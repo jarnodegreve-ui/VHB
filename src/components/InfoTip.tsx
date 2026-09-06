@@ -2,7 +2,7 @@ import { Info } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { cn } from '../lib/ui';
-import { DUR, EASE } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useDropdown } from './useDropdown';
 
 /**
@@ -37,9 +37,8 @@ export function InfoTip({ children, label = 'Uitleg', className, align = 'left' 
             role="dialog"
             aria-label={label}
             initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98 }}
-            transition={{ duration: DUR.fast, ease: EASE }}
+            animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
+            exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: DUR.fast, ease: EASE } }}
             className={cn('absolute top-full z-40 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-paper p-3.5 text-sm font-normal leading-relaxed text-slate-600 ring-1 ring-hairline shadow-xl', align === 'right' ? 'right-0' : 'left-0')}
           >
             {children}

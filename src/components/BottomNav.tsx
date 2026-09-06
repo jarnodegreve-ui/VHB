@@ -5,6 +5,7 @@ import { routeVan } from '../app/routes';
 import { prefetchView } from '../app/viewLoaders';
 import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
+import { overgangActief } from '../lib/overgang';
 
 type NavSlot = {
   view: View;
@@ -123,7 +124,10 @@ export function BottomNav({
                 {isActive && (
                   <motion.span
                     layoutId="bottom-nav-active"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
+                    // Zelfde afspraak als de sidebar-rail: tijdens een route-
+                    // overgang schuift de tab via de view transition.
+                    transition={overgangActief() ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
+                    style={{ viewTransitionName: 'dock-actief' }}
                     className="absolute inset-0 rounded-lg bg-oker-100"
                   />
                 )}

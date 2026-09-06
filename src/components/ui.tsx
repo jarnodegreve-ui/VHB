@@ -158,11 +158,15 @@ export function ConfirmationModal({
  * Empty-state: lus-motief (BrandMotief) + boodschap. `variant` kiest het
  * motief: 'leeg' (niets hier), 'klaar' (alles afgehandeld — goud vinkje) of
  * 'fout' (uitroep-accent). Met een expliciet `icon` blijft de gedempte
- * icoon-tegel van vroeger. Het busje (BrandBus-mascotte) is 01-09 volledig
- * uitgefaseerd (vraag Jarno) — de git-historiek bewaart hem.
+ * icoon-tegel van vroeger; met `illustratie` (src/components/illustraties)
+ * komt er een lijnillustratie op het lus-motief — voor de belangrijkste
+ * lege staten van een scherm (max. 96 px hoog op mobiel, 128 op desktop).
+ * Het busje (BrandBus-mascotte) is 01-09 volledig uitgefaseerd (vraag
+ * Jarno) — de git-historiek bewaart hem.
  */
 export function EmptyState({
   icon,
+  illustratie,
   variant = 'leeg',
   title,
   message,
@@ -176,6 +180,8 @@ export function EmptyState({
   className?: string;
   /** Eigen icoon in de tegel; zonder icoon toont de staat het lus-motief. */
   icon?: React.ReactNode;
+  /** Lijnillustratie (`<LegeLijst />`, `<AllesGedaan />`, …) i.p.v. motief of icoon. */
+  illustratie?: React.ReactNode;
   /** Motief zonder `icon`: 'klaar' waar leeg = alles afgehandeld/niets open. */
   variant?: MotiefVariant;
   title: string;
@@ -187,7 +193,9 @@ export function EmptyState({
   if (compact) {
     return (
       <div className={cn('surface-muted flex items-center gap-4 rounded-2xl px-4 py-3.5', className)}>
-        {icon ? (
+        {illustratie ? (
+          <span className="flex shrink-0 items-center text-slate-400 [&_svg]:h-12 [&_svg]:w-auto">{illustratie}</span>
+        ) : icon ? (
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-slate-400">{icon}</div>
         ) : (
           <BrandMotief variant={variant} className="h-7 w-14 shrink-0 text-slate-400" />
@@ -205,7 +213,9 @@ export function EmptyState({
   // (afwerkingsronde 04-09, nr. 4).
   return (
     <div className={cn('surface-muted rounded-2xl px-6 py-7 text-center', className)}>
-      {icon ? (
+      {illustratie ? (
+        <span className="mx-auto mb-3 flex justify-center text-slate-400 [&_svg]:h-24 [&_svg]:w-auto lg:[&_svg]:h-32">{illustratie}</span>
+      ) : icon ? (
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-muted text-slate-400">{icon}</div>
       ) : (
         <BrandMotief variant={variant} className="mx-auto mb-3 h-9 w-[4.5rem] text-slate-400" />

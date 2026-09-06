@@ -28,7 +28,18 @@ const REGELS = [
   // Native datumveld oogt per browser anders (Safari desktop het slechtst):
   // altijd DateInput (Field.tsx) — de eigen kiezer met dezelfde waarde-API.
   { naam: 'native type="date" (gebruik DateInput uit Field.tsx)', re: /\btype=["']date["']/g, skip: /DatePicker\.tsx$/ },
+  // Drie losse puntjes in zichtbare tekst: typografisch één teken (…). De
+  // spread-operator (`...props`, `[...x]`) wordt gevolgd door een
+  // identifier/haak en matcht niet; commentaar wordt vooraf weggehaald.
+  { naam: 'drie puntjes in UI-tekst (gebruik …)', re: /\.\.\.(?=[\s'"`<})]|$)/gm, zonderCommentaar: true },
 ];
+
+/** Bron zonder //- en /* *\/-commentaar (voor regels die alleen UI-tekst
+ *  bekijken). Regelnummers blijven kloppen: commentaar wordt vervangen
+ *  door spaties, nieuwe regels blijven staan. */
+const zonderCommentaar = (bron) => bron
+  .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+  .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, (m, voor) => voor + ' '.repeat(m.length - voor.length));
 
 const STRIKT = process.env.VHB_LINT_STRIKT === '1';
 let fouten = 0;
@@ -129,7 +140,8 @@ function loop(dir) {
     const bron = fs.readFileSync(p, 'utf8');
     for (const regel of REGELS) {
       if (regel.skip && regel.skip.test(p)) continue;
-      for (const m of bron.matchAll(regel.re)) {
+      const tekst = regel.zonderCommentaar ? zonderCommentaar(bron) : bron;
+      for (const m of tekst.matchAll(regel.re)) {
         const lijn = bron.slice(0, m.index).split('\n').length;
         console.log(`src/${rel}:${lijn}  ${regel.naam}  →  ${m[0]}`);
         fouten++;

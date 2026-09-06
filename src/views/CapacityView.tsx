@@ -1187,7 +1187,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         <ModalHeader
           eyebrow="Maandoverzicht"
           title={`${MONTH_NAMES[monthIndex]} ${year}`}
-          description={'Stand ná wissels, toewijzingen en afwezigheden — identiek aan het tabblad "maandoverzicht" in de Excel-export. Uren = som van de dienstsegmenten; diensten zonder tijden tellen alleen in de dagtelling.'}
+          description={'Stand ná wissels, toewijzingen en afwezigheden — identiek aan het tabblad “maandoverzicht” in de Excel-export. Uren = som van de dienstsegmenten; diensten zonder tijden tellen alleen in de dagtelling.'}
           onClose={() => setOverzichtOpen(false)}
         />
         <div className="p-6 overflow-y-auto flex-1">

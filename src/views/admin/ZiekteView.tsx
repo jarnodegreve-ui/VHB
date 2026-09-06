@@ -509,7 +509,7 @@ export function ZiekteView({
             <ModalHeader
               eyebrow="Ziekteperiode"
               title={naamVan(detail.userId)}
-              description={`${formatDayLong(detail.startDate)} t/m ${formatDayLong(detail.endDate)} · ${daysBetween(detail.startDate, detail.endDate)} ${daysBetween(detail.startDate, detail.endDate) === 1 ? 'dag' : 'dagen'}${detail.comment ? ` · "${detail.comment}"` : ''}`}
+              description={`${formatDayLong(detail.startDate)} t/m ${formatDayLong(detail.endDate)} · ${daysBetween(detail.startDate, detail.endDate)} ${daysBetween(detail.startDate, detail.endDate) === 1 ? 'dag' : 'dagen'}${detail.comment ? ` · “${detail.comment}”` : ''}`}
               onClose={() => setDetail(null)}
             />
             <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">

@@ -1,4 +1,5 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, notify, openPdfInNewTab } from '../../lib/ui';
@@ -459,6 +460,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         eyebrow="Planning"
         title="Beheer roosters"
         description="Importeer de Excel-matrix, bouw de planning opnieuw op en controleer recente imports."
+        actions={<AanwezigOpScherm />}
       />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">
         <Card padding="lg">

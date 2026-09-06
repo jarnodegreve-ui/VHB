@@ -3,7 +3,7 @@ import { Download, AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } fr
 import { cn, downloadBlob } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
 import { isoDate } from '../../lib/availability';
-import { MONTH_NAMES, WEEKDAY_SHORT_SUN, formatGetal } from '../../lib/format';
+import { MONTH_NAMES, WEEKDAY_SHORT_SUN, formatGetal, metEenheid } from '../../lib/format';
 import { maandPlus } from '../../lib/datum';
 import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, EmptyState } from '../../components/ui';
@@ -177,8 +177,8 @@ const fmtKwh = (kwh: number) => formatGetal(Math.round(kwh));
 /** kW / kWh in Belgische notatie met max. 2 cijfers na de komma (verzoek
  *  Jarno 27-08: ChargEye levert tot vijf decimalen). Eén plek voor de hele
  *  pagina — ook titles en aria-labels. */
-const tekstKw = (v: number) => `${formatGetal(v)} kW`;
-const tekstKwh = (v: number) => `${formatGetal(v)} kWh`;
+const tekstKw = (v: number) => metEenheid(formatGetal(v), 'kW');
+const tekstKwh = (v: number) => metEenheid(formatGetal(v), 'kWh');
 
 const STATUS_LABEL: Record<string, string> = {
   AVAILABLE: 'Beschikbaar', CHARGING: 'Laden', RESERVED: 'Gereserveerd', BLOCKED: 'Geblokkeerd',
@@ -213,7 +213,7 @@ const laadStatus = (status: string | undefined, sessie?: { soc?: number | null; 
     : vol
       ? 'Laden voltooid'
       : laadt && kw !== null && kw > 0
-        ? `Laden · ${Math.round(kw)} kW`
+        ? `Laden · ${metEenheid(Math.round(kw), 'kW')}`
         : null;
   return { soc, kw, laadt, vol, label };
 };
@@ -553,7 +553,7 @@ export function OcpiDashboardView() {
               tone="slate"
               label="Vandaag geladen"
               text={fmtKwh(grafiek.dagen.at(-1)?.kwh ?? 0)}
-              suffix=" kWh"
+              suffix={'\u202FkWh'}
               sub={`30 d: ${tekstKwh(kwh30)} · ${data.totals.sessions30d} sessies`}
             />
           </div>
@@ -654,7 +654,7 @@ export function OcpiDashboardView() {
               <TermijnKeuze
                 label="Termijn vermogensgrafiek"
                 waarde={vermogenTermijn}
-                opties={[{ id: '24u', label: '24 u' }, { id: '7d', label: '7 d' }, { id: 'maand', label: 'Maand' }]}
+                opties={[{ id: '24u', label: metEenheid(24, 'u') }, { id: '7d', label: metEenheid(7, 'd') }, { id: 'maand', label: 'Maand' }]}
                 onKies={(t) => { setVermogenTermijn(t); setGekozenSlot(null); }}
               />
             </div>
@@ -864,7 +864,7 @@ export function OcpiDashboardView() {
                     {(() => {
                       // Totaal van dit punt uit de verbruikskaart hieronder (zelfde periodekeuze).
                       const mv = verbruik?.punten.find((p) => p.evseUid === gekozenPunt.uid);
-                      return verbruik && mv ? rij(verbruik.maand ? `Geladen in ${maandLabel(verbruik.maand)}` : `Geladen ${periodeLabel(verbruik)}`, `${fmtKwh(mv.kwh)} kWh`) : null;
+                      return verbruik && mv ? rij(verbruik.maand ? `Geladen in ${maandLabel(verbruik.maand)}` : `Geladen ${periodeLabel(verbruik)}`, metEenheid(fmtKwh(mv.kwh), 'kWh')) : null;
                     })()}
                     {conn && rij('Max. vermogen', maxVermogen(conn.max_electric_power))}
                     {conn && rij('Connector', `${conn.standard ?? '—'}${conn.power_type ? ` · ${conn.power_type}` : ''}`)}
@@ -1097,7 +1097,7 @@ export function OcpiDashboardView() {
                   {/* Eén regel die zegt wáárover de cijfers gaan — in periode-
                       modus staat het label nergens anders voluit. */}
                   <p className="mb-4 text-2xs font-medium font-mono tabular-nums text-slate-500">
-                    {label} · totaal {fmtKwh(verbruik.totaalKwh)} kWh · {verbruik.totaalSessies} sessie{verbruik.totaalSessies === 1 ? '' : 's'} · {actief} van {verbruik.punten.length} laadpunten actief
+                    {label} · totaal {metEenheid(fmtKwh(verbruik.totaalKwh), 'kWh')} · {verbruik.totaalSessies} sessie{verbruik.totaalSessies === 1 ? '' : 's'} · {actief} van {verbruik.punten.length} laadpunten actief
                     {verbruik.tot >= verbruik.huidigeDag ? ' · t/m vandaag' : ''}
                   </p>
                   {verbruik.totaalSessies === 0 ? (
@@ -1110,7 +1110,7 @@ export function OcpiDashboardView() {
                           <div key={cpu.key} className="rounded-2xl border border-slate-100 p-3.5">
                             <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
                               <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
-                              <span className="text-2xs font-medium font-mono tabular-nums text-slate-500">{fmtKwh(cpuKwh)} kWh</span>
+                              <span className="text-2xs font-medium font-mono tabular-nums text-slate-500">{metEenheid(fmtKwh(cpuKwh), 'kWh')}</span>
                             </div>
                             <div className="space-y-1">
                               {cpu.evses.map((p) => {

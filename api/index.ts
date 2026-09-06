@@ -29,6 +29,7 @@ import { userBodySchema, userLijstSchema, WACHTWOORD_MIN } from "../shared/schem
 import { diversionBodySchema, diversionLijstSchema } from "../shared/schemas/diversion.js";
 import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
+import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
 import {
   RECORD_REVISION_HEADER,
   recordRevisionOf,
@@ -69,6 +70,8 @@ import {
   logClientError,
   getClientErrors,
   getClientErrorsSince,
+  getClientErrorStatuses,
+  setClientErrorStatus,
   storeBackup,
   checkBackupIntegrity,
   pruneOldRecords,
@@ -2332,17 +2335,35 @@ app.post("/api/client-errors", clientErrorRateLimit, express.json({ limit: "32kb
     // voor fouten vanaf het loginscherm).
     const verifiedUser = await resolveOptionalUser(req);
     const claimedId = cut(b.userId, 80);
-    const entry = {
+    // Context (release/scherm/rol/online/broodkruimels) sinds 06-09: alles
+    // afgekapt en gefilterd, het is ongeauthenticeerde invoer. De rol komt
+    // bij een geldige sessie van de server, niet van de client.
+    const breadcrumbs = Array.isArray(b.breadcrumbs)
+      ? b.breadcrumbs.slice(-10).map((k: any) => ({ t: cut(k?.t, 30), soort: cut(k?.soort, 20), tekst: cut(k?.tekst, 120) }))
+      : undefined;
+    const basis = {
       message: cut(b.message, 1000),
       stack: cut(b.stack, 4000),
       source: cut(b.source, 50),
       url: cut(b.url, 300),
       userAgent: cut(b.userAgent, 300),
       userId: verifiedUser ? verifiedUser.id : claimedId ? `onbevestigd:${claimedId}` : "",
+      release: cut(b.release, 40) || undefined,
+      view: cut(b.view, 60) || undefined,
+      role: verifiedUser ? verifiedUser.role : cut(b.role, 20) || undefined,
+      online: typeof b.online === "boolean" ? b.online : undefined,
+      breadcrumbs,
     };
-    if (!entry.message) {
+    if (!basis.message) {
       return res.status(400).json({ error: "message is verplicht" });
     }
+    // Vingerafdruk per oorzaak: top-frame uit de sourcemap (best-effort,
+    // gecachet per bundel) + genormaliseerde melding — api/_lib/foutgroepen.ts.
+    let topFrame: string | undefined;
+    try {
+      topFrame = (await symbolicateTopFrame(basis.stack)) ?? undefined;
+    } catch { /* symbolicatie mag een rapport nooit tegenhouden */ }
+    const entry = { ...basis, topFrame, fingerprint: fingerprintVan({ message: basis.message, source: basis.source, topFrame }) };
     // Vangnet dat altijd werkt: zichtbaar in de Vercel-functielogs.
     console.error("[client-error]", JSON.stringify(entry));
     await logClientError(entry);
@@ -2390,11 +2411,51 @@ app.post(
   },
 );
 
-app.get("/api/client-errors", authenticate, requireRole("admin"), async (_req, res) => {
+app.get("/api/client-errors", authenticate, requireRole("admin"), async (req, res) => {
   try {
-    res.json(await getClientErrors(100));
+    if (String(req.query.groepeer ?? "") !== "1") {
+      return res.json(await getClientErrors(100));
+    }
+    // Gegroepeerd per fingerprint (foutgroepen.ts). Statussen komen uit
+    // client_error_status; ontbreekt die tabel (migratie niet gedraaid), dan
+    // zijn alle groepen 'open' en meldt statusBeschikbaar=false dat de
+    // acties nog niet werken. Een 'opgelost' groep die in een andere release
+    // terugkwam, is nu weer 'open' — dat schrijven we meteen terug.
+    const [rijen, statussen] = await Promise.all([getClientErrors(1000), getClientErrorStatuses()]);
+    const { groepen, heropend } = groepeerFouten(rijen, statussen ?? new Map());
+    if (statussen) {
+      for (const fp of heropend) {
+        const vorige = statussen.get(fp);
+        try {
+          await setClientErrorStatus({ fingerprint: fp, status: "open", release: vorige?.release ?? null, bijgewerktOp: new Date().toISOString(), door: "regressie" });
+        } catch { /* best-effort */ }
+      }
+    }
+    res.json({ groepen, statusBeschikbaar: statussen !== null });
   } catch {
-    res.json([]);
+    res.json(String(req.query.groepeer ?? "") === "1" ? { groepen: [], statusBeschikbaar: false } : []);
+  }
+});
+
+// Status van een foutgroep zetten (open / opgelost / genegeerd). `release`
+// = de build waarin de admin de fout als opgelost markeert; komt die groep
+// later in een ándere build terug, dan heropent de groepeer-route hem.
+app.post("/api/client-errors/status", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const fingerprint = String(req.body?.fingerprint ?? "").trim();
+    const status = String(req.body?.status ?? "") as FoutStatusWaarde;
+    if (!/^[0-9a-f]{16}$/.test(fingerprint)) return res.status(400).json({ error: "fingerprint ontbreekt of is ongeldig." });
+    if (!FOUT_STATUSSEN.includes(status)) return res.status(400).json({ error: "status moet open, opgelost of genegeerd zijn." });
+    const release = String(req.body?.release ?? "").trim().slice(0, 40) || null;
+    await setClientErrorStatus({ fingerprint, status, release, bijgewerktOp: new Date().toISOString(), door: String(req.appUser!.id) });
+    await logActivity(req, "system", `Foutgroep ${status}`, `${fingerprint}${release ? ` (release ${release})` : ""}.`);
+    res.json({ success: true, fingerprint, status });
+  } catch (err: any) {
+    if (isMissingTableError(err)) {
+      return res.status(503).json({ error: "De statustabel bestaat nog niet: draai supabase/2026-09-06_client_errors_groepen.sql in de SQL Editor." });
+    }
+    console.error("Foutstatus opslaan is mislukt.", err);
+    res.status(500).json({ error: "Foutstatus opslaan is mislukt." });
   }
 });
 
@@ -2797,8 +2858,11 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const allErrors = await getClientErrorsSince(sinceIso);
     // Levenscyclus ("sessie verlopen") en deploy-ruis (chunk-laadfouten die
     // lazyWithRetry al opvangt) horen niet in de mail — zie isDigestRuis.
-    // De rijen blijven wél in de DB en in Systeem Status zichtbaar.
-    const errors = allErrors.filter((e) => !isDigestRuis(e.message));
+    // Ook groepen die de admin in Systeemstatus op 'genegeerd' zette blijven
+    // buiten de mail. De rijen blijven wél in de DB en in Systeem Status zichtbaar.
+    const statussen = await getClientErrorStatuses();
+    const genegeerd = (e: { fingerprint?: string }) => Boolean(e.fingerprint && statussen?.get(e.fingerprint)?.status === "genegeerd");
+    const errors = allErrors.filter((e) => !isDigestRuis(e.message) && !genegeerd(e));
     const filtered = allErrors.length - errors.length;
 
     // Vervaldata-bewaker (07-08): één keer per dag — dus in deze cron —

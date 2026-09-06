@@ -1,4 +1,5 @@
 import type express from "express";
+import { createHash } from "node:crypto";
 import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache } from "./middleware.js";
 import { DEVICE_GATE_SETTING_KEY, isMissingTableError } from "./deviceGate.js";
 import { sendPushToUsers } from "./push.js";
@@ -40,7 +41,109 @@ const sanitizeDeviceName = (raw: unknown): string =>
     .trim()
     .slice(0, 80) || "Onbekend toestel";
 
+// --- Eigen toestellen (Instellingen › Toestellen en sessies) ---
+// Het toestel-token is een geheim (het identificeert het toestel bij elke
+// call), dus naar de client gaat een afgeleide id: sha256(token), 16 hex.
+export const toestelId = (deviceToken: string): string =>
+  createHash("sha256").update(deviceToken).digest("hex").slice(0, 16);
+
+/** "iPhone · app" → { platform: 'iPhone', kanaal: 'app' }. De naam is bij
+ *  registratie uit de user agent afgeleid (src/lib/device.ts); user_devices
+ *  bewaart de user agent zelf niet. */
+export const platformUitNaam = (naam: string): { platform: string; kanaal: "app" | "browser" | null } => {
+  const [links, rechts] = String(naam ?? "").split("·").map((x) => x.trim());
+  const platform = links || "Toestel";
+  const kanaal = /^app$/i.test(rechts ?? "") ? "app" : /^browser$/i.test(rechts ?? "") ? "browser" : null;
+  return { platform, kanaal };
+};
+
+type EigenToestel = {
+  id: string;
+  naam: string;
+  platform: string;
+  kanaal: "app" | "browser" | null;
+  status: "approved" | "pending" | "revoked";
+  aangemaakt: string;
+  laatstGezien: string;
+  ditToestel: boolean;
+};
+
 export const mountDeviceRoutes = (app: express.Express) => {
+  // Eigen toestellen: naam, platform, laatst gezien, "dit toestel". Werkt ook
+  // met de toestel-gate uit (registratie loopt dan gewoon door, alles is
+  // goedgekeurd); ontbreekt de tabel, dan `beschikbaar: false` i.p.v. 500.
+  app.get("/api/me/toestellen", authenticate, async (req: AuthenticatedRequest, res) => {
+    try {
+      const appUser = req.appUser!;
+      const ownToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+      const [alle, gateActief] = await Promise.all([listAllDevices(), isDeviceGateEnabled()]);
+      const toestellen: EigenToestel[] = alle
+        .filter((d) => d.userId === String(appUser.id))
+        .map((d) => ({
+          id: toestelId(d.deviceToken),
+          naam: d.name,
+          ...platformUitNaam(d.name),
+          status: d.status,
+          aangemaakt: d.createdAt,
+          laatstGezien: d.lastSeenAt,
+          ditToestel: Boolean(ownToken) && d.deviceToken === ownToken,
+        }))
+        .sort((a, b) => Number(b.ditToestel) - Number(a.ditToestel) || String(b.laatstGezien).localeCompare(String(a.laatstGezien)));
+      res.json({ beschikbaar: true, gateActief, toestellen });
+    } catch (err: any) {
+      if (isMissingTableError(err)) return res.json({ beschikbaar: false, gateActief: false, toestellen: [] });
+      console.error("Eigen toestellen laden is mislukt.", err);
+      res.status(500).json({ error: "Toestellen laden is mislukt." });
+    }
+  });
+
+  // Alle andere eigen toestellen intrekken (nooit het huidige). De client
+  // combineert dit met supabase.auth.signOut({ scope: 'others' }) zodat ook
+  // de sessies zelf eindigen; dit endpoint sluit de toestel-kant.
+  app.post("/api/me/toestellen/uitloggen-anderen", authenticate, async (req: AuthenticatedRequest, res) => {
+    try {
+      const appUser = req.appUser!;
+      const ownToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+      const anderen = (await listAllDevices()).filter((d) => d.userId === String(appUser.id) && d.deviceToken !== ownToken && d.status !== "revoked");
+      for (const d of anderen) {
+        await setDeviceStatus(String(appUser.id), d.deviceToken, "revoked", String(appUser.id));
+      }
+      if (anderen.length > 0) {
+        await logActivity(req, "system", "Uitgelogd op andere toestellen", `${appUser.name}: ${anderen.length} toestel${anderen.length === 1 ? "" : "len"} ingetrokken.`);
+      }
+      res.json({ success: true, aantal: anderen.length });
+    } catch (err: any) {
+      if (isMissingTableError(err)) return res.json({ success: true, aantal: 0 });
+      console.error("Andere toestellen uitloggen is mislukt.", err);
+      res.status(500).json({ error: "Uitloggen op andere toestellen is mislukt." });
+    }
+  });
+
+  // Eén eigen toestel intrekken. Het huidige toestel alleen met ?ook-dit=1
+  // (de UI doet dat niet: daarvoor is de gewone Uitloggen-knop).
+  app.post("/api/me/toestellen/:id/uitloggen", authenticate, async (req: AuthenticatedRequest, res) => {
+    try {
+      const appUser = req.appUser!;
+      const id = String(req.params.id ?? "");
+      if (!/^[0-9a-f]{16}$/.test(id)) return res.status(400).json({ error: "Ongeldig toestel-id." });
+      const ownToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+      const toestel = (await listAllDevices()).find((d) => d.userId === String(appUser.id) && toestelId(d.deviceToken) === id);
+      if (!toestel) return res.status(404).json({ error: "Toestel niet gevonden." });
+      if (toestel.deviceToken === ownToken && String(req.query["ook-dit"] ?? "") !== "1") {
+        return res.status(400).json({ error: "Dit is het toestel waarop je nu werkt — gebruik Uitloggen.", code: "huidig_toestel" });
+      }
+      if (toestel.status !== "revoked") {
+        await setDeviceStatus(String(appUser.id), toestel.deviceToken, "revoked", String(appUser.id));
+        await logActivity(req, "system", "Toestel uitgelogd", `${appUser.name}: ${toestel.name}.`);
+      }
+      res.json({ success: true, id, status: "revoked" });
+    } catch (err: any) {
+      if (isMissingTableError(err)) return res.status(404).json({ error: "Toestel niet gevonden." });
+      console.error("Toestel uitloggen is mislukt.", err);
+      res.status(500).json({ error: "Toestel uitloggen is mislukt." });
+    }
+  });
+
   app.post("/api/devices/register", authenticate, deviceRegisterRateLimit, async (req: AuthenticatedRequest, res) => {
     try {
       const deviceToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();

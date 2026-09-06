@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
-import { DUR, EASE } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 
 /**
@@ -132,13 +132,10 @@ export function SlideOver({
             aria-modal="true"
             aria-label={title}
             initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={
-              reduceMotion
-                ? { duration: 0 }
-                : { duration: DUR.slow, ease: EASE }
-            }
+            // Binnenkomend met de veer (EASE_SPRING), uitgaand met de
+            // standaard ease-out — zoals elk paneel in de app.
+            animate={{ x: 0, transition: reduceMotion ? { duration: 0 } : { duration: DUR.slow, ease: EASE_SPRING } }}
+            exit={{ x: '100%', transition: reduceMotion ? { duration: 0 } : { duration: DUR.slow, ease: EASE } }}
             className={cn(
               // Bewust géén backdrop-filter op het geanimeerde paneel zelf
               // (blur + transform op één element geeft compositing-glitches);

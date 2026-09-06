@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, Upload } from 'lucide-react';
 import type { Diversion } from '../../types';
 import { cn, notify } from '../../lib/ui';
@@ -416,9 +417,12 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         title="Beheer omleidingen"
         description={diversions.length > 0 ? `${activeCount} actief, ${diversions.length - activeCount} verlopen.` : 'Routewijzigingen en bijlagen voor chauffeurs.'}
         actions={(
-          <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>
-            Nieuwe omleiding
-          </Button>
+          <>
+            <AanwezigOpScherm />
+            <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>
+              Nieuwe omleiding
+            </Button>
+          </>
         )}
       />
 

@@ -8,6 +8,7 @@ import { Badge, Button, Chip, MicroLabel, segItemClass, TableShell, Td, Th } fro
 import { Input } from '../components/Field';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import { dienstStatistiek, formatDienstDuur } from '../lib/dienstStatistiek';
+import { LegeLijst, NietGevonden } from '../components/illustraties';
 
 export function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -225,8 +226,9 @@ export function ServicesView({ services }: { services: Service[] }) {
         {filteredServices.length === 0 && (
           <div className="px-6 py-6">
             <EmptyState
+              illustratie={searchQuery ? <NietGevonden /> : <LegeLijst />}
               title="Geen diensten gevonden"
-              message={searchQuery ? `Geen diensten gevonden voor "${searchQuery}".` : 'Er zijn nog geen diensten beschikbaar.'}
+              message={searchQuery ? `Geen diensten gevonden voor “${searchQuery}”.` : 'Er zijn nog geen diensten beschikbaar.'}
             />
           </div>
         )}

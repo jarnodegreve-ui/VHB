@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { forwardRef, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/ui';
-import { DUR, EASE } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { addDagen, maandPlus } from '../lib/datum';
 import { WEEKDAY_SHORT_MON } from '../lib/format';
 import {
@@ -237,9 +237,9 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
       tabIndex={-1}
       onKeyDown={onDialoogKey}
       initial={reduceMotion ? { opacity: 1 } : mobiel ? { opacity: 0, y: 24 } : { opacity: 0, scale: 0.96 }}
-      animate={mobiel ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1 }}
-      exit={reduceMotion ? { opacity: 0 } : mobiel ? { opacity: 0, y: 24 } : { opacity: 0, scale: 0.96 }}
-      transition={reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE }}
+      // Binnenkomend met de veer (sheet én popover), uitgaand standaard.
+      animate={{ ...(mobiel ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1 }), transition: reduceMotion ? { duration: 0 } : { duration: mobiel ? DUR.base : DUR.fast, ease: EASE_SPRING } }}
+      exit={{ ...(reduceMotion ? { opacity: 0 } : mobiel ? { opacity: 0, y: 24 } : { opacity: 0, scale: 0.96 }), transition: reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
       style={stijlDialoog}
       className={cn(
         'fixed z-[130] bg-paper ring-1 ring-hairline shadow-xl outline-none',
