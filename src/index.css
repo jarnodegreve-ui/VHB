@@ -159,16 +159,13 @@
      paper = het "witte" vlak (wit in licht, near-black in donker): gebruik
      `bg-paper/NN` waar vroeger `bg-white/NN` stond. ink = altijd-donker vlak
      (zwarte knop, codeblok) mét eigen hover; rim = de lichte binnenrand van
-     kaarten (wit in licht, gedempte haarlijn in donker). fg-* = tekstrollen
-     als alias op de slate-ladder. Alle waardes flippen in html.dark hieronder. */
+     kaarten (wit in licht, gedempte haarlijn in donker). Alle waardes flippen
+     in html.dark hieronder. */
   --color-paper: #FFFFFF;
   --color-ink: #14181B;
   --color-ink-soft: #2C3137;
   --color-rim: rgba(255, 255, 255, 0.70);
   --color-rim-strong: rgba(255, 255, 255, 0.85);
-  --color-fg: var(--color-slate-900);
-  --color-fg-muted: var(--color-slate-600);
-  --color-fg-subtle: var(--color-slate-500);
 
   /* === Motion-ladder (tegenhanger: src/lib/motion.ts) ===
      Alle transition-utilities krijgen standaard deze easing; duraties als
@@ -980,12 +977,6 @@ html.dark {
 .dark th.mp-sticky { background-color: var(--surface-sticky-head) !important; }
 .dark td.mp-sticky { background-color: var(--surface-sticky-cell) !important; }
 .dark td.mp-sticky-own { background-color: var(--surface-sticky-own) !important; }
-
-/* Icoonvierkant van de snelle acties: `dark:bg-oker-500/15` verloor het van
-   de unlayered `.dark .bg-slate-900` hierboven, waardoor het vlak pikzwart
-   bleef op een near-black tegel. Eigen class = geen cascade-verrassing. */
-.quick-action-icon { background-color: #14181B; color: #FFFFFF; }
-:where(.dark) .quick-action-icon { background-color: rgba(226, 163, 35, 0.15); color: rgb(235, 181, 82); }
 
 /* De login is bewust ALTIJD carbon-donker (login-bg-dark / panel-login-dark,
    wit logo, witte koppen), los van de app-thema-toggle — zie LoginView.tsx.

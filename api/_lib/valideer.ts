@@ -13,7 +13,7 @@ import { leesbareVeldfout, valideer } from "../../shared/schemas/basis.js";
  * Bij lijsten zijn de sleutels '<index>.<veld>' en noemt `details` de rij.
  */
 
-export const ongeldigeInvoer = (res: express.Response, veldfouten: Record<string, string>, details: string) =>
+const ongeldigeInvoer = (res: express.Response, veldfouten: Record<string, string>, details: string) =>
   res.status(400).json({ error: "Ongeldige invoer", details, veldfouten });
 
 const eersteFout = (veldfouten: Record<string, string>): [string, string] =>

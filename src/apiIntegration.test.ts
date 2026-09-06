@@ -60,6 +60,10 @@ const mem = vi.hoisted(() => ({
   devices: [] as any[],
   planningNotes: [] as any[],
   userExpiries: [] as any[],
+  // Adres dat in Supabase Auth al bij een ánder account hoort: de
+  // saveUsersData-mock gooit dan dezelfde EmailInGebruikError als de echte
+  // (de Auth-kant zelf zit in src/storageAuthSync.test.ts).
+  authEmailBezet: null as string | null,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -153,6 +157,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     deletePlanningNote: async (driverId: string, date: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); },
     saveUsersData: async (data: any[]) => {
+      const bezet = mem.authEmailBezet && data.find((u: any) => String(u.email || '').toLowerCase() === mem.authEmailBezet);
+      if (bezet) throw new orig.EmailInGebruikError(bezet.email);
       // Zelfde contract als de echte functie: nieuwe e-mailadressen = nieuw
       // Auth-account → welkomstmail-kandidaat.
       const beforeEmails = new Set(mem.users.map((u: any) => String(u.email || '').toLowerCase()).filter(Boolean));
@@ -461,6 +467,7 @@ beforeEach(() => {
   // van de api()-helper), zodat de whitelist-gate bestaande tests niet raakt.
   mem.planningNotes = [];
   mem.userExpiries = [];
+  mem.authEmailBezet = null;
   mem.devices = [
     { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
     { userId: '4', deviceToken: 'dev-ok', name: 'Android · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
@@ -1107,6 +1114,14 @@ describe('client-foutmonitoring', () => {
     expect(res.status).toBe(204);
     expect(mem.clientErrors).toHaveLength(1);
     expect(mem.clientErrors[0].message).toHaveLength(1000);
+  });
+
+  it('weigert een te grote body (413) — eigen 32 kB-limiet i.p.v. de globale 5 MB (controle 05-09, nr. 31)', async () => {
+    const teGroot = await api('POST', '/api/client-errors', { body: { message: 'x'.repeat(40_000) } });
+    expect(teGroot.status).toBe(413);
+    expect(mem.clientErrors).toHaveLength(0);
+    // Een gewone melding (ruim onder de limiet) blijft gewoon binnenkomen.
+    expect((await api('POST', '/api/client-errors', { body: { message: 'boem', stack: 'y'.repeat(3000) } })).status).toBe(204);
   });
 
   it('weigert een melding zonder message (400)', async () => {
@@ -4065,6 +4080,24 @@ describe('per-record API (PUT / POST one / DELETE) — gebruikers, omleidingen, 
       expect((await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'Dubbel', email: 'A@vhb.be' } })).status).toBe(409);
     });
 
+    it('e-mailadres dat in Auth al bij een ánder account hoort → 409 (conflict: email), niets herkoppeld (controle 05-09, nr. 29)', async () => {
+      mem.authEmailBezet = 'vreemd@vhb.be';
+      const rev = await revVan('/api/users', 'tok-admin', '3');
+      const put = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], email: 'Vreemd@vhb.be' }, headers: { [REV]: rev } });
+      expect(put.status).toBe(409);
+      expect(put.json.conflict).toBe('email');
+      expect(put.json.error).toMatch(/al in gebruik bij een ander account/);
+      expect(mem.users[2].email).toBe('a@vhb.be');
+      const post = await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'Nieuw', role: 'chauffeur', email: 'vreemd@vhb.be' } });
+      expect(post.status).toBe(409);
+      expect(post.json.conflict).toBe('email');
+      expect(mem.users).toHaveLength(4);
+      // Collectie-POST: zelfde 409 i.p.v. een 500.
+      const bulk = await api('POST', '/api/users', { token: 'tok-admin', body: mem.users.map((u: any) => (u.id === '4' ? { ...u, email: 'vreemd@vhb.be' } : u)) });
+      expect(bulk.status).toBe(409);
+      expect(bulk.json.conflict).toBe('email');
+    });
+
     it('POST /api/users/one weigert een kort wachtwoord (400) en een lijst (400)', async () => {
       expect((await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'X', email: 'x@vhb.be', password: 'kort' } })).status).toBe(400);
       expect((await api('POST', '/api/users/one', { token: 'tok-admin', body: [{ name: 'X' }] })).status).toBe(400);
@@ -4113,6 +4146,32 @@ describe('per-record API (PUT / POST one / DELETE) — gebruikers, omleidingen, 
       expect(mem.diversions).toHaveLength(3);
       expect(mem.activity.find((a) => a.action === 'Omleiding toegevoegd')).toBeTruthy();
       expect(mem.activity.find((a) => a.action === 'Omleidingen opgeslagen')).toBeFalsy();
+    });
+
+    it('pdfUrl komt uit Storage, nooit van de client: een externe link wordt genegeerd bij POST one, PUT, bulk én GET (controle 05-09, nr. 28)', async () => {
+      // Geen db.storage in de testomgeving = "geen `${id}.pdf` in de bucket".
+      const extern = 'https://kwaad.example/nep.pdf';
+      const post = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '1', title: 'Met link', description: 'x', startDate: '2026-09-10', pdfUrl: extern } });
+      expect(post.status).toBe(201);
+      expect(post.json.diversion.pdfUrl).toBeUndefined();
+      expect(mem.diversions.find((d: any) => d.id === post.json.diversion.id)?.pdfUrl).toBeUndefined();
+
+      const rev = await revVan('/api/diversions', 'tok-planner', 'o-1');
+      const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...mem.diversions[0], pdfUrl: extern }, headers: { [REV]: rev } });
+      expect(put.status).toBe(200);
+      expect(put.json.diversion.pdfUrl).toBeUndefined();
+      expect(mem.diversions.find((d: any) => d.id === 'o-1')?.pdfUrl).toBeUndefined();
+
+      const bulk = await api('POST', '/api/diversions', { token: 'tok-planner', body: mem.diversions.map((d: any) => ({ ...d, pdfUrl: extern })) });
+      expect(bulk.status).toBe(200);
+      expect(mem.diversions.every((d: any) => d.pdfUrl === undefined)).toBe(true);
+
+      // Een oude rij met een rauwe URL gaat ook bij het lezen niet door
+      // zolang het bestand niet ondertekend kan worden.
+      mem.diversions[0].pdfUrl = 'https://oud.example/publiek.pdf';
+      const get = await api('GET', '/api/diversions', { token: 'tok-a' });
+      expect(get.status).toBe(200);
+      expect(get.json.find((d: any) => d.id === 'o-1').pdfUrl).toBeUndefined();
     });
 
     it('POST one valideert titel en datums (400) en weigert chauffeurs (403)', async () => {

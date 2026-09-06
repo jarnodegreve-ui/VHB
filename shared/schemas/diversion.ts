@@ -14,6 +14,10 @@ const diversionVelden = {
   description: verplichteTekst('Vul een omschrijving in'),
   startDate: isoDatum('Vul een startdatum in als JJJJ-MM-DD'),
   endDate: optioneel(isoDatum('Vul een einddatum in als JJJJ-MM-DD')),
+  // Alleen geaccepteerd omdat het formulier het record heen en terug stuurt;
+  // de server negeert de waarde en leidt pdfUrl af uit Storage (`${id}.pdf`,
+  // zie metServerPdfUrl in api/index.ts) — een vrije externe link kan zo
+  // nooit als "officiële PDF" bij een omleiding komen (controle 05-09, nr. 28).
   pdfUrl: optioneel(z.string()),
 };
 

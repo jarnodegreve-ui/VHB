@@ -90,11 +90,23 @@ const controleerAfgebroken = (signal: AbortSignal | undefined): void => {
  * Met `signal` (viewer gesloten) stopt de lus met een AbortError.
  */
 export async function zoekPaginasVoorDienst(doc: RitbladDocument, dienstnummer: string, signal?: AbortSignal): Promise<number[]> {
+  return (await zoekPaginasMetStatus(doc, dienstnummer, signal)).paginas;
+}
+
+/** Zelfde zoektocht, maar met het aantal pagina's dat niet gelezen kon
+ *  worden erbij: een resultaat mét leesfouten is mogelijk onvolledig en
+ *  hoort niet als waarheid in de cache (controle 05-09, nr. 36). */
+export async function zoekPaginasMetStatus(
+  doc: RitbladDocument,
+  dienstnummer: string,
+  signal?: AbortSignal,
+): Promise<{ paginas: number[]; fouten: number }> {
   const nummer = dienstnummer.trim();
-  if (!nummer) return [];
+  if (!nummer) return { paginas: [], fouten: 0 };
   const re = dienstnummerRegex(nummer);
   const inKop: number[] = [];
   const elders: number[] = [];
+  let fouten = 0;
   for (let n = 1; n <= doc.numPages; n++) {
     controleerAfgebroken(signal);
     let tekst = '';
@@ -105,13 +117,14 @@ export async function zoekPaginasVoorDienst(doc: RitbladDocument, dienstnummer: 
       // Eén kapotte pagina mag de rest niet tegenhouden — tenzij de fout
       // komt doordat het document intussen vernietigd is (viewer dicht).
       controleerAfgebroken(signal);
+      fouten++;
       continue;
     }
     if (!re.test(tekst)) continue;
     if (telViercijferigeNummers(tekst) > MAX_NUMMERS_PER_BLAD) continue;
     (staatInKop(tekst, re) ? inKop : elders).push(n);
   }
-  return inKop.length ? inKop : elders;
+  return { paginas: inKop.length ? inKop : elders, fouten };
 }
 
 type PaginaCache = { uploadedAt: string; paginas: Record<string, number[]> };
@@ -148,7 +161,10 @@ export const schrijfPaginasNaarCache = (uploadedAt: string, dienstnummer: string
 };
 
 /** Zoeken met cache per bundel: het lezen van de tekstlaag gebeurt maar
- *  één keer per bundel + dienstnummer (ook een leeg resultaat wordt bewaard). */
+ *  één keer per bundel + dienstnummer (ook een leeg resultaat wordt bewaard).
+ *  Kon een pagina niet gelezen worden (tijdelijke getTextContent-fout, zwak
+ *  toestel), dan wordt het resultaat wél getoond maar níét bewaard: anders
+ *  stond "geen blad gevonden" voor de rest van de bundel vast. */
 export async function zoekPaginasVoorDienstGecached(
   doc: RitbladDocument,
   dienstnummer: string,
@@ -157,9 +173,9 @@ export async function zoekPaginasVoorDienstGecached(
 ): Promise<number[]> {
   const gecached = leesPaginasUitCache(uploadedAt, dienstnummer);
   if (gecached) return gecached;
-  const paginas = await zoekPaginasVoorDienst(doc, dienstnummer, signal);
+  const { paginas, fouten } = await zoekPaginasMetStatus(doc, dienstnummer, signal);
   controleerAfgebroken(signal); // nooit een afgebroken zoektocht bewaren
-  schrijfPaginasNaarCache(uploadedAt, dienstnummer, paginas);
+  if (fouten === 0) schrijfPaginasNaarCache(uploadedAt, dienstnummer, paginas);
   return paginas;
 }
 

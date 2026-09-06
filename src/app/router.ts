@@ -21,7 +21,7 @@ const ROUTE_EVENT = 'vhb-route';
 export type Route = { view: View; params: string[] };
 
 /** Zet een pad om naar view + parameters; onbekend pad → null. */
-export function routeUitPad(pathname: string): Route | null {
+function routeUitPad(pathname: string): Route | null {
   const segmenten = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean).map((s) => {
     try { return decodeURIComponent(s); } catch { return s; }
   });

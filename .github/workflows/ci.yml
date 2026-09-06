@@ -13,6 +13,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Minimale token-rechten (controle 05-09, nr. 30): geen enkele job schrijft
+# naar de repo. Cache, artifacts en de job-samenvatting lopen via het
+# runtime-token en hebben hier niets aan nodig. Een job die meer nodig heeft,
+# vraagt het zelf (zie gitleaks).
+permissions:
+  contents: read
+
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -69,6 +76,13 @@ jobs:
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # De action leest de PR-commits via de API (pull-requests: read). PR-
+    # commentaar bij een vondst zou pull-requests: write vragen — bewust uit:
+    # de rode check is het signaal, en een schrijvend token op een publieke
+    # repo is meer rechten dan dit nodig heeft.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,6 +90,7 @@ jobs:
       - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
 
   # Visuele regressie (verbeterronde 03-09, nr. 11): zes sleutelschermen op
   # deze branch én op de basis-branch schieten (gemockte API) en per pixel

@@ -8,6 +8,16 @@ import { cn } from '../lib/ui';
  * met de tijd erboven. Gereden delen zijn gedempt goud, het lopende deel
  * vult zich, de rest is grijs. `compact` = dashboard-tegel (geen
  * uurstreepjes, kleinere labels).
+ *
+ * Beweging (wijzer, tijdlabel, vulling) loopt over `transform`, niet over
+ * `left`/`width` — die dwongen per frame een reflow af (controle-ronde
+ * 05-09, nr. 38). Wijzer en label staan op `left: 0` in een wrapper over de
+ * volle balkbreedte die `translateX(<pct>%)` van zichzelf verschuift; de
+ * vulling is even breed als het segment en schuift met
+ * `translateX(-(100 − gevuld)%)` naar binnen (zo blijft de ronde eindkap
+ * intact, wat `scaleX` zou platdrukken). `overflow-x-clip` houdt de
+ * verschoven wrappers uit de scroll-overflow. Reduced motion: de globale
+ * prefers-reduced-motion-regel (index.css) zet elke transition op ~0.
  */
 export function DienstBalk({
   delen,
@@ -32,6 +42,7 @@ export function DienstBalk({
     g.gaten.length ? `, ${g.gaten.length} pauze${g.gaten.length === 1 ? '' : 's'}` : ''
   }${wijzer !== null ? `, nu ${label}, ${g.voortgang} % gereden` : ''}`;
   const balkH = compact ? 'h-1' : 'h-1.5';
+  const schuif = (pct: number) => ({ transform: `translateX(${pct}%)` });
 
   return (
     // Bovenruimte = tijdlabel (16) + lucht + streepjes (8) + lucht: het label
@@ -39,18 +50,23 @@ export function DienstBalk({
     // Vaste zones van boven naar onder: tijdlabel (top-1.5, 16 px) · lucht ·
     // uurstreepjes (top-[26px], 8 px) · lucht · balk (pt-10). Zo raakt het
     // label nooit de kaartlijn erboven of de streepjes (Jarno 04-09).
-    <div className={cn('relative', compact ? 'pt-7 pb-4' : 'pt-10 pb-5', className)} role="img" aria-label={omschrijving}>
+    <div className={cn('relative overflow-x-clip', compact ? 'pt-7 pb-4' : 'pt-10 pb-5', className)} role="img" aria-label={omschrijving}>
       {wijzer !== null && (
         <span
           aria-hidden="true"
-          className={cn(
-            'absolute whitespace-nowrap font-mono font-bold tabular-nums leading-4 text-oker-700 transition-[left] duration-1000',
-            compact ? 'top-0.5 text-2xs' : 'top-1.5 text-xs',
-            wijzer < 8 ? 'translate-x-0' : wijzer > 92 ? '-translate-x-full' : '-translate-x-1/2',
-          )}
-          style={{ left: `${wijzer}%` }}
+          data-rol="wijzer-label"
+          className={cn('absolute inset-x-0 transition-transform duration-1000', compact ? 'top-0.5' : 'top-1.5')}
+          style={schuif(wijzer)}
         >
-          {label}
+          <span
+            className={cn(
+              'absolute left-0 top-0 whitespace-nowrap font-mono font-bold tabular-nums leading-4 text-oker-700',
+              compact ? 'text-2xs' : 'text-xs',
+              wijzer < 8 ? 'translate-x-0' : wijzer > 92 ? '-translate-x-full' : '-translate-x-1/2',
+            )}
+          >
+            {label}
+          </span>
         </span>
       )}
       {/* Uurstreepjes boven de balk (niet in de tegel). */}
@@ -81,18 +97,20 @@ export function DienstBalk({
             style={{ left: `${s.links}%`, width: `${s.breedte}%` }}
           >
             <span
-              className={cn('block h-full rounded-full transition-[width] duration-1000', s.gereden ? 'bg-oker-500/55' : 'bg-oker-500')}
-              style={{ width: `${s.gevuld}%` }}
+              data-rol="vulling"
+              className={cn('block h-full w-full rounded-full transition-transform duration-1000', s.gereden ? 'bg-oker-500/55' : 'bg-oker-500')}
+              style={schuif(s.gevuld - 100)}
             />
           </span>
         ))}
         {/* Wijzer: kort gouden streepje door de balk, tijd erboven. */}
         {wijzer !== null && (
           <span
-            className="absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 transition-[left] duration-1000"
-            style={{ left: `${wijzer}%` }}
+            data-rol="wijzer"
+            className="absolute inset-x-0 top-1/2 z-10 transition-transform duration-1000"
+            style={schuif(wijzer)}
           >
-            <span className={cn('block w-0.5 rounded-full bg-oker-500', compact ? 'h-3' : 'h-4')} />
+            <span className={cn('absolute left-0 top-0 block w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-oker-500', compact ? 'h-3' : 'h-4')} />
           </span>
         )}
       </div>
