@@ -177,7 +177,7 @@ export function MijnDagView({
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             {/* Tint i.p.v. vol goud (Jarno 04-09: te fel/druk): groot en mono
                 blijft de nadruk, het goud is voor de balk en "nog …". */}
-            <span className="inline-flex items-center gap-2 rounded-xl border border-oker-500/30 bg-oker-500/12 px-3 py-1.5 font-mono text-xl font-bold tabular-nums tracking-[-0.01em] text-oker-800">
+            <span className="inline-flex items-center gap-2 rounded-xl border border-oker-500/30 bg-oker-500/12 px-3 py-1.5 font-mono text-xl font-bold tabular-nums tracking-[-0.01em] text-oker-800 lg:text-lg">
               {blokken.some((b) => b.bezig) && <span className="h-2 w-2 shrink-0 rounded-full bg-oker-500 animate-pulse" aria-label="dienst bezig" />}
               {dienstnummers.length > 1 ? dienstnummers.join(' / ') : dienstnummers[0] ?? '--'}
             </span>
@@ -246,12 +246,12 @@ export function MijnDagView({
                   <div className={cn('min-w-0 flex-1', gereden && 'opacity-60')}>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       {/* Groot en mono: tijden zijn het instrumentpaneel, leesbaar op armlengte. */}
-                      <p className={cn('text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em]', gereden ? 'text-slate-500' : 'text-slate-900')}>
+                      <p className={cn('text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] lg:text-xl', gereden ? 'text-slate-500' : 'text-slate-900')}>
                         {shift.startTime}–{shift.endTime}
                       </p>
                       {/* De boodschap rechts van de tijd, groot en goud: hoelang nog. */}
                       {resterend !== null && (
-                        <p className="text-xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-oker-700">nog {formatDuration(resterend)}</p>
+                        <p className="text-xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-oker-700 lg:text-lg">nog {formatDuration(resterend)}</p>
                       )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">

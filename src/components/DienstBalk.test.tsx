@@ -46,7 +46,7 @@ describe('DienstBalk', () => {
     const morgen = await monteer(<DienstBalk delen={[{ start: 480, end: 600 }]} nuMin={null} />);
     expect(morgen.container.querySelector('[data-rol="wijzer"]')).toBeNull();
     expect(morgen.container.querySelector('[data-rol="wijzer-label"]')).toBeNull();
-    expect(morgen.container.querySelector('[role="img"]')!.getAttribute('aria-label')).toBe('Dienst van 8:00 tot 10:00');
+    expect(morgen.container.querySelector('[role="img"]')!.getAttribute('aria-label')).toBe('Dienst van 08:00 tot 10:00');
     await act(async () => { morgen.root.unmount(); });
   });
 });
