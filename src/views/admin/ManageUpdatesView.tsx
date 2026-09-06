@@ -243,7 +243,7 @@ export function ManageUpdatesView({
         }) : (
           <EmptyState
             title="Nog geen updates"
-            message="Publiceer je eerste nieuwsbericht of veiligheidsmelding — chauffeurs zien het meteen op hun dashboard."
+            message="Publiceer je eerste nieuwsbericht of veiligheidsmelding, chauffeurs zien het meteen op hun dashboard."
             action={<Button variant="secondary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
           />
         )}

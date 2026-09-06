@@ -154,7 +154,7 @@ describe('beoordeelKandidaat: de regels samen', () => {
   it('een schoolvervoerchauffeur springt niet in op een lijndienst', () => {
     const k = advies({ sectie: 'Schoolvervoer' });
     expect(k.past).toBe(false);
-    expect(k.redenen).toEqual(['schoolvervoerchauffeur — springt niet in op een lijndienst']);
+    expect(k.redenen).toEqual(['schoolvervoerchauffeur, springt niet in op een lijndienst']);
     // Ruim matchen: een hernoemde sectie blijft herkend; andere secties niet.
     expect(advies({ sectie: 'schoolvervoer 2' }).past).toBe(false);
     expect(advies({ sectie: 'Reguliere' }).past).toBe(true);
@@ -316,7 +316,7 @@ describe('adviesSamenvatting: de collega-zin', () => {
 
   it('noemt de beste kandidaat mét waarom, en de tweede keuze', () => {
     const tekst = adviesSamenvatting({ code: '2603', kandidaten: [k('Danny', true, { rustVoor: 12 * 60 }), k('Bart', true)], kettingen: [] });
-    expect(tekst).toBe('Ik zou Danny vragen — geen aansluitende werkdagen, rust 12u, nog geen werkdag deze week. Bart is de logische tweede keuze.');
+    expect(tekst).toBe('Ik zou Danny vragen, geen aansluitende werkdagen, rust 12u, nog geen werkdag deze week. Bart is de logische tweede keuze.');
   });
 
   it('valt terug op de ruil als niemand direct past', () => {

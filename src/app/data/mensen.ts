@@ -87,7 +87,7 @@ export function useMensenData(ctx: DataCtx) {
         body: JSON.stringify(newUsers),
       });
       if (response.status === 409 || response.status === 428) {
-        showToast('De gebruikerslijst is intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        showToast('De gebruikerslijst is intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchUsers();
         return false;
       }

@@ -211,7 +211,7 @@ export function InstellingenView({
           <Rij
             icoon={<Moon size={16} />}
             titel="Donkere modus"
-            uitleg={theme === 'dark' ? 'Aan — het portaal gebruikt het donkere thema op dit toestel.' : 'Uit — het portaal gebruikt het lichte thema op dit toestel.'}
+            uitleg={theme === 'dark' ? 'Aan, het portaal gebruikt het donkere thema op dit toestel.' : 'Uit, het portaal gebruikt het lichte thema op dit toestel.'}
             rechts={<Switch checked={theme === 'dark'} onChange={onToggleTheme} label="Donkere modus" />}
           />
         </div>

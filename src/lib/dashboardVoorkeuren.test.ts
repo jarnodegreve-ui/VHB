@@ -7,7 +7,7 @@ import {
 
 const ids = (defs: { id: string }[]) => defs.map((d) => d.id);
 
-describe('dashboardvoorkeuren — helpers', () => {
+describe('dashboardvoorkeuren, helpers', () => {
   it('catalogi: unieke ids, precies één essentiële tegel per rol', () => {
     for (const defs of [CHAUFFEUR_TEGELS, PLANNER_TEGELS]) {
       expect(new Set(ids([...defs])).size).toBe(defs.length);

@@ -22,7 +22,7 @@ describe('Content-Security-Policy', () => {
 
     for (const body of inline) {
       const hash = createHash('sha256').update(body, 'utf-8').digest('base64');
-      expect(csp, `inline script niet toegestaan — voeg 'sha256-${hash}' toe aan script-src in vercel.json`)
+      expect(csp, `inline script niet toegestaan, voeg 'sha256-${hash}' toe aan script-src in vercel.json`)
         .toContain(`sha256-${hash}`);
     }
   });

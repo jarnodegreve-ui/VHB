@@ -34,7 +34,7 @@ const leave = (
   createdAt: new Date('2026-01-01').toISOString(),
 });
 
-describe('conflicts — detectShiftLeaveConflicts', () => {
+describe('conflicts, detectShiftLeaveConflicts', () => {
   it('matcht een shift met een verlofdag op dezelfde datum', () => {
     const shifts = [shift('s1', 'driver-1', '2026-07-01')];
     const leaves = [leave('l1', 'driver-1', '2026-07-01', '2026-07-05')];
@@ -120,7 +120,7 @@ describe('conflicts — detectShiftLeaveConflicts', () => {
   });
 });
 
-describe('conflicts — set helpers', () => {
+describe('conflicts, set helpers', () => {
   const shifts = [
     shift('s1', 'driver-1', '2026-07-01'),
     shift('s2', 'driver-1', '2026-07-02'),
@@ -141,7 +141,7 @@ describe('conflicts — set helpers', () => {
 
 });
 
-describe('conflicts — shiftsConflictingWithLeave', () => {
+describe('conflicts, shiftsConflictingWithLeave', () => {
   it('geeft alle shifts van die chauffeur in het verlofbereik', () => {
     const shifts = [
       shift('s1', 'driver-1', '2026-07-01'),

@@ -82,7 +82,7 @@ function warnSharedStoreDown(reason: string) {
   storeDownUntil = Date.now() + STORE_DOWN_GRACE_MS;
   if (Date.now() - lastStoreWarnAt < 30_000) return;
   lastStoreWarnAt = Date.now();
-  console.error(`[ratelimit] gedeelde store onbereikbaar (${reason}) — teruggevallen op de per-instantie-limiter.`);
+  console.error(`[ratelimit] gedeelde store onbereikbaar (${reason}), teruggevallen op de per-instantie-limiter.`);
 }
 /** True zolang de gedeelde store recent faalde: dan gelden strengere lokale
  *  limieten, zodat het wegvallen van de globale limiet niet de facto een

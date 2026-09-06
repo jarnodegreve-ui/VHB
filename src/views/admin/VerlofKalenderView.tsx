@@ -248,7 +248,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
                       const leave = userMap?.get(day);
                       const title = leave
-                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type} — ${STATUS_TEKST[leave.status] ?? leave.status} (${leave.startDate}${leave.startDate !== leave.endDate ? ` t/m ${leave.endDate}` : ''})`
+                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type}, ${STATUS_TEKST[leave.status] ?? leave.status} (${leave.startDate}${leave.startDate !== leave.endDate ? ` t/m ${leave.endDate}` : ''})`
                         : undefined;
                       return (
                         <td
@@ -316,7 +316,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                         <span className={cn('shrink-0 w-2.5 h-2.5 rounded-full', cellColor(leave.status, leave.type))} />
                         <span className="font-semibold text-slate-700 tabular-nums">
                           {sameMonthAsStart ? startDay : '←'}
-                          {leave.startDate !== leave.endDate && ` — ${sameMonthAsEnd ? endDay : '→'}`}
+                          {leave.startDate !== leave.endDate && `, ${sameMonthAsEnd ? endDay : '→'}`}
                         </span>
                         <span className="text-slate-500 truncate">
                           {LEAVE_TYPE_LABELS[leave.type] || leave.type}

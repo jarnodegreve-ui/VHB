@@ -318,7 +318,7 @@ export function PlannerDashboardWidgets({
       setAfgehandeld((cur) => ({ ...cur, [d.id]: userNameById(naarId) }));
       await onShiftSwapped();
     } catch {
-      notify('Overzetten is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+      notify('Overzetten is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
     } finally {
       setWisselBezig(null);
     }
@@ -659,7 +659,7 @@ export function PlannerDashboardWidgets({
             icon={<CalendarClock size={16} />}
             primary={horizonDagenOver! <= 0
               ? 'De geladen planning is op'
-              : `Planning geladen t/m ${formatDay(planningHorizon)} — nog ${horizonDagenOver} ${horizonDagenOver === 1 ? 'dag' : 'dagen'}`}
+              : `Planning geladen t/m ${formatDay(planningHorizon)}, nog ${horizonDagenOver} ${horizonDagenOver === 1 ? 'dag' : 'dagen'}`}
             secondary="Importeer de volgende periode zodat chauffeurs vooruit kunnen kijken."
             onClick={() => onNavigate('beheer-roosters')}
           />
@@ -696,7 +696,7 @@ export function PlannerDashboardWidgets({
           <OpsRow
             tone="red"
             icon={<UserX size={16} />}
-            primary={`${g.diensten.length} ${g.diensten.length === 1 ? 'dienst' : 'diensten'} nog niet herverdeeld — ${userNameById(g.driverId)}`}
+            primary={`${g.diensten.length} ${g.diensten.length === 1 ? 'dienst' : 'diensten'} nog niet herverdeeld, ${userNameById(g.driverId)}`}
             secondary={`${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDay(s.date)} (${serviceNumberOf(s)})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`}
             // Ziekte-blad, niet de maandplanning: dáár staan de
             // herverdeel-knoppen (kortste route naar de actie).
@@ -709,7 +709,7 @@ export function PlannerDashboardWidgets({
           <OpsRow
             tone="red"
             icon={<AlertTriangle size={16} />}
-            primary={`${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'} — ${formatDay(d.date)}`}
+            primary={`${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'}, ${formatDay(d.date)}`}
             secondary={`Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`}
             onClick={() => onNavigate('dekking')}
           />
@@ -747,7 +747,7 @@ export function PlannerDashboardWidgets({
             primary={`${swap.swapType === 'overname' ? 'Overname' : 'Dienstruil'} · ${swap.targetDriverId
               ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
               : userNameById(swap.requesterId)}`}
-            secondary={swap.status === 'accepted' ? 'Collega akkoord — wacht op validatie' : swap.reason || 'Wacht op een collega'}
+            secondary={swap.status === 'accepted' ? 'Collega akkoord, wacht op validatie' : swap.reason || 'Wacht op een collega'}
             meta={relTime(swap.createdAt)}
             onClick={() => onNavigate('ruil-verzoeken')}
           />
@@ -757,7 +757,7 @@ export function PlannerDashboardWidgets({
             de teller in de kop dat je alles ziet. */}
         {hiddenAttentionCount > 0 && (
           <p className="px-4 pt-1 text-xs font-medium text-slate-500">
-            +{hiddenAttentionCount} niet getoond — open Verlof, Dienstruil, Toestellen of Vervaldata voor de volledige lijst.
+            +{hiddenAttentionCount} niet getoond, open Verlof, Dienstruil, Toestellen of Vervaldata voor de volledige lijst.
           </p>
         )}
         {attentionCount === 0 && (
@@ -1010,7 +1010,7 @@ export function PlannerDashboardWidgets({
       >
         {availableToday.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">
-            Niemand beschikbaar {peilLabel.toLowerCase()} — iedereen rijdt of is afwezig.
+            Niemand beschikbaar {peilLabel.toLowerCase()}, iedereen rijdt of is afwezig.
           </p>
         ) : (
           <ul className="space-y-0.5">

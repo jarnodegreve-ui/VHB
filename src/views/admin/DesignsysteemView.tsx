@@ -102,7 +102,7 @@ export function DesignsysteemView() {
     <PageShell>
       <PageHeader
         title="Designsysteem"
-        description="Alle bouwstenen, tokens en toestanden van het portaal — in licht en donker, zoals ze in de app staan."
+        description="Alle bouwstenen, tokens en toestanden van het portaal, in licht en donker, zoals ze in de app staan."
       />
       <nav aria-label="Inhoud" className="flex flex-wrap gap-2">
         {INHOUD.map(([id, label]) => (
@@ -147,7 +147,7 @@ export function DesignsysteemView() {
           <p className="text-page-title">Paginatitel · text-page-title</p>
           <p className="text-section-title">Sectietitel · text-section-title</p>
           <p className="text-card-title">Kaarttitel · text-card-title</p>
-          <p className="text-sm text-slate-600">Body · text-sm slate-600 — De dienst begint om 05:42 aan de stelplaats.</p>
+          <p className="text-sm text-slate-600">Body · text-sm slate-600, De dienst begint om 05:42 aan de stelplaats.</p>
           <p className="text-label">Label · text-label</p>
           <p className="text-micro">Micro · text-micro</p>
           <p className="text-stat text-slate-900">2116 · text-stat</p>
@@ -237,7 +237,7 @@ export function DesignsysteemView() {
         </Rij>
       </Sectie>
 
-      <Sectie id="zijvak" titel="Zijvak en actiemenu" uitleg="Zijvak: het vaste rechtervak naast een enkelkolomscherm (cijfers, laatste wijziging, hulp) — gedempt, sticky. ActieMenu: secundaire acties achter '…', zodat een scherm één gouden knop houdt.">
+      <Sectie id="zijvak" titel="Zijvak en actiemenu" uitleg="Zijvak: het vaste rechtervak naast een enkelkolomscherm (cijfers, laatste wijziging, hulp), gedempt, sticky. ActieMenu: secundaire acties achter '…', zodat een scherm één gouden knop houdt.">
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_20rem]">
           <Card padding="sm" className="flex items-center justify-between gap-3">
             <p className="text-sm text-slate-600">Hoofdinhoud met één primaire actie en de rest in het menu.</p>
@@ -258,7 +258,7 @@ export function DesignsysteemView() {
         </div>
       </Sectie>
 
-      <Sectie id="personen" titel="Personen" uitleg="Avatar met initialen en een vaste, gedempte tint per naam — zodat lijsten scanbaar worden zonder extra kleur. De ingelogde gebruiker in de topbar blijft goud.">
+      <Sectie id="personen" titel="Personen" uitleg="Avatar met initialen en een vaste, gedempte tint per naam, zodat lijsten scanbaar worden zonder extra kleur. De ingelogde gebruiker in de topbar blijft goud.">
         <Rij label="Maten">
           <Avatar naam="Bart Peeters" size="sm" />
           <Avatar naam="Bart Peeters" size="md" />
@@ -301,7 +301,7 @@ export function DesignsysteemView() {
         </Rij>
       </Sectie>
 
-      <Sectie id="tabel" titel="Tabel" uitleg="TableToolbar (zoek, telling, filters, acties), sorteerbare koppen, selectie met BulkBar en paginering — hetzelfde recept in elke beheertabel.">
+      <Sectie id="tabel" titel="Tabel" uitleg="TableToolbar (zoek, telling, filters, acties), sorteerbare koppen, selectie met BulkBar en paginering, hetzelfde recept in elke beheertabel.">
         <TableToolbar
           zoek={zoek}
           onZoek={setZoek}
@@ -375,7 +375,7 @@ export function DesignsysteemView() {
         </div>
         <Rij label="In EmptyState">
           <div className="w-full">
-            <EmptyState illustratie={<AllesGedaan />} variant="klaar" title="Niets te doen vandaag" message="Alle aanvragen zijn afgehandeld — een rustpunt." />
+            <EmptyState illustratie={<AllesGedaan />} variant="klaar" title="Niets te doen vandaag" message="Alle aanvragen zijn afgehandeld, een rustpunt." />
           </div>
         </Rij>
         <Rij label="Compact">

@@ -89,7 +89,7 @@ export const VLAAMSE_SCHOOLVAKANTIES: Schoolvakantie[] = [
   { naam: 'Herfstvakantie', van: '2026-11-02', tot: '2026-11-08' },
   { naam: 'Kerstvakantie', van: '2026-12-21', tot: '2027-01-03' },
   { naam: 'Krokusvakantie', van: '2027-02-08', tot: '2027-02-14' }, // Aswoensdag 10/02
-  { naam: 'Paasvakantie', van: '2027-03-29', tot: '2027-04-11' }, // Pasen 28/03 — controleren
+  { naam: 'Paasvakantie', van: '2027-03-29', tot: '2027-04-11' }, // Pasen 28/03, controleren
   { naam: 'Zomervakantie', van: '2027-07-01', tot: '2027-08-31' },
   { naam: 'Herfstvakantie', van: '2027-11-01', tot: '2027-11-07' },
   { naam: 'Kerstvakantie', van: '2027-12-20', tot: '2028-01-02' },
@@ -111,10 +111,10 @@ export const typedag = (iso: string): Typedag => {
 /** Korte label/tooltip voor UI-markering. */
 export const typedagLabel = (iso: string): { kort: string; titel: string } | null => {
   const feest = feestdagNaam(iso);
-  if (feest) return { kort: 'F', titel: `${feest} — zon-/feestdagregeling` };
+  if (feest) return { kort: 'F', titel: `${feest}, zon-/feestdagregeling` };
   switch (typedag(iso)) {
     case 'vakantiedag':
-      return { kort: 'V', titel: 'Schoolvakantie — vakantieregeling' };
+      return { kort: 'V', titel: 'Schoolvakantie, vakantieregeling' };
     default:
       return null; // gewone school-/za-/zo-dagen krijgen geen extra markering
   }

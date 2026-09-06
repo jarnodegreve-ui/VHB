@@ -77,7 +77,7 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
       {meldingen.length === 0 ? (
         <EmptyState
           title="Nog geen meldingen"
-          message="Zodra de planning iets voor jou heeft — een beslissing, een ruil, een update — verschijnt het hier."
+          message="Zodra de planning iets voor jou heeft, een beslissing, een ruil, een update, verschijnt het hier."
         />
       ) : groepen.length === 0 ? (
         <EmptyState

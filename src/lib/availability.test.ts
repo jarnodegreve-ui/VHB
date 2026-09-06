@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { conflictIds, isoDate, addDays, openstaandeDienstenVanAfwezigen, type AvailabilityDay } from './availability';
 
-describe('availability — helpers', () => {
+describe('availability, helpers', () => {
   it('conflictIds: drivers die rijden én verlof hebben', () => {
     const day: AvailabilityDay = {
       date: '2026-07-06',

@@ -238,7 +238,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
           size="lg"
           eyebrow="Aanwezigheid"
           title="Actieve gebruikers en aanmeldingen"
-          description="Wie het portaal gebruikte per dag — ook zonder opnieuw in te loggen — en recente aanmeldingen (laatste 30 dagen)."
+          description="Wie het portaal gebruikte per dag, ook zonder opnieuw in te loggen, en recente aanmeldingen (laatste 30 dagen)."
         />
         {logins.length === 0 ? (
           <div className="mt-5">

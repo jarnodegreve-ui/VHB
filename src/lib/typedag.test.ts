@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { feestdagNaam, feestdagenVanJaar, isSchoolvakantie, typedag } from './typedag';
 
-describe('typedag — De Lijn-regelingen', () => {
+describe('typedag, De Lijn-regelingen', () => {
   it('berekent de Pasen-afgeleiden correct (computus)', () => {
     // Pasen 2026 = 5 april; 2027 = 28 maart.
     expect(feestdagenVanJaar(2026)['2026-04-06']).toBe('Paasmaandag');

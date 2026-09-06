@@ -290,7 +290,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       open={paneelOpen}
       onClose={sluitPaneel}
       title={editingId ? 'Omleiding bewerken' : 'Nieuwe omleiding'}
-      subtitle={bewerkte ? `${bewerkte.title} — lijn ${bewerkte.line}` : 'Vul de details in en voeg eventueel een PDF toe.'}
+      subtitle={bewerkte ? `${bewerkte.title}, lijn ${bewerkte.line}` : 'Vul de details in en voeg eventueel een PDF toe.'}
       sleutel={editingId ?? 'nieuw'}
       leegTekst="Kies een omleiding om te bewerken, of maak een nieuwe."
       leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
@@ -435,7 +435,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         onClose={() => setHistoryDiversion(null)}
         entityType="diversion"
         entityId={historyDiversion?.id ?? ''}
-        title={historyDiversion ? `${historyDiversion.title} — lijn ${historyDiversion.line}` : undefined}
+        title={historyDiversion ? `${historyDiversion.title}, lijn ${historyDiversion.line}` : undefined}
       />
 
     </PageShell>

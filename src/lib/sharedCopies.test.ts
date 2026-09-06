@@ -36,7 +36,7 @@ describe('gedeelde src/api-kopieën blijven in sync', () => {
     it(`${name}: api/-kopie is logisch identiek aan src/lib/`, () => {
       const a = normalize(readFileSync(resolve(root, src), 'utf8'));
       const b = normalize(readFileSync(resolve(root, api), 'utf8'));
-      expect(b, `${api} is afgeweken van ${src} — werk de kopie (of deze test) bij`).toBe(a);
+      expect(b, `${api} is afgeweken van ${src}, werk de kopie (of deze test) bij`).toBe(a);
     });
   }
 });

@@ -38,7 +38,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         body: JSON.stringify(newLeave),
       });
       if (response.status === 409 || response.status === 428) {
-        showToast('De verlofaanvragen zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        showToast('De verlofaanvragen zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchLeave();
         return false;
       }
@@ -49,7 +49,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
           await fetchActivityLog();
         }
         const isNewRequest = newLeave.some((r) => !leaveRequests.some((p) => p.id === r.id));
-        showToast(isNewRequest ? 'Aanvraag ingediend — de planner beoordeelt ze.' : 'Verlofaanvraag bijgewerkt.', 'success');
+        showToast(isNewRequest ? 'Aanvraag ingediend, de planner beoordeelt ze.' : 'Verlofaanvraag bijgewerkt.', 'success');
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
@@ -76,7 +76,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         // het moment waarop de planner een vervanger zoekt, niet na een
         // harde refresh. Best-effort naast de leave-fetch.
         await Promise.all([fetchLeave(), refreshCoverageGaps()]);
-        showToast('Ziekmelding doorgegeven — de planning is verwittigd.', 'success');
+        showToast('Ziekmelding doorgegeven, de planning is verwittigd.', 'success');
         return true;
       }
       const err = await response.json().catch(() => ({} as any));

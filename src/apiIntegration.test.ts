@@ -142,7 +142,7 @@ vi.mock('../api/email.js', async (importOriginal) => ({
     return { ok: true, mocked: true };
   }),
   sendWelcomeEmail: vi.fn(async (ctx: any) => {
-    mem.emailsSent.push({ to: [ctx.to], subject: 'Welkom op het VHB Portaal — stel je wachtwoord in', context: `welcome:${ctx.to}` });
+    mem.emailsSent.push({ to: [ctx.to], subject: 'Welkom op het VHB Portaal, stel je wachtwoord in', context: `welcome:${ctx.to}` });
     return { ok: true, mocked: true };
   }),
 }));
@@ -601,7 +601,7 @@ describe('PII-scoping voor chauffeurs', () => {
     expect(res.json).toHaveLength(3);
   });
 
-  it('een chauffeur kan zichzelf NIET ziek melden (403 — enkel planner/admin)', async () => {
+  it('een chauffeur kan zichzelf NIET ziek melden (403, enkel planner/admin)', async () => {
     const res = await api('POST', '/api/leave/sick-report', { token: 'tok-a', body: { userId: '3', startDate: '2026-09-01' } });
     expect(res.status).toBe(403);
     expect(mem.leave.some((l: any) => l.type === 'ziekte')).toBe(false);
@@ -615,7 +615,7 @@ describe('PII-scoping voor chauffeurs', () => {
       { id: 'zk-1', driverId: '4', date: '2026-09-02', line: '4407' },
       { id: 'zk-2', driverId: '4', date: '2026-09-02', line: '4407' },
       { id: 'zk-3', driverId: '4', date: '2026-09-03', line: '4408' },
-      { id: 'zk-4', driverId: '3', date: '2026-09-02', line: '4409' }, // collega — hoort er níét in
+      { id: 'zk-4', driverId: '3', date: '2026-09-02', line: '4409' }, // collega, hoort er níét in
     );
     const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-02', endDate: '2026-09-03' } });
     expect(res.status).toBe(200);
@@ -635,8 +635,8 @@ describe('PII-scoping voor chauffeurs', () => {
     // gesplitste dienst één keer, de dienst van de collega niet.
     const body = sickMails[0]?.text ?? '';
     expect(body).toContain('Openstaande dienst(en):');
-    expect(body).toMatch(/wo 2 sep.* — 4407/);
-    expect(body).toMatch(/do 3 sep.* — 4408/);
+    expect(body).toMatch(/wo 2 sep.*, 4407/);
+    expect(body).toMatch(/do 3 sep.*, 4408/);
     expect(body).not.toContain('4407 / 4407');
     expect(body).not.toContain('4409');
   });
@@ -736,7 +736,7 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
     expect(mem.leave.find((l) => l.id === 'l-a3')).toBeTruthy();
   });
 
-  it('meldt een nieuwe aanvraag alleen aan actieve planners/admins — niet aan een gepauzeerd staf-account (controle-ronde 27-08)', async () => {
+  it('meldt een nieuwe aanvraag alleen aan actieve planners/admins, niet aan een gepauzeerd staf-account (controle-ronde 27-08)', async () => {
     mem.users = [...mem.users, { id: '9', name: 'Paula Gepauzeerd', email: 'paula@vhb.be', role: 'planner', isActive: false }];
     const own = mem.leave.filter((l) => l.userId === '3');
     const nieuw = { id: 'l-a4', userId: '3', startDate: '2026-09-08', endDate: '2026-09-09', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-08-28T08:00:00Z' };
@@ -839,7 +839,7 @@ describe('dienstruil: autorisatieregels', () => {
     expect(res.status).toBe(403);
   });
 
-  it('weigert een overgang uit een afgehandelde status — rejected → approved via POST (409)', async () => {
+  it('weigert een overgang uit een afgehandelde status, rejected → approved via POST (409)', async () => {
     mem.swaps = [{ id: 's-r', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'rejected', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
     const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s) => ({ ...s, status: 'approved' })) });
     expect(res.status).toBe(409);
@@ -873,7 +873,7 @@ describe('dienstruil: autorisatieregels', () => {
     expect(mem.swaps.find((s) => s.id === 's-h')?.status).toBe('accepted');
   });
 
-  it('weigert een overgang uit een afgehandelde status — rejected → approved via PATCH (409)', async () => {
+  it('weigert een overgang uit een afgehandelde status, rejected → approved via PATCH (409)', async () => {
     mem.swaps = [{ id: 's-r', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'rejected', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
     // ifStatus is sinds de verbeterronde verplicht; de state-machine-check
     // (afgehandeld = eindstation) vuurt daarná alsnog.
@@ -934,7 +934,7 @@ describe('dienstruil zonder tegenprestatie (overname)', () => {
     expect(res.status).toBe(409);
   });
 
-  it('geldt ook voor een planner — niet enkel voor chauffeurs (409)', async () => {
+  it('geldt ook voor een planner, niet enkel voor chauffeurs (409)', async () => {
     mem.planningMatrix = [];
     mem.swaps = [];
     const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [overname()] });
@@ -1176,7 +1176,7 @@ describe('client-foutmonitoring', () => {
     expect(mem.clientErrors[0].message).toHaveLength(1000);
   });
 
-  it('weigert een te grote body (413) — eigen 32 kB-limiet i.p.v. de globale 5 MB (controle 05-09, nr. 31)', async () => {
+  it('weigert een te grote body (413), eigen 32 kB-limiet i.p.v. de globale 5 MB (controle 05-09, nr. 31)', async () => {
     const teGroot = await api('POST', '/api/client-errors', { body: { message: 'x'.repeat(40_000) } });
     expect(teGroot.status).toBe(413);
     expect(mem.clientErrors).toHaveLength(0);
@@ -1387,13 +1387,13 @@ describe('delta-endpoints (PATCH per record, anti-race)', () => {
     expect(mem.leave.find((l) => l.id === 'l-a1')?.status).toBe('approved');
   });
 
-  it('weigert een leave-PATCH zonder ifStatus (400) — spiegel van de swaps-guard', async () => {
+  it('weigert een leave-PATCH zonder ifStatus (400), spiegel van de swaps-guard', async () => {
     const res = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'approved' } });
     expect(res.status).toBe(400);
     expect(mem.leave.find((l) => l.id === 'l-a1')?.status).toBe('pending');
   });
 
-  it('weigert een overgang uit een afgehandelde leave-status — rejected → approved (409)', async () => {
+  it('weigert een overgang uit een afgehandelde leave-status, rejected → approved (409)', async () => {
     mem.leave = [{ id: 'l-r', userId: '3', startDate: '2026-08-10', endDate: '2026-08-12', type: 'betaald_verlof', status: 'rejected', createdAt: '2026-07-01T08:00:00Z', decidedAt: '2026-07-02T08:00:00Z' }];
     const res = await api('PATCH', '/api/leave/l-r', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'rejected' } });
     expect(res.status).toBe(409);
@@ -1426,7 +1426,7 @@ describe('delta-endpoints (PATCH per record, anti-race)', () => {
     expect(admin.status).toBe(200);
   });
 
-  it('weigert een PATCH zonder ifStatus (400) — anders geldt stil last-write-wins', async () => {
+  it('weigert een PATCH zonder ifStatus (400), anders geldt stil last-write-wins', async () => {
     const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'approved' } });
     expect(res.status).toBe(400);
   });
@@ -1437,7 +1437,7 @@ describe('delta-endpoints (PATCH per record, anti-race)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('laat geen enkele stafrol "accepted" schrijven — instemming is niet te vervalsen', async () => {
+  it('laat geen enkele stafrol "accepted" schrijven, instemming is niet te vervalsen', async () => {
     // De force-approve-regel blokkeerde alleen pending → approved in één stap.
     // Via pending → accepted → approved was instemming alsnog te faken, mét
     // een push "<collega> accepteerde de ruil" naar de aanvrager als bewijs.
@@ -1845,7 +1845,7 @@ describe('optimistic concurrency (revisie-tokens, anti-overschrijf)', () => {
     expect(res.status).toBe(200);
   });
 
-  it('gebruikers: een login (lastLogin/activeSessions) verandert de revisie niet — geen valse 409 (controle-ronde 27-08)', async () => {
+  it('gebruikers: een login (lastLogin/activeSessions) verandert de revisie niet, geen valse 409 (controle-ronde 27-08)', async () => {
     const get = await api('GET', '/api/users', { token: 'tok-admin' });
     expect(get.status).toBe(200);
     const rev = get.headers.get(REV)!;
@@ -1888,7 +1888,7 @@ describe('rate limiting', () => {
     expect(blocked).toBe(5);
   });
 
-  it('houdt de limiet per token bij — een andere gebruiker wordt niet geraakt', async () => {
+  it('houdt de limiet per token bij, een andere gebruiker wordt niet geraakt', async () => {
     for (let i = 0; i < 55; i++) await api('GET', '/api/leave', { token: 'tok-a' });
     // tok-b heeft een eigen budget en mag gewoon door.
     const res = await api('GET', '/api/leave', { token: 'tok-b' });
@@ -1994,7 +1994,7 @@ describe('aanmeldingen (login-activiteit)', () => {
   });
 });
 
-describe('OCPI 2.2.1 — gehoste endpoints + handshake-auth', () => {
+describe('OCPI 2.2.1, gehoste endpoints + handshake-auth', () => {
   const tok = (s: string) => 'Token ' + Buffer.from(s, 'utf8').toString('base64');
 
   it('versions vereist een geldig OCPI-token (anders 401)', async () => {
@@ -2025,7 +2025,7 @@ describe('OCPI 2.2.1 — gehoste endpoints + handshake-auth', () => {
   });
 });
 
-describe('OCPI-client — paginatie (parseNextLink)', () => {
+describe('OCPI-client, paginatie (parseNextLink)', () => {
   it('haalt de next-URL uit de Link-header', async () => {
     const { parseNextLink } = await import('../api/ocpi');
     expect(parseNextLink('<https://kempower.io/api/ocpi/2.2.1/locations?offset=100&limit=100>; rel="next"'))
@@ -2043,7 +2043,7 @@ describe('OCPI-client — paginatie (parseNextLink)', () => {
   });
 });
 
-describe('OCPI-sync — autorisatie', () => {
+describe('OCPI-sync, autorisatie', () => {
   it('POST /api/ocpi/sync is admin-only', async () => {
     expect((await api('POST', '/api/ocpi/sync', { token: 'tok-a' })).status).toBe(403);
     expect((await api('POST', '/api/ocpi/sync', { token: 'tok-planner' })).status).toBe(403);
@@ -2059,14 +2059,14 @@ describe('OCPI-sync — autorisatie', () => {
   });
 });
 
-describe('OCPI-dashboard — autorisatie', () => {
+describe('OCPI-dashboard, autorisatie', () => {
   it('GET /api/ocpi/dashboard is admin-only', async () => {
     expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-planner' })).status).toBe(403);
     expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-a' })).status).toBe(403);
   });
 });
 
-describe('rostering-export — eigen secret (controle-ronde 27-08, nr. 28)', () => {
+describe('rostering-export, eigen secret (controle-ronde 27-08, nr. 28)', () => {
   it('met ROSTERING_EXPORT_SECRET gezet werkt het cron-secret niet meer, het eigen secret wel', async () => {
     process.env.ROSTERING_EXPORT_SECRET = 'solver-secret';
     try {
@@ -2129,7 +2129,7 @@ describe('documenten per gebruiker', () => {
     expect(res.json.map((d: any) => d.id)).toEqual(['d1']);
   });
 
-  it('alleen een admin kan de documenten van een andere gebruiker opvragen — een planner krijgt de eigen lijst', async () => {
+  it('alleen een admin kan de documenten van een andere gebruiker opvragen, een planner krijgt de eigen lijst', async () => {
     mem.documents = [
       { id: 'd2', userId: '4', filename: 'loonbrief.pdf', storagePath: '4/y', uploadedAt: '2026-07-01T00:00:00Z' },
       { id: 'd-p', userId: '2', filename: 'eigen.pdf', storagePath: '2/z', uploadedAt: '2026-07-01T00:00:00Z' },
@@ -2187,7 +2187,7 @@ describe('toestel-whitelist', () => {
     expect(revoked.json?.code).toBe('device_revoked');
   });
 
-  it('raakt planner en admin niet — ook zonder toestel-header', async () => {
+  it('raakt planner en admin niet, ook zonder toestel-header', async () => {
     expect((await api('GET', '/api/updates', { token: 'tok-admin', device: null })).status).toBe(200);
     expect((await api('GET', '/api/updates', { token: 'tok-planner', device: null })).status).toBe(200);
   });
@@ -2308,7 +2308,7 @@ describe('dienstruil intrekken via PATCH (#250)', () => {
 });
 
 describe('auth-storing ≠ uitloggen (middleware 401 vs 503)', () => {
-  it('een onbereikbare auth-dienst geeft 503, geen 401 — de client logt anders alle toestellen tegelijk uit', async () => {
+  it('een onbereikbare auth-dienst geeft 503, geen 401, de client logt anders alle toestellen tegelijk uit', async () => {
     const res = await api('GET', '/api/planning', { token: 'tok-storing' });
     expect(res.status).toBe(503);
     expect(res.json?.code).toBe('auth_unavailable');
@@ -2352,7 +2352,7 @@ describe('dienstnotities (planning_notes)', () => {
   });
 });
 
-describe('dienstruil — dóórgeef-ketting en stale goedkeuring', () => {
+describe('dienstruil, dóórgeef-ketting en stale goedkeuring', () => {
   it('laat een via een ruil verkregen dienst opnieuw ruilen (geen 409 op een afgehandelde ruil)', async () => {
     // s-1 is goedgekeurd én doorgevoerd: sh-a staat nu op naam van chauffeur 4.
     // Vóór de fix blokkeerde die afgehandelde ruil elk nieuw verzoek voor
@@ -2384,7 +2384,7 @@ describe('dienstruil — dóórgeef-ketting en stale goedkeuring', () => {
   });
 });
 
-describe('maandplanning — afwezigheidscodes zijn voor iedereen zichtbaar', () => {
+describe('maandplanning, afwezigheidscodes zijn voor iedereen zichtbaar', () => {
   // BEWUSTE KEUZE (Jarno, 01-08-2026): het maandrooster toont dezelfde codes
   // als de fysieke planning in het chauffeurslokaal, ziekte incluis. Er is kort
   // een maskering voor chauffeurs geweest (#290) die er op verzoek weer uit is.
@@ -2466,7 +2466,7 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     mem.leave = [];
     mem.swaps = [{
       id: 's-merk', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'approved',
-      reason: 'Handmatige wissel door Admin E2E — Ziekte', createdAt: '2026-07-14T08:00:00Z',
+      reason: 'Handmatige wissel door Admin E2E, Ziekte', createdAt: '2026-07-14T08:00:00Z',
       decidedAt: '2026-07-14T09:00:00Z', shiftDate: '2026-07-15', shiftLine: '12', swapType: 'overname',
     }];
     const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
@@ -2591,7 +2591,7 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     // Admin zet dienst 12 over naar chauffeur 4 (niet afwezig).
     mem.swaps = [{
       id: 's-dekking', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved',
-      reason: 'Handmatige wissel door Admin E2E — Ziekte', createdAt: '2030-07-14T08:00:00Z',
+      reason: 'Handmatige wissel door Admin E2E, Ziekte', createdAt: '2030-07-14T08:00:00Z',
       decidedAt: '2030-07-14T09:00:00Z', shiftDate: '2030-07-15', shiftLine: '12', swapType: 'overname',
     }];
     const na = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-15', { token: 'tok-planner' });
@@ -2669,7 +2669,7 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
   });
 });
 
-describe('maandplanning — goedgekeurde dienstruilen zichtbaar (bevinding Jarno 06-08)', () => {
+describe('maandplanning, goedgekeurde dienstruilen zichtbaar (bevinding Jarno 06-08)', () => {
   // Een goedgekeurde ruil verhuist de dienst in de planning-tabel, maar het
   // maandrooster leest de matrix — zonder overlay bleef de oude eigenaar
   // daar op zijn dienst staan.
@@ -2729,7 +2729,7 @@ describe('maandplanning — goedgekeurde dienstruilen zichtbaar (bevinding Jarno
   });
 });
 
-describe('dienstruil — afwezigheids-check in beide richtingen', () => {
+describe('dienstruil, afwezigheids-check in beide richtingen', () => {
   it('weigert een nieuwe ruil als de AANVRAGER ziek is op de terugruil-dag (409)', async () => {
     // Chauffeur 4 biedt sh-b aan en zou op 08/07 dienst 12 van chauffeur 3
     // terugrijden — maar is die dag zelf ziek gemeld. De oude check keek
@@ -2762,7 +2762,7 @@ describe('dienstruil — afwezigheids-check in beide richtingen', () => {
   });
 });
 
-describe('dienstruil — terugdraaien, bevriezen en tegenprestatie-validatie', () => {
+describe('dienstruil, terugdraaien, bevriezen en tegenprestatie-validatie', () => {
   it('approved → rejected draait de planning terug (niet alleen cancelled)', async () => {
     // sh-a is via s-x doorgevoerd naar chauffeur 4; de planner wijst hem daarna
     // alsnog af. Vóór de fix bleef de dienst bij 4 staan en zette de replay hem
@@ -2840,7 +2840,7 @@ describe('dienstruil — terugdraaien, bevriezen en tegenprestatie-validatie', (
   });
 });
 
-describe('handmatige dienstwissel — gates uit de controle-ronde', () => {
+describe('handmatige dienstwissel, gates uit de controle-ronde', () => {
   const wissel = (body: Record<string, unknown>, token = 'tok-admin') =>
     api('POST', '/api/admin/shift-swap', { token, body: { reason: 'Ziekte', ...body } });
 
@@ -2866,7 +2866,7 @@ describe('handmatige dienstwissel — gates uit de controle-ronde', () => {
   });
 });
 
-describe('planning-import — ziekte blokkeert niet, gepland verlof wel', () => {
+describe('planning-import, ziekte blokkeert niet, gepland verlof wel', () => {
   // Melding Jarno 15-08: een upload werd geblokkeerd door een "verlofconflict"
   // dat in werkelijkheid een ziekteperiode was. Ziekte is onvoorzien (de Excel
   // wordt vooraf gemaakt) en heeft een eigen herverdeel-flow — alleen gepland
@@ -2917,7 +2917,7 @@ describe('planning-import — ziekte blokkeert niet, gepland verlof wel', () => 
   });
 });
 
-describe('planning-import — periode-selectie', () => {
+describe('planning-import, periode-selectie', () => {
   // De planner maakt de Excel maanden vooruit, maar alleen het vaststaande
   // deel mag het portaal in: een meegegeven periode filtert de rijen vóór
   // opbouw én vervanging, alsof de rest niet in het bestand stond.
@@ -2985,7 +2985,7 @@ describe('planning-import — periode-selectie', () => {
   });
 });
 
-describe('dienstruil — dubbele inplanning bij goedkeuren', () => {
+describe('dienstruil, dubbele inplanning bij goedkeuren', () => {
   it('weigert goedkeuring als de collega intussen zelf een dienst heeft die dag', async () => {
     // s-1: chauffeur 3 biedt sh-a (01/07, dienst 12) aan chauffeur 4, tegen een
     // vrije dag. Chauffeur 4 krijgt intussen zelf een dienst op 01/07.
@@ -3078,7 +3078,7 @@ describe('onbemande dienst toewijzen (Dekking)', () => {
   });
 });
 
-describe('dienstruil — concurrency-vangnet bij goedkeuren', () => {
+describe('dienstruil, concurrency-vangnet bij goedkeuren', () => {
   it('weigert goedkeuring als de doorvoer nul rijen verplaatst (planning intussen gewijzigd)', async () => {
     // Geaccepteerde ruil, maar de dienst is intussen (bv. door een admin-
     // wissel) al naar iemand anders verplaatst: apply raakt 0 rijen.
@@ -3095,7 +3095,7 @@ describe('dienstruil — concurrency-vangnet bij goedkeuren', () => {
   });
 });
 
-describe('dienstruil — verwijderen laat een auditspoor na', () => {
+describe('dienstruil, verwijderen laat een auditspoor na', () => {
   it('logt een verwijderde ruil in het activiteitenlog', async () => {
     const voor = mem.activity.length;
     // Planner schrijft de volledige lijst terug zónder s-1 (= verwijdering).
@@ -3263,7 +3263,7 @@ describe('Excel-terugexport van de maandplanning', () => {
 });
 
 describe('beveiliging (controleronde 16-08)', () => {
-  it('A — /api/planning is per chauffeur gescoped, ook met een vreemde ?driverId', async () => {
+  it('A, /api/planning is per chauffeur gescoped, ook met een vreemde ?driverId', async () => {
     const eigen = await api('GET', '/api/planning', { token: 'tok-a' });
     expect(eigen.status).toBe(200);
     expect(eigen.json.every((s: any) => String(s.driverId) === '3')).toBe(true);
@@ -3273,13 +3273,13 @@ describe('beveiliging (controleronde 16-08)', () => {
     expect(vreemd.json.every((s: any) => String(s.driverId) === '3')).toBe(true);
   });
 
-  it('A — planner/admin mag wél gericht een andere chauffeur opvragen', async () => {
+  it('A, planner/admin mag wél gericht een andere chauffeur opvragen', async () => {
     const res = await api('GET', '/api/planning?driverId=4', { token: 'tok-planner' });
     expect(res.status).toBe(200);
     expect(res.json.every((s: any) => String(s.driverId) === '4')).toBe(true);
   });
 
-  it('E — push-subscribe weigert een intern/loopback-endpoint (SSRF)', async () => {
+  it('E, push-subscribe weigert een intern/loopback-endpoint (SSRF)', async () => {
     for (const endpoint of [
       'http://169.254.169.254/latest/meta-data',
       'https://localhost/x',
@@ -3296,7 +3296,7 @@ describe('beveiliging (controleronde 16-08)', () => {
     expect(ok.status).toBe(200);
   });
 
-  it('C — nieuw toestel boven de bovengrens wordt geweigerd, een bekend token nog wel', async () => {
+  it('C, nieuw toestel boven de bovengrens wordt geweigerd, een bekend token nog wel', async () => {
     mem.devices = Array.from({ length: 15 }, (_, i) => ({
       userId: '3', deviceToken: `d${i}`, name: `t${i}`, status: 'approved',
       createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto',
@@ -3309,7 +3309,7 @@ describe('beveiliging (controleronde 16-08)', () => {
     expect(bekend.status).toBe(200);
   });
 
-  it('D — decidedAt is server-gezaghebbend bij een afwijzing via de array-route', async () => {
+  it('D, decidedAt is server-gezaghebbend bij een afwijzing via de array-route', async () => {
     const eigen = mem.swaps
       .filter((s: any) => s.requesterId === '4' || s.targetDriverId === '4')
       .map((s: any) => (s.id === 's-1' ? { ...s, status: 'rejected', decidedAt: '2000-01-01T00:00:00Z' } : s));
@@ -3321,7 +3321,7 @@ describe('beveiliging (controleronde 16-08)', () => {
     expect(Date.parse(saved.decidedAt)).toBeGreaterThan(Date.parse('2026-01-01'));
   });
 
-  it('D — decidedAt is server-gezaghebbend bij goedkeuring via de array-route', async () => {
+  it('D, decidedAt is server-gezaghebbend bij goedkeuring via de array-route', async () => {
     // Force-approve pending→approved via de array-route mag alleen admin.
     const all = mem.swaps.map((s: any) => (s.id === 's-1' ? { ...s, status: 'approved', decidedAt: '2000-01-01T00:00:00Z' } : s));
     const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: all });
@@ -3332,7 +3332,7 @@ describe('beveiliging (controleronde 16-08)', () => {
     expect(Date.parse(saved.decidedAt)).toBeGreaterThan(Date.parse('2026-01-01'));
   });
 
-  it('G — het bedrijfsbrede noodbericht is rate-limited', async () => {
+  it('G, het bedrijfsbrede noodbericht is rate-limited', async () => {
     let last: any;
     for (let i = 0; i < 8; i++) {
       last = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 't', content: 'c' } } });
@@ -3423,7 +3423,7 @@ describe('advies openstaande diensten (/api/coverage-advisor)', () => {
       ['Chauffeur B', false],
     ]);
     const b = res.json.kandidaten.find((k: any) => k.name === 'Chauffeur B');
-    expect(b.redenen).toEqual(['schoolvervoerchauffeur — springt niet in op een lijndienst']);
+    expect(b.redenen).toEqual(['schoolvervoerchauffeur, springt niet in op een lijndienst']);
   });
 
   it('bij gelijke weekbelasting beslist de reeks, daarna het maandtotaal', async () => {
@@ -3565,7 +3565,7 @@ describe('planner-assistent (/api/planner-chat)', () => {
   });
 });
 
-describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () => {
+describe('verbeterronde 20-08, import-signalen & planning-aanwezigheid', () => {
   const bouwXlsx = async (aoa: unknown[][]) => {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
@@ -3670,7 +3670,7 @@ describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () =
   });
 });
 
-describe('telegram-webhook — secret, koppeling en commando\'s', () => {
+describe('telegram-webhook, secret, koppeling en commando\'s', () => {
   const verzonden: Array<{ chatId: string; tekst: string; knoppen?: Array<Array<{ tekst: string; data: string }>> }> = [];
   const webhook = (body: unknown, secretHeader?: string) =>
     api('POST', '/api/telegram/webhook', {
@@ -3917,7 +3917,7 @@ describe('telegram-webhook — secret, koppeling en commando\'s', () => {
   });
 });
 
-describe('verbeterronde 22-08 — voorstel, batch-advies en maandoverzicht', () => {
+describe('verbeterronde 22-08, voorstel, batch-advies en maandoverzicht', () => {
   it('GET /api/coverage-expectations/voorstel stelt lijsten voor uit de praktijk (staf-only)', async () => {
     mem.planningMatrix = [
       { id: 'v-1', source_date: '2030-09-01', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': 'vrij' }, raw_row: '' },
@@ -3965,7 +3965,7 @@ describe('verbeterronde 22-08 — voorstel, batch-advies en maandoverzicht', () 
   });
 });
 
-describe('planning-import — herstelpunt en terugzetten (controle-ronde 27-08, nr. 56 + 25)', () => {
+describe('planning-import, herstelpunt en terugzetten (controle-ronde 27-08, nr. 56 + 25)', () => {
   const buildXlsx = async (dag: string, codeA: string, codeB = '') => {
     const XLSX = await import('xlsx');
     const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
@@ -4033,7 +4033,7 @@ describe('planning-import — herstelpunt en terugzetten (controle-ronde 27-08, 
   });
 });
 
-describe('authenticate — lokale JWT-verificatie met getUser-fallback (controle-ronde 27-08, nr. 55)', () => {
+describe('authenticate, lokale JWT-verificatie met getUser-fallback (controle-ronde 27-08, nr. 55)', () => {
   it('geldig token → 200 via getClaims (geen roundtrip nodig)', async () => {
     expect((await api('GET', '/api/me', { token: 'tok-a' })).status).toBe(200);
   });
@@ -4049,7 +4049,7 @@ describe('authenticate — lokale JWT-verificatie met getUser-fallback (controle
   });
 });
 
-describe('import-keten — golden end-to-end (echte praktijk-structuur)', () => {
+describe('import-keten, golden end-to-end (echte praktijk-structuur)', () => {
   // Grotere richting 01-09: de keten-bugs die Jarno echt raakten zaten
   // allemaal NÁ de parser (valse kolom-waarschuwingen op het tellingen-blok,
   // een verdwenen terugruil-been bij herimport, wegvallende chauffeurs) —
@@ -4171,7 +4171,7 @@ describe('import-keten — golden end-to-end (echte praktijk-structuur)', () => 
     expect(waarschuwingen.every((w) => w.includes('Testman Nieuw') && w.includes('aantal'))).toBe(true);
   });
 
-  it('herimport voert een goedgekeurde 1-op-1-ruil opnieuw door — beide benen', async () => {
+  it('herimport voert een goedgekeurde 1-op-1-ruil opnieuw door, beide benen', async () => {
     seedKeten();
     await importeer(await goldenXlsxBase64());
     // Aa (10) geeft zijn 2101 van 01-09 aan Ab (11) en neemt Ab's 2102 die
@@ -4215,7 +4215,7 @@ describe('import-keten — golden end-to-end (echte praktijk-structuur)', () => 
   });
 });
 
-describe('per-record API (PUT / POST one / DELETE) — gebruikers, omleidingen, updates', () => {
+describe('per-record API (PUT / POST one / DELETE), gebruikers, omleidingen, updates', () => {
   const REV = 'x-record-revision';
   const COLL = 'x-collection-revision';
   const revVan = async (pad: string, token: string, id: string): Promise<string> => {

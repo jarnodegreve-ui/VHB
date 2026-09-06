@@ -43,7 +43,7 @@ export function AssistentView() {
       const res = await vraagAssistent(historie);
       setBerichten([...historie, { role: 'assistant', content: res.antwoord }]);
     } catch (e: any) {
-      setFout(e?.message || 'De assistent kon je vraag niet beantwoorden — probeer het zo opnieuw.');
+      setFout(e?.message || 'De assistent kon je vraag niet beantwoorden, probeer het zo opnieuw.');
     } finally {
       setBezig(false);
     }
@@ -53,7 +53,7 @@ export function AssistentView() {
 
   return (
     <PageShell>
-      <PageHeader title="Assistent" description="Stel je planningsvraag — advies op basis van de actuele planning, het verlof en het invaladvies." />
+      <PageHeader title="Assistent" description="Stel je planningsvraag, advies op basis van de actuele planning, het verlof en het invaladvies." />
       <Card padding="none" className="flex flex-col overflow-hidden">
         {/* Gespreksvlak */}
         <div className="flex-1 min-h-[45dvh] max-h-[62dvh] overflow-y-auto p-5 space-y-3">
@@ -65,7 +65,7 @@ export function AssistentView() {
               <div>
                 <p className="text-sm font-bold text-slate-800">Stel je planningsvraag</p>
                 <p className="mt-1 text-xs font-medium text-slate-500 max-w-sm">
-                  De assistent kijkt in de actuele planning, het verlof en het invaladvies — en adviseert alleen; toewijzen doe je zelf in het portaal.
+                  De assistent kijkt in de actuele planning, het verlof en het invaladvies, en adviseert alleen; toewijzen doe je zelf in het portaal.
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
@@ -137,7 +137,7 @@ export function AssistentView() {
       </Card>
 
       <p className="text-2xs font-medium text-slate-500 px-1">
-        De assistent baseert zich op de actuele planning maar kan fouten maken — controleer het advies vóór je toewijst. Gesprekken worden niet bewaard.
+        De assistent baseert zich op de actuele planning maar kan fouten maken, controleer het advies vóór je toewijst. Gesprekken worden niet bewaard.
       </p>
     </PageShell>
   );

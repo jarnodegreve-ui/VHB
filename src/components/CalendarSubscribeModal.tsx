@@ -47,7 +47,7 @@ export function CalendarSubscribeModal({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError('Kopiëren lukte niet — selecteer en kopieer de link handmatig.');
+      setError('Kopiëren lukte niet, selecteer en kopieer de link handmatig.');
     }
   };
 
@@ -63,7 +63,7 @@ export function CalendarSubscribeModal({
             </div>
           }
           title="Aan agenda toevoegen"
-          description="Je diensten in je eigen agenda — automatisch bijgewerkt."
+          description="Je diensten in je eigen agenda, automatisch bijgewerkt."
           onClose={onClose}
         />
 
@@ -123,7 +123,7 @@ export function CalendarSubscribeModal({
                 </p>
                 <div className="mt-2 flex items-start gap-1.5 text-2xs font-medium text-slate-500">
                   <ShieldCheck size={14} className="text-slate-400 mt-0.5 shrink-0" />
-                  <span>Deze link is persoonlijk — deel 'm niet, hij toont jouw diensten.</span>
+                  <span>Deze link is persoonlijk, deel 'm niet, hij toont jouw diensten.</span>
                 </div>
               </>
             ) : null}
@@ -135,7 +135,7 @@ export function CalendarSubscribeModal({
             <Button variant="secondary" className="mt-2" icon={<Download size={16} />} onClick={() => { onDownload(); onClose(); }}>
               Download .ics-bestand
             </Button>
-            <p className="mt-1.5 text-xs font-medium text-slate-500">Een momentopname — updatet niet automatisch.</p>
+            <p className="mt-1.5 text-xs font-medium text-slate-500">Een momentopname, updatet niet automatisch.</p>
           </div>
         </div>
       </div>

@@ -131,7 +131,7 @@ export function openPdfInNewTab(pdfUrl: string | undefined | null) {
     const url = URL.createObjectURL(blob);
     if (!openNieuwVenster(url)) {
       window.location.assign(url);
-      return; // niet revoken — het huidige venster gebruikt de blob-URL nog
+      return; // niet revoken, het huidige venster gebruikt de blob-URL nog
     }
     // Free the object URL after the new tab has had time to load it.
     setTimeout(() => URL.revokeObjectURL(url), 60_000);

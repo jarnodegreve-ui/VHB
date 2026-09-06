@@ -25,6 +25,6 @@ export function useOptioneleAppData(): AppData | null {
 /** Throwt buiten de provider: een view die dit gebruikt hoort in de schil. */
 export function useAppDataContext(): AppData {
   const ctx = useContext(AppDataContext);
-  if (!ctx) throw new Error('useAppDataContext buiten AppDataProvider — deze view hoort binnen de app-schil.');
+  if (!ctx) throw new Error('useAppDataContext buiten AppDataProvider, deze view hoort binnen de app-schil.');
   return ctx;
 }

@@ -63,7 +63,7 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
     const inProductie = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
     const ctx = opts.context ? ` (${opts.context})` : "";
     if (inProductie) {
-      console.error(`[mail] SMTP niet geconfigureerd — mail NIET verzonden${ctx}: ${recipients.length} ontvanger(s), onderwerp "${opts.subject}".`);
+      console.error(`[mail] SMTP niet geconfigureerd, mail NIET verzonden${ctx}: ${recipients.length} ontvanger(s), onderwerp "${opts.subject}".`);
     } else {
       console.log(`--- MOCK EMAIL${ctx} ---`);
       console.log("To:", recipients.join(", "));
@@ -165,7 +165,7 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
         </div>
       </div>
       <div style="background-color: #f8fafc; padding: 14px 30px; text-align: center; font-size: 11px; color: #94a3b8;">
-        Automatisch bericht van het VHB Portaal — niet beantwoorden.
+        Automatisch bericht van het VHB Portaal, niet beantwoorden.
       </div>
     </div>
   `;
@@ -181,7 +181,7 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
 
   await sendEmail({
     to: [ctx.to],
-    subject: `${config.subject} — ${period}`,
+    subject: `${config.subject}, ${period}`,
     text,
     html,
     context: `leave:${ctx.action}:${ctx.to}`,
@@ -216,11 +216,11 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
         </p>
         <div style="margin-top: 26px; text-align: center;">${setPassword.html}</div>
         <p style="margin-top: 26px; color: #94a3b8; font-size: 12px; line-height: 1.6;">
-          Tip: open ${url} op je telefoon en kies "Zet op beginscherm" — dan werkt het portaal als app.
+          Tip: open ${url} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.
         </p>
       </div>
       <div style="background-color: #f8fafc; padding: 14px 30px; text-align: center; font-size: 11px; color: #94a3b8;">
-        Automatisch bericht van het VHB Portaal — niet beantwoorden.
+        Automatisch bericht van het VHB Portaal, niet beantwoorden.
       </div>
     </div>
   `;
@@ -236,7 +236,7 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
 
   return sendEmail({
     to: [ctx.to],
-    subject: "Welkom op het VHB Portaal — stel je wachtwoord in",
+    subject: "Welkom op het VHB Portaal, stel je wachtwoord in",
     text,
     html,
     context: `welcome:${ctx.to}`,
@@ -287,7 +287,7 @@ export const sendExpiryReminderEmail = async (ctx: {
         </div>
       </div>
       <div style="background-color: #f8fafc; padding: 14px 30px; text-align: center; font-size: 11px; color: #94a3b8;">
-        Automatisch bericht van het VHB Portaal — niet beantwoorden.
+        Automatisch bericht van het VHB Portaal, niet beantwoorden.
       </div>
     </div>
   `;

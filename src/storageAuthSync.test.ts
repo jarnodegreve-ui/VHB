@@ -87,7 +87,7 @@ beforeEach(() => {
   ];
 });
 
-describe('saveUsersData — Auth-koppeling bij e-mailwijzigingen', () => {
+describe('saveUsersData, Auth-koppeling bij e-mailwijzigingen', () => {
   it('weigert een adreswissel naar een adres waar al een ánder Auth-account op staat, vóór enige write', async () => {
     const data = invoer().map((u) => (u.id === '2' ? { ...u, email: 'b@vhb.be' } : u));
     await expect(saveUsersData(data)).rejects.toBeInstanceOf(EmailInGebruikError);

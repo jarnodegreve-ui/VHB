@@ -19,7 +19,7 @@ const leave = (
   createdAt: new Date('2026-01-01').toISOString(),
 });
 
-describe('verlofBalans — basis', () => {
+describe('verlofBalans, basis', () => {
   it('standaard budget = 24 dagen VHB', () => {
     expect(BETAALD_VERLOF_BUDGET).toBe(24);
   });
@@ -58,7 +58,7 @@ describe('verlofBalans — basis', () => {
   });
 });
 
-describe('verlofBalans — filtering', () => {
+describe('verlofBalans, filtering', () => {
   it('telt alleen verlof van die userId', () => {
     const leaves = [
       leave('l1', 'driver-1', '2026-07-01', '2026-07-05'),
@@ -89,7 +89,7 @@ describe('verlofBalans — filtering', () => {
   });
 });
 
-describe('verlofBalans — jaargrenzen (clipping)', () => {
+describe('verlofBalans, jaargrenzen (clipping)', () => {
   it('verlof dat in het vorige jaar start, telt alleen de dagen IN het opgegeven jaar', () => {
     const leaves = [leave('l1', 'driver-1', '2025-12-28', '2026-01-03')];
     // 2025: 28, 29, 30, 31 → 4 dagen
@@ -110,7 +110,7 @@ describe('verlofBalans — jaargrenzen (clipping)', () => {
   });
 });
 
-describe('verlofBalans — over budget', () => {
+describe('verlofBalans, over budget', () => {
   it('gebruikt > budget → resterend = 0 (nooit negatief)', () => {
     const leaves = [leave('l1', 'driver-1', '2026-01-01', '2026-01-31')]; // 31 dagen
     const balance = verlofBalans(leaves, 'driver-1', 2026);
@@ -119,7 +119,7 @@ describe('verlofBalans — over budget', () => {
   });
 });
 
-describe('verlofBalans — zomertijd (DST)', () => {
+describe('verlofBalans, zomertijd (DST)', () => {
   it('verlofperiode over de overgang naar zomertijd telt elke dag inclusief', () => {
     // 2026: zomertijd begint zondag 29 maart (die lokale dag is maar 23u).
     // 28, 29, 30 maart = 3 dagen — vroeger telde floor() er maar 2.
@@ -133,7 +133,7 @@ describe('verlofBalans — zomertijd (DST)', () => {
   });
 });
 
-describe('verlofBalans — custom budget per gebruiker', () => {
+describe('verlofBalans, custom budget per gebruiker', () => {
   it('respecteert verlofBudget veld op user (bv. anciënniteit/deeltijds)', () => {
     const leaves = [leave('l1', 'driver-1', '2026-07-01', '2026-07-05')]; // 5 dagen
     const balance = verlofBalans(leaves, 'driver-1', 2026, 30);
@@ -154,7 +154,7 @@ describe('verlofBalans — custom budget per gebruiker', () => {
   });
 });
 
-describe('verlofBalans — aangevraagd (pending)', () => {
+describe('verlofBalans, aangevraagd (pending)', () => {
   const aanvraag = (id: string, start: string, end: string, status: LeaveRequest['status'], type: LeaveRequest['type'] = 'betaald_verlof'): LeaveRequest => ({
     id, userId: 'driver-1', startDate: start, endDate: end, type, status, createdAt: '2026-01-01T00:00:00Z',
   });

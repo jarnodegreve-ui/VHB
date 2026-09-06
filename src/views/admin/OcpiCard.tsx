@@ -57,7 +57,7 @@ export function OcpiCard() {
         notify(`Geregistreerd bij ChargEye (OCPI ${data.version ?? '2.2.1'}, ${data.endpoints ?? 0} endpoints).`, 'success');
       }
     } catch {
-      notify('Registratie mislukt — controleer de OCPI-instellingen en probeer opnieuw.', 'error');
+      notify('Registratie mislukt, controleer de OCPI-instellingen en probeer opnieuw.', 'error');
     } finally {
       setIsRegistering(false);
       fetchStatus();
@@ -80,7 +80,7 @@ export function OcpiCard() {
         else notify(`Sync klaar: ${s}`, 'success');
       }
     } catch {
-      notify('Sync mislukt — probeer opnieuw.', 'error');
+      notify('Sync mislukt, probeer opnieuw.', 'error');
     } finally {
       setIsSyncing(false);
     }

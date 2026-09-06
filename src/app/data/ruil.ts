@@ -39,7 +39,7 @@ export function useRuilData(ctx: DataCtx) {
         body: JSON.stringify(newSwaps),
       });
       if (response.status === 409 || response.status === 428) {
-        showToast('De dienstruilen zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        showToast('De dienstruilen zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchSwaps();
         return false;
       }
@@ -53,7 +53,7 @@ export function useRuilData(ctx: DataCtx) {
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
-        showToast(isNewRequest ? 'Ruilverzoek verstuurd — je collega moet eerst accepteren.' : 'Dienstruil bijgewerkt.', 'success');
+        showToast(isNewRequest ? 'Ruilverzoek verstuurd, je collega moet eerst accepteren.' : 'Dienstruil bijgewerkt.', 'success');
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
@@ -90,7 +90,7 @@ export function useRuilData(ctx: DataCtx) {
       // echte timestamp via de refresh binnenhalen.
       setSwaps((curr) => curr.map((s) => (s.id === id ? { ...s, targetSeenAt: new Date().toISOString() } : s)));
       void fetchSwaps();
-      notify('Bevestigd — de planner ziet dat je de wissel gezien hebt.', 'success');
+      notify('Bevestigd, de planner ziet dat je de wissel gezien hebt.', 'success');
       return true;
     } catch {
       notify('Bevestigen mislukt. Controleer je verbinding.', 'error');

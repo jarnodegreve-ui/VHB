@@ -277,7 +277,7 @@ export function RitbladViewer({
             <EmptyState
               illustratie={<NietGevonden />}
               title={`Geen apart blad gevonden voor ${nummerTekst}`}
-              message="De bundel bevat geen pagina waarop dit dienstnummer herkenbaar staat — of het bestand is een scan zonder tekst. De volledige bundel werkt wel."
+              message="De bundel bevat geen pagina waarop dit dienstnummer herkenbaar staat, of het bestand is een scan zonder tekst. De volledige bundel werkt wel."
               action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => openPdfInNewTab(staat.url)}>Volledige bundel openen</Button>}
             />
           </div>

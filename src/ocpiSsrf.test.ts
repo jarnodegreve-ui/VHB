@@ -25,7 +25,7 @@ describe('assertSafeOcpiUrl', () => {
     expect(assertSafeOcpiUrl(ok, 'test-URL')).toBe(ok);
   });
 
-  it('weigert een andere publieke host — ook al is die op zich "veilig"', () => {
+  it('weigert een andere publieke host, ook al is die op zich "veilig"', () => {
     // Dit is de kern: het oude IP-blocklistje liet elke publieke host door,
     // dus een aanvallershost kreeg gewoon Token C toegestuurd.
     geweigerd('https://evil.example/ocpi/locations');

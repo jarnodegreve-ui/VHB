@@ -3,7 +3,7 @@ import { escapeIcsText, foldIcsLine, addOneDay, toFloatingDateTime, buildVevent,
 
 const DTSTAMP = '20260609T120000Z';
 
-describe('ics — helpers', () => {
+describe('ics, helpers', () => {
   it('escapeIcsText escapet , ; \\ en newline', () => {
     expect(escapeIcsText('a,b;c\\d\ne')).toBe('a\\,b\\;c\\\\d\\ne');
   });
@@ -29,7 +29,7 @@ describe('ics — helpers', () => {
   });
 });
 
-describe('ics — events', () => {
+describe('ics, events', () => {
   const base: IcsEvent = {
     uid: 'vhb-shift-1@vhb-portaal',
     date: '2026-07-03',

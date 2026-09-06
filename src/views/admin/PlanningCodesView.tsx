@@ -74,7 +74,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
     }
     const index = draftCodes.findIndex((c) => c._key === code._key);
     void metOngedaan({
-      boodschap: `${code.code ? `Code ${code.code.toUpperCase()}` : 'Lege rij'} verwijderd — definitief zodra je opslaat.`,
+      boodschap: `${code.code ? `Code ${code.code.toUpperCase()}` : 'Lege rij'} verwijderd, definitief zodra je opslaat.`,
       uitvoeren: () => { setDraftCodes((current) => current.filter((c) => c._key !== code._key)); },
       herstellen: () => {
         setDraftCodes((current) => (
@@ -155,7 +155,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           <Zijvak
             titel="Overzicht"
             voet={summary.unknown > 0
-              ? `${summary.unknown} ${summary.unknown === 1 ? 'code staat' : 'codes staan'} nog op Onbekend — kies een categorie zodat het portaal er iets mee kan.`
+              ? `${summary.unknown} ${summary.unknown === 1 ? 'code staat' : 'codes staan'} nog op Onbekend, kies een categorie zodat het portaal er iets mee kan.`
               : 'Wijzigingen gelden pas na Opslaan.'}
           >
             <ZijvakRij label="Diensten" waarde={summary.service} mono />

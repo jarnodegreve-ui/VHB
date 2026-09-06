@@ -49,7 +49,7 @@ export function AppSkeleton() {
             <ViewLoader />
             {lang && (
               <p className="mt-6 text-center text-xs font-medium text-slate-500">
-                Dit duurt langer dan normaal —{' '}
+                Dit duurt langer dan normaal,{' '}
                 {/* rauw: tekstlink in het skelet. */}
                 <button type="button" className="underline underline-offset-2 hover:text-slate-800" onClick={() => window.location.reload()}>vernieuw de pagina</button>.
               </p>

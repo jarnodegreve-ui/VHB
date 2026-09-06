@@ -122,7 +122,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         else next.delete(noteKey(selected.driverId, selected.iso));
         return next;
       });
-      notify(noteDraft.trim() ? 'Notitie opgeslagen — de chauffeur krijgt een melding.' : 'Notitie verwijderd.', 'success');
+      notify(noteDraft.trim() ? 'Notitie opgeslagen, de chauffeur krijgt een melding.' : 'Notitie verwijderd.', 'success');
       setSelected(null);
     } finally {
       setIsSavingNote(false);
@@ -148,9 +148,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         return;
       }
       await downloadBlob(`planning-${monthParam}.xlsx`, await res.blob());
-      notify('Excel gedownload — dit is de actuele stand, direct her-importeerbaar.', 'success');
+      notify('Excel gedownload, dit is de actuele stand, direct her-importeerbaar.', 'success');
     } catch {
-      notify('Exporteren is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+      notify('Exporteren is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
     } finally {
       setIsExporteren(false);
     }
@@ -179,7 +179,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       }
       setOverzicht(body);
     } catch {
-      notify('Overzicht laden is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+      notify('Overzicht laden is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
       setOverzichtOpen(false);
     } finally {
       setOverzichtLaden(false);
@@ -205,7 +205,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   const wisselRedenTekst = wisselReden === 'Andere correctie'
     ? wisselToelichting.trim()
-    : (wisselToelichting.trim() ? `${wisselReden} — ${wisselToelichting.trim()}` : wisselReden);
+    : (wisselToelichting.trim() ? `${wisselReden}, ${wisselToelichting.trim()}` : wisselReden);
   const wisselKlaar = !!wisselNaar && !!wisselRedenTekst;
 
   // Welke dienst is hier over te zetten? Een dienst-cel spreekt voor zich;
@@ -233,11 +233,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       });
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) { notify(body.error || 'Dienstwissel is mislukt.', 'error'); return; }
-      notify(`Dienst ${wisselDienst} overgezet — beide chauffeurs krijgen een melding.`, 'success');
+      notify(`Dienst ${wisselDienst} overgezet, beide chauffeurs krijgen een melding.`, 'success');
       setSelected(null);
       setReloadTick((t) => t + 1);
     } catch {
-      notify('Dienstwissel is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+      notify('Dienstwissel is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
     } finally {
       setIsWisselen(false);
     }
@@ -258,11 +258,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       });
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) { notify(body.error || 'Terugdraaien is mislukt.', 'error'); return; }
-      notify('Wissel teruggedraaid — de dienst staat weer op de oorspronkelijke chauffeur.', 'success');
+      notify('Wissel teruggedraaid, de dienst staat weer op de oorspronkelijke chauffeur.', 'success');
       setSelected(null);
       setReloadTick((t) => t + 1);
     } catch {
-      notify('Terugdraaien is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+      notify('Terugdraaien is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
     } finally {
       setIsTerugdraaien(false);
     }
@@ -459,7 +459,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     cell.hiddenService ? `dienst ${cell.hiddenService} nog niet herverdeeld` : '',
     cell.swapId ? (cell.swapManual ? `handmatig overgezet van ${cell.swapFrom || 'een collega'}` : `geruild met ${cell.swapFrom || 'een collega'}`) : '',
     heeftNotitie ? 'notitie' : '',
-  ].filter(Boolean).join(' · ') + ' — klik voor details';
+  ].filter(Boolean).join(' · ') + ', klik voor details';
 
   // Zoeken op chauffeur óf dienstnummer: bij 39 namen scroll je anders het
   // halve scherm door, en "wie rijdt 4102?" is de omgekeerde vraag die je
@@ -1067,7 +1067,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           value={noteDraft}
                           onChange={(e) => setNoteDraft(e.target.value)}
                           maxLength={280}
-                          placeholder="bv. Neem bus 412 — eerst tanken."
+                          placeholder="bv. Neem bus 412, eerst tanken."
                           className="h-20"
                         />
                         {/* Secundair: de ene gouden knop van dit venster is
@@ -1106,7 +1106,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             ) : (
               <p className="mt-5 text-sm font-medium text-slate-500">
                 {KIND_LABEL[selected.cell.kind]}
-                {selected.cell.kind === 'unknown' && ' — staat (nog) niet in het dienstoverzicht of de planningscodes.'}
+                {selected.cell.kind === 'unknown' && ', staat (nog) niet in het dienstoverzicht of de planningscodes.'}
               </p>
             )}
 
@@ -1120,7 +1120,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 {wisselNaAfwezigheid && (
                   <Card tone="accent" padding="none" className="px-3.5 py-2.5 text-xs font-medium text-slate-700 leading-relaxed">
                     {selected.driverName} staat op {selected.cell.label.toLowerCase()}, maar dienst{' '}
-                    <span className="font-semibold tabular-nums">{wisselDienst}</span> staat nog op naam — zet hem hieronder over.
+                    <span className="font-semibold tabular-nums">{wisselDienst}</span> staat nog op naam, zet hem hieronder over.
                   </Card>
                 )}
                 <p className="text-xs font-medium text-slate-500 leading-relaxed">
@@ -1187,7 +1187,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         <ModalHeader
           eyebrow="Maandoverzicht"
           title={`${MONTH_NAMES[monthIndex]} ${year}`}
-          description={'Stand ná wissels, toewijzingen en afwezigheden — identiek aan het tabblad “maandoverzicht” in de Excel-export. Uren = som van de dienstsegmenten; diensten zonder tijden tellen alleen in de dagtelling.'}
+          description={'Stand ná wissels, toewijzingen en afwezigheden, identiek aan het tabblad “maandoverzicht” in de Excel-export. Uren = som van de dienstsegmenten; diensten zonder tijden tellen alleen in de dagtelling.'}
           onClose={() => setOverzichtOpen(false)}
         />
         <div className="p-6 overflow-y-auto flex-1">

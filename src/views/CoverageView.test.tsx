@@ -33,7 +33,7 @@ const findBtn = (c: HTMLElement, re: RegExp) =>
 const nameInputs = (c: HTMLElement) =>
   [...c.querySelectorAll('input[placeholder="Naam dag-type"]')] as HTMLInputElement[];
 
-describe('CoverageView — dag-type toevoegen', () => {
+describe('CoverageView, dag-type toevoegen', () => {
   it('voegt een leeg dag-type bovenaan de lijst toe', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);

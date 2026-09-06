@@ -208,7 +208,7 @@ describe('zoekPaginasVoorDienstGecached', () => {
     expect(JSON.parse(window.localStorage.getItem(PAGINAS_CACHE_KEY)!).paginas).toEqual({ '2116': [1, 2] });
   });
 
-  it('bewaart een leeg resultaat mét leesfout evenmin (een scan zonder tekst wél — die is compleet gelezen)', async () => {
+  it('bewaart een leeg resultaat mét leesfout evenmin (een scan zonder tekst wél, die is compleet gelezen)', async () => {
     const kapot = maakDoc([['Dienst', '2117']]);
     kapot.getPage.mockImplementationOnce(async () => { throw new Error('tijdelijk'); });
     await expect(zoekPaginasVoorDienstGecached(kapot, '2116', 'v1')).resolves.toEqual([]);
@@ -240,7 +240,7 @@ describe('zoekPaginasVoorDienstGecached', () => {
 describe('haalRitbladMeta', () => {
   beforeEach(() => apiFetchMock.mockReset());
 
-  it('vraagt de metadata altijd vers op (cache: no-store — de SW doet dan network-first)', async () => {
+  it('vraagt de metadata altijd vers op (cache: no-store, de SW doet dan network-first)', async () => {
     apiFetchMock.mockResolvedValue(new Response(JSON.stringify({ url: 'https://s/ritblaadjes/x.pdf?token=1', uploadedAt: 'v1' })));
     await expect(haalRitbladMeta()).resolves.toEqual({ url: 'https://s/ritblaadjes/x.pdf?token=1', uploadedAt: 'v1' });
     expect(apiFetchMock).toHaveBeenCalledWith('/api/ritblaadje', { cache: 'no-store' });
@@ -292,7 +292,7 @@ describe('haalBundelBytes', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1); // dezelfde/geen URL opnieuw proberen heeft geen zin
   });
 
-  it('offline: de service worker beantwoordt de fetch uit zijn cache (query-loos pad) — geen herkansing nodig', async () => {
+  it('offline: de service worker beantwoordt de fetch uit zijn cache (query-loos pad), geen herkansing nodig', async () => {
     // De SW matcht /ritblaadjes/ ongeacht de (verlopen) token en geeft de
     // gecachte PDF; vanuit de app is dat gewoon een geslaagde fetch. De
     // metadata kwam dan uit de SW-fallback; een verse URL is er niet.

@@ -88,12 +88,12 @@ const allowedOcpiHosts = (): Set<string> => {
  *  stil een andere host te bellen. */
 export const assertSafeOcpiUrl = (raw: string, wat: string): string => {
   if (!isSafeExternalHttpsUrl(raw)) {
-    throw new OcpiError(`OCPI: ${wat} geweigerd — geen veilige publieke https-URL.`);
+    throw new OcpiError(`OCPI: ${wat} geweigerd, geen veilige publieke https-URL.`);
   }
   const allowed = allowedOcpiHosts();
   const host = new URL(raw).host.toLowerCase();
   if (allowed.size === 0) {
-    throw new OcpiError(`OCPI: ${wat} geweigerd — geen toegestane hosts geconfigureerd (OCPI_CPO_VERSIONS_URL ontbreekt).`);
+    throw new OcpiError(`OCPI: ${wat} geweigerd, geen toegestane hosts geconfigureerd (OCPI_CPO_VERSIONS_URL ontbreekt).`);
   }
   if (!allowed.has(host)) {
     throw new OcpiError(`OCPI: ${wat} wijst naar een niet-toegestane host (${host}).`);

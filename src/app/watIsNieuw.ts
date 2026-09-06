@@ -21,12 +21,12 @@ export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
     titel: 'Meldingen, offline en je eigen dashboard',
     regels: {
       chauffeur: [
-        'Meldingen: alles wat de planning je stuurde — beslissing, ruil, update — staat achter de bel bovenaan, ook zonder pushmeldingen.',
+        'Meldingen: alles wat de planning je stuurde, beslissing, ruil, update, staat achter de bel bovenaan, ook zonder pushmeldingen.',
         'Mijn dag en je ritblad werken nu ook zonder bereik: je ziet de laatst geladen gegevens en het opgeslagen blad.',
         'Dashboard aanpassen: verberg tegels of zet ze in je eigen volgorde via het menu rechtsboven.',
       ],
       staf: [
-        'Meldingen: verlofaanvragen, ruilen en ziekmeldingen staan achter de bel bovenaan — ook zonder pushmeldingen.',
+        'Meldingen: verlofaanvragen, ruilen en ziekmeldingen staan achter de bel bovenaan, ook zonder pushmeldingen.',
         'Chauffeurs zien Mijn dag en hun ritblad ook zonder bereik.',
         'Dashboard aanpassen: tegels verbergen of herschikken via het menu bovenaan de cockpit.',
       ],

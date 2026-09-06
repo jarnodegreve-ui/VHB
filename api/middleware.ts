@@ -63,7 +63,7 @@ export const isRosteringExportAuthorized = (req: express.Request): boolean => {
   const eigen = process.env.ROSTERING_EXPORT_SECRET;
   if (eigen) return bearerMatches(req, eigen);
   const viaCron = isCronAuthorized(req);
-  if (viaCron) console.warn("[rostering-export] geautoriseerd met CRON_SECRET — zet ROSTERING_EXPORT_SECRET (Vercel én Render) zodat het cron-secret niet gedeeld hoeft te worden.");
+  if (viaCron) console.warn("[rostering-export] geautoriseerd met CRON_SECRET, zet ROSTERING_EXPORT_SECRET (Vercel én Render) zodat het cron-secret niet gedeeld hoeft te worden.");
   return viaCron;
 };
 
@@ -241,7 +241,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
       // geforceerde fout te omzeilen. Chauffeur-only, dus planners/admins
       // blijven sowieso werken.
       if (isMissingTableError(err)) {
-        console.error("Toestel-tabel ontbreekt — gate tijdelijk overgeslagen:", err);
+        console.error("Toestel-tabel ontbreekt, gate tijdelijk overgeslagen:", err);
         req.accessToken = accessToken;
         req.authUser = authUser;
         req.appUser = appUser;

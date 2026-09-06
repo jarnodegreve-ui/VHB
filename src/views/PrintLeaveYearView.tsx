@@ -210,14 +210,14 @@ export function PrintLeaveYearView({
           <div className="grid grid-cols-2 gap-12">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 mb-8">
-                Voor gezien — chauffeur
+                Voor gezien, chauffeur
               </p>
               <div className="border-b border-slate-400 h-10" />
               <p className="mt-1 text-[10px] font-medium text-slate-400">Datum en handtekening</p>
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 mb-8">
-                Voor gezien — planner
+                Voor gezien, planner
               </p>
               <div className="border-b border-slate-400 h-10" />
               <p className="mt-1 text-[10px] font-medium text-slate-400">Datum en handtekening</p>

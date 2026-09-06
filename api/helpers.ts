@@ -897,7 +897,7 @@ export const parsePlanningMatrixXlsxMetWaarschuwingen = (
     if (laag === "aantal" || PLANNING_MATRIX_NON_DRIVER_HEADERS.has(laag)) continue;
     if (!NAAMACHTIG_RE.test(naam)) continue;
     if (chauffeurSleutels.has(sortedNameToken(naam))) continue;
-    waarschuwingen.push(`Kolom "${naam}" staat ná de "aantal"-kolom en wordt niet geïmporteerd — staat daar een chauffeur, verplaats de kolom dan vóór "aantal" en importeer opnieuw.`);
+    waarschuwingen.push(`Kolom "${naam}" staat ná de "aantal"-kolom en wordt niet geïmporteerd, staat daar een chauffeur, verplaats de kolom dan vóór "aantal" en importeer opnieuw.`);
   }
 
   // Voor diagnostiek bij faal: bewaar wat we wél zagen in kolom A.
@@ -974,7 +974,7 @@ export const parsePlanningMatrixXlsxMetWaarschuwingen = (
     else seenDates.add(row.source_date);
   }
   if (duplicateDates.size > 0) {
-    throw new Error(`Dubbele datumrijen in de praktijk-tab: ${Array.from(duplicateDates).sort().join(", ")}. Elke datum hoort één rij te hebben — verwijder de dubbele rij en importeer opnieuw.`);
+    throw new Error(`Dubbele datumrijen in de praktijk-tab: ${Array.from(duplicateDates).sort().join(", ")}. Elke datum hoort één rij te hebben, verwijder de dubbele rij en importeer opnieuw.`);
   }
 
   return { rows, waarschuwingen };

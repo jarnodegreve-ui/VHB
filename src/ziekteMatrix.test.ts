@@ -66,7 +66,7 @@ describe('vindOngeregistreerdeZiekte', () => {
   });
 });
 
-describe('vindOngeregistreerdeZiekte — accountstatus (controle-ronde 20-08)', () => {
+describe('vindOngeregistreerdeZiekte, accountstatus (controle-ronde 20-08)', () => {
   it('markeert een gepauzeerd account als niet-actief (registreer-knop zou een dood einde zijn)', () => {
     const gepauzeerd = [{ id: '3', name: 'Danny Van Ooteghem', isActive: false }];
     const rows = [rij('2030-09-01', { 'Van Ooteghem Danny': 'ziek' })];
@@ -75,7 +75,7 @@ describe('vindOngeregistreerdeZiekte — accountstatus (controle-ronde 20-08)', 
     ]);
   });
 
-  it('onderscheidt een naam-botsing (ambigu) van "geen account" — de remedie is tegengesteld', () => {
+  it('onderscheidt een naam-botsing (ambigu) van "geen account", de remedie is tegengesteld', () => {
     // Twee accounts die op dezelfde naam-sleutel uitkomen: de match valt
     // bewust weg (nameIdIndex), maar de UI mag dan niet "maak een account
     // aan" adviseren.
