@@ -29,7 +29,7 @@ export type BalkGeometrie = {
   voortgang: number;
 };
 
-export const minNaarTijd = (m: number): string => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+export const minNaarTijd = (m: number): string => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 export function balkGeometrie(delen: BalkDeel[], nuMin: number | null): BalkGeometrie | null {
   const gesorteerd = [...delen].filter((d) => d.end > d.start).sort((a, b) => a.start - b.start);
