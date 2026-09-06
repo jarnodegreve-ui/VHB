@@ -1,4 +1,5 @@
 import { deviceHeaders } from './device';
+import { markeerEigenSchrijfactie } from './liveSignaal';
 import { supabase } from './supabase';
 
 /**
@@ -159,5 +160,8 @@ async function verstuur(
     }
     throw new Error(detail || 'Je hebt geen toegang tot deze actie.');
   }
+  // Eigen schrijfactie: de realtime-echo daarvan hoort geen "bijgewerkt"-toast
+  // te geven (src/lib/liveSignaal.ts).
+  if (!isLezen && response.ok) markeerEigenSchrijfactie();
   return response;
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { valideer } from '../../lib/valideer';
 import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
@@ -548,6 +549,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
         description="Medewerkers, rollen en accountacties."
         actions={(
           <>
+            <AanwezigOpScherm />
             {/* Eén gouden knop in de kop; Excel-import en het document-
                 rondsturen zitten in het "…"-menu ernaast — zo stapelen er op
                 mobiel geen drie knoppen (afwerking 04-09, nr. 5 en 7). */}

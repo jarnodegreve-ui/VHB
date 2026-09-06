@@ -1724,22 +1724,62 @@ export type ClientErrorEntry = {
   url?: string;
   userAgent?: string;
   userId?: string;
+  // Context sinds 2026-09-06 (supabase/2026-09-06_client_errors_groepen.sql);
+  // zonder die migratie vallen we terug op de basiskolommen.
+  fingerprint?: string;
+  release?: string;
+  view?: string;
+  role?: string;
+  online?: boolean;
+  breadcrumbs?: unknown;
+  topFrame?: string;
 };
+
+/** Herkent "kolom bestaat niet" (migratie niet gedraaid): Postgres 42703,
+ *  PostgREST PGRST204 (schema-cache kent de kolom niet). */
+const isMissingColumnError = (err: unknown): boolean => {
+  const code = String((err as { code?: unknown })?.code ?? "");
+  const msg = String((err as { message?: unknown })?.message ?? "").toLowerCase();
+  return code === "42703" || code === "PGRST204" || /column .* does not exist/.test(msg) || /could not find the .* column/.test(msg);
+};
+
+// Per warme lambda onthouden of de contextkolommen bestaan; null = nog niet
+// geprobeerd. Zo kost de terugval op het basisschema één mislukte insert.
+let clientErrorsUitgebreid: boolean | null = null;
 
 /** Best-effort: de `client_errors`-tabel is optioneel — zonder tabel (of
  *  zonder db) blijft de console.error in de route-handler het vangnet
  *  (zichtbaar in de Vercel-functielogs). Mag zelf nooit throwen. */
 export const logClientError = async (entry: ClientErrorEntry) => {
   if (!db) return;
+  const basis = {
+    message: entry.message,
+    stack: entry.stack || null,
+    source: entry.source || null,
+    url: entry.url || null,
+    user_agent: entry.userAgent || null,
+    user_id: entry.userId || null,
+  };
+  const context = {
+    fingerprint: entry.fingerprint || null,
+    release: entry.release || null,
+    view: entry.view || null,
+    role: entry.role || null,
+    online: typeof entry.online === "boolean" ? entry.online : null,
+    breadcrumbs: Array.isArray(entry.breadcrumbs) ? entry.breadcrumbs : null,
+    top_frame: entry.topFrame || null,
+  };
   try {
-    await db.from("client_errors").insert({
-      message: entry.message,
-      stack: entry.stack || null,
-      source: entry.source || null,
-      url: entry.url || null,
-      user_agent: entry.userAgent || null,
-      user_id: entry.userId || null,
-    });
+    if (clientErrorsUitgebreid !== false) {
+      const { error } = await db.from("client_errors").insert({ ...basis, ...context });
+      if (!error) {
+        clientErrorsUitgebreid = true;
+        return;
+      }
+      if (!isMissingColumnError(error)) return; // tabel ontbreekt of andere fout — stil
+      clientErrorsUitgebreid = false;
+    }
+    await db.from("client_errors").insert(basis);
   } catch {
     // tabel ontbreekt of insert faalt — bewust stil
   }
@@ -1754,7 +1794,59 @@ const mapClientErrorRow = (row: any) => ({
   url: row.url ?? undefined,
   userAgent: row.user_agent ?? undefined,
   userId: row.user_id ?? undefined,
+  fingerprint: row.fingerprint ?? undefined,
+  release: row.release ?? undefined,
+  view: row.view ?? undefined,
+  role: row.role ?? undefined,
+  online: typeof row.online === "boolean" ? row.online : undefined,
+  breadcrumbs: row.breadcrumbs ?? undefined,
+  topFrame: row.top_frame ?? undefined,
 });
+
+// --- Status per foutgroep (client_error_status) ---
+// Server-only tabel uit supabase/2026-09-06_client_errors_groepen.sql.
+// `getClientErrorStatuses` geeft null zolang de tabel ontbreekt (probe): de
+// API toont dan groepen zonder statusacties i.p.v. te crashen.
+
+export type ClientErrorStatusRecord = {
+  fingerprint: string;
+  status: "open" | "opgelost" | "genegeerd";
+  release: string | null;
+  bijgewerktOp: string | null;
+  door: string | null;
+};
+
+const mapClientErrorStatusRow = (row: any): ClientErrorStatusRecord => ({
+  fingerprint: String(row.fingerprint),
+  status: row.status,
+  release: row.release ?? null,
+  bijgewerktOp: row.bijgewerkt_op ?? null,
+  door: row.door ?? null,
+});
+
+export const getClientErrorStatuses = async (): Promise<Map<string, ClientErrorStatusRecord> | null> => {
+  if (!db) return null;
+  try {
+    const { data, error } = await db.from("client_error_status").select("*").limit(5000);
+    if (error) return null;
+    return new Map((data ?? []).map((r: any) => [String(r.fingerprint), mapClientErrorStatusRow(r)]));
+  } catch {
+    return null;
+  }
+};
+
+/** Upsert; gooit wanneer de tabel ontbreekt (de route vertaalt dat naar 503). */
+export const setClientErrorStatus = async (record: ClientErrorStatusRecord): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client.from("client_error_status").upsert({
+    fingerprint: record.fingerprint,
+    status: record.status,
+    release: record.release,
+    bijgewerkt_op: record.bijgewerktOp ?? new Date().toISOString(),
+    door: record.door,
+  });
+  if (error) throw error;
+};
 
 export const getClientErrors = async (limit = 100) => {
   if (!db) return [];
@@ -1807,6 +1899,17 @@ export const pruneOldRecords = async (opts: { errorDays: number; logDays: number
     if (!error) summary.clientErrors = count ?? 0;
   } catch {
     // tabel ontbreekt of delete faalt — bewust stil
+  }
+  try {
+    // Statussen volgen dezelfde retentie als de fouten zelf, behalve
+    // 'genegeerd': die moet een terugkerende ruisfout blijven onderdrukken.
+    await db
+      .from("client_error_status")
+      .delete()
+      .neq("status", "genegeerd")
+      .lt("bijgewerkt_op", cutoff(opts.errorDays));
+  } catch {
+    // tabel ontbreekt (migratie niet gedraaid) — bewust stil
   }
   try {
     const { count, error } = await db

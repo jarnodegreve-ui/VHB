@@ -51,6 +51,10 @@ const mem = vi.hoisted(() => ({
   // 'Actief'-event bij action:'resume'.
   lastAuthEventAt: null as string | null,
   clientErrors: [] as any[],
+  // Status per foutgroep (client_error_status); `clientErrorStatusTabel=false`
+  // simuleert een niet-gedraaide migratie (probe → null / 42P01).
+  clientErrorStatus: [] as any[],
+  clientErrorStatusTabel: true,
   emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; text?: string }>,
   storedBackups: [] as Array<{ filename: string; size: number }>,
   pushSubscriptions: [] as any[],
@@ -344,8 +348,15 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.documents = mem.documents.filter((d: any) => String(d.userId) !== String(userId));
       return n;
     },
-    logClientError: async (entry: any) => { mem.clientErrors.push(entry); },
-    getClientErrors: async () => mem.clientErrors,
+    logClientError: async (entry: any) => { mem.clientErrors.push({ id: mem.clientErrors.length + 1, createdAt: new Date().toISOString(), ...entry }); },
+    // Zoals de echte functie: nieuwste eerst (created_at desc).
+    getClientErrors: async () => [...mem.clientErrors].reverse(),
+    getClientErrorStatuses: async () =>
+      mem.clientErrorStatusTabel ? new Map(mem.clientErrorStatus.map((s: any) => [s.fingerprint, s])) : null,
+    setClientErrorStatus: async (record: any) => {
+      if (!mem.clientErrorStatusTabel) throw { code: '42P01', message: 'relation "client_error_status" does not exist' };
+      mem.clientErrorStatus = [...mem.clientErrorStatus.filter((s: any) => s.fingerprint !== record.fingerprint), record];
+    },
     getClientErrorsSince: async (sinceIso: string) =>
       mem.clientErrors.filter((e) => String(e.createdAt) >= sinceIso),
     storeBackup: async (filename: string, body: string) => {
@@ -470,6 +481,8 @@ beforeEach(() => {
   mem.activity = [];
   mem.lastAuthEventAt = null;
   mem.clientErrors = [];
+  mem.clientErrorStatus = [];
+  mem.clientErrorStatusTabel = true;
   mem.emailsSent = [];
   mem.storedBackups = [];
   mem.pushSubscriptions = [];
@@ -1174,6 +1187,152 @@ describe('client-foutmonitoring', () => {
     const admin = await api('GET', '/api/client-errors', { token: 'tok-admin' });
     expect(admin.status).toBe(200);
     expect(admin.json).toHaveLength(1);
+  });
+});
+
+describe('foutgroepen (fingerprint, groepering, status, regressie)', () => {
+  const meld = (message: string, extra: Record<string, unknown> = {}) =>
+    api('POST', '/api/client-errors', { body: { message, source: 'error-toast', release: 'aaa1111', view: 'verlof', breadcrumbs: [{ t: '2026-09-06T10:00:00Z', soort: 'navigatie', tekst: 'verlof' }], ...extra } });
+
+  it('geeft elk rapport een fingerprint en context; dezelfde fout met andere getallen deelt de fingerprint', async () => {
+    await meld('Kon dienst 2515 niet laden');
+    await meld('Kon dienst 2607 niet laden');
+    await meld('Iets heel anders');
+    expect(mem.clientErrors).toHaveLength(3);
+    expect(mem.clientErrors[0].fingerprint).toMatch(/^[0-9a-f]{16}$/);
+    expect(mem.clientErrors[0].fingerprint).toBe(mem.clientErrors[1].fingerprint);
+    expect(mem.clientErrors[2].fingerprint).not.toBe(mem.clientErrors[0].fingerprint);
+    expect(mem.clientErrors[0].release).toBe('aaa1111');
+    expect(mem.clientErrors[0].view).toBe('verlof');
+    expect(mem.clientErrors[0].breadcrumbs).toEqual([{ t: '2026-09-06T10:00:00Z', soort: 'navigatie', tekst: 'verlof' }]);
+  });
+
+  it('neemt de rol van de sessie, niet van de client', async () => {
+    await api('POST', '/api/client-errors', { token: 'tok-a', body: { message: 'boem', role: 'admin' } });
+    expect(mem.clientErrors[0].role).toBe('chauffeur');
+    // Zonder sessie: de opgegeven rol blijft (afgekapt), zoals de rest van de context.
+    await api('POST', '/api/client-errors', { body: { message: 'boem2', role: 'planner' } });
+    expect(mem.clientErrors[1].role).toBe('planner');
+  });
+
+  it('GET ?groepeer=1 groepeert per fingerprint (admin), met aantal, releases en unieke gebruikers', async () => {
+    await meld('Kon dienst 1 niet laden');
+    await meld('Kon dienst 2 niet laden', { release: 'bbb2222' });
+    await api('POST', '/api/client-errors', { token: 'tok-a', body: { message: 'Kon dienst 3 niet laden', source: 'error-toast', release: 'bbb2222' } });
+    await meld('Iets anders');
+    expect((await api('GET', '/api/client-errors?groepeer=1', { token: 'tok-planner' })).status).toBe(403);
+    const res = await api('GET', '/api/client-errors?groepeer=1', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json.statusBeschikbaar).toBe(true);
+    expect(res.json.groepen).toHaveLength(2);
+    const g = res.json.groepen.find((x: any) => x.message.startsWith('Kon dienst'));
+    expect(g.aantal).toBe(3);
+    expect(g.releases.sort()).toEqual(['aaa1111', 'bbb2222']);
+    expect(g.gebruikers).toBe(1); // alleen chauffeur A had een sessie
+    expect(g.status).toBe('open');
+    expect(g.laatsteVoorval.message).toBeUndefined();
+    expect(g.laatsteVoorval.release).toBe('bbb2222');
+    // De platte lijst blijft bestaan.
+    expect(Array.isArray((await api('GET', '/api/client-errors', { token: 'tok-admin' })).json)).toBe(true);
+  });
+
+  it('status zetten (admin) en automatisch heropenen bij een regressie in een andere release', async () => {
+    await meld('Kon dienst 1 niet laden');
+    const fp = mem.clientErrors[0].fingerprint;
+    expect((await api('POST', '/api/client-errors/status', { token: 'tok-planner', body: { fingerprint: fp, status: 'opgelost' } })).status).toBe(403);
+    expect((await api('POST', '/api/client-errors/status', { token: 'tok-admin', body: { fingerprint: fp, status: 'kapot' } })).status).toBe(400);
+    expect((await api('POST', '/api/client-errors/status', { token: 'tok-admin', body: { fingerprint: 'nope', status: 'opgelost' } })).status).toBe(400);
+    const zet = await api('POST', '/api/client-errors/status', { token: 'tok-admin', body: { fingerprint: fp, status: 'opgelost', release: 'aaa1111' } });
+    expect(zet.status).toBe(200);
+    expect(mem.clientErrorStatus[0]).toMatchObject({ fingerprint: fp, status: 'opgelost', release: 'aaa1111', door: '1' });
+    expect(mem.activity.some((a) => a.action === 'Foutgroep opgelost')).toBe(true);
+
+    // Zelfde release opnieuw: blijft opgelost (fix nog niet uitgerold).
+    await meld('Kon dienst 2 niet laden');
+    let groepen = (await api('GET', '/api/client-errors?groepeer=1', { token: 'tok-admin' })).json.groepen;
+    expect(groepen[0].status).toBe('opgelost');
+    expect(groepen[0].regressie).toBe(false);
+
+    // Andere release, ná het oplossen: regressie → open, en teruggeschreven.
+    await meld('Kon dienst 3 niet laden', { release: 'ccc3333' });
+    groepen = (await api('GET', '/api/client-errors?groepeer=1', { token: 'tok-admin' })).json.groepen;
+    expect(groepen[0].status).toBe('open');
+    expect(groepen[0].regressie).toBe(true);
+    expect(mem.clientErrorStatus.find((s: any) => s.fingerprint === fp)).toMatchObject({ status: 'open', door: 'regressie' });
+  });
+
+  it('zonder de statustabel: groepen blijven werken, statusacties geven 503 met migratie-hint', async () => {
+    mem.clientErrorStatusTabel = false;
+    await meld('Kon dienst 1 niet laden');
+    const res = await api('GET', '/api/client-errors?groepeer=1', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json.statusBeschikbaar).toBe(false);
+    expect(res.json.groepen).toHaveLength(1);
+    const zet = await api('POST', '/api/client-errors/status', { token: 'tok-admin', body: { fingerprint: mem.clientErrors[0].fingerprint, status: 'opgelost' } });
+    expect(zet.status).toBe(503);
+    expect(zet.json.error).toContain('2026-09-06_client_errors_groepen.sql');
+  });
+
+  it('de weekmail slaat genegeerde groepen over', async () => {
+    await meld('Ruisfout 1');
+    const fp = mem.clientErrors[0].fingerprint;
+    mem.clientErrorStatus = [{ fingerprint: fp, status: 'genegeerd', release: null, bijgewerktOp: null, door: '1' }];
+    await meld('Echte fout');
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(res.json.count).toBe(1);
+  });
+});
+
+describe('eigen toestellen en sessies (/api/me/toestellen)', () => {
+  it('toont alleen eigen toestellen, met afgeleide id, platform en "dit toestel"', async () => {
+    mem.devices.push({ userId: '3', deviceToken: 'dev-oud', name: 'Mac · browser', status: 'approved', createdAt: '2026-06-01T00:00:00Z', lastSeenAt: '2026-06-02T00:00:00Z', approvedAt: '2026-06-01T00:00:00Z', approvedBy: 'auto' });
+    const res = await api('GET', '/api/me/toestellen', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.beschikbaar).toBe(true);
+    expect(res.json.toestellen).toHaveLength(2);
+    const [dit, ander] = res.json.toestellen;
+    expect(dit.ditToestel).toBe(true);
+    expect(dit).toMatchObject({ naam: 'iPhone · app', platform: 'iPhone', kanaal: 'app', status: 'approved' });
+    expect(ander).toMatchObject({ naam: 'Mac · browser', platform: 'Mac', kanaal: 'browser', ditToestel: false });
+    // Het toestel-token zelf lekt niet; de id is een hash.
+    expect(JSON.stringify(res.json)).not.toContain('dev-ok');
+    expect(ander.id).toMatch(/^[0-9a-f]{16}$/);
+    // Chauffeur B ziet zijn eigen toestel, niet dat van A.
+    const b = await api('GET', '/api/me/toestellen', { token: 'tok-b' });
+    expect(b.json.toestellen.map((t: any) => t.naam)).toEqual(['Android · app']);
+  });
+
+  it('trekt één eigen toestel in, maar niet het huidige zonder ?ook-dit=1', async () => {
+    mem.devices.push({ userId: '3', deviceToken: 'dev-oud', name: 'Mac · browser', status: 'approved', createdAt: '2026-06-01T00:00:00Z', lastSeenAt: '2026-06-02T00:00:00Z', approvedAt: '2026-06-01T00:00:00Z', approvedBy: 'auto' });
+    const lijst = (await api('GET', '/api/me/toestellen', { token: 'tok-a' })).json.toestellen;
+    const dit = lijst.find((t: any) => t.ditToestel);
+    const ander = lijst.find((t: any) => !t.ditToestel);
+    const geweigerd = await api('POST', `/api/me/toestellen/${dit.id}/uitloggen`, { token: 'tok-a' });
+    expect(geweigerd.status).toBe(400);
+    expect(geweigerd.json.code).toBe('huidig_toestel');
+    expect((await api('POST', `/api/me/toestellen/${ander.id}/uitloggen`, { token: 'tok-a' })).status).toBe(200);
+    expect(mem.devices.find((d: any) => d.deviceToken === 'dev-oud')?.status).toBe('revoked');
+    // Andermans toestel is onvindbaar (404), ook met een geldig id.
+    expect((await api('POST', `/api/me/toestellen/${ander.id}/uitloggen`, { token: 'tok-b' })).status).toBe(404);
+    // Met ?ook-dit=1 mag het huidige wél.
+    expect((await api('POST', `/api/me/toestellen/${dit.id}/uitloggen?ook-dit=1`, { token: 'tok-a' })).status).toBe(200);
+    expect(mem.devices.find((d: any) => d.userId === '3' && d.deviceToken === 'dev-ok')?.status).toBe('revoked');
+  });
+
+  it('"uitloggen op alle andere toestellen" trekt alles behalve het huidige in', async () => {
+    mem.devices.push(
+      { userId: '3', deviceToken: 'dev-2', name: 'Mac · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' },
+      { userId: '3', deviceToken: 'dev-3', name: 'iPad · app', status: 'pending', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null },
+    );
+    const res = await api('POST', '/api/me/toestellen/uitloggen-anderen', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.aantal).toBe(2);
+    const mijn = mem.devices.filter((d: any) => d.userId === '3');
+    expect(mijn.find((d: any) => d.deviceToken === 'dev-ok')?.status).toBe('approved');
+    expect(mijn.filter((d: any) => d.deviceToken !== 'dev-ok').every((d: any) => d.status === 'revoked')).toBe(true);
+    // Andere gebruikers blijven ongemoeid.
+    expect(mem.devices.find((d: any) => d.userId === '4')?.status).toBe('approved');
   });
 });
 
