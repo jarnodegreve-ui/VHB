@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState } from 'react';
-import { AlertTriangle, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, Users } from 'lucide-react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { AlertTriangle, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users } from 'lucide-react';
 import { activeDiversions } from '../lib/diversions';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
@@ -7,6 +7,7 @@ import { cn, openPdfInNewTab } from '../lib/ui';
 import { formatDateHuman, formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
 import { relatieveDag } from '../lib/datum';
+import { warmRitbladCache } from '../lib/ritbladCache';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, parseHHMM, shiftWindowMinutes } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
@@ -17,6 +18,9 @@ import { Card } from '../components/Card';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { ServiceChip } from '../components/ServiceChip';
 import { DienstBalk } from '../components/DienstBalk';
+import { ActieMenu } from '../components/ActieMenu';
+import { DashboardAanpassen } from '../components/DashboardAanpassen';
+import { CHAUFFEUR_TEGELS, kleineTegelSpan, pasVoorkeurenToe, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
 
 /**
  * Chauffeursdashboard — zelfde Operations Center-taal als het planner/admin-
@@ -64,6 +68,9 @@ export function DashboardView({ notes = [],
   };
   // Detailvenster voor een omleiding — opent als side panel, geen paginawissel.
   const [openDiversion, setOpenDiversion] = useState<Diversion | null>(null);
+  // Dashboard op maat (06-09): verborgen tegels + volgorde per gebruiker.
+  const { voorkeuren, opslaan: bewaarVoorkeuren } = useDashboardVoorkeuren(user);
+  const [aanpassen, setAanpassen] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
@@ -74,6 +81,15 @@ export function DashboardView({ notes = [],
   // Lokale dag (isoDate) i.p.v. toISOString(): die laatste gaf 's nachts in
   // BE de UTC-dag terug, waardoor 'Vandaag' de verkeerde/geen dienst toonde.
   const today = isoDate(now);
+  // Ritblad van vandaag/morgen alvast offline beschikbaar maken (zelfde
+  // regel als Mijn dag; de service worker bewaart de bundel).
+  const morgenDate = new Date(now);
+  morgenDate.setDate(morgenDate.getDate() + 1);
+  const heeftDienstBinnenkort = myShifts.some((s) => s.date === today || s.date === isoDate(morgenDate));
+  useEffect(() => {
+    if (isInitialLoad || !heeftDienstBinnenkort || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    void warmRitbladCache();
+  }, [isInitialLoad, heeftDienstBinnenkort]);
   // Nachtdienst over middernacht: zolang de dienst van gisteren nog loopt, is
   // dát de "dienstdag" van de tegel en telt "nu" door in busvak-tijd
   // (controle 05-09).
@@ -201,6 +217,178 @@ export function DashboardView({ notes = [],
   const pendingLeaveMine = leaveRequests.filter((l) => l.userId === user.id && l.status === 'pending');
   const needsAttention = pendingLeaveMine.length > 0;
 
+  // --- Dashboard op maat: tegels op id, in de volgorde van de voorkeuren ---
+  const zichtbareTegels = pasVoorkeurenToe(CHAUFFEUR_TEGELS, voorkeuren);
+  const toon = (id: string) => zichtbareTegels.some((t) => t.id === id);
+  const stripZichtbaar = zichtbareTegels.filter((t) => t.groep === 'tegels');
+  const GROOT = new Set(['vandaag', 'volgende-dienst']);
+  const kleineTegels = stripZichtbaar.filter((t) => !GROOT.has(t.id));
+  // Op xl (6 kolommen) vullen de kleine tegels samen één rij; op de telefoon
+  // (2 kolommen) spant een oneven laatste kleine tegel de volle breedte.
+  const kleinSpan = kleineTegelSpan(kleineTegels.length);
+  const laatsteKlein = kleineTegels.length % 2 === 1 ? kleineTegels[kleineTegels.length - 1]?.id : undefined;
+  const kleinKlassen = (id: string) => cn(kleinSpan, id === laatsteKlein && 'col-span-2 md:col-span-1');
+  const STRIP_TEGEL: Record<string, ReactNode> = {
+    // Vandaag: het dienstnummer als kop, hoelang nog als boodschap, de
+    // delen als regels en de dienstbalk (wijzerplaat) eronder — dezelfde
+    // taal als Mijn dag. Op mobiel over de volle breedte.
+    vandaag: (
+      <OpsStat
+        icon={<Clock size={16} />}
+        // Mobiel volle breedte; breed altijd dubbel (balk + regels), op
+        // md alleen bij meerdere delen.
+        className={cn('col-span-2 md:col-span-1 xl:col-span-3', todayLines.length > 1 && 'md:col-span-2')}
+        // Kleur alleen als er nú iets gebeurt (oker = lopende dienst);
+        // een gewone geplande dag is rusttoestand en blijft slate.
+        tone={activeBlok ? 'oker' : 'slate'}
+        label="Vandaag"
+        text={todayParts.length === 0 ? 'Vrij' : todayServices.join(' / ') || todayParts[0].startTime}
+        sub={todayStatus}
+        subClassName={activeBlok ? 'text-sm font-semibold text-oker-800' : 'text-sm font-semibold text-slate-600'}
+        lines={todayLines}
+        balk={todayParts.length > 0 ? <DienstBalk compact delen={balkDelen} nuMin={nowMin} nuLabel={nowLabel} className="mt-1" /> : undefined}
+        note={todayNote}
+        onClick={onNavigate ? () => onNavigate('mijn-dag') : undefined}
+      />
+    ),
+    // Volgende dienst: dienstnummer groot, eronder de dag en de delen.
+    'volgende-dienst': (
+      <OpsStat
+        icon={<Calendar size={16} />}
+        tone="slate"
+        className="col-span-2 md:col-span-1 xl:col-span-3"
+        label="Volgende dienst"
+        // Dienstnummer groot, net als in de Vandaag-tegel (Jarno 04-09:
+        // het nummer is het belangrijkste); dag + afstand op de subregel.
+        text={nextShift ? serviceNumberOf(nextShift) : '—'}
+        subClassName="text-sm font-semibold text-slate-600"
+        sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'niets ingepland'}
+        lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
+        onClick={onNavigate ? () => onNavigate('rooster') : undefined}
+      />
+    ),
+    verlofsaldo: (
+      <OpsStat
+        icon={<Plane size={16} />}
+        tone="slate"
+        className={kleinKlassen('verlofsaldo')}
+        label="Verlofsaldo"
+        value={balans.betaaldResterend}
+        suffix={` / ${balans.betaaldBudget}`}
+        sub="dagen over"
+        meter={balans.betaaldBudget > 0 ? Math.round((balans.betaaldGebruikt / balans.betaaldBudget) * 100) : 0}
+        onClick={onNavigate ? () => onNavigate('verlof') : undefined}
+      />
+    ),
+    'deze-maand': (
+      <OpsStat
+        icon={<CalendarDays size={16} />}
+        tone="slate"
+        className={kleinKlassen('deze-maand')}
+        label="Deze maand"
+        value={thisMonthShiftCount}
+        sub="diensten ingepland"
+        onClick={onNavigate ? () => onNavigate('rooster') : undefined}
+      />
+    ),
+    omleidingen: (
+      <OpsStat
+        icon={<MapPin size={16} />}
+        tone={liveDiversions.length > 0 ? 'amber' : 'slate'}
+        className={kleinKlassen('omleidingen')}
+        label="Omleidingen"
+        value={liveDiversions.length}
+        sub={liveDiversions.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
+        onClick={onNavigate ? () => onNavigate('omleidingen') : undefined}
+      />
+    ),
+  };
+
+  // Panelen: Komende diensten (breed) en Omleidingen; staat er maar één,
+  // dan krijgt die de volle breedte.
+  const panelenZichtbaar = zichtbareTegels.filter((t) => t.groep === 'panelen' && t.id !== 'snelle-acties');
+  const alleenPaneel = panelenZichtbaar.length === 1;
+  const PANEEL: Record<string, ReactNode> = {
+    'komende-diensten': (
+      <OpsPanel
+        className={alleenPaneel ? 'lg:col-span-3' : 'lg:col-span-2'}
+        icon={<Calendar size={16} />}
+        title="Komende diensten"
+        aside={thisMonthShiftCount > 0 ? `${thisMonthShiftCount} deze maand` : undefined}
+        onSeeAll={onNavigate ? () => onNavigate('rooster') : undefined}
+        seeAllLabel="Mijn rooster"
+      >
+        {upcomingShifts.length === 0 ? (
+          /* Neutrale lege staat: geen groen vlak voor een rusttoestand. */
+          <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
+              <Clock size={16} />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Geen komende diensten</p>
+              <p className="text-xs font-normal text-slate-600">Er staat op dit moment niets ingepland.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {/* Alleen de eerstvolgende dienst krijgt goud; de rest blijft
+                neutraal — hooguit twee gouden accenten per scherm (naam in de
+                groet + Vandaag-tegel), controle 05-09 nr. 20. */}
+            {upcomingShifts.map((shift, i) => (
+              <Fragment key={shift.id}>
+                <OpsRow
+                  tone={i === 0 ? 'oker' : 'slate'}
+                  icon={<Calendar size={16} />}
+                  primary={formatShortDayPadded(shift.date)}
+                  secondary={`${shift.startTime}–${shift.endTime}${shift.loopnr ? ` · loop ${shift.loopnr}` : ''}`}
+                  trailing={<ServiceChip serviceNumber={serviceNumberOf(shift)} tone={i === 0 ? 'oker' : 'slate'} />}
+                  onClick={() => onNavigate?.('rooster')}
+                />
+              </Fragment>
+            ))}
+          </div>
+        )}
+      </OpsPanel>
+    ),
+    'omleidingen-paneel': (
+      <OpsPanel
+        className={alleenPaneel ? 'lg:col-span-3' : undefined}
+        icon={<MapPin size={16} />}
+        title="Omleidingen"
+        aside={liveDiversions.length > 0 ? `${liveDiversions.length} actief` : undefined}
+        onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
+      >
+        {newestDiversions.length === 0 ? (
+          <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
+              <MapPin size={16} />
+            </span>
+
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Vrije baan</p>
+              <p className="text-xs font-normal text-slate-500">Geen omleidingen op het netwerk.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {newestDiversions.map((div) => (
+              <Fragment key={div.id}>
+                <OpsRow
+                  tone="amber"
+                  icon={<AlertTriangle size={16} />}
+                  primary={div.title}
+                  secondary={div.description}
+                  meta={div.line}
+                  onClick={() => setOpenDiversion(div)}
+                />
+              </Fragment>
+            ))}
+          </div>
+        )}
+      </OpsPanel>
+    ),
+  };
+
   return (
     <div className="space-y-5">
       {/* === Eenmalige welkomstkaart (eerste bezoek) ===
@@ -246,12 +434,20 @@ export function DashboardView({ notes = [],
         {/* Stille chip met gekleurd puntje: "Dienst vandaag" en "in
             behandeling" zijn informatie, geen alarm (afwerking 04-09, nr. 6).
             De stip staat stil — beweging voor "alles is normaal" maakt van
-            rust een alarm. */}
-        <Badge tone={needsAttention ? 'amber' : 'emerald'} stil className="ml-auto w-fit tabular-nums">
-          {needsAttention
-            ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
-            : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
-        </Badge>
+            rust een alarm. Ernaast de enige actie van de kop: "…" met
+            Dashboard aanpassen (geen extra gouden knop). */}
+        <div className="ml-auto flex items-center gap-2">
+          <Badge tone={needsAttention ? 'amber' : 'emerald'} stil className="w-fit tabular-nums">
+            {needsAttention
+              ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
+              : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
+          </Badge>
+          <ActieMenu
+            size="sm"
+            label="Meer acties"
+            items={[{ label: 'Dashboard aanpassen', icon: <SlidersHorizontal size={16} />, onClick: () => setAanpassen(true) }]}
+          />
+        </div>
       </div>
 
       {/* === Status-strip ===
@@ -261,154 +457,26 @@ export function DashboardView({ notes = [],
       {/* Twee rijen op breed: Vandaag + Volgende dienst (elk de helft), daaronder
           de drie kleine tegels (elk een derde). Op één rij van zeven kolommen
           werden de kleine tegels smal en zo hoog als de Vandaag-tegel, met
-          afgeknipte labels (Jarno 04-09). */}
+          afgeknipte labels (Jarno 04-09). Volgorde en zichtbaarheid volgen
+          de voorkeuren van de gebruiker (Dashboard aanpassen). */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {/* Vandaag: het dienstnummer als kop, hoelang nog als boodschap, de
-            delen als regels en de dienstbalk (wijzerplaat) eronder — dezelfde
-            taal als Mijn dag. Op mobiel over de volle breedte. */}
-        <OpsStat
-          icon={<Clock size={16} />}
-          // Mobiel volle breedte; breed altijd dubbel (balk + regels), op
-          // md alleen bij meerdere delen.
-          className={cn('col-span-2 md:col-span-1 xl:col-span-3', todayLines.length > 1 && 'md:col-span-2')}
-          // Kleur alleen als er nú iets gebeurt (oker = lopende dienst);
-          // een gewone geplande dag is rusttoestand en blijft slate.
-          tone={activeBlok ? 'oker' : 'slate'}
-          label="Vandaag"
-          text={todayParts.length === 0 ? 'Vrij' : todayServices.join(' / ') || todayParts[0].startTime}
-          sub={todayStatus}
-          subClassName={activeBlok ? 'text-sm font-semibold text-oker-800' : 'text-sm font-semibold text-slate-600'}
-          lines={todayLines}
-          balk={todayParts.length > 0 ? <DienstBalk compact delen={balkDelen} nuMin={nowMin} nuLabel={nowLabel} className="mt-1" /> : undefined}
-          note={todayNote}
-          onClick={onNavigate ? () => onNavigate('mijn-dag') : undefined}
-        />
-        {/* Volgende dienst: dienstnummer groot, eronder de dag en de delen. */}
-        <OpsStat
-          icon={<Calendar size={16} />}
-          tone="slate"
-          className="col-span-2 md:col-span-1 xl:col-span-3"
-          label="Volgende dienst"
-          // Dienstnummer groot, net als in de Vandaag-tegel (Jarno 04-09:
-          // het nummer is het belangrijkste); dag + afstand op de subregel.
-          text={nextShift ? serviceNumberOf(nextShift) : '—'}
-          subClassName="text-sm font-semibold text-slate-600"
-          sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'niets ingepland'}
-          lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
-          onClick={onNavigate ? () => onNavigate('rooster') : undefined}
-        />
-        <OpsStat
-          icon={<Plane size={16} />}
-          tone="slate"
-          className="xl:col-span-2"
-          label="Verlofsaldo"
-          value={balans.betaaldResterend}
-          suffix={` / ${balans.betaaldBudget}`}
-          sub="dagen over"
-          meter={balans.betaaldBudget > 0 ? Math.round((balans.betaaldGebruikt / balans.betaaldBudget) * 100) : 0}
-          onClick={onNavigate ? () => onNavigate('verlof') : undefined}
-        />
-        <OpsStat
-          icon={<CalendarDays size={16} />}
-          tone="slate"
-          className="xl:col-span-2"
-          label="Deze maand"
-          value={thisMonthShiftCount}
-          sub="diensten ingepland"
-          onClick={onNavigate ? () => onNavigate('rooster') : undefined}
-        />
-        <OpsStat
-          icon={<MapPin size={16} />}
-          tone={liveDiversions.length > 0 ? 'amber' : 'slate'}
-          className="xl:col-span-2"
-          label="Omleidingen"
-          value={liveDiversions.length}
-          sub={liveDiversions.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
-          onClick={onNavigate ? () => onNavigate('omleidingen') : undefined}
-        />
+        {stripZichtbaar.map((t) => (
+          <Fragment key={t.id}>{STRIP_TEGEL[t.id]}</Fragment>
+        ))}
       </div>
 
       {/* === Panelen === */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <OpsPanel
-          className="lg:col-span-2"
-          icon={<Calendar size={16} />}
-          title="Komende diensten"
-          aside={thisMonthShiftCount > 0 ? `${thisMonthShiftCount} deze maand` : undefined}
-          onSeeAll={onNavigate ? () => onNavigate('rooster') : undefined}
-          seeAllLabel="Mijn rooster"
-        >
-          {upcomingShifts.length === 0 ? (
-            /* Neutrale lege staat: geen groen vlak voor een rusttoestand. */
-            <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
-                <Clock size={16} />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Geen komende diensten</p>
-                <p className="text-xs font-normal text-slate-600">Er staat op dit moment niets ingepland.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {/* Alleen de eerstvolgende dienst krijgt goud; de rest blijft
-                  neutraal — hooguit twee gouden accenten per scherm (naam in de
-                  groet + Vandaag-tegel), controle 05-09 nr. 20. */}
-              {upcomingShifts.map((shift, i) => (
-                <Fragment key={shift.id}>
-                  <OpsRow
-                    tone={i === 0 ? 'oker' : 'slate'}
-                    icon={<Calendar size={16} />}
-                    primary={formatShortDayPadded(shift.date)}
-                    secondary={`${shift.startTime}–${shift.endTime}${shift.loopnr ? ` · loop ${shift.loopnr}` : ''}`}
-                    trailing={<ServiceChip serviceNumber={serviceNumberOf(shift)} tone={i === 0 ? 'oker' : 'slate'} />}
-                    onClick={() => onNavigate?.('rooster')}
-                  />
-                </Fragment>
-              ))}
-            </div>
-          )}
-        </OpsPanel>
-
-        <OpsPanel
-          icon={<MapPin size={16} />}
-          title="Omleidingen"
-          aside={liveDiversions.length > 0 ? `${liveDiversions.length} actief` : undefined}
-          onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
-        >
-          {newestDiversions.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
-                <MapPin size={16} />
-              </span>
-
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Vrije baan</p>
-                <p className="text-xs font-normal text-slate-500">Geen omleidingen op het netwerk.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {newestDiversions.map((div) => (
-                <Fragment key={div.id}>
-                  <OpsRow
-                    tone="amber"
-                    icon={<AlertTriangle size={16} />}
-                    primary={div.title}
-                    secondary={div.description}
-                    meta={div.line}
-                    onClick={() => setOpenDiversion(div)}
-                  />
-                </Fragment>
-              ))}
-            </div>
-          )}
-        </OpsPanel>
-      </div>
+      {panelenZichtbaar.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {panelenZichtbaar.map((t) => (
+            <Fragment key={t.id}>{PANEEL[t.id]}</Fragment>
+          ))}
+        </div>
+      )}
 
       {/* === Snelle acties (alleen zonder zijbalk: op desktop staan dezelfde
           schermen al links, dus daar zijn ze dubbel) === */}
-      {onNavigate && (
+      {onNavigate && toon('snelle-acties') && (
         <div className="grid grid-cols-2 gap-3 lg:hidden">
           <QuickAction icon={<Calendar size={16} />} label="Mijn rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
@@ -456,6 +524,14 @@ export function DashboardView({ notes = [],
           </div>
         )}
       </SlideOver>
+
+      <DashboardAanpassen
+        open={aanpassen}
+        onClose={() => setAanpassen(false)}
+        tegels={CHAUFFEUR_TEGELS}
+        voorkeuren={voorkeuren}
+        onChange={bewaarVoorkeuren}
+      />
     </div>
   );
 }

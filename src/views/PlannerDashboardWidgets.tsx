@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
+  SlidersHorizontal,
   AlertTriangle,
   Bell,
   Bus,
@@ -39,6 +40,9 @@ import { EmptyState, ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
 import { Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
+import { ActieMenu } from '../components/ActieMenu';
+import { DashboardAanpassen } from '../components/DashboardAanpassen';
+import { PLANNER_TEGELS, pasVoorkeurenToe, stripSpans, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
 import { Card } from '../components/Card';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { cn, notify, telHref } from '../lib/ui';
@@ -98,6 +102,11 @@ export function PlannerDashboardWidgets({
   // Alles wat live of werkvoorraad is (Chauffeurs actief, Open taken,
   // ziekmelden) blijft altijd op vandaag/nu.
   const [dagOffset, setDagOffset] = useState<0 | 1>(0);
+  // Dashboard op maat (06-09): verborgen tegels + volgorde per gebruiker
+  // (users.dashboardvoorkeuren, localStorage als terugval). Hooks vóór de
+  // skeleton-return hieronder (hooks-volgorde).
+  const { voorkeuren: dashboardVoorkeuren, opslaan: bewaarDashboardVoorkeuren } = useDashboardVoorkeuren(currentUser);
+  const [dashboardAanpassen, setDashboardAanpassen] = useState(false);
   const peilDag = isoDate(addDays(now, dagOffset));
   const peilLabel = dagOffset === 0 ? 'Vandaag' : 'Morgen';
   // `absent` voedt de tegel/popup "Vandaag afwezig"; `busyNames` is breder — élke
@@ -524,6 +533,350 @@ export function PlannerDashboardWidgets({
   const geenVerwachtingen = coverageDays !== null && (weekDagen.length === 0 || weekDagen.every((d) => d.expected === 0));
   const weekOpen = weekDagen.reduce((n, d) => n + d.missing.length, 0);
 
+  // --- Dashboard op maat: tegels op id, in de volgorde van de voorkeuren ---
+  // Status-strip: elke tegel als functie van zijn rasterklassen, zodat de
+  // gat-vrije verdeling (stripSpans) per aantal zichtbare tegels klopt.
+  const zichtbareTegels = pasVoorkeurenToe(PLANNER_TEGELS, dashboardVoorkeuren);
+  const STRIP_TEGEL: Record<string, (className: string) => ReactNode> = {
+    'chauffeurs-actief': (className) => dagOffset === 1 ? (
+      // Morgen: "nu aan het rijden" is een vandaag-cijfer — het bleef staan
+      // en las als "morgen zijn er al mensen actief" (melding Jarno 03-09).
+      // Toon in plaats daarvan de eerste start van morgen.
+      <OpsStat
+        className={className}
+        icon={<Bus size={16} />}
+        tone="slate"
+        label="Eerste start morgen"
+        text={eersteStartMorgen ? eersteStartMorgen.tijd : '—'}
+        sub={eersteStartMorgen ? `${eersteStartMorgen.naam} · dienst ${eersteStartMorgen.dienst}` : 'nog geen diensten ingepland'}
+        onClick={() => setShowScheduled(true)}
+      />
+    ) : (
+      <OpsStat
+        className={className}
+        icon={<Bus size={16} />}
+        // Oker = er rijdt nú iemand (het enige merk-accent in de strip);
+        // een lege ochtend is rusttoestand en blijft slate.
+        tone={driversDrivingNow > 0 ? 'oker' : 'slate'}
+        label="Chauffeurs actief"
+        value={driversDrivingNow}
+        sub="nu aan het rijden"
+        onClick={() => setShowDriving(true)}
+      />
+    ),
+    ingepland: (className) => (
+      <OpsStat
+        className={className}
+        icon={<Users size={16} />}
+        tone="slate"
+        label={`${peilLabel} ingepland`}
+        value={driversActiveToday}
+        suffix={totalDrivers > 0 ? ` / ${totalDrivers}` : undefined}
+        sub={ingeplandAfwezig > 0 ? `waarvan ${ingeplandAfwezig} afwezig gemeld` : 'chauffeurs met dienst'}
+        onClick={() => setShowScheduled(true)}
+      />
+    ),
+    beschikbaar: (className) => (
+      <OpsStat
+        className={className}
+        icon={<UserCheck size={16} />}
+        tone="slate"
+        label="Beschikbaar"
+        value={availableToday.length}
+        sub={`vrij en inzetbaar ${peilLabel.toLowerCase()}`}
+        onClick={() => setShowAvailable(true)}
+      />
+    ),
+    afwezig: (className) => (
+      <OpsStat
+        className={className}
+        icon={<CalendarClock size={16} />}
+        tone={todayAbsent.some((a) => a.isSick) ? 'rose' : 'slate'}
+        label={`${peilLabel} afwezig`}
+        value={todayAbsent.length}
+        sub={todayAbsent.length === 0
+          ? 'iedereen inzetbaar'
+          : `${todayAbsent.filter((a) => a.isSick).length} ziek · ${todayAbsent.filter((a) => !a.isSick).length} verlof`}
+        onClick={() => setShowAbsent(true)}
+      />
+    ),
+    omleidingen: (className) => (
+      <OpsStat
+        className={className}
+        icon={<MapPin size={16} />}
+        tone="slate"
+        label="Omleidingen"
+        value={activeDiversions}
+        sub={activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
+        onClick={() => onNavigate('omleidingen')}
+      />
+    ),
+    // Laadplein-tegel — alleen zodra de OCPI-koppeling data levert.
+    // Doorklikken naar het volle OCPI-scherm kan alleen als admin;
+    // voor een planner is de tegel zelf de informatie.
+    laadplein: (className) => laadplein ? (
+      <OpsStat
+        className={className}
+        icon={<Zap size={16} />}
+        tone={laadplein.outOfOrder > 0 ? 'red' : laadplein.charging > 0 ? 'blue' : 'slate'}
+        label="Aan de lader"
+        value={laadplein.charging}
+        suffix={` / ${laadplein.evses}`}
+        sub={laadplein.outOfOrder > 0
+          ? `${laadplein.outOfOrder} in storing`
+          : laadplein.totalPowerKw > 0
+            ? `${laadplein.totalPowerKw} kW op dit moment`
+            : 'laadpunten bezet'}
+        onClick={isAdmin ? () => onNavigate('ocpi-monitoring') : undefined}
+      />
+    ) : null,
+  };
+  // Zichtbare striptegels (laadplein alleen mét data) + gat-vrije verdeling.
+  const stripZichtbaar = zichtbareTegels.filter((t) => t.groep === 'tegels' && (t.id !== 'laadplein' || laadplein));
+  const stripLayout = stripSpans(stripZichtbaar.length);
+
+  // Operations Center: het eerste zichtbare paneel staat links, de rest
+  // stapelt rechts (zoals de vaste indeling Open taken | activiteit + week).
+  const paneelOpenTaken = (
+    <OpsPanel
+      icon={<Inbox size={16} />}
+      title="Open taken"
+      aside={attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'item' : 'items'}` : undefined}
+    >
+      <div className="space-y-1.5">
+        {planningStale && (
+          <OpsRow
+            tone="amber"
+            icon={<CalendarClock size={16} />}
+            primary={`Planning al ${daysSinceImport} dagen niet bijgewerkt`}
+            secondary="Upload je laatste Excel zodat de planning actueel blijft."
+            onClick={() => onNavigate('beheer-roosters')}
+          />
+        )}
+        {horizonKrap && (
+          <OpsRow
+            tone={horizonDagenOver! <= 0 ? 'red' : 'amber'}
+            icon={<CalendarClock size={16} />}
+            primary={horizonDagenOver! <= 0
+              ? 'De geladen planning is op'
+              : `Planning geladen t/m ${formatDay(planningHorizon)} — nog ${horizonDagenOver} ${horizonDagenOver === 1 ? 'dag' : 'dagen'}`}
+            secondary="Importeer de volgende periode zodat chauffeurs vooruit kunnen kijken."
+            onClick={() => onNavigate('beheer-roosters')}
+          />
+        )}
+        {importIssueCount > 0 && lastImport && (
+          <OpsRow
+            tone="red"
+            icon={<AlertTriangle size={16} />}
+            primary="Laatste import heeft aandachtspunten"
+            secondary={[
+              lastImport.unknownCodes.length > 0 ? `${lastImport.unknownCodes.length} onbekende codes` : null,
+              lastImport.unmatchedDrivers.length > 0 ? `${lastImport.unmatchedDrivers.length} niet-gematchte chauffeurs` : null,
+            ].filter(Boolean).join(' · ')}
+            onClick={() => onNavigate('beheer-roosters')}
+          />
+        )}
+        {vervalTaken.slice(0, 3).map((e) => (
+          <Fragment key={`${e.userId}:${e.soort}`}>
+          <OpsRow
+            tone={e.dagen < 0 ? 'red' : 'amber'}
+            icon={<IdCard size={16} />}
+            primary={`${EXPIRY_SOORT_LABELS[e.soort] ?? e.soort} · ${userNameById(e.userId)}`}
+            secondary={e.dagen < 0
+              ? `Verlopen sinds ${e.validUntil}`
+              : e.dagen === 0
+                ? `Verloopt vandaag (${e.validUntil})`
+                : `Verloopt over ${e.dagen} ${e.dagen === 1 ? 'dag' : 'dagen'} (${e.validUntil})`}
+            onClick={() => onNavigate('vervaldata')}
+          />
+          </Fragment>
+        ))}
+        {herverdeelPerChauffeur.slice(0, 3).map((g) => (
+          <Fragment key={`herverdeel:${g.driverId}`}>
+          <OpsRow
+            tone="red"
+            icon={<UserX size={16} />}
+            primary={`${g.diensten.length} ${g.diensten.length === 1 ? 'dienst' : 'diensten'} nog niet herverdeeld — ${userNameById(g.driverId)}`}
+            secondary={`${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDay(s.date)} (${serviceNumberOf(s)})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`}
+            // Ziekte-blad, niet de maandplanning: dáár staan de
+            // herverdeel-knoppen (kortste route naar de actie).
+            onClick={() => onNavigate('ziekte')}
+          />
+          </Fragment>
+        ))}
+        {gapDays.slice(0, 3).map((d) => (
+          <Fragment key={d.date}>
+          <OpsRow
+            tone="red"
+            icon={<AlertTriangle size={16} />}
+            primary={`${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'} — ${formatDay(d.date)}`}
+            secondary={`Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`}
+            onClick={() => onNavigate('dekking')}
+          />
+          </Fragment>
+        ))}
+        {pendingDevices.slice(0, 3).map((d) => (
+          <Fragment key={`${d.userId}:${d.name}:${d.createdAt}`}>
+          <OpsRow
+            tone="amber"
+            icon={<Smartphone size={16} />}
+            primary={`Toestel wacht op goedkeuring · ${userNameById(d.userId)}`}
+            secondary={d.name}
+            meta={relTime(d.createdAt)}
+            onClick={() => onNavigate('toestellen')}
+          />
+          </Fragment>
+        ))}
+        {pendingLeave.slice(0, 4).map((req) => (
+          <Fragment key={req.id}>
+          <OpsRow
+            tone="amber"
+            icon={<CalendarDays size={16} />}
+            primary={`Verlofaanvraag · ${userNameById(req.userId)}`}
+            secondary={`${req.startDate}${req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : 'klein verlet'}`}
+            meta={relTime(req.createdAt)}
+            onClick={() => onNavigate('verlof')}
+          />
+          </Fragment>
+        ))}
+        {pendingSwaps.slice(0, 4).map((swap) => (
+          <Fragment key={swap.id}>
+          <OpsRow
+            tone="blue"
+            icon={<Repeat size={16} />}
+            primary={`${swap.swapType === 'overname' ? 'Overname' : 'Dienstruil'} · ${swap.targetDriverId
+              ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
+              : userNameById(swap.requesterId)}`}
+            secondary={swap.status === 'accepted' ? 'Collega akkoord — wacht op validatie' : swap.reason || 'Wacht op een collega'}
+            meta={relTime(swap.createdAt)}
+            onClick={() => onNavigate('ruil-verzoeken')}
+          />
+          </Fragment>
+        ))}
+        {/* De lijst toont bewust een top-N; zonder deze regel suggereerde
+            de teller in de kop dat je alles ziet. */}
+        {hiddenAttentionCount > 0 && (
+          <p className="px-4 pt-1 text-xs font-medium text-slate-500">
+            +{hiddenAttentionCount} niet getoond — open Verlof, Dienstruil, Toestellen of Vervaldata voor de volledige lijst.
+          </p>
+        )}
+        {attentionCount === 0 && (
+          /* Neutrale kaart met alleen een groen vinkje: "alles ok" is
+             rusttoestand, geen melding (afwerking 04-09, nr. 6). */
+          <Card tone="muted" padding="none" className="flex items-center gap-3 px-4 py-3.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-paper text-emerald-700 ring-1 ring-hairline">
+              <CheckCircle2 size={16} />
+
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Alles ok</p>
+              <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
+            </div>
+          </Card>
+        )}
+      </div>
+    </OpsPanel>
+  );
+  // Rechterflank: live activiteit. Het vroegere "Systeemstatus"-paneel
+  // is bewust weg: import-status en dekking staan al in de status-strip
+  // bovenaan, en "Portaal Online"/"Realtime Actief" waren hardcoded
+  // (decoratie) — tegen het eigen niets-is-decoratief-principe in.
+  const paneelActiviteit: ReactNode = isAdmin && activityLog.length > 0 ? (
+    <OpsPanel
+      className="flex-1"
+      icon={<Activity size={16} />}
+      title="Live activiteit"
+      aside="laatste acties"
+      onSeeAll={() => onNavigate('activiteit')}
+      seeAllLabel="Volledige log"
+    >
+      <div className="space-y-0.5">
+        {activityLog.slice(0, 6).map((entry) => (
+          <Fragment key={entry.id}><FeedRow entry={entry} /></Fragment>
+        ))}
+      </div>
+    </OpsPanel>
+  ) : (
+    updates.length > 0 && (
+      <OpsPanel
+        className="flex-1"
+        icon={<Bell size={16} />}
+        title="Recente updates"
+        onSeeAll={() => onNavigate('updates')}
+        seeAllLabel="Alle updates"
+      >
+        <div className="space-y-1.5">
+          {updates.slice(0, 3).map((u) => (
+            <OpsRow
+              tone={u.isUrgent ? 'red' : 'slate'}
+              icon={<Bell size={16} />}
+              primary={u.title}
+              secondary={u.date}
+              onClick={() => onNavigate('updates')}
+            />
+          ))}
+        </div>
+      </OpsPanel>
+    )
+  );
+  // Deze week als compacte strook onder de activiteit (afwerking 04-09,
+  // nr. 10): zeven dagcellen i.p.v. een derde smalle kolom met
+  // afgekapte regels. Mobiel: een tik verder op Openstaande diensten.
+  const paneelDezeWeek = (
+    <OpsPanel
+      className="hidden lg:block"
+      icon={<CalendarDays size={16} />}
+      title="Deze week"
+      aside={coverageDays === null ? 'laden…' : geenVerwachtingen ? undefined : weekOpen === 0 ? 'alles gedekt' : `${weekOpen} open`}
+      onSeeAll={() => onNavigate('dekking')}
+      seeAllLabel="Openstaande diensten"
+    >
+      {coverageDays === null ? (
+        <div className="space-y-1.5" aria-busy="true" aria-label="Dekking wordt geladen">
+          <SkeletonRow /><SkeletonRow /><SkeletonRow />
+        </div>
+      ) : geenVerwachtingen ? (
+        <EmptyState
+          icon={<AlertTriangle size={24} />}
+          title="Nog geen verwachte diensten"
+          message="Stel per dag-type in welke diensten er verwacht worden; dan zie je hier per dag wat er nog open staat."
+          action={(
+            <Button variant="secondary" size="sm" onClick={() => onNavigate('dekking')}>
+              Verwachte diensten instellen
+            </Button>
+          )}
+        />
+      ) : (
+        <ul className="grid grid-cols-7 gap-1.5" aria-label="Dekking per dag">
+          {weekDagen.map((d) => {
+            const ok = d.missing.length === 0;
+            const dag = new Date(`${d.date}T00:00:00`);
+            return (
+              <li
+                key={d.date}
+                title={ok ? `${formatDay(d.date)} · gedekt` : `${formatDay(d.date)} · open: ${d.missing.join(', ')}`}
+                className={cn('flex flex-col items-center gap-1 rounded-xl px-1 py-2 ring-1 ring-hairline', ok ? 'bg-surface-row' : 'bg-red-500/8')}
+              >
+                <span className="text-micro">{dag.toLocaleDateString('nl-BE', { weekday: 'short' }).replace('.', '')}</span>
+                <span className="font-mono text-sm font-semibold tabular-nums text-slate-800">{dag.getDate()}</span>
+                {ok ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-label="gedekt" />
+                ) : (
+                  <span className="rounded-full bg-red-500/12 px-1.5 text-2xs font-bold tabular-nums text-red-700">{d.missing.length}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </OpsPanel>
+  );
+  const PANEEL: Record<string, ReactNode> = { 'open-taken': paneelOpenTaken, activiteit: paneelActiviteit, 'deze-week': paneelDezeWeek };
+  const [panelenLinks, ...panelenRechts] = zichtbareTegels
+    .filter((t) => t.groep === 'panelen')
+    .map((t) => PANEEL[t.id])
+    .filter((el) => el !== undefined && el !== null && el !== false);
+
   return (
     <section className="space-y-5">
       {/* === Operationele header === */}
@@ -578,6 +931,13 @@ export function PlannerDashboardWidgets({
         >
           Ziek melden
         </Button>
+        {/* Stille secundaire actie: dashboard aanpassen (tegels verbergen /
+            herschikken) — geen tweede gouden knop. */}
+        <ActieMenu
+          size="sm"
+          label="Meer acties"
+          items={[{ label: 'Dashboard aanpassen', icon: <SlidersHorizontal size={16} />, onClick: () => setDashboardAanpassen(true) }]}
+        />
         </div>
       </div>
 
@@ -607,91 +967,18 @@ export function PlannerDashboardWidgets({
           ) : undefined}
         />
       )}
-      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-6' : 'xl:grid-cols-5')}>
-        {dagOffset === 1 ? (
-          // Morgen: "nu aan het rijden" is een vandaag-cijfer — het bleef staan
-          // en las als "morgen zijn er al mensen actief" (melding Jarno 03-09).
-          // Toon in plaats daarvan de eerste start van morgen.
-          <OpsStat
-            className="md:col-span-2 xl:col-span-1"
-            icon={<Bus size={16} />}
-            tone="slate"
-            label="Eerste start morgen"
-            text={eersteStartMorgen ? eersteStartMorgen.tijd : '—'}
-            sub={eersteStartMorgen ? `${eersteStartMorgen.naam} · dienst ${eersteStartMorgen.dienst}` : 'nog geen diensten ingepland'}
-            onClick={() => setShowScheduled(true)}
-          />
-        ) : (
-          <OpsStat
-            className="md:col-span-2 xl:col-span-1"
-            icon={<Bus size={16} />}
-            // Oker = er rijdt nú iemand (het enige merk-accent in de strip);
-            // een lege ochtend is rusttoestand en blijft slate.
-            tone={driversDrivingNow > 0 ? 'oker' : 'slate'}
-            label="Chauffeurs actief"
-            value={driversDrivingNow}
-            sub="nu aan het rijden"
-            onClick={() => setShowDriving(true)}
-          />
-        )}
-        <OpsStat
-          className="md:col-span-2 xl:col-span-1"
-          icon={<Users size={16} />}
-          tone="slate"
-          label={`${peilLabel} ingepland`}
-          value={driversActiveToday}
-          suffix={totalDrivers > 0 ? ` / ${totalDrivers}` : undefined}
-          sub={ingeplandAfwezig > 0 ? `waarvan ${ingeplandAfwezig} afwezig gemeld` : 'chauffeurs met dienst'}
-          onClick={() => setShowScheduled(true)}
-        />
-        <OpsStat
-          className="md:col-span-2 xl:col-span-1"
-          icon={<UserCheck size={16} />}
-          tone="slate"
-          label="Beschikbaar"
-          value={availableToday.length}
-          sub={`vrij en inzetbaar ${peilLabel.toLowerCase()}`}
-          onClick={() => setShowAvailable(true)}
-        />
-        <OpsStat
-          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
-          icon={<CalendarClock size={16} />}
-          tone={todayAbsent.some((a) => a.isSick) ? 'rose' : 'slate'}
-          label={`${peilLabel} afwezig`}
-          value={todayAbsent.length}
-          sub={todayAbsent.length === 0
-            ? 'iedereen inzetbaar'
-            : `${todayAbsent.filter((a) => a.isSick).length} ziek · ${todayAbsent.filter((a) => !a.isSick).length} verlof`}
-          onClick={() => setShowAbsent(true)}
-        />
-        <OpsStat
-          className={cn(laadplein ? 'md:col-span-2' : 'col-span-2 md:col-span-3', 'xl:col-span-1')}
-          icon={<MapPin size={16} />}
-          tone="slate"
-          label="Omleidingen"
-          value={activeDiversions}
-          sub={activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
-          onClick={() => onNavigate('omleidingen')}
-        />
-        {/* Laadplein-tegel — alleen zodra de OCPI-koppeling data levert.
-            Doorklikken naar het volle OCPI-scherm kan alleen als admin;
-            voor een planner is de tegel zelf de informatie. */}
-        {laadplein && (
-          <OpsStat
-            className="md:col-span-2 xl:col-span-1"
-            icon={<Zap size={16} />}
-            tone={laadplein.outOfOrder > 0 ? 'red' : laadplein.charging > 0 ? 'blue' : 'slate'}
-            label="Aan de lader"
-            value={laadplein.charging}
-            suffix={` / ${laadplein.evses}`}
-            sub={laadplein.outOfOrder > 0
-              ? `${laadplein.outOfOrder} in storing`
-              : laadplein.totalPowerKw > 0
-                ? `${laadplein.totalPowerKw} kW op dit moment`
-                : 'laadpunten bezet'}
-            onClick={isAdmin ? () => onNavigate('ocpi-monitoring') : undefined}
-          />
-        )}
+      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', stripLayout.xl)}>
+        {stripZichtbaar.map((t, i) => (
+          <Fragment key={t.id}>
+            {STRIP_TEGEL[t.id]?.(cn(
+              stripLayout.md[i],
+              'xl:col-span-1',
+              // Oneven aantal op de telefoon (2 kolommen): de laatste tegel
+              // over de volle breedte, geen half gat.
+              i === stripZichtbaar.length - 1 && stripZichtbaar.length % 2 === 1 && 'col-span-2',
+            ))}
+          </Fragment>
+        ))}
       </div>
 
       {/* === Operations Center ===
@@ -703,241 +990,13 @@ export function PlannerDashboardWidgets({
           — dat zijn korte rijen en er staan er meestal maar twee of drie.
           Op xl+ komt er een derde kolom bij ("Deze week", fase C13); onder
           xl blijft alles zoals het was. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Open taken — gecombineerde werkvoorraad */}
-        <OpsPanel
-          icon={<Inbox size={16} />}
-          title="Open taken"
-          aside={attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'item' : 'items'}` : undefined}
-        >
-          <div className="space-y-1.5">
-            {planningStale && (
-              <OpsRow
-                tone="amber"
-                icon={<CalendarClock size={16} />}
-                primary={`Planning al ${daysSinceImport} dagen niet bijgewerkt`}
-                secondary="Upload je laatste Excel zodat de planning actueel blijft."
-                onClick={() => onNavigate('beheer-roosters')}
-              />
-            )}
-            {horizonKrap && (
-              <OpsRow
-                tone={horizonDagenOver! <= 0 ? 'red' : 'amber'}
-                icon={<CalendarClock size={16} />}
-                primary={horizonDagenOver! <= 0
-                  ? 'De geladen planning is op'
-                  : `Planning geladen t/m ${formatDay(planningHorizon)} — nog ${horizonDagenOver} ${horizonDagenOver === 1 ? 'dag' : 'dagen'}`}
-                secondary="Importeer de volgende periode zodat chauffeurs vooruit kunnen kijken."
-                onClick={() => onNavigate('beheer-roosters')}
-              />
-            )}
-            {importIssueCount > 0 && lastImport && (
-              <OpsRow
-                tone="red"
-                icon={<AlertTriangle size={16} />}
-                primary="Laatste import heeft aandachtspunten"
-                secondary={[
-                  lastImport.unknownCodes.length > 0 ? `${lastImport.unknownCodes.length} onbekende codes` : null,
-                  lastImport.unmatchedDrivers.length > 0 ? `${lastImport.unmatchedDrivers.length} niet-gematchte chauffeurs` : null,
-                ].filter(Boolean).join(' · ')}
-                onClick={() => onNavigate('beheer-roosters')}
-              />
-            )}
-            {vervalTaken.slice(0, 3).map((e) => (
-              <Fragment key={`${e.userId}:${e.soort}`}>
-              <OpsRow
-                tone={e.dagen < 0 ? 'red' : 'amber'}
-                icon={<IdCard size={16} />}
-                primary={`${EXPIRY_SOORT_LABELS[e.soort] ?? e.soort} · ${userNameById(e.userId)}`}
-                secondary={e.dagen < 0
-                  ? `Verlopen sinds ${e.validUntil}`
-                  : e.dagen === 0
-                    ? `Verloopt vandaag (${e.validUntil})`
-                    : `Verloopt over ${e.dagen} ${e.dagen === 1 ? 'dag' : 'dagen'} (${e.validUntil})`}
-                onClick={() => onNavigate('vervaldata')}
-              />
-              </Fragment>
-            ))}
-            {herverdeelPerChauffeur.slice(0, 3).map((g) => (
-              <Fragment key={`herverdeel:${g.driverId}`}>
-              <OpsRow
-                tone="red"
-                icon={<UserX size={16} />}
-                primary={`${g.diensten.length} ${g.diensten.length === 1 ? 'dienst' : 'diensten'} nog niet herverdeeld — ${userNameById(g.driverId)}`}
-                secondary={`${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDay(s.date)} (${serviceNumberOf(s)})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`}
-                // Ziekte-blad, niet de maandplanning: dáár staan de
-                // herverdeel-knoppen (kortste route naar de actie).
-                onClick={() => onNavigate('ziekte')}
-              />
-              </Fragment>
-            ))}
-            {gapDays.slice(0, 3).map((d) => (
-              <Fragment key={d.date}>
-              <OpsRow
-                tone="red"
-                icon={<AlertTriangle size={16} />}
-                primary={`${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'} — ${formatDay(d.date)}`}
-                secondary={`Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`}
-                onClick={() => onNavigate('dekking')}
-              />
-              </Fragment>
-            ))}
-            {pendingDevices.slice(0, 3).map((d) => (
-              <Fragment key={`${d.userId}:${d.name}:${d.createdAt}`}>
-              <OpsRow
-                tone="amber"
-                icon={<Smartphone size={16} />}
-                primary={`Toestel wacht op goedkeuring · ${userNameById(d.userId)}`}
-                secondary={d.name}
-                meta={relTime(d.createdAt)}
-                onClick={() => onNavigate('toestellen')}
-              />
-              </Fragment>
-            ))}
-            {pendingLeave.slice(0, 4).map((req) => (
-              <Fragment key={req.id}>
-              <OpsRow
-                tone="amber"
-                icon={<CalendarDays size={16} />}
-                primary={`Verlofaanvraag · ${userNameById(req.userId)}`}
-                secondary={`${req.startDate}${req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : 'klein verlet'}`}
-                meta={relTime(req.createdAt)}
-                onClick={() => onNavigate('verlof')}
-              />
-              </Fragment>
-            ))}
-            {pendingSwaps.slice(0, 4).map((swap) => (
-              <Fragment key={swap.id}>
-              <OpsRow
-                tone="blue"
-                icon={<Repeat size={16} />}
-                primary={`${swap.swapType === 'overname' ? 'Overname' : 'Dienstruil'} · ${swap.targetDriverId
-                  ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
-                  : userNameById(swap.requesterId)}`}
-                secondary={swap.status === 'accepted' ? 'Collega akkoord — wacht op validatie' : swap.reason || 'Wacht op een collega'}
-                meta={relTime(swap.createdAt)}
-                onClick={() => onNavigate('ruil-verzoeken')}
-              />
-              </Fragment>
-            ))}
-            {/* De lijst toont bewust een top-N; zonder deze regel suggereerde
-                de teller in de kop dat je alles ziet. */}
-            {hiddenAttentionCount > 0 && (
-              <p className="px-4 pt-1 text-xs font-medium text-slate-500">
-                +{hiddenAttentionCount} niet getoond — open Verlof, Dienstruil, Toestellen of Vervaldata voor de volledige lijst.
-              </p>
-            )}
-            {attentionCount === 0 && (
-              /* Neutrale kaart met alleen een groen vinkje: "alles ok" is
-                 rusttoestand, geen melding (afwerking 04-09, nr. 6). */
-              <Card tone="muted" padding="none" className="flex items-center gap-3 px-4 py-3.5">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-paper text-emerald-700 ring-1 ring-hairline">
-                  <CheckCircle2 size={16} />
-
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Alles ok</p>
-                  <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
-                </div>
-              </Card>
-            )}
+      <div className={cn('grid grid-cols-1 gap-4', panelenRechts.length > 0 && 'lg:grid-cols-2')}>
+        {panelenLinks}
+        {panelenRechts.length > 0 && (
+          <div className="flex flex-col gap-4">
+            {panelenRechts.map((el, i) => <Fragment key={i}>{el}</Fragment>)}
           </div>
-        </OpsPanel>
-
-        {/* Rechterflank: live activiteit. Het vroegere "Systeemstatus"-paneel
-            is bewust weg: import-status en dekking staan al in de status-strip
-            bovenaan, en "Portaal Online"/"Realtime Actief" waren hardcoded
-            (decoratie) — tegen het eigen niets-is-decoratief-principe in. */}
-        <div className="flex flex-col gap-4">
-          {isAdmin && activityLog.length > 0 ? (
-            <OpsPanel
-              className="flex-1"
-              icon={<Activity size={16} />}
-              title="Live activiteit"
-              aside="laatste acties"
-              onSeeAll={() => onNavigate('activiteit')}
-              seeAllLabel="Volledige log"
-            >
-              <div className="space-y-0.5">
-                {activityLog.slice(0, 6).map((entry) => (
-                  <Fragment key={entry.id}><FeedRow entry={entry} /></Fragment>
-                ))}
-              </div>
-            </OpsPanel>
-          ) : (
-            updates.length > 0 && (
-              <OpsPanel
-                className="flex-1"
-                icon={<Bell size={16} />}
-                title="Recente updates"
-                onSeeAll={() => onNavigate('updates')}
-                seeAllLabel="Alle updates"
-              >
-                <div className="space-y-1.5">
-                  {updates.slice(0, 3).map((u) => (
-                    <OpsRow
-                      tone={u.isUrgent ? 'red' : 'slate'}
-                      icon={<Bell size={16} />}
-                      primary={u.title}
-                      secondary={u.date}
-                      onClick={() => onNavigate('updates')}
-                    />
-                  ))}
-                </div>
-              </OpsPanel>
-            )
-          )}
-          {/* Deze week als compacte strook onder de activiteit (afwerking 04-09,
-              nr. 10): zeven dagcellen i.p.v. een derde smalle kolom met
-              afgekapte regels. Mobiel: een tik verder op Openstaande diensten. */}
-        <OpsPanel
-          className="hidden lg:block"
-          icon={<CalendarDays size={16} />}
-          title="Deze week"
-          aside={coverageDays === null ? 'laden…' : geenVerwachtingen ? undefined : weekOpen === 0 ? 'alles gedekt' : `${weekOpen} open`}
-          onSeeAll={() => onNavigate('dekking')}
-          seeAllLabel="Openstaande diensten"
-        >
-          {coverageDays === null ? (
-            <div className="space-y-1.5" aria-busy="true" aria-label="Dekking wordt geladen">
-              <SkeletonRow /><SkeletonRow /><SkeletonRow />
-            </div>
-          ) : geenVerwachtingen ? (
-            <EmptyState
-              icon={<AlertTriangle size={24} />}
-              title="Nog geen verwachte diensten"
-              message="Stel per dag-type in welke diensten er verwacht worden; dan zie je hier per dag wat er nog open staat."
-              action={(
-                <Button variant="secondary" size="sm" onClick={() => onNavigate('dekking')}>
-                  Verwachte diensten instellen
-                </Button>
-              )}
-            />
-          ) : (
-            <ul className="grid grid-cols-7 gap-1.5" aria-label="Dekking per dag">
-              {weekDagen.map((d) => {
-                const ok = d.missing.length === 0;
-                const dag = new Date(`${d.date}T00:00:00`);
-                return (
-                  <li
-                    key={d.date}
-                    title={ok ? `${formatDay(d.date)} · gedekt` : `${formatDay(d.date)} · open: ${d.missing.join(', ')}`}
-                    className={cn('flex flex-col items-center gap-1 rounded-xl px-1 py-2 ring-1 ring-hairline', ok ? 'bg-surface-row' : 'bg-red-500/8')}
-                  >
-                    <span className="text-micro">{dag.toLocaleDateString('nl-BE', { weekday: 'short' }).replace('.', '')}</span>
-                    <span className="font-mono text-sm font-semibold tabular-nums text-slate-800">{dag.getDate()}</span>
-                    {ok ? (
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-label="gedekt" />
-                    ) : (
-                      <span className="rounded-full bg-red-500/12 px-1.5 text-2xs font-bold tabular-nums text-red-700">{d.missing.length}</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </OpsPanel>
-        </div>
+        )}
       </div>
 
       {/* === Popup: wie is er vandaag beschikbaar === */}
@@ -1232,6 +1291,14 @@ export function PlannerDashboardWidgets({
         </form>
         )}
       </Modal>
+
+      <DashboardAanpassen
+        open={dashboardAanpassen}
+        onClose={() => setDashboardAanpassen(false)}
+        tegels={PLANNER_TEGELS}
+        voorkeuren={dashboardVoorkeuren}
+        onChange={bewaarDashboardVoorkeuren}
+      />
     </section>
   );
 }
