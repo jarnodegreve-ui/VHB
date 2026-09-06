@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "audit:mobile": "node scripts/mobile-audit.mjs",
+    "changelog": "node scripts/changelog.mjs",
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
