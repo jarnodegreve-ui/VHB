@@ -140,7 +140,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
         ) : (
           <EmptyState
             title={searchQuery ? 'Geen resultaten' : 'Geen actieve omleidingen'}
-            message={searchQuery ? `Geen omleidingen gevonden voor "${searchQuery}"` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
+            message={searchQuery ? `Geen omleidingen gevonden voor “${searchQuery}”` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
             action={searchQuery ? (
               <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
                 Wis zoekopdracht

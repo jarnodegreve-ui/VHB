@@ -320,7 +320,7 @@ export function DesignsysteemView() {
               <tr key={r.id}>
                 <Td><Checkbox checked={gekozen.has(r.id)} onChange={(v) => setGekozen((s) => { const n = new Set(s); if (v) n.add(r.id); else n.delete(r.id); return n; })} label={`Selecteer ${r.naam}`} /></Td>
                 <Td>{r.naam}</Td>
-                <Td className="text-right"><Chip>{r.dienst}</Chip></Td>
+                <Td num><Chip>{r.dienst}</Chip></Td>
                 <Td><StatusBadge status={r.status} /></Td>
               </tr>
             ))}

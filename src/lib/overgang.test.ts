@@ -8,7 +8,7 @@ import { kiesRecord, metOvergang, recordNaam } from './overgang';
  * krijgen rij en paneel tijdelijk dezelfde view-transition-name.
  */
 type Start = (cb: () => void) => { finished: Promise<void> };
-const doc = document as Document & { startViewTransition?: Start };
+const doc = document as unknown as { startViewTransition?: Start };
 
 let reduced = false;
 let inline = true;

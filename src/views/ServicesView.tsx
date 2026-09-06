@@ -226,7 +226,7 @@ export function ServicesView({ services }: { services: Service[] }) {
           <div className="px-6 py-6">
             <EmptyState
               title="Geen diensten gevonden"
-              message={searchQuery ? `Geen diensten gevonden voor "${searchQuery}".` : 'Er zijn nog geen diensten beschikbaar.'}
+              message={searchQuery ? `Geen diensten gevonden voor “${searchQuery}”.` : 'Er zijn nog geen diensten beschikbaar.'}
             />
           </div>
         )}

@@ -177,3 +177,14 @@ export function formatGetal(value: number, max = 2): string {
   // nl-BE gebruikt de komma als decimaalteken, dus elke punt is een duizendtal.
   return value.toLocaleString('nl-BE', { maximumFractionDigits: max }).replace(/\./g, '\u202F');
 }
+
+/**
+ * Getal + eenheid met een smalle vaste spatie (U+202F) ertussen: "12 kW",
+ * "3 u", "45 min". Typografisch juist én onbreekbaar — "112" en "kW" komen
+ * nooit op verschillende regels terecht. Neem een al geformatteerd getal
+ * (formatGetal) of een ruwe waarde; een niet-eindig getal wordt '—'.
+ */
+export function metEenheid(waarde: number | string, eenheid: string): string {
+  const tekst = typeof waarde === 'number' ? (Number.isFinite(waarde) ? String(waarde) : '—') : waarde;
+  return tekst === '—' ? tekst : `${tekst}\u202F${eenheid}`;
+}

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { metEenheid } from '../lib/format';
 import { ArrowUpRight, ChevronRight } from 'lucide-react';
 import { CountUp } from './CountUp';
 import { cn } from '../lib/ui';
@@ -288,9 +289,9 @@ export function relTime(iso: string): string {
   if (!Number.isFinite(diff) || diff < 0) return '';
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'zojuist';
-  if (minutes < 60) return `${minutes} min geleden`;
+  if (minutes < 60) return `${metEenheid(minutes, 'min')} geleden`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} u geleden`;
+  if (hours < 24) return `${metEenheid(hours, 'u')} geleden`;
   const days = Math.floor(hours / 24);
   if (days === 1) return 'gisteren';
   return `${days} dagen geleden`;
