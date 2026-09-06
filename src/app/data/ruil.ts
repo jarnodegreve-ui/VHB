@@ -38,7 +38,7 @@ export function useRuilData(ctx: DataCtx) {
         headers: ctx.revisionHeader('swaps'),
         body: JSON.stringify(newSwaps),
       });
-      if (response.status === 409) {
+      if (response.status === 409 || response.status === 428) {
         showToast('De dienstruilen zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchSwaps();
         return false;

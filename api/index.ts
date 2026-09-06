@@ -649,7 +649,7 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
       // (bv. planner B saved terwijl A net een maand importeerde) verwijderde
       // anders stilletjes alles wat B nog niet gezien had.
       const previousPlanning = await getPlanningData();
-      if (revisionConflict(req, previousPlanning)) return revisionConflictResponse(res, "De planning");
+      { const rp = revisionCheck(req, previousPlanning); if (rp) return revisionProbleemResponse(res, "De planning", rp); }
       const shiftsRemoved = detectMassDelete(previousPlanning, newData);
       if (shiftsRemoved !== null) return massDeleteResponse(res, shiftsRemoved, previousPlanning.length, "diensten");
       await savePlanningData(newData);
@@ -2039,19 +2039,29 @@ const revisionOf = (rows: any[]): string => {
  *  saveUsersData houdt de DB-waarde aan. */
 const usersRevisionOf = (users: AppUser[]): string =>
   revisionOf(users.map((user) => ({ ...user, lastLogin: undefined, activeSessions: undefined })));
-/** True als de client een base-revisie meegaf die niet meer overeenkomt met
- *  de huidige serverstaat → iemand anders heeft intussen opgeslagen. */
-const revisionConflict = (req: AuthenticatedRequest, current: any[], rev: (rows: any[]) => string = revisionOf): boolean => {
+/** Revisiecontrole op collectie-saves. "ontbreekt": de client stuurde geen
+ *  X-Collection-Revision mee (verplicht sinds 06-09 — zonder basisrevisie kan
+ *  de server niet weten of de payload nog vers is). "conflict": de basisrevisie
+ *  komt niet meer overeen met de serverstaat → iemand anders heeft intussen
+ *  opgeslagen. null: in orde. */
+type RevisieProbleem = "ontbreekt" | "conflict";
+const revisionCheck = (req: AuthenticatedRequest, current: any[], rev: (rows: any[]) => string = revisionOf): RevisieProbleem | null => {
   const base = req.headers[COLLECTION_REVISION_HEADER];
-  if (typeof base !== "string" || base.length === 0) return false; // oudere client → check overslaan
-  return base !== rev(current);
+  if (typeof base !== "string" || base.length === 0) return "ontbreekt";
+  return base === rev(current) ? null : "conflict";
 };
-const revisionConflictResponse = (res: any, label: string) =>
-  res.status(409).json({
-    error: "Gewijzigd door iemand anders",
-    details: `${label} is intussen door iemand anders aangepast. De lijst wordt ververst — bekijk de wijziging en probeer je aanpassing opnieuw.`,
-    conflict: "revision",
-  });
+const revisionProbleemResponse = (res: any, label: string, probleem: RevisieProbleem) =>
+  probleem === "ontbreekt"
+    ? res.status(428).json({
+        error: "Revisie ontbreekt",
+        details: `${label} kan niet opgeslagen worden zonder de revisie van de geladen lijst (X-Collection-Revision). Ververs de lijst en probeer opnieuw.`,
+        conflict: "revision-missing",
+      })
+    : res.status(409).json({
+        error: "Gewijzigd door iemand anders",
+        details: `${label} is intussen door iemand anders aangepast. De lijst wordt ververst — bekijk de wijziging en probeer je aanpassing opnieuw.`,
+        conflict: "revision",
+      });
 
 app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
@@ -2061,7 +2071,7 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
     }
 
     const previousCodes = await getPlanningCodesData();
-    if (revisionConflict(req, previousCodes)) return revisionConflictResponse(res, "De planningscodes");
+    { const rp = revisionCheck(req, previousCodes); if (rp) return revisionProbleemResponse(res, "De planningscodes", rp); }
     const codesRemoved = detectMassDelete(previousCodes, codes, (c) => String(c?.code));
     if (codesRemoved !== null) return massDeleteResponse(res, codesRemoved, previousCodes.length, "planningscodes");
     await savePlanningCodesData(codes);
@@ -2122,7 +2132,7 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       const previousUsers = await getUsersData();
       // Revisie-check: twee admin-sessies die tegelijk bewerken overschreven
       // elkaar anders stil — en saveUsersData doet onomkeerbare Auth-deletes.
-      if (revisionConflict(req, previousUsers, usersRevisionOf)) return revisionConflictResponse(res, "De gebruikerslijst");
+      { const rp = revisionCheck(req, previousUsers, usersRevisionOf); if (rp) return revisionProbleemResponse(res, "De gebruikerslijst", rp); }
       const usersRemoved = detectMassDelete(previousUsers, newData);
       if (usersRemoved !== null) return massDeleteResponse(res, usersRemoved, previousUsers.length, "gebruikers");
       // Bijwerkingen (Auth + welkomstmail, onthaal-docs, documenten opruimen,
@@ -3116,7 +3126,7 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
       // Gedeeld contract (shared/schemas/diversion.ts): 400 met veldfouten per rij.
       if (!valideerLijst(res, diversionLijstSchema, newData, (d: any) => d?.title)) return;
       const previousDiversions = await getDiversionsData();
-      if (revisionConflict(req, previousDiversions)) return revisionConflictResponse(res, "De omleidingen");
+      { const rp = revisionCheck(req, previousDiversions); if (rp) return revisionProbleemResponse(res, "De omleidingen", rp); }
       const diversionsRemoved = detectMassDelete(previousDiversions, newData);
       if (diversionsRemoved !== null) return massDeleteResponse(res, diversionsRemoved, previousDiversions.length, "omleidingen");
       // pdfUrl komt uit Storage, nooit van de client (zie metServerPdfUrl).
@@ -3338,7 +3348,7 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
       if (!isBulkReplace) {
         // Bulk-import vervangt bewust de hele collectie → revisie-/wipe-checks
         // alleen voor gewone bewerkingen.
-        if (revisionConflict(req, previousServices)) return revisionConflictResponse(res, "Het dienstoverzicht");
+        { const rp = revisionCheck(req, previousServices); if (rp) return revisionProbleemResponse(res, "Het dienstoverzicht", rp); }
         const servicesRemoved = detectMassDelete(previousServices, newData);
         if (servicesRemoved !== null) return massDeleteResponse(res, servicesRemoved, previousServices.length, "diensten");
       }
@@ -3400,7 +3410,7 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
     // Gedeeld contract (shared/schemas/update.ts): 400 met veldfouten per rij.
     if (!valideerLijst(res, updateLijstSchema, newData, (u: any) => u?.title)) return;
     const previousUpdates = await getUpdatesData();
-    if (revisionConflict(req, previousUpdates)) return revisionConflictResponse(res, "De updates");
+    { const rp = revisionCheck(req, previousUpdates); if (rp) return revisionProbleemResponse(res, "De updates", rp); }
     const updatesRemoved = detectMassDelete(previousUpdates, newData);
     if (updatesRemoved !== null) return massDeleteResponse(res, updatesRemoved, previousUpdates.length, "updates");
     await verwerkUpdatesOpslag(req as AuthenticatedRequest, previousUpdates, newData, { pushUrl: viewUrl("updates") });
@@ -3764,7 +3774,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // aanvraag die intussen binnenkwam. Chauffeur-payloads worden hieronder
     // delta-gereconstrueerd en hebben de check niet nodig.
     if (req.appUser?.role !== "chauffeur") {
-      if (revisionConflict(req, previousSwaps)) return revisionConflictResponse(res, "De dienstruilen");
+      { const rp = revisionCheck(req, previousSwaps); if (rp) return revisionProbleemResponse(res, "De dienstruilen", rp); }
       const swapsRemoved = detectMassDelete(previousSwaps, newData);
       if (swapsRemoved !== null) return massDeleteResponse(res, swapsRemoved, previousSwaps.length, "dienstruilen");
     }
@@ -5004,7 +5014,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     // revisie-check + wipe-detectie zodat een stale save geen verse aanvraag
     // stilletjes verwijdert. Chauffeur-payloads worden delta-gereconstrueerd.
     if (req.appUser?.role !== "chauffeur") {
-      if (revisionConflict(req, previousLeave)) return revisionConflictResponse(res, "De verlofaanvragen");
+      { const rp = revisionCheck(req, previousLeave); if (rp) return revisionProbleemResponse(res, "De verlofaanvragen", rp); }
       const leaveRemoved = detectMassDelete(previousLeave, newData);
       if (leaveRemoved !== null) return massDeleteResponse(res, leaveRemoved, previousLeave.length, "verlofaanvragen");
     }

@@ -37,7 +37,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
         headers: ctx.revisionHeader('updates'),
         body: JSON.stringify(newUpdates),
       });
-      if (response.status === 409) {
+      if (response.status === 409 || response.status === 428) {
         showToast('De updates zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchUpdates();
         return false;
@@ -108,7 +108,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
         headers: ctx.revisionHeader('diversions'),
         body: JSON.stringify(newDiversions),
       });
-      if (response.status === 409) {
+      if (response.status === 409 || response.status === 428) {
         showToast('De omleidingen zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchDiversions(undefined, { silent: true });
         return;

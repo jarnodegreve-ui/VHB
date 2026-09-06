@@ -383,20 +383,36 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server?.close(() => resolve()));
 });
 
+const COLLECTIE_PADEN = new Set(['/api/planning', '/api/planning-codes', '/api/users', '/api/diversions', '/api/services', '/api/updates', '/api/swaps', '/api/leave']);
 const api = async (
   method: string,
   path: string,
   // device: toestel-token voor de whitelist-gate. Default 'dev-ok' (in
   // beforeEach goedgekeurd voor beide chauffeurs) zodat bestaande tests
   // ongemoeid blijven; expliciet null = header weglaten.
-  opts: { token?: string; body?: unknown; headers?: Record<string, string>; device?: string | null } = {},
+  opts: { token?: string; body?: unknown; headers?: Record<string, string>; device?: string | null; revisie?: null } = {},
 ) => {
+  const auth = {
+    ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
+    ...(opts.device === null ? {} : { 'X-Device-Token': opts.device ?? 'dev-ok' }),
+  };
+  // Collectie-POSTs vereisen sinds 06-09 een basisrevisie (X-Collection-
+  // Revision). Zoals de echte client: eerst de lijst laden, de revisie uit de
+  // responsheader meesturen. Tests die de header zelf zetten (of expliciet
+  // weglaten met revisie: null) blijven de baas.
+  let revisie: Record<string, string> = {};
+  if (method === 'POST' && COLLECTIE_PADEN.has(path) && opts.revisie !== null && !opts.headers?.['x-collection-revision']) {
+    const vers = await fetch(`${baseUrl}${path}`, { headers: auth });
+    const rev = vers.headers.get('x-collection-revision');
+    await vers.arrayBuffer().catch(() => undefined);
+    if (vers.ok && rev) revisie = { 'x-collection-revision': rev };
+  }
   const res = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
       ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
-      ...(opts.device === null ? {} : { 'X-Device-Token': opts.device ?? 'dev-ok' }),
+      ...auth,
+      ...revisie,
       ...(opts.headers ?? {}),
     },
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
@@ -1601,9 +1617,17 @@ describe('optimistic concurrency (revisie-tokens, anti-overschrijf)', () => {
     expect(mem.services[0].startTime).toBe('06:00');
   });
 
-  it('POST zonder revisie-header blijft toegestaan (oudere client / backward compatible)', async () => {
+  it('POST zonder revisie-header wordt geweigerd met 428 en slaat niets op (controle-ronde 05-09, punt 8)', async () => {
     const edited = mem.services.map((s, i) => (i === 0 ? { ...s, startTime: '05:30' } : s));
-    const res = await api('POST', '/api/services', { token: 'tok-planner', body: edited });
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: edited, revisie: null });
+    expect(res.status).toBe(428);
+    expect(res.json.conflict).toBe('revision-missing');
+    expect(mem.services[0].startTime).toBe('06:00');
+  });
+
+  it('chauffeur-payloads (swaps/leave, delta-gereconstrueerd) hebben geen revisie nodig', async () => {
+    const own = mem.leave.filter((l: any) => String(l.userId) === '3');
+    const res = await api('POST', '/api/leave', { token: 'tok-a', body: own, revisie: null });
     expect(res.status).toBe(200);
   });
 
