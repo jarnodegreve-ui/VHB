@@ -134,6 +134,26 @@ describe('DatePicker', () => {
     await act(async () => { gevuld.root.unmount(); });
   });
 
+  it('dagcellen zijn 44 px op touch; onder 640 px opent de kiezer als sheet', async () => {
+    // De zij-insets van de sheet (max(1rem, env(safe-area-inset-*))) zijn
+    // hier niet te toetsen: jsdom kent env() niet en laat de stijl vallen.
+    const breedte = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    try {
+      const { root, container } = await monteer(<Harnas onChange={() => {}} />);
+      await act(async () => { klik(container.querySelector('button#d')); });
+      const sheet = dialoog()!;
+      expect(sheet.className).toContain('inset-x-0');
+      expect(sheet.getAttribute('aria-modal')).toBe('true');
+      const klassen = cel('2026-09-08')!.className.split(' ');
+      expect(klassen).toEqual(expect.arrayContaining(['h-11', 'w-11', 'sm:pointer-fine:h-9', 'sm:pointer-fine:w-9']));
+      expect(klassen).not.toContain('h-10');
+      await act(async () => { root.unmount(); });
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: breedte });
+    }
+  });
+
   it('DateInput in een Field: label, hint en fout hangen aan de trigger', async () => {
     const { root, container } = await monteer(
       <Field label="Van" error="Kies een datum." htmlFor="van">

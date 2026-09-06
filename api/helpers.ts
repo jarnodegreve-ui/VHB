@@ -675,7 +675,7 @@ export const sortedNameToken = (name: string) =>
  * dekking bij zo'n botsing de cel van de verkeerde chauffeur weg en meldt hij
  * een fantoom-gat op de verkeerde naam.
  */
-export const nameIdIndexMetBotsingen = (
+const nameIdIndexMetBotsingen = (
   users: Array<{ id: string | number; name?: string | null }>,
 ): { map: Map<string, string>; botsingen: Set<string> } => {
   const map = new Map<string, string>();

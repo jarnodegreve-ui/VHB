@@ -187,7 +187,7 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
 /** Datavenster voor één advies-datum: ±6 dagen (6-dagenregel + rustcheck met
  *  de buurdagen), opgerekt tot de volledige week (ma–zo) én kalendermaand van
  *  de dag — de sortering telt sinds 19-08 gewerkte dagen per week en maand. */
-export function adviesVenster(date: string): { vanaf: string; tot: string } {
+function adviesVenster(date: string): { vanaf: string; tot: string } {
   const maandStart = `${date.slice(0, 7)}-01`;
   // Laatste dag van de maand = de dag vóór de 1e van de volgende maand
   // (dag 28 + 7 valt gegarandeerd in de volgende maand).
@@ -203,7 +203,7 @@ type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; serv
 
 /** Eén dataload voor [vanaf, tot] — gedeeld door het losse advies en de
  *  batch (herverdeel-wizard): 17 gaten hoeven niet 17× alles op te halen. */
-export async function laadAdviesBron(vanaf: string, tot: string): Promise<AdviesBron> {
+async function laadAdviesBron(vanaf: string, tot: string): Promise<AdviesBron> {
   const months: string[] = [];
   for (let m = vanaf.slice(0, 7); m <= tot.slice(0, 7); ) {
     months.push(m);
@@ -228,7 +228,7 @@ export async function berekenCoverageAdvies(date: string, code: string) {
 
 /** Zelfde berekening als vanouds, maar op een (mogelijk ruimere) voorgeladen
  *  bron; het venster van déze datum wordt er hier uit gefilterd. */
-export function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, code: string) {
+function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, code: string) {
     const { vanaf, tot } = adviesVenster(date);
     const { users, leave, services, swaps } = bron;
     const shifts = bron.shifts.filter((s) => String(s.date ?? "") >= vanaf && String(s.date ?? "") <= tot);

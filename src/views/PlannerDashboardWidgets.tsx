@@ -549,7 +549,7 @@ export function PlannerDashboardWidgets({
               type="button"
               onClick={() => setDagOffset(offset)}
               aria-pressed={dagOffset === offset}
-              className={segItemClass(dagOffset === offset)}
+              className={segItemClass(dagOffset === offset, 'min-h-11 sm:pointer-fine:min-h-8')}
             >
               {offset === 0 ? 'Vandaag' : 'Morgen'}
             </button>

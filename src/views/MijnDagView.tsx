@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Calendar, FileText, MapPin } from 'lucide-react';
 import { activeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
+import { relatieveDag } from '../lib/datum';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, shiftWindowMinutes } from '../lib/shiftTime';
 import { cn } from '../lib/ui';
@@ -121,15 +122,6 @@ export function MijnDagView({
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
   const volgende = volgendeDag[0];
   const volgendeDelen = volgende ? volgendeDag.filter((s) => s.date === volgende.date) : [];
-  const relatieveDag = (dateIso: string): string => {
-    const diff = Math.round(
-      (new Date(`${dateIso}T00:00:00`).getTime() - new Date(`${vandaag}T00:00:00`).getTime()) / 86400000,
-    );
-    if (diff <= 0) return 'vandaag';
-    if (diff === 1) return 'morgen';
-    if (diff === 2) return 'overmorgen';
-    return `over ${diff} dagen`;
-  };
 
   const liveOmleidingen = activeDiversions(diversions);
 
@@ -154,12 +146,14 @@ export function MijnDagView({
     <div className="mx-auto max-w-2xl space-y-5">
       {/* === Kop: dag-taal + schakelaar + statuszin === */}
       <header className="px-1 pt-1">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+        {/* Zelfde kop-raster als PageHeader: schakelaar rechts via ml-auto,
+            zakt onder de kop als hij niet naast de datum past. */}
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:items-end">
+          <div className="min-w-0 flex-1 basis-[14rem]">
             <p className="text-micro">{nachtdienstLoopt && isVandaag ? 'Nog bezig · dienst van gisteren' : hoofdletter(dagWoord)}</p>
             <h1 className="text-page-title mt-1">{hoofdletter(formatDayLong(peildag))}</h1>
           </div>
-          <div className="glass-segmented inline-flex shrink-0 rounded-2xl p-1" role="group" aria-label="Dag kiezen">
+          <div className="glass-segmented ml-auto inline-flex shrink-0 rounded-2xl p-1" role="group" aria-label="Dag kiezen">
             {([0, 1] as const).map((offset) => (
               // rauw: segmented-control-item via segItemClass (het voorgeschreven patroon)
               <button
@@ -337,7 +331,7 @@ export function MijnDagView({
           <OpsRow
             tone="oker"
             icon={<Calendar size={16} />}
-            primary={`${hoofdletter(relatieveDag(volgende.date))} · ${formatShortDay(volgende.date)}`}
+            primary={`${hoofdletter(relatieveDag(volgende.date, vandaag))} · ${formatShortDay(volgende.date)}`}
             secondary={
               volgendeDelen.length > 1
                 ? `${volgende.startTime} · ${volgendeDelen.length} delen · tot ${volgendeDelen[volgendeDelen.length - 1].endTime}`

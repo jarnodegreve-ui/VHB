@@ -20,7 +20,7 @@ import { useDropdown } from './useDropdown';
 
 // === Tabelvoorkeur: dichtheid + kolomkeuze ===
 
-export type Dichtheid = 'compact' | 'comfortabel';
+type Dichtheid = 'compact' | 'comfortabel';
 
 /**
  * Klassen op de <table> per dichtheid. Compact knijpt de rijen alleen met een
@@ -28,12 +28,12 @@ export type Dichtheid = 'compact' | 'comfortabel';
  * selectors `[&_td]`/`[&_th]` winnen op specificiteit van de basismaten in
  * Td/Th, zodat de primitieven zelf ongemoeid blijven.
  */
-export const DICHTHEID_TABEL: Record<Dichtheid, string> = {
+const DICHTHEID_TABEL: Record<Dichtheid, string> = {
   comfortabel: '',
   compact: 'sm:pointer-fine:[&_td]:py-1.5 sm:pointer-fine:[&_th]:py-1.5 sm:pointer-fine:[&_th_button]:min-h-8 [&_td]:text-xs',
 };
 
-export type KolomKeuze<K extends string = string> = { key: K; label: string };
+type KolomKeuze<K extends string = string> = { key: K; label: string };
 
 type VoorkeurOpslag = { dichtheid: Dichtheid; verborgen: string[] };
 
@@ -89,8 +89,8 @@ export function useTabelVoorkeur<K extends string = never>(sleutel: string, keuz
   };
 }
 
-export type DichtheidProps = { waarde: Dichtheid; onChange: (d: Dichtheid) => void };
-export type KolommenProps = {
+type DichtheidProps = { waarde: Dichtheid; onChange: (d: Dichtheid) => void };
+type KolommenProps = {
   keuzes: ReadonlyArray<KolomKeuze<string>>;
   verborgen: ReadonlySet<string>;
   onToggle: (key: string) => void;
@@ -207,7 +207,7 @@ export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling,
   );
 }
 
-export type SortRichting = 'asc' | 'desc';
+type SortRichting = 'asc' | 'desc';
 
 /** Sorteerstate + comparator voor een lijst; `key` is de kolomsleutel. */
 export function useSort<K extends string>(standaard: K, richting: SortRichting = 'asc') {

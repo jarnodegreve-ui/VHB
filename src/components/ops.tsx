@@ -39,7 +39,6 @@ export function OpsStat({
   sub,
   subClassName,
   lines,
-  badge,
   balk,
   meter,
   note,
@@ -60,8 +59,6 @@ export function OpsStat({
    *  dienst): `left` (tijden) en `right` (loopnummer) staan in twee nette
    *  kolommen onder elkaar. `done` toont een al gereden blok gedempt. */
   lines?: Array<{ left: string; right?: string; done?: boolean; active?: boolean }>;
-  /** Chip naast het label (bv. dienstnummer bij "Volgende dienst"). */
-  badge?: ReactNode;
   /** Instrument onder de regels — bv. de DienstBalk (compact). */
   balk?: ReactNode;
   /** Optionele voortgangsbalk (0–100) onder de subtekst — bv. verlofsaldo.
@@ -75,9 +72,8 @@ export function OpsStat({
   const inner = (
     <>
       {/* Kop: icoon en label op één regel (het pijltje is weg — de hele tegel
-          is klikbaar), rechts een optionele chip. Compacter dan de oude
-          icoon-boven-label-opbouw: ±40 px minder in de smalle mobiele tegel
-          (Jarno 04-09). */}
+          is klikbaar). Compacter dan de oude icoon-boven-label-opbouw: ±40 px
+          minder in de smalle mobiele tegel (Jarno 04-09). */}
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
           <span className={cn('inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
@@ -88,13 +84,10 @@ export function OpsStat({
       </div>
       {/* Mono: de cijfers zijn het instrumentpaneel — zelfde accent als
           dienstnummers en tijden (rol text-stat, index.css). */}
-      <div className="mt-2.5 flex items-baseline justify-between gap-2">
-        <p className="min-w-0 truncate text-stat text-slate-900">
-          {text ?? <CountUp value={value ?? 0} />}
-          {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
-        </p>
-        {badge && <span className="shrink-0">{badge}</span>}
-      </div>
+      <p className="mt-2.5 min-w-0 truncate text-stat text-slate-900">
+        {text ?? <CountUp value={value ?? 0} />}
+        {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
+      </p>
       <p className={cn('mt-0.5 text-2xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {typeof meter === 'number' && (
         <div className="mt-2 h-1.5 rounded-full bg-surface-muted overflow-hidden">
@@ -275,7 +268,9 @@ export function QuickAction({
         boxShadow: 'var(--tile-shadow)',
       }}
     >
-      <span className="quick-action-icon inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl">
+      {/* Carbon vierkant met licht icoon; de omgekeerde schalen keren dat in
+          donker vanzelf om (geen aparte dark-look meer, controle-ronde 05-09, 40). */}
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-slate-50">
         {icon}
       </span>
       <span className="min-w-0 flex-1">

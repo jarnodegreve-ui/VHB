@@ -221,8 +221,10 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
   const volgendeUit = maandBuitenBereik(maandPlus(maand, 1), min, max);
   const naamDialoog = dialogLabel ?? ariaLabel ?? 'Datum kiezen';
 
-  const stijlDialoog: CSSProperties | undefined = mobiel
-    ? undefined
+  // Sheet: landscape-iOS negeert de portrait-lock, dus de zij-insets tellen
+  // mee (zoals SlideOver) — anders vallen de randcellen achter de notch-hoek.
+  const stijlDialoog: CSSProperties = mobiel
+    ? { paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }
     : { top: positie.top, left: positie.left, transformOrigin: positie.boven ? 'bottom left' : 'top left' };
 
   const dialoog = (
@@ -243,7 +245,8 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
         'fixed z-[130] bg-paper ring-1 ring-hairline shadow-xl outline-none',
         mobiel
           ? 'inset-x-0 bottom-0 rounded-t-2xl border-t border-rim p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
-          : 'w-[19.5rem] rounded-2xl border border-rim p-3',
+          // Op touch (tablet/landscape ≥640) zijn de cellen 44 px: 7 × 44 + p-3 past niet in 19.5rem.
+          : 'w-[19.5rem] pointer-coarse:w-[21rem] rounded-2xl border border-rim p-3',
       )}
     >
       <div className="flex items-center justify-between gap-2">
@@ -283,7 +286,8 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
                   onClick={() => kies(iso)}
                   onFocus={() => setCursor(iso)}
                   className={cn(
-                    'ios-pressable mx-auto flex h-10 w-10 items-center justify-center rounded-lg text-sm tabular-nums transition-colors sm:h-9 sm:w-9',
+                    // 44 px raakvlak op touch, 36 px met een muis — zelfde recept als IconButton.
+                    'ios-pressable mx-auto flex h-11 w-11 items-center justify-center rounded-lg text-sm tabular-nums transition-colors sm:pointer-fine:h-9 sm:pointer-fine:w-9',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oker-400',
                     inMaand ? 'text-slate-800' : 'text-slate-400',
                     uit ? 'cursor-not-allowed opacity-40' : 'hover:bg-slate-100/70',
