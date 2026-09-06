@@ -30,7 +30,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema, type ToastEventDetail } from './lib/ui';
+import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema, vergeetEffectiefThema, wisOfflineCaches, type ToastEventDetail } from './lib/ui';
 import { apiFetch, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { VIEW_LOADERS, prefetchView } from './app/viewLoaders';
@@ -705,6 +705,7 @@ export default function App() {
     const onDeviceBlocked = (event: Event) => {
       const code = (event as CustomEvent<{ code?: string }>).detail?.code;
       setDeviceBlocked(code === 'device_revoked' ? 'revoked' : 'pending');
+      void wisOfflineCaches(); // ingetrokken/wachtend toestel: geen offline rooster of ritblad meer
     };
     window.addEventListener('vhb-auth-expired', onExpired);
     window.addEventListener('vhb-device-blocked', onDeviceBlocked as EventListener);
@@ -752,12 +753,8 @@ export default function App() {
     // uitlog (verlopen sessie / gedeactiveerd account). Vóór signOut, want de
     // push-afmelding heeft nog een geldig token nodig; alles best-effort zodat
     // het uitloggen nooit ophoudt.
-    try {
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-    } catch { /* cache-API geblokkeerd — geen blocker */ }
+    await wisOfflineCaches();
+    vergeetEffectiefThema();
     try {
       if (session?.access_token && isPushSupported()) {
         await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
@@ -836,6 +833,7 @@ export default function App() {
       const deviceStatus = await registerThisDevice(accessToken);
       if (deviceStatus === 'pending' || deviceStatus === 'revoked') {
         setDeviceBlocked(deviceStatus);
+        void wisOfflineCaches();
         setIsInitialLoad(false);
         initializingUserIdRef.current = null; // "Opnieuw controleren" moet opnieuw kunnen initialiseren
         return; // dedup-vlag (initialized) bewust niet zetten
@@ -850,10 +848,7 @@ export default function App() {
         const LAST_USER_KEY = 'vhb-last-user-id';
         const previous = window.localStorage.getItem(LAST_USER_KEY);
         const current = String(appUser.id);
-        if (previous && previous !== current && 'caches' in window) {
-          const keys = await caches.keys();
-          await Promise.all(keys.map((k) => caches.delete(k)));
-        }
+        if (previous && previous !== current) await wisOfflineCaches();
         window.localStorage.setItem(LAST_USER_KEY, current);
       } catch {
         // localStorage/Cache API geblokkeerd — geen blocker voor de boot
@@ -996,14 +991,8 @@ export default function App() {
     } finally {
       // Gedeeld toestel (depot-tablet): het stale-while-revalidate-rooster
       // van deze gebruiker mag niet in Cache Storage achterblijven.
-      try {
-        if ('caches' in window) {
-          const keys = await caches.keys();
-          await Promise.all(keys.map((k) => caches.delete(k)));
-        }
-      } catch {
-        // cache-API geblokkeerd — geen blocker voor uitloggen
-      }
+      await wisOfflineCaches();
+      vergeetEffectiefThema();
       // Push-abonnement opruimen vóór signOut (vereist nog een geldig token):
       // op een gedeeld toestel mag de vorige gebruiker geen meldingen blijven
       // krijgen, en de DB-koppeling endpoint→user moet weg.
@@ -1280,6 +1269,10 @@ export default function App() {
       {/* Main Content */}
       {/* Mobiele lade open: de inhoud is inert (focus blijft in de lade). */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative" inert={isSidebarOpen && !isDesktopNav}>
+        {/* Statusbalkstrook vast bovenaan (buiten de scroll-root): bij
+            rubber-band/pull-to-refresh schoof hij anders mee omlaag en flitste
+            de lichte achtergrond onder de witte statusbalktekens (controle 05-09, nr. 39). */}
+        <div className="statusbalk-strook pointer-events-none absolute inset-x-0 top-0 z-40" aria-hidden="true" />
         {/* Scroll container met sticky-header — header zit BINNEN de scroll
             zodat content er onderdoor schuift en de panel-blur natuurlijk
             werkt (echte iOS-vibe i.p.v. harde rand). */}
@@ -1311,8 +1304,9 @@ export default function App() {
           {/* Negatieve marge = scroll-root-padding, óók de safe-area: met een
               vaste -mx-4 stopte de sticky topbar + haarlijn in landscape met
               notch ~30px vóór de schermrand (de inset is dan ~47px). */}
-          <div className="sticky top-0 z-30 -mx-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:-mx-7 mb-5">
-            <div className="statusbalk-strook" aria-hidden="true" />
+          {/* Sticky topbar begint onder de statusbalkstrook (die staat buiten de
+              scroll-root, zie <main>), zodat overscroll de strook niet meeneemt. */}
+          <div className="sticky top-[env(safe-area-inset-top,0px)] z-30 -mx-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:-mx-7 mb-5">
             <header className={cn("topbar px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7", isScrolled && "topbar--scrolled")}>
               <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 py-2.5 min-h-12">
                 <div className="flex items-center gap-2 min-w-0">

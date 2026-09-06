@@ -262,7 +262,6 @@ export function ToastStack({
       // rechtsboven overlapte de toast de topbar-acties. Desktop (md+):
       // rechtsboven zoals voorheen.
       className="fixed inset-x-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] z-[120] mx-auto max-w-sm space-y-2.5 md:inset-x-auto md:bottom-auto md:right-4 md:top-4 md:mx-0 md:w-[calc(100vw-2rem)]"
-      style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <AnimatePresence>
         {visible.map((toast) => {
