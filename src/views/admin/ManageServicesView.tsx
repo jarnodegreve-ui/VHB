@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { dienstoverzichtCsv } from '../../lib/dienstoverzichtExport';
 import { Clock, Download, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { Service } from '../../types';
@@ -313,6 +314,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         description="Voeg diensten toe, bewerk of verwijder ze."
         actions={(
           <>
+            <AanwezigOpScherm />
             {/* Eén gouden knop; import en export in het "…"-menu ernaast, zodat
                 er op mobiel geen drie knoppen stapelen (afwerking 04-09, nr. 7). */}
             <input ref={importRef} type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />

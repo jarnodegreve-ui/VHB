@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { History, Plus, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
@@ -134,6 +135,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         description="De betekenis van matrixcodes: welke tellen als dienst, verlof of afwezigheid."
         actions={(
           <>
+            <AanwezigOpScherm />
             <Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>
               Code toevoegen
             </Button>

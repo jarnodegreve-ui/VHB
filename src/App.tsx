@@ -34,7 +34,10 @@ import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema, verg
 import { apiFetch, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { VIEW_LOADERS, prefetchView } from './app/viewLoaders';
-import { reportHandledError, setMonitoringUser } from './lib/monitoring';
+import { addBreadcrumb, reportHandledError, setMonitoringUser } from './lib/monitoring';
+import { useAanwezigheid } from './lib/presence';
+import { meldLive } from './lib/liveSignaal';
+import { AanwezigheidStack } from './components/AanwezigheidStack';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
@@ -111,6 +114,9 @@ export default function App() {
   // Waar we zijn = de URL (src/app/router.ts): terugknop, deeplinks en
   // refresh-op-dezelfde-plek werken daardoor vanzelf.
   const { view: currentView, navigeer } = useRoute();
+  // Aanwezigheid (staf ziet elkaar in de topbar) + broodkruimel per schermwissel (foutrapporten).
+  useAanwezigheid(!!session && !!currentUser, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
+  useEffect(() => { addBreadcrumb('navigatie', currentView); }, [currentView]);
   const [isLoading, setIsLoading] = useState(false);
   // Netwerkstatus voor de topbar-pill (was hardcoded "Online").
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
@@ -269,12 +275,15 @@ export default function App() {
   // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
   // gebeurt er niets.
   useRealtimeSync(!!session && !!currentUser, {
-    refetchLeave: () => fetchLeave(),
-    refetchSwaps: () => fetchSwaps(),
-    refetchDiversions: () => fetchDiversions(undefined, { silent: true }),
-    refetchUpdates: () => fetchUpdates(),
+    // meldLive: stille "… bijgewerkt"-toast (max één per 10 s per collectie,
+    // niet na een eigen schrijfactie) — src/lib/liveSignaal.ts.
+    refetchLeave: () => { meldLive('verlof'); return fetchLeave(); },
+    refetchSwaps: () => { meldLive('ruil'); return fetchSwaps(); },
+    refetchDiversions: () => { meldLive('omleidingen'); return fetchDiversions(undefined, { silent: true }); },
+    refetchUpdates: () => { meldLive('updates'); return fetchUpdates(); },
     refetchNotes: () => fetchMyNotes(),
     refetchPlanning: () => {
+      meldLive('planning');
       // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
       const planningFilter = currentUser?.role === 'chauffeur'
         ? { driverId: String(currentUser.id) }
@@ -791,7 +800,7 @@ export default function App() {
       throw new Error('Ongeldig profiel-antwoord van de server.');
     }
     setCurrentUser(data);
-    setMonitoringUser(String(data.id));
+    setMonitoringUser(String(data.id), data.role);
     forceSignOutRef.current = false; // geldige sessie → her-arm de auto-logout
     return data as User;
   };
@@ -1379,6 +1388,7 @@ export default function App() {
                       <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-oker-500 ring-2 ring-paper" aria-hidden="true" />
                     )}
                   </IconButton>
+                  {isPlanner && <AanwezigheidStack />}
                   <UserMenu
                     user={currentUser}
                     initials={userInitials}

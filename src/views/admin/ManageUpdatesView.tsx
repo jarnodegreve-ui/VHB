@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { Bell, ChevronRight, History, Plus, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
@@ -342,9 +343,12 @@ export function ManageUpdatesView({
         title="Beheer updates"
         description="Nieuws en dringende meldingen voor de chauffeurs."
         actions={(
-          <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>
-            Nieuwe update
-          </Button>
+          <>
+            <AanwezigOpScherm />
+            <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>
+              Nieuwe update
+            </Button>
+          </>
         )}
       />
 
