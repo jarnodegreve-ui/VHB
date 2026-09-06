@@ -30,6 +30,15 @@ function starter(): StartViewTransition | null {
 
 let bezig = false;
 
+/**
+ * Loopt er nu een route-overgang? Voor motion-elementen in de schil die
+ * hun eigen veer (layoutId) tijdens de overgang moeten overslaan: de root
+ * wordt als stilstaande snapshot getoond, dus een veer eronder zou na
+ * afloop zichtbaar verspringen. Zulke elementen krijgen een eigen
+ * view-transition-name en laten de overgang het schuiven doen.
+ */
+export const overgangActief = () => typeof document !== 'undefined' && document.documentElement.classList.contains('vt-route');
+
 /** Soort overgang als klasse op <html>, zodat de CSS de juiste keyframes kiest. */
 const markeer = (soort: 'vt-route' | 'vt-record') => {
   document.documentElement.classList.add(soort);

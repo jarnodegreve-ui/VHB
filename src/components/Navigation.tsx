@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { overgangActief } from '../lib/overgang';
 import { MicroLabel, microLabelClass } from './primitives';
 
 
@@ -21,7 +22,11 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
       {active && (
         <motion.span
           layoutId="nav-active-rail"
-          transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
+          // Tijdens een route-overgang schuift de rail via de view transition
+          // (eigen naam); de veer zou dan onder de snapshot lopen en na
+          // afloop verspringen — zie src/lib/overgang.ts.
+          transition={overgangActief() ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
+          style={{ viewTransitionName: 'nav-actief-rail' }}
           className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-oker-500"
         />
       )}

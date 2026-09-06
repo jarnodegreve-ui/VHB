@@ -1103,8 +1103,17 @@ html.login-donker {
    van de rij naar het paneel. Duraties uit de ladder. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
+  /* De schil wisselt zonder animatie (de nieuwe snapshot staat er meteen);
+     Chrome rendert de pagina niet live onder de overlay, dus 'verbergen'
+     van de root-snapshot laat de schil verdwijnen — niet doen. */
   animation: none;
   mix-blend-mode: normal;
+}
+/* De actieve nav-indicator (sidebar-rail, dock-tab) is apart benoemd: hij
+   schuift mee via de overgang i.p.v. te bevriezen in de root-snapshot;
+   Navigation/BottomNav zetten hun motion-veer intussen uit (overgangActief). */
+::view-transition {
+  pointer-events: none;
 }
 #hoofdinhoud {
   view-transition-name: hoofdinhoud;
