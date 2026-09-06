@@ -17,6 +17,7 @@ export const VIEW_LOADERS: Record<View, () => Promise<unknown>> = {
   'ruil-verzoeken': () => import('../views/SwapRequestsView'),
   verlof: () => import('../views/LeaveManagementView'),
   updates: () => import('../views/UpdatesView'),
+  meldingen: () => import('../views/MeldingenView'),
   contacten: () => import('../views/ContactsView'),
   bezetting: () => import('../views/CapacityView'),
   'beheer-roosters': () => import('../views/admin/ManageSchedulesView'),

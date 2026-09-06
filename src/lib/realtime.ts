@@ -31,6 +31,11 @@ type RealtimeRefetchers = {
   /** Catch-up: alle refetchers in één keer — voor gemiste events na een
    *  reconnect of het heropenen van de PWA. */
   refetchAll?: () => void | Promise<void>;
+  /** Meldingencentrum: eigen rijen in public.meldingen (bel + badge). Vereist
+   *  `meldingenUserId` — zonder eigen id geen abonnement (RLS beschermt,
+   *  het filter voorkomt alleen ruis). */
+  refetchMeldingen?: () => void | Promise<void>;
+  meldingenUserId?: string;
 };
 
 export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers) {
@@ -39,6 +44,7 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
   const refRef = useRef(refetchers);
   refRef.current = refetchers;
   const firstSubscribe = useRef(true);
+  const meldingenUserId = refetchers.meldingenUserId ?? '';
 
   useEffect(() => {
     if (!enabled || !supabase) return;
@@ -57,13 +63,23 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
       );
     };
 
-    const channel = supabase
+    let channel = supabase
       .channel('vhb-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'leave' },
         () => debounce('leave', () => refRef.current.refetchLeave?.()),
-      )
+      );
+    // Meldingencentrum: alleen de eigen rijen (server-filter op user_id;
+    // RLS laat toch niets anders door). Eén event = één refetch van de lijst.
+    if (meldingenUserId) {
+      channel = channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meldingen', filter: `user_id=eq.${meldingenUserId}` },
+        () => debounce('meldingen', () => refRef.current.refetchMeldingen?.()),
+      );
+    }
+    channel = channel
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'swaps' },
@@ -133,5 +149,5 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
       document.removeEventListener('visibilitychange', onVisibility);
       supabase!.removeChannel(channel);
     };
-  }, [enabled]);
+  }, [enabled, meldingenUserId]);
 }

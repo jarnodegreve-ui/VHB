@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Calendar, FileText, MapPin } from 'lucide-react';
+import { AlertTriangle, Calendar, FileText, MapPin, WifiOff } from 'lucide-react';
+import { useOptioneleAppData } from '../app/AppDataContext';
 import { activeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
 import { relatieveDag } from '../lib/datum';
-import { formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
+import { formatDayLong, formatShortDay, formatSyncedTime, serviceNumberOf } from '../lib/format';
+import { warmRitbladCache } from '../lib/ritbladCache';
+import { useOnline } from '../lib/useOnline';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, shiftWindowMinutes } from '../lib/shiftTime';
 import { cn } from '../lib/ui';
 import type { Diversion, Shift, User, View } from '../types';
 import { Card } from '../components/Card';
 import { OpsRow } from '../components/ops';
-import { Button, Chip, segItemClass } from '../components/primitives';
+import { Badge, Button, Chip, segItemClass } from '../components/primitives';
 import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { DienstBalk } from '../components/DienstBalk';
@@ -65,6 +68,12 @@ export function MijnDagView({
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // Offline (next-level 2, 06-09): de service worker serveert de laatst
+  // bekende planning/omleidingen/notities en het opgeslagen ritblad; hier
+  // alleen een stil label met de versheid — geen banner over het scherm.
+  const online = useOnline();
+  const lastSyncedAt = useOptioneleAppData()?.lastSyncedAt ?? null;
 
   const vandaag = isOffset(now, 0);
   const mijnShifts = shifts.filter((s) => s.driverId === user.id);
@@ -125,6 +134,15 @@ export function MijnDagView({
 
   const liveOmleidingen = activeDiversions(diversions);
 
+  // Ritblad alvast in de offline-cache zetten zodra er vandaag of morgen een
+  // dienst is (de bundel is gedeeld; de SW sleutelt op het pad). Eén keer
+  // per half uur, alleen online.
+  const heeftDienstBinnenkort = mijnShifts.some((s) => s.date === vandaag || s.date === isOffset(now, 1));
+  useEffect(() => {
+    if (isInitialLoad || !online || !heeftDienstBinnenkort) return;
+    void warmRitbladCache();
+  }, [isInitialLoad, online, heeftDienstBinnenkort]);
+
   if (isInitialLoad) {
     return (
       <div className="mx-auto max-w-2xl space-y-5" aria-busy="true" aria-label="Mijn dag wordt geladen">
@@ -152,6 +170,13 @@ export function MijnDagView({
           <div className="min-w-0 flex-1">
             <p className="text-micro">{nachtdienstLoopt && isVandaag ? 'Nog bezig · dienst van gisteren' : hoofdletter(dagWoord)}</p>
             <h1 className="text-page-title mt-1">{hoofdletter(formatDayLong(peildag))}</h1>
+            {/* Stil: een chip met amber-puntje, geen rood en geen banner —
+                offline is een toestand, geen alarm. */}
+            {!online && (
+              <Badge tone="amber" stil icon={<WifiOff size={12} />} className="mt-2 whitespace-nowrap tabular-nums" title="Zonder bereik: je ziet de laatst geladen gegevens">
+                Offline{lastSyncedAt ? ` · gegevens van ${formatSyncedTime(lastSyncedAt)}` : ' · opgeslagen gegevens'}
+              </Badge>
+            )}
           </div>
           <div className="glass-segmented ml-auto inline-flex shrink-0 rounded-2xl p-1" role="group" aria-label="Dag kiezen">
             {([0, 1] as const).map((offset) => (

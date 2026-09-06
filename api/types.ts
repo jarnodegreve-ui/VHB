@@ -1,5 +1,7 @@
 import type express from "express";
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
+import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
+import type { MeldingSoort } from "../shared/schemas/meldingen.js";
 
 export type Role = "chauffeur" | "planner" | "admin";
 
@@ -19,6 +21,21 @@ export interface AppUser {
   wantsSystemMail?: boolean;
   section?: string;
   startDate?: string;
+  /** Eigen dashboardindeling (verborgen tegels + volgorde) — alleen in het
+   *  eigen profiel (/api/me); PATCH /api/me/voorkeuren schrijft hem. */
+  dashboardVoorkeuren?: DashboardVoorkeuren;
+}
+
+/** Eén rij uit public.meldingen zoals de API hem teruggeeft (camelCase). */
+export interface MeldingRecord {
+  id: string;
+  titel: string;
+  tekst?: string;
+  soort: MeldingSoort;
+  /** Pad in de app (bv. 'mijn-dag', 'dienstruil'); leeg = geen doel. */
+  doel?: string;
+  createdAt: string;
+  gelezenOp?: string;
 }
 
 /** Server-intern: profiel mét de Supabase Auth-uid waaraan het gekoppeld is

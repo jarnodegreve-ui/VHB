@@ -8,6 +8,7 @@ import { useVerlofData } from './data/verlof';
 import { useRuilData } from './data/ruil';
 import { useMensenData } from './data/mensen';
 import { useCommunicatieData } from './data/communicatie';
+import { useMeldingenData } from './data/meldingen';
 
 /**
  * De datalaag van het portaal — de compositiewortel. De collecties, hun
@@ -58,6 +59,7 @@ export function useAppData({
   const ruil = useRuilData(ctx);
   const mensen = useMensenData(ctx);
   const communicatie = useCommunicatieData({ ...ctx, users: mensen.users });
+  const meldingenData = useMeldingenData(ctx);
 
   // Eerste data-fetch nog niet rond? Views kunnen dit gebruiken om
   // skeleton-loaders te tonen i.p.v. lege/mock-data.
@@ -84,6 +86,8 @@ export function useAppData({
         communicatie.fetchUpdates(accessToken),
         ruil.fetchSwaps(accessToken),
         verlof.fetchLeave(accessToken),
+        // Meldingencentrum (bel + badge) — voor elke rol.
+        meldingenData.fetchMeldingen(accessToken),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [planning.fetchPlanningMatrix(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [planning.fetchPlanningCodes(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [planning.fetchPlanningMatrixHistory(accessToken)] : []),
@@ -112,6 +116,7 @@ export function useAppData({
     ruil.resetRuil();
     verlof.resetVerlof();
     activiteit.resetActiviteit();
+    meldingenData.resetMeldingen();
   };
 
   const { shifts, services, myNotes, planningMatrixRows, planningCodes, planningMatrixHistory, coverageDays,
@@ -124,6 +129,7 @@ export function useAppData({
   const { updates, diversions, fetchUpdates, saveUpdates, sendUrgentEmail, saveUpdate, createUpdate, deleteUpdate,
     fetchDiversions, saveDiversions, saveDiversion, createDiversion, deleteDiversion } = communicatie;
   const { activityLog, loginActivity, fetchActivityLog, fetchLoginActivity } = activiteit;
+  const { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen } = meldingenData;
 
   return {
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
@@ -135,6 +141,7 @@ export function useAppData({
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
     fetchServices, saveServices, fetchUsers, saveUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
     saveUser, createUser, deleteUser, saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
+    meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen,
   };
 }
 

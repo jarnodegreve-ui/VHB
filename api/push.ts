@@ -1,5 +1,8 @@
 import webpush from "web-push";
 import { db } from "./db.js";
+import type { MeldingSoort } from "../shared/schemas/meldingen.js";
+import { meldingUitPayload } from "./_lib/meldingen.js";
+import { bewaarMeldingen } from "./storage.js";
 
 /**
  * Web-push notificaties. Volledig optioneel: zonder de drie VAPID env-vars
@@ -90,19 +93,44 @@ export type PushPayload = {
   body: string;
   /** Relatief pad waar een klik op de notificatie heen navigeert. */
   url?: string;
+  /** Filterchip in het meldingencentrum; zonder: afgeleid uit `url`
+   *  (api/_lib/meldingen.ts). */
+  soort?: MeldingSoort;
+  /** Pad in de app voor de melding-rij; zonder: afgeleid uit `url`. */
+  doel?: string;
 };
 
+let meldingFoutGemeld = false;
+
 /**
- * Stuurt een notificatie naar alle abonnementen van de gegeven gebruikers.
+ * Stuurt een notificatie naar alle abonnementen van de gegeven gebruikers —
+ * en bewaart de melding eerst per gebruiker in public.meldingen (het
+ * meldingencentrum in de app), óók voor wie geen push-abonnement heeft: de
+ * melding is de bron, push is het kanaal.
  * Best-effort en nooit blokkerend voor de hoofdflow: fouten worden gelogd,
  * verlopen abonnementen (404/410) worden opgeruimd.
  */
 export const sendPushToUsers = async (userIds: string[], payload: PushPayload): Promise<void> => {
+  const ontvangers = [...new Set(userIds.map(String).filter(Boolean))];
+  if (ontvangers.length === 0) return;
+
+  try {
+    await bewaarMeldingen(ontvangers, meldingUitPayload(payload));
+  } catch (err: any) {
+    // Vóór migratie 2026-09-06_meldingen.sql bestaat de tabel niet: één keer
+    // melden, verder stil — de push zelf gaat gewoon door.
+    if (!meldingFoutGemeld) {
+      meldingFoutGemeld = true;
+      console.error("[meldingen] bewaren mislukt (migratie 2026-09-06_meldingen.sql gedraaid?):", err?.message ?? err);
+    }
+  }
+
   if (!ensureConfigured()) return;
-  const subscriptions = await getSubscriptionsForUsers(userIds);
+  const subscriptions = await getSubscriptionsForUsers(ontvangers);
   if (subscriptions.length === 0) return;
 
-  const body = JSON.stringify(payload);
+  // De client-SW kent alleen title/body/url; soort/doel blijven server-side.
+  const body = JSON.stringify({ title: payload.title, body: payload.body, url: payload.url });
   await Promise.all(
     subscriptions.map(async (sub) => {
       try {

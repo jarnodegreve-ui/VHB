@@ -28,6 +28,8 @@ import { invalidateUsersCache } from "./userCache.js";
 import { userBodySchema, userLijstSchema, WACHTWOORD_MIN } from "../shared/schemas/user.js";
 import { diversionBodySchema, diversionLijstSchema } from "../shared/schemas/diversion.js";
 import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js";
+import { meldingenGelezenBodySchema } from "../shared/schemas/meldingen.js";
+import { meVoorkeurenBodySchema } from "../shared/schemas/dashboardVoorkeuren.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
 import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
 import {
@@ -111,6 +113,10 @@ import {
   getCronHeartbeats,
   getDevice,
   getPlanningNotes,
+  getMeldingen,
+  telOngelezenMeldingen,
+  markeerMeldingenGelezen,
+  updateUserDashboardVoorkeuren,
   upsertPlanningNote,
   getUserExpiries,
   saveUserExpiry,
@@ -1365,6 +1371,7 @@ app.put("/api/planning-notes", authenticate, requireRole("planner", "admin"), as
     // De chauffeur meteen op de hoogte — push is best-effort.
     await sendPushToUsers([driverId], {
       title: "Notitie bij je dienst",
+      soort: "planning",
       body: `${date.split("-").reverse().join("/")}: ${note.slice(0, 120)}`,
       url: viewUrl("rooster"),
     });
@@ -1637,6 +1644,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     const affectedDriverIds = [...new Set(generatedPlanning.shifts.map((s: any) => String(s.driverId)))];
     await sendPushToUsers(affectedDriverIds, {
       title: "Planning bijgewerkt",
+      soort: "planning",
       body: `Nieuwe planning geïmporteerd (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}). Bekijk je rooster.`,
       url: viewUrl("rooster"),
     });
@@ -1913,6 +1921,7 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
     if (gewijzigd.length > 0) {
       await sendPushToUsers(gewijzigd, {
         title: "Rooster bijgewerkt",
+        soort: "planning",
         body: "Je rooster is gewijzigd — bekijk je diensten.",
         url: viewUrl("rooster"),
       });
@@ -2314,6 +2323,62 @@ app.post("/api/push/unsubscribe", authenticate, async (req: AuthenticatedRequest
   res.json({ success: true });
 });
 
+// --- Meldingencentrum (2026-09-06_meldingen.sql) ---
+// Elke push die de API verstuurt (sendPushToUsers) staat óók als rij in
+// public.meldingen — ook voor wie geen push-abonnement heeft. De app toont
+// de eigen rijen onder /meldingen (bel in de topbar) en luistert via
+// Realtime op de eigen user_id. Zonder migratie: lege lijst, geen crash.
+app.get("/api/meldingen", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = String(req.appUser!.id);
+    const [meldingen, ongelezen] = await Promise.all([getMeldingen(userId, 100), telOngelezenMeldingen(userId)]);
+    res.json({ meldingen, ongelezen });
+  } catch (err) {
+    if (isMissingTableError(err)) return res.json({ meldingen: [], ongelezen: 0, migratie: "2026-09-06_meldingen.sql" });
+    console.error("Meldingen laden is mislukt.", err);
+    res.status(500).json({ error: "Meldingen laden is mislukt." });
+  }
+});
+
+// Gelezen markeren: { ids: [...] } voor een selectie, zonder ids = alles.
+// Altijd op de eigen rijen gescoped (user_id in de query), dus andermans
+// ids doen niets.
+app.post("/api/meldingen/gelezen", authenticate, async (req: AuthenticatedRequest, res) => {
+  const body = valideerRecord(res, meldingenGelezenBodySchema, isPlainRecord(req.body) ? req.body : {});
+  if (!body) return;
+  try {
+    const gelezen = await markeerMeldingenGelezen(String(req.appUser!.id), body.ids);
+    res.json({ success: true, gelezen });
+  } catch (err) {
+    if (isMissingTableError(err)) return res.status(503).json({ error: "De meldingen-tabel bestaat nog niet: draai supabase/2026-09-06_meldingen.sql in de SQL Editor." });
+    console.error("Meldingen gelezen markeren is mislukt.", err);
+    res.status(500).json({ error: "Meldingen bijwerken is mislukt." });
+  }
+});
+
+// --- Eigen voorkeuren (dashboardindeling) ---
+// Alleen het eigen profiel; de jsonb-kolom users.dashboardvoorkeuren komt
+// via toPublicUser terug in /api/me (niet in /api/users — persoonlijke
+// UI-staat). Ongeldige body → 400 (zod, shared/schemas/dashboardVoorkeuren).
+app.patch("/api/me/voorkeuren", authenticate, async (req: AuthenticatedRequest, res) => {
+  const body = valideerRecord(res, meVoorkeurenBodySchema, req.body);
+  if (!body) return;
+  try {
+    await updateUserDashboardVoorkeuren(String(req.appUser!.id), body.dashboard);
+    // Het profiel zit in de auth-cache (userCache.ts): anders gaf /api/me
+    // tot 30 s de oude indeling terug.
+    invalidateUsersCache();
+    res.json({ success: true, dashboardVoorkeuren: body.dashboard });
+  } catch (err: any) {
+    const msg = String(err?.message ?? "").toLowerCase();
+    if (isMissingTableError(err) || err?.code === "PGRST204" || /dashboardvoorkeuren/.test(msg)) {
+      return res.status(503).json({ error: "De kolom users.dashboardvoorkeuren bestaat nog niet: draai supabase/2026-09-06_meldingen.sql in de SQL Editor." });
+    }
+    console.error("Voorkeuren opslaan is mislukt.", err);
+    res.status(500).json({ error: "Voorkeuren opslaan is mislukt." });
+  }
+});
+
 // --- Toestel-whitelist --- → losgetrokken naar api/deviceRoutes.ts
 // (mountDeviceRoutes, hierboven gemount naast mountOcpiRoutes).
 
@@ -2618,13 +2683,15 @@ app.get("/api/cron/backup", async (req, res) => {
     const errorDays = Number(process.env.RETENTION_ERROR_DAYS) > 0 ? Number(process.env.RETENTION_ERROR_DAYS) : 30;
     const logDays = Number(process.env.RETENTION_LOG_DAYS) > 0 ? Number(process.env.RETENTION_LOG_DAYS) : 365;
     const noteDays = Number(process.env.RETENTION_NOTE_DAYS) > 0 ? Number(process.env.RETENTION_NOTE_DAYS) : 90;
-    const pruned = await pruneOldRecords({ errorDays, logDays, noteDays });
-    const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions;
+    // Meldingen (meldingencentrum): na 90 dagen geschiedenis.
+    const meldingDays = Number(process.env.RETENTION_MELDING_DAYS) > 0 ? Number(process.env.RETENTION_MELDING_DAYS) : 90;
+    const pruned = await pruneOldRecords({ errorDays, logDays, noteDays, meldingDays });
+    const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions + pruned.meldingen;
     if (prunedTotal > 0) {
-      console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
+      console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
     }
 
-    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
+    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.meldingen} meldingen + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
     res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned, integrity });
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
@@ -2895,6 +2962,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
         if (e.dagen === 90 || e.dagen === 30 || e.dagen === 7 || e.dagen === 0) {
           await sendPushToUsers([e.userId], {
             title: e.dagen === 0 ? `${e.label} verloopt vandaag` : `${e.label} verloopt over ${e.dagen} dagen`,
+            soort: "systeem",
             body: `Je ${e.label.toLowerCase()} is geldig tot ${e.validUntil}. Regel tijdig de vernieuwing en geef het door aan de planning.`,
             url: "/",
           });
@@ -2969,6 +3037,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
         if (planners.length > 0) {
           await sendPushToUsers(planners, {
             title: `${gaten.length} openstaande dienst${gaten.length === 1 ? "" : "en"} komende 7 dagen`,
+            soort: "planning",
             body: regels[0].slice(0, 140),
             url: viewUrl("dekking"),
           });
@@ -4328,6 +4397,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         if (next.targetDriverId) {
           await sendPushToUsers([String(next.targetDriverId)], {
             title: isTakeover ? "Vraag om een dienst over te nemen" : "Nieuwe dienstruil-aanvraag",
+            soort: "ruil",
             body: isTakeover
               ? `${userName(next.requesterId)} vraagt of je een dienst wil overnemen — zonder tegenprestatie.`
               : `${userName(next.requesterId)} wil een dienst met je ruilen.`,
@@ -4352,6 +4422,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             .filter((id) => id && id !== actorId);
           await sendPushToUsers(betrokkenen, {
             title: action,
+            soort: "ruil",
             body: next.status === "accepted"
               ? `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil — wacht op goedkeuring van de planner.`
               : `Dienstruil van ${userName(next.requesterId)}: ${prev.status} → ${next.status}.`,
@@ -4366,6 +4437,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
               .map((u) => String(u.id));
             await sendPushToUsers(beslissers, {
               title: "Dienstruil wacht op validatie",
+              soort: "ruil",
               body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)} — rij- en rusttijden checken.`,
               url: viewUrl("ruil-verzoeken"),
             });
@@ -4530,6 +4602,7 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
       .filter((uid) => uid && uid !== selfId);
     await sendPushToUsers(betrokkenen, {
       title: action,
+      soort: "ruil",
       body: status === "accepted"
         ? `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil — wacht op goedkeuring van de planner.`
         : `Dienstruil van ${userName(String(current.requesterId))}: ${current.status} → ${status}.`,
@@ -4543,6 +4616,7 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
         .map((u) => String(u.id));
       await sendPushToUsers(beslissers, {
         title: "Dienstruil wacht op validatie",
+        soort: "ruil",
         body: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))} — rij- en rusttijden checken.`,
         url: viewUrl("ruil-verzoeken"),
       });
@@ -4696,6 +4770,7 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
 
     await sendPushToUsers([fromDriverId, toDriverId], {
       title: "Planning aangepast",
+      soort: "planning",
       body: `Dienst ${dienstLine} op ${date} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
       url: viewUrl("rooster"),
     });
@@ -4834,6 +4909,7 @@ async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber: unkno
     );
     await sendPushToUsers([driverId], {
       title: "Dienst toegewezen",
+      soort: "planning",
       body: `Je rijdt dienst ${service.serviceNumber} op ${date}. Bekijk je rooster.`,
       url: viewUrl("rooster"),
     });
@@ -5001,6 +5077,7 @@ async function registreerZiekmeldingIntern(
     const beslissers = planningRollen.filter((u) => String(u.id) !== selfId);
     await sendPushToUsers(beslissers.map((u) => String(u.id)), {
       title: "Ziekmelding",
+      soort: "verlof",
       body: `${target.name} is ziek gemeld voor ${period}.`,
       url: viewUrl("ziekte"),
     });
@@ -5215,6 +5292,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           const beslissers = users.filter(isActieveStaf).map((u) => String(u.id));
           await sendPushToUsers(beslissers, {
             title: "Nieuwe verlofaanvraag",
+            soort: "verlof",
             body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
             url: viewUrl("verlof"),
           });
@@ -5255,6 +5333,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           }
           await sendPushToUsers([String(next.userId)], {
             title: action,
+            soort: "verlof",
             body: `${typeLabel} (${period}) — beslist door ${req.appUser.name || "Planning"}.`,
             url: viewUrl("verlof"),
           });
@@ -5338,6 +5417,7 @@ async function beslisVerlofIntern(opts: { id: string; status: string; ifStatus: 
       }
       await sendPushToUsers([String(current.userId)], {
         title: action,
+        soort: "verlof",
         body: `${typeLabel} (${period}) — beslist door ${actor.name || "Planning"}.`,
         url: viewUrl("verlof"),
       });
@@ -5393,7 +5473,7 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
   // Push naar álle actieve gebruikers (ook wie geen e-mail heeft) — best-effort.
   await sendPushToUsers(
     activeUsers.map((u) => String(u.id)).filter(Boolean),
-    { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: viewUrl("updates") },
+    { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: viewUrl("updates"), soort: "update" },
   );
 
   if (emails.length === 0) {
@@ -5657,6 +5737,7 @@ app.post("/api/documents", authenticate, requireRole("admin"), async (req: Authe
     await logActivity(req, "users", "Document toegevoegd", `${filename} voor ${targetUser.name}${category ? ` (${category})` : ""}.`, { type: "user", id: userId });
     await sendPushToUsers([userId], {
       title: "Nieuw document",
+      soort: "document",
       body: `Er staat een nieuw document voor je klaar: ${filename}.`,
       url: viewUrl("documenten"),
     });
@@ -5702,6 +5783,7 @@ app.post("/api/documents/broadcast", authenticate, requireRole("admin"), async (
     await logActivity(req, "users", "Document rondgestuurd", `${filename}${category ? ` (${category})` : ""} naar ${done} chauffeur(s).`);
     await sendPushToUsers(chauffeurs.map((u) => String(u.id)), {
       title: "Nieuw document",
+      soort: "document",
       body: `Er staat een nieuw document voor je klaar: ${filename}.`,
       url: viewUrl("documenten"),
     });

@@ -5,6 +5,7 @@ import type {
   AppUser,
   AuthenticatedRequest,
   IncomingUser,
+  MeldingRecord,
   PlanningCodeRecord,
   PlanningMatrixImportHistoryRecord,
   PlanningMatrixImportHistoryRow,
@@ -38,6 +39,8 @@ import {
   toPublicUser,
 } from "./helpers.js";
 import { db, supabaseAdmin } from "./db.js";
+import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
+import type { MeldingInvoer } from "./_lib/meldingen.js";
 
 const requireDb = () => {
   if (!db) {
@@ -1300,6 +1303,16 @@ export const updateUserSessionMeta = async (
   if (error) throw error;
 };
 
+/** Eigen dashboardindeling opslaan (users.dashboardvoorkeuren, jsonb —
+ *  2026-09-06_meldingen.sql). Alleen deze kolom; de gebruikers-save
+ *  (toDatabaseUser) raakt hem niet aan. Gooit door: de route vertaalt een
+ *  ontbrekende kolom naar een duidelijke 503 met de migratienaam. */
+export const updateUserDashboardVoorkeuren = async (userId: string, voorkeuren: DashboardVoorkeuren): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client.from('users').update({ dashboardvoorkeuren: voorkeuren }).eq('id', String(userId));
+  if (error) throw error;
+};
+
 /** Verhoog/verlaag de activeSessions-teller ATOMAIR via een Postgres-RPC.
  *  Voorkomt de lost-update-race wanneer meerdere mensen ~tegelijk in/uitloggen
  *  (read-modify-write op de gecachte waarde telde mis). Valt terug op een
@@ -1887,8 +1900,8 @@ export const getClientErrorsSince = async (sinceIso: string, limit = 1000) => {
  * verwijderen. Best-effort per tabel — een ontbrekende tabel of fout mag de
  * back-upcron nooit laten falen.
  */
-export const pruneOldRecords = async (opts: { errorDays: number; logDays: number; noteDays: number }) => {
-  const summary = { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0 };
+export const pruneOldRecords = async (opts: { errorDays: number; logDays: number; noteDays: number; meldingDays: number }) => {
+  const summary = { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0 };
   if (!db) return summary;
   const cutoff = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
   try {
@@ -1932,6 +1945,17 @@ export const pruneOldRecords = async (opts: { errorDays: number; logDays: number
     // idem
   }
   try {
+    // Meldingen (meldingencentrum) zijn na drie maanden geschiedenis: wie ze
+    // toen niet las, leest ze nu ook niet meer. Gelezen of niet maakt niet uit.
+    const { count, error } = await db
+      .from("meldingen")
+      .delete({ count: "exact" })
+      .lt("created_at", cutoff(opts.meldingDays));
+    if (!error) summary.meldingen = count ?? 0;
+  } catch {
+    // tabel ontbreekt (migratie 2026-09-06 nog niet gedraaid) — bewust stil
+  }
+  try {
     // Push-abonnementen van verwijderde gebruikers. NIET op leeftijd prunen:
     // een abonnement wordt alleen bij het aanzetten geregistreerd, dus een oud
     // abonnement kan nog springlevend zijn (dode endpoints ruimt sendPushToUsers
@@ -1953,6 +1977,77 @@ export const pruneOldRecords = async (opts: { errorDays: number; logDays: number
     // idem
   }
   return summary;
+};
+
+// --- Meldingen (meldingencentrum, 2026-09-06_meldingen.sql) ---
+
+const toPublicMelding = (row: any): MeldingRecord => ({
+  id: String(row.id),
+  titel: String(row.titel ?? ""),
+  tekst: row.tekst ? String(row.tekst) : undefined,
+  soort: row.soort,
+  doel: row.doel ? String(row.doel) : undefined,
+  createdAt: String(row.created_at ?? ""),
+  gelezenOp: row.gelezen_op ? String(row.gelezen_op) : undefined,
+});
+
+/** Eén melding per ontvanger bewaren. Gooit door (de push-laag vangt het:
+ *  een ontbrekende tabel mag een verlofbeslissing niet laten falen). */
+export const bewaarMeldingen = async (userIds: string[], melding: MeldingInvoer): Promise<number> => {
+  const ontvangers = [...new Set(userIds.map(String).filter(Boolean))];
+  if (ontvangers.length === 0) return 0;
+  const client = requireDb();
+  const rijen = ontvangers.map((userId) => ({
+    user_id: userId,
+    titel: melding.titel,
+    tekst: melding.tekst,
+    soort: melding.soort,
+    doel: melding.doel,
+  }));
+  const { error } = await client.from('meldingen').insert(rijen);
+  if (error) throw error;
+  return rijen.length;
+};
+
+/** Eigen meldingen, nieuwste eerst, hooguit `max` (de app toont er 100). */
+export const getMeldingen = async (userId: string, max = 100): Promise<MeldingRecord[]> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from('meldingen')
+    .select('id, titel, tekst, soort, doel, created_at, gelezen_op')
+    .eq('user_id', String(userId))
+    .order('created_at', { ascending: false })
+    .limit(max);
+  if (error) throw error;
+  return (data ?? []).map(toPublicMelding);
+};
+
+/** Aantal ongelezen meldingen van een gebruiker (over álle rijen, niet
+ *  alleen de getoonde 100 — de badge moet kloppen). */
+export const telOngelezenMeldingen = async (userId: string): Promise<number> => {
+  const client = requireDb();
+  const { count, error } = await client
+    .from('meldingen')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', String(userId))
+    .is('gelezen_op', null);
+  if (error) throw error;
+  return count ?? 0;
+};
+
+/** Gelezen markeren: de gegeven ids (alleen eigen rijen) of, zonder ids,
+ *  alles wat nog ongelezen is. Geeft het aantal bijgewerkte rijen. */
+export const markeerMeldingenGelezen = async (userId: string, ids?: string[]): Promise<number> => {
+  const client = requireDb();
+  let q = client
+    .from('meldingen')
+    .update({ gelezen_op: new Date().toISOString() }, { count: 'exact' })
+    .eq('user_id', String(userId))
+    .is('gelezen_op', null);
+  if (ids && ids.length > 0) q = q.in('id', ids.map(String));
+  const { count, error } = await q;
+  if (error) throw error;
+  return count ?? 0;
 };
 
 // --- Updates ---

@@ -16,6 +16,12 @@ export function AppDataProvider({ value, children }: { value: AppData; children:
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }
 
+/** Zelfde context, maar null buiten de provider — voor views die ook los
+ *  gerenderd worden (tests, print) en de datalaag alleen als extra gebruiken. */
+export function useOptioneleAppData(): AppData | null {
+  return useContext(AppDataContext);
+}
+
 /** Throwt buiten de provider: een view die dit gebruikt hoort in de schil. */
 export function useAppDataContext(): AppData {
   const ctx = useContext(AppDataContext);

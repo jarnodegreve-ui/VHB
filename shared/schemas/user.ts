@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isoDatum, leegNaarUndefined, optioneel, verplichteTekst } from './basis.js';
 import { ROLLEN, WACHTWOORD_MIN } from './constanten.js';
+import { dashboardVoorkeurenSchema } from './dashboardVoorkeuren.js';
 
 /**
  * Gebruiker — spiegel van `AppUser`/`IncomingUser` (api/types.ts) en
@@ -55,6 +56,9 @@ const userVelden = {
   wantsSystemMail: optioneel(z.boolean()),
   section: optioneel(z.string().trim()),
   startDate: optioneel(isoDatum('Vul een datum in als JJJJ-MM-DD')),
+  /** Eigen dashboardindeling (alleen via PATCH /api/me/voorkeuren geschreven;
+   *  de gebruikers-save negeert dit veld — zie api/helpers.ts toDatabaseUser). */
+  dashboardVoorkeuren: optioneel(dashboardVoorkeurenSchema),
   /** Nieuw of reset; leeg = geen wijziging. */
   password: optioneel(wachtwoordSchema),
 };

@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { randomBytes } from "node:crypto";
+import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import type {
   AppUser,
   DiversionRecord,
@@ -34,6 +35,8 @@ export const toPublicUser = (user: any): AppUserIntern => ({
   wantsSystemMail: (user.wantsSystemMail ?? user.wantssystemmail) !== false,
   section: (user.section ?? undefined) || undefined,
   startDate: (user.startDate ?? user.startdate) || undefined,
+  // jsonb-kolom (2026-09-06_meldingen.sql); ongeldige inhoud = geen voorkeur.
+  dashboardVoorkeuren: parseDashboardVoorkeuren(user.dashboardVoorkeuren ?? user.dashboardvoorkeuren) ?? undefined,
 });
 
 /** Planner of admin die nog actief is — de enigen die meldingen (push/mail)
@@ -1008,9 +1011,12 @@ export const isDigestRuis = (message?: string | null): boolean => {
 };
 
 /** Rol-afhankelijke weergave van een gebruiker, zónder de Auth-koppeling:
- *  `authId` is server-intern (sessie-identiteit) en gaat nooit naar de client. */
+ *  `authId` is server-intern (sessie-identiteit) en gaat nooit naar de client.
+ *  De dashboardvoorkeuren zijn persoonlijke UI-staat: die reizen alleen mee
+ *  in het eigen profiel (/api/me), niet in de gebruikerslijst. */
 export const toRoleScopedUser = (user: AppUser, role: Role, viewerId?: string): AppUser => {
-  const { authId: _weg, ...schoon } = scopeUser(user, role, viewerId) as AppUserIntern;
+  const { authId: _weg, dashboardVoorkeuren: _prive, ...schoon } = scopeUser(user, role, viewerId) as AppUserIntern;
   void _weg;
+  void _prive;
   return schoon;
 };
