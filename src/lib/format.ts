@@ -177,3 +177,22 @@ export function formatGetal(value: number, max = 2): string {
   // nl-BE gebruikt de komma als decimaalteken, dus elke punt is een duizendtal.
   return value.toLocaleString('nl-BE', { maximumFractionDigits: max }).replace(/\./g, '\u202F');
 }
+
+/**
+ * Relatieve tijd voor "laatst gezien"/"laatste keer": zojuist, 5 min geleden,
+ * 3 u geleden, gisteren, 4 d geleden; daarna de gewone datum. Toekomst en
+ * onleesbare waarden vallen terug op de datum/lege string.
+ */
+export function formatRelatief(iso: string | undefined | null, nu: number = Date.now()): string {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return String(iso);
+  const sec = Math.round((nu - t) / 1000);
+  if (sec < 45) return 'zojuist';
+  if (sec < 3600) return `${Math.max(1, Math.round(sec / 60))} min geleden`;
+  if (sec < 86_400) return `${Math.round(sec / 3600)} u geleden`;
+  const dagen = Math.round(sec / 86_400);
+  if (dagen === 1) return 'gisteren';
+  if (dagen < 14) return `${dagen} d geleden`;
+  return formatDateHuman(String(iso).slice(0, 10));
+}
