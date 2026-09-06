@@ -585,6 +585,11 @@ export default function App() {
 
         setSession(data.session);
         if (data.session) {
+          // Chunk van de landingsview alvast ophalen, parallel met /api/me —
+          // anders begon die download pas ná het profiel (prestatiebudget
+          // 09-2026). Niet op het loginscherm: daar zou hij het kritieke pad
+          // beconcurreren. currentView = de view bij het opstarten (lege deps).
+          prefetchView(currentView);
           await initializeAuthenticatedApp(data.session.access_token, data.session.user.id);
         }
       } catch (error) {
@@ -940,9 +945,12 @@ export default function App() {
     const w = window as any;
     const cb = () => {
       // De schermen die hierna het vaakst geopend worden (per rol), stil.
+      // Dashboard/Mijn dag/Rooster voorop (prestatiebudget 09-2026): wie op
+      // een deeplink landt heeft het dashboard nog niet, en Mijn dag is de
+      // eerste tik van elke chauffeur. Al geladen = gratis (module-cache).
       const volgende: View[] = currentUser.role === 'chauffeur'
-        ? ['rooster', 'verlof', 'omleidingen', 'ruil-verzoeken']
-        : ['verlof', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'];
+        ? ['dashboard', 'mijn-dag', 'rooster', 'verlof', 'omleidingen', 'ruil-verzoeken']
+        : ['dashboard', 'mijn-dag', 'rooster', 'verlof', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'];
       volgende.forEach((v) => prefetchView(v));
     };
     const idleId = typeof w.requestIdleCallback === 'function'

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Menu } from 'lucide-react';
 import { routeVan } from '../app/routes';
+import { prefetchView } from '../app/viewLoaders';
 import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
 
@@ -106,6 +107,9 @@ export function BottomNav({
             <li key={slot.view} className="flex-auto min-w-0">
               <button
                 onClick={() => onSelect(slot.view)}
+                // Voorladen bij aanraken/hover: de chunk is binnen vóór de tik landt.
+                onPointerEnter={() => prefetchView(slot.view)}
+                onTouchStart={() => prefetchView(slot.view)}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={slot.label}
                 className={cn(

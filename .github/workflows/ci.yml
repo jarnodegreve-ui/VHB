@@ -69,6 +69,69 @@ jobs:
       - name: E2E-smoke
         run: npm run test:e2e
 
+  # Prestatiebudget (09-2026): Lighthouse CI op de gebouwde app, mobiel
+  # geëmuleerd (Moto-G-klasse, gesimuleerde 4G — de bus, niet de kantoor-Mac),
+  # 3 runs per URL en de mediaan telt. Loginscherm én Mijn dag (ingelogd als
+  # chauffeur via de e2e-fixtures, zie scripts/lighthouse-server.mjs).
+  #
+  # Drempels (.lighthouserc.json, per URL via assertMatrix):
+  #   - scores  → error: performance ≥ 0,90 (login), accessibility ≥ 0,95,
+  #               best-practices ≥ 0,90. Scores zijn stabiel genoeg op een
+  #               gedeelde runner om hard te blokkeren. /mijn-dag staat op
+  #               performance ≥ 0,80: de stand op 06-09 was 0,85–0,88 (mediaan
+  #               0,87) door de seriële auth-keten devices/register → me →
+  #               data (drie 4G-roundtrips vóór de eerste inhoud); 0,80 is
+  #               dus regressiebewaking, geen doel — trek hem naar 0,90 zodra
+  #               die keten korter is.
+  #   - metrics → warn: LCP ≤ 2500 ms, CLS ≤ 0,1, TBT ≤ 300 ms. Absolute
+  #               milliseconden jitteren op ubuntu-latest (gedeelde CPU) —
+  #               een waarschuwing in de log is het signaal, niet een rode PR.
+  #               Zet ze op error zodra een paar weken logs laten zien dat ze
+  #               nooit flappen.
+  #
+  # @lhci/cli via npx (vastgepind, --yes), niet als devDependency: het pakket
+  # trekt Lighthouse + Chrome-launcher mee (±40 MB) en zou anders élke job
+  # (checks, visueel) langer laten installeren voor iets dat alleen hier
+  # draait. Rapporten (HTML + JSON) komen als artifact mee; bewust géén
+  # temporary-public-storage — dat is tokenloos, maar zet het rapport op een
+  # publieke URL van Google, en dat heeft niemand nodig.
+  lighthouse:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Zelfde dummy-env als e2e/visueel, op de Lighthouse-poort (4191):
+      # zonder VITE_SUPABASE_* rendert de app "configuratie ontbreekt".
+      VITE_SUPABASE_URL: http://localhost:4191
+      VITE_SUPABASE_ANON_KEY: e2e-dummy-anon-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # autorun = healthcheck + collect (start scripts/lighthouse-server.mjs
+      # zelf) + assert + upload naar .lighthouseci/rapporten (filesystem).
+      - name: Lighthouse CI
+        run: npx --yes @lhci/cli@0.14.0 autorun
+
+      - name: Lighthouse-rapporten als artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse
+          path: .lighthouseci
+          retention-days: 14
+          if-no-files-found: ignore
+
   # Secret-scanner (verbeterronde 01-09, nr. 5): de repo is publiek en er is
   # al eens een bot-token gelekt (via een transcript, niet de repo — maar het
   # vangnet ontbrak). gitleaks scant de gepushte commits op secrets en laat
