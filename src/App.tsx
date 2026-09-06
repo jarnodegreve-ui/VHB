@@ -48,6 +48,7 @@ import { Toast, ToastOpties, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
+import { OmgevingLabel } from './components/OmgevingLabel';
 import { UserMenu } from './components/UserMenu';
 import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
 import { berekenWerkvoorraad } from './lib/werkvoorraad';
@@ -593,6 +594,11 @@ export default function App() {
 
         setSession(data.session);
         if (data.session) {
+          // Chunk van de landingsview alvast ophalen, parallel met /api/me —
+          // anders begon die download pas ná het profiel (prestatiebudget
+          // 09-2026). Niet op het loginscherm: daar zou hij het kritieke pad
+          // beconcurreren. currentView = de view bij het opstarten (lege deps).
+          prefetchView(currentView);
           await initializeAuthenticatedApp(data.session.access_token, data.session.user.id);
         }
       } catch (error) {
@@ -948,9 +954,12 @@ export default function App() {
     const w = window as any;
     const cb = () => {
       // De schermen die hierna het vaakst geopend worden (per rol), stil.
+      // Dashboard/Mijn dag/Rooster voorop (prestatiebudget 09-2026): wie op
+      // een deeplink landt heeft het dashboard nog niet, en Mijn dag is de
+      // eerste tik van elke chauffeur. Al geladen = gratis (module-cache).
       const volgende: View[] = currentUser.role === 'chauffeur'
-        ? ['rooster', 'verlof', 'omleidingen', 'ruil-verzoeken']
-        : ['verlof', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'];
+        ? ['dashboard', 'mijn-dag', 'rooster', 'verlof', 'omleidingen', 'ruil-verzoeken']
+        : ['dashboard', 'mijn-dag', 'rooster', 'verlof', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'];
       volgende.forEach((v) => prefetchView(v));
     };
     const idleId = typeof w.requestIdleCallback === 'function'
@@ -1330,6 +1339,8 @@ export default function App() {
                       dubbele titeling boven de vouw is weg. */}
                   {/* Titel verschijnt pas zodra de paginakop (h1) weggescrold
                       is — anders stond dezelfde naam twee keer boven de vouw. */}
+                  {/* Staging-label (alleen met VITE_OMGEVING=staging) — nooit een preview voor productie aanzien. */}
+                  <OmgevingLabel className="shrink-0" />
                   <h2
                     aria-hidden={!isScrolled || undefined}
                     className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-200', isScrolled ? 'opacity-100' : 'opacity-0')}

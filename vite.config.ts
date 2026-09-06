@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, loadEnv} from 'vite';
 
 // Build-info voor de versie-indicator in Systeem-status. Vercel injecteert de
 // commit-SHA; lokaal blijft die leeg. builtAt = tijdstip van de build.
@@ -53,9 +53,30 @@ const stampServiceWorker = () => {
   };
 };
 
-export default defineConfig(() => {
+// Preconnect naar Supabase (prestatiebudget 09-2026): de eerste call na het
+// laden (sessie ophalen / inloggen) hoeft dan geen DNS + TLS-handshake meer af
+// te wachten. De URL is at build time bekend (VITE_SUPABASE_URL), dus de tag
+// wordt hier ingebakken i.p.v. in index.html gehardcodeerd — een ander
+// project (staging) krijgt vanzelf zijn eigen origin. Alleen voor https:
+// de dummy-localhost-URL van e2e/Lighthouse krijgt niets. `crossorigin`
+// omdat supabase-js met fetch (CORS, zonder cookies) praat: alleen een
+// anonieme preconnect wordt daarvoor hergebruikt.
+const preconnectSupabase = (supabaseUrl: string) => ({
+  name: 'vhb-preconnect-supabase',
+  transformIndexHtml() {
+    let origin = '';
+    try { origin = new URL(supabaseUrl).origin; } catch { return []; }
+    if (!origin.startsWith('https://')) return [];
+    return [{ tag: 'link', attrs: { rel: 'preconnect', href: origin, crossorigin: '' }, injectTo: 'head' as const }];
+  },
+});
+
+export default defineConfig(({ mode }) => {
+  // .env-bestanden én process.env (Vercel/CI zetten de variabele direct).
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  const supabaseUrl = process.env.VITE_SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '';
   return {
-    plugins: [react(), tailwindcss(), stampServiceWorker()],
+    plugins: [react(), tailwindcss(), stampServiceWorker(), preconnectSupabase(supabaseUrl)],
     define: {
       __BUILD_INFO__: JSON.stringify(BUILD_INFO),
     },

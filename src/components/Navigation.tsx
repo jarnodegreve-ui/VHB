@@ -6,10 +6,21 @@ import { overgangActief } from '../lib/overgang';
 import { MicroLabel, microLabelClass } from './primitives';
 
 
-export function NavItem({ icon, label, active, onClick, badge }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, badge?: number }) {
+export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  /** Stil voorladen van de bijhorende view zodra de muis of vinger het item
+   *  raakt (prefetchView) — de klik erna voelt instant. */
+  onPrefetch?: () => void;
+  badge?: number;
+}) {
   return (
     <button
       onClick={onClick}
+      onPointerEnter={onPrefetch}
+      onTouchStart={onPrefetch}
       aria-current={active ? 'page' : undefined}
       className={cn(
         "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-150",
