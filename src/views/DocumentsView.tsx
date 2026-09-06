@@ -139,7 +139,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                   <Th>Document</Th>
                   <Th>Categorie</Th>
                   <Th>Geplaatst op</Th>
-                  <Th className="text-right">Grootte</Th>
+                  <Th num>Grootte</Th>
                   <Th className="text-right">Actie</Th>
                 </tr>
               </thead>
@@ -156,7 +156,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                     </Td>
                     <Td>{doc.category ? <Badge tone="slate">{doc.category}</Badge> : <span className="text-slate-400">—</span>}</Td>
                     <Td className="tabular-nums whitespace-nowrap">{formatDateHuman(doc.uploadedAt)}</Td>
-                    <Td className="text-right tabular-nums whitespace-nowrap">{doc.sizeBytes != null ? prettySize(doc.sizeBytes) : <span className="text-slate-400">—</span>}</Td>
+                    <Td num>{doc.sizeBytes != null ? prettySize(doc.sizeBytes) : <span className="text-slate-400">—</span>}</Td>
                     <Td className="text-right">
                       <Button variant="secondary" size="sm" onClick={() => openDoc(doc)} aria-label={`Open ${doc.filename}`} icon={<Download size={14} />}>
                         Openen

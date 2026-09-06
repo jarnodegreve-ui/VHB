@@ -324,20 +324,21 @@ export function TableShell({ className, sticky = false, children }: { className?
   );
 }
 
-export function Th({ className, children, title, sort }: { className?: string; children?: ReactNode; title?: string; sort?: 'ascending' | 'descending' }) {
+export function Th({ className, children, title, sort, num = false }: { className?: string; children?: ReactNode; title?: string; sort?: 'ascending' | 'descending'; /** Kolom met getallen/tijden: rechts uitgelijnd (Td num doet de rest). */ num?: boolean }) {
   // Sentence-case, geen caps: tabelkoppen zijn leestekst, geen eyebrow.
   // `sort` zet aria-sort voor sorteerbare kolommen (maandoverzicht).
   return (
-    <th title={title} aria-sort={sort} className={cn('px-4 py-3 text-left text-xs font-medium text-slate-500 whitespace-nowrap', className)}>
+    <th title={title} aria-sort={sort} className={cn('px-4 py-3 text-xs font-medium text-slate-500 whitespace-nowrap', num ? 'text-right' : 'text-left', className)}>
       {children}
     </th>
   );
 }
 
-export function Td({ className, children }: { className?: string; children?: ReactNode }) {
+export function Td({ className, children, num = false }: { className?: string; children?: ReactNode; /** Cel met getal/tijd/grootte: rechts uitgelijnd, tabular-nums, niet afbrekend — zodat kolommen cijfer onder cijfer staan. */ num?: boolean }) {
   // Compacter op desktop-met-muis (dispatch-dichtheid); op touch blijft de
-  // rij hoog genoeg als raakvlak.
-  return <td className={cn('px-4 py-3 text-sm text-slate-700', className)}>{children}</td>;
+  // rij hoog genoeg als raakvlak. tabular-nums staat al op <body>; `num`
+  // herhaalt het expliciet en lijnt rechts uit.
+  return <td className={cn('px-4 py-3 text-sm text-slate-700', num && 'text-right tabular-nums whitespace-nowrap', className)}>{children}</td>;
 }
 
 // === Switch ===

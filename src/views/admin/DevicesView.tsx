@@ -473,7 +473,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           setConfirmDelete(null);
         }}
         title="Toestel schrappen?"
-        message={confirmDelete ? `"${confirmDelete.name}" van ${userName(confirmDelete.userId)} wordt uit de lijst verwijderd. Meldt deze gebruiker zich er opnieuw mee aan (en heeft die nog een ander toestel), dan verschijnt het weer als "wacht op goedkeuring". Voor een verloren of gestolen toestel kies je beter Blokkeren.` : ''}
+        message={confirmDelete ? `“${confirmDelete.name}” van ${userName(confirmDelete.userId)} wordt uit de lijst verwijderd. Meldt deze gebruiker zich er opnieuw mee aan (en heeft die nog een ander toestel), dan verschijnt het weer als “wacht op goedkeuring”. Voor een verloren of gestolen toestel kies je beter Blokkeren.` : ''}
         confirmText="Schrappen"
       />
     </PageShell>

@@ -21,6 +21,7 @@ import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openHuidigRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
 import { useRouteParam } from '../app/router';
+import { LegeLijst } from '../components/illustraties';
 
 /** Maand in de URL (`/rooster/2026-10`, maandweergave) — spiegel van de
  *  kalendermaand; een ongeldige waarde wordt genegeerd. */
@@ -253,7 +254,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           ))}
         </Card>
       ) : upcoming.length === 0 && past.length === 0 ? (
-        <EmptyState title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier — je krijgt er een melding van." />
+        <EmptyState illustratie={<LegeLijst />} title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier — je krijgt er een melding van." />
       ) : (
         /* xl+: lijst links, maandkalender rechts (elk 50 %). De lijst gebruikt
            dan de compacte kaartvorm — de brede tabel past niet in een halve

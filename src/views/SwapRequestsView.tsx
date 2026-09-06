@@ -13,6 +13,7 @@ import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { formatDateHuman, formatShortDay, serviceNumberOf } from '../lib/format';
 import { canRespondToSwap } from '../lib/authorization';
 import { notify } from '../lib/ui';
+import { AllesGedaan, LegeLijst } from '../components/illustraties';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
@@ -479,6 +480,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           ) : (
             <EmptyState
               compact
+              illustratie={<LegeLijst />}
               title="Nog geen ruilverzoeken"
               message="Klik op “Dienstruil aanvragen” — je collega en de planner keuren daarna goed."
             />
@@ -546,6 +548,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             <EmptyState
               compact
               variant="klaar"
+              illustratie={<AllesGedaan />}
               title="Geen openstaande dienstruilen"
               message="Stelt een collega jou een ruil voor, dan verschijnt die hier en krijg je een melding."
             />
@@ -583,6 +586,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
               <EmptyState
                 variant="klaar"
+                illustratie={<AllesGedaan />}
                 title="Geen dienstruilen om te beoordelen"
                 message="Zodra een chauffeur een ruil aanvraagt en zijn collega akkoord gaat, verschijnt die hier."
               />

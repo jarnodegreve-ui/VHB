@@ -240,7 +240,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         const raw = String(cleaned[f] ?? '').trim();
         if (!raw) { cleaned[f] = ''; continue; }
         if (!isValidBusvakTime(raw)) {
-          notify(`Ongeldige tijd "${raw}" — gebruik UU:MM, na middernacht als 24:00+ (bv. 26:16).`, 'error');
+          notify(`Ongeldige tijd “${raw}” — gebruik UU:MM, na middernacht als 24:00+ (bv. 26:16).`, 'error');
           return;
         }
         cleaned[f] = normalizeTimeString(raw);

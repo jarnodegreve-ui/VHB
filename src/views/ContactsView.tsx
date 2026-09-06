@@ -9,6 +9,7 @@ import { Input } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { notify, telHref } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
+import { LegeLijst, NietGevonden } from '../components/illustraties';
 
 const roleLabel = (role: string) =>
   role === 'chauffeur' ? 'Chauffeur' : role === 'planner' ? 'Planning' : role === 'admin' ? 'Beheer' : role;
@@ -121,6 +122,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
 
   const leeg = (
     <EmptyState
+      illustratie={searchQuery ? <NietGevonden /> : <LegeLijst />}
       title="Geen contacten gevonden"
       message={searchQuery ? "Pas je zoekopdracht aan om medewerkers terug te vinden." : "Zodra collega's zichtbaar staan in de contactlijst verschijnen ze hier."}
     />

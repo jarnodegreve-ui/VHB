@@ -14,6 +14,7 @@ import { useQueryParam } from '../../app/router';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { Select } from '../../components/Field';
+import { LegeLijst, NietGevonden } from '../../components/illustraties';
 
 const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
   users: 'oker',
@@ -385,6 +386,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             />
           ) : (
             <EmptyState
+              illustratie={sourceEntries.length > 0 ? <NietGevonden /> : <LegeLijst />}
               title={sourceEntries.length > 0 ? 'Geen activiteit in dit tijdvenster' : 'Nog geen activiteit gelogd'}
               message={sourceEntries.length > 0 ? 'Kies een ruimer tijdvenster om oudere activiteit te zien.' : 'Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch.'}
               action={sourceEntries.length > 0 && dateWindow !== 'all' ? <Button variant="secondary" onClick={() => setDateWindow('all')}>Alles tonen</Button> : undefined}

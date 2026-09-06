@@ -196,3 +196,14 @@ export function formatRelatief(iso: string | undefined | null, nu: number = Date
   if (dagen < 14) return `${dagen} d geleden`;
   return formatDateHuman(String(iso).slice(0, 10));
 }
+
+/**
+ * Getal + eenheid met een smalle vaste spatie (U+202F) ertussen: "12 kW",
+ * "3 u", "45 min". Typografisch juist én onbreekbaar — "112" en "kW" komen
+ * nooit op verschillende regels terecht. Neem een al geformatteerd getal
+ * (formatGetal) of een ruwe waarde; een niet-eindig getal wordt '—'.
+ */
+export function metEenheid(waarde: number | string, eenheid: string): string {
+  const tekst = typeof waarde === 'number' ? (Number.isFinite(waarde) ? String(waarde) : '—') : waarde;
+  return tekst === '—' ? tekst : `${tekst}\u202F${eenheid}`;
+}

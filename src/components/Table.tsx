@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, Search, X } from 'luc
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useId, useMemo, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
-import { DUR, EASE } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { Button, IconButton, MicroLabel, segItemClass, Td, Th } from './primitives';
 import { useDropdown } from './useDropdown';
 
@@ -136,9 +136,8 @@ function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
             role="dialog"
             aria-label="Kolommen"
             initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98 }}
-            transition={{ duration: DUR.fast, ease: EASE }}
+            animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
+            exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: DUR.fast, ease: EASE } }}
             style={{ transformOrigin: 'top right' }}
             className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline shadow-xl"
           >

@@ -308,7 +308,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     try {
       const parsed = JSON.parse(await file.text());
       if (!parsed?.collections || typeof parsed.collections !== 'object') {
-        notify('Dit lijkt geen geldig VHB-back-upbestand (geen "collections").', 'error');
+        notify('Dit lijkt geen geldig VHB-back-upbestand (geen “collections”).', 'error');
         return;
       }
       const users = parsed.collections.users;
