@@ -10,6 +10,7 @@ import { Badge, Button, IconButton } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Input, Select } from '../components/Field';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
+import { LegeLijst, NietGevonden } from '../components/illustraties';
 
 /**
  * Lijst + detail via het gedeelde DetailPaneel: op desktop staat de
@@ -139,6 +140,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
           </ul>
         ) : (
           <EmptyState
+            illustratie={searchQuery ? <NietGevonden /> : <LegeLijst />}
             title={searchQuery ? 'Geen resultaten' : 'Geen actieve omleidingen'}
             message={searchQuery ? `Geen omleidingen gevonden voor “${searchQuery}”` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
             action={searchQuery ? (

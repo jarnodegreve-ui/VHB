@@ -9,6 +9,7 @@ import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge } from '../components/primitives';
 import { Card } from '../components/Card';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
+import { LegeLijst } from '../components/illustraties';
 
 /**
  * Titels links, het volledige bericht in het gedeelde DetailPaneel: op
@@ -47,6 +48,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
 
       {updates.length === 0 ? (
         <EmptyState
+          illustratie={<LegeLijst />}
           title="Geen updates"
           message="Er zijn nog geen berichten geplaatst."
         />
