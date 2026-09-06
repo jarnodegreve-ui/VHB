@@ -32,6 +32,21 @@ export const addDays = (d: Date, n: number): Date => {
  *  lokale middernacht altijd, de zomertijd wisselt om 02:00). */
 export const addDagen = (iso: string, n: number): string => isoDate(addDays(new Date(`${iso}T00:00:00`), n));
 
+/** Dag-taal voor een datum t.o.v. vandaag: 'vandaag' (ook voor het verleden),
+ *  'morgen', 'overmorgen', anders 'over n dagen'. Chauffeurs denken in
+ *  "morgen/overmorgen", niet in een aftellend "17u 25m" (verzoek Jarno).
+ *  Kalenderdag-verschil, dus 's avonds klopt "morgen" ook al is het < 12 u.
+ *  Stond dubbel in DashboardView en MijnDagView (controle-ronde 05-09, 44). */
+export const relatieveDag = (dateIso: string, vandaagIso: string): string => {
+  const diff = Math.round(
+    (new Date(`${dateIso}T00:00:00`).getTime() - new Date(`${vandaagIso}T00:00:00`).getTime()) / 86400000,
+  );
+  if (diff <= 0) return 'vandaag';
+  if (diff === 1) return 'morgen';
+  if (diff === 2) return 'overmorgen';
+  return `over ${diff} dagen`;
+};
+
 /** "YYYY-MM" ± n maanden, over jaargrenzen heen. */
 export const maandPlus = (maand: string, delta: number): string => {
   const [j, m] = maand.split('-').map(Number);

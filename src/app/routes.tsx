@@ -86,7 +86,6 @@ export const routeVanPad = (pad: string): RouteDef | undefined => PER_PAD.get(pa
 /** Alle views die voor minstens één rol bestaan (whitelist voor deeplinks). */
 export const ALLE_VIEWS: readonly View[] = ROUTES.map((r) => r.view);
 
-export const toegestaneViews = (rol: Role): View[] => ROUTES.filter((r) => r.rollen.includes(rol)).map((r) => r.view);
 export const magView = (rol: Role, view: View): boolean => routeVan(view).rollen.includes(rol);
 
 /** Routes voor de sidebar van een rol, gegroepeerd per sectie. */

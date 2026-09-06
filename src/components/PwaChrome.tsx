@@ -53,7 +53,8 @@ export function OfflineBanner() {
           aria-live="polite"
         >
           <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink/90 px-4 py-2.5 text-white shadow-2xl backdrop-blur-sm">
-            <WifiOff size={16} className="text-amber-300 shrink-0" />
+            {/* amber-400: 300 wordt in donker een transparante tint (omgekeerde schalen). */}
+            <WifiOff size={16} className="text-amber-400 shrink-0" />
             <span className="text-xs font-bold tracking-tight">
               Offline — je ziet mogelijk verouderde gegevens
             </span>

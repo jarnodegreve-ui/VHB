@@ -612,7 +612,7 @@ export function OcpiDashboardView() {
                               className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                             >
                               <div
-                                className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900' : isPiek ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500'}
+                                className={gekozen ? 'w-full rounded-t-md bg-slate-900' : isPiek ? 'w-full rounded-t-md bg-oker-500' : 'w-full rounded-t-md bg-slate-500'}
                                 style={{ height: d.kwh > 0 ? `${Math.max(3, Math.round((d.kwh / asTop) * 100))}%` : '2px' }}
                               />
                             </button>
@@ -771,7 +771,7 @@ export function OcpiDashboardView() {
                               className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                             >
                               <div
-                                className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900' : st.isPiek ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500'}
+                                className={gekozen ? 'w-full rounded-t-md bg-slate-900' : st.isPiek ? 'w-full rounded-t-md bg-oker-500' : 'w-full rounded-t-md bg-slate-500'}
                                 style={{ height: st.kw > 0 ? `${Math.max(3, Math.round((st.kw / asTop) * 100))}%` : '2px' }}
                               />
                             </button>

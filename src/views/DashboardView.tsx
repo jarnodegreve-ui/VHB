@@ -6,6 +6,7 @@ import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
 import { formatDateHuman, formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
+import { relatieveDag } from '../lib/datum';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, parseHHMM, shiftWindowMinutes } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
@@ -27,7 +28,6 @@ export function DashboardView({ notes = [],
   user,
   shifts,
   diversions,
-  users,
   leaveRequests = [],
   isInitialLoad = false,
   onNavigate,
@@ -37,7 +37,6 @@ export function DashboardView({ notes = [],
   shifts: Shift[];
   diversions: Diversion[];
   notes?: Array<{ date: string; note: string }>;
-  users: User[];
   leaveRequests?: LeaveRequest[];
   isInitialLoad?: boolean;
   onNavigate?: (view: View) => void;
@@ -161,19 +160,6 @@ export function DashboardView({ notes = [],
   const lineLabel = (line: string) =>
     line.trim().toLowerCase().startsWith('lijn') ? line.trim() : `Lijn ${line.trim()}`;
 
-  // Wanneer is de volgende dienst, in dag-taal: chauffeurs denken in
-  // "morgen/overmorgen", niet in een aftellend "17u 25m" (verzoek Jarno).
-  // Kalenderdag-verschil, dus 's avonds klopt "morgen" ook al is het < 12u.
-  const relativeDay = (dateIso: string): string => {
-    const diff = Math.round(
-      (new Date(`${dateIso}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000,
-    );
-    if (diff <= 0) return 'vandaag';
-    if (diff === 1) return 'morgen';
-    if (diff === 2) return 'overmorgen';
-    return `over ${diff} dagen`;
-  };
-
   const firstName = user.name.split(' ')[0];
   const greeting = getDaypartGreeting(now);
 
@@ -244,9 +230,11 @@ export function DashboardView({ notes = [],
       {/* Na een release: één dismissbare kaart met wat er nieuw is (src/app/watIsNieuw.ts). */}
       {!showWelcome && <WatIsNieuwKaart rol={user.role} onNavigate={onNavigate} />}
 
-      {/* === Persoonlijke header === */}
-      <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
-        <div>
+      {/* === Persoonlijke header ===
+          Zelfde kop-raster als PageHeader (flex-wrap, actie rechts via
+          ml-auto, zakt onder de kop als hij niet past). */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-1 pt-1 md:items-end">
+        <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl">
           <h1 className="text-page-title">
             {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
@@ -259,7 +247,7 @@ export function DashboardView({ notes = [],
             behandeling" zijn informatie, geen alarm (afwerking 04-09, nr. 6).
             De stip staat stil — beweging voor "alles is normaal" maakt van
             rust een alarm. */}
-        <Badge tone={needsAttention ? 'amber' : 'emerald'} stil className="w-fit tabular-nums">
+        <Badge tone={needsAttention ? 'amber' : 'emerald'} stil className="ml-auto w-fit tabular-nums">
           {needsAttention
             ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
             : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
@@ -305,7 +293,7 @@ export function DashboardView({ notes = [],
           // het nummer is het belangrijkste); dag + afstand op de subregel.
           text={nextShift ? serviceNumberOf(nextShift) : '—'}
           subClassName="text-sm font-semibold text-slate-600"
-          sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relativeDay(nextShift.date)}` : 'niets ingepland'}
+          sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'niets ingepland'}
           lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
         />
