@@ -34,6 +34,8 @@ type FoutStatus = 'open' | 'opgelost' | 'genegeerd';
 type Breadcrumb = { t: string; soort: string; tekst: string };
 type FoutGroep = {
   fingerprint: string;
+  /** Korte code die de gebruiker op het foutscherm ziet ("Referentie A7F3C1"). */
+  referentie?: string;
   message: string;
   source: string;
   topFrame: string | null;
@@ -150,7 +152,7 @@ function FoutenSectie() {
       <CardHeader
         icon={<Bug size={16} />}
         title="Fouten"
-        description="Gegroepeerd per oorzaak: dezelfde fout met andere getallen of id's is één rij."
+        description="Gegroepeerd per oorzaak: dezelfde fout met andere getallen of id's is één rij. De gouden code is de referentie die de gebruiker op het foutscherm ziet."
         aside={(
           <>
             {groepen.length > 0 && <Badge tone={openGroepen > 0 ? 'amber' : 'emerald'} stil>{openGroepen} open</Badge>}
@@ -243,6 +245,7 @@ function FoutRijen({ groep: g, uit, onToggle, bezig, statusBeschikbaar, onStatus
         <Td className="min-w-0 max-w-md">
           <p className="break-words text-sm font-medium text-slate-800">{g.message}</p>
           <p className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-2xs text-slate-500">
+            {g.referentie && <Chip tone="oker" title="Referentie zoals de gebruiker die op het foutscherm ziet">{g.referentie}</Chip>}
             <Chip mono={false}>{BRON_LABEL[g.source] ?? g.source}</Chip>
             {g.topFrame ? <span className="[overflow-wrap:anywhere]">{g.topFrame}</span> : <span>geen bronregel</span>}
           </p>

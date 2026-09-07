@@ -21,6 +21,7 @@ import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit, create
 import type AnthropicClient from "@anthropic-ai/sdk";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
+import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
@@ -31,7 +32,7 @@ import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js
 import { meldingenGelezenBodySchema } from "../shared/schemas/meldingen.js";
 import { meVoorkeurenBodySchema } from "../shared/schemas/dashboardVoorkeuren.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
-import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
+import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, referentieVan, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
 import {
   RECORD_REVISION_HEADER,
   recordRevisionOf,
@@ -202,6 +203,10 @@ mountOcpiRoutes(app);
 
 // Toestel-whitelist (registratie + admin-beheer). Zie api/deviceRoutes.ts.
 mountDeviceRoutes(app);
+
+// Onderhoudsmodus (banner + schrijfblok). Zie api/_lib/onderhoudRoutes.ts;
+// het blok zelf zit in authenticate (middleware.ts).
+mountOnderhoudRoutes(app);
 
 // Telegram-bot voor de planner (webhook, commando's, goedkeurknoppen). Zie
 // api/telegram.ts. De bereken-functies komen uit coverageRoutes/advisor; de
@@ -2432,7 +2437,10 @@ app.post("/api/client-errors", clientErrorRateLimit, express.json({ limit: "32kb
     // Vangnet dat altijd werkt: zichtbaar in de Vercel-functielogs.
     console.error("[client-error]", JSON.stringify(entry));
     await logClientError(entry);
-    res.status(204).end();
+    // Korte referentie van de foutgroep terug naar de client: het foutscherm
+    // toont hem ("Referentie A7F3C1"), Systeemstatus › Fouten toont dezelfde
+    // code bij de groep, zodat een chauffeur hem kan doorgeven (07-09, nr. 6).
+    res.json({ ok: true, referentie: referentieVan(entry.fingerprint) });
   } catch {
     // Foutrapportage mag nooit zelf een fout-loop veroorzaken.
     res.status(204).end();
