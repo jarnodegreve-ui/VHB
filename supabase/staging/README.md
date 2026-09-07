@@ -156,10 +156,15 @@ op het productieproject):
 - `ANTHROPIC_API_KEY` — de assistent geeft een nette 503.
 - `UPSTASH_*`, `RATE_LIMIT_*`, `RETENTION_*`, `ROSTERING_EXPORT_SECRET` — defaults.
 
-Let op: `vercel.json` stuurt een CSP mee met de **productie**-Supabase-host
-in `connect-src`/`frame-src`. Op een preview met een ander project blokkeert
-de browser de Supabase-calls tot die host erbij staat — voeg de staging-host
-toe aan die twee directives (naast de productiehost; dat is onschadelijk).
+De CSP in `vercel.json` bevat sinds 07-09 zowel de productie- als de staging-host
+(`bzxnkjswfhaiqqbxbmky.supabase.co`) in `connect-src`/`frame-src`. Een nieuw
+staging-project = die host daar vervangen.
+
+**Stand 07-09:** de Vercel-Preview-omgeving wijst naar staging (VITE_SUPABASE_URL,
+SUPABASE_URL, VITE_SUPABASE_ANON_KEY, SUPABASE_ANON_KEY, VITE_OMGEVING, APP_URL,
+CALENDAR_FEED_SECRET als aparte Preview-records; CRON_SECRET gedeeld met productie).
+Alleen `SUPABASE_SERVICE_ROLE_KEY` voor Preview moet nog handmatig uit het
+staging-dashboard gezet worden (Project Settings › API keys › service_role).
 
 ## 6. Een preview herkennen
 
