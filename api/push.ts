@@ -67,6 +67,16 @@ export const deletePushSubscriptionForUser = async (endpoint: string, userId: st
   await db.from("push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", String(userId));
 };
 
+/** Álle abonnementen van één gebruiker wissen (uitdienst-flow): een
+ *  gedeactiveerd account mag geen pushes meer krijgen, ook niet van de
+ *  digest-cron. Geeft het aantal gewiste rijen terug. */
+export const deletePushSubscriptionsForUser = async (userId: string): Promise<number> => {
+  if (!db) return 0;
+  const { data, error } = await db.from("push_subscriptions").delete().eq("user_id", String(userId)).select("endpoint");
+  if (error) throw new Error(`Push-abonnementen wissen mislukt: ${error.message}`);
+  return (data ?? []).length;
+};
+
 /** Wie heeft er meldingen aanstaan? Alleen gebruikers-ids — geen endpoints of
  *  sleutels, want dit voedt enkel een badge in Gebruikersbeheer. Nodig bij de
  *  uitrol: zonder dit overzicht is niet te zien wie de meldingen die de app
