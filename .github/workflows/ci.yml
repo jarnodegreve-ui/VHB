@@ -131,6 +131,10 @@ jobs:
           path: .lighthouseci
           retention-days: 14
           if-no-files-found: ignore
+          # upload-artifact v4.4+ slaat verborgen mappen (.lighthouseci) over
+          # tenzij dit aanstaat; zonder was er bij een gefaalde assert nooit
+          # een rapport om in te kijken (07-09).
+          include-hidden-files: true
 
   # Secret-scanner (verbeterronde 01-09, nr. 5): de repo is publiek en er is
   # al eens een bot-token gelekt (via een transcript, niet de repo — maar het

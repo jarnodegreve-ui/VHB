@@ -220,17 +220,20 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     return res.status(403).json({ error: "Dit account is gedeactiveerd." });
   }
 
-  // Toestel-whitelist: alleen voor chauffeurs, en niet op de exempt-paden
-  // (registratie/sessie-boekhouding). De DB-lookup gebeurt pas hier, zodat
-  // planner/admin-verkeer er geen query aan overhoudt.
-  if (appUser.role === "chauffeur" && !DEVICE_GATE_EXEMPT.has(req.path)) {
-    // Een geldig token is een 36-teken UUID. Alles langer dan 100 tekens is
-    // onzin (en zou de PostgREST-URL kunnen opblazen → een geforceerde DB-fout
-    // waarmee de gate anders te omzeilen was): behandel als onbekend toestel,
-    // zónder DB-lookup.
-    const rawToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
-    const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
-
+  // Toestel-whitelist, niet op de exempt-paden (registratie/sessie-
+  // boekhouding). Chauffeurs: altijd. Planner/admin: alleen wanneer het
+  // verzoek een toesteltoken draagt, en dan enkel om een expliciet
+  // ingetrokken toestel tegen te houden (geen goedkeuring vereist, dus geen
+  // lock-out). Zonder token blijft stafverkeer zonder extra query.
+  //
+  // Een geldig token is een 36-teken UUID. Alles langer dan 100 tekens is
+  // onzin (en zou de PostgREST-URL kunnen opblazen → een geforceerde DB-fout
+  // waarmee de gate anders te omzeilen was): behandel als onbekend toestel,
+  // zónder DB-lookup.
+  const rawToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+  const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
+  const gateVanToepassing = appUser.role === "chauffeur" || deviceToken.length > 0;
+  if (gateVanToepassing && !DEVICE_GATE_EXEMPT.has(req.path)) {
     let device: { status: string } | null = null;
     try {
       device = deviceToken ? await getDevice(String(appUser.id), deviceToken) : null;
@@ -252,8 +255,9 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     }
 
     // Alleen wanneer het toestel niet al goedgekeurd is maakt de schakelaar
-    // het verschil — dan pas (gecacht) ophalen.
-    const gateEnabled = device?.status === "approved" ? true : await isDeviceGateEnabled();
+    // het verschil, dan pas (gecacht) ophalen. Voor staf is de schakelaar
+    // irrelevant (enkel de revoked-check telt), dus geen extra query.
+    const gateEnabled = appUser.role !== "chauffeur" || device?.status === "approved" ? true : await isDeviceGateEnabled();
     const verdict = evaluateDeviceGate(appUser.role, req.path, device, gateEnabled);
     if (!verdict.allow) {
       return res.status(verdict.status ?? 403).json(verdict.body ?? { error: "Dit toestel heeft geen toegang.", code: "device_unknown" });

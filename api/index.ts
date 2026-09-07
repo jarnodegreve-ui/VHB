@@ -3904,6 +3904,13 @@ const stripSwapAliassen = (record: any): any => {
   return schoon;
 };
 
+/** Toegestane vorm van een client-gegenereerd record-id (UUID of de
+ *  Date.now()-terugval uit de views). Sluit scheidingstekens uit: het id
+ *  reist mee in Telegram-callback_data als `lv|<id>|<besluit>`, en een id
+ *  met een pipe kon daar het doelrecord verleggen (security-audit 07-09,
+ *  bevinding 9). */
+const RECORD_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
 app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
@@ -3994,6 +4001,9 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           }
           if (String(next.targetDriverId) === selfId) {
             return res.status(400).json({ error: "Je kan geen dienstruil aan jezelf aanvragen." });
+          }
+          if (!RECORD_ID_RE.test(String(next.id ?? ""))) {
+            return res.status(400).json({ error: "Ongeldig aanvraag-id." });
           }
           // Bij een overname (ruil zonder tegenprestatie) is er bewust géén
           // terugruil; de eigenlijke voorwaarde — de collega staat die dag op
@@ -4377,7 +4387,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    await saveSwapsData(finalRecords, swapIdsToDelete);
+    await saveSwapsData(finalRecords, swapIdsToDelete, { alleenPending: req.appUser?.role === "chauffeur" });
 
     // Activity log: detecteer state-overgangen en nieuwe aanvragen. Over
     // recordsToWrite zodat een niet-weggeschreven echo geen spookmelding geeft.
@@ -5225,6 +5235,9 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
         if (next.status !== "pending") {
           return res.status(403).json({ error: "Niet toegestaan: nieuwe verlofaanvragen starten als 'pending'." });
         }
+        if (!RECORD_ID_RE.test(String(next.id ?? ""))) {
+          return res.status(400).json({ error: "Ongeldig aanvraag-id." });
+        }
         if (next.decidedAt) {
           return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
         }
@@ -5280,7 +5293,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    await saveLeaveData(recordsToWrite, leaveIdsToDelete);
+    await saveLeaveData(recordsToWrite, leaveIdsToDelete, { alleenPending: req.appUser?.role === "chauffeur" });
 
     if (leaveIdsToDelete.length > 0) {
       await logActivity(

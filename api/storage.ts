@@ -2314,7 +2314,7 @@ export const getSwapsData = async () => {
   return rows.map(toPublicSwap);
 };
 
-export const saveSwapsData = async (data: any, idsToDelete: string[] = []) => {
+export const saveSwapsData = async (data: any, idsToDelete: string[] = [], opties: { alleenPending?: boolean } = {}) => {
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicSwap) : [];
   if (normalizedData.length > 0) {
@@ -2322,8 +2322,11 @@ export const saveSwapsData = async (data: any, idsToDelete: string[] = []) => {
     if (error) throw error;
   }
   // Intrekkingen: gevalideerd door de handler (zie POST /api/swaps).
+  // alleenPending (chauffeur-pad): zelfde race-afdichting als saveLeaveData.
   if (idsToDelete.length > 0) {
-    const { error } = await client.from('swaps').delete().in('id', idsToDelete.map(String));
+    let q = client.from('swaps').delete().in('id', idsToDelete.map(String));
+    if (opties.alleenPending) q = q.eq('status', 'pending');
+    const { error } = await q;
     if (error) throw error;
   }
 };
@@ -2504,7 +2507,7 @@ export const getLeaveData = async (filters?: { endOnOrAfter?: string }) => {
   return rows.map(toPublicLeave);
 };
 
-export const saveLeaveData = async (data: any, idsToDelete: string[] = []) => {
+export const saveLeaveData = async (data: any, idsToDelete: string[] = [], opties: { alleenPending?: boolean } = {}) => {
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicLeave) : [];
   if (normalizedData.length > 0) {
@@ -2514,8 +2517,14 @@ export const saveLeaveData = async (data: any, idsToDelete: string[] = []) => {
   // Intrekkingen: de handler valideert scope + status; hier alleen uitvoeren.
   // Zonder dit was 'aanvraag intrekken' een stille no-op (upsert raakt
   // ontbrekende rijen niet) en kwam de aanvraag na refresh terug.
+  // alleenPending (chauffeur-pad): de handler toetste 'pending' op een
+  // snapshot; keurt een planner de aanvraag tussen die read en deze delete
+  // goed, dan mag de intrekking hem niet meer raken. De voorwaarde zit
+  // daarom in dezelfde databaseoperatie (security-audit 07-09, bevinding 7).
   if (idsToDelete.length > 0) {
-    const { error } = await client.from('leave').delete().in('id', idsToDelete.map(String));
+    let q = client.from('leave').delete().in('id', idsToDelete.map(String));
+    if (opties.alleenPending) q = q.eq('status', 'pending');
+    const { error } = await q;
     if (error) throw error;
   }
 };

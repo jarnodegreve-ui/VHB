@@ -6,9 +6,24 @@ const pending = { status: 'pending' };
 const revoked = { status: 'revoked' };
 
 describe('evaluateDeviceGate', () => {
-  it('laat planner en admin altijd door (geen toestelcontrole)', () => {
+  it('laat planner en admin door zonder goedkeuring (onbekend of wachtend toestel)', () => {
     expect(evaluateDeviceGate('planner', '/api/planning', null).allow).toBe(true);
     expect(evaluateDeviceGate('admin', '/api/planning', null).allow).toBe(true);
+    expect(evaluateDeviceGate('planner', '/api/planning', pending).allow).toBe(true);
+    expect(evaluateDeviceGate('admin', '/api/planning', approved).allow).toBe(true);
+  });
+
+  it('houdt een expliciet uitgelogd staftoestel tegen (audit 07-09, #5)', () => {
+    for (const rol of ['planner', 'admin'] as const) {
+      const v = evaluateDeviceGate(rol, '/api/planning', revoked);
+      expect(v.allow).toBe(false);
+      expect(v.status).toBe(403);
+      expect(v.body?.code).toBe('device_revoked');
+      // Exempt-paden blijven open zodat opnieuw registreren kan.
+      expect(evaluateDeviceGate(rol, '/api/devices/register', revoked).allow).toBe(true);
+      // Ook met de schakelaar uit blijft een ingetrokken toestel dicht.
+      expect(evaluateDeviceGate(rol, '/api/planning', revoked, false).allow).toBe(false);
+    }
   });
 
   it('laat chauffeurs door op de exempt-paden zonder toestel', () => {
