@@ -1,0 +1,13 @@
+# Gitleaks-config voor de CI-secretscan (job `gitleaks` in ci.yml).
+# Uitbreiding op de standaardregels; alleen een allowlist voor de vaste
+# testtokens van de integratietests (`tok-…` in src/apiIntegration.test.ts),
+# die de generic-api-key-regel vanaf ±3,5 bits entropie als lek aanziet.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Testtokens van de integratietests (tok-admin, tok-planner-2fa, …)"
+regexTarget = "match"
+regexes = [
+  '''tok-[a-z0-9-]{2,32}''',
+]

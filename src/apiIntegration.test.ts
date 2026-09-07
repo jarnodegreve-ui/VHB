@@ -78,6 +78,9 @@ vi.mock('../api/db.js', () => {
     'tok-planner': 'planner@vhb.be',
     'tok-a': 'a@vhb.be',
     'tok-b': 'b@vhb.be',
+    // Zelfde accounts, maar met een aal2-claim (na twee-stapsverificatie).
+    'tok-planner-2fa': 'planner@vhb.be',
+    'tok-admin-2fa': 'admin@vhb.be',
   };
   return {
     supabase: {
@@ -90,8 +93,9 @@ vi.mock('../api/db.js', () => {
           if (token === 'tok-storing' || token === 'tok-auth-500') return { data: null, error: { name: 'AuthRetryableFetchError', message: 'fetch failed', status: 0 } };
           if (token === 'tok-verlopen') return { data: null, error: { name: 'AuthInvalidJwtError', message: 'JWT has expired', status: 400 } };
           const email = tokenToEmail[token];
+          const basis = token.replace(/-2fa$/, '');
           return email
-            ? { data: { claims: { sub: `auth-${token}`, email } }, error: null }
+            ? { data: { claims: { sub: `auth-${basis}`, email, aal: token.endsWith('-2fa') ? 'aal2' : 'aal1' } }, error: null }
             : { data: null, error: { name: 'AuthInvalidJwtError', message: 'invalid JWT', status: 401 } };
         },
         getUser: async (token: string) => {
@@ -119,6 +123,11 @@ vi.mock('../api/push.js', async (importOriginal) => ({
   },
   deletePushSubscriptionForUser: async (endpoint: string, userId: string) => {
     mem.pushSubscriptions = mem.pushSubscriptions.filter((s) => !(s.endpoint === endpoint && String(s.userId) === String(userId)));
+  },
+  deletePushSubscriptionsForUser: async (userId: string) => {
+    const voor = mem.pushSubscriptions.length;
+    mem.pushSubscriptions = mem.pushSubscriptions.filter((s) => String(s.userId) !== String(userId));
+    return voor - mem.pushSubscriptions.length;
   },
   sendPushToUsers: async (userIds: string[], payload: any) => {
     if (userIds.length === 0) return;
@@ -158,6 +167,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   return {
     ...orig,
     getUsersData: async () => mem.users,
+    getRecentLogins: async () => [],
     koppelAuthId: async (userId: string, authId: string) => { const u = mem.users.find((x: any) => String(x.id) === String(userId)); if (u) u.authId = authId; },
     getPlanningNotes: async (o: any) => mem.planningNotes.filter((n: any) => (!o.driverId || n.driverId === o.driverId) && n.date >= o.fromIso && n.date <= o.toIso),
     upsertPlanningNote: async (driverId: string, date: string, note: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); mem.planningNotes.push({ driverId, date, note }); },
@@ -372,6 +382,13 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     deleteDevice: async (userId: string, deviceToken: string) => {
       mem.devices = mem.devices.filter((d: any) => !(String(d.userId) === String(userId) && d.deviceToken === deviceToken));
+    },
+    revokeAllDevices: async (userId: string) => {
+      let n = 0;
+      for (const d of mem.devices) {
+        if (String(d.userId) === String(userId) && d.status !== 'revoked') { d.status = 'revoked'; n++; }
+      }
+      return n;
     },
     deleteAllDocumentsForUser: async (userId: string) => {
       const n = mem.documents.filter((d: any) => String(d.userId) === String(userId)).length;
@@ -4691,5 +4708,94 @@ describe('roostersolver: POST /api/rooster/solver-verzoek (verbeterronde 07-09 n
     process.env.ROSTERING_EXPORT_SECRET = 'test-geheim';
     expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-admin', body: { van: '2026-09-13', tot: '2026-09-07' } })).status).toBe(400);
     expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-admin', body: { van: '2026-09-07', tot: '2026-09-13', contracturen: 'veel' } })).status).toBe(400);
+  });
+});
+
+describe('twee-stapsverificatie voor staf (MFA_STAF=aan, verbeterronde 07-09 nr. 8)', () => {
+  const vorige = process.env.MFA_STAF;
+  beforeEach(() => { process.env.MFA_STAF = 'aan'; });
+  afterEach(() => { if (vorige === undefined) delete process.env.MFA_STAF; else process.env.MFA_STAF = vorige; });
+
+  it('weigert staf op aal1 met 403 mfa_required, behalve op de exempt-paden', async () => {
+    const res = await api('GET', '/api/users', { token: 'tok-planner' });
+    expect(res.status).toBe(403);
+    expect(res.json.code).toBe('mfa_required');
+    // Profiel en beveiligingsoverzicht blijven bereikbaar: die zijn nodig
+    // om de code te kunnen invoeren of in te schrijven.
+    expect((await api('GET', '/api/me', { token: 'tok-planner' })).status).toBe(200);
+    const bev = await api('GET', '/api/me/beveiliging', { token: 'tok-planner' });
+    expect(bev.status).toBe(200);
+    expect(bev.json).toMatchObject({ staf: true, mfaVerplicht: true, aal: 'aal1' });
+  });
+
+  it('laat staf op aal2 door en chauffeurs altijd', async () => {
+    expect((await api('GET', '/api/users', { token: 'tok-planner-2fa' })).status).toBe(200);
+    expect((await api('GET', '/api/users', { token: 'tok-admin-2fa' })).status).toBe(200);
+    const chauffeur = await api('GET', '/api/me/beveiliging', { token: 'tok-a' });
+    expect(chauffeur.status).toBe(200);
+    expect(chauffeur.json).toMatchObject({ staf: false, mfaVerplicht: false });
+    expect((await api('GET', '/api/leave', { token: 'tok-a' })).status).toBe(200);
+  });
+
+  it('zonder MFA_STAF=aan is aal1 voor staf gewoon toegestaan', async () => {
+    process.env.MFA_STAF = 'uit';
+    expect((await api('GET', '/api/users', { token: 'tok-planner' })).status).toBe(200);
+    const bev = await api('GET', '/api/me/beveiliging', { token: 'tok-planner' });
+    expect(bev.json.mfaVerplicht).toBe(false);
+  });
+});
+
+describe('uit dienst in één handeling (POST /api/users/:id/uitdienst)', () => {
+  it('deactiveert, trekt alle toestellen in, wist de push-abonnementen en logt één regel', async () => {
+    mem.devices.push({ userId: '3', deviceToken: 'dev-2', name: 'iPad', status: 'pending', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null });
+    mem.pushSubscriptions.push({ userId: '3', endpoint: 'https://push.example/a', p256dh: 'k', auth: 'a' }, { userId: '4', endpoint: 'https://push.example/b', p256dh: 'k', auth: 'a' });
+    const res = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin', body: { reden: 'Einde contract' } });
+    expect(res.status).toBe(200);
+    expect(res.json.samenvatting).toEqual({ toestellen: 2, push: 1, sessies: 'gebannen' });
+    expect(res.json.user.isActive).toBe(false);
+    expect(res.json.user._rev).toBeTruthy();
+    expect(res.json.stappen.every((s: any) => s.ok)).toBe(true);
+    expect(mem.users.find((u: any) => u.id === '3').isActive).toBe(false);
+    expect(mem.devices.filter((d: any) => d.userId === '3').every((d: any) => d.status === 'revoked')).toBe(true);
+    // Alleen de abonnementen van chauffeur 3 weg, die van 4 blijven.
+    expect(mem.pushSubscriptions.map((s: any) => s.userId)).toEqual(['4']);
+    const regel = mem.activity.find((a) => a.action === 'Uit dienst');
+    expect(regel?.entityId).toBe('3');
+    expect(regel?.message).toBe('Chauffeur A: account gedeactiveerd, 2 toestellen ingetrokken, 1 push-abonnement gewist. Reden: Einde contract.');
+    // Het gedeactiveerde account kan de API niet meer gebruiken.
+    expect((await api('GET', '/api/updates', { token: 'tok-a' })).status).toBe(403);
+  });
+
+  it('is idempotent: nogmaals op een al inactieve gebruiker geeft 200 met nullen', async () => {
+    mem.pushSubscriptions.push({ userId: '3', endpoint: 'https://push.example/a', p256dh: 'k', auth: 'a' });
+    expect((await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin' })).json.samenvatting).toEqual({ toestellen: 1, push: 1, sessies: 'gebannen' });
+    const weer = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin' });
+    expect(weer.status).toBe(200);
+    expect(weer.json.samenvatting).toEqual({ toestellen: 0, push: 0, sessies: 'gebannen' });
+    expect(weer.json.stappen.find((s: any) => s.stap === 'deactiveren')?.detail).toMatch(/al gedeactiveerd/);
+    expect(mem.activity.filter((a) => a.action === 'Uit dienst')).toHaveLength(2);
+  });
+
+  it('weigert een planner (403), jezelf (400) en een onbekende (404)', async () => {
+    expect((await api('POST', '/api/users/3/uitdienst', { token: 'tok-planner' })).status).toBe(403);
+    expect((await api('POST', '/api/users/1/uitdienst', { token: 'tok-admin' })).status).toBe(400);
+    expect((await api('POST', '/api/users/bestaat-niet/uitdienst', { token: 'tok-admin' })).status).toBe(404);
+    expect(mem.users.every((u: any) => u.isActive !== false)).toBe(true);
+    expect(mem.activity.some((a) => a.action === 'Uit dienst')).toBe(false);
+  });
+
+  it('beschermt de laatste actieve admin (400), ook als de eigen rol intussen gewijzigd is', async () => {
+    // Auth-cache warm met Annelies als admin; daarna wisselt een andere
+    // sessie de rollen: Pieter wordt de enige actieve admin. Zonder de
+    // countAdmins-vangrail zou Annelies (cache: admin) hem nu uit dienst
+    // kunnen zetten en bleef er geen admin over.
+    // Twee keer: de eerste aanmelding koppelt de authId en leegt de cache.
+    await api('GET', '/api/users', { token: 'tok-admin' });
+    expect((await api('GET', '/api/users', { token: 'tok-admin' })).status).toBe(200);
+    mem.users = mem.users.map((u: any) => (u.id === '1' ? { ...u, role: 'planner' } : u.id === '2' ? { ...u, role: 'admin' } : u));
+    const res = await api('POST', '/api/users/2/uitdienst', { token: 'tok-admin' });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toMatch(/minstens 1 actieve admin/);
+    expect(mem.users.find((u: any) => u.id === '2').isActive).toBe(true);
   });
 });

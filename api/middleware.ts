@@ -85,7 +85,34 @@ export const resolveOptionalUser = async (req: express.Request): Promise<AppUser
   }
 };
 
-type TokenCheck = { ok: true; id: string; email: string | null } | { ok: false; status: 401 | 503 };
+type TokenCheck = { ok: true; id: string; email: string | null; aal: "aal1" | "aal2" } | { ok: false; status: 401 | 503 };
+
+/** 'aal2' alleen wanneer het token dat expliciet zegt; alles anders = aal1. */
+const normaliseerAal = (v: unknown): "aal1" | "aal2" => (v === "aal2" ? "aal2" : "aal1");
+
+/** Leest de `aal`-claim uit een al geverifieerd JWT (getUser-fallback geeft
+ *  die niet terug). Alleen aanroepen ná verificatie, de payload wordt hier
+ *  niet gecontroleerd. */
+export const aalUitJwt = (token: string): "aal1" | "aal2" => {
+  try {
+    const deel = token.split(".")[1] ?? "";
+    const json = Buffer.from(deel.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    return normaliseerAal((JSON.parse(json) as { aal?: unknown }).aal);
+  } catch {
+    return "aal1";
+  }
+};
+
+// --- Twee-stapsverificatie voor staf (verbeterronde 07-09, nr. 8) ---
+// Supabase MFA (TOTP) geeft het JWT na de code de claim aal='aal2'. Met
+// MFA_STAF=aan eist de API dat niveau voor planner/admin op alle routes,
+// behalve de paden die nodig zijn om in te schrijven of de code in te
+// voeren. Chauffeurs blijven buiten schot (toestel-whitelist is hun laag).
+// Standaard uit: pas aanzetten nadat TOTP in het Supabase-dashboard aanstaat
+// en de beheerder zichzelf heeft ingeschreven, anders sluit je jezelf buiten.
+export const mfaStafVerplicht = (): boolean => (process.env.MFA_STAF ?? "uit").toLowerCase() === "aan";
+export const MFA_EXEMPT = new Set(["/api/me", "/api/me/beveiliging", "/api/auth/session", "/api/devices/register", "/api/client-errors"]);
+export const isStafRol = (role: Role): boolean => role === "planner" || role === "admin";
 const is4xx = (e: unknown): boolean => {
   const st = (e as { status?: unknown })?.status;
   return typeof st === "number" && st >= 400 && st < 500;
@@ -107,13 +134,13 @@ const is4xx = (e: unknown): boolean => {
 export const verifieerToken = async (token: string): Promise<TokenCheck> => {
   if (!supabase) return { ok: false, status: 503 };
   try {
-    const auth = supabase.auth as unknown as { getClaims?: (jwt: string) => Promise<{ data: { claims?: { sub?: unknown; email?: unknown } } | null; error: { name?: string; status?: number; message?: string } | null }> };
+    const auth = supabase.auth as unknown as { getClaims?: (jwt: string) => Promise<{ data: { claims?: { sub?: unknown; email?: unknown; aal?: unknown } } | null; error: { name?: string; status?: number; message?: string } | null }> };
     if (typeof auth.getClaims === "function") {
       const { data, error } = await auth.getClaims(token);
       const sub = data?.claims?.sub;
       if (!error && typeof sub === "string" && sub) {
         const email = data?.claims?.email;
-        return { ok: true, id: sub, email: typeof email === "string" ? email : null };
+        return { ok: true, id: sub, email: typeof email === "string" ? email : null, aal: normaliseerAal((data?.claims as { aal?: unknown } | undefined)?.aal) };
       }
       if (error && (is4xx(error) || error.name === "AuthInvalidJwtError")) return { ok: false, status: 401 };
       // Anders: geen uitspraak → hieronder via getUser.
@@ -140,7 +167,7 @@ export const verifieerToken = async (token: string): Promise<TokenCheck> => {
     return { ok: false, status: 503 };
   }
   if (!data.user) return { ok: false, status: 401 };
-  return { ok: true, id: data.user.id, email: data.user.email ?? null };
+  return { ok: true, id: data.user.id, email: data.user.email ?? null, aal: aalUitJwt(token) };
 };
 
 const getBearerToken = (req: express.Request) => {
@@ -220,6 +247,11 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     return res.status(403).json({ error: "Dit account is gedeactiveerd." });
   }
 
+  // Twee-stapsverificatie voor staf: zie mfaStafVerplicht hierboven.
+  if (mfaStafVerplicht() && isStafRol(appUser.role) && check.aal !== "aal2" && !MFA_EXEMPT.has(req.path)) {
+    return res.status(403).json({ error: "Twee-stapsverificatie is vereist voor dit account.", code: "mfa_required" });
+  }
+
   // Toestel-whitelist, niet op de exempt-paden (registratie/sessie-
   // boekhouding). Chauffeurs: altijd. Planner/admin: alleen wanneer het
   // verzoek een toesteltoken draagt, en dan enkel om een expliciet
@@ -248,6 +280,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
         req.accessToken = accessToken;
         req.authUser = authUser;
         req.appUser = appUser;
+        req.aal = check.aal;
         return next();
       }
       console.error("Toestel-controle DB-fout (fail-closed):", err);
@@ -267,6 +300,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   req.accessToken = accessToken;
   req.authUser = authUser;
   req.appUser = appUser;
+  req.aal = check.aal;
   next();
 };
 

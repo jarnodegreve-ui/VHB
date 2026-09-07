@@ -29,7 +29,7 @@ function CarbonAchtergrond() {
   return null;
 }
 
-function CarbonScherm({ children, className }: { children: ReactNode; className?: string }) {
+export function CarbonScherm({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn('login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5', className)}>
       <CarbonAchtergrond />
