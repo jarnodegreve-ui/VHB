@@ -18,8 +18,10 @@
 
 begin;
 
--- RLS op realtime.messages staat standaard aan; expliciet voor de zekerheid.
-alter table realtime.messages enable row level security;
+-- RLS op realtime.messages staat al aan (Supabase's eigen Realtime-migratie).
+-- Géén 'alter table ... enable row level security' hier: de SQL-Editor-rol is
+-- geen eigenaar van die tabel en krijgt dan 42501 (gebleken 07-09); policies
+-- aanmaken mag wel.
 
 drop policy if exists "vhb_aanwezigheid_staf_lezen" on realtime.messages;
 create policy "vhb_aanwezigheid_staf_lezen"
