@@ -7,13 +7,15 @@ import { gezienNieuwsId, markeerNieuwsGezien, nieuwsRolVan, ongezienNieuws } fro
 import type { View } from '../types';
 
 /**
- * Dismissbare "Wat is nieuw"-kaart bovenaan het dashboard (één per release,
- * per rol andere regels). Inhoud en zichtbaarheid: src/app/watIsNieuw.ts.
+ * Dismissbare "Wat is nieuw"-kaart bovenaan het dashboard (één per release).
+ * Inhoud: src/app/watIsNieuw.ts. Alleen beheerders zien hem (Jarno 07-09):
+ * chauffeurs en planners krijgen geen release-notes in hun dashboard; de
+ * regels per rol blijven in de data staan voor de changelog.
  */
 export function WatIsNieuwKaart({ rol, onNavigate, className }: { rol: string; onNavigate?: (view: View) => void; className?: string }) {
   const nieuwsRol = nieuwsRolVan(rol);
-  const [item, setItem] = useState(() => ongezienNieuws(nieuwsRol, gezienNieuwsId()));
-  if (!item) return null;
+  const [item, setItem] = useState(() => (rol === 'admin' ? ongezienNieuws(nieuwsRol, gezienNieuwsId()) : null));
+  if (!item || rol !== 'admin') return null;
   const regels = item.regels[nieuwsRol] ?? [];
   const bekijk = item.bekijk?.[nieuwsRol];
   const sluit = () => {
