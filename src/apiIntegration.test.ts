@@ -3217,6 +3217,22 @@ describe('gezien-bevestiging op een doorgevoerde wissel', () => {
     expect(mem.swaps.find((s: any) => s.id === 's-pend')?.targetSeenAt ?? undefined).toBeUndefined();
   });
 
+  it('een nieuwe aanvraag met de snake_case-alias target_seen_at start onbevestigd (audit 07-09, #4)', async () => {
+    // saveSwapsData haalt records door toPublicSwap, die voor targetSeenAt
+    // terugvalt op target_seen_at. De handler zette targetSeenAt wel op de
+    // opgeslagen waarde (nieuw = undefined), maar liet de alias in de spread
+    // staan; via de echte mapper werd die alsnog de Gezien-bevestiging. De
+    // mock bewaart wat de handler aanlevert, dus de alias mag er niet in zitten.
+    const eigen = mem.swaps.filter((s: any) => s.requesterId === '3' || s.targetDriverId === '3');
+    const nieuw = { id: 's-alias', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-07-01T10:00:00Z', swapType: 'overname', target_seen_at: '2020-01-01T00:00:00Z' };
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...eigen, nieuw] });
+    expect(res.status).toBe(200);
+    const opgeslagen = mem.swaps.find((s: any) => s.id === 's-alias');
+    expect(opgeslagen).toBeTruthy();
+    expect(opgeslagen?.targetSeenAt ?? undefined).toBeUndefined();
+    expect('target_seen_at' in opgeslagen).toBe(false);
+  });
+
   it('GET /api/swaps geeft targetSeenAt terug', async () => {
     await api('POST', '/api/swaps/s-app/gezien', { token: 'tok-b' });
     const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
