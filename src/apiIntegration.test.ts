@@ -4678,6 +4678,39 @@ describe('eigen voorkeuren (PATCH /api/me/voorkeuren)', () => {
   });
 });
 
+describe('roostersolver: POST /api/rooster/solver-verzoek (verbeterronde 07-09 nr. 13)', () => {
+  const vorige = process.env.ROSTERING_EXPORT_SECRET;
+  afterEach(() => { if (vorige === undefined) delete process.env.ROSTERING_EXPORT_SECRET; else process.env.ROSTERING_EXPORT_SECRET = vorige; });
+
+  it('alleen planner/admin, en 503 zolang het geheim ontbreekt', async () => {
+    delete process.env.ROSTERING_EXPORT_SECRET;
+    expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-a', body: { van: '2026-09-07', tot: '2026-09-13' } })).status).toBe(403);
+    expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-planner', body: { van: '2026-09-07', tot: '2026-09-13' } })).status).toBe(503);
+  });
+
+  it('bouwt en tekent het verzoek; de handtekening klopt met de teruggegeven JSON', async () => {
+    process.env.ROSTERING_EXPORT_SECRET = 'test-geheim';
+    const res = await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-planner', body: { van: '2026-09-07', tot: '2026-09-13', contracturen: '38', rekentijd: 30 } });
+    expect(res.status).toBe(200);
+    expect(res.json.solverUrl).toMatch(/^https:\/\//);
+    expect(res.json.handtekening).toMatch(/^sha256=[0-9a-f]{64}$/);
+    const verzoek = JSON.parse(res.json.verzoek);
+    expect(verzoek.meta).toMatchObject({ van: '2026-09-07', tot: '2026-09-13', bron: 'vhb-portaal' });
+    expect(verzoek.kalender).toHaveLength(7);
+    expect(verzoek.chauffeurs.length).toBeGreaterThan(0);
+    expect(verzoek.config.solver.max_time_s).toBe(30);
+    const { createHmac } = await import('node:crypto');
+    expect(res.json.handtekening).toBe(`sha256=${createHmac('sha256', 'test-geheim').update(res.json.verzoek, 'utf8').digest('hex')}`);
+    expect(mem.activity.some((a: any) => a.action === 'Rooster berekend')).toBe(true);
+  });
+
+  it('weigert een ongeldige periode of ongeldige contracturen (400)', async () => {
+    process.env.ROSTERING_EXPORT_SECRET = 'test-geheim';
+    expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-admin', body: { van: '2026-09-13', tot: '2026-09-07' } })).status).toBe(400);
+    expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-admin', body: { van: '2026-09-07', tot: '2026-09-13', contracturen: 'veel' } })).status).toBe(400);
+  });
+});
+
 describe('twee-stapsverificatie voor staf (MFA_STAF=aan, verbeterronde 07-09 nr. 8)', () => {
   const vorige = process.env.MFA_STAF;
   beforeEach(() => { process.env.MFA_STAF = 'aan'; });
