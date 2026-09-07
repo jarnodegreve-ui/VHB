@@ -138,7 +138,12 @@ export function useAanwezigheid(
       zetAnderen(mock.filter((a) => a.userId !== eigenRef.current.userId));
       return () => zetAnderen([]);
     }
-    const kanaal = supabase!.channel(KANAAL, { config: { presence: { key: eigenRef.current.userId } } });
+    // private: true = Realtime past de RLS-policy op realtime.messages toe
+    // (migratie 2026-09-07_realtime_presence_private.sql): alleen actieve staf
+    // mag dit topic lezen en beschrijven. Zonder dat kon iedereen met de
+    // publieke projectconfig meeluisteren wie van de staf waar zat, en zelf
+    // een 'planner' nabootsen (security-audit 07-09, bevinding 2).
+    const kanaal = supabase!.channel(KANAAL, { config: { private: true, presence: { key: eigenRef.current.userId } } });
     kanaalRef.current = kanaal;
     const sync = () => {
       try {

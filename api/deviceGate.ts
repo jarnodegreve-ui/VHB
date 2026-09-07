@@ -47,8 +47,17 @@ export const evaluateDeviceGate = (
   device: { status: string } | null,
   gateEnabled = true,
 ): DeviceGateVerdict => {
-  if (role !== "chauffeur") return { allow: true };
   if (DEVICE_GATE_EXEMPT.has(path)) return { allow: true };
+  // Planner/admin hoeven geen goedkeuring (geen lock-out), maar een toestel
+  // dat ze zelf of een admin expliciet uitlogden blijft ook voor hen dicht.
+  // Voorheen sloeg de gate staf volledig over, waardoor "toestel uitloggen"
+  // in Instellingen een succesmelding gaf zonder effect (security-audit
+  // 07-09, bevinding 5).
+  if (role !== "chauffeur") {
+    return device?.status === "revoked"
+      ? { allow: false, status: 403, body: { error: "Dit toestel is uitgelogd voor dit account. Meld je opnieuw aan.", code: "device_revoked" } }
+      : { allow: true };
+  }
   if (device?.status === "revoked") {
     return {
       allow: false,

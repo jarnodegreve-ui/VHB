@@ -102,6 +102,19 @@ export type PushPayload = {
 
 let meldingFoutGemeld = false;
 
+/** Socket-timeout voor één push-aanroep (web-push `timeout`-optie). */
+export const PUSH_TIMEOUT_MS = 5_000;
+/** Harde deadline op de hele aanroep, ook als het endpoint blijft druppelen. */
+export const PUSH_DEADLINE_MS = 8_000;
+
+/** Wacht hooguit `ms` op `p`; daarna een fout, de onderliggende request loopt
+ *  door maar houdt de aanroeper niet meer vast. */
+export const metDeadline = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`push-deadline (${ms} ms) verstreken`)), ms);
+    p.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
+
 /**
  * Stuurt een notificatie naar alle abonnementen van de gegeven gebruikers —
  * en bewaart de melding eerst per gebruiker in public.meldingen (het
@@ -134,9 +147,18 @@ export const sendPushToUsers = async (userIds: string[], payload: PushPayload): 
   await Promise.all(
     subscriptions.map(async (sub) => {
       try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          body,
+        // Het endpoint is door de gebruiker gekozen (elke publieke https-host
+        // passeert de subscribe-check). Zonder deadline hield één traag of
+        // eindeloos antwoordend endpoint de hele hoofdactie (verlofbeslissing,
+        // ruil) vast tot de Vercel-limiet. Socket-timeout in web-push plus een
+        // harde deadline op de await (security-audit 07-09, bevinding 3).
+        await metDeadline(
+          webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            body,
+            { timeout: PUSH_TIMEOUT_MS },
+          ),
+          PUSH_DEADLINE_MS,
         );
       } catch (err: any) {
         const status = err?.statusCode;

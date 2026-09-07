@@ -74,6 +74,15 @@ export const zetTelegramVerzenderVoorTests = (v: typeof echteVerzender | null) =
  *  alert, dekkingsgaten) staan standaard UIT (Jarno 05-09: "voorlopig
  *  storend"). Aanzetten met env TELEGRAM_MELDINGEN=aan. Antwoorden van de bot
  *  op een commando (`antwoord: true`) gaan altijd door — die vraag je zelf. */
+/** `lv|<id>|<besluit>` (of lv2/rl/rl2): exact drie velden, id zonder
+ *  scheidingstekens, besluit uit de vaste set. */
+export const isBeslisCallback = (data: string): boolean => {
+  const delen = data.split("|");
+  return delen.length === 3
+    && /^[A-Za-z0-9_-]{1,64}$/.test(delen[1] ?? "")
+    && (delen[2] === "approved" || delen[2] === "rejected");
+};
+
 export const telegramMeldingenAan = (): boolean => (process.env.TELEGRAM_MELDINGEN ?? "uit").toLowerCase() === "aan";
 
 export const stuurTelegram = async (
@@ -500,6 +509,11 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
           } catch {
             await antwoord(`Advies voor dienst ${escapeHtml(String(code ?? ""))} kon niet berekend worden.`);
           }
+        } else if ((data.startsWith("lv|") || data.startsWith("rl|") || data.startsWith("lv2|") || data.startsWith("rl2|")) && !isBeslisCallback(data)) {
+          // Precies drie velden, id zonder scheidingstekens en een bekend
+          // besluit: anders zou een id met een pipe het doelrecord kunnen
+          // verleggen (security-audit 07-09, bevinding 9).
+          await answerCallback(cbId, "Ongeldige knop.");
         } else if (data.startsWith("lv|") || data.startsWith("rl|")) {
           // Stap 1 van een beslissing: expliciete bevestiging vragen — één
           // tik op een knop in een scrollende chat mag nooit direct beslissen.

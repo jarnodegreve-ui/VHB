@@ -747,6 +747,14 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
     expect(mem.pushesSent.some((p) => p.userIds.includes('9'))).toBe(false); // …het gepauzeerde account niet
   });
 
+  it('weigert een nieuwe aanvraag met een id dat een scheidingsteken bevat (400, audit 07-09, #9)', async () => {
+    const own = mem.leave.filter((l) => l.userId === '3');
+    const gevormd = { id: 'l-echt|approved', userId: '3', startDate: '2026-09-01', endDate: '2026-09-01', type: 'betaald_verlof', status: 'pending', createdAt: '2026-06-12T08:00:00Z' };
+    const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, gevormd] });
+    expect(res.status).toBe(400);
+    expect(mem.leave.find((l) => l.id === 'l-echt|approved')).toBeFalsy();
+  });
+
   it('weigert verlof aanvragen voor een ander (403)', async () => {
     const own = mem.leave.filter((l) => l.userId === '3');
     const voorAnder = { id: 'l-x', userId: '4', startDate: '2026-09-01', endDate: '2026-09-01', type: 'betaald_verlof', status: 'pending', createdAt: '2026-06-12T08:00:00Z' };

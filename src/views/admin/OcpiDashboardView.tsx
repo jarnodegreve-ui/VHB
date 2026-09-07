@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { csvTekst } from '../../lib/csv';
 import { Download, AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide-react';
 import { cn, downloadBlob } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
@@ -287,7 +288,10 @@ export function OcpiDashboardView() {
       ...verbruik.punten.map((p) => [naam(p), num(p.kwh), String(p.sessies)]),
       ['Totaal', num(verbruik.totaalKwh), String(verbruik.totaalSessies)],
     ];
-    const csv = '\ufeff' + regels.map((r) => r.map((v) => (/[";\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v)).join(';')).join('\r\n');
+    // csvTekst neutraliseert formule-prefixen: de laadpuntnaam komt uit de
+    // externe OCPI-koppeling (physical_reference van de CPO) en was hier de
+    // enige export zonder die guard (security-audit 07-09, bevinding 8).
+    const csv = '\ufeff' + csvTekst(regels, ';');
     void downloadBlob(`vhb-laadplein-${verbruik.maand ?? `${verbruik.van}_${verbruik.tot}`}.csv`, new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   };
 
