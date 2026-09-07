@@ -7,7 +7,7 @@ import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
 
 import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
-import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
+import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, deletePushSubscriptionsForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isRosteringExportAuthorized } from "./middleware.js";
@@ -112,6 +112,7 @@ import {
   logCronHeartbeat,
   getCronHeartbeats,
   getDevice,
+  revokeAllDevices,
   getPlanningNotes,
   getMeldingen,
   telOngelezenMeldingen,
@@ -2310,6 +2311,89 @@ app.delete("/api/users/:id", authenticate, requireRole("admin"), async (req: Aut
   } catch (err: any) {
     console.error("Gebruiker verwijderen is mislukt.", err?.message || err);
     res.status(500).json({ error: "Verwijderen is mislukt." });
+  }
+});
+
+// Uit dienst in één handeling (verbeterronde 07-09, nr. 1): deactiveren via
+// dezelfde schrijfkern als de per-record-routes (revisie/activity/Auth-ban),
+// dan alle toestellen intrekken en de push-abonnementen wissen. Elke stap is
+// best-effort en wordt gerapporteerd; nogmaals aanroepen op een al inactieve
+// gebruiker geeft 200 met nullen. De agenda-feed vervalt vanzelf bij
+// isActive=false; lopende Supabase-sessies stoppen door de ban uiterlijk bij
+// tokenverloop (er is geen per-gebruiker signOut zonder diens token).
+app.post("/api/users/:id/uitdienst", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    if (id === String(req.appUser!.id)) return res.status(400).json({ error: "Je kunt jezelf niet uit dienst zetten." });
+    const reden = typeof req.body?.reden === "string" ? req.body.reden.trim().slice(0, 200) : "";
+    const previousUsers = await getUsersData();
+    const current = previousUsers.find((u) => String(u.id) === id);
+    if (!current) return res.status(404).json({ error: "Gebruiker niet gevonden, mogelijk intussen verwijderd." });
+    const wasActief = current.isActive !== false;
+    const stappen: Array<{ stap: string; ok: boolean; detail: string }> = [];
+
+    // (1) Deactiveren, alleen als de gebruiker nog actief is.
+    if (wasActief) {
+      const newData = previousUsers.map((u) => (String(u.id) === id ? { ...u, isActive: false } : u));
+      if (laatsteAdminVerdwijnt(newData)) return res.status(400).json({ error: "Er moet minstens 1 actieve admin overblijven." });
+      try {
+        await verwerkUsersOpslag(req, previousUsers, newData, { samenvatting: false });
+        stappen.push({ stap: "deactiveren", ok: true, detail: "Account gedeactiveerd en Auth-account geblokkeerd." });
+      } catch (err: any) {
+        // Zonder deactivering heeft de rest geen zin: de gebruiker kan nog
+        // inloggen en toestellen opnieuw registreren.
+        console.error("Uit dienst: deactiveren is mislukt.", err?.message || err);
+        return res.status(500).json({ error: "Deactiveren is mislukt.", stappen: [{ stap: "deactiveren", ok: false, detail: String(err?.message || err) }] });
+      }
+    } else {
+      stappen.push({ stap: "deactiveren", ok: true, detail: "Account was al gedeactiveerd." });
+    }
+
+    // (2) Toestellen intrekken.
+    let toestellen = 0;
+    try {
+      toestellen = await revokeAllDevices(id);
+      stappen.push({ stap: "toestellen", ok: true, detail: `${toestellen} toestel${toestellen === 1 ? "" : "len"} ingetrokken.` });
+    } catch (err: any) {
+      if (isMissingTableError(err)) stappen.push({ stap: "toestellen", ok: true, detail: "Geen toestel-tabel, niets in te trekken." });
+      else {
+        console.error("Uit dienst: toestellen intrekken is mislukt.", err?.message || err);
+        stappen.push({ stap: "toestellen", ok: false, detail: "Toestellen intrekken is mislukt." });
+      }
+    }
+
+    // (3) Push-abonnementen wissen.
+    let push = 0;
+    try {
+      push = await deletePushSubscriptionsForUser(id);
+      stappen.push({ stap: "push", ok: true, detail: `${push} push-abonnement${push === 1 ? "" : "en"} gewist.` });
+    } catch (err: any) {
+      console.error("Uit dienst: push-abonnementen wissen is mislukt.", err?.message || err);
+      stappen.push({ stap: "push", ok: false, detail: "Push-abonnementen wissen is mislukt." });
+    }
+
+    // (4) Sessies: de ban uit stap 1 blokkeert nieuwe logins en token-
+    // refreshes; lopende access-tokens verlopen vanzelf (max. 1 uur).
+    stappen.push({ stap: "sessies", ok: true, detail: "Auth-account geblokkeerd, lopende sessies stoppen bij tokenverloop." });
+
+    // (5) Eén samenvattende auditregel.
+    await logActivity(
+      req,
+      "users",
+      "Uit dienst",
+      `${current.name}: account ${wasActief ? "gedeactiveerd" : "was al gedeactiveerd"}, ${toestellen} toestel${toestellen === 1 ? "" : "len"} ingetrokken, ${push} push-abonnement${push === 1 ? "" : "en"} gewist.${reden ? ` Reden: ${reden}.` : ""}`,
+      { type: "user", id },
+    );
+
+    res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
+    res.json({
+      user: await userResponseRecord(id),
+      samenvatting: { toestellen, push, sessies: "gebannen" },
+      stappen,
+    });
+  } catch (err: any) {
+    console.error("Uit dienst zetten is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Uit dienst zetten is mislukt." });
   }
 });
 

@@ -124,6 +124,11 @@ vi.mock('../api/push.js', async (importOriginal) => ({
   deletePushSubscriptionForUser: async (endpoint: string, userId: string) => {
     mem.pushSubscriptions = mem.pushSubscriptions.filter((s) => !(s.endpoint === endpoint && String(s.userId) === String(userId)));
   },
+  deletePushSubscriptionsForUser: async (userId: string) => {
+    const voor = mem.pushSubscriptions.length;
+    mem.pushSubscriptions = mem.pushSubscriptions.filter((s) => String(s.userId) !== String(userId));
+    return voor - mem.pushSubscriptions.length;
+  },
   sendPushToUsers: async (userIds: string[], payload: any) => {
     if (userIds.length === 0) return;
     mem.pushesSent.push({ userIds, payload });
@@ -377,6 +382,13 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     deleteDevice: async (userId: string, deviceToken: string) => {
       mem.devices = mem.devices.filter((d: any) => !(String(d.userId) === String(userId) && d.deviceToken === deviceToken));
+    },
+    revokeAllDevices: async (userId: string) => {
+      let n = 0;
+      for (const d of mem.devices) {
+        if (String(d.userId) === String(userId) && d.status !== 'revoked') { d.status = 'revoked'; n++; }
+      }
+      return n;
     },
     deleteAllDocumentsForUser: async (userId: string) => {
       const n = mem.documents.filter((d: any) => String(d.userId) === String(userId)).length;
@@ -4697,5 +4709,60 @@ describe('twee-stapsverificatie voor staf (MFA_STAF=aan, verbeterronde 07-09 nr.
     expect((await api('GET', '/api/users', { token: 'tok-planner' })).status).toBe(200);
     const bev = await api('GET', '/api/me/beveiliging', { token: 'tok-planner' });
     expect(bev.json.mfaVerplicht).toBe(false);
+  });
+});
+
+describe('uit dienst in één handeling (POST /api/users/:id/uitdienst)', () => {
+  it('deactiveert, trekt alle toestellen in, wist de push-abonnementen en logt één regel', async () => {
+    mem.devices.push({ userId: '3', deviceToken: 'dev-2', name: 'iPad', status: 'pending', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null });
+    mem.pushSubscriptions.push({ userId: '3', endpoint: 'https://push.example/a', p256dh: 'k', auth: 'a' }, { userId: '4', endpoint: 'https://push.example/b', p256dh: 'k', auth: 'a' });
+    const res = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin', body: { reden: 'Einde contract' } });
+    expect(res.status).toBe(200);
+    expect(res.json.samenvatting).toEqual({ toestellen: 2, push: 1, sessies: 'gebannen' });
+    expect(res.json.user.isActive).toBe(false);
+    expect(res.json.user._rev).toBeTruthy();
+    expect(res.json.stappen.every((s: any) => s.ok)).toBe(true);
+    expect(mem.users.find((u: any) => u.id === '3').isActive).toBe(false);
+    expect(mem.devices.filter((d: any) => d.userId === '3').every((d: any) => d.status === 'revoked')).toBe(true);
+    // Alleen de abonnementen van chauffeur 3 weg, die van 4 blijven.
+    expect(mem.pushSubscriptions.map((s: any) => s.userId)).toEqual(['4']);
+    const regel = mem.activity.find((a) => a.action === 'Uit dienst');
+    expect(regel?.entityId).toBe('3');
+    expect(regel?.message).toBe('Chauffeur A: account gedeactiveerd, 2 toestellen ingetrokken, 1 push-abonnement gewist. Reden: Einde contract.');
+    // Het gedeactiveerde account kan de API niet meer gebruiken.
+    expect((await api('GET', '/api/updates', { token: 'tok-a' })).status).toBe(403);
+  });
+
+  it('is idempotent: nogmaals op een al inactieve gebruiker geeft 200 met nullen', async () => {
+    mem.pushSubscriptions.push({ userId: '3', endpoint: 'https://push.example/a', p256dh: 'k', auth: 'a' });
+    expect((await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin' })).json.samenvatting).toEqual({ toestellen: 1, push: 1, sessies: 'gebannen' });
+    const weer = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin' });
+    expect(weer.status).toBe(200);
+    expect(weer.json.samenvatting).toEqual({ toestellen: 0, push: 0, sessies: 'gebannen' });
+    expect(weer.json.stappen.find((s: any) => s.stap === 'deactiveren')?.detail).toMatch(/al gedeactiveerd/);
+    expect(mem.activity.filter((a) => a.action === 'Uit dienst')).toHaveLength(2);
+  });
+
+  it('weigert een planner (403), jezelf (400) en een onbekende (404)', async () => {
+    expect((await api('POST', '/api/users/3/uitdienst', { token: 'tok-planner' })).status).toBe(403);
+    expect((await api('POST', '/api/users/1/uitdienst', { token: 'tok-admin' })).status).toBe(400);
+    expect((await api('POST', '/api/users/bestaat-niet/uitdienst', { token: 'tok-admin' })).status).toBe(404);
+    expect(mem.users.every((u: any) => u.isActive !== false)).toBe(true);
+    expect(mem.activity.some((a) => a.action === 'Uit dienst')).toBe(false);
+  });
+
+  it('beschermt de laatste actieve admin (400), ook als de eigen rol intussen gewijzigd is', async () => {
+    // Auth-cache warm met Annelies als admin; daarna wisselt een andere
+    // sessie de rollen: Pieter wordt de enige actieve admin. Zonder de
+    // countAdmins-vangrail zou Annelies (cache: admin) hem nu uit dienst
+    // kunnen zetten en bleef er geen admin over.
+    // Twee keer: de eerste aanmelding koppelt de authId en leegt de cache.
+    await api('GET', '/api/users', { token: 'tok-admin' });
+    expect((await api('GET', '/api/users', { token: 'tok-admin' })).status).toBe(200);
+    mem.users = mem.users.map((u: any) => (u.id === '1' ? { ...u, role: 'planner' } : u.id === '2' ? { ...u, role: 'admin' } : u));
+    const res = await api('POST', '/api/users/2/uitdienst', { token: 'tok-admin' });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toMatch(/minstens 1 actieve admin/);
+    expect(mem.users.find((u: any) => u.id === '2').isActive).toBe(true);
   });
 });
