@@ -8,6 +8,8 @@ import { supabase } from '../lib/supabase';
 import { applyThemeColorMeta, LOGIN_MELDING_KEY } from '../lib/ui';
 import { BrandLogo } from '../components/BrandLogo';
 import { OmgevingLabel } from '../components/OmgevingLabel';
+import { OnderhoudBanner } from '../components/OnderhoudBanner';
+import { useOnderhoudPubliek } from '../app/useOnderhoud';
 import { DUR, EASE } from '../lib/motion';
 
 
@@ -80,6 +82,9 @@ export function LoginView({
     }
   }, []);
   const reden = melding || opgeslagenReden;
+  // Onderhoudsmodus: de publieke variant (alleen actief + tekst), zodat wie
+  // wil inloggen al weet dat het portaal even in onderhoud is.
+  const onderhoud = useOnderhoudPubliek();
   const uitlogReden = reden === 'account'
     ? 'Je account is gedeactiveerd. Neem contact op met de planning.'
     : reden === 'sessie'
@@ -220,6 +225,7 @@ export function LoginView({
                   inlogt, in tegenstelling tot de toast die hier voorheen
                   achter dit scherm verdween. Oker (info), niet rood: er is
                   niets stuk, je moet alleen opnieuw inloggen. */}
+              {!recoveryMode && <OnderhoudBanner onderhoud={onderhoud} tone="donker" className="mb-6" />}
               {uitlogReden && !recoveryMode && (
                 <div className="mb-6 flex items-start gap-2.5 rounded-2xl border border-oker-500/25 bg-oker-500/12 px-4 py-3">
                   <ShieldCheck size={16} className="mt-px shrink-0 text-oker-400" />

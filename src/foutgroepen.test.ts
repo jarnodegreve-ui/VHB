@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { fingerprintVan, groepeerFouten, normaliseerFoutmelding, topFrameSleutel, type FoutRij, type FoutStatus } from '../api/_lib/foutgroepen';
+import { fingerprintVan, groepeerFouten, normaliseerFoutmelding, referentieVan, REFERENTIE_LENGTE, topFrameSleutel, type FoutRij, type FoutStatus } from '../api/_lib/foutgroepen';
 
 const rij = (over: Partial<FoutRij>): FoutRij => ({
   id: over.id ?? Math.random(),
@@ -23,6 +23,16 @@ describe('fingerprint', () => {
     expect(a).toHaveLength(16);
     expect(fingerprintVan({ message: 'Kon dienst 2515 niet laden', source: 'window.onerror' })).not.toBe(a);
     expect(fingerprintVan({ message: 'Kon dienst 2515 niet laden', source: 'error-toast', topFrame: 'src/x.tsx:12' })).not.toBe(a);
+  });
+
+  it('leidt de korte referentie af: begin van de fingerprint in hoofdletters', () => {
+    expect(referentieVan('a7f3c19e0b2d4f61')).toBe('A7F3C1');
+    expect(referentieVan('a7f3c19e0b2d4f61')).toHaveLength(REFERENTIE_LENGTE);
+    // Dezelfde oorzaak → dezelfde code, ongeacht getallen in de melding.
+    expect(referentieVan(fingerprintVan({ message: 'Kon dienst 2515 niet laden', source: 'error-toast' })))
+      .toBe(referentieVan(fingerprintVan({ message: 'Kon dienst 2607 niet laden', source: 'error-toast' })));
+    expect(referentieVan(fingerprintVan({ message: 'x' }))).toMatch(/^[0-9A-F]{6}$/);
+    expect(referentieVan('')).toBe('');
   });
 
   it('laat de functienaam van het top-frame buiten de sleutel', () => {
@@ -55,6 +65,8 @@ describe('groepeerFouten', () => {
     const { groepen } = groepeerFouten([rij({ id: 1, fingerprint: fp }), rij({ id: 2 })], new Map());
     expect(groepen).toHaveLength(1);
     expect(groepen[0].fingerprint).toBe(fp);
+    // De groep draagt dezelfde korte code die de gebruiker op het foutscherm zag.
+    expect(groepen[0].referentie).toBe(referentieVan(fp));
   });
 
   it('heropent een opgeloste groep alleen bij een voorval ná het oplossen in een ándere release', () => {

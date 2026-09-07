@@ -46,6 +46,29 @@ export function getBreadcrumbs(): Breadcrumb[] {
   return [...breadcrumbs];
 }
 
+// --- Foutreferentie: de korte code die de server per rapport teruggeeft ---
+// POST /api/client-errors antwoordt met { ok, referentie } (eerste tekens van
+// de foutgroep-fingerprint, api/_lib/foutgroepen.ts). De foutschermen tonen
+// de laatst ontvangen code ("Referentie A7F3C1, geef deze door aan de
+// planning") zodat een admin de groep in Systeemstatus › Fouten terugvindt.
+// Alleen automatische rapporten zetten hem; een gebruikersmelding niet (die
+// neemt hem juist mee). Niet verstuurd of offline = geen referentie.
+let laatsteReferentie: string | null = null;
+const referentieListeners = new Set<() => void>();
+const zetReferentie = (referentie: string | null) => {
+  if (laatsteReferentie === referentie) return;
+  laatsteReferentie = referentie;
+  for (const l of referentieListeners) l();
+};
+export const getLaatsteReferentie = (): string | null => laatsteReferentie;
+/** Voor useSyncExternalStore (src/app/FoutReferentie.tsx). */
+export function subscribeReferentie(listener: () => void): () => void {
+  referentieListeners.add(listener);
+  return () => { referentieListeners.delete(listener); };
+}
+/** Na "Opnieuw proberen": een oude code hoort niet bij een nieuwe fout. */
+export const wisReferentie = () => zetReferentie(null);
+
 /** Alleen voor tests. */
 export function resetMonitoring() {
   breadcrumbs.length = 0;
@@ -55,6 +78,8 @@ export function resetMonitoring() {
   seenMessages.clear();
   reportCount = 0;
   feedbackCount = 0;
+  laatsteReferentie = null;
+  referentieListeners.clear();
 }
 
 /** Context die met élk rapport meegaat: release (build-SHA), huidig scherm,
@@ -78,8 +103,9 @@ type ClientErrorReport = {
 /** Eén plek voor de POST zelf (stond drie keer uitgeschreven). Met
  *  `auth: true` gaan de sessie-headers mee zodat de server de afzender
  *  verifieert; zonder sessie (loginscherm, crash vóór init) valt hij terug
- *  op een anonieme melding. Geeft terug of de server hem accepteerde. */
-async function postClientError(body: Record<string, unknown>, opts: { auth?: boolean } = {}): Promise<boolean> {
+ *  op een anonieme melding. Geeft terug of de server hem accepteerde, plus
+ *  de korte referentie van de foutgroep als die meekwam. */
+async function postClientError(body: Record<string, unknown>, opts: { auth?: boolean } = {}): Promise<{ ok: boolean; referentie?: string }> {
   try {
     let headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (opts.auth) {
@@ -90,10 +116,14 @@ async function postClientError(body: Record<string, unknown>, opts: { auth?: boo
       }
     }
     const res = await fetch('/api/client-errors', { method: 'POST', headers, keepalive: true, body: JSON.stringify(body) });
-    return res.ok;
+    if (!res.ok) return { ok: false };
+    // Oudere server (204) of een mock zonder body: dan gewoon geen referentie.
+    const json = typeof res.json === 'function' ? await res.json().catch(() => null) : null;
+    const referentie = json && typeof json.referentie === 'string' && /^[0-9A-Z]{4,16}$/.test(json.referentie) ? json.referentie : undefined;
+    return { ok: true, referentie };
   } catch {
     // Rapportage mag zelf nooit een nieuwe fout veroorzaken.
-    return false;
+    return { ok: false };
   }
 }
 
@@ -107,6 +137,9 @@ function send(report: ClientErrorReport) {
   seenMessages.add(key);
   reportCount += 1;
 
+  // Eerst wissen: mislukt de verzending (offline), dan blijft er geen oude
+  // code van een eerdere fout op het scherm staan.
+  zetReferentie(null);
   void postClientError({
     message: report.message,
     stack: report.stack,
@@ -115,7 +148,7 @@ function send(report: ClientErrorReport) {
     userAgent: navigator.userAgent,
     userId: currentUserId ?? undefined,
     ...rapportContext(),
-  });
+  }).then((r) => { if (r.referentie) zetReferentie(r.referentie); });
 }
 
 /** Handmatige melding via de "Meld een probleem"-knop: de tekst van de
@@ -129,7 +162,7 @@ function send(report: ClientErrorReport) {
 export async function reportUserFeedback(message: string, context: { view?: string } = {}): Promise<boolean> {
   if (feedbackCount >= MAX_FEEDBACK_PER_SESSION) return false;
   feedbackCount += 1;
-  return postClientError({
+  const r = await postClientError({
     message: `Melding gebruiker${context.view ? ` (scherm: ${context.view})` : ''}: ${message}`,
     source: 'gebruikersmelding',
     url: window.location.pathname,
@@ -137,6 +170,7 @@ export async function reportUserFeedback(message: string, context: { view?: stri
     userId: currentUserId ?? undefined,
     ...rapportContext(),
   }, { auth: true });
+  return r.ok;
 }
 
 /** Voor fouten die de app zelf al afving maar wel aan de gebruiker toonde

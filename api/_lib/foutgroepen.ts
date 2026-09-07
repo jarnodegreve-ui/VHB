@@ -50,6 +50,8 @@ export type FoutStatus = {
 
 export type FoutGroep = {
   fingerprint: string;
+  /** Korte code voor de gebruiker (referentieVan). */
+  referentie: string;
   message: string;
   source: string;
   topFrame: string | null;
@@ -91,6 +93,17 @@ export const fingerprintVan = (i: { message: string; source?: string | null; top
     .update(`${i.source || ""}|${normaliseerFoutmelding(i.message)}|${topFrameSleutel(i.topFrame) || ""}`)
     .digest("hex")
     .slice(0, 16);
+
+/**
+ * Korte referentie voor mensen: de eerste 6 tekens van de fingerprint in
+ * hoofdletters ("A7F3C1"). Kort genoeg om door te geven aan de planning,
+ * ruim genoeg om binnen de foutgroepen van Systeemstatus uniek te zijn.
+ * De client krijgt hem terug van POST /api/client-errors en toont hem op
+ * het foutscherm; de groepeer-route geeft hem per groep mee.
+ */
+export const REFERENTIE_LENGTE = 6;
+export const referentieVan = (fingerprint: string): string =>
+  String(fingerprint ?? "").slice(0, REFERENTIE_LENGTE).toUpperCase();
 
 const STATUS_VOLGORDE: Record<FoutStatusWaarde, number> = { open: 0, opgelost: 1, genegeerd: 2 };
 
@@ -135,6 +148,7 @@ export const groepeerFouten = (
     }
     groepen.push({
       fingerprint: fp,
+      referentie: referentieVan(fp),
       message: laatste.message,
       source: laatste.source || "onbekend",
       topFrame: gesorteerd.map((x) => x.topFrame).find(Boolean) ?? null,

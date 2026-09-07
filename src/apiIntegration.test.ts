@@ -16,6 +16,7 @@ import type { AddressInfo } from 'node:net';
 // RATE_LIMIT_MAX gezet is — dezelfde reden waarom de app dynamisch importeert).
 let resetAllRateLimiters: () => void;
 let invalidateUsersCache: () => void;
+let invalidateOnderhoudCache: () => void;
 
 // Vóór de import van de app: voorkom dat index.ts zelf op poort 3000 gaat
 // luisteren of Vite-middleware start.
@@ -51,6 +52,8 @@ const mem = vi.hoisted(() => ({
   // 'Actief'-event bij action:'resume'.
   lastAuthEventAt: null as string | null,
   clientErrors: [] as any[],
+  // app_settings (key → jsonb): toestel-gate en onderhoudsmodus.
+  appSettings: {} as Record<string, unknown>,
   // Status per foutgroep (client_error_status); `clientErrorStatusTabel=false`
   // simuleert een niet-gedraaide migratie (probe → null / 42P01).
   clientErrorStatus: [] as any[],
@@ -166,6 +169,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   };
   return {
     ...orig,
+    getAppSetting: async (key: string) => mem.appSettings[key] ?? null,
+    setAppSetting: async (key: string, value: unknown) => { mem.appSettings[key] = value; },
     getUsersData: async () => mem.users,
     getRecentLogins: async () => [],
     koppelAuthId: async (userId: string, authId: string) => { const u = mem.users.find((x: any) => String(x.id) === String(userId)); if (u) u.authId = authId; },
@@ -430,6 +435,7 @@ beforeAll(async () => {
   const app = (await import('../api/index')).default;
   resetAllRateLimiters = (await import('../api/rateLimit')).resetAllRateLimiters;
   invalidateUsersCache = (await import('../api/userCache')).invalidateUsersCache;
+  invalidateOnderhoudCache = (await import('../api/_lib/onderhoud')).invalidateOnderhoudCache;
   await new Promise<void>((resolve) => {
     server = app.listen(0, '127.0.0.1', () => resolve());
   });
@@ -485,6 +491,8 @@ beforeEach(() => {
   // stale users zien).
   resetAllRateLimiters();
   invalidateUsersCache();
+  invalidateOnderhoudCache();
+  mem.appSettings = {};
   mem.users = [
     { id: '1', name: 'Annelies Admin', email: 'admin@vhb.be', role: 'admin', isActive: true },
     { id: '2', name: 'Pieter Planner', email: 'planner@vhb.be', role: 'planner', isActive: true },
@@ -1192,13 +1200,16 @@ describe('bulk-wipe-vangrail (PR #71)', () => {
 });
 
 describe('client-foutmonitoring', () => {
-  it('accepteert een foutmelding zonder authenticatie (204) en kapt lange velden af', async () => {
+  it('accepteert een foutmelding zonder authenticatie (200 + referentie) en kapt lange velden af', async () => {
     const res = await api('POST', '/api/client-errors', {
       body: { message: 'x'.repeat(5000), source: 'error-toast', url: '/dashboard' },
     });
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
     expect(mem.clientErrors).toHaveLength(1);
     expect(mem.clientErrors[0].message).toHaveLength(1000);
+    // Korte referentie voor het foutscherm = begin van de fingerprint in hoofdletters.
+    expect(res.json).toEqual({ ok: true, referentie: String(mem.clientErrors[0].fingerprint).slice(0, 6).toUpperCase() });
+    expect(res.json.referentie).toMatch(/^[0-9A-F]{6}$/);
   });
 
   it('weigert een te grote body (413), eigen 32 kB-limiet i.p.v. de globale 5 MB (controle 05-09, nr. 31)', async () => {
@@ -1206,7 +1217,7 @@ describe('client-foutmonitoring', () => {
     expect(teGroot.status).toBe(413);
     expect(mem.clientErrors).toHaveLength(0);
     // Een gewone melding (ruim onder de limiet) blijft gewoon binnenkomen.
-    expect((await api('POST', '/api/client-errors', { body: { message: 'boem', stack: 'y'.repeat(3000) } })).status).toBe(204);
+    expect((await api('POST', '/api/client-errors', { body: { message: 'boem', stack: 'y'.repeat(3000) } })).status).toBe(200);
   });
 
   it('weigert een melding zonder message (400)', async () => {
@@ -1217,13 +1228,13 @@ describe('client-foutmonitoring', () => {
 
   it('vervangt een opgegeven userId door de échte gebruiker bij een geldig token', async () => {
     const res = await api('POST', '/api/client-errors', { token: 'tok-a', body: { message: 'boem', userId: '1' } });
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
     expect(mem.clientErrors[0].userId).toBe('3');
   });
 
   it('markeert een userId zonder geldige sessie als onbevestigd', async () => {
     const res = await api('POST', '/api/client-errors', { body: { message: 'boem', userId: '1' } });
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
     expect(mem.clientErrors[0].userId).toBe('onbevestigd:1');
   });
 
@@ -4675,6 +4686,79 @@ describe('eigen voorkeuren (PATCH /api/me/voorkeuren)', () => {
     await api('PATCH', '/api/me/voorkeuren', { token: 'tok-b', body: { dashboard: { verborgen: [], volgorde: ['vandaag'] } } });
     expect(mem.users.find((u: any) => u.id === '3').dashboardVoorkeuren).toBeUndefined();
     expect(mem.users.find((u: any) => u.id === '4').dashboardVoorkeuren).toEqual({ verborgen: [], volgorde: ['vandaag'] });
+  });
+});
+
+describe('onderhoudsmodus (/api/onderhoud + schrijfblok)', () => {
+  const ONDERHOUD = { actief: true, tekst: 'Even geduld, we migreren.', schrijfblok: true };
+
+  it('publieke route geeft zonder sessie alleen actief + tekst', async () => {
+    mem.appSettings.onderhoud = ONDERHOUD;
+    const res = await api('GET', '/api/onderhoud/publiek', { device: null });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ actief: true, tekst: 'Even geduld, we migreren.' });
+  });
+
+  it('zonder instelling: geen onderhoud (fail-open), leesbaar voor elke ingelogde rol', async () => {
+    const res = await api('GET', '/api/onderhoud', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ actief: false, tekst: '', schrijfblok: false });
+    expect((await api('GET', '/api/onderhoud', { device: null })).status).toBe(401);
+  });
+
+  it('PUT is admin-only, valideert met het gedeelde schema en logt de omslag', async () => {
+    expect((await api('PUT', '/api/onderhoud', { token: 'tok-planner', body: ONDERHOUD })).status).toBe(403);
+    const ongeldig = await api('PUT', '/api/onderhoud', { token: 'tok-admin', body: { actief: 'ja' } });
+    expect(ongeldig.status).toBe(400);
+    expect(ongeldig.json.veldfouten.actief).toBe('Kies aan of uit');
+    const aan = await api('PUT', '/api/onderhoud', { token: 'tok-admin', body: ONDERHOUD });
+    expect(aan.status).toBe(200);
+    expect(aan.json).toEqual(ONDERHOUD);
+    expect(mem.appSettings.onderhoud).toEqual(ONDERHOUD);
+    expect(mem.activity.map((a) => a.action)).toEqual(['Onderhoudsmodus aangezet']);
+    // Tekstcorrectie zonder omslag: geen extra logregel.
+    await api('PUT', '/api/onderhoud', { token: 'tok-admin', body: { ...ONDERHOUD, tekst: 'Bijna klaar.' } });
+    expect(mem.activity).toHaveLength(1);
+    const uit = await api('PUT', '/api/onderhoud', { token: 'tok-admin', body: { actief: false, tekst: '', schrijfblok: false } });
+    expect(uit.status).toBe(200);
+    expect(mem.activity.map((a) => a.action)).toEqual(['Onderhoudsmodus aangezet', 'Onderhoudsmodus uitgezet']);
+  });
+
+  it('schrijfblok: schrijfacties van niet-admins krijgen 503 met code onderhoud, lezen en admins gaan door', async () => {
+    mem.appSettings.onderhoud = ONDERHOUD;
+    const chauffeur = await api('POST', '/api/meldingen/gelezen', { token: 'tok-a', body: {} });
+    expect(chauffeur.status).toBe(503);
+    expect(chauffeur.json).toEqual({ error: 'Het portaal is even in onderhoud, probeer het zo opnieuw.', code: 'onderhoud' });
+    expect((await api('POST', '/api/meldingen/gelezen', { token: 'tok-planner', body: {} })).status).toBe(503);
+    expect((await api('PATCH', '/api/me/voorkeuren', { token: 'tok-a', body: { dashboard: { verborgen: [], volgorde: [] } } })).status).toBe(503);
+    // Lezen blijft werken.
+    expect((await api('GET', '/api/leave', { token: 'tok-a' })).status).toBe(200);
+    // Admin kan door (en dus ook de modus weer uitzetten).
+    expect((await api('POST', '/api/meldingen/gelezen', { token: 'tok-admin', body: {} })).status).toBe(200);
+    const uit = await api('PUT', '/api/onderhoud', { token: 'tok-admin', body: { ...ONDERHOUD, actief: false } });
+    expect(uit.status).toBe(200);
+    expect((await api('POST', '/api/meldingen/gelezen', { token: 'tok-a', body: {} })).status).toBe(200);
+  });
+
+  it('schrijfblok: sessie-boekhouding, toestelregistratie en foutrapportage blijven open', async () => {
+    mem.appSettings.onderhoud = ONDERHOUD;
+    expect((await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } })).status).not.toBe(503);
+    mem.devices = [];
+    const registratie = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-1', body: { name: 'iPhone · app' } });
+    expect(registratie.status).toBe(200);
+    const fout = await api('POST', '/api/client-errors', { token: 'tok-a', device: 'dev-1', body: { message: 'boem' } });
+    expect(fout.status).toBe(200);
+  });
+
+  it('alleen een banner (zonder schrijfblok) blokkeert niets', async () => {
+    mem.appSettings.onderhoud = { ...ONDERHOUD, schrijfblok: false };
+    expect((await api('POST', '/api/meldingen/gelezen', { token: 'tok-a', body: {} })).status).toBe(200);
+  });
+
+  it('een verlopen `tot` zet het onderhoud vanzelf uit', async () => {
+    mem.appSettings.onderhoud = { ...ONDERHOUD, tot: '2020-01-01T00:00:00+01:00' };
+    expect((await api('GET', '/api/onderhoud/publiek', { device: null })).json.actief).toBe(false);
+    expect((await api('POST', '/api/meldingen/gelezen', { token: 'tok-a', body: {} })).status).toBe(200);
   });
 });
 

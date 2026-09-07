@@ -5,6 +5,7 @@ import { Field, Textarea } from '../components/Field';
 import { Button } from '../components/primitives';
 import { reportUserFeedback } from '../lib/monitoring';
 import type { View } from '../types';
+import { useFoutReferentie } from './FoutReferentie';
 
 /**
  * "Meld een probleem" (testfase): vrije tekst + scherm-context → client_errors
@@ -16,6 +17,9 @@ export function ProbleemMelder({ open, onClose, view }: { open: boolean; onClose
   const [verstuurd, setVerstuurd] = useState(false);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState(false);
+  // Laatste foutreferentie (zie FoutReferentie.tsx): gaat automatisch mee in
+  // het bericht, dan hangt de melding meteen aan de juiste foutgroep.
+  const referentie = useFoutReferentie();
   useEffect(() => {
     if (open) { setTekst(''); setVerstuurd(false); setFout(false); }
   }, [open]);
@@ -38,7 +42,7 @@ export function ProbleemMelder({ open, onClose, view }: { open: boolean; onClose
               // Pas "verstuurd" tonen als de server de melding écht heeft.
               setBezig(true);
               setFout(false);
-              void reportUserFeedback(t, { view }).then((ok) => {
+              void reportUserFeedback(referentie ? `${t} (referentie ${referentie})` : t, { view }).then((ok) => {
                 setBezig(false);
                 if (ok) setVerstuurd(true); else setFout(true);
               });

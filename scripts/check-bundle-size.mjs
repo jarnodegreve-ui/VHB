@@ -32,6 +32,18 @@ for (const f of fs.readdirSync(dir)) {
   total += size;
   perFile.push([f, size]);
 }
+// Startbundel-bewaking: zod (±25 kB gzip) hoort niet in index-*.js — de
+// schil en het loginscherm gebruiken de zod-vrije constanten
+// (shared/schemas/constanten.ts), de schemas laden lazy mee met de
+// beheerschermen. Een onschuldige import trok hem op 07-09 stilletjes de
+// startbundel in en kostte Lighthouse 0,02 op login; daarom een harde fout.
+for (const f of fs.readdirSync(dir)) {
+  if (!/^index-.*\.js$/.test(f)) continue;
+  if (/safeParse|ZodError/.test(fs.readFileSync(path.join(dir, f), 'utf8'))) {
+    console.error(`zod zit in de startbundel (${f}). Importeer in App/LoginView/schil alleen shared/schemas/constanten.ts (of \`import type\`), niet de schemas zelf.`);
+    process.exit(1);
+  }
+}
 const totalKb = Math.round(total / 1024);
 console.log(`Bundelgrootte (gzip, JS): ${totalKb} kB — budget ${BUDGET_KB} kB`);
 if (totalKb > BUDGET_KB) {

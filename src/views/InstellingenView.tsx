@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 import { leesTweeStapsStatus, schakelUit, type TweeStapsStatus } from '../lib/tweeStaps';
 import { notify } from '../lib/ui';
 import type { User, View } from '../types';
+import { OnderhoudBeheer } from './instellingen/OnderhoudBeheer';
 
 // --- Toestellen en sessies (GET /api/me/toestellen) ---
 type EigenToestel = {
@@ -400,6 +401,7 @@ export function InstellingenView({
               uitleg="Bepaal of een nieuw toestel eerst goedgekeurd moet worden voordat het toegang krijgt."
               rechts={<Button variant="secondary" size="sm" onClick={() => onNavigate('toestellen')}>Toestellen</Button>}
             />
+            <OnderhoudBeheer />
             <Rij
               icoon={<HeartPulse size={16} />}
               titel="Systeemstatus"

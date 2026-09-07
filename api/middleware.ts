@@ -4,6 +4,8 @@ import { supabase } from "./db.js";
 import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
 import { getAppSetting, getDevice, koppelAuthId } from "./storage.js";
+import { getOnderhoud } from "./_lib/onderhoud.js";
+import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
 import { getUsersCached, invalidateUsersCache } from "./userCache.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, Role } from "./types.js";
 
@@ -245,6 +247,16 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
 
   if (appUser.isActive === false) {
     return res.status(403).json({ error: "Dit account is gedeactiveerd." });
+  }
+
+  // Onderhoudsmodus met schrijfblok (api/_lib/onderhoudRegels.ts): zolang
+  // de beheerder het blok aan heeft, krijgt elke schrijfactie van een
+  // niet-admin 503 met code 'onderhoud' (de client toont één toast). Lezen
+  // blijft werken; admins gaan altijd door. De instelling is 30 s gecacht en
+  // wordt alleen bij schrijfmethodes geraadpleegd.
+  if (isSchrijfmethode(req.method) && appUser.role !== "admin"
+    && beslisSchrijfblok({ method: req.method, path: req.path, role: appUser.role, onderhoud: await getOnderhoud() })) {
+    return res.status(503).json(ONDERHOUD_FOUT);
   }
 
   // Twee-stapsverificatie voor staf: zie mfaStafVerplicht hierboven.

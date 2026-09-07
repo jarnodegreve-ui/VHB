@@ -5,6 +5,7 @@ import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Button } from './components/primitives';
 import { initMonitoring } from './lib/monitoring';
+import { FoutReferentie } from './app/FoutReferentie';
 
 initMonitoring();
 
@@ -20,6 +21,7 @@ function CrashFallback() {
         <Button variant="primary" className="mt-5" onClick={() => window.location.reload()}>
           Pagina herladen
         </Button>
+        <FoutReferentie className="mt-4" />
       </div>
     </div>
   );
