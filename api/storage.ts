@@ -2304,6 +2304,21 @@ export const deleteDevice = async (userId: string, deviceToken: string): Promise
   if (error) throw error;
 };
 
+/** Alle toestellen van één gebruiker op 'revoked' (uitdienst-flow). Geeft
+ *  het aantal toestellen dat écht van status veranderde, zodat een tweede
+ *  aanroep 0 meldt. Rijen blijven staan (auditspoor in Toestellen). */
+export const revokeAllDevices = async (userId: string): Promise<number> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from('user_devices')
+    .update({ status: 'revoked' satisfies DeviceStatus })
+    .eq('user_id', String(userId))
+    .neq('status', 'revoked')
+    .select('device_token');
+  if (error) throw error;
+  return (data ?? []).length;
+};
+
 // --- Swaps ---
 
 export const getSwapsData = async () => {

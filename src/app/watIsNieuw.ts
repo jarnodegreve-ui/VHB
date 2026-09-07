@@ -17,6 +17,15 @@ export type WatIsNieuwItem = {
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-07',
+    titel: 'Uit dienst in één handeling',
+    regels: {
+      staf: [
+        'Gebruikersbeheer: “Uit dienst” in het rijmenu deactiveert het account, trekt alle toestellen in en stopt de pushmeldingen in één keer (admin).',
+      ],
+    },
+  },
+  {
     id: '2026-09-06',
     titel: 'Meldingen, offline en je eigen dashboard',
     regels: {
