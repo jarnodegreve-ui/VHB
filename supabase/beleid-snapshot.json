@@ -1,0 +1,2207 @@
+{
+  "functies": [
+    {
+      "definitie": "CREATE OR REPLACE FUNCTION public.bump_planning_version() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' AS $function$ begin insert into public.planning_version (id, version, updated_at) values (true, 1, now()) on conflict (id) do update set version = public.planning_version.version + 1, updated_at = now(); return null; end; $function$",
+      "execute": [],
+      "functie": "bump_planning_version()",
+      "security_definer": true
+    },
+    {
+      "definitie": "CREATE OR REPLACE FUNCTION public.current_app_user_id() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO '' AS $function$ select id from public.users where isactive and ( authid = (select auth.uid()) or (authid is null and lower(email) = lower((select auth.email()))) ) order by authid is null limit 1 $function$",
+      "execute": [
+        "authenticated"
+      ],
+      "functie": "current_app_user_id()",
+      "security_definer": true
+    },
+    {
+      "definitie": "CREATE OR REPLACE FUNCTION public.current_app_user_role() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO '' AS $function$ select role from public.users where isactive and ( authid = (select auth.uid()) or (authid is null and lower(email) = lower((select auth.email()))) ) order by authid is null limit 1 $function$",
+      "execute": [
+        "authenticated"
+      ],
+      "functie": "current_app_user_role()",
+      "security_definer": true
+    },
+    {
+      "definitie": "CREATE OR REPLACE FUNCTION public.is_active_app_user() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO '' AS $function$ select public.current_app_user_role() is not null $function$",
+      "execute": [
+        "authenticated"
+      ],
+      "functie": "is_active_app_user()",
+      "security_definer": true
+    },
+    {
+      "definitie": "CREATE OR REPLACE FUNCTION public.replace_planning_and_matrix_periode(matrix_rows jsonb, shifts jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$ declare span_start text; span_end text; buiten_bereik integer; matrix_count integer; shift_count integer := 0; begin if matrix_rows is null or jsonb_typeof(matrix_rows) <> 'array' or jsonb_array_length(matrix_rows) = 0 then raise exception 'Lege matrix-set geweigerd: er valt geen periode uit af te leiden.'; end if; -- Élke rij moet een geldige ISO-datum hebben — niet alleen de extremen: -- een kapotte rij middenin zou anders pas bij de insert falen, met een -- cryptische Postgres-fout i.p.v. deze melding. if exists ( select 1 from jsonb_array_elements(matrix_rows) as elem where (elem->>'source_date') is null or (elem->>'source_date') !~ '^\\d{4}-\\d{2}-\\d{2}$' ) then raise exception 'Matrixrijen zonder geldige source_date (YYYY-MM-DD) — periode niet af te leiden.'; end if; -- Te vervangen bereik = het datumbereik van het bestand zelf. select min(elem->>'source_date'), max(elem->>'source_date') into span_start, span_end from jsonb_array_elements(matrix_rows) as elem; -- Vangnet: elke dienst hoort binnen het matrixbereik te vallen (de opbouw -- werkt per matrixrij en ruilen verleggen alleen driverId, nooit de datum). -- Een dienst erbuiten zou blijven plakken op een dag die deze import niet -- vervangt, en bij een latere import van díe periode een id-conflict geven. if shifts is not null and jsonb_typeof(shifts) = 'array' then select count(*) into buiten_bereik from jsonb_array_elements(shifts) as s where (s->>'date') is null or (s->>'date') !~ '^\\d{4}-\\d{2}-\\d{2}$' or (s->>'date') < span_start or (s->>'date') > span_end; if buiten_bereik > 0 then raise exception 'Import geweigerd: % dienst(en) vallen buiten het matrixbereik % t/m %.', buiten_bereik, span_start, span_end; end if; end if; delete from public.planning_matrix_rows where source_date >= span_start::date and source_date <= span_end::date; -- Expliciete kolommen + coalesce, zelfde reden als replace_planning_matrix_rows: -- jsonb_populate_recordset zet ontbrekende keys op NULL en zou anders de -- defaults van created_at/assignments overschrijven. insert into public.planning_matrix_rows (id, source_date, day_type, assignments, raw_row, created_at) select r.id, r.source_date, r.day_type, coalesce(r.assignments, '{}'::jsonb), r.raw_row, coalesce(r.created_at, now()) from jsonb_populate_recordset(null::public.planning_matrix_rows, matrix_rows) as r; get diagnostics matrix_count = row_count; delete from public.planning where date >= span_start and date <= span_end; if shifts is not null and jsonb_typeof(shifts) = 'array' and jsonb_array_length(shifts) > 0 then insert into public.planning (id, date, \"startTime\", \"endTime\", line, \"busNumber\", loopnr, \"driverId\") select r.id, r.date, r.\"startTime\", r.\"endTime\", r.line, r.\"busNumber\", r.loopnr, r.\"driverId\" from jsonb_populate_recordset(null::public.planning, shifts) as r; get diagnostics shift_count = row_count; end if; -- Bestand met enkel verlof-/afwezigheidscodes: legitiem 0 diensten — de -- planning binnen het bereik is dan bewust leeg (en alléén binnen het bereik). return jsonb_build_object('matrix', matrix_count, 'shifts', shift_count, 'span_start', span_start, 'span_end', span_end); end; $function$",
+      "execute": [],
+      "functie": "replace_planning_and_matrix_periode(matrix_rows jsonb, shifts jsonb)",
+      "security_definer": true
+    },
+    {
+      "definitie": "CREATE OR REPLACE FUNCTION public.replace_planning_matrix_rows(rows jsonb) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$ declare inserted integer; begin if rows is null or jsonb_typeof(rows) <> 'array' or jsonb_array_length(rows) = 0 then raise exception 'Lege matrix-set geweigerd: dit zou de volledige matrixplanning wissen.'; end if; delete from public.planning_matrix_rows where true; insert into public.planning_matrix_rows (id, source_date, day_type, assignments, raw_row, created_at) select r.id, r.source_date, r.day_type, coalesce(r.assignments, '{}'::jsonb), r.raw_row, coalesce(r.created_at, now()) from jsonb_populate_recordset(null::public.planning_matrix_rows, rows) as r; get diagnostics inserted = row_count; return inserted; end; $function$",
+      "execute": [],
+      "functie": "replace_planning_matrix_rows(rows jsonb)",
+      "security_definer": true
+    },
+    {
+      "definitie": "CREATE OR REPLACE FUNCTION public.replace_planning(rows jsonb) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$ declare inserted integer; begin if rows is null or jsonb_typeof(rows) <> 'array' or jsonb_array_length(rows) = 0 then raise exception 'Lege planning-set geweigerd: dit zou alle planning wissen.'; end if; -- `where true` = alle rijen wissen, mét WHERE-clausule (Supabase-guard). delete from public.planning where true; -- Expliciete kolomlijst i.p.v. `select *`: jsonb_populate_recordset zet -- ontbrekende JSON-keys op NULL en zou een toekomstige NOT NULL DEFAULT- -- kolom breken (de bug-klasse die de import al 2x brak). insert into public.planning (id, date, \"startTime\", \"endTime\", line, \"busNumber\", loopnr, \"driverId\") select r.id, r.date, r.\"startTime\", r.\"endTime\", r.line, r.\"busNumber\", r.loopnr, r.\"driverId\" from jsonb_populate_recordset(null::public.planning, rows) as r; get diagnostics inserted = row_count; return inserted; end; $function$",
+      "execute": [],
+      "functie": "replace_planning(rows jsonb)",
+      "security_definer": true
+    },
+    {
+      "definitie": "CREATE OR REPLACE FUNCTION public.security_snapshot() RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO '' AS $function$ select jsonb_build_object( 'versie', 1, 'tabellen', coalesce(( select jsonb_agg(jsonb_build_object( 'tabel', c.relname::text, 'rls', c.relrowsecurity, 'force_rls', c.relforcerowsecurity ) order by c.relname) from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind in ('r', 'p') ), '[]'::jsonb), 'policies', coalesce(( select jsonb_agg(jsonb_build_object( 'schema', p.schemaname::text, 'tabel', p.tablename::text, 'policy', p.policyname::text, 'permissive', p.permissive, 'cmd', p.cmd, 'rollen', ( select coalesce(jsonb_agg(r::text order by r::text), '[]'::jsonb) from unnest(p.roles) as r ), 'using', p.qual, 'with_check', p.with_check ) order by p.schemaname, p.tablename, p.policyname) from pg_catalog.pg_policies p where p.schemaname = 'public' or (p.schemaname = 'realtime' and p.tablename = 'messages') ), '[]'::jsonb), 'grants', coalesce(( select jsonb_agg(jsonb_build_object( 'tabel', g.table_name::text, 'grantee', g.grantee::text, 'privilege', g.privilege_type::text, 'grantable', g.is_grantable = 'YES' ) order by g.table_name, g.grantee, g.privilege_type, g.is_grantable) from information_schema.role_table_grants g where g.table_schema = 'public' and g.grantee in ('PUBLIC', 'anon', 'authenticated', 'service_role') ), '[]'::jsonb), 'functies', coalesce(( select jsonb_agg(jsonb_build_object( 'functie', f.naam, 'security_definer', f.prosecdef, 'definitie', pg_catalog.pg_get_functiondef(f.oid), 'execute', ( select coalesce(jsonb_agg(r::text order by r::text), '[]'::jsonb) from unnest(array['anon', 'authenticated']::name[]) as r where pg_catalog.has_function_privilege(r, f.oid, 'execute') ) ) order by f.naam collate \"C\") from ( select p.oid, p.prosecdef, p.proname::text || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as naam from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prokind in ('f', 'p') and ( p.prosecdef or p.proname in ('current_app_user_role', 'current_app_user_id', 'is_active_app_user', 'security_snapshot') ) ) f ), '[]'::jsonb) ) $function$",
+      "execute": [],
+      "functie": "security_snapshot()",
+      "security_definer": true
+    }
+  ],
+  "grants": [
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "activity_log"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "activity_log"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "activity_log"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "activity_log"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "activity_log"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "activity_log"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "activity_log"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "activity_log"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "app_settings"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "app_settings"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "app_settings"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "app_settings"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "app_settings"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "app_settings"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "app_settings"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "app_settings"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "client_error_status"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "client_error_status"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "client_error_status"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "client_error_status"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "client_error_status"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "client_error_status"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "client_error_status"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "client_errors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "client_errors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "client_errors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "client_errors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "client_errors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "client_errors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "client_errors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "client_errors"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "coverage_expectations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "coverage_expectations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "coverage_expectations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "coverage_expectations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "coverage_expectations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "coverage_expectations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "coverage_expectations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "coverage_expectations"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "dienst_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "dienst_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "dienst_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "dienst_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "dienst_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "dienst_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "dienst_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "dienst_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "diversions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "diversions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "diversions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "diversions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "diversions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "diversions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "diversions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "diversions"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "meldingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "meldingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "meldingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "meldingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "meldingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "meldingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "meldingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "meldingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "ocpi_evses"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ocpi_evses"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ocpi_evses"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ocpi_evses"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ocpi_evses"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ocpi_evses"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ocpi_evses"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ocpi_evses"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "ocpi_locations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ocpi_locations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ocpi_locations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ocpi_locations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ocpi_locations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ocpi_locations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ocpi_locations"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ocpi_locations"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "ocpi_registration"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ocpi_registration"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ocpi_registration"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ocpi_registration"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ocpi_registration"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ocpi_registration"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ocpi_registration"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ocpi_registration"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "planning"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "planning"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "planning"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "planning"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "planning"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "planning"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "planning"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "planning"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "planning_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "planning_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "planning_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "planning_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "planning_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "planning_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "planning_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "planning_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "planning_notes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "planning_notes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "planning_notes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "planning_notes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "planning_notes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "planning_notes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "planning_notes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "planning_notes"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "planning_version"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "planning_version"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "planning_version"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "planning_version"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "planning_version"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "planning_version"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "planning_version"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "planning_version"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "push_subscriptions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "push_subscriptions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "push_subscriptions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "push_subscriptions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "push_subscriptions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "push_subscriptions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "push_subscriptions"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "push_subscriptions"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "ritblaadje"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ritblaadje"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ritblaadje"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ritblaadje"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ritblaadje"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ritblaadje"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ritblaadje"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ritblaadje"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "service_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "service_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "service_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "service_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "service_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "service_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "service_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "service_loops"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "services"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "services"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "services"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "services"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "services"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "services"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "services"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "services"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "swaps"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "swaps"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "swaps"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "swaps"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "swaps"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "swaps"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "swaps"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "swaps"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "update_reads"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "update_reads"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "update_reads"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "update_reads"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "update_reads"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "update_reads"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "update_reads"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "update_reads"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "updates"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "updates"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "updates"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "updates"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "updates"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "updates"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "updates"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "updates"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "user_devices"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "user_devices"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "user_devices"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "user_devices"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "user_devices"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "user_devices"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "user_devices"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "user_devices"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "user_documents"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "user_documents"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "user_documents"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "user_documents"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "user_documents"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "user_documents"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "user_documents"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "user_documents"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "user_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "user_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "user_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "user_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "user_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "user_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "user_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "user_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "users"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "users"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "users"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "users"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "users"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "users"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "users"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "users"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "vehicles"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "vehicles"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "vehicles"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "vehicles"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "vehicles"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "vehicles"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "vehicles"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "vehicles"
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "chauffeur_ids_staff_only",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "chauffeur_ids",
+      "using": "(( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text]))",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "dienst_loops_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "dienst_loops",
+      "using": "true",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "diversions_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "diversions",
+      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "leave_read_involved_or_staff",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "leave",
+      "using": "((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) OR (userid = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "loop_vehicle_defaults_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "loop_vehicle_defaults",
+      "using": "true",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "meldingen_select_own",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "meldingen",
+      "using": "(user_id = ( SELECT public.current_app_user_id() AS current_app_user_id))",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "planning_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "planning",
+      "using": "((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) OR (\"driverId\" = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "planning_codes_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "planning_codes",
+      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "planning_matrix_import_history_staff_only",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "planning_matrix_import_history",
+      "using": "(( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text]))",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "planning_matrix_rows_staff_only",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "planning_matrix_rows",
+      "using": "(( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text]))",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "planning_version_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "planning_version",
+      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "Authenticated can read ritblaadje",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "ritblaadje",
+      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "service_loops_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "service_loops",
+      "using": "true",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "services_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "services",
+      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "swaps_read_involved_or_staff",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "swaps",
+      "using": "((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) OR (requesterid = ( SELECT public.current_app_user_id() AS current_app_user_id)) OR (targetdriverid = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "updates_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "updates",
+      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "users_select_self_or_staff",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "users",
+      "using": "((isactive AND ((authid = ( SELECT auth.uid() AS uid)) OR ((authid IS NULL) AND (lower(email) = lower(( SELECT auth.email() AS email)))))) OR (( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])))",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "vehicles_read_authenticated",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "public",
+      "tabel": "vehicles",
+      "using": "true",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "permissive": "PERMISSIVE",
+      "policy": "vhb_aanwezigheid_staf_lezen",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "realtime",
+      "tabel": "messages",
+      "using": "((realtime.topic() = 'vhb-aanwezigheid'::text) AND (extension = 'presence'::text) AND (( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])))",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "permissive": "PERMISSIVE",
+      "policy": "vhb_aanwezigheid_staf_schrijven",
+      "rollen": [
+        "authenticated"
+      ],
+      "schema": "realtime",
+      "tabel": "messages",
+      "using": null,
+      "with_check": "((realtime.topic() = 'vhb-aanwezigheid'::text) AND (extension = 'presence'::text) AND (( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])))"
+    }
+  ],
+  "tabellen": [
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "activity_log"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "app_settings"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "chauffeur_ids"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "client_error_status"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "client_errors"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "coverage_expectations"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "dienst_loops"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "diversions"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "leave"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "loop_vehicle_defaults"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "meldingen"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ocpi_cdrs"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ocpi_connectors"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ocpi_evses"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ocpi_locations"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ocpi_power_snapshots"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ocpi_registration"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ocpi_sessions"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "planning"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "planning_codes"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "planning_matrix_import_history"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "planning_matrix_rows"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "planning_notes"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "planning_version"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "push_subscriptions"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ritblaadje"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "service_loops"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "services"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "swaps"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "update_reads"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "updates"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "user_devices"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "user_documents"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "user_expiries"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "users"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "vehicles"
+    }
+  ],
+  "versie": 1
+}
