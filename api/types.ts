@@ -236,4 +236,6 @@ export type AuthenticatedRequest = express.Request & {
   authUser?: Pick<SupabaseAuthUser, "id" | "email">;
   appUser?: AppUser;
   accessToken?: string;
+  /** Authenticator Assurance Level uit het JWT: 'aal2' = na twee-stapsverificatie. */
+  aal?: "aal1" | "aal2";
 };

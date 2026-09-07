@@ -78,6 +78,9 @@ vi.mock('../api/db.js', () => {
     'tok-planner': 'planner@vhb.be',
     'tok-a': 'a@vhb.be',
     'tok-b': 'b@vhb.be',
+    // Zelfde accounts, maar met een aal2-claim (na twee-stapsverificatie).
+    'tok-planner-2fa': 'planner@vhb.be',
+    'tok-admin-2fa': 'admin@vhb.be',
   };
   return {
     supabase: {
@@ -90,8 +93,9 @@ vi.mock('../api/db.js', () => {
           if (token === 'tok-storing' || token === 'tok-auth-500') return { data: null, error: { name: 'AuthRetryableFetchError', message: 'fetch failed', status: 0 } };
           if (token === 'tok-verlopen') return { data: null, error: { name: 'AuthInvalidJwtError', message: 'JWT has expired', status: 400 } };
           const email = tokenToEmail[token];
+          const basis = token.replace(/-2fa$/, '');
           return email
-            ? { data: { claims: { sub: `auth-${token}`, email } }, error: null }
+            ? { data: { claims: { sub: `auth-${basis}`, email, aal: token.endsWith('-2fa') ? 'aal2' : 'aal1' } }, error: null }
             : { data: null, error: { name: 'AuthInvalidJwtError', message: 'invalid JWT', status: 401 } };
         },
         getUser: async (token: string) => {
@@ -158,6 +162,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   return {
     ...orig,
     getUsersData: async () => mem.users,
+    getRecentLogins: async () => [],
     koppelAuthId: async (userId: string, authId: string) => { const u = mem.users.find((x: any) => String(x.id) === String(userId)); if (u) u.authId = authId; },
     getPlanningNotes: async (o: any) => mem.planningNotes.filter((n: any) => (!o.driverId || n.driverId === o.driverId) && n.date >= o.fromIso && n.date <= o.toIso),
     upsertPlanningNote: async (driverId: string, date: string, note: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); mem.planningNotes.push({ driverId, date, note }); },
@@ -4658,5 +4663,39 @@ describe('eigen voorkeuren (PATCH /api/me/voorkeuren)', () => {
     await api('PATCH', '/api/me/voorkeuren', { token: 'tok-b', body: { dashboard: { verborgen: [], volgorde: ['vandaag'] } } });
     expect(mem.users.find((u: any) => u.id === '3').dashboardVoorkeuren).toBeUndefined();
     expect(mem.users.find((u: any) => u.id === '4').dashboardVoorkeuren).toEqual({ verborgen: [], volgorde: ['vandaag'] });
+  });
+});
+
+describe('twee-stapsverificatie voor staf (MFA_STAF=aan, verbeterronde 07-09 nr. 8)', () => {
+  const vorige = process.env.MFA_STAF;
+  beforeEach(() => { process.env.MFA_STAF = 'aan'; });
+  afterEach(() => { if (vorige === undefined) delete process.env.MFA_STAF; else process.env.MFA_STAF = vorige; });
+
+  it('weigert staf op aal1 met 403 mfa_required, behalve op de exempt-paden', async () => {
+    const res = await api('GET', '/api/users', { token: 'tok-planner' });
+    expect(res.status).toBe(403);
+    expect(res.json.code).toBe('mfa_required');
+    // Profiel en beveiligingsoverzicht blijven bereikbaar: die zijn nodig
+    // om de code te kunnen invoeren of in te schrijven.
+    expect((await api('GET', '/api/me', { token: 'tok-planner' })).status).toBe(200);
+    const bev = await api('GET', '/api/me/beveiliging', { token: 'tok-planner' });
+    expect(bev.status).toBe(200);
+    expect(bev.json).toMatchObject({ staf: true, mfaVerplicht: true, aal: 'aal1' });
+  });
+
+  it('laat staf op aal2 door en chauffeurs altijd', async () => {
+    expect((await api('GET', '/api/users', { token: 'tok-planner-2fa' })).status).toBe(200);
+    expect((await api('GET', '/api/users', { token: 'tok-admin-2fa' })).status).toBe(200);
+    const chauffeur = await api('GET', '/api/me/beveiliging', { token: 'tok-a' });
+    expect(chauffeur.status).toBe(200);
+    expect(chauffeur.json).toMatchObject({ staf: false, mfaVerplicht: false });
+    expect((await api('GET', '/api/leave', { token: 'tok-a' })).status).toBe(200);
+  });
+
+  it('zonder MFA_STAF=aan is aal1 voor staf gewoon toegestaan', async () => {
+    process.env.MFA_STAF = 'uit';
+    expect((await api('GET', '/api/users', { token: 'tok-planner' })).status).toBe(200);
+    const bev = await api('GET', '/api/me/beveiliging', { token: 'tok-planner' });
+    expect(bev.json.mfaVerplicht).toBe(false);
   });
 });

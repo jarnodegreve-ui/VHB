@@ -8,9 +8,9 @@ import { TABLE_PROBES } from "./schemaProbes.js";
 
 import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
-import type { AppUser, AuthenticatedRequest, IncomingUser } from "./types.js";
+import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
-import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isRosteringExportAuthorized } from "./middleware.js";
+import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isRosteringExportAuthorized } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
@@ -126,6 +126,7 @@ import {
   storeImportSnapshot,
   getImportSnapshot,
   restorePlanningAndMatrixSnapshot,
+  getRecentLogins,
 } from "./storage.js";
 
 dotenv.config();
@@ -352,6 +353,47 @@ const runSchemaCheck = async (res: express.Response) => {
 
 app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
   res.json(req.appUser);
+});
+
+// Instellingen › Beveiliging + de pre-app-beslissing "moet deze staf-gebruiker
+// nu een code invoeren of zich inschrijven?". MFA-exempt (zie middleware):
+// dit is juist de route die vóór de code gelezen wordt.
+app.get("/api/me/beveiliging", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const user = req.appUser!;
+    const staf = isStafRol(user.role);
+    const aanmeldingen = await getRecentLogins(String(user.id));
+    res.json({ staf, mfaVerplicht: staf && mfaStafVerplicht(), aal: req.aal ?? "aal1", aanmeldingen });
+  } catch (err) {
+    console.error("Beveiligingsoverzicht mislukt:", err);
+    res.status(500).json({ error: "Beveiligingsoverzicht kon niet geladen worden." });
+  }
+});
+
+// Admin: twee-stapsverificatie van een collega resetten (telefoon kwijt).
+// Verwijdert alle TOTP-factoren in Supabase Auth; bij de volgende aanmelding
+// schrijft de collega zich opnieuw in.
+app.post("/api/admin/users/:id/mfa-reset", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: "Service-role niet geconfigureerd." });
+    const id = String(req.params.id ?? "");
+    const target = ((await getUsersData()) as AppUserIntern[]).find((u) => String(u.id) === id);
+    if (!target) return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    if (!target.authId) return res.status(409).json({ error: "Deze gebruiker heeft nog geen gekoppelde aanmelding." });
+    const { data, error } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId: target.authId });
+    if (error) throw error;
+    let verwijderd = 0;
+    for (const factor of data?.factors ?? []) {
+      const { error: delErr } = await supabaseAdmin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: target.authId });
+      if (delErr) throw delErr;
+      verwijderd += 1;
+    }
+    await logActivity(req, "users", "Twee-stapsverificatie gereset", `${target.name}: ${verwijderd} ${verwijderd === 1 ? "factor" : "factoren"} verwijderd door ${req.appUser!.name}.`, { type: "user", id });
+    res.json({ success: true, verwijderd });
+  } catch (err) {
+    console.error("MFA-reset mislukt:", err);
+    res.status(500).json({ error: "Twee-stapsverificatie resetten is mislukt." });
+  }
 });
 
 app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, res) => {

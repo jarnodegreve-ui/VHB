@@ -8,6 +8,9 @@ import { useRoute, routeUitUrl } from './app/router';
 import { magView, routeVan } from './app/routes';
 import { SidebarNav } from './app/SidebarNav';
 import { SessieLaden, ProfielLaden, PrintLaden, ConfigOntbreekt, ToestelGeblokkeerd } from './app/PreAppScreens';
+import { TweeStapsScherm } from './app/TweeStapsScherm';
+import { bepaalTweeStapsStap, leesTweeStapsStatus } from './lib/tweeStaps';
+import { GEDEELD_TOESTEL_EVENT, isGedeeldToestel, useInactiviteitsUitlog } from './lib/inactiviteit';
 import { AppSkeleton, heeftOpgeslagenSessie } from './app/AppSkeleton';
 import { ProbleemMelder } from './app/ProbleemMelder';
 import { useAppData } from './app/useAppData';
@@ -225,7 +228,7 @@ export default function App() {
   const laadfoutenRef = useRef<Set<string>>(new Set());
   const laadfoutTimerRef = useRef<number | null>(null);
   // Reden van een gedwongen uitlog, door te geven aan het inlogscherm.
-  const [uitlogMelding, setUitlogMelding] = useState<'sessie' | 'account' | ''>('');
+  const [uitlogMelding, setUitlogMelding] = useState<'sessie' | 'account' | 'inactief' | ''>('');
   // Dubbele-init-guard: bootstrap én het INITIAL_SESSION/SIGNED_IN-event
   // proberen allebei te initialiseren; per gebruiker doen we het één keer.
   // `initialized` = klaar (blijft na succes); `initializing` = nú bezig, en
@@ -458,6 +461,10 @@ export default function App() {
   const [pushEnabled, setPushEnabled] = useState(false);
   // Toestel-whitelist: 'pending'/'revoked' → geblokkeerd-scherm i.p.v. de app.
   const [deviceBlocked, setDeviceBlocked] = useState<'pending' | 'revoked' | null>(null);
+  // Twee-stapsverificatie (staf): tussenscherm vóór de app, zie initializeAuthenticatedApp.
+  const [tweeStaps, setTweeStaps] = useState<{ stap: 'code' | 'inschrijven'; factorId: string | null } | null>(null);
+  // Gedeeld toestel (Instellingen › Beveiliging): automatisch afmelden na een half uur stilte.
+  const [gedeeldToestel, setGedeeldToestel] = useState<boolean>(() => (typeof window !== 'undefined' ? isGedeeldToestel() : false));
 
   useEffect(() => {
     if (!currentUser || !session?.access_token || !isPushSupported()) return;
@@ -668,6 +675,7 @@ export default function App() {
         if (isPushSupported()) void unsubscribeFromPush({}).catch(() => {});
         setPushEnabled(false);
         setDeviceBlocked(null);
+        setTweeStaps(null);
         initializedUserIdRef.current = null;
         initializingUserIdRef.current = null;
         resetAll();
@@ -728,11 +736,25 @@ export default function App() {
       setDeviceBlocked(code === 'device_revoked' ? 'revoked' : 'pending');
       void wisOfflineCaches(); // ingetrokken/wachtend toestel: geen offline rooster of ritblad meer
     };
+    // Server zegt 403 mfa_required (staf zonder code in deze sessie): naar het
+    // codescherm, of naar inschrijven als er nog geen authenticator is.
+    const onMfaRequired = () => {
+      void leesTweeStapsStatus().then((status) => {
+        setTweeStaps(status?.factorId ? { stap: 'code', factorId: status.factorId } : { stap: 'inschrijven', factorId: null });
+      });
+    };
+    const onGedeeldToestel = (event: Event) => {
+      setGedeeldToestel(!!(event as CustomEvent<{ aan: boolean }>).detail?.aan);
+    };
     window.addEventListener('vhb-auth-expired', onExpired);
     window.addEventListener('vhb-device-blocked', onDeviceBlocked as EventListener);
+    window.addEventListener('vhb-mfa-required', onMfaRequired);
+    window.addEventListener(GEDEELD_TOESTEL_EVENT, onGedeeldToestel);
     return () => {
       window.removeEventListener('vhb-auth-expired', onExpired);
       window.removeEventListener('vhb-device-blocked', onDeviceBlocked as EventListener);
+      window.removeEventListener('vhb-mfa-required', onMfaRequired);
+      window.removeEventListener(GEDEELD_TOESTEL_EVENT, onGedeeldToestel);
     };
   }, []);
 
@@ -755,7 +777,7 @@ export default function App() {
   // gedeactiveerd account). Eén keer per sessie: onAuthStateChange(SIGNED_OUT)
   // wist verder alle state en toont LoginView.
   const forceSignOutRef = useRef(false);
-  const forceSignOut = async (msg: string, reden: 'sessie' | 'account' = 'sessie') => {
+  const forceSignOut = async (msg: string, reden: 'sessie' | 'account' | 'inactief' = 'sessie') => {
     if (forceSignOutRef.current) return;
     forceSignOutRef.current = true;
     // Vanaf hier is élke lopende fetch gedoemd: hun catch-blokken mogen geen
@@ -861,6 +883,25 @@ export default function App() {
       }
       setDeviceBlocked(null);
       const appUser = await fetchCurrentUser(accessToken);
+      // Twee-stapsverificatie (staf): ingeschreven maar nog geen code in deze
+      // sessie = codescherm; geen authenticator terwijl de server hem eist =
+      // inschrijfscherm. Chauffeurs slaan dit over. Fail-open: lukt de status
+      // niet (mock-Supabase, oude sessie), dan gaat de app gewoon door en
+      // vangt de 403 mfa_required van de server het alsnog.
+      if (appUser.role === 'planner' || appUser.role === 'admin') {
+        const [status, beveiliging] = await Promise.all([
+          leesTweeStapsStatus(),
+          apiFetch('/api/me/beveiliging', { accessToken }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as Promise<{ mfaVerplicht?: boolean } | null>,
+        ]);
+        const stap = bepaalTweeStapsStap(status, !!beveiliging?.mfaVerplicht);
+        if (stap !== 'geen') {
+          setTweeStaps({ stap, factorId: status?.factorId ?? null });
+          setIsInitialLoad(false);
+          initializingUserIdRef.current = null; // na de code opnieuw initialiseren
+          return;
+        }
+      }
+      setTweeStaps(null);
       // Gedeeld toestel (depot-tablet): logt er een ándere gebruiker in dan
       // de vorige keer, wis dan Cache Storage. Uitloggen doet dat al, maar
       // een sessie die verlóópt niet — en dan kon de offline-fallback van de
@@ -1039,6 +1080,12 @@ export default function App() {
     }
   };
 
+  // Gedeeld toestel: na 30 minuten zonder aanraking terug naar het
+  // loginscherm, met uitleg (verbeterronde 07-09, nr. 12).
+  useInactiviteitsUitlog(gedeeldToestel && !!currentUser, () => {
+    void forceSignOut('Automatisch afgemeld na een half uur zonder activiteit.', 'inactief');
+  });
+
   // Warme start (opgeslagen sessie): meteen de skeleton-schil; koude start: het
   // carbon laadscherm — dat wordt zo het inlogscherm.
   if (!authReady) return warmeStart ? <AppSkeleton /> : <SessieLaden />;
@@ -1104,6 +1151,28 @@ export default function App() {
         onLogin={handleLogin}
         recoveryMode
         onRecoveryComplete={async () => { setRecoveryMode(false); }}
+      />
+    );
+  }
+
+  // Twee-stapsverificatie: ingelogd, maar de code (of de inschrijving) ontbreekt nog.
+  if (tweeStaps && session) {
+    return (
+      <TweeStapsScherm
+        stap={tweeStaps.stap}
+        factorId={tweeStaps.factorId}
+        onLogout={handleLogout}
+        onKlaar={async () => {
+          // challengeAndVerify gaf een nieuwe (aal2-)sessie; die opnieuw
+          // ophalen en de app alsnog initialiseren.
+          const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } };
+          const verse = data.session ?? session;
+          setSession(verse);
+          setTweeStaps(null);
+          initializedUserIdRef.current = null;
+          initializingUserIdRef.current = null;
+          void initializeAuthenticatedApp(verse.access_token, verse.user?.id);
+        }}
       />
     );
   }

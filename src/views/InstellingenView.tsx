@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { BellRing, CalendarPlus, HeartPulse, Info, KeyRound, LifeBuoy, LogOut, Monitor, Moon, Smartphone, Tablet } from 'lucide-react';
+import { BellRing, CalendarPlus, Clock, HeartPulse, Info, KeyRound, LifeBuoy, LogOut, Monitor, Moon, ShieldCheck, Smartphone, Tablet, Users } from 'lucide-react';
 import { Card, CardHeader } from '../components/Card';
-import { ConfirmationModal, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
+import { Modal } from '../components/Modal';
 import { Badge, Button, Chip, Switch } from '../components/primitives';
 import { ActieMenu } from '../components/ActieMenu';
+import { TweeStapsCode, TweeStapsInschrijving } from '../components/TweeStapsInschrijving';
 import { apiJson } from '../lib/api';
 import { BUILD_INFO } from '../lib/appVersion';
 import { formatRelatief } from '../lib/format';
+import { isGedeeldToestel, zetGedeeldToestel } from '../lib/inactiviteit';
 import { supabase } from '../lib/supabase';
+import { leesTweeStapsStatus, schakelUit, type TweeStapsStatus } from '../lib/tweeStaps';
 import { notify } from '../lib/ui';
 import type { User, View } from '../types';
 
@@ -152,6 +156,145 @@ function ToestellenSectie() {
   );
 }
 
+// --- Beveiliging (GET /api/me/beveiliging + Supabase MFA) ---
+type Beveiliging = { staf: boolean; mfaVerplicht: boolean; aal: 'aal1' | 'aal2'; aanmeldingen: Array<{ at: string; action: string }> };
+
+/**
+ * Twee-stapsverificatie, gedeeld toestel en laatste aanmeldingen op één
+ * rustige plek (verbeterronde 07-09, nrs. 5, 8 en 12). Toestellen en
+ * sessies staat er als eigen kaart direct onder.
+ */
+function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePassword: () => void }) {
+  const staf = user.role === 'planner' || user.role === 'admin';
+  const [info, setInfo] = useState<Beveiliging | null>(null);
+  const [status, setStatus] = useState<TweeStapsStatus | null | undefined>(undefined);
+  const [modal, setModal] = useState<'inschrijven' | 'uitschakelen' | null>(null);
+  const [gedeeld, setGedeeld] = useState<boolean>(() => isGedeeldToestel());
+  const [bezig, setBezig] = useState(false);
+
+  const laad = async () => {
+    try { setInfo(await apiJson<Beveiliging>('/api/me/beveiliging')); } catch { setInfo(null); }
+    if (staf) setStatus(await leesTweeStapsStatus());
+  };
+  useEffect(() => { void laad(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user.id]);
+
+  const tweeStapsAan = !!status?.factorId;
+  const uitschakelen = async () => {
+    if (!status?.factorId) return;
+    setBezig(true);
+    try {
+      await schakelUit(status.factorId);
+      notify('Twee-stapsverificatie staat uit.', 'success');
+      setModal(null);
+      await laad();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Uitschakelen is mislukt.', 'error');
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  const tweeStapsUitleg = status === undefined
+    ? 'Status ophalen…'
+    : status === null
+      ? 'Status kon niet gelezen worden. Vernieuw de pagina en probeer opnieuw.'
+      : tweeStapsAan
+        ? `Aan. Bij elke aanmelding vraagt het portaal naast je wachtwoord een code uit je authenticator-app.${info?.mfaVerplicht ? ' Verplicht voor planners en beheerders.' : ''}`
+        : info?.mfaVerplicht
+          ? 'Verplicht voor planners en beheerders, maar nog niet ingesteld op dit account.'
+          : 'Uit. Voeg een code uit een authenticator-app toe aan je wachtwoord; een gestolen wachtwoord alleen is dan niet genoeg.';
+
+  return (
+    <>
+      <Card>
+        <CardHeader title="Beveiliging" description="Wachtwoord, twee-stapsverificatie en wie zich wanneer aanmeldde." />
+        <div className="mt-4">
+          <Rij
+            icoon={<KeyRound size={16} />}
+            titel="Wachtwoord"
+            uitleg={user.email || 'Geen e-mailadres bekend.'}
+            rechts={<Button variant="secondary" size="sm" onClick={onChangePassword}>Wijzigen</Button>}
+          />
+          {staf && (
+            <Rij
+              icoon={<ShieldCheck size={16} />}
+              titel={(
+                <span className="flex flex-wrap items-center gap-2">
+                  Twee-stapsverificatie
+                  {status !== undefined && status !== null && (tweeStapsAan ? <Badge tone="emerald" stil>Aan</Badge> : <Badge tone={info?.mfaVerplicht ? 'amber' : 'slate'} stil>Uit</Badge>)}
+                </span>
+              )}
+              uitleg={tweeStapsUitleg}
+              rechts={tweeStapsAan
+                ? (info?.mfaVerplicht
+                  ? <Chip tone="slate" mono={false}>Verplicht</Chip>
+                  : <Button variant="secondary" size="sm" disabled={bezig} onClick={() => setModal('uitschakelen')}>Uitschakelen</Button>)
+                : <Button variant={info?.mfaVerplicht ? 'primary' : 'secondary'} size="sm" disabled={status === undefined || status === null} onClick={() => setModal('inschrijven')}>Instellen</Button>}
+            />
+          )}
+          <Rij
+            icoon={<Users size={16} />}
+            titel="Gedeeld toestel"
+            uitleg={gedeeld
+              ? 'Aan. Na een half uur zonder activiteit meldt het portaal je op dit toestel automatisch af.'
+              : 'Uit. Zet dit aan op een toestel dat meerdere collega’s gebruiken, zoals de tablet in het lokaal.'}
+            rechts={<Switch checked={gedeeld} onChange={() => { const naar = !gedeeld; setGedeeld(naar); zetGedeeldToestel(naar); }} label="Gedeeld toestel" />}
+          />
+          <Rij
+            icoon={<Clock size={16} />}
+            titel="Laatste aanmeldingen"
+            uitleg={info === null
+              ? 'Aanmeldingen konden niet geladen worden.'
+              : info.aanmeldingen.length === 0
+                ? 'Nog geen aanmeldingen geregistreerd.'
+                : 'De recentste momenten waarop dit account zich aanmeldde of actief werd. Herken je er een niet, log dan overal uit en wijzig je wachtwoord.'}
+            rechts={<span />}
+          />
+          {info && info.aanmeldingen.length > 0 && (
+            <ul className="mt-1 grid gap-1 pl-11 text-sm text-slate-600 sm:grid-cols-2">
+              {info.aanmeldingen.map((a) => (
+                <li key={a.at} className="flex items-center gap-2">
+                  <span className="text-slate-900">{formatRelatief(a.at)}</span>
+                  <span className="text-micro">{a.action === 'Actief' ? 'actief' : 'aangemeld'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Card>
+
+      <Modal open={modal === 'inschrijven'} onClose={() => setModal(null)} maxWidth="sm" ariaLabel="Twee-stapsverificatie instellen">
+        <ModalHeader title="Twee-stapsverificatie instellen" onClose={() => setModal(null)} />
+        <div className="mt-4">
+          <TweeStapsInschrijving
+            onAnnuleer={() => setModal(null)}
+            onKlaar={() => {
+              setModal(null);
+              notify('Twee-stapsverificatie staat aan. Bij je volgende aanmelding vraagt het portaal de code.', 'success');
+              void laad();
+            }}
+          />
+        </div>
+      </Modal>
+
+      <Modal open={modal === 'uitschakelen'} onClose={() => setModal(null)} maxWidth="sm" ariaLabel="Twee-stapsverificatie uitschakelen">
+        <ModalHeader title="Twee-stapsverificatie uitschakelen" onClose={() => setModal(null)} />
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">Daarna is je wachtwoord weer de enige sleutel. Bevestig eerst met een code uit je app.</p>
+        <div className="mt-4">
+          {status?.factorId && status.huidig !== 'aal2'
+            ? <TweeStapsCode factorId={status.factorId} annuleerLabel="Annuleren" onAnnuleer={() => setModal(null)} onKlaar={() => { void laad().then(() => void uitschakelen()); }} />
+            : (
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setModal(null)} disabled={bezig}>Annuleren</Button>
+                <Button variant="danger" onClick={() => { void uitschakelen(); }} disabled={bezig}>Uitschakelen</Button>
+              </div>
+            )}
+        </div>
+      </Modal>
+    </>
+  );
+}
+
 /**
  * Instellingen: alles wat vroeger verspreid stond over het avatar-menu, het
  * rooster (agenda-koppeling) en de beheerschermen, op één adres
@@ -203,7 +346,7 @@ export function InstellingenView({
   const isAdmin = user.role === 'admin';
   return (
     <PageShell>
-      <PageHeader title="Instellingen" description="Weergave, meldingen, account en koppelingen." />
+      <PageHeader title="Instellingen" description="Weergave, meldingen, account, beveiliging en koppelingen." />
 
       <Card>
         <CardHeader title="Weergave" />
@@ -235,12 +378,6 @@ export function InstellingenView({
         <CardHeader title="Account" aside={<Badge tone="oker">{rolLabel}</Badge>} />
         <div className="mt-4">
           <Rij
-            icoon={<KeyRound size={16} />}
-            titel={user.name}
-            uitleg={user.email || 'Geen e-mailadres bekend.'}
-            rechts={<Button variant="secondary" size="sm" onClick={onChangePassword}>Wachtwoord wijzigen</Button>}
-          />
-          <Rij
             icoon={<CalendarPlus size={16} />}
             titel="Agenda-koppeling"
             uitleg="Abonneer je agenda op je rooster of download je diensten als agendabestand."
@@ -248,6 +385,8 @@ export function InstellingenView({
           />
         </div>
       </Card>
+
+      <BeveiligingSectie user={user} onChangePassword={onChangePassword} />
 
       <ToestellenSectie />
 
