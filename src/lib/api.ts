@@ -101,7 +101,7 @@ const huidigToken = async (): Promise<string | undefined> => {
 
 const wacht = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
-const meld = (naam: 'vhb-auth-expired' | 'vhb-device-blocked', detail: Record<string, string>) => {
+const meld = (naam: 'vhb-auth-expired' | 'vhb-device-blocked' | 'vhb-mfa-required', detail: Record<string, string>) => {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(naam, { detail }));
 };
 
@@ -154,7 +154,10 @@ async function verstuur(
     }
     // Toestel-whitelist: het toestel is (intussen) niet meer goedgekeurd →
     // App toont het geblokkeerd-scherm i.p.v. losse fout-toasts per call.
-    if (body?.code === 'device_pending' || body?.code === 'device_unknown' || body?.code === 'device_revoked') {
+    if (body?.code === 'mfa_required') {
+      // Staf zonder code in deze sessie: App toont het codescherm.
+      meld('vhb-mfa-required', { code: body.code });
+    } else if (body?.code === 'device_pending' || body?.code === 'device_unknown' || body?.code === 'device_revoked') {
       meld('vhb-device-blocked', { code: body.code });
       throw new Error(detail || 'Dit toestel heeft geen toegang.');
     }
