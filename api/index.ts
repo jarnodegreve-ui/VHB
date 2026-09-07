@@ -10,6 +10,7 @@ import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfi
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
+import { bouwSolverVerzoek, normaliseerContracturen, tekenVerzoek, CONTRACTUREN_STANDAARD, REKENTIJD_STANDAARD_S, SOLVER_URL_STANDAARD } from "./_lib/roosterSolver.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isRosteringExportAuthorized } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
@@ -3422,6 +3423,43 @@ app.get("/api/services", authenticate, async (req, res) => {
 // solver headless kan ophalen zonder gebruikersaccount (CRON_SECRET werkt
 // alleen nog als overgang zolang het eigen secret niet gezet is — zie
 // isRosteringExportAuthorized).
+// Roostersolver in het portaal (verbeterronde 07-09, nr. 13): het portaal
+// bouwt het solve-verzoek uit zijn eigen data en tekent het met
+// ROSTERING_EXPORT_SECRET; de browser van de planner stuurt het byte-exact
+// naar de solver op Render (header X-Solver-Signature). Zo kent de solver
+// geen portaalsessie en loopt een berekening van een minuut niet tegen de
+// Vercel-functietijd aan. Zie api/_lib/roosterSolver.ts.
+app.post("/api/rooster/solver-verzoek", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const secret = process.env.ROSTERING_EXPORT_SECRET;
+    if (!secret) return res.status(503).json({ error: "De solver-koppeling is niet geconfigureerd (ROSTERING_EXPORT_SECRET ontbreekt)." });
+    const van = String(req.body?.van ?? "");
+    const tot = String(req.body?.tot ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(van) || !/^\d{4}-\d{2}-\d{2}$/.test(tot) || tot < van) {
+      return res.status(400).json({ error: "Kies een geldige periode (van en tot)." });
+    }
+    const contracturen = normaliseerContracturen(String(req.body?.contracturen ?? CONTRACTUREN_STANDAARD));
+    if (!contracturen) return res.status(400).json({ error: "Contracturen: geef uren per week op, bv. 38 of 38:00." });
+    const rekentijdS = Number(req.body?.rekentijd ?? REKENTIJD_STANDAARD_S);
+    const [users, services, leave, verwachtingen] = await Promise.all([getUsersData(), getServicesData(), getLeaveData({ endOnOrAfter: van }), getCoverageExpectations()]);
+    const { verzoek, waarschuwingen } = bouwSolverVerzoek({ van, tot, door: String(req.appUser!.id), contracturen, rekentijdS: Number.isFinite(rekentijdS) ? rekentijdS : REKENTIJD_STANDAARD_S, users, services, leave, verwachtingen });
+    const json = JSON.stringify(verzoek);
+    await logActivity(req, "planning", "Rooster berekend", `${req.appUser!.name} vroeg een solver-rooster aan voor ${van} t/m ${tot} (${verzoek.chauffeurs.length} chauffeurs, ${verzoek.diensten.length} dienstsjablonen).`);
+    res.json({
+      verzoek: json,
+      handtekening: tekenVerzoek(json, secret),
+      solverUrl: (process.env.ROSTER_SOLVER_URL || SOLVER_URL_STANDAARD).replace(/\/+$/, ""),
+      waarschuwingen,
+      samenvatting: { chauffeurs: verzoek.chauffeurs.length, diensten: verzoek.diensten.length, dagen: verzoek.kalender.length, afwezigheden: verzoek.afwezigheden.length, dagtypes: verzoek.dagtypes.map((d) => d.code) },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Solver-verzoek opbouwen mislukt.";
+    if (/periode|chauffeurs gevonden|negen weken/i.test(msg)) return res.status(400).json({ error: msg });
+    console.error("Solver-verzoek mislukt:", err);
+    res.status(500).json({ error: "Solver-verzoek opbouwen mislukt." });
+  }
+});
+
 app.get("/api/rostering-export", async (req, res) => {
   const handle = async () => {
     try {

@@ -30,6 +30,7 @@ export const VIEW_LOADERS: Record<View, () => Promise<unknown>> = {
   'verlof-kalender': () => import('../views/admin/VerlofKalenderView'),
   ziekte: () => import('../views/admin/ZiekteView'),
   vervaldata: () => import('../views/admin/VervaldataView'),
+  roostersolver: () => import('../views/admin/RoosterSolverView'),
   'beheer-updates': () => import('../views/admin/ManageUpdatesView'),
   'beheer-omleidingen': () => import('../views/admin/ManageDiversionsView'),
   gebruikers: () => import('../views/admin/ManageUsersView'),

@@ -17,6 +17,16 @@ export type WatIsNieuwItem = {
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-08',
+    titel: 'Roostersolver in het portaal',
+    regels: {
+      staf: [
+        'Roostersolver: onder Planning laat je de solver een rooster berekenen uit het dienstoverzicht, de verwachte diensten per dagtype en het goedgekeurde verlof, met Excel-export.',
+      ],
+    },
+    bekijk: { staf: 'roostersolver' },
+  },
+  {
     id: '2026-09-06',
     titel: 'Meldingen, offline en je eigen dashboard',
     regels: {
