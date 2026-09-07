@@ -48,6 +48,8 @@ import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
 import { OmgevingLabel } from './components/OmgevingLabel';
+import { OnderhoudBanner } from './components/OnderhoudBanner';
+import { useOnderhoud } from './app/useOnderhoud';
 import { UserMenu } from './components/UserMenu';
 import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
 import { MeldingenBel } from './components/MeldingenBel';
@@ -517,6 +519,14 @@ export default function App() {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   };
 
+  // Onderhoudsmodus (src/app/useOnderhoud.ts): banner boven de inhoud zolang
+  // actief; bij een geblokkeerde schrijfactie één info-toast.
+  const onderhoudMeldingRef = useRef(0);
+  const onderhoud = useOnderhoud(Boolean(currentUser), (tekst) => {
+    onderhoudMeldingRef.current = Date.now();
+    showToast(tekst, 'info');
+  });
+
   const showToast = (message: string, tone: Toast['tone'] = 'info', action?: Toast['action'], opties?: ToastOpties) => {
     // Sessie loopt af: de catch-blokken van alle lopende calls komen hier
     // tegelijk binnen ("Kon de verlofaanvragen niet laden", "…de dienstruilen
@@ -524,6 +534,10 @@ export default function App() {
     // foutenlog voor één oorzaak — 142 meldingen in twee weken, waarvan het
     // leeuwendeel afgeleid. De sessie zelf is al gemeld op het inlogscherm.
     if (tone === 'error' && sessieBeeindigdRef.current) return;
+    // Schrijfblok van de onderhoudsmodus: de info-toast uit useOnderhoud is
+    // de melding; de rode toast die de aanroeper vlak daarna toont (en het
+    // foutrapport dat daaraan hangt) is geen fout van de app.
+    if (tone === 'error' && Date.now() - onderhoudMeldingRef.current < 3000) return;
     // Elke fout-toast is een gebroken flow — meld die ook aan de monitoring,
     // anders blijven afgehandelde fouten (catch-blokken) onzichtbaar.
     if (tone === 'error') reportHandledError(message);
@@ -1417,6 +1431,11 @@ export default function App() {
               keek je zonder het te weten naar verouderde data. */}
           {/* Mijn dag draagt zijn eigen stille offline-chip (06-09) —
               daar geen kaart erbovenop. */}
+          {onderhoud.actief && (
+            <div className="mx-auto w-full max-w-[1200px]">
+              <OnderhoudBanner onderhoud={onderhoud} tot={onderhoud.tot} className="mb-4" />
+            </div>
+          )}
           {!isOnline && resolvedCurrentView !== 'mijn-dag' && (
             <div className="mx-auto w-full max-w-[1200px]">
               <Card tone="warning" padding="none" className="mb-4 flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-amber-800">

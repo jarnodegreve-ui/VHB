@@ -29,7 +29,9 @@ import { supabase } from './supabase';
  *    servermelding), nooit een uitlog.
  *  - 503 (o.a. code auth_unavailable: Supabase-auth tijdelijk onbereikbaar)
  *    is géén reden om uit te loggen: na de ene herkansing komt de Response
- *    gewoon terug en beslist de aanroeper.
+ *    gewoon terug en beslist de aanroeper. Uitzondering: code 'onderhoud'
+ *    (schrijfblok van de onderhoudsmodus): `vhb-onderhoud` (App toont één
+ *    toast en haalt de banner op) + Error met de servermelding.
  *
  * Twee aparte herkansings-vlaggen i.p.v. één: een 5xx-retry en een 401-refresh
  * zijn losse gebeurtenissen. Met één vlag sloeg een GET die eerst 5xx kreeg en
@@ -101,7 +103,7 @@ const huidigToken = async (): Promise<string | undefined> => {
 
 const wacht = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
-const meld = (naam: 'vhb-auth-expired' | 'vhb-device-blocked', detail: Record<string, string>) => {
+const meld = (naam: 'vhb-auth-expired' | 'vhb-device-blocked' | 'vhb-onderhoud', detail: Record<string, string>) => {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(naam, { detail }));
 };
 
@@ -159,6 +161,14 @@ async function verstuur(
       throw new Error(detail || 'Dit toestel heeft geen toegang.');
     }
     throw new Error(detail || 'Je hebt geen toegang tot deze actie.');
+  }
+  if (response.status === 503 && !isLezen) {
+    const body = await response.clone().json().catch(() => ({} as any));
+    if (body?.code === 'onderhoud') {
+      const tekst: string = body.error || 'Het portaal is even in onderhoud, probeer het zo opnieuw.';
+      meld('vhb-onderhoud', { tekst });
+      throw new Error(tekst);
+    }
   }
   // Eigen schrijfactie: de realtime-echo daarvan hoort geen "bijgewerkt"-toast
   // te geven (src/lib/liveSignaal.ts).

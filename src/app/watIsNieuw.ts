@@ -17,6 +17,17 @@ export type WatIsNieuwItem = {
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-07',
+    titel: 'Onderhoudsmodus en foutreferenties',
+    regels: {
+      staf: [
+        'Onderhoudsmodus (beheerder): zet in Instellingen › Beheer een banner aan voor iedereen en pauzeer desgewenst alle wijzigingen, bijvoorbeeld tijdens een migratie.',
+        'Foutschermen tonen nu een korte referentie; in Systeemstatus › Fouten staat dezelfde code bij de foutgroep, zodat je een melding van een chauffeur meteen terugvindt.',
+      ],
+    },
+    bekijk: { staf: 'instellingen' },
+  },
+  {
     id: '2026-09-06',
     titel: 'Meldingen, offline en je eigen dashboard',
     regels: {
