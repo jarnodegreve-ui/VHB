@@ -3,7 +3,7 @@ import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { valideer } from '../../lib/valideer';
 import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
-import { CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, UserX } from 'lucide-react';
+import { CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
@@ -377,6 +377,27 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
     if (targetIds.size === 0) return notify('Geen gebruikers om te verwijderen (beschermde accounts overgeslagen).', 'error');
     const success = await onSave(users.filter((u) => !targetIds.has(u.id)));
     if (success) { notify(`${targetIds.size} gebruiker(s) verwijderd.`, 'success'); clearSelection(); }
+  };
+
+  // Twee-stapsverificatie resetten (verbeterronde 07-09, nr. 8): voor een
+  // planner/admin die zijn authenticator kwijt is. Verwijdert de factoren in
+  // Supabase Auth; bij de volgende aanmelding schrijft de collega zich
+  // opnieuw in (of meteen, als MFA_STAF=aan).
+  const [mfaResetUser, setMfaResetUser] = useState<User | null>(null);
+  const handleMfaReset = async () => {
+    if (!mfaResetUser) return;
+    const doel = mfaResetUser;
+    setMfaResetUser(null);
+    try {
+      const response = await apiFetch(`/api/admin/users/${doel.id}/mfa-reset`, { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return notify(data.error || 'Resetten is mislukt.', 'error');
+      notify(data.verwijderd > 0
+        ? `Twee-stapsverificatie van ${doel.name} is gereset. Bij de volgende aanmelding stelt ${doel.name} hem opnieuw in.`
+        : `${doel.name} had geen twee-stapsverificatie ingesteld.`, 'success');
+    } catch (error: any) {
+      notify(`Resetten is mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
+    }
   };
 
   const handleResetPassword = async () => {
@@ -782,6 +803,9 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                               <RowMenuItem icon={<FolderOpen size={16} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
                               <RowMenuItem icon={<History size={16} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
                               <RowMenuItem icon={<RotateCcw size={16} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
+                              {(u.role === 'planner' || u.role === 'admin') && (
+                                <RowMenuItem icon={<ShieldOff size={16} />} label="Twee-stapsverificatie resetten" onClick={() => { setMenuUserId(null); setMfaResetUser(u); }} />
+                              )}
                               <RowMenuItem
                                 icon={u.isActive !== false ? <Pause size={16} /> : <Play size={16} />}
                                 label={u.isActive !== false ? 'Gebruiker pauzeren' : 'Gebruiker activeren'}
@@ -1008,6 +1032,16 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
           </>
         )}
       </Modal>
+
+      <ConfirmationModal
+        isOpen={!!mfaResetUser}
+        onClose={() => setMfaResetUser(null)}
+        onConfirm={() => { void handleMfaReset(); }}
+        title="Twee-stapsverificatie resetten?"
+        variant="warning"
+        confirmText="Ja, resetten"
+        message={`De authenticator-koppeling van ${mfaResetUser?.name ?? ''} wordt verwijderd. Bij de volgende aanmelding stelt ${mfaResetUser?.name ?? 'de collega'} twee-stapsverificatie opnieuw in. Doe dit alleen op vraag van de collega zelf.`}
+      />
 
       <Modal open={!!uitDienstUser} onClose={sluitUitDienst} className="flex flex-col !p-0" ariaLabel="Uit dienst">
         {uitDienstUser && (
