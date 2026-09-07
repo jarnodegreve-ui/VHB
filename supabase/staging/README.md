@@ -87,6 +87,9 @@ draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
 51. `supabase/2026-08-22_drop_dubbele_import_history_policy.sql`
 52. `supabase/2026-08-28_rls_inactieve_gebruikers.sql`
 53. `supabase/2026-09-05_users_authid.sql` — RLS-helpers op `authid`; de seed en het accounts-script rekenen hierop
+54. `supabase/2026-09-06_client_errors_groepen.sql`
+55. `supabase/2026-09-06_meldingen.sql`
+56. `supabase/2026-09-07_planning_rls_eigen_chauffeur.sql`, planning-SELECT voor chauffeurs beperkt tot eigen rijen (security-audit 07-09)
 
 **Bewust overgeslagen** (alleen zinvol op het historische productieschema; ze
 falen op een verse database):
