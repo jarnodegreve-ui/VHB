@@ -268,7 +268,10 @@ export function MijnDagView({
                       />
                     </span>
                   )}
-                  <div className={cn('min-w-0 flex-1', gereden && 'opacity-60')}>
+                  {/* Gereden deel gedempt, maar niet onder 4,5:1: op opacity-60
+                      zakte de loop-chip naar 3,57 en faalde Lighthouse-a11y in
+                      CI zodra een dienst van vandaag al voorbij was (07-09). */}
+                  <div className={cn('min-w-0 flex-1', gereden && 'opacity-75')}>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       {/* Groot en mono: tijden zijn het instrumentpaneel, leesbaar op armlengte. */}
                       <p className={cn('text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] lg:text-xl', gereden ? 'text-slate-500' : 'text-slate-900')}>
