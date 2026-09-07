@@ -1,6 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../lib/api';
-import { GEEN_ONDERHOUD, parseOnderhoud, type Onderhoud, type OnderhoudPubliek } from '../../shared/schemas/onderhoud';
+// Bewust alleen de zod-vrije constanten + types: dit bestand zit in de
+// startbundel (App, LoginView); het schema zelf blijft bij het beheerscherm.
+import { GEEN_ONDERHOUD } from '../../shared/schemas/constanten';
+import type { Onderhoud, OnderhoudPubliek } from '../../shared/schemas/onderhoud';
+
+/** Antwoord van GET /api/onderhoud lezen zonder zod; rommel = geen onderhoud. */
+const leesOnderhoud = (json: unknown): Onderhoud => {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return GEEN_ONDERHOUD;
+  const o = json as Record<string, unknown>;
+  if (typeof o.actief !== 'boolean') return GEEN_ONDERHOUD;
+  return {
+    actief: o.actief,
+    tekst: typeof o.tekst === 'string' ? o.tekst : '',
+    schrijfblok: o.schrijfblok === true,
+    ...(typeof o.tot === 'string' && o.tot ? { tot: o.tot } : {}),
+  };
+};
 
 const POLL_MS = 60_000;
 const MELDING_STILTE_MS = 10_000;
@@ -47,7 +63,7 @@ export function useOnderhoud(ingelogd: boolean, opMelding: (tekst: string) => vo
         const res = await apiFetch('/api/onderhoud');
         if (!res.ok) return;
         const json = await res.json().catch(() => null);
-        if (actief) setOnderhoud(parseOnderhoud(json));
+        if (actief) setOnderhoud(leesOnderhoud(json));
       } catch {
         // Stil: de banner is informatief, een mislukte poll mag nooit storen.
       }

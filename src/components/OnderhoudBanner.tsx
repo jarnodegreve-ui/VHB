@@ -1,7 +1,8 @@
 import { Wrench } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '../lib/ui';
-import { ONDERHOUD_STANDAARD_TEKST, type OnderhoudPubliek } from '../../shared/schemas/onderhoud';
+import { ONDERHOUD_STANDAARD_TEKST } from '../../shared/schemas/constanten';
+import type { OnderhoudPubliek } from '../../shared/schemas/onderhoud';
 
 /**
  * Rustige onderhoudsstrook: in de schil een `Card tone="warning"` boven de

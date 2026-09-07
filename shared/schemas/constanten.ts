@@ -12,3 +12,12 @@
 export const WACHTWOORD_MIN = 10;
 
 export const ROLLEN = ['chauffeur', 'planner', 'admin'] as const;
+
+// --- Onderhoudsmodus (shared/schemas/onderhoud.ts) ---
+// Zod-vrij, want de schil (useOnderhoud, OnderhoudBanner) en het loginscherm
+// lezen deze; alleen het beheerscherm (lazy) gebruikt het schema zelf.
+import type { Onderhoud } from './onderhoud.js';
+
+export const ONDERHOUD_TEKST_MAX = 240;
+export const ONDERHOUD_STANDAARD_TEKST = 'Het portaal is even in onderhoud. Bekijken kan, sommige onderdelen werken tijdelijk niet.';
+export const GEEN_ONDERHOUD: Onderhoud = { actief: false, tekst: '', schrijfblok: false };

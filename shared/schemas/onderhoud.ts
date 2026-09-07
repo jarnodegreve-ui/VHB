@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { optioneel } from './basis.js';
+import { GEEN_ONDERHOUD, ONDERHOUD_STANDAARD_TEKST, ONDERHOUD_TEKST_MAX } from './constanten.js';
 
 /**
  * Onderhoudsmodus (verbeterronde 07-09, nr. 4): één app_settings-sleutel
@@ -9,10 +10,12 @@ import { optioneel } from './basis.js';
  * 503 (code 'onderhoud'). `tot` is optioneel: daarna geldt de modus vanzelf
  * niet meer (zie api/_lib/onderhoudRegels.ts).
  *
- * Eén schema voor het formulier én de body van PUT /api/onderhoud.
+ * Eén schema voor het formulier én de body van PUT /api/onderhoud. De
+ * constanten (tekstlimiet, standaardtekst, lege instelling) staan zod-vrij in
+ * constanten.ts: de schil en het loginscherm lezen ze zonder zod in de
+ * startbundel te trekken (±25 kB gzip, Lighthouse-les 07-09).
  */
-export const ONDERHOUD_TEKST_MAX = 240;
-export const ONDERHOUD_STANDAARD_TEKST = 'Het portaal is even in onderhoud. Bekijken kan, sommige onderdelen werken tijdelijk niet.';
+export { GEEN_ONDERHOUD, ONDERHOUD_STANDAARD_TEKST, ONDERHOUD_TEKST_MAX };
 
 export const onderhoudSchema = z.object({
   actief: z.boolean({ error: 'Kies aan of uit' }),
@@ -26,8 +29,6 @@ export type Onderhoud = z.output<typeof onderhoudSchema>;
 
 /** Body van PUT /api/onderhoud (admin). */
 export const onderhoudBodySchema = onderhoudSchema;
-
-export const GEEN_ONDERHOUD: Onderhoud = { actief: false, tekst: '', schrijfblok: false };
 
 /** Onbekende invoer (db-jsonb, API-antwoord) → geldige instelling, anders "geen onderhoud". */
 export const parseOnderhoud = (waarde: unknown): Onderhoud => {
