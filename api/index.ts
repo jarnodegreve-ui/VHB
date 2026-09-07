@@ -3894,6 +3894,16 @@ const staleApprovalError = async (
     : null;
 };
 
+/** Verwijdert de snake_case-databasealiassen uit een client-swaprecord, zodat
+ *  alleen de camelCase-API-velden overblijven (zie toPublicSwap in helpers). */
+const SWAP_DB_ALIASSEN = ["shiftid", "requesterid", "targetdriverid", "createdat", "decidedat", "return_date", "return_code", "swap_type", "shift_date", "shift_line", "target_seen_at"] as const;
+const stripSwapAliassen = (record: any): any => {
+  if (!record || typeof record !== "object") return record;
+  const schoon: Record<string, unknown> = { ...record };
+  for (const alias of SWAP_DB_ALIASSEN) delete schoon[alias];
+  return schoon;
+};
+
 app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
@@ -4261,7 +4271,15 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // nieuw = server-side uit de planning-rij, bestaand = opgeslagen waarde —
     // dit is de sleutel voor de automatische planning-doorvoer hieronder.
     const finalRecords: any[] = [];
-    for (const n of recordsToWrite) {
+    for (const rauw of recordsToWrite) {
+      // Alleen de bekende camelCase-velden gaan door. saveSwapsData haalt de
+      // records door toPublicSwap, en die valt voor élk veld terug op de
+      // snake_case-databasekolom (target_seen_at, decidedat, ...). Een client
+      // die zo'n alias meestuurde omzeilde daarmee de server-overrides
+      // hieronder: targetSeenAt werd wel op prev gezet, maar target_seen_at
+      // bleef in de spread staan en werd alsnog de Gezien-bevestiging
+      // (security-audit 07-09, bevinding 4).
+      const n = stripSwapAliassen(rauw);
       const prev = previousById.get(String(n.id));
       let shiftDate = prev?.shiftDate;
       let shiftLine = prev?.shiftLine;

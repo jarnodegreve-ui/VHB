@@ -248,10 +248,14 @@ export function usePlanningData(ctx: DataCtx) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role]);
 
-  /** Bij uitloggen: de collecties leeg (coverage/notities blijven, zoals voorheen). */
+  /** Bij uitloggen: de collecties leeg. Ook de persoonlijke dienstnotities:
+   *  MijnDagView zoekt ze enkel op datum, dus zonder wissen zag de volgende
+   *  chauffeur op een gedeeld toestel de notitie van de vorige tot zijn eigen
+   *  fetch slaagde (security-audit 07-09, bevinding 11). Coverage blijft. */
   const resetPlanning = () => {
     setShifts([]);
     setServices([]);
+    setMyNotes([]);
     setPlanningMatrixRows([]);
     setPlanningCodes([]);
     setPlanningMatrixHistory([]);
