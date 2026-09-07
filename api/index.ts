@@ -7,10 +7,11 @@ import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
 
 import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
-import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
-import type { AppUser, AuthenticatedRequest, IncomingUser } from "./types.js";
+import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, deletePushSubscriptionsForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
+import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
-import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isRosteringExportAuthorized } from "./middleware.js";
+import { bouwSolverVerzoek, normaliseerContracturen, tekenVerzoek, CONTRACTUREN_STANDAARD, REKENTIJD_STANDAARD_S, SOLVER_URL_STANDAARD } from "./_lib/roosterSolver.js";
+import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isRosteringExportAuthorized } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
@@ -113,6 +114,7 @@ import {
   logCronHeartbeat,
   getCronHeartbeats,
   getDevice,
+  revokeAllDevices,
   getPlanningNotes,
   getMeldingen,
   telOngelezenMeldingen,
@@ -127,6 +129,7 @@ import {
   storeImportSnapshot,
   getImportSnapshot,
   restorePlanningAndMatrixSnapshot,
+  getRecentLogins,
 } from "./storage.js";
 
 dotenv.config();
@@ -357,6 +360,47 @@ const runSchemaCheck = async (res: express.Response) => {
 
 app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
   res.json(req.appUser);
+});
+
+// Instellingen › Beveiliging + de pre-app-beslissing "moet deze staf-gebruiker
+// nu een code invoeren of zich inschrijven?". MFA-exempt (zie middleware):
+// dit is juist de route die vóór de code gelezen wordt.
+app.get("/api/me/beveiliging", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const user = req.appUser!;
+    const staf = isStafRol(user.role);
+    const aanmeldingen = await getRecentLogins(String(user.id));
+    res.json({ staf, mfaVerplicht: staf && mfaStafVerplicht(), aal: req.aal ?? "aal1", aanmeldingen });
+  } catch (err) {
+    console.error("Beveiligingsoverzicht mislukt:", err);
+    res.status(500).json({ error: "Beveiligingsoverzicht kon niet geladen worden." });
+  }
+});
+
+// Admin: twee-stapsverificatie van een collega resetten (telefoon kwijt).
+// Verwijdert alle TOTP-factoren in Supabase Auth; bij de volgende aanmelding
+// schrijft de collega zich opnieuw in.
+app.post("/api/admin/users/:id/mfa-reset", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(503).json({ error: "Service-role niet geconfigureerd." });
+    const id = String(req.params.id ?? "");
+    const target = ((await getUsersData()) as AppUserIntern[]).find((u) => String(u.id) === id);
+    if (!target) return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    if (!target.authId) return res.status(409).json({ error: "Deze gebruiker heeft nog geen gekoppelde aanmelding." });
+    const { data, error } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId: target.authId });
+    if (error) throw error;
+    let verwijderd = 0;
+    for (const factor of data?.factors ?? []) {
+      const { error: delErr } = await supabaseAdmin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: target.authId });
+      if (delErr) throw delErr;
+      verwijderd += 1;
+    }
+    await logActivity(req, "users", "Twee-stapsverificatie gereset", `${target.name}: ${verwijderd} ${verwijderd === 1 ? "factor" : "factoren"} verwijderd door ${req.appUser!.name}.`, { type: "user", id });
+    res.json({ success: true, verwijderd });
+  } catch (err) {
+    console.error("MFA-reset mislukt:", err);
+    res.status(500).json({ error: "Twee-stapsverificatie resetten is mislukt." });
+  }
 });
 
 app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, res) => {
@@ -2276,6 +2320,89 @@ app.delete("/api/users/:id", authenticate, requireRole("admin"), async (req: Aut
   }
 });
 
+// Uit dienst in één handeling (verbeterronde 07-09, nr. 1): deactiveren via
+// dezelfde schrijfkern als de per-record-routes (revisie/activity/Auth-ban),
+// dan alle toestellen intrekken en de push-abonnementen wissen. Elke stap is
+// best-effort en wordt gerapporteerd; nogmaals aanroepen op een al inactieve
+// gebruiker geeft 200 met nullen. De agenda-feed vervalt vanzelf bij
+// isActive=false; lopende Supabase-sessies stoppen door de ban uiterlijk bij
+// tokenverloop (er is geen per-gebruiker signOut zonder diens token).
+app.post("/api/users/:id/uitdienst", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    if (id === String(req.appUser!.id)) return res.status(400).json({ error: "Je kunt jezelf niet uit dienst zetten." });
+    const reden = typeof req.body?.reden === "string" ? req.body.reden.trim().slice(0, 200) : "";
+    const previousUsers = await getUsersData();
+    const current = previousUsers.find((u) => String(u.id) === id);
+    if (!current) return res.status(404).json({ error: "Gebruiker niet gevonden, mogelijk intussen verwijderd." });
+    const wasActief = current.isActive !== false;
+    const stappen: Array<{ stap: string; ok: boolean; detail: string }> = [];
+
+    // (1) Deactiveren, alleen als de gebruiker nog actief is.
+    if (wasActief) {
+      const newData = previousUsers.map((u) => (String(u.id) === id ? { ...u, isActive: false } : u));
+      if (laatsteAdminVerdwijnt(newData)) return res.status(400).json({ error: "Er moet minstens 1 actieve admin overblijven." });
+      try {
+        await verwerkUsersOpslag(req, previousUsers, newData, { samenvatting: false });
+        stappen.push({ stap: "deactiveren", ok: true, detail: "Account gedeactiveerd en Auth-account geblokkeerd." });
+      } catch (err: any) {
+        // Zonder deactivering heeft de rest geen zin: de gebruiker kan nog
+        // inloggen en toestellen opnieuw registreren.
+        console.error("Uit dienst: deactiveren is mislukt.", err?.message || err);
+        return res.status(500).json({ error: "Deactiveren is mislukt.", stappen: [{ stap: "deactiveren", ok: false, detail: String(err?.message || err) }] });
+      }
+    } else {
+      stappen.push({ stap: "deactiveren", ok: true, detail: "Account was al gedeactiveerd." });
+    }
+
+    // (2) Toestellen intrekken.
+    let toestellen = 0;
+    try {
+      toestellen = await revokeAllDevices(id);
+      stappen.push({ stap: "toestellen", ok: true, detail: `${toestellen} toestel${toestellen === 1 ? "" : "len"} ingetrokken.` });
+    } catch (err: any) {
+      if (isMissingTableError(err)) stappen.push({ stap: "toestellen", ok: true, detail: "Geen toestel-tabel, niets in te trekken." });
+      else {
+        console.error("Uit dienst: toestellen intrekken is mislukt.", err?.message || err);
+        stappen.push({ stap: "toestellen", ok: false, detail: "Toestellen intrekken is mislukt." });
+      }
+    }
+
+    // (3) Push-abonnementen wissen.
+    let push = 0;
+    try {
+      push = await deletePushSubscriptionsForUser(id);
+      stappen.push({ stap: "push", ok: true, detail: `${push} push-abonnement${push === 1 ? "" : "en"} gewist.` });
+    } catch (err: any) {
+      console.error("Uit dienst: push-abonnementen wissen is mislukt.", err?.message || err);
+      stappen.push({ stap: "push", ok: false, detail: "Push-abonnementen wissen is mislukt." });
+    }
+
+    // (4) Sessies: de ban uit stap 1 blokkeert nieuwe logins en token-
+    // refreshes; lopende access-tokens verlopen vanzelf (max. 1 uur).
+    stappen.push({ stap: "sessies", ok: true, detail: "Auth-account geblokkeerd, lopende sessies stoppen bij tokenverloop." });
+
+    // (5) Eén samenvattende auditregel.
+    await logActivity(
+      req,
+      "users",
+      "Uit dienst",
+      `${current.name}: account ${wasActief ? "gedeactiveerd" : "was al gedeactiveerd"}, ${toestellen} toestel${toestellen === 1 ? "" : "len"} ingetrokken, ${push} push-abonnement${push === 1 ? "" : "en"} gewist.${reden ? ` Reden: ${reden}.` : ""}`,
+      { type: "user", id },
+    );
+
+    res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
+    res.json({
+      user: await userResponseRecord(id),
+      samenvatting: { toestellen, push, sessies: "gebannen" },
+      stappen,
+    });
+  } catch (err: any) {
+    console.error("Uit dienst zetten is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Uit dienst zetten is mislukt." });
+  }
+});
+
 // --- Push-notificaties ---
 app.get("/api/push/public-key", authenticate, (_req, res) => {
   // null = push staat uit (geen VAPID-keys geconfigureerd) — de client
@@ -3430,6 +3557,43 @@ app.get("/api/services", authenticate, async (req, res) => {
 // solver headless kan ophalen zonder gebruikersaccount (CRON_SECRET werkt
 // alleen nog als overgang zolang het eigen secret niet gezet is — zie
 // isRosteringExportAuthorized).
+// Roostersolver in het portaal (verbeterronde 07-09, nr. 13): het portaal
+// bouwt het solve-verzoek uit zijn eigen data en tekent het met
+// ROSTERING_EXPORT_SECRET; de browser van de planner stuurt het byte-exact
+// naar de solver op Render (header X-Solver-Signature). Zo kent de solver
+// geen portaalsessie en loopt een berekening van een minuut niet tegen de
+// Vercel-functietijd aan. Zie api/_lib/roosterSolver.ts.
+app.post("/api/rooster/solver-verzoek", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const secret = process.env.ROSTERING_EXPORT_SECRET;
+    if (!secret) return res.status(503).json({ error: "De solver-koppeling is niet geconfigureerd (ROSTERING_EXPORT_SECRET ontbreekt)." });
+    const van = String(req.body?.van ?? "");
+    const tot = String(req.body?.tot ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(van) || !/^\d{4}-\d{2}-\d{2}$/.test(tot) || tot < van) {
+      return res.status(400).json({ error: "Kies een geldige periode (van en tot)." });
+    }
+    const contracturen = normaliseerContracturen(String(req.body?.contracturen ?? CONTRACTUREN_STANDAARD));
+    if (!contracturen) return res.status(400).json({ error: "Contracturen: geef uren per week op, bv. 38 of 38:00." });
+    const rekentijdS = Number(req.body?.rekentijd ?? REKENTIJD_STANDAARD_S);
+    const [users, services, leave, verwachtingen] = await Promise.all([getUsersData(), getServicesData(), getLeaveData({ endOnOrAfter: van }), getCoverageExpectations()]);
+    const { verzoek, waarschuwingen } = bouwSolverVerzoek({ van, tot, door: String(req.appUser!.id), contracturen, rekentijdS: Number.isFinite(rekentijdS) ? rekentijdS : REKENTIJD_STANDAARD_S, users, services, leave, verwachtingen });
+    const json = JSON.stringify(verzoek);
+    await logActivity(req, "planning", "Rooster berekend", `${req.appUser!.name} vroeg een solver-rooster aan voor ${van} t/m ${tot} (${verzoek.chauffeurs.length} chauffeurs, ${verzoek.diensten.length} dienstsjablonen).`);
+    res.json({
+      verzoek: json,
+      handtekening: tekenVerzoek(json, secret),
+      solverUrl: (process.env.ROSTER_SOLVER_URL || SOLVER_URL_STANDAARD).replace(/\/+$/, ""),
+      waarschuwingen,
+      samenvatting: { chauffeurs: verzoek.chauffeurs.length, diensten: verzoek.diensten.length, dagen: verzoek.kalender.length, afwezigheden: verzoek.afwezigheden.length, dagtypes: verzoek.dagtypes.map((d) => d.code) },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Solver-verzoek opbouwen mislukt.";
+    if (/periode|chauffeurs gevonden|negen weken/i.test(msg)) return res.status(400).json({ error: msg });
+    console.error("Solver-verzoek mislukt:", err);
+    res.status(500).json({ error: "Solver-verzoek opbouwen mislukt." });
+  }
+});
+
 app.get("/api/rostering-export", async (req, res) => {
   const handle = async () => {
     try {

@@ -1,0 +1,72 @@
+# Beleidsdrift-check (verbeterronde 07-09, nr. 10): elke nacht de live
+# beveiligingsstand van Supabase (RLS, policies, grants, definer-functies)
+# vergelijken met het gecommitte snapshot supabase/beleid-snapshot.json.
+# Migraties draaien met de hand in de SQL Editor; dit is het bewijs dat wat
+# live staat nog is wat de repo zegt. Verschil = rode run = mail via de
+# gewone GitHub-notificaties.
+#
+# Aparte workflow (niet in ci.yml): de PR-jobs hoeven niet op een schema te
+# draaien en deze job heeft geen npm ci nodig (script zonder dependencies).
+#
+# Secrets (repo-instellingen, zie README › Beleidssnapshot):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY            → productie (verplicht)
+#   STAGING_SUPABASE_URL, STAGING_SERVICE_ROLE_KEY     → staging (optioneel,
+#                                                        alleen als ook
+#                                                        supabase/beleid-snapshot-staging.json
+#                                                        gecommit is)
+# Ontbreken de productie-secrets, dan slaat de job netjes over (geen fout):
+# de check is dan gewoon nog niet ingericht.
+name: Beleidsdrift
+
+on:
+  schedule:
+    # 04:00 UTC = 06:00 Belgische zomertijd / 05:00 wintertijd.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: beleid-drift
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  beleid-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Secrets aanwezig?
+        id: secrets
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::notice::Secrets SUPABASE_URL en/of SUPABASE_SERVICE_ROLE_KEY ontbreken: beleidsdrift-check overgeslagen (inrichten: README › Beleidssnapshot)."
+            echo "productie=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "productie=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -z "$STAGING_SUPABASE_URL" ] || [ -z "$STAGING_SERVICE_ROLE_KEY" ]; then
+            echo "staging=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "staging=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Productie vergelijken
+        if: steps.secrets.outputs.productie == 'true'
+        run: node scripts/beleid-drift.mjs
+
+      # Ook na een rode productie-stap: beide uitkomsten in één run.
+      - name: Staging vergelijken
+        if: ${{ !cancelled() && steps.secrets.outputs.staging == 'true' }}
+        run: node scripts/beleid-drift.mjs --omgeving staging

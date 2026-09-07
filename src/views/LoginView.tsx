@@ -35,7 +35,7 @@ export function LoginView({
   /** Reden van een gedwongen uitlog ('sessie' | 'account'), doorgegeven door
    *  App. sessionStorage vangt daarnaast het geval af dat de gebruiker de
    *  pagina herlaadt. */
-  melding?: 'sessie' | 'account' | '';
+  melding?: 'sessie' | 'account' | 'inactief' | '';
 }) {
   const [mode, setMode] = useState<Mode>('login');
 
@@ -89,7 +89,9 @@ export function LoginView({
     ? 'Je account is gedeactiveerd. Neem contact op met de planning.'
     : reden === 'sessie'
       ? 'Je sessie is verlopen omdat je een tijdje weg was. Log opnieuw in, er is niets van je werk verloren.'
-      : '';
+      : reden === 'inactief'
+        ? 'Automatisch afgemeld: dit is een gedeeld toestel en er was een half uur geen activiteit.'
+        : '';
 
   const resetFeedback = () => {
     setError('');

@@ -3,7 +3,7 @@ import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { valideer } from '../../lib/valideer';
 import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
-import { CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload } from 'lucide-react';
+import { CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
@@ -50,7 +50,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   //   Auth-sync draaien en halverwege kunnen stranden).
   // - `saveUser`/`createUser`/`deleteUser` (PUT/POST one/DELETE) voor
   //   bewerken, toevoegen, verwijderen en de snelle pauzeer/activeer-knop.
-  const { users, saveUsers: onSave, saveUser: onSaveUser, createUser: onCreateUser, deleteUser: onDeleteUser, shifts, leaveRequests, swaps } = useAppDataContext();
+  const { users, saveUsers: onSave, saveUser: onSaveUser, createUser: onCreateUser, deleteUser: onDeleteUser, fetchUsers, shifts, leaveRequests, swaps } = useAppDataContext();
   const [isImporting, setIsImporting] = useState(false);
   // Verborgen file-input voor de Excel-import; het "…"-menu in de kop klikt hem aan.
   const importRef = useRef<HTMLInputElement>(null);
@@ -156,6 +156,14 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   // ⋯-overflowmenu per rij: zes losse knoppen naast elkaar was te druk
   // (design-review); Bewerken blijft direct, de rest zit in het menu.
   const [menuUserId, setMenuUserId] = useState<string | null>(null);
+  // Uit dienst in één handeling (verbeterronde 07-09, nr. 1): deactiveren,
+  // toestellen intrekken en push stoppen via één endpoint. Het aantal
+  // toestellen wordt vooraf geteld zodat de bevestiging concreet is;
+  // null = nog aan het tellen.
+  const [uitDienstUser, setUitDienstUser] = useState<User | null>(null);
+  const [uitDienstToestellen, setUitDienstToestellen] = useState<number | null>(null);
+  const [uitDienstReden, setUitDienstReden] = useState('');
+  const [isUitDienstBezig, setIsUitDienstBezig] = useState(false);
 
   // Uitrol-teller: alleen actieve medewerkers tellen mee — een gepauzeerd
   // account zonder meldingen is geen openstaand punt.
@@ -371,6 +379,27 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
     if (success) { notify(`${targetIds.size} gebruiker(s) verwijderd.`, 'success'); clearSelection(); }
   };
 
+  // Twee-stapsverificatie resetten (verbeterronde 07-09, nr. 8): voor een
+  // planner/admin die zijn authenticator kwijt is. Verwijdert de factoren in
+  // Supabase Auth; bij de volgende aanmelding schrijft de collega zich
+  // opnieuw in (of meteen, als MFA_STAF=aan).
+  const [mfaResetUser, setMfaResetUser] = useState<User | null>(null);
+  const handleMfaReset = async () => {
+    if (!mfaResetUser) return;
+    const doel = mfaResetUser;
+    setMfaResetUser(null);
+    try {
+      const response = await apiFetch(`/api/admin/users/${doel.id}/mfa-reset`, { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return notify(data.error || 'Resetten is mislukt.', 'error');
+      notify(data.verwijderd > 0
+        ? `Twee-stapsverificatie van ${doel.name} is gereset. Bij de volgende aanmelding stelt ${doel.name} hem opnieuw in.`
+        : `${doel.name} had geen twee-stapsverificatie ingesteld.`, 'success');
+    } catch (error: any) {
+      notify(`Resetten is mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
+    }
+  };
+
   const handleResetPassword = async () => {
     if (!confirmResetUser) return;
     if (resetPasswordValue.length < 6) return notify('Gebruik minstens 6 tekens.', 'error');
@@ -396,6 +425,49 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
       notify(`Reset mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
     } finally {
       setIsResettingPassword(false);
+    }
+  };
+
+  const openUitDienst = (u: User) => {
+    setUitDienstUser(u);
+    setUitDienstToestellen(null);
+    setUitDienstReden('');
+    void (async () => {
+      try {
+        const res = await apiFetch('/api/devices');
+        const rows: Array<{ userId: string; status: string }> = res.ok ? await res.json() : [];
+        setUitDienstToestellen(Array.isArray(rows) ? rows.filter((d) => String(d.userId) === String(u.id) && d.status !== 'revoked').length : 0);
+      } catch {
+        // Zonder telling toch door: de server trekt alles in wat er is.
+        setUitDienstToestellen(0);
+      }
+    })();
+  };
+  const sluitUitDienst = () => { setUitDienstUser(null); setUitDienstReden(''); };
+  const handleUitDienst = async () => {
+    if (!uitDienstUser) return;
+    try {
+      setIsUitDienstBezig(true);
+      const response = await apiFetch(`/api/users/${encodeURIComponent(uitDienstUser.id)}/uitdienst`, {
+        method: 'POST',
+        body: JSON.stringify(uitDienstReden.trim() ? { reden: uitDienstReden.trim() } : {}),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return notify(data.details || data.error || 'Uit dienst zetten is mislukt.', 'error');
+      const { toestellen = 0, push = 0 } = data.samenvatting ?? {};
+      const mislukt = Array.isArray(data.stappen) ? data.stappen.filter((s: { ok: boolean }) => !s.ok) : [];
+      notify(
+        `${uitDienstUser.name} is uit dienst: account gedeactiveerd, ${toestellen} toestel${toestellen === 1 ? '' : 'len'} ingetrokken, ${push} push-abonnement${push === 1 ? '' : 'en'} gewist.`,
+        mislukt.length > 0 ? 'info' : 'success',
+      );
+      if (mislukt.length > 0) notify(`Niet gelukt: ${mislukt.map((s: { detail: string }) => s.detail).join(' ')}`, 'error');
+      setPushUserIds((prev) => { const n = new Set(prev); n.delete(String(uitDienstUser.id)); return n; });
+      sluitUitDienst();
+      await fetchUsers();
+    } catch (error: any) {
+      notify(`Uit dienst zetten is mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
+    } finally {
+      setIsUitDienstBezig(false);
     }
   };
 
@@ -731,12 +803,23 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                               <RowMenuItem icon={<FolderOpen size={16} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
                               <RowMenuItem icon={<History size={16} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
                               <RowMenuItem icon={<RotateCcw size={16} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
+                              {(u.role === 'planner' || u.role === 'admin') && (
+                                <RowMenuItem icon={<ShieldOff size={16} />} label="Twee-stapsverificatie resetten" onClick={() => { setMenuUserId(null); setMfaResetUser(u); }} />
+                              )}
                               <RowMenuItem
                                 icon={u.isActive !== false ? <Pause size={16} /> : <Play size={16} />}
                                 label={u.isActive !== false ? 'Gebruiker pauzeren' : 'Gebruiker activeren'}
                                 disabled={u.isActive !== false && isProtectedAdmin(u)}
                                 onClick={() => { setMenuUserId(null); void quickToggleActive(u); }}
                               />
+                              {u.isActive !== false && (
+                                <RowMenuItem
+                                  icon={<UserX size={16} />}
+                                  label="Uit dienst"
+                                  disabled={u.id === currentUser.id || isProtectedAdmin(u)}
+                                  onClick={() => { setMenuUserId(null); openUitDienst(u); }}
+                                />
+                              )}
                               <div className="my-1 border-t border-slate-100" />
                               <RowMenuItem
                                 icon={<Trash2 size={16} />}
@@ -797,6 +880,9 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                 <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setViewingChangeLogUser(u)}><History size={18} /></IconButton>
                 <IconButton label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Gebruiker verwijderen'} variant="danger" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)}><Trash2 size={18} /></IconButton>
                 <IconButton label="Nieuw tijdelijk wachtwoord instellen" variant="ghost" onClick={() => setConfirmResetUser(u)}><RotateCcw size={18} /></IconButton>
+                {u.isActive !== false && (
+                  <IconButton label="Uit dienst" variant="ghost" onClick={() => openUitDienst(u)} disabled={u.id === currentUser.id || isProtectedAdmin(u)}><UserX size={18} /></IconButton>
+                )}
               </div>
             </div>
           ))}
@@ -942,6 +1028,49 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                 <Input id="reset-wachtwoord" type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} autoFocus />
               </Field>
               <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }}>Annuleren</Button><Button variant="primary" className="flex-1" onClick={handleResetPassword} disabled={isResettingPassword}>{isResettingPassword ? 'Bezig…' : 'Resetten'}</Button></div>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      <ConfirmationModal
+        isOpen={!!mfaResetUser}
+        onClose={() => setMfaResetUser(null)}
+        onConfirm={() => { void handleMfaReset(); }}
+        title="Twee-stapsverificatie resetten?"
+        variant="warning"
+        confirmText="Ja, resetten"
+        message={`De authenticator-koppeling van ${mfaResetUser?.name ?? ''} wordt verwijderd. Bij de volgende aanmelding stelt ${mfaResetUser?.name ?? 'de collega'} twee-stapsverificatie opnieuw in. Doe dit alleen op vraag van de collega zelf.`}
+      />
+
+      <Modal open={!!uitDienstUser} onClose={sluitUitDienst} className="flex flex-col !p-0" ariaLabel="Uit dienst">
+        {uitDienstUser && (
+          <>
+            <ModalHeader title="Uit dienst" description={`${uitDienstUser.name} gaat uit dienst. Dit gebeurt in één keer:`} />
+            <div className="p-6 md:p-7 space-y-5">
+              <ul className="space-y-2 text-sm text-slate-700">
+                <li className="flex items-start gap-2.5"><Pause size={16} className="mt-0.5 shrink-0 text-slate-500" /><span>Account deactiveren, inloggen is niet meer mogelijk.</span></li>
+                <li className="flex items-start gap-2.5">
+                  <UserX size={16} className="mt-0.5 shrink-0 text-slate-500" />
+                  <span>
+                    {uitDienstToestellen === null
+                      ? 'Toestellen tellen…'
+                      : uitDienstToestellen === 0
+                        ? 'Geen toestellen om in te trekken.'
+                        : `${uitDienstToestellen} toestel${uitDienstToestellen === 1 ? '' : 'len'} intrekken.`}
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5"><Send size={16} className="mt-0.5 shrink-0 text-slate-500" /><span>Pushmeldingen stoppen.</span></li>
+                <li className="flex items-start gap-2.5"><CalendarOff size={16} className="mt-0.5 shrink-0 text-slate-500" /><span>De agenda-koppeling vervalt.</span></li>
+              </ul>
+              <Field label="Reden (optioneel)" htmlFor="uitdienst-reden" hint="Komt in het activiteitenlogboek.">
+                <Input id="uitdienst-reden" value={uitDienstReden} onChange={(e) => setUitDienstReden(e.target.value)} placeholder="Bv. einde contract" maxLength={200} />
+              </Field>
+              <p className="text-micro text-slate-500">Terugdraaien kan via “Gebruiker activeren”; toestellen keur je daarna opnieuw goed.</p>
+              <div className="flex gap-3 pt-1">
+                <Button variant="ghost" className="flex-1" onClick={sluitUitDienst}>Annuleren</Button>
+                <Button variant="primary" className="flex-1" onClick={handleUitDienst} disabled={isUitDienstBezig}>{isUitDienstBezig ? 'Bezig…' : 'Uit dienst zetten'}</Button>
+              </div>
             </div>
           </>
         )}

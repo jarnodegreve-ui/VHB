@@ -482,6 +482,22 @@ export const getLoginActivity = async (sinceIso: string, limit = 3000): Promise<
 /** Tijdstip (ISO) van het meest recente auth-event ('Aangemeld' of 'Actief')
  *  van één gebruiker — voor de éénmaal-per-dag-dedup van het 'Actief'-event
  *  bij sessie-herstel. null = nog geen auth-event bekend. */
+/** Laatste aanmeldingen van één gebruiker (Instellingen › Beveiliging). */
+export const getRecentLogins = async (userId: string, max = 8): Promise<Array<{ at: string; action: string }>> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from("activity_log")
+    .select("created_at, action")
+    .eq("category", "auth")
+    .in("action", ["Aangemeld", "Actief"])
+    .eq("entity_type", "user")
+    .eq("entity_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(max);
+  if (error || !data) return [];
+  return (data as Array<{ created_at: string; action: string }>).map((r) => ({ at: r.created_at, action: r.action }));
+};
+
 export const getLatestAuthEventAt = async (userId: string): Promise<string | null> => {
   const client = requireDb();
   const { data, error } = await client
@@ -2302,6 +2318,21 @@ export const deleteDevice = async (userId: string, deviceToken: string): Promise
     .eq('user_id', String(userId))
     .eq('device_token', String(deviceToken));
   if (error) throw error;
+};
+
+/** Alle toestellen van één gebruiker op 'revoked' (uitdienst-flow). Geeft
+ *  het aantal toestellen dat écht van status veranderde, zodat een tweede
+ *  aanroep 0 meldt. Rijen blijven staan (auditspoor in Toestellen). */
+export const revokeAllDevices = async (userId: string): Promise<number> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from('user_devices')
+    .update({ status: 'revoked' satisfies DeviceStatus })
+    .eq('user_id', String(userId))
+    .neq('status', 'revoked')
+    .select('device_token');
+  if (error) throw error;
+  return (data ?? []).length;
 };
 
 // --- Swaps ---

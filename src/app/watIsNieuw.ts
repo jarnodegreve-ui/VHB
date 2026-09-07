@@ -17,15 +17,30 @@ export type WatIsNieuwItem = {
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
-    id: '2026-09-07',
-    titel: 'Onderhoudsmodus en foutreferenties',
+    id: '2026-09-08',
+    titel: 'Beveiliging op één plek',
     regels: {
+      chauffeur: [
+        'Instellingen › Beveiliging: zie je laatste aanmeldingen en zet “Gedeeld toestel” aan op de tablet in het lokaal, dan meldt het portaal je na een half uur stilte vanzelf af.',
+      ],
       staf: [
+        'Roostersolver: onder Planning laat je de solver een rooster berekenen uit het dienstoverzicht, de verwachte diensten per dagtype en het goedgekeurde verlof, met Excel-export.',
+        'Twee-stapsverificatie: planners en beheerders melden zich aan met wachtwoord én een code uit een authenticator-app. Instellen via Instellingen › Beveiliging.',
+        'Laatste aanmeldingen en “Gedeeld toestel” (automatisch afmelden na een half uur) staan in dezelfde sectie.',
         'Onderhoudsmodus (beheerder): zet in Instellingen › Beheer een banner aan voor iedereen en pauzeer desgewenst alle wijzigingen, bijvoorbeeld tijdens een migratie.',
         'Foutschermen tonen nu een korte referentie; in Systeemstatus › Fouten staat dezelfde code bij de foutgroep, zodat je een melding van een chauffeur meteen terugvindt.',
       ],
     },
-    bekijk: { staf: 'instellingen' },
+    bekijk: { chauffeur: 'instellingen', staf: 'instellingen' },
+  },
+  {
+    id: '2026-09-07',
+    titel: 'Uit dienst in één handeling',
+    regels: {
+      staf: [
+        'Gebruikersbeheer: “Uit dienst” in het rijmenu deactiveert het account, trekt alle toestellen in en stopt de pushmeldingen in één keer (admin).',
+      ],
+    },
   },
   {
     id: '2026-09-06',
