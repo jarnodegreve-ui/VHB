@@ -2,7 +2,6 @@ import type express from "express";
 import { timingSafeEqual } from "node:crypto";
 import { escapeHtml } from "./email.js";
 import { getLeaveData, getPlanningData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getUsersData } from "./storage.js";
-import { sharedCheck } from "./rateLimit.js";
 import { addDagenIso, brusselsDay, matrixCodesForDate, toLookupToken } from "./helpers.js";
 import type { DayGap } from "./coverageGaps.js";
 
@@ -337,7 +336,6 @@ const HULP = [
   "/rooster Danny, iemands week",
   "/dienst 2601, de tijden van een dienst",
   "/ziekmeld danny t/m vrijdag, ziekmelding registreren (met bevestigknop)",
-  "Gewone tekst, een vraag aan de planner-assistent",
 ].join("\n");
 
 // ---------------------------------------------------------------------------
@@ -354,7 +352,6 @@ export type TelegramDeps = {
   beslisRuil: (opts: { id: string; status: string; ifStatus: string | null; actor: any }) => Promise<any>;
   registreerZiekmelding: (invoer: { userId: unknown; startDate?: unknown; endDate?: unknown; comment?: unknown }, actor: any, stuurTelegramAlert?: boolean) => Promise<any>;
   wijsDienstToe: (invoer: { date: unknown; serviceNumber: unknown; driverId: unknown }, actor: any) => Promise<any>;
-  draaiPlannerChat: (gesprek: Array<{ role: "user" | "assistant"; content: any }>) => Promise<{ ok: true; antwoord: string } | { ok: false; status: number; error: string; code?: string }>;
 };
 
 /** De bot handelt namens de gekoppelde planner (chat-id = Jarno). Eerlijke
@@ -366,20 +363,6 @@ const BOT_ACTOR = {
   get id() { return String(process.env.TELEGRAM_ACTOR_USER_ID ?? "").trim() || "telegram-bot"; },
   name: "Jarno (via Telegram)",
   role: "admin" as const,
-};
-
-/** Uurlimiet voor assistent-vragen via de bot (het endpoint kost geld per
- *  token). Eerst de gedeelde cross-instance-limiter (Upstash); zonder store
- *  de in-memory teller als vangnet — per instantie, dus zacht. */
-const chatBeurten: number[] = [];
-const chatBinnenLimiet = async (): Promise<boolean> => {
-  const gedeeld = await sharedCheck("telegram-assistent", 60 * 60 * 1000, 20);
-  if (gedeeld) return gedeeld.allowed;
-  const nu = Date.now();
-  while (chatBeurten.length > 0 && nu - chatBeurten[0] > 60 * 60 * 1000) chatBeurten.shift();
-  if (chatBeurten.length >= 20) return false;
-  chatBeurten.push(nu);
-  return true;
 };
 
 /** In-flight-guard voor schrijf-callbacks: een dubbele knop-tik of Telegram-
@@ -677,14 +660,11 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
       } else if (cmd.startsWith("/")) {
         await antwoord(`Dat commando ken ik niet.\n\n${HULP}`);
       } else if (tekst) {
-        // Vrije tekst = een vraag aan de planner-assistent (zelfde leestools
-        // en beknoptheidscontract als in het portaal). Zachte uurlimiet.
-        if (!(await chatBinnenLimiet())) {
-          await antwoord("Even rustig aan, maximaal 20 assistent-vragen per uur via de bot. Probeer het straks opnieuw of gebruik de Assistent in het portaal.");
-        } else {
-          const uit = await deps.draaiPlannerChat([{ role: "user", content: tekst.slice(0, 1000) }]);
-          await antwoord("antwoord" in uit ? escapeHtml(uit.antwoord) : `⚠️ ${escapeHtml(uit.error)}`);
-        }
+        // Vrije tekst: de planner-assistent is verwijderd (Jarno 08-09), dus
+        // alleen de commandolijst terug.
+        await antwoord(`Ik begrijp alleen commando's.
+
+${HULP}`);
       }
       return res.json({ ok: true });
     } catch (err: any) {

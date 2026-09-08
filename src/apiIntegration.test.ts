@@ -2134,18 +2134,6 @@ describe('OCPI leesPeriode / vorigePeriode (zuiver)', () => {
   });
 });
 
-describe('rostering-export, eigen secret (controle-ronde 27-08, nr. 28)', () => {
-  it('met ROSTERING_EXPORT_SECRET gezet werkt het cron-secret niet meer, het eigen secret wel', async () => {
-    process.env.ROSTERING_EXPORT_SECRET = 'solver-secret';
-    try {
-      expect((await api('GET', '/api/rostering-export', { headers: { Authorization: 'Bearer test-cron-secret' } })).status).toBe(401);
-      expect((await api('GET', '/api/rostering-export', { headers: { Authorization: 'Bearer solver-secret' } })).status).toBe(200);
-    } finally {
-      delete process.env.ROSTERING_EXPORT_SECRET;
-    }
-  });
-});
-
 describe('wachtwoordminimum server-side (controle-ronde 27-08, nr. 32)', () => {
   it('POST /api/users weigert een nieuw account met een wachtwoord korter dan 10 tekens', async () => {
     const nieuw = { id: '77', name: 'Nieuwe Chauffeur', email: 'nieuw@vhb.be', role: 'chauffeur', isActive: true, password: 'kort123' };
@@ -2157,32 +2145,6 @@ describe('wachtwoordminimum server-side (controle-ronde 27-08, nr. 32)', () => {
     const nieuw = { id: '78', name: 'Nieuwe Chauffeur', email: 'nieuw2@vhb.be', role: 'chauffeur', isActive: true, password: 'lang-genoeg' };
     const res = await api('POST', '/api/users', { token: 'tok-admin', body: [...mem.users, nieuw] });
     expect(res.status).toBe(200);
-  });
-});
-
-describe('rostering-export (solver-brug)', () => {
-  it('weigert zonder auth (401) en voor chauffeurs (403)', async () => {
-    expect((await api('GET', '/api/rostering-export')).status).toBe(401);
-    expect((await api('GET', '/api/rostering-export', { token: 'tok-a' })).status).toBe(403);
-  });
-
-  it('geeft de planner solver-input: actieve chauffeurs, diensten, goedgekeurd verlof en shifts in het venster', async () => {
-    const res = await api('GET', '/api/rostering-export?from=2026-07-01&to=2026-12-31', { token: 'tok-planner' });
-    expect(res.status).toBe(200);
-    expect(res.json.range).toEqual({ from: '2026-07-01', to: '2026-12-31' });
-    // Alleen chauffeurs (3 en 4), niet admin/planner.
-    expect(res.json.drivers.map((d: any) => d.id).sort()).toEqual(['3', '4']);
-    expect(res.json.services).toHaveLength(6);
-    // Alleen goedgekeurd verlof binnen het venster (l-a2), geen pending.
-    expect(res.json.approvedLeave).toHaveLength(1);
-    expect(res.json.approvedLeave[0]).toMatchObject({ userId: '3', startDate: '2026-08-10' });
-    expect(res.json.shifts).toHaveLength(3);
-  });
-
-  it('is ook bereikbaar met het cron-secret (headless solver)', async () => {
-    const res = await api('GET', '/api/rostering-export?from=2026-07-01&to=2026-07-31', { headers: { Authorization: 'Bearer test-cron-secret' } });
-    expect(res.status).toBe(200);
-    expect(res.json.shifts).toHaveLength(3);
   });
 });
 
@@ -3617,38 +3579,6 @@ describe('digest: proactieve sectie openstaande diensten', () => {
   });
 });
 
-describe('planner-assistent (/api/planner-chat)', () => {
-  it('is planner/admin-terrein (chauffeur krijgt 403)', async () => {
-    const res = await api('POST', '/api/planner-chat', { token: 'tok-a', body: { messages: [{ role: 'user', content: 'test' }] } });
-    expect(res.status).toBe(403);
-  });
-
-  it('meldt netjes dat de assistent nog niet geactiveerd is zonder API-sleutel', async () => {
-    const bewaard = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
-      const res = await api('POST', '/api/planner-chat', { token: 'tok-planner', body: { messages: [{ role: 'user', content: 'test' }] } });
-      expect(res.status).toBe(503);
-      expect(res.json.code).toBe('assistent_uitgeschakeld');
-    } finally {
-      if (bewaard !== undefined) process.env.ANTHROPIC_API_KEY = bewaard;
-    }
-  });
-
-  it('weigert een lege of kapotte gespreksgeschiedenis (vóór er een model aan te pas komt)', async () => {
-    process.env.ANTHROPIC_API_KEY = 'sk-test-nep';
-    try {
-      const leeg = await api('POST', '/api/planner-chat', { token: 'tok-planner', body: { messages: [] } });
-      expect(leeg.status).toBe(400);
-      // Laatste beurt moet van de gebruiker zijn.
-      const verkeerd = await api('POST', '/api/planner-chat', { token: 'tok-planner', body: { messages: [{ role: 'assistant', content: 'hoi' }] } });
-      expect(verkeerd.status).toBe(400);
-    } finally {
-      delete process.env.ANTHROPIC_API_KEY;
-    }
-  });
-});
-
 describe('verbeterronde 20-08, import-signalen & planning-aanwezigheid', () => {
   const bouwXlsx = async (aoa: unknown[][]) => {
     const XLSX = await import('xlsx');
@@ -3935,10 +3865,9 @@ describe('telegram-webhook, secret, koppeling en commando\'s', () => {
     expect(mem.planningMatrix[0].assignments['Chauffeur B']).toBe('11');
   });
 
-  it('vrije tekst gaat naar de assistent (zonder sleutel: nette uitlegzin)', async () => {
-    delete process.env.ANTHROPIC_API_KEY;
+  it('vrije tekst krijgt de commandolijst terug (de assistent is verwijderd, 08-09)', async () => {
     await webhook({ message: { chat: { id: 777 }, text: 'wie kan er zaterdag rijden?' } }, 'test-secret');
-    expect(verzonden[0].tekst).toContain('nog niet geactiveerd');
+    expect(verzonden[0].tekst).toContain('Commando');
   });
 
   it('briefing-cron is dicht zonder cron-secret', async () => {
@@ -4791,39 +4720,6 @@ describe('onderhoudsmodus (/api/onderhoud + schrijfblok)', () => {
     mem.appSettings.onderhoud = { ...ONDERHOUD, tot: '2020-01-01T00:00:00+01:00' };
     expect((await api('GET', '/api/onderhoud/publiek', { device: null })).json.actief).toBe(false);
     expect((await api('POST', '/api/meldingen/gelezen', { token: 'tok-a', body: {} })).status).toBe(200);
-  });
-});
-
-describe('roostersolver: POST /api/rooster/solver-verzoek (verbeterronde 07-09 nr. 13)', () => {
-  const vorige = process.env.ROSTERING_EXPORT_SECRET;
-  afterEach(() => { if (vorige === undefined) delete process.env.ROSTERING_EXPORT_SECRET; else process.env.ROSTERING_EXPORT_SECRET = vorige; });
-
-  it('alleen planner/admin, en 503 zolang het geheim ontbreekt', async () => {
-    delete process.env.ROSTERING_EXPORT_SECRET;
-    expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-a', body: { van: '2026-09-07', tot: '2026-09-13' } })).status).toBe(403);
-    expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-planner', body: { van: '2026-09-07', tot: '2026-09-13' } })).status).toBe(503);
-  });
-
-  it('bouwt en tekent het verzoek; de handtekening klopt met de teruggegeven JSON', async () => {
-    process.env.ROSTERING_EXPORT_SECRET = 'test-geheim';
-    const res = await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-planner', body: { van: '2026-09-07', tot: '2026-09-13', contracturen: '38', rekentijd: 30 } });
-    expect(res.status).toBe(200);
-    expect(res.json.solverUrl).toMatch(/^https:\/\//);
-    expect(res.json.handtekening).toMatch(/^sha256=[0-9a-f]{64}$/);
-    const verzoek = JSON.parse(res.json.verzoek);
-    expect(verzoek.meta).toMatchObject({ van: '2026-09-07', tot: '2026-09-13', bron: 'vhb-portaal' });
-    expect(verzoek.kalender).toHaveLength(7);
-    expect(verzoek.chauffeurs.length).toBeGreaterThan(0);
-    expect(verzoek.config.solver.max_time_s).toBe(30);
-    const { createHmac } = await import('node:crypto');
-    expect(res.json.handtekening).toBe(`sha256=${createHmac('sha256', 'test-geheim').update(res.json.verzoek, 'utf8').digest('hex')}`);
-    expect(mem.activity.some((a: any) => a.action === 'Rooster berekend')).toBe(true);
-  });
-
-  it('weigert een ongeldige periode of ongeldige contracturen (400)', async () => {
-    process.env.ROSTERING_EXPORT_SECRET = 'test-geheim';
-    expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-admin', body: { van: '2026-09-13', tot: '2026-09-07' } })).status).toBe(400);
-    expect((await api('POST', '/api/rooster/solver-verzoek', { token: 'tok-admin', body: { van: '2026-09-07', tot: '2026-09-13', contracturen: 'veel' } })).status).toBe(400);
   });
 });
 

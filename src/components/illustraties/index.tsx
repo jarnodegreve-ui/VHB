@@ -59,16 +59,16 @@ function Lus({ transform, dashRechts = false }: { transform?: string; /** Rechte
   );
 }
 
-/** Lege lijst / inbox: de lus als lege bak, met erboven de plekken waar
- *  rijen komen — nog gestippeld. */
+/** Lege lijst / inbox: de lus als leeg kader, met erin de plekken waar
+ *  rijen komen — nog gestippeld (in het kader i.p.v. erboven, Jarno 08-09). */
 export function LegeLijst({ className }: IllustratieProps) {
   return (
     <Vel className={className}>
+      <Lus />
       <g strokeDasharray="2.5 4" opacity={0.7}>
-        <path d="M 54 20 H 106" />
-        <path d="M 54 32 H 106" />
+        <path d="M 60 53 H 100" />
+        <path d="M 60 67 H 100" />
       </g>
-      <Lus transform="translate(0 10)" />
     </Vel>
   );
 }

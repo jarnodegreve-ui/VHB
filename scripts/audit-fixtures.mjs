@@ -55,9 +55,24 @@ export const DEVICES = [
   { userId: '43', deviceToken: 'tok-2', name: 'Android · browser', status: 'pending', createdAt: dayOffset(0), lastSeenAt: dayOffset(0) },
 ];
 export const LOGINS = USERS.map((u, i) => ({ id: `lg${i}`, actorName: u.name, action: 'Aangemeld', category: 'auth', createdAt: new Date(Date.now() - i * 7200e3).toISOString(), entityId: u.id, details: '' }));
+// Activiteit: een realistische week — bursts van dezelfde actie (vouwen samen
+// in de feed), cron-hartslagen (standaard verborgen) en meerdere personen.
+const uurGeleden = (u) => new Date(Date.now() - u * 3600e3).toISOString();
 export const ACTIVITY = [
-  { id: 'a1', createdAt: new Date().toISOString(), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'planning', action: 'Planning geïmporteerd', details: 'Matrix juli verwerkt.' },
-  { id: 'a2', createdAt: new Date(Date.now() - 3600e3).toISOString(), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'users', action: 'Gebruiker gewijzigd', details: 'Alex Du Priez bijgewerkt.' },
+  { id: 'a1', createdAt: uurGeleden(1), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'planning', action: 'Matrix import bevestigd', details: '56 dagen verwerkt (periode 2026-08-31 t/m 2026-10-25 vervangen), 1 349 diensten.' },
+  { id: 'a2', createdAt: uurGeleden(1.02), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'planning', action: 'Planning opnieuw opgebouwd', details: '1 981 diensten opgebouwd vanuit de actuele matrix, 2 goedgekeurde ruilen opnieuw doorgevoerd.' },
+  ...['Alex Du Priez, telefoon.', 'Diether Van Haute, telefoon.', 'Test Chauffeur, status: actief→inactief.', 'Luc Cherlet, e-mail.'].map((d, i) => ({ id: `a3-${i}`, createdAt: uurGeleden(2 + i * 0.02), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'users', action: 'Gebruiker gewijzigd', details: d })),
+  { id: 'a4', createdAt: uurGeleden(3), actorName: 'Systeem (cron)', actorRole: 'admin', category: 'system', action: 'Cron geslaagd: ocpi-sync', details: 'Sync ok (all).' },
+  { id: 'a5', createdAt: uurGeleden(5), actorName: 'Test Planning', actorRole: 'planner', category: 'leave', action: 'Verlof goedgekeurd', details: 'Alex Du Priez, 14 t/m 18 september (betaald verlof).' },
+  { id: 'a6', createdAt: uurGeleden(6), actorName: 'Test Planning', actorRole: 'planner', category: 'swaps', action: 'Dienst handmatig overgezet', details: 'Dienst 2607 op 12 september van Diether Van Haute naar Alex Du Priez (ziek).' },
+  { id: 'a7', createdAt: uurGeleden(9), actorName: 'Systeem (cron)', actorRole: 'admin', category: 'system', action: 'Cron geslaagd: backup', details: 'Back-up weggeschreven (2,1 MB).' },
+  { id: 'a8', createdAt: uurGeleden(26), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'diversions', action: 'Omleiding toegevoegd', details: 'Lijn 58, Werken Markt Zottegem, t/m 22 september.' },
+  { id: 'a9', createdAt: uurGeleden(28), actorName: 'Test Planning', actorRole: 'planner', category: 'leave', action: 'Ziekmelding', details: 'Diether Van Haute, 11 t/m 12 september.' },
+  { id: 'a10', createdAt: uurGeleden(30), actorName: 'Systeem (cron)', actorRole: 'admin', category: 'system', action: 'Cron geslaagd: ocpi-sync', details: 'Sync ok (all).' },
+  { id: 'a11', createdAt: uurGeleden(50), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'updates', action: 'Update geplaatst', details: 'Onderhoud aan boordcomputers (dringend).' },
+  { id: 'a12', createdAt: uurGeleden(52), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'system', action: 'Toestel goedgekeurd', details: 'Android · browser van Alex Du Priez.' },
+  { id: 'a13', createdAt: uurGeleden(75), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'services', action: 'Diensten opgeslagen', details: '3 diensten gewijzigd (2101, 2607, 2515).' },
+  { id: 'a14', createdAt: uurGeleden(100), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'planning_codes', action: 'Code gewijzigd', details: 'BV: telt als betaald verlof.' },
 ];
 
 // ---- Laadpalen (OCPI): deterministische fixtures voor de vier tabbladen ----
