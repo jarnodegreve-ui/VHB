@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download, X } from 'lucide-react';
 import { DateInput, Select } from '../../../components/Field';
 import { Modal } from '../../../components/Modal';
-import { Badge, Button, FilterChip, IconButton, TableShell, Td, microLabelClass } from '../../../components/primitives';
+import { Badge, Button, IconButton, TableShell, Td, microLabelClass } from '../../../components/primitives';
 import { SkeletonTile } from '../../../components/Skeleton';
 import { Paginering, SortTh, TableToolbar, useSort } from '../../../components/Table';
 import { EmptyState } from '../../../components/ui';
@@ -14,7 +14,7 @@ import { busVoorLaadpunt } from '../../../lib/laadplein';
 import { cn } from '../../../lib/ui';
 import { SessieStatusBadge, socTekst } from './DagDetail';
 import {
-  dagKort, dagVanTs, duurLabel, exporteerCsv, klasseLabel, laadpuntSort, periodeLabel, puntNaam, tekstKw, tekstKwh, tijdstipKort, uurLabel,
+  TermijnKeuze, dagKort, dagVanTs, duurLabel, exporteerCsv, klasseLabel, laadpuntSort, periodeLabel, puntNaam, tekstKw, tekstKwh, tijdstipKort, uurLabel,
   type Laadpunt, type SessieDetail,
 } from './gedeeld';
 
@@ -36,7 +36,7 @@ type Antwoord = {
   laadpunten: Laadpunt[];
 };
 type Periode = { van: string; tot: string };
-type StatusFilter = 'alle' | 'geladen' | 'mislukt' | 'leeg';
+type StatusFilter = 'alle' | 'geladen' | 'mislukt';
 type Kolom = 'start' | 'eind' | 'punt' | 'kwh' | 'duurMin' | 'laadMin' | 'gemKw' | 'maxKw' | 'soc' | 'status';
 
 const PER_PAGINA = 50;
@@ -84,7 +84,6 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
       if (evse && s.evseUid !== evse) return false;
       if (status === 'geladen' && !s.laadbeurt) return false;
       if (status === 'mislukt' && !s.mislukt) return false;
-      if (status === 'leeg' && (s.laadbeurt || s.mislukt || s.ongeldig)) return false;
       if (q) {
         const n = naam(s);
         const bus = busVoorLaadpunt(n) ?? '';
@@ -110,7 +109,7 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
   const presets: Array<{ id: string; label: string; periode: Periode }> = [
     { id: 'maand', label: 'Deze maand', periode: { van: `${dezeMaand}-01`, tot: vandaag } },
     { id: 'vorige', label: 'Vorige maand', periode: { van: `${maandPlus(dezeMaand, -1)}-01`, tot: addDagen(`${dezeMaand}-01`, -1) } },
-    { id: '7d', label: 'Laatste 7 dagen', periode: { van: addDagen(vandaag, -6), tot: vandaag } },
+    { id: '7d', label: '7 dagen', periode: { van: addDagen(vandaag, -6), tot: vandaag } },
   ];
   const actiefPreset = presets.find((p) => p.periode.van === periode.van && p.periode.tot === periode.tot)?.id ?? null;
 
@@ -119,17 +118,22 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
       ['Start', 'Einde', 'Dag', 'Laadpunt', 'Bus', 'kWh', 'Duur (min)', 'Laadtijd (min)', 'Gem. kW', 'Max. kW', 'Batterij start %', 'Batterij einde %', 'Status', 'Classificatie', 'Voertuig', 'Sessie-id'],
       ...gesorteerd.map((s) => {
         const n = naam(s);
-        return [s.start ? `${dagVanTs(s.start)} ${uurLabel(s.start)}` : '', s.eind ? `${dagVanTs(s.eind)} ${uurLabel(s.eind)}` : '', s.dag, n, busVoorLaadpunt(n) ?? '', s.kwh, s.duurMin ?? '', s.laadMin ?? '', s.gemKw ?? '', s.maxKw ?? '', s.socStart ?? '', s.socEind ?? '', s.ongeldig ? 'ongeldig' : s.laadbeurt ? 'geladen' : s.mislukt ? 'mislukt' : 'leeg', klasseLabel(s.klasse), s.voertuig ?? '', s.id];
+        return [s.start ? `${dagVanTs(s.start)} ${uurLabel(s.start)}` : '', s.eind ? `${dagVanTs(s.eind)} ${uurLabel(s.eind)}` : '', s.dag, n, busVoorLaadpunt(n) ?? '', s.kwh, s.duurMin ?? '', s.laadMin ?? '', s.gemKw ?? '', s.maxKw ?? '', s.socStart ?? '', s.socEind ?? '', s.ongeldig ? 'ongeldig' : s.laadbeurt ? 'geladen' : s.mislukt ? 'mislukt' : '0 kWh', klasseLabel(s.klasse), s.voertuig ?? '', s.id];
       }),
     ]);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {presets.map((p) => (
-          <FilterChip key={p.id} active={actiefPreset === p.id} onClick={() => setPeriode(p.periode)}>{p.label}</FilterChip>
-        ))}
+      {/* Periode: één segmented control voor de snelkeuzes, daarnaast de
+          datumvelden voor een eigen periode (netter dan losse chips, Jarno 08-09). */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <TermijnKeuze<string>
+          label="Periode"
+          waarde={actiefPreset ?? 'eigen'}
+          opties={[...presets.map((p) => ({ id: p.id, label: p.label })), { id: 'eigen', label: 'Eigen periode' }]}
+          onKies={(id) => { const p = presets.find((x) => x.id === id); if (p) setPeriode(p.periode); }}
+        />
         <div className="flex items-center gap-2" role="group" aria-label="Periodekeuze">
           <DateInput size="sm" value={periode.van} max={periode.tot} onChange={(v) => { if (v) setPeriode({ van: v, tot: v > periode.tot ? v : periode.tot }); }} aria-label="Van" />
           <span className="text-xs font-medium text-slate-500">t/m</span>
@@ -152,9 +156,12 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
                 return <option key={p.uid} value={p.uid}>{n}{bus ? ` · bus ${bus}` : ''}</option>;
               })}
             </Select>
-            {([['alle', 'Alle'], ['geladen', 'Geladen'], ['mislukt', 'Mislukt'], ['leeg', 'Leeg']] as Array<[StatusFilter, string]>).map(([id, label]) => (
-              <FilterChip key={id} active={status === id} onClick={() => setStatus(id)}>{label}</FilterChip>
-            ))}
+            <TermijnKeuze<StatusFilter>
+              label="Status"
+              waarde={status}
+              opties={[{ id: 'alle', label: 'Alle' }, { id: 'geladen', label: 'Geladen' }, { id: 'mislukt', label: 'Mislukt' }]}
+              onKies={setStatus}
+            />
           </>
         )}
         acties={<Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={exporteer} disabled={gefilterd.length === 0}>CSV</Button>}

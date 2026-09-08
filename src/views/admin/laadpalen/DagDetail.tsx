@@ -37,7 +37,7 @@ export function SessieStatusBadge({ s }: { s: SessieDetail }) {
   if (s.status === 'ACTIVE') return <Badge tone="blue" dot stil>Bezig</Badge>;
   if (s.mislukt) return <Badge tone="red" dot className="whitespace-nowrap">{klasseLabel(s.klasse)}</Badge>;
   if (s.laadbeurt) return <Badge tone="emerald" dot stil>Geladen</Badge>;
-  return <Badge tone="slate" stil>Leeg</Badge>;
+  return <Badge tone="slate" stil>0 kWh</Badge>;
 }
 
 export const socTekst = (s: SessieDetail) => (s.socStart === null && s.socEind === null ? '—' : `${s.socStart ?? '?'} → ${s.socEind ?? '?'} %`);
@@ -75,7 +75,7 @@ export function DagDetail({ dag, onSluit, onDag, eersteDag }: { dag: string | nu
       ['Start', 'Einde', 'Laadpunt', 'Bus', 'kWh', 'Duur (min)', 'Laadtijd (min)', 'Gem. kW', 'Max. kW', 'Batterij start %', 'Batterij einde %', 'Status', 'Classificatie', 'Voertuig'],
       ...data.sessies.map((s) => {
         const naam = puntNaam(s.evseUid, laadpunten);
-        return [s.start ? `${s.dag} ${uurLabel(s.start)}` : '', s.eind ? uurLabel(s.eind) : '', naam, busVoorLaadpunt(naam) ?? '', s.kwh, s.duurMin ?? '', s.laadMin ?? '', s.gemKw ?? '', s.maxKw ?? '', s.socStart ?? '', s.socEind ?? '', s.ongeldig ? 'ongeldig' : s.laadbeurt ? 'geladen' : s.mislukt ? 'mislukt' : 'leeg', klasseLabel(s.klasse), s.voertuig ?? ''];
+        return [s.start ? `${s.dag} ${uurLabel(s.start)}` : '', s.eind ? uurLabel(s.eind) : '', naam, busVoorLaadpunt(naam) ?? '', s.kwh, s.duurMin ?? '', s.laadMin ?? '', s.gemKw ?? '', s.maxKw ?? '', s.socStart ?? '', s.socEind ?? '', s.ongeldig ? 'ongeldig' : s.laadbeurt ? 'geladen' : s.mislukt ? 'mislukt' : '0 kWh', klasseLabel(s.klasse), s.voertuig ?? ''];
       }),
     ]);
   };
