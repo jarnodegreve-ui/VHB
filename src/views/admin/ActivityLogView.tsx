@@ -8,7 +8,7 @@ import { isoDate, addDagen } from '../../lib/datum';
 import { formatDayLong, formatRelatief, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { EmptyState, ModalHeader, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, FilterChip, MicroLabel, Switch } from '../../components/primitives';
+import { Badge, Button, MicroLabel, Switch, segItemClass } from '../../components/primitives';
 import { Paginering, TableToolbar } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
 import { Card, CardHeader } from '../../components/Card';
@@ -266,9 +266,9 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                 ['Deze week', kpi.week, 'unieke gebruikers'],
                 ['Aanmeldingen', kpi.aanmeldingen7d, 'laatste 7 dagen'],
               ].map(([k, v, sub]) => (
-                <div key={String(k)} className="min-w-[6rem]">
+                <div key={String(k)} className="w-36">
                   <dt className="text-micro">{k}</dt>
-                  <dd className="mt-0.5 text-lg font-bold leading-tight text-slate-900">{v}<span className="ml-1.5 text-2xs font-medium text-slate-500">{sub}</span></dd>
+                  <dd className="mt-0.5 flex items-baseline gap-1.5 text-lg font-bold leading-tight text-slate-900">{v}<span className="text-2xs font-medium text-slate-500">{sub}</span></dd>
                 </div>
               ))}
             </dl>
@@ -349,15 +349,19 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
           telling={`${filteredEntries.length} ${filteredEntries.length === 1 ? 'actie' : 'acties'}${bundels.length !== filteredEntries.length ? ` · ${bundels.length} regels` : ''}`}
           filters={(
             <>
-              <FilterChip active={dateWindow === 'today'} onClick={() => setDateWindow('today')}>Vandaag</FilterChip>
-              <FilterChip active={dateWindow === '7d'} onClick={() => setDateWindow('7d')}>7 dagen</FilterChip>
-              <FilterChip active={dateWindow === '30d'} onClick={() => setDateWindow('30d')}>{isLoadingWindow && dateWindow === '30d' ? '30 dagen…' : '30 dagen'}</FilterChip>
-              <FilterChip active={dateWindow === 'all'} onClick={() => setDateWindow('all')}>{isLoadingWindow && dateWindow === 'all' ? 'Alles…' : 'Alles'}</FilterChip>
+              <div role="group" aria-label="Periode" className="glass-segmented inline-flex h-9 shrink-0 items-center rounded-2xl p-1">
+                {([['today', 'Vandaag'], ['7d', '7 dagen'], ['30d', '30 dagen'], ['all', 'Alles']] as Array<[typeof dateWindow, string]>).map(([id, label]) => (
+                  // rauw: segmented control op de glass-rail, klassen via segItemClass
+                  <button key={id} type="button" onClick={() => setDateWindow(id)} aria-pressed={dateWindow === id} className={segItemClass(dateWindow === id, 'py-1.5')}>
+                    {isLoadingWindow && dateWindow === id ? `${label}…` : label}
+                  </button>
+                ))}
+              </div>
               <Select
                 aria-label="Categorie"
                 value={activeCategory}
                 onChange={(e) => setActiveCategory(e.target.value as typeof activeCategory)}
-                className="!w-auto min-h-11 sm:pointer-fine:min-h-8 !py-1.5 !text-xs font-semibold"
+                className="!h-9 !w-auto min-w-[11rem] !py-1 !text-xs font-semibold"
               >
                 <option value="all">Alle categorieën</option>
                 {(Object.keys(CATEGORY_LABELS) as Categorie[]).map((c) => (
@@ -368,7 +372,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                 aria-label="Wie"
                 value={actor}
                 onChange={(e) => setActor(e.target.value)}
-                className="!w-auto min-h-11 sm:pointer-fine:min-h-8 !py-1.5 !text-xs font-semibold"
+                className="!h-9 !w-auto min-w-[10rem] !py-1 !text-xs font-semibold"
               >
                 <option value="">Iedereen</option>
                 {actoren.map(([naam, n]) => <option key={naam} value={naam}>{naam} ({n})</option>)}
@@ -391,7 +395,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             <div className="surface-table overflow-hidden rounded-3xl">
               {perDag.map(({ dag, bundels: rijen }) => (
                 <section key={dag} aria-label={dagKop(dag, vandaag)}>
-                  <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 bg-surface-muted/60 px-4 py-2">
+                  <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 bg-surface-muted/60 px-4 py-1.5">
                     <h3 className="text-xs font-semibold text-slate-700">{dagKop(dag, vandaag)}{dag === vandaag || dag === addDagen(vandaag, -1) ? <span className="ml-2 font-normal text-slate-500">{formatDayLong(dag)}</span> : null}</h3>
                     <span className="text-2xs font-medium font-mono text-slate-500">{rijen.reduce((a, b) => a + b.items.length, 0)} {rijen.reduce((a, b) => a + b.items.length, 0) === 1 ? 'actie' : 'acties'}</span>
                   </div>
@@ -409,13 +413,13 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                             type="button"
                             onClick={() => toggleOpen(b.key)}
                             aria-expanded={isOpen}
-                            className="ios-pressable flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-soft-hover"
+                            className="ios-pressable grid w-full grid-cols-[3.25rem_minmax(0,1fr)_1rem] items-center gap-x-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-soft-hover sm:grid-cols-[4.5rem_8rem_minmax(0,1fr)_11rem_1rem]"
                           >
-                            <span className="w-14 shrink-0 pt-0.5 text-xs font-medium font-mono text-slate-500">
-                              {n > 1 ? <>{uur(laatste.createdAt)}<span className="block text-slate-400">–{uur(e.createdAt)}</span></> : uur(e.createdAt)}
+                            <span className="whitespace-nowrap text-xs font-medium font-mono text-slate-500">
+                              {n > 1 ? `${uur(laatste.createdAt)}–${uur(e.createdAt)}` : uur(e.createdAt)}
                             </span>
-                            <Badge tone={CATEGORY_TONES[e.category]} dot stil className="mt-0.5 hidden w-28 shrink-0 justify-center sm:inline-flex">{CATEGORY_LABELS[e.category]}</Badge>
-                            <span className="min-w-0 flex-1">
+                            <Badge tone={CATEGORY_TONES[e.category]} dot stil className="hidden w-full justify-center sm:inline-flex">{CATEGORY_LABELS[e.category]}</Badge>
+                            <span className="min-w-0">
                               <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                 <span className="text-sm font-semibold text-slate-800">{e.action}</span>
                                 {n > 1 && <Badge tone="oker" stil className="font-mono">{n}×</Badge>}
@@ -427,14 +431,14 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                                 </span>
                               )}
                             </span>
-                            <span className="hidden shrink-0 items-center gap-2 sm:flex">
+                            <span className="hidden min-w-0 items-center gap-2 sm:flex">
                               <Avatar naam={e.actorName} size="sm" />
-                              <span className="w-32 truncate text-xs font-medium text-slate-600" title={e.actorName}>{e.actorName}</span>
+                              <span className="min-w-0 truncate text-xs font-medium text-slate-600" title={e.actorName}>{e.actorName}</span>
                             </span>
-                            <ChevronDown size={16} className={cn('mt-0.5 shrink-0 text-slate-400 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
+                            <ChevronDown size={16} className={cn('justify-self-end text-slate-400 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
                           </button>
                           {isOpen && (
-                            <div className="bg-surface-muted/40 px-4 pb-4 pt-1 sm:pl-[calc(3.5rem+7rem+1.5rem)]">
+                            <div className="bg-surface-muted/40 px-4 pb-4 pt-1 sm:pl-[calc(4.5rem+8rem+2.5rem)]">
                               <p className="text-xs font-medium text-slate-500 sm:hidden">{e.actorName} · {e.actorRole}</p>
                               {n === 1 ? (
                                 <p className="mt-1 text-sm text-slate-700">{e.details || 'Geen details.'}</p>
