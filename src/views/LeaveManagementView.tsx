@@ -25,6 +25,18 @@ import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 // een registratie die de planning meteen raakt, en ze komt telefonisch binnen
 // tijdens de rit — dus hoort ze in de cockpit, niet achter een menu-item dat
 // verder over aanvragen beoordelen gaat.
+/**
+ * Bezetting van een kalenderdag in de verlofkalender (kleuren en titels
+ * gekozen door Jarno 08-09): groen = vrij (niemand goedgekeurd afwezig),
+ * oranje = deels vrij, rood = volzet. Volzet vanaf VOLZET_VANAF gelijktijdig
+ * goedgekeurde afwezigen; dat was ook de oude "krap"-grens. Eén plek om de
+ * drempel bij te stellen.
+ */
+const VOLZET_VANAF = 2;
+type Bezetting = 'vrij' | 'deels' | 'volzet';
+const bezettingVanDag = (afwezig: number): Bezetting => (afwezig <= 0 ? 'vrij' : afwezig < VOLZET_VANAF ? 'deels' : 'volzet');
+const BEZETTING_LABEL: Record<Bezetting, string> = { vrij: 'vrij', deels: 'deels vrij', volzet: 'volzet' };
+
 export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   // /verlof?nieuw=1 (command palette "Verlof aanvragen"): meteen het
@@ -609,10 +621,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </Button>
                 )}
               </MaandNavigatie>
-              {/* Legende als stille chips — zelfde puntjes als in de dagcellen. */}
+              {/* Legende als stille chips — zelfde puntjes als in de dagcellen
+                  (kleuren en titels: Jarno 08-09). */}
               <div className="flex flex-wrap gap-2">
-                <Badge tone="emerald" stil>Voldoende</Badge>
-                <Badge tone="amber" stil>Krap</Badge>
+                <Badge tone="emerald" stil>Vrij</Badge>
+                <Badge tone="amber" stil>Deels vrij</Badge>
+                <Badge tone="red" stil>Volzet</Badge>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
@@ -621,7 +635,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
                 const occupancyCount = getRequestsForDate(dateStr).length;
-                const statusColor = occupancyCount >= 2 ? 'bg-amber-500' : occupancyCount >= 1 ? 'bg-emerald-500' : 'bg-surface-muted';
+                const bezetting = bezettingVanDag(occupancyCount);
+                const statusColor = bezetting === 'volzet' ? 'bg-red-500' : bezetting === 'deels' ? 'bg-amber-500' : 'bg-emerald-500';
                 const isSelected = selectedDate === dateStr;
                 const isInDraftRange = isDateWithinDraftRange(dateStr);
                 const isDraftEdge = isDraftBoundary(dateStr);
@@ -630,6 +645,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <button
                     key={day}
                     onClick={() => handleCalendarDateClick(dateStr)}
+                    aria-label={`${day}: ${BEZETTING_LABEL[bezetting]}${occupancyCount > 0 ? `, ${occupancyCount} afwezig` : ''}`}
                     className={cn(
                       'aspect-square rounded-2xl border transition-all flex flex-col items-center justify-center relative group',
                       isSelected && 'border-oker-500 bg-oker-50 ring-4 ring-oker-500/10',
@@ -639,7 +655,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     )}
                   >
                     <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-oker-700' : 'text-slate-500 group-hover:text-slate-600')}>{day}</span>
-                    {occupancyCount > 0 && <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} />}
+                    <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} aria-hidden="true" />
                   </button>
                 );
               })}
