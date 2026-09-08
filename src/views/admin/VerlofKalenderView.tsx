@@ -100,6 +100,9 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
     approved: 4, pending: 3, cancelled: 2, rejected: 1,
   };
   for (const leave of leaveRequests) {
+    // Ziekte hoort niet bij verlof (Jarno 08-09): ziekmeldingen staan in
+    // Beheer › Ziekte en blijven hier buiten beeld.
+    if (leave.type === 'ziekte') continue;
     if (leave.endDate < monthStart || leave.startDate > monthEnd) continue;
     const start = leave.startDate < monthStart ? monthStart : leave.startDate;
     const end = leave.endDate > monthEnd ? monthEnd : leave.endDate;
@@ -346,10 +349,6 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
         <div className="flex items-center gap-2">
           <div className="w-4 h-3 rounded bg-blue-400" />
           <span className="font-medium text-slate-600">Klein verlet goedgekeurd</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-3 rounded bg-rose-500" />
-          <span className="font-medium text-slate-600">Ziekte</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-3 rounded bg-amber-400" />
