@@ -108,7 +108,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   // Lokale dag i.p.v. UTC (toISOString gaf 's nachts in BE de vorige dag).
   const today = isoDate(new Date());
-  const myRequests = leaveRequests.filter((r) => r.userId === user.id);
+  // Ziekte hoort niet bij verlof (Jarno 08-09): ziekmeldingen staan in
+  // dezelfde tabel (type 'ziekte') maar tellen hier nergens mee: niet in de
+  // kalender, niet in de dekking bij een beoordeling, niet in de eigen lijst.
+  // Ze leven in Beheer › Ziekte. Opslaan gebeurt wél op de volledige lijst,
+  // anders zouden ziekmeldingen bij een beslissing verdwijnen.
+  const verlofRequests = useMemo(() => leaveRequests.filter((r) => r.type !== 'ziekte'), [leaveRequests]);
+  const myRequests = verlofRequests.filter((r) => r.userId === user.id);
   const myPending = myRequests
     .filter((r) => r.status === 'pending')
     .sort((a, b) => a.startDate.localeCompare(b.startDate));
@@ -398,7 +404,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   }, []);
 
   const getRequestsForDate = (dateStr: string) =>
-    leaveRequests.filter((r) => {
+    verlofRequests.filter((r) => {
       const start = new Date(r.startDate);
       const end = new Date(r.endDate);
       const current = new Date(dateStr);
@@ -527,10 +533,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 </Card>
               )}
 
-              {/* Dekkingsimpact: hoeveel andere chauffeurs zijn deze periode al
-                  afwezig (goedgekeurd verlof/ziekte) — beslis met het gat in beeld. */}
+              {/* Dekkingsimpact: hoeveel andere chauffeurs hebben deze periode al
+                  goedgekeurd verlof (ziekte telt bewust niet mee). */}
               {(() => {
-                const others = leaveRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(reviewLeave.userId));
+                const others = verlofRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(reviewLeave.userId));
                 const overlap = others.filter((r) => r.startDate <= reviewLeave.endDate && r.endDate >= reviewLeave.startDate);
                 const uniqueOthers = new Set(overlap.map((r) => String(r.userId))).size;
                 if (uniqueOthers === 0) return null;
@@ -547,7 +553,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <Card tone="muted" padding="none" className="px-4 py-3">
                     <MicroLabel className="text-slate-500">Dekking deze periode</MicroLabel>
                     <p className="mt-1 text-xs font-normal text-slate-600">
-                      {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} afwezig in deze periode{peak > 1 ? `, tot ${peak} tegelijk op de drukste dag` : ''}.
+                      {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} met goedgekeurd verlof in deze periode{peak > 1 ? `, tot ${peak} tegelijk op de drukste dag` : ''}.
                     </p>
                   </Card>
                 );
@@ -668,7 +674,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 {/* Bewust geen CardHeader: die zet de aside op mobiel ónder de
                     titel, en een sluitknop hoort rechts naast de kop te blijven. */}
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-card-title">Afwezigheid op {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h3>
+                  <h3 className="text-card-title">Verlof op {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h3>
                   <IconButton label="Sluiten" variant="ghost" size="sm" onClick={() => setSelectedDate(null)}><X size={18} /></IconButton>
                 </div>
                 <div className="space-y-3">
@@ -723,7 +729,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           </div>
 
           {isPlanner && (() => {
-            const plannerPending = leaveRequests.filter((r) => {
+            const plannerPending = verlofRequests.filter((r) => {
               if (r.status !== 'pending') return false;
               const requester = users.find((u) => u.id === r.userId);
               const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
