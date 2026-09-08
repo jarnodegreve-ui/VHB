@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 
 /**
  * Dashboardvoorkeuren — "Dashboard aanpassen" (next-level 2, 06-09-2026):

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 import { isoDatum, optioneel, verplichteTekst } from './basis.js';
 
 /**
