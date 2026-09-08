@@ -990,13 +990,12 @@ html.dark {
    band-/vandaag-tint hebben, zoals de sectiekop-rij. */
 .mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100, 116, 139, 0.09) 3px, rgba(100, 116, 139, 0.09) 4px); }
 .dark .mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255, 255, 255, 0.05) 3px, rgba(255, 255, 255, 0.05) 4px); }
-/* Sectiekop-rij van de maandplanning (Jarno 08-09, vierde ronde: lichter,
-   past bij de kolomkop): één doorlopende band over sticky cel én dagcellen
-   in de slate-200-tint (flipt mee in dark mode via de tokens), met een
-   hairline boven en onder. Unlayered en met !important zodat hij wint van
-   de sticky-overrides hieronder, die de eerste cel anders in de gewone
-   sticky-kleur zetten en de band braken. */
-.mp-sectie, td.mp-sectie.mp-sticky { background-color: var(--color-slate-200) !important; border-top: 1px solid var(--color-slate-300) !important; border-bottom: 1px solid var(--color-slate-300) !important; }
+/* Sectiekop-rij van de maandplanning (Jarno 08-09, vijfde ronde: géén
+   gevulde band meer, die bleef "raar"): dezelfde achtergrond als de rijen,
+   een duidelijke lijn erboven en een hairline eronder; de tekst zelf doet
+   het werk (vet, iets groter, carbon). Unlayered en met !important zodat
+   de sticky cel niet in de gewone sticky-kleur terugvalt. */
+.mp-sectie, td.mp-sectie.mp-sticky { background-color: var(--color-surface-white) !important; border-top: 2px solid var(--color-slate-300) !important; border-bottom: 1px solid var(--color-slate-200) !important; }
 .mp-sectie:not(.mp-sticky) { border-left-color: transparent !important; }
 .mp-sectie.mp-sectie-ma { border-left: 2px solid var(--color-slate-300) !important; }
 /* Lege cel (geen dienst, geen code): fijn stippenpatroon, bewust anders
