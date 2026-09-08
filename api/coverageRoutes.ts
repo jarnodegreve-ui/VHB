@@ -20,7 +20,7 @@ import {
  * Dekking & advies — verhuisd uit api/index.ts (verbeterronde 22-08, nr. 8;
  * zelfde opknip-patroon als deviceRoutes/telegram). Pure verplaatsing: de
  * routes en berekeningen zijn ongewijzigd; de bereken-functies blijven
- * geëxporteerd voor de digest, de planner-chat, de import-preview en de
+ * geëxporteerd voor de digest, de import-preview en de
  * Telegram-bot.
  */
 

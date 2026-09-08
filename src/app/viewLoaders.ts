@@ -26,7 +26,6 @@ export const VIEW_LOADERS: Record<View, () => Promise<unknown>> = {
   dienstoverzicht: () => import('../views/ServicesView'),
   'beheer-dienstoverzicht': () => import('../views/admin/ManageServicesView'),
   dekking: () => import('../views/CoverageView'),
-  assistent: () => import('../views/AssistentView'),
   'verlof-kalender': () => import('../views/admin/VerlofKalenderView'),
   ziekte: () => import('../views/admin/ZiekteView'),
   vervaldata: () => import('../views/admin/VervaldataView'),

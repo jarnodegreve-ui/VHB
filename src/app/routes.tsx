@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
   Hash, HeartPulse, IdCard, Inbox, LayoutDashboard, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
-  Sparkles, Sunrise, Thermometer, Users, Zap, CalendarRange } from 'lucide-react';
+  Sunrise, Thermometer, Users, Zap, CalendarRange } from 'lucide-react';
 import type { Role, View } from '../types';
 
 /**
@@ -59,7 +59,6 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'dienstoverzicht', pad: 'dienstoverzicht', label: 'Dienstoverzicht', omschrijving: 'Alle diensten, uren en blokken.', icoon: Bus, sectie: 'planning', rollen: STAF },
   { view: 'beheer-dienstoverzicht', pad: 'beheer/dienstoverzicht', label: 'Beheer dienstoverzicht', omschrijving: 'Onderhoud het dienstschema.', icoon: ClipboardList, sectie: 'planning', rollen: STAF },
   { view: 'dekking', pad: 'openstaande-diensten', label: 'Openstaande diensten', kort: 'Open diensten', omschrijving: 'Niet-ingevulde diensten per dag t.o.v. het dag-type.', icoon: AlertTriangle, sectie: 'planning', rollen: STAF },
-  { view: 'assistent', pad: 'assistent', label: 'Assistent', omschrijving: 'Stel je planningsvraag aan de assistent.', icoon: Sparkles, sectie: 'planning', rollen: STAF },
   // — Beheer › Mensen —
   { view: 'verlof-kalender', pad: 'beheer/verlofkalender', label: 'Verlofkalender', omschrijving: 'Maandoverzicht van alle afwezigheden.', icoon: Calendar, sectie: 'mensen', rollen: STAF },
   { view: 'ziekte', pad: 'beheer/ziekte', label: 'Ziekte', omschrijving: 'Ziekmeldingen en de diensten die daardoor open staan.', icoon: Thermometer, sectie: 'mensen', rollen: STAF },

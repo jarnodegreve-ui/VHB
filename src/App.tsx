@@ -77,7 +77,6 @@ const LazyManageDiversionsView = lazyWithRetry(() => import('./views/admin/Manag
 const LazyManageServicesView = lazyWithRetry(() => import('./views/admin/ManageServicesView').then((module) => ({ default: module.ManageServicesView })));
 const LazyVerlofKalenderView = lazyWithRetry(() => import('./views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
 const LazyCoverageView = lazyWithRetry(() => import('./views/CoverageView').then((module) => ({ default: module.CoverageView })));
-const LazyAssistentView = lazyWithRetry(() => import('./views/AssistentView').then((module) => ({ default: module.AssistentView })));
 const LazyDebugView = lazyWithRetry(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
@@ -161,8 +160,7 @@ export default function App() {
   // views, dus wie onderaan Rooster op de dock-tab Verlof tikte, landde
   // halverwege Verlof mét de topbar-schaduw al aan (controle-ronde 27-08,
   // bevinding 10). Reset hier, vóór de nieuwe view rendert, zodat een view
-  // die bij het openen zelf scrolt (assistent naar het laatste bericht) het
-  // laatste woord houdt. Dezelfde tab nog eens kiezen = ook naar boven.
+  // die bij het openen zelf scrolt het laatste woord houdt. Dezelfde tab nog eens kiezen = ook naar boven.
   const setCurrentView = useCallback((next: View) => {
     scrollContainerRef.current?.scrollTo({ top: 0 });
     navigeer(next);
@@ -1608,7 +1606,6 @@ export default function App() {
               {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
               {resolvedCurrentView === 'roostersolver' && <Suspense fallback={<ViewLoader />}><LazyRoosterSolverView /></Suspense>}
-              {resolvedCurrentView === 'assistent' && <Suspense fallback={<ViewLoader />}><LazyAssistentView /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>)}
               {resolvedCurrentView === 'verlof' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>

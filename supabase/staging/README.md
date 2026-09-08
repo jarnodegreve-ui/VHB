@@ -159,7 +159,6 @@ op het productieproject):
 - `TELEGRAM_*` — geen bot; meldingen staan standaard al uit.
 - `OCPI_*` — geen laadpalen-koppeling; het OCPI-dashboard blijft leeg.
 - `VAPID_*` — geen web-push; de meldingen-knop verdwijnt.
-- `ANTHROPIC_API_KEY` — de assistent geeft een nette 503.
 - `UPSTASH_*`, `RATE_LIMIT_*`, `RETENTION_*`, `ROSTERING_EXPORT_SECRET` — defaults.
 
 De CSP in `vercel.json` bevat sinds 07-09 zowel de productie- als de staging-host
