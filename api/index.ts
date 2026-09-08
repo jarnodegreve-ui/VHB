@@ -15,14 +15,11 @@ import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorize
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
-import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit, createActionRateLimit } from "./rateLimit.js";
-// Type-only import: de SDK zelf wordt pas geladen als de assistent echt wordt
-// aangeroepen (dynamic import in de handler) — scheelt cold-start en houdt de
-// tests onafhankelijk van een API-sleutel.
-import type AnthropicClient from "@anthropic-ai/sdk";
+import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
+import { metPdfTitel } from "./_lib/pdfTitel.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
@@ -223,7 +220,6 @@ mountTelegramRoutes(app, {
   beslisRuil: beslisRuilIntern,
   registreerZiekmelding: registreerZiekmeldingIntern,
   wijsDienstToe: wijsDienstToeIntern,
-  draaiPlannerChat,
 });
 
 // Dekking & advies (expectations, gaten, advisor). Zie api/coverageRoutes.ts.
@@ -1081,238 +1077,6 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
 });
 
 
-// --- Planner-assistent: chat met Claude als motor (idee 6, 19-08) ---
-//
-// De harde invalregels blijven in code: het model krijgt alleen leestools die
-// de bestaande, deterministische berekeningen aanroepen (gaten, advies,
-// dagplanning, verlof) en adviseert alleen — er is bewust géén tool die iets
-// wijzigt of verstuurt. Kostenbeheersing: rate limit per gebruiker, begrensde
-// invoer, max 6 tool-rondes, en het maandbudget op de sleutel zelf (console).
-const plannerChatRateLimit = createActionRateLimit("planner-chat", 60);
-
-/** De assistent-kern (tools + tool-lus + beknoptheidscontract), losgetrokken
- *  van de route zodat óók de Telegram-bot vragen kan stellen. Zelfde model,
- *  zelfde leestools, zelfde grenzen — alleen de transportlaag verschilt. */
-async function draaiPlannerChat(
-  gesprek: Array<{ role: "user" | "assistant"; content: any }>,
-): Promise<{ ok: true; antwoord: string } | { ok: false; status: number; error: string; code?: string }> {
-    const apiKey = String(process.env.ANTHROPIC_API_KEY ?? "").trim();
-    if (!apiKey) {
-      return {
-        ok: false,
-        status: 503,
-        error: "De planner-assistent is nog niet geactiveerd, zet een ANTHROPIC_API_KEY in de Vercel-omgeving.",
-        code: "assistent_uitgeschakeld",
-      };
-    }
-
-    const vandaag = brusselsDay(new Date().toISOString());
-    const weekdagLang = new Date(`${vandaag}T12:00:00Z`).toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Brussels" });
-
-    const tools = [
-      {
-        name: "openstaande_diensten",
-        description: "Welke verwachte diensten zijn nog niet ingevuld, per dag, mét wie er eventueel uitviel en waarom. Gebruik dit voor elke vraag over gaten of openstaande diensten. Zonder datums: de komende 14 dagen.",
-        input_schema: {
-          type: "object",
-          properties: {
-            vanaf: { type: "string", description: "Begindatum YYYY-MM-DD (standaard vandaag)" },
-            tot: { type: "string", description: "Einddatum YYYY-MM-DD (standaard vandaag + 13 dagen)" },
-          },
-        },
-      },
-      {
-        name: "advies_voor_dienst",
-        description: "Het volledige invaladvies voor één openstaande dienst op één dag: de collega-samenvatting, passende kandidaten (met gewerkte dagen deze week en deze maand, en de reeks aaneengesloten werkdagen), wie niet past en waarom, en eventuele ruilopties in één stap. Roep dit altijd aan vóór je iemand aanraadt voor een dienst.",
-        input_schema: {
-          type: "object",
-          properties: {
-            datum: { type: "string", description: "YYYY-MM-DD" },
-            code: { type: "string", description: "Het dienstnummer, bv. 2603" },
-          },
-          required: ["datum", "code"],
-        },
-      },
-      {
-        name: "dagplanning",
-        description: "De planning van één dag: wie rijdt welke dienst (met tijden), wie is goedgekeurd afwezig (verlof/ziekte/klein verlet) en wie is vrij.",
-        input_schema: {
-          type: "object",
-          properties: { datum: { type: "string", description: "YYYY-MM-DD" } },
-          required: ["datum"],
-        },
-      },
-      {
-        name: "verlof_periode",
-        description: "Alle goedgekeurde afwezigheden (verlof, ziekte, klein verlet) die een periode raken. Gebruik dit voor vragen als 'wie is er volgende week op verlof'.",
-        input_schema: {
-          type: "object",
-          properties: {
-            vanaf: { type: "string", description: "YYYY-MM-DD" },
-            tot: { type: "string", description: "YYYY-MM-DD" },
-          },
-          required: ["vanaf", "tot"],
-        },
-      },
-    ];
-
-    const isoOf = (v: unknown, fallback: string) => (typeof v === "string" && ISO_DAY_RE.test(v) ? v : fallback);
-    const voerToolUit = async (naam: string, input: any): Promise<string> => {
-      if (naam === "openstaande_diensten") {
-        const vanaf = isoOf(input?.vanaf, vandaag);
-        const tot = isoOf(input?.tot, addDagenIso(vandaag, 13));
-        if (vanaf > tot) return JSON.stringify({ fout: "vanaf ligt na tot" });
-        const dagen = await berekenDekkingsGaten(vanaf, tot);
-        return JSON.stringify({
-          vanaf,
-          tot,
-          open: dagen.filter((d) => d.missing.length > 0).map((d) => ({ datum: d.date, diensten: d.missing, uitval: d.uitval ?? undefined })),
-        });
-      }
-      if (naam === "advies_voor_dienst") {
-        const datum = isoOf(input?.datum, "");
-        const code = String(input?.code ?? "").trim();
-        if (!datum || !code) return JSON.stringify({ fout: "datum (YYYY-MM-DD) en code zijn verplicht" });
-        const advies = await berekenCoverageAdvies(datum, code);
-        // Compact doorgeven — alleen wat het model nodig heeft om te adviseren.
-        return JSON.stringify({
-          samenvatting: advies.samenvatting,
-          tijden: advies.segmenten,
-          tijdenOnbekend: advies.tijdenOnbekend,
-          // Volgorde = de sortering van de advisor (minst gewerkt deze week
-          // eerst); de teller-namen zeggen het model wat de cijfers betekenen.
-          passend: advies.kandidaten.filter((k) => k.past).map((k) => ({ naam: k.name, dagenDezeWeek: k.dagenDezeWeek, reeksWerkdagen: k.dagenNaElkaar, dagenDezeMaand: k.dagenDezeMaand })),
-          pastNiet: advies.kandidaten.filter((k) => !k.past).map((k) => ({ naam: k.name, redenen: k.redenen })),
-          ruilOpties: advies.kettingen.map((k) => ({ wieRijdtHetGat: k.vanNaam, staatAf: k.viaCode, tijden: k.viaTijden, overgenomenDoor: k.naarNaam })),
-        });
-      }
-      if (naam === "dagplanning") {
-        const datum = isoOf(input?.datum, "");
-        if (!datum) return JSON.stringify({ fout: "datum (YYYY-MM-DD) is verplicht" });
-        const [users, leave, dagShifts] = await Promise.all([
-          getUsersData(),
-          getLeaveData({ endOnOrAfter: datum }),
-          getPlanningData({ monthIso: datum.slice(0, 7) }),
-        ]);
-        const naam = new Map((users as any[]).map((u) => [String(u.id), String(u.name)]));
-        const rijders = (dagShifts as any[])
-          .filter((s) => String(s.date) === datum)
-          .map((s) => ({ naam: naam.get(String(s.driverId)) ?? "onbekend", dienst: String(s.line ?? ""), tijden: `${s.startTime}–${s.endTime}` }))
-          .sort((a, b) => a.tijden.localeCompare(b.tijden));
-        const afwezig = (leave as any[])
-          .filter((l) => l?.status === "approved" && String(l.startDate) <= datum && datum <= String(l.endDate))
-          .map((l) => ({ naam: naam.get(String(l.userId)) ?? "onbekend", type: LEAVE_TYPE_LABEL[String(l.type)] ?? String(l.type) }));
-        const bezet = new Set([...rijders.map((r) => r.naam), ...afwezig.map((a) => a.naam)]);
-        const vrij = (users as any[])
-          .filter((u) => u.isActive !== false && u.role === "chauffeur" && String(u.name).toLowerCase() !== "beheerder" && !bezet.has(String(u.name)))
-          .map((u) => String(u.name))
-          .sort((a, b) => a.localeCompare(b));
-        return JSON.stringify({ datum, rijders, afwezig, vrij });
-      }
-      if (naam === "verlof_periode") {
-        const vanaf = isoOf(input?.vanaf, "");
-        const tot = isoOf(input?.tot, "");
-        if (!vanaf || !tot || vanaf > tot) return JSON.stringify({ fout: "geldige vanaf/tot (YYYY-MM-DD) verplicht" });
-        const [users, leave] = await Promise.all([getUsersData(), getLeaveData({ endOnOrAfter: vanaf })]);
-        const naam = new Map((users as any[]).map((u) => [String(u.id), String(u.name)]));
-        const rijen = (leave as any[])
-          .filter((l) => l?.status === "approved" && String(l.startDate) <= tot && String(l.endDate) >= vanaf)
-          .map((l) => ({ naam: naam.get(String(l.userId)) ?? "onbekend", type: LEAVE_TYPE_LABEL[String(l.type)] ?? String(l.type), van: String(l.startDate), totEnMet: String(l.endDate) }))
-          .sort((a, b) => a.van.localeCompare(b.van));
-        return JSON.stringify({ vanaf, tot, afwezigheden: rijen });
-      }
-      return JSON.stringify({ fout: `Onbekende tool: ${naam}` });
-    };
-
-    const system = [
-      `Je bent de planner-assistent van het VHB-personeelsportaal, de digitale collega van de planning van busbedrijf VHB (onderaannemer van De Lijn). Vandaag is ${weekdagLang} (${vandaag}).`,
-      "Je helpt de planner met vragen over de personeelsplanning: openstaande diensten, wie kan invallen, wie werkt of afwezig is, en hoe een gat opgelost kan worden.",
-      "Baseer élk feit (namen, diensten, tijden, datums) op de uitvoer van je tools. Verzin nooit namen of diensten; geeft een tool niets terug, zeg dat dan eerlijk.",
-      "De invalregels zitten al in de tools verwerkt: minstens 8 uur rust ten opzichte van de aansluitende werkdagen, maximaal 6 gewerkte dagen na elkaar, en schoolvervoerchauffeurs rijden geen lijndiensten. Volg het tool-advies en reken rusttijden nooit zelf uit.",
-      "Je adviseert alleen, je kunt niets wijzigen of versturen. Verwijs voor het uitvoeren naar het portaal: toewijzen via Openstaande diensten, wissels via de Maandplanning.",
-      // Beknoptheid als hard contract i.p.v. "kort en concreet" — feedback
-      // Jarno 19-08: de antwoorden waren veel te lang.
-      "Wees kort: standaard twee tot vier zinnen. Noem bij een invaladvies alleen de beste twee à drie kandidaten, de tools leveren ze al in de juiste volgorde (wie deze week het minst werkte eerst, dan de kortste reeks aaneengesloten werkdagen, dan het laagste maandtotaal). Som nooit een volledige kandidaten- of dagenlijst op; details zoals wie niet past en waarom, ruilopties of volledige dagplanningen geef je alleen wanneer de planner er expliciet naar vraagt.",
-      "Antwoord in het Nederlands, in gewone lopende tekst zonder opmaaktekens (geen sterretjes, koppen of lijstjes met streepjes tenzij echt nodig). Schrijf datums als 'za 29 aug'. Interpreteer relatieve datums ('zaterdag', 'volgende week') ten opzichte van vandaag.",
-    ].join("\n");
-
-    const AnthropicSdk = (await import("@anthropic-ai/sdk")).default;
-    const client: AnthropicClient = new AnthropicSdk({ apiKey });
-    // Sonnet 5 (keuze Jarno 19-08): vrijwel Opus-niveau op dit werk — het
-    // denkwerk zit in de deterministische tools — maar ~40% goedkoper en
-    // vlotter in een chat. Effort laag om dezelfde reden. Via de env-var
-    // PLANNER_CHAT_MODEL is zonder code-wijziging om te schakelen (bv. naar
-    // claude-opus-5 als de vragen toch te complex blijken).
-    const model = String(process.env.PLANNER_CHAT_MODEL ?? "").trim() || "claude-sonnet-5";
-    const vraagModel = (messages: any[]) =>
-      (client.messages.create as any)({
-        model,
-        max_tokens: 8192,
-        output_config: { effort: "low" },
-        system,
-        tools,
-        messages,
-      });
-
-    let response: any = await vraagModel(gesprek);
-    let rondes = 0;
-    while (response.stop_reason === "tool_use" && rondes < 6) {
-      rondes++;
-      gesprek.push({ role: "assistant", content: response.content });
-      const resultaten: any[] = [];
-      for (const blok of response.content) {
-        if (blok.type !== "tool_use") continue;
-        let uit: string;
-        try {
-          uit = await voerToolUit(String(blok.name), blok.input);
-        } catch (e: any) {
-          uit = JSON.stringify({ fout: e?.message ?? "tool mislukt" });
-        }
-        resultaten.push({ type: "tool_result", tool_use_id: blok.id, content: uit });
-      }
-      gesprek.push({ role: "user", content: resultaten });
-      response = await vraagModel(gesprek);
-    }
-
-    // Een veiligheidsfilter kan een vraag afwijzen (stop_reason "refusal") —
-    // in dit domein vrijwel uitgesloten, maar dan liever een nette zin dan
-    // een leeg antwoord.
-    if (response.stop_reason === "refusal") {
-      return { ok: true, antwoord: "Daar kan ik binnen dit portaal niet mee helpen, stel gerust een planningsvraag." };
-    }
-    const antwoord = (response.content as any[])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-    return { ok: true, antwoord: antwoord || "Daar kon ik geen antwoord op formuleren, probeer de vraag anders te stellen." };
-}
-
-app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), plannerChatRateLimit, async (req: AuthenticatedRequest, res) => {
-  try {
-    // Chatgeschiedenis van de client, hard begrensd (dit endpoint kost geld
-    // per token): max 16 beurten van elk max 4000 tekens, alleen platte tekst.
-    const ruw = Array.isArray(req.body?.messages) ? req.body.messages : [];
-    const gesprek: Array<{ role: "user" | "assistant"; content: any }> = ruw
-      .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m?.content === "string" && m.content.trim())
-      .slice(-16)
-      .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
-    if (gesprek.length === 0 || gesprek[gesprek.length - 1].role !== "user") {
-      return res.status(400).json({ error: "Stuur minstens één vraag mee." });
-    }
-    const uit = await draaiPlannerChat(gesprek);
-    // 'in'-narrowing i.p.v. uit.ok: deze tsconfig narrowt boolean-
-    // discriminanten niet betrouwbaar.
-    if ("antwoord" in uit) {
-      res.json({ antwoord: uit.antwoord });
-      return;
-    }
-    res.status(uit.status).json({ error: uit.error, ...(uit.code ? { code: uit.code } : {}) });
-  } catch (err: any) {
-    console.error("[planner-chat] mislukt:", err?.message ?? err);
-    res.status(500).json({ error: "De assistent kon je vraag niet beantwoorden, probeer het zo opnieuw." });
-  }
-});
 
 
 // De verloftype-labels (LEAVE_TYPE_LABEL) wonen sinds de consolidatie in
@@ -5772,10 +5536,14 @@ app.post("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Auth
     if (!base64Match) {
       return res.status(400).json({ error: "Bestand is geen geldige PDF (base64 data URL verwacht)." });
     }
-    const buffer = Buffer.from(base64Match[1], "base64");
-    if (buffer.length === 0) {
+    const geupload = Buffer.from(base64Match[1], "base64");
+    if (geupload.length === 0) {
       return res.status(400).json({ error: "Bestand is leeg." });
     }
+    // De browser toont in de PDF-balk de Title-metadata van het document
+    // (het planningspakket levert "ritbladje"): op "Ritblad" zetten,
+    // best-effort (api/_lib/pdfTitel.ts). Verzoek Jarno 08-09.
+    const buffer = await metPdfTitel(geupload, "Ritblad");
 
     // Vorige record ophalen zodat we het oude bestand kunnen verwijderen.
     const { data: existing } = await supabaseAdmin
