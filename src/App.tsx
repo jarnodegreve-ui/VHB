@@ -99,7 +99,6 @@ const LazyRitblaadjesView = lazyWithRetry(() => VIEW_LOADERS['ritblaadjes']().th
 const LazyDocumentsView = lazyWithRetry(() => VIEW_LOADERS['documenten']().then((m) => ({ default: (m as typeof import('./views/DocumentsView')).DocumentsView })));
 const LazyCapacityView = lazyWithRetry(() => VIEW_LOADERS['bezetting']().then((m) => ({ default: (m as typeof import('./views/CapacityView')).CapacityView })));
 const LazyDesignsysteemView = lazyWithRetry(() => VIEW_LOADERS['designsysteem']().then((m) => ({ default: (m as typeof import('./views/admin/DesignsysteemView')).DesignsysteemView })));
-const LazyRoosterSolverView = lazyWithRetry(() => VIEW_LOADERS['roostersolver']().then((m) => ({ default: (m as typeof import('./views/admin/RoosterSolverView')).RoosterSolverView })));
 const LazyInstellingenView = lazyWithRetry(() => VIEW_LOADERS['instellingen']().then((m) => ({ default: (m as typeof import('./views/InstellingenView')).InstellingenView })));
 const LazyPlannerDashboardWidgets = lazyWithRetry(() => import('./views/PlannerDashboardWidgets').then((module) => ({ default: module.PlannerDashboardWidgets })));
 const LazyServicesView = lazyWithRetry(() => import('./views/ServicesView').then((module) => ({ default: module.ServicesView })));
@@ -1605,7 +1604,6 @@ export default function App() {
               {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
               {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
-              {resolvedCurrentView === 'roostersolver' && <Suspense fallback={<ViewLoader />}><LazyRoosterSolverView /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>)}
               {resolvedCurrentView === 'verlof' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
