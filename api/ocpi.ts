@@ -883,10 +883,13 @@ const laadAlleSessiesLicht = async (): Promise<SessieDetail[]> => {
 /** ocpi_dagpieken kan nog ontbreken (migratie niet gedraaid): dan stil leeg. */
 const leesDagpiekenTabel = async (van?: string, tot?: string): Promise<Map<string, DagPiek>> => {
   try {
-    let q = db!.from("ocpi_dagpieken").select("dag,piek_kw,piek_ts,charging");
-    if (van) q = q.gte("dag", van);
-    if (tot) q = q.lte("dag", tot);
-    const rijen = await selectAlles((v, t) => q.order("dag", { ascending: true }).range(v, t));
+    // Builder per pagina opnieuw opbouwen: supabase-js-builders zijn muteerbaar.
+    const rijen = await selectAlles((v, t) => {
+      let q = db!.from("ocpi_dagpieken").select("dag,piek_kw,piek_ts,charging");
+      if (van) q = q.gte("dag", van);
+      if (tot) q = q.lte("dag", tot);
+      return q.order("dag", { ascending: true }).range(v, t);
+    });
     return dagpiekenUitTabel(rijen);
   } catch (e: any) {
     if (!/does not exist|42P01|schema cache/i.test(String(e?.message ?? e))) console.error("[ocpi] dagpieken lezen mislukt:", e?.message ?? e);
