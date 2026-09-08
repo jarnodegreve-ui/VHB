@@ -3,7 +3,7 @@ import { AlertTriangle, Clock, Download, Users } from 'lucide-react';
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
-import { KIND_BADGE_TONE } from '../../lib/planningKind';
+import { celBadgeTone } from '../../lib/planningKind';
 import { EmptyState, PageHeader } from '../../components/ui';
 import { Badge, Button, Chip, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
@@ -14,7 +14,6 @@ import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken, sug
 /** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
 // Gedeelde kleurentaal met de Maandplanning (src/lib/planningKind.ts) —
 // voorheen hadden beide views een tegenstrijdige legende.
-const ASSIGNMENT_KIND_TONES = KIND_BADGE_TONE;
 
 export function PlanningMatrixView({
   rows,
@@ -520,7 +519,7 @@ export function PlanningMatrixView({
                         <tr key={assignment.driver} className="hover:bg-slate-50/60 transition-colors">
                           <Td className="font-semibold text-slate-800">{assignment.driver}</Td>
                           <Td>
-                            <Chip tone={ASSIGNMENT_KIND_TONES[assignment.kind] ?? 'slate'} className="uppercase">
+                            <Chip tone={celBadgeTone(assignment)} className="uppercase">
                               {assignment.code}
                             </Chip>
                           </Td>
@@ -537,7 +536,7 @@ export function PlanningMatrixView({
                     <div key={assignment.driver} className="p-5">
                       <p className="text-sm font-semibold text-slate-800">{assignment.driver}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Chip tone={ASSIGNMENT_KIND_TONES[assignment.kind] ?? 'slate'} className="uppercase">
+                        <Chip tone={celBadgeTone(assignment)} className="uppercase">
                           {assignment.code}
                         </Chip>
                         <span className="text-xs font-semibold text-slate-500">{assignment.label}</span>

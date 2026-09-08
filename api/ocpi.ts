@@ -1052,32 +1052,6 @@ export const mountOcpiRoutes = (app: express.Express) => {
     }
   });
 
-  // Samenvatting voor de planner-dashboard-tegel: alleen tellers en het
-  // totaalvermogen — planner én admin (het volle dashboard blijft admin-only,
-  // maar "hoeveel bussen hangen er aan de lader" is operationele kerninfo).
-  app.get("/api/ocpi/summary", authenticate, requireRole("planner", "admin"), async (_req: AuthenticatedRequest, res) => {
-    if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
-    try {
-      const [evsesR, sessR] = await Promise.all([
-        db.from("ocpi_evses").select("status"),
-        db.from("ocpi_sessions").select("raw,evse_uid,start_date_time").eq("status", "ACTIVE"),
-      ]);
-      const statussen = ((evsesR.data ?? []) as any[]).map((e) => String(e.status ?? ""));
-      // Zelfde spooksessie-dedupe als het dashboard: jongste sessie per EVSE.
-      const sessies = perEvseNieuwste((sessR.data ?? []) as any[]);
-      const totalPowerKw = Math.round(sessies.reduce((a, r) => a + (dimensiesUitRaw(r.raw).powerKw ?? 0), 0) * 10) / 10;
-      res.json({
-        evses: statussen.length,
-        charging: statussen.filter((st) => st === "CHARGING").length,
-        outOfOrder: statussen.filter((st) => st === "INOPERATIVE" || st === "OUTOFORDER").length,
-        totalPowerKw,
-      });
-    } catch (err: any) {
-      console.error("[ocpi] summary mislukt:", err?.message ?? err);
-      res.status(500).json({ error: "OCPI-samenvatting mislukt" });
-    }
-  });
-
   // Beheer: huidige registratiestatus (zonder de geheime tokens prijs te geven).
   app.get("/api/ocpi/status", authenticate, requireRole("admin"), async (_req: AuthenticatedRequest, res) => {
     const reg = await getOcpiRegistration();

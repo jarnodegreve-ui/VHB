@@ -43,7 +43,6 @@ export const PLANNER_TEGELS: readonly TegelDef[] = [
   { id: 'beschikbaar', label: 'Beschikbaar', omschrijving: 'Vrij en inzetbaar.', groep: 'tegels' },
   { id: 'afwezig', label: 'Afwezig', omschrijving: 'Ziek en verlof.', groep: 'tegels' },
   { id: 'omleidingen', label: 'Omleidingen', omschrijving: 'Aantal actieve omleidingen.', groep: 'tegels' },
-  { id: 'laadplein', label: 'Aan de lader', omschrijving: 'Alleen zichtbaar met OCPI-data.', groep: 'tegels' },
   { id: 'open-taken', label: 'Open taken', omschrijving: 'De werkvoorraad van de planner.', essentieel: true, groep: 'panelen' },
   { id: 'activiteit', label: 'Live activiteit', omschrijving: 'Laatste acties (admin) of recente updates.', groep: 'panelen' },
   { id: 'deze-week', label: 'Deze week', omschrijving: 'Dekking per dag (breed scherm).', groep: 'panelen' },
