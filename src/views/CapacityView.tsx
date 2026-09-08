@@ -23,6 +23,12 @@ import { DUR } from '../lib/motion';
 import { useRouteParam } from '../app/router';
 
 
+/** Sectiekop in het grid en de daglijst ("Chauffeurs", "Flexi/invallers",
+ *  "Vrij / afwezig"): duidelijker dan een micro-label (Jarno 08-09), met
+ *  een donkerdere band, vette kop en een gouden accentstreep links. */
+const SECTIE_KOP = 'text-xs font-bold uppercase tracking-wide text-slate-800';
+const SECTIE_BAND = 'bg-slate-200/70 border-l-4 border-l-oker-500';
+
 /** Maandag (ISO-datum) van de week waarin `iso` valt. */
 const mondayOf = (iso: string) => {
   const d = new Date(`${iso}T00:00:00`);
@@ -683,8 +689,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               van de band behouden weekend-arcering en de
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
-                          <td className="mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2 bg-slate-100/90">
-                            <div className={cn('inline-flex items-center px-4 py-1.5', microLabelClass)}>
+                          <td className={cn('mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2', SECTIE_BAND)}>
+                            <div className={cn('inline-flex items-center px-3 py-2', SECTIE_KOP)}>
                               {section}
                             </div>
                           </td>
@@ -695,7 +701,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               <td
                                 key={iso}
                                 className={cn(
-                                  'p-0 border-y border-slate-300 bg-slate-100/80',
+                                  'p-0 border-y border-slate-300 bg-slate-200/50',
                                   h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-slate-200',
                                   today ? 'bg-oker-100/60' : h.weekend ? 'mp-hatch' : '',
                                 )}
@@ -900,7 +906,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 ) : dagRijen.secties.map((sectie) => (
                   <Fragment key={sectie.naam}>
                     {showSections && (
-                      <div className={cn('bg-slate-100/80 px-4 py-1.5', microLabelClass)}>{sectie.naam}</div>
+                      <div className={cn(SECTIE_BAND, 'px-4 py-2', SECTIE_KOP)}>{sectie.naam}</div>
                     )}
                     {sectie.rijen.map(({ drv, cell }) => {
                       if (!cell) return null;
@@ -947,7 +953,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       type="button"
                       onClick={() => setToonRust((v) => !v)}
                       aria-expanded={toonRust}
-                      className={cn('w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 active:bg-black/[0.04] transition-colors tabular-nums', microLabelClass)}
+                      className={cn('w-full flex items-center justify-between gap-3 px-4 py-2.5 min-h-11 active:bg-black/[0.04] transition-colors', SECTIE_BAND, SECTIE_KOP)}
                     >
                       <span>Vrij / afwezig · {dagRijen.rust.length}</span>
                       <ChevronRight size={14} className={cn('transition-transform', toonRust && 'rotate-90')} />
