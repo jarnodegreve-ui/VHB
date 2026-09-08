@@ -26,8 +26,10 @@ import { useRouteParam } from '../app/router';
 /** Sectiekop in het grid en de daglijst ("Chauffeurs", "Flexi/invallers",
  *  "Vrij / afwezig"): duidelijker dan een micro-label (Jarno 08-09), met
  *  een donkerdere band, vette kop en een gouden accentstreep links. */
-const SECTIE_KOP = 'text-xs font-bold uppercase tracking-wide text-slate-800';
-const SECTIE_BAND = 'bg-slate-200/70 border-l-4 border-l-oker-500';
+const SECTIE_KOP = 'text-xs font-bold uppercase tracking-wide text-white';
+// Carbon band (bg-ink = altijd donker, ook in dark mode) met gouden streep:
+// een lichte band bleef te veel opgaan in de rijen (Jarno 08-09, tweede ronde).
+const SECTIE_BAND = 'bg-ink border-l-4 border-l-oker-500';
 
 /** Maandag (ISO-datum) van de week waarin `iso` valt. */
 const mondayOf = (iso: string) => {
@@ -701,9 +703,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               <td
                                 key={iso}
                                 className={cn(
-                                  'p-0 border-y border-slate-300 bg-slate-200/50',
-                                  h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-slate-200',
-                                  today ? 'bg-oker-100/60' : h.weekend ? 'mp-hatch' : '',
+                                  'p-0 border-y border-slate-300 bg-ink',
+                                  h.isMonday ? 'border-l-2 border-l-slate-500' : 'border-l border-slate-700',
+                                  today ? 'border-t-2 border-t-oker-500' : '',
                                 )}
                               />
                             );
