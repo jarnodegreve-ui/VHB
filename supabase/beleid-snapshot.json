@@ -678,6 +678,54 @@
       "grantable": false,
       "grantee": "authenticated",
       "privilege": "SELECT",
+      "tabel": "ocpi_dagpieken"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "ocpi_dagpieken"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "ocpi_dagpieken"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "ocpi_dagpieken"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "ocpi_dagpieken"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "ocpi_dagpieken"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "ocpi_dagpieken"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "ocpi_dagpieken"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
       "tabel": "ocpi_evses"
     },
     {
@@ -2086,6 +2134,11 @@
       "force_rls": false,
       "rls": true,
       "tabel": "ocpi_connectors"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "ocpi_dagpieken"
     },
     {
       "force_rls": false,
