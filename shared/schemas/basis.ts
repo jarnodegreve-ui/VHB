@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z } from './zod.js';
 
 /**
  * Bouwstenen voor de gedeelde API-contracten (shared/schemas/*).

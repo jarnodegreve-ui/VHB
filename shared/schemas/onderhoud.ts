@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z } from './zod.js';
 import { optioneel } from './basis.js';
 import { GEEN_ONDERHOUD, ONDERHOUD_STANDAARD_TEKST, ONDERHOUD_TEKST_MAX } from './constanten.js';
 

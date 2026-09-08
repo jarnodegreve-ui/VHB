@@ -1,4 +1,4 @@
-import { z } from './zod';
+import { z } from './zod.js';
 import { isoDatum, leegNaarUndefined, optioneel, verplichteTekst } from './basis.js';
 import { ROLLEN, WACHTWOORD_MIN } from './constanten.js';
 import { dashboardVoorkeurenSchema } from './dashboardVoorkeuren.js';
