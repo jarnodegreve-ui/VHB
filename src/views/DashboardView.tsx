@@ -35,7 +35,6 @@ export function DashboardView({ notes = [],
   leaveRequests = [],
   isInitialLoad = false,
   onNavigate,
-  onChangePassword,
 }: {
   user: User;
   shifts: Shift[];
@@ -44,28 +43,8 @@ export function DashboardView({ notes = [],
   leaveRequests?: LeaveRequest[];
   isInitialLoad?: boolean;
   onNavigate?: (view: View) => void;
-  /** Opent de wachtwoord-wijzigen-modal (voor de eenmalige welkomstkaart). */
-  onChangePassword?: () => void;
 }) {
   const [now, setNow] = useState(new Date());
-  // Eenmalige welkomstkaart bij de allereerste keer op het dashboard: nieuwe
-  // chauffeurs krijgen een tijdelijk wachtwoord van de beheerder en hadden
-  // verder geen enkele uitleg. Weggeklikt = weggeklikt (localStorage).
-  const [showWelcome, setShowWelcome] = useState<boolean>(() => {
-    try {
-      return !window.localStorage.getItem(`vhb-welkom-gezien-${user.id}`);
-    } catch {
-      return false;
-    }
-  });
-  const dismissWelcome = () => {
-    setShowWelcome(false);
-    try {
-      window.localStorage.setItem(`vhb-welkom-gezien-${user.id}`, new Date().toISOString());
-    } catch {
-      // localStorage geblokkeerd — kaart komt dan gewoon nog eens terug.
-    }
-  };
   // Detailvenster voor een omleiding — opent als side panel, geen paginawissel.
   const [openDiversion, setOpenDiversion] = useState<Diversion | null>(null);
   // Dashboard op maat (06-09): verborgen tegels + volgorde per gebruiker.
@@ -391,32 +370,8 @@ export function DashboardView({ notes = [],
 
   return (
     <div className="space-y-5">
-      {/* === Eenmalige welkomstkaart (eerste bezoek) ===
-          Compact: één regel uitleg + de twee knoppen, zodat "de dienst van
-          vandaag" ook op een telefoon boven de vouw blijft (productprincipe 1). */}
-      {showWelcome && (
-        <Card tone="accent" padding="sm" className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-slate-900">Welkom, {firstName}</p>
-            <p className="mt-0.5 text-sm text-slate-600">
-              {onChangePassword ? 'Kies eerst een eigen wachtwoord; daarna vind je hier je rooster, verlof, dienstruil en omleidingen.' : 'Hier vind je je rooster, verlof, dienstruil en omleidingen.'}
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            {onChangePassword && (
-              <Button variant="primary" size="sm" onClick={() => { dismissWelcome(); onChangePassword(); }}>
-                Wachtwoord kiezen
-              </Button>
-            )}
-            <Button variant="secondary" size="sm" onClick={dismissWelcome}>
-              {onChangePassword ? 'Later' : 'Aan de slag'}
-            </Button>
-          </div>
-        </Card>
-      )}
-
       {/* Na een release: één dismissbare kaart met wat er nieuw is (src/app/watIsNieuw.ts). */}
-      {!showWelcome && <WatIsNieuwKaart rol={user.role} onNavigate={onNavigate} />}
+      <WatIsNieuwKaart rol={user.role} onNavigate={onNavigate} />
 
       {/* === Persoonlijke header ===
           Zelfde kop-raster als PageHeader (flex-wrap, actie rechts via
