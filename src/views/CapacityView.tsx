@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Download, RotateCcw, Search, Table2, TriangleAlert } from 'lucide-react';
 import { BrandSpinner } from '../components/BrandSpinner';
@@ -533,6 +533,22 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // Data-gedreven (geen hardgecodeerde codes) → toont "BV = Verlof", "ziek =
   // Afwezig", "tk = Tijdskrediet"… precies zoals ze geïmporteerd zijn. Betekenis
   // = de omschrijving uit de planningscodes indien ingesteld, anders de categorie.
+  // Hoogte van de dagkop, gemeten: de sectiekoppen plakken er precies onder
+  // (sticky top = kophoogte). ResizeObserver volgt een andere dagenreeks of
+  // een lettergrootte-wissel.
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+  const [kopHoogte, setKopHoogte] = useState(0);
+  useLayoutEffect(() => {
+    const el = theadRef.current;
+    if (!el) return;
+    const meet = () => setKopHoogte(Math.round(el.getBoundingClientRect().height));
+    meet();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(meet);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mobielDag]);
+
   const codeLegend = useMemo(() => {
     const map = new Map<string, { code: string; kind: CellKind; meaning: string }>();
     let serviceExample: string | null = null;
@@ -637,9 +653,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           {/* Desktop: Excel-achtig maandgrid (chauffeur × dag) — dunne gridlijnen,
               platte dienstnummers, gearceerde weekend-kolommen. */}
           <Card padding="none" className="hidden md:block overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Eigen scroll-viewport (verticaal én horizontaal): zo plakken de
+                dagkop bovenaan en de sectiekoppen eronder tijdens het scrollen
+                (Jarno 08-09). De hoogte laat de kop van de pagina staan. */}
+            <div className="max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain">
               <table className="w-full text-left border-collapse">
-                <thead>
+                <thead ref={theadRef}>
                   <tr>
                     <th className={cn('mp-sticky sticky left-0 top-0 z-30 bg-surface-muted px-4 py-3 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300', microLabelClass)}>Chauffeur</th>
                     {visibleDates.map((iso) => {
@@ -692,7 +711,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               van de band behouden weekend-arcering en de
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
-                          <td className={cn('mp-sticky sticky left-0 z-10 p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
+                          <td className={cn('mp-sticky sticky left-0 z-20 p-0 border-r-2 border-r-slate-300', SECTIE_BAND)} style={{ top: kopHoogte }}>
                             <div className={cn('inline-flex items-baseline gap-1.5 px-3 py-2', SECTIE_KOP)}>
                               {section}
                               <span className="font-mono text-2xs font-semibold normal-case tracking-normal text-slate-500">{zichtbareDrivers.filter((d) => sectionOf(d) === section).length}</span>
@@ -704,9 +723,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               <td
                                 key={iso}
                                 className={cn(
-                                  'mp-sectie p-0 border-l',
+                                  'mp-sectie sticky z-10 p-0 border-l',
                                   h.isMonday && 'mp-sectie-ma',
                                 )}
+                                style={{ top: kopHoogte }}
                               />
                             );
                           })}
