@@ -60,6 +60,126 @@ export const ACTIVITY = [
   { id: 'a2', createdAt: new Date(Date.now() - 3600e3).toISOString(), actorName: 'Jarno De Greve', actorRole: 'admin', category: 'users', action: 'Gebruiker gewijzigd', details: 'Alex Du Priez bijgewerkt.' },
 ];
 
+// ---- Laadpalen (OCPI): deterministische fixtures voor de vier tabbladen ----
+// Seeded pseudo-random zodat screenshots stabiel blijven (visuele regressie).
+const lcg = (seed) => () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+const OCPI_EVSES = [
+  ['CSal2KA-9Oo-1', '1', '2.1'], ['CSal2KA-9Oo-2', '2', '2.2'], ['CSal2KA-9Oo-3', '3', '2.3'], ['CSal2KA-9Oo-4', '4', '2.4'], ['CSal2KA-9Oo-5', '5', '2.5'], ['CSal2KA-9Oo-6', '6', '2.6'], ['CSal2KA-9Oo-7', '7', '2.7'], ['CSal2KA-9Oo-8', '16', '2.8'],
+  ['CSrh1AH0aNN-1', '12.A', 'mal.1.1'], ['CSrh1AH0aNN-2', '12.B', 'mal.1.2'], ['CSrh1AH0aNN-3', '13.A', 'mal.1.3'], ['CSrh1AH0aNN-4', '13.B', 'mal.1.4'], ['CSrh1AH0aNN-5', '8', 'mal.1.5'], ['CSrh1AH0aNN-6', '9', 'mal.1.6'], ['CSrh1AH0aNN-7', '10', 'mal.1.7'], ['CSrh1AH0aNN-8', '11', 'mal.1.8'],
+  ['CS7MQt5TLO0-1', '17.A', 'CPU3 sat1.1'], ['CS7MQt5TLO0-2', '17.B', 'CPU3 sat1.2'], ['CS7MQt5TLO0-3', '18.A', 'CPU3 sat2.1'], ['CS7MQt5TLO0-4', '18.B', 'CPU3 sat2.2'], ['CS7MQt5TLO0-5', '14.A', 'CPU3 sat3.1'], ['CS7MQt5TLO0-6', '14.B', 'CPU3 sat3.2'], ['CS7MQt5TLO0-7', '15.A', 'CPU3 sat4.1'], ['CS7MQt5TLO0-8', '15.B', 'CPU3 sat4.2'],
+].map(([uid, evseId, ref]) => ({ uid, evseId, physicalReference: ref }));
+const ocpiSessies = (van, tot, seed) => {
+  const r = lcg(seed);
+  const uit = [];
+  const d = new Date(`${van}T00:00:00`);
+  const einde = new Date(`${tot}T00:00:00`);
+  for (let i = 0; d <= einde && i < 400; i++, d.setDate(d.getDate() + 1)) {
+    const dag = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const n = d.getDay() === 0 ? 6 : 14 + Math.floor(r() * 6);
+    for (let k = 0; k < n; k++) {
+      const e = OCPI_EVSES[Math.floor(r() * OCPI_EVSES.length)];
+      const mislukt = r() < 0.18;
+      const startMin = 17 * 60 + Math.floor(r() * 7 * 60);
+      const start = new Date(`${dag}T00:00:00`); start.setMinutes(startMin);
+      const laadMin = mislukt ? 0 : 120 + Math.floor(r() * 420);
+      const duurMin = mislukt ? 5 + Math.floor(r() * 40) : laadMin + Math.floor(r() * 240);
+      const eind = new Date(start.getTime() + duurMin * 60000);
+      const kwh = mislukt ? 0 : Math.round((60 + r() * 320) * 10) / 10;
+      uit.push({
+        id: `s-${dag}-${k}`, evseUid: e.uid, dag, start: start.toISOString(), eind: eind.toISOString(), status: 'COMPLETED',
+        duurMin, laadMin: mislukt ? null : laadMin, kwh, gemKw: mislukt ? null : Math.round((kwh / (laadMin / 60)) * 10) / 10, maxKw: mislukt ? null : Math.round((40 + r() * 100) * 10) / 10,
+        socStart: mislukt ? null : 20 + Math.floor(r() * 50), socEind: mislukt ? null : 90 + Math.floor(r() * 11),
+        voertuig: mislukt ? null : 'MAN Lion’s City E 640.0 kWh', klasse: mislukt ? (r() < 0.8 ? 'HANDSHAKE_FAIL' : 'LOW_POWER') : 'OK',
+        ongeldig: false, laadbeurt: !mislukt, mislukt,
+      });
+    }
+  }
+  return uit;
+};
+const ocpiDagen = (van, tot, seed) => {
+  const r = lcg(seed);
+  const sessies = ocpiSessies(van, tot, seed);
+  const uit = [];
+  const d = new Date(`${van}T00:00:00`);
+  const einde = new Date(`${tot}T00:00:00`);
+  for (; d <= einde; d.setDate(d.getDate() + 1)) {
+    const dag = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const s = sessies.filter((x) => x.dag === dag);
+    const piek = Math.round((180 + r() * 160) * 10) / 10;
+    uit.push({ dag, kwh: Math.round(s.reduce((a, x) => a + x.kwh, 0) * 10) / 10, sessies: s.length, laadbeurten: s.filter((x) => x.laadbeurt).length, mislukt: s.filter((x) => x.mislukt).length, piekKw: piek, piekTs: `${dag}T00:30:00.000Z`, piekCharging: 4 + Math.floor(r() * 6) });
+  }
+  return { sessies, dagen: uit };
+};
+const ocpiTotalen = (dagen, sessies) => {
+  const kwh = dagen.reduce((a, d) => a + d.kwh, 0);
+  const laaddagen = dagen.filter((d) => d.kwh > 0).length;
+  const hoogste = dagen.reduce((b, d) => (!b || d.kwh > b.kwh ? d : b), null);
+  const piek = dagen.reduce((b, d) => (!b || d.piekKw > b.piekKw ? d : b), null);
+  return {
+    kwh: Math.round(kwh * 10) / 10, sessies: dagen.reduce((a, d) => a + d.sessies, 0), laadbeurten: dagen.reduce((a, d) => a + d.laadbeurten, 0), mislukt: dagen.reduce((a, d) => a + d.mislukt, 0),
+    laaddagen, gemPerLaaddag: laaddagen ? Math.round((kwh / laaddagen) * 10) / 10 : 0, hoogsteDag: hoogste ? { dag: hoogste.dag, kwh: hoogste.kwh } : null,
+    piekKw: piek?.piekKw ?? null, piekTs: piek?.piekTs ?? null, piekDag: piek?.dag ?? null, piekCharging: piek?.piekCharging ?? null,
+    gemDagpiekKw: Math.round((dagen.reduce((a, d) => a + d.piekKw, 0) / Math.max(1, dagen.length)) * 10) / 10, piekDagen: dagen.length,
+    laadMin: sessies.reduce((a, s) => a + (s.laadMin ?? 0), 0),
+  };
+};
+const ocpiPunten = (sessies, seed) => {
+  const totaal = sessies.reduce((a, s) => a + s.kwh, 0);
+  return OCPI_EVSES.map((e) => {
+    const eigen = sessies.filter((s) => s.evseUid === e.uid);
+    const kwh = Math.round(eigen.reduce((a, s) => a + s.kwh, 0) * 10) / 10;
+    const laadMin = eigen.reduce((a, s) => a + (s.laadMin ?? 0), 0);
+    return { evseUid: e.uid, evseId: e.evseId, physicalReference: e.physicalReference, maxElectricPowerKw: 160, kwh, kwhVorige: Math.round(kwh * (0.8 + ((seed % 7) / 20))), aandeel: totaal ? Math.round((kwh / totaal) * 1000) / 10 : 0, sessies: eigen.length, laadbeurten: eigen.filter((s) => s.laadbeurt).length, mislukt: eigen.filter((s) => s.mislukt).length, laadMin, gemKw: laadMin ? Math.round((kwh / (laadMin / 60)) * 10) / 10 : null, maxKw: eigen.reduce((a, s) => Math.max(a, s.maxKw ?? 0), 0) || null };
+  });
+};
+const maandGrenzen = (maand) => { const [j, m] = maand.split('-').map(Number); return { van: `${maand}-01`, tot: `${maand}-${String(new Date(j, m, 0).getDate()).padStart(2, '0')}` }; };
+export const OCPI_DASHBOARD = () => ({
+  totals: { evses: OCPI_EVSES.length, sessions30d: 520, totalPowerKw: 214.6 },
+  statusCounts: { AVAILABLE: 17, CHARGING: 6, INOPERATIVE: 1 },
+  locations: [{ id: 'VHB', name: 'Stelplaats Maldegem', city: 'Maldegem', evses: OCPI_EVSES.map((e, i) => ({ uid: e.uid, evse_id: e.evseId, status: i % 4 === 1 ? 'CHARGING' : i === 9 ? 'INOPERATIVE' : 'AVAILABLE', physical_reference: e.physicalReference, connectors: [{ id: '1', standard: 'IEC_62196_T2_COMBO', power_type: 'DC', max_electric_power: 160000 }] })) }],
+  activeSessions: OCPI_EVSES.filter((_, i) => i % 4 === 1).map((e, i) => ({ id: `act-${i}`, evse_uid: e.uid, location_id: 'VHB', status: 'ACTIVE', start_date_time: new Date(Date.now() - (60 + i * 25) * 60000).toISOString(), kwh: 40 + i * 17.5, powerKw: i === 2 ? 0 : 30 + i * 12, soc: i === 2 ? 100 : 35 + i * 9 })),
+  kwhPerDay: Array.from({ length: 30 }, (_, i) => ({ date: dayOffset(i - 29), kwh: i % 7 === 6 ? 900 : 2400 + ((i * 37) % 900), sessions: 14 + (i % 5) })),
+  powerCurve: Array.from({ length: 96 }, (_, i) => ({ ts: new Date(Date.now() - (95 - i) * 15 * 60000).toISOString(), kw: i < 20 || i > 70 ? 40 + (i % 5) * 20 : 150 + ((i * 53) % 160), charging: 2 + (i % 6) })),
+  powerDays: Array.from({ length: 31 }, (_, i) => ({ date: dayOffset(i - 30), kw: 220 + ((i * 41) % 120), ts: `${dayOffset(i - 30)}T00:30:00.000Z`, charging: 4 + (i % 5) })),
+  storingen: [
+    { soort: 'laadpunt', evseUid: 'CSrh1AH0aNN-2', status: 'INOPERATIVE', wanneer: null },
+    { soort: 'sessie', evseUid: 'CSal2KA-9Oo-3', classificatie: 'HANDSHAKE_FAIL', wanneer: new Date(Date.now() - 5 * 3600e3).toISOString() },
+    { soort: 'sessie', evseUid: 'CS7MQt5TLO0-5', classificatie: 'LOW_POWER', wanneer: new Date(Date.now() - 30 * 3600e3).toISOString() },
+  ],
+});
+export const OCPI_MAAND = (maand = '2026-08', van, tot) => {
+  const g = van && tot ? { van, tot } : maandGrenzen(maand);
+  const vorigeMaand = (() => { const [j, m] = maand.split('-').map(Number); const d = new Date(j, m - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })();
+  const vg = maandGrenzen(vorigeMaand);
+  const { sessies, dagen } = ocpiDagen(g.van, g.tot, 7);
+  const vorige = ocpiDagen(vg.van, vg.tot, 11);
+  const tv = ocpiTotalen(vorige.dagen, vorige.sessies);
+  const klassen = {}; for (const s of sessies) if (s.mislukt) klassen[s.klasse] = (klassen[s.klasse] ?? 0) + 1;
+  return { van: g.van, tot: g.tot, maand: van && tot ? null : maand, eersteDag: '2026-07-29', huidigeDag: dayOffset(0), totalen: ocpiTotalen(dagen, sessies), vorige: { van: vg.van, tot: vg.tot, maand: vorigeMaand, kwh: tv.kwh, laadbeurten: tv.laadbeurten, mislukt: tv.mislukt, piekKw: tv.piekKw, gemPerLaaddag: tv.gemPerLaaddag, laaddagen: tv.laaddagen }, dagen, punten: ocpiPunten(sessies, 7), klassen };
+};
+export const OCPI_HISTORIEK = () => {
+  const maanden = ['2026-07', '2026-08', '2026-09'].map((maand, i) => {
+    const g = maandGrenzen(maand);
+    const { sessies, dagen } = ocpiDagen(maand === '2026-07' ? '2026-07-29' : g.van, maand === '2026-09' ? '2026-09-08' : g.tot, 3 + i);
+    const dagRijen = maand === '2026-07' ? dagen.map((d) => ({ ...d, piekKw: null, piekTs: null, piekCharging: null })) : dagen;
+    const t = ocpiTotalen(dagRijen, sessies);
+    if (maand === '2026-07') Object.assign(t, { piekKw: null, piekTs: null, piekDag: null, piekCharging: null, gemDagpiekKw: null, piekDagen: 0 });
+    const klassen = {}; for (const s of sessies) if (s.mislukt) klassen[s.klasse] = (klassen[s.klasse] ?? 0) + 1;
+    return { maand, dagen: dagRijen.length, klassen, ...t, _sessies: sessies };
+  });
+  const matrix = OCPI_EVSES.map((e) => { const perMaand = {}; let totaal = 0; for (const m of maanden) { const k = Math.round(m._sessies.filter((s) => s.evseUid === e.uid).reduce((a, s) => a + s.kwh, 0)); perMaand[m.maand] = k; totaal += k; } return { evseUid: e.uid, evseId: e.evseId, physicalReference: e.physicalReference, perMaand, totaal }; });
+  return { huidigeMaand: '2026-09', huidigeDag: dayOffset(0), maanden: maanden.map(({ _sessies, ...m }) => m), matrix };
+};
+export const OCPI_SESSIES = (van = '2026-08-01', tot = '2026-08-31') => {
+  const sessies = ocpiSessies(van, tot, 5).reverse();
+  return { van, tot, maand: null, huidigeDag: dayOffset(0), totaal: sessies.length, afgekapt: false, sessies, laadpunten: OCPI_EVSES };
+};
+export const OCPI_DAG = (dag = '2026-08-14') => {
+  const { sessies, dagen } = ocpiDagen(dag, dag, 9);
+  const r = lcg(13);
+  return { dag, slots: Array.from({ length: 96 }, (_, i) => ({ ts: new Date(new Date(`${dag}T00:00:00`).getTime() + i * 15 * 60000).toISOString(), kw: i < 8 || (i > 28 && i < 68) ? 20 + Math.round(r() * 40) : 120 + Math.round(r() * 180), charging: 2 + Math.floor(r() * 7) })), piekKw: 296.4, piekTs: `${dag}T01:15:00.000Z`, piekCharging: 8, kwh: dagen[0].kwh, laadbeurten: dagen[0].laadbeurten, mislukt: dagen[0].mislukt, sessies, laadpunten: OCPI_EVSES };
+};
+
 /**
  * Route-handler voor `page.route('**\/api/**', apiFixtures(user))`.
  * `extra(pad, request)` mag een eigen antwoord teruggeven (alles behalve
@@ -93,6 +213,12 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/planning-matrix/changes-since-import')) return json({ lastImport: { createdAt: new Date(Date.now() - 5 * 864e5).toISOString(), importedDays: 31 }, approvedLeave: [], approvedSwaps: [] });
     if (p.includes('/api/coverage-gaps')) return json({ days: [{ date: new Date().toISOString().slice(0, 10), expected: ['2101', '2607'], scheduled: ['2101'], missing: ['2607'], unknown: [] }] });
     if (p.endsWith('/api/coverage-expectations')) return json({ weekdays: ['', '', '', '', '', '', ''], overrides: [] });
+    if (p.endsWith('/api/ocpi/dashboard')) return json(OCPI_DASHBOARD());
+    if (p.endsWith('/api/ocpi/maand')) return json(OCPI_MAAND(url.searchParams.get('maand') || '2026-08', url.searchParams.get('van'), url.searchParams.get('tot')));
+    if (p.endsWith('/api/ocpi/historiek')) return json(OCPI_HISTORIEK());
+    if (p.endsWith('/api/ocpi/sessies')) return json(OCPI_SESSIES(url.searchParams.get('van') || undefined, url.searchParams.get('tot') || undefined));
+    if (p.endsWith('/api/ocpi/dag')) return json(OCPI_DAG(url.searchParams.get('dag') || undefined));
+    if (p.endsWith('/api/ocpi/summary')) return json({ evses: 24, charging: 6, outOfOrder: 1, totalPowerKw: 214.6 });
     if (p.includes('/api/health')) return json({ status: 'ok', supabase: 'configured', tables: {}, smtp: { status: 'configured', from: 'noreply@vhbportaal.com', host: 'smtp.resend.com' }, env: 'e2e', time: new Date().toISOString() });
     return json([]);
   };

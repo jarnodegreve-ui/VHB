@@ -71,7 +71,7 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'gebruikers', pad: 'beheer/gebruikers', label: 'Gebruikers', omschrijving: 'Accounts, rollen en toegang.', icoon: Users, sectie: 'systeem', rollen: ADMIN },
   { view: 'toestellen', pad: 'beheer/toestellen', label: 'Toestellen', omschrijving: 'Keur toestellen goed of blokkeer ze.', icoon: Smartphone, sectie: 'systeem', rollen: ADMIN },
   { view: 'activiteit', pad: 'beheer/activiteit', label: 'Activiteit', omschrijving: 'Recente beheeracties en aanmeldingen.', icoon: Activity, sectie: 'systeem', rollen: ADMIN },
-  { view: 'ocpi-monitoring', pad: 'beheer/laadpalen', label: 'Laadpalen (OCPI)', kort: 'Laadpalen', omschrijving: 'Status, sessies en verbruik van de laadpalen.', icoon: Zap, sectie: 'systeem', rollen: ADMIN },
+  { view: 'ocpi-monitoring', pad: 'beheer/laadpalen', label: 'Laadpalen', kort: 'Laadpalen', omschrijving: 'Live status, maandrapport, historiek en sessies van de laadpalen (ChargEye).', icoon: Zap, sectie: 'systeem', rollen: ADMIN },
   { view: 'designsysteem', pad: 'beheer/designsysteem', label: 'Designsysteem', omschrijving: 'Alle bouwstenen, tokens en toestanden op één pagina.', icoon: Palette, sectie: 'systeem', rollen: ADMIN },
   { view: 'beheer-debug', pad: 'beheer/systeemstatus', label: 'Systeemstatus', omschrijving: 'Koppelingen, tabellen en health checks.', icoon: HeartPulse, sectie: 'systeem', rollen: ADMIN },
   // — Account —
