@@ -589,6 +589,13 @@ export const summarizeTokens = (values: Array<string | undefined | null>, limit 
   return unique.length > limit ? `${visible} +${unique.length - limit}` : visible;
 };
 
+/** Tekstvelden vergelijken zoals ze bedoeld zijn: een lege telefoon uit het
+ *  formulier ('') en een NULL uit de database zijn hetzelfde. Zonder deze
+ *  gelijkstelling logde elke opslag van de gebruikerslijst "telefoon" voor
+ *  iedereen zonder nummer (1.283× "Gebruiker gewijzigd" in 60 dagen,
+ *  gezien 08-09-2026). */
+const anders = (a: unknown, b: unknown): boolean => String(a ?? '').trim() !== String(b ?? '').trim();
+
 export const summarizeUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUser[]) => {
   const normalizedNextUsers = nextUsers.map(sanitizeIncomingUser);
   const previousById = new Map(previousUsers.map((user): [string, AppUser] => [String(user.id), user]));
@@ -762,11 +769,11 @@ export const diffUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUse
       const previous = previousById.get(String(user.id));
       if (!previous) return false;
       return (
-        previous.name !== user.name ||
+        anders(previous.name, user.name) ||
         previous.role !== user.role ||
-        previous.employeeId !== user.employeeId ||
-        previous.phone !== user.phone ||
-        previous.email !== user.email ||
+        anders(previous.employeeId, user.employeeId) ||
+        anders(previous.phone, user.phone) ||
+        anders(previous.email, user.email) ||
         previous.verlofBudget !== user.verlofBudget ||
         Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true)
       );
@@ -774,11 +781,11 @@ export const diffUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUse
     .map((user) => {
       const previous = previousById.get(String(user.id))!;
       const fields: string[] = [];
-      if (previous.name !== user.name) fields.push(`naam: ${previous.name}→${user.name}`);
+      if (anders(previous.name, user.name)) fields.push(`naam: ${previous.name}→${user.name}`);
       if (previous.role !== user.role) fields.push(`rol: ${previous.role}→${user.role}`);
-      if (previous.employeeId !== user.employeeId) fields.push(`employeeId: ${previous.employeeId}→${user.employeeId}`);
-      if (previous.phone !== user.phone) fields.push(`telefoon`);
-      if (previous.email !== user.email) fields.push(`email`);
+      if (anders(previous.employeeId, user.employeeId)) fields.push(`employeeId: ${previous.employeeId}→${user.employeeId}`);
+      if (anders(previous.phone, user.phone)) fields.push(`telefoon`);
+      if (anders(previous.email, user.email)) fields.push(`email`);
       if (previous.verlofBudget !== user.verlofBudget) fields.push(`verlofBudget: ${previous.verlofBudget ?? 'standaard'}→${user.verlofBudget ?? 'standaard'}`);
       if (Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true)) {
         fields.push(`status: ${previous.isActive === false ? 'inactief' : 'actief'}→${user.isActive === false ? 'inactief' : 'actief'}`);
