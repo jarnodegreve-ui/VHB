@@ -27,9 +27,10 @@ import { useRouteParam } from '../app/router';
  *  "Vrij / afwezig"): duidelijker dan een micro-label (Jarno 08-09), met
  *  een donkerdere band, vette kop en een gouden accentstreep links. */
 const SECTIE_KOP = 'text-xs font-bold uppercase tracking-wide text-white';
-// Carbon band (bg-ink = altijd donker, ook in dark mode) met gouden streep:
-// een lichte band bleef te veel opgaan in de rijen (Jarno 08-09, tweede ronde).
-const SECTIE_BAND = 'bg-ink border-l-4 border-l-oker-500';
+// Band-kleur per modus staat in index.css (.mp-sectie: graphite in licht, een
+// lichte laag in donker) zodat hij ook op de sticky cel wint; hier alleen de
+// gouden accentstreep (Jarno 08-09, derde ronde).
+const SECTIE_BAND = 'mp-sectie border-l-4 border-l-oker-500';
 
 /** Maandag (ISO-datum) van de week waarin `iso` valt. */
 const mondayOf = (iso: string) => {
@@ -691,7 +692,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               van de band behouden weekend-arcering en de
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
-                          <td className={cn('mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2', SECTIE_BAND)}>
+                          <td className={cn('mp-sticky sticky left-0 z-10 p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
                             <div className={cn('inline-flex items-center px-3 py-2', SECTIE_KOP)}>
                               {section}
                             </div>
@@ -703,9 +704,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               <td
                                 key={iso}
                                 className={cn(
-                                  'p-0 border-y border-slate-300 bg-ink',
-                                  h.isMonday ? 'border-l-2 border-l-slate-500' : 'border-l border-slate-700',
-                                  today ? 'border-t-2 border-t-oker-500' : '',
+                                  'mp-sectie p-0 border-l',
+                                  h.isMonday && 'mp-sectie-ma',
+                                  today && 'mp-sectie-vandaag',
                                 )}
                               />
                             );
@@ -741,6 +742,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                 // oker-100/60 i.p.v. 50/50: blijft ook zichtbaar
                                 // in je eigen rij (die zelf al bg-oker-50 heeft).
                                 today ? 'bg-oker-100/60' : h.weekend ? 'mp-weekend' : '',
+                                // Lege cel: stippen (anders dan de weekendarcering), Jarno 08-09.
+                                !cell && 'mp-leeg',
                               )}
                             >
                               {cell ? (
