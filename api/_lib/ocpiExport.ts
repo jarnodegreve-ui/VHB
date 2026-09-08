@@ -69,7 +69,7 @@ export const bouwPeriodeXlsx = (opts: {
     [],
     ["Kengetal", "Waarde", "Eenheid", "Toelichting"],
     ["Verbruik", t.kwh, "kWh", "Som van de laadsessies die in de periode startten (Brusselse tijd)."],
-    ["Laadbeurten", t.laadbeurten, "", "Sessies met energie (kWh > 0)."],
+    ["Laadsessies", t.laadbeurten, "", "Sessies met energie (kWh > 0)."],
     ["Mislukte aankoppelingen", t.mislukt, "", "Sessies met een ChargEye-classificatie anders dan OK."],
     ["Laaddagen", t.laaddagen, "", "Dagen met verbruik."],
     ["Gemiddeld per laaddag", t.gemPerLaaddag, "kWh", ""],
@@ -82,14 +82,14 @@ export const bouwPeriodeXlsx = (opts: {
     overzicht.push([], ["Vergelijking", opts.vorige.label, "", ""]);
     overzicht.push(["Verbruik vorige periode", opts.vorige.kwh, "kWh", t.kwh && opts.vorige.kwh ? `${Math.round(((t.kwh - opts.vorige.kwh) / opts.vorige.kwh) * 1000) / 10} % t.o.v. vorige` : ""]);
     overzicht.push(["Piek vorige periode", leeg(opts.vorige.piekKw), "kW", ""]);
-    overzicht.push(["Laadbeurten vorige periode", opts.vorige.laadbeurten, "", ""]);
+    overzicht.push(["Laadsessies vorige periode", opts.vorige.laadbeurten, "", ""]);
   }
 
-  const dagen: unknown[][] = [["Dag", "Weekdag", "kWh", "Laadbeurten", "Mislukt", "Sessies totaal", "Piek kW", "Piek om", "Bussen aan de lader bij piek"]];
+  const dagen: unknown[][] = [["Dag", "Weekdag", "kWh", "Laadsessies", "Mislukt", "Aankoppelingen totaal", "Piek kW", "Piek om", "Bussen aan de lader bij piek"]];
   for (const d of opts.dagen) dagen.push([d.dag, weekdag(d.dag), d.kwh, d.laadbeurten, d.mislukt, d.sessies, leeg(d.piekKw), uur(d.piekTs), leeg(d.piekCharging)]);
   dagen.push(["Totaal", "", t.kwh, t.laadbeurten, t.mislukt, t.sessies, leeg(t.piekKw), uur(t.piekTs), leeg(t.piekCharging)]);
 
-  const punten: unknown[][] = [["Laadpunt", "Bus", "Referentie CPO", "kWh", "Aandeel %", "Laadbeurten", "Mislukt", "Laadtijd (u:mm)", "Gem. kW", "Max. kW", "Max. vermogen paal kW"]];
+  const punten: unknown[][] = [["Laadpunt", "Bus", "Referentie CPO", "kWh", "Aandeel %", "Laadsessies", "Mislukt", "Laadtijd (u:mm)", "Gem. kW", "Max. kW", "Max. vermogen paal kW"]];
   for (const p of opts.punten) punten.push([veilig(puntNaam(p)), opts.busVan(p.evseId) ?? "", veilig(p.physicalReference ?? ""), p.kwh, p.aandeel, p.laadbeurten, p.mislukt, minutenAlsUren(p.laadMin), leeg(p.gemKw), leeg(p.maxKw), leeg(p.maxElectricPowerKw)]);
   punten.push(["Totaal", "", "", t.kwh, 100, t.laadbeurten, t.mislukt, minutenAlsUren(t.laadMin), "", "", ""]);
 
@@ -123,7 +123,7 @@ export const bouwHistoriekXlsx = (opts: {
   busVan: (evseId: string | null) => string | null;
   gemaaktOp: string;
 }): Buffer => {
-  const perMaand: unknown[][] = [["Maand", "kWh", "Laadbeurten", "Mislukt", "Sessies totaal", "Laaddagen", "Gem. kWh per laaddag", "Hoogste dag kWh", "Hoogste dag", "Piek kW", "Piekdag", "Piek om", "Gem. dagpiek kW", "Dagen met piekmeting", "Laadtijd (uur)"]];
+  const perMaand: unknown[][] = [["Maand", "kWh", "Laadsessies", "Mislukt", "Aankoppelingen totaal", "Laaddagen", "Gem. kWh per laaddag", "Hoogste dag kWh", "Hoogste dag", "Piek kW", "Piekdag", "Piek om", "Gem. dagpiek kW", "Dagen met piekmeting", "Laadtijd (uur)"]];
   for (const m of opts.maanden) {
     perMaand.push([m.maand, m.kwh, m.laadbeurten, m.mislukt, m.sessies, m.laaddagen, m.gemPerLaaddag, m.hoogsteDag?.kwh ?? "", m.hoogsteDag?.dag ?? "", leeg(m.piekKw), m.piekDag ?? "", uur(m.piekTs), leeg(m.gemDagpiekKw), m.piekDagen, Math.round((m.laadMin / 60) * 10) / 10]);
   }

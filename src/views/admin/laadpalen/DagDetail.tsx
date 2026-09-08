@@ -110,7 +110,7 @@ export function DagDetail({ dag, onSluit, onDag, eersteDag }: { dag: string | nu
                   {[
                     ['Verbruik', tekstKwh(Math.round(data.kwh))],
                     ['Piek (kwartier)', data.piekKw !== null ? `${tekstKw(Math.round(data.piekKw))} om ${uurLabel(data.piekTs)}` : 'geen meting'],
-                    ['Laadbeurten', String(data.laadbeurten)],
+                    ['Laadsessies', String(data.laadbeurten)],
                     ['Mislukt', String(data.mislukt)],
                   ].map(([k, v]) => (
                     <div key={k} className="surface-muted rounded-2xl px-3.5 py-3">

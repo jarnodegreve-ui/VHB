@@ -68,7 +68,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
   const exporteerMaanden = () => {
     if (!data) return;
     exporteerCsv(`vhb-laadplein-historiek-${data.huidigeDag}.csv`, [
-      ['Maand', 'kWh', 'Laadbeurten', 'Mislukt', 'Sessies totaal', 'Laaddagen', 'Gem. kWh per laaddag', 'Hoogste dag kWh', 'Hoogste dag', 'Piek kW', 'Piekdag', 'Piek om', 'Gem. dagpiek kW', 'Dagen met piekmeting', 'Laadtijd (uur)'],
+      ['Maand', 'kWh', 'Laadsessies', 'Mislukt', 'Aankoppelingen totaal', 'Laaddagen', 'Gem. kWh per laaddag', 'Hoogste dag kWh', 'Hoogste dag', 'Piek kW', 'Piekdag', 'Piek om', 'Gem. dagpiek kW', 'Dagen met piekmeting', 'Laadtijd (uur)'],
       ...chrono.map((m) => [m.maand, m.kwh, m.laadbeurten, m.mislukt, m.sessies, m.laaddagen, m.gemPerLaaddag, m.hoogsteDag?.kwh ?? '', m.hoogsteDag?.dag ?? '', m.piekKw ?? '', m.piekDag ?? '', m.piekTs ? uurLabel(m.piekTs) : '', m.gemDagpiekKw ?? '', m.piekDagen, Math.round((m.laadMin / 60) * 10) / 10]),
     ]);
   };
@@ -104,7 +104,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
             samenvatting={(s) => {
               const m = s ? chrono.find((x) => x.maand === s.key) : null;
               return m
-                ? <>{maandLabel(m.maand)} · {tekstKwhHeel(m.kwh)} · {m.laadbeurten} laadbeurten · <Button variant="ghost" size="sm" className="-my-1 h-6 px-1.5 text-2xs" onClick={() => onMaand(m.maand)}>maandoverzicht</Button></>
+                ? <>{maandLabel(m.maand)} · {tekstKwhHeel(m.kwh)} · {m.laadbeurten} laadsessies · <Button variant="ghost" size="sm" className="-my-1 h-6 px-1.5 text-2xs" onClick={() => onMaand(m.maand)}>maandoverzicht</Button></>
                 : `totaal ${tekstKwhHeel(chrono.reduce((a, m2) => a + m2.kwh, 0))} sinds ${maandLabel(chrono[0].maand)}`;
             }}
           />
@@ -142,7 +142,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                 <Th>Maand</Th>
                 <Th num>kWh</Th>
                 <Th num className="max-md:hidden">Vorige</Th>
-                <Th num>Beurten</Th>
+                <Th num>Sessies</Th>
                 <Th num className="max-md:hidden">Mislukt</Th>
                 <Th num className="max-lg:hidden">Laaddagen</Th>
                 <Th num className="max-lg:hidden">Per laaddag</Th>

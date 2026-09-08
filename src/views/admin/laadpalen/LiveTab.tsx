@@ -305,9 +305,9 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
       </div>
 
       <div>
-        <CardHeader size="lg" title="Storingen (ChargEye)" description="Defecte laadpunten en mislukte laadbeurten van de afgelopen 7 dagen." />
+        <CardHeader size="lg" title="Storingen (ChargEye)" description="Defecte laadpunten en mislukte laadsessies van de afgelopen 7 dagen." />
         {storingen.length === 0 ? (
-          <EmptyState variant="klaar" illustratie={<AllesGedaan />} title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
+          <EmptyState variant="klaar" illustratie={<AllesGedaan />} title="Geen storingen" message="Alle laadpunten en laadsessies van de afgelopen 7 dagen zijn in orde." />
         ) : (
           <Card padding="none" className="overflow-hidden">
             <div className="divide-y divide-slate-100">
@@ -322,7 +322,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
                         {', '}
                         {st.soort === 'laadpunt'
                           ? `in storing (${statusLabel(st.status).toLowerCase()})`
-                          : `laadbeurt mislukt (${st.classificatie})${st.wanneer ? ` · ${tijdstipKort(st.wanneer)}` : ''}`}
+                          : `laadsessie mislukt (${st.classificatie})${st.wanneer ? ` · ${tijdstipKort(st.wanneer)}` : ''}`}
                       </span>
                     </p>
                     <Badge tone="red" dot className="shrink-0 whitespace-nowrap">{st.soort === 'laadpunt' ? statusLabel(st.status) : 'Mislukt'}</Badge>
