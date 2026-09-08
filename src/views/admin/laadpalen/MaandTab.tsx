@@ -131,7 +131,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
   const exporteerPunten = () => {
     if (!data) return;
     exporteerCsv(`vhb-laadplein-${paramUitPeriode(keuze ?? { modus: 'maand', maand: maandGekozen })}-per-laadpunt.csv`, [
-      ['Laadpunt', 'Bus', `kWh (${label})`, 'Aandeel %', `kWh (${vorigeLabel})`, 'Laadbeurten', 'Mislukt', 'Laadtijd (min)', 'Gem. kW', 'Max. kW', 'Max. vermogen paal kW'],
+      ['Laadpunt', 'Bus', `kWh (${label})`, 'Aandeel %', `kWh (${vorigeLabel})`, 'Laadsessies', 'Mislukt', 'Laadtijd (min)', 'Gem. kW', 'Max. kW', 'Max. vermogen paal kW'],
       ...data.punten.map((p) => [puntNaam(p), busVoorLaadpunt(p.evseId) ?? '', p.kwh, p.aandeel, p.kwhVorige ?? 0, p.laadbeurten, p.mislukt, p.laadMin, p.gemKw ?? '', p.maxKw ?? '', p.maxElectricPowerKw ?? '']),
       ['Totaal', '', data.totalen.kwh, 100, data.vorige.kwh, data.totalen.laadbeurten, data.totalen.mislukt, data.totalen.laadMin, '', '', ''],
     ]);
@@ -139,7 +139,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
   const exporteerDagen = () => {
     if (!data) return;
     exporteerCsv(`vhb-laadplein-${paramUitPeriode(keuze ?? { modus: 'maand', maand: maandGekozen })}-per-dag.csv`, [
-      ['Dag', 'Weekdag', 'kWh', 'Laadbeurten', 'Mislukt', 'Sessies totaal', 'Piek kW', 'Piek om', 'Bussen aan de lader bij piek'],
+      ['Dag', 'Weekdag', 'kWh', 'Laadsessies', 'Mislukt', 'Aankoppelingen totaal', 'Piek kW', 'Piek om', 'Bussen aan de lader bij piek'],
       ...data.dagen.map((d) => [d.dag, WEEKDAY_SHORT_SUN[new Date(`${d.dag}T00:00:00`).getDay()], d.kwh, d.laadbeurten, d.mislukt, d.sessies, d.piekKw ?? '', d.piekTs ? uurLabel(d.piekTs) : '', d.piekCharging ?? '']),
       ['Totaal', '', data.totalen.kwh, data.totalen.laadbeurten, data.totalen.mislukt, data.totalen.sessies, data.totalen.piekKw ?? '', data.totalen.piekTs ? uurLabel(data.totalen.piekTs) : '', data.totalen.piekCharging ?? ''],
     ]);
@@ -187,13 +187,13 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <OpsStat icon={<Zap size={16} />} tone="oker" label="Verbruik" text={fmtKwh(t.kwh)} suffix={' kWh'} sub={`${vorigeLabel}: ${tekstKwhHeel(data.vorige.kwh)}`} />
             <OpsStat icon={<Gauge size={16} />} tone="slate" label="Piekvermogen" text={t.piekKw !== null ? formatGetal(Math.round(t.piekKw)) : '—'} suffix={t.piekKw !== null ? ' kW' : ''} sub={t.piekDag ? `${dagKort(t.piekDag)} om ${uurLabel(t.piekTs)}${typeof t.piekCharging === 'number' ? ` · ${t.piekCharging} bussen` : ''}` : 'geen kwartiermeting in deze periode'} />
-            <OpsStat icon={<BatteryCharging size={16} />} tone="slate" label="Laadbeurten" value={t.laadbeurten} sub={t.mislukt > 0 ? `${t.mislukt} mislukt · ${t.sessies} sessies totaal` : `${t.sessies} sessies totaal, niets mislukt`} />
+            <OpsStat icon={<BatteryCharging size={16} />} tone="slate" label="Laadsessies" value={t.laadbeurten} sub={t.mislukt > 0 ? `${t.mislukt} mislukt · ${t.sessies} aankoppelingen totaal` : `${t.sessies} aankoppelingen totaal, niets mislukt`} />
             <OpsStat icon={<CalendarDays size={16} />} tone="slate" label="Per laaddag" text={fmtKwh(t.gemPerLaaddag)} suffix={' kWh'} sub={t.hoogsteDag ? `hoogste dag: ${dagKort(t.hoogsteDag.dag)}, ${tekstKwhHeel(t.hoogsteDag.kwh)}` : `${t.laaddagen} laaddagen`} />
           </div>
           <div className="-mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-2xs text-slate-500">
             <span className="inline-flex items-center gap-1.5">verbruik <Delta huidig={t.kwh} vorige={data.vorige.kwh} /></span>
             <span className="inline-flex items-center gap-1.5">piek <Delta huidig={t.piekKw} vorige={data.vorige.piekKw} omgekeerd /></span>
-            <span className="inline-flex items-center gap-1.5">laadbeurten <Delta huidig={t.laadbeurten} vorige={data.vorige.laadbeurten} /></span>
+            <span className="inline-flex items-center gap-1.5">laadsessies <Delta huidig={t.laadbeurten} vorige={data.vorige.laadbeurten} /></span>
             <span className="inline-flex items-center gap-1.5">per laaddag <Delta huidig={t.gemPerLaaddag} vorige={data.vorige.gemPerLaaddag} /></span>
             <span className="ml-auto">t.o.v. {vorigeLabel}</span>
             {t.piekDagen < dagenTotNu.length && <span>{t.piekDagen} van {dagenTotNu.length} dagen met piekmeting</span>}
@@ -214,11 +214,11 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                   ariaLabel={`Verbruik per dag in ${label}: totaal ${tekstKwhHeel(t.kwh)}, gemiddeld ${tekstKwhHeel(t.gemPerLaaddag)} per laaddag${t.hoogsteDag ? `, hoogste ${dagKort(t.hoogsteDag.dag)} ${tekstKwhHeel(t.hoogsteDag.kwh)}` : ''}`}
                   gekozen={gekozenDagKwh}
                   onKies={setGekozenDagKwh}
-                  titelVan={(s) => { const d = dagenTotNu.find((x) => x.dag === s.key); return `${dagKort(s.key)} · ${tekstKwh(s.waarde)} · ${d?.laadbeurten ?? 0} laadbeurt${d?.laadbeurten === 1 ? '' : 'en'}`; }}
+                  titelVan={(s) => { const d = dagenTotNu.find((x) => x.dag === s.key); return `${dagKort(s.key)} · ${tekstKwh(s.waarde)} · ${d?.laadbeurten ?? 0} laadsessie${d?.laadbeurten === 1 ? '' : 's'}`; }}
                   samenvatting={(s) => {
                     const d = s ? dagenTotNu.find((x) => x.dag === s.key) : null;
                     return d
-                      ? <>{dagKort(d.dag)} · {tekstKwh(d.kwh)} · {d.laadbeurten} laadbeurt{d.laadbeurten === 1 ? '' : 'en'}{d.mislukt ? ` · ${d.mislukt} mislukt` : ''} · {dagSamenvattingKnop(d.dag)}</>
+                      ? <>{dagKort(d.dag)} · {tekstKwh(d.kwh)} · {d.laadbeurten} laadsessie{d.laadbeurten === 1 ? '' : 's'}{d.mislukt ? ` · ${d.mislukt} mislukt` : ''} · {dagSamenvattingKnop(d.dag)}</>
                       : `totaal ${tekstKwhHeel(t.kwh)} · ${tekstKwhHeel(t.gemPerLaaddag)}/laaddag · ${t.laaddagen} laaddagen`;
                   }}
                 />
@@ -286,7 +286,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                     <SortTh kolom="kwh" sort={sortPunt} align="right">kWh</SortTh>
                     <SortTh kolom="aandeel" sort={sortPunt} align="right">Aandeel</SortTh>
                     <SortTh kolom="delta" sort={sortPunt} align="right" className="max-md:hidden">Vorige</SortTh>
-                    <SortTh kolom="laadbeurten" sort={sortPunt} align="right">Beurten</SortTh>
+                    <SortTh kolom="laadbeurten" sort={sortPunt} align="right">Sessies</SortTh>
                     <SortTh kolom="mislukt" sort={sortPunt} align="right" className="max-md:hidden">Mislukt</SortTh>
                     <SortTh kolom="laadMin" sort={sortPunt} align="right" className="max-lg:hidden">Laadtijd</SortTh>
                     <SortTh kolom="gemKw" sort={sortPunt} align="right" className="max-lg:hidden">Gem. kW</SortTh>
@@ -343,7 +343,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
             <CardHeader
               size="lg"
               title="Per dag"
-              description="Verbruik, laadbeurten en de kwartierpiek per kalenderdag. Klik op een dag voor de curve en de sessies van die dag."
+              description="Verbruik, laadsessies en de kwartierpiek per kalenderdag. Klik op een dag voor de curve en de sessies van die dag."
               aside={<Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={exporteerDagen}>CSV</Button>}
             />
             <TableShell className="mt-3">
@@ -352,7 +352,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                   <tr>
                     <SortTh kolom="dag" sort={sortDag}>Dag</SortTh>
                     <SortTh kolom="kwh" sort={sortDag} align="right">kWh</SortTh>
-                    <SortTh kolom="laadbeurten" sort={sortDag} align="right">Beurten</SortTh>
+                    <SortTh kolom="laadbeurten" sort={sortDag} align="right">Sessies</SortTh>
                     <SortTh kolom="mislukt" sort={sortDag} align="right" className="max-md:hidden">Mislukt</SortTh>
                     <SortTh kolom="piekKw" sort={sortDag} align="right">Piek kW</SortTh>
                     <SortTh kolom="piekTs" sort={sortDag} align="right" className="max-md:hidden">Piek om</SortTh>

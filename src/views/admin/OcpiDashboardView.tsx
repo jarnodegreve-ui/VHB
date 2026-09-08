@@ -89,7 +89,7 @@ export function OcpiDashboardView() {
 
   const omschrijving: Record<Tab, string> = {
     live: 'Wat er nu aan de lader hangt, de kwartierpiek van vandaag en de storingen uit ChargEye.',
-    maand: 'Verbruik, kwartierpiek en laadbeurten per maand, per dag en per laadpunt. Ook voor een vrije periode.',
+    maand: 'Verbruik, kwartierpiek en laadsessies per maand, per dag en per laadpunt. Ook voor een vrije periode.',
     historiek: 'Alle maanden naast elkaar sinds de eerste sessie, met jaartotalen en verbruik per laadpunt per maand.',
     sessies: 'Elke laadsessie afzonderlijk, met duur, vermogen, batterijstand en classificatie.',
   };
