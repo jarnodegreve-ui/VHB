@@ -125,16 +125,16 @@ test.describe('desktop: activiteitenlog', () => {
       extra: (pad) => (pad.endsWith('/api/activity') ? rijen : undefined),
     });
     await page.goto('/');
-    await expect(page.getByText('Recente activiteit')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Wat er gebeurde')).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByText('1–50 van 60')).toBeVisible();
-    await expect(page.locator('tbody tr')).toHaveCount(50);
+    await expect(page.locator('section[aria-label] button[aria-expanded]')).toHaveCount(50);
     await expect(page.getByText('Actie 01', { exact: true })).toBeVisible();
     await expect(page.getByText('Actie 60', { exact: true })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Volgende pagina' }).click();
     await expect(page.getByText('51–60 van 60')).toBeVisible();
-    await expect(page.locator('tbody tr')).toHaveCount(10);
+    await expect(page.locator('section[aria-label] button[aria-expanded]')).toHaveCount(10);
     await expect(page.getByText('Actie 60', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Volgende pagina' })).toBeDisabled();
 
