@@ -26,10 +26,10 @@ import { useRouteParam } from '../app/router';
 /** Sectiekop in het grid en de daglijst ("Chauffeurs", "Flexi/invallers",
  *  "Vrij / afwezig"): duidelijker dan een micro-label (Jarno 08-09), met
  *  een donkerdere band, vette kop en een gouden accentstreep links. */
-const SECTIE_KOP = 'text-xs font-bold uppercase tracking-wide text-white';
-// Band-kleur per modus staat in index.css (.mp-sectie: graphite in licht, een
-// lichte laag in donker) zodat hij ook op de sticky cel wint; hier alleen de
-// gouden accentstreep (Jarno 08-09, derde ronde).
+const SECTIE_KOP = 'text-xs font-bold uppercase tracking-wide text-slate-800';
+// Band-kleur staat in index.css (.mp-sectie, slate-200 die meeflipt in dark
+// mode) zodat hij ook op de sticky cel wint; hier alleen de gouden
+// accentstreep (Jarno 08-09: donker paste niet bij de rest).
 const SECTIE_BAND = 'mp-sectie border-l-4 border-l-oker-500';
 
 /** Maandag (ISO-datum) van de week waarin `iso` valt. */
@@ -693,20 +693,19 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
                           <td className={cn('mp-sticky sticky left-0 z-10 p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
-                            <div className={cn('inline-flex items-center px-3 py-2', SECTIE_KOP)}>
+                            <div className={cn('inline-flex items-baseline gap-1.5 px-3 py-2', SECTIE_KOP)}>
                               {section}
+                              <span className="font-mono text-2xs font-semibold normal-case tracking-normal text-slate-500">{zichtbareDrivers.filter((d) => sectionOf(d) === section).length}</span>
                             </div>
                           </td>
                           {visibleDates.map((iso) => {
                             const h = dayHeader(iso);
-                            const today = iso === todayIso;
                             return (
                               <td
                                 key={iso}
                                 className={cn(
                                   'mp-sectie p-0 border-l',
                                   h.isMonday && 'mp-sectie-ma',
-                                  today && 'mp-sectie-vandaag',
                                 )}
                               />
                             );
@@ -911,7 +910,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 ) : dagRijen.secties.map((sectie) => (
                   <Fragment key={sectie.naam}>
                     {showSections && (
-                      <div className={cn(SECTIE_BAND, 'px-4 py-2', SECTIE_KOP)}>{sectie.naam}</div>
+                      <div className={cn(SECTIE_BAND, 'flex items-baseline gap-1.5 px-4 py-2', SECTIE_KOP)}>
+                        {sectie.naam}
+                        <span className="font-mono text-2xs font-semibold normal-case tracking-normal text-slate-500">{sectie.rijen.length}</span>
+                      </div>
                     )}
                     {sectie.rijen.map(({ drv, cell }) => {
                       if (!cell) return null;
