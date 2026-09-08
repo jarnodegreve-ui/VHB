@@ -44,3 +44,15 @@ export const KIND_BADGE_TONE: Record<CellKind, 'oker' | 'blue' | 'slate' | 'emer
   training: 'emerald',
   unknown: 'red',
 };
+
+/** Celkleur mét de twee uitzonderingen van Jarno (08-09): ziekte altijd rood
+ *  (de code "ziek", ongeacht de categorie) en een geruilde of handmatig
+ *  overgezette dienst geel (amber). Alles daarbuiten volgt de soort. */
+type CelInfo = { kind: CellKind; code: string; swapId?: string | null };
+export const isZiekCode = (code: string | undefined | null): boolean => String(code ?? '').trim().toLowerCase() === 'ziek';
+export const celChipClass = (cel: CelInfo): string =>
+  cel.swapId ? 'bg-amber-50 text-amber-800' : isZiekCode(cel.code) ? 'bg-red-50 text-red-700' : KIND_CLS[cel.kind];
+export const celTextClass = (cel: CelInfo): string =>
+  cel.swapId ? 'font-semibold text-amber-700 border-b border-dashed border-amber-500/80' : isZiekCode(cel.code) ? 'text-red-700 font-semibold' : KIND_TEXT[cel.kind];
+export const celBadgeTone = (cel: CelInfo): 'oker' | 'blue' | 'slate' | 'emerald' | 'red' | 'amber' =>
+  cel.swapId ? 'amber' : isZiekCode(cel.code) ? 'red' : KIND_BADGE_TONE[cel.kind];

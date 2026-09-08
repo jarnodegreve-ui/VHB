@@ -233,7 +233,6 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/ocpi/historiek')) return json(OCPI_HISTORIEK());
     if (p.endsWith('/api/ocpi/sessies')) return json(OCPI_SESSIES(url.searchParams.get('van') || undefined, url.searchParams.get('tot') || undefined));
     if (p.endsWith('/api/ocpi/dag')) return json(OCPI_DAG(url.searchParams.get('dag') || undefined));
-    if (p.endsWith('/api/ocpi/summary')) return json({ evses: 24, charging: 6, outOfOrder: 1, totalPowerKw: 214.6 });
     if (p.includes('/api/health')) return json({ status: 'ok', supabase: 'configured', tables: {}, smtp: { status: 'configured', from: 'noreply@vhbportaal.com', host: 'smtp.resend.com' }, env: 'e2e', time: new Date().toISOString() });
     return json([]);
   };

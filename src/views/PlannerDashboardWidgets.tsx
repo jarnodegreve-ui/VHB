@@ -21,9 +21,8 @@ import {
   UserX,
   Users,
   Smartphone,
-  Zap,
 } from 'lucide-react';
-import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay, serviceNumberOf, metEenheid } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
 import type { ActivityLogEntry, LeaveRequest, Shift, User, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { getDaypartGreeting } from '../lib/interactive';
@@ -33,7 +32,7 @@ import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } 
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
-import { apiFetch, apiJson } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
 import { EmptyState, ModalHeader } from '../components/ui';
@@ -126,23 +125,6 @@ export function PlannerDashboardWidgets({
   const [showAbsent, setShowAbsent] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
   const [showDriving, setShowDriving] = useState(false);
-  // Laadplein-samenvatting voor de tegel "Aan de lader". Best-effort: faalt
-  // de fetch (OCPI niet geconfigureerd, storing), dan verdwijnt de tegel
-  // gewoon — het dashboard mag er nooit op wachten of door breken.
-  const [laadplein, setLaadplein] = useState<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    const haal = () => {
-      apiJson<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number }>('/api/ocpi/summary')
-        .then((sum) => { if (!cancelled && sum && sum.evses > 0) setLaadplein(sum); })
-        .catch(() => { /* geen OCPI = geen tegel */ });
-    };
-    haal();
-    // Elke 5 min verversen: het dashboard staat vaak de hele dag open en de
-    // tegel toonde anders de laadstand van 's ochtends.
-    const timer = window.setInterval(haal, 5 * 60 * 1000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [todayKey]);
   useEffect(() => {
     let cancelled = false;
     // Peildag i.p.v. vandaag: de Vandaag|Morgen-schakelaar kijkt naar de
@@ -611,28 +593,10 @@ export function PlannerDashboardWidgets({
         onClick={() => onNavigate('omleidingen')}
       />
     ),
-    // Laadplein-tegel — alleen zodra de OCPI-koppeling data levert.
-    // Doorklikken naar het volle OCPI-scherm kan alleen als admin;
-    // voor een planner is de tegel zelf de informatie.
-    laadplein: (className) => laadplein ? (
-      <OpsStat
-        className={className}
-        icon={<Zap size={16} />}
-        tone={laadplein.outOfOrder > 0 ? 'red' : laadplein.charging > 0 ? 'blue' : 'slate'}
-        label="Aan de lader"
-        value={laadplein.charging}
-        suffix={` / ${laadplein.evses}`}
-        sub={laadplein.outOfOrder > 0
-          ? `${laadplein.outOfOrder} in storing`
-          : laadplein.totalPowerKw > 0
-            ? `${metEenheid(laadplein.totalPowerKw, 'kW')} op dit moment`
-            : 'laadpunten bezet'}
-        onClick={isAdmin ? () => onNavigate('ocpi-monitoring') : undefined}
-      />
-    ) : null,
   };
-  // Zichtbare striptegels (laadplein alleen mét data) + gat-vrije verdeling.
-  const stripZichtbaar = zichtbareTegels.filter((t) => t.groep === 'tegels' && (t.id !== 'laadplein' || laadplein));
+  // Zichtbare striptegels + gat-vrije verdeling (de laadplein-tegel is 08-09
+  // vervallen op vraag van Jarno: vijf tegels, meer ruimte per tegel).
+  const stripZichtbaar = zichtbareTegels.filter((t) => t.groep === 'tegels');
   const stripLayout = stripSpans(stripZichtbaar.length);
 
   // Operations Center: het eerste zichtbare paneel staat links, de rest
@@ -942,14 +906,11 @@ export function PlannerDashboardWidgets({
       </div>
 
       {/* === Status-strip ===
-          Gat-vrije verdeling op elke breedte, voor 5 én 6 tegels (de
-          laadplein-tegel verschijnt alleen mét OCPI-data; de Aanvragen- en
-          Laatste import-tegels zijn 31-08 vervallen — dubbelop met de
-          werkvoorraad-knop in de topbar). Zonder laadplein: md = 3 à span-2
-          + 2 à span-3 (rijen 3/2), en op mobiel spant Omleidingen beide
-          kolommen (5 is oneven). Mét laadplein: md = 6 tegels à span-2
-          (rijen 3/3). Haal je hier een tegel weg of zet je er een bij, dan
-          moeten deze tellingen mee. */}
+          Gat-vrije verdeling op elke breedte (stripSpans) voor het aantal
+          zichtbare tegels: vijf sinds 08-09 (laadplein-tegel weg, Jarno; de
+          Aanvragen- en Laatste import-tegels vervielen 31-08). md = 3 à
+          span-2 + 2 à span-3 (rijen 3/2), op mobiel spant de laatste tegel
+          beide kolommen (5 is oneven), xl = één rij van vijf. */}
       {/* "Begin hier" bóven de strip, niet in de plaats ervan: de tegels
           blijven het vaste anker van dit scherm (ook voor de smoke-test);
           de lege staat zegt waarom ze op 0 staan en wat de volgende stap is. */}

@@ -15,7 +15,7 @@ import { Modal } from '../components/Modal';
 import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
-import { KIND_CLS, KIND_LABEL, KIND_TEXT } from '../lib/planningKind';
+import { KIND_CLS, KIND_LABEL, celChipClass, celTextClass } from '../lib/planningKind';
 import type { User } from '../types';
 import { formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
@@ -546,7 +546,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     const entries = Array.from(map.values()).sort(
       (a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || a.code.localeCompare(b.code),
     );
-    return { serviceExample, entries };
+    const heeftRuil = Object.values(cells).some((row) => Object.values(row).some((c) => Boolean(c.swapId)));
+    return { serviceExample, entries, heeftRuil };
   }, [cells]);
 
   return (
@@ -741,13 +742,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                   onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
                                   className={cn(
                                     'relative flex h-7 w-full items-center justify-center px-1 text-2xs tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70',
-                                    // Gewisselde cel in het rood (keuze Jarno
-                                    // 15-08): de planning wijkt hier af van de
-                                    // Excel — dat moet je in één oogopslag zien,
-                                    // zonder de cel aan te klikken.
-                                    cell.swapId
-                                      ? 'font-semibold text-red-700 border-b border-dashed border-red-500/80'
-                                      : KIND_TEXT[cell.kind],
+                                    // Gewisselde cel in het geel en ziekte in
+                                    // het rood (Jarno 08-09; ruil was rood sinds
+                                    // 15-08): afwijkingen van de Excel moet je
+                                    // in één oogopslag zien.
+                                    celTextClass(cell),
                                   )}
                                   title={celTitel(cell, notes.has(noteKey(String(drv.id), iso)))}
                                 >
@@ -919,7 +918,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         >
                           <Chip mono={false} className={cn(
                             'min-w-[46px] justify-center ring-1 ring-hairline',
-                            cell.swapId ? 'bg-red-50 text-red-700' : KIND_CLS[cell.kind],
+                            celChipClass(cell),
                           )}>{cell.code}</Chip>
                           <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', isOwn ? 'text-oker-800' : 'text-slate-800')}>
                             {drv.name}
@@ -1005,10 +1004,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             )}
             {codeLegend.entries.map((e) => (
               <div key={e.code} className="flex items-center gap-2">
-                <Chip mono={false} className={KIND_CLS[e.kind]}>{e.code}</Chip>
+                <Chip mono={false} className={celChipClass({ kind: e.kind, code: e.code })}>{e.code}</Chip>
                 <span className="font-medium text-slate-600">{e.meaning}</span>
               </div>
             ))}
+            {codeLegend.heeftRuil && (
+              <div className="flex items-center gap-2">
+                <Chip mono={false} className={celChipClass({ kind: 'service', code: '', swapId: 'x' })}>{codeLegend.serviceExample ?? 'dienst'}</Chip>
+                <span className="font-medium text-slate-600">Geruild of overgezet</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <TriangleAlert size={14} className="text-amber-700" />
               <span className="font-medium text-slate-600">Dienst nog niet herverdeeld</span>
@@ -1034,7 +1039,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             <div className="flex items-center gap-2.5">
               <span className={cn(
                 'inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-hairline',
-                selected.cell.swapId ? 'bg-red-50 text-red-700' : KIND_CLS[selected.cell.kind],
+                celChipClass(selected.cell),
               )}>{selected.cell.code}</span>
               <span className="text-sm font-semibold text-slate-700">{selected.cell.label}</span>
             </div>
