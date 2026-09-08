@@ -5,6 +5,12 @@ import { authenticate, requireRole, isCronAuthorized } from "./middleware.js";
 import { logCronHeartbeat } from "./storage.js";
 import { addDagenIso, brusselsDay } from "./helpers.js";
 import type { AuthenticatedRequest } from "./types.js";
+import {
+  bouwDagen, bouwMaanden, bouwPuntMatrix, bouwPunten, bouwTotalen, dagVan, dagpiekenUitSnapshots, dagpiekenUitTabel,
+  maandGrenzenVan, sessieDetail, voegPiekenSamen, type DagPiek, type SessieDetail,
+} from "./_lib/ocpiOverzicht.js";
+import { bouwHistoriekXlsx, bouwPeriodeXlsx } from "./_lib/ocpiExport.js";
+import { busVoorLaadpunt } from "../shared/laadplein.js";
 
 /**
  * OCPI 2.2.1 — eMSP/receiver-kant, read-only monitoring van ChargEye (CPO).
@@ -648,7 +654,24 @@ const schrijfVermogensSnapshot = async (): Promise<void> => {
   if (!bestaand || Number(bestaand.total_power_kw) < totaal) {
     await db.from("ocpi_power_snapshots").upsert({ ts: slot, total_power_kw: totaal, charging: sessies.length }, { onConflict: "ts" });
   }
-  const grens = new Date(Date.now() - 35 * 24 * 3600 * 1000).toISOString();
+  // Permanente dagpiek (herwerking 08-09): per Brusselse dag de hoogste
+  // kwartierwaarde, in ocpi_dagpieken (supabase/2026-09-08_ocpi_dagpieken.sql).
+  // Hoger = overschrijven, anders niets; zonder de migratie faalt dit stil
+  // (de historiek valt dan terug op de snapshots zolang die er zijn).
+  try {
+    const dag = dagVan(slot);
+    if (dag && totaal > 0) {
+      const { data: piek } = await db.from("ocpi_dagpieken").select("piek_kw").eq("dag", dag).maybeSingle();
+      if (!piek || Number(piek.piek_kw) < totaal) {
+        await db.from("ocpi_dagpieken").upsert({ dag, piek_kw: totaal, piek_ts: slot, charging: sessies.length, updated_at: nowIso() }, { onConflict: "dag" });
+      }
+    }
+  } catch (e: any) {
+    console.error("[ocpi] dagpiek bijwerken mislukt:", e?.message ?? e);
+  }
+  // Retentie 400 dagen (was 35): de dagcurve van elke dag van het afgelopen
+  // jaar blijft opvraagbaar (≈ 38.000 rijen, verwaarloosbaar).
+  const grens = new Date(Date.now() - 400 * 24 * 3600 * 1000).toISOString();
   await db.from("ocpi_power_snapshots").delete().lt("ts", grens);
 };
 
@@ -724,6 +747,29 @@ export const periodeVenster = (van: string, tot: string): { van: string; tot: st
   tot: `${dagPlus(tot, 2)}T00:00:00.000Z`,
 });
 
+/** Periode uit de query: ?van=YYYY-MM-DD&tot=YYYY-MM-DD (kalenderdagen, t/m)
+ *  óf ?maand=YYYY-MM; zonder parameters de lopende Brusselse maand. `maand`
+ *  is gezet als de periode precies een kalendermaand is. Gedeeld door
+ *  verbruik, maand, sessies en export. */
+export const leesPeriode = (
+  q: (k: string) => string,
+  opts: { maxDagen?: number } = {},
+): { ok: true; van: string; tot: string; maand: string | null } | { ok: false; fout: string } => {
+  const maxDagen = opts.maxDagen ?? 366;
+  if (q("van") || q("tot")) {
+    const van = q("van");
+    const tot = q("tot");
+    if (!isGeldigeDag(van) || !isGeldigeDag(tot)) return { ok: false, fout: "Ongeldige periode (verwacht van=YYYY-MM-DD&tot=YYYY-MM-DD)." };
+    if (van > tot) return { ok: false, fout: "Ongeldige periode: 'van' ligt na 'tot'." };
+    if (dagPlus(van, maxDagen) < tot) return { ok: false, fout: `Periode te lang (maximaal ${maxDagen} dagen).` };
+    const grenzen = maandGrenzen(van.slice(0, 7));
+    return { ok: true, van, tot, maand: van === grenzen.van && tot === grenzen.tot ? van.slice(0, 7) : null };
+  }
+  const maand = q("maand") || huidigeBrusselseMaand();
+  if (!MAAND_RE.test(maand)) return { ok: false, fout: "Ongeldige maand (verwacht YYYY-MM)." };
+  return { ok: true, ...maandGrenzen(maand), maand };
+};
+
 export type VerbruikRij = {
   evseUid: string;
   evseId: string | null;
@@ -764,6 +810,119 @@ export const verbruikPerLaadpunt = (
     if (v.kwh > 0) rijen.push({ evseUid: uid, evseId: null, physicalReference: null, kwh: rond(v.kwh), sessies: v.sessies });
   }
   return rijen;
+};
+
+// ============================================================================
+// Laadpalen-herwerking (08-09-2026): dataloaders voor maandoverzicht,
+// historiek, sessielijst, dagdetail en export. De rekenregels zelf staan in
+// api/_lib/ocpiOverzicht.ts (zuiver, getest).
+// ============================================================================
+
+const queryTekst = (req: express.Request) => (k: string) => (typeof req.query[k] === "string" ? (req.query[k] as string).trim() : "");
+
+const MAAND_TEKST = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+const maandTekst = (maand: string): string => {
+  const [j, m] = maand.split("-").map(Number);
+  return `${MAAND_TEKST[m - 1] ?? maand} ${j}`;
+};
+
+/** De periode ervóór, even lang: voor een maand de vorige kalendermaand,
+ *  voor een vrije periode dezelfde lengte direct ervoor. */
+export const vorigePeriode = (van: string, tot: string, maand: string | null): { van: string; tot: string; maand: string | null } => {
+  if (maand) {
+    const [j, m] = maand.split("-").map(Number);
+    const d = new Date(Date.UTC(j, m - 2, 1));
+    const vorige = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    return { ...maandGrenzenVan(vorige), maand: vorige };
+  }
+  const lengte = Math.round((Date.parse(`${tot}T00:00:00Z`) - Date.parse(`${van}T00:00:00Z`)) / 86400000) + 1;
+  return { van: dagPlus(van, -lengte), tot: dagPlus(van, -1), maand: null };
+};
+
+type EvseKort = { uid: string; evse_id: string | null; physical_reference: string | null; max_electric_power: number | null };
+
+/** Alle laadpunten met het maximale vermogen van hun (eerste) connector. */
+const laadEvses = async (): Promise<EvseKort[]> => {
+  const [evsesR, connsR] = await Promise.all([
+    db!.from("ocpi_evses").select("uid,evse_id,physical_reference"),
+    db!.from("ocpi_connectors").select("evse_uid,max_electric_power"),
+  ]);
+  if (evsesR.error) throw new Error(evsesR.error.message);
+  const maxPerEvse = new Map<string, number>();
+  for (const c of (connsR.data ?? []) as any[]) {
+    const w = Number(c.max_electric_power);
+    if (Number.isFinite(w)) maxPerEvse.set(String(c.evse_uid), Math.max(maxPerEvse.get(String(c.evse_uid)) ?? 0, w));
+  }
+  return ((evsesR.data ?? []) as any[]).map((e) => ({
+    uid: String(e.uid), evse_id: e.evse_id ?? null, physical_reference: e.physical_reference ?? null, max_electric_power: maxPerEvse.get(String(e.uid)) ?? null,
+  }));
+};
+
+// Alleen de JSON-paden die de detailberekening nodig heeft: de volledige raw
+// (cdr_token, custom.*) hoeft niet over de lijn. PostgREST-aliassen.
+const SESSIE_DETAIL_SELECT = "id,evse_uid,start_date_time,end_date_time,kwh,status,periodes:raw->charging_periods,klasse:raw->custom->>technicalFailClassification,voertuig:raw->custom->vehicle->>model";
+const SESSIE_LICHT_SELECT = "id,evse_uid,start_date_time,end_date_time,kwh,status,klasse:raw->custom->>technicalFailClassification";
+
+/** Sessies die op een Brusselse dag in [van, tot] startten, met detail. */
+const laadSessieDetails = async (van: string, tot: string, evseUid?: string): Promise<SessieDetail[]> => {
+  const venster = periodeVenster(van, tot);
+  const rijen = await selectAlles((v, t) => {
+    let q = db!.from("ocpi_sessions").select(SESSIE_DETAIL_SELECT).gte("start_date_time", venster.van).lt("start_date_time", venster.tot);
+    if (evseUid) q = q.eq("evse_uid", evseUid);
+    return q.order("start_date_time", { ascending: true }).range(v, t);
+  });
+  return rijen.map(sessieDetail).filter((s) => s.dag && s.dag >= van && s.dag <= tot);
+};
+
+/** Alle sessies ooit, zonder charging_periods (historiek: ±10.000 rijen/jaar). */
+const laadAlleSessiesLicht = async (): Promise<SessieDetail[]> => {
+  const rijen = await selectAlles((v, t) => db!.from("ocpi_sessions").select(SESSIE_LICHT_SELECT).order("start_date_time", { ascending: true }).range(v, t));
+  return rijen.map(sessieDetail).filter((s) => s.dag);
+};
+
+/** ocpi_dagpieken kan nog ontbreken (migratie niet gedraaid): dan stil leeg. */
+const leesDagpiekenTabel = async (van?: string, tot?: string): Promise<Map<string, DagPiek>> => {
+  try {
+    let q = db!.from("ocpi_dagpieken").select("dag,piek_kw,piek_ts,charging");
+    if (van) q = q.gte("dag", van);
+    if (tot) q = q.lte("dag", tot);
+    const rijen = await selectAlles((v, t) => q.order("dag", { ascending: true }).range(v, t));
+    return dagpiekenUitTabel(rijen);
+  } catch (e: any) {
+    if (!/does not exist|42P01|schema cache/i.test(String(e?.message ?? e))) console.error("[ocpi] dagpieken lezen mislukt:", e?.message ?? e);
+    return new Map();
+  }
+};
+
+/** Dagpieken voor een periode: permanente tabel + rollende snapshots, hoogste wint. */
+const laadDagpieken = async (van: string, tot: string): Promise<Map<string, DagPiek>> => {
+  const venster = periodeVenster(van, tot);
+  const [tabel, snaps] = await Promise.all([
+    leesDagpiekenTabel(van, tot),
+    selectAlles((v, t) => db!.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", venster.van).lt("ts", venster.tot).order("ts", { ascending: true }).range(v, t)).catch((e) => { console.error("[ocpi] snapshots lezen mislukt:", e?.message ?? e); return [] as any[]; }),
+  ]);
+  const samen = voegPiekenSamen(tabel, dagpiekenUitSnapshots(snaps));
+  for (const dag of [...samen.keys()]) if (dag < van || dag > tot) samen.delete(dag);
+  return samen;
+};
+
+/** Dagpieken voor de hele historiek: de tabel + de snapshots van de laatste
+ *  45 dagen (dekt de periode vóór de migratie als die nog moet draaien). */
+const laadAlleDagpieken = async (): Promise<Map<string, DagPiek>> => {
+  const sinds = new Date(Date.now() - 45 * 24 * 3600 * 1000).toISOString();
+  const [tabel, snaps] = await Promise.all([
+    leesDagpiekenTabel(),
+    selectAlles((v, t) => db!.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", sinds).order("ts", { ascending: true }).range(v, t)).catch(() => [] as any[]),
+  ]);
+  return voegPiekenSamen(tabel, dagpiekenUitSnapshots(snaps));
+};
+
+/** Eerste Brusselse dag met een sessie (hoe ver terug kan de UI bladeren). */
+const laadEersteDag = async (): Promise<string | null> => {
+  const { data, error } = await db!.from("ocpi_sessions").select("start_date_time").not("start_date_time", "is", null).order("start_date_time", { ascending: true }).limit(1).maybeSingle();
+  if (error) throw new Error(error.message);
+  const eerste = (data as { start_date_time?: string } | null)?.start_date_time;
+  return eerste ? dagVan(eerste) || null : null;
 };
 
 // ---- Auth voor ÓNZE gehoste OCPI-endpoints ----
@@ -985,24 +1144,9 @@ export const mountOcpiRoutes = (app: express.Express) => {
   // /maandverbruik blijft als alias werken voor een nog gecachete bundel.
   app.get(["/api/ocpi/verbruik", "/api/ocpi/maandverbruik"], authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
     if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
-    const q = (k: string) => (typeof req.query[k] === "string" ? (req.query[k] as string).trim() : "");
-    let van: string;
-    let tot: string;
-    let maand: string | null = null;
-    if (q("van") || q("tot")) {
-      van = q("van");
-      tot = q("tot");
-      if (!isGeldigeDag(van) || !isGeldigeDag(tot)) return res.status(400).json({ error: "Ongeldige periode (verwacht van=YYYY-MM-DD&tot=YYYY-MM-DD)." });
-      if (van > tot) return res.status(400).json({ error: "Ongeldige periode: 'van' ligt na 'tot'." });
-      if (dagPlus(van, 366) < tot) return res.status(400).json({ error: "Periode te lang (maximaal een jaar)." });
-      // Precies een kalendermaand? Dan ook als maand benoemen (label in de UI).
-      const grenzen = maandGrenzen(van.slice(0, 7));
-      if (van === grenzen.van && tot === grenzen.tot) maand = van.slice(0, 7);
-    } else {
-      maand = q("maand") || huidigeBrusselseMaand();
-      if (!MAAND_RE.test(maand)) return res.status(400).json({ error: "Ongeldige maand (verwacht YYYY-MM)." });
-      ({ van, tot } = maandGrenzen(maand));
-    }
+    const periode = leesPeriode(queryTekst(req));
+    if (periode.ok === false) return res.status(400).json({ error: periode.fout });
+    const { van, tot, maand } = periode;
     try {
       const venster = periodeVenster(van, tot);
       const [evsesR, eersteR, sessieRows] = await Promise.all([
@@ -1034,6 +1178,178 @@ export const mountOcpiRoutes = (app: express.Express) => {
     } catch (err: any) {
       console.error("[ocpi] verbruik per laadpunt mislukt:", err?.message ?? err);
       res.status(500).json({ error: "OCPI-verbruik per laadpunt mislukt" });
+    }
+  });
+
+  // ==========================================================================
+  // Laadpalen-herwerking (08-09-2026): maandoverzicht, historiek, sessielijst,
+  // dagdetail en Excel-export. Rekenwerk in api/_lib/ocpiOverzicht.ts.
+  // ==========================================================================
+
+  // Maandoverzicht (of vrije periode): totalen, per dag, per laadpunt, de
+  // classificaties van mislukte aankoppelingen en de vorige periode ter
+  // vergelijking. ?maand=YYYY-MM of ?van&tot.
+  app.get("/api/ocpi/maand", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
+    const periode = leesPeriode(queryTekst(req));
+    if (periode.ok === false) return res.status(400).json({ error: periode.fout });
+    const { van, tot, maand } = periode;
+    try {
+      const vorige = vorigePeriode(van, tot, maand);
+      const [evses, sessies, pieken, sessiesVorige, piekenVorige, eersteDag] = await Promise.all([
+        laadEvses(),
+        laadSessieDetails(van, tot),
+        laadDagpieken(van, tot),
+        laadSessieDetails(vorige.van, vorige.tot),
+        laadDagpieken(vorige.van, vorige.tot),
+        laadEersteDag(),
+      ]);
+      const dagen = bouwDagen({ van, tot }, sessies, pieken);
+      const totalen = bouwTotalen(dagen, sessies);
+      const punten = bouwPunten({ van, tot }, sessies, evses);
+      const klassen: Record<string, number> = {};
+      for (const s of sessies) if (s.mislukt && s.klasse) klassen[s.klasse] = (klassen[s.klasse] ?? 0) + 1;
+      const totVorige = bouwTotalen(bouwDagen(vorige, sessiesVorige, piekenVorige), sessiesVorige);
+      // Per laadpunt de piek van de vorige periode is overkill; wél het
+      // verbruik zodat de tabel een Δ per laadpunt kan tonen.
+      const puntenVorige = new Map(bouwPunten(vorige, sessiesVorige, evses).map((p) => [p.evseUid, p.kwh]));
+      res.json({
+        van, tot, maand,
+        eersteDag,
+        huidigeDag: huidigeBrusselseDag(),
+        totalen,
+        vorige: { van: vorige.van, tot: vorige.tot, maand: vorige.maand, kwh: totVorige.kwh, laadbeurten: totVorige.laadbeurten, mislukt: totVorige.mislukt, piekKw: totVorige.piekKw, gemPerLaaddag: totVorige.gemPerLaaddag, laaddagen: totVorige.laaddagen },
+        dagen,
+        punten: punten.map((p) => ({ ...p, kwhVorige: puntenVorige.get(p.evseUid) ?? 0 })),
+        klassen,
+      });
+    } catch (err: any) {
+      console.error("[ocpi] maandoverzicht mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-maandoverzicht mislukt" });
+    }
+  });
+
+  // Historiek: één rij per kalendermaand sinds de eerste sessie, plus de
+  // matrix laadpunt × maand. ?format=xlsx geeft het werkboek.
+  app.get("/api/ocpi/historiek", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
+    try {
+      const huidigeMaand = huidigeBrusselseMaand();
+      const [evses, sessies, pieken] = await Promise.all([laadEvses(), laadAlleSessiesLicht(), laadAlleDagpieken()]);
+      const maanden = bouwMaanden(sessies, pieken, huidigeMaand);
+      const matrix = bouwPuntMatrix(sessies, maanden.map((m) => m.maand), evses);
+      if (queryTekst(req)("format") === "xlsx") {
+        const buffer = bouwHistoriekXlsx({ maanden, matrix, busVan: busVoorLaadpunt, gemaaktOp: nowIso() });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="vhb-laadplein-historiek-${huidigeBrusselseDag()}.xlsx"`);
+        return res.send(buffer);
+      }
+      res.json({ huidigeMaand, huidigeDag: huidigeBrusselseDag(), maanden, matrix });
+    } catch (err: any) {
+      console.error("[ocpi] historiek mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-historiek mislukt" });
+    }
+  });
+
+  // Sessielijst met detail per sessie (duur, laadtijd, gem./max. vermogen,
+  // batterij van → tot, classificatie, voertuig). ?van&tot of ?maand,
+  // optioneel ?evse=<uid>. Nieuwste eerst; boven de 5.000 rijen wordt de
+  // lijst afgekapt (afgekapt: true) — kies dan een kortere periode.
+  app.get("/api/ocpi/sessies", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
+    const q = queryTekst(req);
+    const periode = leesPeriode(q);
+    if (periode.ok === false) return res.status(400).json({ error: periode.fout });
+    const { van, tot, maand } = periode;
+    const evse = q("evse").slice(0, 80);
+    try {
+      const [evses, alle] = await Promise.all([laadEvses(), laadSessieDetails(van, tot, evse || undefined)]);
+      const MAX = 5000;
+      const gesorteerd = [...alle].sort((a, b) => String(b.start ?? "").localeCompare(String(a.start ?? "")));
+      res.json({
+        van, tot, maand,
+        huidigeDag: huidigeBrusselseDag(),
+        totaal: gesorteerd.length,
+        afgekapt: gesorteerd.length > MAX,
+        sessies: gesorteerd.slice(0, MAX),
+        laadpunten: evses.map((e) => ({ uid: e.uid, evseId: e.evse_id ?? null, physicalReference: e.physical_reference ?? null })),
+      });
+    } catch (err: any) {
+      console.error("[ocpi] sessielijst mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-sessielijst mislukt" });
+    }
+  });
+
+  // Dagdetail: de kwartiercurve van één Brusselse dag (zolang de snapshots
+  // bewaard zijn, 400 dagen) + de sessies die die dag startten.
+  app.get("/api/ocpi/dag", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
+    const dag = queryTekst(req)("dag");
+    if (!isGeldigeDag(dag)) return res.status(400).json({ error: "Ongeldige dag (verwacht dag=YYYY-MM-DD)." });
+    try {
+      const venster = periodeVenster(dag, dag);
+      const [slotsRuw, sessies, evses, pieken] = await Promise.all([
+        selectAlles((v, t) => db!.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", venster.van).lt("ts", venster.tot).order("ts", { ascending: true }).range(v, t)),
+        laadSessieDetails(dag, dag),
+        laadEvses(),
+        laadDagpieken(dag, dag),
+      ]);
+      const slots = slotsRuw
+        .filter((r) => dagVan(r.ts) === dag)
+        .map((r) => ({ ts: String(r.ts), kw: Math.round((Number(r.total_power_kw) || 0) * 10) / 10, charging: Number(r.charging) || 0 }));
+      const piek = pieken.get(dag) ?? null;
+      const [dagRij] = bouwDagen({ van: dag, tot: dag }, sessies, pieken);
+      res.json({
+        dag,
+        slots,
+        piekKw: piek?.kw ?? null,
+        piekTs: piek?.ts ?? null,
+        piekCharging: piek?.charging ?? null,
+        kwh: dagRij?.kwh ?? 0,
+        laadbeurten: dagRij?.laadbeurten ?? 0,
+        mislukt: dagRij?.mislukt ?? 0,
+        sessies: [...sessies].sort((a, b) => String(a.start ?? "").localeCompare(String(b.start ?? ""))),
+        laadpunten: evses.map((e) => ({ uid: e.uid, evseId: e.evse_id ?? null, physicalReference: e.physical_reference ?? null })),
+      });
+    } catch (err: any) {
+      console.error("[ocpi] dagdetail mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-dagdetail mislukt" });
+    }
+  });
+
+  // Excel-export van een maand of vrije periode: Overzicht · Per dag · Per
+  // laadpunt · Sessies (api/_lib/ocpiExport.ts).
+  app.get("/api/ocpi/export", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
+    const periode = leesPeriode(queryTekst(req));
+    if (periode.ok === false) return res.status(400).json({ error: periode.fout });
+    const { van, tot, maand } = periode;
+    try {
+      const vorige = vorigePeriode(van, tot, maand);
+      const [evses, sessies, pieken, sessiesVorige, piekenVorige] = await Promise.all([
+        laadEvses(), laadSessieDetails(van, tot), laadDagpieken(van, tot), laadSessieDetails(vorige.van, vorige.tot), laadDagpieken(vorige.van, vorige.tot),
+      ]);
+      const dagen = bouwDagen({ van, tot }, sessies, pieken);
+      const totalen = bouwTotalen(dagen, sessies);
+      const totVorige = bouwTotalen(bouwDagen(vorige, sessiesVorige, piekenVorige), sessiesVorige);
+      const naamPerUid = new Map(evses.map((e) => [e.uid, e.evse_id ?? e.physical_reference ?? e.uid]));
+      const label = maand ? maandTekst(maand) : `${van} t/m ${tot}`;
+      const buffer = bouwPeriodeXlsx({
+        label, van, tot, totalen,
+        vorige: { label: vorige.maand ? maandTekst(vorige.maand) : `${vorige.van} t/m ${vorige.tot}`, kwh: totVorige.kwh, piekKw: totVorige.piekKw, laadbeurten: totVorige.laadbeurten },
+        dagen,
+        punten: bouwPunten({ van, tot }, sessies, evses),
+        sessies: [...sessies].sort((a, b) => String(a.start ?? "").localeCompare(String(b.start ?? ""))),
+        puntNaamVan: (uid) => naamPerUid.get(uid) ?? uid,
+        busVan: busVoorLaadpunt,
+        gemaaktOp: nowIso(),
+      });
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="vhb-laadplein-${maand ?? `${van}_${tot}`}.xlsx"`);
+      res.send(buffer);
+    } catch (err: any) {
+      console.error("[ocpi] export mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-export mislukt" });
     }
   });
 

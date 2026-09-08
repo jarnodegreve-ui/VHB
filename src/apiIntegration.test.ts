@@ -2100,6 +2100,38 @@ describe('OCPI-dashboard, autorisatie', () => {
     expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-planner' })).status).toBe(403);
     expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-a' })).status).toBe(403);
   });
+  // Laadpalen-herwerking 08-09: maand, historiek, sessies, dag en export
+  // dragen dezelfde admin-guard; de periode-validatie vuurt vóór de database
+  // (db is in de tests een leeg object → 500 als de guard níét zou vuren).
+  it('de rapportage-endpoints zijn admin-only', async () => {
+    for (const pad of ['/api/ocpi/maand', '/api/ocpi/historiek', '/api/ocpi/sessies', '/api/ocpi/dag?dag=2026-08-01', '/api/ocpi/export']) {
+      expect((await api('GET', pad, { token: 'tok-planner' })).status, pad).toBe(403);
+      expect((await api('GET', pad, { token: 'tok-a' })).status, pad).toBe(403);
+      expect((await api('GET', pad)).status, pad).toBe(401);
+    }
+  });
+  it('valideert de periode vóór de database wordt aangesproken', async () => {
+    expect((await api('GET', '/api/ocpi/maand?maand=2026-13', { token: 'tok-admin' })).status).toBe(400);
+    expect((await api('GET', '/api/ocpi/sessies?van=2026-02-30&tot=2026-03-01', { token: 'tok-admin' })).status).toBe(400);
+    expect((await api('GET', '/api/ocpi/sessies?van=2026-03-02&tot=2026-03-01', { token: 'tok-admin' })).status).toBe(400);
+    expect((await api('GET', '/api/ocpi/export?van=2025-01-01&tot=2026-03-01', { token: 'tok-admin' })).status).toBe(400);
+    expect((await api('GET', '/api/ocpi/dag?dag=gisteren', { token: 'tok-admin' })).status).toBe(400);
+  });
+});
+
+describe('OCPI leesPeriode / vorigePeriode (zuiver)', () => {
+  it('leest maand, vrije periode en de standaard (lopende maand)', async () => {
+    const { leesPeriode, vorigePeriode } = await import('../api/ocpi');
+    const q = (o: Record<string, string>) => (k: string) => o[k] ?? '';
+    expect(leesPeriode(q({ maand: '2026-08' }))).toEqual({ ok: true, van: '2026-08-01', tot: '2026-08-31', maand: '2026-08' });
+    expect(leesPeriode(q({ van: '2026-08-01', tot: '2026-08-31' }))).toEqual({ ok: true, van: '2026-08-01', tot: '2026-08-31', maand: '2026-08' });
+    expect(leesPeriode(q({ van: '2026-08-04', tot: '2026-08-05' }))).toEqual({ ok: true, van: '2026-08-04', tot: '2026-08-05', maand: null });
+    expect(leesPeriode(q({ van: '2026-08-05', tot: '2026-08-04' }))).toMatchObject({ ok: false });
+    expect(leesPeriode(q({ van: '2025-01-01', tot: '2026-02-01' }))).toMatchObject({ ok: false });
+    expect(leesPeriode(q({}))).toMatchObject({ ok: true, maand: expect.stringMatching(/^\d{4}-\d{2}$/) });
+    expect(vorigePeriode('2026-01-01', '2026-01-31', '2026-01')).toEqual({ van: '2025-12-01', tot: '2025-12-31', maand: '2025-12' });
+    expect(vorigePeriode('2026-08-04', '2026-08-05', null)).toEqual({ van: '2026-08-02', tot: '2026-08-03', maand: null });
+  });
 });
 
 describe('rostering-export, eigen secret (controle-ronde 27-08, nr. 28)', () => {

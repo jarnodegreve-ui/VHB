@@ -17,6 +17,18 @@ export type WatIsNieuwItem = {
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-09',
+    titel: 'Laadpalen: maandrapport, historiek en sessies',
+    regels: {
+      staf: [
+        'Laadpalen heeft vier tabbladen: Live (wat er nu aan de lader hangt), Maand (verbruik, kwartierpiek en laadbeurten per dag en per laadpunt, ook voor een vrije periode), Historiek (alle maanden naast elkaar, jaartotalen, laadpunt per maand) en Sessies (elke laadsessie met duur, vermogen en batterijstand).',
+        'Excel-export van een maand of periode (Overzicht · Per dag · Per laadpunt · Sessies) en van de hele historiek; CSV per tabel.',
+        'Klik op een dag voor de kwartiercurve en de sessies van die dag. Dagpieken blijven voortaan permanent bewaard, zodat de maandpiek van elke maand terug te vinden is.',
+      ],
+    },
+    bekijk: { staf: 'ocpi-monitoring' },
+  },
+  {
     id: '2026-09-08',
     titel: 'Beveiliging op één plek',
     regels: {
