@@ -26,7 +26,9 @@ import { useRouteParam } from '../app/router';
 /** Sectiekop in het grid en de daglijst ("Chauffeurs", "Flexi/invallers",
  *  "Vrij / afwezig"): duidelijker dan een micro-label (Jarno 08-09), met
  *  een donkerdere band, vette kop en een gouden accentstreep links. */
-const SECTIE_KOP = 'text-sm font-bold tracking-wide text-slate-900';
+const SECTIE_KOP = 'text-sm font-bold uppercase tracking-wider text-slate-900';
+/** Gouden streepje vóór de sectienaam: klein merkaccent i.p.v. een band. */
+const SECTIE_STREEP = <span className="mr-2.5 inline-block h-3.5 w-1 shrink-0 rounded-full bg-oker-500" aria-hidden="true" />;
 // Band-kleur staat in index.css (.mp-sectie, slate-200 die meeflipt in dark
 // mode) zodat hij ook op de sticky cel wint; hier alleen de gouden
 // accentstreep (Jarno 08-09: donker paste niet bij de rest).
@@ -693,7 +695,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
                           <td className={cn('mp-sticky sticky left-0 z-10 p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
-                            <div className={cn('inline-flex items-center px-4 py-2', SECTIE_KOP)}>
+                            <div className={cn('flex items-center px-4 pb-2 pt-3', SECTIE_KOP)}>
+                              {SECTIE_STREEP}
                               {section}
                             </div>
                           </td>
@@ -909,7 +912,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 ) : dagRijen.secties.map((sectie) => (
                   <Fragment key={sectie.naam}>
                     {showSections && (
-                      <div className={cn(SECTIE_BAND, 'px-4 py-2', SECTIE_KOP)}>{sectie.naam}</div>
+                      <div className={cn(SECTIE_BAND, 'flex items-center px-4 pb-2 pt-3', SECTIE_KOP)}>{SECTIE_STREEP}{sectie.naam}</div>
                     )}
                     {sectie.rijen.map(({ drv, cell }) => {
                       if (!cell) return null;

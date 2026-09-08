@@ -995,7 +995,7 @@ html.dark {
    een duidelijke lijn erboven en een hairline eronder; de tekst zelf doet
    het werk (vet, iets groter, carbon). Unlayered en met !important zodat
    de sticky cel niet in de gewone sticky-kleur terugvalt. */
-.mp-sectie, td.mp-sectie.mp-sticky { background-color: var(--color-surface-white) !important; border-top: 2px solid var(--color-slate-300) !important; border-bottom: 1px solid var(--color-slate-200) !important; }
+.mp-sectie, td.mp-sectie.mp-sticky { background-color: var(--color-surface-white) !important; border-top: 2px solid var(--color-slate-400) !important; border-bottom: 1px solid var(--color-slate-200) !important; }
 .mp-sectie:not(.mp-sticky) { border-left-color: transparent !important; }
 .mp-sectie.mp-sectie-ma { border-left: 2px solid var(--color-slate-300) !important; }
 /* Lege cel (geen dienst, geen code): fijn stippenpatroon, bewust anders
