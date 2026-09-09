@@ -14,16 +14,14 @@ import { LegeLijst, NietGevonden } from '../components/illustraties';
 const roleLabel = (role: string) =>
   role === 'chauffeur' ? 'Chauffeur' : role === 'planner' ? 'Planning' : role === 'admin' ? 'Beheer' : role;
 
-/** Eerste letter voor de groepering/letterindex; cijfers en tekens onder '#'. */
-const letterOf = (name: string) => {
-  const c = name.trim().charAt(0).toUpperCase();
-  return /[A-Z]/.test(c) ? c : '#';
-};
-
 /**
- * Breekpunt als React-state (Tailwind `lg` = 1024 px). Onder `lg` de vlakke
- * kaartlijst; daarboven groepering per letter met een plakkende letterindex.
+ * Breekpunt als React-state (Tailwind `lg` = 1024 px). Boven `lg` staat het
+ * zoekveld in een plakkende werkbalk, daaronder in de paginakop.
  * Lokaal — een gedeelde useMediaQuery ontbreekt nog in src/lib.
+ *
+ * Eén doorlopende alfabetische lijst, bewust zónder lettersecties: de
+ * sectiekoppen (en de letterindex die ernaar sprong) maakten het scherm
+ * onrustig voor een ploeg van deze grootte (Jarno 09-09).
  */
 
 export function ContactsView({ users, currentUser }: { users: User[], currentUser: User }) {
@@ -54,20 +52,6 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
     return u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
            (u.phone && u.phone.includes(searchQuery));
   }).sort((a, b) => a.name.localeCompare(b.name));
-
-  // Groepering per eerste letter (alleen lg+), in alfabetische volgorde —
-  // de lijst is al gesorteerd, dus de Map bewaart die volgorde.
-  const groups = new Map<string, User[]>();
-  for (const u of filteredUsers) {
-    const l = letterOf(u.name);
-    const list = groups.get(l);
-    if (list) list.push(u);
-    else groups.set(l, [u]);
-  }
-
-  const scrollNaarLetter = (letter: string) => {
-    document.getElementById(`contact-letter-${letter === '#' ? 'overig' : letter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 
   const zoekveld = (
     <div className="relative w-full md:w-72 group">
@@ -138,32 +122,18 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
 
       {lg ? (
         <>
-          {/* Plakkende werkbalk: zoekveld + letterindex. top = hoogte van de
+          {/* Plakkende werkbalk: zoekveld + telling. top = hoogte van de
               topbar (zelfde waarde als StickyThead). */}
           <Card padding="none" className="sticky top-[3.25rem] z-20 flex flex-wrap items-center gap-3 px-3 py-2.5">
             {zoekveld}
-            <nav aria-label="Letterindex" className="flex flex-wrap items-center gap-0.5">
-              {Array.from(groups.keys()).map((letter) => (
-                <Button key={letter} variant="ghost" size="sm" className="min-w-8 px-2 tabular-nums" onClick={() => scrollNaarLetter(letter)} aria-label={`Spring naar ${letter === '#' ? 'overige' : letter}`}>
-                  {letter}
-                </Button>
-              ))}
-            </nav>
             <span className="ml-auto text-xs font-medium tabular-nums text-slate-500">
               {filteredUsers.length} {filteredUsers.length === 1 ? 'contact' : 'contacten'}
             </span>
           </Card>
 
           {filteredUsers.length === 0 ? leeg : (
-            <div className="space-y-6">
-              {Array.from(groups.entries()).map(([letter, list]) => (
-                <section key={letter} id={`contact-letter-${letter === '#' ? 'overig' : letter}`} aria-label={letter === '#' ? 'Overige' : letter} className="scroll-mt-32">
-                  <MicroLabel className="mb-2 px-1">{letter === '#' ? 'Overige' : letter}</MicroLabel>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-3">
-                    {list.map(kaart)}
-                  </div>
-                </section>
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-3">
+              {filteredUsers.map(kaart)}
             </div>
           )}
         </>
