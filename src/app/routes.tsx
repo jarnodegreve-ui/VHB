@@ -33,24 +33,28 @@ export type RouteDef = {
   verborgen?: boolean;
 };
 
-const IEDEREEN: readonly Role[] = ['chauffeur', 'planner', 'admin'];
+const IEDEREEN: readonly Role[] = ['chauffeur', 'technieker', 'planner', 'admin'];
 const STAF: readonly Role[] = ['planner', 'admin'];
+/** Rijdend personeel plus staf: alles wat met diensten en rooster te maken
+ *  heeft. Een technieker heeft geen diensten, dus die schermen zijn voor hem
+ *  leeg en staan niet in zijn menu (Jarno 09-09). */
+const RIJDEND_EN_STAF: readonly Role[] = ['chauffeur', 'planner', 'admin'];
 const ADMIN: readonly Role[] = ['admin'];
 
 export const ROUTES: readonly RouteDef[] = [
   // — Algemeen —
   { view: 'dashboard', pad: '', label: 'Dashboard', omschrijving: 'Vandaag in één oogopslag.', icoon: LayoutDashboard, sectie: 'algemeen', rollen: IEDEREEN },
-  { view: 'mijn-dag', pad: 'mijn-dag', label: 'Mijn dag', omschrijving: 'Je dienst van vandaag of morgen, blok voor blok.', icoon: Sunrise, sectie: 'algemeen', rollen: IEDEREEN },
-  { view: 'rooster', pad: 'rooster', label: 'Rooster', omschrijving: 'Je komende diensten en export naar agenda.', icoon: Calendar, sectie: 'algemeen', rollen: IEDEREEN },
-  { view: 'omleidingen', pad: 'omleidingen', label: 'Omleidingen', omschrijving: 'Actuele omleidingen.', icoon: MapPin, sectie: 'algemeen', rollen: IEDEREEN },
-  { view: 'ritblaadjes', pad: 'ritbladen', label: 'Ritbladen', omschrijving: 'Actuele rit-informatie als PDF.', icoon: FileText, sectie: 'algemeen', rollen: IEDEREEN },
-  { view: 'documenten', pad: 'documenten', label: 'Documenten', omschrijving: 'Documenten die de planning voor jou klaarzet.', icoon: FolderOpen, sectie: 'algemeen', rollen: ['chauffeur'] },
-  { view: 'ruil-verzoeken', pad: 'dienstruil', label: 'Dienstruil', omschrijving: 'Ruil een dienst met een collega.', icoon: RotateCcw, sectie: 'algemeen', rollen: IEDEREEN },
+  { view: 'mijn-dag', pad: 'mijn-dag', label: 'Mijn dag', omschrijving: 'Je dienst van vandaag of morgen, blok voor blok.', icoon: Sunrise, sectie: 'algemeen', rollen: RIJDEND_EN_STAF },
+  { view: 'rooster', pad: 'rooster', label: 'Rooster', omschrijving: 'Je komende diensten en export naar agenda.', icoon: Calendar, sectie: 'algemeen', rollen: RIJDEND_EN_STAF },
+  { view: 'omleidingen', pad: 'omleidingen', label: 'Omleidingen', omschrijving: 'Actuele omleidingen.', icoon: MapPin, sectie: 'algemeen', rollen: RIJDEND_EN_STAF },
+  { view: 'ritblaadjes', pad: 'ritbladen', label: 'Ritbladen', omschrijving: 'Actuele rit-informatie als PDF.', icoon: FileText, sectie: 'algemeen', rollen: RIJDEND_EN_STAF },
+  { view: 'documenten', pad: 'documenten', label: 'Documenten', omschrijving: 'Documenten die de planning voor jou klaarzet.', icoon: FolderOpen, sectie: 'algemeen', rollen: ['chauffeur', 'technieker'] },
+  { view: 'ruil-verzoeken', pad: 'dienstruil', label: 'Dienstruil', omschrijving: 'Ruil een dienst met een collega.', icoon: RotateCcw, sectie: 'algemeen', rollen: RIJDEND_EN_STAF },
   { view: 'verlof', pad: 'verlof', label: 'Verlof', omschrijving: 'Vraag verlof aan en volg je aanvragen op.', icoon: CalendarCheck, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'updates', pad: 'updates', label: 'Updates', omschrijving: 'Nieuws en mededelingen.', icoon: Bell, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'meldingen', pad: 'meldingen', label: 'Meldingen', omschrijving: 'Wat er voor jou binnenkwam: planning, verlof, ruil en updates.', icoon: Inbox, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'contacten', pad: 'contacten', label: 'Contacten', omschrijving: 'Contactgegevens van alle medewerkers.', icoon: Phone, sectie: 'algemeen', rollen: IEDEREEN },
-  { view: 'bezetting', pad: 'maandplanning', label: 'Maandplanning', omschrijving: 'Wie rijdt welke dienst, zoals in het chauffeurslokaal.', icoon: Users, sectie: 'algemeen', rollen: IEDEREEN },
+  { view: 'bezetting', pad: 'maandplanning', label: 'Maandplanning', omschrijving: 'Wie rijdt welke dienst, zoals in het chauffeurslokaal.', icoon: Users, sectie: 'algemeen', rollen: RIJDEND_EN_STAF },
   // — Beheer › Planning —
   { view: 'beheer-roosters', pad: 'beheer/roosters', label: 'Beheer roosters', omschrijving: 'Importeer en herbouw de planning.', icoon: CalendarCog, sectie: 'planning', rollen: STAF },
   { view: 'planning-matrix', pad: 'beheer/planningsoverzicht', label: 'Planningsoverzicht', omschrijving: 'Controleer de geïmporteerde matrix per dag en chauffeur.', icoon: FileText, sectie: 'planning', rollen: STAF },

@@ -30,7 +30,7 @@ import {
 import { formatSyncedTime } from './lib/format';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
-import { View, User } from './types';
+import { View, User, isStaf } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema, vergeetEffectiefThema, wisOfflineCaches, type ToastEventDetail } from './lib/ui';
 import { apiFetch, vernieuwSessie } from './lib/api';
@@ -294,7 +294,7 @@ export default function App() {
     refetchPlanning: () => {
       meldLive('planning');
       // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
-      const planningFilter = currentUser?.role === 'chauffeur'
+      const planningFilter = currentUser && !isStaf(currentUser.role)
         ? { driverId: String(currentUser.id) }
         : undefined;
       fetchPlanning(undefined, planningFilter, { silent: true });
@@ -303,14 +303,14 @@ export default function App() {
       // collega een wissel doorvoert of de planning herbouwt.
       window.dispatchEvent(new Event('vhb-planning-changed'));
       // Dekking beweegt mee met de planning (Operations Center).
-      if (currentUser && currentUser.role !== 'chauffeur') {
+      if (currentUser && isStaf(currentUser.role)) {
         refreshCoverageGaps();
       }
     },
     refetchMatrix: () => {
       // Alleen planner/admin gebruiken het Planning-overzicht; chauffeurs
       // hebben deze data niet.
-      if (currentUser && currentUser.role !== 'chauffeur') {
+      if (currentUser && isStaf(currentUser.role)) {
         void fetchPlanningMatrix();
         void fetchPlanningMatrixHistory();
       }
@@ -325,11 +325,11 @@ export default function App() {
       void fetchSwaps();
       void fetchDiversions(undefined, { silent: true });
       void fetchUpdates();
-      const planningFilter = currentUser?.role === 'chauffeur'
+      const planningFilter = currentUser && !isStaf(currentUser.role)
         ? { driverId: String(currentUser.id) }
         : undefined;
       void fetchPlanning(undefined, planningFilter, { silent: true });
-      if (currentUser && currentUser.role !== 'chauffeur') {
+      if (currentUser && isStaf(currentUser.role)) {
         refreshCoverageGaps();
         void fetchPlanningMatrix();
         void fetchPlanningMatrixHistory();
@@ -342,7 +342,7 @@ export default function App() {
   // zodat "gegevens van HH:MM" bij een volgende uitval klopt.
   onlineCatchUpRef.current = () => {
     if (!currentUser) return;
-    const planningFilter = currentUser.role === 'chauffeur' ? { driverId: String(currentUser.id) } : undefined;
+    const planningFilter = isStaf(currentUser.role) ? undefined : { driverId: String(currentUser.id) };
     void Promise.allSettled([
       fetchMyNotes(),
       fetchLeave(),
@@ -350,7 +350,7 @@ export default function App() {
       fetchDiversions(undefined, { silent: true }),
       fetchUpdates(),
       fetchPlanning(undefined, planningFilter, { silent: true }),
-      ...(currentUser.role !== 'chauffeur'
+      ...(isStaf(currentUser.role)
         ? [refreshCoverageGaps(), fetchPlanningMatrix(), fetchPlanningMatrixHistory()]
         : []),
     ]).then(() => {
@@ -1620,7 +1620,7 @@ export default function App() {
                     leaveRequests={leaveRequests}
                     users={users}
                     onSave={saveLeave}
-                    onDecide={currentUser.role !== 'chauffeur' ? decideLeave : undefined}
+                    onDecide={isStaf(currentUser.role) ? decideLeave : undefined}
                     lastSeenDecisionAt={lastSeenLeaveDecisionAt}
                     onMarkDecisionsSeen={markLeaveDecisionsSeen}
                     shifts={shifts}

@@ -4,6 +4,7 @@ import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { valideer } from '../../lib/valideer';
 import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
 import { CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
+import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
@@ -926,7 +927,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
             >
               <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} placeholder="bv. Jan Janssen" />
             </Field>
-            <Field label="Rol" htmlFor="nieuw-rol" error={nieuwFouten.role}><Select id="nieuw-rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
+            <Field label="Rol" htmlFor="nieuw-rol" error={nieuwFouten.role}><Select id="nieuw-rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}</Select></Field>
             <Field label="Personeelsnummer" htmlFor="nieuw-personeelsnr" error={nieuwFouten.employeeId}><Input id="nieuw-personeelsnr" invalid={!!nieuwFouten.employeeId} type="text" autoComplete="off" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} placeholder="Optioneel" /></Field>
             <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2" error={nieuwFouten.email}><Input id="nieuw-email" invalid={!!nieuwFouten.email} type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
             <Field label="Tijdelijk wachtwoord" htmlFor="nieuw-wachtwoord" error={nieuwFouten.password}><Input id="nieuw-wachtwoord" invalid={!!nieuwFouten.password} type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} /></Field>
@@ -954,7 +955,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                 >
                   <Input id="bewerk-naam" type="text" autoComplete="name" required value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </Field>
-                <Field label="Rol" htmlFor="bewerk-rol" error={bewerkFouten.role}><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
+                <Field label="Rol" htmlFor="bewerk-rol" error={bewerkFouten.role}><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}</Select></Field>
                 <Field label="Personeelsnummer" htmlFor="bewerk-personeelsnr" error={bewerkFouten.employeeId}><Input id="bewerk-personeelsnr" invalid={!!bewerkFouten.employeeId} type="text" autoComplete="off" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} /></Field>
                 <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2" error={bewerkFouten.email}><Input id="bewerk-email" invalid={!!bewerkFouten.email} type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
                 <Field label="Nieuw wachtwoord" htmlFor="bewerk-wachtwoord" error={bewerkFouten.password}><Input id="bewerk-wachtwoord" invalid={!!bewerkFouten.password} type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} placeholder="Optioneel" /></Field>

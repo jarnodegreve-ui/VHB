@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, Copy, Phone, Search, X } from 'lucide-react';
+import { ROL_LABELS } from '../../shared/schemas/constanten';
 import type { User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Avatar } from '../components/Avatar';
@@ -11,8 +12,7 @@ import { notify, telHref } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { LegeLijst, NietGevonden } from '../components/illustraties';
 
-const roleLabel = (role: string) =>
-  role === 'chauffeur' ? 'Chauffeur' : role === 'planner' ? 'Planning' : role === 'admin' ? 'Beheer' : role;
+const roleLabel = (role: string) => ROL_LABELS[role as keyof typeof ROL_LABELS] ?? role;
 
 /**
  * Breekpunt als React-state (Tailwind `lg` = 1024 px). Boven `lg` staat het

@@ -1,6 +1,6 @@
 import type express from "express";
 import { createHash } from "node:crypto";
-import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache } from "./middleware.js";
+import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache, isStafRol } from "./middleware.js";
 import { DEVICE_GATE_SETTING_KEY, isMissingTableError } from "./deviceGate.js";
 import { sendPushToUsers } from "./push.js";
 import {
@@ -169,7 +169,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       // bij aanmelden goedgekeurd — bewust toegevoegd aan de whitelist, zodat
       // alles er al in staat wanneer de schakelaar weer aan gaat.
       const gateEnabled = await isDeviceGateEnabled();
-      const autoApprove = appUser.role !== "chauffeur" || !gateEnabled
+      const autoApprove = isStafRol(appUser.role) || !gateEnabled
         ? true
         : !(await userHasDevices(String(appUser.id)));
       let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove);
@@ -185,7 +185,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       // allebei userHasDevices=false → allebei auto-approved. Zodra er ná de
       // insert méér dan één toestel op dit account staat terwijl wij zojuist
       // auto-approveden, deze naar de veilige kant (pending) terugzetten.
-      if (created && autoApprove && appUser.role === "chauffeur" && gateEnabled) {
+      if (created && autoApprove && !isStafRol(appUser.role) && gateEnabled) {
         const mine = (await listAllDevices()).filter((d) => d.userId === String(appUser.id));
         if (mine.length > 1) {
           await setDeviceStatus(String(appUser.id), device.deviceToken, "pending", "auto");

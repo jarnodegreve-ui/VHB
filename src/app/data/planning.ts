@@ -233,6 +233,7 @@ export function usePlanningData(ctx: DataCtx) {
   // Maandrooster zelf). Venster: gisteren t/m +45 dagen.
   const fetchMyNotes = async (accessToken = session?.access_token) => {
     try {
+      // Notities zijn per rijdende chauffeur; staf leest ze in het maandrooster.
       if (currentUser?.role !== 'chauffeur') return;
       const from = new Date(); from.setDate(from.getDate() - 1);
       const to = new Date(); to.setDate(to.getDate() + 45);
