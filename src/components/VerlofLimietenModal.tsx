@@ -107,33 +107,41 @@ export function VerlofLimietenModal({ open, onClose, limieten, onSaved }: {
           ) : (
             <div className="space-y-2">
               {periodes.map((p, i) => (
-                <Card key={p.id} padding="sm" className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_5rem_auto] sm:items-end">
-                  <Field label="Naam">
-                    {({ id }) => <Input id={id} value={p.naam} placeholder="Zomervakantie" onChange={(e) => wijzig(p.id, { naam: e.target.value })} />}
-                  </Field>
-                  <Field label="Van">
-                    {({ id }) => <DateInput id={id} value={p.van} onChange={(v) => wijzig(p.id, { van: v })} />}
-                  </Field>
-                  <Field label="Tot">
-                    {({ id }) => <DateInput id={id} value={p.tot} min={p.van || undefined} onChange={(v) => wijzig(p.id, { tot: v })} />}
-                  </Field>
-                  <Field label="Max.">
-                    {({ id }) => (
-                      <Input
-                        id={id}
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        max={200}
-                        value={String(p.max)}
-                        onChange={(e) => wijzig(p.id, { max: Number(e.target.value) })}
-                        className="tabular-nums"
-                      />
-                    )}
-                  </Field>
-                  <IconButton label={`Periode ${p.naam || i + 1} verwijderen`} variant="danger" onClick={() => verwijder(p.id)}>
-                    <Trash2 size={16} />
-                  </IconButton>
+                <Card key={p.id} padding="sm" className="space-y-3">
+                  {/* Twee rijen: naam + verwijderen, daaronder de datums en het
+                      maximum. Vijf kolommen naast elkaar drukten de naam plat. */}
+                  <div className="flex items-end gap-3">
+                    <div className="min-w-0 flex-1">
+                      <Field label="Naam">
+                        {({ id }) => <Input id={id} value={p.naam} placeholder="Zomervakantie" onChange={(e) => wijzig(p.id, { naam: e.target.value })} />}
+                      </Field>
+                    </div>
+                    <IconButton label={`Periode ${p.naam || i + 1} verwijderen`} variant="danger" onClick={() => verwijder(p.id)}>
+                      <Trash2 size={16} />
+                    </IconButton>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5rem] gap-3">
+                    <Field label="Van">
+                      {({ id }) => <DateInput id={id} value={p.van} onChange={(v) => wijzig(p.id, { van: v })} />}
+                    </Field>
+                    <Field label="Tot">
+                      {({ id }) => <DateInput id={id} value={p.tot} min={p.van || undefined} onChange={(v) => wijzig(p.id, { tot: v })} />}
+                    </Field>
+                    <Field label="Max.">
+                      {({ id }) => (
+                        <Input
+                          id={id}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={200}
+                          value={String(p.max)}
+                          onChange={(e) => wijzig(p.id, { max: Number(e.target.value) })}
+                          className="tabular-nums"
+                        />
+                      )}
+                    </Field>
+                  </div>
                 </Card>
               ))}
             </div>

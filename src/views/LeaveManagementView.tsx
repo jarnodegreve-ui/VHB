@@ -20,7 +20,7 @@ import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 import { apiJson } from '../lib/api';
 import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
-import { limietVoorDag, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
+import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
 
 
 // Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
@@ -67,8 +67,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     let weg = false;
     void (async () => {
       try {
-        const data = await apiJson<VerlofLimieten>('/api/verlof/limieten');
-        if (!weg) setLimieten(data);
+        // parse: rommel of een oud antwoord mag de kalender niet laten crashen.
+        const data = await apiJson<unknown>('/api/verlof/limieten');
+        if (!weg) setLimieten(parseVerlofLimieten(data));
       } catch {
         // standaard blijft staan; de kalender werkt gewoon
       }
@@ -172,7 +173,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const registratie = modus === 'registratie';
   // Verlof achteraf vastleggen mag in het verleden (de chauffeur belde het
   // vorige week door, of het stond al op papier); een eigen aanvraag niet.
-  const magVerleden = namensIemandAnders;
+  // In registratie-modus ook vóór de chauffeur gekozen is: anders staan de
+  // verleden-dagen grijs tot je de keuzelijst aanraakt, wat als kapot oogt.
+  const magVerleden = namensIemandAnders || registratie;
 
   /** Andere chauffeurs (niet `exclUserId`) met goedgekeurd verlof op deze dag. */
   const anderenAfwezigOp = (dag: string, exclUserId: string) =>
@@ -1097,7 +1100,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-semibold">
-                            {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'dag' : 'dagen'} aangevraagd
+                            {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'dag' : 'dagen'} {registratie ? 'vast te leggen' : 'aangevraagd'}
                           </span>
                           <span className="font-bold tabular-nums">
                             {requestPreview.gebruikt + requestPreview.requestedDays} / {requestPreview.budget}
