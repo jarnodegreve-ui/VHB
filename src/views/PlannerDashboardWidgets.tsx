@@ -846,11 +846,10 @@ export function PlannerDashboardWidgets({
       {/* === Operationele header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-page-title">
+          <h1 className="text-greeting">
             {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
           <p className="mt-0.5 text-sm font-normal text-slate-500">
-            Actuele status op{' '}
             {formatDayLong(isoDate(now))} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>

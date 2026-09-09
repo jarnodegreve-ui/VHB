@@ -225,7 +225,6 @@ export function PlanningMatrixView({
       <PageHeader
         eyebrow="Planning"
         title="Planningsoverzicht"
-        description="Controleer de geïmporteerde matrix en los onbekende codes of niet-gematchte chauffeurs op."
       />
       {/* OpsStat i.p.v. StatCard (vaste regel voor KPI-strips): vaste
           twee-regel-labelzone, dus cijfers en subteksten op één lijn. */}

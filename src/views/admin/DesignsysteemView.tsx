@@ -102,7 +102,6 @@ export function DesignsysteemView() {
     <PageShell>
       <PageHeader
         title="Designsysteem"
-        description="Alle bouwstenen, tokens en toestanden van het portaal, in licht en donker, zoals ze in de app staan."
       />
       <nav aria-label="Inhoud" className="flex flex-wrap gap-2">
         {INHOUD.map(([id, label]) => (

@@ -154,7 +154,6 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
     <PageShell>
       <PageHeader
         title="Verlofkalender"
-        description="Maandoverzicht van wie wanneer afwezig is. Eén oogopslag voor capaciteitsplanning."
         actions={(
           <div className="flex items-center gap-2">
             <Button

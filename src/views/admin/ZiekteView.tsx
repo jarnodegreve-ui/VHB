@@ -373,7 +373,6 @@ export function ZiekteView({
     <PageShell>
       <PageHeader
         title="Ziekte"
-        description="Wie is er ziek gemeld, en welke diensten staan daardoor nog open. Gescheiden van het verlofbeheer, ziekte is geen aanvraag."
         actions={(
           <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setMeldOpen(true)}>
             Ziek melden

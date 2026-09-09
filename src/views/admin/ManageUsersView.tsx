@@ -619,7 +619,6 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
       <PageHeader
         eyebrow="Gebruikersbeheer"
         title={title}
-        description="Medewerkers, rollen en accountacties."
         actions={(
           <>
             <AanwezigOpScherm />

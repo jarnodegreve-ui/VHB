@@ -244,7 +244,6 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
     <PageShell>
       <PageHeader
         title="Activiteit"
-        description="Wie deed wat in het portaal, en wie er actief was."
         actions={(
           <Button variant="secondary" icon={<Download size={16} />} onClick={exportFilteredActivity} disabled={filteredEntries.length === 0} title="Gefilterde activiteit als CSV">
             CSV

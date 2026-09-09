@@ -459,7 +459,6 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       <PageHeader
         eyebrow="Planning"
         title="Beheer roosters"
-        description="Importeer de Excel-matrix, bouw de planning opnieuw op en controleer recente imports."
         actions={<AanwezigOpScherm />}
       />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">

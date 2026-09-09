@@ -341,7 +341,6 @@ export function ManageUpdatesView({
       <PageHeader
         eyebrow="Communicatie"
         title="Beheer updates"
-        description="Nieuws en dringende meldingen voor de chauffeurs."
         actions={(
           <>
             <AanwezigOpScherm />

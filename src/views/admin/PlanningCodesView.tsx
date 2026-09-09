@@ -132,7 +132,6 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
       <PageHeader
         eyebrow="Planning"
         title="Planningscodes"
-        description="De betekenis van matrixcodes: welke tellen als dienst, verlof of afwezigheid."
         actions={(
           <>
             <AanwezigOpScherm />

@@ -436,7 +436,6 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     <PageShell>
       <PageHeader
         title="Toestellen"
-        description="Elk volgend toestel wacht hier op goedkeuring."
       />
 
       <Card>
