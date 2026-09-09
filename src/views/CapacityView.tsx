@@ -428,7 +428,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // Kop boven een sectie: de opgeslagen waarde is de korte ploegnaam uit
   // gebruikersbeheer ("Reguliere"); in het bord leest "Reguliere diensten"
   // beter (Jarno 09-09). Alleen weergave, de data en de keuzelijst blijven.
-  const sectieLabel = (naam: string) => (naam === 'Reguliere' ? 'Reguliere diensten' : naam);
+  const sectieLabel = (naam: string) => (/^regulier/i.test(naam.trim()) ? 'Reguliere diensten' : naam);
 
   // === Mobiel: dag-weergave (keuze Jarno 15-08) =============================
   // Op een telefoon is de vraag "wie doet wat op dag X?", niet "wat doet
