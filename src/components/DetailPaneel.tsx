@@ -205,13 +205,23 @@ export function DetailPaneel({
   const wortel = useRef<HTMLDivElement>(null);
 
   // Desktop: het paneel in beeld brengen zodra er iets (anders) gekozen is —
-  // wie onderaan een lange lijst klikt, ziet anders niets gebeuren. Met een
-  // plakkend paneel is dit meestal een no-op ('nearest').
+  // wie onderaan een lange lijst klikt, ziet anders niets gebeuren.
+  // Alleen wanneer de BOVENKANT van het paneel buiten beeld staat: met
+  // 'nearest' scrolde de pagina ook als enkel de onderkant buiten beeld viel,
+  // en op een verse pagina is dat bijna altijd zo. Beheer updates en Beheer
+  // omleidingen (die op desktop meteen het eerste item openen) begonnen
+  // daardoor een stuk naar beneden gescrold, met de paginatitel onder de
+  // topbar (Jarno 09-09).
   useEffect(() => {
     if (!inline || !open) return;
     const el = wortel.current;
     if (!el) return;
-    const raf = requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+    const raf = requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      const topbar = 56; // hoogte van de plakkende topbar (h-14), zie App.tsx
+      const bovenkantZichtbaar = r.top >= topbar && r.top <= window.innerHeight - 120;
+      if (!bovenkantZichtbaar) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
     return () => cancelAnimationFrame(raf);
   }, [inline, open, sleutel]);
 
