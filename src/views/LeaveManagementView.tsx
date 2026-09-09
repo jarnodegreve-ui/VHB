@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Check, ChevronDown, ChevronRight as ChevronRightSmall, History, Plus, Printer, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, History, Plus, Printer, SlidersHorizontal, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
@@ -18,6 +18,9 @@ import { isoDate } from '../lib/availability';
 import { formatDateHuman, formatShortDay } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
+import { apiJson } from '../lib/api';
+import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
+import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
 
 
 // Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
@@ -28,17 +31,53 @@ import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 /**
  * Bezetting van een kalenderdag in de verlofkalender (kleuren en titels
  * gekozen door Jarno 08-09): groen = vrij (niemand goedgekeurd afwezig),
- * oranje = deels vrij, rood = volzet. Volzet vanaf VOLZET_VANAF gelijktijdig
- * goedgekeurde afwezigen; dat was ook de oude "krap"-grens. Eén plek om de
- * drempel bij te stellen.
+ * oranje = deels vrij, rood = volzet. Volzet zodra de verloflimiet van die
+ * dag bereikt is. Die limiet was een vaste 2; sinds 09-09 stelt de admin
+ * hem in (standaard + uitzonderingsperiodes, bv. zomervakantie hoger), zie
+ * shared/schemas/verlofLimieten.ts en de knop "Limieten" hierboven.
  */
-const VOLZET_VANAF = 2;
 type Bezetting = 'vrij' | 'deels' | 'volzet';
-const bezettingVanDag = (afwezig: number): Bezetting => (afwezig <= 0 ? 'vrij' : afwezig < VOLZET_VANAF ? 'deels' : 'volzet');
+const bezettingVanDag = (afwezig: number, limiet: number): Bezetting => (afwezig <= 0 ? 'vrij' : afwezig < limiet ? 'deels' : 'volzet');
+
+/** Alle kalenderdagen van een periode ('YYYY-MM-DD'), begrensd op 400. */
+const dagenVan = (van: string, tot: string): string[] => {
+  const uit: string[] = [];
+  const cur = new Date(`${van}T00:00:00`);
+  const end = new Date(`${tot}T00:00:00`);
+  for (let guard = 0; cur <= end && guard < 400; guard++) {
+    uit.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return uit;
+};
 const BEZETTING_LABEL: Record<Bezetting, string> = { vrij: 'vrij', deels: 'deels vrij', volzet: 'volzet' };
 
 export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
+  // 'registratie' (verzoek Jarno 09-09): een planner/admin legt verlof vast
+  // dat al op papier goedgekeurd was, zodat de papieren en de digitale versie
+  // kloppen. Zelfde formulier als de aanvraag, maar: chauffeur verplicht,
+  // datums in het verleden toegestaan, meteen goedgekeurd, geen mail, en het
+  // venster blijft open zodat je de volgende periode meteen kan invoeren.
+  const [modus, setModus] = useState<'aanvraag' | 'registratie'>('aanvraag');
+  const [voorWieFout, setVoorWieFout] = useState('');
+  const [showLimietenModal, setShowLimietenModal] = useState(false);
+  const [limieten, setLimieten] = useState<VerlofLimieten>(STANDAARD_VERLOF_LIMIETEN);
+  useEffect(() => {
+    let weg = false;
+    void (async () => {
+      try {
+        // parse: rommel of een oud antwoord mag de kalender niet laten crashen.
+        const data = await apiJson<unknown>('/api/verlof/limieten');
+        if (!weg) setLimieten(parseVerlofLimieten(data));
+      } catch {
+        // standaard blijft staan; de kalender werkt gewoon
+      }
+    })();
+    return () => { weg = true; };
+  }, []);
+  const openAanvraag = () => { setModus('aanvraag'); setPeriodeFout(''); setVoorWieFout(''); setShowRequestModal(true); };
+  const openRegistratie = () => { setModus('registratie'); setPeriodeFout(''); setVoorWieFout(''); setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' }); setShowRequestModal(true); };
   // /verlof?nieuw=1 (command palette "Verlof aanvragen"): meteen het
   // aanvraagformulier openen en de parameter weer uit de URL halen.
   useEffect(() => {
@@ -46,6 +85,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     if (url.searchParams.get('nieuw') !== '1') return;
     url.searchParams.delete('nieuw');
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    setModus('aanvraag');
     setShowRequestModal(true);
   }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -130,10 +170,30 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // dat al mondeling is afgesproken).
   const aanvraagVoorId = isPlanner && voorWie ? voorWie : String(user.id);
   const namensIemandAnders = aanvraagVoorId !== String(user.id);
+  const registratie = modus === 'registratie';
+  // Verlof achteraf vastleggen mag in het verleden (de chauffeur belde het
+  // vorige week door, of het stond al op papier); een eigen aanvraag niet.
+  // In registratie-modus ook vóór de chauffeur gekozen is: anders staan de
+  // verleden-dagen grijs tot je de keuzelijst aanraakt, wat als kapot oogt.
+  const magVerleden = namensIemandAnders || registratie;
+
+  /** Andere chauffeurs (niet `exclUserId`) met goedgekeurd verlof op deze dag. */
+  const anderenAfwezigOp = (dag: string, exclUserId: string) =>
+    verlofRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(exclUserId) && r.startDate <= dag && r.endDate >= dag).length;
+  /** Dagen van een periode waarop deze chauffeur erbij de verloflimiet overschrijdt. */
+  const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) =>
+    dagenVan(van, tot)
+      .map((dag) => ({ dag, afwezig: anderenAfwezigOp(dag, exclUserId) + 1, limiet: limietVoorDag(limieten, dag) }))
+      .filter((d) => d.afwezig > d.limiet);
 
   const handleRequestLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+    if (registratie && !voorWie) {
+      setVoorWieFout('Kies eerst de chauffeur voor wie je het verlof vastlegt.');
+      return;
+    }
+    setVoorWieFout('');
     if (!formData.startDate || !formData.endDate) {
       setPeriodeFout('Kies eerst een start- en einddatum in de kalender.');
       return;
@@ -163,11 +223,19 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     };
     const ok = await Promise.resolve(onSave([...leaveRequests, nieuw])).finally(() => setIsSubmitting(false));
     if (ok === false) return;
+    const naam = users.find((u) => String(u.id) === aanvraagVoorId)?.name ?? 'de chauffeur';
+    if (registratie) {
+      // Venster open laten met dezelfde chauffeur: de papieren lijst heeft
+      // meestal meerdere periodes, en de lijst "al vastgelegd" hieronder
+      // groeit mee zodat je ziet wat er al in staat.
+      setFormData((cur) => ({ ...cur, startDate: '', endDate: '', comment: '' }));
+      notify(`${naam}: ${formatLeaveType(formData.type).toLowerCase()} ${formData.startDate === formData.endDate ? formatShortDay(formData.startDate) : `${formatShortDay(formData.startDate)} tot ${formatShortDay(formData.endDate)}`} vastgelegd.`, 'success');
+      return;
+    }
     setShowRequestModal(false);
     setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
     setVoorWie('');
     if (namensIemandAnders) {
-      const naam = users.find((u) => String(u.id) === aanvraagVoorId)?.name ?? 'de chauffeur';
       notify(`Verlof voor ${naam} vastgelegd en meteen goedgekeurd.`, 'success');
     }
   };
@@ -211,8 +279,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       budget: currentBalance.betaaldBudget,
       gebruikt: currentBalance.betaaldGebruikt,
       conflictingShifts,
+      bovenLimiet: dagenBovenLimiet(formData.startDate, formData.endDate, aanvraagVoorId),
     };
-  }, [formData.startDate, formData.endDate, formData.type, leaveRequests, shifts, aanvraagVoorId, users, user]);
+  }, [formData.startDate, formData.endDate, formData.type, leaveRequests, shifts, aanvraagVoorId, users, user, limieten]);
 
   const handleCalendarDateClick = (dateStr: string) => {
     if (!showRequestModal) {
@@ -559,6 +628,21 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 );
               })()}
 
+              {/* Verloflimiet (instelbaar sinds 09-09): rood zodra goedkeuren
+                  ergens in de periode te veel chauffeurs tegelijk vrij zet. */}
+              {(() => {
+                const boven = dagenBovenLimiet(reviewLeave.startDate, reviewLeave.endDate, String(reviewLeave.userId));
+                if (boven.length === 0) return null;
+                return (
+                  <Card tone="danger" padding="none" className="px-4 py-3">
+                    <MicroLabel className="text-red-700">Boven de verloflimiet</MicroLabel>
+                    <p className="mt-1 text-xs font-normal text-red-700">
+                      Na goedkeuring zitten er op {boven.length} {boven.length === 1 ? 'dag' : 'dagen'} te veel chauffeurs tegelijk vrij: {boven.slice(0, 3).map((d) => `${formatShortDay(d.dag)} ${d.afwezig} van ${d.limiet}`).join(', ')}{boven.length > 3 ? ', …' : ''}.
+                    </p>
+                  </Card>
+                );
+              })()}
+
               {conflictShifts.length > 0 && (
                 <div>
                   <MicroLabel className="text-red-700">Conflict met planning</MicroLabel>
@@ -598,8 +682,18 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         title="Verlof"
         description={isPlanner ? 'Beheer verlofaanvragen en bekijk de bezetting.' : 'Vraag verlof aan en volg je aanvragen op.'}
         actions={(
-          <div className="flex items-center gap-2">
-            <Button variant="primary" size="lg" icon={<Plus size={18} />} onClick={() => { setPeriodeFout(''); setShowRequestModal(true); }}>
+          <div className="flex flex-wrap items-center gap-2">
+            {user.role === 'admin' && (
+              <Button variant="secondary" size="lg" icon={<SlidersHorizontal size={18} />} onClick={() => setShowLimietenModal(true)}>
+                Limieten
+              </Button>
+            )}
+            {isPlanner && (
+              <Button variant="secondary" size="lg" icon={<ClipboardCheck size={18} />} onClick={openRegistratie}>
+                Verlof registreren
+              </Button>
+            )}
+            <Button variant="primary" size="lg" icon={<Plus size={18} />} onClick={openAanvraag}>
               Verlof aanvragen
             </Button>
           </div>
@@ -629,10 +723,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               </MaandNavigatie>
               {/* Legende als stille chips — zelfde puntjes als in de dagcellen
                   (kleuren en titels: Jarno 08-09). */}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="emerald" stil>Vrij</Badge>
                 <Badge tone="amber" stil>Deels vrij</Badge>
                 <Badge tone="red" stil>Volzet</Badge>
+                {isPlanner && (
+                  <span className="text-2xs font-medium text-slate-500">
+                    Limiet {limieten.standaard} tegelijk{limieten.periodes.length > 0 ? `, ${limieten.periodes.length} uitzonderingsperiode${limieten.periodes.length === 1 ? '' : 's'}` : ''}
+                  </span>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
@@ -641,7 +740,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
                 const occupancyCount = getRequestsForDate(dateStr).length;
-                const bezetting = bezettingVanDag(occupancyCount);
+                const limiet = limietVoorDag(limieten, dateStr);
+                const bezetting = bezettingVanDag(occupancyCount, limiet);
                 const statusColor = bezetting === 'volzet' ? 'bg-red-500' : bezetting === 'deels' ? 'bg-amber-500' : 'bg-emerald-500';
                 const isSelected = selectedDate === dateStr;
                 const isInDraftRange = isDateWithinDraftRange(dateStr);
@@ -651,7 +751,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <button
                     key={day}
                     onClick={() => handleCalendarDateClick(dateStr)}
-                    aria-label={`${day}: ${BEZETTING_LABEL[bezetting]}${occupancyCount > 0 ? `, ${occupancyCount} afwezig` : ''}`}
+                    aria-label={`${day}: ${BEZETTING_LABEL[bezetting]}${occupancyCount > 0 ? `, ${occupancyCount} van ${limiet} afwezig` : ''}`}
                     className={cn(
                       'aspect-square rounded-2xl border transition-all flex flex-col items-center justify-center relative group',
                       isSelected && 'border-oker-500 bg-oker-50 ring-4 ring-oker-500/10',
@@ -849,7 +949,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing (verbeterronde 29/07 #3). */}
       <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
-              <ModalHeader title="Verlof aanvragen" onClose={() => setShowRequestModal(false)} />
+              <ModalHeader
+                title={registratie ? 'Verlof registreren' : 'Verlof aanvragen'}
+                description={registratie ? 'Voor verlof dat al goedgekeurd is, bijvoorbeeld op papier. Wordt meteen als goedgekeurd vastgelegd, zonder mail naar de chauffeur.' : undefined}
+                onClose={() => setShowRequestModal(false)}
+              />
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
                 {/* Alleen planner/admin: verlof registreren dat een chauffeur
                     mondeling of telefonisch doorgaf. Kiest de planner een
@@ -857,15 +961,18 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     beoordelaar) en rekenen saldo én dienstconflicten hieronder
                     op díe chauffeur. */}
                 {isPlanner && (
-                  <Field label="Voor wie">
-                    {({ id }) => (
+                  <Field label={registratie ? 'Chauffeur' : 'Voor wie'} error={voorWieFout || undefined}>
+                    {({ id, invalid }) => (
                       <>
                         <Select
                           id={id}
                           value={voorWie}
-                          onChange={(e) => setVoorWie(e.target.value)}
+                          invalid={invalid}
+                          onChange={(e) => { setVoorWie(e.target.value); setVoorWieFout(''); }}
                         >
-                          <option value="">Mezelf ({user.name})</option>
+                          {registratie
+                            ? <option value="">Kies een chauffeur…</option>
+                            : <option value="">Mezelf ({user.name})</option>}
                           {users
                             .filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
                             .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
@@ -873,7 +980,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                               <option key={u.id} value={String(u.id)}>{u.name}</option>
                             ))}
                         </Select>
-                        {namensIemandAnders && (
+                        {namensIemandAnders && !registratie && (
                           <p className="text-2xs font-medium text-oker-700">
                             Wordt meteen als goedgekeurd verlof vastgelegd, je hoeft het daarna niet nog eens te beoordelen.
                           </p>
@@ -906,7 +1013,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       const inRange = isDateWithinDraftRange(dateStr);
                       const edge = isDraftBoundary(dateStr);
                       const isToday = dateStr === today;
-                      const isPast = dateStr < today;
+                      // Verleden alleen dicht voor een eigen aanvraag; wie
+                      // namens een chauffeur registreert boekt ook achteraf.
+                      const isPast = dateStr < today && !magVerleden;
                       return (
                         // rauw: kalender-dagcel in de datumkiezer (eigen bereik-/randstijl)
                         <button
@@ -991,7 +1100,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-semibold">
-                            {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'dag' : 'dagen'} aangevraagd
+                            {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'dag' : 'dagen'} {registratie ? 'vast te leggen' : 'aangevraagd'}
                           </span>
                           <span className="font-bold tabular-nums">
                             {requestPreview.gebruikt + requestPreview.requestedDays} / {requestPreview.budget}
@@ -999,8 +1108,23 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         </div>
                         <p className="mt-1 text-2xs font-medium opacity-90">
                           {requestPreview.wouldExceed
-                            ? `⚠ ${Math.abs(requestPreview.remainingAfter)} ${Math.abs(requestPreview.remainingAfter) === 1 ? 'dag' : 'dagen'} boven je jaarbudget. Planner moet beoordelen.`
-                            : `${requestPreview.remainingAfter} ${requestPreview.remainingAfter === 1 ? 'dag' : 'dagen'} resterend na deze aanvraag.`}
+                            ? `⚠ ${Math.abs(requestPreview.remainingAfter)} ${Math.abs(requestPreview.remainingAfter) === 1 ? 'dag' : 'dagen'} boven ${namensIemandAnders ? 'het' : 'je'} jaarbudget.${registratie ? ' Controleer het papier.' : namensIemandAnders ? '' : ' Planner moet beoordelen.'}`
+                            : `${requestPreview.remainingAfter} ${requestPreview.remainingAfter === 1 ? 'dag' : 'dagen'} resterend na deze ${registratie ? 'periode' : 'aanvraag'}.`}
+                        </p>
+                      </Card>
+                    )}
+
+                    {/* Verloflimiet: op welke dagen zijn er dan te veel chauffeurs tegelijk vrij? */}
+                    {requestPreview.bovenLimiet.length > 0 && (
+                      <Card tone="warning" padding="none" className="px-4 py-3 text-xs font-medium text-amber-800">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle size={14} className="shrink-0" />
+                          <span className="font-semibold">
+                            Boven de verloflimiet op {requestPreview.bovenLimiet.length} {requestPreview.bovenLimiet.length === 1 ? 'dag' : 'dagen'}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-2xs font-medium opacity-90">
+                          {requestPreview.bovenLimiet.slice(0, 3).map((d) => `${formatShortDay(d.dag)}: ${d.afwezig} van ${d.limiet}`).join(', ')}{requestPreview.bovenLimiet.length > 3 ? ', …' : ''}.{registratie ? ' Het staat al op papier, dus je kan het gewoon vastleggen.' : ''}
                         </p>
                       </Card>
                     )}
@@ -1023,8 +1147,49 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </div>
                 )}
 
+                {/* Registratie: wat staat er al voor deze chauffeur in het jaar
+                    van de getoonde maand? Zo vergelijk je meteen met het papier. */}
+                {registratie && voorWie && (() => {
+                  const jaar = viewMonth.getFullYear();
+                  const doel = users.find((u) => String(u.id) === voorWie);
+                  const balans = verlofBalans(leaveRequests, voorWie, jaar, doel?.verlofBudget);
+                  const vast = verlofRequests
+                    .filter((r) => String(r.userId) === voorWie && r.status === 'approved' && r.startDate <= `${jaar}-12-31` && r.endDate >= `${jaar}-01-01`)
+                    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+                  return (
+                    <Card tone="muted" padding="sm" className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <MicroLabel className="text-slate-500">Al vastgelegd in {jaar}</MicroLabel>
+                        <span className="text-xs font-semibold tabular-nums text-slate-700">
+                          {balans.betaaldGebruikt} / {balans.betaaldBudget} betaald{balans.kleinVerletDagen > 0 ? ` · ${balans.kleinVerletDagen} klein verlet` : ''}
+                        </span>
+                      </div>
+                      {vast.length === 0 ? (
+                        <p className="text-xs text-slate-500">Nog niets voor {doel?.name ?? 'deze chauffeur'} in {jaar}.</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {vast.map((r) => (
+                            <li key={r.id} className="flex items-center justify-between gap-3 text-xs">
+                              <span className="tabular-nums text-slate-700">
+                                {r.startDate === r.endDate ? formatShortDay(r.startDate) : `${formatShortDay(r.startDate)} tot ${formatShortDay(r.endDate)}`}
+                                <span className="ml-1.5 text-slate-500">({daysBetween(r.startDate, r.endDate)} {daysBetween(r.startDate, r.endDate) === 1 ? 'dag' : 'dagen'})</span>
+                              </span>
+                              <Badge tone={r.type === 'betaald_verlof' ? 'oker' : 'slate'} stil>{formatLeaveType(r.type)}</Badge>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </Card>
+                  );
+                })()}
+
                 <div className="space-y-2">
-                  <Button type="submit" variant="primary" size="lg" full disabled={!formData.startDate || !formData.endDate || isSubmitting}>{isSubmitting ? 'Versturen…' : 'Aanvraag indienen'}</Button>
+                  <Button type="submit" variant="primary" size="lg" full disabled={!formData.startDate || !formData.endDate || isSubmitting}>
+                    {isSubmitting ? (registratie ? 'Vastleggen…' : 'Versturen…') : registratie ? 'Vastleggen' : 'Aanvraag indienen'}
+                  </Button>
+                  {registratie && (
+                    <Button variant="secondary" size="lg" full onClick={() => { setShowRequestModal(false); setVoorWie(''); }}>Klaar</Button>
+                  )}
                   {/* Reden waarom de knop nog uit staat — anders lijkt hij kapot. */}
                   {(!formData.startDate || !formData.endDate) && !periodeFout && (
                     <p className="text-center text-xs text-slate-500">
@@ -1034,6 +1199,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 </div>
               </form>
       </Modal>
+
+      {user.role === 'admin' && (
+        <VerlofLimietenModal open={showLimietenModal} onClose={() => setShowLimietenModal(false)} limieten={limieten} onSaved={setLimieten} />
+      )}
 
       <EntityHistoryModal
         open={!!historyLeave}

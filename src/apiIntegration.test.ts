@@ -4811,3 +4811,62 @@ describe('uit dienst in één handeling (POST /api/users/:id/uitdienst)', () => 
     expect(mem.users.find((u: any) => u.id === '2').isActive).toBe(true);
   });
 });
+
+describe('verloflimieten en verlof registreren (09-09)', () => {
+  const ZOMER = { id: 'zomer', naam: 'Zomervakantie', van: '2026-07-01', tot: '2026-08-31', max: 4 };
+  const KROKUS = { id: 'krokus', naam: 'Krokus', van: '2026-02-16', tot: '2026-02-22', max: 1 };
+
+  it('GET geeft iedereen de standaard zolang er niets ingesteld is', async () => {
+    for (const token of ['tok-a', 'tok-planner', 'tok-admin']) {
+      const res = await api('GET', '/api/verlof/limieten', { token });
+      expect(res.status).toBe(200);
+      expect(res.json).toEqual({ standaard: 2, periodes: [] });
+    }
+  });
+
+  it('admin stelt limieten in: gesorteerd opgeslagen, gelogd, en daarna voor elke rol leesbaar', async () => {
+    const res = await api('PUT', '/api/verlof/limieten', { token: 'tok-admin', body: { standaard: 2, periodes: [ZOMER, KROKUS] } });
+    expect(res.status).toBe(200);
+    expect(res.json.periodes.map((p: any) => p.id)).toEqual(['krokus', 'zomer']);
+    expect(mem.appSettings.verlof_limieten).toEqual({ standaard: 2, periodes: [KROKUS, ZOMER] });
+    const log = mem.activity.find((a: any) => a.action === 'Verloflimieten aangepast');
+    expect(log?.message).toContain('Zomervakantie (4)');
+    const chauffeur = await api('GET', '/api/verlof/limieten', { token: 'tok-a' });
+    expect(chauffeur.json.periodes).toHaveLength(2);
+  });
+
+  it('planner en chauffeur mogen de limieten niet wijzigen (403)', async () => {
+    expect((await api('PUT', '/api/verlof/limieten', { token: 'tok-planner', body: { standaard: 3, periodes: [] } })).status).toBe(403);
+    expect((await api('PUT', '/api/verlof/limieten', { token: 'tok-a', body: { standaard: 3, periodes: [] } })).status).toBe(403);
+    expect(mem.appSettings.verlof_limieten).toBeUndefined();
+  });
+
+  it('weigert ongeldige limieten met een leesbare fout (400)', async () => {
+    const omgekeerd = await api('PUT', '/api/verlof/limieten', { token: 'tok-admin', body: { standaard: 2, periodes: [{ ...ZOMER, tot: '2026-06-01' }] } });
+    expect(omgekeerd.status).toBe(400);
+    expect(String(omgekeerd.json.details)).toMatch(/einddatum/i);
+    const teVeel = await api('PUT', '/api/verlof/limieten', { token: 'tok-admin', body: { standaard: 999, periodes: [] } });
+    expect(teVeel.status).toBe(400);
+    expect(mem.appSettings.verlof_limieten).toBeUndefined();
+  });
+
+  it('een planner die verlof namens een chauffeur vastlegt: meteen goedgekeurd, gelogd als registratie, geen mail of push', async () => {
+    const nieuw = { id: 'l-papier', userId: '4', startDate: '2026-03-02', endDate: '2026-03-06', type: 'betaald_verlof', status: 'approved', comment: 'Van papier overgezet', createdAt: '2026-09-09T08:00:00Z', decidedAt: '2026-09-09T08:00:00Z' };
+    const res = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, nieuw] });
+    expect(res.status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'l-papier')?.status).toBe('approved');
+    const log = mem.activity.find((a: any) => a.entityId === 'l-papier');
+    expect(log?.action).toBe('Verlof geregistreerd');
+    expect(log?.message).toContain('Pieter Planner');
+    // Geen "je verlof is goedgekeurd"-mail en geen push: de chauffeur wist het al.
+    expect(mem.emailsSent.filter((m) => (m.context ?? '').startsWith('leave:'))).toHaveLength(0);
+    expect(mem.pushesSent.filter((p) => p.payload.soort === 'verlof')).toHaveLength(0);
+  });
+
+  it('een aanvraag van een chauffeur zelf heet nog steeds "Verlof aangevraagd"', async () => {
+    const nieuw = { id: 'l-eigen', userId: '3', startDate: '2026-11-02', endDate: '2026-11-03', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-09-09T08:00:00Z' };
+    const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...mem.leave.filter((l: any) => String(l.userId) === '3'), nieuw] });
+    expect(res.status).toBe(200);
+    expect(mem.activity.find((a: any) => a.entityId === 'l-eigen')?.action).toBe('Verlof aangevraagd');
+  });
+});
