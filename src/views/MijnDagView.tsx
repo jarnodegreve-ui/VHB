@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Calendar, FileText, MapPin, WifiOff } from 'lucide-react';
+import { lijnLabel } from '../../shared/lijnen';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { activeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
@@ -33,9 +34,6 @@ import { RitbladViewer } from '../components/RitbladViewer';
  * dezelfde regel volgen als isShiftActiveAt.
  */
 
-/** "Lijn 5 & 8" vs "5": prefix alleen wanneer 't nog niet in de data zit. */
-const lineLabel = (line: string) =>
-  line.trim().toLowerCase().startsWith('lijn') ? line.trim() : `Lijn ${line.trim()}`;
 
 const hoofdletter = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
@@ -344,7 +342,7 @@ export function MijnDagView({
                 icon={<AlertTriangle size={16} />}
                 primary={d.title}
                 secondary={d.description}
-                meta={lineLabel(d.line)}
+                meta={lijnLabel(d.line)}
                 onClick={() => onNavigate?.('omleidingen')}
               />
             ))}
