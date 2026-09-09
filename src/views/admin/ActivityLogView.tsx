@@ -258,21 +258,25 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
           eyebrow="Gebruik"
           title="Actieve gebruikers"
           description="Wie het portaal gebruikte, per dag. Een dag telt zodra iemand het portaal opent, ook zonder opnieuw aan te melden."
-          aside={(
-            <dl className="flex flex-wrap gap-x-6 gap-y-2">
-              {[
-                ['Vandaag', kpi.vandaag, 'actief'],
-                ['Deze week', kpi.week, 'unieke gebruikers'],
-                ['Aanmeldingen', kpi.aanmeldingen7d, 'laatste 7 dagen'],
-              ].map(([k, v, sub]) => (
-                <div key={String(k)} className="w-36">
-                  <dt className="text-micro">{k}</dt>
-                  <dd className="mt-0.5 flex items-baseline gap-1.5 text-lg font-bold leading-tight text-slate-900">{v}<span className="text-2xs font-medium text-slate-500">{sub}</span></dd>
-                </div>
-              ))}
-            </dl>
-          )}
         />
+        {/* Drie gelijke kengetal-tegels op een eigen rij (Jarno 09-09): eerst
+            stonden ze als aside naast de beschrijving, met het onderschrift
+            inline achter het cijfer, en liepen ze ongelijk door de
+            verschillende lengtes. Nu label, cijfer en onderschrift elk op
+            een eigen regel, links uitgelijnd. */}
+        <dl className="mt-5 grid grid-cols-3 gap-3">
+          {[
+            ['Vandaag', kpi.vandaag, 'actief'],
+            ['Deze week', kpi.week, 'unieke gebruikers'],
+            ['Aanmeldingen', kpi.aanmeldingen7d, 'laatste 7 dagen'],
+          ].map(([k, v, sub]) => (
+            <div key={String(k)} className="rounded-xl bg-surface-soft px-4 py-3 ring-1 ring-hairline">
+              <dt className="text-micro">{k}</dt>
+              <dd className="mt-1 text-stat text-slate-900">{v}</dd>
+              <dd className="mt-0.5 text-2xs font-medium text-slate-500">{sub}</dd>
+            </div>
+          ))}
+        </dl>
         {logins.length === 0 ? (
           <div className="mt-5">
             <EmptyState title="Nog geen gebruik geregistreerd" message="Zodra gebruikers het portaal openen, verschijnt hier per dag wie er actief was." />
