@@ -3,7 +3,14 @@ import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import type { MeldingSoort } from "../shared/schemas/meldingen.js";
 
-export type Role = "chauffeur" | "planner" | "admin";
+export type Role = "chauffeur" | "technieker" | "planner" | "admin";
+
+/** Staf: planner en admin. Zij mogen andermans gegevens lezen en schrijven.
+ *  Bewust een functie i.p.v. `role !== "chauffeur"`: met een derde
+ *  niet-stafrol (technieker) zou die omkering stil plannerrechten geven
+ *  (Jarno 09-09). Voor "is dit rijdend personeel" blijft `role === "chauffeur"`
+ *  staan — dat filtert ándermans rol, niet die van de aanvrager. */
+export const isStafRol = (role: Role | string): boolean => role === "planner" || role === "admin";
 
 export interface AppUser {
   id: string;

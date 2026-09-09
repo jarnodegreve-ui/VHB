@@ -7,6 +7,7 @@ import { getAppSetting, getDevice, koppelAuthId } from "./storage.js";
 import { getOnderhoud } from "./_lib/onderhoud.js";
 import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
 import { getUsersCached, invalidateUsersCache } from "./userCache.js";
+import { isStafRol } from "./types.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, Role } from "./types.js";
 
 // --- Toestel-whitelist (zie supabase/user_devices.sql + api/deviceGate.ts) ---
@@ -97,7 +98,9 @@ export const aalUitJwt = (token: string): "aal1" | "aal2" => {
 // en de beheerder zichzelf heeft ingeschreven, anders sluit je jezelf buiten.
 export const mfaStafVerplicht = (): boolean => (process.env.MFA_STAF ?? "uit").toLowerCase() === "aan";
 export const MFA_EXEMPT = new Set(["/api/me", "/api/me/beveiliging", "/api/auth/session", "/api/devices/register", "/api/client-errors"]);
-export const isStafRol = (role: Role): boolean => role === "planner" || role === "admin";
+// isStafRol staat in api/types.ts (geen afhankelijkheden); hier opnieuw
+// geëxporteerd zodat bestaande imports uit middleware blijven werken.
+export { isStafRol };
 const is4xx = (e: unknown): boolean => {
   const st = (e as { status?: unknown })?.status;
   return typeof st === "number" && st >= 400 && st < 500;
@@ -259,7 +262,9 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   // zónder DB-lookup.
   const rawToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
   const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
-  const gateVanToepassing = appUser.role === "chauffeur" || deviceToken.length > 0;
+  // Niet-staf (chauffeur én technieker) valt altijd onder de gate; staf
+  // alleen wanneer het verzoek een toesteltoken draagt.
+  const gateVanToepassing = !isStafRol(appUser.role) || deviceToken.length > 0;
   if (gateVanToepassing && !DEVICE_GATE_EXEMPT.has(req.path)) {
     let device: { status: string } | null = null;
     try {
@@ -285,7 +290,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     // Alleen wanneer het toestel niet al goedgekeurd is maakt de schakelaar
     // het verschil, dan pas (gecacht) ophalen. Voor staf is de schakelaar
     // irrelevant (enkel de revoked-check telt), dus geen extra query.
-    const gateEnabled = appUser.role !== "chauffeur" || device?.status === "approved" ? true : await isDeviceGateEnabled();
+    const gateEnabled = isStafRol(appUser.role) || device?.status === "approved" ? true : await isDeviceGateEnabled();
     const verdict = evaluateDeviceGate(appUser.role, req.path, device, gateEnabled);
     if (!verdict.allow) {
       return res.status(verdict.status ?? 403).json(verdict.body ?? { error: "Dit toestel heeft geen toegang.", code: "device_unknown" });

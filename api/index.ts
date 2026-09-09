@@ -417,7 +417,7 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
     // inloggegevens is. Ontbrekende device-tabel = fail-open (zelfde regel
     // als de middleware-gate).
     let deviceApproved = true;
-    if (currentUser.role === "chauffeur") {
+    if (!isStafRol(currentUser.role)) {
       const rawToken = String(req.headers["x-device-token"] ?? "").trim();
       const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
       try {
@@ -541,9 +541,7 @@ app.get("/api/planning", authenticate, async (req: AuthenticatedRequest, res) =>
     // maandbord (/api/month-planning) toont toewijzingen bewust wél breed,
     // maar deze detail-route hoort per-chauffeur begrensd (zoals /api/leave,
     // /api/swaps en /api/planning-notes dat al zijn).
-    const driverId = req.appUser?.role === "chauffeur"
-      ? String(req.appUser.id)
-      : gevraagdeDriverId;
+    const driverId = isStafRol(req.appUser!.role) ? gevraagdeDriverId : String(req.appUser!.id);
     const monthIso = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month)
       ? req.query.month
       : undefined;
@@ -1048,7 +1046,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     // zodat scherm en export nooit kunnen verschillen. Staf-only: tellingen
     // per collega zijn planner-informatie.
     if (String(req.query.format ?? "") === "summary") {
-      if (req.appUser?.role === "chauffeur") {
+      if (!isStafRol(req.appUser!.role)) {
         return res.status(403).json({ error: "Onvoldoende rechten." });
       }
       const overzicht = berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[]);
@@ -1056,7 +1054,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     }
 
     if (String(req.query.format ?? "") === "xlsx") {
-      if (req.appUser?.role === "chauffeur") {
+      if (!isStafRol(req.appUser!.role)) {
         return res.status(403).json({ error: "Onvoldoende rechten." });
       }
       const dayTypeByDate = new Map<string, string>(monthRows.map((r: any) => [String(r.source_date), String(r.day_type ?? "")]));
@@ -1094,9 +1092,7 @@ app.get("/api/user-expiries", authenticate, async (req: AuthenticatedRequest, re
     // rijen in user_expiries mogen niet alsnog in de lijsten opduiken. De
     // rijen zelf blijven in de DB staan — geen dataverlies.
     const bewaakt = alle.filter((e) => Boolean(EXPIRY_SOORT_LABEL[e.soort]));
-    const eigen = req.appUser?.role === "chauffeur"
-      ? bewaakt.filter((e) => e.userId === String(req.appUser!.id))
-      : bewaakt;
+    const eigen = isStafRol(req.appUser!.role) ? bewaakt : bewaakt.filter((e) => e.userId === String(req.appUser!.id));
     res.json(eigen.map((e) => ({ userId: e.userId, soort: e.soort, validUntil: e.validUntil })));
   } catch (err) {
     console.error("Error reading user expiries:", err);
@@ -1153,7 +1149,7 @@ app.get("/api/planning-notes", authenticate, async (req: AuthenticatedRequest, r
       return res.status(400).json({ error: "from/to (JJJJ-MM-DD) vereist." });
     }
     // Chauffeurs zien alleen hun eigen notities; planner/admin alles.
-    const driverId = req.appUser!.role === "chauffeur" ? String(req.appUser!.id) : undefined;
+    const driverId = isStafRol(req.appUser!.role) ? undefined : String(req.appUser!.id);
     const notes = await getPlanningNotes({ fromIso: from, toIso: to, driverId });
     res.json(notes);
   } catch (err) {
@@ -3483,6 +3479,8 @@ app.post("/api/updates/read", authenticate, async (req: AuthenticatedRequest, re
     // De teller telt alléén chauffeurs (zij zijn de doelgroep). Een planner/
     // admin die de Updates-weergave opent mag de cijfers niet flatteren, dus
     // registreren we hun reads niet.
+    // Bewust `=== "chauffeur"`: de teller gaat over rijdend personeel, dus
+    // ook een technieker telt hier niet mee.
     if (req.appUser!.role !== "chauffeur") return res.json({ success: true });
     const ids = Array.isArray(req.body?.updateIds) ? req.body.updateIds.map((id: unknown) => String(id)) : [];
     if (ids.length === 0) return res.json({ success: true });
@@ -3518,7 +3516,7 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // Privacy: een chauffeur ziet enkel ruilen waar hij zélf bij betrokken is
     // (aanvrager of aangezochte collega) — niet de ruilhistoriek van iedereen.
     // Planner/admin zien alles (nodig voor validatie + beheer).
-    if (req.appUser?.role === "chauffeur") {
+    if (!isStafRol(req.appUser!.role)) {
       const selfId = String(req.appUser.id);
       const scoped = data.filter(
         (s) => String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId,
@@ -3773,7 +3771,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // zonder revisie-check verwijderde een stale save stilletjes een verse
     // aanvraag die intussen binnenkwam. Chauffeur-payloads worden hieronder
     // delta-gereconstrueerd en hebben de check niet nodig.
-    if (req.appUser?.role !== "chauffeur") {
+    if (isStafRol(req.appUser!.role)) {
       { const rp = revisionCheck(req, previousSwaps); if (rp) return revisionProbleemResponse(res, "De dienstruilen", rp); }
       const swapsRemoved = detectMassDelete(previousSwaps, newData);
       if (swapsRemoved !== null) return massDeleteResponse(res, swapsRemoved, previousSwaps.length, "dienstruilen");
@@ -3802,7 +3800,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
 
     // Exclusiviteit per dienst geldt ook voor planner/admin-aanvragen —
     // de check zat eerst alleen in de chauffeur-tak.
-    if (req.appUser?.role !== "chauffeur") {
+    if (isStafRol(req.appUser!.role)) {
       for (const next of newData) {
         if (previousById.has(String(next.id))) continue;
         // Alleen echte nieuwe aanvragen ('pending'); andere creatie-statussen
@@ -3814,7 +3812,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    if (req.appUser?.role === "chauffeur") {
+    if (!isStafRol(req.appUser!.role)) {
       const selfId = String(req.appUser.id);
       const writes: any[] = [];
 
@@ -3952,7 +3950,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // → approved was instemming alsnog te vervalsen (zelfde gat als in
     // PATCH /api/swaps/:id). Een admin keurt zonder bevestiging goed via de
     // directe pending → approved-weg.
-    if (req.appUser?.role !== "chauffeur") {
+    if (isStafRol(req.appUser!.role)) {
       for (const next of newData) {
         const prev = previousById.get(String(next.id));
         if (String(next.status) === "accepted" && String(prev?.status ?? "") !== "accepted") {
@@ -3961,7 +3959,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    if (req.appUser?.role !== "chauffeur") {
+    if (isStafRol(req.appUser!.role)) {
       for (const [id, prev] of previousById) {
         if (newById.has(String(id))) continue;
         // Doorgevoerde ruilen (approved/completed) zitten in de heropbouw-
@@ -4237,7 +4235,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    await saveSwapsData(finalRecords, swapIdsToDelete, { alleenPending: req.appUser?.role === "chauffeur" });
+    await saveSwapsData(finalRecords, swapIdsToDelete, { alleenPending: !isStafRol(req.appUser!.role) });
 
     // Activity log: detecteer state-overgangen en nieuwe aanvragen. Over
     // recordsToWrite zodat een niet-weggeschreven echo geen spookmelding geeft.
@@ -4360,7 +4358,7 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
 
     const role = actor.role;
     const selfId = String(actor.id);
-    if (role === "chauffeur") {
+    if (!isStafRol(role)) {
       // Alleen de aangezochte collega mag een openstaande ruil accepteren
       // of weigeren — zelfde regels als de array-route. Daarnaast mag de
       // AANVRAGER zijn eigen ruil intrekken zolang die nog open staat
@@ -4850,7 +4848,7 @@ app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     const data = await getLeaveData();
     // Privacy: een chauffeur ziet enkel zijn eigen verlof (incl. de vrije-tekst
     // reden). Planner/admin zien alles (voor verlof-beheer en bezetting).
-    if (req.appUser?.role === "chauffeur") {
+    if (!isStafRol(req.appUser!.role)) {
       const selfId = String(req.appUser.id);
       return res.json(data.filter((l) => String(l.userId) === selfId));
     }
@@ -5070,7 +5068,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     // Planner/admin-payload is gezaghebbend ("ontbreekt = verwijderen"):
     // revisie-check + wipe-detectie zodat een stale save geen verse aanvraag
     // stilletjes verwijdert. Chauffeur-payloads worden delta-gereconstrueerd.
-    if (req.appUser?.role !== "chauffeur") {
+    if (isStafRol(req.appUser!.role)) {
       { const rp = revisionCheck(req, previousLeave); if (rp) return revisionProbleemResponse(res, "De verlofaanvragen", rp); }
       const leaveRemoved = detectMassDelete(previousLeave, newData);
       if (leaveRemoved !== null) return massDeleteResponse(res, leaveRemoved, previousLeave.length, "verlofaanvragen");
@@ -5094,7 +5092,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     // (TOCTOU-clobber).
     let recordsToWrite: any[] = newData;
 
-    if (req.appUser?.role === "chauffeur") {
+    if (!isStafRol(req.appUser!.role)) {
       const newById = new Map(newData.map((r: any) => [String(r.id), r]));
       const selfId = String(req.appUser.id);
 
@@ -5181,7 +5179,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    await saveLeaveData(recordsToWrite, leaveIdsToDelete, { alleenPending: req.appUser?.role === "chauffeur" });
+    await saveLeaveData(recordsToWrite, leaveIdsToDelete, { alleenPending: !isStafRol(req.appUser!.role) });
 
     if (leaveIdsToDelete.length > 0) {
       await logActivity(
@@ -5203,7 +5201,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
         // dat is geen aanvraag maar een registratie, meteen goedgekeurd. Zo
         // heet het ook in het activiteitenlog, en er gaat geen "je verlof is
         // goedgekeurd"-mail uit: de chauffeur wist dat al.
-        const geregistreerd = req.appUser?.role !== "chauffeur" && String(next.status) === "approved";
+        const geregistreerd = isStafRol(req.appUser!.role) && String(next.status) === "approved";
         await logActivity(
           req,
           "leave",
@@ -5215,7 +5213,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
         );
         // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins,
         // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
-        if (req.appUser?.role === "chauffeur") {
+        if (!isStafRol(req.appUser!.role)) {
           const beslissers = users.filter(isActieveStaf).map((u) => String(u.id));
           await sendPushToUsers(beslissers, {
             title: "Nieuwe verlofaanvraag",

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users } from 'lucide-react';
 import { activeDiversions } from '../lib/diversions';
+import { isRijdend } from '../types';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
@@ -20,7 +21,7 @@ import { ServiceChip } from '../components/ServiceChip';
 import { DienstBalk } from '../components/DienstBalk';
 import { ActieMenu } from '../components/ActieMenu';
 import { DashboardAanpassen } from '../components/DashboardAanpassen';
-import { CHAUFFEUR_TEGELS, kleineTegelSpan, pasVoorkeurenToe, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
+import { kleineTegelSpan, pasVoorkeurenToe, tegelsVoorRol, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
 
 /**
  * Chauffeursdashboard — zelfde Operations Center-taal als het planner/admin-
@@ -197,7 +198,10 @@ export function DashboardView({ notes = [],
   const needsAttention = pendingLeaveMine.length > 0;
 
   // --- Dashboard op maat: tegels op id, in de volgorde van de voorkeuren ---
-  const zichtbareTegels = pasVoorkeurenToe(CHAUFFEUR_TEGELS, voorkeuren);
+  // Catalogus per rol: een technieker heeft geen diensten, dus die tegels
+  // bestaan voor hem niet.
+  const tegelCatalogus = tegelsVoorRol(user.role);
+  const zichtbareTegels = pasVoorkeurenToe(tegelCatalogus, voorkeuren);
   const toon = (id: string) => zichtbareTegels.some((t) => t.id === id);
   const stripZichtbaar = zichtbareTegels.filter((t) => t.groep === 'tegels');
   const GROOT = new Set(['vandaag', 'volgende-dienst']);
@@ -392,11 +396,15 @@ export function DashboardView({ notes = [],
             rust een alarm. Ernaast de enige actie van de kop: "…" met
             Dashboard aanpassen (geen extra gouden knop). */}
         <div className="ml-auto flex items-center gap-2">
-          <Badge tone={needsAttention ? 'amber' : 'emerald'} stil className="w-fit tabular-nums">
-            {needsAttention
-              ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
-              : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
-          </Badge>
+          {/* "Vrij/Dienst vandaag" gaat over rijden; voor een technieker
+              blijft alleen de verlofstatus over (Jarno 09-09). */}
+          {(needsAttention || isRijdend(user.role)) && (
+            <Badge tone={needsAttention ? 'amber' : 'emerald'} stil className="w-fit tabular-nums">
+              {needsAttention
+                ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
+                : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
+            </Badge>
+          )}
           <ActieMenu
             size="sm"
             label="Meer acties"
@@ -433,11 +441,11 @@ export function DashboardView({ notes = [],
           schermen al links, dus daar zijn ze dubbel) === */}
       {onNavigate && toon('snelle-acties') && (
         <div className="grid grid-cols-2 gap-3 lg:hidden">
-          <QuickAction icon={<Calendar size={16} />} label="Mijn rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />
+          {isRijdend(user.role) && <QuickAction icon={<Calendar size={16} />} label="Mijn rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />}
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
-          <QuickAction icon={<RefreshCw size={16} />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />
-          <QuickAction icon={<FileText size={16} />} label="Ritbladen" sub="Actuele rit-info" onClick={() => onNavigate('ritblaadjes')} />
-          <QuickAction icon={<Users size={16} />} label="Maandplanning" sub="Wie rijdt wanneer" onClick={() => onNavigate('bezetting')} />
+          {isRijdend(user.role) && <QuickAction icon={<RefreshCw size={16} />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />}
+          <QuickAction icon={<FileText size={16} />} label="Documenten" sub="Wat de planning klaarzet" onClick={() => onNavigate('documenten')} />
+          {isRijdend(user.role) && <QuickAction icon={<Users size={16} />} label="Maandplanning" sub="Wie rijdt wanneer" onClick={() => onNavigate('bezetting')} />}
         </div>
       )}
 
@@ -483,7 +491,7 @@ export function DashboardView({ notes = [],
       <DashboardAanpassen
         open={aanpassen}
         onClose={() => setAanpassen(false)}
-        tegels={CHAUFFEUR_TEGELS}
+        tegels={tegelCatalogus}
         voorkeuren={voorkeuren}
         onChange={bewaarVoorkeuren}
       />

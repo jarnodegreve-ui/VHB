@@ -2,6 +2,7 @@ import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Setti
 import { AnimatePresence, motion } from 'motion/react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../lib/ui';
+import { ROL_LABELS } from '../../shared/schemas/constanten';
 import type { User } from '../types';
 import { useDropdown } from './useDropdown';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
@@ -104,7 +105,7 @@ export function UserMenu({
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-slate-800 truncate leading-tight">{user.name}</span>
               <span className="block text-2xs text-slate-500 font-medium">
-                {{ admin: 'Beheerder', planner: 'Planner', chauffeur: 'Chauffeur' }[user.role] ?? user.role}
+                {ROL_LABELS[user.role as keyof typeof ROL_LABELS] ?? user.role}
               </span>
             </span>
           </div>

@@ -1,3 +1,4 @@
+import { isStafRol } from "./types.js";
 import type { Role } from "./types.js";
 
 // --- Toestel-whitelist: pure beslissingslogica (zie supabase/user_devices.sql
@@ -53,7 +54,7 @@ export const evaluateDeviceGate = (
   // Voorheen sloeg de gate staf volledig over, waardoor "toestel uitloggen"
   // in Instellingen een succesmelding gaf zonder effect (security-audit
   // 07-09, bevinding 5).
-  if (role !== "chauffeur") {
+  if (isStafRol(role)) {
     return device?.status === "revoked"
       ? { allow: false, status: 403, body: { error: "Dit toestel is uitgelogd voor dit account. Meld je opnieuw aan.", code: "device_revoked" } }
       : { allow: true };

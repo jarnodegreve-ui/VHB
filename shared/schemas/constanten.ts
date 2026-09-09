@@ -11,7 +11,17 @@
  *  hier niet onder te liggen. */
 export const WACHTWOORD_MIN = 10;
 
-export const ROLLEN = ['chauffeur', 'planner', 'admin'] as const;
+export const ROLLEN = ['chauffeur', 'technieker', 'planner', 'admin'] as const;
+
+/** NL-label per rol, één bron voor de keuzelijst in gebruikersbeheer, de
+ *  contactenkaartjes en het profielmenu. 'technieker' bestaat sinds 09-09:
+ *  eigen verlof en meldingen, maar geen diensten en niet inplanbaar. */
+export const ROL_LABELS: Record<(typeof ROLLEN)[number], string> = {
+  chauffeur: 'Chauffeur',
+  technieker: 'Technieker',
+  planner: 'Planning',
+  admin: 'Beheer',
+};
 
 // --- Onderhoudsmodus (shared/schemas/onderhoud.ts) ---
 // Zod-vrij, want de schil (useOnderhoud, OnderhoudBanner) en het loginscherm

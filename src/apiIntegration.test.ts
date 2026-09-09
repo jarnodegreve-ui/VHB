@@ -81,6 +81,7 @@ vi.mock('../api/db.js', () => {
     'tok-planner': 'planner@vhb.be',
     'tok-a': 'a@vhb.be',
     'tok-b': 'b@vhb.be',
+    'tok-tech': 'tech@vhb.be',
     // Zelfde accounts, maar met een aal2-claim (na twee-stapsverificatie).
     'tok-planner-2fa': 'planner@vhb.be',
     'tok-admin-2fa': 'admin@vhb.be',
@@ -4868,5 +4869,73 @@ describe('verloflimieten en verlof registreren (09-09)', () => {
     const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...mem.leave.filter((l: any) => String(l.userId) === '3'), nieuw] });
     expect(res.status).toBe(200);
     expect(mem.activity.find((a: any) => a.entityId === 'l-eigen')?.action).toBe('Verlof aangevraagd');
+  });
+});
+
+// Rol "technieker" (Jarno 09-09): eigen verlof en meldingen, maar géén
+// diensten, niet inplanbaar, en vooral: GEEN plannerrechten. Dat laatste was
+// het risico — de code gebruikte op veel plekken `role !== 'chauffeur'` als
+// synoniem voor "dus staf".
+describe('rol technieker', () => {
+  // Alleen in dit blok: de gedeelde fixture houdt 4 gebruikers, en tests die
+  // gebruikers tellen mogen daar niet op stuklopen.
+  beforeEach(() => {
+    mem.users.push({ id: '5', name: 'Tom Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    // Een technieker valt onder dezelfde toestel-gate als een chauffeur, dus
+    // hij heeft net als zij een goedgekeurd toestel nodig.
+    mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    invalidateUsersCache();
+  });
+
+  it('krijgt geen stafrechten op verlof: ziet alleen eigen verlof en mag niet beslissen', async () => {
+    const lijst = await api('GET', '/api/leave', { token: 'tok-tech' });
+    expect(lijst.status).toBe(200);
+    // Alleen eigen rijen (er zijn er geen), zeker niet die van de chauffeurs.
+    expect(lijst.json.every((l: any) => String(l.userId) === '5')).toBe(true);
+    expect(lijst.json.length).toBeLessThan(mem.leave.length);
+    // Beslissen blijft planner/admin.
+    const beslis = await api('PATCH', '/api/leave/l-a1', { token: 'tok-tech', body: { status: 'approved', ifStatus: 'pending' } });
+    expect(beslis.status).toBe(403);
+  });
+
+  it('mag wel eigen verlof aanvragen, en dat gaat als wachtende aanvraag naar de planning', async () => {
+    const nieuw = { id: 'l-tech', userId: '5', startDate: '2026-10-05', endDate: '2026-10-06', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-09-09T08:00:00Z' };
+    const res = await api('POST', '/api/leave', { token: 'tok-tech', body: [nieuw] });
+    expect(res.status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'l-tech')?.status).toBe('pending');
+    // Zelfde behandeling als een chauffeur: de planning krijgt een seintje.
+    expect(mem.pushesSent.some((p) => p.payload.title === 'Nieuwe verlofaanvraag')).toBe(true);
+  });
+
+  it('kan niet voor een ander schrijven en niet als gezaghebbende payload opslaan', async () => {
+    const vanCollega = { id: 'l-fraude', userId: '3', startDate: '2026-10-05', endDate: '2026-10-06', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-09-09T08:00:00Z' };
+    const res = await api('POST', '/api/leave', { token: 'tok-tech', body: [vanCollega] });
+    expect(res.status).toBe(403);
+    expect(mem.leave.find((l: any) => l.id === 'l-fraude')).toBeUndefined();
+    // En het weglaten van bestaande rijen verwijdert niets (geen staf-payload).
+    const bestaandeIds = mem.leave.map((l: any) => l.id).sort();
+    await api('POST', '/api/leave', { token: 'tok-tech', body: [] });
+    expect(mem.leave.map((l: any) => l.id).sort()).toEqual(bestaandeIds);
+  });
+
+  it('ziet geen ruilen van anderen en geen staf-only overzichten', async () => {
+    const ruilen = await api('GET', '/api/swaps', { token: 'tok-tech' });
+    expect(ruilen.status).toBe(200);
+    expect(ruilen.json).toEqual([]);
+    const maand = await api('GET', '/api/month-planning?month=2026-09&format=summary', { token: 'tok-tech' });
+    expect(maand.status).toBe(403);
+  });
+
+  it('kan niet ziek gemeld worden: dat is voor rijdend personeel', async () => {
+    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '5', startDate: '2026-09-02' } });
+    expect(res.status).toBe(400);
+    expect(mem.leave.some((l: any) => l.type === 'ziekte' && String(l.userId) === '5')).toBe(false);
+  });
+
+  it('valt onder de toestel-gate, net als een chauffeur', async () => {
+    mem.devices.push({ userId: '5', deviceToken: 'dev-tech', name: 'Windows-pc', status: 'revoked', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null });
+    const res = await api('GET', '/api/leave', { token: 'tok-tech', device: 'dev-tech' });
+    expect(res.status).toBe(403);
+    expect(res.json.code).toBe('device_revoked');
   });
 });
