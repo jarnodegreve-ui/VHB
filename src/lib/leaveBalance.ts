@@ -20,6 +20,28 @@ export const daysBetween = (startIso: string, endIso: string): number => {
   return Math.round(ms / (1000 * 60 * 60 * 24)) + 1;
 };
 
+/**
+ * Verlofdagen in een periode: maandag tot en met zaterdag tellen mee, zondag
+ * nooit (regel Jarno 09-09). Een volle week verlof is dus 6 dagen, niet 7.
+ *
+ * Bewust naast `daysBetween` en niet in de plaats ervan: ziekte en de
+ * aftelteksten ("nog 3 dagen", "terug op…") rekenen wél in kalenderdagen —
+ * een ziekte loopt gewoon door op zondag.
+ */
+export const verlofDagen = (startIso: string, endIso: string): number => {
+  const totaal = daysBetween(startIso, endIso);
+  if (totaal === 0) return 0;
+  const [sy, sm, sd] = startIso.split('-').map(Number);
+  // UTC, net als daysBetween: een lokale weekdag schuift bij de DST-overgang.
+  const startDag = new Date(Date.UTC(sy, sm - 1, sd)).getUTCDay(); // 0 = zondag
+  // Elke volle week bevat precies één zondag; de staart tellen we uit.
+  let zondagen = Math.floor(totaal / 7);
+  for (let i = 0; i < totaal % 7; i++) {
+    if ((startDag + i) % 7 === 0) zondagen += 1;
+  }
+  return totaal - zondagen;
+};
+
 const clipToYear = (iso: string, year: number, fallback: 'start' | 'end') => {
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
@@ -50,18 +72,18 @@ export function verlofBalans(leaves: LeaveRequest[], userId: string, year: numbe
 
   const inJaar = leaves.filter((l) => l.userId === userId && l.startDate <= yearEnd && l.endDate >= yearStart);
   const relevant = inJaar.filter((l) => l.status === 'approved');
-  const dagenIn = (l: LeaveRequest) => daysBetween(clipToYear(l.startDate, year, 'start'), clipToYear(l.endDate, year, 'end'));
+  const dagenIn = (l: LeaveRequest) => verlofDagen(clipToYear(l.startDate, year, 'start'), clipToYear(l.endDate, year, 'end'));
   const betaaldAangevraagd = inJaar
     .filter((l) => l.status === 'pending' && l.type === 'betaald_verlof')
     .reduce((sum, l) => sum + dagenIn(l), 0);
 
   const betaaldGebruikt = relevant
     .filter((l) => l.type === 'betaald_verlof')
-    .reduce((sum, l) => sum + daysBetween(clipToYear(l.startDate, year, 'start'), clipToYear(l.endDate, year, 'end')), 0);
+    .reduce((sum, l) => sum + dagenIn(l), 0);
 
   const kleinVerletDagen = relevant
     .filter((l) => l.type === 'klein_verlet')
-    .reduce((sum, l) => sum + daysBetween(clipToYear(l.startDate, year, 'start'), clipToYear(l.endDate, year, 'end')), 0);
+    .reduce((sum, l) => sum + dagenIn(l), 0);
 
   return {
     betaaldGebruikt,

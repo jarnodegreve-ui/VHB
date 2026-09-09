@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import type { LeaveRequest, User } from '../types';
-import { daysBetween, verlofBalans } from '../lib/leaveBalance';
+import { daysBetween, verlofBalans, verlofDagen } from '../lib/leaveBalance';
 import { formatLeaveType, formatShortDay, MONTH_NAMES } from '../lib/format';
 import { Button } from '../components/primitives';
 
@@ -48,7 +48,12 @@ export function PrintLeaveYearView({
       .filter((l) => driver && l.userId === driver.id && l.startDate <= yearEnd && l.endDate >= yearStart)
       .map((l) => ({
         ...l,
-        dagenInJaar: daysBetween(clipToYear(l.startDate, year, 'start'), clipToYear(l.endDate, year, 'end')),
+        // Verlof telt maandag t/m zaterdag (zondag nooit); ziekte telt gewoon
+        // kalenderdagen, want die loopt door op zondag.
+        dagenInJaar: (l.type === 'ziekte' ? daysBetween : verlofDagen)(
+          clipToYear(l.startDate, year, 'start'),
+          clipToYear(l.endDate, year, 'end'),
+        ),
       }))
       .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
