@@ -445,6 +445,21 @@ html.dark {
   @media (min-width: 768px) {
     .text-page-title { font-size: 1.875rem; }
   }
+  /* Begroeting op de dashboards: één graad kleiner dan een paginatitel. Het
+     is een welkom, geen schermtitel, en op vol formaat domineerde het de
+     cijfers eronder (Jarno 09-09). */
+  .text-greeting {
+    text-wrap: balance;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.25rem;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--color-slate-900);
+  }
+  @media (min-width: 768px) {
+    .text-greeting { font-size: 1.5rem; }
+  }
   .text-section-title {
     text-wrap: balance;
     font-family: var(--font-display);

@@ -59,8 +59,11 @@ export function ManageUpdatesView({
     fetchUpdateReadCounts()
       .then((data) => {
         if (!alive) return;
-        setReadCounts(data.counts);
-        setTotalChauffeurs(data.totalChauffeurs);
+        // Defensief: een onverwacht antwoord (bv. een lege lijst i.p.v. een
+        // object) mag het hele scherm niet laten crashen op readCounts[id].
+        const counts = data && typeof data === 'object' && !Array.isArray(data) && data.counts && typeof data.counts === 'object' ? data.counts : {};
+        setReadCounts(counts);
+        setTotalChauffeurs(Number(data?.totalChauffeurs) || 0);
       })
       .catch(() => {/* stil: geen teller tonen */});
     return () => { alive = false; };
@@ -341,7 +344,6 @@ export function ManageUpdatesView({
       <PageHeader
         eyebrow="Communicatie"
         title="Beheer updates"
-        description="Nieuws en dringende meldingen voor de chauffeurs."
         actions={(
           <>
             <AanwezigOpScherm />

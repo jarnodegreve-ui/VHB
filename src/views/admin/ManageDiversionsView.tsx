@@ -48,7 +48,6 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       return String(b.startDate || '').localeCompare(String(a.startDate || ''));
     });
   }, [diversions]);
-  const activeCount = useMemo(() => diversions.filter((d) => !isExpired(d)).length, [diversions]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyDiversion, setHistoryDiversion] = useState<Diversion | null>(null);
 
@@ -415,7 +414,6 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       <PageHeader
         eyebrow="Communicatie"
         title="Beheer omleidingen"
-        description={diversions.length > 0 ? `${activeCount} actief, ${diversions.length - activeCount} verlopen.` : 'Routewijzigingen en bijlagen voor chauffeurs.'}
         actions={(
           <>
             <AanwezigOpScherm />

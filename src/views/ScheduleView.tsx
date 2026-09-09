@@ -196,7 +196,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         description={
           upcoming.length > 0
             ? `${upcoming.length} ${upcoming.length === 1 ? 'aankomende dienst' : 'aankomende diensten'}.`
-            : 'Overzicht van je komende diensten.'
+            : 'Persoonlijk overzicht van je komende diensten.'
         }
         actions={
           /* Geen kopknop voor de agenda-koppeling: dat is een eenmalige
@@ -239,7 +239,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           ))}
         </div>
         {lastSyncedAt && (
-          <p className="text-2xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+          <p className="text-2xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep naar beneden om te vernieuwen</p>
         )}
       </div>
 

@@ -311,7 +311,6 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       <PageHeader
         eyebrow="Beheer"
         title="Beheer dienstoverzicht"
-        description="Voeg diensten toe, bewerk of verwijder ze."
         actions={(
           <>
             <AanwezigOpScherm />

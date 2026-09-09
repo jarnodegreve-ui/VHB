@@ -500,7 +500,6 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       <PageHeader
         eyebrow="Systeem"
         title="Systeemstatus"
-        description="Koppelingen, tabellen en health checks."
         actions={(
           <>
             {/* Eén knop in de kop; de schrijftest zit in het "…"-menu ernaast

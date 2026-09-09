@@ -425,6 +425,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // een kop te tonen wanneer de sectie t.o.v. de vorige chauffeur wisselt.
   const showSections = drivers.some((d) => !!d.section);
   const sectionOf = (d: { section?: string | null }) => (d.section || 'Overige');
+  // Kop boven een sectie: de opgeslagen waarde is de korte ploegnaam uit
+  // gebruikersbeheer ("Reguliere"); in het bord leest "Reguliere diensten"
+  // beter (Jarno 09-09). Alleen weergave, de data en de keuzelijst blijven.
+  const sectieLabel = (naam: string) => (/^regulier/i.test(naam.trim()) ? 'Reguliere diensten' : naam);
 
   // === Mobiel: dag-weergave (keuze Jarno 15-08) =============================
   // Op een telefoon is de vraag "wie doet wat op dag X?", niet "wat doet
@@ -566,7 +570,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     <PageShell>
       <PageHeader
         title="Maandplanning"
-        description="Wie rijdt welke dienst, zoals het overzicht in het chauffeurslokaal."
+        description="Wie rijdt welke dienst, zoals in het chauffeurslokaal."
         actions={(
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative">
@@ -698,7 +702,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <td className={cn('mp-sticky sticky left-0 z-10 p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
                             <div className={cn('flex h-8 items-center px-4', SECTIE_KOP)}>
                               {SECTIE_STREEP}
-                              {section}
+                              {sectieLabel(section)}
                             </div>
                           </td>
                           {visibleDates.map((iso) => {
@@ -913,7 +917,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 ) : dagRijen.secties.map((sectie) => (
                   <Fragment key={sectie.naam}>
                     {showSections && (
-                      <div className={cn(SECTIE_BAND, 'flex h-9 items-center px-4', SECTIE_KOP)}>{SECTIE_STREEP}{sectie.naam}</div>
+                      <div className={cn(SECTIE_BAND, 'flex h-9 items-center px-4', SECTIE_KOP)}>{SECTIE_STREEP}{sectieLabel(sectie.naam)}</div>
                     )}
                     {sectie.rijen.map(({ drv, cell }) => {
                       if (!cell) return null;

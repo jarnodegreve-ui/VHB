@@ -491,7 +491,6 @@ export function CoverageView() {
     <PageShell>
       <PageHeader
         title="Openstaande diensten"
-        description="Diensten die nog niet ingevuld zijn per dag, t.o.v. de verwachte diensten per dag-type."
         actions={(
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} />} aria-label="Vorige maand" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} />

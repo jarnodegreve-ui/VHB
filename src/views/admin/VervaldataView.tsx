@@ -214,7 +214,6 @@ export function VervaldataView({ users }: { users: User[] }) {
       <PageHeader
         eyebrow="Beheer"
         title="Vervaldata"
-        description="Code 95 en medische schifting per chauffeur, gesorteerd op wie het eerst vervalt. Klik op een chauffeur om de datums aan te passen."
         actions={(
           <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>
             Ververs
