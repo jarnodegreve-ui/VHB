@@ -28,6 +28,7 @@ import { diversionBodySchema, diversionLijstSchema } from "../shared/schemas/div
 import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js";
 import { meldingenGelezenBodySchema } from "../shared/schemas/meldingen.js";
 import { meVoorkeurenBodySchema } from "../shared/schemas/dashboardVoorkeuren.js";
+import { VERLOF_LIMIETEN_KEY, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
 import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, referentieVan, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
 import {
@@ -126,6 +127,7 @@ import {
   getImportSnapshot,
   restorePlanningAndMatrixSnapshot,
   getRecentLogins,
+  getAppSetting, setAppSetting,
 } from "./storage.js";
 
 dotenv.config();
@@ -4805,6 +4807,44 @@ app.post("/api/planning/assign-service", authenticate, requireRole("planner", "a
     res.status(500).json({ error: "Dienst toewijzen is mislukt." });
   }
 });
+// Verloflimieten (verzoek Jarno 09-09): hoeveel chauffeurs tegelijk vrij
+// mogen zijn, standaard plus uitzonderingsperiodes (zomervakantie hoger dan
+// een schoolperiode). Lezen mag elke rol: de kalenderkleuring in Verlof
+// gebruikt het ook voor chauffeurs. Schrijven is admin-werk.
+app.get("/api/verlof/limieten", authenticate, async (_req: AuthenticatedRequest, res) => {
+  try {
+    res.json(parseVerlofLimieten(await getAppSetting(VERLOF_LIMIETEN_KEY)));
+  } catch (err: any) {
+    // Zonder instellingen-tabel (of bij een DB-hik) de standaard: de kalender
+    // moet blijven werken, de admin ziet de fout pas bij het opslaan.
+    if (!isMissingTableError(err)) console.error("Verloflimieten laden is mislukt.", err);
+    res.json(parseVerlofLimieten(null));
+  }
+});
+
+app.put("/api/verlof/limieten", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const body = valideerRecord(res, verlofLimietenSchema, req.body);
+    if (!body) return;
+    const limieten = { standaard: body.standaard, periodes: sorteerPeriodes(body.periodes) };
+    await setAppSetting(VERLOF_LIMIETEN_KEY, limieten);
+    const uitz = limieten.periodes.length;
+    await logActivity(
+      req,
+      "leave",
+      "Verloflimieten aangepast",
+      `Standaard ${limieten.standaard} tegelijk vrij${uitz > 0 ? `, ${uitz} uitzonderingsperiode${uitz === 1 ? "" : "s"}: ${limieten.periodes.map((p) => `${p.naam} (${p.max})`).join(", ")}` : ", geen uitzonderingsperiodes"}.`,
+    );
+    res.json(limieten);
+  } catch (err: any) {
+    if (isMissingTableError(err)) {
+      return res.status(503).json({ error: "De instellingen-tabel bestaat nog niet: draai supabase/2026-07-30_app_settings.sql in de SQL Editor." });
+    }
+    console.error("Verloflimieten opslaan is mislukt.", err);
+    res.status(500).json({ error: "Verloflimieten opslaan is mislukt." });
+  }
+});
+
 app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const data = await getLeaveData();
@@ -5158,11 +5198,19 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       const typeLabel = formatLeaveType(next.type);
 
       if (!prev) {
+        // Planner/admin die verlof namens een chauffeur vastlegt (mondeling
+        // doorgegeven, of de papieren goedkeuringen overzetten, Jarno 09-09):
+        // dat is geen aanvraag maar een registratie, meteen goedgekeurd. Zo
+        // heet het ook in het activiteitenlog, en er gaat geen "je verlof is
+        // goedgekeurd"-mail uit: de chauffeur wist dat al.
+        const geregistreerd = req.appUser?.role !== "chauffeur" && String(next.status) === "approved";
         await logActivity(
           req,
           "leave",
-          "Verlof aangevraagd",
-          `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
+          geregistreerd ? "Verlof geregistreerd" : "Verlof aangevraagd",
+          geregistreerd
+            ? `${userName(next.userId)}: ${typeLabel} voor ${period} vastgelegd door ${req.appUser?.name || "Planning"}, meteen goedgekeurd.`
+            : `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
           { type: "leave", id: next.id },
         );
         // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins,
