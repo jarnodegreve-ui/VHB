@@ -127,6 +127,19 @@ describe('bouwDagen / bouwTotalen', () => {
       gemDagpiekKw: 243.3, piekDagen: 3, laadMin: 240,
     });
   });
+  // Controle-ronde 09-09, nr. 1: draagt geen enkele sessie charging_periods,
+  // dan is laadMin van elke sessie null. Dat mag geen 0 worden, anders staat
+  // er een fout getal in het jaartotaal en de Excel-export.
+  it('laadtijd blijft null wanneer geen enkele sessie laadperiodes had', () => {
+    const zonderPeriodes = sessies
+      .filter((s) => s.dag.startsWith('2026-08'))
+      .map((s) => ({ ...s, laadMin: null }));
+    const t = bouwTotalen(bouwDagen(AUG, sessies, pieken), zonderPeriodes);
+    expect(t.laadMin).toBeNull();
+    // De rest van de totalen blijft gewoon werken.
+    expect(t.kwh).toBe(107);
+  });
+
   it('dagenReeks en maandGrenzen lopen over maand-/jaargrenzen', () => {
     expect(dagenReeks('2026-12-30', '2027-01-02')).toEqual(['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']);
     expect(maandGrenzenVan('2028-02')).toEqual({ van: '2028-02-01', tot: '2028-02-29' });

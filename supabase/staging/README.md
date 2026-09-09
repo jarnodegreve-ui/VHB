@@ -100,6 +100,7 @@ draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
 64. `supabase/2026-09-13_vehicles_categorie.sql`, voertuigen: kolom `categorie` (bus, bedrijfswagen, privéwagen) met backfill uit `type`
 65. `supabase/2026-09-16_rls_loops_voertuigen_oud.sql`, sluit de `using (true)`-leespolicies van `dienst_loops`, `service_loops`, `loop_vehicle_defaults` en `vehicles_chargeye_oud` (losse productietabellen, op staging een no-op; raakt RLS/grants → beleidssnapshot bijwerken)
 66. `supabase/2026-09-18_user_presence.sql`, aanwezigheid: één rij per aaneengesloten sessie, gevuld vanuit de auth-middleware; vervangt de `Actief`-regels in het auditlogboek als bron voor "wie was wanneer actief" (raakt RLS/grants → beleidssnapshot bijwerken)
+67. `supabase/2026-09-09_user_devices_sessie.sql`, `session_id` op `user_devices` zodat toestel-intrekking niet meer van de client-header afhangt (controle-ronde 09-09; alleen kolom + index, raakt geen RLS of grants)
 
 **Bewust overgeslagen** (alleen zinvol op het historische productieschema; ze
 falen op een verse database):

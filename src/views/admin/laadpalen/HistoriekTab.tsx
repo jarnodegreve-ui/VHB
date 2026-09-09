@@ -57,11 +57,14 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
   const hoogstePiek = chrono.reduce<MaandRij | null>((b, m) => (m.piekKw !== null && (!b || (b.piekKw ?? 0) < m.piekKw) ? m : b), null);
   // Jaartotalen: onder de maanden van dat jaar.
   const perJaar = useMemo(() => {
-    const uit = new Map<string, { kwh: number; laadbeurten: number; mislukt: number; laaddagen: number; laadMin: number; piek: MaandRij | null }>();
+    const uit = new Map<string, { kwh: number; laadbeurten: number; mislukt: number; laaddagen: number; laadMin: number | null; piek: MaandRij | null }>();
     for (const m of chrono) {
       const j = m.maand.slice(0, 4);
-      const cur = uit.get(j) ?? { kwh: 0, laadbeurten: 0, mislukt: 0, laaddagen: 0, laadMin: 0, piek: null };
-      cur.kwh += m.kwh; cur.laadbeurten += m.laadbeurten; cur.mislukt += m.mislukt; cur.laaddagen += m.laaddagen; cur.laadMin += m.laadMin;
+      const cur = uit.get(j) ?? { kwh: 0, laadbeurten: 0, mislukt: 0, laaddagen: 0, laadMin: null, piek: null };
+      cur.kwh += m.kwh; cur.laadbeurten += m.laadbeurten; cur.mislukt += m.mislukt; cur.laaddagen += m.laaddagen;
+      // Onbekend blijft onbekend: alleen optellen zodra één maand een echte
+      // laadtijd heeft, anders toonde het jaartotaal "0 min" als een waarde.
+      if (m.laadMin !== null) cur.laadMin = (cur.laadMin ?? 0) + m.laadMin;
       if (m.piekKw !== null && (!cur.piek || (cur.piek.piekKw ?? 0) < m.piekKw)) cur.piek = m;
       uit.set(j, cur);
     }
@@ -72,7 +75,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
     if (!data) return;
     exporteerCsv(`vhb-laadplein-historiek-${data.huidigeDag}.csv`, [
       ['Maand', 'kWh', 'Laadsessies', 'Mislukt', 'Aankoppelingen totaal', 'Laaddagen', 'Gem. kWh per laaddag', 'Hoogste dag kWh', 'Hoogste dag', 'Piek kW', 'Piekdag', 'Piek om', 'Gem. dagpiek kW', 'Dagen met piekmeting', 'Laadtijd (uur)'],
-      ...chrono.map((m) => [m.maand, m.kwh, m.laadbeurten, m.mislukt, m.sessies, m.laaddagen, m.gemPerLaaddag, m.hoogsteDag?.kwh ?? '', m.hoogsteDag?.dag ?? '', m.piekKw ?? '', m.piekDag ?? '', m.piekTs ? uurLabel(m.piekTs) : '', m.gemDagpiekKw ?? '', m.piekDagen, Math.round((m.laadMin / 60) * 10) / 10]),
+      ...chrono.map((m) => [m.maand, m.kwh, m.laadbeurten, m.mislukt, m.sessies, m.laaddagen, m.gemPerLaaddag, m.hoogsteDag?.kwh ?? '', m.hoogsteDag?.dag ?? '', m.piekKw ?? '', m.piekDag ?? '', m.piekTs ? uurLabel(m.piekTs) : '', m.gemDagpiekKw ?? '', m.piekDagen, m.laadMin !== null ? Math.round((m.laadMin / 60) * 10) / 10 : '']),
     ]);
   };
   const exporteerMatrix = () => {
@@ -186,7 +189,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                       <Td num className={cn('font-semibold', hoogstePiek?.maand === m.maand ? 'text-oker-700' : 'text-slate-800')}>{m.piekKw !== null ? formatGetal(Math.round(m.piekKw)) : '—'}</Td>
                       <Td className="max-md:hidden whitespace-nowrap text-slate-600">{m.piekDag ? `${dagKort(m.piekDag)} ${uurLabel(m.piekTs)}` : m.piekDagen === 0 ? 'geen meting' : ''}</Td>
                       <Td num className="max-lg:hidden">{m.gemDagpiekKw !== null ? formatGetal(Math.round(m.gemDagpiekKw)) : '—'}</Td>
-                      <Td num className="max-xl:hidden">{m.laadMin > 0 ? duurLabel(m.laadMin) : '—'}</Td>
+                      <Td num className="max-xl:hidden">{m.laadMin !== null && m.laadMin > 0 ? duurLabel(m.laadMin) : '—'}</Td>
                     </tr>
                     {laatsteVanJaar && jt && (
                       <tr className="bg-surface-muted/60 text-xs font-semibold text-slate-700">
@@ -200,7 +203,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                         <Td num>{jt.piek?.piekKw !== null && jt.piek?.piekKw !== undefined ? formatGetal(Math.round(jt.piek.piekKw)) : '—'}</Td>
                         <Td className="max-md:hidden whitespace-nowrap">{jt.piek?.piekDag ? `${dagKort(jt.piek.piekDag)} ${uurLabel(jt.piek.piekTs)}` : ''}</Td>
                         <Td num className="max-lg:hidden" />
-                        <Td num className="max-xl:hidden">{duurLabel(jt.laadMin)}</Td>
+                        <Td num className="max-xl:hidden">{jt.laadMin !== null && jt.laadMin > 0 ? duurLabel(jt.laadMin) : '—'}</Td>
                       </tr>
                     )}
                   </FragmentRij>
