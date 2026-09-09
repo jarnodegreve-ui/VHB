@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
-import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, Upload } from 'lucide-react';
+import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, Upload, X } from 'lucide-react';
+import { LijnTegel } from '../../components/LijnTegel';
+import { isAlleLijnen, lijnLabel, lijnenNaarTekst, lijnenVan } from '../../../shared/lijnen';
 import type { Diversion } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button } from '../../components/primitives';
+import { Badge, Button, IconButton } from '../../components/primitives';
 import { Card } from '../../components/Card';
 import { DateInput, Field, Input, Textarea } from '../../components/Field';
 import { valideer } from '../../lib/valideer';
@@ -130,6 +132,20 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   // verwijderen schuift de keuze door naar de buur, of sluit het paneel als
   // de lijst leeg is. Het lege "nieuw"-formulier (paneel open zonder
   // editingId) wordt niet gekaapt.
+  // Chip-invoer voor de lijnen: `formData.line` blijft de canonieke tekst,
+  // de chips zijn er de weergave van; `lijnDraft` is wat nog niet bevestigd is.
+  const [lijnDraft, setLijnDraft] = useState('');
+  const lijnen = lijnenVan(formData.line);
+  const voegLijnToe = (tekst: string) => {
+    const nieuw = lijnenNaarTekst([...lijnen, ...lijnenVan(tekst)]);
+    setFormData((f) => ({ ...f, line: nieuw }));
+    setLijnDraft('');
+    setFouten((f) => ({ ...f, line: undefined }));
+  };
+  const verwijderLijn = (l: string) => {
+    setFormData((f) => ({ ...f, line: lijnenNaarTekst(lijnen.filter((x) => x !== l)) }));
+  };
+
   const inline = useStandaardKeuze({
     items: sortedDiversions,
     sleutelVan: (d) => d.id,
@@ -253,13 +269,11 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-slate-50/50 md:px-4"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', expired ? 'bg-slate-500/12 text-slate-500' : 'bg-oker-500/15 text-oker-700')}>
-                  <MapPin size={16} />
-                </div>
+                <LijnTegel line={div.line} tone={expired ? 'muted' : 'accent'} />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <h3 className="text-card-title leading-snug">{div.title}</h3>
-                    <Badge tone="slate">Lijn {div.line}</Badge>
+                    <Badge tone="slate">{lijnLabel(div.line)}</Badge>
                     {expired && <Badge tone="slate">Verlopen</Badge>}
                     {div.pdfUrl && <Badge tone="slate" icon={<FileText size={12} />}>PDF</Badge>}
                   </div>
@@ -289,7 +303,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       open={paneelOpen}
       onClose={sluitPaneel}
       title={editingId ? 'Omleiding bewerken' : 'Nieuwe omleiding'}
-      subtitle={bewerkte ? `${bewerkte.title}, lijn ${bewerkte.line}` : 'Vul de details in en voeg eventueel een PDF toe.'}
+      subtitle={bewerkte ? `${bewerkte.title}, ${lijnLabel(bewerkte.line).toLowerCase()}` : 'Vul de details in en voeg eventueel een PDF toe.'}
       sleutel={editingId ?? 'nieuw'}
       leegTekst="Kies een omleiding om te bewerken, of maak een nieuwe."
       leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
@@ -304,11 +318,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
           ]}
         />
       ) : undefined}
-      icon={(
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500/15 text-oker-700">
-          <MapPin size={16} />
-        </span>
-      )}
+      icon={<LijnTegel line={formData.line} />}
       footer={(
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="lg" className="flex-1" onClick={annuleer}>
@@ -323,16 +333,45 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       {/* De opslaan-knop staat in de footer (buiten het formulier) en koppelt
           via form={FORM_ID}; Enter in een veld dient dus ook gewoon in. */}
       <form id={FORM_ID} onSubmit={handleSubmit} className="space-y-5">
-        <Field label="Lijn(en)" htmlFor="omleiding-lijn" error={fouten.line}>
-          <Input
-            id="omleiding-lijn"
-            invalid={!!fouten.line}
-            type="text"
-            required
-            value={formData.line}
-            onChange={(e) => setFormData({...formData, line: e.target.value})}
-            placeholder="bv. 1, 2 of Alle"
-          />
+        {/* Lijnen als chips: één per keer toevoegen met Enter of een komma,
+            verwijderen met het kruisje. Opgeslagen als "883, 884" (zie
+            shared/lijnen.ts), dus bestaande omleidingen blijven werken.
+            Leeg = alle lijnen (zoals voorheen). */}
+        <Field label="Lijn(en)" htmlFor="omleiding-lijn" error={fouten.line} hint={lijnen.length === 0 ? 'Leeg laten betekent: geldt voor alle lijnen.' : undefined}>
+          <div className={cn('flex min-h-11 flex-wrap items-center gap-1.5 rounded-xl border bg-surface-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-oker-500/30', fouten.line ? 'border-red-400' : 'border-slate-200')}>
+            {lijnen.map((l) => (
+              <Badge key={l} tone={isAlleLijnen(l) ? 'slate' : 'oker'} className="gap-1 pr-0.5">
+                {isAlleLijnen(l) ? 'Alle lijnen' : l}
+                <IconButton label={`Lijn ${l} verwijderen`} size="sm" variant="ghost" onClick={() => verwijderLijn(l)}>
+                  <X size={12} />
+                </IconButton>
+              </Badge>
+            ))}
+            {/* rauw: kaal invoerveld binnen de chip-rand (de rand zit op de wrapper, anders een dubbele kader) */}
+            <input
+              id="omleiding-lijn"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              enterKeyHint="done"
+              value={lijnDraft}
+              onChange={(e) => {
+                // Een komma typen sluit de lijn meteen af.
+                if (/[,;]/.test(e.target.value)) voegLijnToe(e.target.value);
+                else setLijnDraft(e.target.value);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  if (lijnDraft.trim()) { e.preventDefault(); voegLijnToe(lijnDraft); }
+                } else if (e.key === 'Backspace' && !lijnDraft && lijnen.length > 0) {
+                  verwijderLijn(lijnen[lijnen.length - 1]);
+                }
+              }}
+              onBlur={() => { if (lijnDraft.trim()) voegLijnToe(lijnDraft); }}
+              placeholder={lijnen.length === 0 ? 'bv. 883, dan Enter' : 'nog een lijn…'}
+              className="min-w-[7rem] flex-1 bg-transparent px-1.5 py-1 text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm"
+            />
+          </div>
         </Field>
 
         <Field label="Titel" htmlFor="omleiding-titel" error={fouten.title}>
@@ -433,7 +472,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         onClose={() => setHistoryDiversion(null)}
         entityType="diversion"
         entityId={historyDiversion?.id ?? ''}
-        title={historyDiversion ? `${historyDiversion.title}, lijn ${historyDiversion.line}` : undefined}
+        title={historyDiversion ? `${historyDiversion.title}, ${lijnLabel(historyDiversion.line).toLowerCase()}` : undefined}
       />
 
     </PageShell>

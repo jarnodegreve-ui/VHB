@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Calendar, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
+import { Calendar, ChevronRight, Download, FileText, Search, X } from 'lucide-react';
+import { LijnTegel } from '../components/LijnTegel';
+import { isAlleLijnen, lijnLabel, lijnenVan, raaktLijn } from '../../shared/lijnen';
 import { isExpiredDiversion } from '../lib/diversions';
 import type { Diversion } from '../types';
 import { formatDateHuman, formatSyncedTime } from '../lib/format';
@@ -23,7 +25,9 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
   const inline = useInlinePaneel();
 
   // Get unique line numbers for the filter
-  const uniqueLines = Array.from(new Set(diversions.map(div => div.line))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  // Per lijn, niet per omleiding: "883, 884" telt als twee lijnen in de filter.
+  // "Alle" is geen lijn maar een bereik; die omleidingen vallen onder elke filterkeuze.
+  const uniqueLines = Array.from(new Set(diversions.flatMap((div) => lijnenVan(div.line)).filter((l) => !isAlleLijnen(l)))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   const sortedForList = [...diversions].sort((a, b) => {
     const ea = isExpiredDiversion(a) ? 1 : 0;
@@ -36,7 +40,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
       div.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       div.line.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesLine = selectedLine === 'all' || div.line === selectedLine;
+    const matchesLine = selectedLine === 'all' || raaktLijn(div.line, selectedLine);
 
     return matchesSearch && matchesLine;
   });
@@ -65,7 +69,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
             >
               <option value="all">Alle lijnen</option>
               {uniqueLines.map(line => (
-                <option key={line} value={line}>Lijn {line}</option>
+                <option key={line} value={line}>{lijnLabel(line)}</option>
               ))}
             </Select>
             <div className="relative flex-1 md:w-72 group">
@@ -97,7 +101,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
       />
 
       {lastSyncedAt && (
-        <p className="-mt-2 text-2xs font-medium text-slate-500">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+        <p className="-mt-2 text-2xs font-medium text-slate-500">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep naar beneden om te vernieuwen</p>
       )}
 
       <MasterDetail
@@ -123,12 +127,9 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                     className="w-full px-3.5 py-3 md:px-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-3 text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-xl border border-oker-100 bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">
-                        <MapPin size={16} />
-                      </div>
+                      <LijnTegel line={div.line} />
                       <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <h4 className="text-card-title leading-snug" data-vt-record={div.id}>{div.title}</h4>
-                        <Badge tone="slate">{div.line}</Badge>
                         {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
                       </div>
                     </div>
@@ -157,16 +158,12 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
             title={detail?.title ?? 'Omleiding'}
             sleutel={detail?.id}
             leegTekst="Kies een omleiding."
-            icon={(
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-oker-100 bg-oker-50 text-oker-700">
-                <MapPin size={16} />
-              </span>
-            )}
+            icon={detail ? <LijnTegel line={detail.line} /> : undefined}
           >
             {detail && (
               <div className="space-y-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="oker">Lijn {detail.line}</Badge>
+                  <Badge tone="oker">{lijnLabel(detail.line)}</Badge>
                   {isExpiredDiversion(detail) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" stil>Actief</Badge>}
 
                 </div>

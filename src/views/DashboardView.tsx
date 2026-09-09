@@ -2,6 +2,8 @@ import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users } from 'lucide-react';
 import { activeDiversions } from '../lib/diversions';
 import { isRijdend } from '../types';
+import { LijnTegel } from '../components/LijnTegel';
+import { lijnLabel } from '../../shared/lijnen';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
@@ -152,9 +154,6 @@ export function DashboardView({ notes = [],
     .slice(0, 3);
 
 
-  // "Lijn 5 & 8" vs "5": prefix alleen wanneer 't nog niet in de data zit.
-  const lineLabel = (line: string) =>
-    line.trim().toLowerCase().startsWith('lijn') ? line.trim() : `Lijn ${line.trim()}`;
 
   const firstName = user.name.split(' ')[0];
   const greeting = getDaypartGreeting(now);
@@ -382,7 +381,7 @@ export function DashboardView({ notes = [],
           ml-auto, zakt onder de kop als hij niet past). */}
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-1 pt-1 md:items-end">
         <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl">
-          <h1 className="text-page-title">
+          <h1 className="text-greeting">
             {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
           <p className="mt-0.5 text-sm font-normal text-slate-500 tabular-nums">
@@ -454,17 +453,13 @@ export function DashboardView({ notes = [],
         open={!!openDiversion}
         onClose={() => setOpenDiversion(null)}
         title={openDiversion?.title ?? 'Omleiding'}
-        subtitle={openDiversion ? lineLabel(openDiversion.line) : undefined}
-        icon={
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
-            <MapPin size={16} />
-          </span>
-        }
+        subtitle={openDiversion ? lijnLabel(openDiversion.line) : undefined}
+        icon={openDiversion ? <LijnTegel line={openDiversion.line} /> : undefined}
       >
         {openDiversion && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="slate">{lineLabel(openDiversion.line)}</Badge>
+              <Badge tone="slate">{lijnLabel(openDiversion.line)}</Badge>
             </div>
             <Card tone="muted" padding="sm">
               <MicroLabel>Periode</MicroLabel>
