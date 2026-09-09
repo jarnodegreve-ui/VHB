@@ -141,33 +141,29 @@ export function openPdfInNewTab(pdfUrl: string | undefined | null) {
   }
 }
 
-/**
- * Download een Blob als bestand. In een geïnstalleerde PWA op iOS is het
- * a.download-patroon wisselvallig (soms geen zichtbare feedback); daar proberen
- * we eerst het deelblad (navigator.share met een File → bewaren in Bestanden),
- * met de klassieke download als fallback + een bevestigings-toast. Roep aan
- * vanuit een click-handler (user-gesture) zodat het deelblad mag openen.
- */
-export async function downloadBlob(filename: string, blob: Blob) {
-  const standalone =
-    (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
-    (typeof navigator !== 'undefined' && (navigator as { standalone?: boolean }).standalone === true);
-  const shareNav = navigator as Navigator & {
-    canShare?: (data: unknown) => boolean;
-    share?: (data: unknown) => Promise<void>;
-  };
-  if (standalone && typeof File !== 'undefined' && shareNav.share && shareNav.canShare) {
-    const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
-    if (shareNav.canShare({ files: [file] })) {
-      try {
-        await shareNav.share({ files: [file], title: filename });
-        return;
-      } catch (err) {
-        if ((err as { name?: string })?.name === 'AbortError') return; // gebruiker annuleerde
-        // anders: val terug op de klassieke download hieronder
-      }
-    }
-  }
+/** Afloop van downloadBlob, zodat aanroepers geen succes melden dat er niet was. */
+export type DownloadUitkomst =
+  /** Via het iOS-deelblad bewaard. */
+  | 'gedeeld'
+  /** Gebruiker sloot het deelblad zelf. */
+  | 'geannuleerd'
+  /** Klassieke a.download is gestart (browser-tab, desktop). */
+  | 'gedownload'
+  /** Standalone en de user-gesture was verlopen: er staat een toast klaar
+   *  waarmee de gebruiker het deelblad alsnog met één tik opent. */
+  | 'wacht-op-tik';
+
+const standaloneModus = () =>
+  (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
+  (typeof navigator !== 'undefined' && (navigator as { standalone?: boolean }).standalone === true);
+
+type ShareNav = Navigator & {
+  canShare?: (data: unknown) => boolean;
+  share?: (data: unknown) => Promise<void>;
+};
+
+/** Klassieke download; in standalone-iOS wisselvallig, daarbuiten de normale weg. */
+function klassiekeDownload(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -176,7 +172,56 @@ export async function downloadBlob(filename: string, blob: Blob) {
   link.click();
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/**
+ * Download een Blob als bestand. In een geïnstalleerde PWA op iOS is het
+ * a.download-patroon wisselvallig (soms geen zichtbare feedback); daar proberen
+ * we eerst het deelblad (navigator.share met een File → bewaren in Bestanden),
+ * met de klassieke download als fallback + een bevestigings-toast.
+ *
+ * Belangrijk: WebKit staat navigator.share alleen toe zolang de user-gesture
+ * geldig is. Exports die eerst het bestand bij de server ophalen (Excel,
+ * back-up) zijn ná die netwerkronde hun gesture kwijt, waardoor share een
+ * NotAllowedError gooit; de oude code viel dan door naar a.download en meldde
+ * tóch "gedownload", terwijl er in standalone niets gebeurde. Nu bieden we in
+ * dat geval een toast met een Bewaren-knop aan: die tik levert een verse
+ * gesture, dus het deelblad opent alsnog.
+ */
+export async function downloadBlob(filename: string, blob: Blob): Promise<DownloadUitkomst> {
+  const standalone = standaloneModus();
+  const shareNav = navigator as ShareNav;
+  if (standalone && typeof File !== 'undefined' && shareNav.share && shareNav.canShare) {
+    const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+    if (shareNav.canShare({ files: [file] })) {
+      try {
+        await shareNav.share({ files: [file], title: filename });
+        return 'gedeeld';
+      } catch (err) {
+        const naam = (err as { name?: string })?.name;
+        if (naam === 'AbortError') return 'geannuleerd'; // gebruiker annuleerde
+        if (naam === 'NotAllowedError') {
+          notify(`"${filename}" is klaar.`, 'info', {
+            action: {
+              label: 'Bewaren',
+              run: () => {
+                void shareNav.share!({ files: [file], title: filename }).catch((e) => {
+                  if ((e as { name?: string })?.name === 'AbortError') return;
+                  klassiekeDownload(filename, blob);
+                });
+              },
+            },
+            opties: { duurMs: 20_000 },
+          });
+          return 'wacht-op-tik';
+        }
+        // andere fout: val terug op de klassieke download hieronder
+      }
+    }
+  }
+  klassiekeDownload(filename, blob);
   notify(`"${filename}" gedownload.`, 'success');
+  return 'gedownload';
 }
 
 /** Statusbalk-kleur van de PWA-schil laten meekleuren met het thema — een

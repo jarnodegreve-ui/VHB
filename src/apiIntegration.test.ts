@@ -17,6 +17,7 @@ import type { AddressInfo } from 'node:net';
 let resetAllRateLimiters: () => void;
 let invalidateUsersCache: () => void;
 let invalidateOnderhoudCache: () => void;
+let invalidateRevokedSessieCache: () => void;
 
 // Vóór de import van de app: voorkom dat index.ts zelf op poort 3000 gaat
 // luisteren of Vite-middleware start.
@@ -95,6 +96,14 @@ vi.mock('../api/db.js', () => {
         getClaims: async (token: string) => {
           if (token === 'tok-storing' || token === 'tok-auth-500') return { data: null, error: { name: 'AuthRetryableFetchError', message: 'fetch failed', status: 0 } };
           if (token === 'tok-verlopen') return { data: null, error: { name: 'AuthInvalidJwtError', message: 'JWT has expired', status: 400 } };
+          // JWT-vormig token (header.payload.sig): claims uit de payload zelf,
+          // zodat tests met een echte session_id-claim kunnen werken.
+          if (token.split('.').length === 3) {
+            try {
+              const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+              if (claims?.email) return { data: { claims: { aal: 'aal1', ...claims } }, error: null };
+            } catch { /* val door naar de vaste mapping */ }
+          }
           const email = tokenToEmail[token];
           const basis = token.replace(/-2fa$/, '');
           return email
@@ -361,10 +370,11 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     userHasDevices: async (userId: string) =>
       mem.devices.some((d: any) => String(d.userId) === String(userId)),
-    registerDevice: async (userId: string, deviceToken: string, name: string, autoApprove: boolean) => {
+    registerDevice: async (userId: string, deviceToken: string, name: string, autoApprove: boolean, sessionId?: string | null) => {
       const existing = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
       if (existing) {
         existing.lastSeenAt = '2026-07-18T12:00:00Z';
+        if (sessionId) existing.sessionId = sessionId;
         return { device: existing, created: false };
       }
       const device = {
@@ -372,11 +382,14 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         status: autoApprove ? 'approved' : 'pending',
         createdAt: '2026-07-18T12:00:00Z', lastSeenAt: '2026-07-18T12:00:00Z',
         approvedAt: autoApprove ? '2026-07-18T12:00:00Z' : null, approvedBy: autoApprove ? 'auto' : null,
+        sessionId: sessionId ?? null,
       };
       mem.devices.push(device);
       return { device, created: true };
     },
     listAllDevices: async () => mem.devices,
+    listRevokedSessionIds: async () =>
+      mem.devices.filter((d: any) => d.status === 'revoked' && d.sessionId).map((d: any) => String(d.sessionId)),
     setDeviceStatus: async (userId: string, deviceToken: string, status: string) => {
       const device = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
       if (device) device.status = status;
@@ -436,6 +449,7 @@ beforeAll(async () => {
   resetAllRateLimiters = (await import('../api/rateLimit')).resetAllRateLimiters;
   invalidateUsersCache = (await import('../api/userCache')).invalidateUsersCache;
   invalidateOnderhoudCache = (await import('../api/_lib/onderhoud')).invalidateOnderhoudCache;
+  invalidateRevokedSessieCache = (await import('../api/middleware')).invalidateRevokedSessieCache;
   await new Promise<void>((resolve) => {
     server = app.listen(0, '127.0.0.1', () => resolve());
   });
@@ -492,6 +506,9 @@ beforeEach(() => {
   resetAllRateLimiters();
   invalidateUsersCache();
   invalidateOnderhoudCache();
+  // Ingetrokken-sessiecache is 30 s geldig en zou anders tussen tests
+  // doorbloeden (een intrekking uit een vorige test blokkeert de volgende).
+  invalidateRevokedSessieCache();
   mem.appSettings = {};
   mem.users = [
     { id: '1', name: 'Annelies Admin', email: 'admin@vhb.be', role: 'admin', isActive: true },
@@ -1385,6 +1402,62 @@ describe('eigen toestellen en sessies (/api/me/toestellen)', () => {
     // Met ?ook-dit=1 mag het huidige wél.
     expect((await api('POST', `/api/me/toestellen/${dit.id}/uitloggen?ook-dit=1`, { token: 'tok-a' })).status).toBe(200);
     expect(mem.devices.find((d: any) => d.userId === '3' && d.deviceToken === 'dev-ok')?.status).toBe('revoked');
+  });
+
+  // Controle-ronde 09-09, nr. 2: de gate herkende een toestel alleen aan de
+  // X-Device-Token-header. Wie die wegliet, viel voor staf volledig buiten de
+  // gate en werd voor chauffeurs een "onbekend" i.p.v. een ingetrokken
+  // toestel. De sessie uit het JWT is niet weg te laten, dus daar hangt de
+  // intrekking nu aan.
+  describe('intrekking hangt aan de auth-sessie, niet aan de header', () => {
+    const jwt = (email: string, sub: string, sessie: string) =>
+      `x.${Buffer.from(JSON.stringify({ sub, email, session_id: sessie })).toString('base64')}.y`;
+
+    it('blokkeert een ingetrokken staf-toestel dat de header weglaat', async () => {
+      const token = jwt('planner@vhb.be', 'auth-tok-planner', 'sess-planner');
+      // Aanmelden legt de sessie vast op de toestelrij.
+      expect((await api('POST', '/api/devices/register', { token, device: 'dev-planner', body: { name: 'Mac · browser' } })).status).toBe(200);
+      expect(mem.devices.find((d: any) => d.deviceToken === 'dev-planner')?.sessionId).toBe('sess-planner');
+      expect((await api('GET', '/api/leave', { token, device: 'dev-planner' })).status).toBe(200);
+
+      // Admin trekt het toestel in.
+      expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', body: { userId: '2', deviceToken: 'dev-planner' } })).status).toBe(200);
+
+      // Mét header: geblokkeerd (dat werkte al).
+      expect((await api('GET', '/api/leave', { token, device: 'dev-planner' })).json.code).toBe('device_revoked');
+      // Zónder header: vroeger volledige toegang, nu ook geblokkeerd.
+      const zonderHeader = await api('GET', '/api/leave', { token, device: null });
+      expect(zonderHeader.status).toBe(403);
+      expect(zonderHeader.json.code).toBe('device_revoked');
+      // En met een willekeurig ander toestel-token evenmin.
+      expect((await api('GET', '/api/leave', { token, device: 'dev-verzonnen' })).json.code).toBe('device_revoked');
+    });
+
+    it('blokkeert een ingetrokken chauffeurstoestel ook als de goedkeuringsschakelaar uit staat', async () => {
+      mem.appSettings.device_gate = { enabled: false };
+      const token = jwt('a@vhb.be', 'auth-tok-a', 'sess-chauffeur');
+      expect((await api('POST', '/api/devices/register', { token, device: 'dev-tel', body: { name: 'iPhone · app' } })).status).toBe(200);
+      expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-tel' } })).status).toBe(200);
+      // Zonder header was dit een "onbekend toestel" en liet de uitgeschakelde
+      // schakelaar het door.
+      const zonderHeader = await api('GET', '/api/leave', { token, device: null });
+      expect(zonderHeader.status).toBe(403);
+      expect(zonderHeader.json.code).toBe('device_revoked');
+    });
+
+    it('laat een gewone sessie op een goedgekeurd toestel ongemoeid', async () => {
+      const chauffeur = jwt('a@vhb.be', 'auth-tok-a', 'sess-ok');
+      expect((await api('POST', '/api/devices/register', { token: chauffeur, device: 'dev-ok', body: { name: 'iPhone · app' } })).status).toBe(200);
+      expect((await api('GET', '/api/leave', { token: chauffeur, device: 'dev-ok' })).status).toBe(200);
+      // Chauffeur zonder header blijft 'onbekend toestel' zolang de
+      // goedkeuringsschakelaar aanstaat, maar niet 'ingetrokken'.
+      expect((await api('GET', '/api/leave', { token: chauffeur, device: null })).json.code).toBe('device_unknown');
+      // Staf zonder header mag gewoon door: de sessiecontrole voegt alleen een
+      // blokkade toe voor ingetrokken toestellen, geen nieuwe lock-out.
+      const planner = jwt('planner@vhb.be', 'auth-tok-planner', 'sess-planner-ok');
+      expect((await api('POST', '/api/devices/register', { token: planner, device: 'dev-planner-ok', body: { name: 'Mac' } })).status).toBe(200);
+      expect((await api('GET', '/api/leave', { token: planner, device: null })).status).toBe(200);
+    });
   });
 
   it('"uitloggen op alle andere toestellen" trekt alles behalve het huidige in', async () => {

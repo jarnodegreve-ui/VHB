@@ -880,6 +880,26 @@ const laadAlleSessiesLicht = async (): Promise<SessieDetail[]> => {
   return rijen.map(sessieDetail).filter((s) => s.dag);
 };
 
+/**
+ * Laadminuten per maand, in de database opgeteld (RPC uit
+ * 2026-09-09_ocpi_laadminuten_per_maand.sql). De historiek laadt de sessies
+ * zonder charging_periods, dus zonder deze optelling is de laadtijd daar
+ * onbekend. Ontbreekt de functie nog (migratie niet gedraaid), dan blijft de
+ * kolom stil op "onbekend" staan — nooit op 0.
+ */
+const laadMinutenPerMaand = async (): Promise<Map<string, number>> => {
+  try {
+    const { data, error } = await db!.rpc("ocpi_laadminuten_per_maand");
+    if (error) throw error;
+    return new Map(((data ?? []) as any[]).map((r) => [String(r.maand), Number(r.laad_min) || 0]));
+  } catch (e: any) {
+    if (!/does not exist|42883|schema cache|PGRST202/i.test(String(e?.message ?? e))) {
+      console.error("[ocpi] laadminuten per maand mislukt:", e?.message ?? e);
+    }
+    return new Map();
+  }
+};
+
 /** ocpi_dagpieken kan nog ontbreken (migratie niet gedraaid): dan stil leeg. */
 const leesDagpiekenTabel = async (van?: string, tot?: string): Promise<Map<string, DagPiek>> => {
   try {
@@ -1212,8 +1232,11 @@ export const mountOcpiRoutes = (app: express.Express) => {
     if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
     try {
       const huidigeMaand = huidigeBrusselseMaand();
-      const [evses, sessies, pieken] = await Promise.all([laadEvses(), laadAlleSessiesLicht(), laadAlleDagpieken()]);
-      const maanden = bouwMaanden(sessies, pieken, huidigeMaand);
+      const [evses, sessies, pieken, laadMin] = await Promise.all([laadEvses(), laadAlleSessiesLicht(), laadAlleDagpieken(), laadMinutenPerMaand()]);
+      // De sessies kwamen zonder charging_periods binnen, dus bouwMaanden laat
+      // laadMin op null staan; de in de database opgetelde waarde vult dat aan.
+      const maanden = bouwMaanden(sessies, pieken, huidigeMaand)
+        .map((m) => ({ ...m, laadMin: laadMin.has(m.maand) ? laadMin.get(m.maand)! : m.laadMin }));
       const matrix = bouwPuntMatrix(sessies, maanden.map((m) => m.maand), evses);
       if (queryTekst(req)("format") === "xlsx") {
         const buffer = bouwHistoriekXlsx({ maanden, matrix, busVan: busVoorLaadpunt, gemaaktOp: nowIso() });

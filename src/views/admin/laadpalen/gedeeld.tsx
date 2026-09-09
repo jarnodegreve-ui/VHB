@@ -337,7 +337,9 @@ export type Totalen = {
   piekCharging: number | null;
   gemDagpiekKw: number | null;
   piekDagen: number;
-  laadMin: number;
+  /** Som van de effectieve laadtijd in minuten; null = onbekend. De historiek
+   *  laadt sessies zonder charging_periods, daar is dit altijd null. */
+  laadMin: number | null;
 };
 
 export type MaandRij = Totalen & { maand: string; dagen: number; klassen: Record<string, number> };
@@ -364,8 +366,10 @@ export const downloadXlsx = async (url: string, naam: string): Promise<void> => 
   try {
     const res = await apiFetch(url);
     if (!res.ok) throw new Error(String(res.status));
+    // downloadBlob meldt zelf wat er gebeurde (deelblad, download, of een
+    // Bewaren-knop als de gesture verlopen was); een eigen succes-toast zou
+    // in standalone succes claimen dat er niet was.
     await downloadBlob(naam, await res.blob());
-    notify('Excel gedownload.', 'success');
   } catch {
     notify('Exporteren is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
   }
