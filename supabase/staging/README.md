@@ -93,6 +93,8 @@ draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
 57. `supabase/2026-09-07_realtime_presence_private.sql`, presence-kanaal alleen voor actieve staf (security-audit 07-09)
 58. `supabase/2026-09-08_security_snapshot.sql`, `security_snapshot()` voor de nachtelijke beleidsdrift-check (alleen service_role; README › Beleidssnapshot)
 59. `supabase/2026-09-08_ocpi_dagpieken.sql`, permanente dagpieken (kW) voor de laadpalen-historiek + backfill uit de snapshots (raakt grants → beleidssnapshot bijwerken)
+60. `supabase/2026-09-09_user_devices_sessie.sql`, `session_id` op `user_devices` zodat toestel-intrekking niet meer van de client-header afhangt (controle-ronde 09-09)
+61. `supabase/2026-09-09_ocpi_laadminuten_per_maand.sql`, `ocpi_laadminuten_per_maand()` voor de laadtijd in de historiek (alleen service_role)
 
 **Bewust overgeslagen** (alleen zinvol op het historische productieschema; ze
 falen op een verse database):

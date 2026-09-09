@@ -10,7 +10,7 @@ import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfi
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, deletePushSubscriptionsForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
-import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser, invalidateRevokedSessieCache } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
@@ -263,6 +263,14 @@ app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, 
     env: process.env.NODE_ENV,
     time: new Date().toISOString(),
   });
+});
+
+// Kale POST-echo voor de knop "Schrijftest" in Systeemstatus: bevestigt dat
+// POST-routing door Vercel heen werkt zonder ook maar iets te schrijven.
+// Voorheen wees die knop naar /api/test, een route die nooit heeft bestaan,
+// waardoor de test structureel 404 gaf en een serverprobleem suggereerde.
+app.post("/api/health/echo", authenticate, requireRole("admin"), (req: AuthenticatedRequest, res) => {
+  res.json({ status: "ok", ontvangen: typeof req.body === "object" && req.body !== null, time: new Date().toISOString() });
 });
 
 // Testmail naar de ingelogde admin zelf: de enige manier om te bevestigen dat
@@ -2122,6 +2130,7 @@ app.post("/api/users/:id/uitdienst", authenticate, requireRole("admin"), async (
     let toestellen = 0;
     try {
       toestellen = await revokeAllDevices(id);
+      invalidateRevokedSessieCache();
       stappen.push({ stap: "toestellen", ok: true, detail: `${toestellen} toestel${toestellen === 1 ? "" : "len"} ingetrokken.` });
     } catch (err: any) {
       if (isMissingTableError(err)) stappen.push({ stap: "toestellen", ok: true, detail: "Geen toestel-tabel, niets in te trekken." });

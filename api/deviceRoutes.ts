@@ -1,6 +1,6 @@
 import type express from "express";
 import { createHash } from "node:crypto";
-import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache } from "./middleware.js";
+import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache, invalidateRevokedSessieCache, sessieUitJwt } from "./middleware.js";
 import { DEVICE_GATE_SETTING_KEY, isMissingTableError } from "./deviceGate.js";
 import { sendPushToUsers } from "./push.js";
 import {
@@ -108,6 +108,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       for (const d of anderen) {
         await setDeviceStatus(String(appUser.id), d.deviceToken, "revoked", String(appUser.id));
       }
+      invalidateRevokedSessieCache();
       if (anderen.length > 0) {
         await logActivity(req, "system", "Uitgelogd op andere toestellen", `${appUser.name}: ${anderen.length} toestel${anderen.length === 1 ? "" : "len"} ingetrokken.`);
       }
@@ -134,6 +135,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       }
       if (toestel.status !== "revoked") {
         await setDeviceStatus(String(appUser.id), toestel.deviceToken, "revoked", String(appUser.id));
+        invalidateRevokedSessieCache();
         await logActivity(req, "system", "Toestel uitgelogd", `${appUser.name}: ${toestel.name}.`);
       }
       res.json({ success: true, id, status: "revoked" });
@@ -172,7 +174,9 @@ export const mountDeviceRoutes = (app: express.Express) => {
       const autoApprove = appUser.role !== "chauffeur" || !gateEnabled
         ? true
         : !(await userHasDevices(String(appUser.id)));
-      let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove);
+      // Sessie uit het geverifieerde JWT vastleggen op de toestelrij: daarmee
+      // herkent de gate een ingetrokken toestel ook zonder de client-header.
+      let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove, sessieUitJwt(String(req.accessToken ?? "")));
       // Bestond het toestel al als 'wachtend' terwijl de schakelaar uit
       // staat: alsnog goedkeuren (zelfde belofte: elke login komt erin).
       // Geblokkeerd blijft geblokkeerd — de schakelaar heropent geen
@@ -219,7 +223,9 @@ export const mountDeviceRoutes = (app: express.Express) => {
 
   app.get("/api/devices", authenticate, requireRole("admin"), async (_req, res) => {
     try {
-      res.json(await listAllDevices());
+      // sessionId blijft server-side: die is alleen voor de gate en heeft in de
+      // adminbrowser niets te zoeken (SQL-review 09-09).
+      res.json((await listAllDevices()).map(({ sessionId: _sessionId, ...toestel }) => toestel));
     } catch (err: any) {
       console.error("Toestellen laden is mislukt.", err);
       res.status(500).json({ error: "Toestellen laden is mislukt." });
@@ -300,6 +306,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
         return res.status(400).json({ error: "Je kunt het toestel waarop je nu werkt niet blokkeren." });
       }
       await setDeviceStatus(userId, deviceToken, "revoked", String(req.appUser!.id));
+      invalidateRevokedSessieCache();
       const owner = (await getUsersData()).find((u) => String(u.id) === userId);
       await logActivity(req, "system", "Toestel geblokkeerd", `${owner?.name ?? userId}.`);
       res.json({ success: true });

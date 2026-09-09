@@ -158,8 +158,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         notify(body.error || 'Exporteren is mislukt.', 'error');
         return;
       }
-      await downloadBlob(`planning-${monthParam}.xlsx`, await res.blob());
-      notify('Excel gedownload, dit is de actuele stand, direct her-importeerbaar.', 'success');
+      // Alleen een eigen toast als het bestand ook echt lokaal geland is;
+      // downloadBlob handelt het deelblad en de verlopen-gesture-tik zelf af.
+      const uitkomst = await downloadBlob(`planning-${monthParam}.xlsx`, await res.blob());
+      if (uitkomst === 'gedownload') notify('Dit is de actuele stand, direct her-importeerbaar.', 'success');
     } catch {
       notify('Exporteren is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
     } finally {

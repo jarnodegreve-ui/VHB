@@ -161,7 +161,7 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
         </p>
         ${cancelledNote}
         <div style="margin-top: 30px; text-align: center;">
-          <a href="${url}/verlof" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Bekijk in portaal</a>
+          <a href="${url}/verlof" style="background-color: #E2A323; color: #0D0D0F; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Bekijk in portaal</a>
         </div>
       </div>
       <div style="background-color: #f8fafc; padding: 14px 30px; text-align: center; font-size: 11px; color: #94a3b8;">

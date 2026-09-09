@@ -2196,6 +2196,9 @@ export type UserDevice = {
   lastSeenAt: string;
   approvedAt: string | null;
   approvedBy: string | null;
+  /** Supabase auth session_id van de laatste aanmelding op dit toestel.
+   *  null zolang de migratie 2026-09-09_user_devices_sessie.sql niet draaide. */
+  sessionId: string | null;
 };
 
 const toPublicDevice = (row: any): UserDevice => ({
@@ -2207,7 +2210,17 @@ const toPublicDevice = (row: any): UserDevice => ({
   lastSeenAt: String(row.last_seen_at),
   approvedAt: row.approved_at ? String(row.approved_at) : null,
   approvedBy: row.approved_by ? String(row.approved_by) : null,
+  sessionId: row.session_id ? String(row.session_id) : null,
 });
+
+/**
+ * De kolom session_id komt uit 2026-09-09_user_devices_sessie.sql. Draait die
+ * migratie nog niet, dan mag een deploy niet de hele toestelregistratie
+ * breken: bij een "kolom bestaat niet"-fout (isMissingColumnError hierboven)
+ * zetten we deze vlag om en werken we verder zonder sessiebinding — de
+ * header-gate blijft dan de enige laag.
+ */
+let sessieKolomAanwezig = true;
 
 export const getDevice = async (userId: string, deviceToken: string): Promise<UserDevice | null> => {
   const client = requireDb();
@@ -2232,29 +2245,51 @@ export const registerDevice = async (
   deviceToken: string,
   name: string,
   autoApprove: boolean,
+  sessionId?: string | null,
 ): Promise<{ device: UserDevice; created: boolean }> => {
   const client = requireDb();
   const existing = await getDevice(userId, deviceToken);
   if (existing) {
-    const { error } = await client
+    // Bij elke aanmelding de actuele sessie vastleggen: alleen zo kan de gate
+    // een ingetrokken toestel herkennen zonder de client-header.
+    const patch: Record<string, unknown> = { last_seen_at: new Date().toISOString() };
+    if (sessieKolomAanwezig && sessionId) patch.session_id = sessionId;
+    let { error } = await client
       .from('user_devices')
-      .update({ last_seen_at: new Date().toISOString() })
+      .update(patch)
       .eq('user_id', String(userId))
       .eq('device_token', String(deviceToken));
+    if (error && isMissingColumnError(error) && 'session_id' in patch) {
+      sessieKolomAanwezig = false;
+      console.error('user_devices.session_id ontbreekt, migratie 2026-09-09 nog niet gedraaid:', error);
+      delete patch.session_id;
+      ({ error } = await client
+        .from('user_devices')
+        .update(patch)
+        .eq('user_id', String(userId))
+        .eq('device_token', String(deviceToken)));
+    }
     if (error) throw error;
-    return { device: existing, created: false };
+    return { device: { ...existing, sessionId: sessionId ?? existing.sessionId }, created: false };
   }
-  const row = {
+  const row: Record<string, unknown> = {
     user_id: String(userId),
     device_token: String(deviceToken),
     name: name || 'Onbekend toestel',
     status: (autoApprove ? 'approved' : 'pending') as DeviceStatus,
     approved_at: autoApprove ? new Date().toISOString() : null,
     approved_by: autoApprove ? 'auto' : null,
+    ...(sessieKolomAanwezig && sessionId ? { session_id: sessionId } : {}),
   };
   // Race (dubbele boot-call): bij een PK-conflict is de rij er al — negeren
   // en de bestaande status teruggeven i.p.v. een 500.
-  const { error } = await client.from('user_devices').insert(row);
+  let { error } = await client.from('user_devices').insert(row);
+  if (error && isMissingColumnError(error) && 'session_id' in row) {
+    sessieKolomAanwezig = false;
+    console.error('user_devices.session_id ontbreekt, migratie 2026-09-09 nog niet gedraaid:', error);
+    delete row.session_id;
+    ({ error } = await client.from('user_devices').insert(row));
+  }
   if (error) {
     if ((error as any).code === '23505') {
       const raced = await getDevice(userId, deviceToken);
@@ -2284,6 +2319,31 @@ export const listAllDevices = async (): Promise<UserDevice[]> => {
     client.from('user_devices').select('*').order('created_at', { ascending: false }).range(from, to),
   );
   return rows.map(toPublicDevice);
+};
+
+/**
+ * De sessies die bij een ingetrokken toestel horen. De gate gebruikt dit om
+ * een verzoek te blokkeren op basis van het (geverifieerde) JWT in plaats van
+ * de X-Device-Token-header, die een aanvaller simpelweg kan weglaten.
+ * Ingetrokken toestellen zijn zeldzaam, dus dit is een korte lijst.
+ */
+export const listRevokedSessionIds = async (): Promise<string[]> => {
+  if (!sessieKolomAanwezig) return [];
+  const client = requireDb();
+  const { data, error } = await client
+    .from('user_devices')
+    .select('session_id')
+    .eq('status', 'revoked')
+    .not('session_id', 'is', null);
+  if (error) {
+    if (isMissingColumnError(error)) {
+      sessieKolomAanwezig = false;
+      console.error('user_devices.session_id ontbreekt, migratie 2026-09-09 nog niet gedraaid:', error);
+      return [];
+    }
+    throw error;
+  }
+  return (data ?? []).map((r: any) => String(r.session_id)).filter(Boolean);
 };
 
 export const setDeviceStatus = async (

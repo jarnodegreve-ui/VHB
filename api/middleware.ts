@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { supabase } from "./db.js";
 import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
-import { getAppSetting, getDevice, koppelAuthId } from "./storage.js";
+import { getAppSetting, getDevice, koppelAuthId, listRevokedSessionIds } from "./storage.js";
 import { getOnderhoud } from "./_lib/onderhoud.js";
 import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
 import { getUsersCached, invalidateUsersCache } from "./userCache.js";
@@ -38,6 +38,44 @@ export const isDeviceGateEnabled = async (): Promise<boolean> => {
 };
 /** Na een wijziging via de API meteen de nieuwe waarde laten gelden. */
 export const invalidateDeviceGateCache = () => { gateSettingCache = null; };
+
+// Ingetrokken toestellen, herkend aan de auth-sessie i.p.v. de client-header
+// (controle-ronde 09-09, nr. 2). De X-Device-Token-header komt van de client:
+// wie hem wegliet viel voor staf volledig buiten de gate en werd voor
+// chauffeurs een "onbekend" toestel, waardoor intrekken te omzeilen was. De
+// session_id-claim zit in het al geverifieerde JWT en is dus niet weg te
+// laten. Kort gecacht + expliciet ongeldig gemaakt bij intrekken, zodat dit
+// geen query per request kost maar wel meteen werkt.
+let revokedSessieCache: { sessies: Set<string>; at: number } | null = null;
+export const getRevokedSessies = async (): Promise<Set<string>> => {
+  if (revokedSessieCache && Date.now() - revokedSessieCache.at < 30_000) return revokedSessieCache.sessies;
+  let sessies = new Set<string>();
+  try {
+    sessies = new Set(await listRevokedSessionIds());
+  } catch (err) {
+    // Fail-open op déze laag: de header-gate hieronder blijft de bestaande
+    // bescherming. Een DB-hik mag geen volledige lock-out geven.
+    console.error("Kon ingetrokken sessies niet ophalen:", err);
+    return revokedSessieCache?.sessies ?? new Set<string>();
+  }
+  revokedSessieCache = { sessies, at: Date.now() };
+  return sessies;
+};
+/** Meteen laten gelden na een intrekking. */
+export const invalidateRevokedSessieCache = () => { revokedSessieCache = null; };
+
+/** Leest de `session_id`-claim uit een al geverifieerd JWT. Alleen aanroepen
+ *  ná verificatie, de payload wordt hier niet gecontroleerd. */
+export const sessieUitJwt = (token: string): string | null => {
+  try {
+    const deel = token.split(".")[1] ?? "";
+    const json = Buffer.from(deel.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    const sid = (JSON.parse(json) as { session_id?: unknown }).session_id;
+    return typeof sid === "string" && sid ? sid : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Timing-veilige CRON_SECRET-controle. Beide kanten worden eerst gehasht
@@ -259,6 +297,19 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   // zónder DB-lookup.
   const rawToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
   const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
+
+  // Sessiegebonden intrekking, vóór de header-gate: hoort het JWT waarmee dit
+  // verzoek binnenkomt bij een ingetrokken toestel, dan is de header
+  // irrelevant. Dit sluit het gat waarbij een ingetrokken staf-toestel (of een
+  // chauffeurstoestel terwijl de schakelaar uit staat) de gate omzeilde door
+  // X-Device-Token simpelweg weg te laten.
+  if (!DEVICE_GATE_EXEMPT.has(req.path)) {
+    const sessie = sessieUitJwt(accessToken);
+    if (sessie && (await getRevokedSessies()).has(sessie)) {
+      return res.status(403).json({ error: "Dit toestel is uitgelogd voor dit account. Meld je opnieuw aan.", code: "device_revoked" });
+    }
+  }
+
   const gateVanToepassing = appUser.role === "chauffeur" || deviceToken.length > 0;
   if (gateVanToepassing && !DEVICE_GATE_EXEMPT.has(req.path)) {
     let device: { status: string } | null = null;

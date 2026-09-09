@@ -430,7 +430,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       setIsTesting(true);
       setTestResult(null);
 
-      const testResponse = await apiFetch('/api/test', {
+      const testResponse = await apiFetch('/api/health/echo', {
         method: 'POST',
         body: JSON.stringify({ test: true }),
       });
