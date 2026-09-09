@@ -4939,3 +4939,39 @@ describe('rol technieker', () => {
     expect(res.json.code).toBe('device_revoked');
   });
 });
+
+// Wissels uit de geschiedenis wissen (Jarno 09-09, om testwissels op te
+// ruimen): staf laat de rij weg uit de payload. Afgewezen/ingetrokken mag,
+// doorgevoerd niet (die zit in de heropbouw-replay).
+describe('dienstruil: afgehandelde wissels wissen', () => {
+  it('admin wist een afgewezen wissel van een ander, met auditspoor', async () => {
+    mem.swaps.push({ id: 's-test', requesterId: '4', shiftId: 'sh-x', targetDriverId: '3', status: 'rejected', createdAt: '2026-09-01T08:00:00Z' });
+    invalidateUsersCache();
+    const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.filter((s: any) => s.id !== 's-test') });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.some((s: any) => s.id === 's-test')).toBe(false);
+    expect(mem.activity.some((a: any) => a.action === 'Dienstruil verwijderd' && a.entityId === 's-test')).toBe(true);
+  });
+
+  it('een planner kan een doorgevoerde wissel niet wissen (403); een admin bewust wel', async () => {
+    mem.swaps.push({ id: 's-klaar', requesterId: '4', shiftId: 'sh-y', targetDriverId: '3', status: 'completed', createdAt: '2026-09-01T08:00:00Z' });
+    const planner = await api('POST', '/api/swaps', { token: 'tok-planner', body: mem.swaps.filter((s: any) => s.id !== 's-klaar') });
+    expect(planner.status).toBe(403);
+    expect(mem.swaps.some((s: any) => s.id === 's-klaar')).toBe(true);
+    // De UI biedt dit ook een admin niet aan (de wisknop staat alleen bij
+    // afgewezen/ingetrokken), maar de server laat het een admin toe.
+    const admin = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.filter((s: any) => s.id !== 's-klaar') });
+    expect(admin.status).toBe(200);
+    expect(mem.swaps.some((s: any) => s.id === 's-klaar')).toBe(false);
+  });
+
+  it('een chauffeur die andermans afgewezen wissel weglaat, wist hem niet', async () => {
+    mem.swaps.push({ id: 's-ander', requesterId: '4', shiftId: 'sh-z', targetDriverId: '2', status: 'rejected', createdAt: '2026-09-01T08:00:00Z' });
+    // Chauffeur A stuurt alles waar hij zelf bij betrokken is ongewijzigd
+    // door en laat de rij van B weg: die is voor hem geen intrekking.
+    const eigen = mem.swaps.filter((s: any) => String(s.requesterId) === '3' || String(s.targetDriverId) === '3');
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: eigen });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.some((s: any) => s.id === 's-ander')).toBe(true);
+  });
+});
