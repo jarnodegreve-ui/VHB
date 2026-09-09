@@ -11,7 +11,7 @@ import { Avatar } from '../components/Avatar';
 import { Field, Select, Textarea } from '../components/Field';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { DetailPaneel } from '../components/DetailPaneel';
-import { verlofBalans, daysBetween } from '../lib/leaveBalance';
+import { verlofBalans, verlofDagen } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
@@ -180,6 +180,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   /** Andere chauffeurs (niet `exclUserId`) met goedgekeurd verlof op deze dag. */
   const anderenAfwezigOp = (dag: string, exclUserId: string) =>
     verlofRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(exclUserId) && r.startDate <= dag && r.endDate >= dag).length;
+  /** Bevat de periode een zondag? Zo ja, dan verschilt het aantal verlofdagen
+   *  van het aantal kalenderdagen en zetten we dat er expliciet bij — anders
+   *  oogt een week van 6 dagen als een telfout. */
+  const bevatZondag = (van: string, tot: string) => dagenVan(van, tot).some((d) => new Date(`${d}T00:00:00`).getDay() === 0);
+
   /** Dagen van een periode waarop deze chauffeur erbij de verloflimiet overschrijdt. */
   const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) =>
     dagenVan(van, tot)
@@ -249,7 +254,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     const requestedYear = parseInt(formData.startDate.slice(0, 4), 10);
     // DST-veilig tellen via UTC (zie leaveBalance.daysBetween) — lokale
     // middernacht + floor telde 1 dag te weinig over de lente-DST-zondag.
-    const requestedDays = daysBetween(formData.startDate, formData.endDate);
+    // Zondagen tellen niet als verlofdag (regel Jarno 09-09).
+    const requestedDays = verlofDagen(formData.startDate, formData.endDate);
     if (requestedDays <= 0) return null;
 
     // Saldo en conflicten van dégene voor wie je aanvraagt — anders keek een
@@ -556,7 +562,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         {reviewLeave && (() => {
           const requester = users.find((u) => u.id === reviewLeave.userId);
           const conflictShifts = shiftsConflictingWithLeave(shifts, reviewLeave);
-          const dayCount = Math.max(1, daysBetween(reviewLeave.startDate, reviewLeave.endDate));
+          // Geen Math.max(1, …): een periode van alleen zondagen is écht 0
+          // verlofdagen, en dat moet de beoordelaar ook zo zien.
+          const dayCount = verlofDagen(reviewLeave.startDate, reviewLeave.endDate);
           const requestYear = parseInt(reviewLeave.startDate.slice(0, 4), 10);
           const balance = verlofBalans(leaveRequests, reviewLeave.userId, requestYear, requester?.verlofBudget);
           const exceeds = reviewLeave.type === 'betaald_verlof'
@@ -577,8 +585,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 <MicroLabel className="text-slate-500">Periode</MicroLabel>
                 <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
                   {reviewLeave.startDate}{reviewLeave.startDate !== reviewLeave.endDate ? ` → ${reviewLeave.endDate}` : ''}
-                  <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'dag' : 'dagen'})</span>
+                  <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'verlofdag' : 'verlofdagen'})</span>
                 </p>
+                {bevatZondag(reviewLeave.startDate, reviewLeave.endDate) && (
+                  <p className="mt-1 text-2xs font-normal text-slate-500">Zondagen tellen niet mee als verlofdag.</p>
+                )}
               </Card>
 
               {/* Saldo-context van de aanvrager — beslis met het budget in beeld. */}
@@ -1100,7 +1111,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-semibold">
-                            {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'dag' : 'dagen'} {registratie ? 'vast te leggen' : 'aangevraagd'}
+                            {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'verlofdag' : 'verlofdagen'} {registratie ? 'vast te leggen' : 'aangevraagd'}
                           </span>
                           <span className="font-bold tabular-nums">
                             {requestPreview.gebruikt + requestPreview.requestedDays} / {requestPreview.budget}
@@ -1110,6 +1121,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           {requestPreview.wouldExceed
                             ? `⚠ ${Math.abs(requestPreview.remainingAfter)} ${Math.abs(requestPreview.remainingAfter) === 1 ? 'dag' : 'dagen'} boven ${namensIemandAnders ? 'het' : 'je'} jaarbudget.${registratie ? ' Controleer het papier.' : namensIemandAnders ? '' : ' Planner moet beoordelen.'}`
                             : `${requestPreview.remainingAfter} ${requestPreview.remainingAfter === 1 ? 'dag' : 'dagen'} resterend na deze ${registratie ? 'periode' : 'aanvraag'}.`}
+                          {bevatZondag(formData.startDate, formData.endDate) ? ' Zondagen tellen niet mee.' : ''}
                         </p>
                       </Card>
                     )}
@@ -1172,7 +1184,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             <li key={r.id} className="flex items-center justify-between gap-3 text-xs">
                               <span className="tabular-nums text-slate-700">
                                 {r.startDate === r.endDate ? formatShortDay(r.startDate) : `${formatShortDay(r.startDate)} tot ${formatShortDay(r.endDate)}`}
-                                <span className="ml-1.5 text-slate-500">({daysBetween(r.startDate, r.endDate)} {daysBetween(r.startDate, r.endDate) === 1 ? 'dag' : 'dagen'})</span>
+                                <span className="ml-1.5 text-slate-500">({verlofDagen(r.startDate, r.endDate)} {verlofDagen(r.startDate, r.endDate) === 1 ? 'dag' : 'dagen'})</span>
                               </span>
                               <Badge tone={r.type === 'betaald_verlof' ? 'oker' : 'slate'} stil>{formatLeaveType(r.type)}</Badge>
                             </li>

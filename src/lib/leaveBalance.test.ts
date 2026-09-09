@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { LeaveRequest } from '../types';
-import { BETAALD_VERLOF_BUDGET, verlofBalans } from './leaveBalance';
+import { BETAALD_VERLOF_BUDGET, daysBetween, verlofBalans, verlofDagen } from './leaveBalance';
 
 const leave = (
   id: string,
@@ -32,12 +32,12 @@ describe('verlofBalans, basis', () => {
     expect(balance.kleinVerletDagen).toBe(0);
   });
 
-  it('één goedgekeurde verlofperiode telt elke dag inclusief', () => {
+  it('een verlofperiode telt elke dag inclusief, behalve zondag', () => {
+    // wo 1 t/m zo 5 juli 2026 = 5 kalenderdagen, maar zondag telt niet mee.
     const leaves = [leave('l1', 'driver-1', '2026-07-01', '2026-07-05')];
     const balance = verlofBalans(leaves, 'driver-1', 2026);
-    // 1, 2, 3, 4, 5 = 5 dagen
-    expect(balance.betaaldGebruikt).toBe(5);
-    expect(balance.betaaldResterend).toBe(19);
+    expect(balance.betaaldGebruikt).toBe(4);
+    expect(balance.betaaldResterend).toBe(20);
   });
 
   it('één-daagse verlof telt als 1 dag', () => {
@@ -48,13 +48,13 @@ describe('verlofBalans, basis', () => {
 
   it('meerdere verlofperiodes worden opgeteld', () => {
     const leaves = [
-      leave('l1', 'driver-1', '2026-04-01', '2026-04-02'), // 2
-      leave('l2', 'driver-1', '2026-07-15', '2026-07-20'), // 6
-      leave('l3', 'driver-1', '2026-12-23', '2026-12-30'), // 8
+      leave('l1', 'driver-1', '2026-04-01', '2026-04-02'), // wo-do = 2
+      leave('l2', 'driver-1', '2026-07-15', '2026-07-20'), // wo-ma, 1 zondag = 5
+      leave('l3', 'driver-1', '2026-12-23', '2026-12-30'), // wo-wo, 1 zondag = 7
     ];
     const balance = verlofBalans(leaves, 'driver-1', 2026);
-    expect(balance.betaaldGebruikt).toBe(16);
-    expect(balance.betaaldResterend).toBe(8);
+    expect(balance.betaaldGebruikt).toBe(14);
+    expect(balance.betaaldResterend).toBe(10);
   });
 });
 
@@ -64,18 +64,18 @@ describe('verlofBalans, filtering', () => {
       leave('l1', 'driver-1', '2026-07-01', '2026-07-05'),
       leave('l2', 'driver-2', '2026-07-01', '2026-07-10'),
     ];
-    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(5);
-    expect(verlofBalans(leaves, 'driver-2', 2026).betaaldGebruikt).toBe(10);
+    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(4); // wo-zo, 1 zondag
+    expect(verlofBalans(leaves, 'driver-2', 2026).betaaldGebruikt).toBe(9); // wo-vr, 1 zondag
   });
 
   it('telt alleen approved (geen pending/rejected/cancelled)', () => {
     const leaves = [
-      leave('l1', 'driver-1', '2026-07-01', '2026-07-05', 'approved'), // 5
+      leave('l1', 'driver-1', '2026-07-01', '2026-07-05', 'approved'), // wo-zo = 4
       leave('l2', 'driver-1', '2026-07-10', '2026-07-12', 'pending'),
       leave('l3', 'driver-1', '2026-07-15', '2026-07-20', 'rejected'),
       leave('l4', 'driver-1', '2026-07-25', '2026-07-27', 'cancelled'),
     ];
-    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(5);
+    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(4);
   });
 
   it('telt verlof per type apart (betaald_verlof vs klein_verlet)', () => {
@@ -92,9 +92,9 @@ describe('verlofBalans, filtering', () => {
 describe('verlofBalans, jaargrenzen (clipping)', () => {
   it('verlof dat in het vorige jaar start, telt alleen de dagen IN het opgegeven jaar', () => {
     const leaves = [leave('l1', 'driver-1', '2025-12-28', '2026-01-03')];
-    // 2025: 28, 29, 30, 31 → 4 dagen
-    // 2026: 1, 2, 3 → 3 dagen
-    expect(verlofBalans(leaves, 'driver-1', 2025).betaaldGebruikt).toBe(4);
+    // 2025: zo 28 telt niet, ma 29 t/m wo 31 → 3 dagen
+    // 2026: do 1 t/m za 3 → 3 dagen
+    expect(verlofBalans(leaves, 'driver-1', 2025).betaaldGebruikt).toBe(3);
     expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(3);
   });
 
@@ -112,9 +112,10 @@ describe('verlofBalans, jaargrenzen (clipping)', () => {
 
 describe('verlofBalans, over budget', () => {
   it('gebruikt > budget → resterend = 0 (nooit negatief)', () => {
-    const leaves = [leave('l1', 'driver-1', '2026-01-01', '2026-01-31')]; // 31 dagen
+    // do 1 t/m za 31 januari 2026 = 31 kalenderdagen, 4 zondagen → 27 verlofdagen.
+    const leaves = [leave('l1', 'driver-1', '2026-01-01', '2026-01-31')];
     const balance = verlofBalans(leaves, 'driver-1', 2026);
-    expect(balance.betaaldGebruikt).toBe(31);
+    expect(balance.betaaldGebruikt).toBe(27);
     expect(balance.betaaldResterend).toBe(0);
   });
 });
@@ -122,23 +123,24 @@ describe('verlofBalans, over budget', () => {
 describe('verlofBalans, zomertijd (DST)', () => {
   it('verlofperiode over de overgang naar zomertijd telt elke dag inclusief', () => {
     // 2026: zomertijd begint zondag 29 maart (die lokale dag is maar 23u).
-    // 28, 29, 30 maart = 3 dagen — vroeger telde floor() er maar 2.
+    // za 28 + ma 30 = 2 verlofdagen; zondag 29 telt niet mee. De DST-val zat
+    // in de kalenderberekening zelf, die blijft hier bewaakt.
     const leaves = [leave('l1', 'driver-1', '2026-03-28', '2026-03-30')];
-    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(3);
+    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(2);
   });
 
   it('volledige week rond de zomertijd-overgang telt correct', () => {
-    const leaves = [leave('l1', 'driver-1', '2026-03-23', '2026-03-31')]; // 9 dagen
-    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(9);
+    const leaves = [leave('l1', 'driver-1', '2026-03-23', '2026-03-31')]; // ma-di, 9 kalenderdagen
+    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(8);
   });
 });
 
 describe('verlofBalans, custom budget per gebruiker', () => {
   it('respecteert verlofBudget veld op user (bv. anciënniteit/deeltijds)', () => {
-    const leaves = [leave('l1', 'driver-1', '2026-07-01', '2026-07-05')]; // 5 dagen
+    const leaves = [leave('l1', 'driver-1', '2026-07-01', '2026-07-05')]; // wo-zo = 4
     const balance = verlofBalans(leaves, 'driver-1', 2026, 30);
     expect(balance.betaaldBudget).toBe(30);
-    expect(balance.betaaldResterend).toBe(25);
+    expect(balance.betaaldResterend).toBe(26);
   });
 
   it('budget=0 is geldig (geen recht op verlof)', () => {
@@ -164,10 +166,10 @@ describe('verlofBalans, aangevraagd (pending)', () => {
       aanvraag('a', '2026-07-01', '2026-07-05', 'approved'),
       aanvraag('p', '2026-08-10', '2026-08-12', 'pending'),
     ], 'driver-1', 2026);
-    expect(balance.betaaldGebruikt).toBe(5);
-    expect(balance.betaaldAangevraagd).toBe(3);
-    expect(balance.betaaldResterend).toBe(19);
-    expect(balance.betaaldVrij).toBe(16);
+    expect(balance.betaaldGebruikt).toBe(4); // wo-zo, 1 zondag
+    expect(balance.betaaldAangevraagd).toBe(3); // ma-wo
+    expect(balance.betaaldResterend).toBe(20);
+    expect(balance.betaaldVrij).toBe(17);
   });
 
   it('afgewezen, ingetrokken en klein-verlet-aanvragen tellen niet als aangevraagd', () => {
@@ -181,8 +183,65 @@ describe('verlofBalans, aangevraagd (pending)', () => {
   });
 
   it('vrij wordt nooit negatief', () => {
+    // do 1 jan t/m zo 15 feb = 46 kalenderdagen, 7 zondagen → 39 verlofdagen.
     const balance = verlofBalans([aanvraag('p', '2026-01-01', '2026-02-15', 'pending')], 'driver-1', 2026);
-    expect(balance.betaaldAangevraagd).toBe(46);
+    expect(balance.betaaldAangevraagd).toBe(39);
     expect(balance.betaaldVrij).toBe(0);
+  });
+});
+
+describe('verlofDagen: maandag t/m zaterdag telt, zondag nooit (Jarno 09-09)', () => {
+  it('telt een volledige week als 6 dagen, ongeacht waar ze begint', () => {
+    expect(verlofDagen('2026-09-07', '2026-09-13')).toBe(6); // ma t/m zo
+    expect(verlofDagen('2026-09-13', '2026-09-19')).toBe(6); // zo t/m za
+    expect(verlofDagen('2026-09-10', '2026-09-16')).toBe(6); // do t/m wo
+  });
+
+  it('maandag t/m zaterdag telt volledig mee', () => {
+    expect(verlofDagen('2026-09-07', '2026-09-12')).toBe(6);
+  });
+
+  it('een losse zondag is 0 verlofdagen', () => {
+    expect(verlofDagen('2026-09-13', '2026-09-13')).toBe(0);
+  });
+
+  it('losse werkdagen tellen als 1', () => {
+    expect(verlofDagen('2026-09-07', '2026-09-07')).toBe(1); // maandag
+    expect(verlofDagen('2026-09-12', '2026-09-12')).toBe(1); // zaterdag
+  });
+
+  it('twee weken = 12, drie weken = 18', () => {
+    expect(verlofDagen('2026-09-07', '2026-09-20')).toBe(12);
+    expect(verlofDagen('2026-09-07', '2026-09-27')).toBe(18);
+  });
+
+  it('laat kalenderdagen ongemoeid (ziekte en aftelteksten rekenen zo)', () => {
+    expect(daysBetween('2026-09-07', '2026-09-13')).toBe(7);
+    expect(daysBetween('2026-09-13', '2026-09-13')).toBe(1);
+  });
+
+  it('geeft 0 bij een omgekeerde of lege periode', () => {
+    expect(verlofDagen('2026-09-13', '2026-09-07')).toBe(0);
+    expect(verlofDagen('', '')).toBe(0);
+  });
+
+  it('telt correct over de zomertijdovergang (laatste zondag van maart)', () => {
+    // za 28 t/m ma 30 maart 2026: zondag 29 valt weg, dus 2 dagen.
+    expect(daysBetween('2026-03-28', '2026-03-30')).toBe(3);
+    expect(verlofDagen('2026-03-28', '2026-03-30')).toBe(2);
+  });
+});
+
+describe('verlofbalans met de zondagregel', () => {
+  it('klein verlet telt ook zonder zondag', () => {
+    const leaves = [leave('l1', 'driver-1', '2026-09-11', '2026-09-14', 'approved', 'klein_verlet')]; // vr-ma
+    expect(verlofBalans(leaves, 'driver-1', 2026).kleinVerletDagen).toBe(3);
+  });
+
+  it('een aanvraag over de jaargrens telt alleen de dagen in dat jaar, zonder zondag', () => {
+    const leaves = [leave('l1', 'driver-1', '2026-12-28', '2027-01-03')]; // ma t/m zo
+    // 2026: ma 28 t/m do 31 = 4 · 2027: vr 1 t/m zo 3 = 2 (zondag valt weg)
+    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(4);
+    expect(verlofBalans(leaves, 'driver-1', 2027).betaaldGebruikt).toBe(2);
   });
 });
