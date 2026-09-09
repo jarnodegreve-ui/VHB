@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, X, Check } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, X, Check, Trash2 } from 'lucide-react';
+import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
@@ -148,6 +149,26 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
+
+  /** Kan staf deze wissel uit de geschiedenis wissen? Alleen afgewezen of
+   *  ingetrokken: een doorgevoerde (approved/completed) zit in de
+   *  heropbouw-replay en weigert de server bewust (annuleren draait de
+   *  planning wél mee terug). Bedoeld om testwissels op te ruimen (Jarno
+   *  09-09). */
+  const kanWissen = (swap: SwapRequest) => isStaf(user.role) && (swap.status === 'rejected' || swap.status === 'cancelled');
+  /** Wissen met bevestiging, niet met een ongedaan-toast: een afgewezen
+   *  wissel opnieuw aanmaken weigert de server (alleen 'pending' mag nieuw),
+   *  dus een weg terug is er niet. */
+  const vraagWissen = (swap: SwapRequest) => {
+    const naam = users.find((u) => u.id === swap.requesterId)?.name ?? 'de aanvrager';
+    setConfirmAction({
+      title: 'Wissel uit de geschiedenis wissen',
+      message: `Deze ${swap.status === 'rejected' ? 'afgewezen' : 'ingetrokken'} wissel van ${naam} definitief wissen? Dit kan niet ongedaan gemaakt worden; het activiteitenlog houdt wel bij dat hij verwijderd is.`,
+      confirmText: 'Wissen',
+      variant: 'danger',
+      run: () => { void onSave(swaps.filter((s) => s.id !== swap.id)); },
+    });
+  };
   const todayIso = isoDate(new Date());
   // Alleen kómende eigen diensten, chronologisch — verleden diensten ruilen
   // heeft geen zin en vulde de keuzelijst nodeloos.
@@ -471,6 +492,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             Aanvraag intrekken
                           </Button>
                         )}
+                        {kanWissen(swap) && (
+                          <Button variant="ghost" size="sm" full className="mt-2 text-red-700 hover:text-red-700 hover:bg-red-50" icon={<Trash2 size={14} />} onClick={() => vraagWissen(swap)}>
+                            Uit geschiedenis wissen
+                          </Button>
+                        )}
                       </div>
                     )}
                   </Card>
@@ -765,6 +791,53 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 })}
               </div>
             </TableShell>
+          </div>
+        );
+      })()}
+
+      {/* Afgehandeld (alleen staf): afgewezen en ingetrokken wissels van
+          iedereen, met een wisknop om testwissels op te ruimen (Jarno 09-09).
+          Doorgevoerde wissels staan er ter info bij, maar zonder wisknop: die
+          zitten in de heropbouw-replay en gaan via Annuleren. Compact en
+          gecapt op 30, nieuwste eerst; de tabel hierboven blijft de plek voor
+          wat nog actie vraagt. */}
+      {isStaf(user.role) && (() => {
+        const afgehandeld = swaps
+          .filter((s) => s.status === 'rejected' || s.status === 'cancelled' || s.status === 'completed')
+          .sort((a, b) => String(b.decidedAt ?? b.createdAt ?? '').localeCompare(String(a.decidedAt ?? a.createdAt ?? '')))
+          .slice(0, 30);
+        if (afgehandeld.length === 0) return null;
+        return (
+          <div className="space-y-3">
+            <MicroLabel className="text-slate-500 ml-1">Afgehandeld</MicroLabel>
+            <Card padding="none" className="divide-y divide-slate-100">
+              {afgehandeld.map((swap) => {
+                const info = shiftInfoFor(swap);
+                const requester = users.find((u) => u.id === swap.requesterId);
+                return (
+                  <div key={swap.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="text-sm font-semibold text-slate-800 truncate">{requester?.name ?? 'Onbekend'}</span>
+                      <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
+                        Dienst {info.line}{info.date ? ` · ${formatDateHuman(info.date)}` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <StatusBadge status={swap.status} stil />
+                      {kanWissen(swap) ? (
+                        <IconButton label="Uit geschiedenis wissen" size="sm" variant="ghost" className="text-red-700 hover:text-red-700 hover:bg-red-50" onClick={() => vraagWissen(swap)}>
+                          <Trash2 size={16} />
+                        </IconButton>
+                      ) : (
+                        <IconButton label="Doorgevoerde wissel: annuleren i.p.v. wissen" size="sm" variant="ghost" disabled>
+                          <Trash2 size={16} />
+                        </IconButton>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
           </div>
         );
       })()}
