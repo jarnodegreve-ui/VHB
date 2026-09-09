@@ -16,6 +16,7 @@ import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
 import { KIND_CLS, KIND_LABEL, celChipClass, celTextClass } from '../lib/planningKind';
+import { isStaf } from '../types';
 import type { User } from '../types';
 import { formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
@@ -101,7 +102,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // alleen hun eigen notities; planners alles.
   const [notes, setNotes] = useState<Map<string, string>>(new Map());
   const noteKey = (driverId: string, iso: string) => `${driverId}:${iso}`;
-  const canEditNotes = currentUser.role !== 'chauffeur';
+  const canEditNotes = isStaf(currentUser.role);
   const monthFrom = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
   const monthTo = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(new Date(year, monthIndex + 1, 0).getDate()).padStart(2, '0')}`;
   const loadNotes = async () => {

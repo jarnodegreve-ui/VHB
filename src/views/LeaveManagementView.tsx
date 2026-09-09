@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, History, Plus, Printer, SlidersHorizontal, X } from 'lucide-react';
+import { isRijdend } from '../types';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
@@ -179,17 +180,28 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
   /** Andere chauffeurs (niet `exclUserId`) met goedgekeurd verlof op deze dag. */
   const anderenAfwezigOp = (dag: string, exclUserId: string) =>
-    verlofRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(exclUserId) && r.startDate <= dag && r.endDate >= dag).length;
+    verlofRequests.filter((r) => {
+      if (r.status !== 'approved' || String(r.userId) === String(exclUserId)) return false;
+      if (!(r.startDate <= dag && r.endDate >= dag)) return false;
+      // Alleen rijdend personeel telt in de bezetting.
+      const u = users.find((x) => String(x.id) === String(r.userId));
+      return !u || isRijdend(u.role);
+    }).length;
   /** Bevat de periode een zondag? Zo ja, dan verschilt het aantal verlofdagen
    *  van het aantal kalenderdagen en zetten we dat er expliciet bij — anders
    *  oogt een week van 6 dagen als een telfout. */
   const bevatZondag = (van: string, tot: string) => dagenVan(van, tot).some((d) => new Date(`${d}T00:00:00`).getDay() === 0);
 
   /** Dagen van een periode waarop deze chauffeur erbij de verloflimiet overschrijdt. */
-  const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) =>
-    dagenVan(van, tot)
+  const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) => {
+    // Een technieker bezet geen dienst, dus zijn verlof kan de limiet niet
+    // overschrijden — geen waarschuwing tonen.
+    const doel = users.find((u) => String(u.id) === String(exclUserId));
+    if (doel && !isRijdend(doel.role)) return [];
+    return dagenVan(van, tot)
       .map((dag) => ({ dag, afwezig: anderenAfwezigOp(dag, exclUserId) + 1, limiet: limietVoorDag(limieten, dag) }))
       .filter((d) => d.afwezig > d.limiet);
+  };
 
   const handleRequestLeave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -488,6 +500,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
       const isMe = r.userId === user.id;
       if (isBeheerder && !isMe) return false;
+      // De bezetting gaat over rijdend personeel: een technieker vraagt wel
+      // verlof aan, maar telt niet mee in de limiet (Jarno 09-09).
+      if (requester && !isRijdend(requester.role) && !isMe) return false;
       return true;
     });
 

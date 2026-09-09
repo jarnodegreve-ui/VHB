@@ -37,6 +37,14 @@ export const CHAUFFEUR_TEGELS: readonly TegelDef[] = [
   { id: 'snelle-acties', label: 'Snelle acties', omschrijving: 'Snelkoppelingen onderaan (alleen op de telefoon).', groep: 'panelen' },
 ];
 
+/** Technieker: geen diensten, dus alleen wat voor hem betekenis heeft.
+ *  De dienst-, rooster- en omleidingstegels zouden altijd leeg staan en naar
+ *  schermen wijzen die niet in zijn menu staan (Jarno 09-09). */
+export const TECHNIEKER_TEGELS: readonly TegelDef[] = [
+  { id: 'verlofsaldo', label: 'Verlofsaldo', omschrijving: 'Dagen over dit jaar.', essentieel: true, groep: 'tegels' },
+  { id: 'snelle-acties', label: 'Snelle acties', omschrijving: 'Snelkoppelingen onderaan (alleen op de telefoon).', groep: 'panelen' },
+];
+
 export const PLANNER_TEGELS: readonly TegelDef[] = [
   { id: 'chauffeurs-actief', label: 'Chauffeurs actief', omschrijving: 'Nu aan het rijden; morgen: de eerste start.', groep: 'tegels' },
   { id: 'ingepland', label: 'Ingepland', omschrijving: 'Chauffeurs met dienst vandaag of morgen.', groep: 'tegels' },
@@ -49,7 +57,7 @@ export const PLANNER_TEGELS: readonly TegelDef[] = [
 ];
 
 export const tegelsVoorRol = (role: User['role']): readonly TegelDef[] =>
-  role === 'chauffeur' ? CHAUFFEUR_TEGELS : PLANNER_TEGELS;
+  role === 'chauffeur' ? CHAUFFEUR_TEGELS : role === 'technieker' ? TECHNIEKER_TEGELS : PLANNER_TEGELS;
 
 /** Zichtbare tegels in de gewenste volgorde: eerst de ids uit `volgorde`
  *  (bekende ids, één keer), daarna de rest in catalogusvolgorde; verborgen

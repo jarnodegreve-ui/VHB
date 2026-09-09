@@ -1,7 +1,17 @@
 import type { DashboardVoorkeuren } from '../shared/schemas/dashboardVoorkeuren';
 import type { Melding, MeldingSoort } from '../shared/schemas/meldingen';
 
-export type Role = 'chauffeur' | 'planner' | 'admin';
+export type Role = 'chauffeur' | 'technieker' | 'planner' | 'admin';
+
+/** Staf: planner en admin. Zij zien en schrijven andermans gegevens.
+ *  Bewust een functie i.p.v. `role !== 'chauffeur'`: sinds er een derde
+ *  niet-stafrol bestaat (technieker) zou die omkering stilzwijgend
+ *  plannerrechten geven (Jarno 09-09). */
+export const isStaf = (role: Role | string): boolean => role === 'planner' || role === 'admin';
+
+/** Rijdend personeel: heeft diensten, staat in de planning en telt mee in
+ *  de verlofbezetting. Een technieker niet. */
+export const isRijdend = (role: Role | string): boolean => role === 'chauffeur';
 
 // Meldingencentrum: het record en de soorten komen uit het gedeelde contract.
 export type { Melding, MeldingSoort, DashboardVoorkeuren };
