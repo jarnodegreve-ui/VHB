@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Plus, Thermometer } from 'lucide-react';
+import { AlertTriangle, Plus, Thermometer, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
 import { cn, notify } from '../../lib/ui';
@@ -10,6 +10,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { apiFetch } from '../../lib/api';
 import { Button, Chip, MicroLabel, microLabelClass } from '../../components/primitives';
 import { Card } from '../../components/Card';
+import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Select, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
@@ -319,39 +320,77 @@ export function ZiekteView({
     if (ok) setDetail(null);
   };
 
+  // Opmerking per rij uitklapbaar (Jarno 09-09): de tekst uit de import-
+  // preview is lang en maakte elke rij twee regels breed.
+  const [openOpmerkingen, setOpenOpmerkingen] = useState<Set<string>>(new Set());
+  const wisselOpmerking = (id: string) => setOpenOpmerkingen((cur) => {
+    const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
+
   const Rij = ({ r, toonOpen }: { r: LeaveRequest; toonOpen?: boolean }) => {
     const open = toonOpen ? openDienstenVan(r) : 0;
+    const dagen = daysBetween(r.startDate, r.endDate);
+    const lopend = r.status === 'approved' && r.startDate <= today && r.endDate >= today;
+    const komend = r.status === 'approved' && r.startDate > today;
+    const opmerkingOpen = openOpmerkingen.has(r.id);
     return (
-      // rauw: hele rij klikbaar (naam + periode + teller) — kaart-als-knop met eigen layout
-      <button
-        type="button"
-        onClick={() => openDetail(r)}
-        className="group flex w-full items-center gap-3 rounded-xl bg-surface-row px-3.5 py-2.5 min-h-11 text-left ring-1 ring-hairline transition-all hover:bg-surface-row-hover hover:ring-hairline-strong"
-      >
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold text-slate-800">{naamVan(r.userId)}</span>
-            {r.status === 'cancelled' && (
-              <Chip tone="slate" mono={false}>ingetrokken</Chip>
-            )}
-          </span>
-          <span className="mt-px block truncate text-xs font-normal text-slate-500 tabular-nums">
-            {formatShortDay(r.startDate)}{r.startDate !== r.endDate ? ` → ${formatShortDay(r.endDate)}` : ''}
-            {' · '}{daysBetween(r.startDate, r.endDate)} {daysBetween(r.startDate, r.endDate) === 1 ? 'dag' : 'dagen'}
+      // Compacte kaart in een raster, zoals de contactlijst: naam + één
+      // metaregel; de opmerking zit achter een uitklapknop. De kaart is geen
+      // knop-in-knop: de kop opent het detail, de uitklapknop staat ernaast.
+      <Card padding="none" className="flex flex-col overflow-hidden">
+        {/* rauw: kaartkop als knop (naam + periode), opent het detailpaneel */}
+        <button
+          type="button"
+          onClick={() => openDetail(r)}
+          className="group flex w-full items-start gap-3 px-3.5 py-2.5 min-h-11 text-left transition-colors hover:bg-surface-row-hover"
+        >
+          <Avatar naam={naamVan(r.userId)} size="sm" />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-sm font-semibold text-slate-800">{naamVan(r.userId)}</span>
+              {r.status === 'cancelled' && <Chip tone="slate" mono={false}>ingetrokken</Chip>}
+            </span>
+            <span className="mt-px block text-xs font-normal text-slate-500">
+              {formatShortDay(r.startDate)}{r.startDate !== r.endDate ? ` → ${formatShortDay(r.endDate)}` : ''}
+              {' · '}{dagen} {dagen === 1 ? 'dag' : 'dagen'}
+            </span>
             {/* Mensentaal bij lopende/komende periodes: wanneer is hij terug? */}
-            {r.status === 'approved' && r.startDate <= today && r.endDate >= today && (
-              ` · terug ${formatShortDay(dagNa(r.endDate))} · nog ${daysBetween(today, r.endDate)} ${daysBetween(today, r.endDate) === 1 ? 'dag' : 'dagen'}`
+            {lopend && (
+              <span className="mt-px block text-xs font-medium text-emerald-700">
+                terug {formatShortDay(dagNa(r.endDate))} · nog {daysBetween(today, r.endDate)} {daysBetween(today, r.endDate) === 1 ? 'dag' : 'dagen'}
+              </span>
             )}
-            {r.status === 'approved' && r.startDate > today && ` · start over ${daysBetween(today, r.startDate) - 1 || 1} ${daysBetween(today, r.startDate) - 1 === 1 ? 'dag' : 'dagen'}`}
-            {r.comment ? ` · ${r.comment}` : ''}
+            {komend && (
+              <span className="mt-px block text-xs font-medium text-slate-500">
+                start over {daysBetween(today, r.startDate) - 1 || 1} {daysBetween(today, r.startDate) - 1 === 1 ? 'dag' : 'dagen'}
+              </span>
+            )}
           </span>
-        </span>
-        {toonOpen && open > 0 && (
-          <Chip tone="amber" mono={false}>
-            {open} {open === 1 ? 'dienst' : 'diensten'} op naam
-          </Chip>
+          {toonOpen && open > 0 && (
+            <Chip tone="amber" mono={false} className="shrink-0">
+              {open} {open === 1 ? 'dienst' : 'diensten'}
+            </Chip>
+          )}
+        </button>
+        {r.comment && (
+          <div className="border-t border-slate-100">
+            <Button
+              variant="ghost"
+              size="sm"
+              full
+              className="justify-between rounded-none px-3.5 text-xs text-slate-500"
+              aria-expanded={opmerkingOpen}
+              onClick={() => wisselOpmerking(r.id)}
+            >
+              <span>Opmerking</span>
+              <ChevronDown size={14} className={cn('transition-transform', opmerkingOpen && 'rotate-180')} />
+            </Button>
+            {opmerkingOpen && (
+              <p className="px-3.5 pb-3 text-xs font-normal leading-relaxed text-slate-600">{r.comment}</p>
+            )}
+          </div>
         )}
-      </button>
+      </Card>
     );
   };
 
@@ -364,7 +403,7 @@ export function ZiekteView({
       {items.length === 0 ? (
         <p className="rounded-xl bg-surface-soft px-3.5 py-3 text-xs font-medium text-slate-500">{leeg}</p>
       ) : (
-        <div className="space-y-1.5">{items.map((r) => <Rij key={r.id} r={r} toonOpen={toonOpen} />)}</div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{items.map((r) => <Rij key={r.id} r={r} toonOpen={toonOpen} />)}</div>
       )}
     </div>
   );

@@ -214,16 +214,31 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                         isToday(day) && 'bg-oker-50',
                       )}
                     >
-                      <div className={microLabelClass}>{weekdayLetter(day)}</div>
-                      <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
-                      {typedagLabel(dateIso(day)) && (
-                        <div className={cn('text-2xs font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-700' : 'text-slate-500')}>
-                          {typedagLabel(dateIso(day))!.kort}
-                        </div>
-                      )}
-                      {absenceCountPerDay[day] > 0 && (
-                        <div className="text-2xs font-semibold text-emerald-700 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
-                      )}
+                      {/* Drie vaste rijen (letter · dag · markering) met vaste
+                          hoogte, zodat de koppen niet verspringen als een dag
+                          geen dagtype of geen afwezigen heeft (Jarno 09-09).
+                          Feestdag kleurt het dagnummer goud; in de derde rij
+                          wint het aantal afwezigen (dat telt voor de
+                          bezetting) van de dagtype-code, die in de tooltip
+                          blijft staan. */}
+                      {(() => {
+                        const typedag = typedagLabel(dateIso(day));
+                        const feest = typedag?.kort === 'F';
+                        const afwezig = absenceCountPerDay[day] ?? 0;
+                        return (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className={cn(microLabelClass, 'h-3.5 leading-3.5')}>{weekdayLetter(day)}</div>
+                            <div className={cn('h-4 text-xs font-semibold leading-4', isToday(day) || feest ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
+                            <div className="flex h-4 items-center justify-center">
+                              {afwezig > 0 ? (
+                                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500/15 px-1 text-2xs font-semibold leading-none text-emerald-700">{afwezig}</span>
+                              ) : typedag ? (
+                                <span className={cn('text-2xs font-bold leading-none', feest ? 'text-oker-700' : 'text-slate-500')}>{typedag.kort}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </Th>
                   </Fragment>
                 ))}
@@ -356,6 +371,18 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
         <div className="flex items-center gap-2">
           <div className="w-4 h-3 rounded bg-slate-300" />
           <span className="font-medium text-slate-600">Geannuleerd</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500/15 px-1 text-2xs font-semibold leading-none text-emerald-700">3</span>
+          <span className="font-medium text-slate-600">Aantal afwezig die dag</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-2xs font-bold text-oker-700">F</span>
+          <span className="font-medium text-slate-600">Feestdag</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-2xs font-bold text-slate-500">V</span>
+          <span className="font-medium text-slate-600">Schoolvakantie</span>
         </div>
       </Card>
     </PageShell>
