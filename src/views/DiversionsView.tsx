@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Calendar, ChevronRight, Download, FileText, Search, X } from 'lucide-react';
 import { LijnTegel } from '../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenVan, raaktLijn } from '../../shared/lijnen';
-import { isExpiredDiversion } from '../lib/diversions';
+import { isExpiredDiversion, omleidingsFase, omleidingsPeriode, sorteerOmleidingen } from '../lib/diversions';
 import type { Diversion } from '../types';
-import { formatDateHuman, formatSyncedTime } from '../lib/format';
+import { formatSyncedTime } from '../lib/format';
 import { cn, openPdfInNewTab, safeDocumentHref } from '../lib/ui';
 import { kiesRecord } from '../lib/overgang';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -29,12 +29,8 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
   // "Alle" is geen lijn maar een bereik; die omleidingen vallen onder elke filterkeuze.
   const uniqueLines = Array.from(new Set(diversions.flatMap((div) => lijnenVan(div.line)).filter((l) => !isAlleLijnen(l)))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  const sortedForList = [...diversions].sort((a, b) => {
-    const ea = isExpiredDiversion(a) ? 1 : 0;
-    const eb = isExpiredDiversion(b) ? 1 : 0;
-    if (ea !== eb) return ea - eb;
-    return String(b.startDate || '').localeCompare(String(a.startDate || ''));
-  });
+  // Chronologisch: lopend, komend, verlopen (zie sorteerOmleidingen).
+  const sortedForList = sorteerOmleidingen(diversions);
   const filteredDiversions = sortedForList.filter(div => {
     const matchesSearch = div.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       div.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -109,6 +105,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
           <ul className="space-y-2" aria-label="Omleidingen">
             {filteredDiversions.map(div => {
               const isCurrent = detail?.id === div.id;
+              const fase = omleidingsFase(div);
               return (
                 <Card
                   key={div.id}
@@ -118,19 +115,26 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                   aria-current={isCurrent ? 'true' : undefined}
                   className={cn('overflow-hidden', isExpiredDiversion(div) && 'opacity-60', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
                 >
-                  {/* Compacte rij (verzoek Jarno): kleiner icoon, één titelregel,
-                      geen hulpregel — de chevron is de affordance. */}
-                  {/* rauw: lijstrij van het master-detail (kaart als knop: icoontegel + titel + badges + chevron) */}
+                  {/* Compacte rij: kleiner icoon, titelregel + periode eronder
+                      (verzoek Jarno 10-09: begin en einde zichtbaar zonder te openen). */}
+                  {/* rauw: lijstrij van het master-detail (kaart als knop: icoontegel + titel + badges + periode + chevron) */}
                   <button
                     type="button"
                     onClick={() => kiesRecord(div.id, detail?.id ?? null, () => setSelectedId(div.id))}
                     className="w-full px-3.5 py-3 md:px-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-3 text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <LijnTegel line={div.line} />
-                      <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <h4 className="text-card-title leading-snug" data-vt-record={div.id}>{div.title}</h4>
-                        {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
+                      <LijnTegel line={div.line} tone={fase === 'verlopen' ? 'muted' : 'accent'} />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <h4 className="text-card-title leading-snug" data-vt-record={div.id}>{div.title}</h4>
+                          {fase === 'komend' && <Badge tone="oker" stil>Komend</Badge>}
+                          {fase === 'verlopen' && <Badge tone="slate">Verlopen</Badge>}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
+                          <Calendar size={12} className={fase === 'verlopen' ? 'text-slate-400' : 'text-oker-400'} />
+                          <span>{omleidingsPeriode(div)}</span>
+                        </div>
                       </div>
                     </div>
                     <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
@@ -164,8 +168,9 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
               <div className="space-y-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="oker">{lijnLabel(detail.line)}</Badge>
-                  {isExpiredDiversion(detail) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" stil>Actief</Badge>}
-
+                  {omleidingsFase(detail) === 'verlopen' && <Badge tone="slate">Verlopen</Badge>}
+                  {omleidingsFase(detail) === 'komend' && <Badge tone="oker" stil>Komend</Badge>}
+                  {omleidingsFase(detail) === 'lopend' && <Badge tone="emerald" stil>Actief</Badge>}
                 </div>
                 <DiversionBody diversion={detail} />
               </div>
@@ -185,17 +190,9 @@ function DiversionBody({ diversion: div }: { diversion: Diversion }) {
     <div className="space-y-5">
       <p className="text-sm font-normal text-slate-700 leading-relaxed">{div.description}</p>
 
-      <div className="flex flex-wrap items-center gap-4 md:gap-6">
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 tabular-nums">
-          <Calendar size={14} className="text-oker-400" />
-          <span>Start: {formatDateHuman(div.startDate)}</span>
-        </div>
-        {div.endDate && (
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 tabular-nums">
-            <Calendar size={14} className="text-oker-400" />
-            <span>Eind: {formatDateHuman(div.endDate)}</span>
-          </div>
-        )}
+      <div className="flex items-center gap-2 text-xs font-medium text-slate-500 tabular-nums">
+        <Calendar size={14} className="text-oker-400" />
+        <span>{omleidingsPeriode(div)}{!div.endDate && ', geen einddatum'}</span>
       </div>
 
       {div.pdfUrl ? (
