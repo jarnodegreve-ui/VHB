@@ -1,13 +1,13 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users } from 'lucide-react';
-import { activeDiversions } from '../lib/diversions';
+import { activeDiversions, omleidingsPeriode } from '../lib/diversions';
 import { isRijdend } from '../types';
 import { LijnTegel } from '../components/LijnTegel';
 import { lijnLabel } from '../../shared/lijnen';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
-import { formatDateHuman, formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
+import { formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
 import { relatieveDag } from '../lib/datum';
 import { warmRitbladCache } from '../lib/ritbladCache';
@@ -464,8 +464,7 @@ export function DashboardView({ notes = [],
             <Card tone="muted" padding="sm">
               <MicroLabel>Periode</MicroLabel>
               <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
-                {formatDateHuman(openDiversion.startDate)}
-                {openDiversion.endDate ? ` → ${formatDateHuman(openDiversion.endDate)}` : ' → einde onbekend'}
+                {omleidingsPeriode(openDiversion)}{!openDiversion.endDate && ', geen einddatum'}
               </p>
             </Card>
             <div>

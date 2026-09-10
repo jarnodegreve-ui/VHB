@@ -18,7 +18,7 @@ import { ActieMenu } from '../../components/ActieMenu';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
  *  actief tot hij verwijderd wordt. */
-import { isExpiredDiversion as isExpired } from '../../lib/diversions';
+import { isExpiredDiversion as isExpired, omleidingsPeriode, sorteerOmleidingen } from '../../lib/diversions';
 // isoDate = lokale dag. toISOString() is UTC en gaf tussen 00:00 en 02:00
 // Belgische zomertijd de dag ervóór: een omleiding die om 00:30 werd
 // aangemaakt kreeg standaard gisteren als startdatum. Zelfde reden als de
@@ -40,16 +40,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   // Het bewerkformulier leeft in het DetailPaneel: desktop naast de lijst,
   // mobiel als SlideOver. "Nieuw" opent hetzelfde paneel leeg.
   const [paneelOpen, setPaneelOpen] = useState(false);
-  // Actieve omleidingen eerst (nieuwste bovenaan), verlopen onderaan — die
-  // bleven voorheen ongemarkeerd tussen de actieve staan én meetellen.
-  const sortedDiversions = useMemo(() => {
-    return [...diversions].sort((a, b) => {
-      const ea = isExpired(a) ? 1 : 0;
-      const eb = isExpired(b) ? 1 : 0;
-      if (ea !== eb) return ea - eb;
-      return String(b.startDate || '').localeCompare(String(a.startDate || ''));
-    });
-  }, [diversions]);
+  // Zelfde chronologische volgorde als de chauffeurslijst: lopend, komend,
+  // verlopen onderaan (sorteerOmleidingen).
+  const sortedDiversions = useMemo(() => sorteerOmleidingen(diversions), [diversions]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyDiversion, setHistoryDiversion] = useState<Diversion | null>(null);
 
@@ -279,7 +272,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-2xs font-medium text-slate-500 tabular-nums">
                     <Calendar size={12} className="text-slate-400" />
-                    {div.startDate} {div.endDate ? `t/m ${div.endDate}` : '(geen einddatum)'}
+                    {omleidingsPeriode(div)}{!div.endDate && ', geen einddatum'}
                   </div>
                 </div>
               </div>
