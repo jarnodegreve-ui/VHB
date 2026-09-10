@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { LeaveRequest } from '../types';
-import { BETAALD_VERLOF_BUDGET, daysBetween, verlofBalans, verlofDagen } from './leaveBalance';
+import { BETAALD_VERLOF_BUDGET, daysBetween, stelExtraFeestdagenIn, verlofBalans, verlofDagen } from './leaveBalance';
 
 const leave = (
   id: string,
@@ -50,11 +50,11 @@ describe('verlofBalans, basis', () => {
     const leaves = [
       leave('l1', 'driver-1', '2026-04-01', '2026-04-02'), // wo-do = 2
       leave('l2', 'driver-1', '2026-07-15', '2026-07-20'), // wo-ma, 1 zondag = 5
-      leave('l3', 'driver-1', '2026-12-23', '2026-12-30'), // wo-wo, 1 zondag = 7
+      leave('l3', 'driver-1', '2026-12-23', '2026-12-30'), // wo-wo, 1 zondag + Kerstmis = 6
     ];
     const balance = verlofBalans(leaves, 'driver-1', 2026);
-    expect(balance.betaaldGebruikt).toBe(14);
-    expect(balance.betaaldResterend).toBe(10);
+    expect(balance.betaaldGebruikt).toBe(13);
+    expect(balance.betaaldResterend).toBe(11);
   });
 });
 
@@ -93,9 +93,9 @@ describe('verlofBalans, jaargrenzen (clipping)', () => {
   it('verlof dat in het vorige jaar start, telt alleen de dagen IN het opgegeven jaar', () => {
     const leaves = [leave('l1', 'driver-1', '2025-12-28', '2026-01-03')];
     // 2025: zo 28 telt niet, ma 29 t/m wo 31 → 3 dagen
-    // 2026: do 1 t/m za 3 → 3 dagen
+    // 2026: do 1 = Nieuwjaar (telt niet), vr 2 t/m za 3 → 2 dagen
     expect(verlofBalans(leaves, 'driver-1', 2025).betaaldGebruikt).toBe(3);
-    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(3);
+    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(2);
   });
 
   it('verlof dat in het volgende jaar eindigt, telt alleen tot 31/12', () => {
@@ -112,10 +112,11 @@ describe('verlofBalans, jaargrenzen (clipping)', () => {
 
 describe('verlofBalans, over budget', () => {
   it('gebruikt > budget → resterend = 0 (nooit negatief)', () => {
-    // do 1 t/m za 31 januari 2026 = 31 kalenderdagen, 4 zondagen → 27 verlofdagen.
+    // do 1 t/m za 31 januari 2026 = 31 kalenderdagen, 4 zondagen en
+    // Nieuwjaar → 26 verlofdagen.
     const leaves = [leave('l1', 'driver-1', '2026-01-01', '2026-01-31')];
     const balance = verlofBalans(leaves, 'driver-1', 2026);
-    expect(balance.betaaldGebruikt).toBe(27);
+    expect(balance.betaaldGebruikt).toBe(26);
     expect(balance.betaaldResterend).toBe(0);
   });
 });
@@ -183,9 +184,9 @@ describe('verlofBalans, aangevraagd (pending)', () => {
   });
 
   it('vrij wordt nooit negatief', () => {
-    // do 1 jan t/m zo 15 feb = 46 kalenderdagen, 7 zondagen → 39 verlofdagen.
+    // do 1 jan t/m zo 15 feb = 46 kalenderdagen, 7 zondagen en Nieuwjaar → 38.
     const balance = verlofBalans([aanvraag('p', '2026-01-01', '2026-02-15', 'pending')], 'driver-1', 2026);
-    expect(balance.betaaldAangevraagd).toBe(39);
+    expect(balance.betaaldAangevraagd).toBe(38);
     expect(balance.betaaldVrij).toBe(0);
   });
 });
@@ -240,8 +241,40 @@ describe('verlofbalans met de zondagregel', () => {
 
   it('een aanvraag over de jaargrens telt alleen de dagen in dat jaar, zonder zondag', () => {
     const leaves = [leave('l1', 'driver-1', '2026-12-28', '2027-01-03')]; // ma t/m zo
-    // 2026: ma 28 t/m do 31 = 4 · 2027: vr 1 t/m zo 3 = 2 (zondag valt weg)
+    // 2026: ma 28 t/m do 31 = 4 · 2027: vr 1 = Nieuwjaar, za 2 telt, zo 3 niet = 1
     expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(4);
-    expect(verlofBalans(leaves, 'driver-1', 2027).betaaldGebruikt).toBe(2);
+    expect(verlofBalans(leaves, 'driver-1', 2027).betaaldGebruikt).toBe(1);
+  });
+});
+
+describe('feestdagen tellen niet als verlofdag (Jarno 10-09)', () => {
+  it('een wettelijke feestdag op een weekdag valt weg', () => {
+    // vr 25 dec 2026 = Kerstmis; ma 21 t/m za 26 dec = 6 dagen min Kerstmis.
+    expect(verlofDagen('2026-12-21', '2026-12-26')).toBe(5);
+    // wo 1 jan 2026 = Nieuwjaar.
+    expect(verlofDagen('2026-01-01', '2026-01-01')).toBe(0);
+  });
+
+  it('een feestdag op zondag telt niet dubbel weg', () => {
+    // zo 1 nov 2026 = Allerheiligen: was al 0 door de zondagregel.
+    expect(verlofDagen('2026-10-31', '2026-11-02')).toBe(2); // za + ma
+  });
+
+  it('extra vrije dagen van de beheerder tellen ook niet mee', () => {
+    const extra = new Set(['2026-09-08']); // di, brugdag
+    expect(verlofDagen('2026-09-07', '2026-09-12')).toBe(6);
+    expect(verlofDagen('2026-09-07', '2026-09-12', extra)).toBe(5);
+    const leaves = [leave('l1', 'driver-1', '2026-09-07', '2026-09-12')];
+    expect(verlofBalans(leaves, 'driver-1', 2026, undefined, extra).betaaldGebruikt).toBe(5);
+  });
+
+  it('de standaardset uit de datalaag werkt door zonder argument', () => {
+    stelExtraFeestdagenIn(['2026-09-09']);
+    try {
+      expect(verlofDagen('2026-09-07', '2026-09-12')).toBe(5);
+    } finally {
+      stelExtraFeestdagenIn([]);
+    }
+    expect(verlofDagen('2026-09-07', '2026-09-12')).toBe(6);
   });
 });

@@ -29,6 +29,7 @@ import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js
 import { meldingenGelezenBodySchema } from "../shared/schemas/meldingen.js";
 import { meVoorkeurenBodySchema } from "../shared/schemas/dashboardVoorkeuren.js";
 import { VERLOF_LIMIETEN_KEY, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
+import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, verlofFeestdagenSchema } from "../shared/schemas/verlofFeestdagen.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
 import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, referentieVan, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
 import {
@@ -4840,6 +4841,43 @@ app.put("/api/verlof/limieten", authenticate, requireRole("admin"), async (req: 
     }
     console.error("Verloflimieten opslaan is mislukt.", err);
     res.status(500).json({ error: "Verloflimieten opslaan is mislukt." });
+  }
+});
+
+// Extra vrije dagen (verzoek Jarno 10-09): dagen die net als de wettelijke
+// feestdagen niet meetellen als betaald verlof. De wettelijke feestdagen
+// rekent de client zelf uit; dit is de aanvulling van de beheerder. Lezen
+// mag elke rol (de verloftelling gebruikt het), schrijven is admin-werk.
+app.get("/api/verlof/feestdagen", authenticate, async (_req: AuthenticatedRequest, res) => {
+  try {
+    res.json(parseVerlofFeestdagen(await getAppSetting(VERLOF_FEESTDAGEN_KEY)));
+  } catch (err: any) {
+    if (!isMissingTableError(err)) console.error("Extra vrije dagen laden is mislukt.", err);
+    res.json(parseVerlofFeestdagen(null));
+  }
+});
+
+app.put("/api/verlof/feestdagen", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const body = valideerRecord(res, verlofFeestdagenSchema, req.body);
+    if (!body) return;
+    const bewaard = { extra: sorteerExtraFeestdagen(body.extra) };
+    await setAppSetting(VERLOF_FEESTDAGEN_KEY, bewaard);
+    await logActivity(
+      req,
+      "leave",
+      "Extra vrije dagen aangepast",
+      bewaard.extra.length === 0
+        ? "Geen extra vrije dagen meer naast de wettelijke feestdagen."
+        : `${bewaard.extra.length} extra vrije dag${bewaard.extra.length === 1 ? "" : "en"}: ${bewaard.extra.map((d) => `${d.naam} (${d.datum})`).join(", ")}.`,
+    );
+    res.json(bewaard);
+  } catch (err: any) {
+    if (isMissingTableError(err)) {
+      return res.status(503).json({ error: "De instellingen-tabel bestaat nog niet: draai supabase/2026-07-30_app_settings.sql in de SQL Editor." });
+    }
+    console.error("Extra vrije dagen opslaan is mislukt.", err);
+    res.status(500).json({ error: "Extra vrije dagen opslaan is mislukt." });
   }
 });
 

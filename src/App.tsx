@@ -212,6 +212,7 @@ export default function App() {
     fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog,
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
+    feestdagenExtra, zetFeestdagenExtra,
     saveServices, fetchUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
     saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
     fetchMeldingen, ongelezenMeldingen,
@@ -1621,6 +1622,8 @@ export default function App() {
                     users={users}
                     onSave={saveLeave}
                     onDecide={isStaf(currentUser.role) ? decideLeave : undefined}
+                    feestdagenExtra={feestdagenExtra}
+                    onFeestdagenSaved={zetFeestdagenExtra}
                     lastSeenDecisionAt={lastSeenLeaveDecisionAt}
                     onMarkDecisionsSeen={markLeaveDecisionsSeen}
                     shifts={shifts}
