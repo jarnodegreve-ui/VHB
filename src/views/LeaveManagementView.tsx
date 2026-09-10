@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, CalendarOff, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, History, Plus, Printer, SlidersHorizontal, X } from 'lucide-react';
+import { AlertTriangle, CalendarOff, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, History, Plus, Printer, SlidersHorizontal, Users, X } from 'lucide-react';
 import { isRijdend } from '../types';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
@@ -14,6 +14,7 @@ import { MaandNavigatie } from '../components/MaandNavigatie';
 import { DetailPaneel } from '../components/DetailPaneel';
 import { isVerlofdag, verlofBalans, verlofDagen } from '../lib/leaveBalance';
 import { VerlofFeestdagenModal } from '../components/VerlofFeestdagenModal';
+import { VerlofSaldoModal } from '../components/VerlofSaldoModal';
 import type { ExtraFeestdag } from '../../shared/feestdagen';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
@@ -66,6 +67,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const [voorWieFout, setVoorWieFout] = useState('');
   const [showLimietenModal, setShowLimietenModal] = useState(false);
   const [showFeestdagenModal, setShowFeestdagenModal] = useState(false);
+  const [showSaldoModal, setShowSaldoModal] = useState(false);
   const [limieten, setLimieten] = useState<VerlofLimieten>(STANDAARD_VERLOF_LIMIETEN);
   useEffect(() => {
     let weg = false;
@@ -723,9 +725,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               </>
             )}
             {isPlanner && (
-              <Button variant="secondary" size="lg" icon={<ClipboardCheck size={18} />} onClick={openRegistratie}>
-                Verlof registreren
-              </Button>
+              <>
+                <Button variant="secondary" size="lg" icon={<Users size={18} />} onClick={() => setShowSaldoModal(true)}>
+                  Saldo's
+                </Button>
+                <Button variant="secondary" size="lg" icon={<ClipboardCheck size={18} />} onClick={openRegistratie}>
+                  Verlof registreren
+                </Button>
+              </>
             )}
             <Button variant="primary" size="lg" icon={<Plus size={18} />} onClick={openAanvraag}>
               Verlof aanvragen
@@ -1235,6 +1242,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               </form>
       </Modal>
 
+      {isPlanner && (
+        <VerlofSaldoModal open={showSaldoModal} onClose={() => setShowSaldoModal(false)} users={users} leaveRequests={leaveRequests} />
+      )}
       {user.role === 'admin' && (
         <>
           <VerlofLimietenModal open={showLimietenModal} onClose={() => setShowLimietenModal(false)} limieten={limieten} onSaved={setLimieten} />
