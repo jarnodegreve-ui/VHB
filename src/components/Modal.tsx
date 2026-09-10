@@ -35,7 +35,7 @@ export function Modal({
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
   className?: string;
   dismissOnBackdrop?: boolean;
   /** Toegankelijke naam van de dialoog — zonder deze heet elke modal voor
@@ -149,6 +149,7 @@ export function Modal({
     lg: 'max-w-lg',
     xl: 'max-w-xl',
     '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
   }[maxWidth];
 
   return createPortal(
