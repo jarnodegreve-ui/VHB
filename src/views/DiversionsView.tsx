@@ -5,11 +5,12 @@ import { isAlleLijnen, lijnLabel, lijnenVan, raaktLijn } from '../../shared/lijn
 import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, type OmleidingsFase } from '../lib/diversions';
 import { isoDate } from '../lib/availability';
 import type { Diversion } from '../types';
-import { cn, openPdfInNewTab } from '../lib/ui';
+import { cn } from '../lib/ui';
 import { kiesRecord } from '../lib/overgang';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
+import { OmleidingDetail } from '../components/OmleidingDetail';
 import { Input, Select } from '../components/Field';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
 import { LegeLijst, NietGevonden } from '../components/illustraties';
@@ -179,7 +180,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
             icon={detail ? <LijnTegel line={detail.line} tone={omleidingsFase(detail, vandaag) === 'verlopen' ? 'muted' : 'accent'} /> : undefined}
             chip={detail ? <FaseBadge fase={omleidingsFase(detail, vandaag)} hint={omleidingsTijdshint(detail, vandaag)} /> : undefined}
           >
-            {detail && <DiversionBody diversion={detail} />}
+            {detail && <OmleidingDetail diversion={detail} />}
           </DetailPaneel>
         ) : undefined}
       />
@@ -252,41 +253,5 @@ function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; va
         <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
       </button>
     </Card>
-  );
-}
-
-/**
- * Inhoud van één omleiding: periode bovenaan, dan de omschrijving met behoud
- * van regeleinden, en één PDF-knop. Gedeeld met de dashboard-SlideOver.
- */
-export function DiversionBody({ diversion: div }: { diversion: Diversion }) {
-  const hint = omleidingsTijdshint(div);
-  return (
-    <div className="space-y-5">
-      <Card tone="muted" padding="sm">
-        <MicroLabel>Periode</MicroLabel>
-        <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
-          {omleidingsPeriode(div)}{!div.endDate && ', geen einddatum'}
-        </p>
-        {hint && <p className="mt-0.5 text-xs font-medium text-slate-500">{hint}</p>}
-      </Card>
-
-      <div>
-        <MicroLabel>Omschrijving</MicroLabel>
-        <p className="mt-2 whitespace-pre-line text-sm font-normal leading-relaxed text-slate-700">{div.description}</p>
-      </div>
-
-      {div.pdfUrl && (
-        <Button
-          variant="secondary"
-          size="lg"
-          full
-          icon={<FileText size={16} className="text-red-500" />}
-          onClick={() => openPdfInNewTab(div.pdfUrl)}
-        >
-          Open PDF
-        </Button>
-      )}
-    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users } from 'lucide-react';
 import { activeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
-import { DiversionBody } from './DiversionsView';
+import { OmleidingDetail } from '../components/OmleidingDetail';
 import { isRijdend } from '../types';
 import { LijnTegel } from '../components/LijnTegel';
 import { lijnLabel } from '../../shared/lijnen';
@@ -457,7 +457,7 @@ export function DashboardView({ notes = [],
         subtitle={openDiversion ? [lijnLabel(openDiversion.line), openDiversion.location].filter(Boolean).join(' · ') : undefined}
         icon={openDiversion ? <LijnTegel line={openDiversion.line} /> : undefined}
       >
-        {openDiversion && <DiversionBody diversion={openDiversion} />}
+        {openDiversion && <OmleidingDetail diversion={openDiversion} />}
       </SlideOver>
 
       <DashboardAanpassen
