@@ -130,9 +130,9 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                             het oog per rij één datumregel vindt (Jarno 10-09). */}
                         <h4 className="text-card-title leading-snug" data-vt-record={div.id}>{div.title}</h4>
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold tabular-nums">
-                          {fase === 'komend' && <Badge tone="oker" icon={<Calendar size={11} />}>Komend</Badge>}
+                          {fase === 'komend' && <Badge tone="oker" icon={<Calendar size={12} />}>Komend</Badge>}
                           {fase === 'verlopen' && <Badge tone="slate">Verlopen</Badge>}
-                          {fase === 'lopend' && <Calendar size={13} className="text-oker-500" />}
+                          {fase === 'lopend' && <Calendar size={14} className="text-oker-500" />}
                           <span className={fase === 'verlopen' ? 'text-slate-500' : 'text-slate-700'}>{omleidingsPeriode(div)}</span>
                         </div>
                       </div>
@@ -169,7 +169,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="oker">{lijnLabel(detail.line)}</Badge>
                   {omleidingsFase(detail) === 'verlopen' && <Badge tone="slate">Verlopen</Badge>}
-                  {omleidingsFase(detail) === 'komend' && <Badge tone="oker" icon={<Calendar size={11} />}>Komend</Badge>}
+                  {omleidingsFase(detail) === 'komend' && <Badge tone="oker" icon={<Calendar size={12} />}>Komend</Badge>}
                   {omleidingsFase(detail) === 'lopend' && <Badge tone="emerald" stil>Actief</Badge>}
                 </div>
                 <DiversionBody diversion={detail} />
