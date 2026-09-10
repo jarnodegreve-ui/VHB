@@ -42,6 +42,8 @@ export interface User {
 export interface Diversion {
   id: string;
   line: string;
+  /** Plaats/locatie (bv. "Eeklo, Markt"); vet vóór de titel in de chauffeurslijst. */
+  location?: string;
   title: string;
   description: string;
   startDate: string;

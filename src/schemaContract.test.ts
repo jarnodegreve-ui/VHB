@@ -49,7 +49,7 @@ describe('schema-contract: mappers schrijven enkel geprobe-de kolommen', () => {
     {
       table: 'diversions',
       row: toDatabaseDiversion({
-        id: '1', line: '284', title: 't', description: 'd',
+        id: '1', line: '284', location: 'Eeklo', title: 't', description: 'd',
         startDate: '2026-01-01', endDate: '2026-01-02',
         pdfUrl: undefined,
       }),

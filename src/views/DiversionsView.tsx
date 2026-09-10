@@ -40,6 +40,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
     if (!isRecentGenoeg(div, vandaag)) return false;
     const matchesSearch = !zoek
       || div.title.toLowerCase().includes(zoek)
+      || (div.location ?? '').toLowerCase().includes(zoek)
       || div.description.toLowerCase().includes(zoek)
       || div.line.toLowerCase().includes(zoek);
     const matchesLine = selectedLine === 'all' || raaktLijn(div.line, selectedLine);
@@ -172,7 +173,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
             open={!!detail}
             onClose={() => setSelectedId(null)}
             title={detail?.title ?? 'Omleiding'}
-            subtitle={detail ? lijnLabel(detail.line) : undefined}
+            subtitle={detail ? [lijnLabel(detail.line), detail.location].filter(Boolean).join(' · ') : undefined}
             sleutel={detail?.id}
             leegTekst="Kies een omleiding."
             icon={detail ? <LijnTegel line={detail.line} tone={omleidingsFase(detail, vandaag) === 'verlopen' ? 'muted' : 'accent'} /> : undefined}
@@ -230,7 +231,9 @@ function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; va
       >
         <LijnTegel line={div.line} size="sm" tone={verlopen ? 'muted' : 'accent'} className="mt-0.5 self-start" />
         <div className="min-w-0 flex-1">
+          {/* Plaats vet en in oker vóór de titel: dát scant een chauffeur als eerste (Jarno 10-09). */}
           <h4 className="text-card-title leading-snug" data-vt-record={div.id}>
+            {div.location && <span className={verlopen ? 'text-slate-600' : 'text-oker-800'}>{div.location} · </span>}
             {div.title}
             {div.pdfUrl && (
               <FileText size={14} className="ml-1.5 inline-block align-[-2px] text-slate-400" aria-label="Met PDF-bijlage" />

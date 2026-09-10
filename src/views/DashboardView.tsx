@@ -360,7 +360,7 @@ export function DashboardView({ notes = [],
                 <OpsRow
                   tone="amber"
                   leading={<LijnTegel line={div.line} size="sm" />}
-                  primary={div.title}
+                  primary={[div.location, div.title].filter(Boolean).join(' · ')}
                   secondary={[omleidingsPeriode(div), omleidingsTijdshint(div)].filter(Boolean).join(' · ')}
                   onClick={() => setOpenDiversion(div)}
                 />
@@ -454,7 +454,7 @@ export function DashboardView({ notes = [],
         open={!!openDiversion}
         onClose={() => setOpenDiversion(null)}
         title={openDiversion?.title ?? 'Omleiding'}
-        subtitle={openDiversion ? lijnLabel(openDiversion.line) : undefined}
+        subtitle={openDiversion ? [lijnLabel(openDiversion.line), openDiversion.location].filter(Boolean).join(' · ') : undefined}
         icon={openDiversion ? <LijnTegel line={openDiversion.line} /> : undefined}
       >
         {openDiversion && <DiversionBody diversion={openDiversion} />}

@@ -49,6 +49,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   const [formData, setFormData] = useState<Partial<Diversion>>({
     line: '',
     title: '',
+    location: '',
     description: '',
     startDate: isoDate(new Date()),
   });
@@ -97,6 +98,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     setFormData({
       line: '',
       title: '',
+      location: '',
       description: '',
       startDate: isoDate(new Date()),
     });
@@ -109,6 +111,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     setEditingId(div.id);
     setFormData({
       line: div.line,
+      location: div.location ?? '',
       title: div.title,
       description: div.description,
       startDate: div.startDate,
@@ -194,7 +197,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
 
     if (editingId) {
       const bestaande = diversions.find((d) => d.id === editingId);
-      const bijgewerkt = { ...bestaande, ...formData, id: editingId, pdfUrl: uploadedPdfUrl || bestaande?.pdfUrl } as Diversion;
+      const bijgewerkt = { ...bestaande, ...formData, location: formData.location?.trim() || undefined, id: editingId, pdfUrl: uploadedPdfUrl || bestaande?.pdfUrl } as Diversion;
       if (onSaveDiversion) {
         // Per record: het paneel blijft open als het misging (409 → de lijst
         // is ververst; de gebruiker ziet de nieuwe staat en kan opnieuw).
@@ -208,6 +211,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       const diversionToAdd: Diversion = {
         id: targetId,
         line: formData.line || 'Alle',
+        location: formData.location?.trim() || undefined,
         title: formData.title || '',
         description: formData.description || '',
         startDate: formData.startDate || '',
@@ -265,7 +269,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                 <LijnTegel line={div.line} size="sm" tone={expired ? 'muted' : 'accent'} />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <h3 className="text-card-title leading-snug">{div.title}</h3>
+                    <h3 className="text-card-title leading-snug">{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
                     <Badge tone="slate">{lijnLabel(div.line)}</Badge>
                     {expired && <Badge tone="slate">Verlopen</Badge>}
                     {div.pdfUrl && <Badge tone="slate" icon={<FileText size={12} />}>PDF</Badge>}
@@ -365,6 +369,18 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               className="min-w-[7rem] flex-1 bg-transparent px-1.5 py-1 text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm"
             />
           </div>
+        </Field>
+
+        <Field label="Plaats" hint="Gemeente of plek, bv. Eeklo of Zottegem Markt. Staat vet vóór de titel in de chauffeurslijst." htmlFor="omleiding-plaats" error={fouten.location}>
+          <Input
+            id="omleiding-plaats"
+            invalid={!!fouten.location}
+            type="text"
+            maxLength={80}
+            value={formData.location ?? ''}
+            onChange={(e) => setFormData({...formData, location: e.target.value})}
+            placeholder="bv. Eeklo"
+          />
         </Field>
 
         <Field label="Titel" htmlFor="omleiding-titel" error={fouten.title}>
