@@ -205,6 +205,7 @@ export function OpsPanel({
 export function OpsRow({
   tone,
   icon,
+  leading,
   primary,
   secondary,
   meta,
@@ -212,7 +213,9 @@ export function OpsRow({
   onClick,
 }: {
   tone: StatTone;
-  icon: ReactNode;
+  icon?: ReactNode;
+  /** Eigen tegel links (bv. LijnTegel) in plaats van het icoonvak in `tone`. */
+  leading?: ReactNode;
   primary: string;
   secondary?: string;
   meta?: string;
@@ -228,9 +231,11 @@ export function OpsRow({
       onClick={onClick}
       className="group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 sm:pointer-fine:py-2 text-left transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:shadow-sm"
     >
-      <span className={cn('inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
-        {icon}
-      </span>
+      {leading ?? (
+        <span className={cn('inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
+          {icon}
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-slate-800">{primary}</span>
         {secondary && <span className="mt-px block truncate text-xs font-normal text-slate-500">{secondary}</span>}

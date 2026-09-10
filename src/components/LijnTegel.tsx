@@ -22,7 +22,8 @@ export function LijnTegel({ line, tone = 'accent', size = 'md', className }: {
     size === 'sm' ? 'h-7 w-7 rounded-lg' : 'h-9 w-9 rounded-xl',
     tone === 'muted'
       ? 'border-slate-200 bg-slate-500/12 text-slate-500'
-      : 'border-oker-100 bg-oker-50 text-oker-700',
+      // oker-800, niet 700: kleine vette cijfers op oker-50 haalden AA-contrast niet (axe, 10-09).
+      : 'border-oker-100 bg-oker-50 text-oker-800',
     className,
   );
   if (lijnen.length === 0 || isAlleLijnen(lijnen[0])) {

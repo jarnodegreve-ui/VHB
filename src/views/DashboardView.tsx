@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users } from 'lucide-react';
-import { activeDiversions, omleidingsPeriode } from '../lib/diversions';
+import { Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users } from 'lucide-react';
+import { activeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
+import { DiversionBody } from './DiversionsView';
 import { isRijdend } from '../types';
 import { LijnTegel } from '../components/LijnTegel';
 import { lijnLabel } from '../../shared/lijnen';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
-import { cn, openPdfInNewTab } from '../lib/ui';
+import { cn } from '../lib/ui';
 import { formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
 import { relatieveDag } from '../lib/datum';
@@ -16,7 +17,7 @@ import { verlofBalans } from '../lib/leaveBalance';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
-import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Badge } from '../components/primitives';
 import { Card } from '../components/Card';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { ServiceChip } from '../components/ServiceChip';
@@ -134,7 +135,8 @@ export function DashboardView({ notes = [],
   // Verlopen omleidingen horen niet in tegel/paneel: "actief" moet actief zijn
   // (zelfde regel als het beheer-dashboard sinds #251).
   const liveDiversions = activeDiversions(diversions);
-  const newestDiversions = [...liveDiversions].reverse().slice(0, 3);
+  // Zelfde volgorde als het tabblad Omleidingen: lopend eerst, dan komend.
+  const newestDiversions = sorteerOmleidingen(liveDiversions).slice(0, 3);
 
   // Verlofsaldo + 'deze maand' voor de extra dashboard-kaarten.
   const balans = verlofBalans(leaveRequests, user.id, now.getFullYear(), user.verlofBudget);
@@ -357,10 +359,9 @@ export function DashboardView({ notes = [],
               <Fragment key={div.id}>
                 <OpsRow
                   tone="amber"
-                  icon={<AlertTriangle size={16} />}
+                  leading={<LijnTegel line={div.line} size="sm" />}
                   primary={div.title}
-                  secondary={div.description}
-                  meta={div.line}
+                  secondary={[omleidingsPeriode(div), omleidingsTijdshint(div)].filter(Boolean).join(' · ')}
                   onClick={() => setOpenDiversion(div)}
                 />
               </Fragment>
@@ -456,30 +457,7 @@ export function DashboardView({ notes = [],
         subtitle={openDiversion ? lijnLabel(openDiversion.line) : undefined}
         icon={openDiversion ? <LijnTegel line={openDiversion.line} /> : undefined}
       >
-        {openDiversion && (
-          <div className="space-y-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="slate">{lijnLabel(openDiversion.line)}</Badge>
-            </div>
-            <Card tone="muted" padding="sm">
-              <MicroLabel>Periode</MicroLabel>
-              <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
-                {omleidingsPeriode(openDiversion)}{!openDiversion.endDate && ', geen einddatum'}
-              </p>
-            </Card>
-            <div>
-              <MicroLabel>Omschrijving</MicroLabel>
-              <p className="mt-2 whitespace-pre-wrap text-sm font-normal leading-relaxed text-slate-700">
-                {openDiversion.description}
-              </p>
-            </div>
-            {openDiversion.pdfUrl && (
-              <Button variant="secondary" onClick={() => openPdfInNewTab(openDiversion.pdfUrl)} icon={<FileText size={16} />}>
-                Bijlage openen (PDF)
-              </Button>
-            )}
-          </div>
-        )}
+        {openDiversion && <DiversionBody diversion={openDiversion} />}
       </SlideOver>
 
       <DashboardAanpassen
