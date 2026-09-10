@@ -102,10 +102,13 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
               {zichtbaar.map(({ user: u, balans: b }) => {
                 const krap = b.betaaldResterend <= 0;
                 const laag = !krap && b.betaaldResterend <= 3;
+                const boven = Math.max(0, b.betaaldGebruikt - b.betaaldBudget);
                 return (
                   <tr key={u.id}>
-                    <Td>
-                      <span className="flex items-center gap-2.5">
+                    {/* w-full + max-w-0: de naamkolom neemt de restbreedte en
+                        kapt af i.p.v. de tabel op mobiel buiten beeld te duwen. */}
+                    <Td className="w-full max-w-0">
+                      <span className="flex min-w-0 items-center gap-2.5">
                         <Avatar naam={u.name} size="sm" />
                         <span className="truncate font-medium text-slate-800">{u.name}</span>
                       </span>
@@ -113,7 +116,10 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
                     <Td num className="max-md:hidden">{b.betaaldBudget}</Td>
                     <Td num>{b.betaaldGebruikt}</Td>
                     <Td num className={cn('max-md:hidden', b.betaaldAangevraagd > 0 ? 'text-amber-700' : 'text-slate-500')}>{b.betaaldAangevraagd || '—'}</Td>
-                    <Td num className={cn('font-semibold', krap ? 'text-red-700' : laag ? 'text-amber-700' : 'text-slate-800')}>{b.betaaldResterend}</Td>
+                    <Td num className={cn('font-semibold', krap ? 'text-red-700' : laag ? 'text-amber-700' : 'text-slate-800')}>
+                      {b.betaaldResterend}
+                      {boven > 0 && <span className="block text-xs font-normal text-red-700">{boven} boven budget</span>}
+                    </Td>
                     <Td num className="max-md:hidden">{b.kleinVerletDagen || '—'}</Td>
                   </tr>
                 );

@@ -181,8 +181,12 @@ export function PrintLeaveYearView({
                     </span>
                   </td>
                   <td className="py-2.5 pr-3 text-right font-black tabular-nums">{l.dagenInJaar}</td>
-                  <td className="py-2.5 text-right font-bold tabular-nums text-slate-600">
-                    {l.saldoNa === null ? '—' : `${l.saldoNa} van ${balans.betaaldBudget}`}
+                  <td className={`py-2.5 text-right font-bold tabular-nums ${l.saldoNa !== null && l.saldoNa < 0 ? 'text-red-700' : 'text-slate-600'}`}>
+                    {l.saldoNa === null
+                      ? '—'
+                      : l.saldoNa < 0
+                        ? `${Math.abs(l.saldoNa)} boven budget (${balans.betaaldBudget})`
+                        : `${l.saldoNa} van ${balans.betaaldBudget}`}
                   </td>
                 </tr>
               ))}
