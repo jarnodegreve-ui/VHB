@@ -124,16 +124,16 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                     className="w-full px-3.5 py-3 md:px-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-3 text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <LijnTegel line={div.line} tone={fase === 'verlopen' ? 'muted' : 'accent'} />
+                      <LijnTegel line={div.line} size="sm" tone={fase === 'verlopen' ? 'muted' : 'accent'} />
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <h4 className="text-card-title leading-snug" data-vt-record={div.id}>{div.title}</h4>
-                          {fase === 'komend' && <Badge tone="oker" stil>Komend</Badge>}
+                        {/* Titel alleen op regel 1; status en periode samen op regel 2 zodat
+                            het oog per rij één datumregel vindt (Jarno 10-09). */}
+                        <h4 className="text-card-title leading-snug" data-vt-record={div.id}>{div.title}</h4>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold tabular-nums">
+                          {fase === 'komend' && <Badge tone="oker" icon={<Calendar size={11} />}>Komend</Badge>}
                           {fase === 'verlopen' && <Badge tone="slate">Verlopen</Badge>}
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
-                          <Calendar size={12} className={fase === 'verlopen' ? 'text-slate-400' : 'text-oker-400'} />
-                          <span>{omleidingsPeriode(div)}</span>
+                          {fase === 'lopend' && <Calendar size={13} className="text-oker-500" />}
+                          <span className={fase === 'verlopen' ? 'text-slate-500' : 'text-slate-700'}>{omleidingsPeriode(div)}</span>
                         </div>
                       </div>
                     </div>
@@ -169,7 +169,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="oker">{lijnLabel(detail.line)}</Badge>
                   {omleidingsFase(detail) === 'verlopen' && <Badge tone="slate">Verlopen</Badge>}
-                  {omleidingsFase(detail) === 'komend' && <Badge tone="oker" stil>Komend</Badge>}
+                  {omleidingsFase(detail) === 'komend' && <Badge tone="oker" icon={<Calendar size={11} />}>Komend</Badge>}
                   {omleidingsFase(detail) === 'lopend' && <Badge tone="emerald" stil>Actief</Badge>}
                 </div>
                 <DiversionBody diversion={detail} />
