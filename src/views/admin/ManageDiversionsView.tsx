@@ -262,7 +262,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-slate-50/50 md:px-4"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <LijnTegel line={div.line} tone={expired ? 'muted' : 'accent'} />
+                <LijnTegel line={div.line} size="sm" tone={expired ? 'muted' : 'accent'} />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <h3 className="text-card-title leading-snug">{div.title}</h3>
