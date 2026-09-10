@@ -65,7 +65,7 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
   };
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="2xl" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+    <Modal open={open} onClose={onClose} maxWidth="3xl" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
       <ModalHeader
         title={`Verlofsaldo ${jaar}`}
         description="Betaald verlof per medewerker: opgenomen en aangevraagd tegenover het budget. Zondagen en feestdagen tellen niet mee."
@@ -87,15 +87,17 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
         </div>
 
         <TableShell>
-          <table className="w-full text-left">
+          {/* table-fixed: de cijferkolommen krijgen een vaste breedte en de naam de rest,
+              anders duwt de tabel op iPhone de laatste kolom buiten beeld. */}
+          <table className="w-full table-fixed text-left">
             <thead>
               <tr>
                 <SortTh kolom="naam" sort={sort}>Medewerker</SortTh>
-                <SortTh kolom="budget" sort={sort} align="right" className="max-md:hidden">Budget</SortTh>
-                <SortTh kolom="gebruikt" sort={sort} align="right">Opgenomen</SortTh>
-                <SortTh kolom="aangevraagd" sort={sort} align="right" className="max-md:hidden">Aangevraagd</SortTh>
-                <SortTh kolom="resterend" sort={sort} align="right">Resterend</SortTh>
-                <SortTh kolom="kleinVerlet" sort={sort} align="right" className="max-md:hidden">Klein verlet</SortTh>
+                <SortTh kolom="budget" sort={sort} align="right" className="max-md:hidden md:w-20">Budget</SortTh>
+                <SortTh kolom="gebruikt" sort={sort} align="right" className="w-24">Opgenomen</SortTh>
+                <SortTh kolom="aangevraagd" sort={sort} align="right" className="max-md:hidden md:w-28">Aangevraagd</SortTh>
+                <SortTh kolom="resterend" sort={sort} align="right" className="w-24 md:w-32">Resterend</SortTh>
+                <SortTh kolom="kleinVerlet" sort={sort} align="right" className="max-md:hidden md:w-28">Klein verlet</SortTh>
               </tr>
             </thead>
             <tbody>
@@ -105,11 +107,9 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
                 const boven = Math.max(0, b.betaaldGebruikt - b.betaaldBudget);
                 return (
                   <tr key={u.id}>
-                    {/* w-full + max-w-0: de naamkolom neemt de restbreedte en
-                        kapt af i.p.v. de tabel op mobiel buiten beeld te duwen. */}
-                    <Td className="w-full max-w-0">
+                    <Td className="max-md:px-3">
                       <span className="flex min-w-0 items-center gap-2.5">
-                        <Avatar naam={u.name} size="sm" />
+                        <span className="max-md:hidden"><Avatar naam={u.name} size="sm" /></span>
                         <span className="truncate font-medium text-slate-800">{u.name}</span>
                       </span>
                     </Td>
@@ -118,7 +118,7 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
                     <Td num className={cn('max-md:hidden', b.betaaldAangevraagd > 0 ? 'text-amber-700' : 'text-slate-500')}>{b.betaaldAangevraagd || '—'}</Td>
                     <Td num className={cn('font-semibold', krap ? 'text-red-700' : laag ? 'text-amber-700' : 'text-slate-800')}>
                       {b.betaaldResterend}
-                      {boven > 0 && <span className="block text-xs font-normal text-red-700">{boven} boven budget</span>}
+                      {boven > 0 && <span className="block whitespace-normal text-xs font-normal text-red-700 md:whitespace-nowrap">{boven} boven budget</span>}
                     </Td>
                     <Td num className="max-md:hidden">{b.kleinVerletDagen || '—'}</Td>
                   </tr>
