@@ -508,6 +508,7 @@ export const vindOngeregistreerdeZiekte = (
 export const toPublicDiversion = (d: any): DiversionRecord => ({
   id: String(d.id),
   line: d.line ?? "",
+  location: d.location ? String(d.location) : undefined,
   title: d.title ?? "",
   description: d.description ?? "",
   startDate: d.startDate ?? d.startdate ?? "",
@@ -554,6 +555,10 @@ export const sanitizeDiversionPdfUrl = (value?: string | null): string | null =>
 export const toDatabaseDiversion = (d: DiversionRecord) => ({
   id: String(d.id),
   line: d.line,
+  // location: supabase/2026-09-10_diversions_location.sql. Zolang die migratie
+  // niet gedraaid is, valt saveDiversionsData terug op een upsert zónder deze
+  // kolom (zie zonderLocation daar), zodat het beheer niet met 42703 breekt.
+  location: d.location?.trim() || null,
   title: d.title,
   description: d.description,
   startDate: d.startDate,

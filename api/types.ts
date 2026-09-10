@@ -203,6 +203,8 @@ export type PlanningMatrixImportHistoryRow = {
 export interface DiversionRecord {
   id: string;
   line: string;
+  /** Plaats/locatie (bv. "Eeklo, Markt"); kolom `location`, migratie 2026-09-10. */
+  location?: string;
   title: string;
   description: string;
   startDate: string;

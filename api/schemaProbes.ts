@@ -25,7 +25,9 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3,loopnr,loopnr2,loopnr3" },
   // severity bestaat live nog (nullable) maar wordt niet meer geschreven;
   // mapCoordinates bestaat live NIET en is uit de schrijfmapper gehaald.
-  { table: "diversions", columns: "id,line,title,description,startDate,endDate,severity,pdfUrl" },
+  // location: plaats van de omleiding (2026-09-10_diversions_location.sql);
+  // zonder migratie valt de upsert terug op de kolommen zonder location.
+  { table: "diversions", columns: "id,line,title,description,startDate,endDate,severity,pdfUrl,location" },
   // swap_type: ruil zonder tegenprestatie (supabase/swaps_swap_type.sql).
   // shift_date/shift_line: planning-doorvoer (2026-08-01_swaps_shift_info.sql).
   // target_seen_at: gezien-bevestiging door de ontvanger (2026-08-16_swaps_target_seen.sql).

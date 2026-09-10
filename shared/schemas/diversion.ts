@@ -10,6 +10,8 @@ import { isoDatum, optioneel, verplichteTekst } from './basis.js';
 const diversionVelden = {
   id: verplichteTekst('Id ontbreekt'),
   line: verplichteTekst('Vul een lijn in'),
+  // Plaats is optioneel (oudere omleidingen hebben ze niet), maar kort.
+  location: optioneel(z.string().trim().max(80, 'Plaats is te lang (max 80 tekens)')),
   title: verplichteTekst('Vul een titel in'),
   description: verplichteTekst('Vul een omschrijving in'),
   startDate: isoDatum('Vul een startdatum in als JJJJ-MM-DD'),

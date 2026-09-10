@@ -1371,6 +1371,10 @@ export const getDiversionsData = async () => {
   return rows.map(toPublicDiversion);
 };
 
+// null = nog niet geprobeerd; false = kolom `location` bestaat (nog) niet.
+let diversionsMetLocation: boolean | null = null;
+const zonderLocation = ({ location: _l, ...rest }: ReturnType<typeof toDatabaseDiversion>) => rest;
+
 export const saveDiversionsData = async (data: any) => {
   const client = requireDb();
   const normalized = Array.isArray(data) ? data.map(toPublicDiversion) : [];
@@ -1388,7 +1392,18 @@ export const saveDiversionsData = async (data: any) => {
   // rijen (en PDF's) onomkeerbaar weggegooid. Andersom verloor je bij een
   // upsert-fout de zojuist verwijderde records.
   if (normalized.length > 0) {
-    const { error: upsertError } = await client.from('diversions').upsert(normalized.map(toDatabaseDiversion));
+    const rows = normalized.map(toDatabaseDiversion);
+    let { error: upsertError } = diversionsMetLocation === false
+      ? await client.from('diversions').upsert(rows.map(zonderLocation))
+      : await client.from('diversions').upsert(rows);
+    // Migratie 2026-09-10_diversions_location.sql nog niet gedraaid: één
+    // mislukte upsert, daarna schrijven we (per warme lambda) zonder `location`.
+    if (upsertError && diversionsMetLocation !== false && isMissingColumnError(upsertError)) {
+      diversionsMetLocation = false;
+      ({ error: upsertError } = await client.from('diversions').upsert(rows.map(zonderLocation)));
+    } else if (!upsertError) {
+      diversionsMetLocation = true;
+    }
     if (upsertError) throw upsertError;
   }
 
