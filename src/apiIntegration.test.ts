@@ -4975,3 +4975,33 @@ describe('dienstruil: afgehandelde wissels wissen', () => {
     expect(mem.swaps.some((s: any) => s.id === 's-ander')).toBe(true);
   });
 });
+
+describe('extra vrije dagen (feestdagen) (10-09)', () => {
+  const BRUG = { id: 'brug', naam: 'Brugdag', datum: '2026-05-15' };
+  const SLUIT = { id: 'sluit', naam: 'Bedrijfssluiting', datum: '2026-12-24' };
+
+  it('GET geeft iedereen een lege lijst zolang er niets ingesteld is', async () => {
+    for (const token of ['tok-a', 'tok-planner', 'tok-admin']) {
+      const res = await api('GET', '/api/verlof/feestdagen', { token });
+      expect(res.status).toBe(200);
+      expect(res.json).toEqual({ extra: [] });
+    }
+  });
+
+  it('admin bewaart extra dagen: gesorteerd, ontdubbeld per datum, gelogd', async () => {
+    const res = await api('PUT', '/api/verlof/feestdagen', { token: 'tok-admin', body: { extra: [SLUIT, BRUG, { ...BRUG, id: 'dubbel', naam: 'Nog eens' }] } });
+    expect(res.status).toBe(200);
+    expect(res.json.extra.map((d: any) => d.id)).toEqual(['brug', 'sluit']);
+    expect(mem.appSettings.verlof_feestdagen).toEqual({ extra: [BRUG, SLUIT] });
+    expect(mem.activity.find((a: any) => a.action === 'Extra vrije dagen aangepast')?.message).toContain('Brugdag (2026-05-15)');
+    expect((await api('GET', '/api/verlof/feestdagen', { token: 'tok-a' })).json.extra).toHaveLength(2);
+  });
+
+  it('planner en chauffeur mogen niet schrijven (403); een kapotte datum geeft 400', async () => {
+    expect((await api('PUT', '/api/verlof/feestdagen', { token: 'tok-planner', body: { extra: [BRUG] } })).status).toBe(403);
+    expect((await api('PUT', '/api/verlof/feestdagen', { token: 'tok-a', body: { extra: [BRUG] } })).status).toBe(403);
+    const kapot = await api('PUT', '/api/verlof/feestdagen', { token: 'tok-admin', body: { extra: [{ ...BRUG, datum: '15/05/2026' }] } });
+    expect(kapot.status).toBe(400);
+    expect(mem.appSettings.verlof_feestdagen).toBeUndefined();
+  });
+});

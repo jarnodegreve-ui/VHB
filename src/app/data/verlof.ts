@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { LeaveRequest } from '../../types';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, apiJson } from '../../lib/api';
+import { stelExtraFeestdagenIn } from '../../lib/leaveBalance';
+// Zod-vrij (shared/feestdagen.ts): deze hook zit in de startbundel.
+import { parseExtraFeestdagenLos, type ExtraFeestdag } from '../../../shared/feestdagen';
 import type { DataCtx } from './kern';
 
 /**
@@ -126,10 +129,35 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     }
   }, [currentUser?.id]);
 
+  // Extra vrije dagen van de beheerder (naast de wettelijke feestdagen): één
+  // keer laden per sessie en meteen als standaard in de verloftelling zetten
+  // (leaveBalance.stelExtraFeestdagenIn), zodat elk saldo in de app ze
+  // meerekent zonder ze door te geven.
+  const [feestdagenExtra, setFeestdagenExtra] = useState<ExtraFeestdag[]>([]);
+  const zetFeestdagenExtra = (extra: ExtraFeestdag[]) => {
+    setFeestdagenExtra(extra);
+    stelExtraFeestdagenIn(extra.map((d) => d.datum));
+  };
+  useEffect(() => {
+    if (!currentUser) return;
+    let weg = false;
+    void (async () => {
+      try {
+        const data = await apiJson<unknown>('/api/verlof/feestdagen');
+        if (!weg) zetFeestdagenExtra(parseExtraFeestdagenLos(data));
+      } catch {
+        // standaard (alleen wettelijke feestdagen) blijft staan
+      }
+    })();
+    return () => { weg = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
+
   /** Bij uitloggen: de aanvragen leeg (lastSeen wordt door het effect hierboven beheerd). */
   const resetVerlof = () => {
     setLeaveRequests([]);
+    zetFeestdagenExtra([]);
   };
 
-  return { leaveRequests, lastSeenLeaveDecisionAt, fetchLeave, saveLeave, reportSick, decideLeave, markLeaveDecisionsSeen, resetVerlof };
+  return { leaveRequests, lastSeenLeaveDecisionAt, fetchLeave, saveLeave, reportSick, decideLeave, markLeaveDecisionsSeen, resetVerlof, feestdagenExtra, zetFeestdagenExtra };
 }

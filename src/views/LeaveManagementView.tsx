@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, History, Plus, Printer, SlidersHorizontal, X } from 'lucide-react';
+import { AlertTriangle, CalendarOff, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, History, Plus, Printer, SlidersHorizontal, X } from 'lucide-react';
 import { isRijdend } from '../types';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
@@ -12,7 +12,9 @@ import { Avatar } from '../components/Avatar';
 import { Field, Select, Textarea } from '../components/Field';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { DetailPaneel } from '../components/DetailPaneel';
-import { verlofBalans, verlofDagen } from '../lib/leaveBalance';
+import { isVerlofdag, verlofBalans, verlofDagen } from '../lib/leaveBalance';
+import { VerlofFeestdagenModal } from '../components/VerlofFeestdagenModal';
+import type { ExtraFeestdag } from '../../shared/feestdagen';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
@@ -53,7 +55,7 @@ const dagenVan = (van: string, tot: string): string[] => {
 };
 const BEZETTING_LABEL: Record<Bezetting, string> = { vrij: 'vrij', deels: 'deels vrij', volzet: 'volzet' };
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [], feestdagenExtra = [], onFeestdagenSaved }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[]; feestdagenExtra?: ExtraFeestdag[]; onFeestdagenSaved?: (extra: ExtraFeestdag[]) => void }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   // 'registratie' (verzoek Jarno 09-09): een planner/admin legt verlof vast
   // dat al op papier goedgekeurd was, zodat de papieren en de digitale versie
@@ -63,6 +65,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const [modus, setModus] = useState<'aanvraag' | 'registratie'>('aanvraag');
   const [voorWieFout, setVoorWieFout] = useState('');
   const [showLimietenModal, setShowLimietenModal] = useState(false);
+  const [showFeestdagenModal, setShowFeestdagenModal] = useState(false);
   const [limieten, setLimieten] = useState<VerlofLimieten>(STANDAARD_VERLOF_LIMIETEN);
   useEffect(() => {
     let weg = false;
@@ -187,10 +190,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       const u = users.find((x) => String(x.id) === String(r.userId));
       return !u || isRijdend(u.role);
     }).length;
-  /** Bevat de periode een zondag? Zo ja, dan verschilt het aantal verlofdagen
-   *  van het aantal kalenderdagen en zetten we dat er expliciet bij — anders
-   *  oogt een week van 6 dagen als een telfout. */
-  const bevatZondag = (van: string, tot: string) => dagenVan(van, tot).some((d) => new Date(`${d}T00:00:00`).getDay() === 0);
+  /** Bevat de periode een zondag of feestdag? Zo ja, dan verschilt het aantal
+   *  verlofdagen van het aantal kalenderdagen en zetten we dat er expliciet
+   *  bij — anders oogt een week van 5 of 6 dagen als een telfout. */
+  const bevatVrijeDag = (van: string, tot: string) => dagenVan(van, tot).some((d) => !isVerlofdag(d));
 
   /** Dagen van een periode waarop deze chauffeur erbij de verloflimiet overschrijdt. */
   const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) => {
@@ -602,8 +605,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   {reviewLeave.startDate}{reviewLeave.startDate !== reviewLeave.endDate ? ` → ${reviewLeave.endDate}` : ''}
                   <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'verlofdag' : 'verlofdagen'})</span>
                 </p>
-                {bevatZondag(reviewLeave.startDate, reviewLeave.endDate) && (
-                  <p className="mt-1 text-2xs font-normal text-slate-500">Zondagen tellen niet mee als verlofdag.</p>
+                {bevatVrijeDag(reviewLeave.startDate, reviewLeave.endDate) && (
+                  <p className="mt-1 text-2xs font-normal text-slate-500">Zondagen en feestdagen tellen niet mee als verlofdag.</p>
                 )}
               </Card>
 
@@ -710,9 +713,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         actions={(
           <div className="flex flex-wrap items-center gap-2">
             {user.role === 'admin' && (
-              <Button variant="secondary" size="lg" icon={<SlidersHorizontal size={18} />} onClick={() => setShowLimietenModal(true)}>
-                Limieten
-              </Button>
+              <>
+                <Button variant="secondary" size="lg" icon={<CalendarOff size={18} />} onClick={() => setShowFeestdagenModal(true)}>
+                  Feestdagen
+                </Button>
+                <Button variant="secondary" size="lg" icon={<SlidersHorizontal size={18} />} onClick={() => setShowLimietenModal(true)}>
+                  Limieten
+                </Button>
+              </>
             )}
             {isPlanner && (
               <Button variant="secondary" size="lg" icon={<ClipboardCheck size={18} />} onClick={openRegistratie}>
@@ -1136,7 +1144,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           {requestPreview.wouldExceed
                             ? `⚠ ${Math.abs(requestPreview.remainingAfter)} ${Math.abs(requestPreview.remainingAfter) === 1 ? 'dag' : 'dagen'} boven ${namensIemandAnders ? 'het' : 'je'} jaarbudget.${registratie ? ' Controleer het papier.' : namensIemandAnders ? '' : ' Planner moet beoordelen.'}`
                             : `${requestPreview.remainingAfter} ${requestPreview.remainingAfter === 1 ? 'dag' : 'dagen'} resterend na deze ${registratie ? 'periode' : 'aanvraag'}.`}
-                          {bevatZondag(formData.startDate, formData.endDate) ? ' Zondagen tellen niet mee.' : ''}
+                          {bevatVrijeDag(formData.startDate, formData.endDate) ? ' Zondagen en feestdagen tellen niet mee.' : ''}
                         </p>
                       </Card>
                     )}
@@ -1228,7 +1236,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       </Modal>
 
       {user.role === 'admin' && (
-        <VerlofLimietenModal open={showLimietenModal} onClose={() => setShowLimietenModal(false)} limieten={limieten} onSaved={setLimieten} />
+        <>
+          <VerlofLimietenModal open={showLimietenModal} onClose={() => setShowLimietenModal(false)} limieten={limieten} onSaved={setLimieten} />
+          <VerlofFeestdagenModal open={showFeestdagenModal} onClose={() => setShowFeestdagenModal(false)} extra={feestdagenExtra} onSaved={(extra) => onFeestdagenSaved?.(extra)} />
+        </>
       )}
 
       <EntityHistoryModal

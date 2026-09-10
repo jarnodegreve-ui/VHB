@@ -122,7 +122,7 @@ export function useAppData({
   const { shifts, services, myNotes, planningMatrixRows, planningCodes, planningMatrixHistory, coverageDays,
     fetchPlanning, savePlanning, fetchServices, saveServices, fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory,
     savePlanningCodes, refreshCoverageGaps, fetchMyNotes } = planning;
-  const { leaveRequests, lastSeenLeaveDecisionAt, fetchLeave, saveLeave, reportSick, decideLeave, markLeaveDecisionsSeen } = verlof;
+  const { leaveRequests, lastSeenLeaveDecisionAt, fetchLeave, saveLeave, reportSick, decideLeave, markLeaveDecisionsSeen, feestdagenExtra, zetFeestdagenExtra } = verlof;
   const { swaps, fetchSwaps, saveSwaps, decideSwap, confirmSwapSeen } = ruil;
   const { users, unseenDocuments, vervaldata, pendingDevices, fetchUsers, saveUsers, saveUser, createUser, deleteUser,
     fetchUnseenDocuments, markDocumentsSeen } = mensen;
@@ -139,6 +139,7 @@ export function useAppData({
     fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, fetchUnseenDocuments, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog, fetchLoginActivity,
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
+    feestdagenExtra, zetFeestdagenExtra,
     fetchServices, saveServices, fetchUsers, saveUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
     saveUser, createUser, deleteUser, saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
     meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen,
