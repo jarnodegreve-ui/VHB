@@ -1,4 +1,5 @@
 import { isoDate } from './availability';
+import { addDagen, relatieveDag } from './datum';
 import { formatShortDay } from './format';
 import type { Diversion } from '../types';
 
@@ -55,4 +56,36 @@ export const omleidingsPeriode = (d: Periode, vandaag: string = isoDate(new Date
   if (!d.endDate) return `Vanaf ${kort(d.startDate, vandaag)}`;
   if (d.endDate === d.startDate) return kort(d.startDate, vandaag);
   return `${kort(d.startDate, vandaag)} t/m ${kort(d.endDate, vandaag)}`;
+};
+
+const dagenTussen = (vanIso: string, totIso: string): number =>
+  Math.round((new Date(`${totIso}T00:00:00`).getTime() - new Date(`${vanIso}T00:00:00`).getTime()) / 86400000);
+
+/** Tijdsgevoel naast de periode, zodat een chauffeur niet hoeft te rekenen:
+ *  "start morgen", "start over 5 dagen", "nog 14 dagen", "laatste dag vandaag".
+ *  Leeg voor verlopen omleidingen en lopende zonder einddatum. */
+export const omleidingsTijdshint = (d: Periode, vandaag: string = isoDate(new Date())): string => {
+  const fase = omleidingsFase(d, vandaag);
+  if (fase === 'komend') return `start ${relatieveDag(d.startDate, vandaag)}`;
+  if (fase === 'lopend' && d.endDate) {
+    const rest = dagenTussen(vandaag, d.endDate);
+    if (rest <= 0) return 'laatste dag vandaag';
+    if (rest === 1) return 'laatste dag morgen';
+    return `nog ${rest} dagen`;
+  }
+  return '';
+};
+
+/** Verlopen omleidingen blijven zoveel dagen zichtbaar voor chauffeurs; daarna
+ *  vallen ze uit de lijst (het beheer ziet ze wel nog). */
+export const VERLOPEN_ZICHTBAAR_DAGEN = 30;
+
+export const isRecentGenoeg = (d: Periode, vandaag: string = isoDate(new Date())): boolean =>
+  !d.endDate || d.endDate >= addDagen(vandaag, -VERLOPEN_ZICHTBAAR_DAGEN);
+
+/** Gesorteerd én verdeeld in de drie fases, voor secties in de lijst. */
+export const groepeerOmleidingen = <T extends Periode>(list: T[], vandaag: string = isoDate(new Date())): Record<OmleidingsFase, T[]> => {
+  const groepen: Record<OmleidingsFase, T[]> = { lopend: [], komend: [], verlopen: [] };
+  for (const d of sorteerOmleidingen(list, vandaag)) groepen[omleidingsFase(d, vandaag)].push(d);
+  return groepen;
 };

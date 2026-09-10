@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { omleidingsFase, omleidingsPeriode, sorteerOmleidingen } from './diversions';
+import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from './diversions';
 
 const vandaag = '2026-09-10';
 
@@ -51,5 +51,41 @@ describe('omleidingsPeriode', () => {
   });
   it('voegt het jaartal toe als het niet dit jaar is', () => {
     expect(omleidingsPeriode({ startDate: '2026-12-20', endDate: '2027-01-10' }, vandaag)).toMatch(/dec\.? t\/m \S+ 10 jan\.? 2027$/);
+  });
+});
+
+describe('omleidingsTijdshint', () => {
+  it('telt af naar het einde van een lopende omleiding', () => {
+    expect(omleidingsTijdshint({ startDate: '2026-09-01', endDate: '2026-09-24' }, vandaag)).toBe('nog 14 dagen');
+    expect(omleidingsTijdshint({ startDate: '2026-09-01', endDate: '2026-09-11' }, vandaag)).toBe('laatste dag morgen');
+    expect(omleidingsTijdshint({ startDate: '2026-09-01', endDate: '2026-09-10' }, vandaag)).toBe('laatste dag vandaag');
+  });
+  it('zegt wanneer een komende omleiding start', () => {
+    expect(omleidingsTijdshint({ startDate: '2026-09-11' }, vandaag)).toBe('start morgen');
+    expect(omleidingsTijdshint({ startDate: '2026-09-12' }, vandaag)).toBe('start overmorgen');
+    expect(omleidingsTijdshint({ startDate: '2026-09-15' }, vandaag)).toBe('start over 5 dagen');
+  });
+  it('zwijgt zonder einddatum en na afloop', () => {
+    expect(omleidingsTijdshint({ startDate: '2026-09-01' }, vandaag)).toBe('');
+    expect(omleidingsTijdshint({ startDate: '2026-08-01', endDate: '2026-08-15' }, vandaag)).toBe('');
+  });
+});
+
+describe('isRecentGenoeg en groepeerOmleidingen', () => {
+  it('laat verlopen omleidingen na 30 dagen uit de chauffeurslijst vallen', () => {
+    expect(isRecentGenoeg({ startDate: '2026-08-01', endDate: '2026-08-11' }, vandaag)).toBe(true);
+    expect(isRecentGenoeg({ startDate: '2026-08-01', endDate: '2026-08-10' }, vandaag)).toBe(false);
+    expect(isRecentGenoeg({ startDate: '2026-01-01' }, vandaag)).toBe(true);
+  });
+  it('verdeelt gesorteerd in lopend, komend en verlopen', () => {
+    const g = groepeerOmleidingen([
+      { id: 'v', startDate: '2026-08-01', endDate: '2026-09-01' },
+      { id: 'k', startDate: '2026-09-20' },
+      { id: 'l2', startDate: '2026-09-05' },
+      { id: 'l1', startDate: '2026-09-01' },
+    ], vandaag);
+    expect(g.lopend.map((d) => d.id)).toEqual(['l1', 'l2']);
+    expect(g.komend.map((d) => d.id)).toEqual(['k']);
+    expect(g.verlopen.map((d) => d.id)).toEqual(['v']);
   });
 });
