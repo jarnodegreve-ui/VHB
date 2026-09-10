@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { LeaveRequest } from '../../types';
 import { apiFetch, apiJson } from '../../lib/api';
 import { stelExtraFeestdagenIn } from '../../lib/leaveBalance';
-import { parseVerlofFeestdagen, type ExtraFeestdag } from '../../../shared/schemas/verlofFeestdagen';
+// Zod-vrij (shared/feestdagen.ts): deze hook zit in de startbundel.
+import { parseExtraFeestdagenLos, type ExtraFeestdag } from '../../../shared/feestdagen';
 import type { DataCtx } from './kern';
 
 /**
@@ -143,7 +144,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     void (async () => {
       try {
         const data = await apiJson<unknown>('/api/verlof/feestdagen');
-        if (!weg) zetFeestdagenExtra(parseVerlofFeestdagen(data).extra);
+        if (!weg) zetFeestdagenExtra(parseExtraFeestdagenLos(data));
       } catch {
         // standaard (alleen wettelijke feestdagen) blijft staan
       }

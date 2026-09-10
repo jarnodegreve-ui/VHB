@@ -14,7 +14,7 @@ import { MaandNavigatie } from '../components/MaandNavigatie';
 import { DetailPaneel } from '../components/DetailPaneel';
 import { isVerlofdag, verlofBalans, verlofDagen } from '../lib/leaveBalance';
 import { VerlofFeestdagenModal } from '../components/VerlofFeestdagenModal';
-import type { ExtraFeestdag } from '../../shared/schemas/verlofFeestdagen';
+import type { ExtraFeestdag } from '../../shared/feestdagen';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';

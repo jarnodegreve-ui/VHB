@@ -15,7 +15,8 @@ export const extraFeestdagSchema = z.object({
   datum: isoDatum('Ongeldige datum'),
   naam: z.string().trim().min(1, 'Geef de dag een naam').max(60, 'Maximum 60 tekens'),
 });
-export type ExtraFeestdag = z.output<typeof extraFeestdagSchema>;
+export type { ExtraFeestdag } from '../feestdagen.js';
+import type { ExtraFeestdag } from '../feestdagen.js';
 
 export const verlofFeestdagenSchema = z.object({
   extra: z.array(extraFeestdagSchema).max(200, 'Maximum 200 dagen').default([]),

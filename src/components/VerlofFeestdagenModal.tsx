@@ -10,7 +10,8 @@ import { notify } from '../lib/ui';
 import { formatShortDay } from '../lib/format';
 import { feestdagenVanJaar } from '../lib/typedag';
 import { valideer } from '../../shared/schemas/basis';
-import { sorteerExtraFeestdagen, verlofFeestdagenSchema, type ExtraFeestdag } from '../../shared/schemas/verlofFeestdagen';
+import { sorteerExtraFeestdagen, verlofFeestdagenSchema } from '../../shared/schemas/verlofFeestdagen';
+import type { ExtraFeestdag } from '../../shared/feestdagen';
 
 /**
  * Feestdagen (verzoek Jarno 10-09). De wettelijke Belgische feestdagen
