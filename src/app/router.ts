@@ -90,15 +90,24 @@ export function navigeer(view: View, opts: { params?: readonly string[]; replace
   // src/lib/overgang.ts); een parameterwissel binnen hetzelfde scherm
   // (maand, replace) blijft direct, anders fadet elke maandstap.
   const anderScherm = !opts.replace && lees().view !== view;
-  const wissel = () => {
-    if (!zelfde) {
-      if (opts.replace) window.history.replaceState(null, '', pad);
-      else window.history.pushState(null, '', pad);
-    }
-    onthoud(view);
-    window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
-  };
-  if (anderScherm) metOvergang(wissel); else wissel();
+  // De historiek wisselt hier, synchroon in de tik zelf — bewust níét in de
+  // view-transition-callback. Die draait pas bij de volgende rendering-stap,
+  // en in dat gaatje ruimt een overlay die in dezelfde commit sluit (de
+  // mobiele zijbalk, useHistoryDismiss) zijn eigen entry op met een
+  // uitgestelde back(). Stond de nieuwe pagina dan nog niet in de historiek,
+  // dan at die back() haar op en landde je terug op de pagina waar je vandaan
+  // kwam — ongeacht welk menu-item je koos (melding Jarno 11-09).
+  if (!zelfde) {
+    // Getikt vanuit een open overlay: die entry verdwijnt met de overlay mee,
+    // dus nemen we hem over i.p.v. er een tweede bovenop te leggen. Anders
+    // blijft er een lege ladestap achter en is één keer terug geen pagina terug.
+    const uitOverlay = typeof (window.history.state as { vhbOverlay?: unknown } | null)?.vhbOverlay === 'string';
+    if (opts.replace || uitOverlay) window.history.replaceState(null, '', pad);
+    else window.history.pushState(null, '', pad);
+  }
+  onthoud(view);
+  const melden = () => window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
+  if (anderScherm) metOvergang(melden); else melden();
 }
 
 export function useRoute() {

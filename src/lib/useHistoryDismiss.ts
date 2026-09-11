@@ -34,6 +34,7 @@ export function useHistoryDismiss(open: boolean, onClose: () => void) {
     const id = `overlay-${++teller}`;
     idRef.current = id;
     levend.add(id);
+    const padBijOpenen = window.location.pathname;
     const vorige = window.history.state;
     const basis = vorige && typeof vorige === 'object' ? vorige : {};
     const bovenste = (basis as { vhbOverlay?: unknown }).vhbOverlay;
@@ -58,6 +59,10 @@ export function useHistoryDismiss(open: boolean, onClose: () => void) {
       // uitgesteld, zodat een overlay die in dezelfde commit opent eerst onze
       // entry kan overnemen; staat er dan iets anders bovenaan, niets doen.
       window.setTimeout(() => {
+        // Is er intussen naar een andere pagina genavigeerd, dan ligt onze
+        // entry niet meer bovenaan: een back() zou dan die paginawissel
+        // ongedaan maken i.p.v. onze entry op te ruimen.
+        if (window.location.pathname !== padBijOpenen) return;
         if (window.history.state?.vhbOverlay !== id) return;
         onderweg.add(id);
         window.addEventListener('popstate', () => onderweg.delete(id), { once: true });
