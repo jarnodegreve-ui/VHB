@@ -31,3 +31,9 @@ import type { Onderhoud } from './onderhoud.js';
 export const ONDERHOUD_TEKST_MAX = 240;
 export const ONDERHOUD_STANDAARD_TEKST = 'Het portaal is even in onderhoud. Bekijken kan, sommige onderdelen werken tijdelijk niet.';
 export const GEEN_ONDERHOUD: Onderhoud = { actief: false, tekst: '', schrijfblok: false };
+
+/** Prefix van `reason` op een door beheer rechtstreeks overgezette dienst
+ *  (POST /api/admin/shift-swap): zo herkennen server (maandplanning-overlay)
+ *  en client (badge in rooster/Mijn dag) een handmatige wissel zonder eigen
+ *  veld of tabel. */
+export const HANDMATIGE_WISSEL_PREFIX = 'Handmatige wissel door ';

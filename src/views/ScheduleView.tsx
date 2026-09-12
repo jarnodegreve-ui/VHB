@@ -5,6 +5,7 @@ import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
 import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType, serviceNumberOf } from '../lib/format';
+import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '../lib/ruilBadge';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, Chip, MicroLabel, microLabelClass, segItemClass, TableShell, Td, Th } from '../components/primitives';
 import { Card } from '../components/Card';
@@ -59,6 +60,8 @@ type GroupedShift = {
   hasConflict: boolean;
   /** Eigen openstaande ruilaanvraag (pending/accepted) voor deze dienst. */
   openSwap?: SwapRequest;
+  /** Doorgevoerde ruil die deze dienst bij de chauffeur bracht ("Geruild met X"). */
+  geruild?: RuilBadge;
 };
 
 const formatShiftDate = (date: string) =>
@@ -85,7 +88,7 @@ const openSwapLabel = (swap: SwapRequest) => {
  */
 const openSwapTone = (swap: SwapRequest) => (swap.status === 'accepted' ? 'blue' : 'amber');
 
-export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
+export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   // Lijst of maandgrid — de keuze blijft bewaard (localStorage kan in
@@ -137,6 +140,10 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
     }
     return map;
   }, [swaps, user.id]);
+  // Doorgevoerde ruilen per (datum, dienstnummer): de badge "Geruild met X"
+  // op de dienst die je van een collega overnam (vraag Jarno 12-09). Bewust
+  // op datum + dienst, niet op shift-id: die verandert bij elke import.
+  const geruild = useMemo(() => geruildeDiensten(user.id, swaps, users), [swaps, users, user.id]);
 
   // Groepeer per (datum + dienstnummer) zodat multi-segment diensten
   // (bv. dienst 2304 met 3 blokken) als één kaart met meerdere
@@ -164,6 +171,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           earliestStart: s.startTime,
           hasConflict,
           openSwap,
+          geruild: geruild.get(ruilSleutel(s.date, serviceNumberOf(s))),
         });
       }
     }
@@ -177,7 +185,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
     );
     // conflictIds zit in de body: zonder deze dep blijven de verlof-conflict-
     // vlaggen stale wanneer alleen leaveRequests (en dus conflictIds) wijzigt.
-  }, [myShifts, conflictIds, openSwapByShiftId]);
+  }, [myShifts, conflictIds, openSwapByShiftId, geruild]);
 
   // Splits toekomst / vandaag / verleden — chauffeur wil toekomst zien.
   // isoDate = lokale tijd; toISOString() gaf in BE 's nachts de UTC-dag
@@ -512,6 +520,9 @@ function MonthCalendar({
                 {g.openSwap && (
                   <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
                 )}
+                {g.geruild && (
+                  <Badge tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(g.geruild)}</Badge>
+                )}
               </div>
               <div className="mt-1.5 space-y-1.5 pl-1">
                 {g.segments.map((s) => (
@@ -595,6 +606,9 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                         {g.openSwap && (
                           <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
                         )}
+                        {g.geruild && (
+                          <Badge tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(g.geruild)}</Badge>
+                        )}
                       </div>
                     </div>
                   </Td>
@@ -676,6 +690,11 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                   {g.openSwap && (
                     <div className="mt-1">
                       <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
+                    </div>
+                  )}
+                  {g.geruild && (
+                    <div className="mt-1">
+                      <Badge tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(g.geruild)}</Badge>
                     </div>
                   )}
                 </div>

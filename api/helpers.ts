@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { randomBytes } from "node:crypto";
 import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
+import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
 import type {
   AppUser,
   DiversionRecord,
@@ -118,7 +119,8 @@ export const toDatabaseUser = (user: AppUser) => ({
  * ruil 'pending' verlaat, en een handmatige wissel wordt direct goedgekeurd
  * aangemaakt.
  */
-export const HANDMATIGE_WISSEL_PREFIX = "Handmatige wissel door ";
+// Gedeeld met de client (badge in rooster/Mijn dag): shared/schemas/constanten.ts.
+export { HANDMATIGE_WISSEL_PREFIX };
 
 export const isHandmatigeWissel = (swap: { reason?: unknown } | null | undefined) =>
   String(swap?.reason ?? "").startsWith(HANDMATIGE_WISSEL_PREFIX);
