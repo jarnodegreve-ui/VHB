@@ -2441,9 +2441,15 @@ export const swapRaaktBereik = (swap: SwapCarryFields, bereik: { van: string; to
 export const applySwapsToPlanningRows = (
   rows: Array<Pick<ShiftRecord, 'date' | 'line' | 'driverId'>>,
   swaps: SwapCarryFields[],
-): { applied: number; skipped: number } => {
+): { applied: number; skipped: number; alVerwerkt: number } => {
   let applied = 0;
   let skipped = 0;
+  // De planner had de ruil al in de Excel verwerkt (voorlopig de werkwijze,
+  // Jarno 12-09): de dienst staat vers op de ontvanger, er valt niets te
+  // verhuizen. Apart geteld, zodat het importlogje dit niet als "niet
+  // toepasbaar" meldt — dat woord hoort een échte mismatch te betekenen
+  // (dienst intussen handmatig verlegd).
+  let alVerwerkt = 0;
   for (const swap of swaps) {
     const target = String(swap.targetDriverId ?? '');
     if (!swap.shiftDate || !swap.shiftLine || !target) {
@@ -2453,24 +2459,25 @@ export const applySwapsToPlanningRows = (
       continue;
     }
     let touched = false;
-    for (const row of rows) {
-      if (row.date === swap.shiftDate && String(row.line) === String(swap.shiftLine) && String(row.driverId) === String(swap.requesterId)) {
-        row.driverId = target;
-        touched = true;
-      }
-    }
-    if (swapHasReturnShift(swap)) {
+    let alBijOntvanger = false;
+    const verhuis = (date: string, line: string, van: string, naar: string) => {
       for (const row of rows) {
-        if (row.date === swap.returnDate && String(row.line) === String(swap.returnCode) && String(row.driverId) === target) {
-          row.driverId = String(swap.requesterId);
+        if (row.date !== date || String(row.line) !== line) continue;
+        if (String(row.driverId) === van) {
+          row.driverId = naar;
           touched = true;
+        } else if (String(row.driverId) === naar) {
+          alBijOntvanger = true;
         }
       }
-    }
+    };
+    verhuis(swap.shiftDate, String(swap.shiftLine), String(swap.requesterId), target);
+    if (swapHasReturnShift(swap)) verhuis(String(swap.returnDate), String(swap.returnCode), target, String(swap.requesterId));
     if (touched) applied++;
+    else if (alBijOntvanger) alVerwerkt++;
     else skipped++;
   }
-  return { applied, skipped };
+  return { applied, skipped, alVerwerkt };
 };
 
 /**
