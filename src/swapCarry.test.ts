@@ -20,7 +20,7 @@ describe('applySwapsToPlanningRows', () => {
       requesterId: '3', targetDriverId: '4', swapType: 'overname',
       shiftDate: '2026-07-08', shiftLine: '12',
     }]);
-    expect(res).toEqual({ applied: 1, skipped: 0 });
+    expect(res).toEqual({ applied: 1, skipped: 0, alVerwerkt: 0 });
     expect(r[0].driverId).toBe('4');
     expect(r[1].driverId).toBe('4');
     expect(r[2].driverId).toBe('4'); // onaangeraakt
@@ -55,7 +55,7 @@ describe('applySwapsToPlanningRows', () => {
       { requesterId: '3', targetDriverId: '4', swapType: 'ruil' }, // legacy: geen shiftDate/shiftLine
       { requesterId: '3', targetDriverId: '4', swapType: 'overname', shiftDate: '2099-01-01', shiftLine: '99' },
     ]);
-    expect(res).toEqual({ applied: 0, skipped: 2 });
+    expect(res).toEqual({ applied: 0, skipped: 2, alVerwerkt: 0 });
     expect(r.every((row, i) => row.driverId === rows()[i].driverId)).toBe(true);
   });
 
@@ -65,8 +65,31 @@ describe('applySwapsToPlanningRows', () => {
       { requesterId: '3', targetDriverId: '4', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' },
       { requesterId: '4', targetDriverId: '5', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' },
     ]);
-    expect(res).toEqual({ applied: 2, skipped: 0 });
+    expect(res).toEqual({ applied: 2, skipped: 0, alVerwerkt: 0 });
     expect(r[0].driverId).toBe('5');
+  });
+
+  it("telt een ruil die de planner al in de Excel verwerkte als 'al verwerkt', niet als 'niet toepasbaar'", () => {
+    // De matrix zet de dienst al op de collega: er valt niets te verhuizen,
+    // maar het is ook geen mismatch (bevinding Jarno 12-09).
+    const r = [{ date: '2026-07-08', line: '12', driverId: '4' }];
+    const res = applySwapsToPlanningRows(r, [{
+      requesterId: '3', targetDriverId: '4', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12',
+    }]);
+    expect(res).toEqual({ applied: 0, skipped: 0, alVerwerkt: 1 });
+    expect(r[0].driverId).toBe('4');
+  });
+
+  it('een 1-op-1-ruil waarvan de Excel beide benen al kent, telt één keer als al verwerkt', () => {
+    const r = [
+      { date: '2026-07-08', line: '12', driverId: '4' },
+      { date: '2026-07-02', line: '14', driverId: '3' },
+    ];
+    const res = applySwapsToPlanningRows(r, [{
+      requesterId: '3', targetDriverId: '4', swapType: 'ruil',
+      shiftDate: '2026-07-08', shiftLine: '12', returnDate: '2026-07-02', returnCode: '14',
+    }]);
+    expect(res).toEqual({ applied: 0, skipped: 0, alVerwerkt: 1 });
   });
 });
 
@@ -105,7 +128,7 @@ describe('swapRaaktBereik (periode-import)', () => {
     // Alleen september-rijen (periode-import): de terugdienst staat vers op de collega.
     const rijen = [{ date: '2026-09-03', line: '14', driverId: '4' }];
     const res = applySwapsToPlanningRows(rijen, [ruil({})]);
-    expect(res).toEqual({ applied: 1, skipped: 0 });
+    expect(res).toEqual({ applied: 1, skipped: 0, alVerwerkt: 0 });
     expect(rijen[0].driverId).toBe('3');
   });
 });

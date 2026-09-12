@@ -42,7 +42,8 @@ import {
   verwerkDiversionsOpslag,
   verwerkUpdatesOpslag,
 } from "./_lib/recordWrites.js";
-import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { legRuilenOverMaandbeeld } from "./_lib/ruilOverlay.js";
 import {
   applySwapsToPlanningRows,
   swapRaaktBereik,
@@ -936,52 +937,14 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
 
     const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
 
-    // Goedgekeurde dienstruilen doorvoeren in het maandbeeld (bevinding Jarno
-    // 06-08): een goedgekeurde ruil verhuist de dienst wél in de planning-
-    // tabel, maar de matrix — de bron van dit scherm — bleef de oude eigenaar
-    // tonen. We wisselen de cellen van aanvrager en collega op de dienstdag
-    // en (bij een 1-op-1 ruil) op de terugruil-dag, in beslisvolgorde zodat
-    // kettingen (A→B, daarna B→C) kloppen. Guard tegen dubbel doorvoeren:
-    // alleen wisselen als de cel van de gever nog de geruilde dienstcode
-    // toont — is de Excel intussen opnieuw geïmporteerd mét de ruil erin
-    // verwerkt, dan matcht dat niet meer en blijft alles staan. 'completed'
-    // telt mee: ook een voltooide ruil is gereden zoals gewisseld.
-    const dateSet = new Set(dates);
-    // `merk` reist mee met de verplaatste cel: zo ziet de maandplanning welke
-    // cellen afwijken van de geïmporteerde Excel, wie de dienst afstond en —
-    // bij een handmatige admin-wissel — met welke swap je hem kan terugdraaien.
-    const wisselCel = (
-      date: string, vanId: string, naarId: string, verwachtCode: string,
-      merk?: { swapId: string; swapManual: boolean; swapFrom: string },
-    ) => {
-      const vanCel = cells[vanId]?.[date];
-      if (!vanCel || toLookupToken(vanCel.code) !== toLookupToken(verwachtCode)) return;
-      const naarCel = cells[naarId]?.[date];
-      if (!cells[naarId]) cells[naarId] = {};
-      cells[naarId][date] = merk ? { ...vanCel, ...merk } : vanCel;
-      if (naarCel) cells[vanId][date] = naarCel;
-      else delete cells[vanId][date];
-    };
-    const doorgevoerdeRuilen = (swaps as any[])
-      .filter((sw) => sw?.status === "approved" || sw?.status === "completed")
-      .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")));
+    // Goedgekeurde dienstruilen over het maandbeeld leggen: de matrix (Excel)
+    // kent de ruilen uit het portaal niet vanzelf. De logica staat in
+    // api/_lib/ruilOverlay.ts (pure functie, getest): cellen wisselen als de
+    // Excel nog de oude eigenaar toont, alléén markeren als de planner de
+    // ruil al in de Excel verwerkte, zodat "geruild met X" een herimport
+    // overleeft (bevindingen Jarno 06-08 en 12-09).
     const naamVanId = (id: string) => chauffeurs.find((c: any) => String(c.id) === id)?.name ?? "";
-    for (const sw of doorgevoerdeRuilen) {
-      const van = String(sw.requesterId ?? "");
-      const naar = String(sw.targetDriverId ?? "");
-      if (!chauffeurIds.has(van) || !chauffeurIds.has(naar)) continue;
-      const dienstDag = String(sw.shiftDate ?? "");
-      const dienstCode = String(sw.shiftLine ?? "").trim();
-      const merk = { swapId: String(sw.id), swapManual: isHandmatigeWissel(sw), swapFrom: naamVanId(van) };
-      // Zonder dienst-info (aanvraag van vóór de shift_info-migratie) valt er
-      // niets veilig te wisselen.
-      if (dienstDag && dienstCode && dateSet.has(dienstDag)) wisselCel(dienstDag, van, naar, dienstCode, merk);
-      const terugDag = String(sw.returnDate ?? "");
-      const terugCode = String(sw.returnCode ?? "").trim();
-      if (normalizeSwapType(sw.swapType) !== "overname" && terugDag && terugCode && terugCode.toLowerCase() !== "vrij" && dateSet.has(terugDag)) {
-        wisselCel(terugDag, naar, van, terugCode, { ...merk, swapFrom: naamVanId(naar) });
-      }
-    }
+    legRuilenOverMaandbeeld(cells, swaps as any[], { dates, chauffeurIds, naamVanId });
 
     // Goedgekeurde afwezigheden uit de verlof-module (ziekmelding incluis)
     // overschrijven de matrix-cel. De Excel-import is een momentopname; wie
@@ -1448,7 +1411,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       req,
       "planning",
       "Matrix import bevestigd",
-      `${rows.length} dagen verwerkt (periode ${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"} vervangen; planning daarbuiten onaangetast${fileStartDate !== startDate || fileEndDate !== endDate ? `; selectie uit bestand ${fileStartDate} t/m ${fileEndDate}` : ""}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
+      `${rows.length} dagen verwerkt (periode ${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"} vervangen; planning daarbuiten onaangetast${fileStartDate !== startDate || fileEndDate !== endDate ? `; selectie uit bestand ${fileStartDate} t/m ${fileEndDate}` : ""}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
     );
 
     // Chauffeurs met diensten in deze import krijgen een seintje.
@@ -1725,7 +1688,7 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
       _req,
       "planning",
       "Planning opnieuw opgebouwd",
-      `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}.`,
+      `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}.`,
     );
     // "Staat mijn rooster er al op?" is dé vraag van personeel — beantwoord
     // hem proactief, maar alleen bij wie er iets veranderde.
