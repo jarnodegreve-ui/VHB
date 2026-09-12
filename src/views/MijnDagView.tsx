@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Calendar, FileText, MapPin, WifiOff } from 'lucide-react';
+import { ArrowLeftRight, AlertTriangle, Calendar, FileText, MapPin, WifiOff } from 'lucide-react';
 import { lijnLabel } from '../../shared/lijnen';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { activeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
 import { relatieveDag } from '../lib/datum';
 import { formatDayLong, formatShortDay, formatSyncedTime, serviceNumberOf } from '../lib/format';
+import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '../lib/ruilBadge';
 import { warmRitbladCache } from '../lib/ritbladCache';
 import { useOnline } from '../lib/useOnline';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, shiftWindowMinutes } from '../lib/shiftTime';
@@ -71,7 +72,11 @@ export function MijnDagView({
   // bekende planning/omleidingen/notities en het opgeslagen ritblad; hier
   // alleen een stil label met de versheid — geen banner over het scherm.
   const online = useOnline();
-  const lastSyncedAt = useOptioneleAppData()?.lastSyncedAt ?? null;
+  const appData = useOptioneleAppData();
+  const lastSyncedAt = appData?.lastSyncedAt ?? null;
+  // "Geruild met X" op een overgenomen dienst (vraag Jarno 12-09), zelfde
+  // helper als het rooster; zonder context (tests) geen badge.
+  const geruild = geruildeDiensten(user.id, appData?.swaps ?? [], appData?.users ?? []);
 
   const vandaag = isOffset(now, 0);
   const mijnShifts = shifts.filter((s) => s.driverId === user.id);
@@ -88,6 +93,7 @@ export function MijnDagView({
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const dienstnummers = [...new Set(delen.map((p) => serviceNumberOf(p)).filter((n) => n !== '--'))];
   const notitie = notes.find((n) => n.date === peildag)?.note;
+  const ruilBadges = dienstnummers.map((n) => geruild.get(ruilSleutel(peildag, n))).filter((b): b is RuilBadge => !!b);
 
   // Tijdlijn-rijen: blok, pauze, blok, … (pauze alleen als er echt tijd tussen zit).
   const rijen: Rij[] = [];
@@ -207,6 +213,9 @@ export function MijnDagView({
             <p className="text-base font-semibold text-slate-800 tabular-nums">
               {delen.length > 1 ? `${delen.length} delen · tot ${delen[delen.length - 1].endTime}` : `${delen[0].startTime}–${delen[delen.length - 1].endTime}`}
             </p>
+            {ruilBadges.map((b) => (
+              <Badge key={b.swapId} tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(b)}</Badge>
+            ))}
           </div>
         )}
       </header>
