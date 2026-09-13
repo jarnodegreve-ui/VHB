@@ -57,7 +57,7 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "meldingen", columns: "id,user_id,titel,tekst,soort,doel,created_at,gelezen_op" },
   // Techniek (2026-09-13_techniek_voertuigen.sql): voertuigen, gele boek,
   // werkprestaties en vervaldata per voertuig; snake_case, API-only.
-  { table: "vehicles", columns: "id,busnr,kort_nr,nummerplaat,chassisnr,merk,type,aandrijving,status,in_dienst,uit_dienst,zitplaatsen,opmerking,created_at,updated_at" },
+  { table: "vehicles", columns: "id,busnr,kort_nr,nummerplaat,chassisnr,merk,type,aandrijving,status,in_dienst,uit_dienst,zitplaatsen,opmerking,chargeye_mix_id,created_at,updated_at" },
   { table: "vehicle_defects", columns: "id,vehicle_id,gemeld_op,gemeld_door,werktype,omschrijving,status,uitgevoerd_op,uitgevoerd_door,uitgevoerd_werk,manuren,opmerking,updated_at" },
   { table: "vehicle_work", columns: "id,datum,mecanicien_id,vehicle_id,werkcode,omschrijving,begin_tijd,einde_tijd,werkuren,kmstand,defect_id,created_at,updated_at" },
   { table: "vehicle_expiries", columns: "vehicle_id,soort,valid_until,opmerking,updated_at,updated_by" },
