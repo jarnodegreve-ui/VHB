@@ -84,6 +84,7 @@ const LazyWerkprestatiesView = lazyWithRetry(() => VIEW_LOADERS['werkprestaties'
 const LazyVoertuigenView = lazyWithRetry(() => VIEW_LOADERS['voertuigen']().then((m) => ({ default: (m as typeof import('./views/techniek/VoertuigenView')).VoertuigenView })));
 // Loon (fase B Access-migratie, 13-09): dagafsluiting en looncontrole.
 const LazyDagafsluitingView = lazyWithRetry(() => VIEW_LOADERS['dagafsluiting']().then((m) => ({ default: (m as typeof import('./views/admin/DagafsluitingView')).DagafsluitingView })));
+const LazyDienstopbouwView = lazyWithRetry(() => VIEW_LOADERS['dienstopbouw']().then((m) => ({ default: (m as typeof import('./views/admin/DienstopbouwView')).DienstopbouwView })));
 const LazyLooncontroleView = lazyWithRetry(() => VIEW_LOADERS['looncontrole']().then((m) => ({ default: (m as typeof import('./views/admin/LooncontroleView')).LooncontroleView })));
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
@@ -1618,6 +1619,7 @@ export default function App() {
               {resolvedCurrentView === 'defecten' && <Suspense fallback={<ViewLoader />}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'werkprestaties' && <Suspense fallback={<ViewLoader />}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense>}
               {resolvedCurrentView === 'voertuigen' && <Suspense fallback={<ViewLoader />}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}
+              {resolvedCurrentView === 'dienstopbouw' && <Suspense fallback={<ViewLoader />}><LazyDienstopbouwView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'dagafsluiting' && <Suspense fallback={<ViewLoader />}><LazyDagafsluitingView currentUser={currentUser!} users={users} /></Suspense>}
               {resolvedCurrentView === 'looncontrole' && <Suspense fallback={<ViewLoader />}><LazyLooncontroleView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense>}
               {resolvedCurrentView === 'beheer-omleidingen' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense>)}

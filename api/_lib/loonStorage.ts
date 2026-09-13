@@ -48,7 +48,7 @@ export const toLoonCode = (r: any): LoonCode => ({
 });
 
 /** Kolommen die de API schrijft — bewaakt door src/schemaContract.test.ts. */
-export const toDatabaseLoonCode = (code: string, b: LoonCodeBody, updatedBy: string | null) => ({
+export const toDatabaseLoonCode = (code: string, b: LoonCodeBody, updatedBy: string | null, bron: 'handmatig' | 'segments' | 'import' = 'handmatig') => ({
   code: loonCodeSleutel(code),
   code_weergave: b.codeWeergave,
   omschrijving: b.omschrijving ?? null,
@@ -59,7 +59,7 @@ export const toDatabaseLoonCode = (code: string, b: LoonCodeBody, updatedBy: str
   tik1: b.tik1 ?? null, tik2: b.tik2 ?? null, tik3: b.tik3 ?? null, tik4: b.tik4 ?? null, tik5: b.tik5 ?? null, tik6: b.tik6 ?? null,
   lb_rijtijd: b.lbRijtijd ?? null, lb_stat100_at: b.lbStat100At ?? null, lb_stat100_nat: b.lbStat100Nat ?? null, lb_stat50_nat: b.lbStat50Nat ?? null,
   lb_ond: b.lbOnd ?? null, lb_and_wrk: b.lbAndWrk ?? null, lb_nacht: b.lbNacht ?? null,
-  bron: "handmatig",
+  bron,
   updated_by: updatedBy,
 });
 
@@ -69,8 +69,8 @@ export const getLoonCodes = async (): Promise<LoonCode[]> => {
   return (data ?? []).map(toLoonCode);
 };
 
-export const upsertLoonCode = async (code: string, b: LoonCodeBody, updatedBy: string | null): Promise<LoonCode> => {
-  const { data, error } = await requireDb().from("loon_codes").upsert(toDatabaseLoonCode(code, b, updatedBy)).select("*").single();
+export const upsertLoonCode = async (code: string, b: LoonCodeBody, updatedBy: string | null, bron: 'handmatig' | 'segments' | 'import' = 'handmatig'): Promise<LoonCode> => {
+  const { data, error } = await requireDb().from("loon_codes").upsert(toDatabaseLoonCode(code, b, updatedBy, bron)).select("*").single();
   if (error) throw error;
   return toLoonCode(data);
 };

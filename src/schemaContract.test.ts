@@ -9,6 +9,7 @@ import {
   toDatabasePlanningCode,
 } from '../api/helpers';
 import { toDatabaseDefect, toDatabaseDefectPatch, toDatabaseVehicle, toDatabaseVehicleExpiry, toDatabaseWerkprestatie } from '../api/_lib/techniekStorage';
+import { toDatabaseDagtypeCodePatch, toDatabaseSegment, toDatabaseSegmentImport } from '../api/_lib/dienstStorage';
 import { toDatabaseDagAfsluiting, toDatabaseDagPrestatieNieuw, toDatabaseDagPrestatiePatch, toDatabaseLoonCode, toDatabaseLoonMedewerker } from '../api/_lib/loonStorage';
 
 /**
@@ -84,6 +85,12 @@ describe('schema-contract: mappers schrijven enkel geprobe-de kolommen', () => {
       table: 'dag_prestaties',
       row: { ...toDatabaseDagPrestatieNieuw({ datum: '2026-09-13', userId: 'u1', volgnr: 1, planningCode: '2102', geredenCode: '2102' }), ...toDatabaseDagPrestatiePatch({ geredenCode: '2103', overmin: 15, overminNacht: 0, overminExtra: 0, onvPremie: true, qualOngeval: false, qualPanne: true, qualVerkeersovertreding: false, qualKlantklacht: false, qualAdmfout: false, qualInterneklacht: false, qualVertragingDrSchuld: false, qualRitNtGeredenDrSchuld: false, opmerking: 'x' }, 'u1') },
     },
+    { table: 'service_segment_imports', row: toDatabaseSegmentImport({ importedBy: 'u1', filename: 'et.xlsx', rijen: 1, diensten: 1, dagtypes: ['21/0'], waarschuwingen: [], bevindingen: [] }) },
+    {
+      table: 'service_segments',
+      row: toDatabaseSegment('imp1', { serviceNumber: '2102', dagtypeCode: '21/0', volgorde: 1, type: 'RIT', startMin: 300, eindeMin: 360, duurMin: 60, loop: '4600', internLoop: null, lijn: '50', variant: null, rit: '1', voertuig: 'standaard', vertrek: 'A', vertrekCode: null, aankomst: 'B', aankomstCode: null, afstandKm: 12.5, atTijd: null, vtTijd: null }),
+    },
+    { table: 'dagtype_codes', row: toDatabaseDagtypeCodePatch({ portaalDagtype: 'schooldag' }) },
     {
       table: 'planning_codes',
       row: toDatabasePlanningCode({

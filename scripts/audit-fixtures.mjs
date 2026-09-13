@@ -247,6 +247,19 @@ export const DAG_PRESTATIES = [
  * `undefined` wordt als JSON verstuurd) — zo overschrijft een spec één
  * collectie zonder de rest opnieuw op te bouwen.
  */
+export const SEGMENT_IMPORTS = [
+  { id: 'imp1', createdAt: new Date(Date.now() - 3 * 864e5).toISOString(), importedBy: '1', filename: 'dienstregeling-et-260901.xlsx', rijen: 1234, diensten: 67, dagtypes: ['21/0', '26/0', '27/0', '31/0'], waarschuwingen: [], bevindingen: [{ soort: 'duur_klopt_niet', ernst: 'waarschuwing', serviceNumber: '2115', dagtypeCode: '21/0', volgorde: 8, tekst: 'ANW 08:34 tot 08:38 is 4 min, de duur zegt 384 min.' }], actief: true, actiefSinds: new Date(Date.now() - 2 * 864e5).toISOString() },
+];
+const segm = (id, volgorde, type, startMin, eindeMin, extra = {}) => ({ id, importId: 'imp1', serviceNumber: '2101', dagtypeCode: '21/0', volgorde, type, startMin, eindeMin, duurMin: eindeMin - startMin, loop: '4500', internLoop: null, lijn: null, variant: null, rit: null, voertuig: 'standaard', vertrek: null, vertrekCode: null, aankomst: null, aankomstCode: null, afstandKm: null, atTijd: null, vtTijd: null, ...extra });
+export const SEGMENTEN = [
+  segm('s1', 1, 'AVO', 272, 276, { loop: null }),
+  segm('s2', 2, 'LED', 276, 290, { vertrek: 'Garage Van Hoorebeke', aankomst: 'Eeklo Station', afstandKm: 6.2 }),
+  segm('s3', 3, 'RIT', 290, 352, { lijn: '50', rit: '3', vertrek: 'Eeklo Station', aankomst: 'Brugge Station', afstandKm: 31.4 }),
+  segm('s4', 4, 'STA', 352, 372, { loop: null }),
+  segm('s5', 5, 'ONE', 372, 935, { loop: null }),
+  segm('s6', 6, 'RIT', 935, 1010, { lijn: '50', rit: '31', vertrek: 'Brugge Station', aankomst: 'Eeklo Station', afstandKm: 31.4 }),
+];
+
 export function apiFixtures(user, extra) {
   return async (route) => {
     const url = new URL(route.request().url());
@@ -278,6 +291,12 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/werkprestaties/rapport')) return json({ jaar: 2026, totaalUren: 3, aantal: 2, perBus: [{ label: 'Bus 26', uren: 3, aantal: 2, perKwartaal: [0, 0, 3, 0] }], perMecanicien: [{ label: 'Jelle Technieker', uren: 3, aantal: 2, perKwartaal: [0, 0, 3, 0] }], perWerkcode: [{ werkcode: 'H', uren: 3, aantal: 2 }] });
     if (p.endsWith('/api/werkprestaties')) return json(WERKPRESTATIES);
     // Loon (13-09): dagafsluiting, looncodes, matricules, export.
+    // Dienstopbouw (13-09).
+    if (p.endsWith('/api/dienstopbouw/imports')) return json(SEGMENT_IMPORTS);
+    if (p.endsWith('/api/dienstopbouw/dagtypes')) return json([{ code: '21', omschrijving: 'Maandag schooldag', periode: '2', aantalPerJaar: 141, portaalDagtype: 'schooldag' }, { code: '26', omschrijving: 'Zaterdag', periode: '2', aantalPerJaar: 52, portaalDagtype: 'zaterdag' }]);
+    if (p.endsWith('/api/dienstopbouw/segmenten')) return json({ import: SEGMENT_IMPORTS[0], segmenten: SEGMENTEN });
+    if (p.endsWith('/api/dienstopbouw/ritblad')) return json({ serviceNumber: '2101', dagtypes: [{ dagtypeCode: '21/0', rijen: [{ type: 'LED', lijn: '', rit: 'led', loop: '4500', vertrek: 'Garage Van Hoorebeke', start: '04:36', aankomst: 'Eeklo Station', einde: '04:50', via: '4500' }, { type: 'RIT', lijn: '50', rit: '3', loop: '4500', vertrek: 'Eeklo Station', start: '04:50', aankomst: 'Brugge Station', einde: '05:52', via: '' }] }] });
+    if (p.includes('/api/dienstopbouw/imports/') && p.endsWith('/loonparameters')) return json({ importId: 'imp1', diensten: [{ serviceNumber: '2101', dagtypeCode: '21/0', parameters: { lbRijtijd: 404, lbStat100At: 28, lbStat100Nat: 21, lbStat50Nat: 0, lbOnd: 1, lbAndWrk: 0, lbAdmT: 15, lbNacht: 88, lbArbTijd: 447, tiktijden: [{ begin: '04:32', einde: '08:18' }, { begin: '15:35', einde: '19:52' }], teVeelDelen: false }, huidig: null }] });
     if (p.endsWith('/api/loon/codes')) return json(LOON_CODES);
     if (p.endsWith('/api/loon/medewerkers')) return json(LOON_MEDEWERKERS);
     if (p.endsWith('/api/loon/instellingen')) return json({ easypayLidnr: 1234 });

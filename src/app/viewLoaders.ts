@@ -43,6 +43,7 @@ export const VIEW_LOADERS: Record<View, () => Promise<unknown>> = {
   voertuigen: () => import('../views/techniek/VoertuigenView'),
   dagafsluiting: () => import('../views/admin/DagafsluitingView'),
   looncontrole: () => import('../views/admin/LooncontroleView'),
+  dienstopbouw: () => import('../views/admin/DienstopbouwView'),
 };
 
 const ZWAAR: ReadonlySet<View> = new Set<View>(['beheer-roosters', 'beheer-dienstoverzicht', 'gebruikers']);
