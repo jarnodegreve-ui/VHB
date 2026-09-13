@@ -36,17 +36,17 @@ function Vel({ className, children }: IllustratieProps & { children: ReactNode }
 }
 
 /* De lus: stadionvorm, straal 22, middelpunten (52,60) en (108,60); de
-   onderbreking zit rechtsboven, tussen het inkt-einde (−10°) en het gouden
-   segment (top → −23°) — dezelfde verhouding als in het logo. */
-const LUS_INK = 'M 100 38 H 52 A 22 22 0 0 0 52 82 H 108 A 22 22 0 0 0 129.67 56.18';
+   openingen zitten rechtsboven, tussen het inkt-einde (−17°) en het gouden
+   segment (top → −23°) — dezelfde verhouding als in het logo (pakket v2). */
+const LUS_INK = 'M 102.72 38 H 52 A 22 22 0 0 0 52 82 H 108 A 22 22 0 0 0 129.04 53.57';
 const LUS_GOUD = 'M 105 38 H 108 A 22 22 0 0 1 128.25 51.4';
 
 function Lus({ transform, dashRechts = false }: { transform?: string; /** Rechterhelft gestippeld (verbinding valt weg). */ dashRechts?: boolean }) {
   if (dashRechts) {
     return (
       <g transform={transform}>
-        <path d="M 100 38 H 52 A 22 22 0 0 0 52 82 H 80" />
-        <path d="M 80 82 H 108 A 22 22 0 0 0 129.67 56.18" strokeDasharray="3 4.5" />
+        <path d="M 102.72 38 H 52 A 22 22 0 0 0 52 82 H 80" />
+        <path d="M 80 82 H 108 A 22 22 0 0 0 129.04 53.57" strokeDasharray="3 4.5" />
         <path d={LUS_GOUD} stroke={GOUD} strokeDasharray="3 4.5" />
       </g>
     );

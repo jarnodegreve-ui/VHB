@@ -1,8 +1,10 @@
 # VHB — Van Hoorebeke & Zoon
 
+Definitief logopakket, versie 2 (13 september 2026). `VHB-logopakket-overzicht.png` toont alle varianten en de kleuren. Het volledige pakket (4000 px-PNG's, 2400 px-beeldmerken, druk-PDF's) staat buiten de repo in `~/VHB/finaal_ontwerp/`; hier staan de SVG's plus de 1200 px-hoofdlogo's en 600 px-beeldmerken.
+
 ## Hoofdlogo
 
-`VHB-hoofdlogo-goedgekeurde-referentie.png` is de definitieve visuele referentie. Gebruik `VHB-hoofdlogo-kleur.svg` als schaalbare standaardversie op een witte of lichte achtergrond. De twee subtiele profieluitsparingen in de gouden H-verbinding behoren tot het vaste beeldmerk; de lettervormen, onderbrekingen, afstanden en vergrote naamregel zijn daarop afgestemd.
+Gebruik `VHB-hoofdlogo-kleur.svg` als schaalbare standaardversie op een witte of lichte achtergrond. Het beeldmerk: diagonale V, gouden H-verbinding met twee subtiele profieluitsparingen, open B, en een ovale lus met kleine openingen aan beide uiteinden van de gouden buitenboog. Die onderdelen behoren tot het vaste beeldmerk; de lettervormen, openingen, afstanden en naamregel zijn daarop afgestemd.
 
 ## Kleuren
 
@@ -25,8 +27,9 @@ Houd rondom het volledige logo minimaal tweemaal de dikte van de ovale lijn vrij
 ## Welke versie gebruiken?
 
 - Lichte achtergrond: `VHB-hoofdlogo-kleur.svg`
-- Donkere achtergrond: `VHB-hoofdlogo-negatief.svg`
-- Eén kleur: `VHB-hoofdlogo-zwart.svg`
+- Donkere achtergrond: `VHB-hoofdlogo-wit-goud.svg` (wit met het goud behouden)
+- Donkere achtergrond, één kleur: `VHB-hoofdlogo-wit.svg`
+- Eén kleur zwart: `VHB-hoofdlogo-zwart.svg`
 - Zonder naamregel: een bestand dat begint met `VHB-beeldmerk-`
 - Voor websites en documenten: de transparante PNG-bestanden
 - Voor drukwerk en grote toepassingen: de SVG-bestanden
@@ -34,7 +37,7 @@ Houd rondom het volledige logo minimaal tweemaal de dikte van de ovale lijn vrij
 ## Niet doen
 
 - Het logo niet uitrekken, kantelen of vervormen.
-- De onderbreking in de ovaal niet sluiten.
+- De openingen in de ovaal niet sluiten.
 - De twee profieluitsparingen in de gouden H-verbinding niet verwijderen of verplaatsen.
 - De kleuren of onderlinge verhoudingen niet afzonderlijk aanpassen.
 - Geen schaduw, gloed, verloop of omlijning toevoegen.
