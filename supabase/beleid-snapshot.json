@@ -340,6 +340,132 @@
     },
     {
       "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "dag_afsluitingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "dag_afsluitingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "dag_afsluitingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "dag_afsluitingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "dag_afsluitingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "dag_afsluitingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "dag_afsluitingen"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "dag_prestaties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "dag_prestaties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "dag_prestaties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "dag_prestaties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "dag_prestaties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "dag_prestaties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "dag_prestaties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "dagtype_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "dagtype_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "dagtype_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "dagtype_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "dagtype_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "dagtype_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "dagtype_codes"
+    },
+    {
+      "grantable": false,
       "grantee": "authenticated",
       "privilege": "SELECT",
       "tabel": "dienst_loops"
@@ -481,6 +607,90 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "leave"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "loon_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "loon_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "loon_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "loon_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "loon_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "loon_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "loon_codes"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "loon_medewerkers"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "loon_medewerkers"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "loon_medewerkers"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "loon_medewerkers"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "loon_medewerkers"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "loon_medewerkers"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "loon_medewerkers"
     },
     {
       "grantable": false,
@@ -1396,6 +1606,90 @@
     },
     {
       "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "service_segment_imports"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "service_segment_imports"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "service_segment_imports"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "service_segment_imports"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "service_segment_imports"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "service_segment_imports"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "service_segment_imports"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "service_segments"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "service_segments"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "service_segments"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "service_segments"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "service_segments"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "service_segments"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "service_segments"
+    },
+    {
+      "grantable": false,
       "grantee": "authenticated",
       "privilege": "SELECT",
       "tabel": "services"
@@ -1780,9 +2074,129 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "vehicle_defects"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "vehicle_defects"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "vehicle_defects"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
       "privilege": "SELECT",
-      "tabel": "vehicles"
+      "tabel": "vehicle_defects"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "vehicle_defects"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "vehicle_defects"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "vehicle_defects"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "vehicle_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "vehicle_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "vehicle_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "vehicle_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "vehicle_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "vehicle_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "vehicle_expiries"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "vehicle_work"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "vehicle_work"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "vehicle_work"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "vehicle_work"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "vehicle_work"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "vehicle_work"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "vehicle_work"
     },
     {
       "grantable": false,
@@ -1825,6 +2239,54 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "vehicles"
+    },
+    {
+      "grantable": false,
+      "grantee": "authenticated",
+      "privilege": "SELECT",
+      "tabel": "vehicles_chargeye_oud"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
+      "tabel": "vehicles_chargeye_oud"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "vehicles_chargeye_oud"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "vehicles_chargeye_oud"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "vehicles_chargeye_oud"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "vehicles_chargeye_oud"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "vehicles_chargeye_oud"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "vehicles_chargeye_oud"
     }
   ],
   "policies": [
@@ -2040,7 +2502,7 @@
         "authenticated"
       ],
       "schema": "public",
-      "tabel": "vehicles",
+      "tabel": "vehicles_chargeye_oud",
       "using": "true",
       "with_check": null
     },
@@ -2103,6 +2565,21 @@
     {
       "force_rls": false,
       "rls": true,
+      "tabel": "dag_afsluitingen"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "dag_prestaties"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "dagtype_codes"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
       "tabel": "dienst_loops"
     },
     {
@@ -2114,6 +2591,16 @@
       "force_rls": false,
       "rls": true,
       "tabel": "leave"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "loon_codes"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "loon_medewerkers"
     },
     {
       "force_rls": false,
@@ -2213,6 +2700,16 @@
     {
       "force_rls": false,
       "rls": true,
+      "tabel": "service_segment_imports"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "service_segments"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
       "tabel": "services"
     },
     {
@@ -2253,7 +2750,27 @@
     {
       "force_rls": false,
       "rls": true,
+      "tabel": "vehicle_defects"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "vehicle_expiries"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "vehicle_work"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
       "tabel": "vehicles"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "vehicles_chargeye_oud"
     }
   ],
   "versie": 1
