@@ -31,7 +31,7 @@ const WERKTYPE_TONE: Record<Werktype, 'red' | 'amber' | 'blue' | 'oker'> = { T: 
  * werken"), met de ouderdom en de opvolging. De technieker zet een melding op
  * uitgevoerd (datum, wat er gedaan is, manuren) en kan meteen een
  * werkprestatie laten aanmaken. Self-fetching (patroon VervaldataView),
- * ververst bij terugkeer naar het tabblad.
+ * ververst bij terugkeer naar het tabblad (geen realtime: twee techniekers).
  */
 export function GeleBoekView({ currentUser }: { currentUser: User }) {
   const [rijen, setRijen] = useState<Defect[]>([]);
