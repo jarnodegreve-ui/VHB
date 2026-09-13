@@ -72,7 +72,9 @@ export function BottomNav({
     : role === 'technieker'
       // Technieker heeft geen diensten: geen Mijn dag, Rooster of Omleidingen,
       // die schermen staan ook niet in zijn menu (Jarno 09-09).
-      ? [tab('dashboard'), tab('documenten'), tab('verlof', unseenLeaveCount), tab('updates'), tab('meldingen')]
+      // Gele boek en Prestaties zijn zijn dagelijkse werk (13-09); Documenten
+      // en Updates blijven via "Meer".
+      ? [tab('dashboard'), tab('defecten'), tab('werkprestaties'), tab('verlof', unseenLeaveCount), tab('meldingen')]
       // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount).
       // Mijn dag (03-09) neemt de plek van Ritbladen in: het ritblad van vandaag
       // zit als knop ín Mijn dag, de Ritbladen-pagina blijft via "Meer".

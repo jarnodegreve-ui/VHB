@@ -19,6 +19,7 @@ export const dayOffset = (n) => {
 };
 
 export const CHAUFFEUR = { id: '42', name: 'Test Chauffeur', role: 'chauffeur', employeeId: 'VHB-000042', email: 'test@vhb.be', isActive: true, verlofBudget: 20, phone: '0470 00 00 00' };
+export const TECHNIEKER = { id: '55', name: 'Jelle Technieker', role: 'technieker', employeeId: 'VHB-000055', email: 'jelle@vhb.be', isActive: true, verlofBudget: 20 };
 export const ADMIN = { id: '1', name: 'Jarno De Greve', role: 'admin', employeeId: 'VHB-000001', email: 'jarno@vhb.be', isActive: true };
 export const USERS = [ADMIN, CHAUFFEUR,
   { id: '43', name: 'Alex Du Priez', role: 'chauffeur', employeeId: 'VHB-000043', email: 'alex@vhb.be', isActive: true, phone: '0470 11 11 11' },
@@ -195,6 +196,26 @@ export const OCPI_DAG = (dag = '2026-08-14') => {
   return { dag, slots: Array.from({ length: 96 }, (_, i) => ({ ts: new Date(new Date(`${dag}T00:00:00`).getTime() + i * 15 * 60000).toISOString(), kw: i < 8 || (i > 28 && i < 68) ? 20 + Math.round(r() * 40) : 120 + Math.round(r() * 180), charging: 2 + Math.floor(r() * 7) })), piekKw: 296.4, piekTs: `${dag}T01:15:00.000Z`, piekCharging: 8, kwh: dagen[0].kwh, laadbeurten: dagen[0].laadbeurten, mislukt: dagen[0].mislukt, sessies, laadpunten: OCPI_EVSES };
 };
 
+export const VEHICLES = [
+  { id: 'v26', busnr: '613 026', kortNr: 26, nummerplaat: '2-CWF-068', chassisnr: 'WMA12CZZ4PF019730', merk: "MAN LION'S CITY 12E", type: 'lijnbus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2022-12-20', uitDienst: null, zitplaatsen: 40, opmerking: null },
+  { id: 'v34', busnr: '613 034', kortNr: 34, nummerplaat: '2-GPY-265', chassisnr: null, merk: "MAN LION'S CITY 18E", type: 'lijnbus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2025-02-20', uitDienst: null, zitplaatsen: 50, opmerking: null },
+  { id: 'v98', busnr: 'Reserve 98', kortNr: 98, nummerplaat: '2-ECM-130', chassisnr: null, merk: 'VDL', type: 'lijnbus', aandrijving: 'diesel', status: 'reserve', inDienst: '2023-08-29', uitDienst: null, zitplaatsen: null, opmerking: null },
+];
+export const VEHICLE_EXPIRIES = [
+  { vehicleId: 'v26', soort: 'keuring', validUntil: dayOffset(12), opmerking: null },
+  { vehicleId: 'v26', soort: 'brandblussers', validUntil: dayOffset(400), opmerking: '2 stuks' },
+  { vehicleId: 'v34', soort: 'keuring', validUntil: dayOffset(-3), opmerking: null },
+];
+export const DEFECTEN = [
+  { id: 'd1', vehicleId: 'v26', busnr: '613 026', kortNr: 26, gemeldOp: new Date(Date.now() - 2 * 864e5).toISOString(), gemeldDoor: '42', gemeldDoorNaam: 'Test Chauffeur', werktype: 'T', omschrijving: 'Bel doet het niet altijd', status: 'open', uitgevoerdOp: null, uitgevoerdDoor: null, uitgevoerdWerk: null, manuren: null, opmerking: null },
+  { id: 'd2', vehicleId: 'v34', busnr: '613 034', kortNr: 34, gemeldOp: new Date(Date.now() - 20 * 864e5).toISOString(), gemeldDoor: '43', gemeldDoorNaam: 'Alex Du Priez', werktype: 'L', omschrijving: 'Oproep naar dispatch werkt niet', status: 'open', uitgevoerdOp: null, uitgevoerdDoor: null, uitgevoerdWerk: null, manuren: null, opmerking: null },
+  { id: 'd3', vehicleId: 'v26', busnr: '613 026', kortNr: 26, gemeldOp: new Date(Date.now() - 30 * 864e5).toISOString(), gemeldDoor: '42', gemeldDoorNaam: 'Test Chauffeur', werktype: 'C', omschrijving: 'Schade rechts achter', status: 'uitgevoerd', uitgevoerdOp: dayOffset(-25), uitgevoerdDoor: '55', uitgevoerdDoorNaam: 'Jelle Technieker', uitgevoerdWerk: 'Plamuur en verf', manuren: 4, opmerking: null },
+];
+export const WERKPRESTATIES = [
+  { id: 'w1', datum: dayOffset(0), mecanicienId: '55', mecanicienNaam: 'Jelle Technieker', vehicleId: 'v26', busnr: '613 026', kortNr: 26, werkcode: 'H', omschrijving: 'Bel vervangen', beginTijd: '08:00', eindeTijd: '09:00', werkuren: 1, kmstand: 47000, defectId: 'd1' },
+  { id: 'w2', datum: dayOffset(-1), mecanicienId: '55', mecanicienNaam: 'Jelle Technieker', vehicleId: null, busnr: null, kortNr: null, werkcode: 'A', omschrijving: 'Stukken besteld', beginTijd: null, eindeTijd: null, werkuren: 2, kmstand: null, defectId: null },
+];
+
 /**
  * Route-handler voor `page.route('**\/api/**', apiFixtures(user))`.
  * `extra(pad, request)` mag een eigen antwoord teruggeven (alles behalve
@@ -224,6 +245,13 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/activity/logins')) return json({ logins: LOGINS });
     if (p.endsWith('/api/activity')) return json(ACTIVITY);
     if (p.endsWith('/api/ritblaadje')) return json(null);
+    // Techniek (13-09): voertuigen, gele boek, werkprestaties, vervaldata.
+    if (p.endsWith('/api/vehicles')) return json(VEHICLES);
+    if (p.endsWith('/api/vehicle-expiries')) return json(VEHICLE_EXPIRIES);
+    if (p.endsWith('/api/defecten/aantal-open')) return json({ open: DEFECTEN.filter((d) => d.status === 'open').length });
+    if (p.endsWith('/api/defecten')) return json(url.searchParams.get('mijn') === '1' ? DEFECTEN.filter((d) => d.gemeldDoor === user.id) : DEFECTEN);
+    if (p.endsWith('/api/werkprestaties/rapport')) return json({ jaar: 2026, totaalUren: 3, aantal: 2, perBus: [{ label: 'Bus 26', uren: 3, aantal: 2, perKwartaal: [0, 0, 3, 0] }], perMecanicien: [{ label: 'Jelle Technieker', uren: 3, aantal: 2, perKwartaal: [0, 0, 3, 0] }], perWerkcode: [{ werkcode: 'H', uren: 3, aantal: 2 }] });
+    if (p.endsWith('/api/werkprestaties')) return json(WERKPRESTATIES);
     if (p.endsWith('/api/push/subscribers')) return json({ userIds: ['42'] });
     if (p.endsWith('/api/planning-matrix/changes-since-import')) return json({ lastImport: { createdAt: new Date(Date.now() - 5 * 864e5).toISOString(), importedDays: 31 }, approvedLeave: [], approvedSwaps: [] });
     if (p.includes('/api/coverage-gaps')) return json({ days: [{ date: new Date().toISOString().slice(0, 10), expected: ['2101', '2607'], scheduled: ['2101'], missing: ['2607'], unknown: [] }] });

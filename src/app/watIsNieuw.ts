@@ -17,6 +17,20 @@ export type WatIsNieuwItem = {
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-13',
+    titel: 'Techniek: gele boek, voertuigen en werkprestaties',
+    regels: {
+      chauffeur: [
+        'Iets mis met de bus? Op Mijn dag en het dashboard staat “Defect melden”: kies de bus, de soort en beschrijf het, en de garage ziet het meteen in het gele boek.',
+      ],
+      staf: [
+        'Nieuwe sectie Techniek: het gele boek (open defecten per bus, ouderdom, afhandelen), Voertuigen (het wagenpark met keuring SBAT, brandblussers en tachograaf) en Werkprestaties (wat de garage per dag aan welke bus deed, met rapport per bus en per technieker).',
+        'Techniekers krijgen dezelfde schermen in hun menu; vervaldata van voertuigen komen in de dagelijkse digest en als melding op 60/30/7/0 dagen.',
+      ],
+    },
+    bekijk: { staf: 'defecten' },
+  },
+  {
     id: '2026-09-09',
     titel: 'Laadpalen: maandrapport, historiek en sessies',
     regels: {

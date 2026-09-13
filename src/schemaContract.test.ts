@@ -8,6 +8,7 @@ import {
   toDatabaseService,
   toDatabasePlanningCode,
 } from '../api/helpers';
+import { toDatabaseDefect, toDatabaseDefectPatch, toDatabaseVehicle, toDatabaseVehicleExpiry, toDatabaseWerkprestatie } from '../api/_lib/techniekStorage';
 
 /**
  * Contracttest mappers ↔ schema-probes.
@@ -57,6 +58,22 @@ describe('schema-contract: mappers schrijven enkel geprobe-de kolommen', () => {
     {
       table: 'services',
       row: toDatabaseService({ id: '1', serviceNumber: '4101', startTime: '06:00', endTime: '14:00' }),
+    },
+    {
+      table: 'vehicles',
+      row: toDatabaseVehicle({ busnr: '613 026', kortNr: 26, nummerplaat: '2-CWF-068', chassisnr: 'x', merk: 'MAN', type: 'lijnbus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2022-12-20', uitDienst: null, zitplaatsen: 40, opmerking: null }),
+    },
+    {
+      table: 'vehicle_defects',
+      row: { ...toDatabaseDefect({ vehicleId: 'v1', werktype: 'T', omschrijving: 'Bel doet het niet', gemeldDoor: 'u1' }), ...toDatabaseDefectPatch({ status: 'uitgevoerd', uitgevoerdOp: '2026-09-13', uitgevoerdWerk: 'Bel vervangen', manuren: 0.5, opmerking: null, werktype: 'T', omschrijving: 'Bel', uitgevoerdDoor: 'u2' }) },
+    },
+    {
+      table: 'vehicle_work',
+      row: toDatabaseWerkprestatie({ datum: '2026-09-13', vehicleId: 'v1', werkcode: 'H', omschrijving: 'Bel vervangen', beginTijd: '08:00', eindeTijd: '08:30', werkuren: 0.5, kmstand: 1000, defectId: 'd1', mecanicienId: 'u2' }),
+    },
+    {
+      table: 'vehicle_expiries',
+      row: toDatabaseVehicleExpiry({ vehicleId: 'v1', soort: 'keuring', validUntil: '2027-01-01', opmerking: null, updatedBy: 'u1' }),
     },
     {
       table: 'planning_codes',

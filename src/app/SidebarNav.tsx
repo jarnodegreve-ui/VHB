@@ -41,6 +41,7 @@ export function SidebarNav({
   const planning = sidebarRoutes(rol, 'planning');
   const mensen = sidebarRoutes(rol, 'mensen');
   const communicatie = sidebarRoutes(rol, 'communicatie');
+  const techniek = sidebarRoutes(rol, 'techniek');
   const systeem = sidebarRoutes(rol, 'systeem');
   const beheer = [...planning, ...mensen, ...communicatie];
   return (
@@ -55,6 +56,13 @@ export function SidebarNav({
           {mensen.map(item)}
           <NavSubLabel>Communicatie</NavSubLabel>
           {communicatie.map(item)}
+        </NavSection>
+      )}
+      {/* Techniek: garagewerk voor de technieker (zijn enige beheerblok) en
+          voor staf (bussen inplannen, opvolgen). */}
+      {techniek.length > 0 && (
+        <NavSection title="Techniek" count={techniek.length} active={techniek.some((r) => r.view === currentView)}>
+          {techniek.map(item)}
         </NavSection>
       )}
       {isAdmin && systeem.length > 0 && (
