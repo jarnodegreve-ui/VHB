@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { Card } from './Card';
 import { cn } from '../lib/ui';
 import { Badge, Button } from './primitives';
-import { gezienNieuwsId, markeerNieuwsGezien, nieuwsRolVan, ongezienNieuws } from '../app/watIsNieuw';
+import { gezienNieuwsId, markeerNieuwsGezien, nieuwsRolVan, ongezienNieuws, WAT_IS_NIEUW_TONEN } from '../app/watIsNieuw';
 import type { View } from '../types';
 
 /**
@@ -14,8 +14,8 @@ import type { View } from '../types';
  */
 export function WatIsNieuwKaart({ rol, onNavigate, className }: { rol: string; onNavigate?: (view: View) => void; className?: string }) {
   const nieuwsRol = nieuwsRolVan(rol);
-  const [item, setItem] = useState(() => (rol === 'admin' ? ongezienNieuws(nieuwsRol, gezienNieuwsId()) : null));
-  if (!item || rol !== 'admin') return null;
+  const [item, setItem] = useState(() => (WAT_IS_NIEUW_TONEN && rol === 'admin' ? ongezienNieuws(nieuwsRol, gezienNieuwsId()) : null));
+  if (!WAT_IS_NIEUW_TONEN || !item || rol !== 'admin') return null;
   const regels = item.regels[nieuwsRol] ?? [];
   const bekijk = item.bekijk?.[nieuwsRol];
   const sluit = () => {

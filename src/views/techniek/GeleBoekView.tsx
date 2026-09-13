@@ -1,9 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Pencil, Plus, RefreshCw, RotateCcw, Wrench, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Pencil, Plus, Printer, RefreshCw, RotateCcw, Wrench, XCircle } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
 import { DEFECT_STATUS_LABEL, WERKTYPES, WERKTYPE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werktype } from '../../../shared/techniek';
-import { cn, notify } from '../../lib/ui';
+import { cn, notify, openPdfInNewTab } from '../../lib/ui';
 import { formatDateHuman, formatRelatief } from '../../lib/format';
 import { dagenTot, laadDefecten, maakWerkprestatie, TechniekFout, vandaagIso, wijzigDefect, urenTekst, type Defect } from '../../lib/techniek';
 import { EmptyState, PageHeader, PageShell, ViewLoader } from '../../components/ui';
@@ -146,6 +146,8 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
         actions={(
           <>
             <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>
+            {/* Papieren gele boek voor de ISO-map (Jarno 13-09): print van het huidige filter, in een nieuw tabblad. */}
+            <Button variant="secondary" icon={<Printer size={16} />} onClick={() => openPdfInNewTab(`${window.location.origin}${window.location.pathname}?print-gele-boek=${filter === 'open' ? 'open' : 'alles'}`)}>Afdrukken</Button>
             <Button variant="primary" icon={<Plus size={16} />} onClick={() => setMelden(true)}>Melding toevoegen</Button>
           </>
         )}

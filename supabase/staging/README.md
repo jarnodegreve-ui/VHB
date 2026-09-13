@@ -97,6 +97,7 @@ draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
 61. `supabase/2026-09-13_techniek_voertuigen.sql`, voertuigen (seed 40), gele boek, werkprestaties, vervaldata per voertuig (raakt RLS/grants → beleidssnapshot bijwerken)
 62. `supabase/2026-09-13_loon_dagafsluiting.sql`, looncodes (seed 229), matricules, dagafsluiting en dagprestaties (raakt RLS/grants → beleidssnapshot bijwerken)
 63. `supabase/2026-09-13_service_segments.sql`, dienstopbouw: ET-imports, ritdelen en dagtypecodes (seed 24) (raakt RLS/grants → beleidssnapshot bijwerken)
+64. `supabase/2026-09-13_vehicles_categorie.sql`, voertuigen: kolom `categorie` (bus, bedrijfswagen, privéwagen) met backfill uit `type`
 
 **Bewust overgeslagen** (alleen zinvol op het historische productieschema; ze
 falen op een verse database):

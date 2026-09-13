@@ -112,6 +112,7 @@ const LazyPlannerDashboardWidgets = lazyWithRetry(() => import('./views/PlannerD
 const LazyServicesView = lazyWithRetry(() => import('./views/ServicesView').then((module) => ({ default: module.ServicesView })));
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 const LazyPrintLeaveYearView = lazyWithRetry(() => import('./views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
+const LazyPrintGeleBoekView = lazyWithRetry(() => import('./views/PrintGeleBoekView').then((module) => ({ default: module.PrintGeleBoekView })));
 
 
 
@@ -1152,6 +1153,16 @@ export default function App() {
   // Verlof-jaaroverzicht: planner/admin voor iedereen, een chauffeur alleen
   // voor zichzelf (met zijn eigen currentUser en eigen verloflijst — de
   // users-collectie is voor chauffeurs niet volledig).
+  // Papieren gele boek (ISO-map): techniekers en staf, haalt zelf zijn data op.
+  const printGeleBoek = printParams?.get('print-gele-boek');
+  if ((printGeleBoek === 'open' || printGeleBoek === 'alles') && currentUser && (currentUser.role === 'technieker' || currentUser.role === 'planner' || currentUser.role === 'admin')) {
+    return (
+      <Suspense fallback={<PrintLaden />}>
+        <LazyPrintGeleBoekView filter={printGeleBoek} />
+      </Suspense>
+    );
+  }
+
   const printVerlofDriverId = printParams?.get('print-verlof-driver');
   const printVerlofJaar = Number(printParams?.get('print-verlof-jaar'));
   if (printVerlofDriverId && Number.isInteger(printVerlofJaar) && printVerlofJaar > 2000 && currentUser) {
