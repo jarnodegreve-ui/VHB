@@ -214,6 +214,7 @@ export const DEFECTEN = [
 export const WERKPRESTATIES = [
   { id: 'w1', datum: dayOffset(0), mecanicienId: '55', mecanicienNaam: 'Jelle Technieker', vehicleId: 'v26', busnr: '613 026', kortNr: 26, werkcode: 'H', omschrijving: 'Bel vervangen', beginTijd: '08:00', eindeTijd: '09:00', werkuren: 1, kmstand: 47000, defectId: 'd1' },
   { id: 'w2', datum: dayOffset(-1), mecanicienId: '55', mecanicienNaam: 'Jelle Technieker', vehicleId: null, busnr: null, kortNr: null, werkcode: 'A', omschrijving: 'Stukken besteld', beginTijd: null, eindeTijd: null, werkuren: 2, kmstand: null, defectId: null },
+];
 export const LOON_CODES = [
   { code: '2101', codeWeergave: '2101', omschrijving: null, dienstType: 'lijn', inExport: true, easypayActiviteit: 'LIJN', easypayTypePrest: 40140, tik1: '04:32', tik2: '08:33', tik3: '15:50', tik4: '19:52', tik5: null, tik6: null, lbRijtijd: 404, lbStat100At: 28, lbStat100Nat: 21, lbStat50Nat: 0, lbOnd: 1, lbAndWrk: 0, lbNacht: 88, bron: 'import' },
   { code: '2607', codeWeergave: '2607', omschrijving: null, dienstType: 'lijn', inExport: true, easypayActiviteit: 'LIJN', easypayTypePrest: 40140, tik1: '06:00', tik2: '14:00', tik3: null, tik4: null, tik5: null, tik6: null, lbRijtijd: 400, lbStat100At: 0, lbStat100Nat: 0, lbStat50Nat: 0, lbOnd: 0, lbAndWrk: 0, lbNacht: 0, bron: 'import' },
