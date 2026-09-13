@@ -8,12 +8,12 @@ import { cn } from '../lib/ui';
  * illustratie hergebruikt worden; dit is een UI-element dat het merk citeert
  * (zoals BrandSpinner dat al doet), geen logo.
  *
- * Geometrie is de lus van BrandLogo op schaal (r 177 → 16, lusdikte 57 → 5,
- * dezelfde onderbreking rechtsboven tussen ink en goud). Ink via
+ * Geometrie is de lus van BrandLogo op schaal (r 177 → 16, lusdikte 40 →
+ * 3,6, dezelfde openingen rechtsboven: inkt tot −17°, goud tot −23°). Ink via
  * `currentColor` zodat `text-slate-400` en dark mode vanzelf meewerken;
  * goud is de vaste logo-kleur. Geen schaduw/gloed/verloop.
  */
-const LUS_INK = 'M 66.1 8 H 24 A 16 16 0 0 0 24 40 H 72 A 16 16 0 0 0 87.76 21.22';
+const LUS_INK = 'M 68.16 8 H 24 A 16 16 0 0 0 24 40 H 72 A 16 16 0 0 0 87.3 19.32';
 const LUS_GOUD = 'M 69.8 8 H 72 A 16 16 0 0 1 86.73 17.75';
 
 export type MotiefVariant = 'leeg' | 'klaar' | 'fout';
@@ -21,7 +21,7 @@ export type MotiefVariant = 'leeg' | 'klaar' | 'fout';
 export function BrandMotief({ variant = 'leeg', className }: { variant?: MotiefVariant; className?: string }) {
   return (
     <svg viewBox="0 0 96 48" width={96} height={48} className={cn('shrink-0', className)} aria-hidden="true">
-      <g fill="none" strokeWidth={5} strokeLinecap="butt" strokeLinejoin="round">
+      <g fill="none" strokeWidth={3.6} strokeLinecap="butt" strokeLinejoin="round">
         <path d={LUS_INK} stroke="currentColor" />
         <path d={LUS_GOUD} stroke={GOUD} />
       </g>

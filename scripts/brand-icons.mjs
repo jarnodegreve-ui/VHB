@@ -1,7 +1,7 @@
 // Genereert de app-/tab-iconen in public/ uit het officiële VHB-beeldmerk
-// (brand/vhb-final-logo-package/VHB-beeldmerk-negatief.svg). Sinds 01-09
-// (vraag Jarno) staan app-icoon én tab-icoon op de goud-tegel: het beeldmerk
-// in één kleur carbon-inkt (het wit+goud-negatief valt weg op goud).
+// (brand/vhb-final-logo-package/VHB-beeldmerk-kleur.svg, pakket v2 van
+// 2026-09-13). Sinds 01-09 (vraag Jarno) staan app-icoon én tab-icoon op de
+// goud-tegel: het beeldmerk in één kleur carbon-inkt (wit+goud valt weg op goud).
 // Draaien na een logo-wissel:  node scripts/brand-icons.mjs
 //
 // Output (bestandsnamen blijven gelijk — manifest.json, index.html en sw.js
@@ -18,16 +18,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = path.join(ROOT, 'brand/vhb-final-logo-package/VHB-beeldmerk-negatief.svg');
+const SRC = path.join(ROOT, 'brand/vhb-final-logo-package/VHB-beeldmerk-kleur.svg');
 const OUT = path.join(ROOT, 'public');
 
 // Tegelkleur = VHB Black, gelijk aan manifest background_color/theme-color:
 // anders tekent de PWA-splash een net iets lichtere tegel op de donkere
 // achtergrond. Carbonzwart (#14181B) is de logo-inkt op licht, niet de tegel.
 const TEGEL = '#0D0D0F';
-// Buitenmaten van de lus in het master-coördinatenstelsel (stroke 57 →
-// halve lijndikte 28,5 buiten de paden): x 229,5–1197, y 132–543.
-const MARK = { cx: 713.25, cy: 337.5, w: 967.5 };
+// Buitenmaten van de lus in het master-coördinatenstelsel (v2: gevulde
+// vlakken, lijndikte 40): x 280,75–1231,25, y 140,5–534,5.
+const MARK = { cx: 756, cy: 337.5, w: 950.5 };
+// Merkkleuren in het master; op de tegel worden ze allebei inkt.
+const MASTER_KLEUREN = /#14181B|#E2A323/g;
 
 const master = fs.readFileSync(SRC, 'utf-8');
 const inner = master.slice(master.indexOf('</desc>') + '</desc>'.length, master.lastIndexOf('</svg>')).trim();
@@ -37,8 +39,12 @@ const inner = master.slice(master.indexOf('</desc>') + '</desc>'.length, master.
 // tegel: leesbaar op 16 px en zichtbaar in lichte én donkere tabbalken, waar
 // een zwarte tegel wegvalt.
 const GOUD = '#E2A323';
-const monogram = inner.slice(inner.indexOf('<g id="vhb-monogram">')).replace(/#FFFFFF|#E2A323/g, TEGEL);
-const MONOGRAM = { cx: 714, cy: 348, w: 580 }; // bbox x 424–1004, y 262–434
+const monogram = inner
+  .split('\n')
+  .filter((regel) => regel.includes('id="monogram-'))
+  .join('\n')
+  .replace(MASTER_KLEUREN, TEGEL);
+const MONOGRAM = { cx: 747.27, cy: 337.5, w: 600.36 }; // bbox x 447,09–1047,45, y 213,88–461,12
 
 /** Tegel (1024²) met een merkteken gecentreerd op `markWidth` px breed. */
 function tileSvg({ rx, markWidth, title, body = inner, geom = MARK, fill = TEGEL }) {
@@ -55,7 +61,7 @@ function tileSvg({ rx, markWidth, title, body = inner, geom = MARK, fill = TEGEL
 // App-icoon op de goud-tegel (01-09, match met het tab-icoon): het volledige
 // beeldmerk in carbon-inkt — op 180+ px is de lus wél leesbaar, dus die
 // blijft (het tab-icoon houdt het monogram, op 16–32 px is de lus een vlekje).
-const beeldmerkCarbon = inner.replace(/#FFFFFF|#E2A323/g, TEGEL);
+const beeldmerkCarbon = inner.replace(MASTER_KLEUREN, TEGEL);
 // Afgeronde hoeken op de tab-/app-iconen (iOS-achtige radius); apple-touch en
 // maskable blijven vol — het OS maskeert die zelf. Maskable: safe-zone is een
 // cirkel van 80 % → een 2:1-beeldmerk past tot ±730 px, we houden 680.
