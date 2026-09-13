@@ -27,6 +27,8 @@ export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
       ],
     },
     bekijk: { staf: 'dagafsluiting' },
+  },
+  {
     id: '2026-09-13',
     titel: 'Techniek: gele boek, voertuigen en werkprestaties',
     regels: {
