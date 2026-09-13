@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users } from 'lucide-react';
+import { Fragment, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users, Wrench } from 'lucide-react';
 import { activeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
 import { OmleidingDetail } from '../components/OmleidingDetail';
 import { isRijdend } from '../types';
@@ -25,6 +25,11 @@ import { DienstBalk } from '../components/DienstBalk';
 import { ActieMenu } from '../components/ActieMenu';
 import { DashboardAanpassen } from '../components/DashboardAanpassen';
 import { kleineTegelSpan, pasVoorkeurenToe, tegelsVoorRol, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
+
+// Techniek (13-09): de defectmelding en de gele-boek-tegel laden pas bij
+// gebruik, zodat de chauffeurschunk niets van de techniekmodule draagt.
+const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
+const LazyGeleBoekTegel = lazy(() => import('../components/GeleBoekTegel').then((m) => ({ default: m.GeleBoekTegel })));
 
 /**
  * Chauffeursdashboard — zelfde Operations Center-taal als het planner/admin-
@@ -54,6 +59,7 @@ export function DashboardView({ notes = [],
   // Dashboard op maat (06-09): verborgen tegels + volgorde per gebruiker.
   const { voorkeuren, opslaan: bewaarVoorkeuren } = useDashboardVoorkeuren(user);
   const [aanpassen, setAanpassen] = useState(false);
+  const [defectMelden, setDefectMelden] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
@@ -251,6 +257,11 @@ export function DashboardView({ notes = [],
         onClick={onNavigate ? () => onNavigate('rooster') : undefined}
       />
     ),
+    'gele-boek': (
+      <Suspense fallback={<SkeletonTile />}>
+        <LazyGeleBoekTegel className={kleinKlassen('gele-boek')} onClick={onNavigate ? () => onNavigate('defecten') : undefined} />
+      </Suspense>
+    ),
     verlofsaldo: (
       <OpsStat
         icon={<Plane size={16} />}
@@ -443,6 +454,7 @@ export function DashboardView({ notes = [],
         <div className="grid grid-cols-2 gap-3 lg:hidden">
           {isRijdend(user.role) && <QuickAction icon={<Calendar size={16} />} label="Mijn rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />}
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
+          {isRijdend(user.role) && <QuickAction icon={<Wrench size={16} />} label="Defect melden" sub="Iets mis met de bus?" onClick={() => setDefectMelden(true)} />}
           {isRijdend(user.role) && <QuickAction icon={<RefreshCw size={16} />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />}
           <QuickAction icon={<FileText size={16} />} label="Documenten" sub="Wat de planning klaarzet" onClick={() => onNavigate('documenten')} />
           {isRijdend(user.role) && <QuickAction icon={<Users size={16} />} label="Maandplanning" sub="Wie rijdt wanneer" onClick={() => onNavigate('bezetting')} />}
@@ -467,6 +479,11 @@ export function DashboardView({ notes = [],
         voorkeuren={voorkeuren}
         onChange={bewaarVoorkeuren}
       />
+      {defectMelden && (
+        <Suspense fallback={null}>
+          <LazyDefectMeldenModal open onClose={() => setDefectMelden(false)} currentUser={user} />
+        </Suspense>
+      )}
     </div>
   );
 }

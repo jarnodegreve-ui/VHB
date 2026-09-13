@@ -94,6 +94,7 @@ draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
 58. `supabase/2026-09-08_security_snapshot.sql`, `security_snapshot()` voor de nachtelijke beleidsdrift-check (alleen service_role; README › Beleidssnapshot)
 59. `supabase/2026-09-08_ocpi_dagpieken.sql`, permanente dagpieken (kW) voor de laadpalen-historiek + backfill uit de snapshots (raakt grants → beleidssnapshot bijwerken)
 60. `supabase/2026-09-10_diversions_location.sql`, kolom `location` (plaats) op omleidingen
+61. `supabase/2026-09-13_techniek_voertuigen.sql`, voertuigen (seed 40), gele boek, werkprestaties, vervaldata per voertuig (raakt RLS/grants → beleidssnapshot bijwerken)
 
 **Bewust overgeslagen** (alleen zinvol op het historische productieschema; ze
 falen op een verse database):

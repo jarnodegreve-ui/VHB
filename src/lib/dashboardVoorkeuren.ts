@@ -41,6 +41,7 @@ export const CHAUFFEUR_TEGELS: readonly TegelDef[] = [
  *  De dienst-, rooster- en omleidingstegels zouden altijd leeg staan en naar
  *  schermen wijzen die niet in zijn menu staan (Jarno 09-09). */
 export const TECHNIEKER_TEGELS: readonly TegelDef[] = [
+  { id: 'gele-boek', label: 'Gele boek', omschrijving: 'Open defectmeldingen in de garage.', groep: 'tegels' },
   { id: 'verlofsaldo', label: 'Verlofsaldo', omschrijving: 'Dagen over dit jaar.', essentieel: true, groep: 'tegels' },
   { id: 'snelle-acties', label: 'Snelle acties', omschrijving: 'Snelkoppelingen onderaan (alleen op de telefoon).', groep: 'panelen' },
 ];

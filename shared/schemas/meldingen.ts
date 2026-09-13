@@ -6,7 +6,7 @@ import { optioneel } from './basis.js';
  * kennen en de body van POST /api/meldingen/gelezen. Eén bron voor server
  * (validatie) en client (chips, type).
  */
-export const MELDING_SOORTEN = ['planning', 'verlof', 'ruil', 'update', 'omleiding', 'document', 'systeem'] as const;
+export const MELDING_SOORTEN = ['planning', 'verlof', 'ruil', 'update', 'omleiding', 'document', 'techniek', 'systeem'] as const;
 export type MeldingSoort = (typeof MELDING_SOORTEN)[number];
 
 export const meldingSoortSchema = z.enum(MELDING_SOORTEN);
@@ -19,6 +19,7 @@ export const MELDING_SOORT_LABEL: Record<MeldingSoort, string> = {
   update: 'Updates',
   omleiding: 'Omleidingen',
   document: 'Documenten',
+  techniek: 'Techniek',
   systeem: 'Systeem',
 };
 

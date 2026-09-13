@@ -9,3 +9,4 @@ export * from './update.js';
 export * from './dashboardVoorkeuren.js';
 export * from './meldingen.js';
 export * from './onderhoud.js';
+export * from './techniek.js';

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw } from 'lucide-react';
+import { Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw, Wrench } from 'lucide-react';
 import { useAppDataContext } from '../app/AppDataContext';
 import { routeUitUrl } from '../app/router';
 import { MELDING_SOORT_LABEL } from '../../shared/schemas/meldingen';
@@ -27,6 +27,7 @@ const ICOON_PER_SOORT: Record<MeldingSoort, ReactNode> = {
   update: <Bell size={16} />,
   omleiding: <MapPin size={16} />,
   document: <FolderOpen size={16} />,
+  techniek: <Wrench size={16} />,
   systeem: <Info size={16} />,
 };
 

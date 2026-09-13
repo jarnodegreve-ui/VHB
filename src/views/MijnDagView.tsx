@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeftRight, AlertTriangle, Calendar, FileText, MapPin, WifiOff } from 'lucide-react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { ArrowLeftRight, AlertTriangle, Calendar, FileText, MapPin, WifiOff, Wrench } from 'lucide-react';
 import { lijnLabel } from '../../shared/lijnen';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { activeDiversions } from '../lib/diversions';
@@ -19,6 +19,9 @@ import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { DienstBalk } from '../components/DienstBalk';
 import { RitbladViewer } from '../components/RitbladViewer';
+
+// Defect melden (techniek, 13-09): pas laden bij de klik, de chunk van Mijn dag blijft licht.
+const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
 
 /**
  * Mijn dag — het broekzakscherm van de chauffeur.
@@ -62,6 +65,7 @@ export function MijnDagView({
   const [dagOffset, setDagOffset] = useState<0 | 1>(0);
   // Ritblad per dienst: de viewer zoekt de pagina's van het dienstnummer in de bundel.
   const [ritbladOpen, setRitbladOpen] = useState(false);
+  const [defectMelden, setDefectMelden] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
@@ -333,6 +337,16 @@ export function MijnDagView({
           </Button>
           <RitbladViewer dienstnummer={dienstnummers} open={ritbladOpen} onClose={() => setRitbladOpen(false)} />
         </>
+      )}
+
+      {/* === Defect melden: rechtstreeks in het gele boek van de garage (13-09). === */}
+      <Button variant="secondary" size="lg" full icon={<Wrench size={18} />} onClick={() => setDefectMelden(true)}>
+        Defect melden
+      </Button>
+      {defectMelden && (
+        <Suspense fallback={null}>
+          <LazyDefectMeldenModal open onClose={() => setDefectMelden(false)} currentUser={user} />
+        </Suspense>
       )}
 
       {/* === Omleidingen: allemaal, met lijnnummer — de koppeling omleiding ↔

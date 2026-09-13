@@ -34,6 +34,9 @@ export const PAD_PER_VIEW: Record<string, string> = {
   "verlof-kalender": "beheer/verlofkalender",
   ziekte: "beheer/ziekte",
   vervaldata: "beheer/vervaldata",
+  defecten: "techniek/defecten",
+  werkprestaties: "techniek/prestaties",
+  voertuigen: "techniek/voertuigen",
   "beheer-updates": "beheer/updates",
   "beheer-omleidingen": "beheer/omleidingen",
   gebruikers: "beheer/gebruikers",
@@ -58,6 +61,9 @@ const SOORT_PER_VIEW: Record<string, MeldingSoort> = {
   updates: "update",
   omleidingen: "omleiding",
   documenten: "document",
+  defecten: "techniek",
+  werkprestaties: "techniek",
+  voertuigen: "techniek",
 };
 
 /** `/?view=rooster` → 'rooster'; `/verlof` → 'verlof'; '/' → null. */

@@ -55,6 +55,12 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // Meldingencentrum (2026-09-06_meldingen.sql): elke push wordt ook als rij
   // per gebruiker bewaard; snake_case zoals planning_notes.
   { table: "meldingen", columns: "id,user_id,titel,tekst,soort,doel,created_at,gelezen_op" },
+  // Techniek (2026-09-13_techniek_voertuigen.sql): voertuigen, gele boek,
+  // werkprestaties en vervaldata per voertuig; snake_case, API-only.
+  { table: "vehicles", columns: "id,busnr,kort_nr,nummerplaat,chassisnr,merk,type,aandrijving,status,in_dienst,uit_dienst,zitplaatsen,opmerking,chargeye_mix_id,created_at,updated_at" },
+  { table: "vehicle_defects", columns: "id,vehicle_id,gemeld_op,gemeld_door,werktype,omschrijving,status,uitgevoerd_op,uitgevoerd_door,uitgevoerd_werk,manuren,opmerking,updated_at" },
+  { table: "vehicle_work", columns: "id,datum,mecanicien_id,vehicle_id,werkcode,omschrijving,begin_tijd,einde_tijd,werkuren,kmstand,defect_id,created_at,updated_at" },
+  { table: "vehicle_expiries", columns: "vehicle_id,soort,valid_until,opmerking,updated_at,updated_by" },
   { table: "planning_matrix_import_history", columns: "id,created_at,imported_days,detected_drivers,generated_shifts,matched_services,skipped_absences,unknown_codes,unmatched_drivers,filename,imported_by,period_start,period_end,file_start,file_end,snapshot_path" },
 ];
 
