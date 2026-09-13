@@ -16,6 +16,19 @@
 
 begin;
 
+-- === 0) Bestaande losse tabel op productie ===
+-- Productie had al een public.vehicles (nummer, mix_id, bustype: 16 ChargEye-
+-- koppelingen, nergens in de code gebruikt). Die blijft bewaard als
+-- vehicles_chargeye_oud; de mix_id wordt hieronder in de nieuwe fiche gezet.
+-- Op staging (geen oude tabel) is dit een no-op.
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'vehicles' and column_name = 'mix_id')
+     and to_regclass('public.vehicles_chargeye_oud') is null then
+    alter table public.vehicles rename to vehicles_chargeye_oud;
+  end if;
+end $$;
+
 -- === 1) vehicles ===
 create table if not exists public.vehicles (
   id uuid primary key default gen_random_uuid(),
@@ -34,9 +47,12 @@ create table if not exists public.vehicles (
   uit_dienst date,
   zitplaatsen integer,
   opmerking text,
+  -- ChargEye-id (laadmonitoring), overgenomen uit de oude tabel.
+  chargeye_mix_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.vehicles add column if not exists chargeye_mix_id text;
 
 drop trigger if exists vehicles_set_updated_at on public.vehicles;
 create trigger vehicles_set_updated_at
@@ -180,6 +196,17 @@ insert into public.vehicles (busnr, kort_nr, nummerplaat, chassisnr, type, aandr
 -- `on conflict do nothing` zonder doel: dekt élke unique (busnr, kort_nr,
 -- nummerplaat) zodat een herhaalde run nooit op 23505 afbreekt.
 on conflict do nothing;
+
+-- ChargEye-koppeling uit de oude tabel overnemen (nummer 613026 ↔ busnr '613 026').
+do $$
+begin
+  if to_regclass('public.vehicles_chargeye_oud') is not null then
+    update public.vehicles v
+      set chargeye_mix_id = o.mix_id
+      from public.vehicles_chargeye_oud o
+      where replace(v.busnr, ' ', '') = o.nummer::text and v.chargeye_mix_id is null;
+  end if;
+end $$;
 
 -- Post-conditie in de transactie: een halve toepassing rolt terug.
 do $$
