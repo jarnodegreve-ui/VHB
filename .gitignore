@@ -16,3 +16,6 @@ coverage/
 
 # Lighthouse CI (rapporten, lokaal en in CI als artifact)
 /.lighthouseci/
+
+# Supabase-CLI-cache
+supabase/.temp/

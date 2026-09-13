@@ -30,6 +30,8 @@ export const PAD_PER_VIEW: Record<string, string> = {
   "planning-codes": "beheer/planningscodes",
   dienstoverzicht: "dienstoverzicht",
   "beheer-dienstoverzicht": "beheer/dienstoverzicht",
+  dagafsluiting: "beheer/dagafsluiting",
+  looncontrole: "beheer/looncontrole",
   dekking: "openstaande-diensten",
   "verlof-kalender": "beheer/verlofkalender",
   ziekte: "beheer/ziekte",

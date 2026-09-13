@@ -17,6 +17,15 @@ export type WatIsNieuwItem = {
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-14',
+    titel: 'Dagafsluiting en looncontrole',
+    regels: {
+      staf: [
+        'Beheer › Dagafsluiting: open een dag (de planning van die dag wordt gekopieerd, met ruilen en verlof), pas aan wie werkelijk wat reed, vul overminuten, premie en kwaliteitsvlaggen in en sluit de dag af. Dit vervangt het dagelijks intikken in Access.',
+        'Beheer › Looncontrole: maandraster met de stand per dag, de controle vóór de Easypay-export (open dagen, ontbrekende matricules of codes) en de CSV-download; tabbladen voor de looncodes (dienstnummer → Easypay) en de matricules.',
+      ],
+    },
+    bekijk: { staf: 'dagafsluiting' },
     id: '2026-09-13',
     titel: 'Techniek: gele boek, voertuigen en werkprestaties',
     regels: {

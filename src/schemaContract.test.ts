@@ -9,6 +9,7 @@ import {
   toDatabasePlanningCode,
 } from '../api/helpers';
 import { toDatabaseDefect, toDatabaseDefectPatch, toDatabaseVehicle, toDatabaseVehicleExpiry, toDatabaseWerkprestatie } from '../api/_lib/techniekStorage';
+import { toDatabaseDagAfsluiting, toDatabaseDagPrestatieNieuw, toDatabaseDagPrestatiePatch, toDatabaseLoonCode, toDatabaseLoonMedewerker } from '../api/_lib/loonStorage';
 
 /**
  * Contracttest mappers ↔ schema-probes.
@@ -74,6 +75,14 @@ describe('schema-contract: mappers schrijven enkel geprobe-de kolommen', () => {
     {
       table: 'vehicle_expiries',
       row: toDatabaseVehicleExpiry({ vehicleId: 'v1', soort: 'keuring', validUntil: '2027-01-01', opmerking: null, updatedBy: 'u1' }),
+      table: 'loon_codes',
+      row: toDatabaseLoonCode('2102', { codeWeergave: '2102', omschrijving: null, dienstType: 'lijn', inExport: true, easypayActiviteit: 'LIJN', easypayTypePrest: 40140, tik1: '05:28', tik2: '12:13', tik3: '15:28', tik4: '17:27', tik5: null, tik6: null, lbRijtijd: 449, lbStat100At: 41, lbStat100Nat: 4, lbStat50Nat: 0, lbOnd: 1, lbAndWrk: 0, lbNacht: 32 }, 'u1'),
+    },
+    { table: 'loon_medewerkers', row: toDatabaseLoonMedewerker('u1', { easypayNr: 42, inExport: true }, 'u1') },
+    { table: 'dag_afsluitingen', row: toDatabaseDagAfsluiting({ datum: '2026-09-13', geopendDoor: 'u1' }) },
+    {
+      table: 'dag_prestaties',
+      row: { ...toDatabaseDagPrestatieNieuw({ datum: '2026-09-13', userId: 'u1', volgnr: 1, planningCode: '2102', geredenCode: '2102' }), ...toDatabaseDagPrestatiePatch({ geredenCode: '2103', overmin: 15, overminNacht: 0, overminExtra: 0, onvPremie: true, qualOngeval: false, qualPanne: true, qualVerkeersovertreding: false, qualKlantklacht: false, qualAdmfout: false, qualInterneklacht: false, qualVertragingDrSchuld: false, qualRitNtGeredenDrSchuld: false, opmerking: 'x' }, 'u1') },
     },
     {
       table: 'planning_codes',

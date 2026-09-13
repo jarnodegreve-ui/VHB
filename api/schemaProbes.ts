@@ -61,6 +61,11 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "vehicle_defects", columns: "id,vehicle_id,gemeld_op,gemeld_door,werktype,omschrijving,status,uitgevoerd_op,uitgevoerd_door,uitgevoerd_werk,manuren,opmerking,updated_at" },
   { table: "vehicle_work", columns: "id,datum,mecanicien_id,vehicle_id,werkcode,omschrijving,begin_tijd,einde_tijd,werkuren,kmstand,defect_id,created_at,updated_at" },
   { table: "vehicle_expiries", columns: "vehicle_id,soort,valid_until,opmerking,updated_at,updated_by" },
+  // Loon (2026-09-13_loon_dagafsluiting.sql): looncodes, matricules, dagafsluiting.
+  { table: "loon_codes", columns: "code,code_weergave,omschrijving,dienst_type,in_export,easypay_activiteit,easypay_type_prest,tik1,tik2,tik3,tik4,tik5,tik6,lb_rijtijd,lb_stat100_at,lb_stat100_nat,lb_stat50_nat,lb_ond,lb_and_wrk,lb_nacht,bron,updated_at,updated_by" },
+  { table: "loon_medewerkers", columns: "user_id,easypay_nr,in_export,updated_at,updated_by" },
+  { table: "dag_afsluitingen", columns: "datum,status,geopend_op,geopend_door,afgesloten_op,afgesloten_door,heropend_op,heropend_door,heropend_reden" },
+  { table: "dag_prestaties", columns: "id,datum,user_id,volgnr,planning_code,gereden_code,overmin,overmin_nacht,overmin_extra,onv_premie,qual_ongeval,qual_panne,qual_verkeersovertreding,qual_klantklacht,qual_admfout,qual_interneklacht,qual_vertraging_dr_schuld,qual_rit_nt_gereden_dr_schuld,opmerking,bewerkt_op,bewerkt_door" },
   { table: "planning_matrix_import_history", columns: "id,created_at,imported_days,detected_drivers,generated_shifts,matched_services,skipped_absences,unknown_codes,unmatched_drivers,filename,imported_by,period_start,period_end,file_start,file_end,snapshot_path" },
 ];
 
