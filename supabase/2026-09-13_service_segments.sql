@@ -43,10 +43,11 @@ create table if not exists public.service_segments (
   -- Dienstnummer als tekst, sluit aan op services."serviceNumber" (geen FK:
   -- de ET-export kan diensten bevatten die het dienstoverzicht nog niet kent).
   service_number text not null,
-  -- Dagtypecode van De Lijn zoals in de export ('21/0', '26/0').
+  -- Dagtypecode van De Lijn zoals in de export ('21/0', '26/0'); koppeling met
+  -- dagtype_codes.code via split_part(dagtype_code, '/', 1).
   dagtype_code text not null,
   volgorde integer not null,
-  type text not null check (type in ('RIT', 'LED', 'STA', 'ONE', 'ONV', 'ONS', 'AVO', 'ANA', 'ATU', 'ANW', 'AFL')),
+  type text not null constraint service_segments_type_check check (type in ('RIT', 'LED', 'STA', 'ONE', 'ONV', 'ONS', 'AVO', 'ANA', 'ATU', 'ANW', 'AFL')),
   -- Minuten sinds 00:00 van de dienstdag; boven 1440 = na middernacht.
   start_min integer not null,
   einde_min integer not null,
@@ -67,8 +68,9 @@ create table if not exists public.service_segments (
   unique (import_id, service_number, dagtype_code, volgorde)
 );
 
-create index if not exists service_segments_import_dienst_idx
-  on public.service_segments (import_id, service_number, dagtype_code);
+-- (geen aparte index: de unique (import_id, service_number, dagtype_code, volgorde)
+-- dekt de filters van getSegments en de FK-cascade)
+drop index if exists public.service_segments_import_dienst_idx;
 
 alter table public.service_segments enable row level security;
 revoke all on table public.service_segments from anon, authenticated;
@@ -84,6 +86,21 @@ create table if not exists public.dagtype_codes (
   portaal_dagtype text,
   updated_at timestamptz not null default now()
 );
+
+-- Strak in de database (patroon user_expiries.soort): alleen de vier portaal-dagtypes of null.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'dagtype_codes_portaal_dagtype_check') then
+    alter table public.dagtype_codes
+      add constraint dagtype_codes_portaal_dagtype_check
+      check (portaal_dagtype is null or portaal_dagtype in ('schooldag', 'vakantie', 'zaterdag', 'zondag'));
+  end if;
+end $$;
+
+drop trigger if exists dagtype_codes_set_updated_at on public.dagtype_codes;
+create trigger dagtype_codes_set_updated_at
+  before update on public.dagtype_codes
+  for each row execute function public.set_updated_at();
 
 alter table public.dagtype_codes enable row level security;
 revoke all on table public.dagtype_codes from anon, authenticated;
@@ -123,6 +140,7 @@ begin
   if to_regclass('public.service_segment_imports') is null then raise exception 'post-conditie faalt: service_segment_imports ontbreekt'; end if;
   if to_regclass('public.service_segments') is null then raise exception 'post-conditie faalt: service_segments ontbreekt'; end if;
   if to_regclass('public.dagtype_codes') is null then raise exception 'post-conditie faalt: dagtype_codes ontbreekt'; end if;
+  if to_regclass('public.service_segment_imports_actief_idx') is null then raise exception 'post-conditie faalt: actief-index ontbreekt'; end if;
   if (select count(*) from public.dagtype_codes) < 24 then raise exception 'post-conditie faalt: dagtype_codes niet geseed'; end if;
 end $$;
 
