@@ -15,7 +15,28 @@ export type WatIsNieuwItem = {
   bekijk?: { chauffeur?: string; staf?: string };
 };
 
+/**
+ * Kaart uitgezet op vraag van Jarno (13-09): het overzicht met nieuwigheden
+ * verschijnt nergens meer. De items blijven bestaan voor de changelog
+ * (`npm run changelog`); zet op true om de kaart weer te tonen.
+ */
+export const WAT_IS_NIEUW_TONEN = false;
+
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
+  {
+    id: '2026-09-15',
+    titel: 'Techniek: categorieën en papieren gele boek',
+    regels: {
+      chauffeur: [
+        'Bij “Defect melden” toont de keuzelijst alleen nog het busnummer zoals het op de bus staat.',
+      ],
+      staf: [
+        'Voertuigen hebben een categorie (bus, bedrijfswagen, privéwagen) met een filter in de lijst en een veld op de fiche.',
+        'Gele boek › Afdrukken: het huidige overzicht (open of alles) als printblad voor de ISO-map.',
+      ],
+    },
+    bekijk: { staf: 'voertuigen' },
+  },
   {
     id: '2026-09-14',
     titel: 'Dagafsluiting en looncontrole',

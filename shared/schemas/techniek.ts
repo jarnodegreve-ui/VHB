@@ -1,10 +1,10 @@
 import { z } from './zod.js';
 import { optioneel } from './basis.js';
 import {
-  VOERTUIG_TYPES, VOERTUIG_TYPE_LABEL, AANDRIJVINGEN, AANDRIJVING_LABEL, VOERTUIG_STATUSSEN, VOERTUIG_STATUS_LABEL,
+  VOERTUIG_TYPES, VOERTUIG_TYPE_LABEL, VOERTUIG_CATEGORIEEN, AANDRIJVINGEN, AANDRIJVING_LABEL, VOERTUIG_STATUSSEN, VOERTUIG_STATUS_LABEL,
   WERKTYPES, WERKTYPE_LABEL, DEFECT_STATUSSEN, DEFECT_STATUS_LABEL, WERKCODES, WERKCODE_LABEL,
   VOERTUIG_VERVAL_SOORTEN, VOERTUIG_VERVAL_LABEL, DEFECT_OMSCHRIJVING_MAX, WERK_OMSCHRIJVING_MAX, voertuigNaam,
-  type VoertuigType, type Aandrijving, type VoertuigStatus, type Werktype, type DefectStatus, type Werkcode, type VoertuigVervalSoort,
+  type VoertuigType, type VoertuigCategorie, type Aandrijving, type VoertuigStatus, type Werktype, type DefectStatus, type Werkcode, type VoertuigVervalSoort,
 } from '../techniek.js';
 
 /**
@@ -22,7 +22,7 @@ export {
   WERKTYPES, WERKTYPE_LABEL, DEFECT_STATUSSEN, DEFECT_STATUS_LABEL, WERKCODES, WERKCODE_LABEL,
   VOERTUIG_VERVAL_SOORTEN, VOERTUIG_VERVAL_LABEL, DEFECT_OMSCHRIJVING_MAX, WERK_OMSCHRIJVING_MAX, voertuigNaam,
 };
-export type { VoertuigType, Aandrijving, VoertuigStatus, Werktype, DefectStatus, Werkcode, VoertuigVervalSoort };
+export type { VoertuigType, VoertuigCategorie, Aandrijving, VoertuigStatus, Werktype, DefectStatus, Werkcode, VoertuigVervalSoort };
 
 const isoDatum = z.string({ error: 'Vul een datum in' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'Ongeldige datum');
 const klokTijd = z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Ongeldige tijd, verwacht uu:mm');
@@ -38,6 +38,7 @@ export const vehicleSchema = z.object({
   chassisnr: leegNaarNull(z.string().trim().max(40, 'Hooguit 40 tekens')),
   merk: leegNaarNull(z.string().trim().max(60, 'Hooguit 60 tekens')),
   type: z.enum(VOERTUIG_TYPES, { error: 'Kies een type' }),
+  categorie: z.enum(VOERTUIG_CATEGORIEEN, { error: 'Kies een categorie' }).default('bus'),
   aandrijving: optioneel(z.enum(AANDRIJVINGEN, { error: 'Kies een aandrijving' }).nullable()),
   status: z.enum(VOERTUIG_STATUSSEN, { error: 'Kies een status' }).default('actief'),
   inDienst: leegNaarNull(isoDatum),
@@ -52,7 +53,7 @@ export const vehicleBodySchema = vehicleSchema.omit({ id: true });
 export type VehicleBody = z.output<typeof vehicleBodySchema>;
 
 /** Wat een chauffeur/technieker van een voertuig ziet (keuzelijst in de defectmelding). */
-export const vehicleKortSchema = vehicleSchema.pick({ id: true, busnr: true, kortNr: true, nummerplaat: true, type: true, status: true });
+export const vehicleKortSchema = vehicleSchema.pick({ id: true, busnr: true, kortNr: true, type: true, categorie: true, status: true });
 export type VehicleKort = z.output<typeof vehicleKortSchema>;
 
 /** Body van POST /api/defecten (iedereen die ingelogd is). */

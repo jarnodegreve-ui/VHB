@@ -61,9 +61,9 @@ export function mountTechniekRoutes(app: express.Express) {
       const lijst = actief ? alle.filter((v) => v.status !== "uit_dienst") : alle;
       res.setHeader("Cache-Control", "no-store");
       if (isTechniekRol(req.appUser!.role)) return res.json(lijst);
-      // Chauffeur: alleen wat hij nodig heeft om een bus te kiezen.
+      // Chauffeur: alleen wat hij nodig heeft om een bus te kiezen (geen nummerplaat, Jarno 13-09).
       res.json(lijst.filter((v) => v.status !== "uit_dienst").map((v) => ({
-        id: v.id, busnr: v.busnr, kortNr: v.kortNr, nummerplaat: v.nummerplaat, type: v.type, status: v.status,
+        id: v.id, busnr: v.busnr, kortNr: v.kortNr, type: v.type, categorie: v.categorie, status: v.status,
       })));
     } catch (err) {
       fout(res, err, "Kon de voertuigen niet lezen.");

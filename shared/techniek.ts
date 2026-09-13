@@ -17,6 +17,20 @@ export const VOERTUIG_TYPE_LABEL: Record<VoertuigType, string> = {
   ander: 'Ander',
 };
 
+/** Categorie (Jarno 13-09): bussen, bedrijfswagens en privéwagens apart kunnen bekijken; los van het type. */
+export const VOERTUIG_CATEGORIEEN = ['bus', 'bedrijfswagen', 'privewagen'] as const;
+export type VoertuigCategorie = (typeof VOERTUIG_CATEGORIEEN)[number];
+export const VOERTUIG_CATEGORIE_LABEL: Record<VoertuigCategorie, string> = {
+  bus: 'Bus',
+  bedrijfswagen: 'Bedrijfswagen',
+  privewagen: 'Privéwagen',
+};
+export const VOERTUIG_CATEGORIE_MEERVOUD: Record<VoertuigCategorie, string> = {
+  bus: 'Bussen',
+  bedrijfswagen: 'Bedrijfswagens',
+  privewagen: 'Privéwagens',
+};
+
 export const AANDRIJVINGEN = ['elektrisch', 'diesel', 'hybride', 'ander'] as const;
 export type Aandrijving = (typeof AANDRIJVINGEN)[number];
 export const AANDRIJVING_LABEL: Record<Aandrijving, string> = {

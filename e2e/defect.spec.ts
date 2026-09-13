@@ -30,7 +30,7 @@ test('chauffeur meldt een defect vanaf Mijn dag', async ({ page }) => {
   await page.getByRole('button', { name: 'Defect melden' }).click();
   await expect(page.getByRole('dialog', { name: 'Defect melden' })).toBeVisible();
   // De bussen komen uit de fixture; kies op kort nummer.
-  await page.getByRole('combobox', { name: 'Bus' }).selectOption({ label: 'Bus 26 (613 026), 2-CWF-068' });
+  await page.getByRole('combobox', { name: 'Bus' }).selectOption({ label: '613 026' });
   await page.getByRole('button', { name: 'Carrosserie' }).click();
   await page.getByRole('textbox', { name: /Wat is er mis/ }).fill('Spiegel rechts hangt los');
   await page.getByRole('button', { name: 'Melden', exact: true }).click();

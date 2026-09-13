@@ -197,9 +197,9 @@ export const OCPI_DAG = (dag = '2026-08-14') => {
 };
 
 export const VEHICLES = [
-  { id: 'v26', busnr: '613 026', kortNr: 26, nummerplaat: '2-CWF-068', chassisnr: 'WMA12CZZ4PF019730', merk: "MAN LION'S CITY 12E", type: 'lijnbus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2022-12-20', uitDienst: null, zitplaatsen: 40, opmerking: null },
-  { id: 'v34', busnr: '613 034', kortNr: 34, nummerplaat: '2-GPY-265', chassisnr: null, merk: "MAN LION'S CITY 18E", type: 'lijnbus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2025-02-20', uitDienst: null, zitplaatsen: 50, opmerking: null },
-  { id: 'v98', busnr: 'Reserve 98', kortNr: 98, nummerplaat: '2-ECM-130', chassisnr: null, merk: 'VDL', type: 'lijnbus', aandrijving: 'diesel', status: 'reserve', inDienst: '2023-08-29', uitDienst: null, zitplaatsen: null, opmerking: null },
+  { id: 'v26', busnr: '613 026', kortNr: 26, nummerplaat: '2-CWF-068', chassisnr: 'WMA12CZZ4PF019730', merk: "MAN LION'S CITY 12E", type: 'lijnbus', categorie: 'bus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2022-12-20', uitDienst: null, zitplaatsen: 40, opmerking: null },
+  { id: 'v34', busnr: '613 034', kortNr: 34, nummerplaat: '2-GPY-265', chassisnr: null, merk: "MAN LION'S CITY 18E", type: 'lijnbus', categorie: 'bus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2025-02-20', uitDienst: null, zitplaatsen: 50, opmerking: null },
+  { id: 'v98', busnr: 'Reserve 98', kortNr: 98, nummerplaat: '2-ECM-130', chassisnr: null, merk: 'VDL', type: 'lijnbus', categorie: 'bus', aandrijving: 'diesel', status: 'reserve', inDienst: '2023-08-29', uitDienst: null, zitplaatsen: null, opmerking: null },
 ];
 export const VEHICLE_EXPIRIES = [
   { vehicleId: 'v26', soort: 'keuring', validUntil: dayOffset(12), opmerking: null },

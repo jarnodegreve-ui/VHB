@@ -63,7 +63,7 @@ describe('schema-contract: mappers schrijven enkel geprobe-de kolommen', () => {
     },
     {
       table: 'vehicles',
-      row: toDatabaseVehicle({ busnr: '613 026', kortNr: 26, nummerplaat: '2-CWF-068', chassisnr: 'x', merk: 'MAN', type: 'lijnbus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2022-12-20', uitDienst: null, zitplaatsen: 40, opmerking: null }),
+      row: toDatabaseVehicle({ busnr: '613 026', kortNr: 26, nummerplaat: '2-CWF-068', chassisnr: 'x', merk: 'MAN', type: 'lijnbus', categorie: 'bus', aandrijving: 'elektrisch', status: 'actief', inDienst: '2022-12-20', uitDienst: null, zitplaatsen: 40, opmerking: null }),
     },
     {
       table: 'vehicle_defects',

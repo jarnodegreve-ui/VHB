@@ -3,7 +3,8 @@ import { AlertTriangle, Bus, Pencil, Plus, RefreshCw, ShieldCheck, Wrench, Zap }
 import type { User } from '../../types';
 import { isStaf } from '../../types';
 import {
-  AANDRIJVINGEN, AANDRIJVING_LABEL, VOERTUIG_STATUSSEN, VOERTUIG_STATUS_LABEL, VOERTUIG_TYPES, VOERTUIG_TYPE_LABEL,
+  AANDRIJVINGEN, AANDRIJVING_LABEL, VOERTUIG_CATEGORIEEN, VOERTUIG_CATEGORIE_LABEL, VOERTUIG_CATEGORIE_MEERVOUD, VOERTUIG_STATUSSEN, VOERTUIG_STATUS_LABEL, VOERTUIG_TYPES, VOERTUIG_TYPE_LABEL,
+  type VoertuigCategorie,
   VOERTUIG_VERVAL_LABEL, VOERTUIG_VERVAL_SOORTEN, WERKTYPE_LABEL, voertuigNaam, type VoertuigVervalSoort,
 } from '../../../shared/techniek';
 import { cn, notify } from '../../lib/ui';
@@ -24,6 +25,7 @@ import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '..
 const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
 
 type Filter = 'actief' | 'reserve' | 'uit_dienst' | 'alles' | 'verloopt';
+type CategorieFilter = 'alle' | VoertuigCategorie;
 const KOLOMMEN = [
   { key: 'nummerplaat', label: 'Nummerplaat' },
   { key: 'type', label: 'Type' },
@@ -32,7 +34,7 @@ const KOLOMMEN = [
   { key: 'defecten', label: 'Open defecten' },
 ];
 
-const LEEG_FORM: VehicleBody = { busnr: '', kortNr: null, nummerplaat: '', chassisnr: '', merk: '', type: 'lijnbus', aandrijving: 'elektrisch', status: 'actief', inDienst: '', uitDienst: '', zitplaatsen: null, opmerking: '' };
+const LEEG_FORM: VehicleBody = { busnr: '', kortNr: null, nummerplaat: '', chassisnr: '', merk: '', type: 'lijnbus', categorie: 'bus', aandrijving: 'elektrisch', status: 'actief', inDienst: '', uitDienst: '', zitplaatsen: null, opmerking: '' };
 
 /**
  * Voertuigen (fase A Access-migratie, 13-09): het wagenpark met per bus de
@@ -49,6 +51,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('actief');
+  const [categorie, setCategorie] = useState<CategorieFilter>('alle');
   const [zoek, setZoek] = useState('');
   const [detail, setDetail] = useState<Vehicle | null>(null);
   const [bewerk, setBewerk] = useState<{ voertuig: Vehicle | null } | null>(null);
@@ -98,6 +101,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
 
   const zoekTerm = zoek.trim().toLowerCase();
   const gefilterd = rijen
+    .filter((r) => categorie === 'alle' || (r.v.categorie ?? 'bus') === categorie)
     .filter((r) => filter === 'alles' ? true : filter === 'verloopt' ? (r.v.status !== 'uit_dienst' && r.eerste !== null && r.eerste <= 30) : r.v.status === filter)
     .filter((r) => !zoekTerm || `${voertuigNaam(r.v)} ${r.v.busnr} ${r.v.nummerplaat ?? ''} ${r.v.merk ?? ''} ${r.v.chassisnr ?? ''}`.toLowerCase().includes(zoekTerm));
   const gesorteerd = sort.sorteer(gefilterd, (r, k) => {
@@ -174,6 +178,9 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                   <FilterChip active={filter === 'uit_dienst'} onClick={() => setFilter('uit_dienst')}>Uit dienst</FilterChip>
                   <FilterChip active={filter === 'verloopt'} onClick={() => setFilter('verloopt')}>Verloopt binnen 30 d</FilterChip>
                   <FilterChip active={filter === 'alles'} onClick={() => setFilter('alles')}>Alles</FilterChip>
+                  <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:inline-block" aria-hidden="true" />
+                  <FilterChip active={categorie === 'alle'} onClick={() => setCategorie('alle')}>Alle categorieën</FilterChip>
+                  {VOERTUIG_CATEGORIEEN.map((c) => <FilterChip key={c} active={categorie === c} onClick={() => setCategorie(c)}>{VOERTUIG_CATEGORIE_MEERVOUD[c]}</FilterChip>)}
                 </>
               )}
             />
@@ -307,7 +314,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
         <CardHeader
           size="lg"
           title={voertuigNaam(voertuig)}
-          description={`${voertuig.busnr}${voertuig.merk ? ` · ${voertuig.merk}` : ''} · ${VOERTUIG_TYPE_LABEL[voertuig.type]}${voertuig.aandrijving ? `, ${AANDRIJVING_LABEL[voertuig.aandrijving].toLowerCase()}` : ''}`}
+          description={`${voertuig.busnr}${voertuig.merk ? ` · ${voertuig.merk}` : ''} · ${VOERTUIG_CATEGORIE_LABEL[voertuig.categorie ?? 'bus']}, ${VOERTUIG_TYPE_LABEL[voertuig.type].toLowerCase()}${voertuig.aandrijving ? `, ${AANDRIJVING_LABEL[voertuig.aandrijving].toLowerCase()}` : ''}`}
           aside={(
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" icon={<Wrench size={14} />} onClick={() => setMelden(true)}>Defect melden</Button>
@@ -384,7 +391,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
 }
 
 function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: Vehicle | null; onClose: () => void; onKlaar: (v: Vehicle) => void; onVerwijderd: (id: string) => void }) {
-  const [form, setForm] = useState<VehicleBody>(() => voertuig ? { busnr: voertuig.busnr, kortNr: voertuig.kortNr ?? null, nummerplaat: voertuig.nummerplaat ?? '', chassisnr: voertuig.chassisnr ?? '', merk: voertuig.merk ?? '', type: voertuig.type, aandrijving: voertuig.aandrijving ?? null, status: voertuig.status, inDienst: voertuig.inDienst ?? '', uitDienst: voertuig.uitDienst ?? '', zitplaatsen: voertuig.zitplaatsen ?? null, opmerking: voertuig.opmerking ?? '' } : LEEG_FORM);
+  const [form, setForm] = useState<VehicleBody>(() => voertuig ? { busnr: voertuig.busnr, kortNr: voertuig.kortNr ?? null, nummerplaat: voertuig.nummerplaat ?? '', chassisnr: voertuig.chassisnr ?? '', merk: voertuig.merk ?? '', type: voertuig.type, categorie: voertuig.categorie ?? 'bus', aandrijving: voertuig.aandrijving ?? null, status: voertuig.status, inDienst: voertuig.inDienst ?? '', uitDienst: voertuig.uitDienst ?? '', zitplaatsen: voertuig.zitplaatsen ?? null, opmerking: voertuig.opmerking ?? '' } : LEEG_FORM);
   const [fouten, setFouten] = useState<Record<string, string>>({});
   const [bezig, setBezig] = useState(false);
   const zet = <K extends keyof VehicleBody>(k: K, v: VehicleBody[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -425,6 +432,7 @@ function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: V
           <Field label="Chassisnummer" error={fouten.chassisnr}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.chassisnr ?? ''} onChange={(e) => zet('chassisnr', e.target.value)} />}</Field>
           <Field label="Merk en model" error={fouten.merk}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.merk ?? ''} onChange={(e) => zet('merk', e.target.value)} />}</Field>
           <Field label="Zitplaatsen" error={fouten.zitplaatsen}>{({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="numeric" value={form.zitplaatsen ?? ''} onChange={(e) => zet('zitplaatsen', getal(e.target.value))} />}</Field>
+          <Field label="Categorie" error={fouten.categorie}>{({ id }) => <Select id={id} value={form.categorie} onChange={(e) => zet('categorie', e.target.value as VehicleBody['categorie'])}>{VOERTUIG_CATEGORIEEN.map((c) => <option key={c} value={c}>{VOERTUIG_CATEGORIE_LABEL[c]}</option>)}</Select>}</Field>
           <Field label="Type" error={fouten.type}>{({ id }) => <Select id={id} value={form.type} onChange={(e) => zet('type', e.target.value as VehicleBody['type'])}>{VOERTUIG_TYPES.map((t) => <option key={t} value={t}>{VOERTUIG_TYPE_LABEL[t]}</option>)}</Select>}</Field>
           <Field label="Aandrijving" error={fouten.aandrijving}>{({ id }) => <Select id={id} value={form.aandrijving ?? ''} onChange={(e) => zet('aandrijving', (e.target.value || null) as VehicleBody['aandrijving'])}><option value="">Onbekend</option>{AANDRIJVINGEN.map((a) => <option key={a} value={a}>{AANDRIJVING_LABEL[a]}</option>)}</Select>}</Field>
           <Field label="Status" error={fouten.status}>{({ id }) => <Select id={id} value={form.status} onChange={(e) => zet('status', e.target.value as VehicleBody['status'])}>{VOERTUIG_STATUSSEN.map((s) => <option key={s} value={s}>{VOERTUIG_STATUS_LABEL[s]}</option>)}</Select>}</Field>

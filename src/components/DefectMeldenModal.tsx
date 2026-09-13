@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Wrench } from 'lucide-react';
 import type { User } from '../types';
-import { WERKTYPES, WERKTYPE_LABEL, DEFECT_OMSCHRIJVING_MAX, DEFECT_STATUS_LABEL, voertuigNaam, type Werktype } from '../../shared/techniek';
+import { WERKTYPES, WERKTYPE_LABEL, DEFECT_OMSCHRIJVING_MAX, DEFECT_STATUS_LABEL, VOERTUIG_CATEGORIEEN, VOERTUIG_CATEGORIE_MEERVOUD, voertuigNaam, type Werktype } from '../../shared/techniek';
 import { defectMeldingBodySchema } from '../../shared/schemas/techniek';
 import { valideer } from '../lib/valideer';
 import { notify } from '../lib/ui';
@@ -56,10 +56,14 @@ export function DefectMeldenModal({
 
   useEffect(() => { if (vasteBusId) setVehicleId(vasteBusId); }, [vasteBusId]);
 
-  // Lijnbussen eerst (die meldt een chauffeur het vaakst), dan de rest; alles op kort nummer.
-  const keuzes = useMemo(() => {
+  // Per categorie (bussen eerst, die meldt een chauffeur het vaakst), binnen een
+  // categorie lijnbussen vóór schoolbussen en dan op kort nummer. De keuzelijst
+  // toont alleen het busnummer zoals het op de bus staat (Jarno 13-09): geen
+  // nummerplaat of andere gegevens voor chauffeurs.
+  const groepen = useMemo(() => {
     const rang = (v: VehicleKort) => (v.type === 'lijnbus' ? 0 : v.type === 'schoolbus' ? 1 : 2);
-    return [...bussen].sort((a, b) => rang(a) - rang(b) || (a.kortNr ?? 99999) - (b.kortNr ?? 99999) || a.busnr.localeCompare(b.busnr, 'nl'));
+    const gesorteerd = [...bussen].sort((a, b) => rang(a) - rang(b) || (a.kortNr ?? 99999) - (b.kortNr ?? 99999) || a.busnr.localeCompare(b.busnr, 'nl'));
+    return VOERTUIG_CATEGORIEEN.map((c) => ({ categorie: c, label: VOERTUIG_CATEGORIE_MEERVOUD[c], items: gesorteerd.filter((v) => (v.categorie ?? 'bus') === c) })).filter((g) => g.items.length > 0);
   }, [bussen]);
 
   const verstuur = async () => {
@@ -97,9 +101,13 @@ export function DefectMeldenModal({
           {({ id, invalid }) => (
             <Select id={id} value={vehicleId} invalid={invalid} disabled={laden || Boolean(vasteBusId)} onChange={(e) => setVehicleId(e.target.value)}>
               <option value="">{laden ? 'Bussen laden…' : 'Kies een bus'}</option>
-              {keuzes.map((v) => (
-                <option key={v.id} value={v.id}>{voertuigNaam(v)}{v.kortNr !== null && v.kortNr !== undefined ? ` (${v.busnr})` : ''}{v.nummerplaat ? `, ${v.nummerplaat}` : ''}</option>
-              ))}
+              {groepen.length === 1
+                ? groepen[0].items.map((v) => <option key={v.id} value={v.id}>{v.busnr}</option>)
+                : groepen.map((g) => (
+                  <optgroup key={g.categorie} label={g.label}>
+                    {g.items.map((v) => <option key={v.id} value={v.id}>{v.busnr}</option>)}
+                  </optgroup>
+                ))}
             </Select>
           )}
         </Field>
