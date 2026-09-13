@@ -18,6 +18,9 @@ import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit } from 
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
+import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
+import { getVehicleExpiries, getVehicles } from "./_lib/techniekStorage.js";
+import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../shared/schemas/techniek.js";
 import { metPdfTitel } from "./_lib/pdfTitel.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
@@ -209,6 +212,10 @@ mountDeviceRoutes(app);
 // Onderhoudsmodus (banner + schrijfblok). Zie api/_lib/onderhoudRoutes.ts;
 // het blok zelf zit in authenticate (middleware.ts).
 mountOnderhoudRoutes(app);
+
+// Techniek: voertuigen, gele boek, werkprestaties, vervaldata per voertuig.
+// Zie api/_lib/techniekRoutes.ts (fase A Access-migratie, 13-09).
+mountTechniekRoutes(app);
 
 // Telegram-bot voor de planner (webhook, commando's, goedkeurknoppen). Zie
 // api/telegram.ts. De bereken-functies komen uit coverageRoutes/advisor; de
@@ -2897,6 +2904,51 @@ app.get("/api/cron/error-digest", async (req, res) => {
       console.error("[error-digest] vervaldata-sectie mislukt:", err?.message ?? err);
     }
 
+    // Vervaldata per voertuig (techniek, 13-09): keuring SBAT, brandblussers,
+    // tachograaf. Zelfde mijlpalen-mechaniek als hierboven, maar de push gaat
+    // naar de techniekers en admins (het voertuig heeft geen mailbox) en de
+    // mailsectie toont alles binnen 60 dagen. Best-effort.
+    let voertuigVervalTekst = "";
+    let voertuigVervalHtml = "";
+    try {
+      const [voertuigExpiries, voertuigen, alleUsers] = await Promise.all([getVehicleExpiries(), getVehicles(), getUsersData()]);
+      const perVoertuig = new Map(voertuigen.filter((v) => v.status !== "uit_dienst").map((v) => [v.id, v]));
+      const vandaag = brusselsDay(new Date().toISOString());
+      const dagenTot = (d: string) => Math.round((Date.parse(d) - Date.parse(vandaag)) / 86400000);
+      const rijen = voertuigExpiries
+        .filter((e) => perVoertuig.has(e.vehicleId) && Boolean(VOERTUIG_VERVAL_LABEL[e.soort]))
+        .map((e) => ({ ...e, naam: voertuigNaam(perVoertuig.get(e.vehicleId)!), label: VOERTUIG_VERVAL_LABEL[e.soort], dagen: dagenTot(e.validUntil) }))
+        .filter((e) => Number.isFinite(e.dagen))
+        .sort((a, b) => a.dagen - b.dagen);
+      const ontvangers = alleUsers
+        .filter((u: any) => u.isActive !== false && (u.role === "technieker" || u.role === "admin"))
+        .map((u: any) => String(u.id));
+      for (const e of rijen) {
+        if (e.dagen === 60 || e.dagen === 30 || e.dagen === 7 || e.dagen === 0) {
+          await sendPushToUsers(ontvangers, {
+            title: e.dagen === 0 ? `${e.naam}: ${e.label} verloopt vandaag` : `${e.naam}: ${e.label} verloopt over ${e.dagen} dagen`,
+            soort: "techniek",
+            body: `Geldig tot ${e.validUntil}. Plan de keuring of vervanging in.`,
+            url: "/?view=voertuigen",
+          });
+        }
+      }
+      const teMelden = rijen.filter((e) => e.dagen <= 60);
+      if (teMelden.length > 0) {
+        const regel = (e: (typeof teMelden)[number]) =>
+          e.dagen < 0
+            ? `${e.naam}, ${e.label} is VERLOPEN sinds ${e.validUntil} (${Math.abs(e.dagen)} dagen)`
+            : e.dagen === 0
+              ? `${e.naam}, ${e.label} verloopt VANDAAG (${e.validUntil})`
+              : `${e.naam}, ${e.label} verloopt over ${e.dagen} ${e.dagen === 1 ? "dag" : "dagen"} (${e.validUntil})`;
+        voertuigVervalTekst = `\n\nVoertuigen (binnen 60 dagen):\n${teMelden.map((e) => `• ${regel(e)}`).join("\n")}`;
+        voertuigVervalHtml = `<p><strong>Voertuigen (binnen 60 dagen)</strong></p><ul>${teMelden.map((e) => `<li>${escapeHtml(regel(e))}</li>`).join("")}</ul>`;
+      }
+    } catch (err: any) {
+      // Vóór de migratie bestaat de tabel niet: stil overslaan.
+      if (!isMissingTableError(err)) console.error("[error-digest] voertuig-vervaldata-sectie mislukt:", err?.message ?? err);
+    }
+
     // Proactieve advisor (idee 3, 18-08): elke ochtend de openstaande diensten
     // van de komende 7 dagen mét het collega-advies per gat — de planner hoeft
     // het portaal niet meer te openen om te wéten dat er iets openstaat. Best-
@@ -3023,12 +3075,12 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const staart = filtered > 0
       ? `\n\n${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol, die vangt de app zelf op).`
       : "";
-    const text = `${inleiding}${errors.length === 0 ? "" : `\n\n${topLines}${moreLine}`}${staart}${vervalTekst}${dekkingTekst}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
+    const text = `${inleiding}${errors.length === 0 ? "" : `\n\n${topLines}${moreLine}`}${staart}${vervalTekst}${voertuigVervalTekst}${dekkingTekst}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
     // g.source/message/lastUrl zijn door de client aangeleverd — escapen,
     // anders is de digest-mail een HTML-injectiekanaal richting de admins.
     // De symbolicatie-uitkomst komt uit de sourcemap (indirect ook input) —
     // dus óók escapen.
-    const html = `<p>${escapeHtml(inleiding)}</p>${errors.length === 0 ? "" : `<ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere soorten.</p>` : ""}`}${filtered > 0 ? `<p style="color:#6E767F">${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol, die vangt de app zelf op).</p>` : ""}${vervalHtml}${dekkingHtml}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+    const html = `<p>${escapeHtml(inleiding)}</p>${errors.length === 0 ? "" : `<ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere soorten.</p>` : ""}`}${filtered > 0 ? `<p style="color:#6E767F">${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol, die vangt de app zelf op).</p>` : ""}${vervalHtml}${voertuigVervalHtml}${dekkingHtml}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);

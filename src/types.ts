@@ -210,4 +210,4 @@ export interface ActivityLogEntry {
   entityId?: string | null;
 }
 
-export type View = 'dashboard' | 'mijn-dag' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'ruil-verzoeken' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'ocpi-monitoring' | 'vervaldata' | 'ziekte' | 'instellingen' | 'designsysteem' | 'meldingen';
+export type View = 'dashboard' | 'mijn-dag' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'ruil-verzoeken' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'ocpi-monitoring' | 'vervaldata' | 'ziekte' | 'instellingen' | 'designsysteem' | 'meldingen' | 'defecten' | 'werkprestaties' | 'voertuigen';

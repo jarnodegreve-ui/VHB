@@ -78,6 +78,10 @@ const LazyManageServicesView = lazyWithRetry(() => import('./views/admin/ManageS
 const LazyVerlofKalenderView = lazyWithRetry(() => import('./views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
 const LazyCoverageView = lazyWithRetry(() => import('./views/CoverageView').then((module) => ({ default: module.CoverageView })));
 const LazyDebugView = lazyWithRetry(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
+// Techniek (fase A Access-migratie, 13-09): gele boek, werkprestaties, voertuigen.
+const LazyGeleBoekView = lazyWithRetry(() => VIEW_LOADERS['defecten']().then((m) => ({ default: (m as typeof import('./views/techniek/GeleBoekView')).GeleBoekView })));
+const LazyWerkprestatiesView = lazyWithRetry(() => VIEW_LOADERS['werkprestaties']().then((m) => ({ default: (m as typeof import('./views/techniek/WerkprestatiesView')).WerkprestatiesView })));
+const LazyVoertuigenView = lazyWithRetry(() => VIEW_LOADERS['voertuigen']().then((m) => ({ default: (m as typeof import('./views/techniek/VoertuigenView')).VoertuigenView })));
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
 const LazyDevicesView = lazyWithRetry(() => import('./views/admin/DevicesView').then((module) => ({ default: module.DevicesView })));
@@ -1608,6 +1612,9 @@ export default function App() {
               {resolvedCurrentView === 'activiteit' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense>)}
               {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
               {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
+              {resolvedCurrentView === 'defecten' && <Suspense fallback={<ViewLoader />}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
+              {resolvedCurrentView === 'werkprestaties' && <Suspense fallback={<ViewLoader />}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense>}
+              {resolvedCurrentView === 'voertuigen' && <Suspense fallback={<ViewLoader />}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'beheer-omleidingen' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense>)}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense>)}
               {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}

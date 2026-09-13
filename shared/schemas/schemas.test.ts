@@ -19,6 +19,11 @@ import {
   type GevalideerdeDiversion,
   type GevalideerdeUpdate,
   type GevalideerdeUser,
+  defectMeldingBodySchema,
+  defectPatchSchema,
+  vehicleBodySchema,
+  vehicleExpiryBodySchema,
+  werkprestatieBodySchema,
 } from './index';
 
 /**
@@ -204,5 +209,41 @@ describe('basis: foutteksten', () => {
     expect(leesbareVeldfout('email', 'Vul een geldig e-mailadres in')).toBe('e-mailadres: Vul een geldig e-mailadres in');
     expect(leesbareVeldfout('3.endDate', 'Einddatum ligt vóór begindatum')).toBe('einddatum: Einddatum ligt vóór begindatum');
     expect(leesbareVeldfout('_', 'Ongeldig formaat')).toBe('Ongeldig formaat');
+  });
+});
+
+describe('techniek (voertuigen, gele boek, werkprestaties)', () => {
+  it('vehicleBodySchema: busnummer verplicht, lege tekstvelden worden null, status standaard actief', () => {
+    const r = valideer(vehicleBodySchema, { busnr: ' 613 026 ', kortNr: 26, nummerplaat: '', chassisnr: null, type: 'lijnbus', aandrijving: 'elektrisch', inDienst: '2022-12-20' });
+    expect(r.ok && r.data).toMatchObject({ busnr: '613 026', kortNr: 26, nummerplaat: null, type: 'lijnbus', status: 'actief', inDienst: '2022-12-20' });
+    const fout = valideer(vehicleBodySchema, { busnr: '', type: 'raket', status: 'kapot' });
+    expect(fout.ok === false && fout.fouten).toEqual({ busnr: 'Vul het busnummer in', type: 'Kies een type', status: 'Kies een status' });
+  });
+
+  it('defectMeldingBodySchema: bus, soort en omschrijving verplicht', () => {
+    expect(valideer(defectMeldingBodySchema, { vehicleId: 'v1', werktype: 'T', omschrijving: 'Bel doet het niet' }).ok).toBe(true);
+    const fout = valideer(defectMeldingBodySchema, { vehicleId: '', werktype: 'X', omschrijving: 'ok' });
+    expect(fout.ok === false && fout.fouten).toEqual({ vehicleId: 'Kies een bus', werktype: 'Kies een soort', omschrijving: 'Beschrijf het probleem' });
+  });
+
+  it('defectPatchSchema: alles optioneel, manuren niet negatief', () => {
+    expect(valideer(defectPatchSchema, {}).ok).toBe(true);
+    const r = valideer(defectPatchSchema, { status: 'uitgevoerd', uitgevoerdOp: '2026-09-13', uitgevoerdWerk: '', manuren: 1.5 });
+    expect(r.ok && r.data).toEqual({ status: 'uitgevoerd', uitgevoerdOp: '2026-09-13', uitgevoerdWerk: null, manuren: 1.5 });
+    const fout = valideer(defectPatchSchema, { manuren: -1, uitgevoerdOp: '13/09/2026' });
+    expect(fout.ok === false && fout.fouten).toEqual({ manuren: 'Niet negatief', uitgevoerdOp: 'Ongeldige datum' });
+  });
+
+  it('werkprestatieBodySchema: garage/algemeen = lege bus, tijden uu:mm, uren 0 tot 24', () => {
+    const r = valideer(werkprestatieBodySchema, { datum: '2026-09-13', vehicleId: '', werkcode: 'H', omschrijving: 'Remmen', beginTijd: '08:00', eindeTijd: '09:30', werkuren: 1.5 });
+    expect(r.ok && r.data).toMatchObject({ vehicleId: null, werkcode: 'H', beginTijd: '08:00', werkuren: 1.5 });
+    const fout = valideer(werkprestatieBodySchema, { datum: '2026-09-13', werkcode: 'Q', omschrijving: 'x', beginTijd: '8u', werkuren: 30 });
+    expect(fout.ok === false && fout.fouten).toEqual({ werkcode: 'Kies een werkcode', omschrijving: 'Beschrijf het werk', beginTijd: 'Ongeldige tijd, verwacht uu:mm', werkuren: 'Hooguit 24 uur per dag' });
+  });
+
+  it('vehicleExpiryBodySchema: lege datum = verwijderen', () => {
+    const r = valideer(vehicleExpiryBodySchema, { soort: 'keuring', validUntil: '' });
+    expect(r.ok && r.data).toEqual({ soort: 'keuring', validUntil: null });
+    expect(valideer(vehicleExpiryBodySchema, { soort: 'remmen', validUntil: '2027-01-01' }).ok).toBe(false);
   });
 });

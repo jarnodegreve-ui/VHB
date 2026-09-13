@@ -52,6 +52,16 @@ export const VELD_LABELS: Record<string, string> = {
   date: 'datum',
   content: 'inhoud',
   category: 'categorie',
+  vehicleId: 'bus',
+  werktype: 'soort',
+  werkcode: 'werkcode',
+  omschrijving: 'omschrijving',
+  werkuren: 'uren',
+  busnr: 'busnummer',
+  kortNr: 'kort nummer',
+  nummerplaat: 'nummerplaat',
+  datum: 'datum',
+  validUntil: 'vervaldatum',
 };
 
 /** Sleutel van een issue-pad: 'email', 'endDate', bij lijsten '3.email'; wortelfouten '_'. */

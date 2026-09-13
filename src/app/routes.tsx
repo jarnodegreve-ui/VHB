@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
   Hash, HeartPulse, IdCard, Inbox, LayoutDashboard, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
-  Sunrise, Thermometer, Users, Zap } from 'lucide-react';
+  Sunrise, Thermometer, Users, Wrench, Zap } from 'lucide-react';
 import type { Role, View } from '../types';
 
 /**
@@ -15,7 +15,7 @@ import type { Role, View } from '../types';
  * `pad` = de URL zonder leidende slash ('' = dashboard). Parameters komen
  * erachter als extra segmenten (`/bezetting/2026-03`), zie router.ts.
  */
-export type Sectie = 'algemeen' | 'planning' | 'mensen' | 'communicatie' | 'systeem' | 'account';
+export type Sectie = 'algemeen' | 'planning' | 'mensen' | 'communicatie' | 'techniek' | 'systeem' | 'account';
 
 export type RouteDef = {
   view: View;
@@ -40,6 +40,8 @@ const STAF: readonly Role[] = ['planner', 'admin'];
  *  leeg en staan niet in zijn menu (Jarno 09-09). */
 const RIJDEND_EN_STAF: readonly Role[] = ['chauffeur', 'planner', 'admin'];
 const ADMIN: readonly Role[] = ['admin'];
+/** Garagewerk: de technieker plus staf (die plant de bussen in en volgt op). */
+const TECHNIEK: readonly Role[] = ['technieker', 'planner', 'admin'];
 
 export const ROUTES: readonly RouteDef[] = [
   // — Algemeen —
@@ -69,6 +71,10 @@ export const ROUTES: readonly RouteDef[] = [
   // — Beheer › Communicatie —
   { view: 'beheer-updates', pad: 'beheer/updates', label: 'Beheer updates', omschrijving: 'Publiceer updates en dringende meldingen.', icoon: Plus, sectie: 'communicatie', rollen: STAF },
   { view: 'beheer-omleidingen', pad: 'beheer/omleidingen', label: 'Beheer omleidingen', omschrijving: 'Routewijzigingen en bijlagen voor chauffeurs.', icoon: MapIcon, sectie: 'communicatie', rollen: STAF },
+  // — Techniek (fase A Access-migratie, 13-09) —
+  { view: 'defecten', pad: 'techniek/defecten', label: 'Gele boek', omschrijving: 'Gemelde defecten per bus en hun opvolging.', icoon: Wrench, sectie: 'techniek', rollen: TECHNIEK },
+  { view: 'werkprestaties', pad: 'techniek/prestaties', label: 'Werkprestaties', kort: 'Prestaties', omschrijving: 'Wat de garage per dag aan welke bus deed.', icoon: ClipboardList, sectie: 'techniek', rollen: TECHNIEK },
+  { view: 'voertuigen', pad: 'techniek/voertuigen', label: 'Voertuigen', omschrijving: 'Het wagenpark met keuringen en vervaldata.', icoon: Bus, sectie: 'techniek', rollen: TECHNIEK },
   // — Systeem —
   { view: 'gebruikers', pad: 'beheer/gebruikers', label: 'Gebruikers', omschrijving: 'Accounts, rollen en toegang.', icoon: Users, sectie: 'systeem', rollen: ADMIN },
   { view: 'toestellen', pad: 'beheer/toestellen', label: 'Toestellen', omschrijving: 'Keur toestellen goed of blokkeer ze.', icoon: Smartphone, sectie: 'systeem', rollen: ADMIN },

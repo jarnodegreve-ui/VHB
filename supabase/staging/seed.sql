@@ -50,7 +50,7 @@ create or replace function pg_temp.stg_dag(d date) returns text
 language sql immutable as $$ select to_char(d, 'YYYY-MM-DD') $$;
 
 -- =============================================================================
--- 1) Gebruikers: 1 admin, 2 planners, 10 chauffeurs
+-- 1) Gebruikers: 1 admin, 2 planners, 1 technieker, 10 chauffeurs
 -- =============================================================================
 insert into public.users
   (id, name, role, employeeid, lastlogin, activesessions, isactive, phone, email,
@@ -59,6 +59,7 @@ values
   ('stg-admin',        'Bram Vermeulen',    'admin',     'STG-0001', null, 0, true, '0470 00 00 01', 'bram.vermeulen@staging.vhb.test',    null, true,  false, null,        '2015-03-01'),
   ('stg-planner-1',    'Els Peeters',       'planner',   'STG-0002', null, 0, true, '0470 00 00 02', 'els.peeters@staging.vhb.test',       null, true,  false, null,        '2017-09-04'),
   ('stg-planner-2',    'Koen Jacobs',       'planner',   'STG-0003', null, 0, true, '0470 00 00 03', 'koen.jacobs@staging.vhb.test',       null, true,  false, null,        '2021-02-01'),
+  ('stg-technieker',   'Jelle Bourgeois',   'technieker','STG-0004', null, 0, true, '0470 00 00 04', 'jelle.bourgeois@staging.vhb.test',   null, true,  false, null,        '2024-01-08'),
   ('stg-chauffeur-01', 'Jef Claes',         'chauffeur', 'STG-0101', null, 0, true, '0470 00 00 11', 'jef.claes@staging.vhb.test',         24,   true,  true,  'Reguliere', '2008-09-01'),
   ('stg-chauffeur-02', 'Mieke Willems',     'chauffeur', 'STG-0102', null, 0, true, '0470 00 00 12', 'mieke.willems@staging.vhb.test',     24,   true,  true,  'Reguliere', '2012-01-16'),
   ('stg-chauffeur-03', 'Tom Maes',          'chauffeur', 'STG-0103', null, 0, true, '0470 00 00 13', 'tom.maes@staging.vhb.test',          24,   true,  true,  'Reguliere', '2016-05-02'),
