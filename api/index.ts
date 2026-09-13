@@ -21,6 +21,9 @@ import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
 import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
 import { getVehicleExpiries, getVehicles } from "./_lib/techniekStorage.js";
 import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../shared/schemas/techniek.js";
+import { berekenCelWaarheid } from "./_lib/celWaarheid.js";
+import { mountLoonRoutes } from "./_lib/loonRoutes.js";
+import { mountDienstRoutes } from "./_lib/dienstRoutes.js";
 import { metPdfTitel } from "./_lib/pdfTitel.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
@@ -45,8 +48,7 @@ import {
   verwerkDiversionsOpslag,
   verwerkUpdatesOpslag,
 } from "./_lib/recordWrites.js";
-import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
-import { legRuilenOverMaandbeeld } from "./_lib/ruilOverlay.js";
+import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   swapRaaktBereik,
@@ -234,6 +236,12 @@ mountTelegramRoutes(app, {
 
 // Dekking & advies (expectations, gaten, advisor). Zie api/coverageRoutes.ts.
 mountCoverageRoutes(app);
+
+// Loon: dagafsluiting en Easypay-export (fase B Access-migratie, 13-09). Zie api/_lib/loonRoutes.ts.
+mountLoonRoutes(app);
+
+// Dienstopbouw op rit-niveau (fase C Access-migratie, 13-09). Zie api/_lib/dienstRoutes.ts.
+mountDienstRoutes(app);
 
 // Health check — publiek maar kaal: geen tabelstatussen/foutmeldingen/env
 // naar buiten (info-disclosure). Gedetailleerde checks alleen voor admins.
@@ -844,7 +852,6 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
     if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
 
-    const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
     const [rows, users, services, codes, leave, swaps] = await Promise.all([
       getPlanningMatrixRows(),
       getUsersData(),
@@ -856,157 +863,23 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       getSwapsData(),
     ]);
 
-    const monthRows = rows
-      .filter((r: any) => String(r.source_date ?? "").startsWith(`${month}-`))
-      .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
-    const dates = monthRows.map((r: any) => String(r.source_date));
-
-    // Naam- en code-resolutie identiek aan buildPlanningFromMatrix (toLookupToken
-    // strikt: accenten/interpunctie/hoofdletters genormaliseerd). Anders kreeg
-    // /month-planning lege of foute cellen voor accent-/omgekeerde namen en
-    // toonde een dienst met scheidingsteken als 'onbekend'.
-    // Groepering + volgorde per sectie (uit users.section, gezet in het
-    // gebruikersbeheer — staat los van de Excel-import). Onbekende/lege sectie
-    // sorteert achteraan; binnen een sectie op anciënniteit (vroegste startdatum
-    // eerst, uit users.startDate), naam als tiebreak. Chauffeurs zonder
-    // startdatum sorteren onderaan binnen hun sectie.
-    const SECTION_ORDER = ["Reguliere", "Nacht", "Flexi", "Schoolvervoer"];
-    const sectionRank = (s: string) => {
-      const i = SECTION_ORDER.findIndex((x) => x.toLowerCase() === s.trim().toLowerCase());
-      return i === -1 ? SECTION_ORDER.length : i;
-    };
-    const seniorityKey = (d: string) => d || "9999-12-31"; // geen startdatum → achteraan
-    const chauffeurs = users
-      .filter((u: any) => u.isActive !== false && u.role === "chauffeur" && norm(u.name) !== "beheerder")
-      .map((u: any) => ({ id: String(u.id), name: u.name as string, section: String(u.section ?? "").trim(), startDate: String(u.startDate ?? "").trim() }))
-      .sort((a, b) =>
-        sectionRank(a.section) - sectionRank(b.section)
-        || seniorityKey(a.startDate).localeCompare(seniorityKey(b.startDate))
-        || a.name.localeCompare(b.name),
-      );
-    // Volgorde-onafhankelijke index: zowel "Jan Janssen" als "Janssen Jan"
-    // matcht; botsende sleutels vallen weg i.p.v. last-wins (zie nameIdIndex).
-    const idByNameKey = nameIdIndex(chauffeurs);
-
-    // Code-resolutie — zelfde token-normalisatie als de matrix-import.
-    // We geven ook label + uren-segmenten mee zodat de UI per cel een
-    // detail kan tonen zonder de services/codes naar elke client te sturen.
-    const serviceByNorm = new Map(services.map((s: any) => [toLookupToken(s.serviceNumber), s]));
-    const codeByNorm = new Map(codes.map((c: any) => [toLookupToken(c.code), c]));
-    // Loopnummer hoort bij het blok (het deel van de dienst waaronder
-    // bepaalde ritten vallen), dus toon het meteen bij de uren.
-    const withLoop = (times: string, loopnr: unknown) => {
-      const loop = String(loopnr ?? "").trim();
-      return loop ? `${times} (loop ${loop})` : times;
-    };
-    const segmentsOf = (s: any): string[] => [
-      s.startTime && s.endTime ? withLoop(`${s.startTime} - ${s.endTime}`, s.loopnr) : "",
-      s.startTime2 && s.endTime2 ? withLoop(`${s.startTime2} - ${s.endTime2}`, s.loopnr2) : "",
-      s.startTime3 && s.endTime3 ? withLoop(`${s.startTime3} - ${s.endTime3}`, s.loopnr3) : "",
-    ].filter(Boolean);
-    const resolve = (code: string): { kind: string; label: string; segments: string[] } | null => {
-      const n = toLookupToken(code);
-      if (!n) return null;
-      const svc = serviceByNorm.get(n);
-      if (svc) return { kind: "service", label: `Dienst ${svc.serviceNumber}`, segments: segmentsOf(svc) };
-      const pc = codeByNorm.get(n);
-      if (pc) return { kind: String(pc.category), label: pc.description || String(pc.code).toUpperCase(), segments: [] };
-      return { kind: "unknown", label: "Onbekende code", segments: [] };
-    };
-
+    // De cel-waarheid (matrix + goedgekeurde ruilen + afwezigheden) is sinds
+    // fase B van de Access-migratie een pure functie in api/_lib/celWaarheid.ts,
+    // gedeeld met de dagafsluiting. Gedrag ongewijzigd (karakterisatietest).
+    //
     // BEWUSTE KEUZE (Jarno, 01-08-2026): afwezigheidscodes — ziekte incluis —
     // blijven voor iedereen zichtbaar, gelijk aan de fysieke planning in het
     // chauffeurslokaal. Er is kort een maskering voor chauffeurs actief geweest
     // (zie #290); die is er op verzoek weer uit gehaald omdat het digitale
     // scherm niet strenger hoeft te zijn dan het bord waar iedereen langsloopt.
-    //
     // Ziekte is wél een bijzondere categorie persoonsgegevens (AVG art. 9), dus
     // dit is een openstaande keuze en geen afgesloten dossier — Jarno bekijkt
-    // het later opnieuw, dan samen met het bord. Voer het tot die tijd NIET
-    // opnieuw op als bevinding. De maskering terugzetten is klein werk: de
-    // implementatie staat in commit f2a9b33 (helpers: HEALTH_CODES /
-    // isHealthCode, hier: één ternary op de cel).
-    const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[]; hiddenService?: string ; swapId?: string; swapManual?: boolean; swapFrom?: string }>> = {};
-    for (const row of monthRows) {
-      const date = String(row.source_date);
-      const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? row.assignments : {};
-      for (const [driverName, rawCode] of Object.entries(assignments)) {
-        const id = idByNameKey.get(toLookupToken(driverName)) ?? idByNameKey.get(sortedNameToken(driverName));
-        if (!id) continue;
-        const code = String(rawCode ?? "").trim();
-        if (!code) continue;
-        const r = resolve(code);
-        if (!r) continue;
-        if (!cells[id]) cells[id] = {};
-        cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
-      }
-    }
-
-    const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
-
-    // Goedgekeurde dienstruilen over het maandbeeld leggen: de matrix (Excel)
-    // kent de ruilen uit het portaal niet vanzelf. De logica staat in
-    // api/_lib/ruilOverlay.ts (pure functie, getest): cellen wisselen als de
-    // Excel nog de oude eigenaar toont, alléén markeren als de planner de
-    // ruil al in de Excel verwerkte, zodat "geruild met X" een herimport
-    // overleeft (bevindingen Jarno 06-08 en 12-09).
-    const naamVanId = (id: string) => chauffeurs.find((c: any) => String(c.id) === id)?.name ?? "";
-    legRuilenOverMaandbeeld(cells, swaps as any[], { dates, chauffeurIds, naamVanId });
-
-    // Goedgekeurde afwezigheden uit de verlof-module (ziekmelding incluis)
-    // overschrijven de matrix-cel. De Excel-import is een momentopname; wie
-    // dáárna ziek gemeld wordt, stond in het maandrooster nog gewoon op zijn
-    // dienst — terwijl de ziekmeldings-mail belooft dat de dienst als
-    // onbeschikbaar zichtbaar is. De overlay gebruikt de bestaande matrix-
-    // codes (ziek/bv/kv), dus de weergave is identiek aan een code die via
-    // de Excel zelf binnenkwam. Overschrijven per dag, alleen op dagen die
-    // een matrix-rij hebben — kolommen zonder rij rendert de UI toch niet.
-    // Ná de ruil-overlay: ziekte moet ook een geruilde dienst overschrijven.
-    const LEAVE_CODE: Record<string, string> = { ziekte: "ziek", betaald_verlof: "bv", klein_verlet: "kv" };
-    const LEAVE_FALLBACK: Record<string, { kind: string; label: string }> = {
-      ziekte: { kind: "absence", label: "Ziek" },
-      betaald_verlof: { kind: "leave", label: "Betaald Verlof" },
-      klein_verlet: { kind: "absence", label: "Klein Verlet" },
-    };
-    // Ziekte als laatste verwerken zodat die bij overlappende records wint —
-    // "ziek tijdens verlof" moet als ziek op het rooster, niet als bv.
-    const overlayLeave = (leave as any[])
-      .filter((l) => l?.status === "approved")
-      .sort((a, b) => (String(a.type) === "ziekte" ? 1 : 0) - (String(b.type) === "ziekte" ? 1 : 0));
-    for (const l of overlayLeave) {
-      const id = String(l.userId ?? "");
-      if (!chauffeurIds.has(id)) continue;
-      // Onbekend (toekomstig) verloftype: niets tonen. Een fallback naar
-      // "ziek" zou een valse gezondheidsstatus publiceren.
-      const code = LEAVE_CODE[String(l.type)];
-      if (!code) continue;
-      // Records met kapotte of omgekeerde datums overslaan: een lege
-      // startdatum vergeleek anders als "altijd waar" en overschreef de
-      // hele maand.
-      const start = String(l.startDate ?? "");
-      const eind = String(l.endDate ?? "");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(eind) || start > eind) continue;
-      // resolve() kent de code alleen als hij in planning_codes staat; zo
-      // niet, dan wint het fallback-label (anders las de cel "Onbekende code").
-      const r = resolve(code);
-      const cel = !r || r.kind === "unknown" ? LEAVE_FALLBACK[String(l.type)] : r;
-      for (const date of dates) {
-        if (start <= date && date <= eind) {
-          if (!cells[id]) cells[id] = {};
-          // De dienst die deze afwezigheid overdekt, blijft meegestuurd:
-          // ziek melden verwijdert de planning-rij niet, dus de dienst staat
-          // nog op naam van deze chauffeur en moet herverdeeld worden. Zonder
-          // dit veld was juist het hoofdscenario (ziekte) onbereikbaar in de
-          // maandplanning — de cel toonde "ziek" en de dienstwissel-actie
-          // hangt aan een dienst-cel.
-          const overdekt = cells[id][date];
-          cells[id][date] = {
-            code, kind: cel.kind, label: cel.label, segments: [],
-            ...(overdekt?.kind === "service" ? { hiddenService: overdekt.code } : {}),
-          };
-        }
-      }
-    }
+    // het later opnieuw. Voer het tot die tijd NIET opnieuw op als bevinding.
+    // De maskering terugzetten is klein werk: commit f2a9b33 (helpers:
+    // HEALTH_CODES / isHealthCode, plus één ternary op de cel).
+    const { monthRows, dates, chauffeurs, cells } = berekenCelWaarheid(month, {
+      rows: rows as any[], users: users as any[], services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[],
+    });
 
     // Excel-terugexport (planner/admin): de ACTUELE cel-waarheid — wissels,
     // toewijzingen en afwezigheids-overlay verwerkt — in het praktijk-tab-

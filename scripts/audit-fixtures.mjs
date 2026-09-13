@@ -215,6 +215,32 @@ export const WERKPRESTATIES = [
   { id: 'w1', datum: dayOffset(0), mecanicienId: '55', mecanicienNaam: 'Jelle Technieker', vehicleId: 'v26', busnr: '613 026', kortNr: 26, werkcode: 'H', omschrijving: 'Bel vervangen', beginTijd: '08:00', eindeTijd: '09:00', werkuren: 1, kmstand: 47000, defectId: 'd1' },
   { id: 'w2', datum: dayOffset(-1), mecanicienId: '55', mecanicienNaam: 'Jelle Technieker', vehicleId: null, busnr: null, kortNr: null, werkcode: 'A', omschrijving: 'Stukken besteld', beginTijd: null, eindeTijd: null, werkuren: 2, kmstand: null, defectId: null },
 ];
+export const LOON_CODES = [
+  { code: '2101', codeWeergave: '2101', omschrijving: null, dienstType: 'lijn', inExport: true, easypayActiviteit: 'LIJN', easypayTypePrest: 40140, tik1: '04:32', tik2: '08:33', tik3: '15:50', tik4: '19:52', tik5: null, tik6: null, lbRijtijd: 404, lbStat100At: 28, lbStat100Nat: 21, lbStat50Nat: 0, lbOnd: 1, lbAndWrk: 0, lbNacht: 88, bron: 'import' },
+  { code: '2607', codeWeergave: '2607', omschrijving: null, dienstType: 'lijn', inExport: true, easypayActiviteit: 'LIJN', easypayTypePrest: 40140, tik1: '06:00', tik2: '14:00', tik3: null, tik4: null, tik5: null, tik6: null, lbRijtijd: 400, lbStat100At: 0, lbStat100Nat: 0, lbStat50Nat: 0, lbOnd: 0, lbAndWrk: 0, lbNacht: 0, bron: 'import' },
+  { code: 'bv', codeWeergave: 'BV', omschrijving: 'Betaald verlof', dienstType: 'varia', inExport: true, easypayActiviteit: '01', easypayTypePrest: 15200, tik1: null, tik2: null, tik3: null, tik4: null, tik5: null, tik6: null, lbRijtijd: 0, lbStat100At: 0, lbStat100Nat: 0, lbStat50Nat: 0, lbOnd: null, lbAndWrk: 0, lbNacht: 0, bron: 'import' },
+  { code: 'ziek', codeWeergave: 'Ziek', omschrijving: 'ziekte', dienstType: 'varia', inExport: true, easypayActiviteit: '01', easypayTypePrest: 15800, tik1: null, tik2: null, tik3: null, tik4: null, tik5: null, tik6: null, lbRijtijd: 0, lbStat100At: 0, lbStat100Nat: 0, lbStat50Nat: 0, lbOnd: null, lbAndWrk: 0, lbNacht: 0, bron: 'import' },
+  { code: 'vrij', codeWeergave: 'vrij', omschrijving: 'Vrij (geen dienst)', dienstType: 'varia', inExport: true, easypayActiviteit: '01', easypayTypePrest: 15102, tik1: null, tik2: null, tik3: null, tik4: null, tik5: null, tik6: null, lbRijtijd: 0, lbStat100At: 0, lbStat100Nat: 0, lbStat50Nat: 0, lbOnd: null, lbAndWrk: 0, lbNacht: 0, bron: 'import' },
+];
+export const LOON_MEDEWERKERS = [
+  { userId: '42', naam: 'Test Chauffeur', employeeId: 'VHB-000042', easypayNr: 42, inExport: true },
+  { userId: '43', naam: 'Alex Du Priez', employeeId: 'VHB-000043', easypayNr: null, inExport: true },
+  { userId: '44', naam: 'Diether Van Haute', employeeId: 'VHB-000044', easypayNr: 44, inExport: false },
+];
+export const DAG_AFSLUITINGEN = [
+  { datum: dayOffset(-2), status: 'afgesloten', geopendOp: new Date(Date.now() - 2 * 864e5).toISOString(), geopendDoor: '1', afgeslotenOp: new Date(Date.now() - 864e5).toISOString(), afgeslotenDoor: '1', heropendOp: null, heropendDoor: null, heropendReden: null, rijen: 3, overmin: 15, premies: 0, zonderCode: 0 },
+  { datum: dayOffset(-1), status: 'open', geopendOp: new Date(Date.now() - 864e5).toISOString(), geopendDoor: '1', afgeslotenOp: null, afgeslotenDoor: null, heropendOp: null, heropendDoor: null, heropendReden: null, rijen: 3, overmin: 0, premies: 1, zonderCode: 0 },
+];
+const dagPrestatie = (id, userId, naam, planningCode, geredenCode, extra = {}) => ({
+  id, datum: dayOffset(-1), userId, naam, volgnr: 1, planningCode, geredenCode, overmin: 0, overminNacht: 0, overminExtra: 0, onvPremie: false,
+  qualOngeval: false, qualPanne: false, qualVerkeersovertreding: false, qualKlantklacht: false, qualAdmfout: false, qualInterneklacht: false, qualVertragingDrSchuld: false, qualRitNtGeredenDrSchuld: false,
+  opmerking: null, bewerktOp: null, bewerktDoor: null, ...extra,
+});
+export const DAG_PRESTATIES = [
+  dagPrestatie('p1', '42', 'Test Chauffeur', '2101', '2101'),
+  dagPrestatie('p2', '43', 'Alex Du Priez', 'vrij', '2607', { overmin: 20, onvPremie: true, bewerktOp: new Date().toISOString() }),
+  dagPrestatie('p3', '44', 'Diether Van Haute', 'bv', 'bv'),
+];
 
 /**
  * Route-handler voor `page.route('**\/api/**', apiFixtures(user))`.
@@ -222,6 +248,19 @@ export const WERKPRESTATIES = [
  * `undefined` wordt als JSON verstuurd) — zo overschrijft een spec één
  * collectie zonder de rest opnieuw op te bouwen.
  */
+export const SEGMENT_IMPORTS = [
+  { id: 'imp1', createdAt: new Date(Date.now() - 3 * 864e5).toISOString(), importedBy: '1', filename: 'dienstregeling-et-260901.xlsx', rijen: 1234, diensten: 67, dagtypes: ['21/0', '26/0', '27/0', '31/0'], waarschuwingen: [], bevindingen: [{ soort: 'duur_klopt_niet', ernst: 'waarschuwing', serviceNumber: '2115', dagtypeCode: '21/0', volgorde: 8, tekst: 'ANW 08:34 tot 08:38 is 4 min, de duur zegt 384 min.' }], actief: true, actiefSinds: new Date(Date.now() - 2 * 864e5).toISOString() },
+];
+const segm = (id, volgorde, type, startMin, eindeMin, extra = {}) => ({ id, importId: 'imp1', serviceNumber: '2101', dagtypeCode: '21/0', volgorde, type, startMin, eindeMin, duurMin: eindeMin - startMin, loop: '4500', internLoop: null, lijn: null, variant: null, rit: null, voertuig: 'standaard', vertrek: null, vertrekCode: null, aankomst: null, aankomstCode: null, afstandKm: null, atTijd: null, vtTijd: null, ...extra });
+export const SEGMENTEN = [
+  segm('s1', 1, 'AVO', 272, 276, { loop: null }),
+  segm('s2', 2, 'LED', 276, 290, { vertrek: 'Garage Van Hoorebeke', aankomst: 'Eeklo Station', afstandKm: 6.2 }),
+  segm('s3', 3, 'RIT', 290, 352, { lijn: '50', rit: '3', vertrek: 'Eeklo Station', aankomst: 'Brugge Station', afstandKm: 31.4 }),
+  segm('s4', 4, 'STA', 352, 372, { loop: null }),
+  segm('s5', 5, 'ONE', 372, 935, { loop: null }),
+  segm('s6', 6, 'RIT', 935, 1010, { lijn: '50', rit: '31', vertrek: 'Brugge Station', aankomst: 'Eeklo Station', afstandKm: 31.4 }),
+];
+
 export function apiFixtures(user, extra) {
   return async (route) => {
     const url = new URL(route.request().url());
@@ -252,6 +291,24 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/defecten')) return json(url.searchParams.get('mijn') === '1' ? DEFECTEN.filter((d) => d.gemeldDoor === user.id) : DEFECTEN);
     if (p.endsWith('/api/werkprestaties/rapport')) return json({ jaar: 2026, totaalUren: 3, aantal: 2, perBus: [{ label: 'Bus 26', uren: 3, aantal: 2, perKwartaal: [0, 0, 3, 0] }], perMecanicien: [{ label: 'Jelle Technieker', uren: 3, aantal: 2, perKwartaal: [0, 0, 3, 0] }], perWerkcode: [{ werkcode: 'H', uren: 3, aantal: 2 }] });
     if (p.endsWith('/api/werkprestaties')) return json(WERKPRESTATIES);
+    // Loon (13-09): dagafsluiting, looncodes, matricules, export.
+    // Dienstopbouw (13-09).
+    if (p.endsWith('/api/dienstopbouw/imports')) return json(SEGMENT_IMPORTS);
+    if (p.endsWith('/api/dienstopbouw/dagtypes')) return json([{ code: '21', omschrijving: 'Maandag schooldag', periode: '2', aantalPerJaar: 141, portaalDagtype: 'schooldag' }, { code: '26', omschrijving: 'Zaterdag', periode: '2', aantalPerJaar: 52, portaalDagtype: 'zaterdag' }]);
+    if (p.endsWith('/api/dienstopbouw/segmenten')) return json({ import: SEGMENT_IMPORTS[0], segmenten: SEGMENTEN });
+    if (p.endsWith('/api/dienstopbouw/ritblad')) return json({ serviceNumber: '2101', dagtypes: [{ dagtypeCode: '21/0', rijen: [{ type: 'LED', lijn: '', rit: 'led', loop: '4500', vertrek: 'Garage Van Hoorebeke', start: '04:36', aankomst: 'Eeklo Station', einde: '04:50', via: '4500' }, { type: 'RIT', lijn: '50', rit: '3', loop: '4500', vertrek: 'Eeklo Station', start: '04:50', aankomst: 'Brugge Station', einde: '05:52', via: '' }] }] });
+    if (p.includes('/api/dienstopbouw/imports/') && p.endsWith('/loonparameters')) return json({ importId: 'imp1', diensten: [{ serviceNumber: '2101', dagtypeCode: '21/0', parameters: { lbRijtijd: 404, lbStat100At: 28, lbStat100Nat: 21, lbStat50Nat: 0, lbOnd: 1, lbAndWrk: 0, lbAdmT: 15, lbNacht: 88, lbArbTijd: 447, tiktijden: [{ begin: '04:32', einde: '08:18' }, { begin: '15:35', einde: '19:52' }], teVeelDelen: false }, huidig: null }] });
+    if (p.endsWith('/api/loon/codes')) return json(LOON_CODES);
+    if (p.endsWith('/api/loon/medewerkers')) return json(LOON_MEDEWERKERS);
+    if (p.endsWith('/api/loon/instellingen')) return json({ easypayLidnr: 1234 });
+    if (p.endsWith('/api/loon/export/controle')) return json({ maand: url.searchParams.get('maand') || '2026-08', dagenGeopend: 2, dagenAfgesloten: 1, openDagen: [dayOffset(-1)], lidnr: 1234, issues: [], samenvatting: { rijen: 4, personen: 2, overminRijen: 1, premies: 0 }, blokkerend: true });
+    if (p.endsWith('/api/dagafsluiting')) return json({ maand: url.searchParams.get('maand') || '2026-08', dagen: DAG_AFSLUITINGEN, planningDagen: [dayOffset(-2), dayOffset(-1), dayOffset(0)] });
+    if (/[/]api[/]dagafsluiting[/]\d{4}-\d{2}-\d{2}$/.test(p) && route.request().method() === 'GET') {
+      const datum = p.slice(-10);
+      const dag = DAG_AFSLUITINGEN.find((d) => d.datum === datum);
+      if (!dag) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Deze dag is nog niet geopend.', inPlanning: true, voorstel: USERS.filter((u) => u.role === 'chauffeur').map((u) => ({ userId: u.id, naam: u.name, planningCode: u.id === '42' ? '2101' : 'vrij' })) }) });
+      return json({ dag, rijen: DAG_PRESTATIES.map((r) => ({ ...r, datum })), planningAfwijkingen: [], ontbrekendeCodes: [], inPlanning: true });
+    }
     if (p.endsWith('/api/push/subscribers')) return json({ userIds: ['42'] });
     if (p.endsWith('/api/planning-matrix/changes-since-import')) return json({ lastImport: { createdAt: new Date(Date.now() - 5 * 864e5).toISOString(), importedDays: 31 }, approvedLeave: [], approvedSwaps: [] });
     if (p.includes('/api/coverage-gaps')) return json({ days: [{ date: new Date().toISOString().slice(0, 10), expected: ['2101', '2607'], scheduled: ['2101'], missing: ['2607'], unknown: [] }] });

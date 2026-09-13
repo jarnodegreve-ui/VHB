@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
   Hash, HeartPulse, IdCard, Inbox, LayoutDashboard, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
-  Sunrise, Thermometer, Users, Wrench, Zap } from 'lucide-react';
+  Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route } from 'lucide-react';
 import type { Role, View } from '../types';
 
 /**
@@ -63,6 +63,9 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'planning-codes', pad: 'beheer/planningscodes', label: 'Planningscodes', omschrijving: 'Betekenis van matrixcodes.', icoon: Hash, sectie: 'planning', rollen: STAF },
   { view: 'dienstoverzicht', pad: 'dienstoverzicht', label: 'Dienstoverzicht', omschrijving: 'Alle diensten, uren en blokken.', icoon: Bus, sectie: 'planning', rollen: STAF },
   { view: 'beheer-dienstoverzicht', pad: 'beheer/dienstoverzicht', label: 'Beheer dienstoverzicht', omschrijving: 'Onderhoud het dienstschema.', icoon: ClipboardList, sectie: 'planning', rollen: STAF },
+  { view: 'dienstopbouw', pad: 'beheer/dienstopbouw', label: 'Dienstopbouw', omschrijving: 'Ritdelen per dienst uit de ET-export: controles, ritbladen en looncomponenten.', icoon: Route, sectie: 'planning', rollen: STAF },
+  { view: 'dagafsluiting', pad: 'beheer/dagafsluiting', label: 'Dagafsluiting', omschrijving: 'Bevestig per dag wie wat werkelijk reed, met overminuten en premies.', icoon: CalendarCheck2, sectie: 'planning', rollen: STAF },
+  { view: 'looncontrole', pad: 'beheer/looncontrole', label: 'Looncontrole', omschrijving: 'Maandstand, looncodes, matricules en de Easypay-export.', icoon: Coins, sectie: 'planning', rollen: STAF },
   { view: 'dekking', pad: 'openstaande-diensten', label: 'Openstaande diensten', kort: 'Open diensten', omschrijving: 'Niet-ingevulde diensten per dag t.o.v. het dag-type.', icoon: AlertTriangle, sectie: 'planning', rollen: STAF },
   // — Beheer › Mensen —
   { view: 'verlof-kalender', pad: 'beheer/verlofkalender', label: 'Verlofkalender', omschrijving: 'Maandoverzicht van alle afwezigheden.', icoon: Calendar, sectie: 'mensen', rollen: STAF },

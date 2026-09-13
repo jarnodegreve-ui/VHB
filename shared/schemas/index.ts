@@ -10,3 +10,5 @@ export * from './dashboardVoorkeuren.js';
 export * from './meldingen.js';
 export * from './onderhoud.js';
 export * from './techniek.js';
+export * from './loon.js';
+export * from './dienst.js';
