@@ -3,6 +3,7 @@ import { Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, Slid
 import { activeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
 import { OmleidingDetail } from '../components/OmleidingDetail';
 import { isRijdend } from '../types';
+import { telDienstdagen } from '../lib/dienstTelling';
 import { LijnTegel } from '../components/LijnTegel';
 import { lijnLabel } from '../../shared/lijnen';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
@@ -147,7 +148,9 @@ export function DashboardView({ notes = [],
   // Verlofsaldo + 'deze maand' voor de extra dashboard-kaarten.
   const balans = verlofBalans(leaveRequests, user.id, now.getFullYear(), user.verlofBudget);
   const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const thisMonthShiftCount = myShifts.filter((s) => s.date.startsWith(monthPrefix)).length;
+  // Dagen met dienst, niet rijen: een gesplitste dienst is twee rijen
+  // (melding Jarno 14-09: "27 diensten" waar het 15 dagen waren).
+  const thisMonthShiftCount = telDienstdagen(myShifts.filter((s) => s.date.startsWith(monthPrefix)));
 
   // Volgende geplande diensten (toekomst, oplopend gesorteerd) — voor de
   // Planning-panel bij chauffeurs.
@@ -282,7 +285,7 @@ export function DashboardView({ notes = [],
         className={kleinKlassen('deze-maand')}
         label="Deze maand"
         value={thisMonthShiftCount}
-        sub="diensten ingepland"
+        sub="dagen met dienst"
         onClick={onNavigate ? () => onNavigate('rooster') : undefined}
       />
     ),
