@@ -80,6 +80,16 @@
         ],
         "createdAt": "2026-09-01T18:40:51.638Z",
         "reason": "Kalender-legende: slate-tekst staat naast een gekleurde stip (span-sibling), niet op een gekleurd vlak — detector-misparse"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "var(--ease-spring)",
+        "createdAt": "2026-09-14T21:09:34.300Z"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.2, 0.64, 1)",
+        "createdAt": "2026-09-14T21:09:34.328Z"
       }
     ]
   }
