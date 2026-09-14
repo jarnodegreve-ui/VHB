@@ -51,3 +51,16 @@ describe('verloflimieten (per periode instelbaar, 09-09)', () => {
     expect(verlofLimietenSchema.safeParse({ standaard: 0, periodes: [{ ...basis, tot: '2026-07-10' }] }).success).toBe(true);
   });
 });
+
+describe('wie telt mee in de verlofbezetting', () => {
+  it('rijdend personeel wel, technieker niet, flexi-job niet (Jarno 14-09)', async () => {
+    const { teltInVerlofbezetting, isFlexi } = await import('./types');
+    expect(teltInVerlofbezetting({ role: 'chauffeur' })).toBe(true);
+    expect(teltInVerlofbezetting({ role: 'chauffeur', section: 'Reguliere' })).toBe(true);
+    expect(teltInVerlofbezetting({ role: 'chauffeur', section: 'Flexi' })).toBe(false);
+    expect(teltInVerlofbezetting({ role: 'chauffeur', section: ' flexi/invallers ' })).toBe(false);
+    expect(teltInVerlofbezetting({ role: 'technieker' })).toBe(false);
+    expect(isFlexi(undefined)).toBe(false);
+    expect(isFlexi(null)).toBe(false);
+  });
+});

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, CalendarOff, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, History, Plus, Printer, SlidersHorizontal, Users, X } from 'lucide-react';
-import { isRijdend } from '../types';
+import { isRijdend, teltInVerlofbezetting } from '../types';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
@@ -188,9 +188,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     verlofRequests.filter((r) => {
       if (r.status !== 'approved' || String(r.userId) === String(exclUserId)) return false;
       if (!(r.startDate <= dag && r.endDate >= dag)) return false;
-      // Alleen rijdend personeel telt in de bezetting.
+      // Alleen rijdend personeel telt in de bezetting; een flexi-job niet.
       const u = users.find((x) => String(x.id) === String(r.userId));
-      return !u || isRijdend(u.role);
+      return !u || teltInVerlofbezetting(u);
     }).length;
   /** Bevat de periode een zondag of feestdag? Zo ja, dan verschilt het aantal
    *  verlofdagen van het aantal kalenderdagen en zetten we dat er expliciet
@@ -199,10 +199,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
   /** Dagen van een periode waarop deze chauffeur erbij de verloflimiet overschrijdt. */
   const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) => {
-    // Een technieker bezet geen dienst, dus zijn verlof kan de limiet niet
-    // overschrijden — geen waarschuwing tonen.
+    // Een technieker bezet geen dienst en een flexi-job vult in, dus hun
+    // verlof kan de limiet niet overschrijden — geen waarschuwing tonen.
     const doel = users.find((u) => String(u.id) === String(exclUserId));
-    if (doel && !isRijdend(doel.role)) return [];
+    if (doel && !teltInVerlofbezetting(doel)) return [];
     return dagenVan(van, tot)
       .map((dag) => ({ dag, afwezig: anderenAfwezigOp(dag, exclUserId) + 1, limiet: limietVoorDag(limieten, dag) }))
       .filter((d) => d.afwezig > d.limiet);
@@ -510,6 +510,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       if (requester && !isRijdend(requester.role) && !isMe) return false;
       return true;
     });
+  /** Bezetting van een dag voor de verloflimiet: de verlofrijen van die dag
+   *  zonder de flexi-jobs (Jarno 14-09). Een flexi staat wél in de daglijst
+   *  (hij is écht afwezig), maar maakt de dag niet voller: hij vult in en
+   *  bezet geen vaste dienst. */
+  const bezettingOp = (dateStr: string) =>
+    getRequestsForDate(dateStr).filter((r) => {
+      const requester = users.find((u) => u.id === r.userId);
+      return !requester || teltInVerlofbezetting(requester);
+    }).length;
 
   const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
@@ -780,7 +789,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               {calendarDays.map((day, i) => {
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-                const occupancyCount = getRequestsForDate(dateStr).length;
+                const occupancyCount = bezettingOp(dateStr);
                 const limiet = limietVoorDag(limieten, dateStr);
                 const bezetting = bezettingVanDag(occupancyCount, limiet);
                 const statusColor = bezetting === 'volzet' ? 'bg-red-500' : bezetting === 'deels' ? 'bg-amber-500' : 'bg-emerald-500';

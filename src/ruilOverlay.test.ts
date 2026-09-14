@@ -47,6 +47,44 @@ describe('legRuilenOverMaandbeeld', () => {
     expect(cells).toEqual(kopie);
   });
 
+  it('een gever wiens collega op TA stond wordt vrij, niet TA (Jarno 14-09)', () => {
+    const ta = { code: 'TA', kind: 'absence', label: 'Toegestane afwezigheid', segments: [] };
+    const cells: OverlayCellen = { A: { '2026-09-15': cel('2101') }, B: { '2026-09-15': ta } };
+    const uit = legRuilenOverMaandbeeld(cells, [ruil({})], opties(['2026-09-15']));
+    expect(uit).toEqual({ gewisseld: 1, gemarkeerd: 0, overgeslagen: 0 });
+    expect(cells.B['2026-09-15']).toMatchObject({ code: '2101', swapFrom: 'An' });
+    expect(cells.A['2026-09-15']).toEqual({ code: 'vrij', kind: 'absence', label: 'Geen dienst', segments: [] });
+  });
+
+  it('gebruikt de meegegeven vrij-cel (label uit de planningscodes)', () => {
+    const cells: OverlayCellen = { A: { '2026-09-15': cel('2101') }, B: { '2026-09-15': { code: 'bv', kind: 'leave', label: 'Betaald verlof', segments: [] } } };
+    const vrijCel = { code: 'vrij', kind: 'absence', label: 'Vrije dag', segments: [] };
+    legRuilenOverMaandbeeld(cells, [ruil({})], { ...opties(['2026-09-15']), vrijCel });
+    expect(cells.A['2026-09-15']).toEqual(vrijCel);
+    // De ontvanger draagt zijn code niet mee: geen 'bv' bij An.
+    expect(cells.B['2026-09-15'].code).toBe('2101');
+  });
+
+  it('een gever zonder cel bij de ontvanger blijft leeg (ongewijzigd gedrag)', () => {
+    const cells: OverlayCellen = { A: { '2026-09-15': cel('2101') }, B: {} };
+    legRuilenOverMaandbeeld(cells, [ruil({})], opties(['2026-09-15']));
+    expect(cells.A['2026-09-15']).toBeUndefined();
+    expect(cells.B['2026-09-15']).toMatchObject({ code: '2101' });
+  });
+
+  it('1-op-1 op dezelfde dag (handmatige wissel tussen twee ingeplande chauffeurs): beide diensten wisselen van naam', () => {
+    const cells: OverlayCellen = { A: { '2026-09-15': cel('2101') }, B: { '2026-09-15': cel('2202') } };
+    const uit = legRuilenOverMaandbeeld(
+      cells,
+      [ruil({ swapType: 'ruil', returnDate: '2026-09-15', returnCode: '2202', reason: `${HANDMATIGE_WISSEL_PREFIX}Jarno, mondelinge ruil` })],
+      opties(['2026-09-15']),
+    );
+    // Eerste been wisselt beide cellen, het tweede vindt 2202 al bij An en markeert alleen.
+    expect(uit).toEqual({ gewisseld: 1, gemarkeerd: 1, overgeslagen: 0 });
+    expect(cells.B['2026-09-15']).toMatchObject({ code: '2101', swapFrom: 'An', swapManual: true });
+    expect(cells.A['2026-09-15']).toMatchObject({ code: '2202', swapFrom: 'Bert', swapManual: true });
+  });
+
   it('markeert bij een 1-op-1-ruil beide benen, elk met de juiste gever', () => {
     const cells: OverlayCellen = {
       A: { '2026-09-15': cel('vrij'), '2026-09-18': cel('2202') },

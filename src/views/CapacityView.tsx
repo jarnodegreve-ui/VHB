@@ -241,11 +241,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           fromDriverId: selected.driverId,
           toDriverId: wisselNaar,
           reason: wisselRedenTekst,
+          ...(wisselTerug ? { returnLine: wisselTerug } : {}),
         }),
       });
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) { notify(body.error || 'Dienstwissel is mislukt.', 'error'); return; }
-      notify(`Dienst ${wisselDienst} overgezet, beide chauffeurs krijgen een melding.`, 'success');
+      notify(wisselTerug
+        ? `Diensten ${wisselDienst} en ${wisselTerug} gewisseld, beide chauffeurs krijgen een melding.`
+        : `Dienst ${wisselDienst} overgezet, beide chauffeurs krijgen een melding.`, 'success');
       setSelected(null);
       setReloadTick((t) => t + 1);
     } catch {
@@ -373,6 +376,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     }
     return per;
   }, [cells]);
+
+  // Rijdt de gekozen chauffeur die dag zelf een dienst, dan wordt het een
+  // 1-op-1-wissel (Jarno 14-09): zijn dienst gaat in ruil naar de huidige
+  // chauffeur. Niet vanaf een afwezigheidscel: wie ziek is krijgt er geen
+  // dienst bij (die kandidaten staan dan ook niet in de lijst).
+  const wisselNaarCel = selected && wisselNaar ? cells[wisselNaar]?.[selected.iso] : undefined;
+  const wisselTerug = !wisselNaAfwezigheid && wisselNaarCel?.kind === 'service' ? wisselNaarCel.code : null;
+  const wisselNaarNaam = drivers.find((d) => String(d.id) === wisselNaar)?.name ?? '—';
 
   // Venster verschuiven = twee weken op; de hoofdmaand volgt de maand waarin
   // het grootste deel van het venster valt (de tweede maandag), zodat export
@@ -1162,6 +1173,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <p className="text-xs font-medium text-slate-500 leading-relaxed">
                   Zet dienst <span className="font-semibold text-slate-700 tabular-nums">{wisselDienst}</span> op {formatDateLong(selected.iso)} over van{' '}
                   <span className="font-semibold text-slate-700">{selected.driverName}</span> naar een andere chauffeur.
+                  {!wisselNaAfwezigheid && ' Kies je iemand die die dag zelf rijdt, dan wisselen ze hun diensten 1-op-1.'}
                 </p>
                 <Field label="Nieuwe chauffeur" htmlFor="wissel-naar">
                   <Select
@@ -1173,20 +1185,36 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     {/* Vrij die dag bovenaan, daarbinnen minst gewerkt die
                         week — zelfde criteria als de advisor (keuze Jarno
                         19-08). "Vrij" = geen dienst(cel) op deze dag in de
-                        maandplanning. */}
+                        maandplanning; een TA of andere code staat erbij.
+                        Wie die dag zelf rijdt, staat er met zijn dienst bij
+                        (1-op-1-wissel), behalve als de huidige chauffeur
+                        afwezig is: die kan geen dienst terugnemen. */}
                     {rangschikKandidaten(
-                      drivers.filter((d) => String(d.id) !== selected.driverId),
+                      drivers.filter((d) => {
+                        if (String(d.id) === selected.driverId) return false;
+                        const c = cells[String(d.id)]?.[selected.iso];
+                        return !wisselNaAfwezigheid || !c || (c.kind !== 'service' && !c.hiddenService);
+                      }),
                       (d) => {
                         const c = cells[String(d.id)]?.[selected.iso];
                         return !c || (c.kind !== 'service' && !c.hiddenService);
                       },
                       werkdagenPerChauffeur,
                       selected.iso,
-                    ).map((k) => (
-                      <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>
-                    ))}
+                    ).map((k) => {
+                      const c = cells[String(k.user.id)]?.[selected.iso];
+                      const code = c?.kind === 'service' ? `rijdt ${c.code}` : c && c.code.toLowerCase() !== 'vrij' ? c.code.toUpperCase() : '';
+                      return (
+                        <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k, !code)}{code ? ` · ${code}` : ''}</option>
+                      );
+                    })}
                   </Select>
                 </Field>
+                {wisselTerug && (
+                  <Card tone="info" padding="none" className="px-3.5 py-2.5 text-xs font-medium text-slate-700 leading-relaxed">
+                    {wisselNaarNaam} rijdt die dag dienst <span className="font-semibold tabular-nums">{wisselTerug}</span>. Die gaat in ruil naar {selected.driverName}: een 1-op-1-wissel.
+                  </Card>
+                )}
                 <Field label="Reden" htmlFor="wissel-reden">
                   <div className="space-y-2">
                     <Select
@@ -1207,7 +1235,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   </div>
                 </Field>
                 <Button variant="primary" size="sm" full disabled={!wisselKlaar || isWisselen} onClick={() => setWisselBevestigen(true)}>
-                  {isWisselen ? 'Doorvoeren…' : 'Dienst overzetten…'}
+                  {isWisselen ? 'Doorvoeren…' : wisselTerug ? 'Diensten wisselen…' : 'Dienst overzetten…'}
                 </Button>
               </div>
             )}
@@ -1320,7 +1348,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         onConfirm={() => void uitvoerenWissel()}
         title="Dienstwissel doorvoeren?"
         message={selected && wisselDienst
-          ? `Dienst ${wisselDienst} op ${formatDateLong(selected.iso)} gaat van ${selected.driverName} naar ${drivers.find((d) => String(d.id) === wisselNaar)?.name ?? '—'}. Reden: ${wisselRedenTekst}. De planning wordt meteen bijgewerkt en beide chauffeurs krijgen een melding.`
+          ? wisselTerug
+            ? `Op ${formatDateLong(selected.iso)} gaat dienst ${wisselDienst} van ${selected.driverName} naar ${wisselNaarNaam}, en dienst ${wisselTerug} van ${wisselNaarNaam} naar ${selected.driverName}. Reden: ${wisselRedenTekst}. De planning wordt meteen bijgewerkt en beide chauffeurs krijgen een melding.`
+            : `Dienst ${wisselDienst} op ${formatDateLong(selected.iso)} gaat van ${selected.driverName} naar ${wisselNaarNaam}. Reden: ${wisselRedenTekst}. De planning wordt meteen bijgewerkt en beide chauffeurs krijgen een melding.`
           : ''}
         confirmText="Doorvoeren"
         cancelText="Annuleren"

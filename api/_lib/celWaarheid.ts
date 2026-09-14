@@ -122,7 +122,13 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
 
   // Goedgekeurde dienstruilen over het maandbeeld (api/_lib/ruilOverlay.ts).
   const naamVanId = (id: string) => chauffeurs.find((c) => c.id === id)?.name ?? "";
-  legRuilenOverMaandbeeld(cells, swaps, { dates, chauffeurIds, naamVanId });
+  // De “vrij”-cel voor een gever wiens ontvanger geen dienst had, met het
+  // label uit de planningscodes (valt terug op de vaste cel).
+  const vrijResolved = resolve("vrij");
+  const vrijCel = vrijResolved && vrijResolved.kind !== "unknown"
+    ? { code: "vrij", kind: vrijResolved.kind, label: vrijResolved.label, segments: [] }
+    : undefined;
+  legRuilenOverMaandbeeld(cells, swaps, { dates, chauffeurIds, naamVanId, vrijCel });
 
   // Goedgekeurde afwezigheden uit de verlof-module overschrijven de matrix-
   // cel; ziekte als laatste zodat die bij overlap wint. De overdekte dienst
