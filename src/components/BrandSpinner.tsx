@@ -40,7 +40,7 @@ export function BrandSpinner({
         d={AS}
         clipPath={`url(#${id})`}
         fill="none"
-        stroke="#CAA044"
+        stroke="#E2A323"
         strokeWidth={8}
         pathLength={100}
         strokeDasharray="100 100"

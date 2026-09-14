@@ -24,7 +24,9 @@ const OUT = path.join(ROOT, 'public');
 const master = fs.readFileSync(SRC, 'utf-8');
 // Tegelkleur en merk-groep uit het masterbestand zelf.
 const TEGEL = master.match(/<rect [^>]*fill="(#[0-9A-Fa-f]{6})"/)[1];
-const defs = master.slice(master.indexOf('<defs>'), master.indexOf('</defs>') + '</defs>'.length);
+// Goud = het huisstijl-goud (#E2A323, keuze Jarno 14-09) i.p.v. het pakket-goud #CAA044.
+const GOUD = '#E2A323';
+const defs = master.slice(master.indexOf('<defs>'), master.indexOf('</defs>') + '</defs>'.length).replace(/#CAA044/gi, GOUD);
 // Buitenmaten van het merk in de coördinaten van #vhb-mark (na zijn eigen
 // translate(-20 -20)): x 0–572,5 · y 0,6–195,5.
 const MERK = { cx: 286.25, cy: 98, w: 572.5, h: 195 };

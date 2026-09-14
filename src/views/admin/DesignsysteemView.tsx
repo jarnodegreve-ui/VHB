@@ -113,7 +113,7 @@ export function DesignsysteemView() {
         ))}
       </nav>
 
-      <Sectie id="merk" titel="Merk" uitleg="Het VHB-logo (pakket VHB primary, 14-09) in zijn drie opmaken, altijd via BrandLogo (inline SVG, de kleuren van het pakket staan hard in de component). Sizen op breedte. De laadstand laat een lichtband door de gouden streep trekken; BrandSpinner is dezelfde streep klein.">
+      <Sectie id="merk" titel="Merk" uitleg="Het VHB-logo (pakket VHB primary, 14-09) in zijn drie opmaken, altijd via BrandLogo (inline SVG, carbon uit het pakket, goud = het huisstijl-goud, hard in de component). Sizen op breedte. De laadstand laat een lichtband door de gouden streep trekken; BrandSpinner is dezelfde streep klein.">
         <Rij label="Primary">
           <BrandLogo className="w-56 h-auto" />
           <span className="rounded-xl bg-ink p-4"><BrandLogo tone="donker" className="w-56 h-auto" /></span>

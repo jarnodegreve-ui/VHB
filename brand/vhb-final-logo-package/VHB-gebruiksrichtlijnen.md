@@ -25,7 +25,7 @@ Alle bestanden bevatten de naamregel als lettercontouren; er hoeft geen letterty
 
 ## In de app
 
-Uitsluitend via `<BrandLogo tone variant>` (inline SVG): `variant="volledig"` (primary), `"beeldmerk"`, `"horizontaal"`. De laadstand (`laden`) laat een lichtband door de gouden streep trekken. Het negatief in de app is gedempt wit (`#DCDFE2`) in plaats van `#FFFFFF`. Iconen in `public/` komen uit `node scripts/brand-icons.mjs`.
+Uitsluitend via `<BrandLogo tone variant>` (inline SVG): `variant="volledig"` (primary), `"beeldmerk"`, `"horizontaal"`. De laadstand (`laden`) laat een lichtband door de gouden streep trekken. Twee bewuste afwijkingen in de app: het goud is het huisstijl-goud `#E2A323` (keuze Jarno 14-09) in plaats van het pakket-goud `#CAA044`, en het negatief is gedempt wit (`#DCDFE2`) in plaats van `#FFFFFF`. Iconen in `public/` komen uit `node scripts/brand-icons.mjs`.
 
 ## Niet doen
 

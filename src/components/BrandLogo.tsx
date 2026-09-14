@@ -20,14 +20,16 @@ import { useEffect, useId, useRef, useState } from 'react';
  * puur #FFFFFF: op het diepe zwart van dark mode/login vond Jarno dat te fel
  * (30-08), dus het negatief staat op slate-200-wit. Verder staan de kleuren
  * bewust hard (geen tokens): het logo mag niet meebewegen met een UI-retune.
- * Let op: het pakket gebruikt carbon #242628 en goud #CAA044, dus niet de
- * UI-tokens (#14181B / #E2A323).
+ * Eén bewuste afwijking van het pakket: het goud. Het pakket levert
+ * #CAA044; Jarno koos (14-09) voor het bestaande huisstijl-goud #E2A323,
+ * zodat logo en UI-accenten (oker-500) hetzelfde goud dragen. Carbon blijft
+ * het pakket-carbon #242628 (niet slate-900 #14181B).
  *
  * Maat: sizen op BREEDTE (w-36/w-56, h-auto), niet op hoogte; het losse
  * beeldmerk mag op hoogte (h-6 in de mobiele topbar).
  */
 const CARBON = '#242628';
-export const GOUD = '#CAA044';
+export const GOUD = '#E2A323'; // huisstijl-goud (oker-500); het pakket levert #CAA044, Jarno koos 14-09 voor het bestaande goud
 const NEGATIEF = '#DCDFE2'; // gedempt wit (tussen slate-200 en -300) i.p.v. #FFFFFF, zie boven
 
 /* Paden letterlijk uit het masterbestand. Het merk staat in de coördinaten
