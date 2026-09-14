@@ -20,8 +20,8 @@ export function AppSkeleton() {
     <div className="flex h-dvh w-full overflow-hidden" aria-busy="true" aria-label="Portaal wordt geladen">
       <aside className="hidden lg:flex w-[17.5rem] shrink-0 flex-col panel-dark" aria-hidden="true">
         <div className="px-5 pt-4 pb-3 flex justify-center">
-          <BrandLogo tone="licht" naamregelSchaal={1.2} naamregelAfstand={70} laden className="w-36 h-auto select-none block dark:hidden" />
-          <BrandLogo tone="donker" naamregelSchaal={1.2} naamregelAfstand={70} laden className="w-36 h-auto select-none hidden dark:block" />
+          <BrandLogo tone="licht" laden className="w-40 lg:w-44 h-auto select-none block dark:hidden" />
+          <BrandLogo tone="donker" laden className="w-40 lg:w-44 h-auto select-none hidden dark:block" />
         </div>
         <div className="px-4 pt-3 space-y-3">
           {['w-24', 'w-20', 'w-28', 'w-24', 'w-32', 'w-20', 'w-24', 'w-28', 'w-32'].map((w, i) => (

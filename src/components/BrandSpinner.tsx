@@ -1,40 +1,50 @@
 /**
- * Laad-spinner in de vormtaal van het logo: een stadium-lus waarover een
- * goud segment reist — zoals de gouden boog in het merk (verbeterronde
- * 30-08, nr. 5). Vervangt de generieke border-draaicirkels op laadmomenten.
+ * Laad-spinner in de vormtaal van het logo: de gouden schuine streep uit het
+ * VHB-merk, waar een lichtband van onder naar boven doorheen trekt (zoals de
+ * laadstand van BrandLogo). Vervangt de generieke border-draaicirkels op
+ * laadmomenten.
  *
- * Geen rotatie van het element zelf (een draaiende ovaal zwalkt): het
- * goudsegment loopt via stroke-dashoffset over een gesloten pad
- * (pathLength 100, keyframes `vhb-lus-loop` in index.css). Bewust géén
- * kopie van het logo (geen onderbreking/monogram) — dit is een UI-element
- * dat het merk citeert, niet het logo zelf.
+ * Geen rotatie: de band loopt via stroke-dashoffset over de as van de streep,
+ * geknipt op de streepvorm (pathLength 100, keyframes `vhb-streep-veeg` in
+ * index.css). Bewust géén kopie van het logo (geen letters) — dit is een
+ * UI-element dat het merk citeert, niet het logo zelf. Zelfde helling als in
+ * het merk (30° uit de verticaal).
  */
-const PAD = 'M 19 3 H 37 A 13 13 0 0 1 37 29 H 19 A 13 13 0 0 1 19 3 Z';
+import { useId } from 'react';
+
+// Parallellogram met dezelfde helling als de streep in het merk: onderrand
+// x 6–11 op y 29, bovenrand x 21–26 op y 3.
+const STREEP = 'M 6 29 H 11 L 26 3 H 21 Z';
+const AS = 'M 7.5 31 L 24.5 1';
 
 export function BrandSpinner({
   size = 16,
   tone = 'licht',
   className,
 }: {
-  /** Hoogte in px; de breedte volgt de lus-verhouding (1,75×). */
+  /** Hoogte én breedte in px (vierkant). */
   size?: number;
-  /** 'licht' = slate-track (lichte vlakken); 'donker' = wit-transparante track (carbon/login). */
+  /** 'licht' = slate-spoor (lichte vlakken); 'donker' = wit-transparant spoor (carbon/login). */
   tone?: 'licht' | 'donker';
   className?: string;
 }) {
-  const track = tone === 'donker' ? 'rgba(255, 255, 255, 0.2)' : 'var(--color-slate-200, #E4E6E8)';
+  const id = useId();
+  const spoor = tone === 'donker' ? 'rgba(255, 255, 255, 0.2)' : 'var(--color-slate-200, #E4E6E8)';
   return (
-    <svg viewBox="0 0 56 32" width={size * 1.75} height={size} className={className} aria-hidden="true">
-      <path d={PAD} fill="none" stroke={track} strokeWidth={6} />
+    <svg viewBox="0 0 32 32" width={size} height={size} className={className} aria-hidden="true">
+      <clipPath id={id}>
+        <path d={STREEP} />
+      </clipPath>
+      <path d={STREEP} fill={spoor} />
       <path
-        d={PAD}
+        d={AS}
+        clipPath={`url(#${id})`}
         fill="none"
-        stroke="var(--color-oker-500, #E2A323)"
-        strokeWidth={6}
-        strokeLinecap="round"
+        stroke="#E2A323"
+        strokeWidth={8}
         pathLength={100}
-        strokeDasharray="22 78"
-        className="vhb-lus-loop"
+        strokeDasharray="100 100"
+        className="vhb-streep-veeg"
       />
     </svg>
   );

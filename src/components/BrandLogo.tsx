@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 /**
- * Het definitieve VHB-logo (pakket versie 2, 2026-09-13) als ínline SVG i.p.v.
+ * Het VHB-logo (pakket "VHB primary", 2026-09-14) als ínline SVG i.p.v.
  * <img src="…svg">.
  *
  * Waarom inline: Safari rastert een SVG in een <img> die in een gecomposite
@@ -10,135 +10,124 @@ import { useEffect, useRef, useState } from 'react';
  * kartelige randen op retina (#247, #261). Inline SVG wordt per device-pixel
  * vectorieel getekend en blijft dus overal strak.
  *
- * Geometrie is 1-op-1 brand/vhb-final-logo-package/VHB-hoofdlogo-kleur.svg:
- * onderbroken ovale lus (straal 177, lijndikte 40, kleine openingen aan beide
- * uiteinden van het gouden boogje), monogram met diagonale V, gouden
- * H-verbinding met de twee profieluitsparingen, open B, en de naamregel als
- * lettercontouren (geen font nodig). Het master tekent de lus als gevulde
- * vlakken; hier staat hij als stroke over de hartlijn (zelfde buiten- en
- * binnenrand, radiale koppen via butt-caps) omdat de laadstand het gouden
- * segment over die hartlijn laat reizen. De negatief-variant wisselt alleen
- * carbon → wit, zoals VHB-hoofdlogo-wit-goud.svg — maar niet puur #FFFFFF: op
- * het diepe zwart van dark mode/login vond Jarno dat te fel (30-08), dus het
- * negatief staat op slate-200-wit. Verder staan de kleuren bewust hard (geen
- * tokens): de gebruiksrichtlijnen verbieden afwijkende logokleuren, dus het
- * logo mag niet meebewegen met een latere UI-retune.
+ * Geometrie is 1-op-1 brand/vhb-final-logo-package/schoon/VHB-primary-kleur.svg:
+ * het beeldmerk (V·H·B als één zwaar woordmerk met de gouden schuine streep
+ * tussen V en H) en de gespatieerde naamregel als lettercontouren (geen font
+ * nodig). Drie opmaken uit het pakket: 'volledig' (beeldmerk boven naamregel,
+ * 902×334), 'beeldmerk' (alleen het merk) en 'horizontaal' (merk | gouden
+ * scheidingslijn | naamregel op twee regels, 1297×256). De negatief-variant
+ * wisselt alleen carbon → wit, zoals VHB-primary-wit-goud.svg — maar niet
+ * puur #FFFFFF: op het diepe zwart van dark mode/login vond Jarno dat te fel
+ * (30-08), dus het negatief staat op slate-200-wit. Verder staan de kleuren
+ * bewust hard (geen tokens): het logo mag niet meebewegen met een UI-retune.
+ * Eén bewuste afwijking van het pakket: het goud. Het pakket levert
+ * #CAA044; Jarno koos (14-09) voor het bestaande huisstijl-goud #E2A323,
+ * zodat logo en UI-accenten (oker-500) hetzelfde goud dragen. Carbon blijft
+ * het pakket-carbon #242628 (niet slate-900 #14181B).
  *
- * Maat: sizen op BREEDTE (w-36/w-56, h-auto), niet op hoogte. De richtlijn
- * vraagt 180 px voor het volledige logo; de sidebar zit bewust op 144 px
- * (keuze Jarno — naamregel ±6 px, op retina nog leesbaar), lager niet.
- * Het losse beeldmerk (variant="beeldmerk") mag vanaf 48 px.
+ * Maat: sizen op BREEDTE (w-36/w-56, h-auto), niet op hoogte; het losse
+ * beeldmerk mag op hoogte (h-6 in de mobiele topbar).
  */
-const CARBON = '#14181B';
-export const GOUD = '#E2A323';
+const CARBON = '#242628';
+export const GOUD = '#E2A323'; // huisstijl-goud (oker-500); het pakket levert #CAA044, Jarno koos 14-09 voor het bestaande goud
 const NEGATIEF = '#DCDFE2'; // gedempt wit (tussen slate-200 en -300) i.p.v. #FFFFFF, zie boven
 
-/* De lus in master-eenheden: hartlijn-straal 177, lijndikte 40, middelpunten
- * (477,75 | 337,5) en (1034,25 | 337,5). Carbon loopt van de bovenrand (x
- * 991,75) linksom tot −17° rechtsboven; het goud van x 1009,75 over de
- * bovenrand tot −23°. Ertussen de twee openingen (18 eenheden op de bovenrand,
- * 6° op de boog) — exact het master. */
-const LUS_DIKTE = 40;
-const LUS_INK = 'M991.75 160.5 H477.75 A177 177 0 0 0 477.75 514.5 H1034.25 A177 177 0 0 0 1203.52 285.75';
-const LUS_GOUD = 'M1009.75 160.5 H1034.25 A177 177 0 0 1 1197.18 268.34';
-const LUS_HARTLIJN = 'M477.75 160.5 H1034.25 A177 177 0 0 1 1034.25 514.5 H477.75 A177 177 0 0 1 477.75 160.5 Z';
+/* Paden uit brand/vhb-final-logo-package/schoon/VHB-primary-kleur.svg: de
+ * schone vectorversie van het getraceerde pakketbestand (zie
+ * scripts/brand-paden-schoon.mjs; geometrie 1-op-1, alleen de trace-ruis is
+ * weg). Het merk staat in de coördinaten van VHB-beeldmerk-kleur.svg (bbox
+ * x 20–592,5 · y 20,6–215,5); de naamregel in die van de wordmark-groep
+ * (bbox x 19–861 · y 19–55,3, één pad voor "VAN HOOREBEKE & ZOON"). De
+ * naamregel is Montserrat Medium (het lettertype van het pakket, 14-09 via
+ * overlay vastgesteld), glyph voor glyph op de letterposities van het pakket
+ * gezet; zo blijft hij strak op elke maat zonder webfont. */
+const MERK_INK = 'M 412.27 21.54 L 412.27 53.5 C 436.86 53.7 461.46 53.9 486.05 54.2 C 494.22 54.3 502.38 54.41 510.55 54.65 C 514.91 54.78 519.75 54.5 524.01 55.52 C 527.08 56.25 529.77 60.34 531.22 62.9 C 536.89 72.91 532.99 87.35 523.28 93.39 C 519.73 95.6 515.31 95.98 511.24 96.3 C 504.43 96.83 497.57 96.87 490.75 96.92 C 473.25 97.07 455.74 97 438.24 97 C 429.91 97 420.05 95.93 412.24 97.25 L 412.24 215.28 C 422.06 215.81 432.04 215.41 441.89 215.41 C 460.06 215.43 478.23 215.46 496.4 215.45 C 510.26 215.44 525.18 216.78 538.87 214.36 C 545.79 213.14 552.83 210.37 559.12 207.28 C 581.66 196.22 593.8 171.62 590.29 147.13 C 589.36 140.6 587.51 133.91 583.97 128.29 C 579.83 121.73 573.64 116.25 566.86 112.53 C 563.47 110.67 559.41 109.27 556.22 107.64 C 563.05 98.17 572.73 91.74 576.72 80.24 C 584.13 58.86 573.64 32.69 551.89 24.9 C 534.63 18.72 514.38 20.94 496.31 20.84 C 477.97 20.74 459.63 20.64 441.3 20.72 C 431.87 20.75 421.53 19.8 412.27 21.54 Z M 19.6 21.08 L 106.64 214 L 112.29 213.54 L 134.96 173.94 L 67.5 21.08 L 19.6 21.08 Z M 127.71 130.77 L 141.89 161.79 L 221.82 21 L 188.74 21 L 127.71 130.77 Z M 356 102.12 L 249.44 102.12 L 249.44 65.44 L 206 140.83 L 206 214.77 L 249.76 214.77 L 249.76 133.83 L 356 133.83 L 356 215 L 397 215 L 397 21 L 356 21 L 356 102.12 Z M 450.24 173.5 C 466.88 173.5 483.53 173.53 500.18 173.49 C 508.06 173.47 518.03 174.81 525.51 171.93 C 530.49 170.02 535.04 166.8 537.71 162.11 C 542.14 154.32 540.31 142.72 533.78 136.73 C 526.79 130.32 516.95 131.36 508.13 131.2 C 488.83 130.83 469.53 131 450.24 131 L 450.24 173.5 Z';
+const MERK_GOUD = 'M 124.99 213.92 L 145.06 213.92 L 256.96 21.02 L 237.49 21.02 L 124.99 213.92 Z';
+const NAAMREGEL = 'M37.77 53L33.24 53L19.16 21L24.10 21L35.62 47.33L47.23 21L51.80 21L37.77 53Z M68.72 53L64.01 53L78.50 21L83.02 21L97.56 53L92.76 53L89.24 45L72.24 45L68.72 53ZM80.74 25.66L73.84 41.34L87.64 41.34L80.74 25.66Z M119.57 53L115 53L115 21L118.75 21L137.95 44.86L137.95 21L142.52 21L142.52 53L138.77 53L119.57 29.14L119.57 53Z M217.52 53L212.95 53L212.95 38.74L194.57 38.74L194.57 53L190 53L190 21L194.57 21L194.57 34.76L212.95 34.76L212.95 21L217.52 21L217.52 53Z M254.16 53.37L254.16 53.37Q250.45 53.37 247.35 52.13Q244.24 50.90 241.95 48.70Q239.67 46.51 238.39 43.51Q237.11 40.52 237.11 37L237.11 37Q237.11 33.48 238.39 30.49Q239.67 27.49 241.95 25.30Q244.24 23.10 247.35 21.87Q250.45 20.63 254.16 20.63L254.16 20.63Q257.81 20.63 260.90 21.85Q263.99 23.06 266.29 25.27Q268.60 27.49 269.86 30.49Q271.12 33.48 271.12 37L271.12 37Q271.12 40.52 269.86 43.51Q268.60 46.51 266.29 48.73Q263.99 50.94 260.90 52.15Q257.81 53.37 254.16 53.37ZM254.16 49.30L254.16 49.30Q257.68 49.30 260.49 47.70Q263.30 46.10 264.92 43.31Q266.55 40.52 266.55 37L266.55 37Q266.55 33.48 264.92 30.69Q263.30 27.90 260.49 26.30Q257.68 24.70 254.16 24.70L254.16 24.70Q250.55 24.70 247.73 26.30Q244.92 27.90 243.30 30.69Q241.68 33.48 241.68 37L241.68 37Q241.68 40.52 243.30 43.31Q244.92 46.10 247.73 47.70Q250.55 49.30 254.16 49.30Z M305.19 53.37L305.19 53.37Q301.49 53.37 298.38 52.13Q295.27 50.90 292.99 48.70Q290.70 46.51 289.42 43.51Q288.14 40.52 288.14 37L288.14 37Q288.14 33.48 289.42 30.49Q290.70 27.49 292.99 25.30Q295.27 23.10 298.38 21.87Q301.49 20.63 305.19 20.63L305.19 20.63Q308.85 20.63 311.94 21.85Q315.02 23.06 317.33 25.27Q319.64 27.49 320.90 30.49Q322.15 33.48 322.15 37L322.15 37Q322.15 40.52 320.90 43.51Q319.64 46.51 317.33 48.73Q315.02 50.94 311.94 52.15Q308.85 53.37 305.19 53.37ZM305.19 49.30L305.19 49.30Q308.71 49.30 311.52 47.70Q314.34 46.10 315.96 43.31Q317.58 40.52 317.58 37L317.58 37Q317.58 33.48 315.96 30.69Q314.34 27.90 311.52 26.30Q308.71 24.70 305.19 24.70L305.19 24.70Q301.58 24.70 298.77 26.30Q295.96 27.90 294.34 30.69Q292.71 33.48 292.71 37L292.71 37Q292.71 40.52 294.34 43.31Q295.96 46.10 298.77 47.70Q301.58 49.30 305.19 49.30Z M345.57 53L341 53L341 21L353.48 21Q359.70 21 363.26 23.97Q366.83 26.94 366.83 32.15L366.83 32.15Q366.83 35.90 365 38.49Q363.17 41.07 359.79 42.26L359.79 42.26L367.38 53L362.39 53L355.49 43.17Q354.53 43.26 353.48 43.26L353.48 43.26L345.57 43.26L345.57 53ZM345.57 24.98L345.57 39.38L353.34 39.38Q357.73 39.38 359.99 37.48Q362.26 35.58 362.26 32.15L362.26 32.15Q362.26 28.73 359.99 26.85Q357.73 24.98 353.34 24.98L353.34 24.98L345.57 24.98Z M412.22 53L389 53L389 21L411.58 21L411.58 24.98L393.57 24.98L393.57 34.81L409.62 34.81L409.62 38.69L393.57 38.69L393.57 49.02L412.22 49.02L412.22 53Z M446.27 53L431 53L431 21L445.35 21Q450.89 21 453.86 23.22Q456.83 25.43 456.83 29.27L456.83 29.27Q456.83 31.88 455.62 33.69Q454.41 35.49 452.49 36.41L452.49 36.41Q455.23 37.18 456.87 39.17Q458.52 41.16 458.52 44.36L458.52 44.36Q458.52 48.47 455.43 50.74Q452.35 53 446.27 53L446.27 53ZM435.57 38.65L435.57 49.30L446.09 49.30Q449.88 49.30 451.89 48.02Q453.90 46.74 453.90 43.99L453.90 43.99Q453.90 41.21 451.89 39.93Q449.88 38.65 446.09 38.65L446.09 38.65L435.57 38.65ZM435.57 24.70L435.57 34.94L444.94 34.94Q448.42 34.94 450.34 33.66Q452.26 32.38 452.26 29.82L452.26 29.82Q452.26 27.26 450.34 25.98Q448.42 24.70 444.94 24.70L444.94 24.70L435.57 24.70Z M500.22 53L477 53L477 21L499.58 21L499.58 24.98L481.57 24.98L481.57 34.81L497.62 34.81L497.62 38.69L481.57 38.69L481.57 49.02L500.22 49.02L500.22 53Z M524.25 53L519.68 53L519.68 21L524.25 21L524.25 38.92L541.62 21L546.84 21L533.17 35.40L547.70 53L542.36 53L530.10 38.74L524.25 44.73L524.25 53Z M588.22 53L565 53L565 21L587.58 21L587.58 24.98L569.57 24.98L569.57 34.81L585.62 34.81L585.62 38.69L569.57 38.69L569.57 49.02L588.22 49.02L588.22 53Z M651.99 50.58L649.52 53.50L645.27 49.25Q641.02 53.37 634.57 53.37L634.57 53.37Q631.33 53.37 628.79 52.31Q626.25 51.26 624.81 49.39Q623.37 47.51 623.37 45.05L623.37 45.05Q623.37 42.12 625.18 39.83Q626.98 37.55 631.14 35.22L631.14 35.22Q629.00 33.02 628.15 31.35Q627.30 29.69 627.30 27.90L627.30 27.90Q627.30 24.66 629.66 22.69Q632.01 20.73 635.94 20.73L635.94 20.73Q639.56 20.73 641.73 22.51Q643.90 24.29 643.90 27.40L643.90 27.40Q643.90 29.82 642.34 31.74Q640.79 33.66 637.09 35.77L637.09 35.77L644.95 43.63Q646.32 41.16 646.96 37.82L646.96 37.82L650.48 38.97Q649.66 43.17 647.69 46.28L647.69 46.28L651.99 50.58ZM642.66 46.69L642.66 46.69L633.57 37.64Q630.23 39.51 628.95 41.09Q627.67 42.67 627.67 44.59L627.67 44.59Q627.67 46.87 629.64 48.29Q631.60 49.71 634.85 49.71L634.85 49.71Q639.56 49.71 642.66 46.69ZM634.62 33.30L634.62 33.30Q637.77 31.56 638.98 30.26Q640.20 28.95 640.20 27.45L640.20 27.45Q640.20 25.89 639.10 24.91Q638.00 23.93 635.94 23.93L635.94 23.93Q633.80 23.93 632.58 25.02Q631.37 26.12 631.37 27.81L631.37 27.81Q631.37 29.05 632.01 30.19Q632.65 31.33 634.62 33.30Z M713.74 53L687.00 53L687.00 49.89L707.11 24.98L687.32 24.98L687.32 21L713.15 21L713.15 24.11L693.08 49.02L713.74 49.02L713.74 53Z M745.90 53.37L745.90 53.37Q742.20 53.37 739.09 52.13Q735.98 50.90 733.69 48.70Q731.41 46.51 730.13 43.51Q728.85 40.52 728.85 37L728.85 37Q728.85 33.48 730.13 30.49Q731.41 27.49 733.69 25.30Q735.98 23.10 739.09 21.87Q742.20 20.63 745.90 20.63L745.90 20.63Q749.56 20.63 752.64 21.85Q755.73 23.06 758.04 25.27Q760.35 27.49 761.60 30.49Q762.86 33.48 762.86 37L762.86 37Q762.86 40.52 761.60 43.51Q760.35 46.51 758.04 48.73Q755.73 50.94 752.64 52.15Q749.56 53.37 745.90 53.37ZM745.90 49.30L745.90 49.30Q749.42 49.30 752.23 47.70Q755.04 46.10 756.67 43.31Q758.29 40.52 758.29 37L758.29 37Q758.29 33.48 756.67 30.69Q755.04 27.90 752.23 26.30Q749.42 24.70 745.90 24.70L745.90 24.70Q742.29 24.70 739.48 26.30Q736.67 27.90 735.04 30.69Q733.42 33.48 733.42 37L733.42 37Q733.42 40.52 735.04 43.31Q736.67 46.10 739.48 47.70Q742.29 49.30 745.90 49.30Z M797.05 53.37L797.05 53.37Q793.35 53.37 790.24 52.13Q787.13 50.90 784.85 48.70Q782.56 46.51 781.28 43.51Q780.00 40.52 780.00 37L780.00 37Q780.00 33.48 781.28 30.49Q782.56 27.49 784.85 25.30Q787.13 23.10 790.24 21.87Q793.35 20.63 797.05 20.63L797.05 20.63Q800.71 20.63 803.79 21.85Q806.88 23.06 809.19 25.27Q811.50 27.49 812.75 30.49Q814.01 33.48 814.01 37L814.01 37Q814.01 40.52 812.75 43.51Q811.50 46.51 809.19 48.73Q806.88 50.94 803.79 52.15Q800.71 53.37 797.05 53.37ZM797.05 49.30L797.05 49.30Q800.57 49.30 803.38 47.70Q806.19 46.10 807.82 43.31Q809.44 40.52 809.44 37L809.44 37Q809.44 33.48 807.82 30.69Q806.19 27.90 803.38 26.30Q800.57 24.70 797.05 24.70L797.05 24.70Q793.44 24.70 790.63 26.30Q787.82 27.90 786.19 30.69Q784.57 33.48 784.57 37L784.57 37Q784.57 40.52 786.19 43.31Q787.82 46.10 790.63 47.70Q793.44 49.30 797.05 49.30Z M837.57 53L833 53L833 21L836.75 21L855.95 44.86L855.95 21L860.52 21L860.52 53L856.77 53L837.57 29.14L837.57 53Z';
 
-/* Laadstand: het gouden segment reist over de gesloten hartlijn van de lus
- * (pathLength 100 → alles in procenten van de omloop). LUS_THUIS = waar het
- * gouden boogje van het master begint (x 1009,75 op de bovenrand, 23,9 % van
- * de omloop); LUS_SEGMENT = de lengte van dat boogje (10,4 %). Het reizende
- * segment heeft dus exact de vorm van het statische — zodra het thuis is,
- * kan het geruisloos door het masterboogje vervangen worden.
+/* Opmaak 'volledig' = het primary-bestand: merk op (131 | 10), naamregel op
+ * (11 | 250); viewBox strak om de inhoud (x 30–872, y 30–306). */
+const VOLLEDIG = { viewBox: '30 30 842 276', merk: 'translate(131 10)', naam: 'translate(11 250)' };
+/* Opmaak 'beeldmerk': alleen het merk, strak (573×195). */
+const BEELDMERK = { viewBox: '20 20.5 573 195' };
+/* Opmaak 'horizontaal' = het horizontaal-bestand: merk op (10 | 10), gouden
+ * lijn op x 649, naamregel op twee regels (VAN HOOREBEKE / & ZOON) door de
+ * ene naamregel twee keer te knippen: regel 1 = eerste 570 eenheden, regel 2
+ * = eenheden 603–842, 53 lager. */
+const HORIZONTAAL = { viewBox: '30 30 1237 196', merk: 'translate(10 10)', regel1: 'translate(678 64)', regel2: 'translate(75 117)' };
+
+/* Laadstand: de gouden streep is de laadindicator. Een lichtband trekt van
+ * onder naar boven door de streep (tekent hem in, veegt hem daarna uit) —
+ * technisch een lijn over de as van de streep, geknipt op de streepvorm,
+ * met stroke-dashoffset 100 → −100 (pathLength 100, dash 100/100). Onder de
+ * band staat de streep gedempt (spoor) zodat de vorm blijft staan.
  *
- * Eén gedeelde tijdbasis (lusT0) zodat álle laad-logo's in fase lopen en een
- * logo dat ná het laden verschijnt (zijbalk, login) precies weet waar het
- * segment op dat moment zat: het loopt dan door tot thuis en remt af
- * (`landing`) i.p.v. abrupt naar de master-positie te springen. Web
+ * Eén gedeelde tijdbasis (streepT0) zodat álle laad-logo's in fase lopen en
+ * een logo dat ná het laden verschijnt (zijbalk, login) precies weet waar de
+ * band op dat moment zat: het maakt de beweging af tot de streep vol is
+ * (`landing`) i.p.v. abrupt naar de statische streep te springen. Web
  * Animations API i.p.v. een CSS-keyframe: de startTime is expliciet, dus na
- * een blokkerende hoofdthread springt het segment naar de juiste fase in
- * plaats van te blijven hangen. */
-const LUS_OMLOOP_MS = 1100;
-const LUS_THUIS = 23.909;
-const LUS_SEGMENT = 10.403;
-const LUS_LANDING_MIN = 30; // minstens 30 % doorlopen, anders is de afremming een schokje
-const LUS_LANDING_REK = 1.6; // landing duurt 1,6× de lineaire tijd: zelfde startsnelheid, dan uitlopen
-let lusT0: number | null = null;
+ * een blokkerende hoofdthread springt de band naar de juiste fase in plaats
+ * van te blijven hangen. */
+const STREEP_OMLOOP_MS = 1400; // 0 → 200 dash-eenheden (in- en uitvegen)
+const STREEP_VOL = 100; // fase waarop de streep volledig getekend is
+const STREEP_LANDING_REK = 1.4;
+// As van de streep (midden onderrand → midden bovenrand), iets verlengd zodat
+// de geknipte uiteinden volledig gevuld raken.
+const STREEP_AS = 'M133.5 217.5 L249.2 17.5';
+const STREEP_BREEDTE = 24; // > loodrechte breedte van de streep (16,4)
+const SPOOR_OPACITY = 0.28;
+let streepT0: number | null = null;
 let ladenActief = 0; // aantal gemonteerde laad-logo's (voor de landing-beslissing)
 
-function lusNu(): number {
+function nu(): number {
   return typeof document !== 'undefined' && document.timeline?.currentTime != null
     ? Number(document.timeline.currentTime)
     : performance.now();
 }
-function lusStart(): number {
-  if (lusT0 === null) lusT0 = lusNu();
-  return lusT0;
+function streepStart(): number {
+  if (streepT0 === null) streepT0 = nu();
+  return streepT0;
 }
-/** Huidige positie van het reizende segment, in % van de omloop. */
-function lusPositie(): number {
-  return (((lusNu() - lusStart()) % LUS_OMLOOP_MS) / LUS_OMLOOP_MS) * 100;
+/** Huidige fase van de lichtband, 0–200 (0 = leeg, 100 = vol, 200 = weer leeg). */
+function streepFase(): number {
+  return (((nu() - streepStart()) % STREEP_OMLOOP_MS) / STREEP_OMLOOP_MS) * 200;
 }
 function minderBeweging(): boolean {
   return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 }
 
-/* Monogram V · H · B, letterlijk uit het masterbestand (path-id's monogram-*). */
-const MONOGRAM_V = 'M 447.0875 216.4827 H 509.0437 C 514.5445 216.4827 517.347 219.0826 520.6243 224.2996 L 669.435 461.1229 H 611.8215 C 603.6572 461.1229 600.0672 457.6487 596.1877 451.5689 L 447.0875 216.4827 Z';
-const MONOGRAM_H_LINKS = 'M 687.964 214.4561 V 459.9648 L 637.0093 380.7825 V 253.2511 C 637.0093 239.9334 646.5054 228.3528 661.3286 221.4045 C 668.7402 217.9303 676.3834 215.9616 687.964 214.4561 Z';
-const MONOGRAM_H_RECHTS = 'M 782.9249 213.8771 H 833.3005 V 461.1229 H 782.9249 Z';
-const MONOGRAM_H_GOUD = 'M 687.964 320.9976 H 782.9249 V 349.0806 H 687.964 Z M 725.6009 325.0509 H 735.4444 L 717.4945 344.7379 H 707.651 Z M 753.3944 325.0509 H 763.2379 L 745.2879 344.7379 H 735.4444 Z';
-const MONOGRAM_B = 'M 846.6182 213.8771 H 951.0289 C 991.5147 213.8771 1016.8183 237.6173 1016.8183 274.0962 C 1016.8183 296.0994 1005.3651 313.1807 984.4163 322.9675 C 1026.1407 330.5516 1047.449 355.7394 1047.449 389.3232 C 1047.449 432.1714 1013.8884 461.1229 967.0101 461.1229 H 846.6182 V 431.905 H 946.2345 C 977.8676 431.905 997.0733 414.4852 997.0733 389.3232 C 997.0733 363.8781 977.8167 347.2176 948.3653 347.2176 H 846.6182 V 322.2816 H 930.5196 C 954.7567 322.2816 970.7246 301.6897 970.7246 279.8865 C 970.7246 255.5472 954.0757 239.6946 933.9822 239.6946 H 846.6182 Z';
-
-/* Naamregel "VAN HOOREBEKE & ZOON" als lettercontouren, letterlijk uit het masterbestand. */
-const NAAMREGEL =
-  'M 304.5125 590.3029 L 312.0344 590.3029 L 322.4448 619.3988 L 322.6641 619.3988 L 333.1794 590.3029 L 340.4439 590.3029 L 325.2762 628.1028 L 319.4609 628.1028 Z M 366.5082 590.3029 L 372.3236 590.3029 L 388.6066 628.1028 L 380.9227 628.1028 L 377.3953 619.456 L 361.0074 619.456 L 357.5849 628.1028 L 350.0631 628.1028 Z M 375.0501 613.6883 L 369.2252 598.3109 L 363.305 613.6883 Z M 402.9258 590.3029 L 411.8395 590.3029 L 429.4096 618.598 L 429.5144 618.598 L 429.5144 590.3029 L 436.2355 590.3029 L 436.2355 628.1028 L 427.6936 628.1028 L 409.7612 598.902 L 409.6564 598.902 L 409.6564 628.1028 L 402.9258 628.1028 Z M 493.4835 590.3029 L 500.2141 590.3029 L 500.2141 605.5754 L 517.8795 605.5754 L 517.8795 590.3029 L 524.6101 590.3029 L 524.6101 628.1028 L 517.8795 628.1028 L 517.8795 611.3431 L 500.2141 611.3431 L 500.2141 628.1028 L 493.4835 628.1028 Z M 542.3708 609.0932 Q 542.3708 604.5553 543.8962 600.904 Q 545.412 597.2432 548.1099 594.6787 Q 550.8079 592.1238 554.5164 590.7319 Q 558.2249 589.34 562.6102 589.34 Q 567.0337 589.34 570.7708 590.7319 Q 574.5079 592.1238 577.2345 594.6787 Q 579.961 597.2432 581.4768 600.904 Q 583.0022 604.5553 583.0022 609.0932 Q 583.0022 613.5262 581.4768 617.1871 Q 579.961 620.8384 577.2345 623.4886 Q 574.5079 626.1294 570.7708 627.5975 Q 567.0337 629.0657 562.6102 629.0657 Q 558.2249 629.0657 554.5164 627.5975 Q 550.8079 626.1294 548.1099 623.4886 Q 545.412 620.8384 543.8962 617.1871 Q 542.3708 613.5262 542.3708 609.0932 Z M 549.6829 609.0932 Q 549.6829 612.1439 550.6172 614.6798 Q 551.5515 617.2157 553.2866 619.0842 Q 555.0216 620.9528 557.405 621.9919 Q 559.7788 623.031 562.6579 623.031 Q 565.5465 623.031 567.9489 621.9919 Q 570.3513 620.9528 572.0864 619.0842 Q 573.8215 617.2157 574.7558 614.6798 Q 575.69 612.1439 575.69 609.0932 Q 575.69 606.1569 574.7558 603.6496 Q 573.8215 601.1423 572.1055 599.2738 Q 570.399 597.4053 567.9966 596.3375 Q 565.5942 595.2698 562.6579 595.2698 Q 559.7216 595.2698 557.3478 596.3375 Q 554.974 597.4053 553.2675 599.2738 Q 551.5515 601.1423 550.6172 603.6496 Q 549.6829 606.1569 549.6829 609.0932 Z M 598.9515 609.0932 Q 598.9515 604.5553 600.4674 600.904 Q 601.9927 597.2432 604.6906 594.6787 Q 607.3791 592.1238 611.0971 590.7319 Q 614.8056 589.34 619.1814 589.34 Q 623.6144 589.34 627.3515 590.7319 Q 631.0886 592.1238 633.8057 594.6787 Q 636.5322 597.2432 638.0575 600.904 Q 639.5734 604.5553 639.5734 609.0932 Q 639.5734 613.5262 638.0575 617.1871 Q 636.5322 620.8384 633.8057 623.4886 Q 631.0886 626.1294 627.3515 627.5975 Q 623.6144 629.0657 619.1814 629.0657 Q 614.8056 629.0657 611.0971 627.5975 Q 607.3791 626.1294 604.6906 623.4886 Q 601.9927 620.8384 600.4674 617.1871 Q 598.9515 613.5262 598.9515 609.0932 Z M 606.2637 609.0932 Q 606.2637 612.1439 607.1979 614.6798 Q 608.1322 617.2157 609.8673 619.0842 Q 611.6024 620.9528 613.9762 621.9919 Q 616.35 623.031 619.2386 623.031 Q 622.1177 623.031 624.5201 621.9919 Q 626.9225 620.9528 628.6576 619.0842 Q 630.3927 617.2157 631.327 614.6798 Q 632.2612 612.1439 632.2612 609.0932 Q 632.2612 606.1569 631.327 603.6496 Q 630.3927 601.1423 628.6862 599.2738 Q 626.9797 597.4053 624.5773 596.3375 Q 622.1749 595.2698 619.2386 595.2698 Q 616.3023 595.2698 613.919 596.3375 Q 611.5452 597.4053 609.8387 599.2738 Q 608.1322 601.1423 607.1979 603.6496 Q 606.2637 606.1569 606.2637 609.0932 Z M 657.3341 590.3029 L 670.4711 590.3029 Q 673.1405 590.3029 675.6477 590.8653 Q 678.155 591.4278 680.1094 592.7053 Q 682.0542 593.9923 683.2268 596.0706 Q 684.4089 598.1489 684.4089 601.1423 Q 684.4089 605.2512 682.0828 607.8443 Q 679.7566 610.4279 675.7526 611.3431 L 685.8485 628.1028 L 677.7356 628.1028 L 668.9744 612.0867 L 664.0647 612.0867 L 664.0647 628.1028 L 657.3341 628.1028 Z M 669.5654 606.5859 Q 671.005 606.5859 672.4445 606.3762 Q 673.8841 606.1569 675.0376 605.5754 Q 676.1816 604.9843 676.9348 603.888 Q 677.6784 602.8012 677.6784 601.0851 Q 677.6784 599.5407 676.9824 598.5493 Q 676.2865 597.5673 675.2187 596.9763 Q 674.151 596.3947 672.7973 596.1754 Q 671.434 595.9657 670.147 595.9657 L 664.0647 595.9657 L 664.0647 606.5859 Z M 702.1697 590.3029 L 727.2044 590.3029 L 727.2044 596.1754 L 708.8907 596.1754 L 708.8907 605.7851 L 726.2415 605.7851 L 726.2415 611.448 L 708.8907 611.448 L 708.8907 622.1254 L 728.1672 622.1254 L 728.1672 628.1028 L 702.1697 628.1028 Z M 745.9852 590.3029 L 760.7143 590.3029 Q 762.8497 590.3029 764.9376 590.8081 Q 767.0158 591.3229 768.6461 592.467 Q 770.2763 593.611 771.2868 595.4318 Q 772.3069 597.2432 772.3069 599.8077 Q 772.3069 603.0109 770.486 605.0892 Q 768.6747 607.177 765.7384 608.0827 L 765.7384 608.1875 Q 769.3134 608.6737 771.6109 610.9618 Q 773.9085 613.2593 773.9085 617.1013 Q 773.9085 620.1996 772.6787 622.3065 Q 771.4489 624.4229 769.4469 625.7004 Q 767.4448 626.9779 764.8518 627.5403 Q 762.2682 628.1028 759.5989 628.1028 L 745.9852 628.1028 Z M 752.7062 605.6802 L 758.6932 605.6802 Q 762.0489 605.6802 763.8126 604.3456 Q 765.5763 603.0109 765.5763 600.5513 Q 765.5763 597.9963 763.765 596.9286 Q 761.9441 595.8608 758.1021 595.8608 L 752.7062 595.8608 Z M 752.7062 622.44 L 758.7409 622.44 Q 760.0279 622.44 761.5151 622.2588 Q 763.0118 622.0682 764.2702 621.4866 Q 765.5191 620.8956 766.3485 619.7706 Q 767.1779 618.6552 767.1779 616.7867 Q 767.1779 613.7932 765.1473 612.6206 Q 763.1167 611.448 759.0078 611.448 L 752.7062 611.448 Z M 791.7741 590.3029 L 816.8088 590.3029 L 816.8088 596.1754 L 798.5047 596.1754 L 798.5047 605.7851 L 815.8554 605.7851 L 815.8554 611.448 L 798.5047 611.448 L 798.5047 622.1254 L 817.7717 622.1254 L 817.7717 628.1028 L 791.7741 628.1028 Z M 835.5896 590.3029 L 842.3202 590.3029 L 842.3202 606.6431 L 842.4727 606.6431 L 858.2791 590.3029 L 867.3549 590.3029 L 849.68 607.7585 L 868.5275 628.1028 L 859.0799 628.1028 L 842.4727 609.1504 L 842.3202 609.1504 L 842.3202 628.1028 L 835.5896 628.1028 Z M 883.6189 590.3029 L 908.6631 590.3029 L 908.6631 596.1754 L 890.3494 596.1754 L 890.3494 605.7851 L 907.7002 605.7851 L 907.7002 611.448 L 890.3494 611.448 L 890.3494 622.1254 L 909.626 622.1254 L 909.626 628.1028 L 883.6189 628.1028 Z M 973.9669 619.0842 L 982.7757 628.1028 L 974.2338 628.1028 L 970.0677 623.7746 Q 968.1992 625.9673 965.5298 627.4069 Q 962.8605 628.8464 958.7516 628.8464 Q 956.2443 628.8464 953.9467 628.16 Q 951.6492 627.4641 949.9141 626.0722 Q 948.179 624.6898 947.1399 622.6306 Q 946.1008 620.5714 946.1008 617.8544 Q 946.1008 615.7666 946.7967 614.0887 Q 947.4926 612.4108 948.6366 611.0762 Q 949.7806 609.7415 951.2488 608.7786 Q 952.7169 607.8157 954.3185 607.1198 Q 952.45 605.2036 951.3632 603.1444 Q 950.2668 601.0851 950.2668 598.6351 Q 950.2668 596.2326 951.2011 594.469 Q 952.1354 592.7053 953.6512 591.5613 Q 955.1765 590.4077 957.0737 589.8739 Q 958.9708 589.34 960.9443 589.34 Q 962.9749 589.34 964.8625 589.9025 Q 966.7596 590.4649 968.1992 591.6089 Q 969.6482 592.7625 970.5253 594.4976 Q 971.4024 596.2326 971.4024 598.5302 Q 971.4024 600.3415 970.7923 601.8669 Q 970.1821 603.3827 969.1334 604.6411 Q 968.0943 605.89 966.6834 606.8529 Q 965.2629 607.8157 963.6613 608.5593 L 969.858 615.023 L 974.2338 608.1399 L 981.5459 608.1399 Z M 961.0491 594.5262 Q 959.1806 594.5262 957.9031 595.6988 Q 956.6161 596.8714 956.6161 598.7399 Q 956.6161 600.3415 957.5027 601.8383 Q 958.3798 603.335 959.9814 604.7746 Q 961.1063 604.2884 962.0883 603.7068 Q 963.0797 603.1158 963.8233 602.3722 Q 964.5765 601.619 964.996 600.7133 Q 965.425 599.8077 965.425 598.7399 Q 965.425 597.0335 964.1951 595.775 Q 962.9749 594.5262 961.0491 594.5262 Z M 957.9508 611.2287 Q 956.883 611.61 955.9488 612.1439 Q 955.0145 612.6778 954.2995 613.4214 Q 953.5749 614.165 953.1459 615.2136 Q 952.7169 616.2528 952.7169 617.5875 Q 952.7169 618.9698 953.2794 620.0947 Q 953.8419 621.2197 954.7475 621.9633 Q 955.6532 622.7069 956.7782 623.1073 Q 957.9031 623.5077 958.9708 623.5077 Q 961.3161 623.5077 962.9749 622.4972 Q 964.6241 621.4866 966.016 619.6181 Z M 1020.0132 622.0205 L 1040.5672 596.1754 L 1020.3278 596.1754 L 1020.3278 590.3029 L 1048.5753 590.3029 L 1048.5753 596.3947 L 1027.9164 622.1254 L 1048.8899 622.1254 L 1048.8899 628.1028 L 1020.0132 628.1028 Z M 1062.6466 609.0932 Q 1062.6466 604.5553 1064.1624 600.904 Q 1065.6877 597.2432 1068.3857 594.6787 Q 1071.0836 592.1238 1074.7921 590.7319 Q 1078.5006 589.34 1082.8764 589.34 Q 1087.3095 589.34 1091.0466 590.7319 Q 1094.7837 592.1238 1097.5102 594.6787 Q 1100.2272 597.2432 1101.7526 600.904 Q 1103.2684 604.5553 1103.2684 609.0932 Q 1103.2684 613.5262 1101.7526 617.1871 Q 1100.2272 620.8384 1097.5102 623.4886 Q 1094.7837 626.1294 1091.0466 627.5975 Q 1087.3095 629.0657 1082.8764 629.0657 Q 1078.5006 629.0657 1074.7921 627.5975 Q 1071.0836 626.1294 1068.3857 623.4886 Q 1065.6877 620.8384 1064.1624 617.1871 Q 1062.6466 613.5262 1062.6466 609.0932 Z M 1069.9587 609.0932 Q 1069.9587 612.1439 1070.893 614.6798 Q 1071.8272 617.2157 1073.5623 619.0842 Q 1075.2974 620.9528 1077.6712 621.9919 Q 1080.045 623.031 1082.9336 623.031 Q 1085.8127 623.031 1088.2151 621.9919 Q 1090.6176 620.9528 1092.3526 619.0842 Q 1094.0877 617.2157 1095.022 614.6798 Q 1095.9563 612.1439 1095.9563 609.0932 Q 1095.9563 606.1569 1095.022 603.6496 Q 1094.0877 601.1423 1092.3812 599.2738 Q 1090.6748 597.4053 1088.2723 596.3375 Q 1085.8699 595.2698 1082.9336 595.2698 Q 1079.9973 595.2698 1077.6235 596.3375 Q 1075.2402 597.4053 1073.5337 599.2738 Q 1071.8272 601.1423 1070.893 603.6496 Q 1069.9587 606.1569 1069.9587 609.0932 Z M 1117.5017 609.0932 Q 1117.5017 604.5553 1119.0271 600.904 Q 1120.5429 597.2432 1123.2408 594.6787 Q 1125.9388 592.1238 1129.6473 590.7319 Q 1133.3558 589.34 1137.7411 589.34 Q 1142.1646 589.34 1145.9017 590.7319 Q 1149.6388 592.1238 1152.3654 594.6787 Q 1155.0919 597.2432 1156.6077 600.904 Q 1158.1331 604.5553 1158.1331 609.0932 Q 1158.1331 613.5262 1156.6077 617.1871 Q 1155.0919 620.8384 1152.3654 623.4886 Q 1149.6388 626.1294 1145.9017 627.5975 Q 1142.1646 629.0657 1137.7411 629.0657 Q 1133.3558 629.0657 1129.6473 627.5975 Q 1125.9388 626.1294 1123.2408 623.4886 Q 1120.5429 620.8384 1119.0271 617.1871 Q 1117.5017 613.5262 1117.5017 609.0932 Z M 1124.8139 609.0932 Q 1124.8139 612.1439 1125.7481 614.6798 Q 1126.6824 617.2157 1128.4175 619.0842 Q 1130.1526 620.9528 1132.5359 621.9919 Q 1134.9097 623.031 1137.7888 623.031 Q 1140.6774 623.031 1143.0799 621.9919 Q 1145.4823 620.9528 1147.2173 619.0842 Q 1148.9524 617.2157 1149.8867 614.6798 Q 1150.821 612.1439 1150.821 609.0932 Q 1150.821 606.1569 1149.8867 603.6496 Q 1148.9524 601.1423 1147.2364 599.2738 Q 1145.5299 597.4053 1143.1275 596.3375 Q 1140.7251 595.2698 1137.7888 595.2698 Q 1134.8525 595.2698 1132.4787 596.3375 Q 1130.1049 597.4053 1128.3984 599.2738 Q 1126.6824 601.1423 1125.7481 603.6496 Q 1124.8139 606.1569 1124.8139 609.0932 Z M 1174.1778 590.3029 L 1183.0915 590.3029 L 1200.6616 618.598 L 1200.7665 618.598 L 1200.7665 590.3029 L 1207.4875 590.3029 L 1207.4875 628.1028 L 1198.9456 628.1028 L 1181.0132 598.902 L 1180.9084 598.902 L 1180.9084 628.1028 L 1174.1778 628.1028 Z';
-
-// Strakke viewBoxen rond de inhoud (het master is 1512×754 met ruime marge):
-// lus-buitenrand x 280,75–1231,25 / y 140,5–534,5; naamregel y 589–629.
-const VIEWBOX_BEELDMERK = '268 128 976 419';
-const VB_X = 268, VB_Y = 128, VB_W = 976, VB_MARGE = 12;
-// Naamregel-geometrie in master-eenheden: bovenrand, hoogte en middellijn.
-const NAAM_TOP = 589.34;
-const NAAM_HOOGTE = 39.73;
-const NAAM_CX = 756;
+export type LogoVariant = 'volledig' | 'beeldmerk' | 'horizontaal';
 
 export function BrandLogo({
   tone = 'licht',
   variant = 'volledig',
-  naamregelSchaal = 1,
-  naamregelAfstand = 0,
   laden = false,
   className,
 }: {
   /** 'licht' = carbon op lichte achtergrond; 'donker' = negatief (gedempt wit) op zwart/donker. */
   tone?: 'licht' | 'donker';
-  /** 'volledig' = lus + monogram + naamregel; 'beeldmerk' = zonder naamregel. */
-  variant?: 'volledig' | 'beeldmerk';
-  /** Naamregel vergroten (om z'n boven-middenpunt). Wijkt af van het master —
-   *  alleen op vraag van Jarno (sidebar 1,2: leesbaarheid op 144 px). Boven
-   *  ±1,05 wordt de naamregel breder dan de lus; overflow staat daarom open. */
-  naamregelSchaal?: number;
-  /** Naamregel extra omlaag, in master-eenheden (lusdikte = 40). */
-  naamregelAfstand?: number;
-  /** Laadstand: het gouden segment reist over de lus (het logo ís de
+  /** 'volledig' = merk boven naamregel; 'beeldmerk' = alleen het merk; 'horizontaal' = merk | lijn | naamregel in twee regels. */
+  variant?: LogoVariant;
+  /** Laadstand: de lichtband trekt door de gouden streep (het logo ís de
    *  spinner). Alleen voor laadmomenten — het statische logo blijft het
    *  masterbestand. */
   laden?: boolean;
   className?: string;
 }) {
   const ink = tone === 'donker' ? NEGATIEF : CARBON;
-  const beeldmerk = variant === 'beeldmerk';
-  const lusRef = useRef<SVGPathElement>(null);
+  const id = useId();
+  const bandRef = useRef<SVGPathElement>(null);
   // Landing: een statisch logo dat verschijnt terwijl er (nog) een laad-logo
-  // staat — of dit logo zelf net uit de laadstand komt — laat het segment
-  // eerst thuiskomen. 'nee' = gewoon het master-boogje.
+  // staat — of dit logo zelf net uit de laadstand komt — laat de band eerst
+  // de streep vol maken. 'nee' = gewoon de statische streep.
   const [landing, setLanding] = useState<{ stand: 'nee' | 'bezig' | 'klaar'; van: number }>(() =>
-    !laden && ladenActief > 0 && !minderBeweging() ? { stand: 'bezig', van: lusPositie() } : { stand: 'nee', van: LUS_THUIS },
+    !laden && ladenActief > 0 && !minderBeweging() ? { stand: 'bezig', van: streepFase() } : { stand: 'nee', van: STREEP_VOL },
   );
   const vorigeLaden = useRef(laden);
   useEffect(() => {
-    if (vorigeLaden.current && !laden) setLanding(minderBeweging() ? { stand: 'nee', van: LUS_THUIS } : { stand: 'bezig', van: lusPositie() });
-    if (laden) setLanding({ stand: 'nee', van: LUS_THUIS });
+    if (vorigeLaden.current && !laden) setLanding(minderBeweging() ? { stand: 'nee', van: STREEP_VOL } : { stand: 'bezig', van: streepFase() });
+    if (laden) setLanding({ stand: 'nee', van: STREEP_VOL });
     vorigeLaden.current = laden;
   }, [laden]);
   useEffect(() => {
@@ -148,93 +137,107 @@ export function BrandLogo({
       ladenActief -= 1;
     };
   }, [laden]);
-  // Reizen (laadstand): oneindige lus op de gedeelde tijdbasis.
+  // Vegen (laadstand): oneindig op de gedeelde tijdbasis.
   useEffect(() => {
-    const el = lusRef.current;
+    const el = bandRef.current;
     if (!laden || !el || typeof el.animate !== 'function' || minderBeweging()) return;
-    const reis = el.animate([{ strokeDashoffset: '0' }, { strokeDashoffset: '-100' }], {
-      duration: LUS_OMLOOP_MS,
+    const veeg = el.animate([{ strokeDashoffset: '100' }, { strokeDashoffset: '-100' }], {
+      duration: STREEP_OMLOOP_MS,
       iterations: Infinity,
       easing: 'linear',
     });
-    reis.startTime = lusStart();
-    return () => reis.cancel();
+    veeg.startTime = streepStart();
+    return () => veeg.cancel();
   }, [laden]);
-  // Landen: vanaf de huidige positie op dezelfde snelheid door tot thuis, uitlopend.
+  // Landen: vanaf de huidige fase door tot de streep vol is, uitlopend. Zat
+  // de band al in het uitvegen, dan veegt hij eerst uit en tekent opnieuw in.
   useEffect(() => {
-    const el = lusRef.current;
+    const el = bandRef.current;
     if (landing.stand !== 'bezig' || !el) return;
     if (typeof el.animate !== 'function') {
-      setLanding({ stand: 'klaar', van: LUS_THUIS });
+      setLanding({ stand: 'klaar', van: STREEP_VOL });
       return;
     }
-    const van = lusPositie();
-    let afstand = (((LUS_THUIS - van) % 100) + 100) % 100;
-    if (afstand < LUS_LANDING_MIN) afstand += 100;
-    const land = el.animate([{ strokeDashoffset: `${-van}` }, { strokeDashoffset: `${-(van + afstand)}` }], {
-      duration: (afstand / 100) * LUS_OMLOOP_MS * LUS_LANDING_REK,
-      easing: 'cubic-bezier(0.25, 0.4, 0.5, 1)', // startsnelheid = reissnelheid (1,6), eindsnelheid 0
+    const van = streepFase();
+    const afstand = van <= STREEP_VOL ? STREEP_VOL - van : 300 - van;
+    const land = el.animate([{ strokeDashoffset: `${100 - van}` }, { strokeDashoffset: `${100 - van - afstand}` }], {
+      duration: (afstand / 200) * STREEP_OMLOOP_MS * STREEP_LANDING_REK,
+      easing: 'cubic-bezier(0.25, 0.4, 0.5, 1)',
       fill: 'forwards',
     });
-    land.onfinish = () => setLanding({ stand: 'klaar', van: LUS_THUIS });
+    land.onfinish = () => setLanding({ stand: 'klaar', van: STREEP_VOL });
     return () => land.cancel();
   }, [landing.stand]);
-  const reizend = laden || landing.stand === 'bezig';
-  // Hoogte groeit mee met een lagere/grotere naamregel zodat de layout-box
-  // klopt (niets overlapt wat eronder staat); horizontaal mag hij uitsteken.
-  const hoogte = beeldmerk
-    ? 419
-    : Math.ceil(NAAM_TOP + naamregelAfstand + NAAM_HOOGTE * naamregelSchaal + VB_MARGE) - VB_Y;
-  const naamTransform =
-    naamregelSchaal === 1 && naamregelAfstand === 0
-      ? undefined
-      : `translate(${NAAM_CX} ${NAAM_TOP + naamregelAfstand}) scale(${naamregelSchaal}) translate(${-NAAM_CX} ${-NAAM_TOP})`;
-  return (
-    <svg
-      viewBox={beeldmerk ? VIEWBOX_BEELDMERK : `${VB_X} ${VB_Y} ${VB_W} ${hoogte}`}
-      width={VB_W}
-      height={hoogte}
-      role="img"
-      aria-label="VHB, Van Hoorebeke & Zoon"
-      className={className}
-      style={{ overflow: 'visible' }}
-    >
-      {/* Onderbroken ovale lus: carbon/wit met het gouden segment rechtsboven. */}
-      <g fill="none" strokeWidth={LUS_DIKTE} strokeLinecap="butt" strokeLinejoin="round">
-        <path d={LUS_INK} stroke={ink} />
-        {reizend ? (
-          // Laadstand/landing: het goud reist als segment (vorm = masterboogje)
-          // over de gesloten hartlijn van de lus; zonder animatie (reduced
-          // motion, nog niet gestart) rust het op de master-positie.
+  const vegend = laden || landing.stand === 'bezig';
+  const clipId = `${id}streep`;
+
+  /* Het merk: letters in inkt, de gouden streep statisch óf als spoor + band. */
+  const merk = (
+    <>
+      <path d={MERK_INK} fill={ink} fillRule="evenodd" />
+      {vegend ? (
+        <>
+          <clipPath id={clipId}>
+            <path d={MERK_GOUD} />
+          </clipPath>
+          <path d={MERK_GOUD} fill={GOUD} fillRule="evenodd" opacity={SPOOR_OPACITY} />
           <path
-            ref={lusRef}
-            d={LUS_HARTLIJN}
+            ref={bandRef}
+            d={STREEP_AS}
+            clipPath={`url(#${clipId})`}
+            fill="none"
             stroke={GOUD}
+            strokeWidth={STREEP_BREEDTE}
             pathLength={100}
-            strokeDasharray={`${LUS_SEGMENT} ${100 - LUS_SEGMENT}`}
-            // Basiswaarde vóór de animatie start: reizend = thuis (reduced
-            // motion), landend = de positie op het moment van renderen (geen
-            // flits van het thuis-boogje in het eerste frame — WebKit).
-            style={{ strokeDashoffset: laden ? -LUS_THUIS : -landing.van }}
-            className="vhb-lus-reis"
-            data-lus={laden ? 'reist' : 'landt'}
+            strokeDasharray="100 100"
+            // Basiswaarde vóór de animatie start: ladend = leeg (reduced
+            // motion toont dan het spoor), landend = de fase op het moment
+            // van renderen (geen flits van de volle streep in het eerste frame).
+            style={{ strokeDashoffset: laden ? 100 : 100 - landing.van }}
+            data-streep={laden ? 'veegt' : 'landt'}
           />
-        ) : (
-          <path d={LUS_GOUD} stroke={GOUD} />
-        )}
-      </g>
-      {/* Monogram V · H · B */}
-      <g fill={ink} fillRule="evenodd">
-        <path d={MONOGRAM_V} />
-        <path d={MONOGRAM_H_LINKS} />
-        <path d={MONOGRAM_H_RECHTS} />
-        <path d={MONOGRAM_B} />
-      </g>
-      {/* Gouden H-verbinding mét de twee profieluitsparingen (vast onderdeel van het beeldmerk). */}
-      <path d={MONOGRAM_H_GOUD} fill={GOUD} fillRule="evenodd" />
-      {!beeldmerk && (
-        <path d={NAAMREGEL} fill={ink} stroke={ink} strokeWidth={0.3} strokeLinejoin="round" transform={naamTransform} />
+        </>
+      ) : (
+        <path d={MERK_GOUD} fill={GOUD} fillRule="evenodd" />
       )}
+    </>
+  );
+
+  if (variant === 'beeldmerk') {
+    return (
+      <svg viewBox={BEELDMERK.viewBox} width={573} height={195} role="img" aria-label="VHB" className={className} style={{ overflow: 'visible' }}>
+        {merk}
+      </svg>
+    );
+  }
+  if (variant === 'horizontaal') {
+    const r1 = `${id}r1`;
+    const r2 = `${id}r2`;
+    return (
+      <svg viewBox={HORIZONTAAL.viewBox} width={1237} height={196} role="img" aria-label="VHB, Van Hoorebeke & Zoon" className={className} style={{ overflow: 'visible' }}>
+        <g transform={HORIZONTAAL.merk}>{merk}</g>
+        <path d="M649 30 V226" stroke={GOUD} strokeWidth={5} />
+        <clipPath id={r1}>
+          <rect x={19} y={0} width={570} height={60} />
+        </clipPath>
+        <clipPath id={r2}>
+          <rect x={622} y={0} width={239} height={60} />
+        </clipPath>
+        <g transform={HORIZONTAAL.regel1} clipPath={`url(#${r1})`}>
+          <path d={NAAMREGEL} fill={ink} fillRule="evenodd" />
+        </g>
+        <g transform={HORIZONTAAL.regel2} clipPath={`url(#${r2})`}>
+          <path d={NAAMREGEL} fill={ink} fillRule="evenodd" />
+        </g>
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox={VOLLEDIG.viewBox} width={842} height={276} role="img" aria-label="VHB, Van Hoorebeke & Zoon" className={className} style={{ overflow: 'visible' }}>
+      <g transform={VOLLEDIG.merk}>{merk}</g>
+      <g transform={VOLLEDIG.naam}>
+        <path d={NAAMREGEL} fill={ink} fillRule="evenodd" />
+      </g>
     </svg>
   );
 }

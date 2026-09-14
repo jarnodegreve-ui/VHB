@@ -188,11 +188,11 @@ export function LoginView({
           transition={{ duration: DUR.entrance, ease: EASE }}
           className="flex flex-col items-center text-center mb-10"
         >
-          {/* Volledig logo mét naamregel; naamregel 44 eenheden lager dan het
-              master (Jarno 30-08 → 26, 31-08 → 70: 44 was op loginformaat onzichtbaar). */}
-          {/* Compact op elke maat (2× verkleind op vraag van Jarno 30-08):
-              144 px mobiel / 176 px desktop. */}
-          <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
+          {/* Volledig logo (VHB primary: merk boven naamregel), 1-op-1 het
+              master. 176 px mobiel / 224 px desktop: het nieuwe logo is laag
+              en breed, dus iets breder dan de oude 144/176 voor dezelfde
+              aanwezigheid (naamregel ±7–9 px). */}
+          <BrandLogo tone="donker" className="w-44 sm:w-56 h-auto select-none" />
           {/* Staging-label (alleen met VITE_OMGEVING=staging): testers zien meteen dat dit productie niet is. */}
           <OmgevingLabel className="mt-4" />
         </motion.div>

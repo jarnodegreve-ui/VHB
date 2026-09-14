@@ -3,12 +3,13 @@ import { GOUD } from '../BrandLogo';
 import { cn } from '../../lib/ui';
 
 /**
- * Illustratieset op het lus-motief (idee 10, 09-2026): vijf lijntekeningen
- * voor lege staten en foutschermen, elk gebouwd rond de onderbroken ovale
- * lus uit het VHB-logo (zelfde geometrie als BrandMotief, op schaal). Lijnen
- * in `currentColor` (zet `text-slate-400`, dark mode flipt mee), één gouden
- * segment op de lus als merkcitaat en hooguit één extra gouden accent waar
- * de betekenis dat vraagt (vinkje, uitroep). Strokes 1.5, viewBox 160×120,
+ * Illustratieset op het merkteken (idee 10, 09-2026; hertekend 14-09 voor
+ * het VHB-primary-merk): vijf lijntekeningen voor lege staten en
+ * foutschermen, elk gebouwd rond de V met de gouden schuine streep uit het
+ * VHB-merk (zelfde helling als BrandMotief). Lijnen in `currentColor` (zet
+ * `text-slate-400`, dark mode flipt mee), de gouden streep als merkcitaat en
+ * hooguit één extra gouden accent waar de betekenis dat vraagt (vinkje,
+ * uitroep). Strokes 1.5, viewBox 160×120,
  * geen tekst, geen gezichtjes — `aria-hidden`, de tekst ernaast draagt de
  * betekenis. Sizen op hoogte (`h-24 lg:h-32`); de breedte volgt.
  *
@@ -35,88 +36,83 @@ function Vel({ className, children }: IllustratieProps & { children: ReactNode }
   );
 }
 
-/* De lus: stadionvorm, straal 22, middelpunten (52,60) en (108,60); de
-   openingen zitten rechtsboven, tussen het inkt-einde (−17°) en het gouden
-   segment (top → −23°) — dezelfde verhouding als in het logo (pakket v2). */
-const LUS_INK = 'M 102.72 38 H 52 A 22 22 0 0 0 52 82 H 108 A 22 22 0 0 0 129.04 53.57';
-const LUS_GOUD = 'M 105 38 H 108 A 22 22 0 0 1 128.25 51.4';
+/* Het merkteken: de V uit het VHB-merk als twee lijnen (het rechterbeen
+   kort, zoals in het logo) met de gouden streep evenwijdig ernaast —
+   dezelfde helling als in het merk (10 eenheden tussen been en streep).
+   Ankerpunt: de V-punt op (66,82). */
+const V_LINKS = 'M 44 38 L 66 82';
+const V_RECHTS = 'M 88 38 L 75 64';
+const STREEP = 'M 76 82 L 98 38';
 
-function Lus({ transform, dashRechts = false }: { transform?: string; /** Rechterhelft gestippeld (verbinding valt weg). */ dashRechts?: boolean }) {
-  if (dashRechts) {
-    return (
-      <g transform={transform}>
-        <path d="M 102.72 38 H 52 A 22 22 0 0 0 52 82 H 80" />
-        <path d="M 80 82 H 108 A 22 22 0 0 0 129.04 53.57" strokeDasharray="3 4.5" />
-        <path d={LUS_GOUD} stroke={GOUD} strokeDasharray="3 4.5" />
-      </g>
-    );
-  }
+function Merk({ transform, dashRechts = false }: { transform?: string; /** Rechterhelft gestippeld (verbinding valt weg). */ dashRechts?: boolean }) {
   return (
     <g transform={transform}>
-      <path d={LUS_INK} />
-      <path d={LUS_GOUD} stroke={GOUD} />
+      <path d={V_LINKS} />
+      <path d={V_RECHTS} strokeDasharray={dashRechts ? '3 4.5' : undefined} />
+      <path d={STREEP} stroke={GOUD} strokeWidth={2.5} strokeDasharray={dashRechts ? '3 4.5' : undefined} />
     </g>
   );
 }
 
-/** Lege lijst / inbox: de lus als leeg kader, met erin de plekken waar
- *  rijen komen — nog gestippeld (in het kader i.p.v. erboven, Jarno 08-09). */
+/** Lege lijst / inbox: het merkteken met rechts de plekken waar rijen komen,
+ *  nog gestippeld. */
 export function LegeLijst({ className }: IllustratieProps) {
   return (
     <Vel className={className}>
-      <Lus />
+      <Merk transform="translate(-14 0)" />
       <g strokeDasharray="2.5 4" opacity={0.7}>
-        <path d="M 60 53 H 100" />
-        <path d="M 60 67 H 100" />
+        <path d="M 100 50 H 134" />
+        <path d="M 100 62 H 134" />
+        <path d="M 100 74 H 134" />
       </g>
     </Vel>
   );
 }
 
-/** Niets te doen: de lus als rustpunt, het gouden vinkje erin. */
+/** Niets te doen: het merkteken, rechts het gouden vinkje als rustpunt. */
 export function AllesGedaan({ className }: IllustratieProps) {
   return (
     <Vel className={className}>
-      <Lus />
-      <path d="M 68 61 L 77 70 L 94 51" stroke={GOUD} strokeWidth={2} />
+      <Merk transform="translate(-14 0)" />
+      <path d="M 104 62 L 112 70 L 128 50" stroke={GOUD} strokeWidth={2} />
     </Vel>
   );
 }
 
-/** Offline: de lus als verbinding die wegvalt (rechts gestippeld) en de
- *  signaalbogen erboven — de buitenste al onderbroken. */
+/** Offline: het merkteken als verbinding die wegvalt (rechts gestippeld) en
+ *  de signaalbogen erboven — de buitenste al onderbroken. */
 export function GeenBereik({ className }: IllustratieProps) {
   return (
     <Vel className={className}>
-      <path d="M 71 34 A 13 13 0 0 1 89 34" />
-      <path d="M 62 25 A 25 25 0 0 1 98 25" strokeDasharray="3 4.5" />
-      <path d="M 80 44 v 0.01" strokeWidth={3} />
-      <Lus transform="translate(0 12)" dashRechts />
+      <path d="M 71 30 A 13 13 0 0 1 89 30" />
+      <path d="M 62 21 A 25 25 0 0 1 98 21" strokeDasharray="3 4.5" />
+      <path d="M 80 40 v 0.01" strokeWidth={3} />
+      <Merk transform="translate(7 18)" dashRechts />
     </Vel>
   );
 }
 
-/** Iets ging mis: de lus met het gouden uitroep-accent. */
+/** Iets ging mis: het merkteken met rechts het gouden uitroep-accent. */
 export function Fout({ className }: IllustratieProps) {
   return (
     <Vel className={className}>
-      <Lus />
-      <path d="M 80 49 V 63" stroke={GOUD} strokeWidth={2} />
-      <circle cx={80} cy={70.5} r={1.6} fill={GOUD} stroke="none" />
+      <Merk transform="translate(-14 0)" />
+      <path d="M 116 50 V 66" stroke={GOUD} strokeWidth={2} />
+      <circle cx={116} cy={73.5} r={1.6} fill={GOUD} stroke="none" />
     </Vel>
   );
 }
 
-/** Niet gevonden / geen zoekresultaat: de lus als loep met een steel. */
+/** Niet gevonden / geen zoekresultaat: het merkteken met rechts een loep
+ *  (cirkel + steel) en onderaan een gestippelde, lege resultaatregel. */
 export function NietGevonden({ className }: IllustratieProps) {
   return (
     <Vel className={className}>
-      <g transform="rotate(-24 88 54) translate(8 -6)">
-        <Lus />
-        <path d="M 30 60 H 12" strokeWidth={3} />
-      </g>
+      <Merk transform="translate(-14 -4)" />
+      <circle cx={114} cy={54} r={11} />
+      <path d="M 122 62 L 132 72" strokeWidth={3} />
       <g strokeDasharray="2.5 4" opacity={0.7}>
-        <path d="M 22 102 H 66" />
+        <path d="M 40 100 H 120" />
       </g>
     </Vel>
   );
