@@ -1,6 +1,6 @@
 // Genereert de app-/tab-iconen in public/ uit het icoon van de ontwerper
-// (brand/vhb-final-logo-package/VHB-icoon.svg, pakket "VHB primary" van
-// 2026-09-14): wit merk met gouden streep op een carbon tegel (#242628,
+// (brand/vhb-final-logo-package/schoon/VHB-icoon.svg, de schone vectorversie
+// van het pakket "VHB primary" van 2026-09-14): wit merk met gouden streep op een carbon tegel (#242628,
 // hoekstraal 198). App-icoon én tab-icoon zijn hetzelfde beeld.
 // Draaien na een logo-wissel:  node scripts/brand-icons.mjs
 //
@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = path.join(ROOT, 'brand/vhb-final-logo-package/VHB-icoon.svg');
+const SRC = path.join(ROOT, 'brand/vhb-final-logo-package/schoon/VHB-icoon.svg'); // schone vectorversie, zie brand-paden-schoon.mjs
 const OUT = path.join(ROOT, 'public');
 
 const master = fs.readFileSync(SRC, 'utf-8');

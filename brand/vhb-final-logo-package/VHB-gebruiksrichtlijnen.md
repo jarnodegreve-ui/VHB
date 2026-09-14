@@ -11,6 +11,8 @@ Logopakket "VHB primary" (14 september 2026). Het volledige pakket (alle PNG's o
 
 Alle bestanden bevatten de naamregel als lettercontouren; er hoeft geen lettertype meegeleverd te worden.
 
+**Let op: de SVG's van de ontwerper zijn een automatische bitmap-trace** (golvende randen, afgeronde hoeken, bobbelige bogen). De map `schoon/` bevat dezelfde bestanden met schone vectorpaden, gegenereerd door `scripts/brand-paden-schoon.mjs` met de trace als exacte maatvoering (verschil met de trace: merk 0,4 %, streep 0,6 %, naamregel ±6 % randruis op dunne halen). De app gebruikt uitsluitend `schoon/`. Nieuw pakket: bestanden hier vervangen, script opnieuw draaien.
+
 ## Kleuren
 
 - Carbon: `#242628`
