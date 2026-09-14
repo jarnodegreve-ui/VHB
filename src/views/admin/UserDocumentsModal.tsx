@@ -85,7 +85,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             onClose={onClose}
           />
 
-          <div className="p-6 md:p-7 border-b border-slate-200/70 shrink-0 space-y-3">
+          <div className="p-6 md:p-7 border-b border-hairline shrink-0 space-y-3">
             <Field label="Categorie (optioneel)" htmlFor="document-categorie">
               <Input
                 id="document-categorie"

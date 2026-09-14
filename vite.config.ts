@@ -71,12 +71,71 @@ const preconnectSupabase = (supabaseUrl: string) => ({
   },
 });
 
+// Chunk-kaart voor de stille warmup (punt 18, 14-09). De warmup in App.tsx
+// haalde zes views met `import()` op en dat evalueert ze meteen: 75 kB
+// brotli / >250 kB JS aan werk op de hoofdthread binnen het meetvenster van
+// Lighthouse (TBT 575-1037 ms op /mijn-dag sinds 12-09; zonder warmup
+// 0,85 / LCP 3,9 s, met 0,81 / 4,5 s). Alleen downloaden (`<link
+// rel="prefetch">`) kost geen hoofdthread, maar daarvoor moet de app de URL
+// van een view-chunk kennen en die geeft Vite niet prijs. Deze plugin
+// schrijft na het bundelen één regel achteraan index-*.js:
+//   globalThis.__VHB_VIEW_CHUNKS__ = { 'views/MijnDagView': ['/assets/…'], … }
+// per view (sleutel = bronbestand t.o.v. src/, zonder extensie) de chunk
+// zelf plus alles wat hij statisch importeert en wat de schil nog niet
+// geladen heeft. viewLoaders.ts leest de kaart; ontbreekt hij (dev), dan
+// valt de warmup terug op `import()`. Achteraan toevoegen, vóór de
+// sourceMappingURL-regel, houdt de sourcemap kloppend: er schuift geen
+// bestaande regel op. Zelfde moment als Vite's eigen preload-kaart
+// (generateBundle), dus de hashes zijn dan al definitief en de kaart beweegt
+// mee met de chunks die hij benoemt.
+const viewChunkKaart = () => {
+  let base = '/';
+  return {
+    name: 'vhb-view-chunks',
+    enforce: 'post' as const,
+    configResolved(config: { base: string }) {
+      base = config.base || '/';
+    },
+    generateBundle(_opties: unknown, bundle: Record<string, any>) {
+      const chunks = Object.values(bundle).filter((c) => c && c.type === 'chunk');
+      const entry = chunks.find((c) => c.isEntry);
+      if (!entry) return;
+      const perNaam = new Map<string, any>(chunks.map((c) => [c.fileName, c]));
+      // Alles wat de schil zelf al (statisch, transitief) binnenhaalt.
+      const alGeladen = new Set<string>();
+      const loopStatisch = (naam: string, doel: Set<string>) => {
+        if (doel.has(naam)) return;
+        doel.add(naam);
+        for (const dep of perNaam.get(naam)?.imports ?? []) loopStatisch(dep, doel);
+      };
+      loopStatisch(entry.fileName, alGeladen);
+      const srcDir = path.resolve(__dirname, 'src');
+      const kaart: Record<string, string[]> = {};
+      for (const naam of entry.dynamicImports as string[]) {
+        const chunk = perNaam.get(naam);
+        if (!chunk?.facadeModuleId) continue;
+        const sleutel = path.relative(srcDir, chunk.facadeModuleId).replace(/\\/g, '/').replace(/\.[cm]?[jt]sx?$/, '');
+        if (!sleutel.startsWith('views/')) continue;
+        const nodig = new Set<string>();
+        loopStatisch(naam, nodig);
+        kaart[sleutel] = [...nodig].filter((f) => !alGeladen.has(f)).map((f) => `${base}${f}`);
+      }
+      const regel = `globalThis.__VHB_VIEW_CHUNKS__=${JSON.stringify(kaart)};`;
+      const code: string = entry.code;
+      const staart = code.match(/\n\/\/# sourceMappingURL=[^\n]*\n?$/);
+      entry.code = staart && staart.index !== undefined
+        ? `${code.slice(0, staart.index)}\n${regel}${code.slice(staart.index)}`
+        : `${code}\n${regel}\n`;
+    },
+  };
+};
+
 export default defineConfig(({ mode }) => {
   // .env-bestanden én process.env (Vercel/CI zetten de variabele direct).
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const supabaseUrl = process.env.VITE_SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '';
   return {
-    plugins: [react(), tailwindcss(), stampServiceWorker(), preconnectSupabase(supabaseUrl)],
+    plugins: [react(), tailwindcss(), stampServiceWorker(), preconnectSupabase(supabaseUrl), viewChunkKaart()],
     define: {
       __BUILD_INFO__: JSON.stringify(BUILD_INFO),
     },
@@ -109,11 +168,42 @@ export default defineConfig(({ mode }) => {
       // vaste build-warning zonder nieuwe uitschieters te verstoppen.
       chunkSizeWarningLimit: 520,
       rollupOptions: {
+        // zod uit de startbundel (punt 18, 14-09). De schil bereikt zod
+        // statisch via app/data/kern.ts → lib/valideer.ts, dat `valideer` uit
+        // shared/schemas/basis.ts her-exporteert. De schil gebruikt die export
+        // niet en Rollup schudt hem weg, maar shared/schemas/zod.ts heeft een
+        // top-level neveneffect (`z.config({ jitless: true })`), en dát hield
+        // Rollup vast in index-*.js, samen met de zod-kern die ervoor nodig is.
+        // Hier zeggen we: basis.ts (zelf alleen declaraties) telt pas mee als
+        // iets een export ervan gebruikt. In de schil is dat niet zo, dus
+        // Rollup volgt zijn imports daar niet en zod.ts valt weg; in de lazy
+        // beheerchunks wél, en dan markeert Rollup basis als uitgevoerd en
+        // neemt hij zod.ts mét `z.config` mee (default side effects). Bewust
+        // niet de vlag op zod.ts zelf: dan schudt Rollup de `z.config`-aanroep
+        // overal weg (gezien 14-09) en komen de CSP-eval-meldingen terug.
+        // scripts/check-bundle-size.mjs bewaakt via de sourcemap dat
+        // node_modules/zod niet terugkeert in de startbundel, en dat de
+        // `z.config`-aanroep in een lazy chunk blijft staan.
+        treeshake: {
+          moduleSideEffects: (id) => !/\/shared\/schemas\/basis\.ts$/.test(id),
+        },
         output: {
           // Maps zonder brontekst — zie het commentaar bij `sourcemap`.
           sourcemapExcludeSources: true,
           manualChunks(id) {
             if (!id.includes('node_modules')) return;
+            // zod in een eigen chunk (punt 18, 14-09): één bestand dat alle
+            // beheerschermen delen en dat de schil niet laadt (zie treeshake
+            // hierboven). Bewust NIET ook shared/schemas/* in een manual
+            // chunk: Rollup trekt alle statische afhankelijkheden van een
+            // manual chunk mee, dus constanten.ts (zod-vrij, gebruikt door de
+            // login en de schil) belandde erin en de schil importeerde de
+            // chunk mét zod-vendor weer statisch (gezien 14-09). Rollup
+            // plaatst de schema's zelf prima: elk bij zijn scherm, basis.ts +
+            // zod.ts in een gedeelde chunk.
+            if (/node_modules\/zod\//.test(id)) {
+              return 'zod-vendor';
+            }
             // Volgorde is betekenisvol: 'lucide-react' bevat de substring
             // 'react', dus de brede react-check hieronder zou hem anders
             // eerst afvangen.

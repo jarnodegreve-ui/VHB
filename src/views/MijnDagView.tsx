@@ -14,7 +14,8 @@ import { cn } from '../lib/ui';
 import type { Diversion, Shift, User, View } from '../types';
 import { Card } from '../components/Card';
 import { OpsRow } from '../components/ops';
-import { Badge, Button, Chip, segItemClass } from '../components/primitives';
+import { Badge, Button, Chip, Segmented } from '../components/primitives';
+import { Verwissel } from '../components/Verwissel';
 import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { DienstBalk } from '../components/DienstBalk';
@@ -151,24 +152,25 @@ export function MijnDagView({
     void warmRitbladCache();
   }, [isInitialLoad, online, heeftDienstBinnenkort]);
 
-  if (isInitialLoad) {
-    return (
-      <div className="mx-auto max-w-2xl space-y-5" aria-busy="true" aria-label="Mijn dag wordt geladen">
-        <div className="space-y-2 px-1 pt-1">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-48" />
-        </div>
-        <Card padding="none" className="overflow-hidden">
-          <SkeletonRow className="border-b border-slate-100" />
-          <SkeletonRow className="border-b border-slate-100" />
-          <SkeletonRow />
-        </Card>
+  // Skelet met dezelfde kop-/kaartopbouw als de inhoud; Verwissel cross-fadet
+  // ernaar zodra de data binnen is (minstens 180 ms skelet, geen flikker).
+  const skelet = (
+    <div className="mx-auto max-w-2xl space-y-5" aria-busy="true" aria-label="Mijn dag wordt geladen">
+      <div className="space-y-2 px-1 pt-1">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-48" />
       </div>
-    );
-  }
+      <Card padding="none" className="overflow-hidden">
+        <SkeletonRow className="border-b border-hairline-subtle" />
+        <SkeletonRow className="border-b border-hairline-subtle" />
+        <SkeletonRow />
+      </Card>
+    </div>
+  );
 
   return (
+    <Verwissel laden={isInitialLoad} skelet={skelet}>
     <div className="mx-auto max-w-2xl space-y-5">
       {/* === Kop: dag-taal + schakelaar + statuszin === */}
       <header className="px-1 pt-1">
@@ -186,20 +188,14 @@ export function MijnDagView({
               </Badge>
             )}
           </div>
-          <div className="glass-segmented ml-auto inline-flex shrink-0 rounded-2xl p-1" role="group" aria-label="Dag kiezen">
-            {([0, 1] as const).map((offset) => (
-              // rauw: segmented-control-item via segItemClass (het voorgeschreven patroon)
-              <button
-                key={offset}
-                type="button"
-                onClick={() => setDagOffset(offset)}
-                aria-pressed={dagOffset === offset}
-                className={segItemClass(dagOffset === offset, 'min-h-11 sm:pointer-fine:min-h-8')}
-              >
-                {offset === 0 ? 'Vandaag' : 'Morgen'}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Dag kiezen"
+            className="ml-auto shrink-0"
+            itemClassName="min-h-11 sm:pointer-fine:min-h-8"
+            waarde={dagOffset}
+            opties={[{ waarde: 0 as const, label: 'Vandaag' }, { waarde: 1 as const, label: 'Morgen' }]}
+            onChange={(w) => setDagOffset(w)}
+          />
         </div>
         {/* De statuszin ís de boodschap — het dienstnummer voorop en groot:
             "welke dienst rijd ik" is het belangrijkste wat hier staat
@@ -211,7 +207,7 @@ export function MijnDagView({
             {/* Tint i.p.v. vol goud (Jarno 04-09: te fel/druk): groot en mono
                 blijft de nadruk, het goud is voor de balk en "nog …". */}
             <span className="inline-flex items-center gap-2 rounded-xl border border-oker-500/30 bg-oker-500/12 px-3 py-1.5 font-mono text-xl font-bold tabular-nums tracking-[-0.01em] text-oker-800 lg:text-lg">
-              {blokken.some((b) => b.bezig) && <span className="h-2 w-2 shrink-0 rounded-full bg-oker-500 animate-pulse" aria-label="dienst bezig" />}
+              {blokken.some((b) => b.bezig) && <span className="h-2 w-2 shrink-0 rounded-full bg-oker-500 vhb-nu" aria-label="dienst bezig" />}
               {dienstnummers.length > 1 ? dienstnummers.join(' / ') : dienstnummers[0] ?? '--'}
             </span>
             <p className="text-base font-semibold text-slate-800 tabular-nums">
@@ -247,7 +243,7 @@ export function MijnDagView({
                 return (
                   <li key={`pauze-${rij.start}`} className="relative flex gap-4 px-5 py-3">
                     <span className="relative flex w-3 shrink-0 justify-center">
-                      <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-slate-300" />
+                      <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-hairline-strong" />
                     </span>
                     <p className="text-sm font-medium text-slate-500 tabular-nums">
                       pauze · {formatDuration(rij.end - rij.start)}
@@ -274,7 +270,7 @@ export function MijnDagView({
                       <span
                         className={cn(
                           'relative mt-2.5 h-3 w-3 shrink-0 rounded-full',
-                          gereden ? 'bg-slate-300' : bezig ? 'bg-oker-500 ring-4 ring-oker-500/20' : 'border-2 border-slate-300 bg-surface-white',
+                          gereden ? 'bg-slate-300' : bezig ? 'bg-oker-500 ring-4 ring-oker-500/20' : 'border-2 border-hairline-strong bg-surface-white',
                         )}
                       />
                     </span>
@@ -310,7 +306,7 @@ export function MijnDagView({
           </ol>
           {/* De wijzerplaat van de dag: één balk van eerste start tot laatste
               einde, pauzes als gaten, uurstreepjes, wijzer op "nu". */}
-          <div className="border-t border-slate-100 px-5 pb-1">
+          <div className="border-t border-hairline-subtle px-5 pb-1">
             <DienstBalk
               delen={blokken.map((b) => ({ start: b.start, end: b.end, loopnr: b.shift.loopnr }))}
               nuMin={isVandaag ? nuMin : null}
@@ -399,6 +395,7 @@ export function MijnDagView({
         )}
       </section>
     </div>
+    </Verwissel>
   );
 }
 

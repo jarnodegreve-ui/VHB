@@ -373,7 +373,7 @@ export function ZiekteView({
           )}
         </button>
         {r.comment && (
-          <div className="border-t border-slate-100">
+          <div className="border-t border-hairline-subtle">
             <Button
               variant="ghost"
               size="sm"

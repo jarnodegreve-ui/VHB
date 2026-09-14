@@ -135,7 +135,7 @@ function ToestellenSectie() {
           })
         )}
         </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-hairline-subtle pt-4">
           <p className="text-xs leading-relaxed text-slate-500">Beëindigt ook sessies in andere browsers en tabbladen; dit toestel blijft aangemeld.</p>
           <Button variant="secondary" size="sm" icon={<LogOut size={14} />} disabled={bezig !== null || (data !== null && data.beschikbaar && anderenActief === 0 && toestellen.length > 0)} onClick={() => setBevestigAnderen(true)}>
             Uitloggen op alle andere toestellen
@@ -307,7 +307,7 @@ function Rij({ icoon, titel, uitleg, rechts }: { icoon: React.ReactNode; titel: 
     // flex-wrap + min-w op de tekst: op een smal scherm (lang e-mailadres
     // naast "Wachtwoord wijzigen") zakt de knop onder de tekst i.p.v. dat de
     // tekst eronder doorloopt (Jarno 04-09). break-words als extra vangnet.
-    <div className="flex flex-wrap items-start gap-3 py-3.5 first:pt-0 last:pb-0 border-b last:border-b-0 border-slate-100">
+    <div className="flex flex-wrap items-start gap-3 py-3.5 first:pt-0 last:pb-0 border-b last:border-b-0 border-hairline-subtle">
       <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">{icoon}</span>
       <div className="min-w-[11rem] flex-1 basis-0">
         <p className="text-sm font-semibold text-slate-900">{titel}</p>

@@ -280,7 +280,7 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPat
     />
   );
   return (
-    <tr className={cn('border-b border-slate-100 last:border-b-0 align-top', afwijkend && 'bg-oker-50/40')}>
+    <tr className={cn('border-b border-hairline-subtle last:border-b-0 align-top', afwijkend && 'bg-oker-50/40')}>
       <Td>
         <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam ?? '?'} size="sm" />{r.naam}{r.volgnr > 1 && <Badge tone="slate" stil>rij {r.volgnr}</Badge>}</span>
       </Td>
@@ -313,7 +313,7 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPat
             {actieveVlaggen.length ? `${actieveVlaggen.length} vlag${actieveVlaggen.length === 1 ? '' : 'gen'}` : 'Geen'}
           </Button>
           {vlaggenOpen && (
-            <div className="popover-in absolute left-0 top-full z-20 mt-1 w-64 rounded-2xl bg-paper p-2 shadow-lg ring-1 ring-hairline">
+            <div className="popover-in absolute left-0 top-full z-20 mt-1 w-64 rounded-2xl bg-paper p-2 elev-2 ring-1 ring-hairline">
               {QUAL_VLAGGEN.map((k: QualVlag) => (
                 <label key={k} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm hover:bg-surface-soft-hover">
                   <input type="checkbox" className="h-4 w-4" checked={r[k]} disabled={afgesloten} onChange={(e) => onPatch({ [k]: e.target.checked })} />

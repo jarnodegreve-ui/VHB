@@ -323,7 +323,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t border-slate-200 font-semibold text-slate-800">
+                  <tr className="border-t border-hairline font-semibold text-slate-800">
                     <Td>Totaal</Td>
                     <Td num>{fmtKwh(t.kwh)}</Td>
                     <Td num>100 %</Td>
@@ -384,7 +384,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t border-slate-200 font-semibold text-slate-800">
+                  <tr className="border-t border-hairline font-semibold text-slate-800">
                     <Td>Totaal</Td>
                     <Td num>{fmtKwh(t.kwh)}</Td>
                     <Td num>{t.laadbeurten}</Td>

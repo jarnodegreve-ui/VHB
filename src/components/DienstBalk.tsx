@@ -55,6 +55,9 @@ export function DienstBalk({
         <span
           aria-hidden="true"
           data-rol="wijzer-label"
+          // duration-1000 (3×, ook hieronder): bewust buiten de motion-ladder.
+          // De minuutwijzer schuift één keer per minuut een fractie op; een
+          // trage glijbeweging leest als klok, 150-320 ms als een sprong.
           className={cn('absolute inset-x-0 transition-transform duration-1000', compact ? 'top-0.5' : 'top-1.5')}
           style={schuif(wijzer)}
         >
@@ -86,7 +89,7 @@ export function DienstBalk({
         {g.gaten.map(([links, breedte]) => (
           <span
             key={`gat-${links}`}
-            className="absolute top-1/2 -translate-y-1/2 border-t border-dashed border-slate-300"
+            className="absolute top-1/2 -translate-y-1/2 border-t border-dashed border-hairline-strong"
             style={{ left: `${links}%`, width: `${breedte}%` }}
           />
         ))}

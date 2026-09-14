@@ -188,7 +188,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
           const bus = busVoorLaadpunt(gekozenPunt.evse_id);
           const conn = gekozenPunt.connectors[0];
           const rij = (label: string, waarde: string) => (
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-b-0">
+            <div className="flex items-center justify-between gap-3 border-b border-hairline-subtle py-2.5 last:border-b-0">
               <span className={microLabelClass}>{label}</span>
               <span className="text-sm font-semibold font-mono text-slate-800">{waarde}</span>
             </div>
@@ -262,8 +262,8 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
                     {groepeerPerCpu(loc.evses).map((cpu) => {
                       const laden = cpu.evses.filter((e) => e.status === 'CHARGING').length;
                       return (
-                        <div key={cpu.key} className="rounded-2xl border border-slate-100 p-3.5">
-                          <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div key={cpu.key} className="rounded-2xl border border-hairline-subtle p-3.5">
+                          <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-hairline-subtle pb-2">
                             <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
                             <span className="text-2xs font-medium font-mono text-slate-500">{laden > 0 ? `${laden} aan het laden` : `${cpu.evses.length} punten`}</span>
                           </div>
@@ -331,7 +331,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
               })}
             </div>
             {storingen.length > 5 && (
-              <Button variant="ghost" size="sm" full className="rounded-none border-t border-slate-100" aria-expanded={alleStoringen} onClick={() => setAlleStoringen((v) => !v)}>
+              <Button variant="ghost" size="sm" full className="rounded-none border-t border-hairline-subtle" aria-expanded={alleStoringen} onClick={() => setAlleStoringen((v) => !v)}>
                 {alleStoringen ? 'Toon minder' : `Toon alle ${storingen.length} storingen`}
               </Button>
             )}

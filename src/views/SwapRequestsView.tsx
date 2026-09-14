@@ -215,7 +215,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [preselectShiftId]);
   // Tikbare wizard-kaart (stap 1/2/3): geselecteerd = oker-accent.
   const cnCard = (selected: boolean) =>
-    `ios-pressable w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-oker-300 bg-oker-50 ring-1 ring-oker-200' : 'border-slate-200 bg-surface-white hover:bg-surface-soft-hover'}`;
+    `ios-pressable w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-oker-300 bg-oker-50 ring-1 ring-oker-200' : 'border-hairline bg-surface-white hover:bg-surface-soft-hover'}`;
   /** Ruil zonder tegenprestatie: de collega neemt de dienst gewoon over. */
   const isTakeoverSwap = (swap: SwapRequest) => swap.swapType === 'overname';
   // "krijgt: dienst 4101 (vr 10/07)" of "krijgt: vrij (vr 10/07)"
@@ -456,7 +456,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <StatusBadge status={swap.status} stil />
-                        <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                        <ChevronDown size={16} className={`text-slate-400 transition-transform duration-base ${open ? 'rotate-180' : ''}`} />
                       </div>
                     </button>
                     {open && (
@@ -627,7 +627,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               {/* Desktop table */}
               <div className="hidden md:block">
                 <table className="w-full text-left">
-                  <thead className="bg-surface-soft border-b border-slate-100">
+                  <thead className="bg-surface-soft border-b border-hairline-subtle">
                     <tr>
                       <Th>Chauffeur</Th>
                       <Th>Dienst</Th>
@@ -1011,7 +1011,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="block text-xs font-medium text-slate-500">Jij neemt een dienst of vrije dag van {voornaam} over</span>
                             </span>
                           </span>
-                          {!isTakeover ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                          {!isTakeover ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
                         </button>
                         {/* rauw: keuzekaart ruilvorm (icoon + titel + uitleg + radio-vinkje), eigen layout via cnCard */}
                         <button
@@ -1031,7 +1031,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               </span>
                             </span>
                           </span>
-                          {isTakeover ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                          {isTakeover ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
                         </button>
                       </div>
 
@@ -1060,7 +1060,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                     <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(o.date)}</span>
                                     <span className="block text-xs font-medium text-slate-500">{o.isFree ? 'Vrije dag van de collega' : `Dienst ${o.code}`}</span>
                                   </span>
-                                  {selected ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                                  {selected ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
                                 </button>
                               );
                             })}
@@ -1250,7 +1250,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               {reviewSwap.reason && (
                 <div>
                   <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-slate-100 px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
                     {reviewSwap.reason}
                   </p>
                 </div>

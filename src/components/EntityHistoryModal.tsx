@@ -83,7 +83,7 @@ export function EntityHistoryModal({
               )}
 
               {entries && entries.length > 0 && (
-                <ol className="relative space-y-3 border-l-2 border-slate-200/60 pl-5">
+                <ol className="relative space-y-3 border-l-2 border-hairline pl-5">
                   {entries.map((entry, i) => (
                     <li key={entry.id} className="relative">
                       <span className={cn(

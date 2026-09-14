@@ -157,6 +157,12 @@
   --color-surface-muted: #F2F3F4;                      /* gedempt vlak / meter-track (was bg-slate-100) */
   --color-surface-soft: #F7F8F8;                       /* zachtste vlak (was bg-slate-50) */
   --color-surface-soft-hover: #F7F8F8;                 /* (was hover:bg-slate-50) */
+  /* Hairline-ladder, drie gewichten (golf 1, 14-09): subtle = scheiding
+     binnen een kaart (rijen, voetnoten; was border-slate-100), hairline =
+     rand van kaarten/kopbalken (was border-slate-200 en -200/NN), strong =
+     structurele lijn (sticky tabelkop, tijdlijn, radio-cirkel; was
+     border-slate-300/400). Ook als ring-*: ring-hairline, ring-hairline-strong. */
+  --color-hairline-subtle: rgba(228, 230, 232, 0.45);  /* (was border-slate-100) */
   --color-hairline: rgba(228, 230, 232, 0.70);         /* ring om rijen (was ring-slate-200/60-70) */
   --color-hairline-strong: rgba(205, 209, 213, 0.80);  /* hover-ring (was ring-slate-300/80) */
 
@@ -195,6 +201,25 @@
   --duration-fast: 150ms;
   --duration-base: 220ms;
   --duration-slow: 320ms;
+
+  /* === Focus-tokens (één focus-systeem, zie het blok "Focus" hieronder) ===
+     --focus-ring = huisstijl-goud; --focus-ring-contrast = de ring óp een
+     gouden vlak (btn-primary, goud-chip, gekozen dag): carbon op licht,
+     licht op donker. */
+  --focus-ring: #E2A323;
+  --focus-ring-contrast: #14181B;
+
+  /* === Elevation-ladder (voorbereiding golf 2) ===
+     Drie treden, letterlijk de bestaande stapels: 1 = .surface-card (kaart,
+     rij-hover), 2 = .bottom-dock (zwevend: popover, menu, toast), 3 =
+     .glass-modal (modal, slide-over). accent = de gouden contactschaduw
+     (was `shadow-sm shadow-oker-500/30` op gekozen dag / switch aan).
+     Als utility: elev-1 / elev-2 / elev-3 / elev-accent, ook met varianten
+     (hover:elev-1). Geen fabrieks-shadow-sm/md/lg/xl meer (design-lint). */
+  --elev-1: 0 1px 2px rgba(13, 13, 15, 0.04), 0 6px 20px rgba(13, 13, 15, 0.04);
+  --elev-2: 0 1px 2px rgba(13, 13, 15, 0.05), 0 12px 32px rgba(13, 13, 15, 0.14);
+  --elev-3: 0 1px 2px rgba(13, 13, 15, 0.05), 0 28px 80px rgba(13, 13, 15, 0.18);
+  --elev-accent: 0 1px 3px 0 rgba(226, 163, 35, 0.30), 0 1px 2px -1px rgba(226, 163, 35, 0.30);
 }
 
 /* === Tile-surface variabelen ===
@@ -253,8 +278,18 @@ html.dark {
   --color-surface-muted: rgba(38, 40, 43, 0.60);
   --color-surface-soft: rgba(23, 24, 26, 0.60);
   --color-surface-soft-hover: rgba(38, 40, 43, 0.40);
+  --color-hairline-subtle: rgba(79, 87, 95, 0.20);
   --color-hairline: rgba(79, 87, 95, 0.32);
   --color-hairline-strong: rgba(110, 118, 127, 0.45);
+
+  /* Focus en elevation in donker (zelfde goud; contrastring wordt licht;
+     schaduwen = de donkere stapels van surface-card / bottom-dock (zonder
+     de inzet-highlight, die is dock-specifiek) / glass-modal). */
+  --focus-ring: #E2A323;
+  --focus-ring-contrast: #F2F3F4;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --elev-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.55);
+  --elev-3: 0 1px 2px rgba(0, 0, 0, 0.4), 0 28px 80px rgba(0, 0, 0, 0.7);
 
   --color-paper: #17181A;
   --color-ink: #0D0D0F;
@@ -356,16 +391,10 @@ html.dark {
     font-feature-settings: "cv05", "cv08";
   }
 
-  /* Apple-style focus rings: subtle colored halo instead of harsh outline. */
-  :focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(226, 163, 35, 0.28);
-    border-radius: inherit;
-  }
-  /* Elements with their own focus treatment can opt out via class. */
-  .no-focus-ring:focus-visible {
-    box-shadow: none;
-  }
+  /* Focus: zie het unlayered blok "Focus" onder deze laag. Hier bewust
+     niets meer: een box-shadow-ring in @layer base verloor van elke
+     utility die zelf box-shadow zet (btn-primary, control-button-soft,
+     inline tegel-schaduwen), dus knoppen toonden geen focus. */
 
   /* Lopende tekst (alinea's in kaarten, lege staten, hints, InfoTips):
      geen weduwe van één woord op de laatste regel. Koppen krijgen
@@ -404,11 +433,11 @@ html.dark {
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(205, 209, 213, 0.6) transparent;
-    /* Standaard rand- en outlinekleur (was shadcn's `border-border
-       outline-ring/50`, nu expliciet): kale `border`-utilities zonder
-       kleurklasse krijgen de haarlijn-kleur i.p.v. currentColor. */
+    /* Standaard randkleur (was shadcn's `border-border`, nu expliciet):
+       kale `border`-utilities zonder kleurklasse krijgen de haarlijn-kleur
+       i.p.v. currentColor. (De outline-color die hier stond was dood: de
+       focus-outline zet zijn kleur zelf.) */
     border-color: var(--border-default);
-    outline-color: rgba(226, 163, 35, 0.5);
   }
 
   *::-webkit-scrollbar {
@@ -423,6 +452,32 @@ html.dark {
     background-color: rgba(205, 209, 213, 0.6);
     border-radius: 999px;
   }
+}
+
+/* === Focus: één systeem (golf 1, 14-09) ===
+   Bewust UNLAYERED: cascade-layers gaan vóór specificiteit, dus alleen zo
+   wint de ring van elke utility, elke component-klasse én van inline
+   box-shadows. Outline i.p.v. box-shadow: botst nergens mee (schaduwen
+   blijven vrij voor elevation), volgt border-radius vanzelf (geen
+   `border-radius: inherit` meer, die liet een knop de radius van zijn
+   kaart aannemen) en heeft geen transition nodig. Alleen bij toetsenbord-
+   focus (:focus-visible); muis/touch tonen niets.
+   Op een gouden vlak (btn-primary, goud-chip, gekozen dag, switch aan) is
+   een gouden ring onzichtbaar: daar wordt de ring carbon (licht) of licht
+   (donker) via --focus-ring-contrast.
+   Opt-out `focus-stil` alleen voor een binnenveld waarvan de ouder de ring
+   tekent via `focus-within:focus-ring` (chip-invoer). De utility
+   `focus-ring` (onderaan) tekent dezelfde ring handmatig (peer-/focus-
+   within-varianten, bv. de custom checkbox in Table.tsx). */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+:is(.btn-primary, .bg-oker-500, .bg-oker-400):focus-visible {
+  outline-color: var(--focus-ring-contrast);
+}
+:where(.focus-stil):focus-visible {
+  outline: none;
 }
 
 @layer components {
@@ -522,19 +577,9 @@ html.dark {
    * Eén consistente familie i.p.v. zwaar gestapeld glas: witte kaarten met
    * een fijne slate-rand en twee zachte schaduwlagen. Blur alleen waar
    * content er echt onderdoor schuift (topbar, modals). */
-  .panel {
-    /* Geen backdrop-filter meer: near-opaque volstaat visueel en een
-     * blur-laag hersampelt zijn achtergrond bij elke frame (Windows-jank). */
-    background: rgba(255, 255, 255, 0.97);
-    border: 1px solid rgba(228, 230, 232, 0.85);
-    box-shadow:
-      0 1px 2px rgba(13, 13, 15, 0.04),
-      0 8px 24px rgba(13, 13, 15, 0.05);
-    transition:
-      box-shadow var(--duration-slow) var(--ease-standard),
-      background var(--duration-slow) var(--ease-standard),
-      border-color var(--duration-slow) var(--ease-standard);
-  }
+  /* (.panel is 14-09 verwijderd: nul gebruik; kaarten zijn .surface-card.
+     Geen backdrop-filter op oppervlakken: near-opaque volstaat en een
+     blur-laag hersampelt zijn achtergrond bij elke frame (Windows-jank).) */
 
   /* Sidebar-rail: vaste, rustige flank van de app. Bewust géén
      backdrop-filter: blur + transform (mobile slide-in) op hetzelfde
@@ -719,11 +764,12 @@ html.dark {
     }
   }
 
+  /* Focus-ring komt uit het globale focus-systeem (2 px goud, outline);
+     hier alleen nog het oplichten van het vlak. De eigen 4 px-gloed van
+     vroeger (Jarno 30/07: zichtbaarder) is daarmee overbodig én de solide
+     ring is zichtbaarder dan de gloed was. */
   .control-input:focus {
     background: #ffffff;
-    border-color: rgba(226, 163, 35, 0.6);
-    /* Iets zichtbaarder dan voorheen (verzoek Jarno 30/07). */
-    box-shadow: 0 0 0 4px rgba(226, 163, 35, 0.18);
   }
 
   .control-button-soft {
@@ -809,27 +855,59 @@ html.dark {
     transform: none;
   }
 
-  .glass-chip {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(228, 230, 232, 0.9);
-    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.04);
-  }
-
   .glass-segmented {
     background: rgba(242, 243, 244, 0.75);
     border: 1px solid rgba(228, 230, 232, 0.8);
     box-shadow: inset 0 1px 2px rgba(13, 13, 15, 0.03);
   }
 
-  .section-title {
-    font-family: var(--font-display);
-    letter-spacing: -0.025em;
-  }
-
   .fine-divider {
     border-color: rgba(154, 161, 169, 0.18);
   }
 
+}
+
+/* === Eigen utilities (Tailwind v4 @utility: werken mét varianten zoals
+   hover:elev-1, peer-focus-visible:focus-ring, focus-within:focus-ring) === */
+
+/* Motion-ladder als utility: duration-150/200/300 zijn strooiwaarden; dit
+   zijn de drie treden (150/220/320 ms, --duration-*). --tw-duration mee
+   zodat transition-* de waarde oppikt ongeacht de volgorde. */
+@utility duration-fast {
+  --tw-duration: var(--duration-fast);
+  transition-duration: var(--duration-fast);
+}
+@utility duration-base {
+  --tw-duration: var(--duration-base);
+  transition-duration: var(--duration-base);
+}
+@utility duration-slow {
+  --tw-duration: var(--duration-slow);
+  transition-duration: var(--duration-slow);
+}
+
+/* Elevation-ladder (tokens in :root / html.dark). */
+@utility elev-1 { box-shadow: var(--elev-1); }
+@utility elev-2 { box-shadow: var(--elev-2); }
+@utility elev-3 { box-shadow: var(--elev-3); }
+@utility elev-accent { box-shadow: var(--elev-accent); }
+
+/* Dezelfde focus-ring als het globale systeem, handmatig te zetten. */
+@utility focus-ring {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* "Nu"-stip (Mijn dag, Vandaag-tegel): zachte opacity-puls i.p.v.
+   animate-pulse (die zakt tot 50 % en heeft z'n eigen easing). 1,6 s,
+   ease-standard; stil bij reduced motion. */
+@keyframes vhb-nu {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.vhb-nu { animation: vhb-nu 1.6s var(--ease-standard) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .vhb-nu { animation: none; }
 }
 
 /* ==========================================================================
@@ -874,17 +952,7 @@ html.dark {
   background-color: rgba(110, 118, 127, 0.55);
 }
 
-/* --- Custom glass-morphism classes (dark) ---
- * Match de nieuwe premium-bento DNA: hogere blur, dubbele inner-rim,
- * sterkere edge-lit highlights. */
-
-:where(.dark) .panel {
-  background: rgba(21, 22, 25, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 8px 24px rgba(0, 0, 0, 0.4);
-}
+/* --- Oppervlakklassen (dark) --- */
 
 :where(.dark) .panel-dark {
   background: rgba(16, 17, 19, 0.97);
@@ -962,9 +1030,6 @@ html.dark {
 
 :where(.dark) .control-input:focus {
   background: rgba(29, 31, 34, 0.95);
-  border-color: rgba(226, 163, 35, 0.55);
-  /* Zelfde opwaardering als licht: de focus-gloed was in dark amper te zien. */
-  box-shadow: 0 0 0 4px rgba(226, 163, 35, 0.24);
 }
 
 :where(.dark) .control-button-soft {
@@ -980,12 +1045,6 @@ html.dark {
     background: rgba(38, 40, 43, 0.9);
     border-color: rgba(255, 255, 255, 0.14);
   }
-}
-
-:where(.dark) .glass-chip {
-  background: rgba(23, 24, 26, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 :where(.dark) .glass-segmented {
@@ -1105,12 +1164,11 @@ html.login-donker {
 .control-input-dark::placeholder {
   color: rgba(255, 255, 255, 0.30);
 }
+/* Ring = het globale focus-systeem (LoginView draagt nog `no-focus-ring
+   outline-none`; beide zijn sinds 14-09 zonder effect). */
 .control-input-dark:focus {
   background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(226, 163, 35, 0.55);
-  box-shadow:
-    0 0 0 4px rgba(226, 163, 35, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* Mobile: zelfde forced 16px font-size truc voor iOS-zoom-fix.
@@ -1168,6 +1226,20 @@ html.login-donker {
 @keyframes vt-inhoud-in {
   from { opacity: 0; transform: translateY(5px); }
 }
+/* Schermwissel-inloop zonder view transition (SchermInloop, Verwissel.tsx):
+   opacity 0 → 1 en 4 px omhoog op de ladder. Als CSS-animatie zodat hij
+   ook loopt wanneer het scherm bij het mounten op zijn chunk wacht; tijdens
+   een view transition (html.vt-route) beweegt die al, dus dan niets. */
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.view-in { animation: view-in var(--duration-base) var(--ease-standard) both; }
+html.vt-route .view-in { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .view-in { animation: none; }
+}
+
 html.vt-route::view-transition-old(hoofdinhoud) {
   animation: vt-inhoud-uit var(--duration-fast) var(--ease-standard) both;
   mix-blend-mode: normal;

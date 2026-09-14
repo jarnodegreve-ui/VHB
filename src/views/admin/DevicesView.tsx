@@ -335,7 +335,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                           <span className="shrink-0 text-2xs font-medium text-slate-500 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
                           {attention > 0 && <Badge tone="amber" dot className="tabular-nums">{attention}</Badge>}
                         </div>
-                        <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
+                        <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform duration-base', open && 'rotate-180')} />
                       </button>
                       {open && <div className="pb-1.5 pl-2">{list.map(renderDeviceCompact)}</div>}
                     </div>

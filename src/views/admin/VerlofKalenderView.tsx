@@ -200,7 +200,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
       <TableShell className="hidden md:block">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/60 border-b border-slate-100">
+              <tr className="bg-slate-50/60 border-b border-hairline-subtle">
                 <SortTh kolom="naam" sort={sort} className="sticky left-0 z-10 bg-surface-soft min-w-[180px]">
                   Chauffeur
                 </SortTh>
@@ -209,7 +209,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                     <Th
                       title={typedagLabel(dateIso(day))?.titel}
                       className={cn(
-                        'px-1 py-2 text-center border-l border-slate-100',
+                        'px-1 py-2 text-center border-l border-hairline-subtle',
                         isWeekend(day) && 'bg-slate-100/50',
                         isToday(day) && 'bg-oker-50',
                       )}
@@ -248,7 +248,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
               {visibleUsers.map((u) => {
                 const userMap = leaveByUserDay.get(u.id);
                 return (
-                  <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
+                  <tr key={u.id} className="border-b border-hairline-subtle hover:bg-slate-50/40 transition-colors">
                     <Td className="sticky left-0 z-10 bg-surface-white py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
                       {/* rauw: naam-als-link in een dichte tabelcel (tekst + printer-icoon,
                           geen knopvorm) — een Button zou de rijhoogte van het grid oprekken */}
@@ -272,7 +272,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                           key={day}
                           title={title}
                           className={cn(
-                            'border-l border-slate-100 h-9 px-1',
+                            'border-l border-hairline-subtle h-9 px-1',
                             isWeekend(day) && !leave && 'bg-slate-50/40',
                             isToday(day) && !leave && 'bg-oker-50/30',
                           )}

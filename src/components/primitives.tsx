@@ -1,5 +1,9 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, useId, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { overgangActief } from '../lib/overgang';
+import { BrandSpinner } from './BrandSpinner';
 
 /**
  * Primitieven van het VHB design-systeem.
@@ -42,18 +46,65 @@ const BUTTON_SIZES: Record<ButtonSize, string> = {
   lg: 'gap-2 rounded-xl px-5 py-3 text-sm min-h-12',
 };
 
+/** Spinner-spoor per variant: donkere solide knoppen het lichte spoor, de
+ *  rest het slate-spoor (op goud leest het lichte spoor met de gouden veeg
+ *  als een wisser, dat volstaat). */
+const SPINNER_TONE: Record<ButtonVariant, 'licht' | 'donker'> = {
+  primary: 'licht',
+  secondary: 'licht',
+  ghost: 'licht',
+  success: 'donker',
+  warning: 'licht',
+  danger: 'licht',
+  dangerSolid: 'donker',
+  ink: 'donker',
+};
+
 export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
   /** Icoon links van het label (lucide, maat zelf meegeven). */
   icon?: ReactNode;
+  /** Icoon rechts van het label (de pijl van een CTA). */
+  iconRechts?: ReactNode;
+  /** Bezig (aanmelden, opslaan): uitgeschakeld + aria-busy; het label blijft
+   *  staan (geen breedtesprong) en het icoonslot cross-fadet naar een
+   *  BrandSpinner. Zonder icoon krijgt de spinner een eigen slot links. */
+  bezig?: boolean;
   /** Volle breedte (formulieren, kaart-acties). */
   full?: boolean;
-}>(function Button({ variant = 'secondary', size = 'md', icon, full, className, children, type = 'button', ...rest }, ref) {
+}>(function Button({ variant = 'secondary', size = 'md', icon, iconRechts, bezig = false, full, className, children, type = 'button', disabled, ...rest }, ref) {
+  const reduced = useReducedMotion();
+  // De spinner neemt het slot van het icoon (links; anders rechts).
+  const spinnerLinks = bezig && (!!icon || !iconRechts);
+  const spinnerRechts = bezig && !icon && !!iconRechts;
+  // Icoon en spinner delen één rastercel: de breedte blijft die van de
+  // grootste van de twee, dus het label verschuift niet.
+  const slot = (inhoud: ReactNode, metSpinner: boolean) => (
+    <span className="inline-grid shrink-0 place-items-center">
+      {inhoud && (
+        <span aria-hidden={metSpinner || undefined} className={cn('col-start-1 row-start-1 inline-flex transition-opacity', metSpinner && 'opacity-0')}>
+          {inhoud}
+        </span>
+      )}
+      {metSpinner && (
+        <motion.span
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: reduced ? 0 : DUR.fast, ease: EASE }}
+          className="col-start-1 row-start-1 inline-flex"
+        >
+          <BrandSpinner size={14} tone={SPINNER_TONE[variant]} />
+        </motion.span>
+      )}
+    </span>
+  );
   return (
     <button
       ref={ref}
       type={type}
+      disabled={disabled || bezig}
+      aria-busy={bezig || undefined}
       className={cn(
         'ios-pressable inline-flex items-center justify-center font-semibold transition-all',
         'disabled:cursor-not-allowed disabled:opacity-50',
@@ -64,8 +115,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
       )}
       {...rest}
     >
-      {icon}
+      {(icon || spinnerLinks) && slot(icon, spinnerLinks)}
       {children}
+      {iconRechts && slot(iconRechts, spinnerRechts)}
     </button>
   );
 });
@@ -82,6 +134,9 @@ const BADGE_TONES: Record<BadgeTone, { chip: string; dot: string }> = {
   amber: { chip: 'border-amber-100 bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
   blue: { chip: 'border-blue-100 bg-blue-50 text-blue-700', dot: 'bg-blue-500' },
 };
+
+/** Kleurtransitie op de ladder (Tailwind's standaard is fast; base via de token). */
+const BASE_TRANSITIE = { transitionDuration: 'var(--duration-base)' } as const;
 
 export function Badge({
   tone = 'slate',
@@ -107,9 +162,11 @@ export function Badge({
 }) {
   const t = BADGE_TONES[tone];
   const chip = stil ? BADGE_TONES.slate.chip : t.chip;
+  // transition-colors op DUR.base: een statuswissel op dezelfde badge (In
+  // behandeling → Goedgekeurd) vloeit van kleur i.p.v. te knippen.
   return (
-    <span title={title} className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium', chip, className)}>
-      {(dot || stil) && <span className={cn('h-1.5 w-1.5 rounded-full', t.dot)} />}
+    <span title={title} style={BASE_TRANSITIE} className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium transition-colors', chip, className)}>
+      {(dot || stil) && <span style={BASE_TRANSITIE} className={cn('h-1.5 w-1.5 rounded-full transition-colors', t.dot)} />}
       {icon}
       {children}
     </span>
@@ -170,14 +227,101 @@ export function MicroLabel({ className, children }: { className?: string; childr
  * OCPI). `segItemClass(actief)` geeft de knop-klassen; de rail zelf blijft
  * `glass-segmented … p-1` bij de aanroeper (verschillende radius/breedte).
  */
+const SEG_ITEM = 'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold';
+// Actief = neutrale 'papieren' chip (iOS/Linear-patroon) i.p.v. vol goud:
+// een schakelaar is geen actie, en naast een gouden knop (Ziek melden)
+// gaf dat twee gouden vlakken in één kop (controle 05-09, nr. 19).
+const SEG_PIL = 'bg-paper shadow-sm ring-1 ring-hairline';
+
 export function segItemClass(actief: boolean, className?: string) {
   return cn(
-    'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
-    // Actief = neutrale 'papieren' chip (iOS/Linear-patroon) i.p.v. vol goud:
-    // een schakelaar is geen actie, en naast een gouden knop (Ziek melden)
-    // gaf dat twee gouden vlakken in één kop (controle 05-09, nr. 19).
-    actief ? 'bg-paper text-slate-900 shadow-sm ring-1 ring-hairline' : 'text-slate-500 hover:text-slate-700',
+    SEG_ITEM,
+    'transition-all',
+    actief ? cn(SEG_PIL, 'text-slate-900') : 'text-slate-500 hover:text-slate-700',
     className,
+  );
+}
+
+/**
+ * Segmented control met schuivende pil: dezelfde rail en item-klassen als
+ * `segItemClass`, maar de papieren chip is één `motion.span` (layoutId) die
+ * op de veer (EASE_SPRING, DUR.fast) naar het actieve item schuift. Voor
+ * nieuwe schakelaars; de bestaande `segItemClass`-rails volgen in golf 2
+ * (punt 9). Reduced motion of een lopende view transition: de pil springt.
+ */
+export function Segmented<T extends string | number>({ waarde, opties, onChange, label, className, itemClassName }: {
+  waarde: T;
+  opties: ReadonlyArray<{ waarde: T; label: ReactNode }>;
+  onChange: (waarde: T) => void;
+  /** Toegankelijke naam van de groep ("Dag kiezen"). */
+  label: string;
+  className?: string;
+  /** Extra klassen per item (bv. een minimale hoogte). */
+  itemClassName?: string;
+}) {
+  const id = useId();
+  const reduced = useReducedMotion();
+  return (
+    <div role="group" aria-label={label} className={cn('glass-segmented inline-flex rounded-2xl p-1', className)}>
+      {opties.map((o) => {
+        const actief = o.waarde === waarde;
+        return (
+          <button
+            key={String(o.waarde)}
+            type="button"
+            aria-pressed={actief}
+            onClick={() => onChange(o.waarde)}
+            className={cn(SEG_ITEM, 'relative transition-colors', actief ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700', itemClassName)}
+          >
+            {actief && (
+              <motion.span
+                layoutId={`segmented-pil-${id}`}
+                aria-hidden="true"
+                transition={reduced || overgangActief() ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING }}
+                className={cn('absolute inset-0 rounded-xl', SEG_PIL)}
+              />
+            )}
+            {/* z-10: het label van het vorige item blijft boven de pil die
+                eroverheen schuift (anders knipt de pil het label even af). */}
+            <span className="relative z-10">{o.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// === Meter ===
+
+/**
+ * Voortgangsmeter (verlofsaldo, budget): `Meter` is het spoor (clip), elke
+ * `MeterVulling` een volle laag die van links naar binnen schuift met
+ * `translateX(-(100 − pct)%)`, het recept van DienstBalk: geen `width`-
+ * animatie (reflow per frame) en geen `scaleX` (drukt de ronde eindkap
+ * plat). De eerste render vult van 0 naar de waarde op DUR.slow/EASE,
+ * latere wijzigingen schuiven mee. Lagen stapelen: de laatste ligt boven,
+ * dus render de kortste laag als laatste (met `ring-1 ring-surface-muted`
+ * als haarlijn tussen twee lagen). Reduced motion: geen animatie.
+ */
+export function Meter({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cn('relative overflow-hidden rounded-full bg-surface-muted', className)} {...rest}>
+      {children}
+    </div>
+  );
+}
+
+export function MeterVulling({ pct, className }: { pct: number; className?: string }) {
+  const reduced = useReducedMotion();
+  const x = `${Math.max(0, Math.min(100, pct)) - 100}%`;
+  return (
+    <motion.div
+      aria-hidden="true"
+      className={cn('absolute inset-0 rounded-full', className)}
+      initial={reduced ? false : { x: '-100%' }}
+      animate={{ x }}
+      transition={{ duration: reduced ? 0 : DUR.slow, ease: EASE }}
+    />
   );
 }
 

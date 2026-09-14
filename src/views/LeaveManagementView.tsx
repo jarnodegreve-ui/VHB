@@ -704,7 +704,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               {reviewLeave.comment && (
                 <div>
                   <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-slate-100 px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
                     {reviewLeave.comment}
                   </p>
                 </div>
@@ -805,7 +805,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     className={cn(
                       'aspect-square rounded-2xl border transition-all flex flex-col items-center justify-center relative group',
                       isSelected && 'border-oker-500 bg-oker-50 ring-4 ring-oker-500/10',
-                      !isSelected && !isInDraftRange && 'border-slate-50 hover:border-slate-200 bg-surface-white',
+                      !isSelected && !isInDraftRange && 'border-hairline-subtle hover:border-hairline bg-surface-white',
                       isInDraftRange && 'border-oker-200 bg-oker-50/70',
                       isDraftEdge && 'border-oker-500 bg-oker-100 ring-4 ring-oker-500/10'
                     )}
@@ -922,7 +922,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       <div
                         key={req.id}
                         className={cn(
-                          'group flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:shadow-sm',
+                          'group flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1',
                           isSelected && 'ring-2 ring-oker-400/50',
                         )}
                       >
@@ -930,7 +930,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => togglePendingSelection(req.id)}
-                          className="w-4 h-4 rounded border-slate-300 text-oker-500 focus:ring-oker-400 cursor-pointer shrink-0"
+                          className="w-4 h-4 rounded border-hairline-strong text-oker-500 cursor-pointer shrink-0"
                           aria-label={`Selecteer ${requester?.name}`}
                         />
                         {/* rauw: rij-inhoud (naam + periode + chevron) als knop naast de checkbox — geen knopvorm */}
@@ -1079,7 +1079,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             isPast && 'text-slate-300 cursor-not-allowed',
                             !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
                             !isPast && inRange && !edge && 'bg-oker-100 text-oker-700',
-                            !isPast && edge && 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30',
+                            !isPast && edge && 'bg-oker-500 text-slate-950 elev-accent',
                             !isPast && isToday && !inRange && !edge && 'ring-1 ring-oker-300',
                           )}
                         >
@@ -1293,7 +1293,7 @@ function PeriodeVak({ label, naam, iso, actief, fout }: { label: string; naam: s
       data-datum={iso || undefined}
       className={cn(
         'min-h-11 rounded-xl border px-3.5 py-2',
-        fout ? 'border-red-300 bg-red-50' : iso ? 'border-oker-200 bg-oker-50' : actief ? 'border-dashed border-oker-300 bg-surface-white' : 'border-dashed border-slate-200 bg-surface-soft',
+        fout ? 'border-red-300 bg-red-50' : iso ? 'border-oker-200 bg-oker-50' : actief ? 'border-dashed border-oker-300 bg-surface-white' : 'border-dashed border-hairline bg-surface-soft',
       )}
     >
       <span className="text-micro">{label}</span>
@@ -1341,7 +1341,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                   {fresh && <Badge tone="oker">Nieuw</Badge>}
                   <StatusBadge status={req.status} stil />
 
-                  <ChevronDown size={16} className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
+                  <ChevronDown size={16} className={cn('text-slate-400 transition-transform duration-base', open && 'rotate-180')} />
                 </div>
               </button>
               {open && (

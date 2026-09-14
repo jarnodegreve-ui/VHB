@@ -121,7 +121,7 @@ function PaginaCanvas({ doc, nummer, breedte }: { doc: PDFDocumentProxy; nummer:
       ref={ref}
       role="img"
       aria-label={`Pagina ${nummer} van de ritblad-bundel`}
-      className="block shrink-0 bg-white shadow-sm ring-1 ring-ink/10"
+      className="block shrink-0 bg-white elev-1 ring-1 ring-ink/10"
     />
   );
 }
@@ -231,7 +231,7 @@ export function RitbladViewer({
 
   return (
     <Modal open={open} onClose={onClose} maxWidth="2xl" ariaLabel={titel} className="flex h-full flex-col overflow-hidden">
-      <header className="flex shrink-0 items-start gap-3 border-b border-slate-200/80 px-4 pb-3 pt-4">
+      <header className="flex shrink-0 items-start gap-3 border-b border-hairline px-4 pb-3 pt-4">
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-card-title">{titel}</h2>
           {subregel && <p className="mt-0.5 truncate text-xs font-medium tabular-nums text-slate-500">{subregel}</p>}
@@ -293,7 +293,7 @@ export function RitbladViewer({
               ))}
             </div>
           </div>
-          <footer className="flex shrink-0 items-center gap-1.5 border-t border-slate-200/80 px-3 py-2">
+          <footer className="flex shrink-0 items-center gap-1.5 border-t border-hairline px-3 py-2">
             <IconButton label="Uitzoomen" variant="secondary" size="sm" disabled={zoomIdx === 0} onClick={() => setZoomIdx((i) => Math.max(0, i - 1))}>
               <ZoomOut size={16} />
             </IconButton>

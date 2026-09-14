@@ -132,7 +132,7 @@ export function ServicesView({ services }: { services: Service[] }) {
         {/* Desktop Table View */}
         <div className="hidden md:block">
           <table className="w-full text-left">
-            <thead className="bg-surface-soft border-b border-slate-100">
+            <thead className="bg-surface-soft border-b border-hairline-subtle">
               {/* Zelfde indeling als het totaaloverzicht van de planning:
                   per deel eerst het loopnummer, dan de uren. */}
               <tr>
@@ -181,7 +181,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                     <Badge tone="oker">Dienst</Badge>
                     <ChevronDown
                       size={18}
-                      className={cn('text-slate-400 transition-transform duration-200', isExpanded && 'rotate-180')}
+                      className={cn('text-slate-400 transition-transform duration-base', isExpanded && 'rotate-180')}
                     />
                   </div>
                 </button>

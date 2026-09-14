@@ -73,7 +73,7 @@ export function ModalHeader({
   leading?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 p-6 md:p-7 border-b border-slate-200/70 shrink-0">
+    <div className="flex items-start justify-between gap-3 p-6 md:p-7 border-b border-hairline shrink-0">
       <div className="flex min-w-0 items-center gap-3">
         {leading ? <div className="shrink-0">{leading}</div> : null}
         <div className="min-w-0">
@@ -124,7 +124,7 @@ export function ConfirmationModal({
   return (
     <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
       <div className="flex max-h-[88dvh] flex-col overflow-hidden">
-        <div className="p-6 md:p-7 border-b border-slate-200/70 shrink-0">
+        <div className="p-6 md:p-7 border-b border-hairline shrink-0">
           <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-700' : 'bg-amber-500/15 text-amber-700')}>
             <AlertTriangle size={20} />
           </div>
@@ -132,7 +132,7 @@ export function ConfirmationModal({
           <p className="text-sm text-slate-500 font-normal mt-1.5 leading-relaxed">{message}</p>
         </div>
         <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
-          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-surface-row-hover hover:text-slate-900 border border-transparent hover:border-slate-200 transition-all">
+          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-surface-row-hover hover:text-slate-900 border border-transparent hover:border-hairline transition-all">
             {cancelText}
           </button>
           <button
@@ -240,7 +240,7 @@ export function ViewLoader() {
       <div className="surface-card rounded-3xl overflow-hidden">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i}>
-            <SkeletonRow className="border-b border-slate-100 last:border-0" />
+            <SkeletonRow className="border-b border-hairline-subtle last:border-0" />
           </div>
         ))}
       </div>
@@ -275,7 +275,7 @@ export function CredentialsModal({
   return (
     <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
       <div className="flex max-h-[88dvh] flex-col overflow-hidden">
-        <div className="p-6 md:p-7 border-b border-slate-200/70 flex items-center justify-between shrink-0">
+        <div className="p-6 md:p-7 border-b border-hairline flex items-center justify-between shrink-0">
           <div>
             <h2 className="text-section-title">{title}</h2>
             <p className="mt-1.5 text-sm text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>

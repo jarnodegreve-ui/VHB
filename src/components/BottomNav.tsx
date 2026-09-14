@@ -6,6 +6,7 @@ import { prefetchView } from '../app/viewLoaders';
 import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
 import { overgangActief } from '../lib/overgang';
+import { CountUp } from './CountUp';
 
 type NavSlot = {
   view: View;
@@ -85,7 +86,7 @@ export function BottomNav({
       className={cn(
         // left/right respecteren de safe-area (landscape/notch) — iOS negeert
         // de portrait-lock uit het manifest, dus landscape kán voorkomen.
-        'md:hidden fixed left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] z-40 rounded-2xl px-1.5 py-2 transition-all duration-300',
+        'md:hidden fixed left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] z-40 rounded-2xl px-1.5 py-2 transition-[opacity,transform] duration-slow',
         // Opaak oppervlak + schaduw in index.css (.bottom-dock): blur jankt op
         // een fixed balk, en doorschijnend-zonder-blur liet de content er
         // rommelig doorheen schemeren.
@@ -143,7 +144,7 @@ export function BottomNav({
                   {slot.icon}
                   {slot.badge !== undefined && slot.badge > 0 && (
                     <span className="absolute -top-1.5 -right-3 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
-                      {slot.badge > 9 ? '9+' : slot.badge}
+                      <CountUp value={slot.badge} badge format={(n) => (n > 9 ? '9+' : n)} />
                     </span>
                   )}
                 </span>

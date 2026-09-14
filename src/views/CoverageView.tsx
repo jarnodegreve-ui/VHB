@@ -597,7 +597,7 @@ export function CoverageView() {
 
               {/* 1b. Lijsten uit de planning: voorstel per dag-type uit wat er
                   deze maand echt gereden wordt (verbeterronde 22-08, nr. 2). */}
-              <div className="border-t border-slate-100 pt-5 space-y-3">
+              <div className="border-t border-hairline-subtle pt-5 space-y-3">
                 {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
@@ -648,7 +648,7 @@ export function CoverageView() {
               </div>
 
               {/* 2. Standaard dag-type per weekdag */}
-              <div className="border-t border-slate-100 pt-5 space-y-3">
+              <div className="border-t border-hairline-subtle pt-5 space-y-3">
                 {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
@@ -737,7 +737,7 @@ export function CoverageView() {
               </div>
 
               {/* 3. Uitzonderingen */}
-              <div className="border-t border-slate-100 pt-5 space-y-3">
+              <div className="border-t border-hairline-subtle pt-5 space-y-3">
                 {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
@@ -804,7 +804,7 @@ export function CoverageView() {
               </div>
 
               {/* 4. Kalender-voorzet: feestdagen + schoolvakanties in één klik */}
-              <div className="border-t border-slate-100 pt-5 space-y-3">
+              <div className="border-t border-hairline-subtle pt-5 space-y-3">
                 {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"

@@ -8,14 +8,11 @@ import { useRoute, routeUitUrl } from './app/router';
 import { magView, routeVan } from './app/routes';
 import { SidebarNav } from './app/SidebarNav';
 import { SessieLaden, ProfielLaden, PrintLaden, ConfigOntbreekt, ToestelGeblokkeerd } from './app/PreAppScreens';
-import { TweeStapsScherm } from './app/TweeStapsScherm';
 import { bepaalTweeStapsStap, leesTweeStapsStatus } from './lib/tweeStaps';
 import { GEDEELD_TOESTEL_EVENT, isGedeeldToestel, useInactiviteitsUitlog } from './lib/inactiviteit';
 import { AppSkeleton, heeftOpgeslagenSessie } from './app/AppSkeleton';
-import { ProbleemMelder } from './app/ProbleemMelder';
 import { useAppData } from './app/useAppData';
 import { AppDataProvider } from './app/AppDataContext';
-import { CalendarSubscribeModal } from './components/CalendarSubscribeModal';
 import { downloadRoosterIcs } from './lib/roosterIcs';
 import { ViewFout } from './app/ViewFout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -35,7 +32,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema, vergeetEffectiefThema, wisOfflineCaches, type ToastEventDetail } from './lib/ui';
 import { apiFetch, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
-import { VIEW_LOADERS, prefetchView } from './app/viewLoaders';
+import { VIEW_LOADERS, WARMUP_VIEWS, prefetchView, warmViews } from './app/viewLoaders';
 import { addBreadcrumb, reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { useAanwezigheid } from './lib/presence';
 import { meldLive } from './lib/liveSignaal';
@@ -44,6 +41,7 @@ import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribe
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { ViewLoader } from './components/ui';
+import { SchermInloop, Verwissel } from './components/Verwissel';
 import { IconButton, MicroLabel } from './components/primitives';
 import { Card } from './components/Card';
 import { Toast, ToastOpties, ToastStack } from './components/ToastStack';
@@ -54,15 +52,39 @@ import { OmgevingLabel } from './components/OmgevingLabel';
 import { OnderhoudBanner } from './components/OnderhoudBanner';
 import { useOnderhoud } from './app/useOnderhoud';
 import { UserMenu } from './components/UserMenu';
-import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
 import { MeldingenBel } from './components/MeldingenBel';
 import { berekenWerkvoorraad } from './lib/werkvoorraad';
 import { BrandSpinner } from './components/BrandSpinner';
-import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
 import { useRealtimeSync } from './lib/realtime';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { WatIsNieuwKaart } from './components/WatIsNieuwKaart';
+// Overlays lazy (punt 18, 14-09): wachtwoord wijzigen, agenda-abonnement, de
+// werkvoorraad-knop en het twee-stapsscherm zaten statisch in de schil, samen
+// met de DatePicker die de eerste twee via Field meeslepen: ±30 kB in
+// index-*.js voor schermen die een chauffeur zelden of nooit opent. De
+// `laad…`-functies bestaan los van React.lazy zodat de knop die zo'n overlay
+// opent hem bij hover/focus alvast kan ophalen (de eerste opening hapert dan
+// niet); de module-cache maakt de tweede aanroep gratis.
+const laadChangePasswordModal = () => import('./components/ChangePasswordModal');
+const laadCalendarSubscribeModal = () => import('./components/CalendarSubscribeModal');
+const laadProbleemMelder = () => import('./app/ProbleemMelder');
+const laadWerkvoorraadMenu = () => import('./components/WerkvoorraadMenu');
+const LazyChangePasswordModal = lazyWithRetry(() => laadChangePasswordModal().then((m) => ({ default: m.ChangePasswordModal })));
+const LazyCalendarSubscribeModal = lazyWithRetry(() => laadCalendarSubscribeModal().then((m) => ({ default: m.CalendarSubscribeModal })));
+// ProbleemMelder was de laatste schil-importeur van Field, en Field sleept de
+// DatePicker (±17 kB bron) mee; lazy = Field + DatePicker uit de startbundel.
+const LazyProbleemMelder = lazyWithRetry(() => laadProbleemMelder().then((m) => ({ default: m.ProbleemMelder })));
+const LazyWerkvoorraadMenu = lazyWithRetry(() => laadWerkvoorraadMenu().then((m) => ({ default: m.WerkvoorraadMenu })));
+const LazyTweeStapsScherm = lazyWithRetry(() => import('./app/TweeStapsScherm').then((m) => ({ default: m.TweeStapsScherm })));
+/** Voorladen van de account-overlays: bij hover/focus op het avatar-menu en
+ *  zodra Instellingen open staat (daar zitten dezelfde knoppen). */
+const laadAccountOverlays = () => {
+  void laadChangePasswordModal();
+  void laadCalendarSubscribeModal();
+  void laadProbleemMelder();
+};
+
 // Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
 // géén beheer-code en vooral géén xlsx-bundel (~430 kB) bij het opstarten —
 // die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
@@ -1023,32 +1045,32 @@ export default function App() {
     } catch { /* badging niet ondersteund — stil */ }
   }, [appBadgeCount]);
 
-  // Stille prefetch bij idle: de lazy views die hierna waarschijnlijk geopend
-  // worden alvast ophalen, zodat de eerste navigatie instant voelt zonder de
-  // startbundel te vergroten. Bewust NIET de xlsx-views (500 kB) — die laden
-  // pas bij echt gebruik.
+  // Stille warmup van de lazy views die hierna waarschijnlijk geopend worden,
+  // zodat de eerste navigatie instant voelt zonder de startbundel te
+  // vergroten. Sinds 14-09 (punt 18) niet meer bij de eerste idle-callback
+  // maar pas ná de LCP + marge, en alleen dównloaden (prefetch-link via de
+  // chunk-kaart van de build) in plaats van evalueren: de oude warmup legde
+  // 75 kB brotli (>250 kB JS) aan evaluatiewerk midden in het meetvenster
+  // (Lighthouse /mijn-dag 0,81 / LCP 4,5 s tegen 0,85 / 3,9 s zonder warmup;
+  // CI-TBT 575-1037 ms). Lijsten per rol en de hele werkwijze: warmViews in
+  // src/app/viewLoaders.ts. Bewust NIET de xlsx-views (500 kB) en niet
+  // 'verlof' (schemas + zod, hover-prefetch dekt hem).
   useEffect(() => {
     if (!currentUser || isInitialLoad) return;
-    const w = window as any;
-    const cb = () => {
-      // De schermen die hierna het vaakst geopend worden (per rol), stil.
-      // Dashboard/Mijn dag/Rooster voorop (prestatiebudget 09-2026): wie op
-      // een deeplink landt heeft het dashboard nog niet, en Mijn dag is de
-      // eerste tik van elke chauffeur. Al geladen = gratis (module-cache).
-      const volgende: View[] = currentUser.role === 'chauffeur'
-        ? ['dashboard', 'mijn-dag', 'rooster', 'verlof', 'omleidingen', 'ruil-verzoeken']
-        : ['dashboard', 'mijn-dag', 'rooster', 'verlof', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'];
-      volgende.forEach((v) => prefetchView(v));
-    };
-    const idleId = typeof w.requestIdleCallback === 'function'
-      ? w.requestIdleCallback(cb, { timeout: 5000 })
-      : window.setTimeout(cb, 2500);
-    return () => {
-      if (typeof w.cancelIdleCallback === 'function') w.cancelIdleCallback(idleId);
-      else window.clearTimeout(idleId);
-    };
+    return warmViews(WARMUP_VIEWS[currentUser.role === 'chauffeur' ? 'chauffeur' : 'staf']);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role, isInitialLoad]);
+
+  // Overlays voorladen op het moment dat ze waarschijnlijk worden: de
+  // werkvoorraad-knop staat voor staf altijd in de topbar (meteen ophalen,
+  // parallel met de data, zodat het plekje maar een oogwenk leeg is); de
+  // account-overlays zodra Instellingen open staat (de knoppen zitten daar).
+  useEffect(() => {
+    if (currentUser && isStaf(currentUser.role)) void laadWerkvoorraadMenu();
+  }, [currentUser?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (currentView === 'instellingen') laadAccountOverlays();
+  }, [currentView]);
 
   const handleLogin = async (accessToken?: string) => {
     const token = accessToken || session?.access_token;
@@ -1198,7 +1220,8 @@ export default function App() {
   // Twee-stapsverificatie: ingelogd, maar de code (of de inschrijving) ontbreekt nog.
   if (tweeStaps && session) {
     return (
-      <TweeStapsScherm
+      <Suspense fallback={<SessieLaden />}>
+      <LazyTweeStapsScherm
         stap={tweeStaps.stap}
         factorId={tweeStaps.factorId}
         onLogout={handleLogout}
@@ -1214,6 +1237,7 @@ export default function App() {
           void initializeAuthenticatedApp(verse.access_token, verse.user?.id);
         }}
       />
+      </Suspense>
     );
   }
 
@@ -1282,13 +1306,29 @@ export default function App() {
       <SpeedInsights route={`/${resolvedCurrentView}`} />
       <OfflineBanner />
       <InstallPrompt />
-      <ChangePasswordModal
-        isOpen={showChangePassword}
-        onClose={() => setShowChangePassword(false)}
-        email={currentUser?.email || session?.user?.email || ''}
-      />
-      <ProbleemMelder open={showProbleemMelder} onClose={() => setShowProbleemMelder(false)} view={currentView} />
-      <CalendarSubscribeModal open={showAgenda} onClose={() => setShowAgenda(false)} onDownload={() => downloadRoosterIcs(currentUser.name, shifts.filter((s) => String(s.driverId) === String(currentUser.id)))} />
+      {/* Lazy overlays alleen mounten terwijl ze open staan: Modal heeft
+          bewust geen exit-animatie (zie Modal.tsx), dus er gaat niets
+          verloren; de Suspense-fallback is leeg omdat de chunk bij hover/focus
+          op het avatar-menu al binnen is. */}
+      {showChangePassword && (
+        <Suspense fallback={null}>
+          <LazyChangePasswordModal
+            isOpen
+            onClose={() => setShowChangePassword(false)}
+            email={currentUser?.email || session?.user?.email || ''}
+          />
+        </Suspense>
+      )}
+      {showProbleemMelder && (
+        <Suspense fallback={null}>
+          <LazyProbleemMelder open onClose={() => setShowProbleemMelder(false)} view={currentView} />
+        </Suspense>
+      )}
+      {showAgenda && (
+        <Suspense fallback={null}>
+          <LazyCalendarSubscribeModal open onClose={() => setShowAgenda(false)} onDownload={() => downloadRoosterIcs(currentUser.name, shifts.filter((s) => String(s.driverId) === String(currentUser.id)))} />
+        </Suspense>
+      )}
       <AnimatePresence>
         {isLoading && !isInitialLoad && (
           <motion.div
@@ -1297,7 +1337,7 @@ export default function App() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[110] flex items-center justify-center bg-ink/20"
           >
-            <Card padding="sm" className="shadow-xl">
+            <Card padding="sm" className="elev-2">
               <div className="flex items-center gap-4">
                 <BrandSpinner size={24} />
                 <div>
@@ -1329,7 +1369,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-ink/35 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-40 lg:hidden"
           />
         )}
       </AnimatePresence>
@@ -1339,16 +1379,17 @@ export default function App() {
         aria-label="Zijbalk"
         inert={!isSidebarOpen && !isDesktopNav}
         className={cn(
-          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
+          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
-        // Zachte uitloop zonder overshoot — de bounce voelde gedateerd en
-        // botste met de verder stille motion-taal.
+        // De schuif-transitie komt uit .panel-dark (transform op
+        // --duration-slow/--ease-standard, index.css): geen tweede
+        // transition-transform/duration hier, dat was dubbel.
         // Landscape: iOS negeert de portrait-lock, dus met de notch links
         // hoort de zijbalk de linker-inset te respecteren (dock en SlideOver
         // deden dat al) — anders vallen logo en menu-items deels onder de
         // notch (controle-ronde 27-08, nr. 35).
-        style={{ transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)', paddingLeft: 'env(safe-area-inset-left)' }}
+        style={{ paddingLeft: 'env(safe-area-inset-left)' }}
       >
         {/* Statusbalkzone donker houden zolang de lade open is (licht thema: de
             lade is licht, de statusbalktekens wit — controle 05-09, nr. 14). */}
@@ -1417,7 +1458,7 @@ export default function App() {
           ref={ptrIndicatorRef}
           className="pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-40 flex justify-center opacity-0"
         >
-          <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-white shadow-md ring-1 ring-hairline">
+          <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-white elev-2 ring-1 ring-hairline">
             <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500', ptrRefreshing && 'animate-spin')} />
           </div>
         </div>
@@ -1459,7 +1500,7 @@ export default function App() {
                   <OmgevingLabel className="shrink-0" />
                   <h2
                     aria-hidden={!isScrolled || undefined}
-                    className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-200', isScrolled ? 'opacity-100' : 'opacity-0')}
+                    className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-base', isScrolled ? 'opacity-100' : 'opacity-0')}
                   >
                     {currentMeta.title}
                   </h2>
@@ -1493,17 +1534,25 @@ export default function App() {
                       Jarno 31-08): open taken vanuit elk scherm zichtbaar;
                       verving de statuspil op het planner-dashboard. */}
                   {isPlanner && werkvoorraad && (
-                    <WerkvoorraadMenu
-                      werkvoorraad={werkvoorraad}
-                      userNaam={(id) => users.find((u) => String(u.id) === String(id))?.name || 'Onbekend'}
-                      onNavigate={setCurrentView}
-                    />
+                    // Lazy (punt 18); de fallback heeft de maat van de
+                    // IconButton sm zodat de topbar niet verspringt in de
+                    // oogwenk voordat de chunk (al bij het inloggen gestart) er is.
+                    <Suspense fallback={<span aria-hidden="true" className="inline-block h-11 w-11 shrink-0 sm:pointer-fine:h-8 sm:pointer-fine:w-8" />}>
+                      <LazyWerkvoorraadMenu
+                        werkvoorraad={werkvoorraad}
+                        userNaam={(id) => users.find((u) => String(u.id) === String(id))?.name || 'Onbekend'}
+                        onNavigate={setCurrentView}
+                      />
+                    </Suspense>
                   )}
                   {/* Bel = meldingencentrum (06-09): eigen meldingen met
                       ongelezen-teller; de werkvoorraad-knop hiernaast blijft
                       de open taken van staf tellen. */}
                   <MeldingenBel onNavigate={setCurrentView} actief={resolvedCurrentView === 'meldingen'} />
                   {isPlanner && <AanwezigheidStack />}
+                  {/* Wikkel zonder eigen doos (contents): bij hover/focus op
+                      het avatar-menu de lazy account-overlays alvast ophalen. */}
+                  <span className="contents" onPointerEnter={laadAccountOverlays} onFocus={laadAccountOverlays}>
                   <UserMenu
                     user={currentUser}
                     initials={userInitials}
@@ -1517,6 +1566,7 @@ export default function App() {
                     onLogout={handleLogout}
                     onInstellingen={() => setCurrentView('instellingen')}
                   />
+                  </span>
                 </div>
               </div>
             </header>
@@ -1546,15 +1596,17 @@ export default function App() {
               animatie op de hele view (mode="wait" = exit + enter, ~0.56s op
               een grote DOM) veroorzaakte hapering bij het wisselen van pagina's
               op tragere Windows-pc's. Instant = sneller en jank-vrij. */}
-          <div id="hoofdinhoud" tabIndex={-1} className="mx-auto w-full max-w-[1200px] outline-none">
+          <div id="hoofdinhoud" tabIndex={-1} className="mx-auto w-full max-w-[1200px] focus-stil">
             {/* Foutgrens per view: een crash in één scherm laat sidebar,
                 sessie en context staan; de key reset de grens bij een
                 viewwissel of "Opnieuw proberen". */}
             <ErrorBoundary key={`${resolvedCurrentView}-${viewFoutReset}`} fallback={<ViewFout onRetry={() => setViewFoutReset((n) => n + 1)} />}>
-            {/* Eén Suspense voor alle (lazy) views + een zachte inloop van 150 ms
-                bij een viewwissel (view-in in index.css; respecteert reduced motion). */}
+            {/* Eén Suspense voor alle (lazy) views + een zachte inloop per
+                scherm (SchermInloop: opacity/y op DUR.base, alleen als de view
+                transition het niet al doet; reduced motion = niets). De
+                Verwissel-wrappers cross-faden het skelet naar de inhoud. */}
             <Suspense fallback={<ViewLoader />}>
-            <div key={resolvedCurrentView} className="view-in">
+            <SchermInloop key={resolvedCurrentView}>
               {resolvedCurrentView === 'dashboard' && (
                 isPlanner ? (
                   /* Planner/admin: Operations Center — één operationele cockpit
@@ -1573,15 +1625,15 @@ export default function App() {
                 )
               )}
               {resolvedCurrentView === 'mijn-dag' && <LazyMijnDagView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />}
-              {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
+              {resolvedCurrentView === 'omleidingen' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} /></Verwissel>}
               {resolvedCurrentView === 'rooster' && <LazyScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
-              {resolvedCurrentView === 'dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyServicesView services={services} /></Suspense>)}
+              {resolvedCurrentView === 'dienstoverzicht' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyServicesView services={services} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'ritblaadjes' && <LazyRitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'documenten' && <LazyDocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
-              {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <LazyUpdatesView updates={updates} />)}
+              {resolvedCurrentView === 'updates' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazyUpdatesView updates={updates} /></Verwissel>}
               {resolvedCurrentView === 'meldingen' && <LazyMeldingenView onNavigate={setCurrentView} />}
-              {resolvedCurrentView === 'contacten' && (isInitialLoad ? <ViewLoader /> : <LazyContactsView users={users} currentUser={currentUser!} />)}
-              {resolvedCurrentView === 'beheer-roosters' && (isInitialLoad ? <ViewLoader /> : (
+              {resolvedCurrentView === 'contacten' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazyContactsView users={users} currentUser={currentUser!} /></Verwissel>}
+              {resolvedCurrentView === 'beheer-roosters' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
                     await Promise.all([
@@ -1593,8 +1645,8 @@ export default function App() {
                     ]);
                   }} />
                 </Suspense>
-              ))}
-              {resolvedCurrentView === 'planning-matrix' && (isInitialLoad ? <ViewLoader /> : (
+              </Verwissel>}
+              {resolvedCurrentView === 'planning-matrix' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyPlanningMatrixView
                     rows={planningMatrixRows}
@@ -1607,24 +1659,24 @@ export default function App() {
                     onOpenUserManagement={() => setCurrentView('gebruikers')}
                   />
                 </Suspense>
-              ))}
-              {resolvedCurrentView === 'planning-codes' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense>)}
-              {resolvedCurrentView === 'beheer-updates' && (isInitialLoad ? <ViewLoader /> : (
+              </Verwissel>}
+              {resolvedCurrentView === 'planning-codes' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'beheer-updates' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSaveUpdate={saveUpdate} onCreateUpdate={createUpdate} onDeleteUpdate={deleteUpdate} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} />
                 </Suspense>
-              ))}
-              {resolvedCurrentView === 'gebruikers' && (isInitialLoad ? <ViewLoader /> : (
+              </Verwissel>}
+              {resolvedCurrentView === 'gebruikers' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUsersView currentUser={currentUser!} />
                 </Suspense>
-              ))}
+              </Verwissel>}
               {resolvedCurrentView === 'toestellen' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyDevicesView users={users} currentUserId={currentUser!.id} />
                 </Suspense>
               )}
-              {resolvedCurrentView === 'activiteit' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense>)}
+              {resolvedCurrentView === 'activiteit' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
               {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
               {resolvedCurrentView === 'defecten' && <Suspense fallback={<ViewLoader />}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
@@ -1633,13 +1685,13 @@ export default function App() {
               {resolvedCurrentView === 'dienstopbouw' && <Suspense fallback={<ViewLoader />}><LazyDienstopbouwView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'dagafsluiting' && <Suspense fallback={<ViewLoader />}><LazyDagafsluitingView currentUser={currentUser!} users={users} /></Suspense>}
               {resolvedCurrentView === 'looncontrole' && <Suspense fallback={<ViewLoader />}><LazyLooncontroleView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense>}
-              {resolvedCurrentView === 'beheer-omleidingen' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense>)}
-              {resolvedCurrentView === 'beheer-dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense>)}
-              {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
+              {resolvedCurrentView === 'beheer-omleidingen' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'beheer-dienstoverzicht' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'ruil-verzoeken' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} /></Verwissel>}
               {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
-              {resolvedCurrentView === 'verlof-kalender' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>)}
-              {resolvedCurrentView === 'verlof' && (isInitialLoad ? <ViewLoader /> : (
+              {resolvedCurrentView === 'verlof-kalender' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'verlof' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView
                     user={currentUser}
@@ -1654,8 +1706,8 @@ export default function App() {
                     shifts={shifts}
                   />
                 </Suspense>
-              ))}
-              {resolvedCurrentView === 'ziekte' && (isInitialLoad ? <ViewLoader /> : (
+              </Verwissel>}
+              {resolvedCurrentView === 'ziekte' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyZiekteView
                     user={currentUser}
@@ -1673,7 +1725,7 @@ export default function App() {
                     }}
                   />
                 </Suspense>
-              ))}
+              </Verwissel>}
               {resolvedCurrentView === 'designsysteem' && <LazyDesignsysteemView />}
               {resolvedCurrentView === 'instellingen' && (
                 <LazyInstellingenView
@@ -1690,12 +1742,12 @@ export default function App() {
                   onNavigate={setCurrentView}
                 />
               )}
-              {resolvedCurrentView === 'beheer-debug' && (isInitialLoad ? <ViewLoader /> : (
+              {resolvedCurrentView === 'beheer-debug' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
                 </Suspense>
-              ))}
-            </div>
+              </Verwissel>}
+            </SchermInloop>
             </Suspense>
             </ErrorBoundary>
           </div>

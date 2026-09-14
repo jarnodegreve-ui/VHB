@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Bell, Bus, Check, Download, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { PageHeader, PageShell, EmptyState } from '../../components/ui';
 import { Card, CardHeader } from '../../components/Card';
-import { Badge, Button, Chip, FilterChip, IconButton, MicroLabel, StatusBadge, Switch, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, Chip, FilterChip, IconButton, Meter, MeterVulling, MicroLabel, Segmented, StatusBadge, Switch, TableShell, Td, Th } from '../../components/primitives';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '../../components/Table';
@@ -90,6 +90,7 @@ export function DesignsysteemView() {
   const [filter, setFilter] = useState<'alle' | 'open'>('alle');
   const [zoek, setZoek] = useState('');
   const [gekozen, setGekozen] = useState<Set<string>>(new Set());
+  const [segment, setSegment] = useState<'vandaag' | 'morgen' | 'week'>('vandaag');
   const [pagina, setPagina] = useState(1);
   const sort = useSort<'naam' | 'dienst'>('naam');
   const [fout, setFout] = useState(false);
@@ -107,7 +108,7 @@ export function DesignsysteemView() {
       />
       <nav aria-label="Inhoud" className="flex flex-wrap gap-2">
         {INHOUD.map(([id, label]) => (
-          <a key={id} href={`#${id}`} className="ios-pressable rounded-full border border-slate-200 bg-paper px-3 py-1 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900">
+          <a key={id} href={`#${id}`} className="ios-pressable rounded-full border border-hairline bg-paper px-3 py-1 text-xs font-semibold text-slate-600 transition-colors hover:border-hairline-strong hover:text-slate-900">
             {label}
           </a>
         ))}
@@ -218,6 +219,18 @@ export function DesignsysteemView() {
           <Button variant="primary" size="sm"><Plus size={16} />Nieuw</Button>
           <Button variant="secondary" size="sm"><Download size={16} />Exporteren</Button>
           <Button variant="secondary" size="sm" disabled>Uitgeschakeld</Button>
+        </Rij>
+        <Rij label="Bezig">
+          <Button variant="primary" size="sm" icon={<Plus size={16} />} bezig>Opslaan</Button>
+          <Button variant="secondary" size="sm" iconRechts={<Download size={16} />} bezig>Exporteren</Button>
+          <Button variant="secondary" size="sm" bezig>Zonder icoon</Button>
+        </Rij>
+        <Rij label="Segmented">
+          <Segmented<'vandaag' | 'morgen' | 'week'> waarde={segment} opties={[{ waarde: 'vandaag', label: 'Vandaag' }, { waarde: 'morgen', label: 'Morgen' }, { waarde: 'week', label: 'Week' }]} onChange={setSegment} label="Periode kiezen" />
+        </Rij>
+        <Rij label="Meter">
+          <Meter className="h-1.5 w-40"><MeterVulling pct={35} className="bg-emerald-500" /></Meter>
+          <Meter className="h-1.5 w-40"><MeterVulling pct={80} className="bg-oker-500" /></Meter>
         </Rij>
         <Rij label="IconButton">
           <IconButton label="Bewerken" variant="ghost"><Pencil size={18} /></IconButton>

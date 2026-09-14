@@ -242,7 +242,7 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
       exit={{ ...(reduceMotion ? { opacity: 0 } : mobiel ? { opacity: 0, y: 24 } : { opacity: 0, scale: 0.96 }), transition: reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
       style={stijlDialoog}
       className={cn(
-        'fixed z-[130] bg-paper ring-1 ring-hairline shadow-xl outline-none',
+        'fixed z-[130] bg-paper ring-1 ring-hairline elev-2 outline-none',
         mobiel
           ? 'inset-x-0 bottom-0 rounded-t-2xl border-t border-rim p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
           // Op touch (tablet/landscape ≥640) zijn de cellen 44 px: 7 × 44 + p-3 past niet in 19.5rem.
@@ -288,11 +288,10 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
                   className={cn(
                     // 44 px raakvlak op touch, 36 px met een muis — zelfde recept als IconButton.
                     'ios-pressable mx-auto flex h-11 w-11 items-center justify-center rounded-lg text-sm tabular-nums transition-colors sm:pointer-fine:h-9 sm:pointer-fine:w-9',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oker-400',
                     inMaand ? 'text-slate-800' : 'text-slate-400',
                     uit ? 'cursor-not-allowed opacity-40' : 'hover:bg-slate-100/70',
                     isVandaag && !gekozen && 'ring-1 ring-inset ring-hairline-strong font-semibold',
-                    gekozen && 'bg-oker-500 text-slate-950 font-semibold shadow-sm shadow-oker-500/30 hover:bg-oker-400',
+                    gekozen && 'bg-oker-500 text-slate-950 font-semibold elev-accent hover:bg-oker-400',
                   )}
                 >
                   {Number(iso.slice(8, 10))}

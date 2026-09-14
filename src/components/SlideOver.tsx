@@ -140,8 +140,8 @@ export function SlideOver({
               // Bewust géén backdrop-filter op het geanimeerde paneel zelf
               // (blur + transform op één element geeft compositing-glitches);
               // near-opaque oppervlak heeft het ook niet nodig.
-              'fixed inset-y-0 right-0 z-[101] flex h-full w-full flex-col outline-none sm:rounded-l-2xl',
-              'bg-paper/95 border-l border-slate-200/80 shadow-2xl shadow-ink/20',
+              'fixed inset-y-0 right-0 z-[101] flex h-full w-full flex-col focus-stil sm:rounded-l-2xl',
+              'bg-paper/95 border-l border-hairline elev-3',
               widthClass,
             )}
           >
@@ -150,7 +150,7 @@ export function SlideOver({
                 header, inhoud en footer respecteren de zij-insets — anders valt
                 het sluitkruis deels achter de notch-hoek. */}
             <div
-              className="flex items-start gap-3 border-b border-slate-200/70 p-5"
+              className="flex items-start gap-3 border-b border-hairline p-5"
               style={{ paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
             >
               {icon}
@@ -183,7 +183,7 @@ export function SlideOver({
 
             {footer && (
               <div
-                className="border-t border-slate-200/70 p-4"
+                className="border-t border-hairline p-4"
                 style={{
                   paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
                   paddingRight: 'max(1rem, env(safe-area-inset-right))',

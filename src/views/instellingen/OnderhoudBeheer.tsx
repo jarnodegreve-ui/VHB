@@ -56,7 +56,7 @@ export function OnderhoudBeheer() {
       : 'Uit. Zet aan om iedereen een banner te tonen, bijvoorbeeld tijdens een migratie.';
 
   return (
-    <div className="border-b border-slate-100 py-3.5 first:pt-0 last:border-b-0 last:pb-0">
+    <div className="border-b border-hairline-subtle py-3.5 first:pt-0 last:border-b-0 last:pb-0">
       <div className="flex flex-wrap items-start gap-3">
         <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600"><Wrench size={16} /></span>
         <div className="min-w-[11rem] flex-1 basis-0">

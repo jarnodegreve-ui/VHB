@@ -85,7 +85,7 @@ export function Staafgrafiek({
                 className="flex h-full min-w-0 flex-1 cursor-pointer flex-col justify-end"
               >
                 {s.ontbreekt ? (
-                  <div className="w-full border-t border-dashed border-slate-300" />
+                  <div className="w-full border-t border-dashed border-hairline-strong" />
                 ) : (
                   <div
                     className={cn(
