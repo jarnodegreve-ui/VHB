@@ -13,8 +13,16 @@
 //   - afgeronde trace-hoekjes ("druppels") vallen weg in het snijpunt;
 //   - gladde stukken worden strakke cubic Béziers (Schneider-fit), gesloten
 //     ronde vormen (de O's) exacte cirkels.
+// De naamregel is géén opgeschoonde trace maar het echte lettertype: de
+// letters zijn Montserrat Medium (geïdentificeerd 14-09 via overlay op de
+// trace, elke letter valt samen). Elke glyph wordt uit
+// brand/vhb-final-logo-package/font/Montserrat-Medium.ttf (SIL OFL) gehaald
+// en op de exacte letterpositie van het pakket gezet (linkerrand van de
+// getraceerde letter, kaphoogte 32, basislijn 53), dus spatiëring en
+// proporties blijven die van het pakket.
 // Per pad wordt het oppervlakteverschil met de trace gemeten (raster 8×):
-// merk ±0,4 %, streep ±0,6 %, naamregel ±6 % (dunne halen, randruis).
+// merk ±0,4 %, streep ±0,6 %; naamregel ±17 % t.o.v. de trace, dat is de
+// trace-ruis rond dunne halen (Regular 32 %, SemiBold 30 %: Medium past).
 // Output: brand/vhb-final-logo-package/schoon/*.svg, dezelfde veertien
 // bestanden met dezelfde structuur/ids/kleuren, alleen de d-attributen zijn
 // schoon. BrandLogo.tsx en brand-icons.mjs lezen uit schoon/.
@@ -23,6 +31,7 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import opentype from 'opentype.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BRAND = path.join(ROOT, 'brand/vhb-final-logo-package');
@@ -160,6 +169,18 @@ const subs = await page.evaluate((paden) => {
 // --- opschonen ----------------------------------------------------------------
 const schoonPerPad = [[], [], []];
 for (const s of subs) { setP(s.pad === 2 ? PARAMS.letters : PARAMS.merk); const r = cleanSub(s.samples); schoonPerPad[s.pad].push(r.d); }
+// Naamregel: Montserrat Medium op de letterposities van het pakket.
+const TEKST = 'VANHOOREBEKE&ZOON'.split('');
+const CAP = 32, BASIS = 53; // kapitalen in de trace: y 21–53
+const font = opentype.loadSync(path.join(BRAND, 'font/Montserrat-Medium.ttf'));
+const fontSize = CAP / ((font.tables.os2.sCapHeight || 700) / font.unitsPerEm);
+const letterSubs = subs.filter((s) => s.pad === 2).slice(0, TEKST.length); // de 17 buitenomtrekken staan in leesvolgorde
+const naamregel = TEKST.map((ch, i) => {
+  const g = font.charToGlyph(ch); const bb = g.getPath(0, 0, fontSize).getBoundingBox();
+  const links = Math.min(...letterSubs[i].samples.map((q) => q[0]));
+  return g.getPath(links - bb.x1, BASIS, fontSize).toPathData(2);
+}).join(' ');
+schoonPerPad[2] = [naamregel];
 const schoonD = schoonPerPad.map((ds) => ds.join(' '));
 
 // --- controle: oppervlakteverschil met de trace (raster 8×) -------------------
@@ -175,7 +196,7 @@ const meting = await page.evaluate(({ paden, schoonD }) => {
 }, { paden, schoonD });
 await browser.close();
 console.log(`verschil met de trace: merk ${meting[0]} % · streep ${meting[1]} % · naamregel ${meting[2]} %`);
-if (meting[0] > 1 || meting[1] > 1.5 || meting[2] > 8) throw new Error('afwijking te groot, niet weggeschreven');
+if (meting[0] > 1 || meting[1] > 1.5 || meting[2] > 22) throw new Error('afwijking te groot, niet weggeschreven');
 
 // --- wegschrijven: alle pakketbestanden met schone d's -----------------------
 fs.mkdirSync(OUT, { recursive: true });
@@ -184,7 +205,7 @@ for (const naam of fs.readdirSync(BRAND).filter((f) => f.endsWith('.svg'))) {
   let svg = fs.readFileSync(path.join(BRAND, naam), 'utf8'); let i = 0;
   svg = svg.replace(/(<path fill="#[0-9A-Fa-f]{6}" fill-rule="evenodd" d=")[^"]+(")/g, (_, a, b) => `${a}${schoonD[i++]}${b}`);
   if (i !== 3) throw new Error(`${naam}: ${i} paden vervangen`);
-  svg = svg.replace('<title>', '<!-- Schone vectorversie (scripts/brand-paden-schoon.mjs) van het getraceerde pakketbestand; geometrie 1-op-1. --><title>');
+  svg = svg.replace('<title>', '<!-- Schone vectorversie (scripts/brand-paden-schoon.mjs) van het getraceerde pakketbestand: merk als zuivere geometrie op de trace, naamregel in Montserrat Medium op de letterposities van het pakket. --><title>');
   fs.writeFileSync(path.join(OUT, naam), svg); n++;
 }
 console.log(`✓ ${n} bestanden in brand/vhb-final-logo-package/schoon/`);
