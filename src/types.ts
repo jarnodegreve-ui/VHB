@@ -13,6 +13,19 @@ export const isStaf = (role: Role | string): boolean => role === 'planner' || ro
  *  de verlofbezetting. Een technieker niet. */
 export const isRijdend = (role: Role | string): boolean => role === 'chauffeur';
 
+/** Flexi-job (sectie “Flexi” in gebruikersbeheer; de import mapt alles met
+ *  “flex” daarop). Een flexi vult in, dus zijn verlof bezet geen vaste
+ *  dienst. */
+export const isFlexi = (section?: string | null): boolean =>
+  String(section ?? '').trim().toLowerCase().startsWith('flex');
+
+/** Telt deze persoon mee in de verlofbezetting (de verloflimiet per dag)?
+ *  Rijdend personeel wél, een technieker niet (Jarno 09-09) en een
+ *  flexi-job evenmin (Jarno 14-09): die vult in, dus zijn vrije dag maakt
+ *  de dag niet voller. */
+export const teltInVerlofbezetting = (u: { role: Role | string; section?: string | null }): boolean =>
+  isRijdend(u.role) && !isFlexi(u.section);
+
 // Meldingencentrum: het record en de soorten komen uit het gedeelde contract.
 export type { Melding, MeldingSoort, DashboardVoorkeuren };
 

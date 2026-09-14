@@ -61,8 +61,10 @@ export function mountTechniekRoutes(app: express.Express) {
       const lijst = actief ? alle.filter((v) => v.status !== "uit_dienst") : alle;
       res.setHeader("Cache-Control", "no-store");
       if (isTechniekRol(req.appUser!.role)) return res.json(lijst);
-      // Chauffeur: alleen wat hij nodig heeft om een bus te kiezen (geen nummerplaat, Jarno 13-09).
-      res.json(lijst.filter((v) => v.status !== "uit_dienst").map((v) => ({
+      // Chauffeur: alleen wat hij nodig heeft om een bus te kiezen (geen
+      // nummerplaat, Jarno 13-09) en géén privéwagens (Jarno 14-09): daar
+      // meldt een chauffeur nooit een defect op.
+      res.json(lijst.filter((v) => v.status !== "uit_dienst" && v.categorie !== "privewagen").map((v) => ({
         id: v.id, busnr: v.busnr, kortNr: v.kortNr, type: v.type, categorie: v.categorie, status: v.status,
       })));
     } catch (err) {
@@ -176,6 +178,11 @@ export function mountTechniekRoutes(app: express.Express) {
     try {
       const v = await getVehicle(body.vehicleId);
       if (!v || v.status === "uit_dienst") return res.status(400).json({ error: "Ongeldige invoer", details: "Kies een bestaande bus.", veldfouten: { vehicleId: "Kies een bestaande bus" } });
+      // Chauffeurs melden alleen op bussen en bedrijfswagens; een privéwagen
+      // krijgen ze niet in de keuzelijst en ook niet via een oude respons.
+      if (!isTechniekRol(req.appUser!.role) && v.categorie === "privewagen") {
+        return res.status(400).json({ error: "Ongeldige invoer", details: "Op een privéwagen kan je geen defect melden.", veldfouten: { vehicleId: "Kies een bus of bedrijfswagen" } });
+      }
       const melderId = String(req.appUser!.id);
       const d = await createDefect({ ...body, gemeldDoor: melderId });
       const users = await getUsersData();

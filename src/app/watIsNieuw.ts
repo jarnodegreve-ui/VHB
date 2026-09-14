@@ -24,6 +24,21 @@ export const WAT_IS_NIEUW_TONEN = false;
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-16',
+    titel: 'Dienstwissel 1-op-1, verloftelling en defect melden',
+    regels: {
+      chauffeur: [
+        'Bij “Defect melden” staan alleen nog bussen en bedrijfswagens in de keuzelijst.',
+      ],
+      staf: [
+        'Maandplanning: een handmatige dienstwissel kan nu ook tussen twee chauffeurs die die dag allebei rijden, ze wisselen dan hun diensten 1-op-1.',
+        'Wie een dienst afstaat aan een collega op TA (of een andere code) wordt vrij, de code van de collega verhuist niet mee.',
+        'Verloflimiet: flexi-jobs tellen niet meer mee in de bezetting per dag.',
+      ],
+    },
+    bekijk: { staf: 'bezetting' },
+  },
+  {
     id: '2026-09-15',
     titel: 'Techniek: categorieën en papieren gele boek',
     regels: {

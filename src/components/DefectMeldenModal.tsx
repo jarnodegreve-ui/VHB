@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Wrench } from 'lucide-react';
-import type { User } from '../types';
+import { isStaf, type User } from '../types';
 import { WERKTYPES, WERKTYPE_LABEL, DEFECT_OMSCHRIJVING_MAX, DEFECT_STATUS_LABEL, VOERTUIG_CATEGORIEEN, VOERTUIG_CATEGORIE_MEERVOUD, voertuigNaam, type Werktype } from '../../shared/techniek';
 import { defectMeldingBodySchema } from '../../shared/schemas/techniek';
 import { valideer } from '../lib/valideer';
@@ -60,11 +60,17 @@ export function DefectMeldenModal({
   // categorie lijnbussen vóór schoolbussen en dan op kort nummer. De keuzelijst
   // toont alleen het busnummer zoals het op de bus staat (Jarno 13-09): geen
   // nummerplaat of andere gegevens voor chauffeurs.
+  // Privéwagens zijn er alleen voor de garage (technieker/staf): een chauffeur
+  // krijgt ze niet te zien (Jarno 14-09; de server filtert ze ook al uit
+  // /api/vehicles en weigert de melding).
+  const magPrivewagen = currentUser.role === 'technieker' || isStaf(currentUser.role);
   const groepen = useMemo(() => {
     const rang = (v: VehicleKort) => (v.type === 'lijnbus' ? 0 : v.type === 'schoolbus' ? 1 : 2);
-    const gesorteerd = [...bussen].sort((a, b) => rang(a) - rang(b) || (a.kortNr ?? 99999) - (b.kortNr ?? 99999) || a.busnr.localeCompare(b.busnr, 'nl'));
+    const gesorteerd = [...bussen]
+      .filter((v) => magPrivewagen || v.categorie !== 'privewagen')
+      .sort((a, b) => rang(a) - rang(b) || (a.kortNr ?? 99999) - (b.kortNr ?? 99999) || a.busnr.localeCompare(b.busnr, 'nl'));
     return VOERTUIG_CATEGORIEEN.map((c) => ({ categorie: c, label: VOERTUIG_CATEGORIE_MEERVOUD[c], items: gesorteerd.filter((v) => (v.categorie ?? 'bus') === c) })).filter((g) => g.items.length > 0);
-  }, [bussen]);
+  }, [bussen, magPrivewagen]);
 
   const verstuur = async () => {
     if (bezig) return;

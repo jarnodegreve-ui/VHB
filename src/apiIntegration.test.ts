@@ -2886,6 +2886,34 @@ describe('handmatige dienstwissel, gates uit de controle-ronde', () => {
     expect(mem.planning.find((r: any) => r.id === 'sh-terug')?.driverId).toBe('3');
   });
 
+  it('weigert zonder returnLine als de nieuwe chauffeur die dag al rijdt (dubbele inplanning)', async () => {
+    mem.planning.push({ id: 'sh-x1', driverId: '3', date: '2026-07-21', line: '12' }, { id: 'sh-x2', driverId: '4', date: '2026-07-21', line: '14' });
+    const res = await wissel({ date: '2026-07-21', line: '12', fromDriverId: '3', toDriverId: '4' });
+    expect(res.status).toBe(409);
+    expect(String(res.json?.error)).toContain('dubbele inplanning');
+    expect(mem.planning.find((r: any) => r.id === 'sh-x1')?.driverId).toBe('3');
+  });
+
+  it('wisselt 1-op-1 tussen twee ingeplande chauffeurs met returnLine (Jarno 14-09)', async () => {
+    mem.planning.push({ id: 'sh-y1', driverId: '3', date: '2026-07-22', line: '12' }, { id: 'sh-y2', driverId: '4', date: '2026-07-22', line: 'R14' });
+    // De maandplanning-cel stuurt de rúwe schrijfwijze van de terugdienst mee.
+    const res = await wissel({ date: '2026-07-22', line: '12', fromDriverId: '3', toDriverId: '4', returnLine: 'r14' });
+    expect(res.status).toBe(200);
+    expect(mem.planning.find((r: any) => r.id === 'sh-y1')?.driverId).toBe('4');
+    expect(mem.planning.find((r: any) => r.id === 'sh-y2')?.driverId).toBe('3');
+    const swap = mem.swaps.find((s: any) => s.shiftDate === '2026-07-22');
+    expect(swap).toMatchObject({ status: 'approved', swapType: 'ruil', shiftLine: '12', returnDate: '2026-07-22', returnCode: 'R14' });
+  });
+
+  it('weigert de 1-op-1-wissel als de terugdienst niet (meer) bij de nieuwe chauffeur staat, en verplaatst niets', async () => {
+    mem.planning.push({ id: 'sh-z1', driverId: '3', date: '2026-07-23', line: '12' });
+    const res = await wissel({ date: '2026-07-23', line: '12', fromDriverId: '3', toDriverId: '4', returnLine: '99' });
+    expect(res.status).toBe(409);
+    expect(String(res.json?.error)).toContain('geen dienst 99');
+    expect(mem.planning.find((r: any) => r.id === 'sh-z1')?.driverId).toBe('3');
+    expect(mem.swaps.find((s: any) => s.shiftDate === '2026-07-23')).toBeUndefined();
+  });
+
   it('matcht de dienstcode genormaliseerd (rauwe matrixcode vs. canoniek nummer)', async () => {
     mem.planning.push({ id: 'sh-r12', driverId: '3', date: '2026-07-20', line: 'r12' });
     // De maandplanning-cel stuurt de rúwe schrijfwijze mee.

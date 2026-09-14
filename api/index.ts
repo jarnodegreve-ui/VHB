@@ -4440,6 +4440,10 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
     const fromDriverId = String(req.body?.fromDriverId ?? "").trim();
     const toDriverId = String(req.body?.toDriverId ?? "").trim();
     const reason = String(req.body?.reason ?? "").trim();
+    // Optioneel (Jarno 14-09): de dienst die de nieuwe chauffeur diezelfde dag
+    // al rijdt en die in ruil naar de huidige chauffeur gaat. Zonder
+    // returnLine blijft het een overname naar iemand die die dag vrij is.
+    const returnLine = String(req.body?.returnLine ?? "").trim();
 
     if (!ISO_DAY_RE.test(date)) return res.status(400).json({ error: "Ongeldige datum (JJJJ-MM-DD verwacht)." });
     if (!line) return res.status(400).json({ error: "Geen dienstnummer meegegeven." });
@@ -4472,14 +4476,38 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
     const dienstLine = String(ownRows[0].line);
 
     // Planningsconflict: de nieuwe chauffeur rijdt die dag al een dienst.
-    const conflictRow = dayRows.find((r) => String(r.driverId) === toDriverId);
-    if (conflictRow) {
-      return res.status(409).json({ error: `${toUser.name} rijdt op ${date} al dienst ${conflictRow.line}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg of kies iemand anders.` });
+    // Zonder returnLine is dat een fout (dubbele inplanning); mét returnLine
+    // is het juist de bedoeling: beide chauffeurs staan ingepland en wisselen
+    // hun diensten 1-op-1 (Jarno 14-09).
+    const returnToken = toLookupToken(returnLine);
+    const toRows = dayRows.filter((r) => String(r.driverId) === toDriverId);
+    let terugLine: string | null = null;
+    if (returnLine) {
+      if (returnToken === lineToken) return res.status(400).json({ error: "De terugdienst is dezelfde als de dienst die je overzet." });
+      const terugRow = toRows.find((r) => toLookupToken(r.line) === returnToken);
+      if (!terugRow) {
+        return res.status(409).json({ error: `${toUser.name} rijdt op ${date} geen dienst ${returnLine} (meer), de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
+      }
+      terugLine = String(terugRow.line);
+      // De gever moet die dag zelf kunnen rijden: op een afwezigheidscel
+      // (ziek, verlof) zet je een dienst wég, je haalt er geen bij.
+      const andereVanGever = dayRows.find((r) => String(r.driverId) === fromDriverId && toLookupToken(r.line) !== lineToken);
+      if (andereVanGever) {
+        return res.status(409).json({ error: `${fromUser.name} rijdt op ${date} ook dienst ${andereVanGever.line}, de terugdienst zou een dubbele inplanning geven. Zet die dienst eerst weg.` });
+      }
+    } else {
+      const conflictRow = toRows[0];
+      if (conflictRow) {
+        return res.status(409).json({ error: `${toUser.name} rijdt op ${date} al dienst ${conflictRow.line}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg, kies iemand anders, of wissel de twee diensten 1-op-1.` });
+      }
     }
 
     // Afwezigheid: wie ziek of met verlof gemeld is, krijgt geen dienst
-    // toegeschoven (zelfde check als bij het goedkeuren van een ruil).
-    const afwFout = await ruilAfwezigheidsFout({ requesterId: fromDriverId, targetDriverId: toDriverId, swapType: "overname", shiftDate: date });
+    // toegeschoven (zelfde check als bij het goedkeuren van een ruil). Bij
+    // een 1-op-1-wissel geldt dat voor béíde chauffeurs.
+    const afwFout = await ruilAfwezigheidsFout(terugLine
+      ? { requesterId: fromDriverId, targetDriverId: toDriverId, swapType: "ruil", shiftDate: date, returnDate: date, returnCode: terugLine }
+      : { requesterId: fromDriverId, targetDriverId: toDriverId, swapType: "overname", shiftDate: date });
     if (afwFout) return res.status(409).json({ error: afwFout });
 
     // Een openstaande ruilaanvraag op dezelfde dienst zou door deze wissel
@@ -4491,11 +4519,16 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
     const allSwaps = await getSwapsData();
     const zelfdeDienst = (d?: unknown, l?: unknown) =>
       String(d ?? "") === date && !!String(l ?? "").trim() && toLookupToken(String(l ?? "")) === lineToken;
+    const zelfdeTerugDienst = (d?: unknown, l?: unknown) =>
+      !!terugLine && String(d ?? "") === date && !!String(l ?? "").trim() && toLookupToken(String(l ?? "")) === returnToken;
     const openSwap = allSwaps.find((s) =>
       (s.status === "pending" || s.status === "accepted") &&
       (zelfdeDienst(s.shiftDate, s.shiftLine) ||
         zelfdeDienst(s.returnDate, s.returnCode) ||
-        ownRows.some((r) => String(r.id) === String(s.shiftId))));
+        zelfdeTerugDienst(s.shiftDate, s.shiftLine) ||
+        zelfdeTerugDienst(s.returnDate, s.returnCode) ||
+        ownRows.some((r) => String(r.id) === String(s.shiftId)) ||
+        toRows.some((r) => String(r.id) === String(s.shiftId))));
     if (openSwap) {
       return res.status(409).json({ error: "Voor deze dienst loopt nog een ruilaanvraag. Handel die eerst af (goedkeuren, afwijzen of laten intrekken) en probeer daarna opnieuw." });
     }
@@ -4509,9 +4542,12 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
       status: "approved" as const,
       createdAt: nu,
       decidedAt: nu,
-      swapType: "overname" as const,
+      // 1-op-1 op dezelfde dag = een gewone 'ruil' met de terugdienst op de
+      // dienstdag; doorvoer, terugdraaien en replay kennen die vorm al.
+      swapType: (terugLine ? "ruil" : "overname") as "ruil" | "overname",
       shiftDate: date,
       shiftLine: dienstLine,
+      ...(terugLine ? { returnDate: date, returnCode: terugLine } : {}),
       reason: `${HANDMATIGE_WISSEL_PREFIX}${req.appUser?.name ?? "admin"}, ${reason}`,
     };
 
@@ -4522,21 +4558,31 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
     if (!carryResult || carryResult.offeredMoved === 0) {
       return res.status(409).json({ error: "De dienst kon niet verplaatst worden, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw." });
     }
+    if (terugLine && !carryResult.returnMoved) {
+      // Halve wissel: de aangeboden dienst is al verhuisd, de terugdienst
+      // niet. Terugdraaien en melden, anders staat de gever zonder dienst.
+      await revertSwapFromPlanning({ ...swap, swapType: "overname", returnDate: undefined, returnCode: undefined });
+      return res.status(409).json({ error: `Dienst ${terugLine} van ${toUser.name} kon niet verplaatst worden, de planning is intussen gewijzigd. Er is niets gewisseld. Vernieuw de pagina en probeer opnieuw.` });
+    }
     await saveSwapsData([swap], []);
 
     const carry = describeSwapCarry(swap, carryResult, "doorgevoerd");
     await logActivity(
       req,
       "swaps",
-      "Dienst handmatig overgezet",
-      `${fromUser.name} → ${toUser.name}, dienst ${dienstLine} op ${date}. Reden: ${reason}. ${carry}`,
+      terugLine ? "Diensten handmatig gewisseld" : "Dienst handmatig overgezet",
+      terugLine
+        ? `${fromUser.name} ⇄ ${toUser.name} op ${date}: dienst ${dienstLine} naar ${toUser.name}, dienst ${terugLine} naar ${fromUser.name}. Reden: ${reason}. ${carry}`
+        : `${fromUser.name} → ${toUser.name}, dienst ${dienstLine} op ${date}. Reden: ${reason}. ${carry}`,
       { type: "swap", id: swap.id },
     );
 
     await sendPushToUsers([fromDriverId, toDriverId], {
       title: "Planning aangepast",
       soort: "planning",
-      body: `Dienst ${dienstLine} op ${date} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
+      body: terugLine
+        ? `Op ${date} zijn de diensten gewisseld: ${toUser.name} rijdt dienst ${dienstLine}, ${fromUser.name} rijdt dienst ${terugLine}. Reden: ${reason}.`
+        : `Dienst ${dienstLine} op ${date} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
       url: viewUrl("rooster"),
     });
 

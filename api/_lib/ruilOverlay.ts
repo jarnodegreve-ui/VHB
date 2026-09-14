@@ -52,13 +52,20 @@ export type OverlayUitkomst = {
   overgeslagen: number;
 };
 
+/** De cel van de gever na een wissel als de ontvanger geen dienst had: een
+ *  expliciete “vrij”. De code van de ontvanger (ta, bv, tk, opl) is
+ *  persoonlijk en verhuist niet mee (Jarno 14-09: een TA moet gewisseld
+ *  kunnen worden en de gever wordt dan vrij, niet TA). */
+export const VRIJ_CEL: OverlayCel = { code: "vrij", kind: "absence", label: "Geen dienst", segments: [] };
+
 export function legRuilenOverMaandbeeld(
   cells: OverlayCellen,
   swaps: OverlayRuil[],
-  opts: { dates: Iterable<string>; chauffeurIds: Set<string>; naamVanId: (id: string) => string },
+  opts: { dates: Iterable<string>; chauffeurIds: Set<string>; naamVanId: (id: string) => string; vrijCel?: OverlayCel },
 ): OverlayUitkomst {
   const dateSet = new Set(opts.dates);
   const uit: OverlayUitkomst = { gewisseld: 0, gemarkeerd: 0, overgeslagen: 0 };
+  const vrijCel = opts.vrijCel ?? VRIJ_CEL;
   const toontCode = (cel: OverlayCel | undefined, code: string): cel is OverlayCel =>
     !!cel && toLookupToken(cel.code) === toLookupToken(code);
 
@@ -71,7 +78,10 @@ export function legRuilenOverMaandbeeld(
     if (toontCode(vanCel, verwachtCode)) {
       if (!cells[naarId]) cells[naarId] = {};
       cells[naarId][date] = { ...vanCel, ...merk };
-      if (naarCel) cells[vanId][date] = naarCel;
+      // Had de ontvanger zelf een dienst (1-op-1 op dezelfde dag), dan krijgt
+      // de gever die; een afwezigheidscode van de ontvanger neemt hij niet
+      // over, dan wordt hij vrij. Geen cel = blijft leeg.
+      if (naarCel) cells[vanId][date] = naarCel.kind === "service" ? naarCel : { ...vrijCel };
       else delete cells[vanId][date];
       uit.gewisseld += 1;
       return;
