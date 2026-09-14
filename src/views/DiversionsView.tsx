@@ -9,6 +9,7 @@ import { cn } from '../lib/ui';
 import { kiesRecord } from '../lib/overgang';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
+import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { OmleidingDetail } from '../components/OmleidingDetail';
 import { Input, Select } from '../components/Field';
@@ -90,7 +91,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
       ))}
 
       {nietsActueel && (
-        <p className="text-sm text-slate-500">Geen lopende of komende omleidingen.</p>
+        <p className="text-body-sm text-slate-500">Geen lopende of komende omleidingen.</p>
       )}
 
       {groepen.verlopen.length > 0 && (
@@ -104,18 +105,18 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
             className="ios-pressable -mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between rounded-lg px-1 py-1 text-left transition-colors hover:bg-slate-500/6"
           >
             <SectieKop id="omleidingen-verlopen" titel="Voorbij" aantal={groepen.verlopen.length} inline />
-            <span className="flex items-center gap-1 text-2xs font-medium text-slate-500">
+            <span className="flex items-center gap-1 text-xs font-medium text-slate-500">
               {verlopenOpen ? 'Verbergen' : 'Tonen'}
-              <ChevronDown size={14} className={cn('transition-transform', verlopenOpen && 'rotate-180')} />
+              <ChevronDown size={14} className={uitklapChevron(verlopenOpen)} />
             </span>
           </button>
-          {verlopenOpen && (
-            <ul id="omleidingen-verlopen-lijst" className="mt-2 space-y-2" aria-label="Voorbij">
+          <Uitklap open={verlopenOpen} id="omleidingen-verlopen-lijst">
+            <ul className="mt-2 space-y-2" aria-label="Voorbij">
               {groepen.verlopen.map((div) => (
                 <OmleidingRij key={div.id} div={div} vandaag={vandaag} isCurrent={detail?.id === div.id} onClick={() => kies(div.id)} />
               ))}
             </ul>
-          )}
+          </Uitklap>
         </section>
       )}
     </div>
@@ -193,7 +194,7 @@ function SectieKop({ id, titel, aantal, inline = false }: { id: string; titel: s
   return (
     <h3 id={id} className={cn('flex items-baseline gap-1.5', !inline && 'mb-2 px-0.5')}>
       <MicroLabel>{titel}</MicroLabel>
-      <span className="text-2xs font-medium tabular-nums text-slate-500">{aantal}</span>
+      <span className="text-xs font-medium tabular-nums text-slate-500">{aantal}</span>
     </h3>
   );
 }
@@ -233,7 +234,7 @@ function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; va
         <LijnTegel line={div.line} size="sm" tone={verlopen ? 'muted' : 'accent'} className="mt-0.5 self-start" />
         <div className="min-w-0 flex-1">
           {/* Plaats vet en in oker vóór de titel: dát scant een chauffeur als eerste (Jarno 10-09). */}
-          <h4 className="text-card-title leading-snug" data-vt-record={div.id}>
+          <h4 className="text-md font-semibold leading-snug text-slate-900" data-vt-record={div.id}>
             {div.location && <span className={verlopen ? 'text-slate-600' : 'text-oker-800'}>{div.location} · </span>}
             {div.title}
             {div.pdfUrl && (

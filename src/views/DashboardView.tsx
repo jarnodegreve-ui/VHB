@@ -15,11 +15,11 @@ import { relatieveDag } from '../lib/datum';
 import { warmRitbladCache } from '../lib/ritbladCache';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, parseHHMM, shiftWindowMinutes } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
-import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
+import { SkeletonTile } from '../components/Skeleton';
+import { DashboardSkelet } from '../components/ui';
 import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
 import { Badge } from '../components/primitives';
-import { Card } from '../components/Card';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { ServiceChip } from '../components/ServiceChip';
 import { DienstBalk } from '../components/DienstBalk';
@@ -169,38 +169,9 @@ export function DashboardView({ notes = [],
   const firstName = user.name.split(' ')[0];
   const greeting = getDaypartGreeting(now);
 
-  // Skeleton-mode: eerste fetch nog niet rond
-  if (isInitialLoad) {
-    return (
-      <div className="space-y-4">
-        <div className="px-1 pt-1 space-y-2">
-          <Skeleton className="h-8 w-72" />
-          <Skeleton className="h-3 w-48" />
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 rounded-3xl h-44">
-            <SkeletonTile className="h-full" />
-          </div>
-          <div className="flex flex-col gap-4">
-            <SkeletonTile />
-            <SkeletonTile />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card>
-            <SkeletonRow />
-            <SkeletonRow />
-            <SkeletonRow />
-          </Card>
-          <Card>
-            <SkeletonRow />
-            <SkeletonRow />
-            <SkeletonRow />
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  // Skeleton-mode: eerste fetch nog niet rond. Zelfde skelet als AppSkeleton
+  // (koude start), zodat de keten skelet → skelet → dashboard niet verspringt.
+  if (isInitialLoad) return <DashboardSkelet />;
 
   // Statuspil rechtsboven, zelfde taal als het Operations Center: iets in
   // behandeling (amber) of alles rustig (emerald).
@@ -323,7 +294,7 @@ export function DashboardView({ notes = [],
               <Clock size={16} />
             </span>
             <div>
-              <p className="text-sm font-semibold text-slate-800">Geen komende diensten</p>
+              <p className="text-md font-semibold text-slate-800">Geen komende diensten</p>
               <p className="text-xs font-normal text-slate-600">Er staat op dit moment niets ingepland.</p>
             </div>
           </div>
@@ -363,7 +334,7 @@ export function DashboardView({ notes = [],
             </span>
 
             <div>
-              <p className="text-sm font-semibold text-slate-800">Vrije baan</p>
+              <p className="text-md font-semibold text-slate-800">Vrije baan</p>
               <p className="text-xs font-normal text-slate-500">Geen omleidingen op het netwerk.</p>
             </div>
           </div>
@@ -399,7 +370,7 @@ export function DashboardView({ notes = [],
           <h1 className="text-greeting">
             {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
-          <p className="mt-0.5 text-sm font-normal text-slate-500 tabular-nums">
+          <p className="mt-0.5 text-md font-normal text-slate-500">
             {formatDayLong(isoDate(now))} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>

@@ -1,9 +1,9 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, Search, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useMemo, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
-import { Button, IconButton, MicroLabel, segItemClass, Td, Th } from './primitives';
+import { Button, IconButton, MicroLabel, Segmented, Td, Th } from './primitives';
 import { useDropdown } from './useDropdown';
 
 /**
@@ -102,14 +102,14 @@ const DICHTHEID_LABELS: Record<Dichtheid, string> = { comfortabel: 'Comfortabel'
 /** Segmented "Comfortabel | Compact". Alleen op md+: mobiel toont kaartlijsten, geen tabel. */
 function DichtheidSchakelaar({ waarde, onChange }: DichtheidProps) {
   return (
-    <div className="glass-segmented hidden md:inline-flex rounded-xl p-1" role="group" aria-label="Rijdichtheid">
-      {(['comfortabel', 'compact'] as const).map((d) => (
-        // rauw: segmented control op de glass-rail, klassen via segItemClass
-        <button key={d} type="button" aria-pressed={waarde === d} onClick={() => onChange(d)} className={segItemClass(waarde === d, 'px-3 py-1.5')}>
-          {DICHTHEID_LABELS[d]}
-        </button>
-      ))}
-    </div>
+    <Segmented<Dichtheid>
+      waarde={waarde}
+      opties={(['comfortabel', 'compact'] as const).map((d) => ({ waarde: d, label: DICHTHEID_LABELS[d] }))}
+      onChange={onChange}
+      label="Rijdichtheid"
+      className="hidden md:inline-flex"
+      itemClassName="px-3 py-1.5"
+    />
   );
 }
 
@@ -287,22 +287,45 @@ export function Checkbox({ checked, onChange, label, indeterminate, className, .
   );
 }
 
-/** Bulk-balk boven een tabel: "N geselecteerd" + acties; verschijnt alleen bij selectie. */
+/**
+ * Bulk-balk boven een tabel: "N geselecteerd" + acties; verschijnt alleen bij
+ * selectie. Klapt open (hoogte + opacity, veer op DUR.base) en dicht (EASE,
+ * DUR.fast) i.p.v. de tabel in één frame omlaag te duwen (golf 2, punt 9).
+ * `overflow: hidden` staat alleen tijdens de beweging, zodat de ring van de
+ * balk daarna niet wordt afgeknipt. Reduced motion: geen beweging.
+ */
 export function BulkBar({ aantal, onWis, children, className }: { aantal: number; onWis: () => void; children: ReactNode; className?: string }) {
-  if (aantal === 0) return null;
+  const reduced = useReducedMotion();
+  const [bezig, setBezig] = useState(false);
   return (
-    <div className={cn('flex flex-wrap items-center gap-2.5 rounded-xl bg-oker-50 ring-1 ring-oker-200 px-3 py-2', className)} role="region" aria-label="Bulkacties">
-      <span className="text-sm font-semibold text-slate-900 tabular-nums">{aantal} geselecteerd</span>
-      <IconButton label="Selectie wissen" size="sm" onClick={onWis}><X size={14} /></IconButton>
-      <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>
-    </div>
+    <AnimatePresence initial={false}>
+      {aantal > 0 && (
+        <motion.div
+          key="bulkbar"
+          initial={{ opacity: 0, height: 0, y: -4 }}
+          animate={{ opacity: 1, height: 'auto', y: 0, transition: reduced ? { duration: 0 } : { duration: DUR.base, ease: EASE_SPRING } }}
+          exit={{ opacity: 0, height: 0, y: -4, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
+          onAnimationStart={() => setBezig(true)}
+          onAnimationComplete={() => setBezig(false)}
+          style={{ overflow: bezig ? 'hidden' : 'visible' }}
+        >
+          <div className={cn('flex flex-wrap items-center gap-2.5 rounded-xl bg-oker-50 ring-1 ring-oker-200 px-3 py-2', className)} role="region" aria-label="Bulkacties">
+            <span className="text-sm font-semibold text-slate-900 tabular-nums">{aantal} geselecteerd</span>
+            <IconButton label="Selectie wissen" size="sm" onClick={onWis}><X size={14} /></IconButton>
+            <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
 /** thead die onder de sticky topbar blijft hangen tijdens het scrollen. */
 export function StickyThead({ children, className }: { children: ReactNode; className?: string }) {
-  // top = hoogte van de topbar (min-h-12 + py) — de scroll-root is de pagina.
-  return <thead className={cn('sticky top-[3.25rem] z-10 bg-surface-white/95 backdrop-blur-[2px] [&_th]:border-b [&_th]:border-slate-200', className)}>{children}</thead>;
+  // top = --sticky-top (topbar-hoogte + iOS-statusbalk-inset, index.css):
+  // de scroll-root is de pagina en de topbar plakt daar bovenaan. Vroeger
+  // een geraden 3,25 rem, die de safe-area en de touch-hoogte negeerde.
+  return <thead className={cn('sticky top-[var(--sticky-top)] z-10 bg-surface-white/95 backdrop-blur-[2px] [&_th]:border-b [&_th]:border-slate-200', className)}>{children}</thead>;
 }
 
 /** Simpele paginering: "1–25 van 240" met vorige/volgende. */

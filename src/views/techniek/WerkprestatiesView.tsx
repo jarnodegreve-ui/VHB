@@ -18,7 +18,7 @@ import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, Chip, FilterChip, IconButton, Td, Th, segItemClass } from '../../components/primitives';
+import { Badge, Button, Chip, FilterChip, IconButton, Segmented, Td, Th } from '../../components/primitives';
 import { StickyThead } from '../../components/Table';
 
 type Tab = 'lijst' | 'rapport';
@@ -105,21 +105,17 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
       {error && <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>}
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="glass-segmented inline-flex shrink-0 rounded-2xl p-1" role="group" aria-label="Weergave">
-          {(['lijst', 'rapport'] as const).map((t) => (
-            // rauw: segmented-control-item via segItemClass (het voorgeschreven patroon)
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              aria-pressed={tab === t}
-              className={segItemClass(tab === t, 'inline-flex items-center gap-1.5 min-h-11 sm:pointer-fine:min-h-8')}
-            >
-              {t === 'lijst' ? <ClipboardList size={14} /> : <BarChart3 size={14} />}
-              {t === 'lijst' ? 'Lijst' : 'Rapport'}
-            </button>
-          ))}
-        </div>
+        <Segmented<Tab>
+          label="Weergave"
+          className="shrink-0"
+          itemClassName="min-h-11 sm:pointer-fine:min-h-8"
+          waarde={tab}
+          opties={[
+            { waarde: 'lijst', label: <><ClipboardList size={14} />Lijst</> },
+            { waarde: 'rapport', label: <><BarChart3 size={14} />Rapport</> },
+          ]}
+          onChange={setTab}
+        />
       </div>
 
       {tab === 'lijst' ? (
@@ -163,7 +159,7 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
                             {w.defectId && <Badge tone="oker" stil className="whitespace-nowrap">uit gele boek</Badge>}
                           </div>
                           <p className="whitespace-pre-wrap text-sm text-slate-700">{w.omschrijving}</p>
-                          <p className="flex flex-wrap items-center gap-1.5 text-2xs text-slate-500">
+                          <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                             {staf && w.mecanicienNaam && <span className="inline-flex items-center gap-1"><Avatar naam={w.mecanicienNaam} size="sm" />{w.mecanicienNaam}</span>}
                             {w.beginTijd && w.eindeTijd && <span>{w.beginTijd} tot {w.eindeTijd}</span>}
                             {w.kmstand ? <span>{w.kmstand.toLocaleString('nl-BE')} km</span> : null}

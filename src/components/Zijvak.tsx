@@ -31,8 +31,11 @@ export function ZijvakLayout({
     <div className={cn('grid gap-6', breekpunt === 'xl' ? 'xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start' : 'lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start', className)}>
       <div className="min-w-0 space-y-6 md:space-y-8">{children}</div>
       {/* self-start + sticky: het vak scrolt mee zolang het past; zonder
-          self-start rekt de grid-cel tot rijhoogte en plakt er niets. */}
-      <aside className={cn('min-w-0 self-start', breekpunt === 'xl' ? 'xl:sticky xl:top-20' : 'lg:sticky lg:top-20')}>{zijvak}</aside>
+          self-start rekt de grid-cel tot rijhoogte en plakt er niets.
+          top = --sticky-top (topbar + statusbalk-inset, index.css) plus de
+          1,25 rem lucht die de topbar zelf onder zich houdt (mb-5), zodat het
+          vak precies op de inhoudslijn blijft hangen; was een vaste top-20. */}
+      <aside className={cn('min-w-0 self-start', breekpunt === 'xl' ? 'xl:sticky xl:top-[calc(var(--sticky-top)+1.25rem)]' : 'lg:sticky lg:top-[calc(var(--sticky-top)+1.25rem)]')}>{zijvak}</aside>
     </div>
   );
 }
@@ -56,7 +59,7 @@ export function Zijvak({
     <Card as="section" tone="muted" padding="sm" className={className} aria-label={titel}>
       <CardHeader title={titel} aside={aside} />
       {children ? <div className="mt-2 divide-y divide-slate-200/60">{children}</div> : null}
-      {voet ? <div className="mt-3 border-t border-hairline pt-3 text-xs font-medium leading-relaxed text-slate-500">{voet}</div> : null}
+      {voet ? <div className="mt-3 border-t border-hairline pt-3 text-body-sm font-medium text-slate-500">{voet}</div> : null}
     </Card>
   );
 }
@@ -83,5 +86,5 @@ export function ZijvakRij({
 
 /** Vrije tekst in het zijvak (bv. "Zo werkt het"): hooguit twee regels. */
 export function ZijvakTekst({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('py-2 text-sm font-normal leading-relaxed text-slate-600', className)}>{children}</p>;
+  return <p className={cn('py-2 text-body-sm font-normal text-slate-600', className)}>{children}</p>;
 }

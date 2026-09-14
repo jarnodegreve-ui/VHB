@@ -111,7 +111,7 @@ export function OcpiCard() {
       />
       <div className="min-w-0">
           {lastSync && (
-            <p className="mt-2 text-2xs text-slate-500">Laatste sync: {lastSync}</p>
+            <p className="mt-2 text-xs text-slate-500">Laatste sync: {lastSync}</p>
           )}
 
           <div className="mt-5 space-y-3">
@@ -165,7 +165,7 @@ export function OcpiCard() {
           {!isLoading && status && !status.configured && (
             <div className="mt-4">
               <MicroLabel className="mb-2 text-slate-500">Eerst instellen</MicroLabel>
-              <p className="text-2xs text-slate-500 leading-relaxed">
+              <p className="text-body-sm text-slate-500">
                 Draai <span className="font-mono">supabase/ocpi_registration.sql</span>, zet de <span className="font-mono">OCPI_*</span>-env-vars
                 in Vercel (incl. Token A uit ChargEye) en redeploy. Daarna is deze knop actief.
               </p>

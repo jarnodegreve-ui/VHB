@@ -18,7 +18,7 @@ import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, Switch, Td, Th, segItemClass } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, Segmented, Switch, Td, Th } from '../../components/primitives';
 import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
 
 type Tab = 'maand' | 'codes' | 'medewerkers';
@@ -35,17 +35,20 @@ export function LooncontroleView({ currentUser, onNavigate }: { currentUser: Use
   const maand = maandParam && /^\d{4}-\d{2}$/.test(maandParam) ? maandParam : schuifMaand(vandaagIso().slice(0, 7), -1);
   const [tab, setTab] = useState<Tab>('maand');
   return (
-    <PageShell>
+    <PageShell breed>
       <PageHeader eyebrow="Beheer · Loon" title="Looncontrole" />
-      <div className="glass-segmented inline-flex shrink-0 rounded-2xl p-1" role="group" aria-label="Onderdeel">
-        {(['maand', 'codes', 'medewerkers'] as const).map((t) => (
-          // rauw: segmented-control-item via segItemClass (het voorgeschreven patroon)
-          <button key={t} type="button" onClick={() => setTab(t)} aria-pressed={tab === t} className={segItemClass(tab === t, 'inline-flex items-center gap-1.5 min-h-11 sm:pointer-fine:min-h-8')}>
-            {t === 'maand' ? <Coins size={14} /> : t === 'codes' ? <Hash size={14} /> : <Users size={14} />}
-            {t === 'maand' ? 'Maand' : t === 'codes' ? 'Looncodes' : 'Medewerkers'}
-          </button>
-        ))}
-      </div>
+      <Segmented<Tab>
+        label="Onderdeel"
+        className="shrink-0"
+        itemClassName="min-h-11 sm:pointer-fine:min-h-8"
+        waarde={tab}
+        opties={[
+          { waarde: 'maand', label: <><Coins size={14} />Maand</> },
+          { waarde: 'codes', label: <><Hash size={14} />Looncodes</> },
+          { waarde: 'medewerkers', label: <><Users size={14} />Medewerkers</> },
+        ]}
+        onChange={setTab}
+      />
       {tab === 'maand' && <MaandTab maand={maand} zetMaand={(m) => zetMaandParam(m)} isAdmin={currentUser.role === 'admin'} onNavigate={onNavigate} />}
       {tab === 'codes' && <CodesTab />}
       {tab === 'medewerkers' && <MedewerkersTab />}
@@ -148,12 +151,13 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate }: { maand: string; zet
                 )}
               >
                 <span>{dagNr}</span>
+                {/* 2xs: afwijking in minuten in een dichte matrixcel */}
                 {d && d.overmin !== 0 && <span className="text-2xs font-medium">{d.overmin > 0 ? '+' : ''}{d.overmin}</span>}
               </button>
             );
           })}
         </div>
-        <p className="mt-2 flex flex-wrap gap-3 text-2xs text-slate-500">
+        <p className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
           <span><Badge tone="emerald" dot stil>afgesloten</Badge></span>
           <span><Badge tone="amber" dot stil>open</Badge></span>
           <span><Badge tone="red" dot stil>niet geopend (planning aanwezig)</Badge></span>
@@ -251,7 +255,7 @@ function CodesTab() {
               <tbody>
                 {lijst.map((c) => (
                   <tr key={c.code} className="border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
-                    <Td><p className="font-semibold text-slate-800">{c.codeWeergave}</p>{c.omschrijving && <p className="text-2xs text-slate-500">{c.omschrijving}</p>}</Td>
+                    <Td><p className="font-semibold text-slate-800">{c.codeWeergave}</p>{c.omschrijving && <p className="text-xs text-slate-500">{c.omschrijving}</p>}</Td>
                     <Td className="text-sm">{DIENST_TYPE_LABEL[c.dienstType]}</Td>
                     <Td className="font-mono text-xs">{c.easypayActiviteit}</Td>
                     <Td num>{c.easypayTypePrest}</Td>
@@ -357,7 +361,7 @@ function MedewerkersTab() {
             <tbody>
               {lijst.map((r) => (
                 <tr key={r.userId} className="border-b border-hairline-subtle last:border-b-0">
-                  <Td><span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam} size="sm" />{r.naam}</span>{r.employeeId && <p className="text-2xs text-slate-500">{r.employeeId}</p>}</Td>
+                  <Td><span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam} size="sm" />{r.naam}</span>{r.employeeId && <p className="text-xs text-slate-500">{r.employeeId}</p>}</Td>
                   <Td num>
                     <Input aria-label={`Matricule van ${r.naam}`} inputMode="numeric" defaultValue={r.easypayNr ?? ''} className="w-24 px-2 py-1 text-right text-sm" onBlur={(e) => { const n = e.target.value.trim() === '' ? null : Number(e.target.value); if (n !== (r.easypayNr ?? null) && (n === null || Number.isInteger(n))) void bewaar(r, { easypayNr: n, inExport: r.inExport }); }} />
                   </Td>

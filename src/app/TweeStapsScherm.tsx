@@ -21,7 +21,7 @@ export function TweeStapsScherm({ stap, factorId, onKlaar, onLogout }: {
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-400 ring-1 ring-white/10">
           <ShieldCheck size={24} />
         </div>
-        <h1 className="mt-4 text-center text-xl font-black tracking-tight text-white">
+        <h1 className="mt-4 text-center text-xl font-black tracking-[-0.015em] text-white">
           {stap === 'code' ? 'Code uit je authenticator' : 'Twee-stapsverificatie instellen'}
         </h1>
         <p className="mt-2 text-center text-sm font-medium leading-6 text-slate-300">

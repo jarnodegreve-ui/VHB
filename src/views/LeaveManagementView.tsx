@@ -7,6 +7,7 @@ import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge, statusAccentClass } from '../components/primitives';
+import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { Field, Select, Textarea } from '../components/Field';
@@ -617,7 +618,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'verlofdag' : 'verlofdagen'})</span>
                 </p>
                 {bevatVrijeDag(reviewLeave.startDate, reviewLeave.endDate) && (
-                  <p className="mt-1 text-2xs font-normal text-slate-500">Zondagen en feestdagen tellen niet mee als verlofdag.</p>
+                  <p className="mt-1 text-xs font-normal text-slate-500">Zondagen en feestdagen tellen niet mee als verlofdag.</p>
                 )}
               </Card>
 
@@ -694,7 +695,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       </div>
                     ))}
                     {conflictShifts.length > 5 && (
-                      <p className="text-2xs font-medium text-slate-500">+ {conflictShifts.length - 5} andere diensten in deze periode.</p>
+                      <p className="text-xs font-medium text-slate-500">+ {conflictShifts.length - 5} andere diensten in deze periode.</p>
                     )}
                   </div>
                   <p className="mt-2 text-xs font-normal text-slate-500">Bij goedkeuring moeten deze diensten herverdeeld worden.</p>
@@ -704,7 +705,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               {reviewLeave.comment && (
                 <div>
                   <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-body font-normal text-slate-700">
                     {reviewLeave.comment}
                   </p>
                 </div>
@@ -778,7 +779,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 <Badge tone="amber" stil>Deels vrij</Badge>
                 <Badge tone="red" stil>Volzet</Badge>
                 {isPlanner && (
-                  <span className="text-2xs font-medium text-slate-500">
+                  <span className="text-xs font-medium text-slate-500">
                     Limiet {limieten.standaard} tegelijk{limieten.periodes.length > 0 ? `, ${limieten.periodes.length} uitzonderingsperiode${limieten.periodes.length === 1 ? '' : 's'}` : ''}
                   </span>
                 )}
@@ -840,8 +841,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         >
                           <Avatar naam={requester?.name ?? 'Onbekend'} size="lg" />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-semibold text-slate-800 text-sm">{requester?.name}</p>
-                            <p className="text-2xs font-medium text-slate-500 tabular-nums">{formatLeaveType(req.type)} · {req.startDate} – {req.endDate}</p>
+                            <p className="truncate text-md font-semibold text-slate-800">{requester?.name}</p>
+                            <p className="text-xs font-medium text-slate-500 tabular-nums">{formatLeaveType(req.type)} · {req.startDate} – {req.endDate}</p>
                           </div>
                           <ChevronRightSmall size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                         </button>
@@ -852,7 +853,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         )}
                       </Card>
                     );
-                  }) : <p className="text-center py-4 text-sm text-slate-500">Geen afwezigen op deze dag.</p>}
+                  }) : <p className="text-center py-4 text-body-sm text-slate-500">Geen afwezigen op deze dag.</p>}
                 </div>
               </Card>
             </motion.div>
@@ -942,7 +943,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           <Avatar naam={requester?.name ?? 'Onbekend'} size="md" />
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-2">
-                              <span className="truncate text-sm font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
+                              <span className="truncate text-md font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
                               {conflictShifts.length > 0 && (
                                 <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`} aria-label={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
                                   <AlertTriangle size={14} className="shrink-0 text-red-500" />
@@ -959,7 +960,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     );
                   }) : (
                     <Card tone="success" padding="none" className="px-4 py-3.5">
-                      <p className="text-sm font-semibold text-slate-800">Alles beoordeeld</p>
+                      <p className="text-md font-semibold text-slate-800">Alles beoordeeld</p>
                       <p className="text-xs font-normal text-slate-500">Geen openstaande verlofaanvragen.</p>
                     </Card>
                   )}
@@ -1031,7 +1032,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             ))}
                         </Select>
                         {namensIemandAnders && !registratie && (
-                          <p className="text-2xs font-medium text-oker-700">
+                          <p className="text-xs font-medium text-oker-700">
                             Wordt meteen als goedgekeurd verlof vastgelegd, je hoeft het daarna niet nog eens te beoordelen.
                           </p>
                         )}
@@ -1040,7 +1041,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </Field>
                 )}
 
-                <Card tone="accent" padding="none" className="px-5 py-4 text-sm text-slate-600">
+                <Card tone="accent" padding="none" className="px-5 py-4 text-body-sm text-slate-600">
                   <MicroLabel className="text-oker-700">Periode kiezen</MicroLabel>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
@@ -1156,7 +1157,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             {requestPreview.gebruikt + requestPreview.requestedDays} / {requestPreview.budget}
                           </span>
                         </div>
-                        <p className="mt-1 text-2xs font-medium opacity-90">
+                        <p className="mt-1 text-xs font-medium opacity-90">
                           {requestPreview.wouldExceed
                             ? `⚠ ${Math.abs(requestPreview.remainingAfter)} ${Math.abs(requestPreview.remainingAfter) === 1 ? 'dag' : 'dagen'} boven ${namensIemandAnders ? 'het' : 'je'} jaarbudget.${registratie ? ' Controleer het papier.' : namensIemandAnders ? '' : ' Planner moet beoordelen.'}`
                             : `${requestPreview.remainingAfter} ${requestPreview.remainingAfter === 1 ? 'dag' : 'dagen'} resterend na deze ${registratie ? 'periode' : 'aanvraag'}.`}
@@ -1174,7 +1175,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             Boven de verloflimiet op {requestPreview.bovenLimiet.length} {requestPreview.bovenLimiet.length === 1 ? 'dag' : 'dagen'}
                           </span>
                         </div>
-                        <p className="mt-1 text-2xs font-medium opacity-90">
+                        <p className="mt-1 text-xs font-medium opacity-90">
                           {requestPreview.bovenLimiet.slice(0, 3).map((d) => `${formatShortDay(d.dag)}: ${d.afwezig} van ${d.limiet}`).join(', ')}{requestPreview.bovenLimiet.length > 3 ? ', …' : ''}.{registratie ? ' Het staat al op papier, dus je kan het gewoon vastleggen.' : ''}
                         </p>
                       </Card>
@@ -1190,7 +1191,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             {requestPreview.conflictingShifts.length === 1 ? 'dienst staat' : 'diensten staan'} al ingepland in deze periode
                           </span>
                         </div>
-                        <p className="mt-1 text-2xs font-medium opacity-90">
+                        <p className="mt-1 text-xs font-medium opacity-90">
                           De planner herverdeelt deze bij goedkeuring.
                         </p>
                       </Card>
@@ -1334,19 +1335,19 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                 className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
               >
                 <div className="min-w-0 flex items-baseline gap-2.5">
-                  <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</span>
-                  <span className="text-2xs font-medium text-slate-500 truncate">{formatLeaveType(req.type)}</span>
+                  <span className="text-md font-semibold text-slate-900 whitespace-nowrap">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</span>
+                  <span className="text-xs font-medium text-slate-500 truncate">{formatLeaveType(req.type)}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {fresh && <Badge tone="oker">Nieuw</Badge>}
                   <StatusBadge status={req.status} stil />
 
-                  <ChevronDown size={16} className={cn('text-slate-400 transition-transform duration-base', open && 'rotate-180')} />
+                  <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
                 </div>
               </button>
-              {open && (
+              <Uitklap open={open}>
                 <div className="px-4 pb-4 pt-0.5">
-                  <p className="text-2xs font-medium text-slate-500">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
+                  <p className="text-xs font-medium text-slate-500">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
                   {req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}
                   {onCancel && req.status === 'approved' && (
                     <Button variant="danger" size="sm" full className="mt-3" onClick={() => onCancel(req.id)}>
@@ -1359,12 +1360,12 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                     </Button>
                   )}
                 </div>
-              )}
+              </Uitklap>
             </Card>
           );
         }) : (
           <Card padding="md" className="text-center">
-            <p className="text-slate-500 font-medium text-sm">{emptyText}</p>
+            <p className="text-body-sm font-medium text-slate-500">{emptyText}</p>
           </Card>
         )}
       </div>

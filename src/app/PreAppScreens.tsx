@@ -116,7 +116,7 @@ export function ToestelGeblokkeerd({ revoked, onRetry, onLogout }: { revoked: bo
         )}>
           {revoked ? <ShieldAlert size={24} /> : <Smartphone size={24} />}
         </div>
-        <h1 className="mt-4 text-xl font-black text-white tracking-tight">
+        <h1 className="mt-4 text-xl font-black text-white tracking-[-0.015em]">
           {revoked ? 'Dit toestel is geblokkeerd' : 'Toestel wacht op goedkeuring'}
         </h1>
         <p className="mt-2 text-sm font-medium leading-6 text-slate-300">

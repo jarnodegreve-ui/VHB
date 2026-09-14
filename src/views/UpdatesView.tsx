@@ -75,9 +75,9 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                       className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-slate-50/50"
                     >
                       <div className="min-w-0">
-                        <p className="text-card-title truncate" data-vt-record={update.id}>{update.title}</p>
+                        <p className="truncate text-md font-semibold text-slate-900" data-vt-record={update.id}>{update.title}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 tabular-nums">
                             <Clock size={12} className="text-slate-300" />
                             {formatUpdateDate(update.date)}
                           </span>
@@ -115,7 +115,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                       <Badge tone="red" dot>Dringend</Badge>
                     </div>
                   )}
-                  <p className="max-w-2xl text-sm font-normal leading-relaxed text-slate-600 whitespace-pre-wrap">{detail.content}</p>
+                  <p className="max-w-2xl text-body font-normal text-slate-600 whitespace-pre-wrap">{detail.content}</p>
                 </article>
               )}
             </DetailPaneel>

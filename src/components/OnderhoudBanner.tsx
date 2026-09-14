@@ -27,7 +27,7 @@ export function OnderhoudBanner({ onderhoud, tone = 'licht', tot, className }: {
     return (
       <div role="status" className={cn('flex items-start gap-2.5 rounded-2xl border border-amber-500/25 bg-amber-500/12 px-4 py-3', className)}>
         <Wrench size={16} className="mt-px shrink-0 text-amber-400" />
-        <p className="text-sm font-medium leading-relaxed text-amber-100">{tekst}{totTekst}</p>
+        <p className="text-body-sm font-medium text-amber-100">{tekst}{totTekst}</p>
       </div>
     );
   }

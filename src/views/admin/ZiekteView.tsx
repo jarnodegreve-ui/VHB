@@ -9,6 +9,7 @@ import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Button, Chip, MicroLabel, microLabelClass } from '../../components/primitives';
+import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Select, Textarea } from '../../components/Field';
@@ -383,11 +384,11 @@ export function ZiekteView({
               onClick={() => wisselOpmerking(r.id)}
             >
               <span>Opmerking</span>
-              <ChevronDown size={14} className={cn('transition-transform', opmerkingOpen && 'rotate-180')} />
+              <ChevronDown size={14} className={uitklapChevron(opmerkingOpen)} />
             </Button>
-            {opmerkingOpen && (
-              <p className="px-3.5 pb-3 text-xs font-normal leading-relaxed text-slate-600">{r.comment}</p>
-            )}
+            <Uitklap open={opmerkingOpen}>
+              <p className="px-3.5 pb-3 text-body-sm font-normal text-slate-600">{r.comment}</p>
+            </Uitklap>
           </div>
         )}
       </Card>

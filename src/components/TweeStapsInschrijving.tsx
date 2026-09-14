@@ -64,7 +64,7 @@ export function TweeStapsInschrijving({ donker = false, onKlaar, onAnnuleer }: {
 
   return (
     <form onSubmit={bevestig} className="space-y-5">
-      <ol className={cn('space-y-1.5 text-sm leading-relaxed', tekst)}>
+      <ol className={cn('space-y-1.5 text-body', tekst)}>
         <li><span className={cn('font-semibold', kop)}>1.</span> Open een authenticator-app op je telefoon (Google Authenticator, Microsoft Authenticator of 1Password).</li>
         <li><span className={cn('font-semibold', kop)}>2.</span> Scan de QR-code, of typ de sleutel over.</li>
         <li><span className={cn('font-semibold', kop)}>3.</span> Vul de zescijferige code in die de app toont.</li>

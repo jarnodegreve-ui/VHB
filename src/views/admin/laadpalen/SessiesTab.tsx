@@ -208,7 +208,7 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
                           </button>
                         </Td>
                         <Td num className="max-md:hidden text-left text-slate-600">{s.eind ? (dagVanTs(s.eind) === s.dag ? uurLabel(s.eind) : tijdstipKort(s.eind)) : <Badge tone="blue" dot stil>bezig</Badge>}</Td>
-                        <Td className="whitespace-nowrap"><span className="font-semibold font-mono text-slate-800">{n}</span>{bus ? <span className="ml-1.5 text-2xs text-slate-500">bus {bus}</span> : null}</Td>
+                        <Td className="whitespace-nowrap"><span className="font-semibold font-mono text-slate-800">{n}</span>{bus ? <span className="ml-1.5 text-xs text-slate-500">bus {bus}</span> : null}</Td>
                         <Td num className={cn('font-semibold', s.kwh > 0 ? 'text-slate-800' : 'text-slate-500')}>{formatGetal(s.kwh, 1)}</Td>
                         <Td num className="max-lg:hidden">{duurLabel(s.duurMin)}</Td>
                         <Td num className="max-md:hidden">{s.laadMin !== null && s.laadMin > 0 ? duurLabel(s.laadMin) : '—'}</Td>

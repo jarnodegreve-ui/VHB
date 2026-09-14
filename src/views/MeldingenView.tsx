@@ -117,7 +117,7 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
                             {ICOON_PER_SOORT[m.soort] ?? ICOON_PER_SOORT.systeem}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className={cn('block truncate text-sm', ongelezen ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
+                            <span className={cn('block truncate text-md', ongelezen ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
                               {m.titel}
                             </span>
                             {m.tekst && (

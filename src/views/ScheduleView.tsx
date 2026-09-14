@@ -7,7 +7,8 @@ import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType, serviceNumberOf } from '../lib/format';
 import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '../lib/ruilBadge';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, Chip, MicroLabel, microLabelClass, segItemClass, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, Chip, MicroLabel, microLabelClass, Segmented, TableShell, Td, Th } from '../components/primitives';
+import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
@@ -233,21 +234,16 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
             Gebruikersbeheer en Planningscodes. Stond hier als eigen witte
             variant met een andere radius en padding — de enige toggle in de
             app die er anders uitzag. */}
-        <div className="glass-segmented inline-flex rounded-2xl p-1 xl:hidden">
-          {(['lijst', 'maand'] as const).map((w) => (
-            /* rauw: segmented control op de glass-rail, klassen via segItemClass */
-            <button
-              key={w}
-              type="button"
-              onClick={() => setWeergave(w)}
-              className={segItemClass(weergave === w, 'capitalize')}
-            >
-              {w}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Weergave"
+          className="xl:hidden"
+          itemClassName="capitalize"
+          waarde={weergave}
+          opties={[{ waarde: 'lijst' as const, label: 'lijst' }, { waarde: 'maand' as const, label: 'maand' }]}
+          onChange={setWeergave}
+        />
         {lastSyncedAt && (
-          <p className="text-2xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep naar beneden om te vernieuwen</p>
+          <p className="text-xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep naar beneden om te vernieuwen</p>
         )}
       </div>
 
@@ -283,15 +279,15 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
                     size="sm"
                     className="-ml-3"
                     onClick={() => setShowPast((v) => !v)}
-                    icon={<ChevronDown size={14} className={cn('transition-transform', showPast && 'rotate-180')} />}
+                    icon={<ChevronDown size={14} className={uitklapChevron(showPast)} />}
                   >
                     {showPast ? 'Verberg' : 'Toon'} verleden ({past.length})
                   </Button>
-                  {showPast && (
+                  <Uitklap open={showPast}>
                     <div className="mt-4 opacity-60">
                       <ShiftList shifts={past} today={today} compact={xl} />
                     </div>
-                  )}
+                  </Uitklap>
                 </div>
               )}
             </div>
@@ -447,12 +443,12 @@ function MonthCalendar({
                   {day}
                 </span>
                 {td && td.kort === 'F' && (
-                  <span className="text-2xs font-bold leading-none text-oker-700" title={td.titel}>
+                  <span className="text-xs font-bold leading-none text-oker-700" title={td.titel}>
                     {td.kort}
                   </span>
                 )}
                 {dayGroups.length > 0 ? (
-                  <span className={cn('max-w-full truncate text-2xs font-mono font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-oker-700')}>
+                  <span className={cn('max-w-full truncate text-xs font-mono font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-oker-700')}>
                     {dayGroups[0].line}
                     {dayGroups.length > 1 && '+'}
                   </span>
@@ -464,7 +460,7 @@ function MonthCalendar({
                     )}
                   />
                 ) : isVrijeDag(iso) ? (
-                  <span className="text-2xs font-bold lowercase leading-none text-slate-500" title="Vrij, geen dienst ingepland">
+                  <span className="text-xs font-bold lowercase leading-none text-slate-500" title="Vrij, geen dienst ingepland">
                     v
                   </span>
                 ) : null}
@@ -474,12 +470,12 @@ function MonthCalendar({
         </div>
 
         {/* Legende */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline-subtle pt-3 text-2xs font-medium text-slate-500">
-          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-mono font-bold tabular-nums text-oker-700">2101</span> dienst</span>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline-subtle pt-3 text-xs font-medium text-slate-500">
+          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-mono font-bold tabular-nums text-oker-700">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-oker-700">F</span> feestdag</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-slate-500">v</span> vrij</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-bold text-oker-700">F</span> feestdag</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-bold text-slate-500">v</span> vrij</span>
         </div>
       </Card>
 
@@ -488,9 +484,9 @@ function MonthCalendar({
         <MicroLabel className={cn('tabular-nums', selected === today && 'text-oker-700')}>
           {selected === today ? 'Vandaag' : `Wk ${isoWeekOf(selected)}`}
         </MicroLabel>
-        <p className="mt-0.5 text-sm font-semibold capitalize text-slate-900">{formatShiftDate(selected)}</p>
+        <p className="mt-0.5 text-md font-semibold capitalize text-slate-900">{formatShiftDate(selected)}</p>
         {selectedTypedag && (
-          <p className={cn('mt-0.5 text-2xs font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-700' : 'text-slate-500')}>
+          <p className={cn('mt-0.5 text-xs font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-700' : 'text-slate-500')}>
             {selectedTypedag.titel}
           </p>
         )}
@@ -508,7 +504,7 @@ function MonthCalendar({
         )}
 
         {selectedGroups.length === 0 && !selectedLeave ? (
-          <p className="mt-2.5 text-sm text-slate-500">Geen dienst gepland.</p>
+          <p className="mt-2.5 text-body-sm text-slate-500">Geen dienst gepland.</p>
         ) : (
           selectedGroups.map((g) => (
             <div key={g.key} className="mt-3">
@@ -617,7 +613,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                       <Badge tone={pill.tone} stil>{pill.label}</Badge>
                       <span className="text-lg font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
-                        <span className="text-2xs font-medium text-slate-500 tabular-nums">
+                        <span className="text-xs font-medium text-slate-500 tabular-nums">
                           ({g.segments.length} blokken)
                         </span>
                       )}
@@ -676,7 +672,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                   <MicroLabel className={cn(isToday && 'text-oker-700')}>
                     {isToday ? 'Vandaag' : formatShortDayPadded(g.date).split(' ')[0]}
                   </MicroLabel>
-                  <p className="text-sm font-semibold text-slate-900 mt-0.5 tabular-nums">
+                  <p className="text-md font-semibold text-slate-900 mt-0.5">
                     {formatShortDayPadded(g.date).split(' ').slice(1).join(' ')}
                   </p>
                   {g.hasConflict && (
@@ -684,7 +680,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                       <Badge tone="red" icon={<AlertTriangle size={12} />}>
                         Verlof-conflict
                       </Badge>
-                      <p className="text-2xs font-medium text-red-700 mt-1">Je hebt hier verlof, bel de planner.</p>
+                      <p className="text-xs font-medium text-red-700 mt-1">Je hebt hier verlof, bel de planner.</p>
                     </div>
                   )}
                   {g.openSwap && (

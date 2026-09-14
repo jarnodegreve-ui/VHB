@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Menu } from 'lucide-react';
 import { routeVan } from '../app/routes';
 import { prefetchView } from '../app/viewLoaders';
 import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
 import { overgangActief } from '../lib/overgang';
+import { DUR, EASE_SPRING } from '../lib/motion';
 import { CountUp } from './CountUp';
 
 type NavSlot = {
@@ -59,6 +60,7 @@ export function BottomNav({
    *  hij niet onder de overlay door piept. */
   hidden?: boolean;
 }) {
+  const reduced = useReducedMotion();
   const isPlanner = role === 'planner' || role === 'admin';
   // Tabs per rol; naam en icoon komen uit de routetabel zodat een scherm
   // hier niet anders heet dan in de zijbalk (was "Dekking" vs
@@ -132,8 +134,10 @@ export function BottomNav({
                   <motion.span
                     layoutId="bottom-nav-active"
                     // Zelfde afspraak als de sidebar-rail: tijdens een route-
-                    // overgang schuift de tab via de view transition.
-                    transition={overgangActief() ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
+                    // overgang schuift de tab via de view transition. Zelfde
+                    // veer als rail, dagstrip en Segmented-pil (EASE_SPRING op
+                    // DUR.fast, golf 2 punt 9).
+                    transition={reduced || overgangActief() ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING }}
                     style={{ viewTransitionName: 'dock-actief' }}
                     className="absolute inset-0 rounded-lg bg-oker-100"
                   />

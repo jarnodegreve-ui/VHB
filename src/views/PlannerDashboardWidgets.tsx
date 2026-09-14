@@ -38,7 +38,7 @@ import { Modal } from '../components/Modal';
 import { EmptyState, ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
-import { Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
+import { Button, Chip, microLabelClass, Segmented } from '../components/primitives';
 import { ActieMenu } from '../components/ActieMenu';
 import { DashboardAanpassen } from '../components/DashboardAanpassen';
 import { PLANNER_TEGELS, pasVoorkeurenToe, stripSpans, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
@@ -733,7 +733,7 @@ export function PlannerDashboardWidgets({
 
             </span>
             <div>
-              <p className="text-sm font-semibold text-slate-800">Alles ok</p>
+              <p className="text-md font-semibold text-slate-800">Alles ok</p>
               <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
             </div>
           </Card>
@@ -849,7 +849,7 @@ export function PlannerDashboardWidgets({
           <h1 className="text-greeting">
             {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
-          <p className="mt-0.5 text-sm font-normal text-slate-500">
+          <p className="mt-0.5 text-md font-normal text-slate-500">
             {formatDayLong(isoDate(now))} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
@@ -857,20 +857,13 @@ export function PlannerDashboardWidgets({
         <div className="flex w-fit items-center gap-2">
         {/* Vandaag | Morgen: bezetting-tegels + popups kijken vooruit
             (verbeterronde 01-09, nr. 1); live cijfers blijven op nu. */}
-        <div className="glass-segmented inline-flex rounded-2xl p-1">
-          {([0, 1] as const).map((offset) => (
-            // rauw: segmented-control-item via segItemClass (het voorgeschreven patroon)
-            <button
-              key={offset}
-              type="button"
-              onClick={() => setDagOffset(offset)}
-              aria-pressed={dagOffset === offset}
-              className={segItemClass(dagOffset === offset, 'min-h-11 sm:pointer-fine:min-h-8')}
-            >
-              {offset === 0 ? 'Vandaag' : 'Morgen'}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Dag kiezen"
+          itemClassName="min-h-11 sm:pointer-fine:min-h-8"
+          waarde={dagOffset}
+          opties={[{ waarde: 0 as const, label: 'Vandaag' }, { waarde: 1 as const, label: 'Morgen' }]}
+          onChange={(w) => setDagOffset(w)}
+        />
         {/* De "Open taken/Operationeel"-statuspil die hier stond is 31-08
             vervangen door de werkvoorraad-knop in de topbar (WerkvoorraadMenu)
             — die is vanuit elk scherm zichtbaar. Alleen de actie blijft. */}
@@ -969,7 +962,7 @@ export function PlannerDashboardWidgets({
         subtitle={`${formatDay(peilDag)} · ${availableToday.length} ${availableToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
         {availableToday.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">
+          <p className="px-3 py-6 text-center text-body-sm font-medium text-slate-500">
             Niemand beschikbaar {peilLabel.toLowerCase()}, iedereen rijdt of is afwezig.
           </p>
         ) : (
@@ -982,8 +975,8 @@ export function PlannerDashboardWidgets({
                 <>
                   <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-slate-800">{u.name}</span>
-                    <span className="block text-2xs font-mono font-medium text-slate-500 tabular-nums">
+                    <span className="block truncate text-md font-semibold text-slate-800">{u.name}</span>
+                    <span className="block text-xs font-mono font-medium text-slate-500 tabular-nums">
                       {u.phone || 'geen nummer bekend'}
                     </span>
                   </span>
@@ -1020,12 +1013,12 @@ export function PlannerDashboardWidgets({
         subtitle={`${formatDay(peilDag)} · ${todayAbsent.length} ${todayAbsent.length === 1 ? 'collega' : "collega's"}`}
       >
         {todayAbsent.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">Iedereen inzetbaar {peilLabel.toLowerCase()}.</p>
+          <p className="px-3 py-6 text-center text-body-sm font-medium text-slate-500">Iedereen inzetbaar {peilLabel.toLowerCase()}.</p>
         ) : (
           <ul className="space-y-0.5">
             {todayAbsent.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5">
-                <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{a.name}</span>
+                <span className="min-w-0 truncate text-md font-semibold text-slate-800">{a.name}</span>
                 <Chip mono={false} tone={a.isSick ? 'rose' : 'slate'}>{a.label}</Chip>
               </li>
             ))}
@@ -1080,7 +1073,7 @@ export function PlannerDashboardWidgets({
         />
         {ziekVervolg ? (
           <div className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1">
-            <p className="text-sm font-medium text-slate-600 leading-relaxed">
+            <p className="text-body-sm font-medium text-slate-600">
               {ziekVervolg.naam} is afgemeld, maar {ziekVervolg.diensten.length === 1
                 ? 'deze dienst staat'
                 : `deze ${ziekVervolg.diensten.length} diensten staan`} nog op naam.
@@ -1242,7 +1235,7 @@ export function PlannerDashboardWidgets({
               />
             )}
           </Field>
-          <p className="text-2xs font-medium text-slate-500">
+          <p className="text-xs font-medium text-slate-500">
             De dag(en) komen meteen als onbeschikbaar in de planning; de andere planners krijgen een melding.
           </p>
           <Button type="submit" variant="primary" size="lg" full disabled={isSubmittingSick}>
@@ -1288,7 +1281,7 @@ const AFTEL_TOON: Record<AftelTone, string> = {
 
 function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; phone?: string; lines: string; segs: string[]; remaining?: string; remainingTone?: AftelTone }[]; emptyText: string }) {
   if (items.length === 0) {
-    return <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">{emptyText}</p>;
+    return <p className="px-3 py-6 text-center text-body-sm font-medium text-slate-500">{emptyText}</p>;
   }
   return (
     <ul className="space-y-0.5">
@@ -1313,13 +1306,13 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
           )}
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
-              <span className="truncate text-sm font-semibold text-slate-800">{d.name}</span>
+              <span className="truncate text-md font-semibold text-slate-800">{d.name}</span>
             </span>
             {/* Elk dienstblok als eigen element, met een stip ertussen en
                 flex-wrap: bij één of twee blokken staat het op één regel zoals
                 voorheen, bij drie wijkt het netjes uit naar een tweede regel
                 in plaats van tegen de dienstchip te duwen. */}
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs font-mono font-medium text-slate-500 tabular-nums">
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-mono font-medium text-slate-500 tabular-nums">
               {d.segs.map((seg, i) => (
                 <Fragment key={seg}>
                   {i > 0 && <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-slate-300" />}
@@ -1345,7 +1338,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                 tweede regel (rijhoogte 59 → 75 px). Marges en geen transform:
                 een extra compositing-laag geeft in Safari rasterrandjes. */}
             {d.remaining && (
-              <span className={cn('-ml-2 whitespace-nowrap pr-2 text-2xs font-mono font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
+              <span className={cn('-ml-2 whitespace-nowrap pr-2 text-xs font-mono font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
                 {d.remaining}
               </span>
             )}
@@ -1428,7 +1421,7 @@ function FeedRow({ entry }: { entry: ActivityLogEntry }) {
         <p className="line-clamp-2 text-sm font-medium leading-snug text-slate-700">
           <span className="font-semibold text-slate-900">{entry.actorName}</span> · {entry.details || entry.action}
         </p>
-        <p className="text-2xs font-normal text-slate-500">{relTime(entry.createdAt)}</p>
+        <p className="text-xs font-normal text-slate-500">{relTime(entry.createdAt)}</p>
       </div>
     </div>
   );

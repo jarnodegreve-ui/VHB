@@ -52,7 +52,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
             <MeterVulling pct={vulGebruikt} className={cn('ring-1 ring-surface-muted', overBudget ? 'bg-red-500' : 'bg-emerald-500')} />
           )}
         </Meter>
-        <ul className="flex flex-wrap gap-x-3 gap-y-1 text-2xs font-medium text-slate-500" aria-hidden="true">
+        <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-slate-500" aria-hidden="true">
           <li className="flex items-center gap-1.5">
             <span className={cn('h-1.5 w-1.5 rounded-full', overBudget ? 'bg-red-500' : 'bg-emerald-500')} />
             {balance.betaaldGebruikt} opgenomen
@@ -69,7 +69,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
           </li>
         </ul>
         {overBudget && (
-          <p className="text-2xs font-medium text-red-700">{dagen(balance.betaaldGebruikt - budget)} boven budget.</p>
+          <p className="text-xs font-medium text-red-700">{dagen(balance.betaaldGebruikt - budget)} boven budget.</p>
         )}
       </div>
 

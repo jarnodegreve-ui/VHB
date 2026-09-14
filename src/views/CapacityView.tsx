@@ -10,6 +10,7 @@ import { apiFetch } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
 import { Button, Chip, IconButton, MicroLabel, microLabelClass, Td, Th } from '../components/primitives';
 import { Card } from '../components/Card';
+import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Field, Input, Select, Textarea } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { typedagLabel } from '../lib/typedag';
@@ -20,7 +21,7 @@ import { isStaf } from '../types';
 import type { User } from '../types';
 import { formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
-import { DUR } from '../lib/motion';
+import { DUR, EASE_SPRING } from '../lib/motion';
 import { useRouteParam } from '../app/router';
 
 
@@ -578,7 +579,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   }, [cells]);
 
   return (
-    <PageShell>
+    <PageShell breed>
       <PageHeader
         title="Maandplanning"
         description="Wie rijdt welke dienst, zoals in het chauffeurslokaal."
@@ -683,6 +684,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         >
                           <div className={microLabelClass}>{h.letter}</div>
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
+                          {/* 2xs: matrixcel van 3 px-hoog label onder de dag, dichte planningsmatrix */}
                           <div className="mt-0.5 h-3 text-2xs font-bold leading-3">
                             {andereMaand ? (
                               <span className={microLabelClass}>{maandKort}</span>
@@ -769,6 +771,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                   type="button"
                                   onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
                                   className={cn(
+                                    // 2xs: dichte bezettingsmatrix, 12 px laat de kolommen wrappen
                                     'relative flex h-7 w-full items-center justify-center px-1 text-2xs tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70',
                                     // Gewisselde cel in het geel en ziekte in
                                     // het rood (Jarno 08-09; ruil was rood sinds
@@ -879,7 +882,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       {gekozen && (
                         <motion.span
                           layoutId="dagstrip-actief"
-                          transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
+                          // Zelfde veer als sidebar-rail, dock-tab en Segmented-pil
+                          // (EASE_SPRING op DUR.fast, golf 2 punt 9).
+                          transition={reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING }}
                           className="absolute inset-0 rounded-xl bg-oker-500 elev-accent"
                         />
                       )}
@@ -894,6 +899,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         {d.getDate()}
                       </span>
                       {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
+                      {/* 2xs: matrixcel, typedagletter in een vaste 3 px-hoge strook */}
                       <span className={cn('relative z-10 h-3 text-2xs font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-500')}>
                         {td?.kort ?? ''}
                       </span>
@@ -978,9 +984,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       className={cn('w-full flex items-center justify-between gap-3 px-4 py-2.5 min-h-11 active:bg-black/[0.04] transition-colors', SECTIE_BAND, SECTIE_KOP)}
                     >
                       <span>Vrij / afwezig · {dagRijen.rust.length}</span>
-                      <ChevronRight size={14} className={cn('transition-transform', toonRust && 'rotate-90')} />
+                      <ChevronRight size={14} className={uitklapChevron(toonRust, 90)} />
                     </button>
-                    {toonRust && dagRijen.rust.map(({ drv, cell }) => {
+                    <Uitklap open={toonRust}>
+                    <div>
+                    {dagRijen.rust.map(({ drv, cell }) => {
                       const isOwn = ownId && drv.id === ownId;
                       const inhoud = (
                         <>
@@ -1014,6 +1022,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         <div key={drv.id} className={rijCls}>{inhoud}</div>
                       );
                     })}
+                    </div>
+                    </Uitklap>
                   </>
                 )}
                 </Card>
@@ -1059,6 +1069,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     <span className="font-medium text-slate-700">Notitie bij de dag</span>
                   </span>
                   <span className="inline-flex items-center gap-2">
+                    {/* 2xs: datumbadge van vaste maat */}
                     <span className="inline-flex h-6 w-11 items-center justify-center rounded-lg bg-oker-100 text-2xs font-semibold text-oker-800">{new Date().getDate()}</span>
                     <span className="font-medium text-slate-700">Vandaag</span>
                   </span>
@@ -1091,7 +1102,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 annuleert de ruil én zet de planning terug. */}
             {selected.cell.swapId && (
               <Card tone="muted" padding="none" className="mt-4 px-3.5 py-3 space-y-2.5">
-                <p className="text-xs font-medium text-slate-600 leading-relaxed">
+                <p className="text-body-sm font-medium text-slate-600">
                   {selected.cell.swapManual ? 'Handmatig overgezet' : 'Geruild'}
                   {selected.cell.swapFrom ? <> van <span className="font-semibold text-slate-700">{selected.cell.swapFrom}</span></> : null}.
                 </p>
@@ -1165,12 +1176,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <div className="mt-6 border-t border-hairline pt-5 space-y-3">
                 <MicroLabel>Dienstwissel (admin)</MicroLabel>
                 {wisselNaAfwezigheid && (
-                  <Card tone="accent" padding="none" className="px-3.5 py-2.5 text-xs font-medium text-slate-700 leading-relaxed">
+                  <Card tone="accent" padding="none" className="px-3.5 py-2.5 text-body-sm font-medium text-slate-700">
                     {selected.driverName} staat op {selected.cell.label.toLowerCase()}, maar dienst{' '}
                     <span className="font-semibold tabular-nums">{wisselDienst}</span> staat nog op naam, zet hem hieronder over.
                   </Card>
                 )}
-                <p className="text-xs font-medium text-slate-500 leading-relaxed">
+                <p className="text-body-sm font-medium text-slate-500">
                   Zet dienst <span className="font-semibold text-slate-700 tabular-nums">{wisselDienst}</span> op {formatDateLong(selected.iso)} over van{' '}
                   <span className="font-semibold text-slate-700">{selected.driverName}</span> naar een andere chauffeur.
                   {!wisselNaAfwezigheid && ' Kies je iemand die die dag zelf rijdt, dan wisselen ze hun diensten 1-op-1.'}
@@ -1211,7 +1222,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   </Select>
                 </Field>
                 {wisselTerug && (
-                  <Card tone="info" padding="none" className="px-3.5 py-2.5 text-xs font-medium text-slate-700 leading-relaxed">
+                  <Card tone="info" padding="none" className="px-3.5 py-2.5 text-body-sm font-medium text-slate-700">
                     {wisselNaarNaam} rijdt die dag dienst <span className="font-semibold tabular-nums">{wisselTerug}</span>. Die gaat in ruil naar {selected.driverName}: een 1-op-1-wissel.
                   </Card>
                 )}

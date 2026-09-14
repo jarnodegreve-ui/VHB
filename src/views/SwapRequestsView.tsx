@@ -5,6 +5,7 @@ import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types'
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { Badge, Button, IconButton, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
+import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { Field, Textarea } from '../components/Field';
@@ -452,14 +453,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     >
                       <div className="min-w-0 flex items-baseline gap-2.5">
                         <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap tabular-nums">Dienst {info.line}</span>
-                        <span className="text-2xs font-medium text-slate-500 capitalize truncate">{formatDateHuman(info.date)}</span>
+                        <span className="text-xs font-medium text-slate-500 capitalize truncate">{formatDateHuman(info.date)}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <StatusBadge status={swap.status} stil />
-                        <ChevronDown size={16} className={`text-slate-400 transition-transform duration-base ${open ? 'rotate-180' : ''}`} />
+                        <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
                       </div>
                     </button>
-                    {open && (
+                    <Uitklap open={open}>
                       <div className="px-4 pb-4 pt-0.5">
                         {info.startTime && info.endTime && (
                           <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
@@ -498,7 +499,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </Button>
                         )}
                       </div>
-                    )}
+                    </Uitklap>
                   </Card>
                 );
               })}
@@ -653,7 +654,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="min-w-0">
                                 <span className="block font-semibold text-slate-800">{requester?.name}</span>
                                 {swap.targetDriverId && (
-                                  <span className="block text-2xs font-medium text-slate-500">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
+                                  <span className="block text-xs font-medium text-slate-500">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
                                 )}
                               </span>
                               <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
@@ -665,7 +666,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             {isTakeoverSwap(swap) ? (
                               <span className="mt-1 block"><TakeoverBadge compact /></span>
                             ) : returnLabel(swap) && (
-                              <span className="block text-2xs font-medium text-blue-700 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
+                              <span className="block text-xs font-medium text-blue-700 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
                             )}
                           </Td>
                           <Td>
@@ -740,7 +741,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           {isTakeoverSwap(swap) ? (
                             <div className="mt-1"><TakeoverBadge compact /></div>
                           ) : returnLabel(swap) && (
-                            <p className="text-2xs font-medium text-blue-700 mt-1">↔ in ruil: {returnLabel(swap)}</p>
+                            <p className="text-xs font-medium text-blue-700 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1">
@@ -951,7 +952,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {freeForDate && freeCount === 0 && !showBusyColleagues && (
                           <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)}, je kan wel een bezette collega vragen.</p>
                         )}
-                        <p className="text-2xs font-medium text-slate-500">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
+                        <p className="text-xs font-medium text-slate-500">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
                       </>
                     )}
                   </>
@@ -1124,7 +1125,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {!isTakeover && !returnPick && !returnLoading ? (
                           <p className="text-center text-xs text-slate-500">Kies eerst wat je van {voornaam} overneemt.</p>
                         ) : (
-                          <p className="text-2xs font-medium text-slate-500 text-center">{voornaam} moet eerst accepteren; daarna keurt de planner goed.</p>
+                          <p className="text-xs font-medium text-slate-500 text-center">{voornaam} moet eerst accepteren; daarna keurt de planner goed.</p>
                         )}
                       </div>
                     </>
@@ -1250,7 +1251,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               {reviewSwap.reason && (
                 <div>
                   <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-body font-normal text-slate-700">
                     {reviewSwap.reason}
                   </p>
                 </div>

@@ -56,10 +56,11 @@ describe('ActieMenu', () => {
       expect(item.classList.contains('min-h-11')).toBe(true);
       expect(item.classList.contains('sm:pointer-fine:min-h-9')).toBe(true);
     }
-    // Sluit via de trigger (toggle) vóór het unmounten.
+    // Sluit via de trigger (toggle) vóór het unmounten. Het menu verdwijnt
+    // pas na de exit-animatie (AnimatePresence), dus wachten i.p.v. meteen.
     await act(async () => { klik(t); });
-    expect(menu()).toBeNull();
     expect(t.getAttribute('aria-expanded')).toBe('false');
+    await vi.waitFor(() => expect(menu()).toBeNull());
     await act(async () => { root.unmount(); });
   });
 
@@ -72,7 +73,7 @@ describe('ActieMenu', () => {
       await act(async () => { klik(t); });
       const eerste = items()[0];
       await act(async () => { eerste.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); });
-      expect(menu()).toBeNull();
+      await vi.waitFor(() => expect(menu()).toBeNull());
       expect(opWindow).not.toHaveBeenCalled();
       expect(document.activeElement).toBe(t);
       await historiekRust();
@@ -82,7 +83,7 @@ describe('ActieMenu', () => {
       expect(document.activeElement).toBe(items()[1]);
       expect(opWindow).toHaveBeenCalledTimes(1);
       await act(async () => { klik(t); });
-      expect(menu()).toBeNull();
+      await vi.waitFor(() => expect(menu()).toBeNull());
       await act(async () => { root.unmount(); });
     } finally {
       window.removeEventListener('keydown', opWindow);
@@ -96,7 +97,7 @@ describe('ActieMenu', () => {
     await act(async () => { klik(t); });
     await act(async () => { klik(items()[1]); });
     expect(onKies).toHaveBeenCalledWith('Verwijderen');
-    expect(menu()).toBeNull();
+    await vi.waitFor(() => expect(menu()).toBeNull());
     expect(document.activeElement).toBe(t);
     await act(async () => { root.unmount(); });
   });

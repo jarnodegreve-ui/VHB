@@ -10,6 +10,11 @@ import type { LeaveRequest } from '../types';
  *
  * Views kiezen alleen de VORM (vlak, stip of zachte dagtint) — nooit meer
  * eigen tinten. StatusBadge (primitives) volgt dezelfde taal via zijn tones.
+ *
+ * De tinten zelf staan in @theme (index.css) en zijn sinds golf 2 (punt 3)
+ * gedempte juweeltinten: jade (emerald), baksteen (red), staalblauw (blue),
+ * granaat (rose); amber bleef. De 400/500-verdeling hierboven blijft
+ * bewust staan: de legenda in VerlofKalenderView herhaalt dezelfde klassen.
  */
 
 type LeaveStatus = LeaveRequest['status'];

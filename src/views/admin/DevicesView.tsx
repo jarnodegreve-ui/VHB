@@ -7,6 +7,7 @@ import { cn, notify } from '../../lib/ui';
 import { formatDateHuman } from '../../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, FilterChip, IconButton, MicroLabel, Switch } from '../../components/primitives';
+import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { TableToolbar } from '../../components/Table';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input } from '../../components/Field';
@@ -332,12 +333,14 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                       >
                         <div className="flex min-w-0 items-center gap-2.5">
                           <span className="truncate text-sm font-semibold text-slate-800">{userName(userId)}</span>
-                          <span className="shrink-0 text-2xs font-medium text-slate-500 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
+                          <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
                           {attention > 0 && <Badge tone="amber" dot className="tabular-nums">{attention}</Badge>}
                         </div>
-                        <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform duration-base', open && 'rotate-180')} />
+                        <ChevronDown size={16} className={uitklapChevron(open, 180, 'shrink-0 text-slate-400')} />
                       </button>
-                      {open && <div className="pb-1.5 pl-2">{list.map(renderDeviceCompact)}</div>}
+                      <Uitklap open={open}>
+                        <div className="pb-1.5 pl-2">{list.map(renderDeviceCompact)}</div>
+                      </Uitklap>
                     </div>
                   );
                 })}

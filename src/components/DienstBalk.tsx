@@ -64,6 +64,7 @@ export function DienstBalk({
           <span
             className={cn(
               'absolute left-0 top-0 whitespace-nowrap font-mono font-bold tabular-nums leading-4 text-oker-700',
+              // 2xs: compacte dienstbalk in de Vandaag-tegel, tijdlabels raken elkaar op 12 px
               compact ? 'text-2xs' : 'text-xs',
               wijzer < 8 ? 'translate-x-0' : wijzer > 92 ? '-translate-x-full' : '-translate-x-1/2',
             )}
@@ -118,6 +119,7 @@ export function DienstBalk({
         )}
       </div>
       {/* Begin- en eindtijd onder de balk. */}
+      {/* 2xs: compacte dienstbalk in de Vandaag-tegel, tijdlabels raken elkaar op 12 px */}
       <div aria-hidden="true" className={cn('mt-1.5 flex justify-between font-mono font-medium tabular-nums text-slate-500', compact ? 'text-2xs' : 'text-xs')}>
         <span>{minNaarTijd(g.start)}</span>
         <span>{minNaarTijd(g.end)}</span>

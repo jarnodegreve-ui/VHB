@@ -167,14 +167,18 @@ export function DesignsysteemView() {
         </Rij>
       </Sectie>
 
-      <Sectie id="typografie" titel="Typografie" uitleg="Manrope ExtraBold voor koppen, Inter voor de rest. Vijf rollen; geen losse tekstmaten in views.">
+      <Sectie id="typografie" titel="Typografie" uitleg="Manrope ExtraBold (800) voor koppen, Inter voor de rest. Ladder 11 · 12 · 13 · 15 · 16 · 18 · 24 · 30; koppen 17/20/30 alleen via hun rol. Geen losse tekstmaten in views.">
         <div className="space-y-3">
-          <p className="text-page-title">Paginatitel · text-page-title</p>
-          <p className="text-section-title">Sectietitel · text-section-title</p>
-          <p className="text-card-title">Kaarttitel · text-card-title</p>
-          <p className="text-sm text-slate-600">Body · text-sm slate-600, De dienst begint om 05:42 aan de stelplaats.</p>
+          <p className="text-page-title">Paginatitel · text-page-title · 24/30, -0.02/-0.025em</p>
+          <p className="text-section-title">Sectietitel · text-section-title · 18/20, -0.01/-0.015em</p>
+          <p className="text-card-title">Kaarttitel · text-card-title · 17, -0.01em</p>
+          <p className="text-body text-slate-600">Lopende tekst · text-body 15/1.55, De dienst begint om 05:42 aan de stelplaats; de eerste rit vertrekt tien minuten later.</p>
+          <p className="text-body-sm text-slate-500">Compacte lopende tekst · text-body-sm 13/1.55, hint onder een veld, zijvak-voet of tooltip.</p>
+          <p className="text-md text-slate-800">Lijst- en detailtekst · text-md 15, rijtitel in een kaart of lijst.</p>
+          <p className="text-sm text-slate-600">UI-laag · text-sm 13, chips, knoppen, tabelcellen, labels.</p>
+          <p className="text-xs text-slate-500">Meta · text-xs 12, datum, teller-tekst, dichte tabel.</p>
           <p className="text-label">Label · text-label</p>
-          <p className="text-micro">Micro · text-micro</p>
+          <p className="text-micro">Micro · text-micro · 11, samen met badges en tellers de enige 2xs</p>
           <p className="text-stat text-slate-900">2116 · text-stat</p>
           <p className="text-sm tabular-nums text-slate-600">Cijfers · tabular-nums 05:42 · 2601 · 24 dagen</p>
         </div>

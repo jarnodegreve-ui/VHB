@@ -15,7 +15,7 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Select } from '../../components/Field';
-import { Badge, Button, Chip, FilterChip, IconButton, Td, Th, segItemClass } from '../../components/primitives';
+import { Badge, Button, Chip, FilterChip, IconButton, Segmented, Td, Th } from '../../components/primitives';
 import { StickyThead, TableToolbar } from '../../components/Table';
 
 type Tab = 'imports' | 'diensten' | 'dagtypes';
@@ -42,15 +42,18 @@ export function DienstopbouwView({ currentUser }: { currentUser: User }) {
   return (
     <PageShell>
       <PageHeader eyebrow="Beheer · Planning" title="Dienstopbouw" actions={<Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>} />
-      <div className="glass-segmented inline-flex shrink-0 rounded-2xl p-1" role="group" aria-label="Onderdeel">
-        {(['imports', 'diensten', 'dagtypes'] as const).map((t) => (
-          // rauw: segmented-control-item via segItemClass (het voorgeschreven patroon)
-          <button key={t} type="button" onClick={() => setTab(t)} aria-pressed={tab === t} className={segItemClass(tab === t, 'inline-flex items-center gap-1.5 min-h-11 sm:pointer-fine:min-h-8')}>
-            {t === 'imports' ? <FileSpreadsheet size={14} /> : t === 'diensten' ? <Route size={14} /> : <ListChecks size={14} />}
-            {t === 'imports' ? 'Imports' : t === 'diensten' ? 'Diensten' : 'Dagtypes'}
-          </button>
-        ))}
-      </div>
+      <Segmented<Tab>
+        label="Onderdeel"
+        className="shrink-0"
+        itemClassName="min-h-11 sm:pointer-fine:min-h-8"
+        waarde={tab}
+        opties={[
+          { waarde: 'imports', label: <><FileSpreadsheet size={14} />Imports</> },
+          { waarde: 'diensten', label: <><Route size={14} />Diensten</> },
+          { waarde: 'dagtypes', label: <><ListChecks size={14} />Dagtypes</> },
+        ]}
+        onChange={setTab}
+      />
       {tab === 'imports' && <ImportsTab imports={imports} isLoading={isLoading} isAdmin={currentUser.role === 'admin'} onChanged={load} />}
       {tab === 'diensten' && <DienstenTab actief={actief} />}
       {tab === 'dagtypes' && <DagtypesTab />}
@@ -126,7 +129,7 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
                   <p className="min-w-0 truncate text-sm font-semibold text-slate-800">{i.filename ?? 'import'}</p>
                   {i.actief ? <Badge tone="emerald" dot>actief</Badge> : <Badge tone="slate" stil>niet actief</Badge>}
                 </div>
-                <p className="text-2xs text-slate-500">{formatDateTimeHuman(i.createdAt)} · {i.rijen} ritdelen · {i.diensten} diensten · {i.dagtypes.join(', ')}</p>
+                <p className="text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)} · {i.rijen} ritdelen · {i.diensten} diensten · {i.dagtypes.join(', ')}</p>
                 <div className="flex flex-wrap gap-1">
                   {fouten(i) > 0 ? <Badge tone="red" dot>{fouten(i)} fouten</Badge> : <Badge tone="emerald" stil dot>geen fouten</Badge>}
                   {waarsch(i) > 0 && <Badge tone="amber" stil dot>{waarsch(i)} waarschuwingen</Badge>}
@@ -146,7 +149,7 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
               <tbody>
                 {imports.map((i) => (
                   <tr key={i.id} className="border-b border-hairline-subtle last:border-b-0 align-top">
-                    <Td><p className="font-semibold text-slate-800">{i.filename ?? 'import'}</p><p className="text-2xs text-slate-500">{formatDateTimeHuman(i.createdAt)}</p></Td>
+                    <Td><p className="font-semibold text-slate-800">{i.filename ?? 'import'}</p><p className="text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)}</p></Td>
                     <Td num>{i.rijen}</Td>
                     <Td num>{i.diensten}</Td>
                     <Td className="text-xs">{i.dagtypes.join(', ')}</Td>
@@ -261,7 +264,7 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
                   <li key={k}>
                     {/* rauw: lijstrij als knop die het detail rechts opent */}
                     <button type="button" onClick={() => setGekozen(k)} className={cn('ios-pressable flex min-h-11 w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-surface-soft-hover', gekozen === k && 'bg-oker-50')}>
-                      <span className="min-w-0 flex-1"><span className="text-sm font-semibold text-slate-800">{d.serviceNumber}</span> <span className="text-2xs text-slate-500">{d.dagtypeCode} · {d.segmenten.length} delen</span></span>
+                      <span className="min-w-0 flex-1"><span className="text-sm font-semibold text-slate-800">{d.serviceNumber}</span> <span className="text-xs text-slate-500">{d.dagtypeCode} · {d.segmenten.length} delen</span></span>
                       {pp && <span className="text-xs text-slate-600">{minNaarHHMM(pp.lbRijtijd)} rij</span>}
                     </button>
                   </li>
@@ -276,7 +279,7 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
               <Card padding="none" className="overflow-clip">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-5 py-3">
                   <h2 className="text-card-title">Dienst {detail.serviceNumber} <span className="font-normal text-slate-500">· dagtype {detail.dagtypeCode}</span></h2>
-                  {p && <div className="flex flex-wrap gap-1.5 text-2xs">
+                  {p && <div className="flex flex-wrap gap-1.5 text-xs">
                     <Chip mono={false}>rijtijd {minNaarHHMM(p.lbRijtijd)}</Chip><Chip mono={false}>stat. {p.lbStat100At}/{p.lbStat100Nat}/{p.lbStat50Nat}</Chip><Chip mono={false}>onderbr. {p.lbOnd}</Chip><Chip mono={false}>admin {p.lbAdmT}</Chip><Chip mono={false}>nacht {p.lbNacht}</Chip>
                     <Chip mono={false}>tik {p.tiktijden.map((t) => `${t.begin}-${t.einde}`).join(' · ')}</Chip>
                   </div>}

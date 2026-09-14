@@ -64,7 +64,7 @@ export function OnderhoudBeheer() {
             Onderhoudsmodus
             {o.actief && <Badge tone="amber" dot>Aan</Badge>}
           </p>
-          <p className="mt-0.5 break-words text-sm leading-relaxed text-slate-500">{uitleg}</p>
+          <p className="mt-0.5 break-words text-body-sm text-slate-500">{uitleg}</p>
         </div>
         <div className="ml-auto shrink-0 pt-0.5">
           <Switch
@@ -85,7 +85,7 @@ export function OnderhoudBeheer() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-[11rem] flex-1 basis-0">
               <p className="text-sm font-semibold text-slate-900">Schrijfacties pauzeren</p>
-              <p className="mt-0.5 text-sm leading-relaxed text-slate-500">Bekijken blijft werken; verlof aanvragen, ruilen, opslaan en importeren geven even een melding. Beheerders kunnen altijd door.</p>
+              <p className="mt-0.5 text-body-sm text-slate-500">Bekijken blijft werken; verlof aanvragen, ruilen, opslaan en importeren geven even een melding. Beheerders kunnen altijd door.</p>
             </div>
             <Switch
               checked={o.schrijfblok}

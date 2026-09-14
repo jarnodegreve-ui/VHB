@@ -41,6 +41,7 @@ export function AanwezigheidStack({ className }: { className?: string }) {
             <Avatar key={a.userId} naam={a.naam} size="sm" className="ring-2 ring-paper" />
           ))}
         </span>
+        {/* 2xs: teller naast de avatarstapel */}
         {rest > 0 && <span className="ml-1.5 text-2xs font-semibold tabular-nums text-slate-500">+{rest}</span>}
       </button>
       <AnimatePresence>

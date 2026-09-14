@@ -218,7 +218,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                       <tr key={d.id} className="border-b border-hairline-subtle last:border-b-0 align-top transition-colors hover:bg-surface-soft-hover">
                         <Td>
                           <p className="font-semibold text-slate-800">{voertuigNaam(d)}</p>
-                          {d.kortNr !== null && d.kortNr !== undefined && <p className="text-2xs font-medium text-slate-500">{d.busnr}</p>}
+                          {d.kortNr !== null && d.kortNr !== undefined && <p className="text-xs font-medium text-slate-500">{d.busnr}</p>}
                         </Td>
                         <Td>{werktypeBadge(d.werktype)}</Td>
                         <Td className="max-w-md">
@@ -250,7 +250,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                         {statusBadge(d)}
                       </div>
                       <p className="whitespace-pre-wrap text-sm text-slate-700">{d.omschrijving}</p>
-                      <p className="text-2xs text-slate-500">{d.gemeldDoorNaam ?? 'onbekend'} · {formatRelatief(d.gemeldOp)}</p>
+                      <p className="text-xs text-slate-500">{d.gemeldDoorNaam ?? 'onbekend'} · {formatRelatief(d.gemeldOp)}</p>
                       {d.status === 'uitgevoerd' && d.uitgevoerdWerk && <p className="text-xs text-emerald-700">{d.uitgevoerdWerk}</p>}
                     </div>
                     <ActieMenu size="sm" items={acties(d)} />

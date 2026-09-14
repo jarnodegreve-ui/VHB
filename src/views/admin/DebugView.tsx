@@ -83,9 +83,9 @@ function FoutDetail({ groep }: { groep: FoutGroep }) {
     <div className="grid gap-4 md:grid-cols-2">
       <div className="min-w-0">
         <p className="text-micro mb-1.5">Laatste voorval · {formatDateTimeHuman(v.createdAt)}</p>
-        {meta && <p className="mb-2 break-words font-mono text-2xs text-slate-500">{meta}</p>}
-        {v.userAgent && <p className="mb-2 break-words font-mono text-2xs text-slate-500">{v.userAgent}</p>}
-        <pre className="max-h-48 overflow-auto rounded-xl bg-ink p-3 font-mono text-2xs leading-relaxed text-white/75">{v.stack || 'Geen stack meegestuurd.'}</pre>
+        {meta && <p className="mb-2 break-words font-mono text-xs text-slate-500">{meta}</p>}
+        {v.userAgent && <p className="mb-2 break-words font-mono text-xs text-slate-500">{v.userAgent}</p>}
+        <pre className="max-h-48 overflow-auto rounded-xl bg-ink p-3 font-mono text-xs leading-5 text-white/75">{v.stack || 'Geen stack meegestuurd.'}</pre>
       </div>
       <div className="min-w-0">
         <p className="text-micro mb-1.5">Broodkruimels (laatste 10)</p>
@@ -95,7 +95,7 @@ function FoutDetail({ groep }: { groep: FoutGroep }) {
           <ol className="divide-y divide-slate-200/60 rounded-xl ring-1 ring-hairline">
             {kruimels.map((k, i) => (
               <li key={`${k.t}-${i}`} className="flex items-baseline gap-2.5 px-3 py-1.5 text-xs">
-                <span className="shrink-0 font-mono text-2xs tabular-nums text-slate-500">{k.t?.slice(11, 19)}</span>
+                <span className="shrink-0 font-mono text-xs tabular-nums text-slate-500">{k.t?.slice(11, 19)}</span>
                 <Chip tone={k.soort === 'fout-toast' ? 'red' : 'slate'} mono={false}>{k.soort}</Chip>
                 <span className="min-w-0 flex-1 break-words text-slate-700">{k.tekst}</span>
               </li>
@@ -175,7 +175,7 @@ function FoutenSectie() {
                 <Card key={e.id} tone="muted" padding="sm" className="rounded-xl">
                   <div className="flex items-center justify-between gap-3">
                     <Badge tone="red" dot>{e.source || 'onbekend'}</Badge>
-                    <span className="shrink-0 font-mono text-2xs text-slate-500 tabular-nums">{new Date(e.createdAt).toLocaleString('nl-BE')}</span>
+                    <span className="shrink-0 font-mono text-xs text-slate-500 tabular-nums">{new Date(e.createdAt).toLocaleString('nl-BE')}</span>
                   </div>
                   <p className="mt-1.5 break-words text-xs font-medium text-slate-700">{e.message}</p>
                 </Card>
@@ -187,7 +187,7 @@ function FoutenSectie() {
         ) : (
           <>
             {!data?.statusBeschikbaar && (
-              <p className="mb-3 text-xs font-medium leading-relaxed text-slate-500">
+              <p className="mb-3 text-body-sm font-medium text-slate-500">
                 Statussen bewaren vraagt de migratie <Chip>supabase/2026-09-06_client_errors_groepen.sql</Chip>; tot dan staat alles op Open.
               </p>
             )}
@@ -244,7 +244,7 @@ function FoutRijen({ groep: g, uit, onToggle, bezig, statusBeschikbaar, onStatus
         </Td>
         <Td className="min-w-0 max-w-md">
           <p className="break-words text-sm font-medium text-slate-800">{g.message}</p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-2xs text-slate-500">
+          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs text-slate-500">
             {g.referentie && <Chip tone="oker" title="Referentie zoals de gebruiker die op het foutscherm ziet">{g.referentie}</Chip>}
             <Chip mono={false}>{BRON_LABEL[g.source] ?? g.source}</Chip>
             {g.topFrame ? <span className="[overflow-wrap:anywhere]">{g.topFrame}</span> : <span>geen bronregel</span>}
@@ -637,7 +637,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                         {status === 'OK' ? 'OK' : 'Fout'}
                       </Badge>
                     </StatusRij>
-                    {status !== 'OK' && <p className="mt-1 break-all rounded-lg bg-red-50 p-2 font-mono text-2xs text-red-700">{status}</p>}
+                    {status !== 'OK' && <p className="mt-1 break-all rounded-lg bg-red-50 p-2 font-mono text-xs text-red-700">{status}</p>}
                   </div>
                 ))}
               </div>

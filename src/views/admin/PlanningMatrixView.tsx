@@ -4,7 +4,7 @@ import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { celBadgeTone } from '../../lib/planningKind';
-import { EmptyState, PageHeader } from '../../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, Chip, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
@@ -221,7 +221,7 @@ export function PlanningMatrixView({
   };
 
     return (
-    <div className="space-y-6">
+    <PageShell breed>
       <PageHeader
         eyebrow="Planning"
         title="Planningsoverzicht"
@@ -375,11 +375,11 @@ export function PlanningMatrixView({
                   <p className="text-sm font-semibold text-slate-800 tabular-nums">
                     {new Date(row.source_date).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
                   </p>
-                  <div className="mt-1.5 flex items-center justify-between text-2xs font-medium text-slate-500 tabular-nums">
+                  <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-slate-500 tabular-nums">
                     <span>Dagtype {row.day_type || '—'}</span>
                     <span>{assignmentCount} codes</span>
                   </div>
-                  <div className="mt-0.5 flex items-center justify-between text-2xs font-medium text-slate-500 tabular-nums">
+                  <div className="mt-0.5 flex items-center justify-between text-xs font-medium text-slate-500 tabular-nums">
                     <span>{generatedServices} diensten</span>
                     {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
                       ? <span className="font-semibold text-amber-700">controle nodig</span>
@@ -554,7 +554,7 @@ export function PlanningMatrixView({
           )}
         </Card>
       </div>
-    </div>
+    </PageShell>
     );
   } catch (error) {
     console.error('Planningsoverzicht renderfout:', error);

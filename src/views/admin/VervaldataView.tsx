@@ -329,7 +329,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                       >
                         <Td>
                           <p className={cn('font-semibold', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{rij.user.name}</p>
-                          {rij.user.employeeId ? <p className="text-2xs font-medium tabular-nums text-slate-500">{rij.user.employeeId}</p> : null}
+                          {rij.user.employeeId ? <p className="text-xs font-medium tabular-nums text-slate-500">{rij.user.employeeId}</p> : null}
                         </Td>
                         {soorten.filter(([soort]) => voorkeur.zichtbaar(soort)).map(([soort, label]) => (
                           <Td key={soort}>{datumPil(rij, soort, label, false)}</Td>
@@ -359,9 +359,9 @@ export function VervaldataView({ users }: { users: User[] }) {
                   >
                     <div className="flex items-baseline justify-between gap-3">
                       <p className={cn('min-w-0 truncate text-sm font-semibold', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{rij.user.name}</p>
-                      {rij.eerste === null ? <span className="shrink-0 text-2xs font-semibold text-oker-700">Invullen</span> : null}
+                      {rij.eerste === null ? <span className="shrink-0 text-xs font-semibold text-oker-700">Invullen</span> : null}
                     </div>
-                    <p className="text-2xs font-medium tabular-nums text-slate-500">{eersteTekst(rij.eerste)}</p>
+                    <p className="text-xs font-medium tabular-nums text-slate-500">{eersteTekst(rij.eerste)}</p>
                     {rij.eerste !== null && (
                       <div className="flex flex-wrap gap-1.5">
                         {soorten.map(([soort, label]) => datumPil(rij, soort, label, true))}

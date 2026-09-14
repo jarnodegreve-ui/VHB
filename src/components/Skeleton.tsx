@@ -39,17 +39,14 @@ export function SkeletonRow({ className }: { className?: string }) {
 }
 
 /**
- * Skeleton-tegel die qua maat ongeveer een StatTile vervangt.
+ * Skeleton-tegel die qua maat ongeveer een StatTile vervangt. Zelfde
+ * oppervlak als de echte tegel (.surface-card, trede 1): zo cross-fadet
+ * Verwissel van skelet naar tegel zonder dat rand of schaduw verspringen
+ * (voorheen een eigen, zachtere inline var(--tile-*-soft)-variant).
  */
 export function SkeletonTile({ className }: { className?: string }) {
   return (
-    <div
-      className={cn('rounded-3xl p-5 relative overflow-hidden', className)}
-      style={{
-        background: 'var(--tile-bg-soft)',
-        border: 'var(--tile-border-soft)',
-      }}
-    >
+    <div className={cn('surface-card rounded-3xl p-5 relative overflow-hidden', className)}>
       <Skeleton rounded="xl" className="w-9 h-9" />
       <Skeleton className="mt-3 h-2 w-16" />
       <Skeleton className="mt-2 h-7 w-20" />

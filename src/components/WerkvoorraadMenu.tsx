@@ -199,7 +199,7 @@ export function WerkvoorraadMenu({
           <div className="flex items-center justify-between px-3 py-2 mb-1 border-b fine-divider">
             <span className="text-sm font-semibold text-slate-800">Open taken</span>
             {wv.attentionCount > 0 && (
-              <span className="text-2xs font-semibold text-slate-500">
+              <span className="text-xs font-semibold text-slate-500">
                 {enkelvoud(wv.attentionCount, 'item', 'items')}
               </span>
             )}

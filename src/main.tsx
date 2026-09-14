@@ -14,7 +14,7 @@ function CrashFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 text-center">
       <div className="max-w-sm">
-        <h1 className="text-xl font-black text-slate-900 tracking-tight">Er ging iets mis</h1>
+        <h1 className="text-xl font-black text-slate-900 tracking-[-0.015em]">Er ging iets mis</h1>
         <p className="mt-2 text-sm font-medium text-slate-500">
           De pagina kon niet correct geladen worden. Probeer het opnieuw.
         </p>

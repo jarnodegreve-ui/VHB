@@ -19,7 +19,7 @@ export function OmleidingDetail({ diversion: div }: { diversion: Diversion }) {
     <div className="space-y-5">
       <Card tone="muted" padding="sm">
         <MicroLabel>Periode</MicroLabel>
-        <p className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-slate-800 tabular-nums">
+        <p className="mt-1.5 flex items-center gap-2 text-md font-semibold text-slate-800">
           <Calendar size={14} className="text-oker-500" />
           {omleidingsPeriode(div)}{!div.endDate && ', geen einddatum'}
         </p>
@@ -28,7 +28,7 @@ export function OmleidingDetail({ diversion: div }: { diversion: Diversion }) {
 
       <div>
         <MicroLabel>Omschrijving</MicroLabel>
-        <p className="mt-2 whitespace-pre-line text-sm font-normal leading-relaxed text-slate-700">{div.description}</p>
+        <p className="mt-2 whitespace-pre-line text-body font-normal text-slate-700">{div.description}</p>
       </div>
 
       {div.pdfUrl && (

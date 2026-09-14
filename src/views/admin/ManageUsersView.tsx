@@ -12,7 +12,7 @@ import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, FilterChip, IconButton, MicroLabel, segItemClass, Td, Th, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, MicroLabel, Segmented, Td, Th, Switch } from '../../components/primitives';
 import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
 import { ActieMenu } from '../../components/ActieMenu';
@@ -685,14 +685,13 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
             kolommen={voorkeur.kolommen}
             filters={(
               <>
-                <div className="glass-segmented inline-flex rounded-2xl p-1">
-                  {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
-                    // rauw: segmented control op de glass-rail, klassen via segItemClass
-                    <button key={role} type="button" onClick={() => setRoleFilter(role)} className={segItemClass(roleFilter === role, 'capitalize')}>
-                      {role === 'all' ? 'Alles' : role}
-                    </button>
-                  ))}
-                </div>
+                <Segmented<typeof roleFilter>
+                  label="Rol"
+                  itemClassName="capitalize"
+                  waarde={roleFilter}
+                  opties={(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => ({ waarde: role, label: role === 'all' ? 'Alles' : role }))}
+                  onChange={setRoleFilter}
+                />
                 {/* Snelfilters voor de uitrol. Blijven renderen zolang het
                     filter aanstaat — anders kon een actieve filter zijn eigen
                     knop laten verdwijnen en bleef een lege tabel zonder uitweg
@@ -996,16 +995,16 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                 )}
               </div>
               <Card tone="muted" padding="sm" className="flex items-center justify-between">
-                <div><p className="text-sm font-semibold text-slate-700">Account actief</p><p className="text-2xs text-slate-500">Inactieve gebruikers kunnen niet inloggen.</p></div>
+                <div><p className="text-sm font-semibold text-slate-700">Account actief</p><p className="text-xs text-slate-500">Inactieve gebruikers kunnen niet inloggen.</p></div>
                 <Switch checked={editingUser.isActive !== false} onChange={(aan) => setEditingUser({ ...editingUser, isActive: aan })} label="Account actief" />
               </Card>
               <Card tone="muted" padding="sm" className="flex items-center justify-between">
-                <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-2xs text-slate-500">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
+                <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-xs text-slate-500">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
                 <Switch checked={editingUser.showInContacts !== false} onChange={(aan) => setEditingUser({ ...editingUser, showInContacts: aan })} label="Tonen in contactlijst" />
               </Card>
               {editingUser.role === 'admin' && (
                 <Card tone="muted" padding="sm" className="flex items-center justify-between">
-                  <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-2xs text-slate-500">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
+                  <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-xs text-slate-500">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
                   <Switch checked={editingUser.wantsSystemMail !== false} onChange={(aan) => setEditingUser({ ...editingUser, wantsSystemMail: aan })} label="Systeemmails" />
                 </Card>
               )}

@@ -311,7 +311,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                   <FileText size={20} />
                 </span>
                 <span className="text-base font-semibold text-slate-800">Bekijk ritblad</span>
-                <span className="max-w-sm text-sm font-normal leading-relaxed text-slate-500">
+                <span className="max-w-sm text-body-sm font-normal text-slate-500">
                   Opent het volledige document, alle pagina's, met knijp-zoom.
                 </span>
               </button>

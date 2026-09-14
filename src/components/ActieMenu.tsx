@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { MoreHorizontal } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 import { IconButton } from './primitives';
 
@@ -44,6 +46,7 @@ export function ActieMenu({
   const wortel = useRef<HTMLDivElement>(null);
   const lijst = useRef<HTMLDivElement>(null);
   const id = useId();
+  const reduced = useReducedMotion();
 
   // De trigger is de eerste knop in de wortel die niet in de lijst zit — ook
   // bij een eigen `trigger`, waar we geen ref op kunnen zetten.
@@ -119,14 +122,21 @@ export function ActieMenu({
   return (
     <div ref={wortel} className={cn('relative inline-flex', className)}>
       {triggerEl}
+      {/* Zelfde in/uit als UserMenu: veer in, EASE uit, beide DUR.fast; de
+          `popover-in`-klasse had geen uitgang en het menu verdween in één frame. */}
+      <AnimatePresence>
       {open && (
-        <div
+        <motion.div
           ref={lijst}
           id={id}
           role="menu"
           aria-label={label}
+          initial={{ opacity: 0, scale: 0.97, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING } }}
+          exit={{ opacity: 0, scale: 0.97, y: -4, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
+          style={{ transformOrigin: kant === 'right' ? 'top right' : 'top left' }}
           className={cn(
-            'popover-in absolute top-full z-50 mt-2 min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2',
+            'absolute top-full z-50 mt-2 min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2',
             kant === 'right' ? 'right-0' : 'left-0',
           )}
         >
@@ -157,8 +167,9 @@ export function ActieMenu({
               </button>
             </div>
           ))}
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

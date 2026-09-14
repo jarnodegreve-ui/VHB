@@ -217,7 +217,7 @@ export function LoginView({
                   <h1 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
                     {headerCopy.title}
                   </h1>
-                  <p className="mt-2 text-sm text-slate-300 font-normal">{headerCopy.description}</p>
+                  <p className="mt-2 text-body text-slate-300 font-normal">{headerCopy.description}</p>
                 </motion.div>
               </AnimatePresence>
 
@@ -229,7 +229,7 @@ export function LoginView({
               {uitlogReden && !recoveryMode && (
                 <div className="mb-6 flex items-start gap-2.5 rounded-2xl border border-oker-500/25 bg-oker-500/12 px-4 py-3">
                   <ShieldCheck size={16} className="mt-px shrink-0 text-oker-400" />
-                  <p className="text-sm font-medium leading-relaxed text-oker-100">{uitlogReden}</p>
+                  <p className="text-body-sm font-medium text-oker-100">{uitlogReden}</p>
                 </div>
               )}
 
@@ -353,7 +353,7 @@ export function LoginView({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="absolute inset-x-0 bottom-0 text-2xs font-medium text-slate-500 uppercase tracking-[0.08em] text-center px-6"
+        className="absolute inset-x-0 bottom-0 text-micro text-slate-500 text-center px-6"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         <div>Intern gebruik · © {new Date().getFullYear()} Van Hoorebeke & Zoon</div>

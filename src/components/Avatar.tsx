@@ -11,6 +11,8 @@ import { cn } from '../lib/ui';
  * vlak) en 800 wordt daar een lichte tekstvariant — het paar klopt in beide
  * thema's zonder `dark:`-utilities. Alleen families uit `@theme` in
  * index.css, want alleen die schalen worden in dark mode omgekeerd.
+ * Tekst 800 op de 12 %-tint haalt in licht ≥ 8:1 (gemeten op de gedempte
+ * juweeltinten van golf 2).
  */
 export const AVATAR_TINTEN = [
   'bg-oker-500/12 text-oker-800',
@@ -22,8 +24,9 @@ export const AVATAR_TINTEN = [
 ] as const;
 
 const MATEN = {
+  // 2xs: initialen in een cirkel van 24 px, 12 px past er niet in
   sm: 'h-6 w-6 text-2xs',
-  md: 'h-8 w-8 text-2xs',
+  md: 'h-8 w-8 text-xs',
   lg: 'h-10 w-10 text-xs',
 } as const;
 
