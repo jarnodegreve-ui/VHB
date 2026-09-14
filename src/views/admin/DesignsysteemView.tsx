@@ -9,6 +9,8 @@ import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '..
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
 import { Avatar } from '../../components/Avatar';
 import { BrandMotief } from '../../components/BrandMotief';
+import { BrandLogo } from '../../components/BrandLogo';
+import { BrandSpinner } from '../../components/BrandSpinner';
 import { ActieMenu } from '../../components/ActieMenu';
 import { Zijvak, ZijvakRij, ZijvakTekst } from '../../components/Zijvak';
 import { DUR } from '../../lib/motion';
@@ -70,7 +72,7 @@ function Rij({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const INHOUD = [
-  ['kleur', 'Kleur'], ['typografie', 'Typografie'], ['maat', 'Maat en beweging'], ['knoppen', 'Knoppen'], ['labels', 'Badges en chips'],
+  ['merk', 'Merk'], ['kleur', 'Kleur'], ['typografie', 'Typografie'], ['maat', 'Maat en beweging'], ['knoppen', 'Knoppen'], ['labels', 'Badges en chips'],
   ['kaarten', 'Kaarten'], ['zijvak', 'Zijvak en menu'], ['personen', 'Personen'], ['formulier', 'Formulier'], ['tabel', 'Tabel'], ['feedback', 'Feedback'],
   ['illustraties', 'Illustraties'],
 ] as const;
@@ -110,6 +112,29 @@ export function DesignsysteemView() {
           </a>
         ))}
       </nav>
+
+      <Sectie id="merk" titel="Merk" uitleg="Het VHB-logo (pakket VHB primary, 14-09) in zijn drie opmaken, altijd via BrandLogo (inline SVG, de kleuren van het pakket staan hard in de component). Sizen op breedte. De laadstand laat een lichtband door de gouden streep trekken; BrandSpinner is dezelfde streep klein.">
+        <Rij label="Primary">
+          <BrandLogo className="w-56 h-auto" />
+          <span className="rounded-xl bg-ink p-4"><BrandLogo tone="donker" className="w-56 h-auto" /></span>
+        </Rij>
+        <Rij label="Horizontaal">
+          <BrandLogo variant="horizontaal" className="w-72 h-auto" />
+          <span className="rounded-xl bg-ink p-4"><BrandLogo tone="donker" variant="horizontaal" className="w-72 h-auto" /></span>
+        </Rij>
+        <Rij label="Beeldmerk">
+          <BrandLogo variant="beeldmerk" className="h-6 w-auto" />
+          <BrandLogo variant="beeldmerk" className="h-12 w-auto" />
+          <span className="rounded-xl bg-ink p-3"><BrandLogo tone="donker" variant="beeldmerk" className="h-12 w-auto" /></span>
+        </Rij>
+        <Rij label="Laadstand">
+          <BrandLogo laden className="w-44 h-auto" />
+          <BrandLogo laden variant="beeldmerk" className="h-8 w-auto" />
+          <BrandSpinner size={16} />
+          <BrandSpinner size={24} />
+          <span className="rounded-xl bg-ink p-3"><BrandSpinner size={24} tone="donker" /></span>
+        </Rij>
+      </Sectie>
 
       <Sectie id="kleur" titel="Kleur" uitleg="Warm goud (oker, anker 500) is het merk; amber is de waarschuwingskleur. In dark mode spiegelen de schalen: 50–300 worden transparante tinten, 700–900 lichte tekst.">
         <div className="space-y-3">
@@ -362,7 +387,7 @@ export function DesignsysteemView() {
         </Rij>
       </Sectie>
 
-      <Sectie id="illustraties" titel="Illustraties" uitleg="Vijf lijntekeningen op het lus-motief van het logo (src/components/illustraties): lijnen in currentColor, één gouden segment als merkcitaat. Voor de belangrijkste lege staten via EmptyState illustratie={…}; op mobiel 96 px hoog, op desktop 128.">
+      <Sectie id="illustraties" titel="Illustraties" uitleg="Vijf lijntekeningen op het merkteken (src/components/illustraties): de V met de gouden schuine streep, lijnen in currentColor, de streep als merkcitaat. Voor de belangrijkste lege staten via EmptyState illustratie={…}; op mobiel 96 px hoog, op desktop 128.">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {ILLUSTRATIES.map(({ naam, gebruik, El }) => (
             <Card key={naam} tone="muted" padding="sm" className="flex flex-col items-center gap-2 text-center">

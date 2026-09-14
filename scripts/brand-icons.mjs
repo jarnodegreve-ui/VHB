@@ -1,15 +1,15 @@
-// Genereert de app-/tab-iconen in public/ uit het officiële VHB-beeldmerk
-// (brand/vhb-final-logo-package/VHB-beeldmerk-kleur.svg, pakket v2 van
-// 2026-09-13). Sinds 01-09 (vraag Jarno) staan app-icoon én tab-icoon op de
-// goud-tegel: het beeldmerk in één kleur carbon-inkt (wit+goud valt weg op goud).
+// Genereert de app-/tab-iconen in public/ uit het icoon van de ontwerper
+// (brand/vhb-final-logo-package/VHB-icoon.svg, pakket "VHB primary" van
+// 2026-09-14): wit merk met gouden streep op een carbon tegel (#242628,
+// hoekstraal 198). App-icoon én tab-icoon zijn hetzelfde beeld.
 // Draaien na een logo-wissel:  node scripts/brand-icons.mjs
 //
 // Output (bestandsnamen blijven gelijk — manifest.json, index.html en sw.js
 // verwijzen ernaar; de SW-cache wordt per build gestempeld, dus geen bump):
 //   vhb-icoon.svg / -192.png / -512.png   afgeronde tegel (manifest "any")
-//   vhb-icoon-maskable.png (1024)          vol vlak, beeldmerk in de safe-zone
+//   vhb-icoon-maskable.png (1024)          vol vlak, merk in de safe-zone
 //   apple-touch-icon-180.png               vol vlak (iOS rondt zelf af)
-//   vhb-favicon.svg / -64.png / favicon.ico tab-icoon: carbon monogram op goud
+//   vhb-favicon.svg / -64.png / favicon.ico tab-icoon (zelfde beeld)
 // Rasteren gebeurt met de Playwright-Chromium die al als devDependency
 // aanwezig is (geen sharp/rsvg nodig).
 import { chromium } from '@playwright/test';
@@ -18,59 +18,36 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = path.join(ROOT, 'brand/vhb-final-logo-package/VHB-beeldmerk-kleur.svg');
+const SRC = path.join(ROOT, 'brand/vhb-final-logo-package/VHB-icoon.svg');
 const OUT = path.join(ROOT, 'public');
 
-// Tegelkleur = VHB Black, gelijk aan manifest background_color/theme-color:
-// anders tekent de PWA-splash een net iets lichtere tegel op de donkere
-// achtergrond. Carbonzwart (#14181B) is de logo-inkt op licht, niet de tegel.
-const TEGEL = '#0D0D0F';
-// Buitenmaten van de lus in het master-coördinatenstelsel (v2: gevulde
-// vlakken, lijndikte 40): x 280,75–1231,25, y 140,5–534,5.
-const MARK = { cx: 756, cy: 337.5, w: 950.5 };
-// Merkkleuren in het master; op de tegel worden ze allebei inkt.
-const MASTER_KLEUREN = /#14181B|#E2A323/g;
-
 const master = fs.readFileSync(SRC, 'utf-8');
-const inner = master.slice(master.indexOf('</desc>') + '</desc>'.length, master.lastIndexOf('</svg>')).trim();
-// Alleen het monogram (V·H·B + H-verbinding), voor het tab-icoon: de lus met
-// drie lettertjes erin is op 16–32 px een vlekje (Jarno 30-08). Eén kleur
-// (carbon, ook de H-verbinding — zoals VHB-beeldmerk-zwart.svg) op een goud-
-// tegel: leesbaar op 16 px en zichtbaar in lichte én donkere tabbalken, waar
-// een zwarte tegel wegvalt.
-const GOUD = '#E2A323';
-const monogram = inner
-  .split('\n')
-  .filter((regel) => regel.includes('id="monogram-'))
-  .join('\n')
-  .replace(MASTER_KLEUREN, TEGEL);
-const MONOGRAM = { cx: 747.27, cy: 337.5, w: 600.36 }; // bbox x 447,09–1047,45, y 213,88–461,12
+// Tegelkleur en merk-groep uit het masterbestand zelf.
+const TEGEL = master.match(/<rect [^>]*fill="(#[0-9A-Fa-f]{6})"/)[1];
+const defs = master.slice(master.indexOf('<defs>'), master.indexOf('</defs>') + '</defs>'.length);
+// Buitenmaten van het merk in de coördinaten van #vhb-mark (na zijn eigen
+// translate(-20 -20)): x 0–572,5 · y 0,6–195,5.
+const MERK = { cx: 286.25, cy: 98, w: 572.5, h: 195 };
 
-/** Tegel (1024²) met een merkteken gecentreerd op `markWidth` px breed. */
-function tileSvg({ rx, markWidth, title, body = inner, geom = MARK, fill = TEGEL }) {
-  const s = markWidth / geom.w;
+/** Tegel (1024²) met het merk gecentreerd op `markWidth` px breed. */
+function tileSvg({ rx, markWidth, title }) {
+  const s = markWidth / MERK.w;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="${title}">
-  <rect width="1024" height="1024" rx="${rx}" ry="${rx}" fill="${fill}"/>
-  <g transform="translate(512 512) scale(${s.toFixed(5)}) translate(${-geom.cx} ${-geom.cy})">
-    ${body.replace(/\n\s*/g, '\n    ')}
-  </g>
+  ${defs}
+  <rect width="1024" height="1024" rx="${rx}" ry="${rx}" fill="${TEGEL}"/>
+  <g transform="translate(512 512) scale(${s.toFixed(5)}) translate(${-MERK.cx} ${-MERK.cy})"><use href="#vhb-mark"/></g>
 </svg>
 `;
 }
 
-// App-icoon op de goud-tegel (01-09, match met het tab-icoon): het volledige
-// beeldmerk in carbon-inkt — op 180+ px is de lus wél leesbaar, dus die
-// blijft (het tab-icoon houdt het monogram, op 16–32 px is de lus een vlekje).
-const beeldmerkCarbon = inner.replace(MASTER_KLEUREN, TEGEL);
-// Afgeronde hoeken op de tab-/app-iconen (iOS-achtige radius); apple-touch en
-// maskable blijven vol — het OS maskeert die zelf. Maskable: safe-zone is een
-// cirkel van 80 % → een 2:1-beeldmerk past tot ±730 px, we houden 680.
-// markWidth 760 → 880 (04-09, Jarno: logo mocht groter op het icoon); de
-// maskable blijft binnen de veilige 80 %-cirkel (819 px op 1024).
-const ICOON = tileSvg({ rx: 224, markWidth: 880, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
-const FAVICON = tileSvg({ rx: 200, markWidth: 920, title: 'VHB', body: monogram, geom: MONOGRAM, fill: GOUD });
-const VOL = tileSvg({ rx: 0, markWidth: 880, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
-const MASKABLE = tileSvg({ rx: 0, markWidth: 780, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
+// Het app-icoon volgt de ontwerper: merk 804 px breed (schaal 1,408) op de
+// afgeronde tegel (rx 198). Apple-touch en maskable blijven vol — het OS
+// maskeert die zelf; de maskable houdt het merk binnen de veilige 80 %-cirkel
+// (819 px op 1024: 740 px breed past, diagonaal 782).
+const ICOON = tileSvg({ rx: 198, markWidth: 804, title: 'VHB app-icoon' });
+const VOL = tileSvg({ rx: 0, markWidth: 804, title: 'VHB app-icoon' });
+const MASKABLE = tileSvg({ rx: 0, markWidth: 740, title: 'VHB app-icoon' });
+const FAVICON = ICOON;
 
 fs.writeFileSync(path.join(OUT, 'vhb-icoon.svg'), ICOON);
 fs.writeFileSync(path.join(OUT, 'vhb-favicon.svg'), FAVICON);

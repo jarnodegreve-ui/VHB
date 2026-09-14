@@ -1369,8 +1369,8 @@ export default function App() {
                 het beeldmerk zonder naamregel wilde hij niet. Naamregel 1,2×
                 en 26 eenheden lager (ook Jarno) voor leesbaarheid op deze
                 maat; op mobiel w-32 = 128 px ("iets kleiner", Jarno 30-08). */}
-            <BrandLogo tone="licht" naamregelSchaal={1.2} naamregelAfstand={70} className="w-32 lg:w-36 h-auto mx-auto select-none block dark:hidden" />
-            <BrandLogo tone="donker" naamregelSchaal={1.2} naamregelAfstand={70} className="w-32 lg:w-36 h-auto mx-auto select-none hidden dark:block" />
+            <BrandLogo tone="licht" className="w-40 lg:w-44 h-auto mx-auto select-none block dark:hidden" />
+            <BrandLogo tone="donker" className="w-40 lg:w-44 h-auto mx-auto select-none hidden dark:block" />
           </button>
           <IconButton
             label="Menu sluiten"

@@ -2,39 +2,37 @@ import { GOUD } from './BrandLogo';
 import { cn } from '../lib/ui';
 
 /**
- * Lus-motief voor lege staten (idee 8, 09-2026): een abstractie van de
- * onderbroken ovale lus met het gouden segment uit het VHB-logo — bewust
- * zónder monogram of naamregel. Het logo zelf mag niet vervormd of als
+ * Streep-motief voor lege staten (09-2026): een abstractie van de gouden
+ * schuine streep uit het VHB-merk, geflankeerd door twee dunne strepen in
+ * inkt — bewust zónder letters. Het logo zelf mag niet vervormd of als
  * illustratie hergebruikt worden; dit is een UI-element dat het merk citeert
  * (zoals BrandSpinner dat al doet), geen logo.
  *
- * Geometrie is de lus van BrandLogo op schaal (r 177 → 16, lusdikte 40 →
- * 3,6, dezelfde openingen rechtsboven: inkt tot −17°, goud tot −23°). Ink via
- * `currentColor` zodat `text-slate-400` en dark mode vanzelf meewerken;
- * goud is de vaste logo-kleur. Geen schaduw/gloed/verloop.
+ * Zelfde helling als de streep in het merk (30° uit de verticaal). Inkt via
+ * `currentColor` zodat `text-slate-400` en dark mode vanzelf meewerken; goud
+ * is de vaste logo-kleur. Geen schaduw/gloed/verloop.
  */
-const LUS_INK = 'M 68.16 8 H 24 A 16 16 0 0 0 24 40 H 72 A 16 16 0 0 0 87.3 19.32';
-const LUS_GOUD = 'M 69.8 8 H 72 A 16 16 0 0 1 86.73 17.75';
+// Drie evenwijdige strepen van y 10 tot y 38 (dy 28 → dx 16,2 bij 30°).
+const STREEP = (x: number) => `M ${x} 38 L ${x + 16.2} 10`;
 
 export type MotiefVariant = 'leeg' | 'klaar' | 'fout';
 
 export function BrandMotief({ variant = 'leeg', className }: { variant?: MotiefVariant; className?: string }) {
   return (
-    <svg viewBox="0 0 96 48" width={96} height={48} className={cn('shrink-0', className)} aria-hidden="true">
-      <g fill="none" strokeWidth={3.6} strokeLinecap="butt" strokeLinejoin="round">
-        <path d={LUS_INK} stroke="currentColor" />
-        <path d={LUS_GOUD} stroke={GOUD} />
-      </g>
+    <svg viewBox="0 0 96 48" width={96} height={48} className={cn('shrink-0', className)} aria-hidden="true" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <path d={STREEP(24)} stroke="currentColor" strokeWidth={2.5} />
+      <path d={STREEP(40)} stroke="currentColor" strokeWidth={2.5} />
+      {variant === 'leeg' && <path d={STREEP(56)} stroke={GOUD} strokeWidth={4} />}
       {variant === 'klaar' && (
-        /* Vinkje in goud, sober en klein — binnen de lus. */
-        <path d="M 40 24.5 L 46 30.5 L 57 18.5" fill="none" stroke={GOUD} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
+        /* Vinkje in goud: het lange been ís de streep, het korte been eronder. */
+        <path d="M 49 30 L 56 38 L 72.2 10" stroke={GOUD} strokeWidth={4} />
       )}
       {variant === 'fout' && (
-        /* Uitroep-accent in goud: streep + punt, binnen de lus. */
-        <g fill={GOUD}>
-          <path d="M 48 14 V 27" fill="none" stroke={GOUD} strokeWidth={3.5} strokeLinecap="round" />
-          <circle cx={48} cy={33.5} r={2.1} />
-        </g>
+        /* Uitroep-accent in goud langs de helling: streep + punt. */
+        <>
+          <path d="M 61.2 29 L 72.2 10" stroke={GOUD} strokeWidth={4} />
+          <circle cx={57.6} cy={36.5} r={2.4} fill={GOUD} />
+        </>
       )}
     </svg>
   );

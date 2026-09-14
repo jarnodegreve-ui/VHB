@@ -33,7 +33,7 @@ export function CarbonScherm({ children, className }: { children: ReactNode; cla
   return (
     <div className={cn('login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5', className)}>
       <CarbonAchtergrond />
-      <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
+      <BrandLogo tone="donker" className="w-44 sm:w-56 h-auto select-none" />
       {children}
     </div>
   );
@@ -71,7 +71,7 @@ export function LaadScherm({ tekst = 'Even je gegevens ophalen…' }: { tekst?: 
   return (
     <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6" aria-busy="true" aria-label="Portaal wordt geladen">
       <CarbonAchtergrond />
-      <BrandLogo tone="donker" naamregelAfstand={70} laden className="w-36 sm:w-44 h-auto select-none" />
+      <BrandLogo tone="donker" laden className="w-44 sm:w-56 h-auto select-none" />
       <div className="flex min-h-10 flex-col items-center gap-3">
         <p className={cn('text-sm font-medium text-white/60 transition-opacity duration-300', fase >= 1 ? 'opacity-100' : 'opacity-0')} aria-hidden={fase < 1 || undefined}>
           {tekst}
@@ -93,7 +93,7 @@ export function ProfielLaden() {
 export function PrintLaden() {
   return (
     <div className="min-h-screen bg-surface-white flex flex-col items-center justify-center gap-5" aria-busy="true" aria-label="Print-weergave wordt geladen">
-      <BrandLogo tone="licht" naamregelAfstand={70} laden className="w-36 h-auto select-none" />
+      <BrandLogo tone="licht" laden className="w-44 h-auto select-none" />
     </div>
   );
 }

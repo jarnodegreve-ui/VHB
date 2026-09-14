@@ -155,11 +155,11 @@ export function ConfirmationModal({
 }
 
 /**
- * Empty-state: lus-motief (BrandMotief) + boodschap. `variant` kiest het
+ * Empty-state: streep-motief (BrandMotief) + boodschap. `variant` kiest het
  * motief: 'leeg' (niets hier), 'klaar' (alles afgehandeld — goud vinkje) of
  * 'fout' (uitroep-accent). Met een expliciet `icon` blijft de gedempte
  * icoon-tegel van vroeger; met `illustratie` (src/components/illustraties)
- * komt er een lijnillustratie op het lus-motief — voor de belangrijkste
+ * komt er een lijnillustratie op het merkteken — voor de belangrijkste
  * lege staten van een scherm (max. 96 px hoog op mobiel, 128 op desktop).
  * Het busje (BrandBus-mascotte) is 01-09 volledig uitgefaseerd (vraag
  * Jarno) — de git-historiek bewaart hem.
