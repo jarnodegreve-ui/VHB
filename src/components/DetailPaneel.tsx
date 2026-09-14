@@ -273,7 +273,7 @@ export function DetailPaneel({
               </h2>
               {chip}
             </div>
-            {subtitle ? <p className="mt-0.5 text-sm text-slate-500 truncate">{subtitle}</p> : null}
+            {subtitle ? <p className="mt-0.5 text-md text-slate-500 truncate">{subtitle}</p> : null}
           </div>
           {acties ? <div className="-my-1 flex shrink-0 items-center gap-1">{acties}</div> : null}
         </div>

@@ -223,8 +223,8 @@ export function MijnDagView({
       {/* === Tijdlijn === */}
       {rijen.length === 0 ? (
         <Card tone="muted" padding="sm">
-          <p className="text-sm font-semibold text-slate-800">Geen dienst ingepland</p>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="text-md font-semibold text-slate-800">Geen dienst ingepland</p>
+          <p className="mt-0.5 text-body-sm text-slate-500">
             {volgende ? 'Je volgende dienst staat hieronder.' : 'Er staat op dit moment niets ingepland.'}
           </p>
         </Card>
@@ -320,7 +320,7 @@ export function MijnDagView({
       {notitie && (
         <Card tone="accent" padding="sm">
           <p className="text-micro text-oker-700">Notitie van de planning</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-relaxed text-oker-800">{notitie}</p>
+          <p className="mt-1 whitespace-pre-wrap text-body font-medium text-oker-800">{notitie}</p>
         </Card>
       )}
 
@@ -390,7 +390,7 @@ export function MijnDagView({
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
               <MapPin size={16} />
             </span>
-            <p className="text-sm font-medium text-slate-600">Niets ingepland na {dagWoord}.</p>
+            <p className="text-body-sm font-medium text-slate-600">Niets ingepland na {dagWoord}.</p>
           </Card>
         )}
       </section>

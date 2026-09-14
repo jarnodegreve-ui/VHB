@@ -174,7 +174,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
               samenvatting={(s) => {
                 const d = s ? grafiek.dagen.find((x) => x.date === s.key) : null;
                 return d
-                  ? <>{dagKort(d.date)} · {tekstKwh(d.kwh)} · {d.sessions} sessie{d.sessions === 1 ? '' : 's'} · <Button variant="ghost" size="sm" className="-my-1 h-6 px-1.5 text-2xs" onClick={() => onDag(d.date)}>dagdetail</Button></>
+                  ? <>{dagKort(d.date)} · {tekstKwh(d.kwh)} · {d.sessions} sessie{d.sessions === 1 ? '' : 's'} · <Button variant="ghost" size="sm" className="-my-1 h-6 px-1.5 text-xs" onClick={() => onDag(d.date)}>dagdetail</Button></>
                   : `totaal ${tekstKwh(Math.round(grafiek.totaal))} · gemiddeld ${tekstKwh(grafiek.gemiddeld)}/laaddag · piek ${tekstKwh(Math.round(grafiek.piek))}`;
               }}
             />
@@ -234,7 +234,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
                       <span className="text-sm font-semibold text-slate-800">Laadpunt {nummer}{bus ? ` · bus ${bus}` : ''}</span>
                       {st.soc !== null && <Badge tone={st.vol ? 'emerald' : 'blue'} stil className="shrink-0 font-mono">{st.soc} %</Badge>}
                     </div>
-                    <p className="mt-0.5 text-2xs text-slate-500">
+                    <p className="mt-0.5 text-xs text-slate-500">
                       sinds {tijdstipKort(s.start_date_time)}{typeof s.kwh === 'number' ? ` · ${tekstKwh(s.kwh)} geladen` : ''}
                     </p>
                   </div>
@@ -254,7 +254,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
           <div className="space-y-4">
             {data.locations.map((loc) => (
               <Card key={loc.id}>
-                <CardHeader className="mb-4" title={loc.name ?? loc.id} description={loc.city || undefined} aside={<span className="text-2xs font-medium text-slate-500">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>} />
+                <CardHeader className="mb-4" title={loc.name ?? loc.id} description={loc.city || undefined} aside={<span className="text-xs font-medium text-slate-500">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>} />
                 {loc.evses.length === 0 ? (
                   <p className="text-sm text-slate-500">Geen laadpunten.</p>
                 ) : (
@@ -265,7 +265,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
                         <div key={cpu.key} className="rounded-2xl border border-hairline-subtle p-3.5">
                           <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-hairline-subtle pb-2">
                             <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
-                            <span className="text-2xs font-medium font-mono text-slate-500">{laden > 0 ? `${laden} aan het laden` : `${cpu.evses.length} punten`}</span>
+                            <span className="text-xs font-medium font-mono text-slate-500">{laden > 0 ? `${laden} aan het laden` : `${cpu.evses.length} punten`}</span>
                           </div>
                           <div className="space-y-1">
                             {cpu.evses.map((evse) => {
@@ -283,7 +283,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
                                 >
                                   <span className="flex shrink-0 items-center gap-1.5">
                                     <span className="w-11 shrink-0 text-sm font-semibold font-mono text-slate-700">{evse.evse_id ?? evse.uid}</span>
-                                    <span className="w-14 shrink-0 text-2xs font-medium font-mono text-slate-600">{busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}</span>
+                                    <span className="w-14 shrink-0 text-xs font-medium font-mono text-slate-600">{busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}</span>
                                     {s.soc !== null && <Badge tone={s.vol ? 'emerald' : 'blue'} stil className="shrink-0 font-mono">{s.soc} %</Badge>}
                                   </span>
                                   <Badge tone={s.vol ? 'emerald' : statusTone(evse.status)} dot stil={s.vol || stilStatus(statusTone(evse.status))} className="shrink-0 whitespace-nowrap">

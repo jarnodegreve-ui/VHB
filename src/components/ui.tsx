@@ -9,11 +9,17 @@ import { BrandMotief, type MotiefVariant } from './BrandMotief';
 export function PageShell({
   children,
   className,
+  breed = false,
 }: {
   children: React.ReactNode;
   className?: string;
+  /** Brede kolom (--content-max-breed) voor matrices en brede tabellen.
+   *  Alleen zinvol als de route in routes.tsx óók `breed` heeft: de schil
+   *  (topbar, #hoofdinhoud) volgt dat veld, anders blijft de buitenwand op
+   *  --content-max en verandert deze prop niets. */
+  breed?: boolean;
 }) {
-  return <div className={cn('max-w-[1200px] mx-auto space-y-6 md:space-y-8', className)}>{children}</div>;
+  return <div className={cn(breed ? 'max-w-[var(--content-max-breed)]' : 'max-w-[var(--content-max)]', 'mx-auto space-y-6 md:space-y-8', className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -35,13 +41,14 @@ export function PageHeader({
     <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:items-end">
       <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl">
         {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
-        {/* Eén h1 per scherm, in de page-title-rol (24/30 px, bold — geen
-            black): de kop wint het van de rest door máát, niet door gewicht. */}
+        {/* Eén h1 per scherm, in de page-title-rol (24/30 px, Manrope 800
+            conform huisstijl): de kop wint het van de rest door máát én de
+            tracking-ladder, de beschrijving eronder staat in de body-rol. */}
         <h1 className={cn('text-page-title', eyebrow && 'mt-1.5')}>
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 text-sm font-normal leading-relaxed text-slate-500">{description}</p>
+          <p className="mt-2 text-body font-normal text-slate-500">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 md:gap-3">{actions}</div> : null}
@@ -79,7 +86,7 @@ export function ModalHeader({
         <div className="min-w-0">
           {eyebrow ? <p className="text-micro text-oker-700">{eyebrow}</p> : null}
           <h2 className={cn('text-section-title', eyebrow && 'mt-1.5')}>{title}</h2>
-          {description ? <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500">{description}</p> : null}
+          {description ? <p className="mt-1.5 text-body font-normal text-slate-500">{description}</p> : null}
         </div>
       </div>
       {onClose ? (
@@ -129,7 +136,7 @@ export function ConfirmationModal({
             <AlertTriangle size={20} />
           </div>
           <h2 className="text-section-title">{title}</h2>
-          <p className="text-sm text-slate-500 font-normal mt-1.5 leading-relaxed">{message}</p>
+          <p className="text-body text-slate-500 font-normal mt-1.5">{message}</p>
         </div>
         <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
           <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-surface-row-hover hover:text-slate-900 border border-transparent hover:border-hairline transition-all">
@@ -201,7 +208,7 @@ export function EmptyState({
           <BrandMotief variant={variant} className="h-7 w-14 shrink-0 text-slate-400" />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-800">{title}</p>
+          <p className="text-md font-semibold text-slate-800">{title}</p>
           {message ? <p className="mt-0.5 text-xs text-slate-500">{message}</p> : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
@@ -220,8 +227,8 @@ export function EmptyState({
       ) : (
         <BrandMotief variant={variant} className="mx-auto mb-3 h-9 w-[4.5rem] text-slate-400" />
       )}
-      <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-      {message ? <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-500">{message}</p> : null}
+      <h3 className="text-md font-semibold text-slate-800">{title}</h3>
+      {message ? <p className="mx-auto mt-1 max-w-md text-body-sm text-slate-500">{message}</p> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   );
@@ -241,6 +248,114 @@ export function ViewLoader() {
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i}>
             <SkeletonRow className="border-b border-hairline-subtle last:border-0" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skelet-tegel met de opbouw van een OpsStat (ops.tsx): kop van 1,75 rem
+ * (icoontegel h-7 + label), groot cijfer op de text-stat-regel (2 rem),
+ * subregel (text-xs = 1 rem, of text-sm = 1,25 rem bij `subGroot`), en
+ * optioneel de detailregels, de meter en de compacte DienstBalk (pt-7 pb-4
+ * rond een h-1-baan). De wrappers hebben de regelhoogtes van de echte
+ * tekst, zodat de tegel even hoog is als de tegel die hem straks vervangt.
+ */
+function TegelSkelet({ className, subGroot = false, regels = 0, balk = false, meter = false }: {
+  className?: string;
+  subGroot?: boolean;
+  regels?: number;
+  balk?: boolean;
+  meter?: boolean;
+}) {
+  return (
+    <div className={cn('rounded-3xl p-4', className)} style={{ background: 'var(--tile-bg-soft)', border: 'var(--tile-border-soft)' }}>
+      <div className="flex h-7 items-center gap-2">
+        <Skeleton rounded="lg" className="h-7 w-7 shrink-0" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <div className="mt-2.5 flex h-8 items-center"><Skeleton className="h-5 w-24" /></div>
+      <div className={cn('mt-0.5 flex items-center', subGroot ? 'h-5' : 'h-4')}><Skeleton className={cn(subGroot ? 'h-3 w-36' : 'h-2.5 w-28')} /></div>
+      {meter && <Skeleton rounded="full" className="mt-2 h-1.5 w-full" />}
+      {regels > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {Array.from({ length: regels }).map((_, i) => (
+            <div key={i} className="flex h-4 items-center justify-between gap-3">
+              <Skeleton className="h-2.5 w-24" />
+              <Skeleton className="h-2.5 w-14" />
+            </div>
+          ))}
+        </div>
+      )}
+      {balk && (
+        <div className="mt-1 pt-7 pb-4"><Skeleton rounded="full" className="h-1 w-full" /></div>
+      )}
+    </div>
+  );
+}
+
+/** Skelet-paneel met de opbouw van een OpsPanel: kop (icoontegel + titel, mb-3.5) en drie rijen. */
+function PaneelSkelet({ className }: { className?: string }) {
+  return (
+    <div className={cn('rounded-3xl p-5', className)} style={{ background: 'var(--tile-bg-soft)', border: 'var(--tile-border-soft)' }}>
+      <div className="mb-3.5 flex h-7 items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <Skeleton rounded="lg" className="h-7 w-7" />
+          <Skeleton className="h-3.5 w-32" />
+        </div>
+        <Skeleton className="h-3 w-16" />
+      </div>
+      <SkeletonRow className="px-0" />
+      <SkeletonRow className="px-0" />
+      <SkeletonRow className="px-0" />
+    </div>
+  );
+}
+
+/**
+ * Layout-getrouw skelet van het dashboard (next-level 2, punt 7): groet-regel,
+ * de tegelstrip in hetzelfde raster als DashboardView/PlannerDashboardWidgets
+ * (`grid-cols-2 md:grid-cols-3 xl:grid-cols-6`: twee grote tegels van drie
+ * kolommen, drie kleine van twee), daaronder de twee panelen (`lg:grid-cols-3`,
+ * 2 + 1) en op smal scherm de snelle acties. De AppSkeleton toont dit bij een
+ * warme start op `/`, de Suspense-fallback van het dashboard in App.tsx ook:
+ * zo is de app "er al bijna" in plaats van een lijst die in een raster verandert.
+ */
+export function DashboardSkelet() {
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label="Scherm wordt geladen">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-1 pt-1 md:items-end">
+        <div className="min-w-0 flex-1 basis-[14rem]">
+          {/* text-greeting: 1,25 rem × 1,15 (md 1,5 rem); subregel text-md. */}
+          <div className="flex h-6 items-center md:h-7"><Skeleton className="h-5 w-56 md:h-6 md:w-72" /></div>
+          <div className="mt-0.5 flex h-5.5 items-center"><Skeleton className="h-3 w-44" /></div>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Skeleton rounded="full" className="h-6 w-24" />
+          <Skeleton rounded="lg" className="h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <TegelSkelet className="col-span-2 md:col-span-1 xl:col-span-3" subGroot regels={2} balk />
+        <TegelSkelet className="col-span-2 md:col-span-1 xl:col-span-3" subGroot regels={2} />
+        <TegelSkelet className="xl:col-span-2" meter />
+        <TegelSkelet className="xl:col-span-2" />
+        <TegelSkelet className="col-span-2 md:col-span-1 xl:col-span-2" />
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <PaneelSkelet className="lg:col-span-2" />
+        <PaneelSkelet />
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:hidden">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex h-16 items-center gap-3 rounded-2xl px-4" style={{ background: 'var(--tile-bg-soft)', border: 'var(--tile-border-soft)' }}>
+            <Skeleton rounded="lg" className="h-8 w-8 shrink-0" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Skeleton className="h-3 w-3/5" />
+              <Skeleton className="h-2.5 w-4/5" />
+            </div>
           </div>
         ))}
       </div>
@@ -278,7 +393,7 @@ export function CredentialsModal({
         <div className="p-6 md:p-7 border-b border-hairline flex items-center justify-between shrink-0">
           <div>
             <h2 className="text-section-title">{title}</h2>
-            <p className="mt-1.5 text-sm text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
+            <p className="mt-1.5 text-body text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
           </div>
           <button aria-label="Sluiten" onClick={onClose} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors">
             <X size={18} />

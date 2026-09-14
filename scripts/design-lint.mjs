@@ -48,7 +48,19 @@ const REGELS = [
   // randen; flipt in dark via de tokens. Primitieven, Table en print blijven
   // hun eigen (bewuste) randen houden.
   { naam: 'border-slate-NNN / ring-slate-NNN (gebruik border-hairline-subtle | border-hairline | border-hairline-strong)', re: /\b(?:border|ring)-slate-\d+(?:\/\d+)?\b/g, zonderCommentaar: true, skip: new RegExp(`components\\/(?:primitives|Card|Field|Table)\\.tsx$|${PRINT.source}`) },
+  // Lopende tekst heeft een rol (golf 2, punt 5): text-body (15/1.55) of
+  // text-body-sm (13/1.55), allebei met text-wrap: pretty. Een losse
+  // leading-relaxed is dan een recept naast de rol. De textarea in Field.tsx
+  // is een input, geen tekstrol, en blijft.
+  { naam: 'leading-relaxed (gebruik text-body of text-body-sm)', re: /\bleading-relaxed\b/g, zonderCommentaar: true, skip: PRIMITIVES },
 ];
+
+// text-2xs (11 px) is sinds golf 2 alleen nog voor badges, tellers en de
+// text-micro-rol; lopende meta-tekst staat op text-xs (12). Toegestaan:
+// `rounded-full` op dezelfde regel (teller/badge), of een `2xs:`-toelichting
+// in de drie regels erboven (dichte matrixcel, as-label in een grafiek,
+// compacte dienstbalk). Primitieven, navigatie, bel en print zijn uitgezonderd.
+const TWEE_XS_SKIP = new RegExp(`components\\/(?:primitives|Table|BottomNav|Navigation|MeldingenBel)\\.tsx$|${PRINT.source}`);
 
 /** Bron zonder //- en /* *\/-commentaar (voor regels die alleen UI-tekst
  *  bekijken). Regelnummers blijven kloppen: commentaar wordt vervangen
@@ -195,6 +207,19 @@ function loop(dir) {
         gemeld.add(lijn);
         waarschuw(rel, lijn, `text-slate-400 op leestekst in ${t.tag} (gebruik text-slate-500; slate-400 alleen voor iconen/placeholder)`);
       }
+    }
+    // text-2xs buiten badges/tellers: toegestaan met `rounded-full` op de regel
+    // of een `2xs:`-toelichting op de regel(s) erboven.
+    if (!TWEE_XS_SKIP.test(p)) {
+      const lijnen = zonderCommentaar(bron).split('\n');
+      const ruw = bron.split('\n');
+      lijnen.forEach((l, i) => {
+        if (!/(?<![\w-])text-2xs(?![\w-])/.test(l)) return;
+        if (/\brounded-full\b/.test(l)) return;
+        if (/2xs:/.test(ruw.slice(Math.max(0, i - 3), i).join('\n'))) return;
+        console.log(`src/${rel}:${i + 1}  text-2xs buiten badge/teller (gebruik text-xs, of motiveer met een 2xs:-toelichting erboven)`);
+        fouten++;
+      });
     }
     // Rauwe <button> buiten de primitieven: toegestaan mét een `rauw:`-toelichting op de regel(s) erboven.
     if (!PRIMITIVES.test(p)) {

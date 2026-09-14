@@ -111,7 +111,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
     if (dagenTotNu.length <= 10) return WEEKDAY_SHORT_SUN[dow];
     return dow === 1 ? String(Number(d.dag.slice(8))) : '';
   };
-  const dagSamenvattingKnop = (dag: string) => <Button variant="ghost" size="sm" className="-my-1 h-6 px-1.5 text-2xs" onClick={() => onDag(dag)}>dagdetail</Button>;
+  const dagSamenvattingKnop = (dag: string) => <Button variant="ghost" size="sm" className="-my-1 h-6 px-1.5 text-xs" onClick={() => onDag(dag)}>dagdetail</Button>;
 
   const sortPunt = useSort<PuntKolom>('kwh', 'desc');
   const sortDag = useSort<DagKolom>('dag', 'asc');
@@ -190,7 +190,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
             <OpsStat icon={<BatteryCharging size={16} />} tone="slate" label="Laadsessies" value={t.laadbeurten} sub={t.mislukt > 0 ? `${t.mislukt} mislukt · ${t.sessies} aankoppelingen totaal` : `${t.sessies} aankoppelingen totaal, niets mislukt`} />
             <OpsStat icon={<CalendarDays size={16} />} tone="slate" label="Per laaddag" text={fmtKwh(t.gemPerLaaddag)} suffix={' kWh'} sub={t.hoogsteDag ? `hoogste dag: ${dagKort(t.hoogsteDag.dag)}, ${tekstKwhHeel(t.hoogsteDag.kwh)}` : `${t.laaddagen} laaddagen`} />
           </div>
-          <div className="-mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-2xs text-slate-500">
+          <div className="-mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-slate-500">
             <span className="inline-flex items-center gap-1.5">verbruik <Delta huidig={t.kwh} vorige={data.vorige.kwh} /></span>
             <span className="inline-flex items-center gap-1.5">piek <Delta huidig={t.piekKw} vorige={data.vorige.piekKw} omgekeerd /></span>
             <span className="inline-flex items-center gap-1.5">laadsessies <Delta huidig={t.laadbeurten} vorige={data.vorige.laadbeurten} /></span>
@@ -203,7 +203,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
             <Card>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <MicroLabel>Verbruik per dag (kWh)</MicroLabel>
-                <span className="text-2xs font-medium font-mono text-slate-500">{label}</span>
+                <span className="text-xs font-medium font-mono text-slate-500">{label}</span>
               </div>
               {dagenTotNu.length === 0 ? (
                 <p className="text-sm text-slate-500">Geen dagen in deze periode.</p>
@@ -232,7 +232,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                     <p>Per dag de hoogste kwartierwaarde van het totale laadvermogen op het plein. De hoogste dagpiek van de maand is het getal dat het capaciteitstarief bepaalt. De gestippelde lijn is de piek van de vorige periode.</p>
                   </InfoTip>
                 </span>
-                <span className="text-2xs font-medium font-mono text-slate-500">{t.gemDagpiekKw !== null ? `gem. ${tekstKw(Math.round(t.gemDagpiekKw))}` : ''}</span>
+                <span className="text-xs font-medium font-mono text-slate-500">{t.gemDagpiekKw !== null ? `gem. ${tekstKw(Math.round(t.gemDagpiekKw))}` : ''}</span>
               </div>
               {t.piekDagen === 0 ? (
                 <p className="text-sm text-slate-500">Geen kwartiermetingen in deze periode (de piekbewaking loopt sinds 5 augustus 2026).</p>
@@ -301,7 +301,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                       <tr key={p.evseUid} className={cn(p.kwh === 0 && 'text-slate-500')}>
                         <Td className="whitespace-nowrap">
                           <span className="font-semibold font-mono text-slate-800">{puntNaam(p)}</span>
-                          {bus ? <span className="ml-1.5 text-2xs font-medium text-slate-500">bus {bus}</span> : null}
+                          {bus ? <span className="ml-1.5 text-xs font-medium text-slate-500">bus {bus}</span> : null}
                         </Td>
                         <Td num>
                           <span className="inline-flex items-center justify-end gap-2">
@@ -396,7 +396,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                 </tfoot>
               </table>
             </TableShell>
-            <p className="mt-2 px-1 text-2xs text-slate-500">Laadtijd totaal {duurLabel(t.laadMin)} · {metEenheid(formatGetal(t.laadMin > 0 ? t.kwh / (t.laadMin / 60) : 0, 1), 'kW')} gemiddeld tijdens het laden</p>
+            <p className="mt-2 px-1 text-xs text-slate-500">Laadtijd totaal {duurLabel(t.laadMin)} · {metEenheid(formatGetal(t.laadMin > 0 ? t.kwh / (t.laadMin / 60) : 0, 1), 'kW')} gemiddeld tijdens het laden</p>
           </div>
         </div>
       )}

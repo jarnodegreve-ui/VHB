@@ -158,7 +158,7 @@ export function DagDetail({ dag, onSluit, onDag, eersteDag }: { dag: string | nu
                               <tr key={s.id}>
                                 <Td num className="text-left">{uurLabel(s.start)}</Td>
                                 <Td num className="text-left">{s.eind ? (dagVanTs(s.eind) !== s.dag ? tijdstipKort(s.eind) : uurLabel(s.eind)) : '—'}</Td>
-                                <Td className="whitespace-nowrap"><span className="font-semibold font-mono text-slate-800">{naam}</span>{bus ? <span className="ml-1.5 text-2xs text-slate-500">bus {bus}</span> : null}</Td>
+                                <Td className="whitespace-nowrap"><span className="font-semibold font-mono text-slate-800">{naam}</span>{bus ? <span className="ml-1.5 text-xs text-slate-500">bus {bus}</span> : null}</Td>
                                 <Td num className="font-semibold text-slate-800">{formatGetal(s.kwh, 1)}</Td>
                                 <Td num>{duurLabel(s.laadMin)}</Td>
                                 <Td num>{s.gemKw !== null ? formatGetal(s.gemKw, 1) : '—'}</Td>

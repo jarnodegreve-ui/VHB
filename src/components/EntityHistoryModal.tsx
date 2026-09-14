@@ -103,7 +103,7 @@ export function EntityHistoryModal({
                             })}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs text-slate-600 leading-relaxed">{entry.details}</p>
+                        <p className="mt-1 text-body-sm text-slate-600">{entry.details}</p>
                         <MicroLabel className="mt-2">
                           {entry.actorName} · {entry.actorRole}
                         </MicroLabel>

@@ -237,7 +237,7 @@ export function ManageUpdatesView({
                     {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
                     {gelezenBadge(update)}
                   </span>
-                  <span className="mt-0.5 block text-2xs font-medium text-slate-500 tabular-nums">{formatUpdateDate(update.date)}</span>
+                  <span className="mt-0.5 block text-xs font-medium text-slate-500 tabular-nums">{formatUpdateDate(update.date)}</span>
                 </span>
                 <ChevronRight size={16} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
               </button>

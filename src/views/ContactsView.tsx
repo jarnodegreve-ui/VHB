@@ -99,7 +99,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
           <Phone size={18} />
         </a>
       ) : (
-        <p className="text-2xs font-medium text-slate-500 shrink-0">Geen nummer</p>
+        <p className="text-xs font-medium text-slate-500 shrink-0">Geen nummer</p>
       )}
     </Card>
   );

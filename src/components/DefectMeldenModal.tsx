@@ -146,7 +146,7 @@ export function DefectMeldenModal({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-800">{voertuigNaam(d)} <span className="font-medium text-slate-500">· {WERKTYPE_LABEL[d.werktype]}</span></p>
                     <p className="truncate text-xs text-slate-500">{d.omschrijving}</p>
-                    <p className="text-2xs text-slate-500">{formatDateHuman(d.gemeldOp.slice(0, 10))}</p>
+                    <p className="text-xs text-slate-500">{formatDateHuman(d.gemeldOp.slice(0, 10))}</p>
                   </div>
                   <Badge tone={statusTone(d.status)} stil={d.status !== 'open'} dot className="shrink-0">{DEFECT_STATUS_LABEL[d.status]}</Badge>
                 </li>

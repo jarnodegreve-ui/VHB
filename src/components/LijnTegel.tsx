@@ -41,6 +41,7 @@ export function LijnTegel({ line, tone = 'accent', size = 'md', className }: {
     );
   }
   return (
+    /* 2xs: lijnnummer-tegel, twee regels in een vaste vierkante tegel */
     <span className={cn(basis, 'flex-col text-2xs leading-none tracking-tight', size === 'sm' ? 'gap-px' : 'gap-0.5')} role="img" aria-label={lijnLabel(line)}>
       <span>{lijnen[0]}</span>
       <span>{lijnen.length === 2 ? lijnen[1] : `+${lijnen.length - 1}`}</span>

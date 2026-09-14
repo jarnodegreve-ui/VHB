@@ -39,7 +39,7 @@ export function InfoTip({ children, label = 'Uitleg', className, align = 'left' 
             initial={{ opacity: 0, y: -4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
             exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: DUR.fast, ease: EASE } }}
-            className={cn('absolute top-full z-40 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-paper p-3.5 text-sm font-normal leading-relaxed text-slate-600 ring-1 ring-hairline elev-2', align === 'right' ? 'right-0' : 'left-0')}
+            className={cn('absolute top-full z-40 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-paper p-3.5 text-body-sm font-normal text-slate-600 ring-1 ring-hairline elev-2', align === 'right' ? 'right-0' : 'left-0')}
           >
             {children}
           </motion.div>

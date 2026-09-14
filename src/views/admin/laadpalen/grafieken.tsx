@@ -65,6 +65,7 @@ export function Staafgrafiek({
         {referentie && referentie.waarde > 0 && (
           <div className="pointer-events-none absolute inset-x-0" style={{ bottom: `${Math.min(98, (referentie.waarde / asTop) * 100)}%` }} aria-hidden="true">
             <div className="border-t border-dashed border-oker-500/70" />
+            {/* 2xs: piek-label in de grafiek, staat op de staaf */}
             <span className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono leading-none text-oker-700" style={{ background: 'var(--tile-bg)' }}>
               {referentie.label}
             </span>
@@ -102,10 +103,11 @@ export function Staafgrafiek({
       </div>
       <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
         {staven.map((s) => (
+          /* 2xs: as-labels van de staafgrafiek, 31 kolommen naast elkaar */
           <span key={s.key} className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-center text-2xs font-medium font-mono text-slate-500">{s.asLabel ?? ''}</span>
         ))}
       </div>
-      <p className={cn('mt-2 min-h-4 truncate text-2xs font-mono', gekozenStaaf ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>
+      <p className={cn('mt-2 min-h-4 truncate text-xs font-mono', gekozenStaaf ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>
         {samenvatting(gekozenStaaf)}
       </p>
     </>
@@ -166,6 +168,7 @@ export function StapCurve({
         {referentie && referentie.waarde > 0 && (
           <div className="absolute inset-x-0" style={{ bottom: `${Math.min(98, (referentie.waarde / asTop) * 100)}%` }} aria-hidden="true">
             <div className="border-t border-dashed border-oker-500/70" />
+            {/* 2xs: piek-label in de grafiek, staat op de staaf */}
             <span className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono leading-none text-oker-700" style={{ background: 'var(--tile-bg)' }}>
               {referentie.label}
             </span>
@@ -196,11 +199,12 @@ export function StapCurve({
           ))}
         </div>
       </div>
+      {/* 2xs: as-labels van de lijngrafiek */}
       <div className="mt-1 flex min-h-4 justify-between text-2xs font-medium font-mono text-slate-500" aria-hidden="true">
         <span>{asLinks}</span>
         <span>{asRechts}</span>
       </div>
-      <p className={cn('mt-2 min-h-4 truncate text-2xs font-mono', gekozenSlot ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>
+      <p className={cn('mt-2 min-h-4 truncate text-xs font-mono', gekozenSlot ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>
         {samenvatting(gekozenSlot)}
       </p>
     </>

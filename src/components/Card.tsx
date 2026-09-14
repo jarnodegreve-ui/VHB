@@ -26,7 +26,8 @@ const CARD_TONE: Record<CardTone, string> = {
   muted: 'surface-muted rounded-2xl',
   dashed: 'surface-card rounded-3xl !border-dashed',
   // Callouts: één tint per betekenis, zonder schaduw (het vlak zelf is het
-  // signaal). accent = merk-oker (welkom, samenvatting), de rest semantisch.
+  // signaal, elev-0). accent = merk-oker (welkom, samenvatting), de rest
+  // semantisch: vlak 50 + rand 200 uit de gedempte statusfamilies.
   accent: 'rounded-2xl border border-oker-200/70 bg-oker-50',
   warning: 'rounded-2xl border border-amber-200 bg-amber-50',
   danger: 'rounded-2xl border border-red-200 bg-red-50',
@@ -93,7 +94,7 @@ export function CardHeader({
         <div className="min-w-0 max-w-3xl">
           {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
           <h2 className={cn(lg ? 'text-section-title' : 'text-card-title', eyebrow && 'mt-1')}>{title}</h2>
-          {description ? <p className="mt-1 text-sm font-normal leading-relaxed text-slate-500">{description}</p> : null}
+          {description ? <p className="mt-1 text-body font-normal text-slate-500">{description}</p> : null}
         </div>
       </div>
       {aside ? <div className={cn('flex items-center gap-2.5', lg ? 'flex-wrap md:justify-end' : 'ml-auto shrink-0')}>{aside}</div> : null}

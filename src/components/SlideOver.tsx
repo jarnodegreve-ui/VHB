@@ -155,7 +155,7 @@ export function SlideOver({
             >
               {icon}
               <div className="min-w-0 flex-1">
-                <h2 className="text-base font-bold tracking-tight text-slate-900 truncate">
+                <h2 className="text-card-title truncate">
                   {title}
                 </h2>
                 {subtitle && (

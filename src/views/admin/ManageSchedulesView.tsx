@@ -8,6 +8,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
+import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field, Input, Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
@@ -39,9 +40,11 @@ function InklapSectie({ title, aantal, tone, defaultOpen, children }: {
           <MicroLabel className={label}>{title}</MicroLabel>
           {typeof aantal === 'number' && <Badge tone={tone === 'red' ? 'red' : tone === 'amber' ? 'amber' : 'slate'} className="tabular-nums">{aantal}</Badge>}
         </span>
-        <ChevronDown size={16} className={cn('shrink-0 transition-transform', label, open && 'rotate-180')} />
+        <ChevronDown size={16} className={uitklapChevron(open, 180, cn('shrink-0', label))} />
       </button>
-      {open && <div className="px-5 pb-5">{children}</div>}
+      <Uitklap open={open}>
+        <div className="px-5 pb-5">{children}</div>
+      </Uitklap>
     </div>
   );
 }
@@ -520,7 +523,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       </p>
                     </div>
                     {hasChanges && (
-                      <ChevronDown size={16} className={cn('mt-0.5 shrink-0 text-slate-400 transition-transform', changesExpanded && 'rotate-180')} />
+                      <ChevronDown size={16} className={uitklapChevron(changesExpanded, 180, 'mt-0.5 shrink-0 text-slate-400')} />
                     )}
                   </button>
                   <InfoTip label="Wat betekent dit?" align="right">
@@ -528,7 +531,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <p className="mt-2">Ziekte hoeft niet vooraf in je Excel: na de import staan die diensten als te herverdelen klaar.</p>
                   </InfoTip>
                 </div>
-                {hasChanges && changesExpanded && (
+                <Uitklap open={hasChanges && changesExpanded}>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
                       <MicroLabel className="mb-2">Verlof</MicroLabel>
@@ -590,7 +593,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       )}
                     </div>
                   </div>
-                )}
+                </Uitklap>
               </Card>
             );
           })()}
@@ -1203,7 +1206,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
                 {matrixPreview.perDriver.length > 0 && (
                   <InklapSectie title="Per chauffeur" aantal={matrixPreview.perDriver.length} tone="slate">
-                    <p className="text-2xs font-medium text-slate-500">
+                    <p className="text-xs font-medium text-slate-500">
                       Stille gaten worden hier zichtbaar: een chauffeur met dagen-met-code maar nul diensten betekent ofwel allemaal afwezigheden, ofwel een service zonder geldige uren.
                     </p>
                     <div className="mt-4 overflow-x-auto">

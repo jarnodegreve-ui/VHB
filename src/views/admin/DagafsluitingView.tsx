@@ -174,7 +174,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
                 {detail.planningAfwijkingen.map((a) => (
                   <li key={a.userId} className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-1 ring-1 ring-hairline">
                     <span className="font-semibold">{a.naam}</span>: {codeLabel(a.huidigeCode)} → {codeLabel(a.planningCode)}{a.bewerkt ? ' (bewerkt)' : ''}
-                    {!afgesloten && a.rijId && <Button variant="ghost" size="sm" className="!px-1.5 !py-0.5 text-2xs" onClick={() => void doeOvernemen(a.rijId!)}>overnemen</Button>}
+                    {!afgesloten && a.rijId && <Button variant="ghost" size="sm" className="!px-1.5 !py-0.5 text-xs" onClick={() => void doeOvernemen(a.rijId!)}>overnemen</Button>}
                   </li>
                 ))}
               </ul>

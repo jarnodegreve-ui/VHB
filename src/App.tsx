@@ -5,7 +5,7 @@
 
 import { useCallback, Suspense, useState, useEffect, useRef } from 'react';
 import { useRoute, routeUitUrl } from './app/router';
-import { magView, routeVan } from './app/routes';
+import { isBreed, magView, routeVan, sectieLabel } from './app/routes';
 import { SidebarNav } from './app/SidebarNav';
 import { SessieLaden, ProfielLaden, PrintLaden, ConfigOntbreekt, ToestelGeblokkeerd } from './app/PreAppScreens';
 import { bepaalTweeStapsStap, leesTweeStapsStatus } from './lib/tweeStaps';
@@ -40,7 +40,7 @@ import { AanwezigheidStack } from './components/AanwezigheidStack';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
-import { ViewLoader } from './components/ui';
+import { DashboardSkelet, ViewLoader } from './components/ui';
 import { SchermInloop, Verwissel } from './components/Verwissel';
 import { IconButton, MicroLabel } from './components/primitives';
 import { Card } from './components/Card';
@@ -1286,6 +1286,10 @@ export default function App() {
   const resolvedCurrentView: View = magView(currentUser.role, currentView) ? currentView : 'dashboard';
   // Titel in de topbar = het label uit de routetabel (één naam per scherm).
   const currentMeta = { title: routeVan(resolvedCurrentView).label };
+  // Kolombreedte van de schil volgt de route (routes.tsx `breed`): topbar,
+  // banners en #hoofdinhoud even breed als de PageShell van het scherm.
+  const kolomClass = isBreed(resolvedCurrentView) ? 'max-w-[var(--content-max-breed)]' : 'max-w-[var(--content-max)]';
+  const sectie = sectieLabel(resolvedCurrentView);
   // Volledige initialen ("Jarno De Greve" → JDG), gecapt op 4 voor extreem
   // lange namen (avatar is maar 32px breed).
   const userInitials = currentUser.name
@@ -1483,13 +1487,35 @@ export default function App() {
               scroll-root, zie <main>), zodat overscroll de strook niet meeneemt. */}
           <div className="sticky top-[env(safe-area-inset-top,0px)] z-30 -mx-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:-mx-7 mb-5">
             <header className={cn("topbar px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7", isScrolled && "topbar--scrolled")}>
-              <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 py-2.5 min-h-12">
+              {/* Rijhoogte gepind op --topbar-h (index.css, min de haarlijn):
+                  StickyThead en Zijvak rekenen daarmee, en het skelet
+                  (AppSkeleton) heeft dezelfde rij, dus geen sprong bij het
+                  omwisselen. */}
+              <div className={cn('mx-auto flex w-full items-center justify-between gap-3 py-2.5 min-h-[calc(var(--topbar-h)-1px)]', kolomClass)}>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="hidden md:inline-flex lg:hidden">
                     <IconButton label="Menu openen" variant="ghost" size="sm" className="-ml-1" onClick={() => setIsSidebarOpen(true)}>
                       <Menu size={18} />
                     </IconButton>
                   </span>
+                  {/* Beeldmerk in de mobiele topbar (huisstijl: variant
+                      beeldmerk, h-6), op dezelfde plek en maat als in
+                      AppSkeleton, zodat het bij een warme start niet opflitst
+                      en verdwijnt. Licht/donker via block/hidden dark:
+                      (toegestane uitzondering, zoals het skelet en de zijbalk). */}
+                  <span className="lg:hidden inline-flex shrink-0 items-center">
+                    <BrandLogo tone="licht" variant="beeldmerk" className="h-6 w-auto select-none block dark:hidden" />
+                    <BrandLogo tone="donker" variant="beeldmerk" className="h-6 w-auto select-none hidden dark:block" />
+                  </span>
+                  {/* Desktop (het logo zit dan in de zijbalk): het sectiewoord
+                      uit de routetabel, klein, en net als de titel pas zichtbaar
+                      zodra de paginakop (met haar eigen eyebrow) weggescrold is;
+                      anders staat het woord dubbel boven de vouw. */}
+                  {sectie && (
+                    <span aria-hidden={!isScrolled || undefined} className={cn('hidden lg:inline text-micro shrink-0 whitespace-nowrap transition-opacity duration-base', isScrolled ? 'opacity-100' : 'opacity-0')}>
+                      {sectie}
+                    </span>
+                  )}
                   {/* Topbar is puur context: alleen de compacte titel. De
                       subtitel dupliceerde de PageHeader-description eronder,
                       en het identiteitsblok stond al in de sidebar-footer —
@@ -1500,7 +1526,9 @@ export default function App() {
                   <OmgevingLabel className="shrink-0" />
                   <h2
                     aria-hidden={!isScrolled || undefined}
-                    className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-base', isScrolled ? 'opacity-100' : 'opacity-0')}
+                    // Naast het sectiewoord krijgt de titel een haarlijn links; die
+                    // zit óp de h2 en vervaagt dus mee (geen lege streep in rust).
+                    className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-base', sectie && 'lg:border-l lg:border-hairline-strong lg:pl-2.5', isScrolled ? 'opacity-100' : 'opacity-0')}
                   >
                     {currentMeta.title}
                   </h2>
@@ -1577,12 +1605,12 @@ export default function App() {
           {/* Mijn dag draagt zijn eigen stille offline-chip (06-09) —
               daar geen kaart erbovenop. */}
           {onderhoud.actief && (
-            <div className="mx-auto w-full max-w-[1200px]">
+            <div className={cn('mx-auto w-full', kolomClass)}>
               <OnderhoudBanner onderhoud={onderhoud} tot={onderhoud.tot} className="mb-4" />
             </div>
           )}
           {!isOnline && resolvedCurrentView !== 'mijn-dag' && (
-            <div className="mx-auto w-full max-w-[1200px]">
+            <div className={cn('mx-auto w-full', kolomClass)}>
               <Card tone="warning" padding="none" className="mb-4 flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-amber-800">
                 <WifiOff size={14} className="shrink-0" />
                 <span>
@@ -1596,7 +1624,7 @@ export default function App() {
               animatie op de hele view (mode="wait" = exit + enter, ~0.56s op
               een grote DOM) veroorzaakte hapering bij het wisselen van pagina's
               op tragere Windows-pc's. Instant = sneller en jank-vrij. */}
-          <div id="hoofdinhoud" tabIndex={-1} className="mx-auto w-full max-w-[1200px] focus-stil">
+          <div id="hoofdinhoud" tabIndex={-1} className={cn('mx-auto w-full focus-stil', kolomClass)}>
             {/* Foutgrens per view: een crash in één scherm laat sidebar,
                 sessie en context staan; de key reset de grens bij een
                 viewwissel of "Opnieuw proberen". */}
@@ -1605,13 +1633,15 @@ export default function App() {
                 scherm (SchermInloop: opacity/y op DUR.base, alleen als de view
                 transition het niet al doet; reduced motion = niets). De
                 Verwissel-wrappers cross-faden het skelet naar de inhoud. */}
-            <Suspense fallback={<ViewLoader />}>
+            {/* Dashboard = tegelraster, dus daar het rastergetrouwe skelet
+                (zelfde als in AppSkeleton) i.p.v. de kop-plus-lijst. */}
+            <Suspense fallback={resolvedCurrentView === 'dashboard' ? <DashboardSkelet /> : <ViewLoader />}>
             <SchermInloop key={resolvedCurrentView}>
               {resolvedCurrentView === 'dashboard' && (
                 isPlanner ? (
                   /* Planner/admin: Operations Center — één operationele cockpit
                      i.p.v. een dubbel dashboard. */
-                  <Suspense fallback={<ViewLoader />}>
+                  <Suspense fallback={<DashboardSkelet />}>
                   <WatIsNieuwKaart rol={currentUser!.role} onNavigate={setCurrentView} className="mb-5" />
                   {/* Data (collecties, ziekmelding, verversen) leest de
                       cockpit zelf uit de AppDataContext. */}

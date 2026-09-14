@@ -89,7 +89,7 @@ export function OpsStat({
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
       </p>
-      <p className={cn('mt-0.5 text-2xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
+      <p className={cn('mt-0.5 text-xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {typeof meter === 'number' && (
         <Meter className="mt-2 h-1.5">
           <MeterVulling pct={Math.max(3, meter)} className={meter > 100 ? 'bg-red-500' : meter > 80 ? 'bg-amber-500' : 'bg-emerald-500'} />
@@ -105,7 +105,7 @@ export function OpsStat({
               // "loop 4614" (Jarno 04-09). Nu blijft de tijd heel en zakt het
               // rechterdeel naar een eigen regel, rechts uitgelijnd.
               className={cn(
-                'flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-2xs font-mono font-medium tabular-nums',
+                'flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs font-mono font-medium tabular-nums',
                 l.done ? 'text-slate-500' : 'text-slate-600',
               )}
             >
@@ -123,30 +123,27 @@ export function OpsStat({
       )}
       {balk}
       {note && (
-        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-2xs font-medium leading-snug text-oker-800">
+        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-xs font-medium leading-snug text-oker-800">
           {note}
         </p>
       )}
     </>
   );
-  const style = {
-    background: 'var(--tile-bg)',
-    border: 'var(--tile-border)',
-    boxShadow: 'var(--tile-shadow)',
-  };
+  // Oppervlak = trede 1 van de ladder (.surface-card), net als elke Card;
+  // de inline var(--tile-*)-stijlen van vroeger zijn weg (golf 2, punt 2).
   if (onClick) {
     return (
       // flex-col + justify-start: Safari centreert button-inhoud verticaal
       // zodra de knop hoger is dan zijn inhoud (grid rekt tegels tot gelijke
       // hoogte). Zonder dit hingen icoon en kop van een kortere tegel lager
       // dan die van de buurtegel.
-      // rauw: KPI-tegel-als-knop met eigen layout en inline var(--tile-*)-oppervlak.
-      <button type="button" onClick={onClick} className={cn('group surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', className)} style={style}>
+      // rauw: KPI-tegel-als-knop met eigen layout (kaart-als-knop).
+      <button type="button" onClick={onClick} className={cn('group surface-card surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', className)}>
         {inner}
       </button>
     );
   }
-  return <div className={cn('flex flex-col items-stretch justify-start rounded-3xl p-4', className)} style={style}>{inner}</div>;
+  return <div className={cn('surface-card flex flex-col items-stretch justify-start rounded-3xl p-4', className)}>{inner}</div>;
 }
 
 /** Cockpit-paneel met titelrij en optionele 'bekijk alle'-actie. */
@@ -168,14 +165,7 @@ export function OpsPanel({
   children: ReactNode;
 }) {
   return (
-    <div
-      className={cn('rounded-3xl p-5 relative', className)}
-      style={{
-        background: 'var(--tile-bg)',
-        border: 'var(--tile-border)',
-        boxShadow: 'var(--tile-shadow)',
-      }}
-    >
+    <div className={cn('surface-card rounded-3xl p-5 relative', className)}>
       <div className="mb-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
@@ -238,7 +228,7 @@ export function OpsRow({
         {secondary && <span className="mt-px block truncate text-xs font-normal text-slate-500">{secondary}</span>}
       </span>
       {trailing}
-      {meta && <span className="shrink-0 text-2xs font-medium text-slate-500">{meta}</span>}
+      {meta && <span className="shrink-0 text-xs font-medium text-slate-500">{meta}</span>}
       <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
     </button>
   );
@@ -259,17 +249,12 @@ export function QuickAction({
   onClick: () => void;
 }) {
   return (
-    // rauw: snelactie-tegel (kaart-als-knop met eigen layout en inline
-    // var(--tile-*)-oppervlak), bewust buiten Button gehouden.
+    // rauw: snelactie-tegel (kaart-als-knop met eigen layout), bewust buiten
+    // Button gehouden.
     <button
       type="button"
       onClick={onClick}
-      className="group surface-card-hover flex items-center gap-2.5 rounded-3xl p-3.5 text-left"
-      style={{
-        background: 'var(--tile-bg)',
-        border: 'var(--tile-border)',
-        boxShadow: 'var(--tile-shadow)',
-      }}
+      className="group surface-card surface-card-hover flex items-center gap-2.5 rounded-3xl p-3.5 text-left"
     >
       {/* Carbon vierkant met licht icoon; de omgekeerde schalen keren dat in
           donker vanzelf om (geen aparte dark-look meer, controle-ronde 05-09, 40). */}
@@ -277,7 +262,7 @@ export function QuickAction({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold tracking-tight text-slate-900">{label}</span>
+        <span className="block truncate text-sm font-semibold text-slate-900">{label}</span>
         <span className="block truncate text-xs font-medium text-slate-500">{sub}</span>
       </span>
       <ArrowUpRight size={16} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />

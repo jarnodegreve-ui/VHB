@@ -233,7 +233,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                               {afwezig > 0 ? (
                                 <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500/15 px-1 text-2xs font-semibold leading-none text-emerald-700">{afwezig}</span>
                               ) : typedag ? (
-                                <span className={cn('text-2xs font-bold leading-none', feest ? 'text-oker-700' : 'text-slate-500')}>{typedag.kort}</span>
+                                <span className={cn('text-xs font-bold leading-none', feest ? 'text-oker-700' : 'text-slate-500')}>{typedag.kort}</span>
                               ) : null}
                             </div>
                           </div>
@@ -377,11 +377,11 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
           <span className="font-medium text-slate-600">Aantal afwezig die dag</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-2xs font-bold text-oker-700">F</span>
+          <span className="text-xs font-bold text-oker-700">F</span>
           <span className="font-medium text-slate-600">Feestdag</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-2xs font-bold text-slate-500">V</span>
+          <span className="text-xs font-bold text-slate-500">V</span>
           <span className="font-medium text-slate-600">Schoolvakantie</span>
         </div>
       </Card>

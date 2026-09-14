@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Clock, Download, Search } from 'lucide-react';
 import type { Service } from '../types';
-import { cn, downloadBlob } from '../lib/ui';
+import { downloadBlob } from '../lib/ui';
 import { dienstoverzichtCsv } from '../lib/dienstoverzichtExport';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, Chip, MicroLabel, segItemClass, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, Chip, MicroLabel, Segmented, TableShell, Td, Th } from '../components/primitives';
+import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Input } from '../components/Field';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import { dienstStatistiek, formatDienstDuur } from '../lib/dienstStatistiek';
@@ -69,26 +70,16 @@ export function ServicesView({ services }: { services: Service[] }) {
         title="Dienstoverzicht"
         actions={(
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="glass-segmented inline-flex p-1 rounded-2xl">
-              {/* rauw: segmented control op de glass-rail, klassen via segItemClass */}
-              <button
-                type="button"
-                onClick={() => toggleSort('number')}
-                className={segItemClass(sortBy === 'number', 'inline-flex items-center justify-center gap-2')}
-              >
-                Dienst #
-                {sortBy === 'number' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
-              </button>
-              {/* rauw: segmented control op de glass-rail, klassen via segItemClass */}
-              <button
-                type="button"
-                onClick={() => toggleSort('time')}
-                className={segItemClass(sortBy === 'time', 'inline-flex items-center justify-center gap-2')}
-              >
-                Starttijd
-                {sortBy === 'time' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
-              </button>
-            </div>
+            {/* Nogmaals op het actieve item klikken wisselt de richting (toggleSort). */}
+            <Segmented
+              label="Sorteren"
+              waarde={sortBy}
+              opties={[
+                { waarde: 'number' as const, label: <>Dienst #{sortBy === 'number' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}</> },
+                { waarde: 'time' as const, label: <>Starttijd{sortBy === 'time' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}</> },
+              ]}
+              onChange={toggleSort}
+            />
             <div className="relative min-w-0 flex-1 md:w-64 group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
@@ -181,11 +172,11 @@ export function ServicesView({ services }: { services: Service[] }) {
                     <Badge tone="oker">Dienst</Badge>
                     <ChevronDown
                       size={18}
-                      className={cn('text-slate-400 transition-transform duration-base', isExpanded && 'rotate-180')}
+                      className={uitklapChevron(isExpanded, 180, 'text-slate-400')}
                     />
                   </div>
                 </button>
-                {isExpanded && (
+                <Uitklap open={isExpanded}>
                   <div className="px-5 pb-5 grid grid-cols-1 gap-3">
                     <div className="flex flex-col gap-1">
                       <MicroLabel>Deel 1</MicroLabel>
@@ -216,7 +207,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                       </div>
                     )}
                   </div>
-                )}
+                </Uitklap>
               </div>
             );
           })}

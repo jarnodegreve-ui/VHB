@@ -75,15 +75,23 @@
   --font-weight-black: 800;
 
   /* === Typografische schaal ===
-     Eén vaste ladder: 11 (2xs — alleen micro-labels/badges) · 12 (xs) ·
-     13 (sm) · 16 (base — ondergrens voor inputs, iOS-zoomgrens) · 18 (lg) ·
-     24 (2xl) · 30 (3xl). `text-sm` is geretuned naar 13px: dat wás al de
-     de-facto standaard-UI-maat (overal text-[13px]); nieuwe tekst kiest een
-     trede van deze ladder, geen text-[NNpx]-strooiwaarden meer. */
+     Eén vaste ladder: 11 (2xs — alleen badges, tellers en text-micro) ·
+     12 (xs — meta, hints, dichte tabellen) · 13 (sm — UI-standaard: labels,
+     chips, knoppen, tabelcellen) · 15 (md — leestekst in kaarten en
+     lijstrijen; rol `text-body`) · 16 (base — ondergrens voor inputs,
+     iOS-zoomgrens) · 18 (lg) · 24 (2xl) · 30 (3xl). Koppen: 17 (card-title)
+     · 18/20 (section-title) · 24/30 (page-title), alleen via hun rol.
+     `text-sm` is geretuned naar 13px: dat wás al de de-facto UI-maat;
+     `text-md` (golf 2, punt 5) vult het gat tussen 13 en 16 zodat leestekst
+     één trede boven de UI-laag staat zonder even groot te worden als een
+     kaarttitel. Nieuwe tekst kiest een trede van deze ladder, geen
+     text-[NNpx]-strooiwaarden meer. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.25rem;
+  --text-md: 0.9375rem;
+  --text-md--line-height: 1.375rem;
 
   /* === Dispatch: monospace-accent ===
      Voor operationele nummers — dienst- en loopnummers, tijden, kW/kWh,
@@ -124,6 +132,59 @@
   --color-amber-700: #C2410C;
   --color-amber-800: #9A3412;
   --color-amber-900: #7C2D12;
+
+  /* === Statusfamilies: gedempte juweeltinten (golf 2, punt 3) ===
+     emerald, red, blue en rose waren fabrieks-Tailwind (#10B981, #EF4444,
+     #3B82F6, #F43F5E): koel en fel naast het warme slate/goud. Nu vier
+     eigen schalen, warmer en minder verzadigd, met dezelfde rolverdeling
+     als de rest: tekst ≥700, solide vlakken ≤600, 500 = dot/icoon-anker.
+     Contrast (WCAG, gemeten met een script): 700 op 50/100 ≥ 5,6:1,
+     wit op 600 ≥ 5,0:1 (emerald) tot 6,0:1 (blue), carbon op 500 ≥ 4,0:1.
+     amber (waarschuwing) blijft bewust ongewijzigd. */
+  /* jade */
+  --color-emerald-50: #EEF6F1;
+  --color-emerald-100: #DCEDE4;
+  --color-emerald-200: #B9DBC9;
+  --color-emerald-300: #8FC4AB;
+  --color-emerald-400: #5EAA8A;
+  --color-emerald-500: #2E9E78;
+  --color-emerald-600: #217D5F;
+  --color-emerald-700: #1A6650;
+  --color-emerald-800: #15503F;
+  --color-emerald-900: #0F392D;
+  /* baksteen / karmijn */
+  --color-red-50: #FBEFEF;
+  --color-red-100: #F7DEDE;
+  --color-red-200: #EFBDBD;
+  --color-red-300: #E59595;
+  --color-red-400: #DE6E6E;
+  --color-red-500: #D64545;
+  --color-red-600: #B93838;
+  --color-red-700: #962E2E;
+  --color-red-800: #732424;
+  --color-red-900: #521A1A;
+  /* staalblauw */
+  --color-blue-50: #EEF3F8;
+  --color-blue-100: #DCE7F1;
+  --color-blue-200: #B9CEE3;
+  --color-blue-300: #8FB1D2;
+  --color-blue-400: #6396C1;
+  --color-blue-500: #3E7CB1;
+  --color-blue-600: #336794;
+  --color-blue-700: #295377;
+  --color-blue-800: #1F3F5B;
+  --color-blue-900: #162D41;
+  /* gedempt granaat (ziekte) */
+  --color-rose-50: #FAEEF1;
+  --color-rose-100: #F5DDE3;
+  --color-rose-200: #EBBBC7;
+  --color-rose-300: #DF93A6;
+  --color-rose-400: #D46E88;
+  --color-rose-500: #C94F6D;
+  --color-rose-600: #AD415C;
+  --color-rose-700: #8B344A;
+  --color-rose-800: #6A2839;
+  --color-rose-900: #4B1C28;
 
   /* === VHB-neutralen (huisstijl) ===
      De volledige slate-schaal wordt geretuned naar de brand-neutralen:
@@ -197,6 +258,28 @@
   --radius-lg: 0.5rem;
 }
 
+/* === Schil-tokens (next-level 2, punt 7) ===
+   --topbar-h = de hoogte van de topbar mét haarlijn-onderrand: rij py-2.5
+   (1,25 rem) rond het hoogste element. Op touch is dat een IconButton sm
+   (h-11 → 4 rem), vanaf sm met fijne pointer de avatar-trigger van het
+   accountmenu (py-1 + h-8 = 2,5 rem → 3,75 rem), dezelfde vork als
+   `sm:pointer-fine:h-8`. De rij pint zich óók op dit token (min-h), dus de
+   sticky-offsets kunnen niet meer stil wegdrijven. In rem: schaalt mee met
+   html { font-size } op ≥1280. --sticky-top = waar iets onder de topbar
+   plakt (StickyThead, Zijvak): topbar + iOS-statusbalk-inset.
+   --content-max(-breed) = de kolombreedte van schil en PageShell. */
+:root {
+  --topbar-h: calc(4rem + 1px);
+  --sticky-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  --content-max: 1200px;
+  --content-max-breed: 1520px;
+}
+@media (min-width: 640px) and (pointer: fine) {
+  :root {
+    --topbar-h: calc(3.75rem + 1px);
+  }
+}
+
 :root {
   --duration-fast: 150ms;
   --duration-base: 220ms;
@@ -209,31 +292,58 @@
   --focus-ring: #E2A323;
   --focus-ring-contrast: #14181B;
 
-  /* === Elevation-ladder (voorbereiding golf 2) ===
-     Drie treden, letterlijk de bestaande stapels: 1 = .surface-card (kaart,
-     rij-hover), 2 = .bottom-dock (zwevend: popover, menu, toast), 3 =
-     .glass-modal (modal, slide-over). accent = de gouden contactschaduw
-     (was `shadow-sm shadow-oker-500/30` op gekozen dag / switch aan).
-     Als utility: elev-1 / elev-2 / elev-3 / elev-accent, ook met varianten
-     (hover:elev-1). Geen fabrieks-shadow-sm/md/lg/xl meer (design-lint). */
+  /* === Lagen (golf 2, punt 2) ===
+     De impliciete achtergrondlagen als tokens. In licht zijn kaart en dock
+     gewoon wit; het verschil zit in donker (html.dark hieronder), waar het
+     canvas VHB Black is en elke laag erboven een fractie lichter wordt:
+     canvas < kaart < dock < sticky kop. Paper (--color-paper) en ink
+     (--color-ink) verwijzen in donker naar deze lagen. */
+  --laag-canvas: #F2F3F4;
+  --laag-kaart: #FFFFFF;
+  --laag-dock: #FFFFFF;
+  --laag-sticky: #FFFFFF;
+
+  /* === Elevation-ladder (golf 2, punt 2: één oppervlaksysteem) ===
+     Vijf treden, per trede één schaduw en één randkleur (--elev-N-rim):
+       0  vlak: geen schaduw, alleen de hairline (rij, ingezonken vlak)
+       1  kaart, tegel, tabel (.surface-card, .surface-table, --tile-*)
+       2  zwevend: dock, popover, menu, toast (.bottom-dock, elev-2)
+       3  slide-over (elev-3)
+       4  modal (.glass-modal, elev-4)
+     lift = de hover-stand van trede 1 (.surface-card-hover), geen eigen
+     trede. accent = de gouden contactschaduw (gekozen dag, switch aan).
+     Als utility: elev-0 … elev-4 / elev-accent, ook met varianten
+     (hover:elev-1). Geen fabrieks-shadow-sm/md/lg/xl meer (design-lint).
+     De oppervlakklassen zijn consumenten van deze tokens: een schaduw
+     wijzig je hier, nergens anders. Waarden 1, 2 en 4 zijn letterlijk de
+     oude stapels van surface-card, bottom-dock en glass-modal; trede 3 zat
+     er niet tussen (slide-over deelde de modal-stapel) en is nu de
+     tussenstap 20/56 zodat modal boven slide-over ligt. */
+  --elev-0: none;
+  --elev-0-rim: var(--color-hairline);
   --elev-1: 0 1px 2px rgba(13, 13, 15, 0.04), 0 6px 20px rgba(13, 13, 15, 0.04);
+  --elev-1-rim: rgba(228, 230, 232, 0.90);
+  --elev-1-lift: 0 2px 4px rgba(13, 13, 15, 0.04), 0 14px 32px rgba(13, 13, 15, 0.08);
+  --elev-1-lift-rim: rgba(205, 209, 213, 0.90);
   --elev-2: 0 1px 2px rgba(13, 13, 15, 0.05), 0 12px 32px rgba(13, 13, 15, 0.14);
-  --elev-3: 0 1px 2px rgba(13, 13, 15, 0.05), 0 28px 80px rgba(13, 13, 15, 0.18);
+  --elev-2-rim: rgba(228, 230, 232, 0.90);
+  --elev-3: 0 1px 2px rgba(13, 13, 15, 0.05), 0 20px 56px rgba(13, 13, 15, 0.16);
+  --elev-3-rim: rgba(228, 230, 232, 0.90);
+  --elev-4: 0 1px 2px rgba(13, 13, 15, 0.05), 0 28px 80px rgba(13, 13, 15, 0.18);
+  --elev-4-rim: rgba(228, 230, 232, 0.90);
   --elev-accent: 0 1px 3px 0 rgba(226, 163, 35, 0.30), 0 1px 2px -1px rgba(226, 163, 35, 0.30);
 }
 
-/* === Tile-surface variabelen ===
-   Voor inline-styled tegels in DashboardView / PlannerDashboardWidgets /
-   Skeleton die niet via Tailwind-classes kunnen flippen. Standaard wit-
-   glass; in dark mode worden ze automatisch near-black warm zodat de
-   tiles netjes meebewegen met de rest van het thema. */
+/* === Tile-surface variabelen (legacy, consumenten van de ladder) ===
+   Sinds golf 2 gebruiken ops.tsx en Skeleton gewoon `.surface-card`; alleen
+   de laadpalen-grafieken lezen nog `var(--tile-bg)` inline (label-vlakje op
+   een chart). Alle waarden komen uit de ladder / de lagen, dus een tegel
+   kan niet meer stil van een kaart afwijken. */
 :root {
-  --tile-bg: rgba(255, 255, 255, 0.96);
-  --tile-border: 1px solid rgba(228, 230, 232, 0.9);
-  --tile-shadow:
-    0 1px 2px rgba(13, 13, 15, 0.04),
-    0 6px 20px rgba(13, 13, 15, 0.04);
-  --tile-bg-soft: rgba(255, 255, 255, 0.85);
+  --tile-bg: color-mix(in srgb, var(--laag-kaart) 96%, transparent);
+  --tile-border: 1px solid var(--elev-1-rim);
+  --tile-shadow: var(--elev-1);
+  --tile-bg-soft: color-mix(in srgb, var(--laag-kaart) 85%, transparent);
   --tile-border-soft: 1px solid rgba(228, 230, 232, 0.75);
   /* Standaard randkleur voor kale border-utilities (zie de *-regel in
      @layer base). Zelfde waarde als slate-200. */
@@ -246,7 +356,7 @@
 /* Desktop-schaal (afwerkingsronde 04-09, nr. 1): op een breed scherm is de
    mobiele maatvoering te klein — alles rem-gebaseerd schaalt mee met de
    wortel, dus één regel geeft het hele portaal 6 % meer lucht en letter
-   (16 → 17 px basis). px-waarden (max-w-[1200px], logo) blijven staan. */
+   (16 → 17 px basis). px-waarden (--content-max, logo) blijven staan. */
 @media (min-width: 1280px) {
   html {
     font-size: 106.25%;
@@ -254,20 +364,25 @@
 }
 
 html.dark {
-  --tile-bg: rgba(23, 24, 26, 0.95);
-  --tile-border: 1px solid rgba(255, 255, 255, 0.09);
-  --tile-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 8px 24px rgba(0, 0, 0, 0.4);
-  --tile-bg-soft: rgba(23, 24, 26, 0.75);
+  /* Lagen in donker: canvas = VHB Black, daarboven kaart, dock en sticky
+     kop elk een fractie lichter. Dit zijn de vroegere losse hexen van
+     html.dark, --tile-bg, .bottom-dock en --surface-sticky-head. */
+  --laag-canvas: #0D0D0F;
+  --laag-kaart: #17181A;
+  --laag-dock: #1B1C1F;
+  --laag-sticky: #1E1F22;
+
+  /* --tile-bg/--tile-border/--tile-shadow volgen de ladder (zie :root);
+     alleen de zachte skeleton-variant heeft hier nog een eigen alpha. */
+  --tile-bg-soft: color-mix(in srgb, var(--laag-kaart) 75%, transparent);
   --tile-border-soft: 1px solid rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.10);
   /* Opake sticky-oppervlakken (maandplanning-grid): de generieke dark-
      overrides zijn alpha-kleuren, waardoor scrollende cellen door de vaste
      naamkolom/koprij heen schemerden. Kop iets lichter dan de cel; "own"
      = de eigen rij met een warme oker-zweem. */
-  --surface-sticky-head: rgb(30, 31, 34);
-  --surface-sticky-cell: rgb(23, 24, 26);
+  --surface-sticky-head: var(--laag-sticky);
+  --surface-sticky-cell: var(--laag-kaart);
   --surface-sticky-own: rgb(41, 35, 25);
   /* Donkere kant van de semantische oppervlak-tokens (zelfde waarden als
      de blanket-overrides voor hun oude utility-tegenhangers). */
@@ -282,17 +397,28 @@ html.dark {
   --color-hairline: rgba(79, 87, 95, 0.32);
   --color-hairline-strong: rgba(110, 118, 127, 0.45);
 
-  /* Focus en elevation in donker (zelfde goud; contrastring wordt licht;
-     schaduwen = de donkere stapels van surface-card / bottom-dock (zonder
-     de inzet-highlight, die is dock-specifiek) / glass-modal). */
+  /* Focus en elevation in donker (zelfde goud; contrastring wordt licht).
+     Ladder: trede 1 = de oude --tile-shadow (8/24 op 0,4; die was een
+     fractie dieper dan .surface-card met 6/20 op 0,35 en is als waarheid
+     genomen, want op carbon heeft een kaart die extra definitie nodig);
+     rim 0,10 (tile had 0,09: dat scheelt minder dan één 8-bit-stap).
+     Trede 2 = bottom-dock zónder de inzet-highlight (die zet .bottom-dock
+     er zelf bij); trede 4 = glass-modal; trede 3 = de tussenstap. */
   --focus-ring: #E2A323;
   --focus-ring-contrast: #F2F3F4;
-  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --elev-1-rim: rgba(255, 255, 255, 0.10);
+  --elev-1-lift: 0 2px 4px rgba(0, 0, 0, 0.3), 0 14px 32px rgba(0, 0, 0, 0.5);
+  --elev-1-lift-rim: rgba(255, 255, 255, 0.12);
   --elev-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.55);
-  --elev-3: 0 1px 2px rgba(0, 0, 0, 0.4), 0 28px 80px rgba(0, 0, 0, 0.7);
+  --elev-2-rim: rgba(255, 255, 255, 0.10);
+  --elev-3: 0 1px 2px rgba(0, 0, 0, 0.4), 0 20px 56px rgba(0, 0, 0, 0.6);
+  --elev-3-rim: rgba(255, 255, 255, 0.10);
+  --elev-4: 0 1px 2px rgba(0, 0, 0, 0.4), 0 28px 80px rgba(0, 0, 0, 0.7);
+  --elev-4-rim: rgba(255, 255, 255, 0.10);
 
-  --color-paper: #17181A;
-  --color-ink: #0D0D0F;
+  --color-paper: var(--laag-kaart);
+  --color-ink: var(--laag-canvas);
   --color-ink-soft: #1C2025;
   --color-rim: rgba(154, 161, 169, 0.20);
   --color-rim-strong: rgba(154, 161, 169, 0.26);
@@ -337,37 +463,40 @@ html.dark {
   --color-amber-800: #FED7AA;
   --color-amber-900: #FFEDD5;
 
-  --color-emerald-50: rgba(16, 185, 129, 0.12);
-  --color-emerald-100: rgba(16, 185, 129, 0.18);
-  --color-emerald-200: rgba(16, 185, 129, 0.30);
-  --color-emerald-300: rgba(16, 185, 129, 0.42);
-  --color-emerald-700: #6EE7B7;
-  --color-emerald-800: #A7F3D0;
-  --color-emerald-900: #D1FAE5;
+  /* Statusfamilies in donker: 50-300 = transparante tinten van de nieuwe
+     500 (zelfde alfa's als voorheen), 700-900 = lichte tekstvarianten uit
+     dezelfde tint (700 op kaart #17181A ≥ 8:1, op de 100-tint ≥ 6,7:1). */
+  --color-emerald-50: rgba(46, 158, 120, 0.12);
+  --color-emerald-100: rgba(46, 158, 120, 0.18);
+  --color-emerald-200: rgba(46, 158, 120, 0.30);
+  --color-emerald-300: rgba(46, 158, 120, 0.42);
+  --color-emerald-700: #7FCBAB;
+  --color-emerald-800: #A9DEC7;
+  --color-emerald-900: #D0EEE1;
 
-  --color-red-50: rgba(239, 68, 68, 0.12);
-  --color-red-100: rgba(239, 68, 68, 0.18);
-  --color-red-200: rgba(239, 68, 68, 0.30);
-  --color-red-300: rgba(239, 68, 68, 0.40);
-  --color-red-700: #FCA5A5;
-  --color-red-800: #FECACA;
-  --color-red-900: #FEE2E2;
+  --color-red-50: rgba(214, 69, 69, 0.12);
+  --color-red-100: rgba(214, 69, 69, 0.18);
+  --color-red-200: rgba(214, 69, 69, 0.30);
+  --color-red-300: rgba(214, 69, 69, 0.40);
+  --color-red-700: #E89A9A;
+  --color-red-800: #F1BDBD;
+  --color-red-900: #F8DCDC;
 
-  --color-blue-50: rgba(59, 130, 246, 0.14);
-  --color-blue-100: rgba(59, 130, 246, 0.20);
-  --color-blue-200: rgba(59, 130, 246, 0.30);
-  --color-blue-300: rgba(59, 130, 246, 0.42);
-  --color-blue-700: #93C5FD;
-  --color-blue-800: #BFDBFE;
-  --color-blue-900: #DBEAFE;
+  --color-blue-50: rgba(62, 124, 177, 0.14);
+  --color-blue-100: rgba(62, 124, 177, 0.20);
+  --color-blue-200: rgba(62, 124, 177, 0.30);
+  --color-blue-300: rgba(62, 124, 177, 0.42);
+  --color-blue-700: #92B9DB;
+  --color-blue-800: #B8D1E8;
+  --color-blue-900: #D8E6F2;
 
-  --color-rose-50: rgba(244, 63, 94, 0.14);
-  --color-rose-100: rgba(244, 63, 94, 0.20);
-  --color-rose-200: rgba(244, 63, 94, 0.30);
-  --color-rose-300: rgba(244, 63, 94, 0.42);
-  --color-rose-700: #FDA4AF;
-  --color-rose-800: #FECDD3;
-  --color-rose-900: #FFE4E6;
+  --color-rose-50: rgba(201, 79, 109, 0.14);
+  --color-rose-100: rgba(201, 79, 109, 0.20);
+  --color-rose-200: rgba(201, 79, 109, 0.30);
+  --color-rose-300: rgba(201, 79, 109, 0.42);
+  --color-rose-700: #E39AAE;
+  --color-rose-800: #EEBECB;
+  --color-rose-900: #F6DCE3;
 }
 
 @layer base {
@@ -388,6 +517,11 @@ html.dark {
     text-rendering: optimizeLegibility;
     /* Planningstool: tijden en aantallen lijnen overal netjes uit. */
     font-variant-numeric: tabular-nums;
+    /* Inter-varianten (cv05 = l met voetje, cv08 = I met schreefjes): body is
+       Inter, dus dit hoort hier. Koppen erven het mee maar Manrope kent deze
+       features niet en negeert ze stil; verhuizen naar één body-rol zou de
+       Inter-tekst buiten die rol (labels, tabellen, chips) stiekem anders
+       laten renderen. Bewust op body gelaten. */
     font-feature-settings: "cv05", "cv08";
   }
 
@@ -425,9 +559,12 @@ html.dark {
     stroke-width: 1.75;
   }
 
+  /* Koppen in Manrope. Geen blanket-tracking meer: de tracking-ladder zit in
+     de rollen (page 30 px -0.025em · 24 px -0.02em · section 20 px -0.015em ·
+     card 17/18 px -0.01em · 16 px en lager 0). Een kale h3 op text-sm in een
+     kaart hoort dus op 0 te staan, niet op -0.022em. */
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
-    letter-spacing: -0.022em;
   }
 
   * {
@@ -482,28 +619,37 @@ html.dark {
 
 @layer components {
   /* === Typografie-rollen ===
-     Zeven rollen i.p.v. losse class-recepten. Koppen (page/section/card)
-     in Manrope; labels in Inter. Gebruik de rol, niet de losse utilities:
-       text-page-title    h1 van een scherm (PageHeader, dashboard-groet)
-       text-section-title h2 van een grote (beheer)sectie
-       text-card-title    h2/h3 in een kaart of paneel
+     Negen rollen i.p.v. losse class-recepten. Koppen (page/section/card)
+     in Manrope ExtraBold (800, de huisstijlregel; het zelf-gehoste
+     manrope-latin.woff2 is variabel 500-800); labels en lopende tekst in
+     Inter. Gebruik de rol, niet de losse utilities:
+       text-page-title    h1 van een scherm (PageHeader), 24/30 px
+       text-section-title h2 van een grote (beheer)sectie, 18/20 px
+       text-card-title    h2/h3 in een kaart of paneel, 17 px
+       text-body          lopende tekst (kaartbeschrijving, lege staat,
+                          uitleg, detailtekst), 15/1.55
+       text-body-sm       lopende tekst in een compacte context (hint onder
+                          een veld, zijvak-voet, tooltip), 13/1.55
        text-label         veldlabel / tabelkop (sentence-case)
        text-micro         uppercase eyebrow (MicroLabel)
        text-stat          groot cijfer in een KPI-tegel/statkaart (mono, kleur per plek)
-     Body = text-sm (13) / text-base (16); code = font-mono.
+     UI-laag = text-sm (13: chips, knoppen, tabelcellen, rijtitels); inputs
+     text-base (16, iOS-zoomgrens); code = font-mono. Tracking-ladder:
+     -0.025em op 30 · -0.02em op 24 · -0.015em op 20 · -0.01em op 17/18 ·
+     0 op 16 en lager (daarom géén tracking op h1-h6 in @layer base).
      In @layer components: een kleur-utility ernaast (text-oker-700) wint
      dan van de rol-kleur, zoals bedoeld. */
   .text-page-title {
     text-wrap: balance;
     font-family: var(--font-display);
-    font-weight: 700;
+    font-weight: 800;
     font-size: 1.5rem;
     line-height: 1.1;
     letter-spacing: -0.02em;
     color: var(--color-slate-900);
   }
   @media (min-width: 768px) {
-    .text-page-title { font-size: 1.875rem; }
+    .text-page-title { font-size: 1.875rem; letter-spacing: -0.025em; }
   }
   /* Begroeting op de dashboards: één graad kleiner dan een paginatitel. Het
      is een welkom, geen schermtitel, en op vol formaat domineerde het de
@@ -511,35 +657,51 @@ html.dark {
   .text-greeting {
     text-wrap: balance;
     font-family: var(--font-display);
-    font-weight: 700;
+    font-weight: 800;
     font-size: 1.25rem;
     line-height: 1.15;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
     color: var(--color-slate-900);
   }
   @media (min-width: 768px) {
-    .text-greeting { font-size: 1.5rem; }
+    .text-greeting { font-size: 1.5rem; letter-spacing: -0.02em; }
   }
   .text-section-title {
     text-wrap: balance;
     font-family: var(--font-display);
-    font-weight: 700;
+    font-weight: 800;
     font-size: 1.125rem;
     line-height: 1.25;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
     color: var(--color-slate-900);
   }
   @media (min-width: 768px) {
-    .text-section-title { font-size: 1.25rem; }
+    .text-section-title { font-size: 1.25rem; letter-spacing: -0.015em; }
   }
+  /* 17 px, bewust één trede boven body (15) en boven text-base (16): tot golf
+     2 was de kaarttitel exact even groot als body en onderscheidde hij zich
+     alleen door gewicht. */
   .text-card-title {
     text-wrap: balance;
     font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 1rem;
+    font-weight: 800;
+    font-size: 1.0625rem;
     line-height: 1.3;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.01em;
     color: var(--color-slate-900);
+  }
+  /* Lopende tekst: ruimere regelafstand dan de UI-laag (1.55 i.p.v. ±1.5)
+     en geen weduwen. Geen kleur: die zet de plek (text-slate-500/600). De
+     losse `leading-relaxed`-utility is hiermee overbodig (design-lint). */
+  .text-body {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .text-body-sm {
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    text-wrap: pretty;
   }
   .text-label {
     font-size: 0.75rem;
@@ -620,12 +782,11 @@ html.dark {
     box-shadow: 0 4px 16px rgba(13, 13, 15, 0.04);
   }
 
+  /* Trede 1 van de ladder (tokens in :root / html.dark). */
   .surface-card {
-    background: rgba(255, 255, 255, 0.96);
-    border: 1px solid rgba(228, 230, 232, 0.9);
-    box-shadow:
-      0 1px 2px rgba(13, 13, 15, 0.04),
-      0 6px 20px rgba(13, 13, 15, 0.04);
+    background: color-mix(in srgb, var(--laag-kaart) 96%, transparent);
+    border: 1px solid var(--elev-1-rim);
+    box-shadow: var(--elev-1);
     transition:
       transform var(--duration-slow) var(--ease-standard),
       box-shadow var(--duration-slow) var(--ease-standard),
@@ -646,10 +807,8 @@ html.dark {
   @media (hover: hover) and (pointer: fine) {
     .surface-card-hover:hover {
       transform: translateY(-2px);
-      border-color: rgba(205, 209, 213, 0.9);
-      box-shadow:
-        0 2px 4px rgba(13, 13, 15, 0.04),
-        0 14px 32px rgba(13, 13, 15, 0.08);
+      border-color: var(--elev-1-lift-rim);
+      box-shadow: var(--elev-1-lift);
     }
   }
 
@@ -659,31 +818,28 @@ html.dark {
      rommelig doorheen schemeren — precies wat we hier vermijden. De inzet-
      highlight bovenaan geeft de donkere variant zijn opgetilde rand. */
   .bottom-dock {
-    background: #ffffff;
-    border: 1px solid rgba(228, 230, 232, 0.9);
-    box-shadow:
-      0 1px 2px rgba(13, 13, 15, 0.05),
-      0 12px 32px rgba(13, 13, 15, 0.14);
+    background: var(--laag-dock);
+    border: 1px solid var(--elev-2-rim);
+    box-shadow: var(--elev-2);
   }
 
+  /* Trede 1, net als de kaart (had een eigen, nét afwijkende stapel:
+     8/24 op 0,03-0,04 en rand 0,85; het verschil was niet te zien). */
   .surface-table {
-    background: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(228, 230, 232, 0.85);
-    box-shadow:
-      0 1px 2px rgba(13, 13, 15, 0.03),
-      0 8px 24px rgba(13, 13, 15, 0.04);
+    background: color-mix(in srgb, var(--laag-kaart) 92%, transparent);
+    border: 1px solid var(--elev-1-rim);
+    box-shadow: var(--elev-1);
   }
 
   /* Bewust GEEN backdrop-filter meer op het paneel: het is 95 % dekkend
      achter een 40 %-donkere backdrop, dus de blur was onzichtbaar maar
      hersampelde wel elke frame een bewegend (scale+y) paneel — hakkelig op
      oudere iPhones (controle-ronde 27-08, nr. 11). Zelfde keuze als SlideOver. */
+  /* Trede 4 (top van de ladder). */
   .glass-modal {
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(228, 230, 232, 0.9);
-    box-shadow:
-      0 1px 2px rgba(13, 13, 15, 0.05),
-      0 28px 80px rgba(13, 13, 15, 0.18);
+    background: color-mix(in srgb, var(--laag-kaart) 95%, transparent);
+    border: 1px solid var(--elev-4-rim);
+    box-shadow: var(--elev-4);
   }
 
   .surface-muted {
@@ -886,10 +1042,13 @@ html.dark {
   transition-duration: var(--duration-slow);
 }
 
-/* Elevation-ladder (tokens in :root / html.dark). */
+/* Elevation-ladder (tokens in :root / html.dark): 0 vlak · 1 kaart ·
+   2 zwevend · 3 slide-over · 4 modal. */
+@utility elev-0 { box-shadow: var(--elev-0); }
 @utility elev-1 { box-shadow: var(--elev-1); }
 @utility elev-2 { box-shadow: var(--elev-2); }
 @utility elev-3 { box-shadow: var(--elev-3); }
+@utility elev-4 { box-shadow: var(--elev-4); }
 @utility elev-accent { box-shadow: var(--elev-accent); }
 
 /* Dezelfde focus-ring als het globale systeem, handmatig te zetten. */
@@ -933,7 +1092,7 @@ html.dark {
       rgba(255, 255, 255, 0.02) 0%,
       transparent 60%
     ),
-    #0D0D0F;
+    var(--laag-canvas);
   color-scheme: dark;
 }
 
@@ -969,47 +1128,30 @@ html.dark {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
+/* Kaart, tabel, hover en modal: rand en schaduw komen uit de ladder-tokens
+   (html.dark verlegt die), dus hier alleen nog de achtergrond-alfa op de
+   kaartlaag. De kaart was 0,94 en de tegel 0,95: de tegelwaarde is de
+   waarheid (zie de ladder-toelichting in html.dark). */
 :where(.dark) .surface-card {
-  background: rgba(23, 24, 26, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 6px 20px rgba(0, 0, 0, 0.35);
+  background: color-mix(in srgb, var(--laag-kaart) 95%, transparent);
 }
 
 /* Dock: iets lichter dan het canvas (opgetild), volledig opaak, met een
    subtiele inzet-highlight als bovenrand — een 1px-border alleen verzuipt
-   op een zwart canvas. Diepere schaduw dan .surface-card: de balk zweeft. */
+   op een zwart canvas. Diepere schaduw dan .surface-card: de balk zweeft.
+   De inzet-highlight is dock-specifiek en staat vóór de ladder-schaduw. */
 :where(.dark) .bottom-dock {
-  background: #1B1C1F;
-  border-color: rgba(255, 255, 255, 0.10);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 12px 32px rgba(0, 0, 0, 0.55);
-}
-
-:where(.dark) .surface-card-hover:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    0 14px 32px rgba(0, 0, 0, 0.5);
+    var(--elev-2);
 }
 
 :where(.dark) .surface-table {
-  background: rgba(23, 24, 26, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 8px 24px rgba(0, 0, 0, 0.35);
+  background: color-mix(in srgb, var(--laag-kaart) 88%, transparent);
 }
 
 :where(.dark) .glass-modal {
-  background: rgba(23, 24, 26, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 28px 80px rgba(0, 0, 0, 0.7);
+  background: color-mix(in srgb, var(--laag-kaart) 96%, transparent);
 }
 
 :where(.dark) .surface-muted {

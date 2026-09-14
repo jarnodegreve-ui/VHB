@@ -8,7 +8,8 @@ import { isoDate, addDagen } from '../../lib/datum';
 import { formatDayLong, formatRelatief, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { EmptyState, ModalHeader, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, MicroLabel, Switch, segItemClass } from '../../components/primitives';
+import { Badge, Button, MicroLabel, Segmented, Switch } from '../../components/primitives';
+import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Paginering, TableToolbar } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
 import { Card, CardHeader } from '../../components/Card';
@@ -241,7 +242,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
   };
 
   return (
-    <PageShell>
+    <PageShell breed>
       <PageHeader
         title="Activiteit"
         actions={(
@@ -273,7 +274,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             <div key={String(k)} className="rounded-xl bg-surface-soft px-4 py-3 ring-1 ring-hairline">
               <dt className="text-micro">{k}</dt>
               <dd className="mt-1 text-stat text-slate-900">{v}</dd>
-              <dd className="mt-0.5 text-2xs font-medium text-slate-500">{sub}</dd>
+              <dd className="mt-0.5 text-xs font-medium text-slate-500">{sub}</dd>
             </div>
           ))}
         </dl>
@@ -300,6 +301,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                     aria-label={`${dagKort(d.day, vandaag)}: ${d.count} actief`}
                     className={cn('group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1 rounded-lg', d.count > 0 ? 'cursor-pointer' : 'cursor-default')}
                   >
+                    {/* 2xs: teller boven de dagstrip van de mini-grafiek */}
                     <span className="text-2xs font-semibold font-mono text-slate-700">{d.count || ''}</span>
                     <span
                       className={cn('w-full rounded-t-md transition-colors', d.day === vandaag ? 'bg-oker-500' : d.count > 0 ? 'bg-slate-500 group-hover:bg-slate-700' : 'bg-surface-muted')}
@@ -311,6 +313,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
               </div>
               <div className="mt-1.5 flex gap-1.5" aria-hidden="true">
                 {veertienDagen.map((d) => (
+                  /* 2xs: daglabels van de mini-grafiek, 30 kolommen naast elkaar */
                   <span key={d.day} className={cn('min-w-0 flex-1 truncate text-center text-2xs font-medium font-mono', d.day === vandaag ? 'text-oker-700' : 'text-slate-500')}>
                     {d.day === vandaag ? 'nu' : WEEKDAY_SHORT_SUN[d.dow]}
                   </span>
@@ -326,7 +329,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                   <div key={e.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-surface-soft-hover">
                     <Avatar naam={e.actorName} size="sm" />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{e.actorName}</span>
-                    <span className="shrink-0 text-2xs font-medium text-slate-500" title={new Date(e.createdAt).toLocaleString('nl-BE')}>{formatRelatief(e.createdAt)}</span>
+                    <span className="shrink-0 text-xs font-medium text-slate-500" title={new Date(e.createdAt).toLocaleString('nl-BE')}>{formatRelatief(e.createdAt)}</span>
                   </div>
                 ))}
               </div>
@@ -352,14 +355,17 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
           telling={`${filteredEntries.length} ${filteredEntries.length === 1 ? 'actie' : 'acties'}${bundels.length !== filteredEntries.length ? ` · ${bundels.length} regels` : ''}`}
           filters={(
             <>
-              <div role="group" aria-label="Periode" className="glass-segmented inline-flex h-9 shrink-0 items-center rounded-2xl p-1">
-                {([['today', 'Vandaag'], ['7d', '7 dagen'], ['30d', '30 dagen'], ['all', 'Alles']] as Array<[typeof dateWindow, string]>).map(([id, label]) => (
-                  // rauw: segmented control op de glass-rail, klassen via segItemClass
-                  <button key={id} type="button" onClick={() => setDateWindow(id)} aria-pressed={dateWindow === id} className={segItemClass(dateWindow === id, 'py-1.5')}>
-                    {isLoadingWindow && dateWindow === id ? `${label}…` : label}
-                  </button>
-                ))}
-              </div>
+              <Segmented<typeof dateWindow>
+                label="Periode"
+                className="h-9 shrink-0 items-center"
+                itemClassName="py-1.5"
+                waarde={dateWindow}
+                opties={([['today', 'Vandaag'], ['7d', '7 dagen'], ['30d', '30 dagen'], ['all', 'Alles']] as Array<[typeof dateWindow, string]>).map(([id, label]) => ({
+                  waarde: id,
+                  label: isLoadingWindow && dateWindow === id ? `${label}…` : label,
+                }))}
+                onChange={setDateWindow}
+              />
               <Select
                 aria-label="Categorie"
                 value={activeCategory}
@@ -400,7 +406,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                 <section key={dag} aria-label={dagKop(dag, vandaag)}>
                   <div className="flex items-baseline justify-between gap-3 border-b border-hairline-subtle bg-surface-muted/60 px-4 py-1.5">
                     <h3 className="text-xs font-semibold text-slate-700">{dagKop(dag, vandaag)}{dag === vandaag || dag === addDagen(vandaag, -1) ? <span className="ml-2 font-normal text-slate-500">{formatDayLong(dag)}</span> : null}</h3>
-                    <span className="text-2xs font-medium font-mono text-slate-500">{rijen.reduce((a, b) => a + b.items.length, 0)} {rijen.reduce((a, b) => a + b.items.length, 0) === 1 ? 'actie' : 'acties'}</span>
+                    <span className="text-xs font-medium font-mono text-slate-500">{rijen.reduce((a, b) => a + b.items.length, 0)} {rijen.reduce((a, b) => a + b.items.length, 0) === 1 ? 'actie' : 'acties'}</span>
                   </div>
                   <div className="divide-y divide-slate-100">
                     {rijen.map((b) => {
@@ -438,9 +444,9 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                               <Avatar naam={e.actorName} size="sm" />
                               <span className="min-w-0 truncate text-xs font-medium text-slate-600" title={e.actorName}>{e.actorName}</span>
                             </span>
-                            <ChevronDown size={16} className={cn('justify-self-end text-slate-400 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
+                            <ChevronDown size={16} className={uitklapChevron(isOpen, 180, 'justify-self-end text-slate-400')} aria-hidden="true" />
                           </button>
-                          {isOpen && (
+                          <Uitklap open={isOpen}>
                             <div className="bg-surface-muted/40 px-4 pb-4 pt-1 sm:pl-[calc(4.5rem+8rem+2.5rem)]">
                               <p className="text-xs font-medium text-slate-500 sm:hidden">{e.actorName} · {e.actorRole}</p>
                               {n === 1 ? (
@@ -455,9 +461,9 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                                   ))}
                                 </ul>
                               )}
-                              <p className="mt-2 text-2xs text-slate-500">{new Date(e.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {e.actorName} ({e.actorRole}){e.entityType ? ` · ${e.entityType}${e.entityId ? ` ${e.entityId}` : ''}` : ''}</p>
+                              <p className="mt-2 text-xs text-slate-500">{new Date(e.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {e.actorName} ({e.actorRole}){e.entityType ? ` · ${e.entityType}${e.entityId ? ` ${e.entityId}` : ''}` : ''}</p>
                             </div>
-                          )}
+                          </Uitklap>
                         </div>
                       );
                     })}

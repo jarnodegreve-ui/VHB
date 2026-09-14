@@ -96,11 +96,11 @@ function ToestellenSectie() {
             werken naast het voetje (anders een dubbele haarlijn). */}
         <div>
         {fout ? (
-          <p className="text-sm text-slate-500">Toestellen konden niet geladen worden.</p>
+          <p className="text-body-sm text-slate-500">Toestellen konden niet geladen worden.</p>
         ) : data === null ? (
-          <p className="text-sm text-slate-500">Laden…</p>
+          <p className="text-body-sm text-slate-500">Laden…</p>
         ) : toestellen.length === 0 ? (
-          <p className="text-sm text-slate-500">Alleen de sessie op dit toestel is bekend.</p>
+          <p className="text-body-sm text-slate-500">Alleen de sessie op dit toestel is bekend.</p>
         ) : (
           toestellen.map((t) => {
             const ingetrokken = t.status === 'revoked';
@@ -136,7 +136,7 @@ function ToestellenSectie() {
         )}
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-hairline-subtle pt-4">
-          <p className="text-xs leading-relaxed text-slate-500">Beëindigt ook sessies in andere browsers en tabbladen; dit toestel blijft aangemeld.</p>
+          <p className="text-body-sm text-slate-500">Beëindigt ook sessies in andere browsers en tabbladen; dit toestel blijft aangemeld.</p>
           <Button variant="secondary" size="sm" icon={<LogOut size={14} />} disabled={bezig !== null || (data !== null && data.beschikbaar && anderenActief === 0 && toestellen.length > 0)} onClick={() => setBevestigAnderen(true)}>
             Uitloggen op alle andere toestellen
           </Button>
@@ -280,7 +280,7 @@ function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePas
 
       <Modal open={modal === 'uitschakelen'} onClose={() => setModal(null)} maxWidth="sm" ariaLabel="Twee-stapsverificatie uitschakelen">
         <ModalHeader title="Twee-stapsverificatie uitschakelen" onClose={() => setModal(null)} />
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">Daarna is je wachtwoord weer de enige sleutel. Bevestig eerst met een code uit je app.</p>
+        <p className="mt-2 text-body text-slate-600">Daarna is je wachtwoord weer de enige sleutel. Bevestig eerst met een code uit je app.</p>
         <div className="mt-4">
           {status?.factorId && status.huidig !== 'aal2'
             ? <TweeStapsCode factorId={status.factorId} annuleerLabel="Annuleren" onAnnuleer={() => setModal(null)} onKlaar={() => { void laad().then(() => void uitschakelen()); }} />
@@ -310,8 +310,8 @@ function Rij({ icoon, titel, uitleg, rechts }: { icoon: React.ReactNode; titel: 
     <div className="flex flex-wrap items-start gap-3 py-3.5 first:pt-0 last:pb-0 border-b last:border-b-0 border-hairline-subtle">
       <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">{icoon}</span>
       <div className="min-w-[11rem] flex-1 basis-0">
-        <p className="text-sm font-semibold text-slate-900">{titel}</p>
-        <p className="mt-0.5 break-words text-sm text-slate-500 leading-relaxed">{uitleg}</p>
+        <p className="text-md font-semibold text-slate-900">{titel}</p>
+        <p className="mt-0.5 break-words text-body-sm text-slate-500">{uitleg}</p>
       </div>
       <div className="ml-auto shrink-0 pt-0.5">{rechts}</div>
     </div>

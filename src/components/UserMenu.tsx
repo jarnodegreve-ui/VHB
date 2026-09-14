@@ -80,7 +80,7 @@ export function UserMenu({
         className="flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 hover:bg-slate-100/80 transition-colors"
       >
         {/* Huisstijl-pairing: op goud altijd carbon-tekst, geen wit. */}
-        <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-2xs font-bold select-none">
+        <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-xs font-bold select-none">
           {initials}
         </span>
         <ChevronDown size={14} className={cn('text-slate-400 transition-transform duration-base', open && 'rotate-180')} />
@@ -99,12 +99,12 @@ export function UserMenu({
         >
           {/* Identiteit bovenaan — het kaartje dat eerst in de sidebar-voet stond. */}
           <div className="flex items-center gap-2.5 px-3 py-2.5 mb-1 border-b fine-divider">
-            <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-2xs font-bold shrink-0">
+            <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-xs font-bold shrink-0">
               {initials}
             </span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-slate-800 truncate leading-tight">{user.name}</span>
-              <span className="block text-2xs text-slate-500 font-medium">
+              <span className="block text-xs text-slate-500 font-medium">
                 {ROL_LABELS[user.role as keyof typeof ROL_LABELS] ?? user.role}
               </span>
             </span>

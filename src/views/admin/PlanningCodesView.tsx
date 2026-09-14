@@ -5,7 +5,7 @@ import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
 import { metOngedaan } from '../../lib/ongedaan';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, IconButton, segItemClass, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, IconButton, Segmented, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Input, Select } from '../../components/Field';
 import { Checkbox } from '../../components/Table';
@@ -179,26 +179,20 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
 
         {/* Eén rustige filterbalk — wat de categorieën betekenen staat in de
             uitleg-popover. */}
-        <div className="mt-4 glass-segmented rounded-2xl inline-flex flex-wrap p-1">
-          {[
-            { key: 'all', label: 'Alles' },
-            { key: 'service', label: 'Dienst' },
-            { key: 'leave', label: 'Verlof' },
-            { key: 'absence', label: 'Afwezig' },
-            { key: 'training', label: 'Opleiding' },
-            { key: 'unknown', label: 'Onbekend' },
-          ].map((option) => (
-            // rauw: segmented control op de glass-rail, klassen via segItemClass
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
-              className={segItemClass(filter === option.key)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <Segmented<'all' | PlanningCode['category']>
+          label="Categorie"
+          className="mt-4 flex-wrap"
+          waarde={filter}
+          opties={[
+            { waarde: 'all', label: 'Alles' },
+            { waarde: 'service', label: 'Dienst' },
+            { waarde: 'leave', label: 'Verlof' },
+            { waarde: 'absence', label: 'Afwezig' },
+            { waarde: 'training', label: 'Opleiding' },
+            { waarde: 'unknown', label: 'Onbekend' },
+          ]}
+          onChange={setFilter}
+        />
 
         <TableShell className="mt-5">
           {filteredCodes.length > 0 ? (

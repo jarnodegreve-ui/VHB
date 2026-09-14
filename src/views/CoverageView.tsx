@@ -7,6 +7,7 @@ import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
 import { Badge, Button, FilterChip, IconButton, MicroLabel } from '../components/primitives';
+import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card, CardHeader } from '../components/Card';
 import { DateInput, Input, Select } from '../components/Field';
 import { Modal } from '../components/Modal';
@@ -488,7 +489,7 @@ export function CoverageView() {
   };
 
   return (
-    <PageShell>
+    <PageShell breed>
       <PageHeader
         title="Openstaande diensten"
         actions={(
@@ -561,7 +562,7 @@ export function CoverageView() {
                               aria-expanded={openDayTypes.has(i)}
                               onClick={() => toggleDayTypeOpen(i)}
                             >
-                              <ChevronDown size={16} className={cn('transition-transform', openDayTypes.has(i) && 'rotate-180')} />
+                              <ChevronDown size={16} className={uitklapChevron(openDayTypes.has(i))} />
                             </IconButton>
                             <Input
                               ref={i === 0 ? firstNameRef : undefined}
@@ -576,7 +577,7 @@ export function CoverageView() {
                             <Badge tone="slate" className="shrink-0 tabular-nums">{dt.services.length} {dt.services.length === 1 ? 'dienst' : 'diensten'}</Badge>
                             <IconButton label="Dag-type verwijderen" variant="danger" size="sm" onClick={() => removeDayType(i)}><X size={16} /></IconButton>
                           </div>
-                          {openDayTypes.has(i) && (
+                          <Uitklap open={openDayTypes.has(i)}>
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {config.services.map((svc) => {
                               const on = selected.has(svc);
@@ -587,7 +588,7 @@ export function CoverageView() {
                               );
                             })}
                           </div>
-                          )}
+                          </Uitklap>
                         </Card>
                       );
                     })}
@@ -597,7 +598,7 @@ export function CoverageView() {
 
               {/* 1b. Lijsten uit de planning: voorstel per dag-type uit wat er
                   deze maand echt gereden wordt (verbeterronde 22-08, nr. 2). */}
-              <div className="border-t border-hairline-subtle pt-5 space-y-3">
+              <div className="border-t border-hairline-subtle pt-5">
                 {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
@@ -609,10 +610,10 @@ export function CoverageView() {
                     <MicroLabel className="text-slate-500">Lijsten uit de planning</MicroLabel>
                     <p className="text-xs font-medium text-slate-500 mt-0.5">Stel de dienstenlijsten voor op basis van wat er deze maand echt rijdt, de kortste weg na een dienstregelingswissel.</p>
                   </div>
-                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', voorstelOpen && 'rotate-180')} />
+                  <ChevronDown size={16} className={uitklapChevron(voorstelOpen, 180, 'shrink-0 text-slate-400')} />
                 </button>
-                {voorstelOpen && (
-                <>
+                <Uitklap open={voorstelOpen}>
+                <div className="space-y-3 pt-3">
                 <Button variant="secondary" size="sm" disabled={voorstelLaden} onClick={() => void haalVoorstelOp()}>
                   {voorstelLaden ? 'Berekenen…' : `Haal voorstel op (${MONTH_NAMES[monthIndex].toLowerCase()} ${year})`}
                 </Button>
@@ -637,18 +638,18 @@ export function CoverageView() {
                               </Button>
                             )}
                           </div>
-                          <p className="mt-2 text-2xs font-mono font-medium text-slate-500 tabular-nums">{v.codes.map((c) => c.code).join(' · ')}</p>
+                          <p className="mt-2 text-xs font-mono font-medium text-slate-500 tabular-nums">{v.codes.map((c) => c.code).join(' · ')}</p>
                         </Card>
                       );
                     })}
                   </div>
                 ))}
-                </>
-                )}
+                </div>
+                </Uitklap>
               </div>
 
               {/* 2. Standaard dag-type per weekdag */}
-              <div className="border-t border-hairline-subtle pt-5 space-y-3">
+              <div className="border-t border-hairline-subtle pt-5">
                 {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
@@ -660,10 +661,10 @@ export function CoverageView() {
                     <MicroLabel className="text-slate-500">Standaard per weekdag</MicroLabel>
                     <p className="text-xs font-medium text-slate-500 mt-0.5 tabular-nums">{weekdayPeriods.length > 0 ? `Basis + ${weekdayPeriods.length} ${weekdayPeriods.length === 1 ? 'periode' : 'periodes'}` : 'Basis-toewijzing'}, welk dag-type elke weekdag standaard is.</p>
                   </div>
-                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', weekdagenOpen && 'rotate-180')} />
+                  <ChevronDown size={16} className={uitklapChevron(weekdagenOpen, 180, 'shrink-0 text-slate-400')} />
                 </button>
-                {weekdagenOpen && (
-                <>
+                <Uitklap open={weekdagenOpen}>
+                <div className="space-y-3 pt-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {WEEKDAY_ORDER.map(({ dow, label }) => (
                     <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
@@ -732,12 +733,12 @@ export function CoverageView() {
                     </Card>
                   ))}
                 </div>
-                </>
-                )}
+                </div>
+                </Uitklap>
               </div>
 
               {/* 3. Uitzonderingen */}
-              <div className="border-t border-hairline-subtle pt-5 space-y-3">
+              <div className="border-t border-hairline-subtle pt-5">
                 {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
@@ -751,10 +752,10 @@ export function CoverageView() {
                       {overrides.length === 0 ? 'Nog geen uitzonderingen' : `${overrides.length} ingesteld${verlopenAantal > 0 ? ` · ${verlopenAantal} verlopen` : ''}`}, een periode die afwijkt van de weekdag-standaard.
                     </p>
                   </div>
-                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', uitzonderingenOpen && 'rotate-180')} />
+                  <ChevronDown size={16} className={uitklapChevron(uitzonderingenOpen, 180, 'shrink-0 text-slate-400')} />
                 </button>
-                {uitzonderingenOpen && (
-                <>
+                <Uitklap open={uitzonderingenOpen}>
+                <div className="space-y-3 pt-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="min-w-0 text-xs font-medium text-slate-500">Bv. een schoolvakantie of feestdag (van = tot voor één dag). Chronologisch gesorteerd; verlopen uitzonderingen doen niets meer.</p>
                   <div className="flex shrink-0 gap-2">
@@ -799,12 +800,12 @@ export function CoverageView() {
                     })}
                   </div>
                 )}
-                </>
-                )}
+                </div>
+                </Uitklap>
               </div>
 
               {/* 4. Kalender-voorzet: feestdagen + schoolvakanties in één klik */}
-              <div className="border-t border-hairline-subtle pt-5 space-y-3">
+              <div className="border-t border-hairline-subtle pt-5">
                 {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
@@ -816,10 +817,10 @@ export function CoverageView() {
                     <MicroLabel className="text-slate-500">Kalender 2026–2027</MicroLabel>
                     <p className="text-xs font-medium text-slate-500 mt-0.5">Feestdagen en schoolvakanties in één klik voorzetten als uitzonderingen.</p>
                   </div>
-                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', kalenderOpen && 'rotate-180')} />
+                  <ChevronDown size={16} className={uitklapChevron(kalenderOpen, 180, 'shrink-0 text-slate-400')} />
                 </button>
-                {kalenderOpen && (
-                <>
+                <Uitklap open={kalenderOpen}>
+                <div className="space-y-3 pt-3">
                 <p className="text-xs font-medium text-slate-500">
                   Zet de Belgische feestdagen (zondagsdienst) en de Vlaamse schoolvakanties (herfst, kerst, krokus, Pasen) in één keer voor als uitzonderingen. Je kiest hieronder welk dag-type elke groep krijgt; daarna gewoon controleren en opslaan. De zomervakantie stel je in via een weekdagperiode, zoals vanaf 1 september.
                 </p>
@@ -852,11 +853,11 @@ export function CoverageView() {
                 <Button variant="secondary" size="sm" icon={<CalendarPlus size={14} />} onClick={voegKalenderToe}>
                   Zet voor in de lijst
                 </Button>
-                </>
-                )}
+                </div>
+                </Uitklap>
               </div>
 
-              <p className="text-2xs font-medium text-slate-500">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
+              <p className="text-xs font-medium text-slate-500">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
             </>
           )}
         </Card>
@@ -942,7 +943,7 @@ export function CoverageView() {
                           <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
                         </button>
                         {bronOpenDate === d.date && (
-                          <p className="mt-1.5 max-w-[15rem] text-2xs font-medium leading-snug text-slate-500">{bronUitleg(d.bron)}</p>
+                          <p className="mt-1.5 max-w-[15rem] text-xs font-medium leading-snug text-slate-500">{bronUitleg(d.bron)}</p>
                         )}
                       </>
                     ) : (
@@ -987,7 +988,7 @@ export function CoverageView() {
                             type="button"
                             onClick={() => setPick({ date: d.date, code: svc })}
                             title="Klik om te zien wie vrij is"
-                            className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-2xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
+                            className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
                           >
                             <span className="font-mono tabular-nums">{svc}</span>
                             {info && (
@@ -1043,7 +1044,7 @@ export function CoverageView() {
                   </Card>
 
                   {advies.tijdenOnbekend && (
-                    <p className="text-2xs font-semibold text-amber-800">
+                    <p className="text-xs font-semibold text-amber-800">
                       Dienst {pick.code} heeft geen tijden in het dienstoverzicht, de rustcheck kon niet, alleen de 6-dagenregel is toegepast.
                     </p>
                   )}
@@ -1063,7 +1064,7 @@ export function CoverageView() {
                                 <span className="min-w-0 truncate text-sm font-bold text-slate-800">{k.name}</span>
                                 {i === 0 && <Badge tone="oker" className="shrink-0">Advies</Badge>}
                               </div>
-                              <p className="truncate text-2xs font-medium text-slate-500 tabular-nums">{kandidaatMeta(k)}</p>
+                              <p className="truncate text-xs font-medium text-slate-500 tabular-nums">{kandidaatMeta(k)}</p>
                             </div>
                             <Button
                               variant="secondary"
@@ -1097,7 +1098,7 @@ export function CoverageView() {
                           </div>
                         ))}
                       </div>
-                      <p className="mt-1.5 text-2xs font-medium text-slate-500">Uitvoeren: zet de dienst over via de cel in de Maandplanning en wijs daarna dienst {pick.code} hier toe.</p>
+                      <p className="mt-1.5 text-xs font-medium text-slate-500">Uitvoeren: zet de dienst over via de cel in de Maandplanning en wijs daarna dienst {pick.code} hier toe.</p>
                     </div>
                   )}
 
@@ -1110,7 +1111,7 @@ export function CoverageView() {
                             <UserX size={16} className="text-rose-500 shrink-0" />
                             <div className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-bold text-slate-800">{k.name}</span>
-                              <p className="text-2xs font-medium text-rose-700">{k.redenen.join(' · ')}</p>
+                              <p className="text-xs font-medium text-rose-700">{k.redenen.join(' · ')}</p>
                             </div>
                             <Button
                               variant="ghost"
@@ -1127,7 +1128,7 @@ export function CoverageView() {
                     </div>
                   )}
 
-                  <p className="text-2xs font-medium text-slate-500">
+                  <p className="text-xs font-medium text-slate-500">
                     Passend = die dag vrij, minstens {advies.minRustUren}u rust t.o.v. de aansluitende werkdagen, maximaal {advies.maxDagenNaElkaar} werkdagen na elkaar en geen schoolvervoerchauffeur. Kortste reeks werkdagen bovenaan, daarna wie dit jaar het minst inviel; toewijzen zet de dienst meteen in de planning en meldt het aan de chauffeur.
                   </p>
                 </div>

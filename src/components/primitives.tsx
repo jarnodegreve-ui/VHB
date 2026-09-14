@@ -25,10 +25,11 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: 'btn-primary',
   secondary: 'control-button-soft text-slate-700 hover:text-slate-900',
   ghost: 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/70',
+  // Solide statusknoppen op 600 (gedempte juweeltinten, index.css @theme):
+  // wit op emerald-600 haalt 5,0:1, op red-600 5,7:1; op 500 zou het
+  // 3,3 resp. 4,4:1 zijn, onder AA voor 13-14px tekst ("Verwijderen").
   success: 'bg-emerald-600 text-white hover:bg-emerald-600/90 shadow-lg shadow-emerald-600/20',
   danger: 'bg-paper/90 border border-red-200 text-red-700 hover:bg-red-50',
-  // red-600 als basis: wit op red-500 haalt maar ~3,8:1 — onder AA voor
-  // 13-14px tekst, uitgerekend op de "Verwijderen"-knoppen.
   dangerSolid: 'bg-red-600 text-white hover:bg-red-600/90 shadow-lg shadow-red-600/20',
   // warning = semantisch amber (callout-knoppen), altijd carbon-tekst op amber.
   warning: 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-sm shadow-amber-500/20',
@@ -126,6 +127,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 
 export type BadgeTone = 'slate' | 'oker' | 'emerald' | 'red' | 'amber' | 'blue';
 
+// Chip = tekst 700 op vlak 50 met rand 100 (≥ 5,6:1 in licht; in donker
+// worden 50/100 transparante tinten en 700 een lichte tekst), dot = 500.
 const BADGE_TONES: Record<BadgeTone, { chip: string; dot: string }> = {
   slate: { chip: 'border-slate-200 bg-surface-soft text-slate-600', dot: 'bg-slate-400' },
   oker: { chip: 'border-oker-200 bg-oker-50 text-oker-800', dot: 'bg-oker-500' },
@@ -245,9 +248,12 @@ export function segItemClass(actief: boolean, className?: string) {
 /**
  * Segmented control met schuivende pil: dezelfde rail en item-klassen als
  * `segItemClass`, maar de papieren chip is één `motion.span` (layoutId) die
- * op de veer (EASE_SPRING, DUR.fast) naar het actieve item schuift. Voor
- * nieuwe schakelaars; de bestaande `segItemClass`-rails volgen in golf 2
- * (punt 9). Reduced motion of een lopende view transition: de pil springt.
+ * op de veer (EASE_SPRING, DUR.fast) naar het actieve item schuift. Sinds
+ * golf 2 (punt 9) dé schakelaar voor elke groep die één waarde kiest;
+ * `segItemClass` blijft alleen voor items die geen groep vormen. Klikken op
+ * het actieve item roept `onChange` opnieuw aan (sorteerrichting wisselen in
+ * Dienstoverzicht). Reduced motion of een lopende view transition: de pil
+ * springt.
  */
 export function Segmented<T extends string | number>({ waarde, opties, onChange, label, className, itemClassName }: {
   waarde: T;
@@ -282,8 +288,10 @@ export function Segmented<T extends string | number>({ waarde, opties, onChange,
               />
             )}
             {/* z-10: het label van het vorige item blijft boven de pil die
-                eroverheen schuift (anders knipt de pil het label even af). */}
-            <span className="relative z-10">{o.label}</span>
+                eroverheen schuift (anders knipt de pil het label even af).
+                inline-flex: labels met een icoon (Dienstopbouw, Looncontrole)
+                of een sorteerpijl (Dienstoverzicht) staan netjes naast elkaar. */}
+            <span className="relative z-10 inline-flex items-center justify-center gap-1.5">{o.label}</span>
           </button>
         );
       })}

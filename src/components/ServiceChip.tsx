@@ -35,6 +35,7 @@ export function ServiceChip({
     >
       {nummer}
       {loopnr?.trim() && (
+        /* 2xs: subregel in een chip (loopnummer), hoort onder de chiptekst te blijven */
         <span className="font-semibold text-2xs opacity-70">loop {loopnr.trim()}</span>
       )}
     </span>

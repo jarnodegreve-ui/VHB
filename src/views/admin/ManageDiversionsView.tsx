@@ -269,12 +269,12 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                 <LijnTegel line={div.line} size="sm" tone={expired ? 'muted' : 'accent'} />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <h3 className="text-card-title leading-snug">{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
+                    <h3 className="text-md font-semibold leading-snug text-slate-900">{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
                     <Badge tone="slate">{lijnLabel(div.line)}</Badge>
                     {expired && <Badge tone="slate">Verlopen</Badge>}
                     {div.pdfUrl && <Badge tone="slate" icon={<FileText size={12} />}>PDF</Badge>}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-2xs font-medium text-slate-500 tabular-nums">
+                  <div className="mt-0.5 flex items-center gap-2 text-xs font-medium text-slate-500 tabular-nums">
                     <Calendar size={12} className="text-slate-400" />
                     {omleidingsPeriode(div)}{!div.endDate && ', geen einddatum'}
                   </div>

@@ -5,7 +5,7 @@ import { csvTekst } from '../../../lib/csv';
 import { apiFetch } from '../../../lib/api';
 import { isoDate } from '../../../lib/datum';
 import { MONTH_NAMES, formatGetal, metEenheid } from '../../../lib/format';
-import { segItemClass, type BadgeTone } from '../../../components/primitives';
+import { Segmented, type BadgeTone } from '../../../components/primitives';
 
 /**
  * Gedeelde bouwstenen van de laadpalenpagina (herwerking 08-09-2026):
@@ -163,20 +163,13 @@ export const laadpuntSort = (a: string | null | undefined, b: string | null | un
 /** Termijn-/tabschakelaar in de app-standaard segmented-maat. */
 export function TermijnKeuze<T extends string>({ label, waarde, opties, onKies, className }: { label: string; waarde: T; opties: Array<{ id: T; label: string }>; onKies: (t: T) => void; className?: string }) {
   return (
-    <div role="group" aria-label={label} className={cn('glass-segmented inline-flex shrink-0 rounded-2xl p-1', className)}>
-      {opties.map((o) => (
-        // rauw: segmented control op de glass-rail, klassen via segItemClass
-        <button
-          key={o.id}
-          type="button"
-          onClick={() => onKies(o.id)}
-          aria-pressed={waarde === o.id}
-          className={segItemClass(waarde === o.id)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <Segmented<T>
+      label={label}
+      className={cn('shrink-0', className)}
+      waarde={waarde}
+      opties={opties.map((o) => ({ waarde: o.id, label: o.label }))}
+      onChange={onKies}
+    />
   );
 }
 
@@ -189,6 +182,7 @@ export function Delta({ huidig, vorige, omgekeerd = false, className }: { huidig
   const beter = omgekeerd ? pct < 0 : pct > 0;
   const Icoon = stil ? Minus : pct > 0 ? ArrowUpRight : ArrowDownRight;
   return (
+    /* 2xs: verschil-indicator (teller) naast een kerncijfer */
     <span className={cn('inline-flex items-center gap-0.5 font-mono text-2xs font-semibold', stil ? 'text-slate-500' : beter ? 'text-emerald-700' : 'text-slate-600', className)} title="Verschil met de vorige periode">
       <Icoon size={12} />
       {stil ? '±0 %' : `${pct > 0 ? '+' : '−'}${formatGetal(Math.abs(pct), Math.abs(pct) >= 10 ? 0 : 1)} %`}
@@ -216,6 +210,7 @@ export function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
         <div key={f} className="absolute inset-x-0" style={{ bottom: `${f * 100}%` }}>
           <div className="border-t border-hairline" />
           <span
+            // 2xs: as-label in de grafiek
             className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono leading-none text-slate-500"
             style={{ background: 'var(--tile-bg)' }}
           >

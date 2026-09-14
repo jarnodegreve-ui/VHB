@@ -208,7 +208,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                       <tr key={r.v.id} onClick={() => setDetail(r.v)} className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
                         <Td>
                           <p className="font-semibold text-slate-800">{voertuigNaam(r.v)}</p>
-                          <p className="text-2xs font-medium text-slate-500">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</p>
+                          <p className="text-xs font-medium text-slate-500">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</p>
                         </Td>
                         {voorkeur.zichtbaar('nummerplaat') && <Td className="font-mono text-xs">{r.v.nummerplaat ?? '—'}</Td>}
                         {voorkeur.zichtbaar('type') && <Td className="text-sm">{VOERTUIG_TYPE_LABEL[r.v.type]}</Td>}
@@ -354,7 +354,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
               {defecten.map((d) => (
                 <li key={d.id} className="px-3.5 py-2.5">
                   <p className="text-sm text-slate-800"><span className="font-semibold">{WERKTYPE_LABEL[d.werktype]}</span> · {d.omschrijving}</p>
-                  <p className="text-2xs text-slate-500">{d.gemeldDoorNaam ?? 'onbekend'} · {formatRelatief(d.gemeldOp)}</p>
+                  <p className="text-xs text-slate-500">{d.gemeldDoorNaam ?? 'onbekend'} · {formatRelatief(d.gemeldOp)}</p>
                 </li>
               ))}
             </ul>
@@ -371,7 +371,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
                 <li key={w.id} className="flex items-start gap-3 px-3.5 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-slate-800"><span className="font-semibold">{w.werkcode}</span> · {w.omschrijving}</p>
-                    <p className="text-2xs text-slate-500">{formatDateHuman(w.datum)}{w.mecanicienNaam ? ` · ${w.mecanicienNaam}` : ''}</p>
+                    <p className="text-xs text-slate-500">{formatDateHuman(w.datum)}{w.mecanicienNaam ? ` · ${w.mecanicienNaam}` : ''}</p>
                   </div>
                   <span className="shrink-0 text-sm font-semibold text-slate-700">{urenTekst(w.werkuren)} u</span>
                 </li>

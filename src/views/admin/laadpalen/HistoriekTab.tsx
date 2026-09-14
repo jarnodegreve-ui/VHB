@@ -92,7 +92,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
         <Card>
           <div className="mb-4 flex items-center justify-between gap-3">
             <MicroLabel>Verbruik per maand (kWh)</MicroLabel>
-            <span className="text-2xs font-medium font-mono text-slate-500">{chrono.length} maand{chrono.length === 1 ? '' : 'en'}</span>
+            <span className="text-xs font-medium font-mono text-slate-500">{chrono.length} maand{chrono.length === 1 ? '' : 'en'}</span>
           </div>
           <Staafgrafiek
             staven={chrono.map((m) => ({ key: m.maand, waarde: m.kwh, asLabel: maandKort(m.maand), isPiek: !!hoogsteKwh && m.maand === hoogsteKwh.maand, gedempt: m.maand === data.huidigeMaand }))}
@@ -104,7 +104,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
             samenvatting={(s) => {
               const m = s ? chrono.find((x) => x.maand === s.key) : null;
               return m
-                ? <>{maandLabel(m.maand)} · {tekstKwhHeel(m.kwh)} · {m.laadbeurten} laadsessies · <Button variant="ghost" size="sm" className="-my-1 h-6 px-1.5 text-2xs" onClick={() => onMaand(m.maand)}>maandoverzicht</Button></>
+                ? <>{maandLabel(m.maand)} · {tekstKwhHeel(m.kwh)} · {m.laadbeurten} laadsessies · <Button variant="ghost" size="sm" className="-my-1 h-6 px-1.5 text-xs" onClick={() => onMaand(m.maand)}>maandoverzicht</Button></>
                 : `totaal ${tekstKwhHeel(chrono.reduce((a, m2) => a + m2.kwh, 0))} sinds ${maandLabel(chrono[0].maand)}`;
             }}
           />
@@ -115,7 +115,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
               <MicroLabel>Maandpiek (kW)</MicroLabel>
               <InfoTip label="Uitleg maandpiek"><p>De hoogste kwartierwaarde van het totale laadvermogen in die maand: het capaciteitstarief-getal. De piekbewaking loopt sinds 5 augustus 2026; eerdere maanden hebben geen meting.</p></InfoTip>
             </span>
-            <span className="text-2xs font-medium font-mono text-slate-500">{hoogstePiek ? `hoogste ${tekstKw(Math.round(hoogstePiek.piekKw ?? 0))}` : ''}</span>
+            <span className="text-xs font-medium font-mono text-slate-500">{hoogstePiek ? `hoogste ${tekstKw(Math.round(hoogstePiek.piekKw ?? 0))}` : ''}</span>
           </div>
           <Staafgrafiek
             staven={chrono.map((m) => ({ key: m.maand, waarde: m.piekKw ?? 0, asLabel: maandKort(m.maand), isPiek: !!hoogstePiek && m.maand === hoogstePiek.maand, ontbreekt: m.piekKw === null, gedempt: m.maand === data.huidigeMaand }))}
@@ -167,7 +167,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                         <button type="button" onClick={() => onMaand(m.maand)} className="ios-pressable -mx-1 rounded-md px-1 text-left font-semibold capitalize text-slate-800 hover:text-oker-700">
                           {maandLabel(m.maand)}
                         </button>
-                        {lopend && <span className="ml-2 text-2xs font-medium text-slate-500">lopend</span>}
+                        {lopend && <span className="ml-2 text-xs font-medium text-slate-500">lopend</span>}
                       </Td>
                       <Td num className={cn('font-semibold', hoogsteKwh?.maand === m.maand ? 'text-oker-700' : 'text-slate-800')}>{fmtKwh(m.kwh)}</Td>
                       <Td num className="max-md:hidden"><Delta huidig={m.kwh} vorige={vorige?.kwh ?? null} /></Td>
@@ -220,7 +220,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                 const bus = busVoorLaadpunt(r.evseId);
                 return (
                   <tr key={r.evseUid} className={cn(r.totaal === 0 && 'text-slate-500')}>
-                    <Td className="sticky left-0 z-10 bg-surface-white"><span className="font-semibold font-mono text-slate-800">{naam}</span>{bus ? <span className="ml-1.5 text-2xs text-slate-500">bus {bus}</span> : null}</Td>
+                    <Td className="sticky left-0 z-10 bg-surface-white"><span className="font-semibold font-mono text-slate-800">{naam}</span>{bus ? <span className="ml-1.5 text-xs text-slate-500">bus {bus}</span> : null}</Td>
                     {matrixMaanden.map((m) => <Td key={m} num className={cn((r.perMaand[m] ?? 0) === 0 && 'text-slate-400')}>{(r.perMaand[m] ?? 0) > 0 ? fmtKwh(r.perMaand[m]) : '·'}</Td>)}
                     <Td num className="font-semibold text-slate-800">{fmtKwh(r.totaal)}</Td>
                   </tr>
