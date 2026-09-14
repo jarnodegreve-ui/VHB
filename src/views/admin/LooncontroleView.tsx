@@ -188,7 +188,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate }: { maand: string; zet
           </ul>
         )}
         {isAdmin && (
-          <div className="flex flex-wrap items-end gap-2 border-t border-slate-200/70 pt-3">
+          <div className="flex flex-wrap items-end gap-2 border-t border-hairline pt-3">
             <Field label="Easypay-lidnummer (alphal2)" className="w-48">{({ id }) => <Input id={id} inputMode="numeric" value={lidnrDraft} onChange={(e) => setLidnrDraft(e.target.value)} />}</Field>
             <Button variant="secondary" size="sm" onClick={() => void bewaarLidnr()} disabled={!instellingen || lidnrDraft === String(instellingen.easypayLidnr || '')}>Bewaren</Button>
           </div>
@@ -224,7 +224,7 @@ function CodesTab() {
   return (
     <div className="space-y-3">
       <div className="surface-table rounded-3xl overflow-clip">
-        <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
+        <div className="border-b border-hairline px-5 py-4 md:px-6">
           <TableToolbar
             zoek={zoek} onZoek={setZoek} placeholder="Zoek code of typenummer…" telling={`${lijst.length} van ${codes.length}`}
             filters={(<>{(['alles', 'lijn', 'varia', 'ander'] as const).map((f) => <FilterChip key={f} active={filter === f} onClick={() => setFilter(f)}>{f === 'alles' ? 'Alles' : DIENST_TYPE_LABEL[f]}</FilterChip>)}</>)}
@@ -250,7 +250,7 @@ function CodesTab() {
               </StickyThead>
               <tbody>
                 {lijst.map((c) => (
-                  <tr key={c.code} className="border-b border-slate-100 last:border-b-0 transition-colors hover:bg-surface-soft-hover">
+                  <tr key={c.code} className="border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
                     <Td><p className="font-semibold text-slate-800">{c.codeWeergave}</p>{c.omschrijving && <p className="text-2xs text-slate-500">{c.omschrijving}</p>}</Td>
                     <Td className="text-sm">{DIENST_TYPE_LABEL[c.dienstType]}</Td>
                     <Td className="font-mono text-xs">{c.easypayActiviteit}</Td>
@@ -348,7 +348,7 @@ function MedewerkersTab() {
     <div className="space-y-3">
       {zonder > 0 && <Card tone="warning" padding="sm" className="text-xs text-amber-800">{zonder} {zonder === 1 ? 'chauffeur' : 'chauffeurs'} in de export zonder Easypay-matricule.</Card>}
       <div className="surface-table rounded-3xl overflow-clip">
-        <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
+        <div className="border-b border-hairline px-5 py-4 md:px-6">
           <TableToolbar zoek={zoek} onZoek={setZoek} placeholder="Zoek chauffeur…" telling={`${lijst.length} van ${rijen.length}`} acties={<Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>Lijst plakken</Button>} />
         </div>
         {isLoading && rijen.length === 0 ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
@@ -356,7 +356,7 @@ function MedewerkersTab() {
             <StickyThead><tr><Th>Chauffeur</Th><Th num>Matricule</Th><Th>In export</Th></tr></StickyThead>
             <tbody>
               {lijst.map((r) => (
-                <tr key={r.userId} className="border-b border-slate-100 last:border-b-0">
+                <tr key={r.userId} className="border-b border-hairline-subtle last:border-b-0">
                   <Td><span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam} size="sm" />{r.naam}</span>{r.employeeId && <p className="text-2xs text-slate-500">{r.employeeId}</p>}</Td>
                   <Td num>
                     <Input aria-label={`Matricule van ${r.naam}`} inputMode="numeric" defaultValue={r.easypayNr ?? ''} className="w-24 px-2 py-1 text-right text-sm" onBlur={(e) => { const n = e.target.value.trim() === '' ? null : Number(e.target.value); if (n !== (r.easypayNr ?? null) && (n === null || Number.isInteger(n))) void bewaar(r, { easypayNr: n, inExport: r.inExport }); }} />

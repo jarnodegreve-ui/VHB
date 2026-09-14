@@ -139,7 +139,7 @@ function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
             animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
             exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: DUR.fast, ease: EASE } }}
             style={{ transformOrigin: 'top right' }}
-            className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline shadow-xl"
+            className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2"
           >
             <MicroLabel className="px-2.5 pb-1 pt-1.5">Kolommen</MicroLabel>
             {keuzes.map((k) => {
@@ -277,7 +277,7 @@ export function Checkbox({ checked, onChange, label, indeterminate, className, .
       <span
         aria-hidden="true"
         className={cn(
-          'inline-flex h-[18px] w-[18px] items-center justify-center rounded-md border transition-colors peer-focus-visible:ring-[3px] peer-focus-visible:ring-oker-500/30',
+          'inline-flex h-[18px] w-[18px] items-center justify-center rounded-md border transition-colors peer-focus-visible:focus-ring',
           checked || indeterminate ? 'border-oker-500 bg-oker-500 text-slate-950' : 'border-slate-300 bg-paper text-transparent hover:border-slate-400',
         )}
       >

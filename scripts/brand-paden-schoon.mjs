@@ -178,7 +178,12 @@ const letterSubs = subs.filter((s) => s.pad === 2).slice(0, TEKST.length); // de
 const naamregel = TEKST.map((ch, i) => {
   const g = font.charToGlyph(ch); const bb = g.getPath(0, 0, fontSize).getBoundingBox();
   const links = Math.min(...letterSubs[i].samples.map((q) => q[0]));
-  return g.getPath(links - bb.x1, BASIS, fontSize).toPathData(2);
+  // Eén decimaal (14-09, punt 18): de naamregel is een pad van ±11 kB in
+  // BrandLogo.tsx en zit in de startbundel; met twee decimalen was hij
+  // ±6,8 kB aan tekens, met één ±5,6 kB. Op 0,1 eenheid in een viewBox van
+  // 842 breed (0,012 %) is dat visueel onmeetbaar; de XOR-meting hieronder
+  // bewaakt het (17 % tegen de trace, ongewijzigd t.o.v. twee decimalen).
+  return g.getPath(links - bb.x1, BASIS, fontSize).toPathData(1);
 }).join(' ');
 schoonPerPad[2] = [naamregel];
 const schoonD = schoonPerPad.map((ds) => ds.join(' '));

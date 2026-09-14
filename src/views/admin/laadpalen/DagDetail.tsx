@@ -84,7 +84,7 @@ export function DagDetail({ dag, onSluit, onDag, eersteDag }: { dag: string | nu
     <Modal open={!!dag} onClose={onSluit} maxWidth="2xl" ariaLabel={dag ? `Dagdetail ${dagLang(dag)}` : 'Dagdetail'}>
       {dag && (
         <div className="flex max-h-[85vh] flex-col">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-5 md:p-6">
+          <div className="flex items-center justify-between gap-3 border-b border-hairline-subtle p-5 md:p-6">
             <div className="flex min-w-0 items-center gap-1.5">
               <IconButton label="Vorige dag" variant="secondary" size="sm" onClick={() => onDag(addDagen(dag, -1))} disabled={!!eersteDag && addDagen(dag, -1) < eersteDag}>
                 <ChevronLeft size={16} />

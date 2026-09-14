@@ -214,7 +214,7 @@ export function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
       {[1, 0.5].map((f) => (
         <div key={f} className="absolute inset-x-0" style={{ bottom: `${f * 100}%` }}>
-          <div className="border-t border-slate-200/80" />
+          <div className="border-t border-hairline" />
           <span
             className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono leading-none text-slate-500"
             style={{ background: 'var(--tile-bg)' }}

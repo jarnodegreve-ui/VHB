@@ -58,7 +58,7 @@ export function CalendarSubscribeModal({
             als `leading`), i.p.v. een eigen h3 + losse sluitknop. */}
         <ModalHeader
           leading={
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-oker-500 text-slate-950 shadow-md shadow-black/10">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-oker-500 text-slate-950 elev-1">
               <CalendarPlus size={20} />
             </div>
           }
@@ -92,7 +92,7 @@ export function CalendarSubscribeModal({
                     href={links.googleUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-surface-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-hairline bg-surface-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
                   >
                     <ExternalLink size={16} className="text-oker-500" /> Google Agenda
                   </a>
@@ -130,7 +130,7 @@ export function CalendarSubscribeModal({
           </div>
 
           {/* Eenmalig downloaden */}
-          <div className="mt-5 pt-4 border-t border-slate-100">
+          <div className="mt-5 pt-4 border-t border-hairline-subtle">
             <MicroLabel>Of eenmalig</MicroLabel>
             <Button variant="secondary" className="mt-2" icon={<Download size={16} />} onClick={() => { onDownload(); onClose(); }}>
               Download .ics-bestand

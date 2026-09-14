@@ -1,7 +1,7 @@
 import type { LeaveBalance } from '../lib/leaveBalance';
 import { cn } from '../lib/ui';
 import { Card, CardHeader } from './Card';
-import { microLabelClass } from './primitives';
+import { Meter, MeterVulling, microLabelClass } from './primitives';
 
 /**
  * Visualisatie van de verlofbalans voor één gebruiker. Toont de
@@ -19,6 +19,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
   const pct = (n: number) => (budget > 0 ? Math.min(100, (n / budget) * 100) : n > 0 ? 100 : 0);
   const pctGebruikt = pct(balance.betaaldGebruikt);
   const pctAangevraagd = Math.min(100 - pctGebruikt, pct(balance.betaaldAangevraagd));
+  const vulGebruikt = pctGebruikt > 0 ? Math.max(2, pctGebruikt) : 0;
   const dagen = (n: number) => `${n} ${n === 1 ? 'dag' : 'dagen'}`;
 
   return (
@@ -35,18 +36,22 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
             <span className="text-slate-500"> / {budget} vrij</span>
           </span>
         </div>
-        <div
-          className="flex h-2 gap-px overflow-hidden rounded-full bg-surface-muted"
+        {/* Twee lagen over de volle breedte (Meter): amber loopt tot
+            opgenomen + aangevraagd en ligt onder, emerald (opgenomen) erboven
+            met een haarlijn als scheiding. Beide schuiven met translateX in
+            i.p.v. een width-animatie. Minimaal 2 % zodat één dag zichtbaar is. */}
+        <Meter
+          className="h-2"
           role="img"
           aria-label={`${dagen(balance.betaaldGebruikt)} opgenomen, ${dagen(balance.betaaldAangevraagd)} aangevraagd, ${dagen(balance.betaaldVrij)} vrij van ${budget}`}
         >
-          {pctGebruikt > 0 && (
-            <div className={cn('h-full rounded-full transition-all', overBudget ? 'bg-red-500' : 'bg-emerald-500')} style={{ width: `${Math.max(2, pctGebruikt)}%` }} />
-          )}
           {pctAangevraagd > 0 && (
-            <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.max(2, pctAangevraagd)}%` }} />
+            <MeterVulling pct={vulGebruikt + Math.max(2, pctAangevraagd)} className="bg-amber-400" />
           )}
-        </div>
+          {vulGebruikt > 0 && (
+            <MeterVulling pct={vulGebruikt} className={cn('ring-1 ring-surface-muted', overBudget ? 'bg-red-500' : 'bg-emerald-500')} />
+          )}
+        </Meter>
         <ul className="flex flex-wrap gap-x-3 gap-y-1 text-2xs font-medium text-slate-500" aria-hidden="true">
           <li className="flex items-center gap-1.5">
             <span className={cn('h-1.5 w-1.5 rounded-full', overBudget ? 'bg-red-500' : 'bg-emerald-500')} />
@@ -68,7 +73,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
         )}
       </div>
 
-      <div className="flex items-baseline justify-between gap-3 pt-2 border-t border-slate-100">
+      <div className="flex items-baseline justify-between gap-3 pt-2 border-t border-hairline-subtle">
         <span className={microLabelClass}>Klein verlet</span>
         <span className="text-xs font-bold text-slate-600">
           <span className={cn('font-bold tabular-nums', compact ? 'text-base' : 'text-lg')}>{balance.kleinVerletDagen}</span>

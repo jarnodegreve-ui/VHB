@@ -149,7 +149,7 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
             <div className="space-y-4">
               {perDag.map(([datum, lijst]) => (
                 <Card key={datum} padding="none" className="overflow-clip">
-                  <div className="flex items-baseline justify-between border-b border-slate-200/70 px-5 py-3">
+                  <div className="flex items-baseline justify-between border-b border-hairline px-5 py-3">
                     <h2 className="text-card-title">{datum === vandaag ? 'Vandaag' : formatShortDay(datum)}</h2>
                     <span className="text-xs font-medium text-slate-500">{urenTekst(lijst.reduce((s, w) => s + w.werkuren, 0))} u</span>
                   </div>
@@ -205,14 +205,14 @@ function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | n
   const jaren = [0, 1, 2].map((n) => new Date().getFullYear() - n);
   const tabel = (titel: string, rijen: Array<{ label: string; uren: number; aantal: number; perKwartaal: number[] }>) => (
     <Card padding="none" className="overflow-clip">
-      <div className="border-b border-slate-200/70 px-5 py-3"><h2 className="text-card-title">{titel}</h2></div>
+      <div className="border-b border-hairline px-5 py-3"><h2 className="text-card-title">{titel}</h2></div>
       {rijen.length === 0 ? <div className="p-5"><EmptyState compact title="Geen prestaties" message="Niets geregistreerd in dit jaar." /></div> : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[32rem] text-left border-collapse">
             <StickyThead><tr><Th>{titel.replace('Per ', '')}</Th><Th num>K1</Th><Th num>K2</Th><Th num>K3</Th><Th num>K4</Th><Th num>Uren</Th><Th num>Aantal</Th></tr></StickyThead>
             <tbody>
               {rijen.map((r) => (
-                <tr key={r.label} className="border-b border-slate-100 last:border-b-0">
+                <tr key={r.label} className="border-b border-hairline-subtle last:border-b-0">
                   <Td className="font-semibold text-slate-800">{r.label}</Td>
                   {r.perKwartaal.map((k, i) => <Td key={i} num className="text-slate-600">{k ? urenTekst(k) : '—'}</Td>)}
                   <Td num className="font-semibold">{urenTekst(r.uren)}</Td>
@@ -236,7 +236,7 @@ function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | n
           {tabel('Per bus', rapport.perBus)}
           {tabel('Per technieker', rapport.perMecanicien)}
           <Card padding="none" className="overflow-clip lg:col-span-2">
-            <div className="border-b border-slate-200/70 px-5 py-3"><h2 className="text-card-title">Per werkcode</h2></div>
+            <div className="border-b border-hairline px-5 py-3"><h2 className="text-card-title">Per werkcode</h2></div>
             <ul className="divide-y divide-slate-100">
               {rapport.perWerkcode.map((r) => (
                 <li key={r.werkcode} className="flex items-center gap-3 px-5 py-2.5 text-sm">

@@ -221,7 +221,7 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
                   })}
                 </tbody>
               </table>
-              <Paginering totaal={gesorteerd.length} perPagina={PER_PAGINA} pagina={pagina} onPagina={setPagina} className="border-t border-slate-100" />
+              <Paginering totaal={gesorteerd.length} perPagina={PER_PAGINA} pagina={pagina} onPagina={setPagina} className="border-t border-hairline-subtle" />
             </TableShell>
           )}
         </div>
@@ -232,7 +232,7 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
           const n = naam(gekozen);
           const bus = busVoorLaadpunt(n);
           const rij = (label: string, waarde: string) => (
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-b-0">
+            <div className="flex items-center justify-between gap-3 border-b border-hairline-subtle py-2.5 last:border-b-0">
               <span className={microLabelClass}>{label}</span>
               <span className="min-w-0 truncate text-right text-sm font-semibold font-mono text-slate-800">{waarde}</span>
             </div>

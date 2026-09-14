@@ -29,7 +29,7 @@ function InklapSectie({ title, aantal, tone, defaultOpen, children }: {
     ? 'border-amber-200/70 bg-amber-50/70'
     : tone === 'red'
       ? 'border-red-200/70 bg-red-50/80'
-      : 'border-slate-200/70 bg-surface-field';
+      : 'border-hairline bg-surface-field';
   const label = tone === 'amber' ? 'text-amber-700' : tone === 'red' ? 'text-red-700' : 'text-slate-600';
   return (
     <div className={cn('rounded-3xl border', kader)}>
@@ -829,7 +829,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       {new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long', day: '2-digit', month: 'long' })}
                       <span className="ml-2 text-slate-500">· {daysShifts.length}</span>
                     </MicroLabel>
-                    <div className="rounded-2xl border border-slate-200/70 divide-y divide-slate-100">
+                    <div className="rounded-2xl border border-hairline divide-y divide-slate-100">
                       {daysShifts.map((s) => (
                         <div key={s.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                           <span className="font-semibold text-slate-800 min-w-0 flex-1 truncate">{nameById.get(String(s.driverId)) || `Chauffeur ${s.driverId}`}</span>
@@ -1226,7 +1226,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                               <tr
                                 key={d.driverId}
                                 className={cn(
-                                  'border-t border-slate-100 transition-colors hover:bg-slate-50/50',
+                                  'border-t border-hairline-subtle transition-colors hover:bg-slate-50/50',
                                   hasWarn || noShifts ? 'text-amber-900' : 'text-slate-700'
                                 )}
                               >

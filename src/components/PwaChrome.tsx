@@ -52,7 +52,7 @@ export function OfflineBanner() {
           role="status"
           aria-live="polite"
         >
-          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink/90 px-4 py-2.5 text-white shadow-2xl backdrop-blur-sm">
+          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink/90 px-4 py-2.5 text-white elev-2 backdrop-blur-sm">
             {/* amber-400: 300 wordt in donker een transparante tint (omgekeerde schalen). */}
             <WifiOff size={16} className="text-amber-400 shrink-0" />
             <span className="text-xs font-bold tracking-tight">
@@ -130,7 +130,7 @@ export function InstallPrompt() {
           // kaart de tab-knoppen bijna volledig.
           className="fixed inset-x-0 z-[125] flex justify-center px-4 pointer-events-none bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] md:bottom-[max(1rem,env(safe-area-inset-bottom))]"
         >
-          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-rim bg-paper/95 px-4 py-3 shadow-2xl backdrop-blur-sm max-w-sm">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-rim bg-paper/95 px-4 py-3 elev-3 backdrop-blur-sm max-w-sm">
             <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500 text-slate-950">
               <Download size={16} />
             </div>

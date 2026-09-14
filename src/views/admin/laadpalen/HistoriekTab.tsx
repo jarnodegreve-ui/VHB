@@ -228,7 +228,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t border-slate-200 font-semibold text-slate-800">
+              <tr className="border-t border-hairline font-semibold text-slate-800">
                 <Td className="sticky left-0 z-10 bg-surface-white">Totaal</Td>
                 {matrixMaanden.map((m) => <Td key={m} num>{fmtKwh(chrono.find((x) => x.maand === m)?.kwh ?? 0)}</Td>)}
                 <Td num>{fmtKwh(chrono.reduce((a, m) => a + m.kwh, 0))}</Td>

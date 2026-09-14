@@ -363,7 +363,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           dan plakt de kolomkop niet meer onder de topbar. De tabel is
           desktop-only (mobiel = kaartlijst), dus horizontaal scrollen hoeft niet. */}
       <div className="surface-table rounded-3xl overflow-clip">
-        <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
+        <div className="border-b border-hairline px-5 py-4 md:px-6">
           <TableToolbar
             zoek={zoek}
             onZoek={setZoek}
@@ -392,7 +392,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               </StickyThead>
               <tbody>
                 {gesorteerd.map(s => (
-                  <tr key={s.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50 transition-colors">
+                  <tr key={s.id} className="border-b border-hairline-subtle last:border-b-0 hover:bg-slate-50/50 transition-colors">
                     <Td className="font-semibold text-slate-800 tabular-nums">{s.serviceNumber}</Td>
                     <Td className="tabular-nums font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
                     <Td className="tabular-nums whitespace-nowrap">{tijdvak(s.startTime, s.endTime)}</Td>

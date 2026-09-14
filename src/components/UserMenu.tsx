@@ -27,7 +27,7 @@ function MenuItem({ icon, danger, className, children, ...rest }: ButtonHTMLAttr
       type="button"
       role="menuitem"
       className={cn(
-        'flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 rounded-xl transition-colors duration-150 font-medium text-sm',
+        'flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 rounded-xl transition-colors duration-fast font-medium text-sm',
         danger ? 'hover:text-red-700 hover:bg-red-50/70' : 'hover:text-slate-900 hover:bg-slate-100/70',
         className,
       )}
@@ -83,7 +83,7 @@ export function UserMenu({
         <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-2xs font-bold select-none">
           {initials}
         </span>
-        <ChevronDown size={14} className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
+        <ChevronDown size={14} className={cn('text-slate-400 transition-transform duration-base', open && 'rotate-180')} />
       </button>
 
       <AnimatePresence>
@@ -95,7 +95,7 @@ export function UserMenu({
           animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
           exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: DUR.fast, ease: EASE } }}
           style={{ transformOrigin: 'top right' }}
-          className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-paper ring-1 ring-hairline shadow-xl p-1.5 z-50"
+          className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-paper ring-1 ring-hairline elev-2 p-1.5 z-50"
         >
           {/* Identiteit bovenaan — het kaartje dat eerst in de sidebar-voet stond. */}
           <div className="flex items-center gap-2.5 px-3 py-2.5 mb-1 border-b fine-divider">

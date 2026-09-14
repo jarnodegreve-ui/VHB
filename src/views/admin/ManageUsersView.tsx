@@ -648,7 +648,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
           TableShell: die maakt een scrollcontainer en dan plakt de kolomkop
           niet meer onder de topbar (de tabel is desktop-only, past dus). */}
       <div className="surface-table rounded-3xl overflow-clip">
-        <div className="space-y-4 border-b border-slate-200/70 px-5 py-4 md:px-6">
+        <div className="space-y-4 border-b border-hairline px-5 py-4 md:px-6">
           <CardHeader
             size="lg"
             title="Gebruikerslijst"
@@ -739,7 +739,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
               </StickyThead>
               <tbody>
                 {sortedUsers.map((u) => (
-                  <tr key={u.id} className={cn('group border-b border-slate-100 last:border-b-0 transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-oker-50/40')}>
+                  <tr key={u.id} className={cn('group border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-oker-50/40')}>
                     <Td className="w-12 !py-1">
                       <Checkbox
                         checked={selectedIds.has(u.id)}
@@ -798,7 +798,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                           <>
                             {/* rauw: onzichtbaar klik-buiten-vlak dat het menu sluit */}
                             <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
-                            <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-slate-200 bg-surface-white p-1.5 shadow-xl text-left">
+                            <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-hairline bg-surface-white p-1.5 elev-2 text-left">
                               <RowMenuItem icon={<Info size={16} />} label="Verlof- en dienstruilhistoriek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
                               <RowMenuItem icon={<FolderOpen size={16} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
                               <RowMenuItem icon={<History size={16} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
@@ -820,7 +820,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                                   onClick={() => { setMenuUserId(null); openUitDienst(u); }}
                                 />
                               )}
-                              <div className="my-1 border-t border-slate-100" />
+                              <div className="my-1 border-t border-hairline-subtle" />
                               <RowMenuItem
                                 icon={<Trash2 size={16} />}
                                 label="Gebruiker verwijderen"

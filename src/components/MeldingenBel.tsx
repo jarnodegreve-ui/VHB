@@ -3,6 +3,7 @@ import { useAppDataContext } from '../app/AppDataContext';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
 import { IconButton } from './primitives';
+import { CountUp } from './CountUp';
 
 /**
  * Bel in de topbar (meldingencentrum, 06-09): opent /meldingen en draagt de
@@ -13,7 +14,6 @@ import { IconButton } from './primitives';
  */
 export function MeldingenBel({ onNavigate, actief = false }: { onNavigate: (view: View) => void; actief?: boolean }) {
   const { ongelezenMeldingen } = useAppDataContext();
-  const teller = ongelezenMeldingen > 9 ? '9+' : String(ongelezenMeldingen);
   return (
     <IconButton
       label={ongelezenMeldingen > 0 ? `Meldingen (${ongelezenMeldingen} ongelezen)` : 'Meldingen'}
@@ -30,7 +30,7 @@ export function MeldingenBel({ onNavigate, actief = false }: { onNavigate: (view
           aria-hidden="true"
           className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-oker-500 px-1 text-2xs font-bold tabular-nums text-slate-950 ring-2 ring-paper"
         >
-          {teller}
+          <CountUp value={ongelezenMeldingen} badge format={(n) => (n > 9 ? '9+' : n)} />
         </span>
       )}
     </IconButton>

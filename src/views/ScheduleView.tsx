@@ -257,7 +257,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
         <Card padding="none" className="overflow-hidden">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i}>
-              <SkeletonRow className="border-b border-slate-100 last:border-0" />
+              <SkeletonRow className="border-b border-hairline-subtle last:border-0" />
             </div>
           ))}
         </Card>
@@ -474,7 +474,7 @@ function MonthCalendar({
         </div>
 
         {/* Legende */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-2xs font-medium text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline-subtle pt-3 text-2xs font-medium text-slate-500">
           <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-mono font-bold tabular-nums text-oker-700">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
@@ -586,7 +586,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                 <tr
                   key={g.key}
                   className={cn(
-                    'hover:bg-slate-50/60 transition-colors group border-t border-slate-100',
+                    'hover:bg-slate-50/60 transition-colors group border-t border-hairline-subtle',
                     isToday && 'bg-oker-50/30',
                     g.hasConflict && 'bg-red-50/40 hover:bg-red-50/60',
                   )}

@@ -639,7 +639,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         <Card padding="none" className="overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i}>
-              <SkeletonRow className="border-b border-slate-100 last:border-0" />
+              <SkeletonRow className="border-b border-hairline-subtle last:border-0" />
             </div>
           ))}
         </Card>
@@ -659,7 +659,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className={cn('mp-sticky sticky left-0 top-0 z-30 bg-surface-muted px-4 py-3 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300', microLabelClass)}>Chauffeur</th>
+                    <th className={cn('mp-sticky sticky left-0 top-0 z-30 bg-surface-muted px-4 py-3 min-w-[180px] border-b-2 border-hairline-strong border-r-2 border-hairline-strong', microLabelClass)}>Chauffeur</th>
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
@@ -676,8 +676,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           key={iso}
                           title={td?.titel}
                           className={cn(
-                            'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-slate-300',
-                            h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-slate-200',
+                            'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-hairline-strong',
+                            h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
                             today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
                           )}
                         >
@@ -730,11 +730,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           })}
                         </tr>
                       )}
-                      <tr className={cn('group border-b border-slate-200', rowBg)}>
+                      <tr className={cn('group border-b border-hairline', rowBg)}>
                         <td
                           className={cn(
                             isOwn ? 'mp-sticky-own' : 'mp-sticky',
-                            'sticky left-0 z-10 px-4 py-2 text-sm font-semibold min-w-[180px] truncate border-r-2 border-slate-300 transition-colors',
+                            'sticky left-0 z-10 px-4 py-2 text-sm font-semibold min-w-[180px] truncate border-r-2 border-hairline-strong transition-colors',
                             rowBg,
                             'group-hover:bg-oker-50',
                             isOwn ? 'text-oker-800' : 'text-slate-800',
@@ -755,7 +755,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               key={iso}
                               className={cn(
                                 'p-0 text-center',
-                                h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-slate-200',
+                                h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
                                 // oker-100/60 i.p.v. 50/50: blijft ook zichtbaar
                                 // in je eigen rij (die zelf al bg-oker-50 heeft).
                                 today ? 'bg-oker-100/60' : h.weekend ? 'mp-weekend' : '',
@@ -880,7 +880,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         <motion.span
                           layoutId="dagstrip-actief"
                           transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
-                          className="absolute inset-0 rounded-xl bg-oker-500 shadow-sm shadow-oker-500/30"
+                          className="absolute inset-0 rounded-xl bg-oker-500 elev-accent"
                         />
                       )}
                       <span className={cn(microLabelClass, 'relative z-10 transition-colors', gekozen ? 'text-slate-950/70' : 'text-slate-500')}>
@@ -914,7 +914,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 transition={{ duration: DUR.fast, ease: 'easeOut' }}
               >
                 <Card padding="none" className="overflow-hidden">
-                <div className="flex items-baseline justify-between gap-3 border-b border-slate-200/70 px-4 py-3">
+                <div className="flex items-baseline justify-between gap-3 border-b border-hairline px-4 py-3">
                   <span className="text-sm font-semibold capitalize text-slate-800">{formatDateLong(mobielDag)}</span>
                   <MicroLabel className="tabular-nums">
                     {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0)} {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0) === 1 ? 'dienst' : 'diensten'}
@@ -940,7 +940,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           type="button"
                           onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
                           className={cn(
-                            'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-slate-100 last:border-b-0 active:bg-black/[0.04] transition-colors',
+                            'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0 active:bg-black/[0.04] transition-colors',
                             isOwn && 'bg-oker-50',
                           )}
                         >
@@ -996,7 +996,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         </>
                       );
                       const rijCls = cn(
-                        'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-slate-100 last:border-b-0',
+                        'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0',
                         isOwn && 'bg-oker-50',
                       );
                       // Zonder cel valt er niets te openen — dan geen knop.
@@ -1162,7 +1162,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 juist hét scenario). Voor ziekte, een mondeling afgesproken ruil
                 of een andere correctie; de gewone ruil-flow blijft de normale weg. */}
             {isAdmin && wisselDienst && (
-              <div className="mt-6 border-t border-slate-200/70 pt-5 space-y-3">
+              <div className="mt-6 border-t border-hairline pt-5 space-y-3">
                 <MicroLabel>Dienstwissel (admin)</MicroLabel>
                 {wisselNaAfwezigheid && (
                   <Card tone="accent" padding="none" className="px-3.5 py-2.5 text-xs font-medium text-slate-700 leading-relaxed">
@@ -1310,7 +1310,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       return cmp * richting || a.naam.localeCompare(b.naam);
                     })
                     .map((r) => (
-                      <tr key={r.driverId} className="border-t border-slate-100">
+                      <tr key={r.driverId} className="border-t border-hairline-subtle">
                         <Td className="px-2 py-1.5 text-xs font-semibold text-slate-800 whitespace-nowrap">{r.naam}</Td>
                         <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.diensten}</Td>
                         <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{urenLabel(r.minuten)}</Td>
@@ -1324,7 +1324,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t border-slate-200">
+                  <tr className="border-t border-hairline">
                     <Td className="px-2 py-2 text-xs font-bold text-slate-900">Totaal</Td>
                     <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.diensten}</Td>
                     <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{urenLabel(overzicht.totaal.minuten)}</Td>

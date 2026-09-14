@@ -284,7 +284,7 @@ export function ToastStack({
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
               transition={{ duration: DUR.base, ease: EASE }}
-              className="rounded-2xl border border-slate-200 bg-paper/95 px-4 py-3 shadow-lg backdrop-blur-sm touch-pan-y"
+              className="rounded-2xl border border-hairline bg-paper/95 px-4 py-3 elev-2 backdrop-blur-sm touch-pan-y"
             >
               {toast.ongedaan ? (
                 <OngedaanToast

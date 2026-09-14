@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { overgangActief } from '../lib/overgang';
 import { MicroLabel, microLabelClass } from './primitives';
+import { CountUp } from './CountUp';
 
 
 export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
@@ -23,7 +24,7 @@ export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
       onTouchStart={onPrefetch}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-150",
+        "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-fast",
         active
           ? "bg-oker-50/80 text-slate-900 font-semibold"
           : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-900 font-medium"
@@ -42,7 +43,7 @@ export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
         />
       )}
       <span className={cn(
-        "shrink-0 transition-colors duration-150",
+        "shrink-0 transition-colors duration-fast",
         active ? "text-oker-700" : "text-slate-400 group-hover:text-slate-600"
       )}>
         {icon}
@@ -52,7 +53,7 @@ export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
       <span className="flex-1 leading-5 truncate">{label}</span>
       {badge !== undefined && badge > 0 && (
         <span className="ml-auto inline-flex items-center justify-center min-w-[19px] h-[19px] px-1.5 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
-          {badge}
+          <CountUp value={badge} badge />
         </span>
       )}
     </button>
@@ -87,7 +88,7 @@ export function NavSection({ title, count, active = false, children }: { title: 
         aria-expanded={expanded}
         className={cn('group flex w-full min-h-11 sm:pointer-fine:min-h-8 items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors', microLabelClass, 'hover:text-slate-700')}
       >
-        <ChevronRight size={12} className={cn('shrink-0 transition-transform duration-200', expanded && 'rotate-90')} />
+        <ChevronRight size={12} className={cn('shrink-0 transition-transform duration-base', expanded && 'rotate-90')} />
         <span className="flex-1 text-left">{title}</span>
         {!expanded && <span className="tabular-nums text-slate-300 group-hover:text-slate-400">{count}</span>}
       </button>

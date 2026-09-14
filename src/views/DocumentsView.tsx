@@ -145,7 +145,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
               </thead>
               <tbody>
                 {docs.map((doc) => (
-                  <tr key={doc.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50/60">
+                  <tr key={doc.id} className="border-t border-hairline-subtle transition-colors hover:bg-slate-50/60">
                     <Td className="max-w-md">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-9 h-9 rounded-xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">

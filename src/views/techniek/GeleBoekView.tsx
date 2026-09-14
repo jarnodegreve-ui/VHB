@@ -168,7 +168,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
         </Card>
       ) : (
         <div className="surface-table rounded-3xl overflow-clip">
-          <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
+          <div className="border-b border-hairline px-5 py-4 md:px-6">
             <TableToolbar
               zoek={zoek}
               onZoek={setZoek}
@@ -215,7 +215,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                   </StickyThead>
                   <tbody>
                     {gesorteerd.map((d) => (
-                      <tr key={d.id} className="border-b border-slate-100 last:border-b-0 align-top transition-colors hover:bg-surface-soft-hover">
+                      <tr key={d.id} className="border-b border-hairline-subtle last:border-b-0 align-top transition-colors hover:bg-surface-soft-hover">
                         <Td>
                           <p className="font-semibold text-slate-800">{voertuigNaam(d)}</p>
                           {d.kortNr !== null && d.kortNr !== undefined && <p className="text-2xs font-medium text-slate-500">{d.busnr}</p>}

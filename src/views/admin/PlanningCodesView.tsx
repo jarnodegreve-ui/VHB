@@ -311,15 +311,15 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                         placeholder="Beschrijving"
                       />
                       <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
+                        <div className="flex items-center justify-between rounded-xl border border-hairline bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
                           Dienst
                           <Checkbox label="Telt als dienst" checked={code.countsAsShift} onChange={(v) => updateCode(index, { countsAsShift: v })} />
                         </div>
-                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
+                        <div className="flex items-center justify-between rounded-xl border border-hairline bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
                           Betaald
                           <Checkbox label="Betaalde afwezigheid" checked={code.isPaidAbsence} onChange={(v) => updateCode(index, { isPaidAbsence: v })} />
                         </div>
-                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
+                        <div className="flex items-center justify-between rounded-xl border border-hairline bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
                           Vrij
                           <Checkbox label="Vrije dag" checked={code.isDayOff} onChange={(v) => updateCode(index, { isDayOff: v })} />
                         </div>

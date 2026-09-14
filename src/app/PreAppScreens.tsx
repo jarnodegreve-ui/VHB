@@ -73,7 +73,7 @@ export function LaadScherm({ tekst = 'Even je gegevens ophalen…' }: { tekst?: 
       <CarbonAchtergrond />
       <BrandLogo tone="donker" laden className="w-44 sm:w-56 h-auto select-none" />
       <div className="flex min-h-10 flex-col items-center gap-3">
-        <p className={cn('text-sm font-medium text-white/60 transition-opacity duration-300', fase >= 1 ? 'opacity-100' : 'opacity-0')} aria-hidden={fase < 1 || undefined}>
+        <p className={cn('text-sm font-medium text-white/60 transition-opacity duration-slow', fase >= 1 ? 'opacity-100' : 'opacity-0')} aria-hidden={fase < 1 || undefined}>
           {tekst}
         </p>
         {fase >= 2 && <CarbonLink onClick={() => window.location.reload()}>Duurt het te lang? Vernieuw de pagina</CarbonLink>}

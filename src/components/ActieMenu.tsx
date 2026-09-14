@@ -126,12 +126,12 @@ export function ActieMenu({
           role="menu"
           aria-label={label}
           className={cn(
-            'popover-in absolute top-full z-50 mt-2 min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline shadow-xl',
+            'popover-in absolute top-full z-50 mt-2 min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2',
             kant === 'right' ? 'right-0' : 'left-0',
           )}
         >
           {items.map((item, i) => (
-            <div key={item.label} className={cn(item.scheiding && i > 0 && 'mt-1 border-t border-slate-100 pt-1')}>
+            <div key={item.label} className={cn(item.scheiding && i > 0 && 'mt-1 border-t border-hairline-subtle pt-1')}>
               {/* rauw: menu-item met eigen layout (role=menuitem), geen Button-variant */}
               <button
                 type="button"

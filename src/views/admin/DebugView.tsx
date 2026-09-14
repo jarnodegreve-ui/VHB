@@ -193,7 +193,7 @@ function FoutenSectie() {
             )}
             <TableShell>
               <table className="w-full min-w-[46rem]">
-                <thead className="[&_th]:border-b [&_th]:border-slate-200">
+                <thead className="[&_th]:border-b [&_th]:border-hairline">
                   <tr>
                     <Th className="w-8" />
                     <Th>Fout</Th>

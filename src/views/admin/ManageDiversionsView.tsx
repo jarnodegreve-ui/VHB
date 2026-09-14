@@ -335,7 +335,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             shared/lijnen.ts), dus bestaande omleidingen blijven werken.
             Leeg = alle lijnen (zoals voorheen). */}
         <Field label="Lijn(en)" htmlFor="omleiding-lijn" error={fouten.line} hint={lijnen.length === 0 ? 'Leeg laten betekent: geldt voor alle lijnen.' : undefined}>
-          <div className={cn('flex min-h-11 flex-wrap items-center gap-1.5 rounded-xl border bg-surface-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-oker-500/30', fouten.line ? 'border-red-400' : 'border-slate-200')}>
+          <div className={cn('flex min-h-11 flex-wrap items-center gap-1.5 rounded-xl border bg-surface-white px-2 py-1.5 focus-within:focus-ring', fouten.line ? 'border-red-400' : 'border-hairline')}>
             {lijnen.map((l) => (
               <Badge key={l} tone={isAlleLijnen(l) ? 'slate' : 'oker'} className="gap-1 pr-0.5">
                 {isAlleLijnen(l) ? 'Alle lijnen' : l}
@@ -366,7 +366,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               }}
               onBlur={() => { if (lijnDraft.trim()) voegLijnToe(lijnDraft); }}
               placeholder={lijnen.length === 0 ? 'bv. 883, dan Enter' : 'nog een lijn…'}
-              className="min-w-[7rem] flex-1 bg-transparent px-1.5 py-1 text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm"
+              className="focus-stil min-w-[7rem] flex-1 bg-transparent px-1.5 py-1 text-base text-slate-900 placeholder:text-slate-400 sm:text-sm"
             />
           </div>
         </Field>

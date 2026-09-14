@@ -3,7 +3,7 @@ import { metEenheid } from '../lib/format';
 import { ArrowUpRight, ChevronRight } from 'lucide-react';
 import { CountUp } from './CountUp';
 import { cn } from '../lib/ui';
-import { Button } from './primitives';
+import { Button, Meter, MeterVulling } from './primitives';
 
 /**
  * Gedeelde bouwstenen van het Operations Center-dashboard.
@@ -91,12 +91,9 @@ export function OpsStat({
       </p>
       <p className={cn('mt-0.5 text-2xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {typeof meter === 'number' && (
-        <div className="mt-2 h-1.5 rounded-full bg-surface-muted overflow-hidden">
-          <div
-            className={cn('h-full rounded-full transition-all', meter > 100 ? 'bg-red-500' : meter > 80 ? 'bg-amber-500' : 'bg-emerald-500')}
-            style={{ width: `${Math.max(3, Math.min(100, meter))}%` }}
-          />
-        </div>
+        <Meter className="mt-2 h-1.5">
+          <MeterVulling pct={Math.max(3, meter)} className={meter > 100 ? 'bg-red-500' : meter > 80 ? 'bg-amber-500' : 'bg-emerald-500'} />
+        </Meter>
       )}
       {lines && lines.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
@@ -114,7 +111,7 @@ export function OpsStat({
             >
               <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap', l.done && 'line-through decoration-slate-300')}>
                 {/* "Nu"-stip: het blok dat op dit moment loopt. */}
-                {l.active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500 animate-pulse" aria-label="nu bezig" />}
+                {l.active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500 vhb-nu" aria-label="nu bezig" />}
                 {l.left}
               </span>
               {l.right && (
@@ -229,7 +226,7 @@ export function OpsRow({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 sm:pointer-fine:py-2 text-left transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:shadow-sm"
+      className="group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 sm:pointer-fine:py-2 text-left transition-[background-color,box-shadow] hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1"
     >
       {leading ?? (
         <span className={cn('inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>

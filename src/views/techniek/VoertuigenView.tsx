@@ -163,7 +163,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
         <EmptyState title="Nog geen voertuigen" message={staf ? 'Voeg het eerste voertuig toe of draai de migratie met de seed.' : 'De planning voegt de voertuigen toe.'} action={staf ? <Button variant="primary" onClick={() => setBewerk({ voertuig: null })}>Voertuig toevoegen</Button> : undefined} />
       ) : (
         <div className="surface-table rounded-3xl overflow-clip">
-          <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
+          <div className="border-b border-hairline px-5 py-4 md:px-6">
             <TableToolbar
               zoek={zoek}
               onZoek={setZoek}
@@ -205,7 +205,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                   </StickyThead>
                   <tbody>
                     {gesorteerd.map((r) => (
-                      <tr key={r.v.id} onClick={() => setDetail(r.v)} className="cursor-pointer border-b border-slate-100 last:border-b-0 transition-colors hover:bg-surface-soft-hover">
+                      <tr key={r.v.id} onClick={() => setDetail(r.v)} className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
                         <Td>
                           <p className="font-semibold text-slate-800">{voertuigNaam(r.v)}</p>
                           <p className="text-2xs font-medium text-slate-500">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</p>
@@ -350,7 +350,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
           {defecten.length === 0 ? (
             <EmptyState compact variant="klaar" title="Niets open" message="Geen openstaande meldingen voor deze bus." />
           ) : (
-            <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200/70">
+            <ul className="divide-y divide-slate-100 rounded-2xl border border-hairline">
               {defecten.map((d) => (
                 <li key={d.id} className="px-3.5 py-2.5">
                   <p className="text-sm text-slate-800"><span className="font-semibold">{WERKTYPE_LABEL[d.werktype]}</span> · {d.omschrijving}</p>
@@ -366,7 +366,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
           {prestaties === null ? <SkeletonRow className="px-2 py-2" /> : prestaties.length === 0 ? (
             <EmptyState compact title="Nog geen werkprestaties" message="Wat de garage aan deze bus doet, verschijnt hier." />
           ) : (
-            <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200/70">
+            <ul className="divide-y divide-slate-100 rounded-2xl border border-hairline">
               {prestaties.map((w) => (
                 <li key={w.id} className="flex items-start gap-3 px-3.5 py-2.5">
                   <div className="min-w-0 flex-1">

@@ -96,7 +96,7 @@ export function DashboardAanpassen({
           );
         })}
       </div>
-      <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200/70 px-4 py-3 md:px-5">
+      <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-hairline px-4 py-3 md:px-5">
         <Button variant="ghost" size="sm" disabled={isStandaard(voorkeuren)} onClick={() => onChange(LEGE_DASHBOARD_VOORKEUREN)}>
           Standaard herstellen
         </Button>

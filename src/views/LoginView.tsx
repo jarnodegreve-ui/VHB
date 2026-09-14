@@ -448,7 +448,7 @@ function FieldInput({
           minLength={minLength}
           autoComplete={autoComplete}
           autoFocus={autoFocus}
-          className={`control-input-dark w-full pl-11 py-3.5 rounded-2xl font-medium text-white outline-none transition-all no-focus-ring ${
+          className={`control-input-dark w-full pl-11 py-3.5 rounded-2xl font-medium text-white transition-all ${
             isPassword ? 'pr-12' : 'pr-4'
           }`}
         />
@@ -505,12 +505,20 @@ function SubmitButton({ loading, children }: { loading: boolean; children: React
     // nooit wit op amber — contrast 2,2:1). Standaard md-maat, op inhouds-
     // breedte gecentreerd: de vol-brede hero-variant vond Jarno te groot
     // (31-08); px-8 houdt hem als CTA nog net iets royaler dan een gewone knop.
+    // `bezig`: label en breedte blijven staan en de pijl cross-fadet naar de
+    // spinner (vroeger versprong de knop op "Even geduld…" zonder pijl); de
+    // tekst blijft voor schermlezers als aria-label bestaan.
     <div className="flex justify-center">
-      <Button type="submit" variant="primary" size="md" disabled={loading} className="group mt-2 px-8 font-semibold">
-        <span>{loading ? 'Even geduld…' : children}</span>
-        {!loading && (
-          <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-        )}
+      <Button
+        type="submit"
+        variant="primary"
+        size="md"
+        bezig={loading}
+        aria-label={loading ? 'Even geduld…' : undefined}
+        iconRechts={<ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />}
+        className="group mt-2 px-8 font-semibold"
+      >
+        <span>{children}</span>
       </Button>
     </div>
   );

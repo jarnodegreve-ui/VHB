@@ -258,7 +258,7 @@ export function DetailPaneel({
         aria-label={title}
         className={cn('flex flex-col overflow-hidden', plakkend && 'lg:max-h-[calc(100dvh_-_5rem)]')}
       >
-        <div className="flex items-start gap-3 border-b border-slate-200/70 p-5 md:p-6">
+        <div className="flex items-start gap-3 border-b border-hairline p-5 md:p-6">
           {icon}
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -280,7 +280,7 @@ export function DetailPaneel({
         <div key={sleutel} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 md:p-6">
           {children}
         </div>
-        {footer ? <div className="border-t border-slate-200/70 p-4 md:px-6">{footer}</div> : null}
+        {footer ? <div className="border-t border-hairline p-4 md:px-6">{footer}</div> : null}
       </Card>
     </div>
   );

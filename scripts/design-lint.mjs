@@ -35,6 +35,19 @@ const REGELS = [
   // Em dash als zinsscheiding in zichtbare tekst: Jarno (06-09) wil overal een
   // komma. Een losse '—' als leegte-waarde (geen spaties eromheen) mag blijven.
   { naam: 'em dash in UI-tekst (gebruik een komma)', re: / — /g, zonderCommentaar: true },
+  // Motion-ladder: duration-fast/base/slow (150/220/320 ms, index.css). De
+  // minuutwijzer in DienstBalk (duration-1000) is de bewuste uitzondering.
+  { naam: 'duration-NNN buiten de motion-ladder (gebruik duration-fast/base/slow)', re: /\bduration-\d+\b/g, zonderCommentaar: true, skip: /components\/DienstBalk\.tsx$/ },
+  // Fabrieksschaduwen naast de gestemde stapels: elev-1/2/3 (kaart / zwevend /
+  // modal), elev-accent (goud), of de oppervlakklasse zelf (surface-card,
+  // glass-modal, bottom-dock, surface-table). Primitieven (knopvarianten met
+  // kleurschaduw) blijven buiten schot.
+  { naam: 'shadow-sm/md/lg/xl (gebruik elev-1/2/3, elev-accent of een oppervlakklasse)', re: /(?<![\w-])(?:[\w-]+:)*shadow-(?:sm|md|lg|xl|2xl)\b/g, zonderCommentaar: true, skip: /components\/(?:primitives|ui)\.tsx$/ },
+  // Hairline-ladder: border-hairline-subtle / border-hairline /
+  // border-hairline-strong (en ring-hairline[-strong]) i.p.v. rauwe slate-
+  // randen; flipt in dark via de tokens. Primitieven, Table en print blijven
+  // hun eigen (bewuste) randen houden.
+  { naam: 'border-slate-NNN / ring-slate-NNN (gebruik border-hairline-subtle | border-hairline | border-hairline-strong)', re: /\b(?:border|ring)-slate-\d+(?:\/\d+)?\b/g, zonderCommentaar: true, skip: new RegExp(`components\\/(?:primitives|Card|Field|Table)\\.tsx$|${PRINT.source}`) },
 ];
 
 /** Bron zonder //- en /* *\/-commentaar (voor regels die alleen UI-tekst

@@ -194,7 +194,7 @@ export function WerkvoorraadMenu({
           /* Mobiel: fixed met inset-x zodat het paneel de viewport volgt —
              absoluut verankerd aan de knop viel het links buiten beeld
              (melding Jarno 01-09); top-auto = de plek onder de knop. */
-          className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-paper ring-1 ring-hairline shadow-xl p-1.5 z-50 max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto"
+          className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-paper ring-1 ring-hairline elev-2 p-1.5 z-50 max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto"
         >
           <div className="flex items-center justify-between px-3 py-2 mb-1 border-b fine-divider">
             <span className="text-sm font-semibold text-slate-800">Open taken</span>
@@ -222,7 +222,7 @@ export function WerkvoorraadMenu({
                 key={r.key}
                 role="menuitem"
                 onClick={ga(r.view)}
-                className="flex items-start gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm text-left"
+                className="flex items-start gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-fast font-medium text-sm text-left"
               >
                 <span className={cn('shrink-0 mt-0.5', toonKleur[r.tone])}>{r.icon}</span>
                 <span className="flex-1 min-w-0">

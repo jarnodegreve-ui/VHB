@@ -280,7 +280,7 @@ export function VervaldataView({ users }: { users: User[] }) {
         // dan plakt de kolomkop niet meer onder de topbar. De tabel is
         // desktop-only; mobiel krijgt een kaartlijst met dezelfde rijen.
         <div className="surface-table rounded-3xl overflow-clip">
-          <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
+          <div className="border-b border-hairline px-5 py-4 md:px-6">
             <TableToolbar
               zoek={zoek}
               onZoek={setZoek}
@@ -325,7 +325,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                       <tr
                         key={rij.user.id}
                         onClick={() => openBewerken(rij.user)}
-                        className="cursor-pointer border-b border-slate-100 last:border-b-0 transition-colors hover:bg-surface-soft-hover"
+                        className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover"
                       >
                         <Td>
                           <p className={cn('font-semibold', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{rij.user.name}</p>
