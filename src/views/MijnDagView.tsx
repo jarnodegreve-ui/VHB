@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, AlertTriangle, Calendar, FileText, MapPin, WifiOff, Wrench } from 'lucide-react';
 import { lijnLabel } from '../../shared/lijnen';
 import { useOptioneleAppData } from '../app/AppDataContext';
@@ -17,6 +17,8 @@ import { Card } from '../components/Card';
 import { OpsRow } from '../components/ops';
 import { Badge, Button, Chip, Segmented } from '../components/primitives';
 import { Verwissel } from '../components/Verwissel';
+import { RichtingWissel } from '../components/RichtingWissel';
+import { overgangActief } from '../lib/overgang';
 import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { DienstBalk } from '../components/DienstBalk';
@@ -65,6 +67,14 @@ export function MijnDagView({
   const [now, setNow] = useState(new Date());
   // Vandaag | Morgen — 's avonds is "wanneer moet ik morgen beginnen" dé vraag.
   const [dagOffset, setDagOffset] = useState<0 | 1>(0);
+  // Richting van de laatste dagwissel: naar Morgen schuift de inhoud naar
+  // links weg en komt de nieuwe van rechts (RichtingWissel), terug omgekeerd.
+  const [dagRichting, setDagRichting] = useState<1 | -1>(1);
+  const kiesDag = (w: 0 | 1) => {
+    if (w === dagOffset) return;
+    setDagRichting(w > dagOffset ? 1 : -1);
+    setDagOffset(w);
+  };
   // Ritblad per dienst: de viewer zoekt de pagina's van het dienstnummer in de bundel.
   const [ritbladOpen, setRitbladOpen] = useState(false);
   const [defectMelden, setDefectMelden] = useState(false);
@@ -86,7 +96,9 @@ export function MijnDagView({
   const lastSyncedAt = appData?.lastSyncedAt ?? null;
   // "Geruild met X" op een overgenomen dienst (vraag Jarno 12-09), zelfde
   // helper als het rooster; zonder context (tests) geen badge.
-  const geruild = geruildeDiensten(user.id, appData?.swaps ?? [], appData?.users ?? []);
+  const swaps = appData?.swaps;
+  const users = appData?.users;
+  const geruild = useMemo(() => geruildeDiensten(user.id, swaps ?? [], users ?? []), [user.id, swaps, users]);
 
   const vandaag = isOffset(now, 0);
   const mijnShifts = shifts.filter((s) => s.driverId === user.id);
@@ -98,9 +110,12 @@ export function MijnDagView({
   const dagBasis = nachtdienstLoopt ? -1 : 0;
   const peildag = isOffset(now, dagBasis + dagOffset);
   const isVandaag = dagOffset === 0;
-  const delen = mijnShifts
-    .filter((s) => s.date === peildag)
-    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  // Stabiele referentie: DienstBalk is gememoiseerd en de minuutklok rendert
+  // dit scherm elke minuut opnieuw.
+  const delen = useMemo(
+    () => mijnShifts.filter((s) => s.date === peildag).sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [mijnShifts, peildag],
+  );
   const dienstnummers = [...new Set(delen.map((p) => serviceNumberOf(p)).filter((n) => n !== '--'))];
   const notitie = notes.find((n) => n.date === peildag)?.note;
   const ruilBadges = dienstnummers.map((n) => geruild.get(ruilSleutel(peildag, n))).filter((b): b is RuilBadge => !!b);
@@ -199,7 +214,7 @@ export function MijnDagView({
             itemClassName="min-h-11 sm:pointer-fine:min-h-8"
             waarde={dagOffset}
             opties={[{ waarde: 0 as const, label: 'Vandaag' }, { waarde: 1 as const, label: 'Morgen' }]}
-            onChange={(w) => setDagOffset(w)}
+            onChange={kiesDag}
           />
         </div>
         {/* De statuszin ís de boodschap — het dienstnummer voorop en groot:
@@ -225,6 +240,9 @@ export function MijnDagView({
         )}
       </header>
 
+      {/* Alles wat van de gekozen dag afhangt wisselt met richting (opacity +
+          4 px, stil tijdens een view transition en bij reduced motion). */}
+      <RichtingWissel sleutel={dagOffset} richting={dagRichting} stil={overgangActief()} knip innerClassName="space-y-5">
       {/* === Tijdlijn === */}
       {rijen.length === 0 ? (
         <Card tone="muted" padding="sm">
@@ -341,6 +359,7 @@ export function MijnDagView({
           <RitbladViewer dienstnummer={dienstnummers} open={ritbladOpen} onClose={() => setRitbladOpen(false)} />
         </>
       )}
+      </RichtingWissel>
 
       {/* === Defect melden: rechtstreeks in het gele boek van de garage (13-09). === */}
       <Button variant="secondary" size="lg" full icon={<Wrench size={18} />} onClick={() => setDefectMelden(true)}>
@@ -379,6 +398,7 @@ export function MijnDagView({
       {/* === Volgende dienst === */}
       <section aria-label="Volgende dienst" className="space-y-2">
         <h2 className="px-1 text-card-title">Volgende dienst</h2>
+        <RichtingWissel sleutel={dagOffset} richting={dagRichting} stil={overgangActief()}>
         {volgende ? (
           <OpsRow
             tone="oker"
@@ -400,6 +420,7 @@ export function MijnDagView({
             <p className="text-body-sm font-medium text-slate-600">Niets ingepland na {dagWoord}.</p>
           </Card>
         )}
+        </RichtingWissel>
       </section>
     </div>
     </Verwissel>

@@ -65,6 +65,7 @@ export function useMensenData(ctx: DataCtx) {
   const fetchUsers = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/users', { accessToken });
+      ctx.noteerAntwoord(response);
       ctx.captureRevision('users', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {

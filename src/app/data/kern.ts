@@ -60,9 +60,58 @@ export type PerRecordOpts<T extends { id: string }> = {
   opVeldfouten?: OpVeldfouten;
 };
 
+/**
+ * Responsheader die de service worker zet wanneer een API-antwoord uit de
+ * offline-cache komt (public/sw.js, helper `markeerUitCache` in
+ * public/sw-ritbladen.js). Zo weet de datalaag dat "geladen" niet "vers" is:
+ * `lastSyncedAt` blijft dan op de datum van het gecachte antwoord staan en
+ * Mijn dag toont "gegevens van hh:mm" i.p.v. het moment van openen.
+ */
+export const CACHE_BRON_HEADER = 'x-vhb-bron';
+export const antwoordUitCache = (response: Response): boolean => response.headers.get(CACHE_BRON_HEADER) === 'cache';
+/** Tijdstip van het (oorspronkelijke) antwoord uit de Date-header; null als onbekend. */
+export const antwoordDatum = (response: Response): number | null => {
+  const d = response.headers.get('date');
+  const t = d ? Date.parse(d) : Number.NaN;
+  return Number.isFinite(t) ? t : null;
+};
+
+export type BronMeting = { uitCache: number; vers: number; oudste: number | null };
+
+/**
+ * Stabiele functie-identiteiten voor de acties van de datalaag (punt 19,
+ * 15-09). De domeinhooks maken hun fetchers/savers per render opnieuw aan
+ * (gewone const-functies met verse closures); dat is prima voor de logica,
+ * maar maakte de contextwaarde bij élke render van App een nieuw object en
+ * dus elke context-lezer een re-render, ook bij een scroll of een toast.
+ * Hier krijgt elke sleutel één blijvende wrapper die altijd de laatste
+ * implementatie aanroept. De sleutelset moet per hook vast zijn (dat is ze).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useStabieleActies<T extends Record<string, (...args: any[]) => any>>(acties: T): T {
+  const laatste = useRef(acties);
+  laatste.current = acties;
+  const stabiel = useRef<T | null>(null);
+  if (!stabiel.current) {
+    const uit: Record<string, unknown> = {};
+    for (const sleutel of Object.keys(acties)) {
+      uit[sleutel] = (...args: unknown[]) => (laatste.current[sleutel] as (...a: unknown[]) => unknown)(...args);
+    }
+    stabiel.current = uit as T;
+  }
+  return stabiel.current;
+}
+
 export type DataCtx = DataBasis & {
   /** Collectie markeren als aantoonbaar geladen (GET geslaagd). */
   markCollectionLoaded: (key: string) => void;
+  /** Herkomst van een GET-antwoord bijhouden (vers of uit de SW-cache), voor
+   *  de versheid van de lopende dataload. */
+  noteerAntwoord: (response: Response) => void;
+  /** Meting van de herkomst starten (telt vanaf nu). */
+  beginBronMeting: () => void;
+  /** Meting afsluiten: aantallen + het oudste gecachte antwoord. */
+  sluitBronMeting: () => BronMeting;
   /** false (+ fout-toast) zolang de collectie nooit geladen is — opslaan
    *  vanuit een lege staat zou de server alles laten verwijderen. */
   guardCollectionLoaded: (key: string, label: string) => boolean;
@@ -109,6 +158,24 @@ export function useDataKern(basis: DataBasis): DataCtx {
   };
   const clearLoadedCollections = () => {
     loadedCollectionsRef.current.clear();
+  };
+
+  // Herkomst van de antwoorden in de lopende dataload: komt er ook maar één
+  // uit de SW-cache (offline of net buiten bereik), dan is de load niet
+  // "vers" en houdt loadAppData de datum van het oudste gecachte antwoord aan.
+  const bronRef = useRef<BronMeting>({ uitCache: 0, vers: 0, oudste: null });
+  const noteerAntwoord = (response: Response) => {
+    const b = bronRef.current;
+    if (!antwoordUitCache(response)) { b.vers += 1; return; }
+    b.uitCache += 1;
+    const t = antwoordDatum(response);
+    if (t !== null && (b.oudste === null || t < b.oudste)) b.oudste = t;
+  };
+  const beginBronMeting = () => { bronRef.current = { uitCache: 0, vers: 0, oudste: null }; };
+  const sluitBronMeting = (): BronMeting => {
+    const uit = bronRef.current;
+    bronRef.current = { uitCache: 0, vers: 0, oudste: null };
+    return uit;
   };
 
   // Optimistic-concurrency: per collectie de laatst geladen revisie bewaren
@@ -266,6 +333,9 @@ export function useDataKern(basis: DataBasis): DataCtx {
   return {
     ...basis,
     markCollectionLoaded,
+    noteerAntwoord,
+    beginBronMeting,
+    sluitBronMeting,
     guardCollectionLoaded,
     captureRevision,
     revisionHeader,

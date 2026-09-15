@@ -250,11 +250,17 @@ self.addEventListener('fetch', (event) => {
   // /api/planning-notes, en staan deze antwoorden in de build-onafhankelijke
   // ritbladen-cache: na een deploy bleef de koude offline start anders
   // hangen tot de eerste online opening (de app-cache wordt dan vervangen).
-  // De sleutel is de volledige URL (incl. ?driverId=&month= / ?from=&to=),
-  // dus per gebruiker/venster apart; uitloggen wist alle caches (ui.ts).
+  // Sinds 15-09 (punt 19) ook /api/users, /api/updates, /api/swaps,
+  // /api/leave en /api/meldingen: de startlading haalde die óók op, buiten
+  // de lijst, en dat gaf bij een koude offline start één rode toast met zes
+  // bronnen en een lege ruil-badge. De lijst staat in sw-ritbladen.js
+  // (OFFLINE_API). De sleutel is de volledige URL (incl. ?driverId=&month= /
+  // ?from=&to=), dus per gebruiker/venster apart; uitloggen wist alle
+  // caches (ui.ts). Een antwoord uit de cache draagt `X-VHB-Bron: cache`
+  // (markeerUitCache), zodat de app de versheid niet op "nu" zet.
   // (De ritblad-metadata staat óók in die lijst, maar blijft SWR — zie
   // het blok hieronder.)
-  if (url.pathname !== RITBLAADJE_API && (url.pathname === ME_API || url.pathname === PLANNING_API || self.VHB_RITBLADEN.isMijnDagApi(url.pathname))) {
+  if (url.pathname !== RITBLAADJE_API && (url.pathname === ME_API || url.pathname === PLANNING_API || self.VHB_RITBLADEN.isOfflineApi(url.pathname))) {
     event.respondWith(
       fetch(req)
         .then((res) => {
@@ -264,7 +270,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => caches.open(RITBLADEN_CACHE).then((cache) => cache.match(req)).then((c) => c || Response.error())),
+        .catch(() => caches.open(RITBLADEN_CACHE).then((cache) => cache.match(req)).then((c) => self.VHB_RITBLADEN.markeerUitCache(c) || Response.error())),
     );
     return;
   }

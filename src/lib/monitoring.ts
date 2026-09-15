@@ -80,6 +80,7 @@ export function resetMonitoring() {
   feedbackCount = 0;
   laatsteReferentie = null;
   referentieListeners.clear();
+  prestatieGemeld.clear();
 }
 
 /** Context die met élk rapport meegaat: release (build-SHA), huidig scherm,
@@ -97,7 +98,7 @@ function rapportContext() {
 type ClientErrorReport = {
   message: string;
   stack?: string;
-  source: 'window.onerror' | 'unhandledrejection' | 'error-toast' | 'react-boundary' | 'gebruikersmelding';
+  source: 'window.onerror' | 'unhandledrejection' | 'error-toast' | 'react-boundary' | 'gebruikersmelding' | 'prestatie';
 };
 
 /** Eén plek voor de POST zelf (stond drie keer uitgeschreven). Met
@@ -187,7 +188,71 @@ export function reportBoundaryError(error: Error, componentStack?: string) {
   send({ message: error.message || 'Render-crash', stack: componentStack ?? error.stack, source: 'react-boundary' });
 }
 
+// --- Prestatiedrempels op Mijn dag (golf 4, punt 20) ---
+// Speed Insights stuurt LCP/INP/CLS per scherm naar Vercel, maar zonder
+// drempel of alarm: een regressie viel alleen op als iemand dat dashboard
+// opende. Hier meten we zelf met de native PerformanceObserver (geen
+// web-vitals-dependency; de beforeSend van @vercel/speed-insights geeft geen
+// metriekwaarde mee, alleen type/url/route) en melden we hooguit één keer per
+// sessie per metriek naar /api/client-errors met bron 'prestatie'. Zo wordt
+// een trage Mijn dag een foutgroep in Systeemstatus › Fouten, mét release,
+// rol, online-status en broodkruimels. Alleen Mijn dag: het scherm waar de
+// chauffeur in de bus op wacht, en het scherm dat Lighthouse CI bewaakt.
+//  - LCP > 4 s: elke kandidaat telt (kandidaten worden alleen groter, dus de
+//    eerste boven de drempel is al een trage LCP). Alleen bij een koude start
+//    op Mijn dag; een schermwissel in de SPA levert geen nieuwe LCP-entry.
+//  - INP > 300 ms: één interactie (event-timing mét interactionId) op Mijn
+//    dag die langer duurt. Bij minder dan 50 interacties per sessie ís de
+//    traagste interactie de INP, dus dit is dezelfde maat als Speed Insights.
+export const PRESTATIE_DREMPELS = { LCP: 4000, INP: 300 } as const;
+export const PRESTATIE_SCHERM = 'mijn-dag';
+type PrestatieMetriek = keyof typeof PRESTATIE_DREMPELS;
+const prestatieGemeld = new Set<PrestatieMetriek>();
+
+/** Zit de gebruiker op Mijn dag? Eerst de navigatie-kruimel (App.tsx zet die
+ *  per schermwissel), anders het URL-pad (koude start vóór de eerste kruimel). */
+const opPrestatieScherm = () =>
+  currentView === PRESTATIE_SCHERM
+  || (typeof window !== 'undefined' && window.location.pathname.replace(/^\/+/, '').split('/')[0] === PRESTATIE_SCHERM);
+
+/** Eén melding per metriek per sessie; geeft terug of er gemeld is. Los van de
+ *  observers zodat de drempellogica in vitest te testen is. */
+export function beoordeelPrestatie(metriek: PrestatieMetriek, ms: number): boolean {
+  if (!(ms > PRESTATIE_DREMPELS[metriek]) || prestatieGemeld.has(metriek) || !opPrestatieScherm()) return false;
+  prestatieGemeld.add(metriek);
+  send({
+    message: `Trage ${metriek} op ${PRESTATIE_SCHERM}: ${Math.round(ms)} ms (drempel ${PRESTATIE_DREMPELS[metriek]} ms)`,
+    source: 'prestatie',
+  });
+  return true;
+}
+
+function initPrestatieBewaking() {
+  if (typeof PerformanceObserver === 'undefined') return;
+  const ondersteund: readonly string[] = PerformanceObserver.supportedEntryTypes ?? [];
+  try {
+    if (ondersteund.includes('largest-contentful-paint')) {
+      new PerformanceObserver((lijst) => {
+        for (const entry of lijst.getEntries()) beoordeelPrestatie('LCP', entry.startTime);
+      }).observe({ type: 'largest-contentful-paint', buffered: true });
+    }
+    if (ondersteund.includes('event')) {
+      new PerformanceObserver((lijst) => {
+        for (const entry of lijst.getEntries()) {
+          // interactionId ontbreekt in oudere lib.dom-typen; 0 = geen interactie (bv. hover).
+          const interactie = (entry as PerformanceEntry & { interactionId?: number }).interactionId;
+          if (interactie) beoordeelPrestatie('INP', entry.duration);
+        }
+      }).observe({ type: 'event', buffered: true, durationThreshold: 200 } as PerformanceObserverInit);
+    }
+  } catch {
+    // Browser zonder deze entry-types: geen bewaking, nooit een fout.
+  }
+}
+
 export function initMonitoring() {
+  initPrestatieBewaking();
+
   window.addEventListener('error', (event) => {
     send({
       message: String(event.message ?? 'Onbekende fout'),

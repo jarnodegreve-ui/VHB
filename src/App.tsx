@@ -45,7 +45,8 @@ import { SchermInloop, Verwissel } from './components/Verwissel';
 import { IconButton, MicroLabel } from './components/primitives';
 import { Card } from './components/Card';
 import { Toast, ToastOpties, ToastStack } from './components/ToastStack';
-import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
+import { InstallPrompt } from './components/PwaChrome';
+import { abonneerOnline, isOnlineNu, useOnline } from './lib/useOnline';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
 import { OmgevingLabel } from './components/OmgevingLabel';
@@ -156,17 +157,20 @@ export default function App() {
   useAanwezigheid(!!session && !!currentUser, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
   useEffect(() => { addBreadcrumb('navigatie', currentView); }, [currentView]);
   const [isLoading, setIsLoading] = useState(false);
-  // Netwerkstatus voor de topbar-pill (was hardcoded "Online").
-  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
-  // Via een ref (het effect heeft lege deps en zou anders een verouderde
-  // currentUser vasthouden): bij terug-online meteen stil bijverversen.
+  // Netwerkstatus uit de online-store (src/lib/useOnline.ts): dezelfde
+  // waarheid als Mijn dag en de ritbladviewer, mét ping-fallback voor
+  // "wifi zonder internet". Bij terug-online meteen stil bijverversen; via
+  // een ref, want het effect heeft lege deps en zou anders een verouderde
+  // currentUser vasthouden.
+  const isOnline = useOnline();
   const onlineCatchUpRef = useRef<() => void>(() => {});
   useEffect(() => {
-    const on = () => { setIsOnline(true); onlineCatchUpRef.current(); };
-    const off = () => setIsOnline(false);
-    window.addEventListener('online', on);
-    window.addEventListener('offline', off);
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+    let vorige = isOnlineNu();
+    return abonneerOnline(() => {
+      const nu = isOnlineNu();
+      if (nu && !vorige) onlineCatchUpRef.current();
+      vorige = nu;
+    });
   }, []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Admin-only preview: toont het portaal (nav + dashboard) zoals een chauffeur
@@ -187,13 +191,15 @@ export default function App() {
   // zette de overlay uit zodra de éérste klaar was. Teller fixt dat.
   const loadingCountRef = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  // Navigeren = bovenaan beginnen. De scroll-root is één element voor alle
-  // views, dus wie onderaan Rooster op de dock-tab Verlof tikte, landde
-  // halverwege Verlof mét de topbar-schaduw al aan (controle-ronde 27-08,
-  // bevinding 10). Reset hier, vóór de nieuwe view rendert, zodat een view
-  // die bij het openen zelf scrolt het laatste woord houdt. Dezelfde tab nog eens kiezen = ook naar boven.
+  // Navigeren = bovenaan beginnen; terug = de oude positie terug. Dat zit
+  // sinds 15-09 (punt 19) in de router zelf (scrollgeheugen per route,
+  // src/lib/scrollGeheugen.ts): vroeger scrolde deze wrapper vóór elke
+  // navigeer naar 0 (controle-ronde 27-08, bevinding 10), maar dan was de
+  // positie al weg voordat de router hem kon bewaren, en bij popstate
+  // landde je willekeurig. De router scrolt nog steeds vóór de nieuwe view
+  // rendert, zodat een view die bij het openen zelf scrolt het laatste
+  // woord houdt; dezelfde tab nog eens kiezen = ook naar boven.
   const setCurrentView = useCallback((next: View) => {
-    scrollContainerRef.current?.scrollTo({ top: 0 });
     navigeer(next);
   }, [navigeer]);
   // Deeplink terwijl het portaal al open staat: de service worker stuurt bij
@@ -205,7 +211,7 @@ export default function App() {
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'NAVIGATE') return;
       const route = routeUitUrl(String(event.data.url ?? ''));
-      if (route) { scrollContainerRef.current?.scrollTo({ top: 0 }); navigeer(route.view, { params: route.params }); }
+      if (route) navigeer(route.view, { params: route.params });
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
@@ -271,6 +277,9 @@ export default function App() {
   // loadAppData-calls, aanwezigheids-ping).
   const initializedUserIdRef = useRef<string | null>(null);
   const initializingUserIdRef = useRef<string | null>(null);
+  // Lopende toestelregistratie tijdens de parallelle start (punt 19): de
+  // 403-listener wacht hierop i.p.v. meteen het wachtscherm te tonen.
+  const registratieRef = useRef<Promise<'approved' | 'pending' | 'revoked' | null> | null>(null);
   const setRecoveryMode = (v: boolean) => {
     isPasswordRecoveryRef.current = v;
     setIsPasswordRecovery(v);
@@ -445,8 +454,10 @@ export default function App() {
       // Niet aanbieden zonder netwerk: "Vernieuw" activeert de nieuwe SW en
       // herlaadt; offline was dat een wit scherm zodra de nieuwe cache leeg
       // bleek (controle-ronde 27-08, bevinding 6). Zodra het netwerk terug is,
-      // meldt de online-listener hieronder het alsnog.
-      if (!navigator.onLine) return;
+      // meldt de online-listener hieronder het alsnog. Op de échte status
+      // (online-store, met ping): `navigator.onLine` is op bus-wifi zonder
+      // internet true en bood de toast dan tóch aan.
+      if (!isOnlineNu()) return;
       alGemeld = wachtend;
       showToast('Er staat een nieuwe versie van het portaal klaar.', 'info', {
         label: 'Vernieuw',
@@ -457,9 +468,13 @@ export default function App() {
     const bijZichtbaar = () => {
       if (document.visibilityState === 'visible' && registratie) meldUpdate(registratie);
     };
-    const bijOnline = () => {
-      if (registratie) meldUpdate(registratie);
-    };
+    // Terug online (store-overgang false → true): het uitgestelde aanbod alsnog doen.
+    let wasOnline = isOnlineNu();
+    const stopOnline = abonneerOnline(() => {
+      const nu = isOnlineNu();
+      if (nu && !wasOnline && registratie) meldUpdate(registratie);
+      wasOnline = nu;
+    });
     navigator.serviceWorker.getRegistration().then((reg) => {
       if (!reg || gestopt) return;
       registratie = reg;
@@ -471,12 +486,11 @@ export default function App() {
         });
       });
       document.addEventListener('visibilitychange', bijZichtbaar);
-      window.addEventListener('online', bijOnline);
     });
     return () => {
       gestopt = true;
       document.removeEventListener('visibilitychange', bijZichtbaar);
-      window.removeEventListener('online', bijOnline);
+      stopOnline();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -786,8 +800,22 @@ export default function App() {
     };
     const onDeviceBlocked = (event: Event) => {
       const code = (event as CustomEvent<{ code?: string }>).detail?.code;
-      setDeviceBlocked(code === 'device_revoked' ? 'revoked' : 'pending');
-      void wisOfflineCaches(); // ingetrokken/wachtend toestel: geen offline rooster of ritblad meer
+      const blokkeer = (status: 'pending' | 'revoked') => {
+        setDeviceBlocked(status);
+        void wisOfflineCaches(); // ingetrokken/wachtend toestel: geen offline rooster of ritblad meer
+      };
+      // Parallelle start (punt 19): /api/me en de toestelregistratie lopen
+      // tegelijk. Op een gloednieuw toestel geeft /api/me dan 403
+      // device_unknown vóórdat de registratie het als eerste toestel heeft
+      // goedgekeurd; het oordeel van de registratie wint, dus geen wachtscherm
+      // dat meteen weer verdwijnt. Buiten de start (registratie klaar) telt
+      // de 403 zoals altijd meteen.
+      const lopend = registratieRef.current;
+      if (lopend) {
+        void lopend.then((status) => { if (status === 'pending' || status === 'revoked') blokkeer(status); });
+        return;
+      }
+      blokkeer(code === 'device_revoked' ? 'revoked' : 'pending');
     };
     // Server zegt 403 mfa_required (staf zonder code in deze sessie): naar het
     // codescherm, of naar inschrijven als er nog geen authenticator is.
@@ -875,7 +903,12 @@ export default function App() {
   // Verlopen sessie / gedeactiveerd account / geblokkeerd toestel komen via
   // window-events terug (zie de listener hierboven).
 
-  const fetchCurrentUser = async (accessToken = session?.access_token) => {
+  /** Beveiligingsstatus die /api/me voor staf meestuurt (punt 19); ontbreekt
+   *  bij een oudere server of de e2e-mock, dan valt de init terug op
+   *  /api/me/beveiliging. */
+  type ProfielBeveiliging = { mfaVerplicht?: boolean; aal?: 'aal1' | 'aal2' };
+
+  const fetchCurrentUser = async (accessToken = session?.access_token): Promise<{ appUser: User; beveiliging: ProfielBeveiliging | null }> => {
     const response = await apiFetch('/api/me', { accessToken });
     // Zonder deze checks werd een JSON-errorbody ({error: ...}) als
     // gebruiker gezet → crash op currentUser.name verderop.
@@ -886,10 +919,13 @@ export default function App() {
     if (!data?.id || !data?.role) {
       throw new Error('Ongeldig profiel-antwoord van de server.');
     }
-    setCurrentUser(data);
-    setMonitoringUser(String(data.id), data.role);
+    // /api/me draagt sinds punt 19 ook `toestel` (oordeel over dit toestel)
+    // en, voor staf, `beveiliging`; die horen niet in het User-object.
+    const { toestel: _toestel, beveiliging, ...appUser } = data as User & { toestel?: unknown; beveiliging?: ProfielBeveiliging };
+    setCurrentUser(appUser);
+    setMonitoringUser(String(appUser.id), appUser.role);
     forceSignOutRef.current = false; // geldige sessie → her-arm de auto-logout
-    return data as User;
+    return { appUser, beveiliging: beveiliging && typeof beveiliging === 'object' ? beveiliging : null };
   };
 
 
@@ -924,29 +960,62 @@ export default function App() {
     // vrijwel gelijktijdige tweede aanroeper meteen terugkeert.
     if (authUserId) initializingUserIdRef.current = authUserId;
     try {
-      // Toestel-whitelist vóór al het andere: op een niet-goedgekeurd toestel
-      // zou elke volgende call toch 403 geven — toon meteen het wachtscherm.
-      const deviceStatus = await registerThisDevice(accessToken);
-      if (deviceStatus === 'pending' || deviceStatus === 'revoked') {
-        setDeviceBlocked(deviceStatus);
-        void wisOfflineCaches();
-        setIsInitialLoad(false);
-        initializingUserIdRef.current = null; // "Opnieuw controleren" moet opnieuw kunnen initialiseren
-        return; // dedup-vlag (initialized) bewust niet zetten
+      // Toestelregistratie en profiel tegelijk (punt 19, 15-09). Vroeger
+      // serieel: register → /api/me → (staf) beveiliging → data, drie
+      // roundtrips vóór de eerste inhoud. De server-gate op /api/me blijft
+      // de autoriteit: slaagt /api/me, dan is dit toestel goedgekeurd (of
+      // staf/schakelaar uit) en hoeven we het registratie-antwoord niet af
+      // te wachten; de registratie werkt intussen last_seen bij. Faalt
+      // /api/me (403 device_* op een nieuw of geblokkeerd toestel), dan
+      // beslist het registratie-oordeel: eerste toestel = 'approved' → één
+      // keer opnieuw; pending/revoked → wachtscherm. De 403 van de eerste
+      // poging komt óók als window-event binnen; de listener wacht dan op
+      // hetzelfde oordeel (registratieRef), dus geen flits van het
+      // wachtscherm op een gloednieuw toestel.
+      const registratie = registerThisDevice(accessToken);
+      registratieRef.current = registratie;
+      let profiel: Awaited<ReturnType<typeof fetchCurrentUser>>;
+      try {
+        profiel = await fetchCurrentUser(accessToken);
+      } catch (eersteFout) {
+        const deviceStatus = await registratie;
+        // De toestel-403 van apiFetch draagt de servermelding ("Dit toestel
+        // is niet geregistreerd…", "…wacht op goedkeuring…", "…geblokkeerd…").
+        const toestelFout = eersteFout instanceof Error && /toestel/i.test(eersteFout.message);
+        if (deviceStatus === 'pending' || deviceStatus === 'revoked' || (deviceStatus === null && toestelFout)) {
+          // Registratie mislukt (null) terwijl /api/me een toestelreden gaf:
+          // dezelfde uitkomst als vroeger, het wachtscherm met "Opnieuw controleren".
+          setDeviceBlocked(deviceStatus === 'revoked' ? 'revoked' : 'pending');
+          void wisOfflineCaches();
+          setIsInitialLoad(false);
+          initializingUserIdRef.current = null; // "Opnieuw controleren" moet opnieuw kunnen initialiseren
+          return; // dedup-vlag (initialized) bewust niet zetten
+        }
+        // Geen toestelreden en geen registratie-oordeel: een gewone hik, de
+        // algemene foutafhandeling hieronder. Met 'approved' (zojuist als
+        // eerste toestel goedgekeurd) één herkansing.
+        if (deviceStatus === null) throw eersteFout;
+        profiel = await fetchCurrentUser(accessToken);
+      } finally {
+        registratieRef.current = null;
       }
       setDeviceBlocked(null);
-      const appUser = await fetchCurrentUser(accessToken);
+      const { appUser, beveiliging } = profiel;
       // Twee-stapsverificatie (staf): ingeschreven maar nog geen code in deze
       // sessie = codescherm; geen authenticator terwijl de server hem eist =
       // inschrijfscherm. Chauffeurs slaan dit over. Fail-open: lukt de status
       // niet (mock-Supabase, oude sessie), dan gaat de app gewoon door en
-      // vangt de 403 mfa_required van de server het alsnog.
+      // vangt de 403 mfa_required van de server het alsnog. `mfaVerplicht`
+      // komt sinds punt 19 mee in /api/me (geen aparte roundtrip meer);
+      // alleen een oudere server zonder dat veld vraagt het nog apart.
       if (appUser.role === 'planner' || appUser.role === 'admin') {
-        const [status, beveiliging] = await Promise.all([
+        const [status, mfaVerplicht] = await Promise.all([
           leesTweeStapsStatus(),
-          apiFetch('/api/me/beveiliging', { accessToken }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as Promise<{ mfaVerplicht?: boolean } | null>,
+          beveiliging
+            ? Promise.resolve(!!beveiliging.mfaVerplicht)
+            : (apiFetch('/api/me/beveiliging', { accessToken }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as Promise<{ mfaVerplicht?: boolean } | null>).then((b) => !!b?.mfaVerplicht),
         ]);
-        const stap = bepaalTweeStapsStap(status, !!beveiliging?.mfaVerplicht);
+        const stap = bepaalTweeStapsStap(status, mfaVerplicht);
         if (stap !== 'geen') {
           setTweeStaps({ stap, factorId: status?.factorId ?? null });
           setIsInitialLoad(false);
@@ -1309,7 +1378,6 @@ export default function App() {
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
       {/* Web-vitals (LCP/INP/CLS) per scherm naar Vercel Speed Insights; route = view-naam, niet de URL met parameters. */}
       <SpeedInsights route={`/${resolvedCurrentView}`} />
-      <OfflineBanner />
       <InstallPrompt />
       {/* Lazy overlays alleen mounten terwijl ze open staan: Modal heeft
           bewust geen exit-animatie (zie Modal.tsx), dus er gaat niets
@@ -1710,7 +1778,7 @@ export default function App() {
               {resolvedCurrentView === 'activiteit' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
               {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
-              {resolvedCurrentView === 'werkvoorraad' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyWerkvoorraadView currentUser={currentUser!} onNavigate={(view, params) => { scrollContainerRef.current?.scrollTo({ top: 0 }); navigeer(view, { params }); }} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'werkvoorraad' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyWerkvoorraadView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'defecten' && <Suspense fallback={<ViewLoader />}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'werkprestaties' && <Suspense fallback={<ViewLoader />}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense>}
               {resolvedCurrentView === 'voertuigen' && <Suspense fallback={<ViewLoader />}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}
@@ -1722,7 +1790,7 @@ export default function App() {
               {resolvedCurrentView === 'ruil-verzoeken' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} /></Verwissel>}
               {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
-              {resolvedCurrentView === 'verlof-kalender' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'verlof-kalender' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} shifts={shifts} onDecide={isStaf(currentUser.role) ? decideLeave : undefined} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'verlof' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView

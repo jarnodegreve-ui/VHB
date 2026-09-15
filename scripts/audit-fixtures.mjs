@@ -270,7 +270,9 @@ export function apiFixtures(user, extra) {
       const eigen = extra(p, route.request());
       if (eigen !== undefined) return json(eigen);
     }
-    if (p.endsWith('/api/me')) return json(user);
+    // Sinds golf 4 draagt /api/me het toestel-oordeel en (staf) de beveiligingsstatus mee,
+    // zodat de mock dezelfde korte startketen meet als de echte server.
+    if (p.endsWith('/api/me')) return json({ ...user, toestel: { status: 'approved', gateActief: false }, ...(user.role !== 'chauffeur' && user.role !== 'technieker' ? { beveiliging: { mfaVerplicht: false, aal: 'aal1' } } : {}) });
     if (p.endsWith('/api/devices/register')) return json({ status: 'approved' });
     if (p.endsWith('/api/devices/gate')) return json({ enabled: true });
     if (p.endsWith('/api/devices')) return json(DEVICES);

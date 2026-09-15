@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { balkGeometrie, minNaarTijd, type BalkDeel } from '../lib/dienstBalk';
 import { cn } from '../lib/ui';
 
@@ -18,8 +19,13 @@ import { cn } from '../lib/ui';
  * intact, wat `scaleX` zou platdrukken). `overflow-x-clip` houdt de
  * verschoven wrappers uit de scroll-overflow. Reduced motion: de globale
  * prefers-reduced-motion-regel (index.css) zet elke transition op ~0.
+ *
+ * `memo` (punt 19): de balk is zuiver in zijn props; Mijn dag rendert elke
+ * minuut (klok) en bij elke toast of scroll van de schil, en zonder memo
+ * rekende de geometrie dan telkens mee. Werkt alleen als de aanroeper
+ * `delen` stabiel houdt (useMemo op de shifts van de dag).
  */
-export function DienstBalk({
+export const DienstBalk = memo(function DienstBalk({
   delen,
   nuMin,
   nuLabel,
@@ -126,4 +132,4 @@ export function DienstBalk({
       </div>
     </div>
   );
-}
+});

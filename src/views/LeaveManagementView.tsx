@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, CalendarOff, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, History, Plus, Printer, SlidersHorizontal, Users, X } from 'lucide-react';
+import { AlertTriangle, CalendarOff, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, Plus, Printer, SlidersHorizontal, Users, X } from 'lucide-react';
 import { isRijdend, teltInVerlofbezetting } from '../types';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
@@ -12,8 +12,7 @@ import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { Field, Select, Textarea } from '../components/Field';
 import { MaandNavigatie } from '../components/MaandNavigatie';
-import { DetailPaneel } from '../components/DetailPaneel';
-import { isVerlofdag, verlofBalans, verlofDagen } from '../lib/leaveBalance';
+import { verlofBalans, verlofDagen } from '../lib/leaveBalance';
 import { VerlofFeestdagenModal } from '../components/VerlofFeestdagenModal';
 import { VerlofSaldoModal } from '../components/VerlofSaldoModal';
 import type { ExtraFeestdag } from '../../shared/feestdagen';
@@ -24,8 +23,10 @@ import { formatDateHuman, formatShortDay } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 import { apiJson } from '../lib/api';
+import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
 import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
+import { bevatVrijeDag, dagenBovenVerlofLimiet, VerlofBeoordeling } from '../components/VerlofBeoordeling';
 
 
 // Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
@@ -43,18 +44,6 @@ import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type Ver
  */
 type Bezetting = 'vrij' | 'deels' | 'volzet';
 const bezettingVanDag = (afwezig: number, limiet: number): Bezetting => (afwezig <= 0 ? 'vrij' : afwezig < limiet ? 'deels' : 'volzet');
-
-/** Alle kalenderdagen van een periode ('YYYY-MM-DD'), begrensd op 400. */
-const dagenVan = (van: string, tot: string): string[] => {
-  const uit: string[] = [];
-  const cur = new Date(`${van}T00:00:00`);
-  const end = new Date(`${tot}T00:00:00`);
-  for (let guard = 0; cur <= end && guard < 400; guard++) {
-    uit.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`);
-    cur.setDate(cur.getDate() + 1);
-  }
-  return uit;
-};
 const BEZETTING_LABEL: Record<Bezetting, string> = { vrij: 'vrij', deels: 'deels vrij', volzet: 'volzet' };
 
 export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [], feestdagenExtra = [], onFeestdagenSaved }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[]; feestdagenExtra?: ExtraFeestdag[]; onFeestdagenSaved?: (extra: ExtraFeestdag[]) => void }) {
@@ -184,30 +173,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // verleden-dagen grijs tot je de keuzelijst aanraakt, wat als kapot oogt.
   const magVerleden = namensIemandAnders || registratie;
 
-  /** Andere chauffeurs (niet `exclUserId`) met goedgekeurd verlof op deze dag. */
-  const anderenAfwezigOp = (dag: string, exclUserId: string) =>
-    verlofRequests.filter((r) => {
-      if (r.status !== 'approved' || String(r.userId) === String(exclUserId)) return false;
-      if (!(r.startDate <= dag && r.endDate >= dag)) return false;
-      // Alleen rijdend personeel telt in de bezetting; een flexi-job niet.
-      const u = users.find((x) => String(x.id) === String(r.userId));
-      return !u || teltInVerlofbezetting(u);
-    }).length;
-  /** Bevat de periode een zondag of feestdag? Zo ja, dan verschilt het aantal
-   *  verlofdagen van het aantal kalenderdagen en zetten we dat er expliciet
-   *  bij — anders oogt een week van 5 of 6 dagen als een telfout. */
-  const bevatVrijeDag = (van: string, tot: string) => dagenVan(van, tot).some((d) => !isVerlofdag(d));
-
-  /** Dagen van een periode waarop deze chauffeur erbij de verloflimiet overschrijdt. */
-  const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) => {
-    // Een technieker bezet geen dienst en een flexi-job vult in, dus hun
-    // verlof kan de limiet niet overschrijden — geen waarschuwing tonen.
-    const doel = users.find((u) => String(u.id) === String(exclUserId));
-    if (doel && !teltInVerlofbezetting(doel)) return [];
-    return dagenVan(van, tot)
-      .map((dag) => ({ dag, afwezig: anderenAfwezigOp(dag, exclUserId) + 1, limiet: limietVoorDag(limieten, dag) }))
-      .filter((d) => d.afwezig > d.limiet);
-  };
+  /** Dagen van een periode waarop deze chauffeur erbij de verloflimiet
+   *  overschrijdt (gedeeld met de beoordeling, src/components/VerlofBeoordeling.tsx). */
+  const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) =>
+    dagenBovenVerlofLimiet({ verlofRequests, users, limieten }, van, tot, exclUserId);
 
   const handleRequestLeave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -391,13 +360,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       // die intussen al behandeld is, geeft een melding en slaat over. Eén
       // samenvattende toast na afloop i.p.v. n stiltes.
       void (async () => {
-        let ok = 0;
-        for (const id of ids) {
-          if (await onDecide(id, status, 'pending')) ok += 1;
-        }
-        const label = status === 'approved' ? 'goedgekeurd' : 'geweigerd';
-        if (ok === ids.length) notify(`${ok} ${ok === 1 ? 'aanvraag' : 'aanvragen'} ${label}.`, 'success');
-        else notify(`${ok} van ${ids.length} ${label}, de rest was intussen al behandeld.`, 'info');
+        const resultaat = await bulkUitvoeren(ids, (id) => onDecide(id, status, 'pending'));
+        meldBulkResultaat(notify, resultaat, {
+          item: ['aanvraag', 'aanvragen'],
+          gedaan: status === 'approved' ? 'goedgekeurd' : 'geweigerd',
+          rest: () => ', de rest was intussen al behandeld',
+          misluktToon: 'info',
+        });
       })();
       return;
     }
@@ -529,191 +498,25 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   for (let i = 0; i < startOffset; i++) calendarDays.push(null);
   for (let i = 1; i <= daysInMonth; i++) calendarDays.push(i);
 
-  /** Beoordeling in het gedeelde DetailPaneel: volledige context (saldo,
-   *  dekking, conflicten, toelichting) + beslissing zonder paginawissel.
-   *  Op desktop bovenaan de linkerkolom, op mobiel een SlideOver. */
+  /** Beoordeling in het gedeelde DetailPaneel (src/components/VerlofBeoordeling.tsx):
+   *  volledige context (saldo, dekking, conflicten, toelichting) + beslissing
+   *  zonder paginawissel. Op desktop bovenaan de linkerkolom, op mobiel een
+   *  SlideOver. De verlofkalender toont sinds punt 16 dezelfde beoordeling. */
   function renderBeoordelingPaneel() {
-    const pending = reviewLeave?.status === 'pending';
-    // Goedgekeurd verlof dat nog loopt kan de planner hier annuleren (zelfde
-    // bevestiging als in de datumkaart); afgesloten aanvragen tonen alleen
-    // de historiek.
-    const annuleerbaar = !!reviewLeave && reviewLeave.status === 'approved' && reviewLeave.endDate >= today && isPlanner;
     return (
-      <DetailPaneel
-        open={!!reviewLeave}
+      <VerlofBeoordeling
+        aanvraag={reviewLeave}
+        users={users}
+        shifts={shifts}
+        leaveRequests={leaveRequests}
+        limieten={limieten}
+        today={today}
+        isPlanner={isPlanner}
         onClose={() => setReviewLeave(null)}
-        plakkend={false}
-        verbergLeeg
-        sleutel={reviewLeave?.id}
-        title={reviewLeave ? (users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend') : 'Verlofaanvraag'}
-        subtitle={reviewLeave ? `Aangevraagd op ${formatDateHuman(reviewLeave.createdAt)}` : undefined}
-        icon={reviewLeave ? <Avatar naam={users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend'} size="lg" /> : undefined}
-        footer={reviewLeave ? (
-          <div className="flex items-center gap-2">
-            <IconButton
-              label="Wijzigingsgeschiedenis"
-              variant="ghost"
-              onClick={() => { setHistoryLeave(reviewLeave); }}
-            >
-              <History size={16} />
-            </IconButton>
-            {pending ? (
-              <>
-                <Button
-                  variant="danger"
-                  size="lg"
-                  className="flex-1"
-                  onClick={() => { handleStatusUpdate(reviewLeave.id, 'rejected', reviewLeave.status); setReviewLeave(null); }}
-                >
-                  Afwijzen
-                </Button>
-                <Button
-                  variant="success"
-                  size="lg"
-                  className="flex-1"
-                  icon={<Check size={16} />}
-                  onClick={() => { handleStatusUpdate(reviewLeave.id, 'approved', reviewLeave.status); setReviewLeave(null); }}
-                >
-                  Goedkeuren
-                </Button>
-              </>
-            ) : annuleerbaar ? (
-              <Button variant="danger" size="lg" className="flex-1" onClick={() => handleCancel(reviewLeave.id)}>
-                Verlof annuleren
-              </Button>
-            ) : (
-              <Button variant="secondary" size="lg" className="flex-1" onClick={() => setReviewLeave(null)}>
-                Sluiten
-              </Button>
-            )}
-          </div>
-        ) : undefined}
-      >
-        {reviewLeave && (() => {
-          const requester = users.find((u) => u.id === reviewLeave.userId);
-          const conflictShifts = shiftsConflictingWithLeave(shifts, reviewLeave);
-          // Geen Math.max(1, …): een periode van alleen zondagen is écht 0
-          // verlofdagen, en dat moet de beoordelaar ook zo zien.
-          const dayCount = verlofDagen(reviewLeave.startDate, reviewLeave.endDate);
-          const requestYear = parseInt(reviewLeave.startDate.slice(0, 4), 10);
-          const balance = verlofBalans(leaveRequests, reviewLeave.userId, requestYear, requester?.verlofBudget);
-          const exceeds = reviewLeave.type === 'betaald_verlof'
-            && balance.betaaldGebruikt + dayCount > balance.betaaldBudget;
-          return (
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={reviewLeave.status} stil />
-                <Badge tone="slate">{formatLeaveType(reviewLeave.type)}</Badge>
-                {conflictShifts.length > 0 && (
-                  <Badge tone="red" icon={<AlertTriangle size={12} />}>
-                    {conflictShifts.length} {conflictShifts.length === 1 ? 'dienst' : 'diensten'} ingepland
-                  </Badge>
-                )}
-              </div>
-
-              <Card tone="muted" padding="sm">
-                <MicroLabel className="text-slate-500">Periode</MicroLabel>
-                <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
-                  {reviewLeave.startDate}{reviewLeave.startDate !== reviewLeave.endDate ? ` → ${reviewLeave.endDate}` : ''}
-                  <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'verlofdag' : 'verlofdagen'})</span>
-                </p>
-                {bevatVrijeDag(reviewLeave.startDate, reviewLeave.endDate) && (
-                  <p className="mt-1 text-xs font-normal text-slate-500">Zondagen en feestdagen tellen niet mee als verlofdag.</p>
-                )}
-              </Card>
-
-              {/* Saldo-context van de aanvrager — beslis met het budget in beeld. */}
-              {/* Rood alleen als het budget overschreden wordt; een saldo dat
-                  klopt is informatie en blijft neutraal (afwerking 04-09, nr. 6). */}
-              {reviewLeave.type === 'betaald_verlof' && (
-                <Card tone={exceeds ? 'danger' : 'muted'} padding="none" className="px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <MicroLabel className={exceeds ? 'text-red-700' : 'text-slate-500'}>
-                      Verlofsaldo {requestYear}
-                    </MicroLabel>
-                    <span className={cn('text-sm font-semibold tabular-nums', exceeds ? 'text-red-700' : 'text-slate-800')}>
-                      {balance.betaaldGebruikt + dayCount} / {balance.betaaldBudget}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs font-normal text-slate-600">
-                    {exceeds
-                      ? `Deze aanvraag gaat ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget} ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget === 1 ? 'dag' : 'dagen'} over het jaarbudget.`
-                      : `Na goedkeuring resteren ${balance.betaaldBudget - balance.betaaldGebruikt - dayCount} dagen.`}
-                  </p>
-                </Card>
-              )}
-
-              {/* Dekkingsimpact: hoeveel andere chauffeurs hebben deze periode al
-                  goedgekeurd verlof (ziekte telt bewust niet mee). */}
-              {(() => {
-                const others = verlofRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(reviewLeave.userId));
-                const overlap = others.filter((r) => r.startDate <= reviewLeave.endDate && r.endDate >= reviewLeave.startDate);
-                const uniqueOthers = new Set(overlap.map((r) => String(r.userId))).size;
-                if (uniqueOthers === 0) return null;
-                let peak = 0;
-                const cur = new Date(`${reviewLeave.startDate}T00:00:00`);
-                const end = new Date(`${reviewLeave.endDate}T00:00:00`);
-                for (let guard = 0; cur <= end && guard < 400; guard++) {
-                  const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-                  const c = overlap.filter((r) => r.startDate <= iso && r.endDate >= iso).length;
-                  if (c > peak) peak = c;
-                  cur.setDate(cur.getDate() + 1);
-                }
-                return (
-                  <Card tone="muted" padding="none" className="px-4 py-3">
-                    <MicroLabel className="text-slate-500">Dekking deze periode</MicroLabel>
-                    <p className="mt-1 text-xs font-normal text-slate-600">
-                      {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} met goedgekeurd verlof in deze periode{peak > 1 ? `, tot ${peak} tegelijk op de drukste dag` : ''}.
-                    </p>
-                  </Card>
-                );
-              })()}
-
-              {/* Verloflimiet (instelbaar sinds 09-09): rood zodra goedkeuren
-                  ergens in de periode te veel chauffeurs tegelijk vrij zet. */}
-              {(() => {
-                const boven = dagenBovenLimiet(reviewLeave.startDate, reviewLeave.endDate, String(reviewLeave.userId));
-                if (boven.length === 0) return null;
-                return (
-                  <Card tone="danger" padding="none" className="px-4 py-3">
-                    <MicroLabel className="text-red-700">Boven de verloflimiet</MicroLabel>
-                    <p className="mt-1 text-xs font-normal text-red-700">
-                      Na goedkeuring zitten er op {boven.length} {boven.length === 1 ? 'dag' : 'dagen'} te veel chauffeurs tegelijk vrij: {boven.slice(0, 3).map((d) => `${formatShortDay(d.dag)} ${d.afwezig} van ${d.limiet}`).join(', ')}{boven.length > 3 ? ', …' : ''}.
-                    </p>
-                  </Card>
-                );
-              })()}
-
-              {conflictShifts.length > 0 && (
-                <div>
-                  <MicroLabel className="text-red-700">Conflict met planning</MicroLabel>
-                  <div className="mt-2 space-y-1.5">
-                    {conflictShifts.slice(0, 5).map((s) => (
-                      <div key={s.id} className="flex items-center justify-between rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs">
-                        <span className="font-semibold text-slate-800 tabular-nums">{s.date}</span>
-                        <span className="font-medium text-slate-600 tabular-nums">Dienst {s.line} · {s.startTime}–{s.endTime}</span>
-                      </div>
-                    ))}
-                    {conflictShifts.length > 5 && (
-                      <p className="text-xs font-medium text-slate-500">+ {conflictShifts.length - 5} andere diensten in deze periode.</p>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs font-normal text-slate-500">Bij goedkeuring moeten deze diensten herverdeeld worden.</p>
-                </div>
-              )}
-
-              {reviewLeave.comment && (
-                <div>
-                  <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-body font-normal text-slate-700">
-                    {reviewLeave.comment}
-                  </p>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-      </DetailPaneel>
+        onDecide={(id, status, seenStatus) => { handleStatusUpdate(id, status, seenStatus); setReviewLeave(null); }}
+        onCancel={handleCancel}
+        onHistoriek={setHistoryLeave}
+      />
     );
   }
 

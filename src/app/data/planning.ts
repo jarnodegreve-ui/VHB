@@ -34,6 +34,7 @@ export function usePlanningData(ctx: DataCtx) {
       const qs = params.toString();
       const url = qs ? `/api/planning?${qs}` : '/api/planning';
       const response = await apiFetch(url, { accessToken });
+      ctx.noteerAntwoord(response);
       // Revisie alleen bij een ongefilterde fetch (de server zet 'm ook
       // alleen dan) — een subset-revisie zou valse conflicten geven.
       if (!qs) ctx.captureRevision('planning', response);
@@ -239,6 +240,7 @@ export function usePlanningData(ctx: DataCtx) {
       const to = new Date(); to.setDate(to.getDate() + 45);
       const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const response = await apiFetch(`/api/planning-notes?from=${iso(from)}&to=${iso(to)}`, { accessToken });
+      ctx.noteerAntwoord(response);
       const data = await response.json();
       if (Array.isArray(data)) setMyNotes(data.map((n: any) => ({ date: String(n.date), note: String(n.note) })));
     } catch { /* notities zijn nice-to-have */ }

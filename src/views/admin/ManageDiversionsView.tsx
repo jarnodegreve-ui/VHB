@@ -15,6 +15,7 @@ import { diversionSchema } from '../../../shared/schemas/diversion';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
 import { ActieMenu } from '../../components/ActieMenu';
+import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 import { useRecordParam } from '../../app/router';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
@@ -274,13 +275,15 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
 
   const lijst = sortedDiversions.length > 0 ? (
     <ul className="space-y-2" aria-label="Omleidingen">
+      {/* Verwijderen is optimistisch met undo-toast: de rij klapt dicht en komt
+          na "Ongedaan maken" op zijn eigen plek terug (LijstRij, key = id). */}
+      <LijstAnimatie aantal={sortedDiversions.length}>
       {sortedDiversions.map(div => {
         const expired = isExpired(div);
         const isCurrent = paneelOpen && editingId === div.id;
         return (
+          <LijstRij key={div.id}>
           <Card
-            key={div.id}
-            as="li"
             padding="none"
             interactive
             aria-current={isCurrent ? 'true' : undefined}
@@ -296,7 +299,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                 <LijnTegel line={div.line} size="sm" tone={expired ? 'muted' : 'accent'} />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <h3 className="text-md font-semibold leading-snug text-slate-900">{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
+                    {/* data-vt-record: DetailPaneel leest er de richting van een wissel uit. */}
+                    <h3 className="text-md font-semibold leading-snug text-slate-900" data-vt-record={div.id}>{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
                     <Badge tone="slate">{lijnLabel(div.line)}</Badge>
                     {expired && <Badge tone="slate">Verlopen</Badge>}
                     {div.pdfUrl && <Badge tone="slate" icon={<FileText size={12} />}>PDF</Badge>}
@@ -310,8 +314,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
             </button>
           </Card>
+          </LijstRij>
         );
       })}
+      </LijstAnimatie>
     </ul>
   ) : (
     <EmptyState

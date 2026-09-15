@@ -17,6 +17,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
   const fetchUpdates = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/updates', { accessToken });
+      ctx.noteerAntwoord(response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setUpdates(ctx.stripRecordRevisions<Update>('updates', data));
@@ -86,6 +87,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
     try {
       if (!opts?.silent) beginLoading();
       const response = await apiFetch('/api/diversions', { accessToken });
+      ctx.noteerAntwoord(response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setDiversions(ctx.stripRecordRevisions<Diversion>('diversions', data));

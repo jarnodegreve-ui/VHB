@@ -1,69 +1,23 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Download, WifiOff, X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { Button, IconButton } from './primitives';
 import { DUR, EASE } from '../lib/motion';
 
 /**
- * PWA-randzaken: offline-indicator + install-prompt.
+ * PWA-randzaken: de install-prompt.
  *
- * - <OfflineBanner/>: subtiele pil onderaan zodra het netwerk wegvalt,
- *   zodat een chauffeur weet dat 'ie (mogelijk verouderde) gecachte data
- *   ziet. Geen actie nodig — puur informatief.
  * - <InstallPrompt/>: vangt het beforeinstallprompt-event (Android/Chrome)
  *   en biedt een nette knop "Toevoegen aan beginscherm" aan. Onthoudt een
  *   weigering in localStorage zodat 't niet blijft zeuren.
+ *
+ * De offline-pil (`OfflineBanner`) die hier stond is op 15-09 (punt 19)
+ * verwijderd: hij las alleen `navigator.onLine` (op bus-wifi zonder internet
+ * blijft dat true) en stond naast de offline-kaart in de schil en het stille
+ * label op Mijn dag, drie signalen voor één oorzaak. De schil toont nu één
+ * kaart op de online-store (src/lib/useOnline.ts); Mijn dag houdt zijn
+ * stille Badge, geen banner.
  */
-
-/** Reageert op online/offline-events. */
-function useOnlineStatus(): boolean {
-  const [online, setOnline] = useState(
-    typeof navigator === 'undefined' ? true : navigator.onLine,
-  );
-  useEffect(() => {
-    const up = () => setOnline(true);
-    const down = () => setOnline(false);
-    window.addEventListener('online', up);
-    window.addEventListener('offline', down);
-    return () => {
-      window.removeEventListener('online', up);
-      window.removeEventListener('offline', down);
-    };
-  }, []);
-  return online;
-}
-
-export function OfflineBanner() {
-  const online = useOnlineStatus();
-  return (
-    <AnimatePresence>
-      {!online && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          transition={{ duration: DUR.base, ease: EASE }}
-          // Op mobiel bóven de tab-bar (bottom-3 + ~64px hoogte), zelfde
-          // offset als ToastStack: op 1rem lag de pil middenin de navbalk en
-          // ving hij met pointer-events-auto de tikken op de tabs — precies
-          // wanneer je offline bent en wil navigeren. Vanaf md is er geen
-          // tab-bar, dus daar mag hij gewoon onderaan.
-          className="fixed inset-x-0 z-[130] flex justify-center px-4 pointer-events-none bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] md:bottom-[max(1rem,env(safe-area-inset-bottom))]"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink/90 px-4 py-2.5 text-white elev-2 backdrop-blur-sm">
-            {/* amber-400: 300 wordt in donker een transparante tint (omgekeerde schalen). */}
-            <WifiOff size={16} className="text-amber-400 shrink-0" />
-            <span className="text-xs font-bold tracking-tight">
-              Offline, je ziet mogelijk verouderde gegevens
-            </span>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;

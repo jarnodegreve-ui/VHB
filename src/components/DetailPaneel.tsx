@@ -1,8 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
-import { recordNaam } from '../lib/overgang';
+import { overgangActief, recordNaam } from '../lib/overgang';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Card } from './Card';
+import { RichtingWissel } from './RichtingWissel';
 import { SlideOver } from './SlideOver';
 import { EmptyState } from './ui';
 
@@ -152,6 +153,35 @@ export function MasterDetail({ lijst, paneel, className }: {
   );
 }
 
+/**
+ * Loopt er een view transition die het paneel al beweegt? De route-wissel
+ * (`vt-route`) én de gedeelde titel-overgang van kiesRecord (`vt-record`):
+ * in beide gevallen wisselt de inhoud zonder eigen beweging, anders vecht
+ * de body-fade met de overgang die de browser al tekent.
+ */
+const overgangLoopt = () => overgangActief() || (typeof document !== 'undefined' && document.documentElement.classList.contains('vt-record'));
+
+/** Positie van de rij-titel van een record in de lijst (`data-vt-record`), of null. */
+const rijTop = (id: string): number | null => {
+  if (typeof document === 'undefined' || typeof CSS === 'undefined' || typeof CSS.escape !== 'function') return null;
+  const el = document.querySelector<HTMLElement>(`[data-vt-record="${CSS.escape(id)}"]`);
+  return el ? el.getBoundingClientRect().top : null;
+};
+
+/**
+ * Richting van een recordwissel: 1 als het nieuwe record lager in de lijst
+ * staat dan het vorige (de inhoud schuift omhoog), −1 als het hoger staat.
+ * Gelezen uit de lijst-DOM vóór de commit (beide rijen staan er nog); zonder
+ * rij-markering of zonder vorige keuze: vooruit.
+ */
+const richtingVoor = (vorige: string | undefined, nieuwe: string | undefined): 1 | -1 => {
+  if (!vorige || !nieuwe) return 1;
+  const van = rijTop(vorige);
+  const naar = rijTop(nieuwe);
+  if (van === null || naar === null) return 1;
+  return naar < van ? -1 : 1;
+};
+
 export function DetailPaneel({
   open,
   onClose,
@@ -164,6 +194,7 @@ export function DetailPaneel({
   children,
   breedte = 'md',
   sleutel,
+  richting,
   leegTekst = 'Kies een item uit de lijst.',
   leegActie,
   verbergLeeg = false,
@@ -187,9 +218,14 @@ export function DetailPaneel({
   children: ReactNode;
   /** Breedte van de mobiele SlideOver. */
   breedte?: 'md' | 'lg';
-  /** Id van het getoonde item: bij wissel scrolt de inhoud terug naar boven
-   *  en komt het paneel op desktop in beeld. */
+  /** Id van het getoonde item: bij wissel scrolt de inhoud terug naar boven,
+   *  komt het paneel op desktop in beeld en wisselt de inhoud met een zachte
+   *  verschuiving (opacity + 4 px) in de richting van de wissel. */
   sleutel?: string;
+  /** Richting van de wissel (1 = het nieuwe item staat lager in de lijst).
+   *  Zonder deze prop leest het paneel ze af uit `data-vt-record` op de
+   *  rij-titels; ontbreekt die, dan altijd vooruit. */
+  richting?: 1 | -1;
   /** Lege staat op desktop (niets gekozen). */
   leegTekst?: string;
   /** Optionele knop onder de lege-staat-tekst (bv. "Nieuwe omleiding"). */
@@ -203,6 +239,25 @@ export function DetailPaneel({
 }) {
   const inline = useMinWidth(LG);
   const wortel = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+
+  // Richting van de inhoudswissel, bepaald op het moment dat de sleutel
+  // verandert (vóór de commit: de lijst-DOM toont nog beide rijen). Stil
+  // tijdens een view transition (zie overgangLoopt) — die staat op dat
+  // moment al op <html>, dus dit is in dezelfde render bekend.
+  const vorigeSleutel = useRef(sleutel);
+  const wisselRef = useRef<{ richting: 1 | -1; stil: boolean }>({ richting: 1, stil: false });
+  if (sleutel !== vorigeSleutel.current) {
+    wisselRef.current = { richting: richting ?? richtingVoor(vorigeSleutel.current, sleutel), stil: overgangLoopt() };
+    vorigeSleutel.current = sleutel;
+  }
+  const wissel = wisselRef.current;
+
+  // Nieuw item: de inhoud weer bovenaan tonen (vroeger deed een key-remount
+  // van de scroll-container dat; die blijft nu staan voor de cross-fade).
+  useLayoutEffect(() => {
+    scroller.current?.scrollTo?.(0, 0);
+  }, [sleutel]);
 
   // Desktop: het paneel in beeld brengen zodra er iets (anders) gekozen is —
   // wie onderaan een lange lijst klikt, ziet anders niets gebeuren.
@@ -228,30 +283,32 @@ export function DetailPaneel({
   if (!inline) {
     return (
       <SlideOver open={open} onClose={onClose} title={title} subtitle={subtitle} icon={icon} width={breedte} footer={footer}>
-        {chip || acties ? (
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">{chip}</div>
-            {acties ? <div className="flex shrink-0 items-center gap-1">{acties}</div> : null}
-          </div>
-        ) : null}
-        {children}
+        {/* Een andere rij kiezen terwijl het paneel open staat: zachte wissel
+            i.p.v. een harde; het openen zelf is de veer van de SlideOver. */}
+        <RichtingWissel sleutel={sleutel ?? ''} richting={wissel.richting} as="y" stil={wissel.stil}>
+          {chip || acties ? (
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">{chip}</div>
+              {acties ? <div className="flex shrink-0 items-center gap-1">{acties}</div> : null}
+            </div>
+          ) : null}
+          {children}
+        </RichtingWissel>
       </SlideOver>
     );
   }
 
-  if (!open) {
-    if (verbergLeeg) return null;
-    return (
-      <div ref={wortel} className={cn(plakkend && 'lg:sticky lg:top-16', className)} aria-live="polite">
-        <EmptyState compact title={leegTekst} action={leegActie} />
-      </div>
-    );
-  }
+  if (!open && verbergLeeg) return null;
 
   return (
     <div ref={wortel} className={cn(plakkend && 'lg:sticky lg:top-16', className)} aria-live="polite">
-      {/* Kop en footer staan vast; alleen de inhoud scrolt (max. de
-          viewport onder de topbar) — zoals de SlideOver dat ook doet. */}
+      {/* Lege staat ↔ kaart: cross-fade met 4 px i.p.v. een kale if. */}
+      <RichtingWissel sleutel={open ? 'kaart' : 'leeg'} richting={1} as="y" stil={overgangLoopt()}>
+      {!open ? (
+        <EmptyState compact title={leegTekst} action={leegActie} />
+      ) : (
+      /* Kop en footer staan vast; alleen de inhoud scrolt (max. de
+          viewport onder de topbar) — zoals de SlideOver dat ook doet. */
       <Card
         as="section"
         padding="none"
@@ -277,11 +334,17 @@ export function DetailPaneel({
           </div>
           {acties ? <div className="-my-1 flex shrink-0 items-center gap-1">{acties}</div> : null}
         </div>
-        <div key={sleutel} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 md:p-6">
-          {children}
+        {/* relative: de vertrekkende inhoud (popLayout) blijft binnen de
+            scroll-container staan i.p.v. op de kaart te springen. */}
+        <div ref={scroller} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 md:p-6">
+          <RichtingWissel sleutel={sleutel ?? ''} richting={wissel.richting} as="y" stil={wissel.stil}>
+            {children}
+          </RichtingWissel>
         </div>
         {footer ? <div className="border-t border-hairline p-4 md:px-6">{footer}</div> : null}
       </Card>
+      )}
+      </RichtingWissel>
     </div>
   );
 }

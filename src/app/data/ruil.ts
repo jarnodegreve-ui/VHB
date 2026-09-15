@@ -15,6 +15,7 @@ export function useRuilData(ctx: DataCtx) {
   const fetchSwaps = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/swaps', { accessToken });
+      ctx.noteerAntwoord(response);
       ctx.captureRevision('swaps', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {

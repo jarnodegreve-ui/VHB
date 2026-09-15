@@ -40,7 +40,9 @@ const DEELBUDGET_KB = {
 // Warmup-set in kB gzip (stand 14-09: chauffeur 75 kB / 29 bestanden, staf
 // 100 kB / 36 bestanden). Het dashboard trekt via parseDashboardVoorkeuren
 // zod-vendor (24 kB) mee; dat zit in beide sets.
-const WARMUP_BUDGET_KB = { chauffeur: 83, staf: 110 };
+// Golf 4 (15-09): staf 100 → 112 kB door VerlofBeoordeling, verlofkalender-paneel en
+// planningsoverzicht-acties; budget mee omhoog met dezelfde ±10 % marge.
+const WARMUP_BUDGET_KB = { chauffeur: 83, staf: 124 };
 
 const dir = 'dist/assets';
 if (!fs.existsSync(dir)) {

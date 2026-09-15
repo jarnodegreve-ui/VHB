@@ -44,10 +44,14 @@ const seed = async (page: Page, email: string) => {
 
 for (const rol of ['planner', 'chauffeur'] as const) {
   for (const p of PROFIELEN) {
-    test(`dock · ${rol} · ${p.naam}`, async ({ browser }) => {
+    test(`dock · ${rol} · ${p.naam}`, async ({ browser }, testInfo) => {
+      // Eigen context (viewport per profiel), maar de baseURL komt uit het
+      // project: playwright.config.ts leest E2E_PORT. Een hard '4173' liet
+      // deze 16 tests falen zodra een parallelle sessie een andere poort koos.
+      const baseURL = testInfo.project.use.baseURL ?? `http://localhost:${Number(process.env.E2E_PORT) > 0 ? Number(process.env.E2E_PORT) : 4173}`;
       const context = await browser.newContext({
         viewport: p.viewport, isMobile: p.viewport.width < 768, hasTouch: true,
-        baseURL: 'http://localhost:4173', serviceWorkers: 'block',
+        baseURL, serviceWorkers: 'block',
       });
       const page = await context.newPage();
       const me = rol === 'planner' ? ADMIN : CHAUFFEUR;

@@ -1,4 +1,5 @@
 import type { Toast, ToastOpties } from '../components/ToastStack';
+import { tik } from './tik';
 
 /** Toast-functie zoals App.showToast / notify die ook een actie en opties aankan. */
 export type OngedaanToast = (
@@ -52,6 +53,8 @@ export async function metOngedaan({
     }
   };
 
-  toast(boodschap, tone, { label: ONGEDAAN_LABEL, run: () => { void herstel(); } }, { ongedaan: true });
+  // Haptische bevestiging op de weg terug (src/lib/tik.ts): de tik voelt als
+  // "gevangen", nog vóór de lijst zichtbaar herstelt.
+  toast(boodschap, tone, { label: ONGEDAAN_LABEL, run: () => { tik('ongedaan'); void herstel(); } }, { ongedaan: true });
   return true;
 }

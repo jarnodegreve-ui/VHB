@@ -10,7 +10,8 @@ import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, Chip, MicroLabel, microLabelClass, Segmented, TableShell, Td, Th } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
-import { MaandNavigatie } from '../components/MaandNavigatie';
+import { MaandNavigatie, MaandWissel } from '../components/MaandNavigatie';
+import { useMaandVeeg } from '../lib/useMaandVeeg';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { ActieMenu } from '../components/ActieMenu';
 import { SkeletonRow } from '../components/Skeleton';
@@ -399,6 +400,13 @@ function MonthCalendar({
     if ((maandParam ?? null) !== gewenst) onMaandParam(gewenst);
   }, [monthParam, maandParam, onMaandParam]);
   const [selected, setSelected] = useState<string>(today);
+  // Veeg en pijltjes wisselen de maand met richting (golf 4, punt 11): het
+  // raster beweegt op touch met de vinger mee en de nieuwe maand schuift in
+  // van de kant waar hij vandaan komt (MaandWissel hieronder).
+  const veeg = useMaandVeeg({
+    onVorige: () => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)),
+    onVolgende: () => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)),
+  });
 
   // Planning-horizon: de periode waarvoor er überhaupt planning voor deze
   // chauffeur is ingelezen. Daarbuiten weten we niets — een maand die nog niet
@@ -458,15 +466,12 @@ function MonthCalendar({
           het glipte er structureel doorheen. Met de kleinere gap erbij zitten
           ze op ~44px. */}
       <Card padding="none" className="p-3 md:p-4">
-        <MaandNavigatie
-          className="justify-between"
-          label={monthName}
-          onVorige={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
-          onVolgende={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
-        />
+        <MaandNavigatie className="justify-between" label={monthName} veeg={veeg} />
 
-        {/* Grid */}
-        <div className="mt-3 grid grid-cols-7 gap-0.5 md:gap-1">
+        {/* Grid: wisselt van maand met richting en veegt op touch (MaandWissel;
+            mt-2 + de 4 px speling van de knip = de oude mt-3). */}
+        <MaandWissel sleutel={monthParam} veeg={veeg} className="mt-2">
+        <div className="grid grid-cols-7 gap-0.5 md:gap-1">
           {WEEKDAY_SHORT_MON.map((d) => (
             <div key={d} className={cn(microLabelClass, 'py-1 text-center')}>
               {d}
@@ -529,6 +534,7 @@ function MonthCalendar({
             );
           })}
         </div>
+        </MaandWissel>
 
         {/* Legende */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline-subtle pt-3 text-xs font-medium text-slate-500">

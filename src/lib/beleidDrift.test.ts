@@ -31,7 +31,7 @@ const ruw = () => ({
       cmd: 'SELECT',
       rollen: ['authenticated'],
       using: '( SELECT\n   public.is_active_app_user()   AS is_active_app_user)',
-      with_check: null,
+      with_check: null as string | null,
     },
     {
       schema: 'realtime',
@@ -41,7 +41,7 @@ const ruw = () => ({
       cmd: 'SELECT',
       rollen: ['authenticated'],
       using: "(realtime.topic() = 'vhb-aanwezigheid')",
-      with_check: null,
+      with_check: null as string | null,
     },
   ],
   grants: [

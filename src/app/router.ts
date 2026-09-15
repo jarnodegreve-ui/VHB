@@ -3,6 +3,7 @@ import type { View } from '../types';
 import { ALLE_VIEWS, ROUTES, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
 import { leesStartschermLokaal } from '../lib/startscherm';
+import { annuleerHerstel, bewaarScroll, leesScroll, planHerstel, scrollSleutel } from '../lib/scrollGeheugen';
 
 /**
  * Lichtgewicht router op de History API — geen library, geen <Route>-boom.
@@ -89,15 +90,54 @@ function normaliseerStartUrl() {
   }
 }
 
+// --- Scrollpositie per route (punt 19, 15-09; src/lib/scrollGeheugen.ts) ---
+// De scroll-root is één element voor alle schermen. Vooruit navigeren =
+// bovenaan beginnen (was: App.tsx scrolde vóór elke navigeer naar 0, ook bij
+// popstate); terug/vooruit via de historiek = de positie van dát scherm
+// terug, ná Suspense (de planner wacht per frame tot de inhoud er is).
+const scrollRoot = (): HTMLElement | null => (typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('[data-scroll-root]'));
+/** Pad van het scherm dat nu in beeld staat (de URL is bij popstate al gewisseld). */
+let huidigPad: string | null = null;
+const onthoudPositieVanHuidig = () => {
+  const el = scrollRoot();
+  if (el && huidigPad !== null) bewaarScroll(scrollSleutel(huidigPad), el.scrollTop);
+};
+const naarBoven = () => {
+  annuleerHerstel();
+  scrollRoot()?.scrollTo({ top: 0 });
+};
+let popLuisteraarActief = false;
+/** Eén popstate-listener voor het scrollgeheugen (useRoute wordt door meerdere hooks gebruikt). */
+function zorgVoorScrollHerstel() {
+  if (popLuisteraarActief || typeof window === 'undefined') return;
+  popLuisteraarActief = true;
+  huidigPad = window.location.pathname;
+  window.addEventListener('popstate', () => {
+    const nieuwPad = window.location.pathname;
+    if (nieuwPad === huidigPad) return; // overlay-entry (useHistoryDismiss): geen schermwissel
+    onthoudPositieVanHuidig();
+    huidigPad = nieuwPad;
+    const el = scrollRoot();
+    if (el) planHerstel(el, leesScroll(scrollSleutel(nieuwPad)) ?? 0);
+  });
+}
+
 /** Navigeren buiten React om (service-worker-bericht, tests). */
 export function navigeer(view: View, opts: { params?: readonly string[]; replace?: boolean } = {}) {
   if (typeof window === 'undefined') return;
   const pad = padVan(view, opts.params ?? []);
   const zelfde = window.location.pathname === pad;
+  const anderView = lees().view !== view;
   // Ander scherm = view-transition (cross-fade van de inhoud, schil stil —
   // src/lib/overgang.ts); een parameterwissel binnen hetzelfde scherm
   // (maand, replace) blijft direct, anders fadet elke maandstap.
-  const anderScherm = !opts.replace && lees().view !== view;
+  const anderScherm = !opts.replace && anderView;
+  // Scrollgeheugen: de positie van het scherm dat we verlaten bewaren, en
+  // bovenaan beginnen bij een echt nieuw scherm of dezelfde tab nog eens
+  // (was het gedrag van App.setCurrentView). Een replace binnen hetzelfde
+  // scherm (maand, record) laat de scroll met rust.
+  if (!zelfde) onthoudPositieVanHuidig();
+  if (anderView || !opts.replace) naarBoven();
   // De historiek wisselt hier, synchroon in de tik zelf — bewust níét in de
   // view-transition-callback. Die draait pas bij de volgende rendering-stap,
   // en in dat gaatje ruimt een overlay die in dezelfde commit sluit (de
@@ -113,6 +153,7 @@ export function navigeer(view: View, opts: { params?: readonly string[]; replace
     if (opts.replace || uitOverlay) window.history.replaceState(null, '', pad);
     else window.history.pushState(null, '', pad);
   }
+  huidigPad = pad;
   onthoud(view);
   const melden = () => window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
   if (anderScherm) metOvergang(melden); else melden();
@@ -126,6 +167,8 @@ export function useRoute() {
       const volgende = lees();
       setRoute((huidig) => (huidig.view === volgende.view && huidig.params.join('/') === volgende.params.join('/') ? huidig : volgende));
     };
+    // Scrollpositie per route (één module-listener, zie boven).
+    zorgVoorScrollHerstel();
     // popstate: terugknop/swipe-back. Overlays (Modal/SlideOver) pushen eigen
     // entries zonder padwijziging — `sync` vergelijkt en doet dan niets.
     window.addEventListener('popstate', sync);

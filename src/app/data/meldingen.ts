@@ -12,7 +12,7 @@ import type { DataCtx } from './kern';
  * Gelezen markeren is optimistisch: de rij en de teller schuiven meteen, de
  * server volgt; mislukt het, dan zet de refetch de waarheid terug.
  */
-export function useMeldingenData(ctx: Pick<DataCtx, 'session'>) {
+export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'>) {
   const { session } = ctx;
   const [meldingen, setMeldingen] = useState<Melding[]>([]);
   const [ongelezenMeldingen, setOngelezenMeldingen] = useState(0);
@@ -21,6 +21,7 @@ export function useMeldingenData(ctx: Pick<DataCtx, 'session'>) {
     try {
       const response = await apiFetch('/api/meldingen', { accessToken });
       if (!response.ok) return;
+      ctx.noteerAntwoord(response);
       const data = await response.json();
       // Vorm: { meldingen, ongelezen }. Een kale lijst (oude server, mock)
       // tellen we zelf.

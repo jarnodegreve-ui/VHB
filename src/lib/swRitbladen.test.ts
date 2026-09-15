@@ -10,10 +10,12 @@ import { describe, expect, it } from 'vitest';
 type Api = {
   RITBLADEN_CACHE: string;
   MAX_RITBLADEN: number;
-  MIJN_DAG_API: string[];
+  OFFLINE_API: string[];
+  CACHE_BRON_HEADER: string;
   isRitbladUrl: (url: string) => boolean;
   ritbladCacheKey: (url: string) => string;
-  isMijnDagApi: (pathname: string) => boolean;
+  isOfflineApi: (pathname: string) => boolean;
+  markeerUitCache: (response: Response | null | undefined) => Response | null;
   snoeiSleutels: (keys: Array<string | { url: string }>, max?: number) => string[];
   ritbladUrlsUitBericht: (data: unknown) => Array<{ url: string; key: string }>;
 };
@@ -30,12 +32,19 @@ const pdf = (n: number) => `https://x.supabase.co/storage/v1/object/sign/ritblaa
 describe('sw-ritbladen.js', () => {
   const api = laad();
 
-  it('kent de cache-naam en de Mijn-dag-API-paden', () => {
+  it('kent de cache-naam en de offline-API-paden (Mijn dag + startlading)', () => {
     expect(api.RITBLADEN_CACHE).toBe('vhb-ritbladen');
     expect(api.MAX_RITBLADEN).toBe(6);
-    for (const p of ['/api/me', '/api/planning', '/api/diversions', '/api/planning-notes', '/api/ritblaadje']) expect(api.isMijnDagApi(p)).toBe(true);
-    expect(api.isMijnDagApi('/api/users')).toBe(false);
-    expect(api.isMijnDagApi('/api/planning/assign-service')).toBe(false);
+    for (const p of ['/api/me', '/api/planning', '/api/diversions', '/api/planning-notes', '/api/ritblaadje']) expect(api.isOfflineApi(p)).toBe(true);
+    // Punt 19 (15-09): de bronnen van loadAppData die een chauffeur offline nodig heeft.
+    for (const p of ['/api/users', '/api/updates', '/api/swaps', '/api/leave', '/api/meldingen']) expect(api.isOfflineApi(p)).toBe(true);
+    // Exact pad: subroutes en schrijfpaden blijven buiten de cache.
+    expect(api.isOfflineApi('/api/planning/assign-service')).toBe(false);
+    expect(api.isOfflineApi('/api/meldingen/gelezen')).toBe(false);
+    expect(api.isOfflineApi('/api/leave/sick-report')).toBe(false);
+    expect(api.isOfflineApi('/api/documents')).toBe(false);
+    expect(api.isOfflineApi('/api/services')).toBe(false);
+    expect(api.OFFLINE_API).toHaveLength(10);
   });
 
   it('herkent ritblad-URL\'s en sleutelt zonder query', () => {
@@ -50,6 +59,7 @@ describe('sw-ritbladen.js', () => {
       'https://vhbportaal.com/api/planning?driverId=42',
       ...Array.from({ length: 8 }, (_, i) => `https://x.supabase.co/storage/v1/object/sign/ritblaadjes/b-${i}.pdf`),
       'https://vhbportaal.com/api/me',
+      'https://vhbportaal.com/api/swaps',
     ];
     expect(api.snoeiSleutels(keys)).toEqual([
       'https://x.supabase.co/storage/v1/object/sign/ritblaadjes/b-0.pdf',
@@ -68,5 +78,22 @@ describe('sw-ritbladen.js', () => {
     ]);
     expect(api.ritbladUrlsUitBericht(null)).toEqual([]);
     expect(api.ritbladUrlsUitBericht({ urls: 'x' })).toEqual([]);
+  });
+
+  it('markeert een gecacht antwoord met X-VHB-Bron: cache en houdt status, body en Date', async () => {
+    const origineel = new Response(JSON.stringify([{ id: 'sw1' }]), {
+      status: 200,
+      headers: { 'content-type': 'application/json', date: 'Tue, 15 Sep 2026 06:12:00 GMT', 'x-collection-revision': 'r9' },
+    });
+    const gemarkeerd = api.markeerUitCache(origineel)!;
+    expect(gemarkeerd).not.toBe(origineel);
+    expect(gemarkeerd.status).toBe(200);
+    expect(gemarkeerd.headers.get(api.CACHE_BRON_HEADER)).toBe('cache');
+    expect(gemarkeerd.headers.get('date')).toBe('Tue, 15 Sep 2026 06:12:00 GMT');
+    expect(gemarkeerd.headers.get('x-collection-revision')).toBe('r9');
+    expect(await gemarkeerd.json()).toEqual([{ id: 'sw1' }]);
+    // Geen cache-treffer: null, zodat de SW op Response.error() terugvalt.
+    expect(api.markeerUitCache(undefined)).toBeNull();
+    expect(api.markeerUitCache(null)).toBeNull();
   });
 });

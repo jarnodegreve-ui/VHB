@@ -10,7 +10,7 @@ import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfi
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, deletePushSubscriptionsForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
-import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isDeviceGateEnabled, DEVICE_TOKEN_HEADER } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
@@ -374,8 +374,38 @@ const runSchemaCheck = async (res: express.Response) => {
   res.json({ ok: missing.length === 0, missing, crons, time: new Date().toISOString() });
 };
 
+// Eigen profiel + wat de app vóór de eerste inhoud moet weten (punt 19,
+// 15-09): het toestel-oordeel en, voor staf, de beveiligingsstatus. Zo kan
+// de client de toestelregistratie parallel starten i.p.v. ervóór, en hoeft
+// staf /api/me/beveiliging niet meer apart te wachten. De route blijft
+// gewoon achter de toestel-gate (middleware): een wachtend of geblokkeerd
+// toestel krijgt hier nog steeds 403 device_pending/device_revoked, precies
+// zoals voorheen; `toestel` beschrijft het toestel dat de gate al doorliet
+// (of 'onbekend': staf zonder rij, of schakelaar uit).
+//
+// Vorm: { ...profiel, toestel: { status, gateActief }, beveiliging?: { mfaVerplicht, aal } }.
 app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
-  res.json(req.appUser);
+  const user = req.appUser!;
+  const staf = isStafRol(user.role);
+  const rawToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+  const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
+  let toestel: { status: "approved" | "pending" | "revoked" | "onbekend"; gateActief: boolean } = { status: "onbekend", gateActief: false };
+  try {
+    const [device, gateActief] = await Promise.all([
+      deviceToken ? getDevice(String(user.id), deviceToken) : Promise.resolve(null),
+      isDeviceGateEnabled(),
+    ]);
+    toestel = { status: device?.status ?? "onbekend", gateActief };
+  } catch (err) {
+    // Informatief veld: een ontbrekende tabel of DB-hik mag het profiel niet
+    // blokkeren (de gate zelf heeft al beslist).
+    if (!isMissingTableError(err)) console.error("Toestel-oordeel bij /api/me mislukt:", err);
+  }
+  res.json({
+    ...user,
+    toestel,
+    ...(staf ? { beveiliging: { mfaVerplicht: mfaStafVerplicht(), aal: req.aal ?? "aal1" } } : {}),
+  });
 });
 
 // Instellingen › Beveiliging + de pre-app-beslissing "moet deze staf-gebruiker

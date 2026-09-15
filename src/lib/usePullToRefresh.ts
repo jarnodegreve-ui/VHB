@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { tik } from './tik';
 
 const THRESHOLD = 70; // px slepen om te verversen
 const MAX_PULL = 110; // visuele cap
@@ -36,6 +37,7 @@ export function usePullToRefresh(
     let tracking = false; // vinger staat bovenaan, richting nog niet bepaald
     let pulling = false; // verticale trek bevestigd → wij kapen
     let pull = 0;
+    let drempelGehaald = false; // haptische tik één keer per sleep, op het moment van de drempel
 
     const iconEl = () => indicatorRef.current?.querySelector<HTMLElement>('[data-ptr-icon]') ?? null;
 
@@ -55,6 +57,7 @@ export function usePullToRefresh(
       pull = 0;
       tracking = false;
       pulling = false;
+      drempelGehaald = false;
       paint(0);
     };
 
@@ -78,6 +81,7 @@ export function usePullToRefresh(
       startX = e.touches[0].clientX;
       tracking = true;
       pulling = false;
+      drempelGehaald = false;
     };
 
     const onMove = (e: TouchEvent) => {
@@ -101,6 +105,12 @@ export function usePullToRefresh(
       // Wrijvingscurve: voelt elastisch, cap op MAX_PULL.
       pull = Math.min(MAX_PULL, dy * 0.5);
       paint(pull);
+      // Eén korte tik op het moment dat loslaten gaat verversen (zoals de
+      // klik van een fysieke schakelaar); niet nog eens bij terugveren.
+      if (!drempelGehaald && pull >= THRESHOLD) {
+        drempelGehaald = true;
+        tik('drempel');
+      }
       if (e.cancelable) e.preventDefault();
     };
 
