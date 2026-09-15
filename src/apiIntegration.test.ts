@@ -51,6 +51,8 @@ const mem = vi.hoisted(() => ({
   // Retourwaarde van getLatestAuthEventAt — stuurt de per-dag-dedup van het
   // 'Actief'-event bij action:'resume'.
   lastAuthEventAt: null as string | null,
+  // updateUserSessionMeta-schrijfacties (lastLogin/activeSessions).
+  sessionMetaWrites: [] as any[],
   clientErrors: [] as any[],
   // app_settings (key → jsonb): toestel-gate en onderhoudsmodus.
   appSettings: {} as Record<string, unknown>,
@@ -299,7 +301,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   },
     getLoginActivity: async () => mem.activity.filter((a: any) => a.action === 'Aangemeld' || a.action === 'Actief'),
     getLatestAuthEventAt: async () => mem.lastAuthEventAt,
-    updateUserSessionMeta: async () => {},
+    updateUserSessionMeta: async (id: string, f: any) => { mem.sessionMetaWrites.push({ id, ...f }); },
     bumpActiveSessions: async () => {},
     getPlanningMatrixRows: async () => mem.planningMatrix,
     // Sinds de golden import-keten-suite (01-09) draait hier de ÉCHTE
@@ -536,6 +538,7 @@ beforeEach(() => {
   mem.coverageExpectations = {};
   mem.activity = [];
   mem.lastAuthEventAt = null;
+  mem.sessionMetaWrites = [];
   mem.clientErrors = [];
   mem.clientErrorStatus = [];
   mem.clientErrorStatusTabel = true;
@@ -2021,6 +2024,14 @@ describe('aanmeldingen (login-activiteit)', () => {
     const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
     expect(res.status).toBe(200);
     expect(mem.activity.find((a) => a.action === 'Actief')).toBeTruthy();
+  });
+
+  it('resume werkt lastLogin (Laatst actief) bij, zodat Gebruikers niet achterloopt op Activiteit', async () => {
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    expect(res.status).toBe(200);
+    expect(mem.sessionMetaWrites).toHaveLength(1);
+    expect(res.json.lastLogin).toBe(mem.sessionMetaWrites[0].lastLogin);
+    expect(Date.now() - new Date(res.json.lastLogin).getTime()).toBeLessThan(60_000);
   });
 
   it("'Actief'-events tellen mee in /api/activity/logins", async () => {

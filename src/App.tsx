@@ -375,6 +375,9 @@ export default function App() {
         refreshCoverageGaps();
         void fetchPlanningMatrix();
         void fetchPlanningMatrixHistory();
+        // Sessie-metadata (lastLogin) verandert zonder realtime-event; zonder
+        // deze refetch liep "Laatst actief" achter in een openstaand tabblad.
+        void fetchUsers();
       }
     },
   });

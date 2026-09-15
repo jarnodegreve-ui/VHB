@@ -87,6 +87,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   // oude maand stond maar uit de nieuwste import viel, moet júíst gevlagd
   // worden. Best-effort: zonder data geen badge of filter.
   const [planningPresence, setPlanningPresence] = useState<{ geladen: boolean; tot: string; laatstePerId: Map<string, string> }>({ geladen: false, tot: '', laatstePerId: new Map() });
+  // Bij het openen de lijst vers ophalen: lastLogin/activeSessions veranderen
+  // server-side zonder realtime-event of revisiebump, dus een tabblad dat
+  // dagen openstaat toonde anders de stand van de eigen opstart (15-09).
+  useEffect(() => { void fetchUsers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -1014,7 +1018,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                   <Switch checked={editingUser.wantsSystemMail !== false} onChange={(aan) => setEditingUser({ ...editingUser, wantsSystemMail: aan })} label="Systeemmails" />
                 </Card>
               )}
-              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst ingelogd</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Actieve sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></Card></div>
+              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Actieve sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></Card></div>
               {/* Verwijderknop stond in de kop; de gedeelde ModalHeader heeft
                   daar geen slot voor, dus links in de knoppenrij (zelfde
                   gedrag, zelfde bescherming; controle-ronde 27-08). */}
