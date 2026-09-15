@@ -2,7 +2,7 @@ import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
 import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "./coverageGaps.js";
 import { beoordeelKandidaat, sorteerKandidaten, dagVenster, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
-import { addDagenIso, brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
+import { addDagenIso, brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType, matrixCodesForDate, isTakeoverCode } from "./helpers.js";
 import {
   getCoverageExpectations,
   saveCoverageExpectations,
@@ -199,7 +199,7 @@ function adviesVenster(date: string): { vanaf: string; tot: string } {
   return { vanaf, tot };
 }
 
-type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; services: any[]; swaps: any[]; shifts: any[] };
+type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; services: any[]; swaps: any[]; shifts: any[]; matrixRows: any[] };
 
 /** Eén dataload voor [vanaf, tot] — gedeeld door het losse advies en de
  *  batch (herverdeel-wizard): 17 gaten hoeven niet 17× alles op te halen. */
@@ -210,15 +210,16 @@ async function laadAdviesBron(vanaf: string, tot: string): Promise<AdviesBron> {
     const [jr, mnd] = m.split("-").map(Number);
     m = mnd === 12 ? `${jr + 1}-01` : `${jr}-${String(mnd + 1).padStart(2, "0")}`;
   }
-  const [users, leave, services, swaps, ...planningChunks] = await Promise.all([
+  const [users, leave, services, swaps, matrixRows, ...planningChunks] = await Promise.all([
     getUsersData(),
     getLeaveData({ endOnOrAfter: vanaf }),
     getServicesData(),
     getSwapsData(),
+    getPlanningMatrixRows(),
     ...months.map((m) => getPlanningData({ monthIso: m })),
   ]);
   const shifts = (planningChunks.flat() as any[]).filter((s) => String(s.date ?? "") >= vanaf && String(s.date ?? "") <= tot);
-  return { vanaf, tot, users, leave, services, swaps, shifts };
+  return { vanaf, tot, users, leave, services, swaps, shifts, matrixRows };
 }
 
 export async function berekenCoverageAdvies(date: string, code: string) {
@@ -272,7 +273,13 @@ function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, code: stri
       keren.set(id, (keren.get(id) ?? 0) + 1);
     }
 
-    const vrijeIds = chauffeurs.filter((c) => !werkdagen.get(c.id)?.has(date) && !verlofOpDag.has(c.id));
+    // Wie in de matrix op een niet-overname-code staat (ziek, opl, kv, ...)
+    // is niet vrij, ook zonder planning-rij of portaalverlof (15-09).
+    const nietBeschikbaar = new Set<string>();
+    for (const [driverId, mcode] of matrixCodesForDate(bron.matrixRows ?? [], chauffeurs, date)) {
+      if (!isTakeoverCode(mcode)) nietBeschikbaar.add(driverId);
+    }
+    const vrijeIds = chauffeurs.filter((c) => !werkdagen.get(c.id)?.has(date) && !verlofOpDag.has(c.id) && !nietBeschikbaar.has(c.id));
     const kandidaten = sorteerKandidaten(
       vrijeIds.map((c) =>
         beoordeelKandidaat({

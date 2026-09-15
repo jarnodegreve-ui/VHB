@@ -815,16 +815,16 @@ app.get("/api/availability", authenticate, async (req, res) => {
     }
     if (dates.length === 0) return res.json({ from, to, drivers: [], days: [] });
 
-    // Ruil zonder tegenprestatie: enkel op expliciete vraag (?takeover=1),
-    // want dit vergt de volledige planning-matrix erbij — die hoeft het
-    // bezettingsoverzicht (tot 120 dagen) niet te betalen.
     const wantTakeover = req.query.takeover === "1" || req.query.takeover === "true";
 
     const months = Array.from(new Set(dates.map((d) => d.slice(0, 7))));
+    // De matrix wordt altijd geladen (één rij per dag, dus klein): zonder
+    // matrixcodes stond wie in de Excel op ZIEK/OPL/... zonder
+    // portaalregistratie als "vrij" in het bezettingsoverzicht (15-09).
     const [users, leave, matrixRows] = await Promise.all([
       getUsersData(),
       getLeaveData(),
-      wantTakeover ? getPlanningMatrixRows() : Promise.resolve([]),
+      getPlanningMatrixRows(),
     ]);
     const shiftChunks = await Promise.all(months.map((m) => getPlanningData({ monthIso: m })));
     const shifts = shiftChunks.flat().filter((s: any) => s.date >= from && s.date <= to);
@@ -859,7 +859,14 @@ app.get("/api/availability", authenticate, async (req, res) => {
           onLeave.add(String(l.userId));
         }
       }
-      const free = chauffeurs.filter((c) => !working.has(c.id) && !onLeave.has(c.id)).map((c) => c.id);
+      // Een matrixcode die geen overname-code is (ziek, opl, kv, gar, ...)
+      // maakt iemand die dag niet vrij, ook zonder planning-rij of
+      // portaalverlof; zelfde regel als de takeover-kaart en POST /api/swaps.
+      const nietBeschikbaar = new Set<string>();
+      for (const [driverId, code] of matrixCodesForDate(matrixRows, chauffeurs, date)) {
+        if (chauffeurIds.has(driverId) && !isTakeoverCode(code)) nietBeschikbaar.add(driverId);
+      }
+      const free = chauffeurs.filter((c) => !working.has(c.id) && !onLeave.has(c.id) && !nietBeschikbaar.has(c.id)).map((c) => c.id);
       const day: Record<string, unknown> = { date, working: Array.from(working), leave: Array.from(onLeave), free, lines };
       if (wantTakeover) {
         // Wie mag die dag een dienst overnemen zónder tegenprestatie: staat

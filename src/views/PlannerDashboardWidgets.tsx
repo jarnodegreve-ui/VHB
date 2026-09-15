@@ -29,7 +29,7 @@ import { useAppDataContext } from '../app/AppDataContext';
 import { getDaypartGreeting } from '../lib/interactive';
 import { addDays, isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
 import { berekenWerkvoorraad } from '../lib/werkvoorraad';
-import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
+import { kandidaatLabel, nietBeschikbaarUitMatrix, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
 import { lopendeDiversions as lopendeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
@@ -72,7 +72,7 @@ export function PlannerDashboardWidgets({
   // en de fetchers om na een dienstwissel te verversen.
   const {
     users, shifts, diversions, updates, leaveRequests, swaps,
-    planningMatrixHistory: matrixHistory, activityLog, coverageDays, vervaldata, pendingDevices,
+    planningMatrixRows, planningMatrixHistory: matrixHistory, activityLog, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, reportSick: onSickReport,
     fetchPlanning, fetchSwaps, refreshCoverageGaps,
   } = useAppDataContext();
@@ -1140,7 +1140,7 @@ export function PlannerDashboardWidgets({
                               (keuze Jarno 19-08). */}
                           {rangschikKandidaten(
                             users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(d.driverId)),
-                            vrijOpDatum(shifts, d.date),
+                            vrijOpDatum(shifts, d.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, d.date)),
                             werkdagen,
                             d.date,
                           ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
