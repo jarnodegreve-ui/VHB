@@ -1,12 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Download, FileText, Trash2, Upload } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Download, FileText, Search, Trash2, Upload } from 'lucide-react';
 import type { User } from '../types';
 import { notify, openPdfInNewTab } from '../lib/ui';
-import { prettySize } from '../lib/format';
+import { prettySize, serviceNumberOf } from '../lib/format';
+import { isoDate } from '../lib/datum';
+import { useOptioneleAppData } from '../app/AppDataContext';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
 import { Badge, Button } from '../components/primitives';
 import { Card } from '../components/Card';
+import { Field, Input } from '../components/Field';
+import { RitbladViewer } from '../components/RitbladViewer';
 import { Skeleton } from '../components/Skeleton';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 
@@ -56,6 +60,11 @@ const formatSyncedAt = (iso: string | null) => {
 };
 
 
+/** "2101 / 2304", "2101, 2304" of "2101 2304" → ['2101', '2304']; alleen
+ *  cijfers en letters blijven over, zodat een typfout geen lege zoekterm wordt. */
+export const parseDienstnummers = (invoer: string): string[] =>
+  [...new Set(invoer.split(/[\s,;/]+/).map((n) => n.trim()).filter(Boolean))];
+
 const formatUploadedAt = (iso: string) => {
   try {
     return new Date(iso).toLocaleString('nl-BE', {
@@ -83,6 +92,31 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   // open-kaart i.p.v. de iframe.
   const [touchToestel] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Ritblad per dienst (punt 15): het veld staat standaard op de dienst(en)
+  // van vandaag van de ingelogde gebruiker; de viewer zoekt in de bundel de
+  // pagina's van dat nummer (zelfde RitbladViewer als Mijn dag). De volledige
+  // bundel blijft eronder bereikbaar zoals voorheen.
+  const appData = useOptioneleAppData();
+  const dienstVandaag = useMemo(() => {
+    const vandaag = isoDate(new Date());
+    const nummers = (appData?.shifts ?? [])
+      .filter((s) => s.driverId === currentUser.id && s.date === vandaag)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+      .map((s) => serviceNumberOf(s))
+      .filter((n) => n !== '--');
+    return [...new Set(nummers)].join(' / ');
+  }, [appData?.shifts, currentUser.id]);
+  const [dienstInvoer, setDienstInvoer] = useState(dienstVandaag);
+  const invoerAangeraakt = useRef(false);
+  // De planning komt vaak pas ná de eerste render binnen: vul het veld dan
+  // alsnog, zolang de gebruiker er zelf nog niets in typte.
+  useEffect(() => {
+    if (!invoerAangeraakt.current) setDienstInvoer(dienstVandaag);
+  }, [dienstVandaag]);
+  const dienstnummers = parseDienstnummers(dienstInvoer);
+  const [viewerNummers, setViewerNummers] = useState<string[] | null>(null);
+  const openDienstRitblad = () => { if (dienstnummers.length > 0) setViewerNummers(dienstnummers); };
 
   const canEdit = currentUser.role === 'admin';
   const canDelete = currentUser.role === 'admin';
@@ -296,6 +330,41 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         /* Desktop: preview/open-kaart als hoofdkolom, het zijvak ernaast;
            mobiel: zijvak onder de kaart (afwerkingsronde 04-09). */
         <ZijvakLayout zijvak={zijvak}>
+          {/* Jouw dienst eerst: één veld, één knop; de viewer haalt de juiste
+              pagina's uit de bundel van 100+ bladzijden. */}
+          <Card as="section" padding="sm" aria-label="Ritblad per dienst">
+            <form
+              className="flex flex-col gap-3 sm:flex-row sm:items-end"
+              onSubmit={(e) => { e.preventDefault(); openDienstRitblad(); }}
+            >
+              <Field label="Dienstnummer" className="flex-1">
+                {({ id }) => (
+                  <Input
+                    id={id}
+                    value={dienstInvoer}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    enterKeyHint="go"
+                    placeholder="bv. 2101"
+                    className="font-mono"
+                    onChange={(e) => { invoerAangeraakt.current = true; setDienstInvoer(e.target.value); }}
+                  />
+                )}
+              </Field>
+              <Button type="submit" variant="primary" icon={<Search size={16} />} disabled={dienstnummers.length === 0}>
+                Ritblad openen
+              </Button>
+            </form>
+            <p className="mt-2 text-xs text-slate-500">
+              {dienstVandaag && dienstInvoer === dienstVandaag
+                ? 'Je dienst van vandaag staat al ingevuld. Meerdere nummers scheid je met een schuine streep.'
+                : 'Bijvoorbeeld 2101. Meerdere nummers scheid je met een schuine streep.'}
+            </p>
+            {viewerNummers && (
+              <RitbladViewer dienstnummer={viewerNummers} open onClose={() => setViewerNummers(null)} />
+            )}
+          </Card>
+
           <Card padding="none" className="overflow-hidden">
             {current.url && touchToestel ? (
               /* Opent het vólledige PDF via openPdfInNewTab (met standalone-
@@ -310,7 +379,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-700">
                   <FileText size={20} />
                 </span>
-                <span className="text-base font-semibold text-slate-800">Bekijk ritblad</span>
+                <span className="text-base font-semibold text-slate-800">Volledige bundel</span>
                 <span className="max-w-sm text-body-sm font-normal text-slate-500">
                   Opent het volledige document, alle pagina's, met knijp-zoom.
                 </span>

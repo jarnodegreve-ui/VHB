@@ -4,7 +4,8 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Download, Rot
 import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, downloadBlob, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
-import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell } from '../components/ui';
+import { useZelfLadend } from '../lib/zelfLadend';
 import { ActieMenu } from '../components/ActieMenu';
 import { apiFetch } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
@@ -22,7 +23,7 @@ import type { User } from '../types';
 import { formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 import { DUR, EASE_SPRING } from '../lib/motion';
-import { useRouteParam } from '../app/router';
+import { useRecordParam, useRouteParam } from '../app/router';
 
 
 /** Sectiekop in het grid en de daglijst ("Chauffeurs", "Flexi/invallers",
@@ -74,8 +75,6 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     return maandUitParam(maandParam) ?? new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [data, setData] = useState<MonthPlanning | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [selected, setSelected] = useState<{ driverName: string; driverId: string; iso: string; cell: MonthCell } | null>(null);
 
 
@@ -287,23 +286,27 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const monthParam = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
   const todayIso = isoDate(new Date());
 
-  // Hoofdmaand → URL (replace, geen extra history-entry); de state blijft de
-  // bron. De huidige maand geeft een schone URL zonder parameter.
-  useEffect(() => {
-    const gewenst = monthParam === maandNaarParam(new Date()) ? null : monthParam;
-    if ((maandParam ?? null) !== gewenst) zetMaandParam(gewenst);
-  }, [monthParam, maandParam, zetMaandParam]);
+  // Gekozen dag van de mobiele dag-weergave in de URL (segment ná de maand:
+  // /maandplanning/2026-09/2026-09-15), zie het state-blok "Mobiel:
+  // dag-weergave" verderop. Alleen een tik schrijft; de automatische keuze
+  // (vandaag / eerste dag) blijft buiten de URL.
+  const [dagParam, zetDagParam] = useRecordParam(1, { view: 'bezetting' });
 
+  // Hoofdmaand → URL (replace, geen extra history-entry); de state blijft de
+  // bron. De huidige maand geeft een schone URL zonder parameter, behalve
+  // als er een dag in de URL staat: die kan niet zonder maand ervoor.
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError('');
-    fetchMonthPlanning(monthParam)
-      .then((res) => { if (!cancelled) setData(res); })
-      .catch((e) => { if (!cancelled) setError(e?.message || 'Kon de maandplanning niet laden.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [monthParam]);
+    const gewenst = monthParam === maandNaarParam(new Date()) && !dagParam ? null : monthParam;
+    if ((maandParam ?? null) !== gewenst) zetMaandParam(gewenst);
+  }, [monthParam, maandParam, zetMaandParam, dagParam]);
+
+  // Hoofdmaand: laad, fout en "Opnieuw proberen" via de gedeelde hook (punt
+  // 17); geen focus-refresh, de realtime-laag hieronder ververst al.
+  const zl = useZelfLadend(async () => { setData(await fetchMonthPlanning(monthParam)); }, {
+    deps: [monthParam],
+    focusRefresh: false,
+    boodschap: (e) => (e instanceof Error && e.message ? e.message : 'Kon de maandplanning niet laden.'),
+  });
 
   // Stille herlaad-momenten: na een eigen wissel (reloadTick) en wanneer een
   // collega de planning wijzigt (realtime planning_version → App dispatcht
@@ -311,11 +314,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // tot de verse binnen is, anders flitst het scherm bij elke wissel.
   useEffect(() => {
     if (reloadTick === 0) return;
-    let cancelled = false;
-    fetchMonthPlanning(monthParam)
-      .then((res) => { if (!cancelled) setData(res); })
-      .catch(() => { /* stil: volgende verversing of maandwissel herstelt */ });
-    return () => { cancelled = true; };
+    void zl.ververs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadTick]);
 
@@ -453,11 +452,26 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const [toonRust, setToonRust] = useState(false);
   useEffect(() => {
     if (dates.length === 0) { setMobielDag(null); return; }
-    // Vandaag als hij in de geladen maand valt, anders de eerste dag; een al
-    // geldige keuze blijft staan (maandwissel reset, dagwissel niet).
-    setMobielDag((cur) => (cur && dates.includes(cur) ? cur : (dates.includes(todayIso) ? todayIso : dates[0])));
-    setToonRust(false);
-  }, [dates, todayIso]);
+    // De dag uit de URL (deeplink, refresh, terugknop) wint zolang hij in de
+    // geladen maand valt; anders vandaag als die erin valt, anders de eerste
+    // dag. Een al geldige keuze blijft staan (maandwissel reset, dagwissel
+    // niet). Een dag die niet in deze maand ligt (oude maand, typefout) gaat
+    // stil uit de URL: /maandplanning/2026-10/2026-09-15 zegt niets.
+    const uitUrl = dagParam && dates.includes(dagParam) ? dagParam : null;
+    if (dagParam && !uitUrl) zetDagParam(null);
+    setMobielDag((cur) => uitUrl ?? (cur && dates.includes(cur) ? cur : (dates.includes(todayIso) ? todayIso : dates[0])));
+  }, [dates, todayIso, dagParam, zetDagParam]);
+  // Rust-groep dichtklappen bij een maandwissel (nieuwe dagenlijst), niet bij
+  // elke dagwissel.
+  useEffect(() => { setToonRust(false); }, [dates]);
+  // Tik in de strip of op het aandachtspijltje: dag kiezen én in de URL
+  // zetten (replace). De maand moet er dan vóór staan, ook voor de huidige
+  // maand die anders een schone URL houdt.
+  const kiesDag = (iso: string) => {
+    setMobielDag(iso);
+    if (!maandParam) zetMaandParam(monthParam);
+    zetDagParam(iso);
+  };
 
   // De gekozen dag in de strip in beeld houden (bv. na "Vandaag" of een
   // maandwissel). Bewust NIET scrollIntoView bij elke tik: die sprong hard
@@ -517,7 +531,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const springNaarAandacht = () => {
     if (aandachtDagen.length === 0) return;
     const volgende = aandachtDagen.find((iso) => !!mobielDag && iso > mobielDag) ?? aandachtDagen[0];
-    setMobielDag(volgende);
+    kiesDag(volgende);
   };
 
   // Rijen van de mobiele dag-weergave: hoofdlijst per sectie (op dienstnummer,
@@ -633,9 +647,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         )}
       />
 
-      {error ? (
-        <Card padding="md" className="text-center"><p className="text-sm font-semibold text-red-700">{error}</p></Card>
-      ) : loading ? (
+      {zl.fout ? (
+        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+      ) : zl.laden ? (
         /* Skeleton i.p.v. spinner — zelfde shimmer als de rest van de app. */
         <Card padding="none" className="overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -864,7 +878,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       type="button"
                       role="tab"
                       aria-selected={gekozen}
-                      onClick={() => setMobielDag(iso)}
+                      onClick={() => kiesDag(iso)}
                       className={cn(
                         // Kleuren via transition-colors; de amber pil zelf is
                         // een motion-span met layoutId die tussen de dagen

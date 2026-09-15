@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Plus, Thermometer, ChevronDown } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Mail, Plus, Thermometer, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
 import { cn, notify } from '../../lib/ui';
+import { navigeer } from '../../app/router';
+import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../../lib/uitweg';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
@@ -567,6 +569,15 @@ export function ZiekteView({
                         {/* Wizard: batch-advies vult per gat de beste passende
                             kandidaat voor; "Verdeel alles" voert de gekozen
                             wissels in één keer door (met bevestiging). */}
+                        {/* Planner zonder adminrecht: één mail naar de admins
+                            met de open diensten en hun deeplink (punt 17). */}
+                        {!isAdmin && (() => {
+                          const open = openDienstenLijst(detail).filter((d) => !overgezet[d.id]);
+                          const href = open.length ? adminMailto(users, `Diensten overzetten na ziekmelding ${naamVan(detail.userId)}`, ziekmeldMailTekst(naamVan(detail.userId), open.map((d) => ({ date: d.date, nummer: serviceNumberOf(d) })), window.location.origin)) : undefined;
+                          return href ? (
+                            <Button variant="secondary" size="sm" className="shrink-0" icon={<Mail size={16} />} onClick={() => { window.location.href = href; }}>Vraag een admin</Button>
+                          ) : null;
+                        })()}
                         {isAdmin && (openDienstenLijst(detail).filter((d) => !overgezet[d.id]).length > 1 || verdeelBezig) && (() => {
                           const teVerdelen = openDienstenLijst(detail).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]).length;
                           return (
@@ -590,7 +601,15 @@ export function ZiekteView({
                             <Card key={dienst.id} tone="muted" padding="none" className="px-3.5 py-3 space-y-2.5">
                               <div className="flex items-center justify-between gap-3">
                                 <span className="text-sm font-semibold text-slate-800 tabular-nums">Dienst {serviceNumberOf(dienst)}</span>
-                                <span className={cn(microLabelClass, 'tabular-nums')}>{formatShortDay(dienst.date)}</span>
+                                <span className="flex items-center gap-2">
+                                  <span className={cn(microLabelClass, 'tabular-nums')}>{formatShortDay(dienst.date)}</span>
+                                  {/* Admin: rechtstreeks naar die dag in de Maandplanning. */}
+                                  {isAdmin && !klaar && (
+                                    <Button variant="ghost" size="sm" icon={<CalendarDays size={14} />} onClick={() => { setDetail(null); navigeer('bezetting', { params: maandplanningParams(dienst.date) }); }}>
+                                      Maandplanning
+                                    </Button>
+                                  )}
+                                </span>
                               </div>
                               {klaar ? (
                                 <p className="text-xs font-semibold text-emerald-700">Overgezet naar {klaar}</p>
@@ -625,7 +644,7 @@ export function ZiekteView({
                                 </div>
                                 </>
                               ) : (
-                                <p className="text-xs font-medium text-slate-500">Een admin kan deze dienst overzetten.</p>
+                                <p className="text-xs font-medium text-slate-500">Nog niet herverdeeld, een admin kan deze dienst overzetten.</p>
                               )}
                             </Card>
                           );

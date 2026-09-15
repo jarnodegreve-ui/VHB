@@ -1,4 +1,4 @@
-import type { LeaveRequest, PlanningMatrixImportHistory, Shift, SwapRequest, User } from '../types';
+import type { LeaveRequest, PlanningMatrixImportHistory, Shift, SwapRequest, User, View } from '../types';
 import type { DayGap } from './coverage';
 import { isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from './availability';
 
@@ -136,4 +136,204 @@ export function berekenWerkvoorraad({
     attentionCount,
     needsAttention: attentionCount > 0,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Platte itemlijst (scherm /werkvoorraad, 15-09)
+// ---------------------------------------------------------------------------
+
+/** Soorten werk, in de volgorde van de tegels en filterchips op /werkvoorraad. */
+export type WerkSoort = 'verlof' | 'ruil' | 'herverdelen' | 'dekking' | 'toestellen' | 'vervaldata' | 'planning';
+
+export const WERK_SOORTEN: readonly WerkSoort[] = ['verlof', 'ruil', 'herverdelen', 'dekking', 'toestellen', 'vervaldata', 'planning'];
+
+export const WERK_SOORT_LABELS: Record<WerkSoort, string> = {
+  verlof: 'Verlof',
+  ruil: 'Dienstruil',
+  herverdelen: 'Te herverdelen',
+  dekking: 'Open diensten',
+  toestellen: 'Toestellen',
+  vervaldata: 'Vervaldata',
+  planning: 'Planning',
+};
+
+export type WerkItem = {
+  /** Stabiele sleutel (React key + selectie). */
+  key: string;
+  soort: WerkSoort;
+  tone: 'red' | 'amber' | 'blue';
+  titel: string;
+  detail?: string;
+  /** Hoeveel eenheden dit item in de teller weegt (een herverdeel-rij telt
+   *  per dienst; alles anders 1). De som over alle items = attentionCount. */
+  aantal: number;
+  /** Sorteeras "wat dringt het meest": epoch ms van het moment dat telt.
+   *  Voor aanvragen en toestellen de aanmaakdatum (oudste eerst), voor
+   *  vervaldata en open diensten de datum zelf (dichtstbij eerst). */
+  wanneer: number;
+  /** Leesbare vorm van `wanneer` ("3 dagen geleden", "over 12 dagen", "ma 21 sep"). */
+  wanneerTekst: string;
+  /** Naam van de betrokken collega (zoekveld). */
+  naam?: string;
+  /** Waar de beslissing genomen wordt (zelfde doelen als het dashboardpaneel). */
+  doel: View;
+  doelParams?: string[];
+  /** Alleen voor toestellen: de rij uit pendingDevices, voor goedkeuren. */
+  toestel?: PendingDevice;
+};
+
+/** "zojuist" / "12 min geleden" / "3 u geleden" / "gisteren" / "5 dagen geleden". */
+export function sindsTekst(iso: string, now: Date): string {
+  const diff = now.getTime() - new Date(iso).getTime();
+  if (!Number.isFinite(diff) || diff < 0) return '';
+  const minuten = Math.floor(diff / 60000);
+  if (minuten < 1) return 'zojuist';
+  if (minuten < 60) return `${minuten} min geleden`;
+  const uren = Math.floor(minuten / 60);
+  if (uren < 24) return `${uren} u geleden`;
+  const dagen = Math.floor(uren / 24);
+  return dagen === 1 ? 'gisteren' : `${dagen} dagen geleden`;
+}
+
+const overTekst = (dagen: number): string =>
+  dagen < 0
+    ? `${Math.abs(dagen)} ${Math.abs(dagen) === 1 ? 'dag' : 'dagen'} verlopen`
+    : dagen === 0 ? 'vandaag' : `over ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}`;
+
+const epochVanDag = (iso: string): number => {
+  const t = Date.parse(`${iso.slice(0, 10)}T00:00:00`);
+  return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+};
+const epochVanTijd = (iso: string): number => {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+};
+
+/**
+ * De werkvoorraad als platte lijst, één item per beslissing, gesorteerd op
+ * wat het meest dringt (oudste aanvraag / dichtstbijzijnde datum eerst).
+ * Herverdelen is één item per chauffeur (met `aantal` = diensten), zoals het
+ * dashboardpaneel; de som van `aantal` is exact `attentionCount`, zodat de
+ * tegels op /werkvoorraad en de badge in de topbar nooit uiteenlopen.
+ * `formatDag` levert de korte dagnaam (lib/format.formatShortDay) zodat deze
+ * module zelf niets uit de UI-laag hoeft te trekken.
+ */
+export function werkvoorraadItems(
+  wv: Werkvoorraad,
+  opts: { naamVan: (id: string) => string; now: Date; formatDag: (iso: string) => string; soortLabel?: (soort: string) => string },
+): WerkItem[] {
+  const { naamVan, now, formatDag } = opts;
+  const soortLabel = opts.soortLabel ?? ((s) => s);
+  const today = isoDate(now);
+  const items: WerkItem[] = [];
+  const enkelvoud = (n: number, ev: string, mv: string) => `${n} ${n === 1 ? ev : mv}`;
+  const importMoment = wv.lastImport ? epochVanTijd(wv.lastImport.createdAt) : now.getTime();
+
+  if (wv.planningStale) {
+    items.push({
+      key: 'planning:stale', soort: 'planning', tone: 'amber', aantal: 1,
+      titel: `Planning al ${wv.daysSinceImport} dagen niet bijgewerkt`,
+      detail: 'Upload de laatste Excel zodat de planning actueel blijft.',
+      wanneer: importMoment, wanneerTekst: wv.lastImport ? sindsTekst(wv.lastImport.createdAt, now) : '',
+      doel: 'beheer-roosters',
+    });
+  }
+  if (wv.horizonKrap) {
+    const op = (wv.horizonDagenOver ?? 0) <= 0;
+    items.push({
+      key: 'planning:horizon', soort: 'planning', tone: op ? 'red' : 'amber', aantal: 1,
+      titel: op ? 'De geladen planning is op' : `Planning geladen t/m ${formatDag(wv.planningHorizon)}`,
+      detail: 'Importeer de volgende periode zodat chauffeurs vooruit kunnen kijken.',
+      wanneer: wv.planningHorizon ? epochVanDag(wv.planningHorizon) : now.getTime(),
+      wanneerTekst: op ? 'nu' : `nog ${enkelvoud(wv.horizonDagenOver ?? 0, 'dag', 'dagen')}`,
+      doel: 'beheer-roosters',
+    });
+  }
+  if (wv.importIssueCount > 0 && wv.lastImport) {
+    items.push({
+      key: 'planning:import', soort: 'planning', tone: 'red', aantal: 1,
+      titel: 'Laatste import heeft aandachtspunten',
+      detail: [
+        wv.lastImport.unknownCodes.length > 0 ? `${wv.lastImport.unknownCodes.length} onbekende codes` : null,
+        wv.lastImport.unmatchedDrivers.length > 0 ? `${wv.lastImport.unmatchedDrivers.length} niet-gematchte chauffeurs` : null,
+      ].filter(Boolean).join(' · '),
+      wanneer: importMoment, wanneerTekst: sindsTekst(wv.lastImport.createdAt, now),
+      doel: 'beheer-roosters',
+    });
+  }
+  for (const g of wv.herverdeelPerChauffeur) {
+    const eerste = g.diensten.reduce((min, s) => (s.date < min ? s.date : min), g.diensten[0]?.date ?? today);
+    items.push({
+      key: `herverdeel:${g.driverId}`, soort: 'herverdelen', tone: 'red', aantal: g.diensten.length,
+      titel: `${enkelvoud(g.diensten.length, 'dienst', 'diensten')} nog niet herverdeeld, ${g.naam}`,
+      detail: `${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDag(s.date)} (${s.line})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`,
+      wanneer: epochVanDag(eerste), wanneerTekst: eerste === today ? 'vandaag' : formatDag(eerste),
+      naam: g.naam,
+      doel: 'ziekte',
+    });
+  }
+  for (const d of wv.gapDays) {
+    items.push({
+      key: `dekking:${d.date}`, soort: 'dekking', tone: 'red', aantal: 1,
+      titel: `${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'}, ${formatDag(d.date)}`,
+      detail: `Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`,
+      wanneer: epochVanDag(d.date), wanneerTekst: d.date === today ? 'vandaag' : formatDag(d.date),
+      doel: 'dekking', doelParams: [d.date.slice(0, 7)],
+    });
+  }
+  for (const req of wv.pendingLeave) {
+    const naam = naamVan(req.userId);
+    items.push({
+      key: `verlof:${req.id}`, soort: 'verlof', tone: 'amber', aantal: 1,
+      titel: `Verlofaanvraag · ${naam}`,
+      detail: `${formatDag(req.startDate)}${req.startDate !== req.endDate ? ` → ${formatDag(req.endDate)}` : ''} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : req.type === 'klein_verlet' ? 'klein verlet' : 'ziekte'}`,
+      wanneer: epochVanTijd(req.createdAt), wanneerTekst: sindsTekst(req.createdAt, now),
+      naam,
+      doel: 'verlof',
+    });
+  }
+  for (const swap of wv.pendingSwaps) {
+    const aanvrager = naamVan(swap.requesterId);
+    const collega = swap.targetDriverId ? naamVan(swap.targetDriverId) : null;
+    items.push({
+      key: `ruil:${swap.id}`, soort: 'ruil', tone: 'blue', aantal: 1,
+      titel: `${swap.swapType === 'overname' ? 'Overname' : 'Dienstruil'} · ${collega ? `${aanvrager} → ${collega}` : aanvrager}`,
+      detail: swap.status === 'accepted' ? 'Collega akkoord, wacht op validatie' : swap.reason || 'Wacht op een collega',
+      wanneer: epochVanTijd(swap.createdAt), wanneerTekst: sindsTekst(swap.createdAt, now),
+      naam: [aanvrager, collega].filter(Boolean).join(' '),
+      doel: 'ruil-verzoeken',
+    });
+  }
+  for (const dev of wv.pendingDevices) {
+    const naam = naamVan(dev.userId);
+    items.push({
+      key: `toestel:${dev.userId}:${dev.name}:${dev.createdAt}`, soort: 'toestellen', tone: 'amber', aantal: 1,
+      titel: `Toestel wacht op goedkeuring · ${naam}`,
+      detail: dev.name,
+      wanneer: epochVanTijd(dev.createdAt), wanneerTekst: sindsTekst(dev.createdAt, now),
+      naam,
+      doel: 'toestellen',
+      toestel: dev,
+    });
+  }
+  for (const e of wv.vervalTaken) {
+    const naam = naamVan(e.userId);
+    items.push({
+      key: `verval:${e.userId}:${e.soort}`, soort: 'vervaldata', tone: e.dagen < 0 ? 'red' : 'amber', aantal: 1,
+      titel: `${soortLabel(e.soort)} · ${naam}`,
+      detail: e.dagen < 0 ? `Verlopen sinds ${formatDag(e.validUntil)}` : `Verloopt ${formatDag(e.validUntil)}`,
+      wanneer: epochVanDag(e.validUntil), wanneerTekst: overTekst(e.dagen),
+      naam,
+      doel: 'vervaldata',
+    });
+  }
+
+  return items.sort((a, b) => a.wanneer - b.wanneer || a.titel.localeCompare(b.titel, 'nl'));
+}
+
+/** Telling per soort (som van `aantal`), voor tegels en chips. */
+export function telPerSoort(items: readonly WerkItem[]): Record<WerkSoort, number> {
+  const uit = Object.fromEntries(WERK_SOORTEN.map((s) => [s, 0])) as Record<WerkSoort, number>;
+  for (const it of items) uit[it.soort] += it.aantal;
+  return uit;
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LEGE_DASHBOARD_VOORKEUREN, parseDashboardVoorkeuren, type DashboardVoorkeuren } from '../../shared/schemas/dashboardVoorkeuren';
+import { LEGE_DASHBOARD_VOORKEUREN, parseDashboardVoorkeuren, type DashboardVoorkeuren, type DashboardVoorkeurenPatch } from '../../shared/schemas/dashboardVoorkeuren';
 import type { User } from '../types';
 import { apiFetch } from './api';
+import { onthoudStartschermLokaal } from './startscherm';
 import { notify } from './ui';
 
 /**
@@ -155,10 +156,39 @@ export const bewaarLokaleVoorkeuren = (userId: string, v: DashboardVoorkeuren | 
 };
 
 /**
+ * Eén deel van de voorkeuren opslaan (Instellingen: startscherm, meldings-
+ * soorten). De server voegt samen met wat er al staat, dus dit raakt de
+ * tegelindeling niet. Gooit bij een mislukte save (de aanroeper meldt het).
+ */
+export async function bewaarVoorkeurDeel(patch: DashboardVoorkeurenPatch): Promise<DashboardVoorkeuren | null> {
+  const res = await apiFetch('/api/me/voorkeuren', { method: 'PATCH', body: JSON.stringify({ dashboard: patch }) });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({} as { error?: string }));
+    throw new Error(data?.error || `Opslaan mislukt (${res.status})`);
+  }
+  const data = await res.json().catch(() => null) as { dashboardVoorkeuren?: unknown } | null;
+  return parseDashboardVoorkeuren(data?.dashboardVoorkeuren);
+}
+
+/**
+ * Startscherm uit het profiel naar de lokale kopie spiegelen (de router
+ * leest die vóór /api/me, zie src/lib/startscherm.ts). Aanroepen vanuit de
+ * schermen die als eerste renderen; goedkoop en idempotent.
+ */
+export const spiegelStartscherm = (user: Pick<User, 'dashboardVoorkeuren'>): void => {
+  onthoudStartschermLokaal(user.dashboardVoorkeuren?.startscherm ?? null);
+};
+
+/** Alleen de tegel-sleutels: het dashboard bezit die, Instellingen de rest. */
+const tegelPatch = (v: DashboardVoorkeuren): DashboardVoorkeurenPatch => ({ verborgen: v.verborgen, volgorde: v.volgorde });
+
+/**
  * Voorkeuren van de ingelogde gebruiker + opslaan. Start met het profiel
  * (/api/me); een lokale kopie wint alleen zolang er een niet-geslaagde save
  * openstaat. Opslaan: meteen lokaal + in de state (live preview), daarna
  * één PATCH (400 ms gebundeld); lukt die, dan gaat de lokale kopie weg.
+ * De PATCH draagt alleen de tegel-sleutels (verborgen, volgorde), zodat een
+ * intussen in Instellingen gekozen startscherm hier nooit overschreven wordt.
  */
 export function useDashboardVoorkeuren(user: User) {
   const [voorkeuren, setVoorkeuren] = useState<DashboardVoorkeuren>(
@@ -170,7 +200,7 @@ export function useDashboardVoorkeuren(user: User) {
 
   const verstuur = useCallback(async (v: DashboardVoorkeuren) => {
     try {
-      const res = await apiFetch('/api/me/voorkeuren', { method: 'PATCH', body: JSON.stringify({ dashboard: v }) });
+      const res = await apiFetch('/api/me/voorkeuren', { method: 'PATCH', body: JSON.stringify({ dashboard: tegelPatch(v) }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({} as { error?: string }));
         throw new Error(data?.error || `Opslaan mislukt (${res.status})`);
@@ -191,6 +221,9 @@ export function useDashboardVoorkeuren(user: User) {
   }, [user.id, verstuur]);
 
   useEffect(() => () => { if (timer.current) { window.clearTimeout(timer.current); void verstuur(laatste.current); } }, [verstuur]);
+
+  // Het dashboard is vaak het eerste scherm: spiegel het startscherm meteen.
+  useEffect(() => { spiegelStartscherm(user); }, [user]);
 
   return { voorkeuren, opslaan };
 }

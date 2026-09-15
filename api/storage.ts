@@ -2168,6 +2168,15 @@ export const markUpdatesRead = async (userId: string, updateIds: string[]) => {
   if (error) throw error;
 };
 
+/** Ids van de updates die één gebruiker al las (voor de knop- en markeerstaat in de client). */
+export const getUpdateReadIdsForUser = async (userId: string): Promise<string[]> => {
+  const client = requireDb();
+  const rows = await paginatedFetch((from, to) =>
+    client.from('update_reads').select('update_id').eq('user_id', String(userId)).order('update_id').range(from, to),
+  );
+  return rows.map((row) => String((row as any).update_id));
+};
+
 /**
  * Aantal unieke lezers per update-id (voor de planner-teller). Met
  * `allowedUserIds` tellen alleen reads van die gebruikers mee — de route geeft

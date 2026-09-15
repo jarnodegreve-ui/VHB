@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { db } from "./db.js";
 import type { MeldingSoort } from "../shared/schemas/meldingen.js";
+import { filterPushOntvangers } from "../shared/schemas/dashboardVoorkeuren.js";
 import { meldingUitPayload } from "./_lib/meldingen.js";
 import { bewaarMeldingen } from "./storage.js";
 
@@ -88,6 +89,23 @@ export const getUsersMetPush = async (): Promise<string[]> => {
   return [...new Set((data ?? []).map((r: any) => String(r.user_id)))];
 };
 
+/**
+ * Meldingsvoorkeuren van de ontvangers (users.dashboardvoorkeuren, jsonb):
+ * één select, id → ruwe jsonb. Fout of ontbrekende kolom (migratie
+ * 2026-09-06_meldingen.sql nog niet gedraaid) = lege kaart, en dan krijgt
+ * iedereen de push zoals voorheen; filteren is nooit een reden om niets te
+ * sturen. De pure regel zelf staat in shared/schemas/dashboardVoorkeuren.ts
+ * (`pushSoortToegestaan`, getest in dashboardVoorkeuren.test.ts).
+ */
+const getVoorkeurenVoorUsers = async (userIds: string[]): Promise<Map<string, unknown>> => {
+  const kaart = new Map<string, unknown>();
+  if (!db || userIds.length === 0) return kaart;
+  const { data, error } = await db.from("users").select("id, dashboardvoorkeuren").in("id", userIds.map(String));
+  if (error) return kaart;
+  for (const r of (data ?? []) as Array<{ id: string | number; dashboardvoorkeuren: unknown }>) kaart.set(String(r.id), r.dashboardvoorkeuren);
+  return kaart;
+};
+
 const getSubscriptionsForUsers = async (userIds: string[]): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>> => {
   if (!db || userIds.length === 0) return [];
   const { data, error } = await db
@@ -132,13 +150,21 @@ export const metDeadline = <T,>(p: Promise<T>, ms: number): Promise<T> =>
  * melding is de bron, push is het kanaal.
  * Best-effort en nooit blokkerend voor de hoofdflow: fouten worden gelogd,
  * verlopen abonnementen (404/410) worden opgeruimd.
+ *
+ * Meldingsvoorkeuren (punt 15, 15-09): wie een soort in Instellingen heeft
+ * uitgezet (users.dashboardvoorkeuren.meldingssoortenUit) krijgt voor die
+ * soort géén push, maar de rij in public.meldingen wordt altijd bewaard: de
+ * melding is de bron, alleen het kanaal filtert. 'systeem' is niet uit te
+ * zetten; een push zonder expliciete soort krijgt de soort die ook de
+ * melding-rij krijgt (afgeleid uit de deeplink).
  */
 export const sendPushToUsers = async (userIds: string[], payload: PushPayload): Promise<void> => {
   const ontvangers = [...new Set(userIds.map(String).filter(Boolean))];
   if (ontvangers.length === 0) return;
 
+  const melding = meldingUitPayload(payload);
   try {
-    await bewaarMeldingen(ontvangers, meldingUitPayload(payload));
+    await bewaarMeldingen(ontvangers, melding);
   } catch (err: any) {
     // Vóór migratie 2026-09-06_meldingen.sql bestaat de tabel niet: één keer
     // melden, verder stil — de push zelf gaat gewoon door.
@@ -149,7 +175,9 @@ export const sendPushToUsers = async (userIds: string[], payload: PushPayload): 
   }
 
   if (!ensureConfigured()) return;
-  const subscriptions = await getSubscriptionsForUsers(ontvangers);
+  const pushOntvangers = filterPushOntvangers(ontvangers, await getVoorkeurenVoorUsers(ontvangers), melding.soort);
+  if (pushOntvangers.length === 0) return;
+  const subscriptions = await getSubscriptionsForUsers(pushOntvangers);
   if (subscriptions.length === 0) return;
 
   // De client-SW kent alleen title/body/url; soort/doel blijven server-side.

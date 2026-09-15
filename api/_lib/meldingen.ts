@@ -25,6 +25,7 @@ export const PAD_PER_VIEW: Record<string, string> = {
   contacten: "contacten",
   bezetting: "maandplanning",
   meldingen: "meldingen",
+  werkvoorraad: "werkvoorraad",
   "beheer-roosters": "beheer/roosters",
   "planning-matrix": "beheer/planningsoverzicht",
   "planning-codes": "beheer/planningscodes",
@@ -69,29 +70,62 @@ const SOORT_PER_VIEW: Record<string, MeldingSoort> = {
   voertuigen: "techniek",
 };
 
-/** `/?view=rooster` → 'rooster'; `/verlof` → 'verlof'; '/' → null. */
-export const viewUitPushUrl = (url: string | undefined): string | null => {
+/**
+ * Pad → view + record-segmenten, met de langste bekende prefix (zoals
+ * routeUitPad in src/app/router.ts): `updates/u2` → updates + ['u2'],
+ * `beheer/omleidingen` → beheer-omleidingen + []. Onbekend pad = null.
+ */
+const routeUitPad = (pad: string): { view: string; rest: string[] } | null => {
+  const segmenten = pad.split("/").filter(Boolean).map((s) => {
+    try { return decodeURIComponent(s); } catch { return s; }
+  });
+  for (let n = segmenten.length; n >= 1; n--) {
+    const prefix = segmenten.slice(0, n).join("/");
+    const view = Object.entries(PAD_PER_VIEW).find(([, p]) => p === prefix)?.[0];
+    if (view) return { view, rest: segmenten.slice(n) };
+  }
+  return null;
+};
+
+/** View + record-segmenten uit een push-URL (`/?view=` of pad); null als ze nergens heen wijst. */
+const routeUitPushUrl = (url: string | undefined): { view: string; rest: string[] } | null => {
   if (!url) return null;
   try {
     const u = new URL(url, "https://vhbportaal.com");
     const view = u.searchParams.get("view");
-    if (view) return view;
-    const pad = u.pathname.replace(/^\/+|\/+$/g, "");
-    if (!pad) return null;
-    // Pad → view (omgekeerde tabel); onbekend pad = geen view.
-    const view2 = Object.entries(PAD_PER_VIEW).find(([, p]) => p === pad)?.[0];
-    return view2 ?? null;
+    if (view) return { view, rest: [] };
+    return routeUitPad(u.pathname);
   } catch {
     return null;
   }
 };
 
-/** Doel (pad in de app) uit een push-URL; null als de push nergens heen wijst. */
+/** `/?view=rooster` → 'rooster'; `/verlof` → 'verlof'; `/updates/u2` → 'updates'; '/' → null. */
+export const viewUitPushUrl = (url: string | undefined): string | null => routeUitPushUrl(url)?.view ?? null;
+
+/**
+ * Doel (pad in de app) uit een push-URL; null als de push nergens heen wijst.
+ * Record-segmenten reizen mee (`/updates/u2` → 'updates/u2'), zodat de
+ * melding op het item zelf landt (useRecordParam in de views).
+ */
 export const doelUitPushUrl = (url: string | undefined): string | null => {
-  const view = viewUitPushUrl(url);
-  if (!view) return null;
-  const pad = PAD_PER_VIEW[view];
-  return pad === undefined ? null : pad;
+  const r = routeUitPushUrl(url);
+  if (!r) return null;
+  const pad = PAD_PER_VIEW[r.view];
+  if (pad === undefined) return null;
+  return [pad, ...r.rest.map(encodeURIComponent)].filter(Boolean).join("/");
+};
+
+/**
+ * Push-URL naar één record: `recordUrl('updates', 'u2')` → '/updates/u2'.
+ * Padvorm (geen `?view=`), want alleen een pad kan een id dragen; de app
+ * leest beide (routeUitUrl), de service worker navigeert op het pad.
+ * Zonder id valt hij terug op het scherm zelf.
+ */
+export const recordUrl = (view: string, id?: string | number | null): string => {
+  const pad = PAD_PER_VIEW[view] ?? "";
+  const rest = id === undefined || id === null || String(id).trim() === "" ? "" : `/${encodeURIComponent(String(id))}`;
+  return `${pad ? `/${pad}` : ""}${rest}` || "/";
 };
 
 /** Soort uit een push-URL; 'systeem' als de URL geen domein verraadt. */

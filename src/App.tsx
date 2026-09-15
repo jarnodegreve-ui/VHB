@@ -111,6 +111,7 @@ const LazyLooncontroleView = lazyWithRetry(() => VIEW_LOADERS['looncontrole']().
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
 const LazyDevicesView = lazyWithRetry(() => import('./views/admin/DevicesView').then((module) => ({ default: module.DevicesView })));
+const LazyWerkvoorraadView = lazyWithRetry(() => VIEW_LOADERS['werkvoorraad']().then((m) => ({ default: (m as typeof import('./views/WerkvoorraadView')).WerkvoorraadView })));
 const LazyLeaveManagementView = lazyWithRetry(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
 // Ook lazy (planner/admin-only, maar stond eager in de hoofdbundel): de
 // ops-cockpit sleept ops/coverage/monthPlanning mee die een chauffeur nooit
@@ -1709,6 +1710,7 @@ export default function App() {
               {resolvedCurrentView === 'activiteit' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
               {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
+              {resolvedCurrentView === 'werkvoorraad' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyWerkvoorraadView currentUser={currentUser!} onNavigate={(view, params) => { scrollContainerRef.current?.scrollTo({ top: 0 }); navigeer(view, { params }); }} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'defecten' && <Suspense fallback={<ViewLoader />}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'werkprestaties' && <Suspense fallback={<ViewLoader />}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense>}
               {resolvedCurrentView === 'voertuigen' && <Suspense fallback={<ViewLoader />}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}

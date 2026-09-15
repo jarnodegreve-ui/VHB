@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, IdCard, Pencil, RefreshCw, UserX } from 'lucide-react';
+import { AlertTriangle, IdCard, Pencil, UserX } from 'lucide-react';
 import type { User } from '../../types';
+import { useRecordParam } from '../../app/router';
 import { cn, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateHuman } from '../../lib/format';
-import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
+import { useZelfLadend } from '../../lib/zelfLadend';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
@@ -26,8 +28,6 @@ type Filter = 'all' | 'verlopen' | 'binnen30' | 'binnen90' | 'zonder';
  *  bereikbaar voor planners (Gebruikersbeheer is admin-only). */
 export function VervaldataView({ users }: { users: User[] }) {
   const [expiries, setExpiries] = useState<ExpiryRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   // Bewerken: per chauffeur een draft met de bewaakte datums.
   const [bewerkt, setBewerkt] = useState<User | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -42,21 +42,12 @@ export function VervaldataView({ users }: { users: User[] }) {
   // Rijdichtheid + kolomkeuze, onthouden per toestel.
   const voorkeur = useTabelVoorkeur('vervaldata', KOLOMMEN);
 
-  const load = async () => {
-    setIsLoading(true);
-    try {
-      const res = await apiFetch('/api/user-expiries');
-      if (!res.ok) throw new Error(String(res.status));
-      const rows = await res.json();
-      setExpiries(Array.isArray(rows) ? rows : []);
-      setError(null);
-    } catch {
-      setError('Kon de vervaldata niet laden.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  useEffect(() => { void load(); }, []);
+  const zl = useZelfLadend(async () => {
+    const res = await apiFetch('/api/user-expiries');
+    if (!res.ok) throw new Error(String(res.status));
+    const rows = await res.json();
+    setExpiries(Array.isArray(rows) ? rows : []);
+  }, { boodschap: 'Kon de vervaldata niet laden.' });
 
   const vandaagIso = useMemo(() => {
     const nu = new Date();
@@ -154,10 +145,29 @@ export function VervaldataView({ users }: { users: User[] }) {
     return `eerst vervallend over ${eerste} ${eerste === 1 ? 'dag' : 'dagen'}`;
   };
 
-  const openBewerken = (u: User) => {
+  // De gekozen chauffeur staat in de URL (/beheer/vervaldata/<userId>):
+  // deelbaar ("kijk die van Alex eens na") en een refresh houdt de modal
+  // open. De Modal pusht zelf zijn history-entry (useHistoryDismiss); de
+  // URL wisselt met replace, en sluiten wist het id weer.
+  const [userParam, zetUserParam] = useRecordParam(0, { view: 'vervaldata' });
+
+  const toonBewerken = (u: User) => {
     setBewerkt(u);
     setDraft({ ...(perUser.get(String(u.id)) ?? {}) });
   };
+  const openBewerken = (u: User) => { toonBewerken(u); zetUserParam(String(u.id)); };
+  const sluitBewerken = () => { setBewerkt(null); zetUserParam(null); };
+
+  // URL → modal, pas zodra de vervaldata geladen zijn: de draft komt uit
+  // perUser, en een lege draft opslaan zou bestaande datums wissen. Een
+  // onbekend id doet niets (lijst zonder selectie).
+  useEffect(() => {
+    if (!userParam || !zl.laatstGeladen) return;
+    if (bewerkt && String(bewerkt.id) === userParam) return;
+    const u = users.find((x) => String(x.id) === userParam);
+    if (u) toonBewerken(u);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userParam, users, zl.laatstGeladen]);
 
   const opslaan = async () => {
     if (!bewerkt || isSaving) return;
@@ -181,10 +191,10 @@ export function VervaldataView({ users }: { users: User[] }) {
     }
     setIsSaving(false);
     if (!mislukt) {
-      setBewerkt(null);
+      sluitBewerken();
       notify('Vervaldata opgeslagen.', 'success');
     }
-    await load();
+    await zl.ververs();
   };
 
   /** Datumpil per soort; `metLabel` voor de mobiele kaart (daar is geen kolomkop). */
@@ -214,16 +224,10 @@ export function VervaldataView({ users }: { users: User[] }) {
       <PageHeader
         eyebrow="Beheer"
         title="Vervaldata"
-        actions={(
-          <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>
-            Ververs
-          </Button>
-        )}
+        actions={<VersheidRegel {...zl.versheid} />}
       />
 
-      {error && (
-        <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>
-      )}
+      {zl.fout && expiries.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       {/* Ops-tegels (zelfde als de status-strip op het dashboard): vaste
           twee-regel-labelzone, dus cijfers en subteksten van alle vier de
@@ -267,7 +271,9 @@ export function VervaldataView({ users }: { users: User[] }) {
         />
       </div>
 
-      {isLoading && expiries.length === 0 && !error ? (
+      {zl.fout && expiries.length === 0 ? (
+        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+      ) : zl.laden && expiries.length === 0 ? (
         <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Vervaldata worden geladen">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
@@ -375,7 +381,7 @@ export function VervaldataView({ users }: { users: User[] }) {
         </div>
       )}
 
-      <Modal open={!!bewerkt} onClose={() => setBewerkt(null)} maxWidth="sm" ariaLabel={bewerkt ? `Vervaldata van ${bewerkt.name}` : 'Vervaldata'}>
+      <Modal open={!!bewerkt} onClose={sluitBewerken} maxWidth="sm" ariaLabel={bewerkt ? `Vervaldata van ${bewerkt.name}` : 'Vervaldata'}>
         {bewerkt && (
           <div className="p-6">
             <CardHeader title={bewerkt.name} description="Leeg laten = niet bewaken voor dit document." />
@@ -393,7 +399,7 @@ export function VervaldataView({ users }: { users: User[] }) {
               ))}
             </div>
             <div className="mt-5 flex gap-3">
-              <Button variant="ghost" className="flex-1" onClick={() => setBewerkt(null)}>Annuleren</Button>
+              <Button variant="ghost" className="flex-1" onClick={sluitBewerken}>Annuleren</Button>
               <Button variant="primary" className="flex-1" onClick={() => void opslaan()} disabled={isSaving}>{isSaving ? 'Bezig…' : 'Opslaan'}</Button>
             </div>
           </div>

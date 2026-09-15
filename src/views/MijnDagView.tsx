@@ -8,6 +8,7 @@ import { relatieveDag } from '../lib/datum';
 import { formatDayLong, formatShortDay, formatSyncedTime, serviceNumberOf } from '../lib/format';
 import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '../lib/ruilBadge';
 import { warmRitbladCache } from '../lib/ritbladCache';
+import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
 import { useOnline } from '../lib/useOnline';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, shiftWindowMinutes } from '../lib/shiftTime';
 import { cn } from '../lib/ui';
@@ -72,6 +73,10 @@ export function MijnDagView({
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // Startscherm-voorkeur naar de lokale kopie (de router leest die bij het
+  // opstarten, vóór het profiel binnen is; src/lib/startscherm.ts).
+  useEffect(() => { spiegelStartscherm(user); }, [user]);
 
   // Offline (next-level 2, 06-09): de service worker serveert de laatst
   // bekende planning/omleidingen/notities en het opgeslagen ritblad; hier
@@ -325,11 +330,13 @@ export function MijnDagView({
       )}
 
       {/* === Ritblad: de bundel is voor iedereen, maar de viewer toont meteen de
-          pagina's van jóuw dienstnummer (Jarno 04-09); alleen bij vandaag. === */}
-      {isVandaag && delen.length > 0 && (
+          pagina's van jóuw dienstnummer (Jarno 04-09). Ook voor morgen zodra
+          het dienstnummer bekend is (punt 15): 's avonds klaarleggen wat je
+          morgen rijdt. Het blad is altijd de actuele bundel. === */}
+      {delen.length > 0 && (
         <>
           <Button variant="secondary" size="lg" full icon={<FileText size={18} />} onClick={() => setRitbladOpen(true)}>
-            Ritblad van vandaag
+            Ritblad van {dagWoord}
           </Button>
           <RitbladViewer dienstnummer={dienstnummers} open={ritbladOpen} onClose={() => setRitbladOpen(false)} />
         </>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Calendar, ChevronDown, ChevronRight, FileText, Search, X } from 'lucide-react';
 import { LijnTegel } from '../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenVan, raaktLijn } from '../../shared/lijnen';
@@ -7,6 +7,7 @@ import { isoDate } from '../lib/availability';
 import type { Diversion } from '../types';
 import { cn } from '../lib/ui';
 import { kiesRecord } from '../lib/overgang';
+import { useRecordParam } from '../app/router';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
@@ -26,7 +27,10 @@ import { LegeLijst, NietGevonden } from '../components/illustraties';
  * + eerste regel omschrijving, en de kop is één rij zoek + lijnfilter.
  */
 export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSyncedAt?: number | null }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // De keuze staat in de URL (/omleidingen/<id>): deelbaar, en een melding
+  // over één omleiding landt meteen op dat item. Alleen een klik schrijft;
+  // de desktop-voorselectie hieronder blijft afgeleid.
+  const [selectedId, setSelectedId] = useRecordParam(0, { view: 'omleidingen' });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLine, setSelectedLine] = useState<string>('all');
   const [toonVerlopen, setToonVerlopen] = useState(false);
@@ -49,8 +53,13 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
     return matchesSearch && matchesLine;
   });
   const groepen = groepeerOmleidingen(gefilterd, vandaag);
-  // Wie zoekt, wil ook een verlopen treffer zien: dan klapt "Voorbij" vanzelf open.
-  const verlopenOpen = toonVerlopen || zoek.length > 0;
+  // Wie zoekt, wil ook een verlopen treffer zien: dan klapt "Voorbij" vanzelf
+  // open. Een link naar een verlopen omleiding (/omleidingen/<id>) klapt de
+  // sectie ook open, en die blijft dan open (anders verdween de lijst weer
+  // zodra je vanuit die link een ander record koos).
+  const verlopenGekozen = groepen.verlopen.some((d) => d.id === selectedId);
+  useEffect(() => { if (verlopenGekozen) setToonVerlopen(true); }, [verlopenGekozen]);
+  const verlopenOpen = toonVerlopen || zoek.length > 0 || verlopenGekozen;
   const zichtbaar = [...groepen.lopend, ...groepen.komend, ...(verlopenOpen ? groepen.verlopen : [])];
   const nietsActueel = groepen.lopend.length === 0 && groepen.komend.length === 0;
 

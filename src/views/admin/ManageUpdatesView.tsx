@@ -15,6 +15,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
 import { ActieMenu } from '../../components/ActieMenu';
+import { useRecordParam } from '../../app/router';
 
 const FORM_ID = 'update-form';
 
@@ -122,11 +123,19 @@ export function ManageUpdatesView({
     setIsPublishing(false);
   };
 
+  // De expliciet gekozen update staat in de URL (/beheer/updates/<id>):
+  // deelbaar met een collega, en een refresh houdt het formulier open. De
+  // desktop-voorselectie (useStandaardKeuze) schrijft níét, alleen een klik.
+  const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-updates' });
+
   const handleOpenAdd = () => {
     setEditingId(null);
     setUpdateForm(emptyUpdateForm);
     setFouten({});
     setPaneelOpen(true);
+    // Het lege formulier hoort bij geen record: anders zou een refetch de
+    // URL-keuze hieronder opnieuw openen en het nieuwe formulier kapen.
+    zetRecordParam(null);
   };
 
   const handleEdit = (update: Update) => {
@@ -146,7 +155,11 @@ export function ManageUpdatesView({
     setEditingId(null);
     setUpdateForm(emptyUpdateForm);
     setFouten({});
+    zetRecordParam(null);
   };
+
+  // Klik in de lijst: formulier openen én de keuze in de URL zetten.
+  const kiesUpdate = (update: Update) => { handleEdit(update); zetRecordParam(update.id); };
 
   // Desktop: de nieuwste update staat standaard open in het paneel; na
   // verwijderen schuift de keuze door naar de buur, of sluit het paneel als
@@ -161,6 +174,19 @@ export function ManageUpdatesView({
     wis: handleCancelEdit,
   });
   const bewerkte = editingId ? updates.find((u) => u.id === editingId) ?? null : null;
+
+  // URL → paneel (deeplink, refresh, melding): alleen als de URL iets anders
+  // zegt dan wat al open staat; een onbekend id doet niets (lijst zonder
+  // selectie, desktop kiest dan gewoon het eerste item). Een refetch terwijl
+  // dezelfde update open staat raakt het formulier niet aan. Bewust ná
+  // useStandaardKeuze: beide effecten draaien in dezelfde commit en de
+  // laatste schrijver wint, anders kaapte de desktop-voorselectie de link.
+  useEffect(() => {
+    if (!recordParam || (paneelOpen && editingId === recordParam)) return;
+    const update = updates.find((u) => u.id === recordParam);
+    if (update) handleEdit(update);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordParam, updates]);
 
   // Annuleren: desktop zet het formulier terug op het item (het paneel blijft
   // naast de lijst staan); mobiel sluit de SlideOver.
@@ -177,6 +203,8 @@ export function ManageUpdatesView({
     const success = onDeleteUpdate ? await onDeleteUpdate(id) : await onSave(updates.filter((update) => update.id !== id));
     if (success) {
       if (!onDeleteUpdate) notify('Update verwijderd.', 'success');
+      // De URL mag niet op een verwijderd record blijven wijzen.
+      if (recordParam === id) zetRecordParam(null);
       // Stond de update open, dan regelt useStandaardKeuze de rest: desktop
       // schuift door naar de buur, en zonder buur (of op mobiel) sluit het
       // paneel — het formulier mag niet op een verwijderd record blijven
@@ -192,12 +220,15 @@ export function ManageUpdatesView({
 
   // Stille chip (neutraal vlak, puntje groen zodra iedereen ze las) — de
   // vroegere eigen pil is één Badge geworden (afwerking 04-09, nr. 6).
+  // Eerlijk label (golf 3, 15-09): de teller telt sinds dan alleen chauffeurs
+  // die in het bericht zelf op "Gelezen en begrepen" tikten; vroeger telde
+  // het openen van het Updates-scherm al mee, dus oudere cijfers zijn ruimer.
   const gelezenBadge = (update: Update) => {
     if (!update.isUrgent || totalChauffeurs === 0) return null;
     const gelezen = readCounts[update.id] ?? 0;
     return (
-      <Badge tone={gelezen >= totalChauffeurs ? 'emerald' : 'slate'} stil className="tabular-nums" title="Aantal chauffeurs dat deze update geopend heeft">
-        {gelezen}/{totalChauffeurs} gelezen
+      <Badge tone={gelezen >= totalChauffeurs ? 'emerald' : 'slate'} stil className="tabular-nums" title="Aantal chauffeurs dat in dit bericht op “Gelezen en begrepen” tikte">
+        {gelezen} van {totalChauffeurs} bevestigd
       </Badge>
     );
   };
@@ -228,7 +259,7 @@ export function ManageUpdatesView({
               {/* rauw: hele rij is de knop (titel + badges + datum + chevron) — opent het bewerkpaneel */}
               <button
                 type="button"
-                onClick={() => handleEdit(update)}
+                onClick={() => kiesUpdate(update)}
                 className="flex min-h-11 w-full items-center justify-between gap-3 p-3 pl-4 text-left"
               >
                 <span className="min-w-0 flex-1">
