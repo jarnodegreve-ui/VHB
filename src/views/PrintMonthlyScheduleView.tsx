@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { telDiensten } from '../lib/dienstTelling';
 import type { Shift, User } from '../types';
 import { isoWeekNumber } from '../lib/week';
 import { shiftCategory } from '../lib/shiftTime';
@@ -265,7 +266,9 @@ function DriverMonthSheet({
   // uren van een zieke dag mee terwijl het weekblok hem op 0 zette.
   const totalMinutes = weeks.reduce((sum, w) => sum + w.totalMinutes, 0);
   const totalDaysWorked = weeks.reduce((sum, w) => sum + w.totalDays, 0);
-  const totalShiftsPrinted = weeks.reduce((sum, w) => sum + w.days.reduce((a, d) => a + d.shifts.length, 0), 0);
+  // Echte diensten, geen delen: een gesplitste dienst telt één keer (zelfde
+  // regel als het dashboard sinds #514/telDiensten).
+  const totalShiftsPrinted = telDiensten(weeks.flatMap((w) => w.days.flatMap((d) => d.shifts)));
 
 
   return (

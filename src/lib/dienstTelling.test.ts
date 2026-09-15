@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { telDienstdagen } from './dienstTelling';
+import { telDiensten, telDienstdagen } from './dienstTelling';
 
 describe('telDienstdagen', () => {
   it('telt dagen met dienst: gesplitste diensten en twee diensten op één dag tellen één keer', () => {
@@ -12,5 +12,17 @@ describe('telDienstdagen', () => {
     ];
     expect(telDienstdagen(rijen)).toBe(3);
     expect(telDienstdagen([])).toBe(0);
+  });
+});
+
+describe('telDiensten', () => {
+  it('telt een gesplitste dienst één keer en twee dienstnummers op een dag apart', () => {
+    expect(telDiensten([
+      { driverId: '1', date: '2026-09-15', line: '2109' },
+      { driverId: '1', date: '2026-09-15', line: '2109' },
+      { driverId: '1', date: '2026-09-16', line: '2109' },
+      { driverId: '1', date: '2026-09-16', line: '4407' },
+      { driverId: '2', date: '2026-09-15', line: '2109' },
+    ])).toBe(4);
   });
 });
