@@ -154,9 +154,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         `/api/leave/bezetting?van=${van}&tot=${tot}`,
       );
       if (weg?.()) return;
+      // Vorm valideren vóór de state-updater: die draait tijdens de render,
+      // buiten deze try/catch, en een 404-body ({}) crashte daar de view
+      // ("dagen is not iterable", e2e 15-09).
+      const dagen = Array.isArray((data as any)?.dagen) ? (data as any).dagen : [];
       setBezettingServer((cur) => {
         const next = { ...cur };
-        for (const d of data.dagen) next[d.datum] = d.aantal;
+        for (const d of dagen) next[String(d.datum)] = Number(d.aantal) || 0;
         return next;
       });
     } catch {

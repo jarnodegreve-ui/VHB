@@ -281,6 +281,10 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/services')) return json(SERVICES);
     if (p.endsWith('/api/diversions')) return json(DIVERSIONS);
     if (p.endsWith('/api/updates')) return json(UPDATES);
+    if (p.endsWith('/api/leave/bezetting')) {
+      // Chauffeurs-kalender: aantallen per dag, geen namen (PR #526).
+      return json({ van: url.searchParams.get('van'), tot: url.searchParams.get('tot'), dagen: [], limiet: 2 });
+    }
     if (p.endsWith('/api/leave')) return json(user.role === 'chauffeur' ? LEAVE.filter((l) => l.userId === user.id) : LEAVE);
     if (p.endsWith('/api/swaps')) return json(SWAPS);
     if (p.endsWith('/api/activity/logins')) return json({ logins: LOGINS });
