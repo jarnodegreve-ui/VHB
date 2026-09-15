@@ -87,6 +87,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   // oude maand stond maar uit de nieuwste import viel, moet júíst gevlagd
   // worden. Best-effort: zonder data geen badge of filter.
   const [planningPresence, setPlanningPresence] = useState<{ geladen: boolean; tot: string; laatstePerId: Map<string, string> }>({ geladen: false, tot: '', laatstePerId: new Map() });
+  // Bij het openen de lijst vers ophalen: lastLogin/activeSessions veranderen
+  // server-side zonder realtime-event of revisiebump, dus een tabblad dat
+  // dagen openstaat toonde anders de stand van de eigen opstart (15-09).
+  useEffect(() => { void fetchUsers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
