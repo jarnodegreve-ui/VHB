@@ -37,6 +37,9 @@ export const UITZETBARE_MELDING_SOORTEN: readonly MeldingSoort[] = MELDING_SOORT
 
 const meldingSoortUit = z.enum(UITZETBARE_MELDING_SOORTEN as [MeldingSoort, ...MeldingSoort[]]);
 
+/** ISO-tijdstip voor de gezien-velden; soepel op de vorm (UTC met Z). */
+const gezienOp = z.iso.datetime({ error: 'Ongeldig tijdstip' });
+
 export const dashboardVoorkeurenSchema = z.object({
   /** Tegels die de gebruiker verbergt (essentiële tegels negeren dit). */
   verborgen: z.array(tegelId).max(50).default([]),
@@ -46,6 +49,11 @@ export const dashboardVoorkeurenSchema = z.object({
   startscherm: z.enum(STARTSCHERMEN).optional(),
   /** Soorten waarvoor geen push gestuurd wordt (de melding zelf blijft). */
   meldingssoortenUit: z.array(meldingSoortUit).max(20).optional(),
+  /** "Gezien tot"-tijdstippen voor de nieuw-badges (15-09). Server-side in
+   *  deze jsonb i.p.v. localStorage: op een nieuw toestel of na het wissen
+   *  van sitegegevens telde anders álles ooit als nieuw. */
+  documentenGezienOp: gezienOp.optional(),
+  verlofGezienOp: gezienOp.optional(),
 });
 
 export type DashboardVoorkeuren = z.output<typeof dashboardVoorkeurenSchema>;
@@ -57,6 +65,8 @@ export const dashboardVoorkeurenPatchSchema = z.object({
   volgorde: z.array(tegelId).max(50).optional(),
   startscherm: z.enum(STARTSCHERMEN).nullable().optional(),
   meldingssoortenUit: z.array(meldingSoortUit).max(20).nullable().optional(),
+  documentenGezienOp: gezienOp.nullable().optional(),
+  verlofGezienOp: gezienOp.nullable().optional(),
 });
 export type DashboardVoorkeurenPatch = z.input<typeof dashboardVoorkeurenPatchSchema>;
 

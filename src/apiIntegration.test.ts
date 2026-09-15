@@ -4691,6 +4691,16 @@ describe('eigen voorkeuren (PATCH /api/me/voorkeuren)', () => {
     expect(lijst.json.some((u: any) => 'dashboardVoorkeuren' in u)).toBe(false);
   });
 
+  it("bewaart de gezien-tijdstippen van de nieuw-badges naast de tegels (deelwijziging)", async () => {
+    await api('PATCH', '/api/me/voorkeuren', { token: 'tok-a', body: { dashboard: { verborgen: ['deze-maand'] } } });
+    const res = await api('PATCH', '/api/me/voorkeuren', { token: 'tok-a', body: { dashboard: { documentenGezienOp: '2026-09-15T10:00:00.000Z', verlofGezienOp: '2026-09-15T11:00:00.000Z' } } });
+    expect(res.status).toBe(200);
+    // Deelwijziging: de tegel-sleutels blijven staan.
+    expect(res.json.dashboardVoorkeuren).toMatchObject({ verborgen: ['deze-maand'], documentenGezienOp: '2026-09-15T10:00:00.000Z', verlofGezienOp: '2026-09-15T11:00:00.000Z' });
+    const fout = await api('PATCH', '/api/me/voorkeuren', { token: 'tok-a', body: { dashboard: { documentenGezienOp: 'gisteren' } } });
+    expect(fout.status).toBe(400);
+  });
+
   it('weigert een ongeldige body (400) en raakt alleen het eigen profiel', async () => {
     const fout = await api('PATCH', '/api/me/voorkeuren', { token: 'tok-a', body: { dashboard: { verborgen: 'x' } } });
     expect(fout.status).toBe(400);
