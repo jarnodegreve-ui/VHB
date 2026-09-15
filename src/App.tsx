@@ -1118,11 +1118,14 @@ export default function App() {
   // (meldingencentrum, 06-09 — ruilverzoeken en nieuwe documenten zitten
   // daar als melding in; was ruil + documenten); planner/admin: de volledige
   // werkvoorraad (zelfde teller als de topbar-knop — was alleen verlof+ruil).
+  // Elke niet-stafrol (chauffeur én technieker) krijgt de meldingenteller;
+  // de technieker viel er eerst tussenuit (geen chauffeur, geen werkvoorraad)
+  // en had daardoor altijd badge 0, ook met open gele-boek-meldingen.
   const appBadgeCount = !currentUser
     ? 0
-    : currentUser.role === 'chauffeur'
-      ? ongelezenMeldingen
-      : werkvoorraad?.attentionCount ?? 0;
+    : isStafRol
+      ? werkvoorraad?.attentionCount ?? 0
+      : ongelezenMeldingen;
   useEffect(() => {
     const nav = navigator as any;
     if (typeof nav?.setAppBadge !== 'function') return;
