@@ -589,14 +589,17 @@ const dimensiesUitRaw = (raw: any): { powerKw: number | null; soc: number | null
 // we per pagina op via .range() — anders verliest een grafiek stil zijn staart
 // zonder ook maar één foutmelding. De builder MOET een .order() bevatten,
 // anders is de paginering niet stabiel.
-const selectAlles = async (bouw: (van: number, tot: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<any[]> => {
+// `verwerk` (optioneel) slaat elke pagina meteen plat naar afgeleide rijen,
+// zodat zware kolommen (charging_periods) nooit allemaal tegelijk in het
+// geheugen staan.
+const selectAlles = async (bouw: (van: number, tot: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, verwerk?: (rijen: any[]) => any[]): Promise<any[]> => {
   const uit: any[] = [];
   const stap = 1000;
   for (let van = 0; van < 100_000; van += stap) {
     const { data, error } = await bouw(van, van + stap - 1);
     if (error) throw new Error(error.message);
     const rijen = (data ?? []) as any[];
-    uit.push(...rijen);
+    uit.push(...(verwerk ? verwerk(rijen) : rijen));
     if (rijen.length < stap) break;
   }
   return uit;
@@ -827,16 +830,34 @@ const maandTekst = (maand: string): string => {
 };
 
 /** De periode ervóór, even lang: voor een maand de vorige kalendermaand,
- *  voor een vrije periode dezelfde lengte direct ervoor. */
-export const vorigePeriode = (van: string, tot: string, maand: string | null): { van: string; tot: string; maand: string | null } => {
+ *  voor een vrije periode dezelfde lengte direct ervoor. Voor de nog lopende
+ *  maand vergelijken we met dezelfde dagen van de vorige maand (1 t/m
+ *  vandaag), anders lijkt een halve maand altijd op een terugval; `maand` is
+ *  dan null zodat de labels de deelperiode tonen ("1–15 augustus"). */
+export const vorigePeriode = (van: string, tot: string, maand: string | null, huidigeDag: string = huidigeBrusselseDag()): { van: string; tot: string; maand: string | null } => {
   if (maand) {
     const [j, m] = maand.split("-").map(Number);
     const d = new Date(Date.UTC(j, m - 2, 1));
     const vorige = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    return { ...maandGrenzenVan(vorige), maand: vorige };
+    const grenzen = maandGrenzenVan(vorige);
+    if (maand === huidigeDag.slice(0, 7) && huidigeDag <= tot) {
+      // Stringvergelijking vangt ook een kortere vorige maand op: op 30 maart
+      // is "02-30" > "02-28" en blijft het gewoon de volledige februari.
+      const totDeel = `${vorige}-${huidigeDag.slice(8, 10)}`;
+      if (totDeel < grenzen.tot) return { van: grenzen.van, tot: totDeel, maand: null };
+    }
+    return { ...grenzen, maand: vorige };
   }
   const lengte = Math.round((Date.parse(`${tot}T00:00:00Z`) - Date.parse(`${van}T00:00:00Z`)) / 86400000) + 1;
   return { van: dagPlus(van, -lengte), tot: dagPlus(van, -1), maand: null };
+};
+
+/** Leesbaar label voor een periode in exports: maandnaam, of de deelperiode
+ *  binnen één maand ("1 t/m 15 augustus 2026"). */
+const periodeTekst = (p: { van: string; tot: string; maand: string | null }): string => {
+  if (p.maand) return maandTekst(p.maand);
+  if (p.van.slice(0, 7) === p.tot.slice(0, 7)) return `${Number(p.van.slice(8, 10))} t/m ${Number(p.tot.slice(8, 10))} ${maandTekst(p.van.slice(0, 7))}`;
+  return `${p.van} t/m ${p.tot}`;
 };
 
 type EvseKort = { uid: string; evse_id: string | null; physical_reference: string | null; max_electric_power: number | null };
@@ -861,7 +882,6 @@ const laadEvses = async (): Promise<EvseKort[]> => {
 // Alleen de JSON-paden die de detailberekening nodig heeft: de volledige raw
 // (cdr_token, custom.*) hoeft niet over de lijn. PostgREST-aliassen.
 const SESSIE_DETAIL_SELECT = "id,evse_uid,start_date_time,end_date_time,kwh,status,periodes:raw->charging_periods,klasse:raw->custom->>technicalFailClassification,voertuig:raw->custom->vehicle->>model";
-const SESSIE_LICHT_SELECT = "id,evse_uid,start_date_time,end_date_time,kwh,status,klasse:raw->custom->>technicalFailClassification";
 
 /** Sessies die op een Brusselse dag in [van, tot] startten, met detail. */
 const laadSessieDetails = async (van: string, tot: string, evseUid?: string): Promise<SessieDetail[]> => {
@@ -874,10 +894,16 @@ const laadSessieDetails = async (van: string, tot: string, evseUid?: string): Pr
   return rijen.map(sessieDetail).filter((s) => s.dag && s.dag >= van && s.dag <= tot);
 };
 
-/** Alle sessies ooit, zonder charging_periods (historiek: ±10.000 rijen/jaar). */
-const laadAlleSessiesLicht = async (): Promise<SessieDetail[]> => {
-  const rijen = await selectAlles((v, t) => db!.from("ocpi_sessions").select(SESSIE_LICHT_SELECT).order("start_date_time", { ascending: true }).range(v, t));
-  return rijen.map(sessieDetail).filter((s) => s.dag);
+/** Alle sessies ooit (historiek: ±10.000 rijen/jaar), mét de charging_periods
+ *  zodat ook de laadtijd (laadMin) gevuld is. Elke pagina wordt meteen naar
+ *  SessieDetail platgeslagen: de zware periodes-kolom staat zo nooit voor
+ *  álle rijen tegelijk in het geheugen. */
+const laadAlleSessies = async (): Promise<SessieDetail[]> => {
+  const rijen = await selectAlles(
+    (v, t) => db!.from("ocpi_sessions").select(SESSIE_DETAIL_SELECT).order("start_date_time", { ascending: true }).range(v, t),
+    (pagina) => pagina.map(sessieDetail),
+  );
+  return (rijen as SessieDetail[]).filter((s) => s.dag);
 };
 
 /** ocpi_dagpieken kan nog ontbreken (migratie niet gedraaid): dan stil leeg. */
@@ -1212,16 +1238,26 @@ export const mountOcpiRoutes = (app: express.Express) => {
     if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
     try {
       const huidigeMaand = huidigeBrusselseMaand();
-      const [evses, sessies, pieken] = await Promise.all([laadEvses(), laadAlleSessiesLicht(), laadAlleDagpieken()]);
+      const huidigeDag = huidigeBrusselseDag();
+      const [evses, sessies, pieken] = await Promise.all([laadEvses(), laadAlleSessies(), laadAlleDagpieken()]);
       const maanden = bouwMaanden(sessies, pieken, huidigeMaand);
       const matrix = bouwPuntMatrix(sessies, maanden.map((m) => m.maand), evses);
       if (queryTekst(req)("format") === "xlsx") {
         const buffer = bouwHistoriekXlsx({ maanden, matrix, busVan: busVoorLaadpunt, gemaaktOp: nowIso() });
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        res.setHeader("Content-Disposition", `attachment; filename="vhb-laadplein-historiek-${huidigeBrusselseDag()}.xlsx"`);
+        res.setHeader("Content-Disposition", `attachment; filename="vhb-laadplein-historiek-${huidigeDag}.xlsx"`);
         return res.send(buffer);
       }
-      res.json({ huidigeMaand, huidigeDag: huidigeBrusselseDag(), maanden, matrix });
+      // Eerlijke vergelijking voor de lopende maand: dezelfde dagen van de
+      // vorige maand (1 t/m vandaag), zodat de Δ in de historiek niet
+      // kunstmatig negatief oogt halverwege de maand.
+      const grenzenHuidig = maandGrenzenVan(huidigeMaand);
+      const vorigeDeel = vorigePeriode(grenzenHuidig.van, grenzenHuidig.tot, huidigeMaand, huidigeDag);
+      const kwhVorigeDeel = sessies.reduce((a, s) => (!s.ongeldig && s.dag >= vorigeDeel.van && s.dag <= vorigeDeel.tot ? a + s.kwh : a), 0);
+      res.json({
+        huidigeMaand, huidigeDag, maanden, matrix,
+        vergelijkLopend: { van: vorigeDeel.van, tot: vorigeDeel.tot, maand: vorigeDeel.maand, kwh: Math.round(kwhVorigeDeel * 10) / 10 },
+      });
     } catch (err: any) {
       console.error("[ocpi] historiek mislukt:", err?.message ?? err);
       res.status(500).json({ error: "OCPI-historiek mislukt" });
@@ -1313,7 +1349,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       const label = maand ? maandTekst(maand) : `${van} t/m ${tot}`;
       const buffer = bouwPeriodeXlsx({
         label, van, tot, totalen,
-        vorige: { label: vorige.maand ? maandTekst(vorige.maand) : `${vorige.van} t/m ${vorige.tot}`, kwh: totVorige.kwh, piekKw: totVorige.piekKw, laadbeurten: totVorige.laadbeurten },
+        vorige: { label: periodeTekst(vorige), kwh: totVorige.kwh, piekKw: totVorige.piekKw, laadbeurten: totVorige.laadbeurten },
         dagen,
         punten: bouwPunten({ van, tot }, sessies, evses),
         sessies: [...sessies].sort((a, b) => String(a.start ?? "").localeCompare(String(b.start ?? ""))),
@@ -1346,8 +1382,9 @@ export const mountOcpiRoutes = (app: express.Express) => {
         // Verbruik per dag uit de sessies zelf — CDR's zijn factuurrecords en
         // blijven bij depotladen zonder tarieven voorgoed leeg, waardoor de
         // 30-dagen-grafiek anders nooit iets toont. Gepagineerd: een maand kan
-        // over de 1.000-rijen-cap van PostgREST heen.
-        selectAlles((van, tot) => db!.from("ocpi_sessions").select("start_date_time,kwh").gte("start_date_time", since30).order("start_date_time", { ascending: true }).range(van, tot)),
+        // over de 1.000-rijen-cap van PostgREST heen. Status mee: INVALID
+        // moet er hieronder uit, net als in de dagdetails.
+        selectAlles((van, tot) => db!.from("ocpi_sessions").select("start_date_time,kwh,status").gte("start_date_time", since30).order("start_date_time", { ascending: true }).range(van, tot)),
         // Vermogens-snapshots van de laatste 31 dagen, gepagineerd (96
         // kwartier-slots per dag ≈ 3.000 rijen — ruim boven de 1.000-rijen-cap,
         // die anders stil de nieuwste rijen liet vallen). Rollend venster; de
@@ -1450,14 +1487,20 @@ export const mountOcpiRoutes = (app: express.Express) => {
       }));
 
       // kWh per dag uit de sessies van de laatste 30 dagen, gebucket op de
-      // Brusselse kalenderdag (niet de UTC-datum — zie brusselseDag).
+      // Brusselse kalenderdag (niet de UTC-datum — zie brusselseDag). Zelfde
+      // regels als de dagdetails (bouwDagen): INVALID telt nergens mee en
+      // "sessies" zijn laadbeurten met energie (kWh > 0), geen lege
+      // aankoppelingen.
       const perDay = new Map<string, { kwh: number; sessions: number }>();
+      let laadbeurten30 = 0;
       for (const c of sess30Rows) {
+        if (String(c.status ?? "").toUpperCase() === "INVALID") continue;
         const d = brusselseDag(c.start_date_time);
         if (!d) continue;
+        const kwh = Math.max(0, Number(c.kwh) || 0);
         const cur = perDay.get(d) ?? { kwh: 0, sessions: 0 };
-        cur.kwh += Number(c.kwh) || 0;
-        cur.sessions += 1;
+        cur.kwh += kwh;
+        if (kwh > 0) { cur.sessions += 1; laadbeurten30 += 1; }
         perDay.set(d, cur);
       }
       const kwhPerDay = [...perDay.entries()]
@@ -1469,7 +1512,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
         // kwh30d gingen mee over de lijn maar werden nergens getoond.
         totals: {
           evses: evseRows.length,
-          sessions30d: sess30Rows.length,
+          sessions30d: laadbeurten30,
           totalPowerKw,
         },
         statusCounts,

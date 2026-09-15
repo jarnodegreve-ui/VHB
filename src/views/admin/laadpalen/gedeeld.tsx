@@ -175,7 +175,7 @@ export function TermijnKeuze<T extends string>({ label, waarde, opties, onKies, 
 
 /** Verschil t.o.v. de vorige periode: "+12 %" met pijl, gedempt. `omgekeerd`
  *  = lager is beter (piekvermogen): dan kleurt een daling groen. */
-export function Delta({ huidig, vorige, omgekeerd = false, className }: { huidig: number | null; vorige: number | null; omgekeerd?: boolean; className?: string }) {
+export function Delta({ huidig, vorige, omgekeerd = false, className, title }: { huidig: number | null; vorige: number | null; omgekeerd?: boolean; className?: string; title?: string }) {
   if (huidig === null || vorige === null || vorige <= 0) return null;
   const pct = ((huidig - vorige) / vorige) * 100;
   const stil = Math.abs(pct) < 0.5;
@@ -183,7 +183,7 @@ export function Delta({ huidig, vorige, omgekeerd = false, className }: { huidig
   const Icoon = stil ? Minus : pct > 0 ? ArrowUpRight : ArrowDownRight;
   return (
     /* 2xs: verschil-indicator (teller) naast een kerncijfer */
-    <span className={cn('inline-flex items-center gap-0.5 font-mono text-2xs font-semibold', stil ? 'text-slate-500' : beter ? 'text-emerald-700' : 'text-slate-600', className)} title="Verschil met de vorige periode">
+    <span className={cn('inline-flex items-center gap-0.5 font-mono text-2xs font-semibold', stil ? 'text-slate-500' : beter ? 'text-emerald-700' : 'text-slate-600', className)} title={title ?? 'Verschil met de vorige periode'}>
       <Icoon size={12} />
       {stil ? '±0 %' : `${pct > 0 ? '+' : '−'}${formatGetal(Math.abs(pct), Math.abs(pct) >= 10 ? 0 : 1)} %`}
     </span>
