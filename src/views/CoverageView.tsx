@@ -511,6 +511,9 @@ export function CoverageView() {
         .map((p) => ({ vanaf: p.vanaf, weekdays: p.weekdays.map((w) => (validNames.has(w) ? w : '')) }));
       await saveCoverageConfig({ dayTypes: cleanDayTypes, weekdays: cleanWeekdays, weekdayPeriods: cleanPeriods, overrides: cleanOverrides });
       await refetchGaps();
+      // Ook de app-brede dekking (dashboard, topbar-badge) volgt de nieuwe
+      // verwachtingen, niet alleen dit scherm.
+      void appData?.refreshCoverageGaps();
     } catch (e: any) {
       // Schrijffout = toast; de kaart is voor laadfouten.
       notify(e?.message || 'Opslaan is mislukt.', 'error');

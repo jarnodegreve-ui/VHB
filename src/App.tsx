@@ -325,7 +325,13 @@ export default function App() {
   useRealtimeSync(!!session && !!currentUser, {
     // meldLive: stille "… bijgewerkt"-toast (max één per 10 s per collectie,
     // niet na een eigen schrijfactie) — src/lib/liveSignaal.ts.
-    refetchLeave: () => { meldLive('verlof'); return fetchLeave(); },
+    refetchLeave: () => {
+      meldLive('verlof');
+      // Verlof stuurt de dekking (afwezige = gat): voor staf meteen mee
+      // verversen, anders liepen dashboard en topbar-badge achter.
+      if (currentUser && isStaf(currentUser.role)) refreshCoverageGaps();
+      return fetchLeave();
+    },
     refetchSwaps: () => { meldLive('ruil'); return fetchSwaps(); },
     refetchDiversions: () => { meldLive('omleidingen'); return fetchDiversions(undefined, { silent: true }); },
     refetchUpdates: () => { meldLive('updates'); return fetchUpdates(); },

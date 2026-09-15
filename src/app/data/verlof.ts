@@ -49,6 +49,9 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
       if (response.ok) {
         setLeaveRequests(newLeave);
         ctx.captureRevision('leave', response);
+        // Verlof verandert de dekking (afwezige telt als gat): meteen mee
+        // verversen, anders bleven dashboard en topbar op de oude stand staan.
+        void refreshCoverageGaps();
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
@@ -104,6 +107,11 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     // altijd goed en is de guard feitelijk uitgeschakeld (controleronde 30/07).
     return ctx.decideViaPatch('leave', id, status, seenStatus ?? current.status, fetchLeave, (updated) => {
       setLeaveRequests((curr) => curr.map((r) => (r.id === id ? { ...r, ...updated } : r)));
+    }).then((ok) => {
+      // Een goedkeuring maakt een dienst tot dekkingsgat: dashboard en
+      // topbar-badge meteen laten meebewegen.
+      if (ok) void refreshCoverageGaps();
+      return ok;
     });
   };
 
