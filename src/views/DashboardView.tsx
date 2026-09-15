@@ -242,10 +242,14 @@ export function DashboardView({ notes = [],
         tone="slate"
         className={kleinKlassen('verlofsaldo')}
         label="Verlofsaldo"
-        value={balans.betaaldResterend}
+        // Zelfde hoofdgetal als de verlofbalans-kaart: vrij aan te vragen
+        // (budget min opgenomen én aangevraagd). Het toonde betaaldResterend
+        // (zonder aftrek van aangevraagd), waardoor dashboard en verlofscherm
+        // twee verschillende getallen gaven voor hetzelfde saldo.
+        value={balans.betaaldVrij}
         suffix={` / ${balans.betaaldBudget}`}
-        sub="dagen over"
-        meter={balans.betaaldBudget > 0 ? Math.round((balans.betaaldGebruikt / balans.betaaldBudget) * 100) : 0}
+        sub={balans.betaaldAangevraagd > 0 ? `dagen vrij, ${balans.betaaldAangevraagd} aangevraagd` : 'dagen vrij aan te vragen'}
+        meter={balans.betaaldBudget > 0 ? Math.round(((balans.betaaldGebruikt + balans.betaaldAangevraagd) / balans.betaaldBudget) * 100) : 0}
         onClick={onNavigate ? () => onNavigate('verlof') : undefined}
       />
     ),
