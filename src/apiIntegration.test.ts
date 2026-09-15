@@ -2133,6 +2133,17 @@ describe('OCPI leesPeriode / vorigePeriode (zuiver)', () => {
     expect(vorigePeriode('2026-01-01', '2026-01-31', '2026-01')).toEqual({ van: '2025-12-01', tot: '2025-12-31', maand: '2025-12' });
     expect(vorigePeriode('2026-08-04', '2026-08-05', null)).toEqual({ van: '2026-08-02', tot: '2026-08-03', maand: null });
   });
+  it('vergelijkt een lopende maand met dezelfde dagen van de vorige maand', async () => {
+    const { vorigePeriode } = await import('../api/ocpi');
+    // Halverwege september: vergelijk met 1 t/m 15 augustus, niet met heel augustus.
+    expect(vorigePeriode('2026-09-01', '2026-09-30', '2026-09', '2026-09-15')).toEqual({ van: '2026-08-01', tot: '2026-08-15', maand: null });
+    // Ook op de laatste dag van de lopende maand blijft de basis even lang (1 t/m 30 augustus).
+    expect(vorigePeriode('2026-09-01', '2026-09-30', '2026-09', '2026-09-30')).toEqual({ van: '2026-08-01', tot: '2026-08-30', maand: null });
+    // Afgesloten maand: volledige vorige maand, ook al is het vandaag.
+    expect(vorigePeriode('2026-08-01', '2026-08-31', '2026-08', '2026-09-15')).toEqual({ van: '2026-07-01', tot: '2026-07-31', maand: '2026-07' });
+    // Kortere vorige maand: op 30 maart is 1 t/m 28 februari gewoon heel februari.
+    expect(vorigePeriode('2026-03-01', '2026-03-31', '2026-03', '2026-03-30')).toEqual({ van: '2026-02-01', tot: '2026-02-28', maand: '2026-02' });
+  });
 });
 
 describe('wachtwoordminimum server-side (controle-ronde 27-08, nr. 32)', () => {

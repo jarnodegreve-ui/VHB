@@ -10,7 +10,7 @@ import { apiFetch } from '../../../lib/api';
 import { formatGetal } from '../../../lib/format';
 import { busVoorLaadpunt } from '../../../lib/laadplein';
 import { cn } from '../../../lib/ui';
-import { Delta, dagKort, duurLabel, exporteerCsv, fmtKwh, maandKort, maandLabel, tekstKw, tekstKwhHeel, uurLabel, type MaandRij } from './gedeeld';
+import { Delta, dagKort, duurLabel, exporteerCsv, fmtKwh, maandKort, maandLabel, periodeLabel, tekstKw, tekstKwhHeel, uurLabel, type MaandRij } from './gedeeld';
 import { Staafgrafiek, useKeuze } from './grafieken';
 
 /**
@@ -25,6 +25,9 @@ export type Historiek = {
   huidigeDag: string;
   maanden: MaandRij[];
   matrix: Array<{ evseUid: string; evseId: string | null; physicalReference: string | null; perMaand: Record<string, number>; totaal: number }>;
+  /** Vergelijkbasis voor de lopende maand: dezelfde dagen (1 t/m vandaag) van
+   *  de vorige maand; `maand` gezet = toch een volledige maand. */
+  vergelijkLopend?: { van: string; tot: string; maand: string | null; kwh: number } | null;
 };
 
 export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand: string) => void; herlaad: number; onGeladen?: (h: Historiek) => void }) {
@@ -170,7 +173,12 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                         {lopend && <span className="ml-2 text-xs font-medium text-slate-500">lopend</span>}
                       </Td>
                       <Td num className={cn('font-semibold', hoogsteKwh?.maand === m.maand ? 'text-oker-700' : 'text-slate-800')}>{fmtKwh(m.kwh)}</Td>
-                      <Td num className="max-md:hidden"><Delta huidig={m.kwh} vorige={vorige?.kwh ?? null} /></Td>
+                      {/* Lopende maand: vergelijk met dezelfde dagen van de vorige maand, niet met een volle maand. */}
+                      <Td num className="max-md:hidden">
+                        {lopend && data.vergelijkLopend
+                          ? <Delta huidig={m.kwh} vorige={data.vergelijkLopend.kwh} title={`t.o.v. ${periodeLabel(data.vergelijkLopend)}`} />
+                          : <Delta huidig={m.kwh} vorige={vorige?.kwh ?? null} />}
+                      </Td>
                       <Td num>{m.laadbeurten}</Td>
                       <Td num className={cn('max-md:hidden', m.mislukt > 0 && 'font-semibold text-red-700')}>{m.mislukt || '—'}</Td>
                       <Td num className="max-lg:hidden">{m.laaddagen}</Td>
@@ -201,6 +209,9 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
             </tbody>
           </table>
         </TableShell>
+        {data.vergelijkLopend && data.vergelijkLopend.maand === null && (
+          <p className="mt-2 px-1 text-xs text-slate-500">De lopende maand wordt vergeleken met {periodeLabel(data.vergelijkLopend)}, dezelfde dagen van de vorige maand.</p>
+        )}
       </div>
 
       <div>
