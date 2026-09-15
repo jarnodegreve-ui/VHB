@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from './diversions';
+import { groepeerOmleidingen, isRecentGenoeg, lopendeDiversions, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from './diversions';
 
 const vandaag = '2026-09-10';
 
@@ -87,5 +87,19 @@ describe('isRecentGenoeg en groepeerOmleidingen', () => {
     expect(g.lopend.map((d) => d.id)).toEqual(['l1', 'l2']);
     expect(g.komend.map((d) => d.id)).toEqual(['k']);
     expect(g.verlopen.map((d) => d.id)).toEqual(['v']);
+  });
+});
+
+describe('lopendeDiversions', () => {
+  const vandaag = '2026-09-15';
+  it('telt alleen wat vandaag echt loopt: komend en verlopen vallen weg', () => {
+    const lopend = { startDate: '2026-09-01', endDate: '2026-09-30' };
+    const zonderEind = { startDate: '2026-09-10', endDate: '' };
+    const komend = { startDate: '2026-10-01', endDate: '2026-10-15' };
+    const verlopen = { startDate: '2026-08-01', endDate: '2026-08-31' };
+    expect(lopendeDiversions([lopend, zonderEind, komend, verlopen], vandaag)).toEqual([lopend, zonderEind]);
+  });
+  it('een omleiding die vandaag start of eindigt loopt vandaag', () => {
+    expect(lopendeDiversions([{ startDate: vandaag, endDate: vandaag }], vandaag)).toHaveLength(1);
   });
 });

@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, AlertTriangle, Calendar, FileText, MapPin, WifiOff, Wrench } from 'lucide-react';
 import { lijnLabel } from '../../shared/lijnen';
 import { useOptioneleAppData } from '../app/AppDataContext';
-import { activeDiversions } from '../lib/diversions';
+import { lopendeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
 import { relatieveDag } from '../lib/datum';
 import { formatDayLong, formatShortDay, formatSyncedTime, serviceNumberOf } from '../lib/format';
@@ -161,7 +161,8 @@ export function MijnDagView({
   const volgende = volgendeDag[0];
   const volgendeDelen = volgende ? volgendeDag.filter((s) => s.date === volgende.date) : [];
 
-  const liveOmleidingen = activeDiversions(diversions);
+  // Mijn dag gaat over vandaag: alleen omleidingen die nu echt lopen.
+  const liveOmleidingen = lopendeDiversions(diversions);
 
   // Ritblad alvast in de offline-cache zetten zodra er vandaag of morgen een
   // dienst is (de bundel is gedeeld; de SW sleutelt op het pad). Eén keer

@@ -12,6 +12,12 @@ export const isExpiredDiversion = (d: Pick<Diversion, 'endDate'>, vandaag: strin
 export const activeDiversions = <T extends Pick<Diversion, 'endDate'>>(list: T[]): T[] =>
   list.filter((d) => !isExpiredDiversion(d));
 
+/** Alleen wat vandaag écht loopt. "Actief"-tellers en -labels gebruiken deze;
+ *  een omleiding die pas volgende maand start is "komend", geen "actief"
+ *  (bevinding 15-09: tegels telden komende omleidingen mee als actief). */
+export const lopendeDiversions = <T extends Pick<Diversion, 'startDate' | 'endDate'>>(list: T[], vandaag: string = isoDate(new Date())): T[] =>
+  list.filter((d) => omleidingsFase(d, vandaag) === 'lopend');
+
 type Periode = Pick<Diversion, 'startDate' | 'endDate'>;
 
 /** Waar een omleiding zich vandaag bevindt: al bezig, nog te komen, of voorbij.

@@ -30,7 +30,7 @@ import { getDaypartGreeting } from '../lib/interactive';
 import { addDays, isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
 import { berekenWerkvoorraad } from '../lib/werkvoorraad';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
-import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
+import { lopendeDiversions as lopendeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { apiFetch } from '../lib/api';
@@ -275,10 +275,10 @@ export function PlannerDashboardWidgets({
     pendingLeave, pendingSwaps, attentionCount,
   } = berekenWerkvoorraad({ users, shifts, leaveRequests, swaps, matrixHistory, coverageDays, vervaldata, pendingDevices, now });
 
-  // Verlopen omleidingen (einddatum in het verleden) tellen niet mee: de
-  // tegel zegt "actieve omleidingen" en moet dat dan ook zijn (gedeelde
-  // helper — chauffeursdashboard gebruikt dezelfde).
-  const activeDiversions = activeDiversionsOf(diversions).length;
+  // Verlopen én nog niet gestarte omleidingen tellen niet mee: de tegel
+  // zegt "actieve omleidingen" en moet dat dan ook zijn (gedeelde helper,
+  // het chauffeursdashboard gebruikt dezelfde).
+  const activeDiversions = lopendeDiversionsOf(diversions).length;
 
   const werkdagen = werkdagenUitShifts(shifts);
 
