@@ -627,6 +627,64 @@ describe('PII-scoping voor chauffeurs', () => {
     expect(res.json).toHaveLength(3);
   });
 
+  // GET /api/leave hierboven geeft een chauffeur bewust enkel eigen verlof;
+  // de kalenderkleuring en de limietwaarschuwing rekenen daarom op dit
+  // bezetting-endpoint: uitsluitend datum + aantal + limiet, geen personen.
+  describe('GET /api/leave/bezetting', () => {
+    it('geeft een chauffeur per dag correcte aantallen, zonder namen of persoonsvelden', async () => {
+      // Seed: enkel l-a2 (chauffeur 3, goedgekeurd, 10 t/m 12 aug) telt;
+      // l-a1 en l-b1 zijn pending en vallen buiten deze periode.
+      const res = await api('GET', '/api/leave/bezetting?van=2026-08-09&tot=2026-08-13', { token: 'tok-a' });
+      expect(res.status).toBe(200);
+      expect(res.json.dagen).toEqual([
+        { datum: '2026-08-09', aantal: 0, limiet: 2 },
+        { datum: '2026-08-10', aantal: 1, limiet: 2 },
+        { datum: '2026-08-11', aantal: 1, limiet: 2 },
+        { datum: '2026-08-12', aantal: 1, limiet: 2 },
+        { datum: '2026-08-13', aantal: 0, limiet: 2 },
+      ]);
+      const plat = JSON.stringify(res.json);
+      expect(plat).not.toContain('Chauffeur');
+      expect(plat).not.toContain('userId');
+      expect(plat).not.toContain('betaald_verlof');
+    });
+
+    it('telt met de plannerregels: pending, ziekte, technieker en flexi tellen niet mee', async () => {
+      mem.users.push(
+        { id: '5', name: 'Toon Technieker', email: 'toon@vhb.be', role: 'technieker', isActive: true },
+        { id: '6', name: 'Fien Flexi', email: 'fien@vhb.be', role: 'chauffeur', section: 'Flexi', isActive: true },
+      );
+      invalidateUsersCache();
+      mem.leave.push(
+        // Telt wél mee: tweede chauffeur, goedgekeurd betaald verlof.
+        { id: 'l-x1', userId: '4', startDate: '2026-08-10', endDate: '2026-08-10', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-06-01T08:00:00Z' },
+        // Telt niet mee: pending, ziekte, technieker, flexi.
+        { id: 'l-x2', userId: '4', startDate: '2026-08-10', endDate: '2026-08-10', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-06-01T08:00:00Z' },
+        { id: 'l-x3', userId: '3', startDate: '2026-08-10', endDate: '2026-08-10', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-06-01T08:00:00Z' },
+        { id: 'l-x4', userId: '5', startDate: '2026-08-10', endDate: '2026-08-10', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-06-01T08:00:00Z' },
+        { id: 'l-x5', userId: '6', startDate: '2026-08-10', endDate: '2026-08-10', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-06-01T08:00:00Z' },
+      );
+      const res = await api('GET', '/api/leave/bezetting?van=2026-08-10&tot=2026-08-10', { token: 'tok-a' });
+      expect(res.status).toBe(200);
+      // Chauffeur 3 (l-a2) + chauffeur 4 (l-x1), de rest valt af.
+      expect(res.json.dagen).toEqual([{ datum: '2026-08-10', aantal: 2, limiet: 2 }]);
+    });
+
+    it('gebruikt de ingestelde verloflimiet per dag', async () => {
+      mem.appSettings['verlof_limieten'] = { standaard: 3, periodes: [{ id: 'p-zomer', naam: 'Zomer', van: '2026-08-11', tot: '2026-08-12', max: 5 }] };
+      const res = await api('GET', '/api/leave/bezetting?van=2026-08-10&tot=2026-08-11', { token: 'tok-a' });
+      expect(res.status).toBe(200);
+      expect(res.json.dagen.map((d: any) => d.limiet)).toEqual([3, 5]);
+    });
+
+    it('weigert een ongeldige of te lange periode (400)', async () => {
+      expect((await api('GET', '/api/leave/bezetting?van=2026-02-31&tot=2026-03-02', { token: 'tok-a' })).status).toBe(400);
+      expect((await api('GET', '/api/leave/bezetting?van=2026-03-02&tot=2026-03-01', { token: 'tok-a' })).status).toBe(400);
+      expect((await api('GET', '/api/leave/bezetting?van=2026-01-01&tot=2027-06-01', { token: 'tok-a' })).status).toBe(400);
+      expect((await api('GET', '/api/leave/bezetting?van=2026-01-01', { token: 'tok-a' })).status).toBe(400);
+    });
+  });
+
   it('een chauffeur kan zichzelf NIET ziek melden (403, enkel planner/admin)', async () => {
     const res = await api('POST', '/api/leave/sick-report', { token: 'tok-a', body: { userId: '3', startDate: '2026-09-01' } });
     expect(res.status).toBe(403);
