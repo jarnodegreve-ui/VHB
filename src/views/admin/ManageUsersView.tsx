@@ -741,7 +741,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                 {/* Tabelrijen: alleen opacity + 8 px (geen hoogte/layout, zie LijstRij). */}
                 <LijstAnimatie aantal={sortedUsers.length}>
                 {sortedUsers.map((u) => (
-                  <LijstRij as="tr" key={u.id} className={cn('group border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-oker-50/40')}>
+                  <LijstRij as="tr" key={u.id} className={cn('group border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-slate-100/60')}>
                     <Td className="w-12 !py-1">
                       <Checkbox
                         checked={selectedIds.has(u.id)}
@@ -845,7 +845,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
         <div className="md:hidden divide-y divide-slate-100">
           <LijstAnimatie aantal={sortedUsers.length}>
           {sortedUsers.map((u) => (
-            <LijstRij as="div" key={u.id} className={cn('p-5 space-y-4 active:bg-slate-50 transition-colors', selectedIds.has(u.id) && 'bg-oker-50/40')}>
+            <LijstRij as="div" key={u.id} className={cn('p-5 space-y-4 active:bg-slate-50 transition-colors', selectedIds.has(u.id) && 'bg-slate-100/60')}>
               <div className="flex justify-between items-start gap-3">
                 <div className="flex items-start gap-2">
                   <Checkbox

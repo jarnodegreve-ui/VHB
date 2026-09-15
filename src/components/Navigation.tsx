@@ -29,7 +29,10 @@ export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
       className={cn(
         "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-fast",
         active
-          ? "bg-oker-50/80 text-slate-900 font-semibold"
+          // Goud rantsoeneren (next-level 2, punt 4): een actief nav-item is een
+          // plaats, geen actie. Neutrale chip met hairline; het enige merkmoment
+          // is de gouden rail links. Goud blijft voor actie, focus en live.
+          ? "bg-surface-muted text-slate-900 font-semibold ring-1 ring-hairline"
           : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-900 font-medium"
       )}
     >
@@ -49,7 +52,7 @@ export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
       )}
       <span className={cn(
         "shrink-0 transition-colors duration-fast",
-        active ? "text-oker-700" : "text-slate-400 group-hover:text-slate-600"
+        active ? "text-slate-900" : "text-slate-400 group-hover:text-slate-600"
       )}>
         {icon}
       </span>

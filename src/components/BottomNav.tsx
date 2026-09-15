@@ -127,7 +127,9 @@ export function BottomNav({
                   // blijft :hover na een tik plakken, waardoor een inactieve
                   // tab er permanent "half actief" uitzag.
                   'relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg transition-colors',
-                  isActive ? 'text-oker-800' : 'text-slate-500 pointer-fine:hover:text-slate-700',
+                  // Actieve tab = neutrale pil in carbon (goud rantsoeneren, punt 4):
+                  // navigatie is geen actie; de badge blijft goud (live-signaal).
+                  isActive ? 'text-slate-900' : 'text-slate-500 pointer-fine:hover:text-slate-700',
                 )}
               >
                 {isActive && (
@@ -139,7 +141,7 @@ export function BottomNav({
                     // DUR.fast, golf 2 punt 9).
                     transition={reduced || overgangActief() ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING }}
                     style={{ viewTransitionName: 'dock-actief' }}
-                    className="absolute inset-0 rounded-lg bg-oker-100"
+                    className="absolute inset-0 rounded-lg bg-surface-muted ring-1 ring-hairline"
                   />
                 )}
                 {/* Badge aan het icoon verankerd, niet aan de tab-rand: op een

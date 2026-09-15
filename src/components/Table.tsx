@@ -279,10 +279,12 @@ export function Checkbox({ checked, onChange, label, indeterminate, className, .
         aria-hidden="true"
         className={cn(
           'inline-flex h-[18px] w-[18px] items-center justify-center rounded-md border transition-colors peer-focus-visible:focus-ring',
-          checked || indeterminate ? 'border-oker-500 bg-oker-500 text-slate-950' : 'border-slate-300 bg-paper text-transparent hover:border-slate-400',
+          // Selectie in carbon, niet in goud (punt 4): aanvinken is geen actie.
+          // De focus-ring blijft wél goud.
+          checked || indeterminate ? 'border-keuze bg-keuze text-keuze-tekst' : 'border-slate-300 bg-paper text-transparent hover:border-slate-400',
         )}
       >
-        {indeterminate && !checked ? <span className="h-0.5 w-2.5 rounded-full bg-slate-950" /> : <Check size={12} strokeWidth={3} />}
+        {indeterminate && !checked ? <span className="h-0.5 w-2.5 rounded-full bg-keuze-tekst" /> : <Check size={12} strokeWidth={3} />}
       </span>
     </label>
   );
@@ -316,7 +318,7 @@ export function BulkBar({ aantal, onWis, children, className }: { aantal: number
           onAnimationComplete={() => setBezig(false)}
           style={{ overflow: bezig ? 'hidden' : 'visible' }}
         >
-          <div className={cn('flex flex-wrap items-center gap-2.5 rounded-xl bg-oker-50 ring-1 ring-oker-200 px-3 py-2', className)} role="region" aria-label="Bulkacties">
+          <div className={cn('flex flex-wrap items-center gap-2.5 rounded-xl bg-paper ring-1 ring-hairline-strong elev-1 px-3 py-2', className)} role="region" aria-label="Bulkacties">
             <span className="text-sm font-semibold text-slate-900 tabular-nums">{aantal} geselecteerd</span>
             <IconButton label="Selectie wissen" size="sm" onClick={onWis}><X size={14} /></IconButton>
             <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>

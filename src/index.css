@@ -236,6 +236,16 @@
   --color-paper: #FFFFFF;
   --color-ink: #14181B;
   --color-ink-soft: #2C3137;
+  /* Keuze (punt 4, goud rantsoeneren): de vulling voor "geselecteerd" zonder
+     goud. Klein bedieningselement (Switch aan, Checkbox) = `keuze`; groter
+     vlak met tekst (FilterChip aan) = `keuze-vlak`. In licht allebei carbon;
+     in donker een lichtgrijze inverse voor de controls en een verhoogd
+     graphite voor het vlak, zodat er nergens een wit vlak oplicht (e2e
+     donker.spec). */
+  --color-keuze: #14181B;
+  --color-keuze-tekst: #FFFFFF;
+  --color-keuze-vlak: #14181B;
+  --color-keuze-vlak-tekst: #FFFFFF;
   --color-rim: rgba(255, 255, 255, 0.70);
   --color-rim-strong: rgba(255, 255, 255, 0.85);
 
@@ -420,6 +430,10 @@ html.dark {
   --color-paper: var(--laag-kaart);
   --color-ink: var(--laag-canvas);
   --color-ink-soft: #1C2025;
+  --color-keuze: #C4C9CE;
+  --color-keuze-tekst: #17181A;
+  --color-keuze-vlak: #353B42;
+  --color-keuze-vlak-tekst: #F2F3F4;
   --color-rim: rgba(154, 161, 169, 0.20);
   --color-rim-strong: rgba(154, 161, 169, 0.26);
 
