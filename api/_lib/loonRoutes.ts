@@ -365,8 +365,8 @@ export function mountLoonRoutes(app: express.Express) {
   // --- Easypay-export ---
   const bouwExport = async (maand: string) => {
     const van = `${maand}-01`; const tot = laatsteDagVan(maand);
-    const [dagen, prestaties, codes, medewerkers, instellingen, users] = await Promise.all([
-      getDagAfsluitingen(van, tot), getDagPrestatiesPeriode(van, tot), getLoonCodes(), getLoonMedewerkers(), getAppSetting(LOON_INSTELLINGEN_KEY), getUsersData(),
+    const [dagen, prestaties, codes, medewerkers, instellingen, users, matrixRows] = await Promise.all([
+      getDagAfsluitingen(van, tot), getDagPrestatiesPeriode(van, tot), getLoonCodes(), getLoonMedewerkers(), getAppSetting(LOON_INSTELLINGEN_KEY), getUsersData(), getPlanningMatrixRows(),
     ]);
     const lidnr = parseLoonInstellingen(instellingen).easypayLidnr;
     const medewerkerMap = new Map(medewerkers.map((m) => [m.userId, m]));
@@ -379,16 +379,26 @@ export function mountLoonRoutes(app: express.Express) {
     });
     const naam = new Map(users.map((u: any) => [String(u.id), u.name as string]));
     const openDagen = dagen.filter((d) => d.status !== "afgesloten").map((d) => d.datum);
+    // Dagen met planning-inhoud die nooit geopend zijn hebben geen prestaties
+    // en zouden de export stil onvolledig maken: die blokkeren net als open
+    // dagen. Zelfde bron als het maandraster (planning_matrix_rows), beperkt
+    // tot vandaag zodat een lopende maand niet op de toekomst blokkeert.
+    const vandaag = new Date().toISOString().slice(0, 10);
+    const geopend = new Set(dagen.map((d) => d.datum));
+    const nietGeopendeDagen = [...new Set(matrixRows.map((r: any) => String(r.source_date)))]
+      .filter((d) => d.startsWith(`${maand}-`) && d <= vandaag && !geopend.has(d))
+      .sort();
     const controle = {
       maand,
       dagenGeopend: dagen.length,
       dagenAfgesloten: dagen.length - openDagen.length,
       openDagen,
+      nietGeopendeDagen,
       lidnr,
       issues: issues.map((i: EasypayIssue) => ({ ...i, naam: naam.get(i.userId) ?? i.userId })),
       samenvatting: easypaySamenvatting(rijen),
     };
-    const blokkerend = openDagen.length > 0 || issues.length > 0 || dagen.length === 0 || !lidnr;
+    const blokkerend = openDagen.length > 0 || nietGeopendeDagen.length > 0 || issues.length > 0 || dagen.length === 0 || !lidnr;
     return { rijen, controle, blokkerend };
   };
 
@@ -408,7 +418,7 @@ export function mountLoonRoutes(app: express.Express) {
       if (!ISO_MAAND.test(maand)) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
       const forceer = String(req.query.forceer ?? "") === "1" && req.appUser!.role === "admin";
       const { rijen, controle, blokkerend } = await bouwExport(maand);
-      if (blokkerend && !forceer) return res.status(409).json({ error: "De export is nog niet klaar: sluit alle dagen af en los de meldingen op.", ...controle });
+      if (blokkerend && !forceer) return res.status(409).json({ error: "De export is nog niet klaar: open en sluit alle dagen met planning af en los de meldingen op.", ...controle });
       const format = String(req.query.format ?? "csv");
       await logActivity(req, "system", "Easypay-export gemaakt", `${maand}: ${rijen.length} rijen, ${controle.samenvatting.personen} personen${forceer ? " (geforceerd)" : ""}.`);
       if (format === "json") return res.json({ maand, rijen, controle });

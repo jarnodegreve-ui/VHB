@@ -63,7 +63,9 @@ export const isMissingDbFunction = (error: any): boolean =>
 // data kwijt zodra de tabel de cap overschrijdt. Dat was de oorzaak van
 // het "eind mei verdwijnt"-incident.
 const PAGE_SIZE = 1000;
-const paginatedFetch = async <T = any>(
+// Geëxporteerd zodat ook de losse opslagmodules (api/_lib/loonStorage.ts)
+// dezelfde paginering gebruiken in plaats van een eigen limit.
+export const paginatedFetch = async <T = any>(
   buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
   max?: number,
 ): Promise<T[]> => {

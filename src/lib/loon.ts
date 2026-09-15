@@ -76,7 +76,7 @@ export const bewaarInstellingen = (body: LoonInstellingen) => vraag<LoonInstelli
 
 export type ExportIssue = ({ soort: 'geen_matricule' } | { soort: 'onbekende_code'; datum: string; code: string } | { soort: 'geen_code'; datum: string }) & { userId: string; naam: string };
 export type ExportControle = {
-  maand: string; dagenGeopend: number; dagenAfgesloten: number; openDagen: string[]; lidnr: number; issues: ExportIssue[];
+  maand: string; dagenGeopend: number; dagenAfgesloten: number; openDagen: string[]; nietGeopendeDagen?: string[]; lidnr: number; issues: ExportIssue[];
   samenvatting: { rijen: number; personen: number; overminRijen: number; premies: number }; blokkerend: boolean;
 };
 export const laadExportControle = (maand: string) => vraag<ExportControle>(`/api/loon/export/controle?maand=${maand}`);

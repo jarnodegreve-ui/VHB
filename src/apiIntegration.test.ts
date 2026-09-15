@@ -75,6 +75,15 @@ const mem = vi.hoisted(() => ({
   // saveUsersData-mock gooit dan dezelfde EmailInGebruikError als de echte
   // (de Auth-kant zelf zit in src/storageAuthSync.test.ts).
   authEmailBezet: null as string | null,
+  // Loon-tabellen voor de mini-PostgREST in de db.js-mock: loonStorage draait
+  // hier integraal (inclusief de paginering voorbij de 1000-rijen-cap).
+  loonRijen: {
+    loon_codes: [] as any[],
+    loon_medewerkers: [] as any[],
+    dag_afsluitingen: [] as any[],
+    dag_prestaties: [] as any[],
+  } as Record<string, any[]>,
+  loonVolgnummer: 0,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -116,9 +125,96 @@ vi.mock('../api/db.js', () => {
       },
     },
     supabaseAdmin: null,
-    db: {},
+    db: { from: loonFrom },
   };
 });
+
+// Mini-PostgREST voor de vier loon-tabellen: genoeg querybuilder om
+// api/_lib/loonStorage.ts integraal te laten draaien. Leesantwoorden zijn,
+// net als bij echte PostgREST, gecapt op 1000 rijen per response; alleen
+// wie met .range() pagineert krijgt dus alles terug.
+const POSTGREST_CAP = 1000;
+const LOON_UPSERT_SLEUTEL: Record<string, string> = { loon_codes: 'code', loon_medewerkers: 'user_id' };
+function loonFrom(tabel: string) {
+  if (!(tabel in mem.loonRijen)) throw new Error(`mock-db: onbekende tabel ${tabel}`);
+  const vergelijk = (a: any, b: any) => (a === b ? 0 : a === null || a === undefined ? -1 : b === null || b === undefined ? 1 : a < b ? -1 : 1);
+  const q: any = {
+    _op: 'select',
+    _filters: [] as Array<(r: any) => boolean>,
+    _orders: [] as Array<{ col: string; asc: boolean }>,
+    _range: null as null | [number, number],
+    _limit: null as null | number,
+    _rows: null as any[] | null,
+    _patch: null as any,
+    _wilCount: false,
+    _single: 0 as 0 | 1 | 2,
+    select() { return q; },
+    insert(rows: any) { q._op = 'insert'; q._rows = Array.isArray(rows) ? rows : [rows]; return q; },
+    upsert(rows: any) { q._op = 'upsert'; q._rows = Array.isArray(rows) ? rows : [rows]; return q; },
+    update(patch: any) { q._op = 'update'; q._patch = patch; return q; },
+    delete(opts?: any) { q._op = 'delete'; q._wilCount = Boolean(opts?.count); return q; },
+    eq(col: string, val: any) { q._filters.push((r: any) => String(r[col]) === String(val)); return q; },
+    gte(col: string, val: any) { q._filters.push((r: any) => r[col] >= val); return q; },
+    lte(col: string, val: any) { q._filters.push((r: any) => r[col] <= val); return q; },
+    order(col: string, opts?: { ascending?: boolean }) { q._orders.push({ col, asc: opts?.ascending !== false }); return q; },
+    range(van: number, tot: number) { q._range = [van, tot]; return q; },
+    limit(n: number) { q._limit = n; return q; },
+    maybeSingle() { q._single = 1; return q; },
+    single() { q._single = 2; return q; },
+    then(resolve: any, reject: any) { return q._run().then(resolve, reject); },
+    async _run() {
+      const alle = mem.loonRijen[tabel];
+      const raak = (r: any) => q._filters.every((f: any) => f(r));
+      const antwoord = (rijen: any[], extra: Record<string, unknown> = {}) => {
+        if (q._single === 2) return rijen.length === 1 ? { data: rijen[0], error: null, ...extra } : { data: null, error: { code: 'PGRST116', message: `verwachtte 1 rij, kreeg ${rijen.length}` }, ...extra };
+        if (q._single === 1) return { data: rijen[0] ?? null, error: null, ...extra };
+        return { data: rijen, error: null, ...extra };
+      };
+      if (q._op === 'select') {
+        let rijen = alle.filter(raak);
+        if (q._orders.length) {
+          rijen = [...rijen].sort((a, b) => {
+            for (const o of q._orders) { const c = vergelijk(a[o.col], b[o.col]) * (o.asc ? 1 : -1); if (c !== 0) return c; }
+            return 0;
+          });
+        }
+        if (q._range) rijen = rijen.slice(q._range[0], q._range[1] + 1);
+        if (q._limit !== null) rijen = rijen.slice(0, q._limit);
+        return antwoord(rijen.slice(0, POSTGREST_CAP));
+      }
+      if (q._op === 'insert') {
+        const nieuw = q._rows.map((r: any) => {
+          if (tabel === 'dag_afsluitingen' && alle.some((b: any) => b.datum === r.datum)) return null;
+          return { id: `lr-${++mem.loonVolgnummer}`, geopend_op: tabel === 'dag_afsluitingen' ? new Date().toISOString() : undefined, ...r };
+        });
+        if (nieuw.includes(null)) return { data: null, error: { code: '23505', message: 'duplicate key value' } };
+        alle.push(...nieuw);
+        return antwoord(nieuw);
+      }
+      if (q._op === 'upsert') {
+        const sleutel = LOON_UPSERT_SLEUTEL[tabel];
+        const uit: any[] = [];
+        for (const r of q._rows) {
+          const idx = alle.findIndex((b: any) => String(b[sleutel]) === String(r[sleutel]));
+          if (idx >= 0) { alle[idx] = { ...alle[idx], ...r }; uit.push(alle[idx]); }
+          else { const rij = { ...r }; alle.push(rij); uit.push(rij); }
+        }
+        return antwoord(uit);
+      }
+      if (q._op === 'update') {
+        const uit: any[] = [];
+        for (const r of alle) if (raak(r)) { Object.assign(r, q._patch); uit.push(r); }
+        return antwoord(uit);
+      }
+      // delete
+      const blijft = alle.filter((r: any) => !raak(r));
+      const weg = alle.length - blijft.length;
+      mem.loonRijen[tabel] = blijft;
+      return { data: null, error: null, count: q._wilCount ? weg : null };
+    },
+  };
+  return q;
+}
 
 vi.mock('../api/push.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
@@ -557,6 +653,8 @@ beforeEach(() => {
   mem.userExpiries = [];
   mem.meldingen = [];
   mem.authEmailBezet = null;
+  mem.loonRijen = { loon_codes: [], loon_medewerkers: [], dag_afsluitingen: [], dag_prestaties: [] };
+  mem.loonVolgnummer = 0;
   mem.devices = [
     { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
     { userId: '4', deviceToken: 'dev-ok', name: 'Android · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
@@ -5089,5 +5187,82 @@ describe('/api/me draagt het toestel-oordeel en, voor staf, de beveiligingsstatu
     const onbekend = await api('GET', '/api/me', { token: 'tok-a', device: 'dev-vreemd' });
     expect(onbekend.status).toBe(403);
     expect(onbekend.json?.code).toBe('device_unknown');
+  });
+});
+describe('Loon: dagafsluiting en Easypay-export', () => {
+  const LOON_CODE = (code: string, extra: Record<string, unknown> = {}) => ({
+    code, code_weergave: code, omschrijving: `Dienst ${code}`, dienst_type: 'lijn', in_export: true,
+    easypay_activiteit: 'LIJN', easypay_type_prest: 40140, tik1: '06:00', tik2: '14:00', bron: 'handmatig', ...extra,
+  });
+  const zetLoonBasis = () => {
+    mem.appSettings['loon'] = { easypayLidnr: 4321 };
+    // Alle codes uit de planningsmatrix van juli (12, 14, bv) zijn bekend,
+    // zodat alleen het te testen punt de export kan blokkeren.
+    mem.loonRijen.loon_codes = [LOON_CODE('12'), LOON_CODE('14'), LOON_CODE('bv', { in_export: false })];
+    mem.loonRijen.loon_medewerkers = [
+      { user_id: '3', easypay_nr: 100, in_export: true },
+      { user_id: '4', easypay_nr: 101, in_export: true },
+    ];
+  };
+
+  it('haalt een periode met meer dan 1000 prestaties volledig op (paginering voorbij de PostgREST-cap)', async () => {
+    zetLoonBasis();
+    // 1205 rijen op één dag, allemaal met een onbekende code: de mock-db kapt
+    // net als PostgREST op 1000 rijen per antwoord, dus zonder paginering
+    // zouden de teller en de maandtelling op 1000 blijven steken.
+    mem.loonRijen.dag_afsluitingen = [{ id: 'da-1', datum: '2026-07-02', status: 'afgesloten', geopend_op: '2026-08-01T06:00:00Z', geopend_door: '2', afgesloten_op: '2026-08-01T07:00:00Z', afgesloten_door: '2' }];
+    mem.loonRijen.dag_prestaties = Array.from({ length: 1205 }, (_, i) => ({
+      id: `p-${i + 1}`, datum: '2026-07-02', user_id: '3', volgnr: i + 1, planning_code: '9999', gereden_code: '9999',
+      overmin: 1, overmin_nacht: 0, overmin_extra: 0, onv_premie: false,
+    }));
+
+    const ontbrekend = await api('GET', '/api/loon/codes/ontbrekend?maand=2026-07', { token: 'tok-planner' });
+    expect(ontbrekend.status).toBe(200);
+    expect(ontbrekend.json).toEqual([{ code: '9999', aantal: 1205 }]);
+
+    const maand = await api('GET', '/api/dagafsluiting?maand=2026-07', { token: 'tok-planner' });
+    expect(maand.status).toBe(200);
+    const dag = maand.json.dagen.find((d: any) => d.datum === '2026-07-02');
+    expect(dag.rijen).toBe(1205);
+    expect(dag.overmin).toBe(1205);
+  });
+
+  it('geeft ook boven de 1000 looncodes de volledige lijst terug', async () => {
+    mem.loonRijen.loon_codes = Array.from({ length: 1150 }, (_, i) => LOON_CODE(`c${String(i).padStart(4, '0')}`));
+    const res = await api('GET', '/api/loon/codes', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.length).toBe(1150);
+  });
+
+  it('blokkeert de export op een planningdag die nooit geopend is, tot die is afgesloten', async () => {
+    zetLoonBasis();
+    // De planningsmatrix (beforeEach) heeft inhoud op 01-07 en 08-07. Alleen
+    // 01-07 wordt geopend en afgesloten; 08-07 blijft ongeopend en moet de
+    // export blokkeren, ook al zijn alle geopende dagen netjes afgesloten.
+    const open1 = await api('POST', '/api/dagafsluiting/2026-07-01/openen', { token: 'tok-planner' });
+    expect(open1.status).toBe(201);
+    const sluit1 = await api('POST', '/api/dagafsluiting/2026-07-01/afsluiten', { token: 'tok-planner' });
+    expect(sluit1.status).toBe(200);
+
+    const controle = await api('GET', '/api/loon/export/controle?maand=2026-07', { token: 'tok-planner' });
+    expect(controle.status).toBe(200);
+    expect(controle.json.openDagen).toEqual([]);
+    expect(controle.json.issues).toEqual([]);
+    expect(controle.json.nietGeopendeDagen).toEqual(['2026-07-08']);
+    expect(controle.json.blokkerend).toBe(true);
+
+    const geweigerd = await api('GET', '/api/loon/export?maand=2026-07', { token: 'tok-planner' });
+    expect(geweigerd.status).toBe(409);
+    expect(geweigerd.json.nietGeopendeDagen).toEqual(['2026-07-08']);
+
+    // Na openen en afsluiten van 08-07 is de export vrij.
+    expect((await api('POST', '/api/dagafsluiting/2026-07-08/openen', { token: 'tok-planner' })).status).toBe(201);
+    expect((await api('POST', '/api/dagafsluiting/2026-07-08/afsluiten', { token: 'tok-planner' })).status).toBe(200);
+    const na = await api('GET', '/api/loon/export/controle?maand=2026-07', { token: 'tok-planner' });
+    expect(na.json.nietGeopendeDagen).toEqual([]);
+    expect(na.json.blokkerend).toBe(false);
+    const download = await api('GET', '/api/loon/export?maand=2026-07&format=json', { token: 'tok-planner' });
+    expect(download.status).toBe(200);
+    expect(download.json.rijen.length).toBeGreaterThan(0);
   });
 });

@@ -303,7 +303,7 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/loon/codes')) return json(LOON_CODES);
     if (p.endsWith('/api/loon/medewerkers')) return json(LOON_MEDEWERKERS);
     if (p.endsWith('/api/loon/instellingen')) return json({ easypayLidnr: 1234 });
-    if (p.endsWith('/api/loon/export/controle')) return json({ maand: url.searchParams.get('maand') || '2026-08', dagenGeopend: 2, dagenAfgesloten: 1, openDagen: [dayOffset(-1)], lidnr: 1234, issues: [], samenvatting: { rijen: 4, personen: 2, overminRijen: 1, premies: 0 }, blokkerend: true });
+    if (p.endsWith('/api/loon/export/controle')) return json({ maand: url.searchParams.get('maand') || '2026-08', dagenGeopend: 2, dagenAfgesloten: 1, openDagen: [dayOffset(-1)], nietGeopendeDagen: [], lidnr: 1234, issues: [], samenvatting: { rijen: 4, personen: 2, overminRijen: 1, premies: 0 }, blokkerend: true });
     if (p.endsWith('/api/dagafsluiting')) return json({ maand: url.searchParams.get('maand') || '2026-08', dagen: DAG_AFSLUITINGEN, planningDagen: [dayOffset(-2), dayOffset(-1), dayOffset(0)] });
     if (/[/]api[/]dagafsluiting[/]\d{4}-\d{2}-\d{2}$/.test(p) && route.request().method() === 'GET') {
       const datum = p.slice(-10);

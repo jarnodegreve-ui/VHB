@@ -1,4 +1,5 @@
 import { db } from "../db.js";
+import { paginatedFetch } from "../storage.js";
 import { QUAL_VLAGGEN, loonCodeSleutel, type QualVlag } from "../../shared/loon.js";
 import type { DagPrestatie, DagPrestatieBody, LoonCode, LoonCodeBody, LoonMedewerker } from "../../shared/schemas/loon.js";
 
@@ -63,10 +64,13 @@ export const toDatabaseLoonCode = (code: string, b: LoonCodeBody, updatedBy: str
   updated_by: updatedBy,
 });
 
+// PostgREST kapt af op 1000 rijen per antwoord; alle lijst-selects in deze
+// module lopen daarom door paginatedFetch (api/storage.ts, zie het
+// "eind mei verdwijnt"-incident daar). Een kale .select() of .limit() zou
+// stil rijen laten vallen zodra een tabel de cap overschrijdt.
 export const getLoonCodes = async (): Promise<LoonCode[]> => {
-  const { data, error } = await requireDb().from("loon_codes").select("*").order("code");
-  if (error) throw error;
-  return (data ?? []).map(toLoonCode);
+  const data = await paginatedFetch((from, to) => requireDb().from("loon_codes").select("*").order("code").range(from, to));
+  return data.map(toLoonCode);
 };
 
 export const upsertLoonCode = async (code: string, b: LoonCodeBody, updatedBy: string | null, bron: 'handmatig' | 'segments' | 'import' = 'handmatig'): Promise<LoonCode> => {
@@ -98,9 +102,8 @@ export const toDatabaseLoonMedewerker = (userId: string, m: { easypayNr?: number
 });
 
 export const getLoonMedewerkers = async (): Promise<LoonMedewerker[]> => {
-  const { data, error } = await requireDb().from("loon_medewerkers").select("*");
-  if (error) throw error;
-  return (data ?? []).map(toLoonMedewerker);
+  const data = await paginatedFetch((from, to) => requireDb().from("loon_medewerkers").select("*").order("user_id").range(from, to));
+  return data.map(toLoonMedewerker);
 };
 
 export const upsertLoonMedewerker = async (userId: string, m: { easypayNr?: number | null; inExport: boolean }, updatedBy: string | null): Promise<LoonMedewerker> => {
@@ -148,9 +151,8 @@ export const getDagAfsluiting = async (datum: string): Promise<DagAfsluiting | n
 };
 
 export const getDagAfsluitingen = async (van: string, tot: string): Promise<DagAfsluiting[]> => {
-  const { data, error } = await requireDb().from("dag_afsluitingen").select("*").gte("datum", van).lte("datum", tot).order("datum");
-  if (error) throw error;
-  return (data ?? []).map(toDagAfsluiting);
+  const data = await paginatedFetch((from, to) => requireDb().from("dag_afsluitingen").select("*").gte("datum", van).lte("datum", tot).order("datum").range(from, to));
+  return data.map(toDagAfsluiting);
 };
 
 export const openDag = async (datum: string, geopendDoor: string | null): Promise<DagAfsluiting> => {
@@ -215,15 +217,18 @@ export const toDatabaseDagPrestatiePatch = (b: DagPrestatieBody, bewerktDoor: st
 };
 
 export const getDagPrestaties = async (datum: string): Promise<DagPrestatie[]> => {
-  const { data, error } = await requireDb().from("dag_prestaties").select("*").eq("datum", datum).order("volgnr");
-  if (error) throw error;
-  return (data ?? []).map(toDagPrestatie);
+  // Tiebreak op id: volgnr is niet uniek, zonder vaste totaalvolgorde kan
+  // paginering rijen dubbel of niet teruggeven.
+  const data = await paginatedFetch((from, to) => requireDb().from("dag_prestaties").select("*").eq("datum", datum).order("volgnr").order("id").range(from, to));
+  return data.map(toDagPrestatie);
 };
 
 export const getDagPrestatiesPeriode = async (van: string, tot: string): Promise<DagPrestatie[]> => {
-  const { data, error } = await requireDb().from("dag_prestaties").select("*").gte("datum", van).lte("datum", tot).order("datum").order("volgnr").limit(20000);
-  if (error) throw error;
-  return (data ?? []).map(toDagPrestatie);
+  // Een maand telt al gauw meer dan 1000 prestaties (chauffeurs x dagen):
+  // zonder paginering kapte PostgREST hier stil af en misten de export en de
+  // maandtellingen rijen. De oude .limit(20000) hielp daar niet tegen.
+  const data = await paginatedFetch((from, to) => requireDb().from("dag_prestaties").select("*").gte("datum", van).lte("datum", tot).order("datum").order("volgnr").order("id").range(from, to));
+  return data.map(toDagPrestatie);
 };
 
 export const getDagPrestatie = async (id: string): Promise<DagPrestatie | null> => {
