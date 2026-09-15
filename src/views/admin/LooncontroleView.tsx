@@ -90,7 +90,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
     afgesloten: dagen.filter((d) => d.status === 'afgesloten').length,
     open: dagen.filter((d) => d.status === 'open').length,
     // De server is de bron: dezelfde telling blokkeert daar de export.
-    nietGeopend: controle?.nietGeopendeDagen.length ?? 0,
+    nietGeopend: controle?.nietGeopendeDagen?.length ?? 0,
     overmin: dagen.reduce((s, d) => s + d.overmin, 0),
   };
   const [j, m] = maand.split('-').map(Number);
@@ -190,9 +190,10 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
               {controle.openDagen.length ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
               {controle.openDagen.length ? `${controle.openDagen.length} dagen nog open: ${controle.openDagen.map((d) => d.slice(8)).join(', ')}` : 'Alle geopende dagen zijn afgesloten'}
             </li>
-            <li className={cn('inline-flex items-center gap-1.5', controle.nietGeopendeDagen.length ? 'text-red-700' : 'text-emerald-700')}>
-              {controle.nietGeopendeDagen.length ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
-              {controle.nietGeopendeDagen.length ? `${controle.nietGeopendeDagen.length} dagen met planning nooit geopend: ${controle.nietGeopendeDagen.map((d) => d.slice(8)).join(', ')}` : 'Alle dagen met planning zijn geopend'}
+            {/* Oude server of e2e-mock zonder dit veld: niets tonen i.p.v. crashen. */}
+            <li className={cn('inline-flex items-center gap-1.5', (controle.nietGeopendeDagen ?? []).length ? 'text-red-700' : 'text-emerald-700')}>
+              {(controle.nietGeopendeDagen ?? []).length ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+              {(controle.nietGeopendeDagen ?? []).length ? `${(controle.nietGeopendeDagen ?? []).length} dagen met planning nooit geopend: ${(controle.nietGeopendeDagen ?? []).map((d) => d.slice(8)).join(', ')}` : 'Alle dagen met planning zijn geopend'}
             </li>
             <li className={cn('inline-flex items-center gap-1.5', controle.dagenGeopend === 0 ? 'text-amber-700' : 'text-slate-700')}>{controle.dagenGeopend === 0 ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}{controle.dagenGeopend} dagen geopend</li>
             <li className={cn('inline-flex items-center gap-1.5', controle.lidnr ? 'text-slate-700' : 'text-red-700')}>{controle.lidnr ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}Easypay-lidnummer {controle.lidnr || 'ontbreekt'}</li>
