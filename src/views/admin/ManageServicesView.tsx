@@ -493,7 +493,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <Field label="Starttijd (deel 1)" htmlFor="dienst-start1">
               <Input
                 id="dienst-start1"
-                type="text" required inputMode="numeric" placeholder="04:36" pattern="\\d{1,2}:\\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime}
+                type="text" required inputMode="numeric" placeholder="04:36" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime}
                 onChange={(e) => setFormData({...formData, startTime: e.target.value})}
                 className="tabular-nums"
               />
@@ -501,7 +501,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <Field label="Eindtijd (deel 1)" htmlFor="dienst-eind1">
               <Input
                 id="dienst-eind1"
-                type="text" required inputMode="numeric" placeholder="26:16" pattern="\\d{1,2}:\\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime}
+                type="text" required inputMode="numeric" placeholder="26:16" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime}
                 onChange={(e) => setFormData({...formData, endTime: e.target.value})}
                 className="tabular-nums"
               />
@@ -521,7 +521,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <Field label="Starttijd (deel 2)" htmlFor="dienst-start2">
               <Input
                 id="dienst-start2"
-                type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime2}
+                type="text" inputMode="numeric" placeholder="—" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime2}
                 onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
                 className="tabular-nums"
               />
@@ -529,7 +529,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <Field label="Eindtijd (deel 2)" htmlFor="dienst-eind2">
               <Input
                 id="dienst-eind2"
-                type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime2}
+                type="text" inputMode="numeric" placeholder="—" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime2}
                 onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
                 className="tabular-nums"
               />
@@ -549,7 +549,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <Field label="Starttijd (deel 3)" htmlFor="dienst-start3">
               <Input
                 id="dienst-start3"
-                type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime3}
+                type="text" inputMode="numeric" placeholder="—" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime3}
                 onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
                 className="tabular-nums"
               />
@@ -557,7 +557,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <Field label="Eindtijd (deel 3)" htmlFor="dienst-eind3">
               <Input
                 id="dienst-eind3"
-                type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime3}
+                type="text" inputMode="numeric" placeholder="—" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime3}
                 onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
                 className="tabular-nums"
               />

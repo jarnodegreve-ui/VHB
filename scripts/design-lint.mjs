@@ -27,6 +27,10 @@ const REGELS = [
   { naam: 'rauwe hex-kleur (gebruik tokens)', re: /#[0-9a-fA-F]{6}\b/g, skip: /(BrandLogo|BrandSpinner)\.tsx$|lib\/ui\.ts$|Field\.tsx$/ },
   // Native datumveld oogt per browser anders (Safari desktop het slechtst):
   // altijd DateInput (Field.tsx) — de eigen kiezer met dezelfde waarde-API.
+  // JSX-attributen verwerken geen escapes: pattern="\\d" levert een patroon
+  // met een letterlijke backslash op en keurt élke invoer af (Beheer
+  // dienstoverzicht, 15-09). Schrijf pattern="\d{2}" of pattern={'\\d{2}'}.
+  { naam: 'pattern met dubbele backslash in een JSX-string (keurt alles af)', re: /\bpattern="[^"]*\\\\[^"]*"/g },
   { naam: 'native type="date" (gebruik DateInput uit Field.tsx)', re: /\btype=["']date["']/g, skip: /DatePicker\.tsx$/ },
   // Drie losse puntjes in zichtbare tekst: typografisch één teken (…). De
   // spread-operator (`...props`, `[...x]`) wordt gevolgd door een
