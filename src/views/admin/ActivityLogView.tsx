@@ -8,7 +8,7 @@ import { isoDate, addDagen } from '../../lib/datum';
 import { formatDayLong, formatRelatief, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { EmptyState, ModalHeader, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, MicroLabel, Segmented, Switch } from '../../components/primitives';
+import { Badge, Button, Segmented, Switch } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Paginering, TableToolbar } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
@@ -253,28 +253,25 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
       />
 
       {/* ---- Gebruik ---- */}
-      <Card as="section" padding="lg">
+      <Card as="section" padding="lg" className="min-w-0 p-4 sm:p-6 md:p-8">
         <CardHeader
           size="lg"
           eyebrow="Gebruik"
           title="Actieve gebruikers"
-          description="Wie het portaal gebruikte, per dag. Een dag telt zodra iemand het portaal opent, ook zonder opnieuw aan te melden."
+          description="Wie het portaal opent, telt die dag als actief. Ook zonder opnieuw aan te melden."
         />
-        {/* Drie gelijke kengetal-tegels op een eigen rij (Jarno 09-09): eerst
-            stonden ze als aside naast de beschrijving, met het onderschrift
-            inline achter het cijfer, en liepen ze ongelijk door de
-            verschillende lengtes. Nu label, cijfer en onderschrift elk op
-            een eigen regel, links uitgelijnd. */}
-        <dl className="mt-5 grid grid-cols-3 gap-3">
+        {/* Op mobiel staan de twee gebruikscijfers samen; aanmeldingen krijgt
+            een brede rij zodat het langere label volledig leesbaar blijft. */}
+        <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {[
-            ['Vandaag', kpi.vandaag, 'actief'],
-            ['Deze week', kpi.week, 'unieke gebruikers'],
-            ['Aanmeldingen', kpi.aanmeldingen7d, 'laatste 7 dagen'],
-          ].map(([k, v, sub]) => (
-            <div key={String(k)} className="rounded-xl bg-surface-soft px-4 py-3 ring-1 ring-hairline">
-              <dt className="text-micro">{k}</dt>
-              <dd className="mt-1 text-stat text-slate-900">{v}</dd>
-              <dd className="mt-0.5 text-xs font-medium text-slate-500">{sub}</dd>
+            { label: 'Vandaag', value: kpi.vandaag, sub: 'actieve gebruikers' },
+            { label: 'Laatste 7 dagen', value: kpi.week, sub: 'unieke gebruikers' },
+            { label: 'Aanmeldingen', value: kpi.aanmeldingen7d, sub: 'in de laatste 7 dagen', breed: true },
+          ].map(({ label, value, sub, breed }) => (
+            <div key={label} className={cn('min-w-0 rounded-xl bg-surface-soft p-3 ring-1 ring-hairline sm:p-4', breed && 'col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 sm:col-span-1 sm:block')}>
+              <dt className={cn('text-label break-words', breed ? 'col-start-1 row-start-1' : 'min-h-8 sm:min-h-0')}>{label}</dt>
+              <dd className={`text-stat ${cn('break-words text-slate-900', breed ? 'col-start-2 row-span-2 row-start-1 sm:mt-2' : 'mt-2')}`}>{value}</dd>
+              <dd className={cn('mt-1 text-xs font-medium break-words text-slate-500', breed && 'col-start-1 row-start-2')}>{sub}</dd>
             </div>
           ))}
         </dl>
@@ -284,14 +281,18 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
           </div>
         ) : (
           <div className="mt-6 grid gap-6 lg:grid-cols-5">
-            <div className="lg:col-span-3">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <MicroLabel>Per dag, laatste 14 dagen</MicroLabel>
+            <div className="min-w-0 lg:col-span-3">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <div>
+                  <h3 className="text-card-title">Gebruik per dag</h3>
+                  <p className="mt-1 text-xs text-slate-500">Laatste 14 dagen</p>
+                </div>
                 <Button variant="ghost" size="sm" onClick={() => setShowDailyModal(true)}>Alle dagen ({dailyActive.length})</Button>
               </div>
               {/* Kolommen: elke dag een staaf met het aantal erboven; tik/klik
-                  toont de namen van die dag. */}
-              <div className="flex h-32 items-end gap-1.5" role="img" aria-label={`Actieve gebruikers per dag, laatste 14 dagen: vandaag ${kpi.vandaag}, hoogste ${maxDaily}`}>
+                  toont de namen van die dag. De hoogste staaf gebruikt 80%
+                  van de hoogte, zodat er altijd ruimte is voor de teller. */}
+              <div className="flex h-36 items-end gap-1 sm:gap-1.5" role="group" aria-label={`Actieve gebruikers per dag, laatste 14 dagen: vandaag ${kpi.vandaag}, hoogste ${maxDaily}`}>
                 {veertienDagen.map((d) => (
                   // rauw: staaf-als-knop (namen van die dag), eigen layout
                   <button
@@ -305,31 +306,33 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                     <span className="text-2xs font-semibold font-mono text-slate-700">{d.count || ''}</span>
                     <span
                       className={cn('w-full rounded-t-md transition-colors', d.day === vandaag ? 'bg-oker-500' : d.count > 0 ? 'bg-slate-500 group-hover:bg-slate-700' : 'bg-surface-muted')}
-                      style={{ height: d.count > 0 ? `${Math.max(6, Math.round((d.count / maxDaily) * 100))}%` : '3px' }}
+                      style={{ height: d.count > 0 ? `${Math.max(6, Math.round((d.count / maxDaily) * 80))}%` : '3px' }}
                       aria-hidden="true"
                     />
                   </button>
                 ))}
               </div>
-              <div className="mt-1.5 flex gap-1.5" aria-hidden="true">
+              <div className="mt-1.5 flex gap-1 sm:gap-1.5" aria-hidden="true">
                 {veertienDagen.map((d) => (
-                  /* 2xs: daglabels van de mini-grafiek, 30 kolommen naast elkaar */
+                  /* 2xs: daglabels van de mini-grafiek, 14 kolommen naast elkaar */
                   <span key={d.day} className={cn('min-w-0 flex-1 truncate text-center text-2xs font-medium font-mono', d.day === vandaag ? 'text-oker-700' : 'text-slate-500')}>
                     {d.day === vandaag ? 'nu' : WEEKDAY_SHORT_SUN[d.dow]}
                   </span>
                 ))}
               </div>
             </div>
-            <div className="lg:col-span-2">
-              <MicroLabel className="mb-3 block">Recente aanmeldingen</MicroLabel>
+            <div className="min-w-0 border-t border-hairline pt-5 lg:col-span-2 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+              <h3 className="mb-3 text-card-title">Recente aanmeldingen</h3>
               <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
                 {recentLogins.length === 0 ? (
                   <p className="text-sm text-slate-500">Nog geen aanmeldingen in de laatste 30 dagen.</p>
                 ) : recentLogins.map((e) => (
-                  <div key={e.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-surface-soft-hover">
+                  <div key={e.id} className="flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-soft-hover">
                     <Avatar naam={e.actorName} size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{e.actorName}</span>
-                    <span className="shrink-0 text-xs font-medium text-slate-500" title={new Date(e.createdAt).toLocaleString('nl-BE')}>{formatRelatief(e.createdAt)}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold break-words text-slate-800">{e.actorName}</p>
+                      <p className="mt-0.5 text-xs font-medium text-slate-500" title={new Date(e.createdAt).toLocaleString('nl-BE')}>{formatRelatief(e.createdAt)}</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -517,7 +520,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
               {openDayData.names.map((name) => (
                 <div key={name} className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-surface-soft-hover">
                   <Avatar naam={name} size="sm" />
-                  <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{name}</span>
+                  <span className="min-w-0 text-sm font-semibold break-words text-slate-800">{name}</span>
                 </div>
               ))}
               {openDayData.names.length === 0 && <p className="flex items-center gap-2 text-sm text-slate-500"><Users size={16} /> Niemand actief.</p>}
