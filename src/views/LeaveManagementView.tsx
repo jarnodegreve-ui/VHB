@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, CalendarOff, Check, ChevronDown, ChevronRight as ChevronRightSmall, ClipboardCheck, Plus, Printer, SlidersHorizontal, Users, X } from 'lucide-react';
 import { isRijdend, teltInVerlofbezetting } from '../types';
@@ -26,7 +26,7 @@ import { apiJson } from '../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
 import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
-import { bevatVrijeDag, dagenBovenVerlofLimiet, VerlofBeoordeling } from '../components/VerlofBeoordeling';
+import { bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
 
 
 // Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
@@ -142,6 +142,49 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   })();
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
+  // Bezetting per dag van de server (alleen niet-staf): GET /api/leave geeft
+  // een chauffeur bewust enkel eigen verlof (privacy), dus lokaal rekenen
+  // kleurde bij hem elke dag "Vrij" en kwam de limietwaarschuwing bij het
+  // aanvragen nooit. GET /api/leave/bezetting geeft uitsluitend datum +
+  // aantal + limiet (geen namen), met dezelfde telregels als de planner-kant.
+  const [bezettingServer, setBezettingServer] = useState<Record<string, number>>({});
+  const laadBezetting = useCallback(async (van: string, tot: string, weg?: () => boolean) => {
+    try {
+      const data = await apiJson<{ dagen: Array<{ datum: string; aantal: number }> }>(
+        `/api/leave/bezetting?van=${van}&tot=${tot}`,
+      );
+      if (weg?.()) return;
+      // Vorm valideren vóór de state-updater: die draait tijdens de render,
+      // buiten deze try/catch, en een 404-body ({}) crashte daar de view
+      // ("dagen is not iterable", e2e 15-09).
+      const dagen = Array.isArray((data as any)?.dagen) ? (data as any).dagen : [];
+      setBezettingServer((cur) => {
+        const next = { ...cur };
+        for (const d of dagen) next[String(d.datum)] = Number(d.aantal) || 0;
+        return next;
+      });
+    } catch {
+      // Zonder antwoord blijft de kalender op "Vrij" staan; hij blijft werken.
+    }
+  }, []);
+  // De getoonde maand (en bij een wissel van verlofdata: opnieuw, want een
+  // ingetrokken of pas goedgekeurd verlof verandert de aantallen).
+  useEffect(() => {
+    if (isPlanner) return;
+    let weg = false;
+    const van = `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, '0')}-01`;
+    const tot = isoDate(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0));
+    void laadBezetting(van, tot, () => weg);
+    return () => { weg = true; };
+  }, [isPlanner, viewMonth, leaveRequests, laadBezetting]);
+  // De gekozen aanvraagperiode kan buiten de getoonde maand vallen; haal die
+  // dagen apart op zodat de limiet-preview ook dan klopt.
+  useEffect(() => {
+    if (isPlanner || !formData.startDate || !formData.endDate || formData.endDate < formData.startDate) return;
+    let weg = false;
+    void laadBezetting(formData.startDate, formData.endDate, () => weg);
+    return () => { weg = true; };
+  }, [isPlanner, formData.startDate, formData.endDate, laadBezetting]);
   // Lokale dag i.p.v. UTC (toISOString gaf 's nachts in BE de vorige dag).
   const today = isoDate(new Date());
   // Ziekte hoort niet bij verlof (Jarno 08-09): ziekmeldingen staan in
@@ -173,10 +216,30 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // verleden-dagen grijs tot je de keuzelijst aanraakt, wat als kapot oogt.
   const magVerleden = namensIemandAnders || registratie;
 
+  /** Telt het eigen goedgekeurde verlof van deze gebruiker op die dag mee in
+   *  de servertelling? Dan niet dubbel rekenen bij "erbij deze aanvraag". */
+  const eigenVerlofTeltOp = (dag: string) =>
+    teltInVerlofbezetting(user) &&
+    verlofRequests.some((r) => r.status === 'approved' && String(r.userId) === String(user.id) && r.startDate <= dag && r.endDate >= dag);
+
   /** Dagen van een periode waarop deze chauffeur erbij de verloflimiet
-   *  overschrijdt (gedeeld met de beoordeling, src/components/VerlofBeoordeling.tsx). */
-  const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) =>
-    dagenBovenVerlofLimiet({ verlofRequests, users, limieten }, van, tot, exclUserId);
+   *  overschrijdt (gedeeld met de beoordeling, src/components/VerlofBeoordeling.tsx).
+   *  Een chauffeur heeft de verlofrijen van anderen niet (privacy) en rekent
+   *  daarom op de aantallen van GET /api/leave/bezetting. */
+  const dagenBovenLimiet = (van: string, tot: string, exclUserId: string) => {
+    if (isPlanner) return dagenBovenVerlofLimiet({ verlofRequests, users, limieten }, van, tot, exclUserId);
+    // Niet-staf vraagt altijd voor zichzelf aan (exclUserId = user.id). Telt
+    // hij zelf niet in de bezetting (technieker, flexi), dan geen waarschuwing,
+    // zelfde regel als dagenBovenVerlofLimiet.
+    if (!teltInVerlofbezetting(user)) return [];
+    return dagenVan(van, tot)
+      .map((dag) => ({
+        dag,
+        afwezig: Math.max(0, (bezettingServer[dag] ?? 0) - (eigenVerlofTeltOp(dag) ? 1 : 0)) + 1,
+        limiet: limietVoorDag(limieten, dag),
+      }))
+      .filter((d) => d.afwezig > d.limiet);
+  };
 
   const handleRequestLeave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -484,11 +547,16 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
    *  zonder de flexi-jobs (Jarno 14-09). Een flexi staat wél in de daglijst
    *  (hij is écht afwezig), maar maakt de dag niet voller: hij vult in en
    *  bezet geen vaste dienst. */
-  const bezettingOp = (dateStr: string) =>
-    getRequestsForDate(dateStr).filter((r) => {
+  const bezettingOp = (dateStr: string) => {
+    // Niet-staf heeft de verlofrijen van anderen niet (privacy in GET
+    // /api/leave) en gebruikt de aantallen van GET /api/leave/bezetting;
+    // lokaal rekenen zou hier altijd op "Vrij" uitkomen.
+    if (!isPlanner) return bezettingServer[dateStr] ?? 0;
+    return getRequestsForDate(dateStr).filter((r) => {
       const requester = users.find((u) => u.id === r.userId);
       return !requester || teltInVerlofbezetting(requester);
     }).length;
+  };
 
   const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();

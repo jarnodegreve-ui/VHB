@@ -30,7 +30,7 @@ export type TegelDef = {
 export const CHAUFFEUR_TEGELS: readonly TegelDef[] = [
   { id: 'vandaag', label: 'Vandaag', omschrijving: 'Je dienst van vandaag met de dienstbalk.', essentieel: true, groep: 'tegels' },
   { id: 'volgende-dienst', label: 'Volgende dienst', omschrijving: 'Dienstnummer, dag en delen.', groep: 'tegels' },
-  { id: 'verlofsaldo', label: 'Verlofsaldo', omschrijving: 'Dagen over dit jaar.', groep: 'tegels' },
+  { id: 'verlofsaldo', label: 'Verlofsaldo', omschrijving: 'Dagen vrij aan te vragen dit jaar.', groep: 'tegels' },
   { id: 'deze-maand', label: 'Deze maand', omschrijving: 'Aantal ingeplande diensten.', groep: 'tegels' },
   { id: 'omleidingen', label: 'Omleidingen', omschrijving: 'Aantal actieve omleidingen.', groep: 'tegels' },
   { id: 'komende-diensten', label: 'Komende diensten', omschrijving: 'De eerstvolgende drie diensten.', groep: 'panelen' },
@@ -43,7 +43,7 @@ export const CHAUFFEUR_TEGELS: readonly TegelDef[] = [
  *  schermen wijzen die niet in zijn menu staan (Jarno 09-09). */
 export const TECHNIEKER_TEGELS: readonly TegelDef[] = [
   { id: 'gele-boek', label: 'Gele boek', omschrijving: 'Open defectmeldingen in de garage.', groep: 'tegels' },
-  { id: 'verlofsaldo', label: 'Verlofsaldo', omschrijving: 'Dagen over dit jaar.', essentieel: true, groep: 'tegels' },
+  { id: 'verlofsaldo', label: 'Verlofsaldo', omschrijving: 'Dagen vrij aan te vragen dit jaar.', essentieel: true, groep: 'tegels' },
   { id: 'snelle-acties', label: 'Snelle acties', omschrijving: 'Snelkoppelingen onderaan (alleen op de telefoon).', groep: 'panelen' },
 ];
 

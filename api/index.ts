@@ -35,7 +35,8 @@ import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js
 import { meldingenGelezenBodySchema } from "../shared/schemas/meldingen.js";
 import { recordUrl } from "./_lib/meldingen.js";
 import { meVoorkeurenBodySchema, pasVoorkeurenPatchToe } from "../shared/schemas/dashboardVoorkeuren.js";
-import { VERLOF_LIMIETEN_KEY, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
+import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
+import { teltInVerlofbezetting } from "../shared/verlofbezetting.js";
 import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, verlofFeestdagenSchema } from "../shared/schemas/verlofFeestdagen.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
 import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, referentieVan, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
@@ -4897,6 +4898,68 @@ app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Verlofaanvragen laden is mislukt." });
+  }
+});
+
+// Bezetting van de verlofkalender per dag, zonder personen (elke rol mag
+// lezen). GET /api/leave geeft een chauffeur bewust enkel eigen verlof
+// (privacy), maar daardoor rekende zijn kalender de bezetting op een lege
+// lijst: elke dag "Vrij", en de limietwaarschuwing bij het aanvragen kwam
+// nooit. Dit endpoint geeft uitsluitend datum + aantal + limiet terug, met
+// exact dezelfde telregels als de planner-kant (teltInVerlofbezetting:
+// rijdend personeel zonder flexi's; alleen goedgekeurd; ziekte telt niet).
+app.get("/api/leave/bezetting", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    // Echte kalendercheck, zelfde reden als bij de ziekmelding: "2026-02-31"
+    // past in de regex maar bestaat niet.
+    const isoDay = (v: unknown): string | null => {
+      if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+      const d = new Date(`${v}T00:00:00Z`);
+      return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === v ? v : null;
+    };
+    const van = isoDay(req.query.van);
+    const tot = isoDay(req.query.tot);
+    if (!van || !tot || tot < van) {
+      return res.status(400).json({ error: "Geef een geldige periode op (?van=JJJJ-MM-DD&tot=JJJJ-MM-DD)." });
+    }
+    // Zelfde grens als dagenVan aan de client-kant: ruim genoeg voor een
+    // kalenderjaar, en geen antwoord van duizenden rijen op een tikfout.
+    const start = new Date(`${van}T00:00:00Z`);
+    const eind = new Date(`${tot}T00:00:00Z`);
+    if ((eind.getTime() - start.getTime()) / 86400000 >= 400) {
+      return res.status(400).json({ error: "Periode te lang: vraag hoogstens 400 dagen op." });
+    }
+
+    const [leave, users] = await Promise.all([getLeaveData(), getUsersData()]);
+    // Verloflimieten zoals GET /api/verlof/limieten: zonder instellingen-tabel
+    // (of bij een DB-hik) de standaard, de kalender moet blijven werken.
+    let limieten = parseVerlofLimieten(null);
+    try {
+      limieten = parseVerlofLimieten(await getAppSetting(VERLOF_LIMIETEN_KEY));
+    } catch (err: any) {
+      if (!isMissingTableError(err)) console.error("Verloflimieten laden is mislukt.", err);
+    }
+    // Zelfde regels als bezettingOp/anderenAfwezigOp aan de client-kant:
+    // goedgekeurd, geen ziekte, en de aanvrager telt in de verlofbezetting
+    // (een onbekende aanvrager telt mee, net als daar).
+    const teltMee = leave.filter((l: any) => {
+      if (l.status !== "approved" || l.type === "ziekte") return false;
+      const u = users.find((x: any) => String(x.id) === String(l.userId));
+      return !u || teltInVerlofbezetting(u);
+    });
+    const dagen: Array<{ datum: string; aantal: number; limiet: number }> = [];
+    for (const d = new Date(start); d <= eind; d.setUTCDate(d.getUTCDate() + 1)) {
+      const datum = d.toISOString().slice(0, 10);
+      dagen.push({
+        datum,
+        aantal: teltMee.filter((l: any) => l.startDate <= datum && l.endDate >= datum).length,
+        limiet: limietVoorDag(limieten, datum),
+      });
+    }
+    res.json({ dagen });
+  } catch (err) {
+    console.error("Verlofbezetting laden is mislukt.", err);
+    res.status(500).json({ error: "Verlofbezetting laden is mislukt." });
   }
 });
 

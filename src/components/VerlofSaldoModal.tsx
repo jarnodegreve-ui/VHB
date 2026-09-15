@@ -12,7 +12,7 @@ import { verlofBalans, type LeaveBalance } from '../lib/leaveBalance';
 import { isStaf } from '../types';
 import type { LeaveRequest, User } from '../types';
 
-type Kolom = 'naam' | 'budget' | 'gebruikt' | 'aangevraagd' | 'resterend' | 'kleinVerlet';
+type Kolom = 'naam' | 'budget' | 'gebruikt' | 'aangevraagd' | 'vrij' | 'kleinVerlet';
 
 /**
  * Saldo-overzicht (verzoek Jarno 10-09): alle medewerkers met hun verlofsaldo
@@ -45,21 +45,21 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
         case 'budget': return b.betaaldBudget;
         case 'gebruikt': return b.betaaldGebruikt;
         case 'aangevraagd': return b.betaaldAangevraagd;
-        case 'resterend': return b.betaaldResterend;
+        case 'vrij': return b.betaaldVrij;
         case 'kleinVerlet': return b.kleinVerletDagen;
       }
     });
   }, [rijen, zoek, sort]);
   const totaal = useMemo(() => rijen.reduce((t, r) => ({
     budget: t.budget + r.balans.betaaldBudget, gebruikt: t.gebruikt + r.balans.betaaldGebruikt,
-    aangevraagd: t.aangevraagd + r.balans.betaaldAangevraagd, resterend: t.resterend + r.balans.betaaldResterend,
+    aangevraagd: t.aangevraagd + r.balans.betaaldAangevraagd, vrij: t.vrij + r.balans.betaaldVrij,
     kleinVerlet: t.kleinVerlet + r.balans.kleinVerletDagen,
-  }), { budget: 0, gebruikt: 0, aangevraagd: 0, resterend: 0, kleinVerlet: 0 }), [rijen]);
+  }), { budget: 0, gebruikt: 0, aangevraagd: 0, vrij: 0, kleinVerlet: 0 }), [rijen]);
 
   const exporteer = () => {
     const csv = '﻿' + csvTekst([
-      ['Naam', 'Rol', 'Budget', 'Opgenomen', 'Aangevraagd', 'Resterend', 'Klein verlet'],
-      ...zichtbaar.map((r) => [r.user.name, r.user.role, r.balans.betaaldBudget, r.balans.betaaldGebruikt, r.balans.betaaldAangevraagd, r.balans.betaaldResterend, r.balans.kleinVerletDagen]),
+      ['Naam', 'Rol', 'Budget', 'Opgenomen', 'Aangevraagd', 'Vrij', 'Klein verlet'],
+      ...zichtbaar.map((r) => [r.user.name, r.user.role, r.balans.betaaldBudget, r.balans.betaaldGebruikt, r.balans.betaaldAangevraagd, r.balans.betaaldVrij, r.balans.kleinVerletDagen]),
     ], ';');
     void downloadBlob(`vhb-verlofsaldo-${jaar}.csv`, new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   };
@@ -68,7 +68,7 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
     <Modal open={open} onClose={onClose} maxWidth="3xl" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
       <ModalHeader
         title={`Verlofsaldo ${jaar}`}
-        description="Betaald verlof per medewerker: opgenomen en aangevraagd tegenover het budget. Zondagen en feestdagen tellen niet mee."
+        description="Betaald verlof per medewerker: opgenomen en aangevraagd tegenover het budget. Vrij is wat nog aan te vragen valt, dus na aftrek van aangevraagde dagen. Zondagen en feestdagen tellen niet mee."
         onClose={onClose}
       />
       <div className="flex-1 space-y-4 overflow-y-auto p-6 md:p-8">
@@ -96,14 +96,16 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
                 <SortTh kolom="budget" sort={sort} align="right" className="max-md:hidden md:w-20">Budget</SortTh>
                 <SortTh kolom="gebruikt" sort={sort} align="right" className="w-24">Opgenomen</SortTh>
                 <SortTh kolom="aangevraagd" sort={sort} align="right" className="max-md:hidden md:w-28">Aangevraagd</SortTh>
-                <SortTh kolom="resterend" sort={sort} align="right" className="w-24 md:w-32">Resterend</SortTh>
+                <SortTh kolom="vrij" sort={sort} align="right" className="w-24 md:w-32">Vrij</SortTh>
                 <SortTh kolom="kleinVerlet" sort={sort} align="right" className="max-md:hidden md:w-28">Klein verlet</SortTh>
               </tr>
             </thead>
             <tbody>
               {zichtbaar.map(({ user: u, balans: b }) => {
-                const krap = b.betaaldResterend <= 0;
-                const laag = !krap && b.betaaldResterend <= 3;
+                // Krap/laag op het vrij aan te vragen saldo: hetzelfde
+                // hoofdgetal als het dashboard en de verlofbalans-kaart.
+                const krap = b.betaaldVrij <= 0;
+                const laag = !krap && b.betaaldVrij <= 3;
                 const boven = Math.max(0, b.betaaldGebruikt - b.betaaldBudget);
                 return (
                   <tr key={u.id}>
@@ -117,7 +119,7 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
                     <Td num>{b.betaaldGebruikt}</Td>
                     <Td num className={cn('max-md:hidden', b.betaaldAangevraagd > 0 ? 'text-amber-700' : 'text-slate-500')}>{b.betaaldAangevraagd || '—'}</Td>
                     <Td num className={cn('font-semibold', krap ? 'text-red-700' : laag ? 'text-amber-700' : 'text-slate-800')}>
-                      {b.betaaldResterend}
+                      {b.betaaldVrij}
                       {boven > 0 && <span className="block whitespace-normal text-xs font-normal text-red-700 md:whitespace-nowrap">{boven} boven budget</span>}
                     </Td>
                     <Td num className="max-md:hidden">{b.kleinVerletDagen || '—'}</Td>
@@ -135,7 +137,7 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
                   <Th num className="max-md:hidden">{totaal.budget}</Th>
                   <Th num>{totaal.gebruikt}</Th>
                   <Th num className="max-md:hidden">{totaal.aangevraagd || '—'}</Th>
-                  <Th num>{totaal.resterend}</Th>
+                  <Th num>{totaal.vrij}</Th>
                   <Th num className="max-md:hidden">{totaal.kleinVerlet || '—'}</Th>
                 </tr>
               </tfoot>
