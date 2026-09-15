@@ -89,9 +89,16 @@ export function berekenWerkvoorraad({
     }, new Map<string, { driverId: string; naam: string; reden: string; diensten: OpenstaandeDienst[] }>()).values(),
   );
 
-  // Dekking: null = niet geladen/fout — behandel als 'onbekend', nooit als
-  // 'volledig gedekt'.
-  const gapDays = (coverageDays ?? []).filter((d) => d.missing.length > 0);
+  // Dekking: null = niet geladen/fout, behandel als 'onbekend', nooit als
+  // 'volledig gedekt'. Alleen vandaag en verder (na middernacht telde de
+  // badge de open diensten van gisteren nog mee), en zonder de diensten die
+  // al onder "te herverdelen" staan: de dekking telt een dienst van een
+  // afwezige óók als gat, waardoor één zieke met één dienst dubbel woog.
+  const herverdeelSleutels = new Set(teHerverdelen.map((s) => `${s.date}|${String(s.line ?? '').trim().toLowerCase()}`));
+  const gapDays = (coverageDays ?? [])
+    .filter((d) => d.date >= today)
+    .map((d) => ({ ...d, missing: d.missing.filter((code) => !herverdeelSleutels.has(`${d.date}|${String(code).trim().toLowerCase()}`)) }))
+    .filter((d) => d.missing.length > 0);
 
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
   const pendingSwaps = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted');
@@ -113,9 +120,12 @@ export function berekenWerkvoorraad({
     : null;
   const horizonKrap = horizonDagenOver !== null && horizonDagenOver <= HORIZON_WAARSCHUWING_DAGEN;
 
+  // Open diensten wegen per dienst, niet per dag: de tegel heet "Open
+  // diensten" en moet dat dan ook tellen.
+  const openDiensten = gapDays.reduce((n, d) => n + d.missing.length, 0);
   const attentionCount =
     (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + (horizonKrap ? 1 : 0) +
-    gapDays.length + openTasks + vervalTaken.length + teHerverdelen.length;
+    openDiensten + openTasks + vervalTaken.length + teHerverdelen.length;
 
   return {
     planningStale,
@@ -274,7 +284,7 @@ export function werkvoorraadItems(
   }
   for (const d of wv.gapDays) {
     items.push({
-      key: `dekking:${d.date}`, soort: 'dekking', tone: 'red', aantal: 1,
+      key: `dekking:${d.date}`, soort: 'dekking', tone: 'red', aantal: d.missing.length,
       titel: `${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'}, ${formatDag(d.date)}`,
       detail: `Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`,
       wanneer: epochVanDag(d.date), wanneerTekst: d.date === today ? 'vandaag' : formatDag(d.date),

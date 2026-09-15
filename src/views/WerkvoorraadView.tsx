@@ -176,12 +176,12 @@ export function WerkvoorraadView({
     <PageShell>
       <PageHeader
         eyebrow="Beheer"
-        title="Werkvoorraad"
+        title="Overzicht"
         description="Alles wat op een beslissing wacht, het dringendste eerst. Een rij opent het scherm waar je beslist."
       />
 
       {/* Tegels per soort = filter (patroon Vervaldata); de som is het getal
-          op de werkvoorraad-knop in de topbar. */}
+          op de overzicht-knop in de topbar. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {soorten.map((s) => (
           <OpsStat
