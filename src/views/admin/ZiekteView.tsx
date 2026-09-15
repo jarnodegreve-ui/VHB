@@ -10,6 +10,8 @@ import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
+import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
+import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } from '../../lib/herverdeel';
 import { Button, Chip, MicroLabel, microLabelClass } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card } from '../../components/Card';
@@ -153,59 +155,31 @@ export function ZiekteView({
   // Openstaande diensten), de planner corrigeert waar nodig, en één knop
   // voert alles door. Sequentieel, niet parallel: elke wissel hercheckt
   // dubbele inplanning tegen de stand mét de vorige wissels.
-  type BatchAdvies = { samenvatting?: string; passend: Array<{ id: string; name: string }> };
   const [batchAdvies, setBatchAdvies] = useState<Record<string, BatchAdvies>>({});
   const [batchLaden, setBatchLaden] = useState(false);
   const [verdeelBezig, setVerdeelBezig] = useState(false);
   const [verdeelConfirm, setVerdeelConfirm] = useState(false);
   const [verdeelFouten, setVerdeelFouten] = useState<Record<string, string>>({});
-  const adviesSleutel = (d: Shift) => `${d.date}|${serviceNumberOf(d).trim().toLowerCase()}`;
+  // Batch-advies en dag-bewust voorinvullen zijn gedeeld met Openstaande
+  // diensten (src/lib/herverdeel.ts); de bulk-lus met src/lib/bulk.ts.
+  const adviesSleutelVan = (d: Shift) => adviesSleutel(d.date, serviceNumberOf(d));
   const haalKandidatenVoorstel = async (r: LeaveRequest) => {
     const diensten = openDienstenLijst(r).filter((d) => !overgezet[d.id]);
     if (diensten.length === 0 || batchLaden) return;
     setBatchLaden(true);
     try {
-      const res = await apiFetch('/api/coverage-advisor/batch', {
-        method: 'POST',
-        body: JSON.stringify({ items: diensten.slice(0, 40).map((d) => ({ date: d.date, code: serviceNumberOf(d) })) }),
-      });
-      const body = await res.json().catch(() => ({} as any));
-      if (!res.ok) {
-        notify(body.error || 'Kandidaten voorstellen is mislukt.', 'error');
-        return;
-      }
-      const per: Record<string, BatchAdvies> = {};
-      for (const item of body.items ?? []) per[`${item.date}|${String(item.code).trim().toLowerCase()}`] = item;
+      const per = await haalBatchAdvies(diensten.map((d) => ({ date: d.date, code: serviceNumberOf(d) })));
       setBatchAdvies(per);
-      // Alleen vooraf invullen waar nog geen keuze staat — de planner blijft
+      // Alleen vooraf invullen waar nog geen keuze staat, de planner blijft
       // de baas over elke rij.
-      setVervangerPerDienst((cur) => {
-        const next = { ...cur };
-        // Dag-bewust voorinvullen: twee gaten op dezelfde dag mogen niet
-        // allebei dezelfde topkandidaat krijgen (de server weigert de tweede
-        // wissel dan terecht met een 409 en de batch strandt half). Bestaande
-        // handmatige keuzes tellen mee als bezet.
-        const bezetPerDag = new Map<string, Set<string>>();
-        const bezet = (dag: string) => {
-          if (!bezetPerDag.has(dag)) bezetPerDag.set(dag, new Set());
-          return bezetPerDag.get(dag)!;
-        };
-        for (const d of diensten) {
-          if (next[d.id]) bezet(d.date).add(String(next[d.id]));
-        }
-        for (const d of diensten) {
-          if (next[d.id]) continue;
-          const advies = per[adviesSleutel(d)];
-          const kandidaat = (advies?.passend ?? []).find((k) => !bezet(d.date).has(String(k.id)));
-          if (kandidaat) {
-            next[d.id] = String(kandidaat.id);
-            bezet(d.date).add(String(kandidaat.id));
-          }
-        }
-        return next;
-      });
-    } catch {
-      notify('Kandidaten voorstellen is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+      setVervangerPerDienst((cur) => vulVervangersVoor(diensten, {
+        sleutelVan: (d) => d.id,
+        dagVan: (d) => d.date,
+        adviesVan: (d) => per[adviesSleutelVan(d)],
+        huidig: cur,
+      }));
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Kandidaten voorstellen is mislukt.', 'error');
     } finally {
       setBatchLaden(false);
     }
@@ -215,43 +189,36 @@ export function ZiekteView({
     const diensten = openDienstenLijst(r).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]);
     if (diensten.length === 0) return;
     setVerdeelBezig(true);
-    const fouten: Record<string, string> = {};
-    let gelukt = 0;
-    try {
-      for (const dienst of diensten) {
-        const naarId = vervangerPerDienst[dienst.id];
-        try {
-          const res = await apiFetch('/api/admin/shift-swap', {
-            method: 'POST',
-            body: JSON.stringify({
-              date: dienst.date,
-              line: serviceNumberOf(dienst),
-              fromDriverId: String(dienst.driverId),
-              toDriverId: naarId,
-              reason: 'Ziekte',
-            }),
-          });
-          const body = await res.json().catch(() => ({} as any));
-          if (!res.ok) {
-            fouten[dienst.id] = body.error || 'Overzetten is mislukt.';
-            continue;
-          }
-          gelukt += 1;
-          setOvergezet((cur) => ({ ...cur, [dienst.id]: naamVan(naarId) }));
-        } catch {
-          fouten[dienst.id] = 'Netwerkfout, deze dienst is niet overgezet.';
-        }
+    const resultaat = await bulkUitvoeren(diensten, async (dienst) => {
+      const naarId = vervangerPerDienst[dienst.id];
+      let res: Response;
+      try {
+        res = await apiFetch('/api/admin/shift-swap', {
+          method: 'POST',
+          body: JSON.stringify({
+            date: dienst.date,
+            line: serviceNumberOf(dienst),
+            fromDriverId: String(dienst.driverId),
+            toDriverId: naarId,
+            reason: 'Ziekte',
+          }),
+        });
+      } catch {
+        return { fout: 'Netwerkfout, deze dienst is niet overgezet.' };
       }
-    } finally {
-      setVerdeelBezig(false);
-      setVerdeelFouten(fouten);
-    }
-    const misluktAantal = Object.keys(fouten).length;
-    notify(
-      `${gelukt} van ${diensten.length} diensten herverdeeld${misluktAantal > 0 ? `, ${misluktAantal} mislukt, zie de rijen` : ''}.`,
-      misluktAantal > 0 ? 'error' : 'success',
-    );
-    if (gelukt > 0) await onShiftSwapped?.();
+      const body = await res.json().catch(() => ({} as { error?: string }));
+      if (!res.ok) return { fout: body.error || 'Overzetten is mislukt.' };
+      setOvergezet((cur) => ({ ...cur, [dienst.id]: naamVan(naarId) }));
+    });
+    setVerdeelBezig(false);
+    setVerdeelFouten(Object.fromEntries(resultaat.mislukt.map((m) => [m.item.id, m.fout])));
+    meldBulkResultaat(notify, resultaat, {
+      item: ['dienst', 'diensten'],
+      gedaan: 'herverdeeld',
+      allesGelukt: `${resultaat.gelukt.length} van ${resultaat.totaal} diensten herverdeeld.`,
+      rest: (f) => `, ${f.length} mislukt, zie de rijen`,
+    });
+    if (resultaat.gelukt.length > 0) await onShiftSwapped?.();
   };
 
   // --- Ziek melden (zelfde flow als het dashboard: onSickReport) ------------
@@ -615,8 +582,8 @@ export function ZiekteView({
                                 <p className="text-xs font-semibold text-emerald-700">Overgezet naar {klaar}</p>
                               ) : isAdmin ? (
                                 <>
-                                {batchAdvies[adviesSleutel(dienst)]?.samenvatting && (
-                                  <p className="text-xs font-medium text-slate-500">{batchAdvies[adviesSleutel(dienst)].samenvatting}</p>
+                                {batchAdvies[adviesSleutelVan(dienst)]?.samenvatting && (
+                                  <p className="text-xs font-medium text-slate-500">{batchAdvies[adviesSleutelVan(dienst)].samenvatting}</p>
                                 )}
                                 {verdeelFouten[dienst.id] && (
                                   // red, niet rose: rose is hier de zíekte-statuskleur;

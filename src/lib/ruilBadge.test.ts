@@ -64,4 +64,14 @@ describe('geruildeDiensten', () => {
     const b = map.get(ruilSleutel('2026-09-15', '2101'));
     expect(b?.met).toBe('een collega');
   });
+
+  it('geeft bij dezelfde invoer (op referentie) dezelfde Map terug, bij nieuwe invoer een nieuwe', () => {
+    const swaps = [swap({})];
+    const a = geruildeDiensten('B', swaps, users);
+    expect(geruildeDiensten('B', swaps, users)).toBe(a);
+    expect(geruildeDiensten('A', swaps, users)).not.toBe(a);
+    const b = geruildeDiensten('B', [...swaps], users);
+    expect(b).not.toBe(a);
+    expect(b.get(ruilSleutel('2026-09-15', '2101'))?.met).toBe('An');
+  });
 });

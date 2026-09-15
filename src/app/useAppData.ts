@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { User, View } from '../types';
-import { useDataKern, type ShowToast } from './data/kern';
+import { useDataKern, useStabieleActies, type ShowToast } from './data/kern';
 import { useActiviteitData } from './data/activiteit';
 import { usePlanningData } from './data/planning';
 import { useVerlofData } from './data/verlof';
@@ -22,6 +22,13 @@ import { useMeldingenData } from './data/meldingen';
  * terug — dezelfde vorm als vóór de opsplitsing, zodat App en de views er
  * niets van merken. Views lezen het via `useAppDataContext()`
  * (src/app/AppDataContext.tsx).
+ *
+ * Stabiel (punt 19, 15-09): het teruggegeven object verandert alleen van
+ * referentie wanneer een dátaveld verandert. De acties hebben blijvende
+ * identiteiten (`useStabieleActies`) en staan óók apart onder `acties`, voor
+ * de acties-context. Vroeger was dit een vers object-literal per render van
+ * App, en App rendert bij elke scroll (topbar-schaduw), toast-timer en
+ * laadteller, dus elke context-lezer rekende dan mee.
  *
  * `showToast`/`meldLaadfout` komen als functies binnen zodat de meldingen
  * hun bundeling en sessie-onderdrukking in App behouden.
@@ -76,6 +83,7 @@ export function useAppData({
       // Chauffeur: enkel eigen shifts ophalen (50× minder data op mobile).
       // Planner/admin: alle shifts (nodig voor beheer-views).
       const planningFilter = appUser.role === 'chauffeur' ? { driverId: String(appUser.id) } : undefined;
+      ctx.beginBronMeting();
       await Promise.all([
         planning.fetchPlanning(accessToken, planningFilter),
         mensen.fetchUsers(accessToken),
@@ -95,7 +103,13 @@ export function useAppData({
         ...(appUser.role === 'admin' ? [activiteit.fetchActivityLog(accessToken)] : []),
         ...(appUser.role === 'chauffeur' ? [mensen.fetchUnseenDocuments(appUser.id, accessToken)] : []),
       ]);
-      setLastSyncedAt(Date.now());
+      // Versheid: kwam er ook maar één antwoord uit de SW-cache (offline of
+      // buiten bereik), dan is dit geen verse synchronisatie. We houden dan
+      // de datum van het oudste gecachte antwoord aan (of laten de vorige
+      // waarde staan), zodat "gegevens van hh:mm" klopt.
+      const bron = ctx.sluitBronMeting();
+      if (bron.uitCache === 0) setLastSyncedAt(Date.now());
+      else if (bron.oudste !== null) setLastSyncedAt((vorige) => (vorige === null ? bron.oudste : Math.min(vorige, bron.oudste!)));
     } catch (error) {
       console.error('Error loading app data:', error);
       meldLaadfout('de gegevens');
@@ -131,20 +145,34 @@ export function useAppData({
   const { activityLog, loginActivity, fetchActivityLog, fetchLoginActivity } = activiteit;
   const { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen } = meldingenData;
 
-  return {
+  // Data: alleen een nieuwe referentie wanneer een van de velden wijzigt.
+  const data = useMemo(() => ({
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
     planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, coverageDays, vervaldata, pendingDevices,
-    isInitialLoad, setIsInitialLoad, lastSyncedAt, setLastSyncedAt,
+    isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen,
+  }), [
+    shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
+    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, coverageDays, vervaldata, pendingDevices,
+    isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen,
+  ]);
+
+  // Acties: blijvende identiteiten die altijd de laatste implementatie aanroepen.
+  const acties = useStabieleActies({
+    setIsInitialLoad, setLastSyncedAt,
     loadAppData, refreshAll, resetAll,
     fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, fetchUnseenDocuments, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog, fetchLoginActivity,
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
-    feestdagenExtra, zetFeestdagenExtra,
+    zetFeestdagenExtra,
     fetchServices, saveServices, fetchUsers, saveUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
     saveUser, createUser, deleteUser, saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
-    meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen,
-  };
+    fetchMeldingen, markeerMeldingenGelezen,
+  });
+
+  return useMemo(() => ({ ...data, ...acties, acties }), [data, acties]);
 }
 
 /** De platte vorm die App en de views (via de context) te zien krijgen. */
 export type AppData = ReturnType<typeof useAppData>;
+/** Alleen de acties (stabiel): voor de acties-context. */
+export type AppActies = AppData['acties'];

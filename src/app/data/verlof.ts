@@ -20,6 +20,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
   const fetchLeave = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/leave', { accessToken });
+      ctx.noteerAntwoord(response);
       ctx.captureRevision('leave', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {

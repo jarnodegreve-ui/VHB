@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus, ListChecks } from 'lucide-react';
+import { useOptioneleAppData } from '../app/AppDataContext';
+import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
+import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } from '../lib/herverdeel';
+import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
 import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, notify } from '../lib/ui';
 import { isoDate } from '../lib/datum';
@@ -89,6 +93,93 @@ export function CoverageView() {
   // redenen ≠ leeg = bewust overrulen van het advies → waarschuwing in de bevestiging.
   const [assignConfirm, setAssignConfirm] = useState<{ id: string; name: string; redenen: string[] } | null>(null);
   const [pickLoading, setPickLoading] = useState(false);
+
+  // --- Alle gaten van één dag in één keer (punt 16) ------------------------
+  // Zelfde wizard als "Verdeel alles" in Beheer › Ziekte: het batch-advies
+  // vult per gat de beste passende kandidaat voor (dag-bewust, zodat twee
+  // gaten niet dezelfde chauffeur krijgen), de planner corrigeert per rij, en
+  // één bevestiging voert alles na elkaar door met fouten per rij
+  // (src/lib/herverdeel.ts + src/lib/bulk.ts). De chauffeurslijst voor de
+  // keuzelijst komt uit de datalaag; zonder context (los gerenderd) valt hij
+  // terug op de passende kandidaten uit het advies.
+  const appData = useOptioneleAppData();
+  const chauffeurs = useMemo(() => (appData?.users ?? []).filter((u) => u.role === 'chauffeur' && u.isActive !== false), [appData?.users]);
+  const alleShifts = appData?.shifts ?? [];
+  const werkdagen = useMemo(() => werkdagenUitShifts(alleShifts), [alleShifts]);
+  const [batch, setBatch] = useState<{ date: string; codes: string[] } | null>(null);
+  const [batchAdvies, setBatchAdvies] = useState<Record<string, BatchAdvies>>({});
+  const [batchLaden, setBatchLaden] = useState(false);
+  const [batchKeuze, setBatchKeuze] = useState<Record<string, string>>({});
+  const [batchBezig, setBatchBezig] = useState(false);
+  const [batchConfirm, setBatchConfirm] = useState(false);
+  const [batchFouten, setBatchFouten] = useState<Record<string, string>>({});
+  const [batchKlaar, setBatchKlaar] = useState<Record<string, string>>({});
+  const openBatch = async (d: DayGap) => {
+    const gaten = d.missing.map((code) => ({ date: d.date, code }));
+    setBatch({ date: d.date, codes: d.missing });
+    setBatchAdvies({}); setBatchKeuze({}); setBatchFouten({}); setBatchKlaar({});
+    setBatchLaden(true);
+    try {
+      const per = await haalBatchAdvies(gaten);
+      setBatchAdvies(per);
+      setBatchKeuze((cur) => vulVervangersVoor(gaten, {
+        sleutelVan: (g) => adviesSleutel(g.date, g.code),
+        dagVan: (g) => g.date,
+        adviesVan: (g) => per[adviesSleutel(g.date, g.code)],
+        huidig: cur,
+      }));
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Kandidaten voorstellen is mislukt.', 'error');
+    } finally {
+      setBatchLaden(false);
+    }
+  };
+  const naamVanChauffeur = (id: string) =>
+    chauffeurs.find((u) => String(u.id) === String(id))?.name
+    ?? Object.values(batchAdvies).flatMap((a) => a.passend).find((k) => String(k.id) === String(id))?.name
+    ?? 'de chauffeur';
+  const optiesVoor = (date: string, code: string): Array<{ id: string; label: string }> => {
+    if (chauffeurs.length > 0) {
+      return rangschikKandidaten(chauffeurs, vrijOpDatum(alleShifts, date), werkdagen, date)
+        .map((k) => ({ id: String(k.user.id), label: kandidaatLabel(k) }));
+    }
+    return (batchAdvies[adviesSleutel(date, code)]?.passend ?? []).map((k) => ({ id: String(k.id), label: k.name }));
+  };
+  const batchTeDoen = batch
+    ? batch.codes.filter((code) => !batchKlaar[adviesSleutel(batch.date, code)] && batchKeuze[adviesSleutel(batch.date, code)])
+    : [];
+  const voerBatchUit = async () => {
+    if (!batch || batchBezig || batchTeDoen.length === 0) return;
+    const { date } = batch;
+    setBatchBezig(true);
+    const resultaat = await bulkUitvoeren(batchTeDoen, async (code) => {
+      const sleutel = adviesSleutel(date, code);
+      const driverId = batchKeuze[sleutel];
+      let res: Response;
+      try {
+        res = await apiFetch('/api/planning/assign-service', {
+          method: 'POST',
+          body: JSON.stringify({ date, serviceNumber: code, driverId }),
+        });
+      } catch {
+        return { fout: 'Netwerkfout, deze dienst is niet toegewezen.' };
+      }
+      const body = await res.json().catch(() => ({} as { error?: string }));
+      if (!res.ok) return { fout: body.error || 'Toewijzen is mislukt.' };
+      setBatchKlaar((cur) => ({ ...cur, [sleutel]: naamVanChauffeur(driverId) }));
+    });
+    setBatchBezig(false);
+    setBatchFouten(Object.fromEntries(resultaat.mislukt.map((m) => [adviesSleutel(date, m.item), m.fout])));
+    meldBulkResultaat(notify, resultaat, {
+      item: ['dienst', 'diensten'],
+      gedaan: 'toegewezen',
+      rest: (f) => `, ${f.length} mislukt, zie de rijen`,
+    });
+    if (resultaat.gelukt.length > 0) await refetchGaps();
+    // Alles gelukt: de gaten zijn weg, het venster mag dicht; bij fouten
+    // blijft het open met de melding per rij.
+    if (resultaat.mislukt.length === 0) setBatch(null);
+  };
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
@@ -962,6 +1053,7 @@ export function CoverageView() {
                   {ok ? (
                     <span className="text-xs font-medium text-slate-500 inline-flex items-center gap-1"><Check size={14} className="text-emerald-700" /> volledig gedekt</span>
                   ) : (
+                    <>
                     <div className="flex flex-wrap gap-2">
                       {d.missing.map((svc) => {
                         // Gat door een gemelde afwezigheid: toon wie uitviel en
@@ -1004,6 +1096,15 @@ export function CoverageView() {
                         );
                       })}
                     </div>
+                    {/* Meerdere gaten op één dag: in één keer voorinvullen en toewijzen. */}
+                    {d.missing.length > 1 && (
+                      <div className="mt-2">
+                        <Button variant="secondary" size="sm" icon={<ListChecks size={14} />} onClick={() => void openBatch(d)}>
+                          Vul alle gaten van deze dag voor
+                        </Button>
+                      </div>
+                    )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1151,6 +1252,76 @@ export function CoverageView() {
           ? `Dienst ${pick.code} op ${dayLabel(pick.date)} wordt toegewezen aan ${assignConfirm.name}.${assignConfirm.redenen.length > 0 ? ` Let op, dit wijkt af van het advies: ${assignConfirm.redenen.join(', en ')}.` : ''} De planning wordt meteen bijgewerkt en de chauffeur krijgt een melding.`
           : ''}
         confirmText="Toewijzen"
+        cancelText="Annuleren"
+        variant="warning"
+      />
+
+      {/* Alle gaten van één dag: batch-advies vooringevuld, per rij te corrigeren. */}
+      <Modal open={!!batch} onClose={() => setBatch(null)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0" ariaLabel="Alle gaten van deze dag voorinvullen">
+        {batch && (
+          <>
+            <ModalHeader
+              eyebrow={`${batch.codes.length} openstaande diensten`}
+              title={dayLabel(batch.date).replace(/^./, (c) => c.toUpperCase())}
+              description="Het advies vult per dienst de best passende vrije chauffeur voor; twee diensten op deze dag krijgen nooit dezelfde. Pas aan waar nodig en wijs alles in één keer toe."
+              onClose={() => setBatch(null)}
+            />
+            <div className="flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-6">
+              {batchLaden && (
+                <div className="flex items-center gap-3 text-slate-500">
+                  <BrandSpinner size={16} />
+                  <span className="text-sm font-bold">Advies berekenen…</span>
+                </div>
+              )}
+              {batch.codes.map((code) => {
+                const sleutel = adviesSleutel(batch.date, code);
+                const klaar = batchKlaar[sleutel];
+                const advies = batchAdvies[sleutel];
+                return (
+                  <Card key={code} tone="muted" padding="none" className="space-y-2 px-3.5 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-mono text-sm font-semibold text-slate-800 tabular-nums">Dienst {code}</span>
+                      {klaar && <Badge tone="emerald" stil>Toegewezen aan {klaar}</Badge>}
+                    </div>
+                    {advies?.samenvatting && !klaar && (
+                      <p className="text-xs font-medium text-slate-500">{advies.samenvatting}</p>
+                    )}
+                    {batchFouten[sleutel] && (
+                      <p role="alert" className="text-xs font-semibold text-red-700">{batchFouten[sleutel]}</p>
+                    )}
+                    {!klaar && (
+                      <Select
+                        aria-label={`Chauffeur voor dienst ${code}`}
+                        value={batchKeuze[sleutel] ?? ''}
+                        disabled={batchBezig}
+                        onChange={(e) => setBatchKeuze((cur) => ({ ...cur, [sleutel]: e.target.value }))}
+                      >
+                        <option value="">Kies een chauffeur…</option>
+                        {optiesVoor(batch.date, code).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                      </Select>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-hairline p-4">
+              <Button variant="secondary" onClick={() => setBatch(null)}>Sluiten</Button>
+              <Button variant="primary" disabled={batchLaden || batchTeDoen.length === 0} bezig={batchBezig} onClick={() => setBatchConfirm(true)}>
+                Wijs alles toe ({batchTeDoen.length})
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
+      <ConfirmationModal
+        isOpen={batchConfirm}
+        onClose={() => setBatchConfirm(false)}
+        onConfirm={() => { setBatchConfirm(false); void voerBatchUit(); }}
+        title="Alle gaten van deze dag toewijzen?"
+        message={batch
+          ? `${batchTeDoen.length} ${batchTeDoen.length === 1 ? 'dienst' : 'diensten'} op ${dayLabel(batch.date)} ${batchTeDoen.length === 1 ? 'wordt' : 'worden'} in één keer toegewezen aan de gekozen chauffeurs. De planning wordt meteen bijgewerkt en elke chauffeur krijgt een melding; terugdraaien kan per dienst via de cel in de Maandplanning.`
+          : ''}
+        confirmText="Wijs alles toe"
         cancelText="Annuleren"
         variant="warning"
       />

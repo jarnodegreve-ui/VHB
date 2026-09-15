@@ -8,6 +8,7 @@ import { filterMeldingen, groepeerPerDag, soortenIn, tijdVan, type MeldingFilter
 import { cn } from '../lib/ui';
 import type { Melding, MeldingSoort, View } from '../types';
 import { Card } from '../components/Card';
+import { LijstAnimatie, LijstRij } from '../components/LijstRij';
 import { Button, FilterChip } from '../components/primitives';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 
@@ -92,15 +93,19 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
         />
       ) : (
         <div className="space-y-5">
+          {/* Onder het filter "Ongelezen" verdwijnt een melding zodra ze geopend
+              is: de rij klapt dicht, een leeg geworden dag gaat mee (LijstRij). */}
+          <LijstAnimatie aantal={groepen.length}>
           {groepen.map((groep) => (
-            <section key={groep.dag || 'onbekend'} aria-label={groep.label} className="space-y-2">
+            <LijstRij as="section" key={groep.dag || 'onbekend'} aria-label={groep.label} className="space-y-2">
               <h2 className="px-1 text-micro">{groep.label}</h2>
               <Card padding="none" as="section" className="overflow-hidden">
                 <ul className="divide-y divide-slate-100">
+                  <LijstAnimatie aantal={groep.items.length}>
                   {groep.items.map((m) => {
                     const ongelezen = !m.gelezenOp;
                     return (
-                      <li key={m.id}>
+                      <LijstRij key={m.id}>
                         {/* rauw: lijstrij met eigen layout (icoon, twee tekstregels, tijd + stip);
                             Button centreert en dwingt semibold/min-h af */}
                         <button
@@ -137,13 +142,15 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
                             )}
                           </span>
                         </button>
-                      </li>
+                      </LijstRij>
                     );
                   })}
+                  </LijstAnimatie>
                 </ul>
               </Card>
-            </section>
+            </LijstRij>
           ))}
+          </LijstAnimatie>
         </div>
       )}
     </PageShell>

@@ -8,6 +8,7 @@ import {
   VOERTUIG_VERVAL_LABEL, VOERTUIG_VERVAL_SOORTEN, WERKTYPE_LABEL, voertuigNaam, type VoertuigVervalSoort,
 } from '../../../shared/techniek';
 import { cn, notify } from '../../lib/ui';
+import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { useRouteParam } from '../../app/router';
 import { formatDateHuman, formatRelatief } from '../../lib/format';
@@ -299,14 +300,19 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
   const opslaan = async () => {
     if (bezig) return;
     setBezig(true);
-    let mislukt = false;
-    for (const s of VOERTUIG_VERVAL_SOORTEN) {
+    // Alleen de gewijzigde soorten; fouten per soort, één toast (src/lib/bulk.ts).
+    const gewijzigd = VOERTUIG_VERVAL_SOORTEN.filter((s) => {
       const d = draft[s]; const oud = vervaldata[s];
-      if ((d.datum || '') === (oud?.validUntil ?? '') && (d.opmerking || '') === (oud?.opmerking ?? '')) continue;
-      try { await onVervaldatum(s, d.datum, d.opmerking); } catch { mislukt = true; notify(`${VOERTUIG_VERVAL_LABEL[s]} kon niet opgeslagen worden.`, 'error'); }
-    }
+      return (d.datum || '') !== (oud?.validUntil ?? '') || (d.opmerking || '') !== (oud?.opmerking ?? '');
+    });
+    const resultaat = await bulkUitvoeren(gewijzigd, (s) => onVervaldatum(s, draft[s].datum, draft[s].opmerking));
     setBezig(false);
-    if (!mislukt) notify('Vervaldata opgeslagen.', 'success');
+    meldBulkResultaat(notify, resultaat, {
+      item: ['vervaldatum', 'vervaldata'],
+      gedaan: 'opgeslagen',
+      allesGelukt: 'Vervaldata opgeslagen.',
+      rest: (f) => `, niet gelukt: ${f.map((x) => VOERTUIG_VERVAL_LABEL[x.item]).join(', ')}`,
+    });
   };
   const veld = (label: string, waarde: string | number | null | undefined) => (
     <div className="min-w-0"><dt className="text-micro">{label}</dt><dd className="truncate text-sm font-medium text-slate-800">{waarde ?? '—'}</dd></div>

@@ -32,13 +32,35 @@ export const ruilSleutel = (date: string, line: string): string => `${date}__${S
  * `userId` bracht. Alleen 'approved' en 'completed' tellen; een lopende
  * aanvraag heeft zijn eigen badge. In beslisvolgorde, zodat bij een ketting
  * (A→B, daarna B→C) de laatste wissel het label bepaalt.
+ *
+ * Memo-vriendelijk (punt 19, 15-09): zuiver in (userId, swaps, users), en
+ * met een enkelvoudige cache op referentie. Mijn dag riep dit elke minuut
+ * ongememoiseerd aan (setInterval voor de klok) met `users.find` in een lus;
+ * sinds de datalaag stabiele array-referenties teruggeeft, is de tweede
+ * aanroep met dezelfde invoer nu O(1). Namen via een Map i.p.v. find.
+ * Het resultaat is dezelfde Map-instantie: niet muteren bij de aanroeper.
  */
+let laatste: { userId: string; swaps: readonly SwapRequest[]; users: ReadonlyArray<Pick<User, 'id' | 'name'>>; map: Map<string, RuilBadge> } | null = null;
+
 export function geruildeDiensten(
   userId: string,
   swaps: readonly SwapRequest[],
   users: ReadonlyArray<Pick<User, 'id' | 'name'>>,
 ): Map<string, RuilBadge> {
-  const naam = (id: string | undefined) => users.find((u) => String(u.id) === String(id))?.name ?? 'een collega';
+  if (laatste && laatste.userId === userId && laatste.swaps === swaps && laatste.users === users) return laatste.map;
+  const map = berekenGeruildeDiensten(userId, swaps, users);
+  laatste = { userId, swaps, users, map };
+  return map;
+}
+
+function berekenGeruildeDiensten(
+  userId: string,
+  swaps: readonly SwapRequest[],
+  users: ReadonlyArray<Pick<User, 'id' | 'name'>>,
+): Map<string, RuilBadge> {
+  const namen = new Map<string, string>();
+  for (const u of users) namen.set(String(u.id), u.name);
+  const naam = (id: string | undefined) => namen.get(String(id)) ?? 'een collega';
   const map = new Map<string, RuilBadge>();
   const doorgevoerd = swaps
     .filter((s) => s.status === 'approved' || s.status === 'completed')

@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useMemo, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { tik } from '../lib/tik';
 import { Button, IconButton, MicroLabel, Segmented, Td, Th } from './primitives';
 import { useDropdown } from './useDropdown';
 
@@ -297,6 +298,12 @@ export function Checkbox({ checked, onChange, label, indeterminate, className, .
 export function BulkBar({ aantal, onWis, children, className }: { aantal: number; onWis: () => void; children: ReactNode; className?: string }) {
   const reduced = useReducedMotion();
   const [bezig, setBezig] = useState(false);
+  // Haptische tik zodra de balk verschijnt (eerste selectie), niet bij elke
+  // volgende rij en niet bij het sluiten (src/lib/tik.ts).
+  const zichtbaar = aantal > 0;
+  useEffect(() => {
+    if (zichtbaar) tik('bulk');
+  }, [zichtbaar]);
   return (
     <AnimatePresence initial={false}>
       {aantal > 0 && (

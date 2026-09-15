@@ -5034,3 +5034,38 @@ describe('extra vrije dagen (feestdagen) (10-09)', () => {
     expect(mem.appSettings.verlof_feestdagen).toBeUndefined();
   });
 });
+
+describe('/api/me draagt het toestel-oordeel en, voor staf, de beveiligingsstatus (punt 19, 15-09)', () => {
+  it('chauffeur op een goedgekeurd toestel: profiel + toestel.approved, geen beveiliging', async () => {
+    const res = await api('GET', '/api/me', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.id).toBe('3');
+    expect(res.json.toestel).toMatchObject({ status: 'approved' });
+    expect(typeof res.json.toestel.gateActief).toBe('boolean');
+    expect(res.json.beveiliging).toBeUndefined();
+  });
+
+  it('staf: beveiliging { mfaVerplicht, aal } zit in het profiel (geen aparte roundtrip nodig)', async () => {
+    const res = await api('GET', '/api/me', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json.beveiliging).toEqual({ mfaVerplicht: false, aal: 'aal1' });
+    // Staf zonder toestelrij: het oordeel is 'onbekend', de gate laat staf door.
+    expect(res.json.toestel.status).toBe('onbekend');
+  });
+
+  it('de toestel-gate op /api/me is ongewijzigd: wachtend en geblokkeerd blijven 403 met code', async () => {
+    mem.devices.push(
+      { userId: '3', deviceToken: 'dev-pending', name: 'x', status: 'pending', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null },
+      { userId: '3', deviceToken: 'dev-revoked', name: 'x', status: 'revoked', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null },
+    );
+    const pending = await api('GET', '/api/me', { token: 'tok-a', device: 'dev-pending' });
+    expect(pending.status).toBe(403);
+    expect(pending.json?.code).toBe('device_pending');
+    const revoked = await api('GET', '/api/me', { token: 'tok-a', device: 'dev-revoked' });
+    expect(revoked.status).toBe(403);
+    expect(revoked.json?.code).toBe('device_revoked');
+    const onbekend = await api('GET', '/api/me', { token: 'tok-a', device: 'dev-vreemd' });
+    expect(onbekend.status).toBe(403);
+    expect(onbekend.json?.code).toBe('device_unknown');
+  });
+});

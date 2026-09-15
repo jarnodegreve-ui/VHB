@@ -1,15 +1,28 @@
-import { Fragment, useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Clock, Download, Users } from 'lucide-react';
+import { Fragment, useDeferredValue, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { AlertTriangle, Clock, Download, Plus, UserSearch, Users } from 'lucide-react';
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { celBadgeTone } from '../../lib/planningKind';
-import { EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, Chip, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { Badge, Button, Chip, FilterChip, IconButton, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
 import { OpsStat } from '../../components/ops';
+import { Modal } from '../../components/Modal';
+import { Field, Input, Select } from '../../components/Field';
+import { useOptioneleAppData } from '../../app/AppDataContext';
+import { navigeer } from '../../app/router';
 import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken, suggestClosestName } from '../../lib/planning';
+
+/** Zelfde categorieën als Planningscodes (die view is een eigen chunk, dus niet importeren). */
+const CATEGORIE_OPTIES: Array<{ value: PlanningCode['category']; label: string }> = [
+  { value: 'service', label: 'Dienst' },
+  { value: 'absence', label: 'Afwezigheid' },
+  { value: 'leave', label: 'Verlof' },
+  { value: 'training', label: 'Opleiding' },
+  { value: 'unknown', label: 'Onbekend' },
+];
 
 /** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
 // Gedeelde kleurentaal met de Maandplanning (src/lib/planningKind.ts) —
@@ -38,6 +51,46 @@ export function PlanningMatrixView({
   const [showOnlyIssues, setShowOnlyIssues] = useState(false);
   const [highlightedCode, setHighlightedCode] = useState<string | null>(null);
   const [visibleDayCount, setVisibleDayCount] = useState(60);
+
+  // Doe-scherm (punt 16): een onbekende code meteen als planningscode
+  // vastleggen (zelfde schrijfpad als Planningscodes: savePlanningCodes uit
+  // de datalaag, met revisie-header en conflict-toast) en vanuit een
+  // niet-gematchte naam in één klik op de juiste gebruiker landen. Buiten de
+  // app-schil (geen context) verdwijnt de toevoegknop gewoon.
+  const savePlanningCodes = useOptioneleAppData()?.savePlanningCodes;
+  const [nieuweCode, setNieuweCode] = useState<{ code: string; description: string; category: PlanningCode['category'] } | null>(null);
+  const [codeBezig, setCodeBezig] = useState(false);
+  const [codeFout, setCodeFout] = useState('');
+  const openNieuweCode = (code: string) => { setCodeFout(''); setNieuweCode({ code: normalizePlanningToken(code), description: '', category: 'unknown' }); };
+  const bewaarNieuweCode = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!nieuweCode || !savePlanningCodes || codeBezig) return;
+    const code = nieuweCode.code.trim().toLowerCase();
+    if (!code) { setCodeFout('De code mag niet leeg zijn.'); return; }
+    if (planningCodes.some((c) => normalizePlanningToken(c.code) === normalizePlanningToken(code))) {
+      setCodeFout('Deze code staat al bij de planningscodes.');
+      return;
+    }
+    setCodeBezig(true);
+    // Vinkjes (telt als dienst, betaald, vrije dag) blijven uit, zoals een
+    // nieuwe rij in Planningscodes; daar stel je ze bij.
+    const ok = await savePlanningCodes([...planningCodes, { code, category: nieuweCode.category, description: nieuweCode.description.trim(), countsAsShift: false, isPaidAbsence: false, isDayOff: false }]);
+    setCodeBezig(false);
+    if (!ok) return; // de datalaag meldt de fout of het conflict zelf
+    notify(`Code ${code.toUpperCase()} toegevoegd als planningscode.`, 'success');
+    setNieuweCode(null);
+    setHighlightedCode((cur) => (cur === normalizePlanningToken(code) ? null : cur));
+  };
+  // Gebruikers met de zoekterm al ingevuld (?zoek= bestaat daar): de planner
+  // staat meteen op de juiste rij om de naam te vergelijken of aan te passen.
+  const openGebruiker = (naam: string) => {
+    navigeer('gebruikers');
+    const url = new URL(window.location.href);
+    url.searchParams.set('zoek', naam);
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    window.dispatchEvent(new CustomEvent('vhb-route'));
+  };
+
   const safeRows = useMemo(
     () => rows.map((row) => ({
       ...row,
@@ -289,9 +342,16 @@ export function PlanningMatrixView({
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {derived.globalUnknownCodes.length > 0 ? derived.globalUnknownCodes.map((code) => (
-                <FilterChip key={`list-${code}`} tone="red" active={highlightedCode === code} onClick={() => setHighlightedCode(code)}>
-                  {code}
-                </FilterChip>
+                <span key={`list-${code}`} className="inline-flex items-center gap-0.5">
+                  <FilterChip tone="red" active={highlightedCode === code} onClick={() => setHighlightedCode(code)}>
+                    {code}
+                  </FilterChip>
+                  {savePlanningCodes && (
+                    <IconButton label={`Voeg ${code} toe als planningscode`} variant="ghost" size="sm" onClick={() => openNieuweCode(code)}>
+                      <Plus size={14} />
+                    </IconButton>
+                  )}
+                </span>
               )) : (
                 <span className="text-sm text-slate-500">Geen onbekende codes gevonden.</span>
               )}
@@ -310,7 +370,12 @@ export function PlanningMatrixView({
 
           <Card tone="muted" padding="sm">
             <div className="flex items-center justify-between gap-3">
-              <MicroLabel>Niet-gematchte chauffeurs</MicroLabel>
+              <span className="inline-flex items-center gap-1.5">
+                <MicroLabel>Niet-gematchte chauffeurs</MicroLabel>
+                <InfoTip label="Hoe koppelt het portaal een naam?">
+                  Het portaal koppelt de naam uit de Excel aan een gebruiker op naam; volgorde (voor- of achternaam eerst), hoofdletters en accenten tellen niet mee. Staat de naam anders gespeld, pas hem dan aan bij de gebruiker (Open gebruiker) of in de Excel. Een aparte alias per gebruiker bestaat nog niet.
+                </InfoTip>
+              </span>
               <Badge tone={derived.globalUnmatchedDrivers.length > 0 ? 'amber' : 'slate'} className="tabular-nums">{derived.globalUnmatchedDrivers.length}</Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -318,10 +383,17 @@ export function PlanningMatrixView({
                 // Fuzzy-suggestie: "Duysbergh Pascal" (typo) → "≈ Duysburgh Pascal?"
                 const suggestion = suggestClosestName(driver, users.map((u) => ({ id: String(u.id), name: u.name })));
                 return (
-                  <Badge key={driver} tone="amber">
-                    {driver}
-                    {suggestion && <span className="font-normal text-amber-700/90">≈ {suggestion.name}?</span>}
-                  </Badge>
+                  <span key={driver} className="inline-flex items-center gap-1">
+                    <Badge tone="amber">
+                      {driver}
+                      {suggestion && <span className="font-normal text-amber-700/90">≈ {suggestion.name}?</span>}
+                    </Badge>
+                    {canOpenUserManagement && (
+                      <Button size="sm" variant="ghost" icon={<UserSearch size={14} />} onClick={() => openGebruiker(suggestion?.name ?? driver)}>
+                        Open gebruiker
+                      </Button>
+                    )}
+                  </span>
                 );
               }) : (
                 <span className="text-sm text-slate-500">Alle chauffeurs zijn gekoppeld.</span>
@@ -518,9 +590,16 @@ export function PlanningMatrixView({
                         <tr key={assignment.driver} className="hover:bg-slate-50/60 transition-colors">
                           <Td className="font-semibold text-slate-800">{assignment.driver}</Td>
                           <Td>
-                            <Chip tone={celBadgeTone(assignment)} className="uppercase">
-                              {assignment.code}
-                            </Chip>
+                            <span className="inline-flex items-center gap-0.5">
+                              <Chip tone={celBadgeTone(assignment)} className="uppercase">
+                                {assignment.code}
+                              </Chip>
+                              {assignment.kind === 'unknown' && savePlanningCodes && (
+                                <IconButton label={`Voeg ${assignment.code} toe als planningscode`} variant="ghost" size="sm" onClick={() => openNieuweCode(assignment.code)}>
+                                  <Plus size={14} />
+                                </IconButton>
+                              )}
+                            </span>
                           </Td>
                           <Td className="font-semibold text-slate-800">{assignment.label}</Td>
                           <Td className="text-slate-500 tabular-nums">{assignment.details}</Td>
@@ -554,6 +633,42 @@ export function PlanningMatrixView({
           )}
         </Card>
       </div>
+
+      {/* Onbekende code als planningscode vastleggen zonder schermwissel. */}
+      <Modal open={!!nieuweCode} onClose={() => setNieuweCode(null)} maxWidth="sm" className="!p-0" ariaLabel="Planningscode toevoegen">
+        {nieuweCode && (
+          <form onSubmit={(e) => void bewaarNieuweCode(e)}>
+            <ModalHeader
+              title={`Code ${nieuweCode.code.toUpperCase()} toevoegen`}
+              description="Komt in dezelfde lijst als Planningscodes en is meteen herkend in elke geüploade dag."
+              onClose={() => setNieuweCode(null)}
+            />
+            <div className="space-y-4 p-6">
+              <Field label="Code" error={codeFout || undefined}>
+                {({ id, describedBy, invalid }) => (
+                  <Input id={id} aria-describedby={describedBy} invalid={invalid} value={nieuweCode.code} readOnly className="font-mono uppercase" />
+                )}
+              </Field>
+              <Field label="Betekenis" hint="Wat de code in de Excel betekent, bv. “bijscholing” of “recup”.">
+                {({ id, describedBy }) => (
+                  <Input id={id} aria-describedby={describedBy} value={nieuweCode.description} autoFocus onChange={(e) => setNieuweCode({ ...nieuweCode, description: e.target.value })} />
+                )}
+              </Field>
+              <Field label="Categorie" hint="Telt als dienst, betaald of vrije dag stel je daarna bij in Planningscodes.">
+                {({ id, describedBy }) => (
+                  <Select id={id} aria-describedby={describedBy} value={nieuweCode.category} onChange={(e) => setNieuweCode({ ...nieuweCode, category: e.target.value as PlanningCode['category'] })}>
+                    {CATEGORIE_OPTIES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </Select>
+                )}
+              </Field>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="secondary" onClick={() => setNieuweCode(null)}>Annuleren</Button>
+                <Button type="submit" variant="primary" bezig={codeBezig} icon={<Plus size={16} />}>Toevoegen</Button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
     </PageShell>
     );
   } catch (error) {

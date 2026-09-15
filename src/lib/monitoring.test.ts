@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_BREADCRUMBS, addBreadcrumb, getBreadcrumbs, getLaatsteReferentie, reportBoundaryError, reportHandledError, reportUserFeedback, resetMonitoring, setMonitoringUser, subscribeReferentie, wisReferentie } from './monitoring';
+import { MAX_BREADCRUMBS, PRESTATIE_DREMPELS, addBreadcrumb, beoordeelPrestatie, getBreadcrumbs, getLaatsteReferentie, reportBoundaryError, reportHandledError, reportUserFeedback, resetMonitoring, setMonitoringUser, subscribeReferentie, wisReferentie } from './monitoring';
 
 describe('monitoring: broodkruimels en rapportcontext', () => {
   const fetchMock = vi.fn(async () => ({ ok: true }) as Response);
@@ -60,5 +60,44 @@ describe('monitoring: broodkruimels en rapportcontext', () => {
     fetchMock.mockImplementationOnce(async () => ({ ok: true, json: async () => ({ ok: true, referentie: 'FFFFFF' }) }) as Response);
     expect(await reportUserFeedback('de knop doet niets')).toBe(true);
     expect(getLaatsteReferentie()).toBeNull();
+  });
+});
+
+describe('monitoring: prestatiedrempels op Mijn dag (golf 4)', () => {
+  const fetchMock = vi.fn(async () => ({ ok: true }) as Response);
+  beforeEach(() => {
+    resetMonitoring();
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const body = (i = 0) => JSON.parse(String((fetchMock.mock.calls[i] as unknown as [string, RequestInit])[1].body));
+
+  it('meldt een LCP boven 4 s op mijn-dag één keer per sessie, met bron prestatie en de schermcontext', async () => {
+    setMonitoringUser('42', 'chauffeur');
+    addBreadcrumb('navigatie', 'mijn-dag');
+    expect(beoordeelPrestatie('LCP', PRESTATIE_DREMPELS.LCP)).toBe(false); // precies op de drempel = niet
+    expect(beoordeelPrestatie('LCP', 4500)).toBe(true);
+    expect(beoordeelPrestatie('LCP', 6000)).toBe(false); // al gemeld deze sessie
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(body().source).toBe('prestatie');
+    expect(body().message).toBe('Trage LCP op mijn-dag: 4500 ms (drempel 4000 ms)');
+    expect(body().view).toBe('mijn-dag');
+    expect(body().role).toBe('chauffeur');
+  });
+
+  it('negeert andere schermen en een INP op of onder 300 ms; INP en LCP tellen apart', async () => {
+    addBreadcrumb('navigatie', 'rooster');
+    expect(beoordeelPrestatie('INP', 800)).toBe(false);
+    addBreadcrumb('navigatie', 'mijn-dag');
+    expect(beoordeelPrestatie('INP', PRESTATIE_DREMPELS.INP)).toBe(false);
+    expect(beoordeelPrestatie('INP', 301)).toBe(true);
+    expect(beoordeelPrestatie('LCP', 9000)).toBe(true);
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(body(0).message).toBe('Trage INP op mijn-dag: 301 ms (drempel 300 ms)');
+    expect(body(1).message).toMatch(/^Trage LCP op mijn-dag/);
   });
 });

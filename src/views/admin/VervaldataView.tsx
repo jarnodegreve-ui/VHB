@@ -6,6 +6,7 @@ import { cn, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateHuman } from '../../lib/format';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
+import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
@@ -173,27 +174,24 @@ export function VervaldataView({ users }: { users: User[] }) {
     if (!bewerkt || isSaving) return;
     setIsSaving(true);
     const bestaand = perUser.get(String(bewerkt.id)) ?? {};
-    let mislukt = false;
-    for (const soort of Object.keys(EXPIRY_SOORT_LABELS)) {
-      const nieuw = (draft[soort] ?? '').trim();
-      const oud = bestaand[soort] ?? '';
-      if (nieuw === oud) continue;
-      try {
-        const res = await apiFetch('/api/user-expiries', {
-          method: 'PUT',
-          body: JSON.stringify({ userId: bewerkt.id, soort, validUntil: nieuw || null }),
-        });
-        if (!res.ok) throw new Error(String(res.status));
-      } catch {
-        mislukt = true;
-        notify(`${EXPIRY_SOORT_LABELS[soort]} kon niet opgeslagen worden.`, 'error');
-      }
-    }
+    // Alleen de gewijzigde soorten, één PUT per soort; fouten per soort
+    // verzameld en één toast na afloop (src/lib/bulk.ts).
+    const gewijzigd = Object.keys(EXPIRY_SOORT_LABELS).filter((soort) => (draft[soort] ?? '').trim() !== (bestaand[soort] ?? ''));
+    const resultaat = await bulkUitvoeren(gewijzigd, async (soort) => {
+      const res = await apiFetch('/api/user-expiries', {
+        method: 'PUT',
+        body: JSON.stringify({ userId: bewerkt.id, soort, validUntil: (draft[soort] ?? '').trim() || null }),
+      });
+      if (!res.ok) return false;
+    });
     setIsSaving(false);
-    if (!mislukt) {
-      sluitBewerken();
-      notify('Vervaldata opgeslagen.', 'success');
-    }
+    meldBulkResultaat(notify, resultaat, {
+      item: ['vervaldatum', 'vervaldata'],
+      gedaan: 'opgeslagen',
+      allesGelukt: 'Vervaldata opgeslagen.',
+      rest: (f) => `, niet gelukt: ${f.map((x) => EXPIRY_SOORT_LABELS[x.item]).join(', ')}`,
+    });
+    if (resultaat.mislukt.length === 0) sluitBewerken();
     await zl.ververs();
   };
 

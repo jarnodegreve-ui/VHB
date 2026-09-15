@@ -15,6 +15,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
 import { ActieMenu } from '../../components/ActieMenu';
+import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 import { useRecordParam } from '../../app/router';
 
 const FORM_ID = 'update-form';
@@ -246,11 +247,11 @@ export function ManageUpdatesView({
       />
 
       <div className="mt-5 max-h-[480px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
-        {updates.length > 0 ? updates.map((update) => {
+        {updates.length > 0 ? <LijstAnimatie aantal={updates.length}>{updates.map((update) => {
           const isCurrent = paneelOpen && editingId === update.id;
           return (
+            <LijstRij as="div" key={update.id}>
             <Card
-              key={update.id}
               padding="none"
               interactive
               aria-current={isCurrent ? 'true' : undefined}
@@ -264,7 +265,7 @@ export function ManageUpdatesView({
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{update.title}</span>
+                    <span className="min-w-0 truncate text-sm font-semibold text-slate-800" data-vt-record={update.id}>{update.title}</span>
                     {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
                     {gelezenBadge(update)}
                   </span>
@@ -273,8 +274,9 @@ export function ManageUpdatesView({
                 <ChevronRight size={16} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
               </button>
             </Card>
+            </LijstRij>
           );
-        }) : (
+        })}</LijstAnimatie> : (
           <EmptyState
             title="Nog geen updates"
             message="Publiceer je eerste nieuwsbericht of veiligheidsmelding, chauffeurs zien het meteen op hun dashboard."

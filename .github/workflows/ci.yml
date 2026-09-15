@@ -43,6 +43,13 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      # Strict in fases (golf 4, punt 20): `strict: true` voor shared/** en
+      # src/lib/** via tsconfig.strict.json. Blokkerend, want die kring is
+      # groen; de rest van src/ (bij de meting 121 fouten, 94 in App.tsx)
+      # volgt in latere fases door `include` daar uit te breiden.
+      - name: Typecheck (strict, shared + lib)
+        run: npm run lint:strict
+
       # Design-systeem-bewaking (fase A, 03-09-2026): geen dark:-utilities,
       # rauwe knoppen, off-ladder maten/radii — zie scripts/design-lint.mjs.
       - name: Design-lint
@@ -65,9 +72,24 @@ jobs:
 
       # Twee projecten (playwright.config.ts): iPhone 13 voor de mobiele specs,
       # "Desktop (chromium)" 1440×900 voor desktop.spec.ts; a11y.spec.ts (axe,
-      # WCAG 2.1 AA) draait op beide.
+      # WCAG 2.1 AA) draait op beide. Het derde project (pwa) staat hieronder.
       - name: E2E-smoke
         run: npm run test:e2e
+
+      # PWA-e2e (golf 4, punt 20): het project `pwa` draait mét service
+      # worker: registratie + GET_VERSION, koude offline start van Mijn dag
+      # uit de SW-cache met het offline-label, en de update-flow (nieuwe
+      # worker → "Vernieuw"-toast → SKIP_WAITING → herlaad). Niet-blokkerend
+      # zolang niet bewezen is dat SW-gedrag in headless Chromium op een
+      # gedeelde runner stabiel is: rood hier is een signaal voor de reviewer.
+      # TODO: continue-on-error weghalen zodra hij een paar weken groen is.
+      # E2E_SKIP_BUILD hergebruikt de dist die de smoke hierboven net met
+      # dezelfde dummy-env bouwde (geen tweede build).
+      - name: E2E PWA (service worker, niet-blokkerend)
+        continue-on-error: true
+        env:
+          E2E_SKIP_BUILD: "1"
+        run: npm run test:e2e:pwa
 
   # Prestatiebudget (09-2026): Lighthouse CI op de gebouwde app, mobiel
   # geëmuleerd (Moto-G-klasse, gesimuleerde 4G — de bus, niet de kantoor-Mac),
@@ -159,9 +181,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: "false"
 
-  # Visuele regressie (verbeterronde 03-09, nr. 11): zes sleutelschermen op
+  # Visuele regressie (verbeterronde 03-09, nr. 11): de sleutelschermen
+  # (lijst SCHERMEN in scripts/visueel-ci.mjs; sinds golf 4 zestien, met
+  # Mijn dag, designsysteem, werkvoorraad en de techniek-/loonschermen) op
   # deze branch én op de basis-branch schieten (gemockte API) en per pixel
-  # vergelijken — scripts/visueel-ci.mjs. Boven 1,5 % per scherm faalt de
+  # vergelijken — scripts/visueel-ci.mjs. Geen baselines in de repo: de
+  # basis-branch is de referentie. Boven 1,5 % per scherm faalt de
   # job NIET: de tabel in de job-samenvatting en de diff-afbeeldingen in het
   # artifact zijn een signaal voor de reviewer, geen blokkade.
   visueel:

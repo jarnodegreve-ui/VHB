@@ -22,8 +22,22 @@ dist via `vite preview` op poort 4173.
 
 | Project | Viewport | Specs |
 |---|---|---|
-| `iPhone 13 (chromium)` | iPhone 13 | alle specs behalve `desktop.spec.ts` |
+| `iPhone 13 (chromium)` | iPhone 13 | alle specs behalve `desktop.spec.ts` en `pwa.spec.ts` |
 | `Desktop (chromium)` | 1440×900 | `desktop.spec.ts`, `a11y.spec.ts` |
+| `pwa` | iPhone 13, **service worker aan** | alleen `pwa.spec.ts`; apart via `npm run test:e2e:pwa` |
+
+- **`pwa.spec.ts`** (golf 4): de enige spec mét service worker. Registratie +
+  `GET_VERSION`, koude offline start van Mijn dag uit de cache `vhb-ritbladen`
+  (met het stille offline-label) en de update-flow (nieuwe worker →
+  "Vernieuw"-toast → `SKIP_WAITING` → herlaad). Mocks via `context.route`, want
+  fetches van de SW zelf horen bij de context, niet bij de pagina. In CI
+  niet-blokkerend (`continue-on-error`, stap "E2E PWA"). Wat niet e2e te
+  testen is (échte nieuwe build, ritblad-PDF uit storage, push, trage-netwerk-
+  timeout, iOS-standalone) staat in de kop van de spec; dat blijft de
+  handmatige PWA-checklist + `src/lib/swRitbladen.test.ts`.
+- Poort: `E2E_PORT=4201 npx playwright test --project=pwa` voor een parallelle
+  sessie; alle specs (ook `dock.spec.ts` met zijn eigen contexts) volgen de
+  poort uit de config.
 
 - **Mobiele specs** (`smoke`, `dashboard`, `verlof`, `ruil`, `sessie`, `dock`,
   `donker`): elk met eigen, kleine fixtures — ze testen één schrijfpad en
@@ -44,10 +58,14 @@ visuele audits, zodat een nieuw veld overal tegelijk zichtbaar wordt.
 
 ## Visuele regressie (CI-job `visueel`)
 
-Op elke PR schiet `scripts/visueel-ci.mjs` zes sleutelschermen (desktop:
-admin-dashboard, gebruikers, maandplanning; iPhone/WebKit: chauffeur-dashboard,
-rooster, verlof — licht thema) op de PR-branch én op de basis-branch, en
-vergelijkt ze per pixel (pngjs, geen Python). Boven **1,5 % per scherm** faalt
+Op elke PR schiet `scripts/visueel-ci.mjs` de sleutelschermen uit zijn lijst
+`SCHERMEN` (sinds golf 4 zestien: desktop admin-dashboard, gebruikers,
+maandplanning, werkvoorraad, designsysteem, dienstopbouw, dagafsluiting,
+looncontrole; desktop technieker gele boek, werkprestaties, voertuigen;
+Mijn dag op desktop én iPhone; iPhone/WebKit chauffeur-dashboard, rooster,
+verlof — licht thema) op de PR-branch én op de basis-branch, en vergelijkt ze
+per pixel (pngjs, geen Python). Er zijn geen baselines in de repo: de
+basis-branch is de referentie, een nieuw scherm staat één PR lang op "nieuw". Boven **1,5 % per scherm** faalt
 de job niet: de tabel staat in de job-samenvatting en de diff-afbeeldingen
 (basis | branch | verschil in rood) in het artifact `visuele-regressie`.
 

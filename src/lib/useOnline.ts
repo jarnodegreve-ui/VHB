@@ -1,16 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 /**
- * Netwerkstatus voor de stille offline-labels (Mijn dag, ritbladviewer).
+ * Netwerkstatus als module-store (patroon presence.ts): één waarheid voor de
+ * stille offline-labels (Mijn dag, ritbladviewer, zelf-ladende schermen), de
+ * offline-kaart in de schil en de update-toast-guard in App.tsx.
  *
  * `navigator.onLine` + de online/offline-events zijn de basis, maar die
  * liegen soms: een telefoon met wifi-symbool zonder internet (captive
  * portal, bus-wifi) blijft "online". Daarom een lichte ping-fallback: bij
- * het openen, bij terugkeer naar de voorgrond en bij een online-event één
- * HEAD naar /api/health (publiek, geen sessie, geen SW-cache — de service
- * worker laat /api/* buiten Mijn dag ongemoeid). Alleen een netwerkfout of
- * time-out telt als offline; elke HTTP-status (ook 4xx/5xx) = bereik.
- * Geen periodieke polling: één request per voorgrond-moment volstaat.
+ * de eerste abonnee, bij terugkeer naar de voorgrond en bij een online-event
+ * één HEAD naar /api/health (publiek, geen sessie, geen SW-cache). Alleen een
+ * netwerkfout of time-out telt als offline; elke HTTP-status (ook 4xx/5xx)
+ * = bereik. Geen periodieke polling: één request per voorgrond-moment.
+ *
+ * Vóór 15-09 was dit een lokale hook: elke instantie hing eigen listeners op
+ * en deed een eigen ping (Mijn dag + ritbladviewer = twee pings naast
+ * elkaar), en PwaChrome had er nog een derde definitie naast op alleen
+ * `navigator.onLine`. Nu: één ping tegelijk (gedeeld), één listener-set
+ * (opgehangen bij de eerste abonnee, weer weg bij de laatste), en
+ * `isOnlineNu()` voor code buiten React.
  */
 const PING_URL = '/api/health';
 const PING_TIMEOUT_MS = 4000;
@@ -30,41 +38,89 @@ export async function pingBereik(signal?: AbortSignal): Promise<boolean> {
   }
 }
 
+// --- module-store ---
+let online = typeof navigator === 'undefined' ? true : navigator.onLine;
+const luisteraars = new Set<() => void>();
+let lopendePing: AbortController | null = null;
+let opgehangen = false;
+
+const zetOnline = (waarde: boolean) => {
+  if (online === waarde) return;
+  online = waarde;
+  luisteraars.forEach((l) => l());
+};
+
+/** Bereik nu opnieuw vaststellen: offline-vlag van de browser wint meteen,
+ *  anders één (gedeelde) ping. Een lopende ping wordt vervangen. */
+export function controleerBereik(): void {
+  if (typeof navigator === 'undefined') return;
+  if (!navigator.onLine) {
+    lopendePing?.abort();
+    lopendePing = null;
+    zetOnline(false);
+    return;
+  }
+  lopendePing?.abort();
+  const mijn = new AbortController();
+  lopendePing = mijn;
+  void pingBereik(mijn.signal).then((ok) => {
+    if (lopendePing !== mijn) return; // ingehaald door een nieuwere check
+    lopendePing = null;
+    zetOnline(ok);
+  });
+}
+
+const opOnline = () => controleerBereik();
+const opOffline = () => {
+  lopendePing?.abort();
+  lopendePing = null;
+  zetOnline(false);
+};
+const opZichtbaar = () => {
+  if (document.visibilityState === 'visible') controleerBereik();
+};
+
+const hangOp = () => {
+  if (opgehangen || typeof window === 'undefined') return;
+  opgehangen = true;
+  window.addEventListener('online', opOnline);
+  window.addEventListener('offline', opOffline);
+  document.addEventListener('visibilitychange', opZichtbaar);
+  controleerBereik();
+};
+const haalWeg = () => {
+  if (!opgehangen) return;
+  opgehangen = false;
+  window.removeEventListener('online', opOnline);
+  window.removeEventListener('offline', opOffline);
+  document.removeEventListener('visibilitychange', opZichtbaar);
+  lopendePing?.abort();
+  lopendePing = null;
+};
+
+/** Abonneren buiten React (App-effecten, tests). Geeft de afmelder terug. */
+export function abonneerOnline(l: () => void): () => void {
+  luisteraars.add(l);
+  hangOp();
+  return () => {
+    luisteraars.delete(l);
+    if (luisteraars.size === 0) haalWeg();
+  };
+}
+
+/** De laatst bekende status, synchroon, voor code buiten een component. */
+export const isOnlineNu = (): boolean => online;
+
+const lees = () => online;
+const leesServer = () => true;
+
 export function useOnline(): boolean {
-  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  return useSyncExternalStore(abonneerOnline, lees, leesServer);
+}
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    let actief = true;
-    let lopend: AbortController | null = null;
-    const check = () => {
-      if (!navigator.onLine) {
-        setOnline(false);
-        return;
-      }
-      lopend?.abort();
-      lopend = new AbortController();
-      void pingBereik(lopend.signal).then((ok) => {
-        if (actief) setOnline(ok);
-      });
-    };
-    const op = () => check();
-    const af = () => setOnline(false);
-    const zichtbaar = () => {
-      if (document.visibilityState === 'visible') check();
-    };
-    window.addEventListener('online', op);
-    window.addEventListener('offline', af);
-    document.addEventListener('visibilitychange', zichtbaar);
-    check();
-    return () => {
-      actief = false;
-      lopend?.abort();
-      window.removeEventListener('online', op);
-      window.removeEventListener('offline', af);
-      document.removeEventListener('visibilitychange', zichtbaar);
-    };
-  }, []);
-
-  return online;
+/** Alleen voor tests: store terug naar de beginstand. */
+export function _resetOnlineStoreVoorTests(): void {
+  haalWeg();
+  luisteraars.clear();
+  online = typeof navigator === 'undefined' ? true : navigator.onLine;
 }

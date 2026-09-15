@@ -25,6 +25,7 @@ import { UserDocumentsModal } from './UserDocumentsModal';
 import { BroadcastDocumentModal } from './BroadcastDocumentModal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { LegeLijst, NietGevonden } from '../../components/illustraties';
+import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 
 type UserDraft = User & { password?: string };
 
@@ -737,8 +738,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                 </tr>
               </StickyThead>
               <tbody>
+                {/* Tabelrijen: alleen opacity + 8 px (geen hoogte/layout, zie LijstRij). */}
+                <LijstAnimatie aantal={sortedUsers.length}>
                 {sortedUsers.map((u) => (
-                  <tr key={u.id} className={cn('group border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-oker-50/40')}>
+                  <LijstRij as="tr" key={u.id} className={cn('group border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-oker-50/40')}>
                     <Td className="w-12 !py-1">
                       <Checkbox
                         checked={selectedIds.has(u.id)}
@@ -832,15 +835,17 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                         )}
                       </div>
                     </Td>
-                  </tr>
+                  </LijstRij>
                 ))}
+                </LijstAnimatie>
               </tbody>
             </table>
           </div>
         )}
         <div className="md:hidden divide-y divide-slate-100">
+          <LijstAnimatie aantal={sortedUsers.length}>
           {sortedUsers.map((u) => (
-            <div key={u.id} className={cn('p-5 space-y-4 active:bg-slate-50 transition-colors', selectedIds.has(u.id) && 'bg-oker-50/40')}>
+            <LijstRij as="div" key={u.id} className={cn('p-5 space-y-4 active:bg-slate-50 transition-colors', selectedIds.has(u.id) && 'bg-oker-50/40')}>
               <div className="flex justify-between items-start gap-3">
                 <div className="flex items-start gap-2">
                   <Checkbox
@@ -883,8 +888,9 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                   <IconButton label="Uit dienst" variant="ghost" onClick={() => openUitDienst(u)} disabled={u.id === currentUser.id || isProtectedAdmin(u)}><UserX size={18} /></IconButton>
                 )}
               </div>
-            </div>
+            </LijstRij>
           ))}
+          </LijstAnimatie>
         </div>
         {sortedUsers.length === 0 && (
           <div className="p-6">

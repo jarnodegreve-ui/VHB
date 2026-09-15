@@ -2,11 +2,14 @@
 /**
  * Visuele regressie in CI (verbeterronde 03-09, nr. 11).
  *
- * Zes sleutelschermen — desktop 1440×900 (admin-dashboard, gebruikers,
- * maandplanning) en iPhone 13/WebKit (chauffeur-dashboard, rooster, verlof),
- * licht thema — worden met gemockte API (scripts/audit-fixtures.mjs)
+ * De sleutelschermen in SCHERMEN hieronder (sinds golf 4 zestien: desktop
+ * 1440×900 voor de beheer-, techniek- en loonschermen, het designsysteem en
+ * Mijn dag; iPhone 13/WebKit voor chauffeur-dashboard, Mijn dag, rooster en
+ * verlof; licht thema) worden met gemockte API (scripts/audit-fixtures.mjs)
  * geschoten op de PR-branch én op de basis-branch, en daarna per pixel
- * vergeleken. Boven de drempel (1,5 % per scherm) faalt de job NIET: het is
+ * vergeleken. Er zijn geen opgeslagen baselines in de repo: de basis-branch
+ * ís de referentie, dus een nieuw scherm in de lijst staat één PR lang op
+ * "nieuw" en telt daarna gewoon mee. Boven de drempel (1,5 % per scherm) faalt de job NIET: het is
  * een signaal voor de reviewer. De diff-afbeeldingen komen als artifact mee.
  *
  * Gebruik:
@@ -23,7 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium, devices, webkit } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { ADMIN, CHAUFFEUR, seedPagina } from './audit-fixtures.mjs';
+import { ADMIN, CHAUFFEUR, TECHNIEKER, seedPagina } from './audit-fixtures.mjs';
 
 const DREMPEL_STANDAARD = 1.5;
 /** Kanaalverschil (0-255) waaronder een pixel als "gelijk" telt — vangt
@@ -31,9 +34,26 @@ const DREMPEL_STANDAARD = 1.5;
 const PIXEL_TOLERANTIE = 24;
 
 const SCHERMEN = [
+  // Beheer (admin, desktop)
   { naam: 'desktop-admin-dashboard', profiel: 'desktop', user: ADMIN, view: 'dashboard' },
   { naam: 'desktop-admin-gebruikers', profiel: 'desktop', user: ADMIN, view: 'gebruikers' },
   { naam: 'desktop-admin-maandplanning', profiel: 'desktop', user: ADMIN, view: 'bezetting' },
+  { naam: 'desktop-admin-werkvoorraad', profiel: 'desktop', user: ADMIN, view: 'werkvoorraad' },
+  // Designsysteem: alle primitieven en tokens op één pagina (CLAUDE.md:
+  // "het scherm zit in de visuele regressie"). Viewport-schot, geen full-page.
+  { naam: 'desktop-admin-designsysteem', profiel: 'desktop', user: ADMIN, view: 'designsysteem' },
+  // Loon en dienstopbouw (13-09; STAF, dus admin)
+  { naam: 'desktop-admin-dienstopbouw', profiel: 'desktop', user: ADMIN, view: 'dienstopbouw' },
+  { naam: 'desktop-admin-dagafsluiting', profiel: 'desktop', user: ADMIN, view: 'dagafsluiting' },
+  { naam: 'desktop-admin-looncontrole', profiel: 'desktop', user: ADMIN, view: 'looncontrole' },
+  // Techniek (13-09): als technieker, de rol waarvoor de schermen gebouwd zijn.
+  { naam: 'desktop-technieker-defecten', profiel: 'desktop', user: TECHNIEKER, view: 'defecten' },
+  { naam: 'desktop-technieker-werkprestaties', profiel: 'desktop', user: TECHNIEKER, view: 'werkprestaties' },
+  { naam: 'desktop-technieker-voertuigen', profiel: 'desktop', user: TECHNIEKER, view: 'voertuigen' },
+  // Mijn dag: hét chauffeursscherm, op telefoon én desktop (DienstBalk-geometrie).
+  { naam: 'desktop-chauffeur-mijn-dag', profiel: 'desktop', user: CHAUFFEUR, view: 'mijn-dag' },
+  { naam: 'iphone-chauffeur-mijn-dag', profiel: 'iphone', user: CHAUFFEUR, view: 'mijn-dag' },
+  // Chauffeur (iPhone/WebKit)
   { naam: 'iphone-chauffeur-dashboard', profiel: 'iphone', user: CHAUFFEUR, view: 'dashboard' },
   { naam: 'iphone-chauffeur-rooster', profiel: 'iphone', user: CHAUFFEUR, view: 'rooster' },
   { naam: 'iphone-chauffeur-verlof', profiel: 'iphone', user: CHAUFFEUR, view: 'verlof' },
@@ -43,6 +63,13 @@ const PROFIELEN = {
   desktop: { browser: chromium, context: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }, fullPage: false },
   iphone: { browser: webkit, context: { ...devices['iPhone 13'] }, fullPage: true },
 };
+
+/** Vandaag om 09:20 lokale tijd (van dit proces, dus voor kop en basis gelijk). */
+function vasteKlok() {
+  const d = new Date();
+  d.setHours(9, 20, 0, 0);
+  return d;
+}
 
 function argumenten(argv) {
   const los = [];
@@ -100,6 +127,12 @@ async function schiet({ out, app = '.', port = '4173' }) {
       page.on('pageerror', (e) => fouten.push(e.message));
       // Expliciet licht: admins landen anders in de rol-standaard (donker).
       await seedPagina(page, { user: scherm.user, view: scherm.view, thema: 'light' });
+      // Vaste klok (golf 4): Mijn dag en de Vandaag-tegel tonen "nu hh:mm",
+      // "start over 4u 19min" en een minuutwijzer; kop en basis worden
+      // minuten na elkaar geschoten en verschilden dus altijd een beetje.
+      // Vandaag 09:20 (dag blijft die van de fixtures, die rekenen vanaf
+      // vandaag); alleen Date staat vast, timers lopen gewoon door.
+      await page.clock.setFixedTime(vasteKlok());
       await page.goto(url, { waitUntil: 'networkidle' });
       // Fonts + lazy chunks binnen; de korte extra wacht dekt count-ups en
       // late layout (zelfde budget als mobile-audit).
