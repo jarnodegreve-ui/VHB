@@ -1383,12 +1383,24 @@ describe('eigen toestellen en sessies (/api/me/toestellen)', () => {
     expect(geweigerd.status).toBe(400);
     expect(geweigerd.json.code).toBe('huidig_toestel');
     expect((await api('POST', `/api/me/toestellen/${ander.id}/uitloggen`, { token: 'tok-a' })).status).toBe(200);
-    expect(mem.devices.find((d: any) => d.deviceToken === 'dev-oud')?.status).toBe('revoked');
+    // Zelf uitloggen = rij weg (opnieuw aanmelden kan), geen blokkade meer.
+    expect(mem.devices.find((d: any) => d.deviceToken === 'dev-oud')).toBeUndefined();
     // Andermans toestel is onvindbaar (404), ook met een geldig id.
     expect((await api('POST', `/api/me/toestellen/${ander.id}/uitloggen`, { token: 'tok-b' })).status).toBe(404);
     // Met ?ook-dit=1 mag het huidige wél.
     expect((await api('POST', `/api/me/toestellen/${dit.id}/uitloggen?ook-dit=1`, { token: 'tok-a' })).status).toBe(200);
-    expect(mem.devices.find((d: any) => d.userId === '3' && d.deviceToken === 'dev-ok')?.status).toBe('revoked');
+    expect(mem.devices.find((d: any) => d.userId === '3' && d.deviceToken === 'dev-ok')).toBeUndefined();
+  });
+
+  it('een zelf uitgelogd toestel kan zich daarna gewoon opnieuw aanmelden', async () => {
+    mem.devices.push({ userId: '3', deviceToken: 'dev-oud', name: 'Mac · browser', status: 'approved', createdAt: '2026-06-01T00:00:00Z', lastSeenAt: '2026-06-02T00:00:00Z', approvedAt: '2026-06-01T00:00:00Z', approvedBy: 'auto' });
+    const lijst = (await api('GET', '/api/me/toestellen', { token: 'tok-a' })).json.toestellen;
+    const ander = lijst.find((t: any) => !t.ditToestel);
+    expect((await api('POST', `/api/me/toestellen/${ander.id}/uitloggen`, { token: 'tok-a' })).status).toBe(200);
+    const her = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-oud', body: { name: 'Mac · browser' } });
+    expect(her.status).toBe(200);
+    // Geen blokkade: het toestel bestaat weer (status volgens de gate-regels).
+    expect(mem.devices.find((d: any) => d.deviceToken === 'dev-oud')?.status).not.toBe('revoked');
   });
 
   it('"uitloggen op alle andere toestellen" trekt alles behalve het huidige in', async () => {
@@ -1401,7 +1413,8 @@ describe('eigen toestellen en sessies (/api/me/toestellen)', () => {
     expect(res.json.aantal).toBe(2);
     const mijn = mem.devices.filter((d: any) => d.userId === '3');
     expect(mijn.find((d: any) => d.deviceToken === 'dev-ok')?.status).toBe('approved');
-    expect(mijn.filter((d: any) => d.deviceToken !== 'dev-ok').every((d: any) => d.status === 'revoked')).toBe(true);
+    // Zelf uitloggen verwijdert de rijen; alleen het huidige toestel blijft.
+    expect(mijn).toHaveLength(1);
     // Andere gebruikers blijven ongemoeid.
     expect(mem.devices.find((d: any) => d.userId === '4')?.status).toBe('approved');
   });

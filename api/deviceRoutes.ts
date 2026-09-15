@@ -104,9 +104,14 @@ export const mountDeviceRoutes = (app: express.Express) => {
     try {
       const appUser = req.appUser!;
       const ownToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+      // Zelf uitloggen VERWIJDERT de rij (het toestel meldt zich bij het
+      // volgende bezoek opnieuw aan en doorloopt de gate); 'revoked' blijft
+      // de admin-blokkade en wordt hier bewust niet aangeraakt of gewist.
+      // Vroeger zetten we hier 'revoked', waardoor een zelf uitgelogd
+      // toestel voorgoed "geblokkeerd" was (bevinding 15-09).
       const anderen = (await listAllDevices()).filter((d) => d.userId === String(appUser.id) && d.deviceToken !== ownToken && d.status !== "revoked");
       for (const d of anderen) {
-        await setDeviceStatus(String(appUser.id), d.deviceToken, "revoked", String(appUser.id));
+        await deleteDevice(String(appUser.id), d.deviceToken);
       }
       if (anderen.length > 0) {
         await logActivity(req, "system", "Uitgelogd op andere toestellen", `${appUser.name}: ${anderen.length} toestel${anderen.length === 1 ? "" : "len"} ingetrokken.`);
@@ -132,11 +137,13 @@ export const mountDeviceRoutes = (app: express.Express) => {
       if (toestel.deviceToken === ownToken && String(req.query["ook-dit"] ?? "") !== "1") {
         return res.status(400).json({ error: "Dit is het toestel waarop je nu werkt, gebruik Uitloggen.", code: "huidig_toestel" });
       }
+      // Zelfde regel als hierboven: zelf uitloggen = rij weg, opnieuw
+      // aanmelden kan gewoon; alleen een admin blokkeert ('revoked').
       if (toestel.status !== "revoked") {
-        await setDeviceStatus(String(appUser.id), toestel.deviceToken, "revoked", String(appUser.id));
+        await deleteDevice(String(appUser.id), toestel.deviceToken);
         await logActivity(req, "system", "Toestel uitgelogd", `${appUser.name}: ${toestel.name}.`);
       }
-      res.json({ success: true, id, status: "revoked" });
+      res.json({ success: true, id });
     } catch (err: any) {
       if (isMissingTableError(err)) return res.status(404).json({ error: "Toestel niet gevonden." });
       console.error("Toestel uitloggen is mislukt.", err);

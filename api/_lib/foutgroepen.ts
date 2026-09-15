@@ -139,7 +139,11 @@ export const groepeerFouten = (
     let regressie = false;
     if (st?.status === "opgelost") {
       const na = st.bijgewerktOp ?? "";
-      const terug = gesorteerd.some((x) => String(x.createdAt) > na && Boolean(x.release) && x.release !== st.release);
+      // >= en niet >: een voorval in een ándere release op exact hetzelfde
+      // tijdstip als het oplossen is per definitie niet door die fix gedekt.
+      // (Met > was dit ook een timing-flake in de integratietest: melden en
+      // oplossen vielen daar geregeld in dezelfde milliseconde.)
+      const terug = gesorteerd.some((x) => String(x.createdAt) >= na && Boolean(x.release) && x.release !== st.release);
       if (terug) {
         status = "open";
         regressie = true;
