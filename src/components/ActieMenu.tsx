@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { MoreHorizontal } from 'lucide-react';
 import { cn } from '../lib/ui';
@@ -14,6 +15,15 @@ import { IconButton } from './primitives';
  * kiezen van een item zetten de focus terug op de trigger; de terugknop op
  * mobiel sluit het menu i.p.v. het scherm (useHistoryDismiss, zoals de
  * DatePicker). Items zijn ≥44 px op touch (controle-ronde 05-09, nr. 17).
+ *
+ * Het menu zelf staat in een portal op <body> met `position: fixed`, berekend
+ * vanaf de trigger: een absoluut menu binnen een kaart met `overflow-clip`
+ * (surface-table in Beheer dienstoverzicht) werd bij de onderste rijen
+ * volledig afgeknipt (Jarno 15-09, dienst 4512). Onder de trigger als daar
+ * plaats is, anders erboven. Bij scrollen volgt het menu de trigger en sluit
+ * pas als die uit beeld schuift (een loutere scroll-event, bv. van het
+ * scrollherstel na een navigatie, sluit hem dus niet). z-[125]: boven Modal (100/120) en SlideOver (101),
+ * want DetailPaneel gebruikt dit menu binnen een SlideOver.
  */
 export type ActieMenuItem = {
   label: string;
@@ -61,26 +71,62 @@ export function ActieMenu({
   // Terugknop/swipe-back op mobiel sluit het menu i.p.v. het scherm.
   useHistoryDismiss(open, () => setOpen(false));
 
-  // Viewport-bewust: `align` is de voorkeur; valt het menu buiten beeld
-  // (bv. "…" links in een mobiele kop), dan klapt het naar de andere kant.
+  // Positie t.o.v. de viewport (portal + fixed). `align` is de voorkeur voor
+  // de horizontale kant; valt het menu buiten beeld (bv. "…" links in een
+  // mobiele kop), dan klapt het naar de andere kant. Verticaal: onder de
+  // trigger, of erboven als daar meer plaats is dan het menu nodig heeft.
   const [kant, setKant] = useState<'left' | 'right'>(align);
-  useEffect(() => {
+  const [boven, setBoven] = useState(false);
+  const [positie, setPositie] = useState<CSSProperties | null>(null);
+  const MARGE = 8;
+  /** Meet en zet de positie; geeft false als de trigger buiten beeld is. */
+  const plaats = useCallback((): boolean => {
+    const trigger = triggerElement();
+    const menu = lijst.current;
+    if (!trigger || !menu) return true;
+    const t = trigger.getBoundingClientRect();
+    if (t.bottom < 0 || t.top > window.innerHeight || t.width === 0) return false;
+    const m = menu.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let k: 'left' | 'right' = align;
+    if (align === 'right' && t.right - m.width < MARGE) k = 'left';
+    else if (align === 'left' && t.left + m.width > vw - MARGE) k = 'right';
+    const past = t.bottom + MARGE + m.height <= vh - MARGE;
+    const naarBoven = !past && t.top - MARGE - m.height >= MARGE;
+    const stijl: CSSProperties = naarBoven ? { bottom: vh - t.top + MARGE } : { top: t.bottom + MARGE };
+    if (k === 'right') stijl.right = Math.max(MARGE, vw - t.right);
+    else stijl.left = Math.max(MARGE, t.left);
+    setKant(k);
+    setBoven(naarBoven);
+    setPositie(stijl);
+    return true;
+  }, [align]);
+  useLayoutEffect(() => {
     if (!open) {
       setKant(align);
+      setBoven(false);
+      setPositie(null);
       return;
     }
-    const el = lijst.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (align === 'right' && r.left < 8) setKant('left');
-    else if (align === 'left' && r.right > window.innerWidth - 8) setKant('right');
-  }, [open, align]);
+    plaats();
+  }, [open, align, plaats]);
 
   useEffect(() => {
     if (!open) return;
     const buiten = (e: MouseEvent | TouchEvent) => {
-      if (wortel.current && !wortel.current.contains(e.target as Node)) setOpen(false);
+      const doel = e.target as Node;
+      if (wortel.current?.contains(doel) || lijst.current?.contains(doel)) return;
+      setOpen(false);
     };
+    // Scrollt de pagina of een container: het fixed menu volgt de trigger en
+    // sluit pas als die uit beeld is.
+    const scrol = (e: Event) => {
+      if (lijst.current && e.target instanceof Node && lijst.current.contains(e.target)) return;
+      if (!plaats()) setOpen(false);
+    };
+    window.addEventListener('scroll', scrol, true);
+    window.addEventListener('resize', scrol);
     const toets = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         // Alleen het menu sluit: een omliggende Modal/SlideOver luistert op
@@ -107,8 +153,10 @@ export function ActieMenu({
       document.removeEventListener('mousedown', buiten);
       document.removeEventListener('touchstart', buiten);
       document.removeEventListener('keydown', toets);
+      window.removeEventListener('scroll', scrol, true);
+      window.removeEventListener('resize', scrol);
     };
-  }, [open, sluit]);
+  }, [open, sluit, plaats]);
 
   const toggle = () => setOpen((o) => !o);
   const triggerEl = trigger ? (
@@ -119,26 +167,24 @@ export function ActieMenu({
     </IconButton>
   );
 
-  return (
-    <div ref={wortel} className={cn('relative inline-flex', className)}>
-      {triggerEl}
-      {/* Zelfde in/uit als UserMenu: veer in, EASE uit, beide DUR.fast; de
-          `popover-in`-klasse had geen uitgang en het menu verdween in één frame. */}
-      <AnimatePresence>
+  // Vóór de eerste meting staat het menu onzichtbaar op (0,0), zodat er geen
+  // frame op de verkeerde plek verschijnt; de layout-effect meet en zet hem.
+  const menuStijl: CSSProperties = positie
+    ? { ...positie, transformOrigin: `${boven ? 'bottom' : 'top'} ${kant}` }
+    : { top: 0, left: 0, visibility: 'hidden' };
+  const menu = (
+    <AnimatePresence>
       {open && (
         <motion.div
           ref={lijst}
           id={id}
           role="menu"
           aria-label={label}
-          initial={{ opacity: 0, scale: 0.97, y: -4 }}
+          initial={{ opacity: 0, scale: 0.97, y: boven ? 4 : -4 }}
           animate={{ opacity: 1, scale: 1, y: 0, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING } }}
-          exit={{ opacity: 0, scale: 0.97, y: -4, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
-          style={{ transformOrigin: kant === 'right' ? 'top right' : 'top left' }}
-          className={cn(
-            'absolute top-full z-50 mt-2 min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2',
-            kant === 'right' ? 'right-0' : 'left-0',
-          )}
+          exit={{ opacity: 0, scale: 0.97, y: boven ? 4 : -4, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
+          style={menuStijl}
+          className="fixed z-[125] min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2"
         >
           {items.map((item, i) => (
             <div key={item.label} className={cn(item.scheiding && i > 0 && 'mt-1 border-t border-hairline-subtle pt-1')}>
@@ -169,7 +215,14 @@ export function ActieMenu({
           ))}
         </motion.div>
       )}
-      </AnimatePresence>
+    </AnimatePresence>
+  );
+
+  return (
+    <div ref={wortel} className={cn('relative inline-flex', className)}>
+      {triggerEl}
+      {/* Zelfde in/uit als UserMenu: veer in, EASE uit, beide DUR.fast. */}
+      {typeof document !== 'undefined' ? createPortal(menu, document.body) : menu}
     </div>
   );
 }
