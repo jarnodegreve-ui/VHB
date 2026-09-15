@@ -143,7 +143,7 @@ export function useAppData({
   const { updates, diversions, fetchUpdates, saveUpdates, sendUrgentEmail, saveUpdate, createUpdate, deleteUpdate,
     fetchDiversions, saveDiversions, saveDiversion, createDiversion, deleteDiversion } = communicatie;
   const { activityLog, loginActivity, fetchActivityLog, fetchLoginActivity } = activiteit;
-  const { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen } = meldingenData;
+  const { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm } = meldingenData;
 
   // Data: alleen een nieuwe referentie wanneer een van de velden wijzigt.
   const data = useMemo(() => ({
@@ -166,7 +166,7 @@ export function useAppData({
     zetFeestdagenExtra,
     fetchServices, saveServices, fetchUsers, saveUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
     saveUser, createUser, deleteUser, saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
-    fetchMeldingen, markeerMeldingenGelezen,
+    fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm,
   });
 
   return useMemo(() => ({ ...data, ...acties, acties }), [data, acties]);

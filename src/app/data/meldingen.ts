@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Melding } from '../../types';
 import { apiFetch } from '../../lib/api';
 import type { DataCtx } from './kern';
@@ -16,6 +16,10 @@ export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'
   const { session } = ctx;
   const [meldingen, setMeldingen] = useState<Melding[]>([]);
   const [ongelezenMeldingen, setOngelezenMeldingen] = useState(0);
+  // Actuele lijst voor markeerMeldingenGelezenVoorScherm zonder dat de
+  // schermwissel-hook op elke meldingenwijziging opnieuw hoeft te vuren.
+  const meldingenRef = useRef<Melding[]>([]);
+  meldingenRef.current = meldingen;
 
   const fetchMeldingen = async (accessToken = session?.access_token) => {
     try {
@@ -55,10 +59,23 @@ export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'
     }
   };
 
+  /** Meldingen die naar dít scherm wijzen als gelezen markeren, aangeroepen
+   *  bij elke schermwissel (App.tsx). Zo verdwijnen bel- en app-badge ook
+   *  wanneer iemand via een push of de navigatie op de plek van de melding
+   *  aankomt, zonder eerst langs het meldingenscherm te moeten (15-09).
+   *  Vergelijkt op view-niveau: het doel 'updates/u2' hoort bij het scherm
+   *  'updates'. */
+  const markeerMeldingenGelezenVoorScherm = (view: string, doelNaarView: (doel: string) => string | null) => {
+    const ids = meldingenRef.current
+      .filter((m) => !m.gelezenOp && m.doel && doelNaarView(m.doel) === view)
+      .map((m) => m.id);
+    if (ids.length > 0) void markeerMeldingenGelezen(ids);
+  };
+
   const resetMeldingen = () => {
     setMeldingen([]);
     setOngelezenMeldingen(0);
   };
 
-  return { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen, resetMeldingen };
+  return { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm, resetMeldingen };
 }
