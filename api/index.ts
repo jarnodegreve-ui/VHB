@@ -486,12 +486,20 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
     // nieuwe login). Zonder dit event was zo'n gebruiker onzichtbaar in
     // "Actieve gebruikers per dag" — de grafiek telde alleen wie opnieuw
     // moest inloggen. Max. één 'Actief'-event per gebruiker per dag; raakt
-    // de sessieteller en lastLogin niet aan.
+    // de sessieteller niet aan. lastLogin wél: dat is "Laatst actief" in
+    // Gebruikers, en zonder deze update bleef die dagen achter op wat
+    // Activiteit toonde (15-09). Hooguit één schrijf per 5 minuten.
     if (action === "resume") {
+      const nu = new Date().toISOString();
       const latestAuthEventAt = await getLatestAuthEventAt(String(currentUser.id));
-      const today = brusselsDay(new Date().toISOString());
+      const today = brusselsDay(nu);
       if (!latestAuthEventAt || brusselsDay(latestAuthEventAt) !== today) {
         await logActivity(req, "auth", "Actief", `${currentUser.name} was actief op het portaal.`, { type: "user", id: String(currentUser.id) });
+      }
+      const vorige = currentUser.lastLogin ? new Date(currentUser.lastLogin).getTime() : NaN;
+      if (!(Date.now() - vorige < 5 * 60 * 1000)) {
+        await updateUserSessionMeta(String(currentUser.id), { lastLogin: nu });
+        return res.json({ ...currentUser, lastLogin: nu });
       }
       return res.json(currentUser);
     }
