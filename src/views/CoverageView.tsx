@@ -3,7 +3,7 @@ import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertT
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } from '../lib/herverdeel';
-import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
+import { kandidaatLabel, nietBeschikbaarUitMatrix, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
 import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, notify } from '../lib/ui';
 import { isoDate } from '../lib/datum';
@@ -140,7 +140,7 @@ export function CoverageView() {
     ?? 'de chauffeur';
   const optiesVoor = (date: string, code: string): Array<{ id: string; label: string }> => {
     if (chauffeurs.length > 0) {
-      return rangschikKandidaten(chauffeurs, vrijOpDatum(alleShifts, date), werkdagen, date)
+      return rangschikKandidaten(chauffeurs, vrijOpDatum(alleShifts, date, nietBeschikbaarUitMatrix(appData?.planningMatrixRows ?? [], chauffeurs, date)), werkdagen, date)
         .map((k) => ({ id: String(k.user.id), label: kandidaatLabel(k) }));
     }
     return (batchAdvies[adviesSleutel(date, code)]?.passend ?? []).map((k) => ({ id: String(k.id), label: k.name }));
@@ -511,6 +511,9 @@ export function CoverageView() {
         .map((p) => ({ vanaf: p.vanaf, weekdays: p.weekdays.map((w) => (validNames.has(w) ? w : '')) }));
       await saveCoverageConfig({ dayTypes: cleanDayTypes, weekdays: cleanWeekdays, weekdayPeriods: cleanPeriods, overrides: cleanOverrides });
       await refetchGaps();
+      // Ook de app-brede dekking (dashboard, topbar-badge) volgt de nieuwe
+      // verwachtingen, niet alleen dit scherm.
+      void appData?.refreshCoverageGaps();
     } catch (e: any) {
       // Schrijffout = toast; de kaart is voor laadfouten.
       notify(e?.message || 'Opslaan is mislukt.', 'error');

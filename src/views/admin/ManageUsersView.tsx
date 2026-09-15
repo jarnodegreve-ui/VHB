@@ -37,7 +37,7 @@ const KOLOMMEN = [
   { key: 'status', label: 'Status' },
   { key: 'meldingen', label: 'Meldingen' },
   { key: 'laatst', label: 'Laatst actief' },
-  { key: 'sessies', label: 'Sessies' },
+  { key: 'sessies', label: 'Toestellen' },
 ] as const;
 
 export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
@@ -68,6 +68,29 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   // uitrol is dat het verschil tussen "hij reageert niet" en "hij krijgt
   // niets". Best-effort: mislukt de call, dan blijft de kolom gewoon "uit".
   const [pushUserIds, setPushUserIds] = useState<Set<string>>(new Set());
+  // Goedgekeurde toestellen per gebruiker: vervangt de oude sessieteller.
+  // Die telde alleen op (start +1, alleen de uitlogknop -1), waardoor een
+  // account op "115 sessies" kon staan; het aantal toestellen is wél waar.
+  const [toestellenPerUser, setToestellenPerUser] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await apiFetch('/api/devices');
+        if (!res.ok) return;
+        const body = await res.json();
+        if (cancelled || !Array.isArray(body)) return;
+        const telling = new Map<string, number>();
+        for (const d of body) {
+          if (d?.status !== 'approved') continue;
+          const id = String(d.userId);
+          telling.set(id, (telling.get(id) ?? 0) + 1);
+        }
+        setToestellenPerUser(telling);
+      } catch { /* zonder deze lijst blijft de kolom op 0 staan */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -220,7 +243,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
       case 'status': return u.isActive !== false ? 0 : 1;
       case 'meldingen': return pushUserIds.has(String(u.id)) ? 0 : 1;
       case 'laatst': return u.lastLogin || null;
-      case 'sessies': return u.activeSessions || 0;
+      case 'sessies': return toestellenPerUser.get(String(u.id)) ?? 0;
     }
   });
   const filterActief = roleFilter !== 'all' || alleenNooitIn || alleenNietInPlanning || userSearch.trim() !== '';
@@ -737,7 +760,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                   {voorkeur.zichtbaar('status') && <SortTh kolom="status" sort={sort}>Status</SortTh>}
                   {voorkeur.zichtbaar('meldingen') && <SortTh kolom="meldingen" sort={sort} title="Heeft deze medewerker meldingen aan staan op minstens één toestel?">Meldingen</SortTh>}
                   {voorkeur.zichtbaar('laatst') && <SortTh kolom="laatst" sort={sort}>Laatst actief</SortTh>}
-                  {voorkeur.zichtbaar('sessies') && <SortTh kolom="sessies" sort={sort}>Sessies</SortTh>}
+                  {voorkeur.zichtbaar('sessies') && <SortTh kolom="sessies" sort={sort} title="Aantal goedgekeurde toestellen van deze medewerker.">Toestellen</SortTh>}
                   <Th className="text-right">Acties</Th>
                 </tr>
               </StickyThead>
@@ -787,7 +810,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                       </Td>
                     )}
                     {voorkeur.zichtbaar('laatst') && <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-500">Nooit</span>}</Td>}
-                    {voorkeur.zichtbaar('sessies') && <Td><Badge tone={(u.activeSessions || 0) > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">{u.activeSessions || 0}</Badge></Td>}
+                    {voorkeur.zichtbaar('sessies') && <Td><Badge tone={(toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">{toestellenPerUser.get(String(u.id)) ?? 0}</Badge></Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
                         <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
@@ -879,7 +902,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></Card>
-                <Card tone="muted" padding="sm"><MicroLabel>Sessies</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.activeSessions || 0}</p></Card>
+                <Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{toestellenPerUser.get(String(u.id)) ?? 0}</p></Card>
               </div>
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => setEditingUser(u)}>Bewerken</Button>
@@ -1018,7 +1041,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                   <Switch checked={editingUser.wantsSystemMail !== false} onChange={(aan) => setEditingUser({ ...editingUser, wantsSystemMail: aan })} label="Systeemmails" />
                 </Card>
               )}
-              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Actieve sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></Card></div>
+              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{toestellenPerUser.get(String(editingUser.id)) ?? 0}</p></Card></div>
               {/* Verwijderknop stond in de kop; de gedeelde ModalHeader heeft
                   daar geen slot voor, dus links in de knoppenrij (zelfde
                   gedrag, zelfde bescherming; controle-ronde 27-08). */}

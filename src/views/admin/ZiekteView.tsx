@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useOptioneleAppData } from '../../app/AppDataContext';
 import { AlertTriangle, CalendarDays, Mail, Plus, Thermometer, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
 import { cn, notify } from '../../lib/ui';
 import { navigeer } from '../../app/router';
 import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../../lib/uitweg';
-import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
+import { kandidaatLabel, nietBeschikbaarUitMatrix, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
@@ -49,6 +50,9 @@ export function ZiekteView({
   /** Ververst planning + ruilen na een dienstwissel vanuit dit blad. */
   onShiftSwapped?: () => Promise<void> | void;
 }) {
+  // Matrixrijen voor de vervangerlijst: wie in de Excel op ZIEK/OPL/... staat
+  // telt niet als vrij (props blijven zoals ze waren, dit is extra context).
+  const planningMatrixRows = useOptioneleAppData()?.planningMatrixRows ?? [];
   const today = isoDate(new Date());
   const naamVan = (id: string) => users.find((u) => String(u.id) === String(id))?.name ?? 'Onbekend';
   const isAdmin = user.role === 'admin';
@@ -600,7 +604,7 @@ export function ZiekteView({
                                     <option value="">Kies een chauffeur…</option>
                                     {rangschikKandidaten(
                                       users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId)),
-                                      vrijOpDatum(shifts, dienst.date),
+                                      vrijOpDatum(shifts, dienst.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, dienst.date)),
                                       werkdagen,
                                       dienst.date,
                                     ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}

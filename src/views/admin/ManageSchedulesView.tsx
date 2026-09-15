@@ -1,4 +1,5 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { telDiensten } from '../../lib/dienstTelling';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
@@ -821,7 +822,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           return (
             <>
               <div className="flex flex-wrap gap-2 mb-4">
-                <Badge tone="oker" stil className="tabular-nums">{upcoming.length} diensten vanaf vandaag</Badge>
+                <Badge tone="oker" stil className="tabular-nums">{telDiensten(upcoming)} diensten vanaf vandaag</Badge>
                 <Badge tone="slate" stil className="tabular-nums">{byDate.size} dagen</Badge>
                 <Badge tone="slate" stil className="tabular-nums">{driverCount} chauffeurs</Badge>
               </div>

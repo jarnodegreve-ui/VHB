@@ -1,4 +1,5 @@
 import type { Shift } from '../types';
+import { normalizePlanningToken, sortedNameToken } from './planning';
 import { addDagen } from './datum';
 
 type Kandidaat = { id: string | number; name: string };
@@ -93,8 +94,44 @@ export const kandidaatLabel = (k: KandidaatInfo, metVrij = true): string => {
   return delen.join(' · ');
 };
 
-/** Vrij-op-datum op basis van de planning-lijst (dashboard, Ziekte-blad). */
-export const vrijOpDatum = (shifts: Shift[], datum: string) => {
+/** Vrij-op-datum op basis van de planning-lijst (dashboard, Ziekte-blad).
+ *  Geef `nietBeschikbaar` (uit nietBeschikbaarUitMatrix) mee zodat ook wie
+ *  in de Excel op ZIEK/OPL/... staat niet als vrij telt. */
+export const vrijOpDatum = (shifts: Shift[], datum: string, nietBeschikbaar?: ReadonlySet<string>) => {
   const bezet = new Set(shifts.filter((s) => s.date === datum).map((s) => String(s.driverId)));
-  return (u: Kandidaat) => !bezet.has(String(u.id));
+  return (u: Kandidaat) => !bezet.has(String(u.id)) && !nietBeschikbaar?.has(String(u.id));
+};
+
+/** Overname-codes uit de matrix (zelfde lijst als TAKEOVER_CODES op de server). */
+const OVERNAME_CODES = new Set(['vrij', 'bv', 'tk', 'ta']);
+
+/**
+ * Wie volgens de planningsmatrix die dag niet beschikbaar is: een code die
+ * geen overname-code en geen lege cel is (ziek, opl, kv, gar, ...). Zonder
+ * portaalregistratie bestond zo iemand niet voor vrijOpDatum en stond hij
+ * als "vrij" in de vervangerlijsten (bevinding 15-09). Dienst-codes komen
+ * hier ook in terecht; die chauffeurs waren via de planning al bezet.
+ */
+export const nietBeschikbaarUitMatrix = (
+  rows: Array<{ source_date: string; assignments: Record<string, string> }>,
+  users: Array<{ id: string | number; name: string }>,
+  datum: string,
+): Set<string> => {
+  const idByToken = new Map<string, string>();
+  for (const u of users) {
+    idByToken.set(normalizePlanningToken(u.name), String(u.id));
+    idByToken.set(sortedNameToken(u.name), String(u.id));
+  }
+  const uit = new Set<string>();
+  for (const row of rows) {
+    if (String(row.source_date) !== datum) continue;
+    const assignments = row.assignments && typeof row.assignments === 'object' && !Array.isArray(row.assignments) ? row.assignments : {};
+    for (const [naam, rawCode] of Object.entries(assignments)) {
+      const code = normalizePlanningToken(rawCode);
+      if (!code || OVERNAME_CODES.has(code)) continue;
+      const id = idByToken.get(normalizePlanningToken(naam)) ?? idByToken.get(sortedNameToken(naam));
+      if (id) uit.add(id);
+    }
+  }
+  return uit;
 };

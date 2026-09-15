@@ -245,7 +245,7 @@ export function WerkvoorraadMenu({
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-600 transition-colors duration-fast hover:bg-slate-100/70 hover:text-slate-900"
             >
               <span className="shrink-0 text-slate-500"><ListChecks size={16} /></span>
-              <span className="flex-1">Volledige werkvoorraad</span>
+              <span className="flex-1">Volledig overzicht</span>
               <ArrowUpRight size={14} className="shrink-0 text-slate-400" />
             </button>
           </div>

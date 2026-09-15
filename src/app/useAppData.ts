@@ -101,7 +101,9 @@ export function useAppData({
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [planning.fetchPlanningMatrixHistory(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [planning.refreshCoverageGaps()] : []),
         ...(appUser.role === 'admin' ? [activiteit.fetchActivityLog(accessToken)] : []),
-        ...(appUser.role === 'chauffeur' ? [mensen.fetchUnseenDocuments(appUser.id, accessToken)] : []),
+        // Documenten bestaan ook voor techniekers (routes.tsx); alleen voor
+        // chauffeurs ophalen liet hun nieuw-badge altijd op 0 staan.
+        ...(appUser.role === 'chauffeur' || appUser.role === 'technieker' ? [mensen.fetchUnseenDocuments(appUser.id, accessToken)] : []),
       ]);
       // Versheid: kwam er ook maar één antwoord uit de SW-cache (offline of
       // buiten bereik), dan is dit geen verse synchronisatie. We houden dan
@@ -143,7 +145,7 @@ export function useAppData({
   const { updates, diversions, fetchUpdates, saveUpdates, sendUrgentEmail, saveUpdate, createUpdate, deleteUpdate,
     fetchDiversions, saveDiversions, saveDiversion, createDiversion, deleteDiversion } = communicatie;
   const { activityLog, loginActivity, fetchActivityLog, fetchLoginActivity } = activiteit;
-  const { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen } = meldingenData;
+  const { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm } = meldingenData;
 
   // Data: alleen een nieuwe referentie wanneer een van de velden wijzigt.
   const data = useMemo(() => ({
@@ -166,7 +168,7 @@ export function useAppData({
     zetFeestdagenExtra,
     fetchServices, saveServices, fetchUsers, saveUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
     saveUser, createUser, deleteUser, saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
-    fetchMeldingen, markeerMeldingenGelezen,
+    fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm,
   });
 
   return useMemo(() => ({ ...data, ...acties, acties }), [data, acties]);

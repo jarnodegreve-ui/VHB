@@ -11,3 +11,14 @@ export const telDienstdagen = (shifts: Array<{ driverId?: string; date: string }
   for (const s of shifts) dagen.add(`${String(s.driverId ?? '')}|${s.date}`);
   return dagen.size;
 };
+
+/**
+ * Aantal diensten (niet delen, niet dagen): een gesplitste dienst (zelfde
+ * chauffeur, dag en dienstnummer in meerdere rijen) telt één keer; twee
+ * verschillende dienstnummers op één dag tellen wél als twee.
+ */
+export const telDiensten = (shifts: Array<{ driverId?: string; date: string; line?: string | number }>): number => {
+  const diensten = new Set<string>();
+  for (const s of shifts) diensten.add(`${String(s.driverId ?? '')}|${s.date}|${String(s.line ?? '').trim()}`);
+  return diensten.size;
+};

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { telDiensten } from '../lib/dienstTelling';
 import { AlertTriangle, Check, History } from 'lucide-react';
 import { teltInVerlofbezetting } from '../types';
 import type { LeaveRequest, Shift, User } from '../types';
@@ -122,11 +123,15 @@ export function VerlofBeoordelingInhoud({ aanvraag, users, shifts, leaveRequests
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={reviewLeave.status} stil />
         <Badge tone="slate">{formatLeaveType(reviewLeave.type)}</Badge>
-        {conflictShifts.length > 0 && (
-          <Badge tone="red" icon={<AlertTriangle size={12} />}>
-            {conflictShifts.length} {conflictShifts.length === 1 ? 'dienst' : 'diensten'} ingepland
-          </Badge>
-        )}
+        {conflictShifts.length > 0 && (() => {
+          // Diensten tellen, geen delen: een gesplitste dienst is één dienst.
+          const n = telDiensten(conflictShifts);
+          return (
+            <Badge tone="red" icon={<AlertTriangle size={12} />}>
+              {n} {n === 1 ? 'dienst' : 'diensten'} ingepland
+            </Badge>
+          );
+        })()}
       </div>
 
       <Card tone="muted" padding="sm">

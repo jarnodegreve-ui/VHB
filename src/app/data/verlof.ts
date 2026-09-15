@@ -49,6 +49,9 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
       if (response.ok) {
         setLeaveRequests(newLeave);
         ctx.captureRevision('leave', response);
+        // Verlof verandert de dekking (afwezige telt als gat): meteen mee
+        // verversen, anders bleven dashboard en topbar op de oude stand staan.
+        void refreshCoverageGaps();
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
@@ -104,6 +107,11 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     // altijd goed en is de guard feitelijk uitgeschakeld (controleronde 30/07).
     return ctx.decideViaPatch('leave', id, status, seenStatus ?? current.status, fetchLeave, (updated) => {
       setLeaveRequests((curr) => curr.map((r) => (r.id === id ? { ...r, ...updated } : r)));
+    }).then((ok) => {
+      // Een goedkeuring maakt een dienst tot dekkingsgat: dashboard en
+      // topbar-badge meteen laten meebewegen.
+      if (ok) void refreshCoverageGaps();
+      return ok;
     });
   };
 
@@ -116,6 +124,9 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     } catch {
       // ignore quota / unavailable storage
     }
+    // Server is de bron (15-09): per toestel in localStorage betekende dat
+    // een nieuw toestel elke beslissing ooit als "nieuw" toonde.
+    void apiFetch('/api/me/voorkeuren', { method: 'PATCH', body: JSON.stringify({ dashboard: { verlofGezienOp: now } }) }).catch(() => undefined);
   };
 
   useEffect(() => {
@@ -123,11 +134,18 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
       setLastSeenLeaveDecisionAt(null);
       return;
     }
+    // Server-waarde eerst (geldt op elk toestel); localStorage als terugval
+    // voor accounts van vóór deze wijziging of een niet-gelukte PATCH. De
+    // jongste van de twee wint, zodat een oud servertijdstip een recentere
+    // lokale "gezien" niet terugdraait.
+    let lokaal: string | null = null;
     try {
-      setLastSeenLeaveDecisionAt(localStorage.getItem(`planx-leave-lastseen-${currentUser.id}`));
+      lokaal = localStorage.getItem(`planx-leave-lastseen-${currentUser.id}`);
     } catch {
-      setLastSeenLeaveDecisionAt(null);
+      lokaal = null;
     }
+    const server = currentUser.dashboardVoorkeuren?.verlofGezienOp ?? null;
+    setLastSeenLeaveDecisionAt([lokaal, server].filter(Boolean).sort().pop() ?? null);
   }, [currentUser?.id]);
 
   // Extra vrije dagen van de beheerder (naast de wettelijke feestdagen): één

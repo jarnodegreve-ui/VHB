@@ -1,6 +1,6 @@
 import { Fragment, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users, Wrench } from 'lucide-react';
-import { activeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
+import { activeDiversions, lopendeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
 import { OmleidingDetail } from '../components/OmleidingDetail';
 import { isRijdend } from '../types';
 import { telDienstdagen } from '../lib/dienstTelling';
@@ -142,6 +142,9 @@ export function DashboardView({ notes = [],
   // Verlopen omleidingen horen niet in tegel/paneel: "actief" moet actief zijn
   // (zelfde regel als het beheer-dashboard sinds #251).
   const liveDiversions = activeDiversions(diversions);
+  // De teller zegt "actief", dus alleen wat vandaag echt loopt; het paneel
+  // toont daarnaast ook wat eraan komt (met tijdshint).
+  const lopend = lopendeDiversions(liveDiversions);
   // Zelfde volgorde als het tabblad Omleidingen: lopend eerst, dan komend.
   const newestDiversions = sorteerOmleidingen(liveDiversions).slice(0, 3);
 
@@ -263,11 +266,11 @@ export function DashboardView({ notes = [],
     omleidingen: (
       <OpsStat
         icon={<MapPin size={16} />}
-        tone={liveDiversions.length > 0 ? 'amber' : 'slate'}
+        tone={lopend.length > 0 ? 'amber' : 'slate'}
         className={kleinKlassen('omleidingen')}
         label="Omleidingen"
-        value={liveDiversions.length}
-        sub={liveDiversions.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
+        value={lopend.length}
+        sub={lopend.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
         onClick={onNavigate ? () => onNavigate('omleidingen') : undefined}
       />
     ),
@@ -324,7 +327,7 @@ export function DashboardView({ notes = [],
         className={alleenPaneel ? 'lg:col-span-3' : undefined}
         icon={<MapPin size={16} />}
         title="Omleidingen"
-        aside={liveDiversions.length > 0 ? `${liveDiversions.length} actief` : undefined}
+        aside={lopend.length > 0 ? `${lopend.length} actief` : undefined}
         onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
       >
         {newestDiversions.length === 0 ? (

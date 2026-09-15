@@ -91,7 +91,7 @@ function ToestellenSectie() {
     : !data.beschikbaar
       ? 'Toestelregistratie staat uit op deze server; alleen de sessie op dit toestel is bekend.'
       : data.gateActief
-        ? 'Toestellen waarop je bent aangemeld. Een toestel uitloggen trekt het in; je meldt je er dan opnieuw aan.'
+        ? 'Toestellen waarop je bent aangemeld. Een toestel uitloggen verwijdert het hier; op dat toestel meld je je daarna gewoon opnieuw aan.'
         : 'Toestel-goedkeuring staat uit, dus elk toestel wordt bij aanmelden meteen toegelaten; dit is wat er bekend is.';
 
   return (
@@ -118,7 +118,7 @@ function ToestellenSectie() {
                   <span className="flex flex-wrap items-center gap-2">
                     <span className={ingetrokken ? 'text-slate-500 line-through decoration-slate-300' : undefined}>{t.naam}</span>
                     {t.ditToestel && <Badge tone="oker" stil>Dit toestel</Badge>}
-                    {ingetrokken && <Badge tone="slate" stil>Uitgelogd</Badge>}
+                    {ingetrokken && <Badge tone="slate" stil>Geblokkeerd</Badge>}
                     {t.status === 'pending' && <Badge tone="amber" stil>Wacht op goedkeuring</Badge>}
                   </span>
                 )}

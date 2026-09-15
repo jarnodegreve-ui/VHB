@@ -150,6 +150,34 @@ describe('berekenWerkvoorraad', () => {
     expect(wv.gapDays.map((d) => d.date)).toEqual(['2026-09-02']);
   });
 
+  it('dekking: gisteren telt niet meer mee, en telt per dienst i.p.v. per dag', () => {
+    const wv = berekenWerkvoorraad({
+      ...basis(),
+      coverageDays: [
+        { date: '2026-08-30', dayType: 'schooldag', expected: 17, covered: 15, missing: ['2101', '2102'] }, // gisteren
+        { date: '2026-09-02', dayType: 'schooldag', expected: 17, covered: 15, missing: ['2103', '2104'] },
+      ],
+    });
+    expect(wv.gapDays.map((d) => d.date)).toEqual(['2026-09-02']);
+    expect(wv.attentionCount).toBe(2); // 2 open diensten, geen 1 dag
+  });
+
+  it('dekking: een dienst van een afwezige telt niet dubbel (herverdelen wint)', () => {
+    const wv = berekenWerkvoorraad({
+      ...basis(),
+      users: [gebruiker('7', 'Bianca')],
+      // Horizon ruim zodat die niet meetelt.
+      shifts: [dienst('7', '2026-09-01', '2101'), dienst('9', '2026-10-15')],
+      leaveRequests: [verlof('7', '2026-09-01', '2026-09-02')],
+      coverageDays: [
+        { date: '2026-09-01', dayType: 'schooldag', expected: 17, covered: 16, missing: ['2101'] },
+      ],
+    });
+    expect(wv.teHerverdelen).toHaveLength(1);
+    expect(wv.gapDays).toEqual([]); // het gat ís de dienst van de zieke
+    expect(wv.attentionCount).toBe(1);
+  });
+
   it('attentionCount: som van signalen en items', () => {
     const wv = berekenWerkvoorraad({
       ...basis(),

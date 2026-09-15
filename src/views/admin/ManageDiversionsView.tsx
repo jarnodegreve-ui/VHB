@@ -20,7 +20,7 @@ import { useRecordParam } from '../../app/router';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
  *  actief tot hij verwijderd wordt. */
-import { isExpiredDiversion as isExpired, omleidingsPeriode, sorteerOmleidingen } from '../../lib/diversions';
+import { isExpiredDiversion as isExpired, omleidingsFase, omleidingsPeriode, sorteerOmleidingen } from '../../lib/diversions';
 // isoDate = lokale dag. toISOString() is UTC en gaf tussen 00:00 en 02:00
 // Belgische zomertijd de dag ervóór: een omleiding die om 00:30 werd
 // aangemaakt kreeg standaard gisteren als startdatum. Zelfde reden als de
@@ -337,7 +337,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       sleutel={editingId ?? 'nieuw'}
       leegTekst="Kies een omleiding om te bewerken, of maak een nieuwe."
       leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
-      chip={bewerkte ? (isExpired(bewerkte) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" stil>Actief</Badge>) : undefined}
+      chip={bewerkte ? ({ verlopen: <Badge tone="slate">Verlopen</Badge>, komend: <Badge tone="blue" stil>Komend</Badge>, lopend: <Badge tone="emerald" stil>Actief</Badge> }[omleidingsFase(bewerkte)]) : undefined}
       acties={bewerkte ? (
         <ActieMenu
           size="sm"

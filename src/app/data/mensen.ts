@@ -151,13 +151,21 @@ export function useMensenData(ctx: DataCtx) {
 
   // 'Nieuw'-badge op Mijn documenten: telt de eigen documenten die nieuwer zijn
   // dan het moment waarop de chauffeur de documentenweergave het laatst opende.
+  // Bron = users.dashboardvoorkeuren.documentenGezienOp (server, 15-09):
+  // localStorage was per toestel, waardoor een nieuwe iPhone alles ooit als
+  // "nieuw" telde. localStorage blijft de terugval zolang de PATCH niet lukt
+  // en voor accounts van vóór deze wijziging.
   const fetchUnseenDocuments = async (userId: string, accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/documents', { accessToken });
       const data = await response.json();
       if (!Array.isArray(data)) return;
-      let lastSeen: string | null = null;
-      try { lastSeen = localStorage.getItem(`planx-documents-lastseen-${userId}`); } catch { /* privacy-modus */ }
+      let lokaal: string | null = null;
+      try { lokaal = localStorage.getItem(`planx-documents-lastseen-${userId}`); } catch { /* privacy-modus */ }
+      // De jongste van server en toestel wint: een oud servertijdstip mag een
+      // recentere lokale "gezien" (PATCH ooit mislukt) niet terugdraaien.
+      const server = currentUser?.dashboardVoorkeuren?.documentenGezienOp ?? null;
+      const lastSeen = [lokaal, server].filter(Boolean).sort().pop() ?? null;
       const unseen = lastSeen ? data.filter((d: any) => String(d.uploadedAt) > lastSeen).length : data.length;
       setUnseenDocuments(unseen);
     } catch (error) {
@@ -168,7 +176,11 @@ export function useMensenData(ctx: DataCtx) {
   const markDocumentsSeen = () => {
     setUnseenDocuments(0);
     if (!currentUser) return;
-    try { localStorage.setItem(`planx-documents-lastseen-${currentUser.id}`, new Date().toISOString()); } catch { /* privacy-modus */ }
+    const nu = new Date().toISOString();
+    try { localStorage.setItem(`planx-documents-lastseen-${currentUser.id}`, nu); } catch { /* privacy-modus */ }
+    // Server is de bron; mislukt de PATCH (offline), dan vangt localStorage
+    // het op dit toestel op en probeert het volgende bezoek opnieuw.
+    void apiFetch('/api/me/voorkeuren', { method: 'PATCH', body: JSON.stringify({ dashboard: { documentenGezienOp: nu } }) }).catch(() => undefined);
   };
 
   /** Bij uitloggen: de gebruikerslijst leeg (badge/werkvoorraad blijven, zoals voorheen). */

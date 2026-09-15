@@ -156,6 +156,14 @@ export default function App() {
   // Aanwezigheid (staf ziet elkaar in de topbar) + broodkruimel per schermwissel (foutrapporten).
   useAanwezigheid(!!session && !!currentUser, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
   useEffect(() => { addBreadcrumb('navigatie', currentView); }, [currentView]);
+  // Aankomen op het scherm waar een melding naar wijst = die melding gelezen
+  // (ook via een push-tik of deeplink); de bel- en app-badge zakken meteen
+  // mee in plaats van te blijven staan tot iemand het meldingenscherm opent.
+  useEffect(() => {
+    if (!currentUser) return;
+    markeerMeldingenGelezenVoorScherm(currentView, (doel) => routeUitUrl('/' + doel.replace(/^\/+/, ''))?.view ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, currentUser?.id]);
   const [isLoading, setIsLoading] = useState(false);
   // Netwerkstatus uit de online-store (src/lib/useOnline.ts): dezelfde
   // waarheid als Mijn dag en de ritbladviewer, mét ping-fallback voor
@@ -253,7 +261,7 @@ export default function App() {
     feestdagenExtra, zetFeestdagenExtra,
     saveServices, fetchUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
     saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
-    fetchMeldingen, ongelezenMeldingen,
+    fetchMeldingen, ongelezenMeldingen, markeerMeldingenGelezenVoorScherm,
   } = appData;
   // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
   // verwijderde dan twee meldingen tegelijk).
@@ -325,7 +333,13 @@ export default function App() {
   useRealtimeSync(!!session && !!currentUser, {
     // meldLive: stille "… bijgewerkt"-toast (max één per 10 s per collectie,
     // niet na een eigen schrijfactie) — src/lib/liveSignaal.ts.
-    refetchLeave: () => { meldLive('verlof'); return fetchLeave(); },
+    refetchLeave: () => {
+      meldLive('verlof');
+      // Verlof stuurt de dekking (afwezige = gat): voor staf meteen mee
+      // verversen, anders liepen dashboard en topbar-badge achter.
+      if (currentUser && isStaf(currentUser.role)) refreshCoverageGaps();
+      return fetchLeave();
+    },
     refetchSwaps: () => { meldLive('ruil'); return fetchSwaps(); },
     refetchDiversions: () => { meldLive('omleidingen'); return fetchDiversions(undefined, { silent: true }); },
     refetchUpdates: () => { meldLive('updates'); return fetchUpdates(); },
@@ -1104,11 +1118,14 @@ export default function App() {
   // (meldingencentrum, 06-09 — ruilverzoeken en nieuwe documenten zitten
   // daar als melding in; was ruil + documenten); planner/admin: de volledige
   // werkvoorraad (zelfde teller als de topbar-knop — was alleen verlof+ruil).
+  // Elke niet-stafrol (chauffeur én technieker) krijgt de meldingenteller;
+  // de technieker viel er eerst tussenuit (geen chauffeur, geen werkvoorraad)
+  // en had daardoor altijd badge 0, ook met open gele-boek-meldingen.
   const appBadgeCount = !currentUser
     ? 0
-    : currentUser.role === 'chauffeur'
-      ? ongelezenMeldingen
-      : werkvoorraad?.attentionCount ?? 0;
+    : isStafRol
+      ? werkvoorraad?.attentionCount ?? 0
+      : ongelezenMeldingen;
   useEffect(() => {
     const nav = navigator as any;
     if (typeof nav?.setAppBadge !== 'function') return;
