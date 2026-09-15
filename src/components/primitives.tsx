@@ -339,7 +339,11 @@ type FilterChipTone = 'oker' | 'red';
 
 const FILTER_CHIP_TONES: Record<FilterChipTone, { on: string; off: string }> = {
   oker: {
-    on: 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30',
+    // Aan = carbon chip in licht, verhoogd graphite in donker (token
+    // keuze-vlak, index.css). Goud rantsoeneren (punt 4): een filter is een
+    // toestand, geen actie. Niet `bg-ink` (onzichtbaar in dark) en niet
+    // `bg-slate-900` (spiegelt in dark naar een wit vlak).
+    on: 'bg-keuze-vlak text-keuze-vlak-tekst ring-1 ring-hairline-strong elev-1',
     off: 'control-button-soft text-slate-600 hover:text-slate-900',
   },
   // Foutfilter (onbekende codes in de planningsmatrix): rood blijft rood,
@@ -525,7 +529,7 @@ export function Switch({ checked, onChange, label, disabled, className }: {
         className,
       )}
     >
-      <span className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors', checked ? 'bg-oker-500' : 'bg-slate-300')}>
+      <span className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors', checked ? 'bg-keuze' : 'bg-slate-300')}>
         <span className={cn('inline-block h-5 w-5 rounded-full bg-surface-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
       </span>
     </button>
