@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, FileText } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, FileText, Phone } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
@@ -14,15 +14,17 @@ import { MaandNavigatie } from '../components/MaandNavigatie';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { ActieMenu } from '../components/ActieMenu';
 import { SkeletonRow } from '../components/Skeleton';
-import { cn } from '../lib/ui';
+import { cn, telHref } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
-import { shiftCategory } from '../lib/shiftTime';
+import { formatDuration, shiftCategory } from '../lib/shiftTime';
+import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUren';
+import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
 import { formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openHuidigRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
-import { useRouteParam } from '../app/router';
+import { navigeer, useRouteParam } from '../app/router';
 import { LegeLijst } from '../components/illustraties';
 
 /** Maand in de URL (`/rooster/2026-10`, maandweergave) — spiegel van de
@@ -88,6 +90,38 @@ const openSwapLabel = (swap: SwapRequest) => {
  * chauffeur las de verkeerde fase.
  */
 const openSwapTone = (swap: SwapRequest) => (swap.status === 'accepted' ? 'blue' : 'amber');
+
+/**
+ * Uitweg bij een verlof-conflict (punt 15): "bel de planner" stond er als
+ * zin zonder knop. Nu een belknop naar het planningsnummer (de eerste planner,
+ * anders beheerder, met een nummer in de contacten) of, zonder nummer, de
+ * weg naar Contacten, plus de dienstruil zodat een collega de dienst kan
+ * overnemen.
+ */
+function ConflictUitweg({ planningTel, onRuil }: { planningTel?: string; onRuil: () => void }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {planningTel ? (
+        <Button variant="secondary" size="sm" icon={<Phone size={14} />} onClick={() => { window.location.href = planningTel; }}>
+          Bel de planning
+        </Button>
+      ) : (
+        <Button variant="secondary" size="sm" icon={<Phone size={14} />} onClick={() => navigeer('contacten')}>
+          Contacten
+        </Button>
+      )}
+      <Button variant="ghost" size="sm" icon={<ArrowLeftRight size={14} />} onClick={onRuil}>
+        Open dienstruil
+      </Button>
+    </div>
+  );
+}
+
+/** tel:-link naar de planning: eerste planner met nummer, anders beheerder. */
+const planningTelefoon = (users: User[]): string | undefined => {
+  const kandidaat = users.find((u) => u.role === 'planner' && u.phone?.trim()) ?? users.find((u) => u.role === 'admin' && u.phone?.trim());
+  return telHref(kandidaat?.phone);
+};
 
 export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
@@ -195,6 +229,13 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
   const upcoming = grouped.filter((g) => g.date >= today);
   const past = grouped.filter((g) => g.date < today).reverse();
 
+  // Geplande uren deze week/maand (punt 15): afgeleid uit de dienstvensters,
+  // geen loonberekening (src/lib/roosterUren.ts); de strook zegt dat ook.
+  const uren = useMemo(() => berekenRoosterUren(myShifts, today), [myShifts, today]);
+  const planningTel = useMemo(() => planningTelefoon(users), [users]);
+  // Startscherm-voorkeur naar de lokale kopie (router leest die bij de start).
+  useEffect(() => { spiegelStartscherm(user); }, [user]);
+
   // Gedeelde export (src/lib/roosterIcs.ts) — ook gebruikt door Instellingen.
   const exportToICS = () => downloadRoosterIcs(user.name, myShifts);
 
@@ -247,6 +288,19 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
         )}
       </div>
 
+      {/* Stille urenstrook: geen kaart, één regel micro-tekst. Het label
+          "geplande uren, geen loonberekening" is verplicht: dit zijn de
+          dienstvensters uit de planning, geen gepresteerde of betaalde uren. */}
+      {!isInitialLoad && myShifts.length > 0 && (
+        <p className="-mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-0.5" aria-label="Geplande uren">
+          <span className="text-xs font-semibold text-slate-600 tabular-nums">
+            deze week {formatUren(uren.weekMinuten)} · deze maand {formatUren(uren.maandMinuten)} · {uren.maandDienstdagen} {uren.maandDienstdagen === 1 ? 'dag' : 'dagen'} met dienst
+          </span>
+          <span className="sr-only">, </span>
+          <span className="text-micro">geplande uren, geen loonberekening</span>
+        </p>
+      )}
+
       <CalendarSubscribeModal open={calendarOpen} onClose={() => setCalendarOpen(false)} onDownload={exportToICS} />
 
       {isInitialLoad ? (
@@ -268,7 +322,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
             <div>
               {/* Toekomst */}
               {upcoming.length > 0 && (
-                <ShiftList shifts={upcoming} today={today} noteFor={(d) => notes.find((n) => n.date === d)?.note} onRequestSwap={onRequestSwap} compact={xl} />
+                <ShiftList shifts={upcoming} today={today} noteFor={(d) => notes.find((n) => n.date === d)?.note} onRequestSwap={onRequestSwap} compact={xl} planningTel={planningTel} />
               )}
 
               {/* Verleden — collapsed by default */}
@@ -285,7 +339,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
                   </Button>
                   <Uitklap open={showPast}>
                     <div className="mt-4 opacity-60">
-                      <ShiftList shifts={past} today={today} compact={xl} />
+                      <ShiftList shifts={past} today={today} compact={xl} planningTel={planningTel} />
                     </div>
                   </Uitklap>
                 </div>
@@ -301,6 +355,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
               onRequestSwap={onRequestSwap}
               maandParam={maandParam}
               onMaandParam={zetMaandParam}
+              planningTel={planningTel}
             />
           )}
         </div>
@@ -319,6 +374,7 @@ function MonthCalendar({
   onRequestSwap,
   maandParam,
   onMaandParam,
+  planningTel,
 }: {
   groups: GroupedShift[];
   today: string;
@@ -328,6 +384,8 @@ function MonthCalendar({
   /** Maand uit de URL (`YYYY-MM` of null) en de schrijver ervan (replace). */
   maandParam: string | null;
   onMaandParam: (waarde: string | null) => void;
+  /** tel:-link naar de planning voor de verlof-conflict-uitweg. */
+  planningTel?: string;
 }) {
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
@@ -376,6 +434,8 @@ function MonthCalendar({
     }
     return map;
   }, [groups]);
+  // Geplande minuten per dag voor de tooltip van de dagcel en het detail.
+  const minutenOpDag = useMemo(() => minutenPerDag(groups.flatMap((g) => g.segments)), [groups]);
 
   // Verlof per dag; goedgekeurd wint van aangevraagd als beide de dag raken.
   const leaveFor = (iso: string): LeaveRequest | undefined => {
@@ -430,7 +490,8 @@ function MonthCalendar({
                 key={day}
                 type="button"
                 onClick={() => setSelected(iso)}
-                aria-label={`${iso}${dayGroups.length > 0 ? ', dienst' : ''}${leave ? ', verlof' : ''}`}
+                aria-label={`${iso}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}`}
+                title={dayGroups.length > 0 ? `${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : undefined}
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',
                   !isSelected && 'hover:bg-surface-soft-hover',
@@ -531,8 +592,14 @@ function MonthCalendar({
                   </div>
                 ))}
               </div>
+              {g.hasConflict && (
+                <ConflictUitweg planningTel={planningTel} onRuil={() => (onRequestSwap ? onRequestSwap(g.segments[0].id) : navigeer('ruil-verzoeken'))} />
+              )}
             </div>
           ))
+        )}
+        {selectedGroups.length > 0 && (
+          <p className="mt-2 text-xs font-medium text-slate-500 tabular-nums">{formatDuration(minutenOpDag.get(selected) ?? 0)} gepland</p>
         )}
 
         {selectedNote && (
@@ -558,7 +625,8 @@ function MonthCalendar({
 
 // --- Subcomponent: gedeelde lijst voor toekomst en verleden ---
 
-function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: { shifts: GroupedShift[]; today: string; noteFor?: (date: string) => string | undefined; onRequestSwap?: (shiftId: string) => void; /** Altijd de kaartvorm (halve kolom naast de maandkalender op xl). */ compact?: boolean }) {
+function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, planningTel }: { shifts: GroupedShift[]; today: string; noteFor?: (date: string) => string | undefined; onRequestSwap?: (shiftId: string) => void; /** Altijd de kaartvorm (halve kolom naast de maandkalender op xl). */ compact?: boolean; /** tel:-link naar de planning (verlof-conflict-uitweg). */ planningTel?: string }) {
+  const ruilUitweg = (g: GroupedShift) => () => (onRequestSwap ? onRequestSwap(g.segments[0].id) : navigeer('ruil-verzoeken'));
   return (
     <>
       {/* Desktop tabel */}
@@ -606,6 +674,12 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                           <Badge tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(g.geruild)}</Badge>
                         )}
                       </div>
+                      {g.hasConflict && (
+                        <>
+                          <p className="text-xs font-medium text-red-700">Je hebt hier verlof, bel de planner.</p>
+                          <ConflictUitweg planningTel={planningTel} onRuil={ruilUitweg(g)} />
+                        </>
+                      )}
                     </div>
                   </Td>
                   <Td className="px-6 py-4">
@@ -681,6 +755,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                         Verlof-conflict
                       </Badge>
                       <p className="text-xs font-medium text-red-700 mt-1">Je hebt hier verlof, bel de planner.</p>
+                      <ConflictUitweg planningTel={planningTel} onRuil={ruilUitweg(g)} />
                     </div>
                   )}
                   {g.openSwap && (

@@ -33,7 +33,8 @@ import { userBodySchema, userLijstSchema, WACHTWOORD_MIN } from "../shared/schem
 import { diversionBodySchema, diversionLijstSchema } from "../shared/schemas/diversion.js";
 import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js";
 import { meldingenGelezenBodySchema } from "../shared/schemas/meldingen.js";
-import { meVoorkeurenBodySchema } from "../shared/schemas/dashboardVoorkeuren.js";
+import { recordUrl } from "./_lib/meldingen.js";
+import { meVoorkeurenBodySchema, pasVoorkeurenPatchToe } from "../shared/schemas/dashboardVoorkeuren.js";
 import { VERLOF_LIMIETEN_KEY, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
 import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, verlofFeestdagenSchema } from "../shared/schemas/verlofFeestdagen.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
@@ -71,6 +72,7 @@ import {
   getSwapsData,
   getUpdatesData,
   getUpdateReadCounts,
+  getUpdateReadIdsForUser,
   getUsersData,
   EmailInGebruikError,
   logActivity,
@@ -2093,19 +2095,26 @@ app.post("/api/meldingen/gelezen", authenticate, async (req: AuthenticatedReques
   }
 });
 
-// --- Eigen voorkeuren (dashboardindeling) ---
+// --- Eigen voorkeuren (dashboardindeling, startscherm, meldingssoorten) ---
 // Alleen het eigen profiel; de jsonb-kolom users.dashboardvoorkeuren komt
 // via toPublicUser terug in /api/me (niet in /api/users — persoonlijke
 // UI-staat). Ongeldige body → 400 (zod, shared/schemas/dashboardVoorkeuren).
+// De body is een deelwijziging: het dashboard stuurt de tegel-sleutels,
+// Instellingen het startscherm of de meldingssoorten; hier voegen we samen
+// met wat er al staat (punt 15, 15-09), zodat het ene scherm de voorkeur van
+// het andere niet overschrijft. `null` wist een optionele voorkeur.
 app.patch("/api/me/voorkeuren", authenticate, async (req: AuthenticatedRequest, res) => {
   const body = valideerRecord(res, meVoorkeurenBodySchema, req.body);
   if (!body) return;
   try {
-    await updateUserDashboardVoorkeuren(String(req.appUser!.id), body.dashboard);
+    // req.appUser komt uit de gebruikerscache, die bij elke save hieronder
+    // geleegd wordt; opeenvolgende PATCHes zien dus elkaars resultaat.
+    const nieuw = pasVoorkeurenPatchToe(req.appUser!.dashboardVoorkeuren, body.dashboard);
+    await updateUserDashboardVoorkeuren(String(req.appUser!.id), nieuw);
     // Het profiel zit in de auth-cache (userCache.ts): anders gaf /api/me
     // tot 30 s de oude indeling terug.
     invalidateUsersCache();
-    res.json({ success: true, dashboardVoorkeuren: body.dashboard });
+    res.json({ success: true, dashboardVoorkeuren: nieuw });
   } catch (err: any) {
     const msg = String(err?.message ?? "").toLowerCase();
     if (isMissingTableError(err) || err?.code === "PGRST204" || /dashboardvoorkeuren/.test(msg)) {
@@ -3378,6 +3387,20 @@ app.post("/api/updates/read", authenticate, async (req: AuthenticatedRequest, re
   } catch (err: any) {
     console.error("Leesbevestiging opslaan is mislukt.", err);
     res.status(500).json({ error: "Leesbevestiging opslaan is mislukt." });
+  }
+});
+
+// Eigen leesstaat: welke updates deze gebruiker al opende of bevestigde. De
+// client toont daarmee de knop "Gelezen en begrepen" niet opnieuw en markeert
+// niet dubbel. `telt` = false voor staf (hun reads slaan we hierboven niet op).
+app.get("/api/updates/read", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const telt = req.appUser!.role === "chauffeur";
+    const ids = telt ? await getUpdateReadIdsForUser(String(req.appUser!.id)) : [];
+    res.json({ ids, telt });
+  } catch (err: any) {
+    console.error("Leesstaat laden is mislukt.", err);
+    res.status(500).json({ error: "Leesstaat laden is mislukt." });
   }
 });
 
@@ -5370,7 +5393,9 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
   // Push naar álle actieve gebruikers (ook wie geen e-mail heeft) — best-effort.
   await sendPushToUsers(
     activeUsers.map((u) => String(u.id)).filter(Boolean),
-    { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: viewUrl("updates"), soort: "update" },
+    // Naar het bericht zelf (/updates/<id>) zodra er een id is: de melding
+    // en de push-tik landen dan op dat item (useRecordParam in UpdatesView).
+    { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: update.id ? recordUrl("updates", String(update.id)) : viewUrl("updates"), soort: "update" },
   );
 
   if (emails.length === 0) {

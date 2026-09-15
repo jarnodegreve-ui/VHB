@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
-import { BellRing, CalendarPlus, Clock, HeartPulse, Info, KeyRound, LifeBuoy, LogOut, Monitor, Moon, ShieldCheck, Smartphone, Tablet, Users } from 'lucide-react';
+import { Bell, BellRing, CalendarPlus, Clock, HeartPulse, Home, Info, KeyRound, LifeBuoy, LogOut, Monitor, Moon, ShieldCheck, Smartphone, Tablet, Users } from 'lucide-react';
+import { MELDING_SOORT_LABEL, type MeldingSoort } from '../../shared/schemas/meldingen';
+import { UITZETBARE_MELDING_SOORTEN } from '../../shared/schemas/dashboardVoorkeuren';
 import { Card, CardHeader } from '../components/Card';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { Badge, Button, Chip, Switch } from '../components/primitives';
+import { Select } from '../components/Field';
 import { ActieMenu } from '../components/ActieMenu';
 import { TweeStapsCode, TweeStapsInschrijving } from '../components/TweeStapsInschrijving';
+import { ROUTES } from '../app/routes';
 import { apiJson } from '../lib/api';
 import { BUILD_INFO } from '../lib/appVersion';
+import { bewaarVoorkeurDeel, spiegelStartscherm } from '../lib/dashboardVoorkeuren';
 import { formatRelatief } from '../lib/format';
 import { isGedeeldToestel, zetGedeeldToestel } from '../lib/inactiviteit';
+import { STARTSCHERMEN, onthoudStartschermLokaal, type Startscherm } from '../lib/startscherm';
 import { supabase } from '../lib/supabase';
 import { leesTweeStapsStatus, schakelUit, type TweeStapsStatus } from '../lib/tweeStaps';
 import { notify } from '../lib/ui';
@@ -174,7 +180,12 @@ function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePas
   const [bezig, setBezig] = useState(false);
 
   const laad = async () => {
-    try { setInfo(await apiJson<Beveiliging>('/api/me/beveiliging')); } catch { setInfo(null); }
+    // Vorm bewaken: een onverwacht antwoord (oude server, mock zonder route)
+    // mag de hele pagina niet laten omvallen op `aanmeldingen.length`.
+    try {
+      const b = await apiJson<Beveiliging>('/api/me/beveiliging');
+      setInfo(b && Array.isArray(b.aanmeldingen) ? b : null);
+    } catch { setInfo(null); }
     if (staf) setStatus(await leesTweeStapsStatus());
   };
   useEffect(() => { void laad(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [user.id]);
@@ -296,6 +307,113 @@ function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePas
   );
 }
 
+// --- Startscherm (users.dashboardvoorkeuren.startscherm) ---
+
+/**
+ * Waar de app opent (punt 15). Leeg = het oude gedrag: de laatst geopende
+ * pagina, wat voor een chauffeur onvoorspelbaar aanvoelde. De keuze gaat naar
+ * de server (deel-PATCH, raakt de tegelindeling niet) én naar de lokale kopie
+ * die de router bij het opstarten leest (src/lib/startscherm.ts). Alleen de
+ * schermen die de rol mag zien staan in de lijst (routetabel).
+ */
+function StartschermRij({ user }: { user: User }) {
+  const [keuze, setKeuze] = useState<Startscherm | ''>(user.dashboardVoorkeuren?.startscherm ?? '');
+  const [bezig, setBezig] = useState(false);
+  useEffect(() => { spiegelStartscherm(user); }, [user]);
+
+  const opties = STARTSCHERMEN
+    .map((view) => ROUTES.find((r) => r.view === view))
+    .filter((r): r is NonNullable<typeof r> => !!r && r.rollen.includes(user.role));
+
+  const kies = async (naar: Startscherm | '') => {
+    const vorige = keuze;
+    setKeuze(naar);
+    onthoudStartschermLokaal(naar || null);
+    setBezig(true);
+    try {
+      await bewaarVoorkeurDeel({ startscherm: naar || null });
+    } catch (err) {
+      setKeuze(vorige);
+      onthoudStartschermLokaal(vorige || null);
+      notify(err instanceof Error ? err.message : 'Startscherm opslaan is mislukt.', 'error');
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  return (
+    <Rij
+      icoon={<Home size={16} />}
+      titel="Startscherm"
+      uitleg={keuze
+        ? `De app opent op ${opties.find((o) => o.view === keuze)?.label ?? keuze}, op elk toestel waar je aangemeld bent.`
+        : 'De app opent op de pagina die je het laatst open had. Kies een vast scherm als je liever altijd op dezelfde plek begint.'}
+      rechts={(
+        <Select
+          aria-label="Startscherm"
+          value={keuze}
+          disabled={bezig}
+          className="min-w-[11rem]"
+          onChange={(e) => { void kies(e.target.value as Startscherm | ''); }}
+        >
+          <option value="">Laatst geopend</option>
+          {opties.map((o) => <option key={o.view} value={o.view}>{o.label}</option>)}
+        </Select>
+      )}
+    />
+  );
+}
+
+// --- Meldingssoorten (users.dashboardvoorkeuren.meldingssoortenUit) ---
+
+/**
+ * Waarover wil je meldingen (punt 15): één schakelaar per soort, standaard
+ * allemaal aan. Uitzetten filtert alleen het pushkanaal (api/push.ts); in
+ * Meldingen blijft elke melding staan. 'systeem' (vervaldata van je eigen
+ * attesten) is bewust niet uit te zetten en staat er niet tussen.
+ */
+function MeldingssoortenRijen({ user }: { user: User }) {
+  const [uit, setUit] = useState<ReadonlySet<MeldingSoort>>(() => new Set(user.dashboardVoorkeuren?.meldingssoortenUit ?? []));
+  const [bezig, setBezig] = useState(false);
+
+  const zet = async (soort: MeldingSoort, aan: boolean) => {
+    const vorige = uit;
+    const volgende = new Set(vorige);
+    if (aan) volgende.delete(soort); else volgende.add(soort);
+    setUit(volgende);
+    setBezig(true);
+    try {
+      // Lege lijst = voorkeur wissen (null): "nooit iets uitgezet" en "alles
+      // weer aan" zijn dan hetzelfde, ook voor soorten die later bijkomen.
+      await bewaarVoorkeurDeel({ meldingssoortenUit: volgende.size ? [...volgende] : null });
+    } catch (err) {
+      setUit(vorige);
+      notify(err instanceof Error ? err.message : 'Meldingsvoorkeur opslaan is mislukt.', 'error');
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  return (
+    <>
+      <Rij
+        icoon={<Bell size={16} />}
+        titel="Waarover wil je meldingen"
+        uitleg="Zet een soort uit en je krijgt er geen seintje meer van; onder Meldingen blijft alles staan. Systeemmeldingen, zoals een attest dat verloopt, komen altijd."
+        rechts={<span />}
+      />
+      <ul className="grid gap-y-2 pl-11 pb-3.5 sm:grid-cols-2 sm:gap-x-6" aria-label="Meldingssoorten">
+        {UITZETBARE_MELDING_SOORTEN.map((soort) => (
+          <li key={soort} className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-slate-700">{MELDING_SOORT_LABEL[soort]}</span>
+            <Switch checked={!uit.has(soort)} disabled={bezig} onChange={(aan) => { void zet(soort, aan); }} label={`Meldingen over ${MELDING_SOORT_LABEL[soort].toLowerCase()}`} />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 /**
  * Instellingen: alles wat vroeger verspreid stond over het avatar-menu, het
  * rooster (agenda-koppeling) en de beheerschermen, op één adres
@@ -358,6 +476,7 @@ export function InstellingenView({
             uitleg={theme === 'dark' ? 'Aan, het portaal gebruikt het donkere thema op dit toestel.' : 'Uit, het portaal gebruikt het lichte thema op dit toestel.'}
             rechts={<Switch checked={theme === 'dark'} onChange={onToggleTheme} label="Donkere modus" />}
           />
+          <StartschermRij user={user} />
         </div>
       </Card>
 
@@ -372,6 +491,7 @@ export function InstellingenView({
               : 'Niet beschikbaar op dit toestel of in deze browser. Zet het portaal op je beginscherm om meldingen te kunnen ontvangen.'}
             rechts={<Switch checked={pushEnabled} onChange={onTogglePush} label="Pushmeldingen" disabled={!pushBeschikbaar} />}
           />
+          <MeldingssoortenRijen user={user} />
         </div>
       </Card>
 

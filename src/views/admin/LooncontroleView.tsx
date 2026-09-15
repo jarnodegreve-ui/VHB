@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Coins, Download, FileSpreadsheet, Hash, Pencil, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Coins, Download, FileSpreadsheet, Hash, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import type { User } from '../../types';
 import { DIENST_TYPES, DIENST_TYPE_LABEL, loonCodeSleutel } from '../../../shared/loon';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
+import { useZelfLadend, type Versheid } from '../../lib/zelfLadend';
 import { formatShortDay, MONTH_NAMES } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import {
@@ -11,7 +12,7 @@ import {
   laadMaand, laadMedewerkers, LoonFout, schuifMaand, vandaagIso, verwijderLoonCode,
   type DagTelling, type ExportControle, type LoonCode, type LoonCodeBody, type LoonInstellingen, type LoonMedewerkerRij,
 } from '../../lib/loon';
-import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
@@ -34,9 +35,12 @@ export function LooncontroleView({ currentUser, onNavigate }: { currentUser: Use
   const [maandParam, zetMaandParam] = useRouteParam(0);
   const maand = maandParam && /^\d{4}-\d{2}$/.test(maandParam) ? maandParam : schuifMaand(vandaagIso().slice(0, 7), -1);
   const [tab, setTab] = useState<Tab>('maand');
+  // De tabs laden elk hun eigen data; de versheidsregel staat toch op de
+  // vaste plek (PageHeader-acties), de actieve tab meldt zijn staat omhoog.
+  const [versheid, setVersheid] = useState<Versheid | null>(null);
   return (
     <PageShell breed>
-      <PageHeader eyebrow="Beheer · Loon" title="Looncontrole" />
+      <PageHeader eyebrow="Beheer · Loon" title="Looncontrole" actions={versheid ? <VersheidRegel {...versheid} /> : undefined} />
       <Segmented<Tab>
         label="Onderdeel"
         className="shrink-0"
@@ -49,32 +53,34 @@ export function LooncontroleView({ currentUser, onNavigate }: { currentUser: Use
         ]}
         onChange={setTab}
       />
-      {tab === 'maand' && <MaandTab maand={maand} zetMaand={(m) => zetMaandParam(m)} isAdmin={currentUser.role === 'admin'} onNavigate={onNavigate} />}
-      {tab === 'codes' && <CodesTab />}
-      {tab === 'medewerkers' && <MedewerkersTab />}
+      {tab === 'maand' && <MaandTab maand={maand} zetMaand={(m) => zetMaandParam(m)} isAdmin={currentUser.role === 'admin'} onNavigate={onNavigate} onVersheid={setVersheid} />}
+      {tab === 'codes' && <CodesTab onVersheid={setVersheid} />}
+      {tab === 'medewerkers' && <MedewerkersTab onVersheid={setVersheid} />}
     </PageShell>
   );
 }
 
-function MaandTab({ maand, zetMaand, isAdmin, onNavigate }: { maand: string; zetMaand: (m: string) => void; isAdmin: boolean; onNavigate?: (view: 'dagafsluiting', params?: string[]) => void }) {
+type OnVersheid = (v: Versheid | null) => void;
+/** Meldt de versheid van een tab aan de kop; bij unmount weer leeg. */
+function useVersheidOmhoog(versheid: Versheid, onVersheid: OnVersheid) {
+  useEffect(() => { onVersheid(versheid); }, [versheid, onVersheid]);
+  useEffect(() => () => onVersheid(null), [onVersheid]);
+}
+
+function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand: string; zetMaand: (m: string) => void; isAdmin: boolean; onNavigate?: (view: 'dagafsluiting', params?: string[]) => void; onVersheid: OnVersheid }) {
   const [dagen, setDagen] = useState<DagTelling[]>([]);
   const [planningDagen, setPlanningDagen] = useState<string[]>([]);
   const [controle, setControle] = useState<ExportControle | null>(null);
   const [instellingen, setInstellingen] = useState<LoonInstellingen | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [bezig, setBezig] = useState(false);
   const [lidnrDraft, setLidnrDraft] = useState('');
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [m, c, i] = await Promise.all([laadMaand(maand), laadExportControle(maand), laadInstellingen()]);
-      setDagen(m.dagen); setPlanningDagen(m.planningDagen); setControle(c); setInstellingen(i); setLidnrDraft(String(i.easypayLidnr || ''));
-    } catch (err) {
-      notify(err instanceof Error ? err.message : 'Kon de maand niet laden.', 'error');
-    } finally { setIsLoading(false); }
-  }, [maand]);
-  useEffect(() => { void load(); }, [load]);
+  const zl = useZelfLadend(async () => {
+    const [m, c, i] = await Promise.all([laadMaand(maand), laadExportControle(maand), laadInstellingen()]);
+    setDagen(m.dagen); setPlanningDagen(m.planningDagen); setControle(c); setInstellingen(i); setLidnrDraft(String(i.easypayLidnr || ''));
+  }, { deps: [maand], boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de maand niet laden.') });
+  useVersheidOmhoog(zl.versheid, onVersheid);
+  const load = () => zl.ververs();
 
   const perDag = useMemo(() => new Map(dagen.map((d) => [d.datum, d])), [dagen]);
   const alle = dagenInMaand(maand);
@@ -118,9 +124,10 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate }: { maand: string; zet
         <IconButton label="Vorige maand" onClick={() => zetMaand(schuifMaand(maand, -1))}><ChevronLeft size={18} /></IconButton>
         <p className="min-w-0 flex-1 text-sm font-semibold text-slate-800">{titel}</p>
         <IconButton label="Volgende maand" onClick={() => zetMaand(schuifMaand(maand, 1))}><ChevronRight size={18} /></IconButton>
-        <Button variant="secondary" size="sm" icon={<RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>
       </Card>
 
+      {zl.fout && <Foutkaart compact={zl.laatstGeladen !== null} boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
+      {zl.fout && zl.laatstGeladen === null ? null : (<>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat icon={<CheckCircle2 size={16} />} tone="slate" label="Afgesloten" value={tellers.afgesloten} sub={`van ${alle.filter((d) => d <= vandaag).length} dagen tot vandaag`} />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub="geopend, nog niet afgesloten" />
@@ -198,24 +205,21 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate }: { maand: string; zet
           </div>
         )}
       </Card>
+      </>)}
     </div>
   );
 }
 
 const LEEG_CODE: LoonCodeBody & { code: string } = { code: '', codeWeergave: '', omschrijving: '', dienstType: 'lijn', inExport: true, easypayActiviteit: 'LIJN', easypayTypePrest: 40140, tik1: '', tik2: '', tik3: '', tik4: '', tik5: '', tik6: '', lbRijtijd: null, lbStat100At: null, lbStat100Nat: null, lbStat50Nat: null, lbOnd: null, lbAndWrk: null, lbNacht: null };
 
-function CodesTab() {
+function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
   const [codes, setCodes] = useState<LoonCode[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [zoek, setZoek] = useState('');
   const [filter, setFilter] = useState<'alles' | 'lijn' | 'varia' | 'ander'>('alles');
   const [bewerk, setBewerk] = useState<(LoonCodeBody & { code: string; nieuw?: boolean }) | null>(null);
   const sort = useSort<string>('code');
-  const load = async () => {
-    setIsLoading(true);
-    try { setCodes(await laadLoonCodes()); } catch (err) { notify(err instanceof Error ? err.message : 'Kon de looncodes niet laden.', 'error'); } finally { setIsLoading(false); }
-  };
-  useEffect(() => { void load(); }, []);
+  const zl = useZelfLadend(async () => { setCodes(await laadLoonCodes()); }, { boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de looncodes niet laden.') });
+  useVersheidOmhoog(zl.versheid, onVersheid);
   const zoekTerm = zoek.trim().toLowerCase();
   const lijst = sort.sorteer(
     codes.filter((c) => filter === 'alles' || c.dienstType === filter).filter((c) => !zoekTerm || `${c.code} ${c.omschrijving ?? ''} ${c.easypayTypePrest}`.toLowerCase().includes(zoekTerm)),
@@ -235,7 +239,7 @@ function CodesTab() {
             acties={<Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setBewerk({ ...LEEG_CODE, nieuw: true })}>Code toevoegen</Button>}
           />
         </div>
-        {isLoading && codes.length === 0 ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : lijst.length === 0 ? (
+        {zl.fout && codes.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && codes.length === 0 ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : lijst.length === 0 ? (
           <div className="p-6"><EmptyState title="Geen looncodes" message={codes.length ? 'Pas de zoekterm of het filter aan.' : 'Draai de migratie met de seed of voeg codes toe.'} /></div>
         ) : (
           <div className="overflow-x-auto">
@@ -323,18 +327,15 @@ function CodeModal({ init, onClose, onKlaar }: { init: LoonCodeBody & { code: st
   );
 }
 
-function MedewerkersTab() {
+function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
   const [rijen, setRijen] = useState<LoonMedewerkerRij[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [zoek, setZoek] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [importTekst, setImportTekst] = useState('');
   const [bezig, setBezig] = useState(false);
-  const load = async () => {
-    setIsLoading(true);
-    try { setRijen(await laadMedewerkers()); } catch (err) { notify(err instanceof Error ? err.message : 'Kon de medewerkers niet laden.', 'error'); } finally { setIsLoading(false); }
-  };
-  useEffect(() => { void load(); }, []);
+  const zl = useZelfLadend(async () => { setRijen(await laadMedewerkers()); }, { boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de medewerkers niet laden.') });
+  useVersheidOmhoog(zl.versheid, onVersheid);
+  const load = () => zl.ververs();
   const zoekTerm = zoek.trim().toLowerCase();
   const lijst = rijen.filter((r) => !zoekTerm || `${r.naam} ${r.employeeId ?? ''} ${r.easypayNr ?? ''}`.toLowerCase().includes(zoekTerm));
   const zonder = rijen.filter((r) => r.inExport && !r.easypayNr).length;
@@ -355,7 +356,7 @@ function MedewerkersTab() {
         <div className="border-b border-hairline px-5 py-4 md:px-6">
           <TableToolbar zoek={zoek} onZoek={setZoek} placeholder="Zoek chauffeur…" telling={`${lijst.length} van ${rijen.length}`} acties={<Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>Lijst plakken</Button>} />
         </div>
-        {isLoading && rijen.length === 0 ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
+        {zl.fout && rijen.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && rijen.length === 0 ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
           <table className="w-full text-left border-collapse">
             <StickyThead><tr><Th>Chauffeur</Th><Th num>Matricule</Th><Th>In export</Th></tr></StickyThead>
             <tbody>

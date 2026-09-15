@@ -4,6 +4,7 @@ import type { AppUser, AuthenticatedRequest, IncomingUser } from "../types.js";
 import { supabaseAdmin } from "../db.js";
 import { sendWelcomeEmail } from "../email.js";
 import { sendPushToUsers } from "../push.js";
+import { recordUrl } from "./meldingen.js";
 import { invalidateUsersCache } from "../userCache.js";
 import {
   deleteAllDocumentsForUser,
@@ -221,7 +222,9 @@ export const verwerkUpdatesOpslag = async (
         title: u.isUrgent ? "Belangrijke update" : "Nieuwe update",
         soort: "update",
         body: u.title,
-        url: opts.pushUrl,
+        // Naar het bericht zelf (/updates/<id>), niet naar het scherm: de
+        // melding en de push-tik landen dan op dat item (useRecordParam).
+        url: u.id ? recordUrl("updates", u.id) : opts.pushUrl,
       });
     }
   }

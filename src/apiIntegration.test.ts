@@ -4475,7 +4475,8 @@ describe('per-record API (PUT / POST one / DELETE), gebruikers, omleidingen, upd
       expect(mem.activity.find((a) => a.action === 'Update toegevoegd')).toBeTruthy();
       const push = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe update');
       expect(push?.userIds.sort()).toEqual(['3', '4']);
-      expect(push?.payload.url).toBe('/?view=updates');
+      // Naar het bericht zelf (golf 3, punt 13): /updates/<id>, niet het scherm.
+      expect(push?.payload.url).toBe(`/updates/${encodeURIComponent(res.json.update.id)}`);
     });
 
     it('POST one valideert titel/inhoud (400) en weigert chauffeurs (403)', async () => {

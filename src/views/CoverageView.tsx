@@ -4,7 +4,8 @@ import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, notify } from '../lib/ui';
 import { isoDate } from '../lib/datum';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
-import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell, VersheidRegel } from '../components/ui';
+import { useZelfLadend } from '../lib/zelfLadend';
 import { apiFetch } from '../lib/api';
 import { Badge, Button, FilterChip, IconButton, MicroLabel } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
@@ -72,9 +73,7 @@ export function CoverageView() {
   // Verwachtingen-vs-praktijk voor de getoonde maand: structurele afwijkingen
   // tussen de dag-type-lijsten en wat er echt gereden wordt (fantoomgaten).
   const [expCheck, setExpCheck] = useState<VerwachtingAfwijking[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
   const [showConfig, setShowConfig] = useState(false);
   const [onlyGaps, setOnlyGaps] = useState(true);
   // Klik op een ontbrekende dienst → advies: wie is vrij én bij wie past dit?
@@ -104,36 +103,32 @@ export function CoverageView() {
     if ((maandParam ?? null) !== gewenst) zetMaandParam(gewenst);
   }, [monthParam, maandParam, zetMaandParam]);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchCoverageConfig()
-      .then((c) => {
-        if (cancelled) return;
-        setConfig(c);
-        setDayTypes((c.dayTypes || []).map((dt) => ({ name: dt.name, services: [...(dt.services || [])] })));
-        const w = Array.isArray(c.weekdays) && c.weekdays.length === 7 ? c.weekdays : ['', '', '', '', '', '', ''];
-        setWeekdays([...w]);
-        setWeekdayPeriods((c.weekdayPeriods || []).map((p) => ({ vanaf: p.vanaf, weekdays: [...(p.weekdays || [])] })));
-        setOverrides((c.overrides || []).map((o) => ({ ...o })));
-      })
-      .catch((e) => { if (!cancelled) setError(e?.message || 'Kon instellingen niet laden.'); });
-    return () => { cancelled = true; };
-  }, []);
+  // Instellingen één keer (de bewerkbare kopie leeft in state); pas als dat
+  // lukte hoeft het niet meer, anders probeert de volgende laad het opnieuw.
+  const configGeladen = useRef(false);
+  const laadConfig = async () => {
+    const c = await fetchCoverageConfig();
+    setConfig(c);
+    setDayTypes((c.dayTypes || []).map((dt) => ({ name: dt.name, services: [...(dt.services || [])] })));
+    const w = Array.isArray(c.weekdays) && c.weekdays.length === 7 ? c.weekdays : ['', '', '', '', '', '', ''];
+    setWeekdays([...w]);
+    setWeekdayPeriods((c.weekdayPeriods || []).map((p) => ({ vanaf: p.vanaf, weekdays: [...(p.weekdays || [])] })));
+    setOverrides((c.overrides || []).map((o) => ({ ...o })));
+    configGeladen.current = true;
+  };
 
   // Versieteller tegen kruisende responses: zowel de maandwissel als een
   // refetch (na toewijzen/opslaan) bumpen hem, en alleen het recentste
   // antwoord mag de state zetten — anders kon een traag antwoord van de
-  // vorige maand over de nieuwe heen schrijven.
+  // vorige maand over de nieuwe heen schrijven. Een mislukte gatenberekening
+  // werpt; de hook eronder maakt daar de Foutkaart van.
   const gapsVersieRef = useRef(0);
-  const laadGaps = (van: string, tot: string) => {
+  const laadGaps = async (van: string, tot: string) => {
     const versie = ++gapsVersieRef.current;
     const alsActueel = (fn: () => void) => { if (versie === gapsVersieRef.current) fn(); };
-    setLoading(true);
-    return Promise.all([
+    await Promise.all([
       fetchCoverageGaps(van, tot)
-        .then((res) => alsActueel(() => setGaps(Array.isArray(res?.days) ? res.days : [])))
-        .catch((e) => alsActueel(() => setError(e?.message || 'Kon dekking niet berekenen.')))
-        .finally(() => alsActueel(() => setLoading(false))),
+        .then((res) => alsActueel(() => setGaps(Array.isArray(res?.days) ? res.days : []))),
       // Best-effort naast de gaten: een mislukte check mag het scherm niet raken.
       fetchExpectationCheck(van, tot)
         .then((res) => alsActueel(() => setExpCheck(Array.isArray(res?.afwijkingen) ? res.afwijkingen : [])))
@@ -141,16 +136,21 @@ export function CoverageView() {
     ]);
   };
 
+  // Laad, fout, focus-refresh en versheid via de gedeelde hook (punt 17).
+  const zl = useZelfLadend(async () => {
+    if (!configGeladen.current) await laadConfig();
+    await laadGaps(from, to);
+  }, { deps: [from, to], boodschap: (e) => (e instanceof Error && e.message ? e.message : 'Kon de dekking niet berekenen.') });
+
   useEffect(() => {
     // Voorstel hoort bij de getoonde maand — bij bladeren resetten, anders
     // belooft de knop september terwijl er augustus-cijfers staan.
     setVoorstellen(null);
-    laadGaps(from, to);
     return () => { gapsVersieRef.current += 1; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to]);
 
-  const refetchGaps = () => laadGaps(from, to);
+  // Na een eigen schrijfactie: stil (geen skelet over de gatenlijst).
+  const refetchGaps = () => zl.ververs();
 
   // Laatste matrix-import (voor het zijvak) — best-effort, zelfde bron als
   // Beheer roosters; zonder antwoord gewoon een streepje.
@@ -400,7 +400,6 @@ export function CoverageView() {
 
   const handleSave = async () => {
     setSaving(true);
-    setError('');
     try {
       // Dag-types: lege namen weg, dedupe (eerste wint).
       const seen = new Set<string>();
@@ -422,7 +421,8 @@ export function CoverageView() {
       await saveCoverageConfig({ dayTypes: cleanDayTypes, weekdays: cleanWeekdays, weekdayPeriods: cleanPeriods, overrides: cleanOverrides });
       await refetchGaps();
     } catch (e: any) {
-      setError(e?.message || 'Opslaan is mislukt.');
+      // Schrijffout = toast; de kaart is voor laadfouten.
+      notify(e?.message || 'Opslaan is mislukt.', 'error');
     } finally {
       setSaving(false);
     }
@@ -465,8 +465,8 @@ export function CoverageView() {
         </Button>
       ) : undefined}
     >
-      <ZijvakRij label="Dagen met gaten" waarde={loading ? '…' : dagenMetGaten} mono />
-      <ZijvakRij label="Open diensten" waarde={loading ? '…' : totalMissing} mono />
+      <ZijvakRij label="Dagen met gaten" waarde={zl.laden ? '…' : dagenMetGaten} mono />
+      <ZijvakRij label="Open diensten" waarde={zl.laden ? '…' : totalMissing} mono />
       <ZijvakRij
         label="Dag-types"
         waarde={!config ? '…' : dayTypeNames.length === 0 ? 'nog niet ingesteld' : dayTypeNames.length}
@@ -493,6 +493,8 @@ export function CoverageView() {
       <PageHeader
         title="Openstaande diensten"
         actions={(
+          <>
+          <VersheidRegel {...zl.versheid} />
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} />} aria-label="Vorige maand" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} />
             <span className="px-3 text-sm font-bold tracking-tight capitalize min-w-[130px] text-center tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
@@ -507,13 +509,14 @@ export function CoverageView() {
               Instellen
             </Button>
           </div>
+          </>
         )}
       />
 
       {/* Desktop: instellingen + gatenlijst als hoofdkolom, het zijvak
           ernaast; de maandnavigatie blijft in de kop. */}
       <ZijvakLayout zijvak={zijvak}>
-      {error && <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>}
+      {zl.fout && <Foutkaart compact={zl.laatstGeladen !== null} boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       {/* === Instellingen === */}
       {showConfig && (
@@ -902,7 +905,7 @@ export function CoverageView() {
         </FilterChip>
       </div>
 
-      {loading ? (
+      {zl.fout && zl.laatstGeladen === null ? null : zl.laden ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i}><SkeletonTile /></div>

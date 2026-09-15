@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, IdCard, ListChecks, Repeat, Smartphone, UserX } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, CalendarClock, CalendarDays, CheckCircle2, IdCard, ListChecks, Repeat, Smartphone, UserX } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
@@ -234,6 +234,21 @@ export function WerkvoorraadMenu({
               </button>
             ))
           )}
+          {/* Voet: het volledige scherm (15-09). Het menu blijft een samenvatting
+              per soort; wie álles wil zien (of sorteren, filteren, zoeken) gaat
+              naar /werkvoorraad. */}
+          <div className="mt-1 border-t fine-divider pt-1">
+            {/* rauw: dropdown-menurij (role=menuitem), zelfde uiterlijk als de rijen erboven. */}
+            <button
+              role="menuitem"
+              onClick={ga('werkvoorraad')}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-600 transition-colors duration-fast hover:bg-slate-100/70 hover:text-slate-900"
+            >
+              <span className="shrink-0 text-slate-500"><ListChecks size={16} /></span>
+              <span className="flex-1">Volledige werkvoorraad</span>
+              <ArrowUpRight size={14} className="shrink-0 text-slate-400" />
+            </button>
+          </div>
         </motion.div>
       )}
       </AnimatePresence>

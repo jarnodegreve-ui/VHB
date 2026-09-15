@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Bus, Pencil, Plus, RefreshCw, ShieldCheck, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, Bus, Pencil, Plus, ShieldCheck, Wrench, Zap } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
 import {
@@ -8,12 +8,14 @@ import {
   VOERTUIG_VERVAL_LABEL, VOERTUIG_VERVAL_SOORTEN, WERKTYPE_LABEL, voertuigNaam, type VoertuigVervalSoort,
 } from '../../../shared/techniek';
 import { cn, notify } from '../../lib/ui';
+import { useZelfLadend } from '../../lib/zelfLadend';
+import { useRouteParam } from '../../app/router';
 import { formatDateHuman, formatRelatief } from '../../lib/format';
 import {
   bewaarVoertuig, dagenTot, laadDefecten, laadVoertuigVervaldata, laadVoertuigen, laadWerkprestaties, maakVoertuig, TechniekFout,
   urenTekst, verwijderVoertuig, zetVoertuigVervaldatum, type Defect, type Vehicle, type VehicleBody, type VehicleExpiry, type Werkprestatie,
 } from '../../lib/techniek';
-import { EmptyState, PageHeader, PageShell, ViewLoader } from '../../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel, ViewLoader } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
@@ -48,8 +50,6 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
   const [voertuigen, setVoertuigen] = useState<Vehicle[]>([]);
   const [expiries, setExpiries] = useState<VehicleExpiry[]>([]);
   const [openDefecten, setOpenDefecten] = useState<Defect[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('actief');
   const [categorie, setCategorie] = useState<CategorieFilter>('alle');
   const [zoek, setZoek] = useState('');
@@ -58,19 +58,21 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
   const sort = useSort<string>('kort');
   const voorkeur = useTabelVoorkeur('voertuigen', KOLOMMEN);
 
-  const load = async () => {
-    setIsLoading(true);
-    try {
-      const [v, e, d] = await Promise.all([laadVoertuigen(), laadVoertuigVervaldata(), laadDefecten({ status: 'open', limit: 2000 })]);
-      setVoertuigen(v); setExpiries(e); setOpenDefecten(d);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon de voertuigen niet laden.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  useEffect(() => { void load(); }, []);
+  const zl = useZelfLadend(async () => {
+    const [v, e, d] = await Promise.all([laadVoertuigen(), laadVoertuigVervaldata(), laadDefecten({ status: 'open', limit: 2000 })]);
+    setVoertuigen(v); setExpiries(e); setOpenDefecten(d);
+  }, { boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de voertuigen niet laden.') });
+
+  // Deeplink /techniek/voertuigen/<id> (bv. "Open bus" uit het gele boek):
+  // de fiche opent zodra de lijst er is; de parameter gaat daarna weg zodat
+  // sluiten niet opnieuw opent.
+  const [voertuigParam, zetVoertuigParam] = useRouteParam(0);
+  useEffect(() => {
+    if (!voertuigParam || voertuigen.length === 0) return;
+    const v = voertuigen.find((x) => x.id === voertuigParam);
+    if (v) setDetail(v);
+    zetVoertuigParam(null);
+  }, [voertuigParam, voertuigen, zetVoertuigParam]);
 
   const perVoertuig = useMemo(() => {
     const m = new Map<string, Partial<Record<VoertuigVervalSoort, VehicleExpiry>>>();
@@ -141,12 +143,12 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
         title="Voertuigen"
         actions={(
           <>
-            <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>
+            <VersheidRegel {...zl.versheid} />
             {staf && <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ voertuig: null })}>Voertuig toevoegen</Button>}
           </>
         )}
       />
-      {error && <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>}
+      {zl.fout && voertuigen.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat icon={<Bus size={16} />} tone="slate" label="Actief" value={tellers.actief} sub="in dienst" onClick={() => setFilter('actief')} className={cn(filter === 'actief' && 'ring-2 ring-oker-500/40')} />
@@ -155,7 +157,9 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
         <OpsStat icon={<Wrench size={16} />} tone={tellers.metDefect > 0 ? 'amber' : 'slate'} label="Met open defect" value={tellers.metDefect} sub="in het gele boek" />
       </div>
 
-      {isLoading && voertuigen.length === 0 && !error ? (
+      {zl.fout && voertuigen.length === 0 ? (
+        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+      ) : zl.laden && voertuigen.length === 0 ? (
         <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Voertuigen worden geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
         </Card>

@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
-  Hash, HeartPulse, IdCard, Inbox, LayoutDashboard, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
+  Hash, HeartPulse, IdCard, Inbox, LayoutDashboard, ListChecks, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
   Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route } from 'lucide-react';
 import type { Role, View } from '../types';
 
@@ -62,6 +62,7 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'contacten', pad: 'contacten', label: 'Contacten', omschrijving: 'Contactgegevens van alle medewerkers.', icoon: Phone, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'bezetting', pad: 'maandplanning', label: 'Maandplanning', omschrijving: 'Wie rijdt welke dienst, zoals in het chauffeurslokaal.', icoon: Users, sectie: 'algemeen', breed: true, rollen: RIJDEND_EN_STAF },
   // — Beheer › Planning —
+  { view: 'werkvoorraad', pad: 'werkvoorraad', label: 'Werkvoorraad', omschrijving: 'Alles wat op een beslissing van de planning wacht, op één scherm.', icoon: ListChecks, sectie: 'planning', rollen: STAF },
   { view: 'beheer-roosters', pad: 'beheer/roosters', label: 'Beheer roosters', omschrijving: 'Importeer en herbouw de planning.', icoon: CalendarCog, sectie: 'planning', rollen: STAF },
   { view: 'planning-matrix', pad: 'beheer/planningsoverzicht', label: 'Planningsoverzicht', omschrijving: 'Controleer de geïmporteerde matrix per dag en chauffeur.', icoon: FileText, sectie: 'planning', breed: true, rollen: STAF },
   { view: 'planning-codes', pad: 'beheer/planningscodes', label: 'Planningscodes', omschrijving: 'Betekenis van matrixcodes.', icoon: Hash, sectie: 'planning', rollen: STAF },

@@ -1,10 +1,12 @@
-import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { versheidTekst, type Versheid } from '../lib/zelfLadend';
 import { Button } from './primitives';
 import { Modal } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
 import { BrandMotief, type MotiefVariant } from './BrandMotief';
+import { Fout } from './illustraties';
 
 export function PageShell({
   children,
@@ -231,6 +233,83 @@ export function EmptyState({
       {message ? <p className="mx-auto mt-1 max-w-md text-body-sm text-slate-500">{message}</p> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
+  );
+}
+
+/**
+ * Dé laadfout van een scherm (next-level 2, punt 17): één taal voor "dit kon
+ * niet laden" met altijd een uitweg. EmptyState in de fout-variant met de
+ * Fout-illustratie, een korte boodschap en "Opnieuw proberen" (secundair,
+ * met bezig-staat zolang de retry loopt). `compact` = één rij, voor bóven
+ * een lijst die nog oude data toont (mislukte verversing) of in een kaart.
+ * Schrijffouten blijven toasts; dit is alleen voor laden.
+ */
+export function Foutkaart({
+  boodschap,
+  titel,
+  onOpnieuw,
+  bezig,
+  offline = false,
+  compact = false,
+  className,
+}: {
+  /** Korte boodschap ("Kon het gele boek niet laden."). */
+  boodschap: string;
+  titel?: string;
+  /** Retry; een Promise houdt de knop bezig tot hij afgerond is. */
+  onOpnieuw?: () => void | Promise<void>;
+  /** Bezig-staat van buitenaf (bv. `zl.laden`); anders volgt de kaart de Promise. */
+  bezig?: boolean;
+  /** Zonder bereik: de knop blijft, de boodschap zegt waarom. */
+  offline?: boolean;
+  compact?: boolean;
+  className?: string;
+}) {
+  const [eigenBezig, setEigenBezig] = useState(false);
+  const isBezig = bezig ?? eigenBezig;
+  const opnieuw = async () => {
+    if (!onOpnieuw || isBezig) return;
+    const r = onOpnieuw();
+    if (r && typeof (r as Promise<void>).then === 'function') {
+      setEigenBezig(true);
+      try { await r; } finally { setEigenBezig(false); }
+    }
+  };
+  const knop = onOpnieuw ? (
+    <Button variant="secondary" size={compact ? 'sm' : 'md'} icon={<RefreshCw size={16} />} bezig={isBezig} onClick={() => void opnieuw()}>
+      Opnieuw proberen
+    </Button>
+  ) : undefined;
+  return (
+    <div role="alert" className={className}>
+      <EmptyState
+        compact={compact}
+        variant="fout"
+        illustratie={<Fout />}
+        title={titel ?? (compact ? 'Bijwerken is niet gelukt' : 'Dit kon niet laden')}
+        message={offline ? `${boodschap} Je bent offline; probeer opnieuw zodra er bereik is.` : boodschap}
+        action={knop}
+      />
+    </div>
+  );
+}
+
+/**
+ * Stille versheidsregel "Bijgewerkt om 14:32" (text-micro) op één vaste
+ * plek: rechts in de PageHeader-acties, vóór de knoppen. Tijdens een stille
+ * verversing "Bijwerken…", zonder bereik "Offline · …". Vóór de eerste laad
+ * rendert hij niets, zodat de kop niet verspringt.
+ */
+export function VersheidRegel({ className, ...versheid }: Versheid & { className?: string }) {
+  const tekst = versheidTekst(versheid);
+  if (!tekst) return null;
+  return (
+    // Mobiel: eigen regel onder de knoppen (basis-full + order-last), zodat de
+    // ene gouden knop niet door een tijdstip van zijn plek geduwd wordt;
+    // vanaf md gewoon links van de knoppen op dezelfde rij.
+    <p className={cn('text-micro order-last basis-full self-center whitespace-nowrap text-right md:order-none md:basis-auto md:text-left', className)} aria-live="polite">
+      {tekst}
+    </p>
   );
 }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { View } from '../types';
 import { ALLE_VIEWS, ROUTES, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
+import { leesStartschermLokaal } from '../lib/startscherm';
 
 /**
  * Lichtgewicht router op de History API — geen library, geen <Route>-boom.
@@ -68,6 +69,13 @@ function normaliseerStartUrl() {
     return;
   }
   if (pathname === '/' || pathname === '') {
+    // Gekozen startscherm (Instellingen, punt 15): dat wint van "laatst
+    // geopend". 'dashboard' = altijd op `/` blijven; leeg = het oude gedrag.
+    const startscherm = leesStartschermLokaal();
+    if (startscherm) {
+      if (startscherm !== 'dashboard') window.history.replaceState(null, '', padVan(startscherm) + search + hash);
+      return;
+    }
     let opgeslagen: string | null = null;
     try { opgeslagen = window.localStorage.getItem(OPGESLAGEN_VIEW); } catch { /* privémodus */ }
     if (opgeslagen && opgeslagen !== 'dashboard' && (ALLE_VIEWS as readonly string[]).includes(opgeslagen)) {
@@ -148,6 +156,53 @@ export function useRouteParam(index = 0): [string | null, (waarde: string | null
     else volgende[index] = waarde;
     navigeer(view, { params: volgende, replace: true });
   }, [index, navigeer, params, view]);
+  return [huidig, zet];
+}
+
+/**
+ * Het geselecteerde record in de URL: `/omleidingen/<id>`, `/beheer/updates/<id>`,
+ * `/maandplanning/2026-09/2026-09-15` (dag = segment 1 na de maand). Daarmee
+ * is een selectie deelbaar ("kijk hier eens naar"), overleeft ze een refresh
+ * en kan een melding rechtstreeks naar één item wijzen.
+ *
+ * Schrijven is altijd `replace`: van record naar record wisselen mag de
+ * historiek niet volspammen. De terugknop op mobiel werkt via de overlay
+ * zelf: de SlideOver van het DetailPaneel pusht met `useHistoryDismiss` een
+ * eigen entry zodra hij opent (ná onze replace), en die entry sluit hem weer.
+ * Op `onClose` wist de view het record (`zet(null)`), dus de URL landt weer
+ * op de lijst. Views schrijven alleen bij een expliciete klik: de
+ * desktop-voorselectie (eerste record, `useStandaardKeuze`) blijft buiten de
+ * URL, anders droeg elke lijstpagina een id in de adresbalk.
+ *
+ * `opties.view`: de route waar dit record bij hoort. Staat het scherm ergens
+ * anders (test, ingebed blok), dan valt de hook terug op lokale state en
+ * raakt hij de URL niet. De zetter leest de URL vers in plaats van uit de
+ * render-closure, zodat twee zetters na elkaar (maand, dan dag) elkaar niet
+ * overschrijven. Ontbreekt een voorliggend segment (dag zonder maand), dan
+ * schrijft hij niets: `/maandplanning/2026-09-15` zou als maand gelezen worden.
+ */
+export function useRecordParam(index = 0, opties: { view?: View } = {}): [string | null, (waarde: string | null) => void] {
+  const { view, params } = useRoute();
+  const opRoute = opties.view === undefined || opties.view === view;
+  const [lokaal, zetLokaal] = useState<string | null>(null);
+  const huidig = opRoute ? params[index] ?? null : lokaal;
+  const doelView = opties.view ?? view;
+  const zet = useCallback((waarde: string | null) => {
+    if (!opRoute) { zetLokaal(waarde); return; }
+    const actueel = lees();
+    if (actueel.view !== doelView) return;
+    const volgende = [...actueel.params];
+    if (waarde == null) {
+      if (volgende.length <= index) return;
+      volgende.splice(index);
+    } else {
+      if (volgende.length < index) return;
+      if (volgende[index] === waarde && volgende.length === index + 1) return;
+      volgende.splice(index);
+      volgende[index] = waarde;
+    }
+    navigeer(doelView, { params: volgende, replace: true });
+  }, [doelView, index, opRoute]);
   return [huidig, zet];
 }
 

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Bell, Bus, Check, Download, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { PageHeader, PageShell, EmptyState } from '../../components/ui';
+import { PageHeader, PageShell, EmptyState, Foutkaart, VersheidRegel } from '../../components/ui';
 import { Card, CardHeader } from '../../components/Card';
 import { Badge, Button, Chip, FilterChip, IconButton, Meter, MeterVulling, MicroLabel, Segmented, StatusBadge, Switch, TableShell, Td, Th } from '../../components/primitives';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
@@ -380,7 +380,7 @@ export function DesignsysteemView() {
         <Paginering totaal={48} perPagina={20} pagina={pagina} onPagina={setPagina} />
       </Sectie>
 
-      <Sectie id="feedback" titel="Feedback" uitleg="Skeletons tijdens het laden, EmptyState met een volgende stap, toasts kort en met hooguit één actie.">
+      <Sectie id="feedback" titel="Feedback" uitleg="Skeletons tijdens het laden, EmptyState met een volgende stap, toasts kort en met hooguit één actie. Laadfouten altijd als Foutkaart met “Opnieuw proberen”; de versheid van een zelf-ladend scherm staat als stille regel rechts in de PageHeader-acties (useZelfLadend).">
         <Rij label="Skeleton">
           <div className="w-full space-y-2"><SkeletonRow /><SkeletonRow /></div>
           <SkeletonTile className="w-40" />
@@ -394,8 +394,16 @@ export function DesignsysteemView() {
         <div className="grid gap-3 lg:grid-cols-3">
           <EmptyState variant="leeg" title="Nog geen omleidingen" message="Voeg de eerste omleiding toe; chauffeurs zien ze meteen op Mijn dag." action={<Button variant="primary" size="sm"><Plus size={16} />Omleiding toevoegen</Button>} />
           <EmptyState variant="klaar" title="Alles afgehandeld" message="Er staan geen aanvragen meer open." />
-          <EmptyState variant="fout" title="Dit scherm kon niet laden" message="Probeer het opnieuw; blijft het misgaan, meld het via het menu." action={<Button variant="secondary" size="sm">Opnieuw proberen</Button>} />
+          <Foutkaart boodschap="Kon het gele boek niet laden." onOpnieuw={() => new Promise<void>((r) => setTimeout(r, 1200))} />
         </div>
+        <Rij label="Foutkaart compact">
+          <div className="w-full"><Foutkaart compact boodschap="Kon de vervaldata niet verversen." onOpnieuw={() => new Promise<void>((r) => setTimeout(r, 1200))} /></div>
+        </Rij>
+        <Rij label="Versheid">
+          <span className="rounded-lg bg-surface-muted px-2.5 py-1"><VersheidRegel laatstGeladen={Date.now()} verversen={false} online /></span>
+          <span className="rounded-lg bg-surface-muted px-2.5 py-1"><VersheidRegel laatstGeladen={Date.now()} verversen online /></span>
+          <span className="rounded-lg bg-surface-muted px-2.5 py-1"><VersheidRegel laatstGeladen={Date.now()} verversen={false} online={false} /></span>
+        </Rij>
         <Rij label="Toast">
           <Button variant="secondary" size="sm" onClick={() => notify('Opgeslagen.', 'success')}>Succes</Button>
           <Button variant="secondary" size="sm" onClick={() => notify('Dat is niet gelukt. Probeer opnieuw.', 'error')}>Fout</Button>

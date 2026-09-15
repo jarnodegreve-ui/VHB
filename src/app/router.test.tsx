@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useRoute } from './router';
+import { useRecordParam, useRoute } from './router';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 
 /**
@@ -125,6 +125,54 @@ describe('navigeren vanuit de mobiele zijbalk', () => {
 
     await act(async () => { window.history.back(); await tikken(); });
     expect(zichtbareView()).toBe('verlof');
+    await act(async () => { root.unmount(); });
+  });
+});
+
+/** Master-detail-attrap: een lijst die het record in de URL kiest (punt 13). */
+function Lijst({ view }: { view: 'omleidingen' | 'updates' }) {
+  const [id, zetId] = useRecordParam(0, { view });
+  return (
+    <>
+      {/* rauw: testattrap */}
+      <button type="button" data-knop="kies-a" onClick={() => zetId('a')} />
+      {/* rauw: testattrap */}
+      <button type="button" data-knop="kies-b" onClick={() => zetId('b 1')} />
+      {/* rauw: testattrap */}
+      <button type="button" data-knop="wis" onClick={() => zetId(null)} />
+      <span data-record={id ?? ''} />
+    </>
+  );
+}
+const gekozenRecord = () => document.querySelector('[data-record]')?.getAttribute('data-record');
+
+describe('useRecordParam: selectie in de URL', () => {
+  it('leest het record uit het pad en schrijft met replace (geen extra stap per wissel)', async () => {
+    window.history.replaceState(null, '', '/omleidingen/x');
+    const lengte = window.history.length;
+    const root = await monteer(<Lijst view="omleidingen" />);
+    expect(gekozenRecord()).toBe('x');
+
+    await act(async () => { klik('kies-a'); await tikken(); });
+    expect(window.location.pathname).toBe('/omleidingen/a');
+    expect(gekozenRecord()).toBe('a');
+    await act(async () => { klik('kies-b'); await tikken(); });
+    expect(window.location.pathname).toBe('/omleidingen/b%201');
+    expect(gekozenRecord()).toBe('b 1');
+    expect(window.history.length).toBe(lengte);
+
+    await act(async () => { klik('wis'); await tikken(); });
+    expect(window.location.pathname).toBe('/omleidingen');
+    expect(gekozenRecord()).toBe('');
+    await act(async () => { root.unmount(); });
+  });
+
+  it('valt terug op lokale state als het scherm niet op zijn route staat', async () => {
+    window.history.replaceState(null, '', '/verlof');
+    const root = await monteer(<Lijst view="updates" />);
+    await act(async () => { klik('kies-a'); await tikken(); });
+    expect(gekozenRecord()).toBe('a');
+    expect(window.location.pathname).toBe('/verlof');
     await act(async () => { root.unmount(); });
   });
 });

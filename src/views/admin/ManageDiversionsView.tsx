@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, Upload, X } from 'lucide-react';
 import { LijnTegel } from '../../components/LijnTegel';
@@ -15,6 +15,7 @@ import { diversionSchema } from '../../../shared/schemas/diversion';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
 import { ActieMenu } from '../../components/ActieMenu';
+import { useRecordParam } from '../../app/router';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
  *  actief tot hij verwijderd wordt. */
@@ -93,6 +94,11 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     }
   };
 
+  // De expliciet gekozen omleiding staat in de URL (/beheer/omleidingen/<id>):
+  // deelbaar met een collega, en een refresh houdt het formulier open. De
+  // desktop-voorselectie (useStandaardKeuze) schrijft níét, alleen een klik.
+  const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-omleidingen' });
+
   const handleOpenAdd = () => {
     setEditingId(null);
     setFormData({
@@ -105,6 +111,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     setPdfFile(null);
     setFouten({});
     setPaneelOpen(true);
+    // Het lege formulier hoort bij geen record: anders zou een refetch de
+    // URL-keuze hieronder opnieuw openen en het nieuwe formulier kapen.
+    zetRecordParam(null);
   };
 
   const handleOpenEdit = (div: Diversion) => {
@@ -122,7 +131,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     setPaneelOpen(true);
   };
 
-  const sluitPaneel = () => setPaneelOpen(false);
+  const sluitPaneel = () => { setPaneelOpen(false); zetRecordParam(null); };
+
+  // Klik in de lijst: formulier openen én de keuze in de URL zetten.
+  const kiesOmleiding = (div: Diversion) => { handleOpenEdit(div); zetRecordParam(div.id); };
 
   // Desktop: de eerste omleiding staat standaard open in het paneel; na
   // verwijderen schuift de keuze door naar de buur, of sluit het paneel als
@@ -152,6 +164,19 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   });
 
   const bewerkte = editingId ? diversions.find((d) => d.id === editingId) ?? null : null;
+
+  // URL → paneel (deeplink, refresh, melding): alleen als de URL iets anders
+  // zegt dan wat al open staat; een onbekend id doet niets (lijst zonder
+  // selectie, desktop kiest dan gewoon het eerste item). Een refetch terwijl
+  // hetzelfde record open staat raakt het formulier niet aan. Bewust ná
+  // useStandaardKeuze: beide effecten draaien in dezelfde commit en de
+  // laatste schrijver wint, anders kaapte de desktop-voorselectie de link.
+  useEffect(() => {
+    if (!recordParam || (paneelOpen && editingId === recordParam)) return;
+    const div = diversions.find((d) => d.id === recordParam);
+    if (div) handleOpenEdit(div);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordParam, diversions]);
 
   // Annuleren: desktop zet het formulier terug op het item (het paneel blijft
   // naast de lijst staan); mobiel sluit de SlideOver.
@@ -238,6 +263,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     } else {
       onSave(diversions.filter((d) => d.id !== id));
     }
+    // De URL mag niet op een verwijderd record blijven wijzen.
+    if (recordParam === id) zetRecordParam(null);
     // Stond het item open, dan regelt useStandaardKeuze de rest: desktop
     // schuift door naar de buur, en zonder buur (of op mobiel) sluit het
     // paneel — het formulier mag niet op een verwijderd record blijven
@@ -262,7 +289,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             {/* rauw: lijstrij van het master-detail (kaart als knop: icoontegel + titel + badges + periode + chevron) — opent het bewerkpaneel */}
             <button
               type="button"
-              onClick={() => handleOpenEdit(div)}
+              onClick={() => kiesOmleiding(div)}
               className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-slate-50/50 md:px-4"
             >
               <div className="flex min-w-0 items-center gap-3">

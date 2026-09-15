@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Clock, ClipboardList, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { BarChart3, Clock, ClipboardList, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
 import { WERKCODES, WERKCODE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werkcode } from '../../../shared/techniek';
 import { cn, notify } from '../../lib/ui';
+import { useZelfLadend } from '../../lib/zelfLadend';
 import { formatShortDay } from '../../lib/format';
 import { metOngedaan } from '../../lib/ongedaan';
 import {
   bewaarWerkprestatie, laadVoertuigen, laadWerkRapport, laadWerkprestaties, maakWerkprestatie, TechniekFout, urenTekst, urenTussen,
   vandaagIso, verwijderWerkprestatie, type Vehicle, type WerkRapport, type Werkprestatie, type WerkprestatieBody,
 } from '../../lib/techniek';
-import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { LegeLijst } from '../../components/illustraties';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
@@ -39,8 +40,6 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
   const [periode, setPeriode] = useState<Periode>('maand');
   const [rijen, setRijen] = useState<Werkprestatie[]>([]);
   const [voertuigen, setVoertuigen] = useState<Vehicle[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [mecanicienFilter, setMecanicienFilter] = useState('');
   const [bewerk, setBewerk] = useState<{ prestatie: Werkprestatie | null } | null>(null);
   const [rapport, setRapport] = useState<WerkRapport | null>(null);
@@ -50,17 +49,10 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
   const vandaag = vandaagIso();
   const van = periode === 'week' ? isoMin(vandaag, 7) : periode === 'maand' ? isoMin(vandaag, 31) : isoMin(vandaag, 92);
 
-  const load = async () => {
-    setIsLoading(true);
-    try {
-      const [w, v] = await Promise.all([laadWerkprestaties({ van, mecanicienId: staf ? mecanicienFilter || undefined : undefined, limit: 2000 }), laadVoertuigen()]);
-      setRijen(w); setVoertuigen(v); setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon de werkprestaties niet laden.');
-    } finally { setIsLoading(false); }
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void load(); }, [van, mecanicienFilter]);
+  const zl = useZelfLadend(async () => {
+    const [w, v] = await Promise.all([laadWerkprestaties({ van, mecanicienId: staf ? mecanicienFilter || undefined : undefined, limit: 2000 }), laadVoertuigen()]);
+    setRijen(w); setVoertuigen(v);
+  }, { deps: [van, mecanicienFilter], boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de werkprestaties niet laden.') });
   useEffect(() => {
     if (tab !== 'rapport') return;
     setRapportLaden(true);
@@ -97,12 +89,12 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
         title="Werkprestaties"
         actions={(
           <>
-            <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>
+            <VersheidRegel {...zl.versheid} />
             <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>
           </>
         )}
       />
-      {error && <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>}
+      {zl.fout && rijen.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <Segmented<Tab>
@@ -137,7 +129,9 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
             )}
           </div>
 
-          {isLoading && rijen.length === 0 && !error ? (
+          {zl.fout && rijen.length === 0 ? (
+            <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+          ) : zl.laden && rijen.length === 0 ? (
             <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Werkprestaties worden geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
           ) : rijen.length === 0 ? (
             <EmptyState illustratie={<LegeLijst />} title="Nog geen werkprestaties in deze periode" message="Registreer wat je vandaag aan welke bus deed." action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>} />

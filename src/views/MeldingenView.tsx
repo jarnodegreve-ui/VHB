@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw, Wrench } from 'lucide-react';
 import { useAppDataContext } from '../app/AppDataContext';
-import { routeUitUrl } from '../app/router';
+import { navigeer, routeUitUrl } from '../app/router';
 import { MELDING_SOORT_LABEL } from '../../shared/schemas/meldingen';
 import { isoDate } from '../lib/datum';
 import { filterMeldingen, groepeerPerDag, soortenIn, tijdVan, type MeldingFilter } from '../lib/meldingen';
@@ -46,7 +46,11 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
     if (!m.gelezenOp) void markeerMeldingenGelezen([m.id]);
     if (!m.doel || !onNavigate) return;
     const route = routeUitUrl('/' + m.doel.replace(/^\/+/, ''));
-    if (route) onNavigate(route.view);
+    if (!route) return;
+    onNavigate(route.view);
+    // Doel met record (`updates/u2`): het id erbij zetten, zonder extra
+    // history-entry (useRecordParam leest het in de view).
+    if (route.params.length > 0) navigeer(route.view, { params: route.params, replace: true });
   };
 
   return (

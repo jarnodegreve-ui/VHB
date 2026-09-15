@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Lock, Plus, RefreshCw, RotateCcw, Trash2, Unlock } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Lock, Plus, RotateCcw, Trash2, Unlock } from 'lucide-react';
 import type { User } from '../../types';
 import { QUAL_VLAGGEN, QUAL_VLAG_LABEL, OPMERKING_MAX, loonCodeSleutel, type QualVlag } from '../../../shared/loon';
 import { cn, notify } from '../../lib/ui';
+import { useZelfLadend } from '../../lib/zelfLadend';
 import { formatDayLong } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import {
   bewaarRij, heropenDag, laadDag, laadLoonCodes, LoonFout, neemPlanningOver, openDag, schuifDag, sluitDag, vandaagIso, verwijderRij, voegRijToe,
   type DagDetail, type DagPrestatie, type DagVoorstel, type LoonCode,
 } from '../../lib/loon';
-import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
@@ -35,8 +36,6 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   const [detail, setDetail] = useState<DagDetail | null>(null);
   const [voorstel, setVoorstel] = useState<DagVoorstel | null>(null);
   const [codes, setCodes] = useState<LoonCode[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
   const [bevestigSluiten, setBevestigSluiten] = useState(false);
   const [heropenOpen, setHeropenOpen] = useState(false);
@@ -45,21 +44,14 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   const isAdmin = currentUser.role === 'admin';
   void isAdmin;
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [r, c] = await Promise.all([laadDag(datum), codes.length ? Promise.resolve(codes) : laadLoonCodes()]);
-      setCodes(c);
-      if ('detail' in r) { setDetail(r.detail); setVoorstel(null); } else { setDetail(null); setVoorstel(r.voorstel); }
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon de dag niet laden.');
-    } finally {
-      setIsLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datum]);
-  useEffect(() => { void load(); }, [load]);
+  const zl = useZelfLadend(async () => {
+    const [r, c] = await Promise.all([laadDag(datum), codes.length ? Promise.resolve(codes) : laadLoonCodes()]);
+    setCodes(c);
+    if ('detail' in r) { setDetail(r.detail); setVoorstel(null); } else { setDetail(null); setVoorstel(r.voorstel); }
+  }, { deps: [datum], boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de dag niet laden.') });
+  // Stil herladen na een schrijfactie die de hele dag raakt (overnemen,
+  // mislukte rij-patch): geen skelet over een gevulde tabel.
+  const load = () => zl.ververs();
 
   const codeMap = useMemo(() => new Map(codes.map((c) => [c.code, c])), [codes]);
   const dienstCodes = useMemo(() => codes.filter((c) => c.dienstType === 'lijn').sort((a, b) => a.code.localeCompare(b.code, 'nl', { numeric: true })), [codes]);
@@ -128,7 +120,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
         title="Dagafsluiting"
         actions={(
           <>
-            <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>
+            <VersheidRegel {...zl.versheid} />
             {detail && !afgesloten && <Button variant="primary" icon={<Lock size={16} />} onClick={() => setBevestigSluiten(true)} disabled={bezig}>Dag afsluiten</Button>}
             {detail && afgesloten && (
               <ActieMenu size="sm" items={[{ label: 'Dag heropenen', icon: <Unlock size={16} />, onClick: () => setHeropenOpen(true) }]} />
@@ -147,9 +139,11 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
         <Button variant="ghost" size="sm" icon={<Calendar size={14} />} onClick={() => zetDatum(schuifDag(vandaagIso(), -1))}>Gisteren</Button>
       </Card>
 
-      {error && <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>}
+      {zl.fout && (detail || voorstel) && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
-      {isLoading && !detail && !voorstel ? (
+      {zl.fout && !detail && !voorstel ? (
+        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+      ) : zl.laden && !detail && !voorstel ? (
         <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Dag wordt geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
       ) : voorstel ? (
         <Card className="space-y-4">

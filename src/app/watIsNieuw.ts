@@ -24,6 +24,17 @@ export const WAT_IS_NIEUW_TONEN = false;
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-17',
+    titel: 'Werkvoorraad op één scherm',
+    regels: {
+      staf: [
+        'Nieuw scherm Werkvoorraad (Beheer › Planning): alles wat op een beslissing wacht, oudste eerst, met een filter per soort.',
+        'Het Open taken-paneel op het dashboard en het menu in de topbar linken er nu naartoe in plaats van “+N niet getoond”.',
+      ],
+    },
+    bekijk: { staf: 'werkvoorraad' },
+  },
+  {
     id: '2026-09-16',
     titel: 'Dienstwissel 1-op-1, verloftelling en defect melden',
     regels: {

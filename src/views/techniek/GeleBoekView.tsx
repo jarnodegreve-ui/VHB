@@ -1,12 +1,15 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Pencil, Plus, Printer, RefreshCw, RotateCcw, Wrench, XCircle } from 'lucide-react';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { AlertTriangle, Bus, CheckCircle2, Clock, Pencil, Phone, Plus, Printer, RotateCcw, Wrench, XCircle } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
 import { DEFECT_STATUS_LABEL, WERKTYPES, WERKTYPE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werktype } from '../../../shared/techniek';
-import { cn, notify, openPdfInNewTab } from '../../lib/ui';
+import { cn, notify, openPdfInNewTab, telHref } from '../../lib/ui';
+import { useZelfLadend } from '../../lib/zelfLadend';
+import { navigeer } from '../../app/router';
+import { useAppDataContext } from '../../app/AppDataContext';
 import { formatDateHuman, formatRelatief } from '../../lib/format';
 import { dagenTot, laadDefecten, maakWerkprestatie, TechniekFout, vandaagIso, wijzigDefect, urenTekst, type Defect } from '../../lib/techniek';
-import { EmptyState, PageHeader, PageShell, ViewLoader } from '../../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel, ViewLoader } from '../../components/ui';
 import { AllesGedaan } from '../../components/illustraties';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
@@ -17,6 +20,7 @@ import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
 import { Badge, Button, FilterChip, Switch, Td, Th } from '../../components/primitives';
 import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
+import type { ActieMenuItem } from '../../components/ActieMenu';
 
 const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
 
@@ -30,14 +34,17 @@ const WERKTYPE_TONE: Record<Werktype, 'red' | 'amber' | 'blue' | 'oker'> = { T: 
  * bus, standaard alleen de open meldingen (het Access-rapport "Aangevraagde
  * werken"), met de ouderdom en de opvolging. De technieker zet een melding op
  * uitgevoerd (datum, wat er gedaan is, manuren) en kan meteen een
- * werkprestatie laten aanmaken. Self-fetching (patroon VervaldataView),
- * ververst bij terugkeer naar het tabblad (geen realtime: twee techniekers).
+ * werkprestatie laten aanmaken. Self-fetching via useZelfLadend (laad, fout,
+ * focus-refresh, versheid; geen realtime: twee techniekers).
  */
 export function GeleBoekView({ currentUser }: { currentUser: User }) {
+  // Telefoonnummer van de melder voor "Melder bellen"; ontbreekt het, dan
+  // ontbreekt het menu-item.
+  const { users } = useAppDataContext();
   const [rijen, setRijen] = useState<Defect[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('open');
+  // Vervolg op de tegel "Ouder dan 14 dagen": alleen die meldingen tonen.
+  const [alleenOud, setAlleenOud] = useState(false);
   const [zoek, setZoek] = useState('');
   const [busFilter, setBusFilter] = useState('');
   const [melden, setMelden] = useState(false);
@@ -45,35 +52,10 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
   const [bewerken, setBewerken] = useState<Defect | null>(null);
   const sort = useSort<string>('gemeld', 'desc');
 
-  const load = useCallback(async (stil = false) => {
-    if (!stil) setIsLoading(true);
-    try {
-      const sinds = filter === 'recent' ? new Date(Date.now() - RECENT_DAGEN * 864e5).toISOString().slice(0, 10) : undefined;
-      const data = await laadDefecten({ status: filter === 'open' ? 'open' : 'alles', sinds, limit: filter === 'alles' ? 2000 : 1000 });
-      setRijen(data);
-      setError(null);
-    } catch {
-      setError('Kon het gele boek niet laden.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filter]);
-
-  useEffect(() => { void load(); }, [load]);
-  // Verversen bij terugkeer naar het tabblad (geen realtime: twee techniekers
-  // en een planner hebben genoeg aan "bij focus").
-  useEffect(() => {
-    let laatste = Date.now();
-    const bijFocus = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (Date.now() - laatste < 60_000) return;
-      laatste = Date.now();
-      void load(true);
-    };
-    document.addEventListener('visibilitychange', bijFocus);
-    window.addEventListener('focus', bijFocus);
-    return () => { document.removeEventListener('visibilitychange', bijFocus); window.removeEventListener('focus', bijFocus); };
-  }, [load]);
+  const zl = useZelfLadend(async () => {
+    const sinds = filter === 'recent' ? new Date(Date.now() - RECENT_DAGEN * 864e5).toISOString().slice(0, 10) : undefined;
+    setRijen(await laadDefecten({ status: filter === 'open' ? 'open' : 'alles', sinds, limit: filter === 'alles' ? 2000 : 1000 }));
+  }, { deps: [filter], boodschap: 'Kon het gele boek niet laden.' });
 
   const vandaag = vandaagIso();
   const ouderdom = (d: Defect) => -dagenTot(d.gemeldOp.slice(0, 10), vandaag);
@@ -97,6 +79,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
 
   const zoekTerm = zoek.trim().toLowerCase();
   const gefilterd = rijen
+    .filter((r) => !alleenOud || (r.status === 'open' && ouderdom(r) > 14))
     .filter((r) => !busFilter || r.vehicleId === busFilter)
     .filter((r) => !zoekTerm || `${voertuigNaam(r)} ${r.busnr} ${r.omschrijving} ${r.gemeldDoorNaam ?? ''} ${r.uitgevoerdWerk ?? ''}`.toLowerCase().includes(zoekTerm));
   const gesorteerd = sort.sorteer(gefilterd, (r, k) => {
@@ -126,11 +109,17 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       {d.status === 'open' ? `Open, ${ouderdom(d)} d` : DEFECT_STATUS_LABEL[d.status]}
     </Badge>
   );
-  const acties = (d: Defect) => {
-    const items = [];
+  const acties = (d: Defect): ActieMenuItem[] => {
+    const items: ActieMenuItem[] = [];
     if (d.status === 'open') {
       items.push({ label: 'Uitgevoerd', icon: <CheckCircle2 size={16} />, onClick: () => setAfhandelen(d) });
       items.push({ label: 'Bewerken', icon: <Pencil size={16} />, onClick: () => setBewerken(d) });
+      // Uitweg bij een melding die blijft liggen: de melder bellen (nummer
+      // uit de gebruikerslijst) of de voertuigfiche openen; geen wachtstatus
+      // of toewijzing (vervolg, vraagt een schemawijziging).
+      const tel = telHref(users.find((u) => String(u.id) === String(d.gemeldDoor))?.phone);
+      if (tel) items.push({ label: 'Melder bellen', icon: <Phone size={16} />, onClick: () => { window.location.href = tel; }, scheiding: true });
+      items.push({ label: 'Open bus', icon: <Bus size={16} />, onClick: () => navigeer('voertuigen', { params: [d.vehicleId] }), scheiding: !tel });
       items.push({ label: 'Annuleren', icon: <XCircle size={16} />, onClick: () => void zetStatus(d, 'geannuleerd'), gevaarlijk: true, scheiding: true });
     } else {
       items.push({ label: 'Opnieuw openen', icon: <RotateCcw size={16} />, onClick: () => void zetStatus(d, 'open') });
@@ -145,7 +134,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
         title="Gele boek"
         actions={(
           <>
-            <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>
+            <VersheidRegel {...zl.versheid} />
             {/* Papieren gele boek voor de ISO-map (Jarno 13-09): print van het huidige filter, in een nieuw tabblad. */}
             <Button variant="secondary" icon={<Printer size={16} />} onClick={() => openPdfInNewTab(`${window.location.origin}${window.location.pathname}?print-gele-boek=${filter === 'open' ? 'open' : 'alles'}`)}>Afdrukken</Button>
             <Button variant="primary" icon={<Plus size={16} />} onClick={() => setMelden(true)}>Melding toevoegen</Button>
@@ -153,16 +142,18 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
         )}
       />
 
-      {error && <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>}
+      {zl.fout && rijen.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <OpsStat icon={<Wrench size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub={tellers.open === 1 ? 'melding wacht' : 'meldingen wachten'} onClick={() => { setFilter('open'); setBusFilter(''); }} className={cn(filter === 'open' && 'ring-2 ring-oker-500/40')} />
-        <OpsStat icon={<Clock size={16} />} tone={tellers.oud > 0 ? 'red' : 'slate'} label="Ouder dan 14 dagen" value={tellers.oud} sub={tellers.oud > 0 ? 'blijft liggen' : 'niets blijft liggen'} />
+        <OpsStat icon={<Wrench size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub={tellers.open === 1 ? 'melding wacht' : 'meldingen wachten'} onClick={() => { setFilter('open'); setBusFilter(''); setAlleenOud(false); }} className={cn(filter === 'open' && !alleenOud && 'ring-2 ring-oker-500/40')} />
+        <OpsStat icon={<Clock size={16} />} tone={tellers.oud > 0 ? 'red' : 'slate'} label="Ouder dan 14 dagen" value={tellers.oud} sub={tellers.oud > 0 ? 'blijft liggen, bekijk ze' : 'niets blijft liggen'} onClick={() => { setFilter('open'); setAlleenOud((v) => !v); }} className={cn(alleenOud && 'ring-2 ring-oker-500/40')} />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.technisch > 0 ? 'amber' : 'slate'} label="Technisch" value={tellers.technisch} sub="open, voor de garage" />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.lijn > 0 ? 'oker' : 'slate'} label="Voor De Lijn" value={tellers.lijn} sub="open, planning meldt door" />
       </div>
 
-      {isLoading && rijen.length === 0 && !error ? (
+      {zl.fout && rijen.length === 0 ? (
+        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+      ) : zl.laden && rijen.length === 0 ? (
         <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Gele boek wordt geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
         </Card>
@@ -176,9 +167,10 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
               telling={`${gesorteerd.length} van ${rijen.length}`}
               filters={(
                 <>
-                  <FilterChip active={filter === 'open'} onClick={() => setFilter('open')}>Open</FilterChip>
-                  <FilterChip active={filter === 'recent'} onClick={() => setFilter('recent')}>Laatste {RECENT_DAGEN} dagen</FilterChip>
-                  <FilterChip active={filter === 'alles'} onClick={() => setFilter('alles')}>Alles</FilterChip>
+                  <FilterChip active={filter === 'open' && !alleenOud} onClick={() => { setFilter('open'); setAlleenOud(false); }}>Open</FilterChip>
+                  <FilterChip active={alleenOud} onClick={() => { setFilter('open'); setAlleenOud((v) => !v); }}>Ouder dan 14 dagen</FilterChip>
+                  <FilterChip active={filter === 'recent'} onClick={() => { setFilter('recent'); setAlleenOud(false); }}>Laatste {RECENT_DAGEN} dagen</FilterChip>
+                  <FilterChip active={filter === 'alles'} onClick={() => { setFilter('alles'); setAlleenOud(false); }}>Alles</FilterChip>
                   <Select aria-label="Bus" value={busFilter} onChange={(e) => setBusFilter(e.target.value)} className="min-w-0 px-2.5 py-1.5 text-xs">
                     <option value="">Alle bussen</option>
                     {bussen.map(([id, naam]) => <option key={id} value={id}>{naam}</option>)}
@@ -192,9 +184,9 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
             <div className="p-6">
               <EmptyState
                 variant="klaar"
-                illustratie={filter === 'open' && !zoekTerm && !busFilter ? <AllesGedaan /> : undefined}
-                title={zoekTerm ? `Geen meldingen voor “${zoek.trim()}”` : filter === 'open' ? 'Niets open in het gele boek' : 'Geen meldingen voor dit filter'}
-                message={filter === 'open' && !zoekTerm ? 'Alle gemelde defecten zijn afgehandeld.' : 'Pas de zoekterm of het filter aan.'}
+                illustratie={filter === 'open' && !alleenOud && !zoekTerm && !busFilter ? <AllesGedaan /> : undefined}
+                title={zoekTerm ? `Geen meldingen voor “${zoek.trim()}”` : alleenOud ? 'Niets blijft liggen' : filter === 'open' ? 'Niets open in het gele boek' : 'Geen meldingen voor dit filter'}
+                message={alleenOud && !zoekTerm ? 'Geen open melding is ouder dan 14 dagen.' : filter === 'open' && !zoekTerm ? 'Alle gemelde defecten zijn afgehandeld.' : 'Pas de zoekterm of het filter aan.'}
                 action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => setMelden(true)}>Melding toevoegen</Button>}
               />
             </div>
@@ -273,7 +265,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       {bewerken && <BewerkModal defect={bewerken} onClose={() => setBewerken(null)} onKlaar={(d) => { vervang(d); setBewerken(null); }} />}
       {melden && (
         <Suspense fallback={<ViewLoader />}>
-          <LazyDefectMeldenModal open onClose={() => setMelden(false)} currentUser={currentUser} onGemeld={() => void load(true)} />
+          <LazyDefectMeldenModal open onClose={() => setMelden(false)} currentUser={currentUser} onGemeld={() => void zl.ververs()} />
         </Suspense>
       )}
     </PageShell>

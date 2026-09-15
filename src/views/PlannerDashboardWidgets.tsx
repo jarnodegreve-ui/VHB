@@ -11,6 +11,7 @@ import {
   IdCard,
   Inbox,
   KeyRound,
+  Mail,
   MapPin,
   Phone,
   Plus,
@@ -45,6 +46,8 @@ import { PLANNER_TEGELS, pasVoorkeurenToe, stripSpans, useDashboardVoorkeuren } 
 import { Card } from '../components/Card';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { cn, notify, telHref } from '../lib/ui';
+import { navigeer } from '../app/router';
+import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../lib/uitweg';
 
 /**
  * Operations Center — het planner/admin-dashboard als operationele cockpit.
@@ -606,6 +609,11 @@ export function PlannerDashboardWidgets({
       icon={<Inbox size={16} />}
       title="Open taken"
       aside={attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'item' : 'items'}` : undefined}
+      // Het paneel blijft een top-N per soort; de volledige lijst (sorteren,
+      // filteren, zoeken) staat op /werkvoorraad (15-09). Verving de regel
+      // "+N niet getoond, open Verlof, Dienstruil, …".
+      onSeeAll={attentionCount > 0 ? () => onNavigate('werkvoorraad') : undefined}
+      seeAllLabel={hiddenAttentionCount > 0 ? `Alle ${attentionCount} bekijken` : 'Volledige werkvoorraad'}
     >
       <div className="space-y-1.5">
         {planningStale && (
@@ -717,13 +725,6 @@ export function PlannerDashboardWidgets({
           />
           </Fragment>
         ))}
-        {/* De lijst toont bewust een top-N; zonder deze regel suggereerde
-            de teller in de kop dat je alles ziet. */}
-        {hiddenAttentionCount > 0 && (
-          <p className="px-4 pt-1 text-xs font-medium text-slate-500">
-            +{hiddenAttentionCount} niet getoond, open Verlof, Dienstruil, Toestellen of Vervaldata voor de volledige lijst.
-          </p>
-        )}
         {attentionCount === 0 && (
           /* Neutrale kaart met alleen een groen vinkje: "alles ok" is
              rusttoestand, geen melding (afwerking 04-09, nr. 6). */
@@ -1077,8 +1078,18 @@ export function PlannerDashboardWidgets({
               {ziekVervolg.naam} is afgemeld, maar {ziekVervolg.diensten.length === 1
                 ? 'deze dienst staat'
                 : `deze ${ziekVervolg.diensten.length} diensten staan`} nog op naam.
-              {isAdmin ? ' Zet ze meteen over.' : ' Een admin kan ze overzetten in de Maandplanning.'}
+              {isAdmin ? ' Zet ze meteen over.' : ' Een admin kan ze overzetten.'}
             </p>
+            {/* Uitweg voor een planner zonder adminrecht (punt 17): één mail
+                naar de admins met de open diensten en hun deeplink; het
+                probleem-meldpad zit in de schil en is hier niet bereikbaar. */}
+            {!isAdmin && (() => {
+              const open = ziekVervolg.diensten.filter((d) => !afgehandeld[d.id]);
+              const href = open.length ? adminMailto(users, `Diensten overzetten na ziekmelding ${ziekVervolg.naam}`, ziekmeldMailTekst(ziekVervolg.naam, open.map((d) => ({ date: d.date, nummer: serviceNumberOf(d) })), window.location.origin)) : undefined;
+              return href ? (
+                <Button variant="secondary" size="sm" icon={<Mail size={16} />} onClick={() => { window.location.href = href; }}>Vraag een admin</Button>
+              ) : null;
+            })()}
             {/* Voortgang expliciet: bij een langere ziekte staat de lijst vol en
                 scrol je makkelijk over de laatste heen — dan lijkt het klaar
                 terwijl er nog diensten open staan (melding Jarno 14-08). */}
@@ -1099,7 +1110,17 @@ export function PlannerDashboardWidgets({
                       <span className="text-sm font-semibold text-slate-800 tabular-nums">
                         Dienst {serviceNumberOf(d)}
                       </span>
-                      <span className={cn(microLabelClass, 'tabular-nums')}>{formatDay(d.date)}</span>
+                      <span className="flex items-center gap-2">
+                        <span className={cn(microLabelClass, 'tabular-nums')}>{formatDay(d.date)}</span>
+                        {/* Admin: rechtstreeks naar die dag in de Maandplanning
+                            (/maandplanning/<maand>/<dag>; zonder dagparameter
+                            opent de maand). */}
+                        {isAdmin && !klaar && (
+                          <Button variant="ghost" size="sm" icon={<CalendarDays size={14} />} onClick={() => { closeSickModal(); navigeer('bezetting', { params: maandplanningParams(d.date) }); }}>
+                            Maandplanning
+                          </Button>
+                        )}
+                      </span>
                     </div>
                     {klaar ? (
                       <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
