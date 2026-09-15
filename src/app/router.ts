@@ -4,6 +4,7 @@ import { ALLE_VIEWS, ROUTES, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
 import { leesStartschermLokaal } from '../lib/startscherm';
 import { annuleerHerstel, bewaarScroll, leesScroll, planHerstel, scrollSleutel } from '../lib/scrollGeheugen';
+import { herstelOverlayUrl } from '../lib/useHistoryDismiss';
 
 /**
  * Lichtgewicht router op de History API — geen library, geen <Route>-boom.
@@ -113,6 +114,9 @@ function zorgVoorScrollHerstel() {
   popLuisteraarActief = true;
   huidigPad = window.location.pathname;
   window.addEventListener('popstate', () => {
+    // Deze gedeelde luisteraar staat vóór alle useRoute-luisteraars. Eerst
+    // de gesloten overlay opruimen, anders lezen zij nog de oude detail-URL.
+    herstelOverlayUrl();
     const nieuwPad = window.location.pathname;
     if (nieuwPad === huidigPad) return; // overlay-entry (useHistoryDismiss): geen schermwissel
     onthoudPositieVanHuidig();
@@ -150,7 +154,10 @@ export function navigeer(view: View, opts: { params?: readonly string[]; replace
     // dus nemen we hem over i.p.v. er een tweede bovenop te leggen. Anders
     // blijft er een lege ladestap achter en is één keer terug geen pagina terug.
     const uitOverlay = typeof (window.history.state as { vhbOverlay?: unknown } | null)?.vhbOverlay === 'string';
-    if (opts.replace || uitOverlay) window.history.replaceState(null, '', pad);
+    // Een record/maand vervangen binnen dezelfde view behoudt de eigenaar
+    // van de overlay-entry. Bij sluiten kan useHistoryDismiss die dan
+    // opruimen; anders bleef het oude detail onder de lijst in de historiek.
+    if (opts.replace || uitOverlay) window.history.replaceState(opts.replace && !anderView ? window.history.state : null, '', pad);
     else window.history.pushState(null, '', pad);
   }
   huidigPad = pad;

@@ -146,7 +146,103 @@ function Lijst({ view }: { view: 'omleidingen' | 'updates' }) {
 }
 const gekozenRecord = () => document.querySelector('[data-record]')?.getAttribute('data-record');
 
+/** Op mobiel koppelt DetailPaneel dezelfde URL-selectie aan een overlay. */
+function MobieleLijst() {
+  const [id, zetId] = useRecordParam(0, { view: 'omleidingen' });
+  useHistoryDismiss(id !== null, () => zetId(null));
+  return (
+    <>
+      {/* rauw: testattrap */}
+      <button type="button" data-knop="kies-a" onClick={() => zetId('a')} />
+      {/* rauw: testattrap */}
+      <button type="button" data-knop="kies-b" onClick={() => zetId('b')} />
+      {/* rauw: testattrap */}
+      <button type="button" data-knop="wis" onClick={() => zetId(null)} />
+      <span data-record={id ?? ''} />
+    </>
+  );
+}
+
 describe('useRecordParam: selectie in de URL', () => {
+  it('werkt de gesloten URL bij vóór eerder geregistreerde popstate-luisteraars het record lezen', async () => {
+    // Chromium behandelt popstate op Window in registratievolgorde, ook
+    // voor een later toegevoegde capture-listener. Laat jsdom dezelfde
+    // volgorde gebruiken; anders maskeert zijn capture-fase de vastloper.
+    const voegToe = window.addEventListener.bind(window);
+    const registratie = vi.spyOn(window, 'addEventListener').mockImplementation((naam, luisteraar, opties) => {
+      voegToe(naam, luisteraar, naam === 'popstate' && typeof opties === 'object' ? { ...opties, capture: false } : opties);
+    });
+    window.history.pushState(null, '', '/omleidingen');
+    const root = await monteer(<MobieleLijst />);
+    try {
+      await act(async () => { klik('kies-a'); await tikken(); });
+      await act(async () => { klik('wis'); await tikken(); });
+      expect(window.location.pathname).toBe('/omleidingen');
+      expect(gekozenRecord()).toBe('');
+      expect(window.history.state?.vhbOverlay).toBeUndefined();
+    } finally {
+      await act(async () => { root.unmount(); await tikken(); });
+      registratie.mockRestore();
+    }
+  });
+
+  it.each([
+    { naam: 'vanuit de lijst', pad: '/omleidingen', keuzes: ['kies-a'] },
+    { naam: 'vanuit een directe link', pad: '/omleidingen/a', keuzes: [] },
+    { naam: 'na een recordwissel', pad: '/omleidingen', keuzes: ['kies-a', 'kies-b'] },
+  ])('mobiel sluiten $naam ruimt de detailstap op, zodat terug niets heropent', async ({ pad, keuzes }) => {
+    window.history.pushState(null, '', pad);
+    const root = await monteer(<MobieleLijst />);
+    try {
+      for (const keuze of keuzes) await act(async () => { klik(keuze); await tikken(); });
+      expect(gekozenRecord()).not.toBe('');
+      await act(async () => { klik('wis'); await tikken(); });
+      expect(gekozenRecord()).toBe('');
+      expect(window.location.pathname).toBe('/omleidingen');
+
+      await act(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/verlof');
+      expect(gekozenRecord()).toBe('');
+    } finally {
+      await act(async () => { root.unmount(); await tikken(); });
+    }
+  });
+
+  it('mobiele terugknop sluit een gewisseld record en blijft op de lijst', async () => {
+    window.history.pushState(null, '', '/omleidingen');
+    const root = await monteer(<MobieleLijst />);
+    try {
+      await act(async () => { klik('kies-a'); await tikken(); });
+      await act(async () => { klik('kies-b'); await tikken(); });
+      await act(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/omleidingen');
+      expect(gekozenRecord()).toBe('');
+
+      await act(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/verlof');
+    } finally {
+      await act(async () => { root.unmount(); await tikken(); });
+    }
+  });
+
+  it('een opnieuw gemonteerd detail sluit ook na een recordwissel zonder de oude keuze te heropenen', async () => {
+    window.history.pushState(null, '', '/omleidingen');
+    const root = await monteer(<MobieleLijst />);
+    try {
+      await act(async () => { klik('kies-a'); await tikken(); });
+      await act(async () => { klik('kies-b'); await tikken(); });
+      await act(async () => { root.render(<MobieleLijst key="opnieuw" />); await tikken(); });
+      expect(gekozenRecord()).toBe('b');
+      await act(async () => { klik('wis'); await tikken(); });
+      expect(window.location.pathname).toBe('/omleidingen');
+      expect(gekozenRecord()).toBe('');
+      await act(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/verlof');
+    } finally {
+      await act(async () => { root.unmount(); await tikken(); });
+    }
+  });
+
   it('leest het record uit het pad en schrijft met replace (geen extra stap per wissel)', async () => {
     window.history.replaceState(null, '', '/omleidingen/x');
     const lengte = window.history.length;

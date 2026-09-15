@@ -86,7 +86,9 @@ export function Modal({
     // Respecteer een autoFocus-veld in de inhoud: React zet die focus vóór
     // dit effect, en het paneel mag hem dan niet meer afpakken.
     const panel = panelRef.current;
-    if (panel && !(document.activeElement && panel.contains(document.activeElement))) panel.focus();
+    // Focus mag de achterliggende scroll-root niet verplaatsen, ook niet
+    // terwijl overflow:hidden staat (dat blokkeert alleen gebruikersscroll).
+    if (panel && !(document.activeElement && panel.contains(document.activeElement))) panel.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Tab' || !isBovenste()) return;
       if (!panel) return;
@@ -115,7 +117,7 @@ export function Modal({
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      previouslyFocused?.focus?.();
+      previouslyFocused?.focus?.({ preventScroll: true });
     };
   }, [open]);
 
