@@ -16,7 +16,7 @@ import { defineConfig, devices } from '@playwright/test';
  * in CI niet-blokkerend (zie ci.yml), omdat SW-gedrag in headless Chromium
  * op een gedeelde runner nog niet bewezen stabiel is.
  *
- * Eenmalig lokaal: `npx playwright install chromium`.
+ * Eenmalig lokaal: `npx playwright install chromium webkit`.
  */
 
 // E2E_PORT: parallelle sessies/worktrees kiezen elk een vrije poort (4173 blijft de standaard).
@@ -48,8 +48,15 @@ export default defineConfig({
 
   projects: [
     {
-      // iPhone 13-viewport, maar op chromium gedraaid zodat alleen de
-      // chromium-browser nodig is (geen extra webkit-download).
+      // De mobiele regressies ook in Safari's engine: focus, History API en
+      // view-transition-lagen gedragen zich daar anders dan in Chromium.
+      name: 'iPhone 13 (webkit)',
+      testMatch: /(mobiele-navigatie|dock-transitie)\.spec\.ts$/,
+      use: { ...devices['iPhone 13'], browserName: 'webkit' },
+    },
+    {
+      // De volledige mobiele suite in Chromium; de regressies hierboven
+      // draaien aanvullend in WebKit.
       name: 'iPhone 13 (chromium)',
       testIgnore: NIET_MOBIEL,
       use: {

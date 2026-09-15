@@ -1,12 +1,9 @@
 import type { ReactNode } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
 import { Menu } from 'lucide-react';
 import { routeVan } from '../app/routes';
 import { prefetchView } from '../app/viewLoaders';
 import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
-import { overgangActief } from '../lib/overgang';
-import { DUR, EASE_SPRING } from '../lib/motion';
 import { CountUp } from './CountUp';
 
 type NavSlot = {
@@ -26,7 +23,7 @@ type NavSlot = {
  * als chauffeur") stuurt hier de effectieve rol in, dus de balk wisselt mee.
  *
  * - Floating glass-card stijl, sticky aan de onderkant
- * - Actief item heeft oker-fill + animated layoutId-pill
+ * - Actief item heeft een direct zichtbare neutrale achtergrond
  * - Badges (bv. openstaande aanvragen) tonen rechtsboven
  * - Alleen rendered op md:hidden (mobile/tablet portrait)
  */
@@ -60,7 +57,6 @@ export function BottomNav({
    *  hij niet onder de overlay door piept. */
   hidden?: boolean;
 }) {
-  const reduced = useReducedMotion();
   const isPlanner = role === 'planner' || role === 'admin';
   // Tabs per rol; naam en icoon komen uit de routetabel zodat een scherm
   // hier niet anders heet dan in de zijbalk (was "Dekking" vs
@@ -101,6 +97,10 @@ export function BottomNav({
       // iPhone) een lege band ín het dock, bovenop de zweefmarge.
       style={{
         bottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+        // De hele balk moet boven de inhoudssnapshot blijven. Alleen de
+        // actieve pil benoemen trok die los van het dock, terwijl de nieuwe
+        // pagina over de achtergrond en labels van de balk heen tekende.
+        viewTransitionName: 'dock',
       }}
       aria-label="Hoofdnavigatie"
     >
@@ -133,14 +133,9 @@ export function BottomNav({
                 )}
               >
                 {isActive && (
-                  <motion.span
-                    layoutId="bottom-nav-active"
-                    // Zelfde afspraak als de sidebar-rail: tijdens een route-
-                    // overgang schuift de tab via de view transition. Zelfde
-                    // veer als rail, dagstrip en Segmented-pil (EASE_SPRING op
-                    // DUR.fast, golf 2 punt 9).
-                    transition={reduced || overgangActief() ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING }}
-                    style={{ viewTransitionName: 'dock-actief' }}
+                  <span
+                    // Meteen tekenen: een layoutId-animatie kan de selectie
+                    // pas na de browser-snapshot plaatsen, ook met duur 0.
                     className="absolute inset-0 rounded-lg bg-surface-muted ring-1 ring-hairline"
                   />
                 )}

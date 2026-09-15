@@ -72,7 +72,9 @@ export function SlideOver({
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    panelRef.current?.focus();
+    // Een verschuivend paneel focussen of de oude tegel opnieuw focussen
+    // mag de positie van de pagina achter het paneel niet veranderen.
+    panelRef.current?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Tab') return;
       const panel = panelRef.current;
@@ -102,7 +104,7 @@ export function SlideOver({
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      previouslyFocused?.focus?.();
+      previouslyFocused?.focus?.({ preventScroll: true });
     };
   }, [open]);
 

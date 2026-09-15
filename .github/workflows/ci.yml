@@ -67,12 +67,12 @@ jobs:
       # De e2e-webServer bouwt zelf opnieuw mét VITE_SUPABASE-dummy-env
       # (zie playwright.config.ts) — de build hierboven bewaakt alleen dat
       # de productie-build slaagt.
-      - name: Playwright-browser
-        run: npx playwright install --with-deps chromium
+      - name: Playwright-browsers
+        run: npx playwright install --with-deps chromium webkit
 
-      # Twee projecten (playwright.config.ts): iPhone 13 voor de mobiele specs,
-      # "Desktop (chromium)" 1440×900 voor desktop.spec.ts; a11y.spec.ts (axe,
-      # WCAG 2.1 AA) draait op beide. Het derde project (pwa) staat hieronder.
+      # Mobiel en desktop in Chromium, plus mobiele navigatieregressies in
+      # WebKit. a11y.spec.ts (axe, WCAG 2.1 AA) draait op beide Chromium-
+      # viewports. Het afzonderlijke PWA-project staat hieronder.
       - name: E2E-smoke
         run: npm run test:e2e
 

@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test --project=\"iPhone 13 (chromium)\" --project=\"Desktop (chromium)\"",
+    "test:e2e": "playwright test --project=\"iPhone 13 (chromium)\" --project=\"Desktop (chromium)\" --project=\"iPhone 13 (webkit)\"",
     "test:e2e:pwa": "playwright test --project=pwa",
     "audit:mobile": "node scripts/mobile-audit.mjs",
     "changelog": "node scripts/changelog.mjs",

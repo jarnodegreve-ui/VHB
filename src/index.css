@@ -1358,9 +1358,16 @@ html.login-donker {
   animation: none;
   mix-blend-mode: normal;
 }
-/* De actieve nav-indicator (sidebar-rail, dock-tab) is apart benoemd: hij
-   schuift mee via de overgang i.p.v. te bevriezen in de root-snapshot;
-   Navigation/BottomNav zetten hun motion-veer intussen uit (overgangActief). */
+/* De sidebar-rail is apart benoemd. Het mobiele dock wordt als geheel
+   vastgelegd: anders tekent hoofdinhoud boven de balk in de root-snapshot
+   en lijkt die even doorzichtig. De nieuwe dock-snapshot blijft opaak,
+   inclusief de selectie; alleen de pagina-inhoud vervaagt. */
+::view-transition-group(dock),
+::view-transition-old(dock),
+::view-transition-new(dock) {
+  animation: none;
+  mix-blend-mode: normal;
+}
 ::view-transition {
   pointer-events: none;
 }

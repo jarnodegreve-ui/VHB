@@ -8,7 +8,7 @@ in de GitHub-CI (`.github/workflows/ci.yml`, job `checks`).
 ## Draaien
 
 ```bash
-npx playwright install chromium   # eenmalig, lokaal
+npx playwright install chromium webkit   # eenmalig, lokaal
 npm run test:e2e                  # bouwt + serveert (poort 4173) + test
 npm run test:e2e:ui               # interactieve UI-modus
 npx playwright test e2e/desktop.spec.ts e2e/a11y.spec.ts   # alleen desktop + a11y
@@ -23,6 +23,7 @@ dist via `vite preview` op poort 4173.
 | Project | Viewport | Specs |
 |---|---|---|
 | `iPhone 13 (chromium)` | iPhone 13 | alle specs behalve `desktop.spec.ts` en `pwa.spec.ts` |
+| `iPhone 13 (webkit)` | iPhone 13 | `mobiele-navigatie.spec.ts`, `dock-transitie.spec.ts` |
 | `Desktop (chromium)` | 1440×900 | `desktop.spec.ts`, `a11y.spec.ts` |
 | `pwa` | iPhone 13, **service worker aan** | alleen `pwa.spec.ts`; apart via `npm run test:e2e:pwa` |
 
@@ -42,6 +43,13 @@ dist via `vite preview` op poort 4173.
 - **Mobiele specs** (`smoke`, `dashboard`, `verlof`, `ruil`, `sessie`, `dock`,
   `donker`): elk met eigen, kleine fixtures — ze testen één schrijfpad en
   willen precies weten wat er in de POST/PATCH zit.
+- **Mobiele navigatieregressies** draaien in Chromium én WebKit: dashboard-
+  scroll na het sluiten van een tegel en herladen, omleidingen sluiten via
+  kruisje of Terug, en de dock-lagen tijdens een echte View Transition.
+  Chromium vergelijkt ook de pixels van de gekozen dock-tab. WebKit-
+  screenshots missen de live nieuwe lagen van fixed elementen tijdens de
+  overgang (ook in een minimale HTML-repro); daar controleren we de
+  laaginstellingen. iOS-standalone blijft een handmatige controle op een toestel.
 - **`desktop.spec.ts`**: de `lg+`-layouts die mobiel niet bestaan —
   master-detail Omleidingen, sorteren (`aria-sort`) en bulk-selectie in de
   gebruikerslijst, paginering van het activiteitenlog (60 rijen → pagina 2).

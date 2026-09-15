@@ -5,6 +5,14 @@ let teller = 0;
 const levend = new Set<string>();
 /** Ids waarvan de opruim-`back()` al is afgevuurd maar nog niet is afgewikkeld. */
 const onderweg = new Set<string>();
+/** URL-correcties voor een uitgestelde back() die nog moet aankomen. */
+const herstelVoorRoute = new Set<() => void>();
+
+/** De router doet dit vóór hij een popstate leest. Een later geregistreerde
+ * capture-listener op Window komt in Chromium niet vóór eerdere listeners. */
+export function herstelOverlayUrl() {
+  for (const herstel of herstelVoorRoute) herstel();
+}
 
 /**
  * Laat een overlay (modal, slide-over, mobiele zijbalk, actiemenu) meedoen met
@@ -34,15 +42,19 @@ export function useHistoryDismiss(open: boolean, onClose: () => void) {
     const id = `overlay-${++teller}`;
     idRef.current = id;
     levend.add(id);
-    const padBijOpenen = window.location.pathname;
+    const urlBijOpenen = window.location.pathname + window.location.search + window.location.hash;
     const vorige = window.history.state;
     const basis = vorige && typeof vorige === 'object' ? vorige : {};
     const bovenste = (basis as { vhbOverlay?: unknown }).vhbOverlay;
     // Wees-entry van een net gesloten overlay (zelfde commit): overnemen —
     // tenzij de back() ervan al loopt, dan zou de traversal ónze entry raken.
     const wees = typeof bovenste === 'string' && !levend.has(bovenste) && !onderweg.has(bovenste);
-    if (wees) window.history.replaceState({ ...basis, vhbOverlay: id }, '');
-    else window.history.pushState({ ...basis, vhbOverlay: id }, '');
+    // Bij overname (ander paneel of herladen) blijft ook de URL onder de
+    // overlay dezelfde. Die kan een ouder record bevatten dan de huidige URL.
+    const urlOnderOverlay = wees && typeof basis.vhbOverlayTerug === 'string' ? basis.vhbOverlayTerug : urlBijOpenen;
+    const staat = { ...basis, vhbOverlay: id, vhbOverlayTerug: urlOnderOverlay };
+    if (wees) window.history.replaceState(staat, '');
+    else window.history.pushState(staat, '');
     let doorTerugknop = false;
     const onPop = () => {
       // Eigen entry nog bovenaan? Dan is er iets bóven ons gesloten — blijven.
@@ -59,13 +71,29 @@ export function useHistoryDismiss(open: boolean, onClose: () => void) {
       // uitgesteld, zodat een overlay die in dezelfde commit opent eerst onze
       // entry kan overnemen; staat er dan iets anders bovenaan, niets doen.
       window.setTimeout(() => {
-        // Is er intussen naar een andere pagina genavigeerd, dan ligt onze
-        // entry niet meer bovenaan: een back() zou dan die paginawissel
-        // ongedaan maken i.p.v. onze entry op te ruimen.
-        if (window.location.pathname !== padBijOpenen) return;
+        // Een echte paginawissel verwijdert de overlay-id in de router.
+        // Een record sluiten of wisselen behoudt hem, ook al verandert het
+        // pad: de entry behoort dan nog steeds aan dit paneel.
         if (window.history.state?.vhbOverlay !== id) return;
+        const urlBijSluiten = window.location.pathname + window.location.search + window.location.hash;
         onderweg.add(id);
-        window.addEventListener('popstate', () => onderweg.delete(id), { once: true });
+        const herstel = () => {
+          // Recordselectie verving de lijst-URL vóór het paneel opende.
+          // Na back() staat die oude detail-URL dus opnieuw bovenaan. Wis
+          // dat record vóór de router zijn popstate verwerkt, zodat een
+          // gesloten paneel niet meteen opnieuw opent. De router roept dit
+          // expliciet vóór het lezen aan: listener-volgorde verschilt per browser.
+          const urlNaTerug = window.location.pathname + window.location.search + window.location.hash;
+          if (urlBijSluiten !== urlOnderOverlay && urlNaTerug === urlOnderOverlay) {
+            window.history.replaceState(window.history.state, '', urlBijSluiten);
+          }
+        };
+        herstelVoorRoute.add(herstel);
+        window.addEventListener('popstate', () => {
+          herstel();
+          herstelVoorRoute.delete(herstel);
+          onderweg.delete(id);
+        }, { once: true });
         window.history.back();
       }, 0);
     };
