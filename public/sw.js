@@ -7,9 +7,10 @@
 //   De signed URL verloopt na een uur: eerst de cache tonen leverde een
 //   verlopen PDF-link op, die pas bij een tweede bezoek werd vernieuwd.
 // - Ritblaadje-PDF (ondertekende storage-URL met /ritblaadjes/ in pad):
-//   cache-first met achtergrond-revalidate, zodat de PDF offline blijft
-//   werken in de iframe + download. Cache-key = URL zónder query: signed
-//   URLs wisselen per fetch van token en zouden anders blob na blob opstapelen.
+//   cache-first zonder revalidate (een nieuwe upload = nieuw pad), zodat de
+//   PDF offline blijft werken en niet bij elke weergave opnieuw wordt
+//   gedownload. Cache-key = URL zónder query: signed URLs wisselen per fetch
+//   van token en zouden anders blob na blob opstapelen.
 // - Rooster (/api/planning): stale-while-revalidate — chauffeur ziet z'n
 //   diensten ook zonder signaal. Gecachet per volledige URL (incl.
 //   ?driverId=&month=), dus per gebruiker/maand geïsoleerd.
@@ -192,9 +193,12 @@ self.addEventListener('fetch', (event) => {
 
   if (req.method !== 'GET') return;
 
-  // === Ritblaadje-PDF (cross-origin storage) — cache-first + revalidate ===
+  // === Ritblaadje-PDF (cross-origin storage) — cache-first, zonder revalidate ===
   // Match op het pad-segment /ritblaadjes/ ongeacht de (Supabase-)origin.
-  // Opaque responses zijn prima om in een iframe te tonen of te downloaden.
+  // Een bundel wisselt nooit van inhoud onder hetzelfde pad (een nieuwe
+  // upload krijgt een nieuw pad, zie cacheRitbladen), dus een cache-treffer
+  // is definitief: geen achtergrond-download meer bij elke weergave
+  // (controle 16-09, nr. 6: dat kostte per opening de hele bundel aan data).
   if (url.pathname.includes(RITBLAADJE_PDF_MARKER)) {
     // Query strippen: het signed-URL-token wisselt per fetch, maar het is
     // hetzelfde PDF-bestand — één cache-entry per pad. In de build-
@@ -204,10 +208,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(RITBLADEN_CACHE).then((cache) =>
         cache.match(cacheKey).then((cached) => {
+          if (cached) return cached;
           // Met cors-mode i.p.v. de opaque originele request: zo is de status
           // leesbaar en cachen we alléén een echte 200. Een verlopen signed
           // URL (Supabase-400) is óók opaque en overschreef anders de goede PDF.
-          const network = fetch(url.href, { mode: 'cors' })
+          return fetch(url.href, { mode: 'cors' })
             .then((res) => {
               if (res && res.ok) {
                 const copy = res.clone();
@@ -215,11 +220,9 @@ self.addEventListener('fetch', (event) => {
               }
               return res;
             })
-            // Cors-fout (geen CORS-headers/redirect): gecachte PDF, of anders de
-            // originele (opaque) request zodat een koude weergave nooit breekt.
-            .catch(() => cached || fetch(req));
-          // Cached eerst tonen (snel + offline), op achtergrond verversen.
-          return cached || network;
+            // Cors-fout (geen CORS-headers/redirect): de originele (opaque)
+            // request zodat een koude weergave nooit breekt.
+            .catch(() => fetch(req));
         }),
       ),
     );

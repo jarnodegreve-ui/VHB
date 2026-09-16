@@ -141,7 +141,7 @@ export function RitbladViewer({
   const [zoomIdx, setZoomIdx] = useState(0);
   // Offline én de bundel staat in de ritbladen-cache → "Opgeslagen exemplaar"
   // in de subregel (stil; geen banner). Online komt het blad óók uit de cache
-  // (cache-first met revalidate), maar dan is dat geen boodschap.
+  // (cache-first), maar dan is dat geen boodschap.
   const online = useOnline();
   const [opgeslagen, setOpgeslagen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
