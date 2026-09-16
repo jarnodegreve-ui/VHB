@@ -60,7 +60,9 @@ function terugvalKlassen(size: Maat, tone: Toon) {
 }
 
 function LijnBadge({ lijn, size, tone }: { lijn: string; size: Maat; tone: Toon }) {
-  const badge = Object.hasOwn(LIJNBADGES, lijn) ? LIJNBADGES[lijn] : undefined;
+  // hasOwnProperty.call i.p.v. Object.hasOwn: dat bestaat pas vanaf Safari 15.4
+  // en de build-target is safari14 (controle-ronde 16-09, nr. 20).
+  const badge = Object.prototype.hasOwnProperty.call(LIJNBADGES, lijn) ? LIJNBADGES[lijn] : undefined;
   const [laadfout, setLaadfout] = useState(false);
   if (!badge || laadfout) {
     return <span className={terugvalKlassen(size, tone)} role="img" aria-label={lijnLabel(lijn)}>{lijn}</span>;
