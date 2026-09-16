@@ -17,6 +17,7 @@ import { downloadRoosterIcs } from './lib/roosterIcs';
 import { ViewFout } from './app/ViewFout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useHistoryDismiss } from './lib/useHistoryDismiss';
+import { RITBLAD_BUNDEL_EVENT } from './lib/ritblad';
 import {
   Eye,
   Menu,
@@ -71,12 +72,16 @@ const laadChangePasswordModal = () => import('./components/ChangePasswordModal')
 const laadCalendarSubscribeModal = () => import('./components/CalendarSubscribeModal');
 const laadProbleemMelder = () => import('./app/ProbleemMelder');
 const laadWerkvoorraadMenu = () => import('./components/WerkvoorraadMenu');
+const laadRitbladViewer = () => import('./components/RitbladViewer');
 const LazyChangePasswordModal = lazyWithRetry(() => laadChangePasswordModal().then((m) => ({ default: m.ChangePasswordModal })));
 const LazyCalendarSubscribeModal = lazyWithRetry(() => laadCalendarSubscribeModal().then((m) => ({ default: m.CalendarSubscribeModal })));
 // ProbleemMelder was de laatste schil-importeur van Field, en Field sleept de
 // DatePicker (±17 kB bron) mee; lazy = Field + DatePicker uit de startbundel.
 const LazyProbleemMelder = lazyWithRetry(() => laadProbleemMelder().then((m) => ({ default: m.ProbleemMelder })));
 const LazyWerkvoorraadMenu = lazyWithRetry(() => laadWerkvoorraadMenu().then((m) => ({ default: m.WerkvoorraadMenu })));
+// Volledige ritblad-bundel in de app (controle 16-09, nr. 10): pdfjs blijft
+// lazy, net als bij de viewer op Mijn dag.
+const LazyRitbladViewer = lazyWithRetry(() => laadRitbladViewer().then((m) => ({ default: m.RitbladViewer })));
 const LazyTweeStapsScherm = lazyWithRetry(() => import('./app/TweeStapsScherm').then((m) => ({ default: m.TweeStapsScherm })));
 /** Voorladen van de account-overlays: bij hover/focus op het avatar-menu en
  *  zodra Instellingen open staat (daar zitten dezelfde knoppen). */
@@ -318,6 +323,20 @@ export default function App() {
 
   // Terugknop/swipe-back sluit de mobiele zijbalk i.p.v. de app te verlaten.
   useHistoryDismiss(isSidebarOpen && !isDesktopNav, () => setIsSidebarOpen(false));
+
+  // openHuidigRitblad() vraagt met een gebeurtenis of de app de bundel zelf
+  // kan tonen; zo blijft de PWA-schil staan en werkt het offline uit de
+  // service-worker-cache (controle 16-09, nr. 10).
+  const [bundelOpen, setBundelOpen] = useState(false);
+  useEffect(() => {
+    const onBundel = (e: Event) => {
+      e.preventDefault(); // bevestigt aan openHuidigRitblad dat wij het doen
+      setBundelOpen(true);
+    };
+    window.addEventListener(RITBLAD_BUNDEL_EVENT, onBundel);
+    return () => window.removeEventListener(RITBLAD_BUNDEL_EVENT, onBundel);
+  }, []);
+  useHistoryDismiss(bundelOpen, () => setBundelOpen(false));
   useEffect(() => {
     if (!isSidebarOpen || isDesktopNav) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsSidebarOpen(false); };
@@ -1441,6 +1460,11 @@ export default function App() {
       {showAgenda && (
         <Suspense fallback={null}>
           <LazyCalendarSubscribeModal open onClose={() => setShowAgenda(false)} onDownload={() => downloadRoosterIcs(currentUser.name, shifts.filter((s) => String(s.driverId) === String(currentUser.id)))} />
+        </Suspense>
+      )}
+      {bundelOpen && (
+        <Suspense fallback={null}>
+          <LazyRitbladViewer dienstnummer="" alles open onClose={() => setBundelOpen(false)} />
         </Suspense>
       )}
       <AnimatePresence>

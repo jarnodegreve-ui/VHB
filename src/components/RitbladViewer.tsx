@@ -6,7 +6,7 @@ import { Modal } from './Modal';
 import { Button, IconButton } from './primitives';
 import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
-import { openHuidigRitblad } from '../lib/ritblad';
+import { openHuidigRitbladExtern } from '../lib/ritblad';
 import { isRitbladOpgeslagen } from '../lib/ritbladCache';
 import { useOnline } from '../lib/useOnline';
 import { haalRitbladMeta, laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbladPaginas';
@@ -24,7 +24,7 @@ import { Fout, GeenBereik, NietGevonden } from './illustraties';
  *
  * Vindt de viewer geen apart blad (scan zonder tekstlaag, ander nummer-
  * formaat), dan blijft de volledige bundel één tik weg — dat is de
- * openHuidigRitblad-route, die bij iedere klik een verse PDF-link ophaalt.
+ * bundel-stand van deze viewer, of anders de externe PDF-route.
  */
 
 type Staat =
@@ -130,14 +130,22 @@ export function RitbladViewer({
   dienstnummer,
   open,
   onClose,
+  alles = false,
 }: {
   /** Eén dienstnummer, of meerdere bij een gesplitste dag (alle bladen onder elkaar). */
   dienstnummer: string | string[];
   open: boolean;
   onClose: () => void;
+  /** Toon de hele bundel in plaats van de pagina's van het dienstnummer. */
+  alles?: boolean;
 }) {
   const nummers = nummerLijst(dienstnummer);
   const nummerSleutel = nummers.join('/');
+  // Binnen de viewer kan de chauffeur alsnog naar de volledige bundel; dat
+  // blijft in de app en dus in de service-worker-cache (controle 16-09,
+  // nr. 10). De prop is de beginstand.
+  const [alleBladen, setAlleBladen] = useState(alles);
+  useEffect(() => { if (open) setAlleBladen(alles); }, [open, alles]);
   const [staat, setStaat] = useState<Staat>({ soort: 'laden' });
   const [zoomIdx, setZoomIdx] = useState(0);
   // Offline én de bundel staat in de ritbladen-cache → "Opgeslagen exemplaar"
@@ -181,12 +189,17 @@ export function RitbladViewer({
       // query-loze pad, dat óók pas bij een nieuwe upload wijzigt.
       const versie = meta.uploadedAt || new URL(meta.url).pathname;
       void isRitbladOpgeslagen(meta.url).then((ja) => { if (!signal.aborted) setOpgeslagen(ja); });
-      const gevonden = new Set<number>();
-      for (const n of nummers) {
-        for (const p of await zoekPaginasVoorDienstGecached(doc, n, versie, signal)) gevonden.add(p);
+      let paginas: number[];
+      if (alleBladen) {
+        paginas = Array.from({ length: doc.numPages }, (_, i) => i + 1);
+      } else {
+        const gevonden = new Set<number>();
+        for (const n of nummers) {
+          for (const p of await zoekPaginasVoorDienstGecached(doc, n, versie, signal)) gevonden.add(p);
+        }
+        if (signal.aborted) return;
+        paginas = [...gevonden].sort((a, b) => a - b);
       }
-      if (signal.aborted) return;
-      const paginas = [...gevonden].sort((a, b) => a - b);
       const basis = { url: meta.url, totaal: doc.numPages, bundelDatum: formatBundelDatum(meta.uploadedAt) };
       setStaat(paginas.length ? { soort: 'klaar', doc, paginas, ...basis } : { soort: 'niets', ...basis });
     })().catch((err: unknown) => {
@@ -201,7 +214,7 @@ export function RitbladViewer({
     // nummerSleutel vat `nummers` samen; een nieuwe array met dezelfde
     // nummers mag niet opnieuw laden.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, nummerSleutel]);
+  }, [open, nummerSleutel, alleBladen]);
 
   // Breedte van de scroller: de pagina's passen op zoom 1 precies in beeld,
   // vanaf 1,5× scrolt het horizontaal.
@@ -218,13 +231,15 @@ export function RitbladViewer({
 
   const zoom = ZOOM_STAPPEN[zoomIdx];
   const paginaBreedte = Math.max(0, Math.floor((scrollBreedte - RAND * 2) * zoom));
-  const titel = nummers.length > 1 ? `Ritblad · diensten ${nummers.join(' / ')}` : `Ritblad · dienst ${nummers[0] ?? '--'}`;
+  const titel = alleBladen
+    ? 'Ritblad · volledige bundel'
+    : nummers.length > 1 ? `Ritblad · diensten ${nummers.join(' / ')}` : `Ritblad · dienst ${nummers[0] ?? '--'}`;
   const nummerTekst = nummers.length > 1 ? `diensten ${nummers.join(' / ')}` : `dienst ${nummers[0] ?? '--'}`;
 
   const opgeslagenLabel = !online && opgeslagen ? ' · opgeslagen exemplaar' : '';
   const subregel = (() => {
     switch (staat.soort) {
-      case 'laden': return 'Ritblad zoeken…';
+      case 'laden': return alleBladen ? 'Bundel laden…' : 'Ritblad zoeken…';
       case 'klaar': return `${somPaginas(staat.paginas)} van ${staat.totaal}${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}${opgeslagenLabel}`;
       case 'niets': return `${staat.totaal} pagina's${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}${opgeslagenLabel}`;
       default: return null;
@@ -267,7 +282,7 @@ export function RitbladViewer({
               illustratie={typeof navigator !== 'undefined' && navigator.onLine === false ? <GeenBereik /> : <Fout />}
               title="Ritblad kon niet geladen worden"
               message="Controleer je verbinding, of open de volledige bundel zoals voorheen."
-              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => openHuidigRitblad()}>Volledige bundel openen</Button>}
+              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => void openHuidigRitbladExtern()}>Volledige bundel openen</Button>}
             />
           </div>
         </div>
@@ -280,7 +295,7 @@ export function RitbladViewer({
               illustratie={<NietGevonden />}
               title={`Geen apart blad gevonden voor ${nummerTekst}`}
               message="De bundel bevat geen pagina waarop dit dienstnummer herkenbaar staat, of het bestand is een scan zonder tekst. De volledige bundel werkt wel."
-              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => void openHuidigRitblad()}>Volledige bundel openen</Button>}
+              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => setAlleBladen(true)}>Volledige bundel openen</Button>}
             />
           </div>
         </div>
@@ -330,9 +345,11 @@ export function RitbladViewer({
               <ZoomIn size={16} />
             </IconButton>
             <div className="flex-1" />
-            <Button variant="secondary" size="sm" icon={<FileText size={14} />} onClick={() => void openHuidigRitblad()}>
-              Volledige bundel
-            </Button>
+            {!alleBladen && (
+              <Button variant="secondary" size="sm" icon={<FileText size={14} />} onClick={() => setAlleBladen(true)}>
+                Volledige bundel
+              </Button>
+            )}
           </footer>
         </>
       )}
