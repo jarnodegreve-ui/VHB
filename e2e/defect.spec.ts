@@ -35,7 +35,7 @@ test('chauffeur meldt een defect vanaf Mijn dag', async ({ page }) => {
   await page.getByRole('textbox', { name: /Wat is er mis/ }).fill('Spiegel rechts hangt los');
   await page.getByRole('button', { name: 'Melden', exact: true }).click();
 
-  await expect(page.getByText('Gemeld, de garage ziet het in het gele boek.')).toBeVisible();
+  await expect(page.getByText('Gemeld, de garage ziet het in de gele boek.')).toBeVisible();
   expect(gepost, 'POST /api/defecten is nooit verstuurd').not.toBeNull();
   expect(gepost).toEqual({ vehicleId: VEHICLES[0].id, werktype: 'C', omschrijving: 'Spiegel rechts hangt los' });
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
