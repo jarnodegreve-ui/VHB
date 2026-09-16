@@ -285,7 +285,10 @@ export function RitbladViewer({
 
       {staat.soort === 'klaar' && (
         <>
-          <div ref={scrollRef} className="flex-1 overflow-auto overscroll-contain bg-surface-muted">
+          {/* Houd de verticale scrollbar-ruimte vast. Anders verkleint de
+              scrollbar de gemeten breedte, past de PDF net weer in de hoogte
+              en verdwijnt de scrollbar: een eindeloze resize-/zoomlus. */}
+          <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-scroll overscroll-contain bg-surface-muted">
             <div className="flex w-max min-w-full flex-col items-center gap-3 p-3">
               {paginaBreedte > 0 && staat.paginas.map((n) => (
                 <PaginaCanvas key={n} doc={staat.doc} nummer={n} breedte={paginaBreedte} />

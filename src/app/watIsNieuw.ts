@@ -36,15 +36,16 @@ export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   },
   {
     id: '2026-09-16',
-    titel: 'Dienstwissel 1-op-1, verloftelling en defect melden',
+    titel: 'Ziekteoverzicht, ritbladen en planning',
     regels: {
       chauffeur: [
+        'Een opgezocht ritblad blijft stabiel in beeld, ook wanneer een schuifbalk nodig is.',
         'Bij “Defect melden” staan alleen nog bussen en bedrijfswagens in de keuzelijst.',
       ],
       staf: [
-        'Maandplanning: een handmatige dienstwissel kan nu ook tussen twee chauffeurs die die dag allebei rijden, ze wisselen dan hun diensten 1-op-1.',
-        'Wie een dienst afstaat aan een collega op TA (of een andere code) wordt vrij, de code van de collega verhuist niet mee.',
-        'Verloflimiet: flexi-jobs tellen niet meer mee in de bezetting per dag.',
+        'Ziekte: actuele meldingen en diensten op naam bovenaan, met maandcijfers, jaarkeuze en volledige doorzoekbare historiek. Kalenderdagen tellen tot vandaag, zonder dubbeltelling bij overlap.',
+        'Een opgezocht ritblad blijft stabiel in beeld. Maandplanning: twee ingeplande chauffeurs kunnen diensten 1-op-1 wisselen; wie een dienst afstaat aan een collega op TA wordt vrij.',
+        'Verloflimiet: flexi-jobs tellen niet meer mee in de bezetting per dag. Bij “Defect melden” kies je uit bussen en bedrijfswagens.',
       ],
     },
     bekijk: { staf: 'bezetting' },
