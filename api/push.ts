@@ -35,6 +35,15 @@ export type PushSubscriptionRecord = {
   auth: string;
 };
 
+/** Plafond per gebruiker (controle-ronde 16-09, nr. 18): een browser maakt bij
+ *  elke herinstallatie/SW-vernieuwing een nieuw endpoint, en de oude worden
+ *  pas opgeruimd als een push er 404/410 op krijgt. Zonder plafond kon één
+ *  account de tabel onbeperkt laten groeien. Toestellen weigeren met 429
+ *  (MAX_DEVICES_PER_USER, de gebruiker kan er zelf een verwijderen); een
+ *  push-abonnement kan de gebruiker niet zelf beheren, dus hier vervalt het
+ *  oudste. */
+export const MAX_PUSH_ABONNEMENTEN_PER_USER = 10;
+
 export const savePushSubscription = async (record: PushSubscriptionRecord) => {
   if (!db) throw new Error("Database niet geconfigureerd.");
   // Expliciete handoff op een gedeeld toestel: eerst een eventuele registratie
@@ -52,6 +61,24 @@ export const savePushSubscription = async (record: PushSubscriptionRecord) => {
     { onConflict: "endpoint" },
   );
   if (error) throw new Error(`Abonnement opslaan mislukt: ${error.message}`);
+  await snoeiPushAbonnementen(record.userId);
+};
+
+/** Houdt hooguit MAX_PUSH_ABONNEMENTEN_PER_USER abonnementen per gebruiker
+ *  over: de oudste (created_at) gaan weg. Geeft het aantal gewiste rijen. */
+export const snoeiPushAbonnementen = async (userId: string): Promise<number> => {
+  if (!db) return 0;
+  const { data, error } = await db
+    .from("push_subscriptions")
+    .select("endpoint")
+    .eq("user_id", String(userId))
+    .order("created_at", { ascending: false });
+  if (error || !data) return 0;
+  const teVeel = (data as Array<{ endpoint: string }>).slice(MAX_PUSH_ABONNEMENTEN_PER_USER).map((r) => r.endpoint);
+  if (teVeel.length === 0) return 0;
+  const { error: wisFout } = await db.from("push_subscriptions").delete().eq("user_id", String(userId)).in("endpoint", teVeel);
+  if (wisFout) throw new Error(`Oude push-abonnementen opruimen mislukt: ${wisFout.message}`);
+  return teVeel.length;
 };
 
 export const deletePushSubscription = async (endpoint: string) => {
