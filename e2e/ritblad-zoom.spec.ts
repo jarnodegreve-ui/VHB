@@ -35,17 +35,22 @@ async function openRitblad(page: Page, baseURL: string) {
 }
 
 async function canvasBlijftStil(canvas: Locator) {
-  const afmetingen = await canvas.evaluate(async (el) => {
+  await expect.poll(() => canvas.evaluate(async (el) => {
     const metingen: string[] = [];
-    // Een lange reeks frames bewaakt ook een afwisselend brede/smalle render.
+    // Een viewportresize werkt mediaqueries, rem-maten, ResizeObserver en
+    // PDF-render achtereenvolgens bij. Geef die eenmalige aanpassing ruimte,
+    // maar eis daarna 45 volledig stabiele frames. Een resize-/zoomlus blijft
+    // iedere meetreeks afwisselende maten geven en faalt binnen de timeout.
     for (let i = 0; i < 45; i++) {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const rect = el.getBoundingClientRect();
       metingen.push(`${rect.width}×${rect.height}`);
     }
     return [...new Set(metingen)];
-  });
-  expect(afmetingen, 'het ritblad verandert zonder invoer niet steeds van formaat').toHaveLength(1);
+  }), {
+    timeout: 5_000,
+    message: 'het ritblad blijft na aanpassen 45 frames stabiel, zonder resize-/zoomlus',
+  }).toHaveLength(1);
 }
 
 // Headless Chromium verbergt anders de scrollbars, inclusief hun breedte.
