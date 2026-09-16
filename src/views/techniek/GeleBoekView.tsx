@@ -30,7 +30,7 @@ const RECENT_DAGEN = 62;
 const WERKTYPE_TONE: Record<Werktype, 'red' | 'amber' | 'blue' | 'oker'> = { T: 'red', C: 'amber', I: 'blue', L: 'oker' };
 
 /**
- * Het gele boek (fase A Access-migratie, 13-09): alle gemelde defecten per
+ * De gele boek (fase A Access-migratie, 13-09): alle gemelde defecten per
  * bus, standaard alleen de open meldingen (het Access-rapport "Aangevraagde
  * werken"), met de ouderdom en de opvolging. De technieker zet een melding op
  * uitgevoerd (datum, wat er gedaan is, manuren) en kan meteen een
@@ -55,7 +55,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
   const zl = useZelfLadend(async () => {
     const sinds = filter === 'recent' ? new Date(Date.now() - RECENT_DAGEN * 864e5).toISOString().slice(0, 10) : undefined;
     setRijen(await laadDefecten({ status: filter === 'open' ? 'open' : 'alles', sinds, limit: filter === 'alles' ? 2000 : 1000 }));
-  }, { deps: [filter], boodschap: 'Kon het gele boek niet laden.' });
+  }, { deps: [filter], boodschap: 'Probeer het over enkele ogenblikken opnieuw.' });
 
   const vandaag = vandaagIso();
   const ouderdom = (d: Defect) => -dagenTot(d.gemeldOp.slice(0, 10), vandaag);
@@ -152,7 +152,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       </div>
 
       {zl.fout && rijen.length === 0 ? (
-        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+        <Foutkaart titel="De gele boek kon niet laden" boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && rijen.length === 0 ? (
         <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Gele boek wordt geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
@@ -185,7 +185,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
               <EmptyState
                 variant="klaar"
                 illustratie={filter === 'open' && !alleenOud && !zoekTerm && !busFilter ? <AllesGedaan /> : undefined}
-                title={zoekTerm ? `Geen meldingen voor “${zoek.trim()}”` : alleenOud ? 'Niets blijft liggen' : filter === 'open' ? 'Niets open in het gele boek' : 'Geen meldingen voor dit filter'}
+                title={zoekTerm ? `Geen meldingen voor “${zoek.trim()}”` : alleenOud ? 'Niets blijft liggen' : filter === 'open' ? 'Niets open in de gele boek' : 'Geen meldingen voor dit filter'}
                 message={alleenOud && !zoekTerm ? 'Geen open melding is ouder dan 14 dagen.' : filter === 'open' && !zoekTerm ? 'Alle gemelde defecten zijn afgehandeld.' : 'Pas de zoekterm of het filter aan.'}
                 action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => setMelden(true)}>Melding toevoegen</Button>}
               />

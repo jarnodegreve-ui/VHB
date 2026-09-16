@@ -64,7 +64,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
     setVoertuigen(v); setExpiries(e); setOpenDefecten(d);
   }, { boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de voertuigen niet laden.') });
 
-  // Deeplink /techniek/voertuigen/<id> (bv. "Open bus" uit het gele boek):
+  // Deeplink /techniek/voertuigen/<id> (bv. "Open bus" uit de gele boek):
   // de fiche opent zodra de lijst er is; de parameter gaat daarna weg zodat
   // sluiten niet opnieuw opent.
   const [voertuigParam, zetVoertuigParam] = useRouteParam(0);
@@ -155,7 +155,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
         <OpsStat icon={<Bus size={16} />} tone="slate" label="Actief" value={tellers.actief} sub="in dienst" onClick={() => setFilter('actief')} className={cn(filter === 'actief' && 'ring-2 ring-oker-500/40')} />
         <OpsStat icon={<Zap size={16} />} tone="slate" label="Elektrisch" value={tellers.elektrisch} sub="e-bussen" />
         <OpsStat icon={<ShieldCheck size={16} />} tone={tellers.verloopt > 0 ? 'amber' : 'slate'} label="Verloopt binnen 30 d" value={tellers.verloopt} sub={tellers.verloopt > 0 ? 'keuring of controle plannen' : 'alles in orde'} onClick={() => setFilter('verloopt')} className={cn(filter === 'verloopt' && 'ring-2 ring-oker-500/40')} />
-        <OpsStat icon={<Wrench size={16} />} tone={tellers.metDefect > 0 ? 'amber' : 'slate'} label="Met open defect" value={tellers.metDefect} sub="in het gele boek" />
+        <OpsStat icon={<Wrench size={16} />} tone={tellers.metDefect > 0 ? 'amber' : 'slate'} label="Met open defect" value={tellers.metDefect} sub="in de gele boek" />
       </div>
 
       {zl.fout && voertuigen.length === 0 ? (

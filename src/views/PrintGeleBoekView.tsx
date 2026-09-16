@@ -19,7 +19,7 @@ export function PrintGeleBoekView({ filter }: { filter: 'open' | 'alles' }) {
     let actief = true;
     laadDefecten({ status: filter === 'open' ? 'open' : 'alles', limit: 5000 })
       .then((d) => { if (actief) setRijen([...d].sort((a, b) => a.gemeldOp.localeCompare(b.gemeldOp))); })
-      .catch((e: unknown) => { if (actief) setFout(e instanceof Error ? e.message : 'Kon het gele boek niet laden.'); });
+      .catch((e: unknown) => { if (actief) setFout(e instanceof Error ? e.message : 'Kon de gele boek niet laden.'); });
     return () => { actief = false; };
   }, [filter]);
 

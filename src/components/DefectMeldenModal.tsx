@@ -14,7 +14,7 @@ import { Badge, Button, FilterChip } from './primitives';
 
 /**
  * "Defect melden": de chauffeur (of technieker) meldt een probleem aan een
- * bus, dat meteen in het gele boek van de garage verschijnt (fase A Access-
+ * bus, dat meteen in de gele boek van de garage verschijnt (fase A Access-
  * migratie, 13-09). Lazy geladen vanuit Mijn dag en het dashboard: pas bij de
  * klik komt deze chunk (mét zod-schema) binnen, de chauffeursschermen zelf
  * blijven licht. Onderaan de laatste eigen meldingen met hun status, zodat
@@ -30,7 +30,7 @@ export function DefectMeldenModal({
   open: boolean;
   onClose: () => void;
   currentUser: User;
-  /** Na een geslaagde melding (bv. lijst verversen in het gele boek). */
+  /** Na een geslaagde melding (bv. lijst verversen in de gele boek). */
   onGemeld?: (defect: Defect) => void;
   /** Bus al gekozen (vanuit het voertuigdetail). */
   vasteBusId?: string;
@@ -79,7 +79,7 @@ export function DefectMeldenModal({
     setBezig(true);
     try {
       const d = await meldDefect(r.data);
-      notify('Gemeld, de garage ziet het in het gele boek.', 'success');
+      notify('Gemeld, de garage ziet het in de gele boek.', 'success');
       setOmschrijving('');
       setFouten({});
       onGemeld?.(d);
@@ -163,6 +163,6 @@ export function DefectMeldenModal({
   );
 }
 
-/** Naam van de melder voor het gele boek ("jij" op eigen meldingen). */
+/** Naam van de melder voor de gele boek ("jij" op eigen meldingen). */
 export const melderLabel = (d: Defect, currentUser: User): string =>
   d.gemeldDoor === String(currentUser.id) ? 'jij' : d.gemeldDoorNaam ?? 'onbekend';
