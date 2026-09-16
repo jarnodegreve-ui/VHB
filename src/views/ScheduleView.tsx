@@ -500,8 +500,9 @@ function MonthCalendar({
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',
                   !isSelected && 'hover:bg-surface-soft-hover',
-                  isSelected && 'bg-oker-500/15 ring-1 ring-oker-400',
-                  !isSelected && isToday && 'ring-1 ring-oker-300',
+                  // Gekozen dag = neutraal (punt 4); "vandaag" houdt de gouden ring, ook als hij gekozen is.
+                  isSelected && 'bg-surface-muted ring-1 ring-hairline-strong',
+                  isToday && 'ring-1 ring-oker-300',
                   !isSelected && leave && leaveDayTint(leave.status, leave.type),
                 )}
               >

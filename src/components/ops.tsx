@@ -44,6 +44,7 @@ export function OpsStat({
   meter,
   note,
   onClick,
+  actief = false,
   className,
 }: {
   icon: ReactNode;
@@ -68,6 +69,9 @@ export function OpsStat({
   /** Notitie van de planner bij deze dag — opvallend maar gedempt (oker). */
   note?: string;
   onClick?: () => void;
+  /** Gekozen filtertegel (punt 4, 16-09): neutraal zoals elke selectie,
+   *  gedempt vlak + sterke hairline, geen goud (goud = actie, focus, nu). */
+  actief?: boolean;
   className?: string;
 }) {
   const inner = (
@@ -138,7 +142,7 @@ export function OpsStat({
       // hoogte). Zonder dit hingen icoon en kop van een kortere tegel lager
       // dan die van de buurtegel.
       // rauw: KPI-tegel-als-knop met eigen layout (kaart-als-knop).
-      <button type="button" onClick={onClick} className={cn('group surface-card surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', className)}>
+      <button type="button" onClick={onClick} aria-pressed={actief || undefined} className={cn('group surface-card surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', actief && 'bg-surface-muted ring-1 ring-hairline-strong', className)}>
         {inner}
       </button>
     );

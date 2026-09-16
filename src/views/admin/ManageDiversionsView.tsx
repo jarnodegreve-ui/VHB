@@ -287,7 +287,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             padding="none"
             interactive
             aria-current={isCurrent ? 'true' : undefined}
-            className={cn('overflow-hidden', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
+            className={cn('overflow-hidden', isCurrent && 'bg-surface-muted ring-1 ring-hairline-strong')}
           >
             {/* rauw: lijstrij van het master-detail (kaart als knop: icoontegel + titel + badges + periode + chevron) — opent het bewerkpaneel */}
             <button

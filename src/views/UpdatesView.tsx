@@ -107,7 +107,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                     padding="none"
                     interactive
                     aria-current={isCurrent ? 'true' : undefined}
-                    className={cn('relative overflow-hidden', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
+                    className={cn('relative overflow-hidden', isCurrent && 'bg-surface-muted ring-1 ring-hairline-strong')}
                   >
                     <div className={cn('absolute top-0 left-0 w-1 h-full', update.isUrgent ? 'bg-red-500' : 'bg-slate-300')} />
                     {/* rauw: lijstrij van het master-detail (kaart als knop: titel + datum + dringend-badge + eerste regel) */}

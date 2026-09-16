@@ -192,7 +192,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         key={keyOf(device)}
         className={cn(
           'flex items-center gap-2 rounded-xl border px-3 py-2 border-amber-200 bg-amber-50/80',
-          isCurrent && 'ring-1 ring-oker-400',
+          isCurrent && 'ring-1 ring-hairline-strong',
         )}
       >
         {/* rauw: rij-inhoud (icoon + naam + status + meta) als knop naast de snelle actie — opent het detailpaneel */}

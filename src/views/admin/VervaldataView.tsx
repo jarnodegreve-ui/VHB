@@ -238,7 +238,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           value={tellers.verlopen}
           sub={tellers.verlopen > 0 ? 'direct actie nodig' : 'niets verlopen'}
           onClick={() => kiesFilter('verlopen')}
-          className={cn(filter === 'verlopen' && 'ring-2 ring-oker-500/40')}
+          actief={filter === 'verlopen'}
         />
         <OpsStat
           icon={<IdCard size={16} />}
@@ -247,7 +247,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           value={tellers.binnen30}
           sub="vernieuwing plannen"
           onClick={() => kiesFilter('binnen30')}
-          className={cn(filter === 'binnen30' && 'ring-2 ring-oker-500/40')}
+          actief={filter === 'binnen30'}
         />
         <OpsStat
           icon={<IdCard size={16} />}
@@ -256,7 +256,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           value={tellers.binnen90}
           sub="komt eraan"
           onClick={() => kiesFilter('binnen90')}
-          className={cn(filter === 'binnen90' && 'ring-2 ring-oker-500/40')}
+          actief={filter === 'binnen90'}
         />
         <OpsStat
           icon={<UserX size={16} />}
@@ -265,7 +265,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           value={tellers.zonder}
           sub={tellers.zonder > 0 ? 'nog in te vullen' : 'alles ingevuld'}
           onClick={() => kiesFilter('zonder')}
-          className={cn(filter === 'zonder' && 'ring-2 ring-oker-500/40')}
+          actief={filter === 'zonder'}
         />
       </div>
 
