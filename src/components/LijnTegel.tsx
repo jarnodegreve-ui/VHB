@@ -69,7 +69,7 @@ function LijnBadge({ lijn, size, tone }: { lijn: string; size: Maat; tone: Toon 
     <span
       role="img"
       aria-label={lijnLabel(lijn)}
-      className={cn('relative block shrink-0 overflow-hidden', size === 'sm' ? 'h-6' : 'h-8')}
+      className={cn('lijnbadge relative block shrink-0 overflow-hidden ring-1 ring-hairline', size === 'sm' ? 'h-6' : 'h-8')}
       style={{ aspectRatio: '315 / 216', borderRadius: '15% / 22%' }}
     >
       <img

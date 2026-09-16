@@ -5,6 +5,11 @@ uit `Desktop/lijnnummer`. Ze worden ongewijzigd gebruikt: kleurprofiel, vorm en
 cijfers blijven behouden. Ook in het donkere thema en bij verlopen omleidingen
 blijven de badges in hun oorspronkelijke kleuren zichtbaar.
 
+In het donkere thema worden ze wel iets gedempt (`--badge-demping` in
+`src/index.css`, klasse `lijnbadge`) en krijgen ze een hairline. Drie badges
+(801, 858, 884) hebben een wit binnenvlak dat anders het felste element op de
+donkere canvas is. De kleuren zelf verschuiven daarbij niet.
+
 `src/components/LijnTegel.tsx` kadert alleen de badge in (315 × 216 pixels per
 bronbestand), zodat de grijze screenshotmarge niet wordt getoond. De positie en
 afmetingen van elk bronbestand staan daar bij de import. Vite levert de PNG's
