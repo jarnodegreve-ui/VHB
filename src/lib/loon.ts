@@ -64,7 +64,6 @@ export const heropenDag = (datum: string, reden: string) => vraag<DagAfsluiting>
 export const laadLoonCodes = () => vraag<LoonCode[]>('/api/loon/codes');
 export const bewaarLoonCode = (code: string, body: LoonCodeBody) => vraag<LoonCode>(`/api/loon/codes/${encodeURIComponent(code)}`, json('PUT', body));
 export const verwijderLoonCode = (code: string) => vraag<{ success: true }>(`/api/loon/codes/${encodeURIComponent(code)}`, { method: 'DELETE' });
-export const laadOntbrekendeCodes = (maand: string) => vraag<Array<{ code: string; aantal: number }>>(`/api/loon/codes/ontbrekend?maand=${maand}`);
 
 export type LoonMedewerkerRij = { userId: string; naam: string; employeeId: string | null; easypayNr: number | null; inExport: boolean };
 export const laadMedewerkers = () => vraag<LoonMedewerkerRij[]>('/api/loon/medewerkers');

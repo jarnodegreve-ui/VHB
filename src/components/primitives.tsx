@@ -224,11 +224,8 @@ export function MicroLabel({ className, children }: { className?: string; childr
 // === Segmented control ===
 
 /**
- * Eén dialect voor het segmented-control-patroon (sorteer-/filterschakelaars
- * op een `glass-segmented`-rail). Er waren er drie — amber-gevuld, glass-chip
- * en witte chip; dit is de amber-gevulde (de recentste, o.a. ScheduleView en
- * OCPI). `segItemClass(actief)` geeft de knop-klassen; de rail zelf blijft
- * `glass-segmented … p-1` bij de aanroeper (verschillende radius/breedte).
+ * Klassen voor het segmented-control-patroon. `Segmented` hieronder is de
+ * enige consument: elke rail in het portaal is die component.
  */
 const SEG_ITEM = 'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold';
 // Actief = neutrale 'papieren' chip (iOS/Linear-patroon) i.p.v. vol goud:
@@ -236,21 +233,10 @@ const SEG_ITEM = 'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold';
 // gaf dat twee gouden vlakken in één kop (controle 05-09, nr. 19).
 const SEG_PIL = 'bg-paper shadow-sm ring-1 ring-hairline';
 
-export function segItemClass(actief: boolean, className?: string) {
-  return cn(
-    SEG_ITEM,
-    'transition-all',
-    actief ? cn(SEG_PIL, 'text-slate-900') : 'text-slate-500 hover:text-slate-700',
-    className,
-  );
-}
-
 /**
- * Segmented control met schuivende pil: dezelfde rail en item-klassen als
- * `segItemClass`, maar de papieren chip is één `motion.span` (layoutId) die
+ * Segmented control met schuivende pil: de papieren chip is één `motion.span` (layoutId) die
  * op de veer (EASE_SPRING, DUR.fast) naar het actieve item schuift. Sinds
- * golf 2 (punt 9) dé schakelaar voor elke groep die één waarde kiest;
- * `segItemClass` blijft alleen voor items die geen groep vormen. Klikken op
+ * golf 2 (punt 9) dé schakelaar voor elke groep die één waarde kiest. Klikken op
  * het actieve item roept `onChange` opnieuw aan (sorteerrichting wisselen in
  * Dienstoverzicht). Reduced motion of een lopende view transition: de pil
  * springt.

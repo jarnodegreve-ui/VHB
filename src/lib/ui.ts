@@ -87,11 +87,6 @@ export function telHref(phone: string | undefined | null): string | undefined {
   return `tel:${plus ? '+' : ''}${digits}`;
 }
 
-/** Veilige href voor een download-anchor: onveilige/lege URL's worden
- *  onklikbaar (`undefined`) i.p.v. een navigatiedoel. */
-export const safeDocumentHref = (url: string | undefined | null): string | undefined =>
-  url && isSafeDocumentUrl(url) ? url : undefined;
-
 /** Nieuw tabblad zonder opener-lek — bewust NIET via de 'noopener'/
  *  'noreferrer'-features: per HTML-spec geeft window.open dán áltijd null
  *  terug, óók als het venster gewoon opent. De fallback in openPdfInNewTab

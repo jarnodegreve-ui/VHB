@@ -74,16 +74,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   }, []);
   const openAanvraag = () => { setModus('aanvraag'); setPeriodeFout(''); setVoorWieFout(''); setShowRequestModal(true); };
   const openRegistratie = () => { setModus('registratie'); setPeriodeFout(''); setVoorWieFout(''); setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' }); setShowRequestModal(true); };
-  // /verlof?nieuw=1 (command palette "Verlof aanvragen"): meteen het
-  // aanvraagformulier openen en de parameter weer uit de URL halen.
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get('nieuw') !== '1') return;
-    url.searchParams.delete('nieuw');
-    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
-    setModus('aanvraag');
-    setShowRequestModal(true);
-  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
   // (browser-popup met "vhb-five.vercel.app meldt…" schrikt chauffeurs af).

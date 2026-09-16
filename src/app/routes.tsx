@@ -7,10 +7,9 @@ import type { Role, View } from '../types';
 
 /**
  * Dé routetabel van het portaal — één bron voor: het pad in de URL, de
- * sidebar (sectie + icoon + label), de bottom-nav, het command palette, de
- * rol-guard en de titel in de topbar. Voorheen stonden die zes lijsten los
- * in App.tsx/BottomNav/CommandPalette en liepen ze uit elkaar (één scherm
- * had drie namen).
+ * sidebar (sectie + icoon + label), de bottom-nav, de rol-guard en de titel
+ * in de topbar. Voorheen stonden die lijsten los in App.tsx en BottomNav en
+ * liepen ze uit elkaar (één scherm had drie namen).
  *
  * `pad` = de URL zonder leidende slash ('' = dashboard). Parameters komen
  * erachter als extra segmenten (`/bezetting/2026-03`), zie router.ts.
@@ -24,12 +23,12 @@ export type RouteDef = {
   label: string;
   /** Korte naam voor de bottom-nav (valt terug op label). */
   kort?: string;
-  /** Eén regel uitleg (command palette, instellingen-overzicht). */
+  /** Eén regel uitleg (instellingen-overzicht). */
   omschrijving: string;
   icoon: LucideIcon;
   sectie: Sectie;
   rollen: readonly Role[];
-  /** Niet in de sidebar tonen (wel bereikbaar via URL/palette). */
+  /** Niet in de sidebar tonen (wel bereikbaar via URL). */
   verborgen?: boolean;
   /** Brede kolom (--content-max-breed i.p.v. --content-max): schermen met
    *  een matrix of brede tabel. Schil (topbar, #hoofdinhoud) en PageShell

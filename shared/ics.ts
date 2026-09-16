@@ -1,6 +1,6 @@
 /**
- * Pure iCalendar (.ics) helpers — géén browser/DOM- of Node-afhankelijkheden,
- * zodat zowel de server (abonnee-feed) als unit-tests ze kunnen gebruiken.
+ * Pure iCalendar (.ics) helpers, gedeeld door api/ (abonnee-feed) en src/
+ * (één bron in shared/, geen browser/DOM- of Node-afhankelijkheden).
  *
  * Tijden worden als "floating local time" geschreven (geen Z, geen TZID):
  * agenda-apps tonen die in de lokale tijdzone van de kijker. Voor een

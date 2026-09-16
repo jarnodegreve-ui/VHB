@@ -29,6 +29,3 @@ export const EASE_SPRING = [0.34, 1.2, 0.64, 1] as const;
 
 /** Kant-en-klare transition-props voor `motion`-elementen. */
 export const transitie = (duration: number = DUR.base, delay = 0) => ({ duration, ease: EASE, delay });
-
-/** Binnenkomend paneel: veer-easing op de ladder-duur. */
-export const transitieSpring = (duration: number = DUR.base) => ({ duration, ease: EASE_SPRING });

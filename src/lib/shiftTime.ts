@@ -43,10 +43,6 @@ export const parseHHMM = (t: string): number | null => {
   return h * 60 + min;
 };
 
-/** Alias van `isoDate` (datum.ts) — de ene bron voor de lokale dag; blijft
- *  bestaan voor wie hem uit deze module importeert. */
-export const localIso = isoDate;
-
 /**
  * Is dit dienstsegment op dit moment bezig? Gesplitste diensten zijn aparte
  * segmenten, dus een chauffeur met pauze tussen twee delen telt dan terecht

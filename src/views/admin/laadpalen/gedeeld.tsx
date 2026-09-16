@@ -21,8 +21,6 @@ export const tekstKwh = (v: number) => metEenheid(formatGetal(v), 'kWh');
 /** Hele kWh met smal duizendtal ("6 559"): tienden zeggen niets op maandniveau. */
 export const fmtKwh = (kwh: number) => formatGetal(Math.round(kwh));
 export const tekstKwhHeel = (kwh: number) => metEenheid(fmtKwh(kwh), 'kWh');
-export const tekstPct = (v: number) => `${formatGetal(v, 1)} %`;
-
 /** Minuten → "9 u 24 min", "45 min", "—". */
 export const duurLabel = (min: number | null | undefined): string => {
   if (min === null || min === undefined || !Number.isFinite(min)) return '—';

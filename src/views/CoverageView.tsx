@@ -31,7 +31,7 @@ import {
   type CoverageWeekdayPeriod,
   type DayGap,
 } from '../lib/coverage';
-import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking, type VerwachtingVoorstel } from '../lib/coverageGaps';
+import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking, type VerwachtingVoorstel } from '../../shared/coverageGaps';
 import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
 import { bouwKalenderUitzonderingen } from '../lib/schoolkalender';
 import { useRouteParam } from '../app/router';

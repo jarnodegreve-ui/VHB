@@ -1,4 +1,4 @@
-import { buildCalendar, type IcsEvent } from './ics';
+import { buildCalendar, type IcsEvent } from '../../shared/ics';
 import { serviceNumberOf } from './format';
 import { downloadBlob } from './ui';
 import type { Shift } from '../types';

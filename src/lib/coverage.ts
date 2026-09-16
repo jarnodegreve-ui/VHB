@@ -1,7 +1,7 @@
 import { apiJson } from './api';
-import type { DayGap } from './coverageGaps';
+import type { DayGap } from '../../shared/coverageGaps';
 
-export type { DayGap } from './coverageGaps';
+export type { DayGap } from '../../shared/coverageGaps';
 
 /** Eén zelf-gedefinieerd dag-type met de verwachte diensten (welke + hoeveel). */
 export type CoverageDayType = { name: string; services: string[] };
@@ -56,14 +56,14 @@ export type ExpectationCheck = {
   from: string;
   to: string;
   dagen: number;
-  afwijkingen: import('./coverageGaps').VerwachtingAfwijking[];
+  afwijkingen: import('../../shared/coverageGaps').VerwachtingAfwijking[];
 };
 
 export type ExpectationVoorstel = {
   from: string;
   to: string;
   dagen: number;
-  voorstellen: import('./coverageGaps').VerwachtingVoorstel[];
+  voorstellen: import('../../shared/coverageGaps').VerwachtingVoorstel[];
 };
 
 /** Lijstenvoorstel uit de praktijk: per dag-type de codes die op minstens de

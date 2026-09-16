@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { escapeHtml } from "./email.js";
 import { getLeaveData, getPlanningData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getUsersData } from "./storage.js";
 import { addDagenIso, brusselsDay, matrixCodesForDate, toLookupToken } from "./helpers.js";
-import type { DayGap } from "./coverageGaps.js";
+import type { DayGap } from "../shared/coverageGaps.js";
 
 /**
  * Telegram-koppeling voor de planner — het beproefde patroon uit Jarno's

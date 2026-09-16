@@ -344,8 +344,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [isSidebarOpen, isDesktopNav]);
 
-  // ⌘K / Ctrl+K opent het command palette
-
   // Supabase Realtime: live sync van leave/swaps/diversions/updates/planning.
   // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
   // gebeurt er niets.
@@ -1668,10 +1666,9 @@ export default function App() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Zoekknop bewust weg (Jarno: "vrij zinloos") — het
-                      command palette blijft bereikbaar via ⌘K. Geen permanente
-                      "Online"-pill: alleen een storing verdient een signaal
-                      (offline-banner hieronder). */}
+                  {/* Zoekknop bewust weg (Jarno: "vrij zinloos"). Geen
+                      permanente "Online"-pill: alleen een storing verdient een
+                      signaal (offline-banner hieronder). */}
                   {/* Topbar-inrichting = mock Jarno 30-08: preview-toggle,
                       bel met attentie-stip, avatar-menu. De toggle stond
                       eerst op beide dashboards; één vaste plek is rustiger.
@@ -1933,7 +1930,6 @@ export default function App() {
         hidden={isSidebarOpen}
       />
 
-      {/* ⌘K Command Palette */}
     </AppDataProvider>
   );
 }
