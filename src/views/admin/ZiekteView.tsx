@@ -66,14 +66,11 @@ export function ZiekteView({
   const nuZiek = ziektes
     .filter((r) => r.status === 'approved' && r.startDate <= today && r.endDate >= today)
     .sort((a, b) => a.endDate.localeCompare(b.endDate));
-  const aangekondigd = ziektes
-    .filter((r) => r.status === 'approved' && r.startDate > today)
-    .sort((a, b) => a.startDate.localeCompare(b.startDate));
   const historiek = ziektes
     .filter((r) => (r.status === 'approved' && r.endDate < today) || r.status === 'cancelled')
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
-  const actueleMeldingen = [...nuZiek, ...aangekondigd];
+  const actueleMeldingen = ziektes.filter((r) => r.status === 'approved' && r.endDate >= today);
   const openDienstenLijst = (r: LeaveRequest) => openZiekteDiensten(r, shifts, today);
   const openDienstenVan = (r: LeaveRequest) => openDienstenLijst(r).length;
   // Een gesplitste dienst of overlappende ziekteperiode telt maar één keer.
@@ -270,11 +267,10 @@ export function ZiekteView({
 
       <section aria-label="Ziekte vandaag" className="space-y-3">
         <p className="text-body-sm text-slate-500">Stand van {formatDayLong(today)}</p>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <ZiekteKengetal label="Nu ziek" waarde={personenNuZiek} uitleg="unieke chauffeurs vandaag" />
-          <ZiekteKengetal label="Diensten op naam" waarde={dienstenOpNaam} uitleg="binnen lopende en komende ziekteperiodes" aandacht={dienstenOpNaam > 0} />
+          <ZiekteKengetal label="Diensten op naam" waarde={dienstenOpNaam} uitleg="binnen geregistreerde ziekteperiodes" aandacht={dienstenOpNaam > 0} />
           <ZiekteKengetal label="Loopt vandaag af" waarde={looptVandaagAf} uitleg="meldingen waarvan de einddatum vandaag is" aandacht={looptVandaagAf > 0} />
-          <ZiekteKengetal label="Aangekondigd" waarde={aangekondigd.length} uitleg="meldingen met een latere startdatum" />
         </div>
       </section>
 
