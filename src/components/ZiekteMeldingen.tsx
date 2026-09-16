@@ -11,7 +11,7 @@ import { Badge, Button, FilterChip, Segmented } from './primitives';
 import { Paginering } from './Table';
 import { EmptyState } from './ui';
 
-type ZiekteFilter = 'nu' | 'komend' | 'alles';
+type ZiekteFilter = 'nu' | 'alles';
 const PER_PAGINA = 10;
 
 /** Elke rij gaat over één registratie. De samenvatting erboven telt personen. */
@@ -31,27 +31,25 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
   const namen = new Map(users.map((u) => [String(u.id), u.name]));
   const naamVan = (id: string) => namen.get(String(id)) ?? 'Onbekende chauffeur';
   const nu = meldingen.filter((r) => r.startDate <= vandaag).length;
-  const komend = meldingen.length - nu;
   const query = zoek.trim().toLocaleLowerCase('nl');
   const resultaat = meldingen.filter((r) => {
     if (query && !naamVan(r.userId).toLocaleLowerCase('nl').includes(query)) return false;
     if (historiek) return status === 'alle' || (status === 'ingetrokken' ? r.status === 'cancelled' : r.status === 'approved');
     if (filter === 'nu' && r.startDate > vandaag) return false;
-    if (filter === 'komend' && r.startDate <= vandaag) return false;
     return !metDiensten || dienstenVan(r) > 0;
   }).sort((a, b) => historiek
     ? b.startDate.localeCompare(a.startDate) || naamVan(a.userId).localeCompare(naamVan(b.userId), 'nl')
     : Number(dienstenVan(b) > 0) - Number(dienstenVan(a) > 0) || a.endDate.localeCompare(b.endDate) || naamVan(a.userId).localeCompare(naamVan(b.userId), 'nl'));
   const huidigePagina = Math.min(pagina, Math.max(1, Math.ceil(resultaat.length / PER_PAGINA)));
   const zichtbaar = resultaat.slice((huidigePagina - 1) * PER_PAGINA, huidigePagina * PER_PAGINA);
-  const titel = historiek ? 'Historiek' : 'Actuele meldingen';
+  const titel = historiek ? 'Historiek' : 'Actueel';
   const wisFilters = () => { setZoek(''); setFilter('alles'); setStatus('alle'); setMetDiensten(false); setPagina(1); };
 
   return (
     <section aria-label={titel} className="space-y-4">
       <CardHeader
         title={titel}
-        description={historiek ? 'Afgelopen en ingetrokken registraties, van nieuw naar oud.' : 'Meldingen met diensten op naam staan bovenaan.'}
+        description={historiek ? 'Afgelopen en ingetrokken registraties, van nieuw naar oud.' : undefined}
         aside={<span className="text-xs text-slate-500">{resultaat.length} {resultaat.length === 1 ? 'melding' : 'meldingen'}</span>}
       />
       <Card padding="none" className="@container overflow-hidden">
@@ -62,7 +60,6 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
               waarde={filter}
               opties={[
                 { waarde: 'nu', label: `Nu ziek (${nu})` },
-                { waarde: 'komend', label: `Aangekondigd (${komend})` },
                 { waarde: 'alles', label: 'Alles' },
               ]}
               onChange={(waarde) => { setFilter(waarde); setPagina(1); }}
@@ -107,7 +104,7 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
             <div aria-hidden="true" className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,.8fr)_minmax(0,.9fr)_1rem] gap-4 border-b border-hairline-subtle bg-surface-soft px-4 py-2.5 text-xs font-medium text-slate-500 @[46rem]:grid">
               <span>Chauffeur</span><span>Geregistreerde periode</span><span>Kalenderdagen</span><span>{historiek ? 'Status' : 'Opvolging'}</span><span />
             </div>
-            <ul className="divide-y divide-hairline-subtle" aria-label={historiek ? 'Eerdere ziekmeldingen' : 'Lopende en aangekondigde ziekmeldingen'}>
+            <ul className="divide-y divide-hairline-subtle" aria-label={historiek ? 'Eerdere ziekmeldingen' : 'Actuele ziekmeldingen'}>
               {zichtbaar.map((r) => <ZiekteRij key={r.id} melding={r} naam={naamVan(r.userId)} vandaag={vandaag} diensten={historiek ? 0 : dienstenVan(r)} historiek={historiek} onOpen={onOpen} />)}
             </ul>
             <Paginering totaal={resultaat.length} perPagina={PER_PAGINA} pagina={huidigePagina} onPagina={setPagina} className="border-t border-hairline" />
@@ -146,7 +143,7 @@ function ZiekteRij({ melding: r, naam, vandaag, diensten, historiek, onOpen }: {
         </span>
         <span id={`${beschrijvingId}-dagen`} className="min-w-0 text-sm text-slate-700 @[46rem]:col-start-3 @[46rem]:row-start-1">
           <span className="font-semibold">{dagen} {dagen === 1 ? 'dag' : 'dagen'}</span>
-          <span className="block text-xs text-slate-500">{historiek ? 'geregistreerd' : komend ? 'aangekondigd' : 't/m vandaag'}</span>
+          <span className="block text-xs text-slate-500">{historiek || komend ? 'geregistreerd' : 't/m vandaag'}</span>
         </span>
         <span id={`${beschrijvingId}-status`} className="flex min-w-0 flex-col items-end gap-1.5 @[46rem]:col-start-4 @[46rem]:row-start-1 @[46rem]:items-start">
           {historiek ? <Badge tone="slate">{r.status === 'cancelled' ? 'Ingetrokken' : 'Afgelopen'}</Badge> : (

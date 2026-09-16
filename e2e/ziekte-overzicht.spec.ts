@@ -40,7 +40,7 @@ const DIENSTEN = [
   dienst('alex-morgen', 'alex', '2026-09-17', '2607'),
   dienst('alex-voorbij', 'alex', '2026-09-13', '2101'),
   dienst('alex-na-herstel', 'alex', '2026-09-21', '2101'),
-  dienst('cem-aangekondigd', 'cem', '2026-09-18', '4101'),
+  dienst('cem-geregistreerd', 'cem', '2026-09-18', '4101'),
 ];
 
 type ZiekmeldingPayload = { userId: string; startDate: string; endDate: string; comment?: string };
@@ -80,7 +80,7 @@ async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, u
   });
   await page.goto('/beheer/ziekte');
   await expect(page.getByRole('heading', { level: 1, name: 'Ziekte', exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('region', { name: 'Actuele meldingen', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Actueel', exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   return { registraties, wijzigingen, dienstwissels };
 }
@@ -100,7 +100,7 @@ async function pastBinnenScherm(page: Page) {
 
 test('ziekte: actuele filters, zoeken en diensten op naam blijven bruikbaar', async ({ page }) => {
   await openZiekte(page);
-  const actueel = page.getByRole('region', { name: 'Actuele meldingen', exact: true });
+  const actueel = page.getByRole('region', { name: 'Actueel', exact: true });
   await expect(rij(actueel, 0, '2026-09-14')).toBeVisible();
   await expect(rij(actueel, 1, VANDAAG)).toBeVisible();
   await expect(rij(actueel, 2, '2026-09-18')).toHaveCount(0);
@@ -108,7 +108,7 @@ test('ziekte: actuele filters, zoeken en diensten op naam blijven bruikbaar', as
   await expect(rij(actueel, 0, '2026-09-14')).toHaveAccessibleDescription(/14 sep 2026.*20 sep 2026.*3 dagen.*t\/m vandaag.*2 diensten op naam/);
   await expect(rij(actueel, 3, VANDAAG)).toHaveCount(0);
   const kengetallen = page.getByRole('region', { name: 'Ziekte vandaag', exact: true });
-  for (const [label, waarde] of [['Nu ziek', '2'], ['Diensten op naam', '3'], ['Loopt vandaag af', '1'], ['Aangekondigd', '1']]) {
+  for (const [label, waarde] of [['Nu ziek', '2'], ['Diensten op naam', '3'], ['Loopt vandaag af', '1']]) {
     await expect(kengetallen.getByLabel(label, { exact: true }).locator('.text-stat')).toHaveText(waarde);
   }
   await pastBinnenScherm(page);
@@ -117,10 +117,8 @@ test('ziekte: actuele filters, zoeken en diensten op naam blijven bruikbaar', as
   await metDiensten.click();
   await expect(rij(actueel, 0, '2026-09-14')).toBeVisible();
   await expect(rij(actueel, 1, VANDAAG)).toHaveCount(0);
-  await actueel.getByRole('button', { name: /^Aangekondigd/ }).click();
-  await expect(rij(actueel, 2, '2026-09-18')).toBeVisible();
-  await expect(rij(actueel, 0, '2026-09-14')).toHaveCount(0);
   await actueel.getByRole('button', { name: /^Alles/ }).click();
+  await expect(rij(actueel, 2, '2026-09-18')).toBeVisible();
   await expect(actueel.getByRole('button', { name: /^Bekijk ziekmelding/ })).toHaveCount(2);
   await metDiensten.click();
   await expect(actueel.getByRole('button', { name: /^Bekijk ziekmelding/ })).toHaveCount(3);
@@ -176,13 +174,13 @@ test('ziekte: registreren verstuurt de gekozen chauffeur en verschijnt direct in
   await modal.getByRole('button', { name: 'Ziekmelding registreren', exact: true }).click();
   await expect(modal).toHaveCount(0);
   expect(writes.registraties).toEqual([{ userId: 'dina', startDate: VANDAAG, endDate: VANDAAG, comment: 'Om 06:15 telefonisch doorgegeven.' }]);
-  await expect(rij(page.getByRole('region', { name: 'Actuele meldingen', exact: true }), 3, VANDAAG)).toBeVisible();
+  await expect(rij(page.getByRole('region', { name: 'Actueel', exact: true }), 3, VANDAAG)).toBeVisible();
   await pastBinnenScherm(page);
 });
 
 test('ziekte: planner kan einddatum opslaan en ziet geen dienstwisselacties', async ({ page }) => {
   const writes = await openZiekte(page, { user: PLANNER });
-  await rij(page.getByRole('region', { name: 'Actuele meldingen', exact: true }), 0, '2026-09-14').click();
+  await rij(page.getByRole('region', { name: 'Actueel', exact: true }), 0, '2026-09-14').click();
   const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[0].name, exact: true }) });
   await expect(modal.getByText('Dienst 2101', { exact: true })).toHaveCount(1);
   await expect(modal.getByText('Dienst 2607', { exact: true })).toBeVisible();
@@ -203,7 +201,7 @@ test('ziekte: planner kan einddatum opslaan en ziet geen dienstwisselacties', as
   expect(writes.wijzigingen[0].find((r) => r.id === 'nu-alex')).toMatchObject({ endDate: '2026-09-17' });
   expect(writes.wijzigingen[0].find((r) => r.id === 'verlof-dina')).toEqual(MELDINGEN.find((r) => r.id === 'verlof-dina'));
   expect(writes.dienstwissels).toEqual([]);
-  await rij(page.getByRole('region', { name: 'Actuele meldingen', exact: true }), 0, '2026-09-14').click();
+  await rij(page.getByRole('region', { name: 'Actueel', exact: true }), 0, '2026-09-14').click();
   await expect(modal.getByLabel('Ziek tot en met', { exact: true })).toHaveAttribute('data-datum', '2026-09-17');
 });
 
