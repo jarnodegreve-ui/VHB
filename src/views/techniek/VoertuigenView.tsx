@@ -137,6 +137,10 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
     if (detail?.id === v.id) setDetail(v);
   };
 
+  // De lege staat draagt dezelfde actie als de kopknop; dan hoort er maar
+  // één gouden knop in beeld te staan (punt 13, 16-09).
+  const legeStaat = voertuigen.length === 0 && !zl.laden && !zl.fout;
+
   return (
     <PageShell>
       <PageHeader
@@ -145,7 +149,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
         actions={(
           <>
             <VersheidRegel {...zl.versheid} />
-            {staf && <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ voertuig: null })}>Voertuig toevoegen</Button>}
+            {staf && !legeStaat && <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ voertuig: null })}>Voertuig toevoegen</Button>}
           </>
         )}
       />

@@ -82,6 +82,10 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
 
   const busLabel = (w: Werkprestatie) => (w.vehicleId ? voertuigNaam({ busnr: w.busnr ?? '', kortNr: w.kortNr }) : 'Garage / algemeen');
 
+  // De lege staat draagt dezelfde actie als de kopknop; dan hoort er maar
+  // één gouden knop in beeld te staan (punt 13, 16-09).
+  const legeStaat = rijen.length === 0 && !zl.laden && !zl.fout;
+
   return (
     <PageShell>
       <PageHeader
@@ -90,7 +94,7 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
         actions={(
           <>
             <VersheidRegel {...zl.versheid} />
-            <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>
+            {!legeStaat && <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>}
           </>
         )}
       />
