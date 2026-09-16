@@ -13,12 +13,14 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { apiFetch } from '../../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } from '../../lib/herverdeel';
-import { Button, Chip, MicroLabel, microLabelClass } from '../../components/primitives';
+import { Button, MicroLabel, microLabelClass } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card } from '../../components/Card';
-import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Select, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
+import { ZiekteInzicht } from '../../components/ZiekteInzicht';
+import { ZiekteMeldingen } from '../../components/ZiekteMeldingen';
+import { openZiekteDiensten } from '../../lib/ziekteInzicht';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
 /**
@@ -56,11 +58,6 @@ export function ZiekteView({
   const today = isoDate(new Date());
   const naamVan = (id: string) => users.find((u) => String(u.id) === String(id))?.name ?? 'Onbekend';
   const isAdmin = user.role === 'admin';
-  const dagNa = (iso: string) => {
-    const d = new Date(`${iso}T00:00:00`);
-    d.setDate(d.getDate() + 1);
-    return isoDate(d);
-  };
 
   const ziektes = useMemo(
     () => leaveRequests.filter((r) => r.type === 'ziekte'),
@@ -74,53 +71,16 @@ export function ZiekteView({
     .sort((a, b) => a.startDate.localeCompare(b.startDate));
   const historiek = ziektes
     .filter((r) => (r.status === 'approved' && r.endDate < today) || r.status === 'cancelled')
-    .sort((a, b) => b.startDate.localeCompare(a.startDate))
-    .slice(0, 25);
+    .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
-  /** Diensten die binnen de ziekteperiode (vanaf vandaag) nog op naam staan —
-   *  dát is het werk dat dit scherm zichtbaar moet maken. */
-  const openDienstenLijst = (r: LeaveRequest) => {
-    const rijen = shifts.filter((s) =>
-      String(s.driverId) === String(r.userId) &&
-      s.date >= (r.startDate > today ? r.startDate : today) &&
-      s.date <= r.endDate,
-    );
-    // Gesplitste diensten (meerdere planning-rijen, zelfde dag + code) tellen
-    // hier één keer — zelfde dedupe als openstaandeDienstenVanAfwezigen; het
-    // vroegste segment blijft, en de wissel verhuist toch alle rijen van de
-    // dienst in één keer. Zonder dit stond "31 diensten op naam" waar er 17
-    // openstonden (melding Jarno 22-08).
-    const perDienst = new Map<string, Shift>();
-    for (const s of rijen) {
-      const key = `${s.date}|${serviceNumberOf(s).trim().toLowerCase()}`;
-      const bestaand = perDienst.get(key);
-      if (!bestaand || String(s.startTime ?? '') < String(bestaand.startTime ?? '')) perDienst.set(key, s);
-    }
-    return [...perDienst.values()].sort((a, b) => a.date.localeCompare(b.date));
-  };
+  const actueleMeldingen = [...nuZiek, ...aangekondigd];
+  const openDienstenLijst = (r: LeaveRequest) => openZiekteDiensten(r, shifts, today);
   const openDienstenVan = (r: LeaveRequest) => openDienstenLijst(r).length;
-
-  /** Ziektedagen per chauffeur dit jaar (goedgekeurde meldingen, afgekapt op
-   *  de jaargrens) — voor loonadministratie en verzuimgesprekken. */
-  const jaar = Number(today.slice(0, 4));
-  const clip = (iso: string, kant: 'start' | 'eind') => {
-    const grens = kant === 'start' ? `${jaar}-01-01` : `${jaar}-12-31`;
-    if (kant === 'start') return iso < grens ? grens : iso;
-    return iso > grens ? grens : iso;
-  };
-  const dagenDitJaar = useMemo(() => {
-    const per = new Map<string, number>();
-    for (const r of ziektes) {
-      if (r.status !== 'approved') continue;
-      if (r.endDate < `${jaar}-01-01` || r.startDate > `${jaar}-12-31`) continue;
-      const dagen = daysBetween(clip(r.startDate, 'start'), clip(r.endDate, 'eind'));
-      per.set(String(r.userId), (per.get(String(r.userId)) ?? 0) + dagen);
-    }
-    return [...per.entries()]
-      .map(([userId, dagen]) => ({ userId, dagen }))
-      .sort((a, b) => b.dagen - a.dagen);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ziektes, jaar]);
+  // Een gesplitste dienst of overlappende ziekteperiode telt maar één keer.
+  const dienstenOpNaam = new Set(actueleMeldingen.flatMap((r) => openDienstenLijst(r)
+    .map((d) => `${d.driverId}|${d.date}|${serviceNumberOf(d).trim().toLowerCase()}`))).size;
+  const personenNuZiek = new Set(nuZiek.map((r) => String(r.userId))).size;
+  const looptVandaagAf = nuZiek.filter((r) => r.endDate === today).length;
 
   // --- Herverdelen vanuit het detail (admin): zelfde wissel als overal -------
   const werkdagen = werkdagenUitShifts(shifts);
@@ -280,7 +240,7 @@ export function ZiekteView({
   const openDetail = (r: LeaveRequest) => { setDetail(r); setNieuwEinde(r.endDate); setBatchAdvies({}); setVerdeelFouten({}); };
   const bewaarEinde = async (endDate: string) => {
     if (!detail || isOpslaan) return;
-    if (endDate < detail.startDate) { return; }
+    if (!endDate || endDate < detail.startDate) { return; }
     setIsOpslaan(true);
     const ok = await Promise.resolve(onSave(leaveRequests.map((r) => (r.id === detail.id ? { ...r, endDate } : r))))
       .finally(() => setIsOpslaan(false));
@@ -294,98 +254,13 @@ export function ZiekteView({
     if (ok) setDetail(null);
   };
 
-  // Opmerking per rij uitklapbaar (Jarno 09-09): de tekst uit de import-
-  // preview is lang en maakte elke rij twee regels breed.
-  const [openOpmerkingen, setOpenOpmerkingen] = useState<Set<string>>(new Set());
-  const wisselOpmerking = (id: string) => setOpenOpmerkingen((cur) => {
-    const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n;
-  });
-
-  const Rij = ({ r, toonOpen }: { r: LeaveRequest; toonOpen?: boolean }) => {
-    const open = toonOpen ? openDienstenVan(r) : 0;
-    const dagen = daysBetween(r.startDate, r.endDate);
-    const lopend = r.status === 'approved' && r.startDate <= today && r.endDate >= today;
-    const komend = r.status === 'approved' && r.startDate > today;
-    const opmerkingOpen = openOpmerkingen.has(r.id);
-    return (
-      // Compacte kaart in een raster, zoals de contactlijst: naam + één
-      // metaregel; de opmerking zit achter een uitklapknop. De kaart is geen
-      // knop-in-knop: de kop opent het detail, de uitklapknop staat ernaast.
-      <Card padding="none" className="flex flex-col overflow-hidden">
-        {/* rauw: kaartkop als knop (naam + periode), opent het detailpaneel */}
-        <button
-          type="button"
-          onClick={() => openDetail(r)}
-          className="group flex w-full items-start gap-3 px-3.5 py-2.5 min-h-11 text-left transition-colors hover:bg-surface-row-hover"
-        >
-          <Avatar naam={naamVan(r.userId)} size="sm" />
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2">
-              <span className="truncate text-sm font-semibold text-slate-800">{naamVan(r.userId)}</span>
-              {r.status === 'cancelled' && <Chip tone="slate" mono={false}>ingetrokken</Chip>}
-            </span>
-            <span className="mt-px block text-xs font-normal text-slate-500">
-              {formatShortDay(r.startDate)}{r.startDate !== r.endDate ? ` → ${formatShortDay(r.endDate)}` : ''}
-              {' · '}{dagen} {dagen === 1 ? 'dag' : 'dagen'}
-            </span>
-            {/* Mensentaal bij lopende/komende periodes: wanneer is hij terug? */}
-            {lopend && (
-              <span className="mt-px block text-xs font-medium text-emerald-700">
-                terug {formatShortDay(dagNa(r.endDate))} · nog {daysBetween(today, r.endDate)} {daysBetween(today, r.endDate) === 1 ? 'dag' : 'dagen'}
-              </span>
-            )}
-            {komend && (
-              <span className="mt-px block text-xs font-medium text-slate-500">
-                start over {daysBetween(today, r.startDate) - 1 || 1} {daysBetween(today, r.startDate) - 1 === 1 ? 'dag' : 'dagen'}
-              </span>
-            )}
-          </span>
-          {toonOpen && open > 0 && (
-            <Chip tone="amber" mono={false} className="shrink-0">
-              {open} {open === 1 ? 'dienst' : 'diensten'}
-            </Chip>
-          )}
-        </button>
-        {r.comment && (
-          <div className="border-t border-hairline-subtle">
-            <Button
-              variant="ghost"
-              size="sm"
-              full
-              className="justify-between rounded-none px-3.5 text-xs text-slate-500"
-              aria-expanded={opmerkingOpen}
-              onClick={() => wisselOpmerking(r.id)}
-            >
-              <span>Opmerking</span>
-              <ChevronDown size={14} className={uitklapChevron(opmerkingOpen)} />
-            </Button>
-            <Uitklap open={opmerkingOpen}>
-              <p className="px-3.5 pb-3 text-body-sm font-normal text-slate-600">{r.comment}</p>
-            </Uitklap>
-          </div>
-        )}
-      </Card>
-    );
-  };
-
-  const Sectie = ({ titel, items, leeg, toonOpen }: { titel: string; items: LeaveRequest[]; leeg: string; toonOpen?: boolean }) => (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between px-1">
-        <MicroLabel className="text-slate-500">{titel}</MicroLabel>
-        <MicroLabel className="tabular-nums">{items.length}</MicroLabel>
-      </div>
-      {items.length === 0 ? (
-        <p className="rounded-xl bg-surface-soft px-3.5 py-3 text-xs font-medium text-slate-500">{leeg}</p>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{items.map((r) => <Rij key={r.id} r={r} toonOpen={toonOpen} />)}</div>
-      )}
-    </div>
-  );
+  const [toonExcel, setToonExcel] = useState(false);
 
   return (
     <PageShell>
       <PageHeader
         title="Ziekte"
+        description="Actuele meldingen, opvolging en inzicht in geregistreerde ziektedagen."
         actions={(
           <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setMeldOpen(true)}>
             Ziek melden
@@ -393,63 +268,48 @@ export function ZiekteView({
         )}
       />
 
-      {/* Excel zegt ziek, portaal weet van niets — vóór de secties, want dit
-          is precies het geval waarin de secties hieronder leeg blijven. */}
+      <section aria-label="Ziekte vandaag" className="space-y-3">
+        <p className="text-body-sm text-slate-500">Stand van {formatDayLong(today)}</p>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <ZiekteKengetal label="Nu ziek" waarde={personenNuZiek} uitleg="unieke chauffeurs vandaag" />
+          <ZiekteKengetal label="Diensten op naam" waarde={dienstenOpNaam} uitleg="binnen lopende en komende ziekteperiodes" aandacht={dienstenOpNaam > 0} />
+          <ZiekteKengetal label="Loopt vandaag af" waarde={looptVandaagAf} uitleg="meldingen waarvan de einddatum vandaag is" aandacht={looptVandaagAf > 0} />
+          <ZiekteKengetal label="Aangekondigd" waarde={aangekondigd.length} uitleg="meldingen met een latere startdatum" />
+        </div>
+      </section>
+
       {excelZiekte.length > 0 && (
-        <Card tone="warning" padding="md">
-          <div className="flex items-start gap-3">
-            {/* Zelfde banner-anatomie als de dekking (icoon-chip + tekst) —
-                één signaalvorm voor "Excel en portaal lopen uiteen". */}
-            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
-            <div className="min-w-0 flex-1">
-              <MicroLabel className="text-amber-700">In de planning als ziek, hier niet geregistreerd</MicroLabel>
-              <p className="mt-1 text-sm font-medium text-amber-900">
-                Deze chauffeurs staan in de geïmporteerde planning als "ziek", maar hebben geen ziekteperiode in het portaal, meldingen, dekking en dit blad kennen die afwezigheid dan niet.
-              </p>
-              {/* Zelfde rij-component als de import-preview: één presentatie. */}
-              <ul className="mt-3 space-y-2">
-                {excelZiekte.map((r) => (
-                  <ZiekteReeksRij
-                    key={ziekteReeksSleutel(r)}
-                    reeks={r}
-                    bezig={excelZiekteBusy === ziekteReeksSleutel(r)}
-                    disabled={!!excelZiekteBusy}
-                    onRegistreer={registreerUitExcel}
-                  />
-                ))}
-              </ul>
+        <Card as="section" aria-label="Ontbrekende registraties" tone="warning" padding="sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-start gap-2.5">
+              <AlertTriangle size={18} className="mt-1 shrink-0 text-amber-700" />
+              <div className="min-w-0">
+                <h2 className="text-card-title">{excelZiekte.length} {excelZiekte.length === 1 ? 'periode mist' : 'periodes missen'} een registratie</h2>
+                <p className="mt-1 text-body-sm text-amber-900">Wel als ziek in de planning, nog niet opgenomen in de cijfers hieronder.</p>
+              </div>
             </div>
+            <Button variant="secondary" size="sm" aria-expanded={toonExcel} aria-controls="ontbrekende-ziektemeldingen" onClick={() => setToonExcel((v) => !v)} iconRechts={<ChevronDown size={14} className={uitklapChevron(toonExcel)} />}>
+              {toonExcel ? 'Verbergen' : 'Registraties bekijken'}
+            </Button>
           </div>
+          <Uitklap open={toonExcel} id="ontbrekende-ziektemeldingen">
+            <ul className="mt-4 space-y-2">
+              {excelZiekte.map((r) => (
+                <ZiekteReeksRij key={ziekteReeksSleutel(r)} reeks={r} bezig={excelZiekteBusy === ziekteReeksSleutel(r)} disabled={!!excelZiekteBusy} onRegistreer={registreerUitExcel} />
+              ))}
+            </ul>
+          </Uitklap>
         </Card>
       )}
 
       {ziektes.length === 0 ? (
-        <EmptyState title="Nog geen ziekmeldingen" message="Registreer een ziekmelding met de knop rechtsboven, de dagen staan dan meteen als onbeschikbaar in de planning." />
+        <EmptyState title="Nog geen ziekmeldingen" message="Registreer een ziekmelding met de knop rechtsboven. De periode verschijnt dan in de planning en in dit overzicht." />
       ) : (
-        <div className="space-y-6">
-          <Sectie titel="Nu ziek" items={nuZiek} leeg="Niemand ziek gemeld op dit moment." toonOpen />
-          {aangekondigd.length > 0 && <Sectie titel="Aangekondigd" items={aangekondigd} leeg="" toonOpen />}
-          <Sectie titel="Historiek" items={historiek} leeg="Nog geen afgelopen ziekteperiodes." />
-
-          {/* Ziektedagen per chauffeur dit jaar — voor loonadministratie en
-              verzuimgesprekken. Alleen chauffeurs met minstens één dag. */}
-          {dagenDitJaar.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-baseline justify-between px-1">
-                <MicroLabel className="text-slate-500">Ziektedagen in {jaar}</MicroLabel>
-                <MicroLabel className="tabular-nums">{dagenDitJaar.reduce((n, d) => n + d.dagen, 0)} totaal</MicroLabel>
-              </div>
-              <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
-                {dagenDitJaar.map((d) => (
-                  <div key={d.userId} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                    <span className="min-w-0 truncate text-sm font-medium text-slate-700">{naamVan(d.userId)}</span>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-800">{d.dagen} {d.dagen === 1 ? 'dag' : 'dagen'}</span>
-                  </div>
-                ))}
-              </Card>
-            </div>
-          )}
-        </div>
+        <>
+          <ZiekteMeldingen meldingen={actueleMeldingen} users={users} vandaag={today} dienstenVan={openDienstenVan} onOpen={openDetail} />
+          <ZiekteInzicht leaveRequests={leaveRequests} users={users} vandaag={today} />
+          <ZiekteMeldingen meldingen={historiek} users={users} vandaag={today} dienstenVan={openDienstenVan} onOpen={openDetail} historiek />
+        </>
       )}
 
       {/* Ziek melden — zelfde velden en flow als het dashboard. */}
@@ -521,14 +381,42 @@ export function ZiekteView({
             <ModalHeader
               eyebrow="Ziekteperiode"
               title={naamVan(detail.userId)}
-              description={`${formatDayLong(detail.startDate)} t/m ${formatDayLong(detail.endDate)} · ${daysBetween(detail.startDate, detail.endDate)} ${daysBetween(detail.startDate, detail.endDate) === 1 ? 'dag' : 'dagen'}${detail.comment ? ` · “${detail.comment}”` : ''}`}
+              description={`${formatDayLong(detail.startDate)} t/m ${formatDayLong(detail.endDate)} · ${daysBetween(detail.startDate, detail.endDate)} ${daysBetween(detail.startDate, detail.endDate) === 1 ? 'kalenderdag' : 'kalenderdagen'}`}
               onClose={() => setDetail(null)}
             />
-            <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-6">
+              {detail.comment && <Card tone="muted" padding="sm"><MicroLabel>Opmerking</MicroLabel><p className="mt-2 whitespace-pre-wrap text-body-sm text-slate-600 [overflow-wrap:anywhere]">{detail.comment}</p></Card>}
               {detail.status === 'cancelled' ? (
                 <p className="rounded-2xl bg-surface-soft px-3.5 py-3 text-sm font-medium text-slate-500">Deze melding is ingetrokken.</p>
               ) : (
                 <>
+                  <Field
+                    label="Ziek tot en met"
+                    hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug."
+                    error={nieuwEinde && nieuwEinde < detail.startDate ? `De einddatum ligt vóór de startdatum (${formatShortDay(detail.startDate)}).` : undefined}
+                  >
+                    {({ id, describedBy, invalid }) => (
+                      <div className="flex gap-2">
+                        <DateInput
+                          id={id}
+                          aria-describedby={describedBy}
+                          invalid={invalid}
+                          value={nieuwEinde}
+                          min={detail.startDate}
+                          onChange={(v) => setNieuwEinde(v)}
+                          className="min-w-0 flex-1"
+                        />
+                        <Button variant="primary" size="md" disabled={isOpslaan || !nieuwEinde || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate} onClick={() => void bewaarEinde(nieuwEinde)}>
+                          Opslaan
+                        </Button>
+                      </div>
+                    )}
+                  </Field>
+                  {detail.endDate >= today && detail.startDate <= today && (
+                    <Button variant="secondary" size="md" full icon={<Thermometer size={14} />} disabled={isOpslaan} onClick={() => void bewaarEinde(today)}>
+                      Hersteld, vandaag was de laatste ziektedag
+                    </Button>
+                  )}
                   {/* Diensten die in deze periode nog op naam staan: meteen
                       herverdelen (admin), zonder omweg via de Maandplanning. */}
                   {openDienstenLijst(detail).length > 0 && (
@@ -570,9 +458,9 @@ export function ZiekteView({
                           const klaar = overgezet[dienst.id];
                           return (
                             <Card key={dienst.id} tone="muted" padding="none" className="px-3.5 py-3 space-y-2.5">
-                              <div className="flex items-center justify-between gap-3">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
                                 <span className="text-sm font-semibold text-slate-800 tabular-nums">Dienst {serviceNumberOf(dienst)}</span>
-                                <span className="flex items-center gap-2">
+                                <span className="flex flex-wrap items-center gap-2">
                                   <span className={cn(microLabelClass, 'tabular-nums')}>{formatShortDay(dienst.date)}</span>
                                   {/* Admin: rechtstreeks naar die dag in de Maandplanning. */}
                                   {isAdmin && !klaar && (
@@ -623,33 +511,6 @@ export function ZiekteView({
                       </div>
                     </div>
                   )}
-                  <Field
-                    label="Ziek tot en met"
-                    hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug."
-                    error={nieuwEinde && nieuwEinde < detail.startDate ? `De einddatum ligt vóór de startdatum (${formatShortDay(detail.startDate)}).` : undefined}
-                  >
-                    {({ id, describedBy, invalid }) => (
-                      <div className="flex gap-2">
-                        <DateInput
-                          id={id}
-                          aria-describedby={describedBy}
-                          invalid={invalid}
-                          value={nieuwEinde}
-                          min={detail.startDate}
-                          onChange={(v) => setNieuwEinde(v)}
-                          className="min-w-0 flex-1"
-                        />
-                        <Button variant="primary" size="md" disabled={isOpslaan || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate} onClick={() => void bewaarEinde(nieuwEinde)}>
-                          Opslaan
-                        </Button>
-                      </div>
-                    )}
-                  </Field>
-                  {detail.endDate >= today && detail.startDate <= today && (
-                    <Button variant="secondary" size="md" full icon={<Thermometer size={14} />} disabled={isOpslaan} onClick={() => void bewaarEinde(today)}>
-                      Hersteld, vandaag was de laatste ziektedag
-                    </Button>
-                  )}
                   <Button variant="danger" size="md" full disabled={isOpslaan} onClick={() => void trekIn()}>
                     Melding intrekken (foutief geregistreerd)
                   </Button>
@@ -676,5 +537,15 @@ export function ZiekteView({
       />
 
     </PageShell>
+  );
+}
+
+function ZiekteKengetal({ label, waarde, uitleg, aandacht = false }: { label: string; waarde: number; uitleg: string; aandacht?: boolean }) {
+  return (
+    <Card padding="sm" className="min-w-0" aria-label={label}>
+      <p className="text-label text-slate-600 [overflow-wrap:anywhere]">{label}</p>
+      <p className={`mt-2 text-stat ${aandacht ? 'text-amber-800' : 'text-slate-900'}`}>{waarde}</p>
+      <p className="mt-1 text-xs text-slate-500 [overflow-wrap:anywhere]">{uitleg}</p>
+    </Card>
   );
 }
