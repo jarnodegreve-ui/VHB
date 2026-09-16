@@ -32,8 +32,6 @@ export const TYPPRE_STAT_100_AT = 30300;
 export const TYPPRE_STAT_100_NAT = 30301;
 export const TYPPRE_STAT_50_NAT = 30302;
 
-export const VOERTUIGTYPES_ET = ['standaard', 'geleed', 'midi'] as const;
-
 export type Segment = {
   serviceNumber: string;
   dagtypeCode: string;

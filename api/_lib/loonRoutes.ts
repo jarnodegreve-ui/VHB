@@ -96,21 +96,6 @@ export function mountLoonRoutes(app: express.Express) {
     } catch (err) { fout(res, err, "Kon de looncode niet verwijderen."); }
   });
 
-  /** Codes die in de dagafsluitingen van een maand voorkomen maar geen looncode hebben. */
-  app.get("/api/loon/codes/ontbrekend", ...staf, async (req: AuthenticatedRequest, res) => {
-    try {
-      const maand = String(req.query.maand ?? "");
-      if (!ISO_MAAND.test(maand)) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
-      const [codes, prestaties] = await Promise.all([getLoonCodes(), getDagPrestatiesPeriode(`${maand}-01`, laatsteDagVan(maand))]);
-      const bekend = new Set(codes.map((c) => c.code));
-      const teller = new Map<string, number>();
-      for (const p of prestaties) {
-        const s = loonCodeSleutel(p.geredenCode);
-        if (s && !bekend.has(s)) teller.set(s, (teller.get(s) ?? 0) + 1);
-      }
-      res.json([...teller.entries()].map(([code, aantal]) => ({ code, aantal })).sort((a, b) => b.aantal - a.aantal));
-    } catch (err) { fout(res, err, "Kon de ontbrekende codes niet bepalen."); }
-  });
 
   // --- Medewerkers (matricules) ---
   app.get("/api/loon/medewerkers", ...staf, async (_req: AuthenticatedRequest, res) => {

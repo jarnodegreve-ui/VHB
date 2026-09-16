@@ -5288,18 +5288,14 @@ describe('Loon: dagafsluiting en Easypay-export', () => {
 
   it('haalt een periode met meer dan 1000 prestaties volledig op (paginering voorbij de PostgREST-cap)', async () => {
     zetLoonBasis();
-    // 1205 rijen op één dag, allemaal met een onbekende code: de mock-db kapt
-    // net als PostgREST op 1000 rijen per antwoord, dus zonder paginering
-    // zouden de teller en de maandtelling op 1000 blijven steken.
+    // 1205 rijen op één dag: de mock-db kapt net als PostgREST op 1000 rijen
+    // per antwoord, dus zonder paginering zou de maandtelling op 1000 blijven
+    // steken.
     mem.loonRijen.dag_afsluitingen = [{ id: 'da-1', datum: '2026-07-02', status: 'afgesloten', geopend_op: '2026-08-01T06:00:00Z', geopend_door: '2', afgesloten_op: '2026-08-01T07:00:00Z', afgesloten_door: '2' }];
     mem.loonRijen.dag_prestaties = Array.from({ length: 1205 }, (_, i) => ({
       id: `p-${i + 1}`, datum: '2026-07-02', user_id: '3', volgnr: i + 1, planning_code: '9999', gereden_code: '9999',
       overmin: 1, overmin_nacht: 0, overmin_extra: 0, onv_premie: false,
     }));
-
-    const ontbrekend = await api('GET', '/api/loon/codes/ontbrekend?maand=2026-07', { token: 'tok-planner' });
-    expect(ontbrekend.status).toBe(200);
-    expect(ontbrekend.json).toEqual([{ code: '9999', aantal: 1205 }]);
 
     const maand = await api('GET', '/api/dagafsluiting?maand=2026-07', { token: 'tok-planner' });
     expect(maand.status).toBe(200);

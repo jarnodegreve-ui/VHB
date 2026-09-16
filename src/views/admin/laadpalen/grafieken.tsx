@@ -148,7 +148,7 @@ export function StapCurve({
   const w = n > 0 ? 100 / n : 100;
   const y = (kw: number) => 100 - Math.min(98, Math.max(kw > 0 ? 2 : 0.5, (kw / asTop) * 100));
   let lijn = n > 0 ? `M 0 ${y(slots[0].kw).toFixed(2)}` : '';
-  slots.forEach((s, i) => {
+  slots.forEach((_s, i) => {
     lijn += ` H ${((i + 1) * w).toFixed(2)}`;
     const volgende = slots[i + 1];
     if (volgende) lijn += ` V ${y(volgende.kw).toFixed(2)}`;

@@ -1221,10 +1221,6 @@ html.dark {
    bg-utilities op dezelfde cellen. */
 .mp-weekend { background-color: rgba(241, 245, 249, 0.85); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100, 116, 139, 0.09) 3px, rgba(100, 116, 139, 0.09) 4px); }
 .dark .mp-weekend { background-color: rgba(255, 255, 255, 0.03); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255, 255, 255, 0.05) 3px, rgba(255, 255, 255, 0.05) 4px); }
-/* Alleen de arcering (geen eigen achtergrond) — voor cellen die al een
-   band-/vandaag-tint hebben, zoals de sectiekop-rij. */
-.mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100, 116, 139, 0.09) 3px, rgba(100, 116, 139, 0.09) 4px); }
-.dark .mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255, 255, 255, 0.05) 3px, rgba(255, 255, 255, 0.05) 4px); }
 /* Sectiekop-rij van de maandplanning (Jarno 08-09, vijfde ronde: géén
    gevulde band meer, die bleef "raar"): dezelfde achtergrond als de rijen,
    een duidelijke lijn erboven en een hairline eronder; de tekst zelf doet

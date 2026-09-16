@@ -1,15 +1,12 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { DUR, EASE } from '../lib/motion';
-import { useAanwezigen, type Aanwezige } from '../lib/presence';
+import { useAanwezigen } from '../lib/presence';
 import { routeVan } from '../app/routes';
 import { Avatar } from './Avatar';
 import { useDropdown } from './useDropdown';
 
 const MAX_ZICHTBAAR = 3;
-
-/** "Pieter · Dienstoverzicht" — naam plus het label van het scherm. */
-export const aanwezigeRegel = (a: Aanwezige) => `${a.naam} · ${routeVan(a.view).label}`;
 
 /**
  * Avatar-stapel in de desktop-topbar (staf): wie is er nu ook in het

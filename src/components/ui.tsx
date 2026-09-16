@@ -5,7 +5,6 @@ import { versheidTekst, type Versheid } from '../lib/zelfLadend';
 import { Button } from './primitives';
 import { Modal } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
-import type { MotiefVariant } from './BrandMotief';
 import { AllesGedaan, Fout, GeenBereik, LegeLijst } from './illustraties';
 
 export function PageShell({
@@ -166,6 +165,10 @@ export function ConfirmationModal({
 /** Gedeelde lege staat: herkenbaar symbool, links uitgelijnde tekst en
  * optioneel één actie. Compact gebruikt dezelfde taal in een korte rij.
  */
+
+/** Toestand van een lege staat: niets te zien, alles afgehandeld, of stuk. */
+export type LegeStaatVariant = 'leeg' | 'klaar' | 'fout';
+
 export function EmptyState({
   icon,
   illustratie,
@@ -180,7 +183,7 @@ export function EmptyState({
   className?: string;
   icon?: React.ReactNode;
   illustratie?: React.ReactNode;
-  variant?: MotiefVariant;
+  variant?: LegeStaatVariant;
   title: string;
   message?: string;
   action?: React.ReactNode;

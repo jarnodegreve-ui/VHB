@@ -162,7 +162,3 @@ export function DefectMeldenModal({
     </Modal>
   );
 }
-
-/** Naam van de melder voor de gele boek ("jij" op eigen meldingen). */
-export const melderLabel = (d: Defect, currentUser: User): string =>
-  d.gemeldDoor === String(currentUser.id) ? 'jij' : d.gemeldDoorNaam ?? 'onbekend';

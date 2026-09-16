@@ -161,7 +161,8 @@ if (!process.env.CALENDAR_FEED_SECRET) {
 // bron voor client én server.
 
 /** Deeplink-URL voor een push-melding: de app opent op die pagina i.p.v. op
- *  het dashboard (controle-ronde 27-08, voorstel 44; zie src/lib/deeplink.ts). */
+ *  het dashboard. De router leest de view uit de URL (src/app/router.ts);
+ *  api/_lib/meldingen.ts vertaalt hem naar het pad in de app. */
 const viewUrl = (view: string) => `/?view=${view}`;
 
 const app = express();
@@ -1087,7 +1088,7 @@ app.put("/api/planning-notes", authenticate, requireRole("planner", "admin"), as
   }
 });
 
-app.get("/api/planning-matrix", authenticate, requireRole("planner", "admin"), async (req, res) => {
+app.get("/api/planning-matrix", authenticate, requireRole("planner", "admin"), async (_req, res) => {
   try {
     const rows = await getPlanningMatrixRows();
     res.json(rows);
@@ -3077,7 +3078,7 @@ const metServerPdfUrl = async <T extends { id: string; pdfUrl?: string }>(record
   return (pdfUrl ? { ...rest, pdfUrl } : rest) as T;
 };
 
-app.get("/api/diversions", authenticate, async (req, res) => {
+app.get("/api/diversions", authenticate, async (_req, res) => {
   try {
     const data = await getDiversionsData();
     // Revisie op de rauwe data: de ondertekende URL's wisselen per request en
@@ -3243,7 +3244,7 @@ app.post("/api/diversions/pdf", authenticate, requireRole("planner", "admin"), a
   }
 });
 
-app.get("/api/services", authenticate, async (req, res) => {
+app.get("/api/services", authenticate, async (_req, res) => {
   try {
     const data = await getServicesData();
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
@@ -3312,7 +3313,7 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
   }
 });
 
-app.get("/api/updates", authenticate, async (req, res) => {
+app.get("/api/updates", authenticate, async (_req, res) => {
   try {
     const data = await getUpdatesData();
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
@@ -5861,7 +5862,7 @@ app.all("/api/*", (req, res) => {
 
 // Global error handler — details/stack alleen in de server-logs, nooit
 // naar de client (info-disclosure).
-app.use((err: any, req: any, res: any, next: any) => {
+app.use((err: any, _req: any, res: any, _next: any) => {
   // Te grote body (express.json-limiet): een nette 413 i.p.v. een 500 —
   // het is een clientfout, geen serverstoring.
   if (err?.type === "entity.too.large" || err?.status === 413) {

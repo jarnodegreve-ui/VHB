@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { View } from '../types';
-import { ALLE_VIEWS, ROUTES, padVan, routeVanPad } from './routes';
+import { ALLE_VIEWS, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
 import { leesStartschermLokaal } from '../lib/startscherm';
 import { annuleerHerstel, bewaarScroll, leesScroll, planHerstel, scrollSleutel } from '../lib/scrollGeheugen';
@@ -274,6 +274,3 @@ export function useQueryParam(naam: string): [string, (waarde: string) => void] 
   }, [naam]);
   return [huidig, zet];
 }
-
-/** Routes die in het command palette horen (alles behalve verborgen). */
-export const paletteRoutes = () => ROUTES.filter((r) => !r.verborgen);
