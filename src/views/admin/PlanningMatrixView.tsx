@@ -585,9 +585,9 @@ export function PlanningMatrixView({
                         <Th>Uren / status</Th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-hairline-subtle">
                       {filteredAssignments.map((assignment) => (
-                        <tr key={assignment.driver} className="hover:bg-slate-50/60 transition-colors">
+                        <tr key={assignment.driver} className="hover:bg-surface-soft-hover transition-colors">
                           <Td className="font-semibold text-slate-800">{assignment.driver}</Td>
                           <Td>
                             <span className="inline-flex items-center gap-0.5">
@@ -609,7 +609,7 @@ export function PlanningMatrixView({
                   </table>
                 </div>
 
-                <div className="divide-y divide-slate-100 md:hidden">
+                <div className="divide-y divide-hairline-subtle md:hidden">
                   {filteredAssignments.map((assignment) => (
                     <div key={assignment.driver} className="p-5">
                       <p className="text-sm font-semibold text-slate-800">{assignment.driver}</p>

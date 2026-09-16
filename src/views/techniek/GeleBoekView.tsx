@@ -154,7 +154,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       {zl.fout && rijen.length === 0 ? (
         <Foutkaart titel="De gele boek kon niet laden" boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && rijen.length === 0 ? (
-        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Gele boek wordt geladen">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Gele boek wordt geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
         </Card>
       ) : (
@@ -232,7 +232,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                   </tbody>
                 </table>
               </div>
-              <ul className="md:hidden divide-y divide-slate-100">
+              <ul className="md:hidden divide-y divide-hairline-subtle">
                 {gesorteerd.map((d) => (
                   <li key={d.id} className="flex items-start gap-3 px-5 py-3.5">
                     <div className="min-w-0 flex-1 space-y-1">

@@ -155,7 +155,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                 <Th num className="max-xl:hidden">Laadtijd</Th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-hairline-subtle">
               {maanden.map((m, i) => {
                 const vorige = chrono[chrono.indexOf(m) - 1] ?? null;
                 const lopend = m.maand === data.huidigeMaand;
@@ -225,7 +225,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                 <Th num>Totaal</Th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-hairline-subtle">
               {data.matrix.map((r) => {
                 const naam = r.evseId ?? r.physicalReference ?? r.evseUid;
                 const bus = busVoorLaadpunt(r.evseId);

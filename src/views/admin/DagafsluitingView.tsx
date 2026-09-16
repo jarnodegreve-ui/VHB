@@ -144,7 +144,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
       {zl.fout && !detail && !voorstel ? (
         <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && !detail && !voorstel ? (
-        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Dag wordt geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Dag wordt geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
       ) : voorstel ? (
         <Card className="space-y-4">
           <CardHeader title="Dag openen" description={voorstel.inPlanning ? `De planning kent ${voorstel.voorstel.filter((v) => v.planningCode).length} van de ${voorstel.voorstel.length} chauffeurs een code toe. Bij het openen wordt die gekopieerd als startpunt; daarna pas je aan wat anders liep.` : 'Deze dag staat niet in de geïmporteerde planning. Je kunt hem toch openen en alles handmatig invullen.'} />

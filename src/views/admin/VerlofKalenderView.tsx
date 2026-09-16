@@ -416,7 +416,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
               {visibleUsers.map((u) => {
                 const userMap = leaveByUserDay.get(u.id);
                 return (
-                  <tr key={u.id} className="border-b border-hairline-subtle hover:bg-slate-50/40 transition-colors">
+                  <tr key={u.id} className="border-b border-hairline-subtle hover:bg-surface-soft-hover transition-colors">
                     <Td className="sticky left-0 z-10 bg-surface-white py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
                       {/* rauw: naam-als-link in een dichte tabelcel (tekst + printer-icoon,
                           geen knopvorm) — een Button zou de rijhoogte van het grid oprekken */}
@@ -474,7 +474,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
           Veel compacter dan een mini-grid; meest relevante info eerst.
           Een rij aantikken opent het dagpaneel op de eerste dag van die
           aanvraag in deze maand (wachtend = meteen de beoordeling). */}
-      <Card padding="none" className="md:hidden overflow-hidden divide-y divide-slate-100">
+      <Card padding="none" className="md:hidden overflow-hidden divide-y divide-hairline-subtle">
         {visibleUsers.map((u) => {
           const userMap = leaveByUserDay.get(u.id);
           // userMap heeft één entry per dag van een leave — dedup naar

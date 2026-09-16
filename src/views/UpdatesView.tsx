@@ -114,7 +114,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                     <button
                       type="button"
                       onClick={() => kiesRecord(update.id, detail?.id ?? null, () => setSelectedId(update.id))}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-slate-50/50"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-surface-soft-hover"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-md font-semibold text-slate-900" data-vt-record={update.id}>{update.title}</p>

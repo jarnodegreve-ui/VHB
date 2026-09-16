@@ -140,7 +140,7 @@ export function DefectMeldenModal({
         {eigen.length > 0 && (
           <div>
             <p className="text-micro mb-2">Jouw laatste meldingen</p>
-            <ul className="divide-y divide-slate-100 rounded-2xl border border-hairline">
+            <ul className="divide-y divide-hairline-subtle rounded-2xl border border-hairline">
               {eigen.map((d) => (
                 <li key={d.id} className="flex items-start gap-3 px-3.5 py-2.5">
                   <div className="min-w-0 flex-1">

@@ -644,12 +644,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <Th>Acties</Th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-hairline-subtle">
                     {actionableSwaps.map(swap => {
                       const info = shiftInfoFor(swap);
                       const requester = users.find(u => u.id === swap.requesterId);
                       return (
-                        <tr key={swap.id} className="hover:bg-slate-50/60 transition-colors">
+                        <tr key={swap.id} className="hover:bg-surface-soft-hover transition-colors">
                           <Td>
                             {/* rauw: tabelrij-knop met naam + doelcollega + chevron (opent het beoordelingspaneel) */}
                             <button
@@ -722,7 +722,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               </div>
 
               {/* Mobile cards */}
-              <div className="md:hidden divide-y divide-slate-100">
+              <div className="md:hidden divide-y divide-hairline-subtle">
                 {actionableSwaps.map(swap => {
                   const info = shiftInfoFor(swap);
                   const requester = users.find(u => u.id === swap.requesterId);
@@ -819,7 +819,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         return (
           <div className="space-y-3">
             <MicroLabel className="text-slate-500 ml-1">Afgehandeld</MicroLabel>
-            <Card padding="none" className="divide-y divide-slate-100">
+            <Card padding="none" className="divide-y divide-hairline-subtle">
               {afgehandeld.map((swap) => {
                 const info = shiftInfoFor(swap);
                 const requester = users.find((u) => u.id === swap.requesterId);

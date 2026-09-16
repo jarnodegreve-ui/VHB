@@ -657,7 +657,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                 <tr
                   key={g.key}
                   className={cn(
-                    'hover:bg-slate-50/60 transition-colors group border-t border-hairline-subtle',
+                    'hover:bg-surface-soft-hover transition-colors group border-t border-hairline-subtle',
                     isToday && 'bg-oker-50/30',
                     g.hasConflict && 'bg-red-50/40 hover:bg-red-50/60',
                   )}

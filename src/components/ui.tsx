@@ -96,7 +96,7 @@ export function ModalHeader({
           type="button"
           aria-label="Sluiten"
           onClick={onClose}
-          className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors"
+          className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-surface-soft-hover hover:text-slate-700 rounded-xl transition-colors"
         >
           <X size={18} />
         </button>
@@ -453,7 +453,7 @@ export function CredentialsModal({
             <h2 className="text-section-title">{title}</h2>
             <p className="mt-1.5 text-body text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
           </div>
-          <button aria-label="Sluiten" onClick={onClose} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors">
+          <button aria-label="Sluiten" onClick={onClose} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-surface-soft-hover hover:text-slate-700 rounded-xl transition-colors">
             <X size={18} />
           </button>
         </div>

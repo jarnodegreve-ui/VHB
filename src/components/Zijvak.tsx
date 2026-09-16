@@ -58,7 +58,7 @@ export function Zijvak({
   return (
     <Card as="section" tone="muted" padding="sm" className={className} aria-label={titel}>
       <CardHeader title={titel} aside={aside} />
-      {children ? <div className="mt-2 divide-y divide-slate-200/60">{children}</div> : null}
+      {children ? <div className="mt-2 divide-y divide-hairline">{children}</div> : null}
       {voet ? <div className="mt-3 border-t border-hairline pt-3 text-body-sm font-medium text-slate-500">{voet}</div> : null}
     </Card>
   );

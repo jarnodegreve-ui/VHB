@@ -117,12 +117,12 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
         </div>
       </Card>
 
-      {isLoading && imports.length === 0 ? <Card padding="none" className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card> : imports.length === 0 ? (
+      {isLoading && imports.length === 0 ? <Card padding="none" className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card> : imports.length === 0 ? (
         <EmptyState title="Nog geen import" message="Importeer de ET-export om de ritdelen, controles en looncomponenten te krijgen." />
       ) : (
         <div className="surface-table rounded-3xl overflow-clip">
           {/* Mobiel: kaartlijst (de brede tabel hieronder is desktop-only, zoals de andere beheerschermen). */}
-          <ul className="md:hidden divide-y divide-slate-100">
+          <ul className="md:hidden divide-y divide-hairline-subtle">
             {imports.map((i) => (
               <li key={i.id} className="space-y-2 px-5 py-3.5">
                 <div className="flex items-baseline justify-between gap-3">
@@ -192,7 +192,7 @@ function BevindingenModal({ imp, onClose }: { imp: SegmentImport; onClose: () =>
           <Card tone="warning" padding="sm" className="mt-3 text-xs text-amber-800">{imp.waarschuwingen.length} rijen overgeslagen bij het inlezen: {imp.waarschuwingen.slice(0, 5).map((w) => `rij ${w.rij}: ${w.tekst}`).join(' · ')}{imp.waarschuwingen.length > 5 ? ' …' : ''}</Card>
         )}
         {lijst.length === 0 ? <div className="mt-4"><EmptyState compact variant="klaar" title="Niets gevonden" message="Geen bevindingen voor dit filter." /></div> : (
-          <ul className="mt-4 max-h-[60vh] divide-y divide-slate-100 overflow-y-auto rounded-2xl border border-hairline">
+          <ul className="mt-4 max-h-[60vh] divide-y divide-hairline-subtle overflow-y-auto rounded-2xl border border-hairline">
             {lijst.map((b: Bevinding, i) => (
               <li key={i} className="flex items-start gap-3 px-3.5 py-2.5 text-sm">
                 <Badge tone={b.ernst === 'fout' ? 'red' : 'amber'} stil dot className="shrink-0">{BEVINDING_LABEL[b.soort]}</Badge>
@@ -255,8 +255,8 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
           <div className="border-b border-hairline px-5 py-4">
             <TableToolbar zoek={zoek} onZoek={setZoek} placeholder="Dienstnummer…" telling={`${lijst.length} van ${diensten.length}`} filters={<Select aria-label="Dagtype" value={dagtype} onChange={(e) => setDagtype(e.target.value)} className="min-w-0 px-2.5 py-1.5 text-xs"><option value="">Alle dagtypes</option>{dagtypes.map((d) => <option key={d} value={d}>{d}</option>)}</Select>} />
           </div>
-          {isLoading ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
-            <ul className="max-h-[70vh] divide-y divide-slate-100 overflow-y-auto">
+          {isLoading ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
+            <ul className="max-h-[70vh] divide-y divide-hairline-subtle overflow-y-auto">
               {lijst.map((d) => {
                 const k = `${d.serviceNumber}|${d.dagtypeCode}`;
                 const pp = params.get(k);
@@ -343,7 +343,7 @@ function DagtypesTab() {
   return (
     <div className="surface-table rounded-3xl overflow-clip">
       <div className="border-b border-hairline px-5 py-4 text-sm text-slate-600">De dagtypecodes van De Lijn (21 = maandag schooldag, 26 = zaterdag, 31 = maandag schoolvakantie, …) gekoppeld aan de dagtypes van het portaal, zodat de dekking en Mijn dag de juiste ritdelen kiezen.</div>
-      {isLoading ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
+      {isLoading ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
         <table className="w-full text-left border-collapse">
           <StickyThead><tr><Th>Code</Th><Th>Omschrijving</Th><Th num>Per jaar</Th><Th>Portaal-dagtype</Th></tr></StickyThead>
           <tbody>

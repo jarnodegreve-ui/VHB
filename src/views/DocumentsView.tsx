@@ -93,7 +93,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
       >
 
       {verval.length > 0 && (
-        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden">
           {verval.map((e) => {
             const dagen = dagenTot(e.validUntil);
             const urgent = Number.isFinite(dagen) && dagen <= 30;
@@ -121,7 +121,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
       )}
 
       {loading ? (
-        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
@@ -145,7 +145,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
               </thead>
               <tbody>
                 {docs.map((doc) => (
-                  <tr key={doc.id} className="border-t border-hairline-subtle transition-colors hover:bg-slate-50/60">
+                  <tr key={doc.id} className="border-t border-hairline-subtle transition-colors hover:bg-surface-soft-hover">
                     <Td className="max-w-md">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-9 h-9 rounded-xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">
@@ -169,7 +169,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
           </TableShell>
 
           {/* Onder lg: de kaartlijst. */}
-          <Card padding="none" className="divide-y divide-slate-100 overflow-hidden lg:hidden">
+          <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden lg:hidden">
             {docs.map((doc) => (
               <div key={doc.id} className="flex items-center gap-4 px-5 py-4">
                 <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">

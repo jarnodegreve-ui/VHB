@@ -100,7 +100,7 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
             <LijstRij as="section" key={groep.dag || 'onbekend'} aria-label={groep.label} className="space-y-2">
               <h2 className="px-1 text-micro">{groep.label}</h2>
               <Card padding="none" as="section" className="overflow-hidden">
-                <ul className="divide-y divide-slate-100">
+                <ul className="divide-y divide-hairline-subtle">
                   <LijstAnimatie aantal={groep.items.length}>
                   {groep.items.map((m) => {
                     const ongelezen = !m.gelezenOp;

@@ -310,7 +310,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
           <EmptyState variant="klaar" illustratie={<AllesGedaan />} title="Geen storingen" message="Alle laadpunten en laadsessies van de afgelopen 7 dagen zijn in orde." />
         ) : (
           <Card padding="none" className="overflow-hidden">
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-hairline-subtle">
               {(alleStoringen ? storingen : storingen.slice(0, 5)).map((st, i) => {
                 const nummer = st.evseUid ? nummerByUid.get(st.evseUid) ?? st.evseUid : null;
                 const bus = nummer ? busVoorLaadpunt(nummer) : null;

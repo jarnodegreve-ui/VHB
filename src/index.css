@@ -217,7 +217,7 @@
   --color-surface-white: #FFFFFF;                      /* opaak wit vlak (was bg-white) */
   --color-surface-muted: #F2F3F4;                      /* gedempt vlak / meter-track (was bg-slate-100) */
   --color-surface-soft: #F7F8F8;                       /* zachtste vlak (was bg-slate-50) */
-  --color-surface-soft-hover: #F7F8F8;                 /* (was hover:bg-slate-50) */
+  --color-surface-soft-hover: #F7F8F8;                 /* (was hover:bg-surface-soft-hover) */
   /* Hairline-ladder, drie gewichten (golf 1, 14-09): subtle = scheiding
      binnen een kaart (rijen, voetnoten; was border-slate-100), hairline =
      rand van kaarten/kopbalken (was border-slate-200 en -200/NN), strong =

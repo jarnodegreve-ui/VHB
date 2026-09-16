@@ -293,7 +293,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             <button
               type="button"
               onClick={() => kiesOmleiding(div)}
-              className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-slate-50/50 md:px-4"
+              className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-surface-soft-hover md:px-4"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <div className="min-w-0 space-y-2">

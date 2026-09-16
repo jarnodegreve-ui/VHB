@@ -293,7 +293,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                     <SortTh kolom="maxKw" sort={sortPunt} align="right" className="max-lg:hidden">Max. kW</SortTh>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-hairline-subtle">
                   {punten.map((p) => {
                     const bus = busVoorLaadpunt(p.evseId);
                     const isTop = p.kwh > 0 && p.kwh === maxPuntKwh;
@@ -359,7 +359,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                     <Th num className="max-lg:hidden">Bussen bij piek</Th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-hairline-subtle">
                   {dagen.map((d) => {
                     const toekomst = d.dag > data.huidigeDag;
                     const isPiekDag = d.dag === t.piekDag;

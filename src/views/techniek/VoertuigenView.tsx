@@ -161,7 +161,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
       {zl.fout && voertuigen.length === 0 ? (
         <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && voertuigen.length === 0 ? (
-        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Voertuigen worden geladen">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Voertuigen worden geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
         </Card>
       ) : voertuigen.length === 0 ? (
@@ -229,7 +229,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                   </tbody>
                 </table>
               </div>
-              <div className="md:hidden divide-y divide-slate-100">
+              <div className="md:hidden divide-y divide-hairline-subtle">
                 {gesorteerd.map((r) => (
                   // rauw: hele kaartrij (naam + pillen) is de knop die het detail opent
                   <button key={r.v.id} type="button" onClick={() => setDetail(r.v)} className="ios-pressable flex min-h-11 w-full flex-col gap-2 px-5 py-3.5 text-left transition-colors hover:bg-surface-soft-hover">
@@ -360,7 +360,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
           {defecten.length === 0 ? (
             <EmptyState compact variant="klaar" title="Niets open" message="Geen openstaande meldingen voor deze bus." />
           ) : (
-            <ul className="divide-y divide-slate-100 rounded-2xl border border-hairline">
+            <ul className="divide-y divide-hairline-subtle rounded-2xl border border-hairline">
               {defecten.map((d) => (
                 <li key={d.id} className="px-3.5 py-2.5">
                   <p className="text-sm text-slate-800"><span className="font-semibold">{WERKTYPE_LABEL[d.werktype]}</span> · {d.omschrijving}</p>
@@ -376,7 +376,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
           {prestaties === null ? <SkeletonRow className="px-2 py-2" /> : prestaties.length === 0 ? (
             <EmptyState compact title="Nog geen werkprestaties" message="Wat de garage aan deze bus doet, verschijnt hier." />
           ) : (
-            <ul className="divide-y divide-slate-100 rounded-2xl border border-hairline">
+            <ul className="divide-y divide-hairline-subtle rounded-2xl border border-hairline">
               {prestaties.map((w) => (
                 <li key={w.id} className="flex items-start gap-3 px-3.5 py-2.5">
                   <div className="min-w-0 flex-1">
