@@ -348,6 +348,34 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// De push-service kan een abonnement vervangen (verlopen, sleutelrotatie).
+// Zonder handler bleef het oude endpoint in de database en kreeg het toestel
+// stilletjes nooit meer een melding (controle 16-09, nr. 8). Opnieuw
+// abonneren met de VAPID-sleutel van het oude abonnement; de SW heeft geen
+// bearer-token, dus de app (App.tsx, PUSH_SUBSCRIPTION_CHANGED) registreert
+// het nieuwe abonnement bij /api/push/subscribe. Staat er geen venster open,
+// dan vangt de hersync bij de volgende start het op (ander endpoint dan de
+// lokale stempel = meteen opnieuw sturen).
+self.addEventListener('pushsubscriptionchange', (event) => {
+  const oud = event.oldSubscription;
+  const sleutel = event.newSubscription?.options?.applicationServerKey || oud?.options?.applicationServerKey || null;
+  const opnieuw = event.newSubscription
+    ? Promise.resolve(event.newSubscription)
+    : sleutel
+      ? self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: sleutel })
+      : Promise.resolve(null);
+  event.waitUntil(
+    opnieuw
+      .catch(() => null)
+      .then((sub) => clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+        const bericht = { type: 'PUSH_SUBSCRIPTION_CHANGED', subscription: sub ? sub.toJSON() : null };
+        for (const win of wins) {
+          try { win.postMessage(bericht); } catch (_) { /* oude client */ }
+        }
+      })),
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = event.notification.data?.url || '/';

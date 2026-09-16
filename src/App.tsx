@@ -37,7 +37,7 @@ import { addBreadcrumb, reportHandledError, setMonitoringUser } from './lib/moni
 import { useAanwezigheid } from './lib/presence';
 import { meldLive } from './lib/liveSignaal';
 import { AanwezigheidStack } from './components/AanwezigheidStack';
-import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
+import { fetchPushPublicKey, getExistingSubscription, hersyncPushSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { DashboardSkelet, ViewLoader } from './components/ui';
@@ -541,17 +541,38 @@ export default function App() {
   useEffect(() => {
     if (!currentUser || !session?.access_token || !isPushSupported()) return;
     let cancelled = false;
+    const headers = { Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() };
     (async () => {
-      const key = await fetchPushPublicKey({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
+      const key = await fetchPushPublicKey(headers);
       if (cancelled) return;
       setPushPublicKey(key);
       if (key) {
         const existing = await getExistingSubscription();
-        if (!cancelled) setPushEnabled(Boolean(existing));
+        if (cancelled) return;
+        // Geen abonnement meer terwijl de schakelaar aan stond (push-service
+        // of iOS ruimde het op) → de schakelaar toont eerlijk "uit".
+        setPushEnabled(Boolean(existing));
+        // Wél een abonnement: hooguit 1× per 24 u opnieuw registreren, zodat
+        // een rij die de server na een 410 wiste terugkomt (nr. 8).
+        if (existing) void hersyncPushSubscription(existing, headers);
       }
     })();
+    // De service worker meldt een vervangen abonnement (pushsubscriptionchange
+    // in sw.js); hij heeft zelf geen token, dus de app registreert het.
+    const onBericht = (event: MessageEvent) => {
+      if (event.data?.type !== 'PUSH_SUBSCRIPTION_CHANGED') return;
+      const sub = event.data.subscription as PushSubscriptionJSON | null;
+      if (!sub?.endpoint) {
+        setPushEnabled(false);
+        return;
+      }
+      void hersyncPushSubscription(sub, headers, { force: true }).then((ok) => { if (ok) setPushEnabled(true); });
+    };
+    const sw = 'serviceWorker' in navigator ? navigator.serviceWorker : null;
+    sw?.addEventListener('message', onBericht);
     return () => {
       cancelled = true;
+      sw?.removeEventListener('message', onBericht);
     };
   }, [currentUser?.id, session?.access_token]);
 
