@@ -111,7 +111,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
         <OpsStat icon={<BatteryCharging size={16} />} tone={kpi.laden > 0 ? 'blue' : 'slate'} label="Aan de lader" value={kpi.laden} suffix={` / ${data.totals.evses}`} sub={data.totals.totalPowerKw > 0 ? `${tekstKw(data.totals.totalPowerKw)} nu` : 'geen vermogen nu'} />
         <OpsStat icon={<Zap size={16} />} tone="slate" label="Beschikbaar" value={kpi.beschikbaar} sub="vrije laadpunten" />
         <OpsStat icon={<AlertTriangle size={16} />} tone={kpi.afwijkend > 0 ? 'red' : 'slate'} label="Afwijkend" value={kpi.afwijkend} sub={kpi.afwijkend > 0 ? kpi.afwijkendTekst : 'alles operationeel'} />
-        <OpsStat icon={<Gauge size={16} />} tone="slate" label="Vandaag geladen" text={fmtKwh(grafiek.dagen.at(-1)?.kwh ?? 0)} suffix={' kWh'} sub={`30 d: ${tekstKwh(kwh30)} · ${data.totals.sessions30d} laadsessies`} onClick={() => onDag(vandaag)} />
+        <OpsStat icon={<Gauge size={16} />} tone="slate" label="Vandaag geladen" text={fmtKwh(grafiek.dagen[grafiek.dagen.length - 1]?.kwh ?? 0)} suffix={' kWh'} sub={`30 d: ${tekstKwh(kwh30)} · ${data.totals.sessions30d} laadsessies`} onClick={() => onDag(vandaag)} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
