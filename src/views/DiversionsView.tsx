@@ -256,7 +256,7 @@ function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; va
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {isAlleLijnen(div.line) || lijnenVan(div.line).length === 0
               ? <span className="text-xs font-semibold text-slate-600">{lijnLabel(div.line)}</span>
-              : lijnenVan(div.line).map((lijn) => <LijnTegel key={lijn} line={lijn} size="sm" tone="muted" className="text-slate-700" />)}
+              : <LijnTegel line={div.line} size="sm" layout="rij" tone="muted" />}
           </div>
           <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
             {div.pdfUrl && <span className="inline-flex items-center gap-1"><FileText size={14} aria-hidden="true" />PDF</span>}

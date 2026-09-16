@@ -287,7 +287,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             padding="none"
             interactive
             aria-current={isCurrent ? 'true' : undefined}
-            className={cn('overflow-hidden', expired && 'opacity-60', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
+            className={cn('overflow-hidden', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
           >
             {/* rauw: lijstrij van het master-detail (kaart als knop: icoontegel + titel + badges + periode + chevron) — opent het bewerkpaneel */}
             <button
@@ -296,8 +296,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-slate-50/50 md:px-4"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <LijnTegel line={div.line} size="sm" tone={expired ? 'muted' : 'accent'} />
-                <div className="min-w-0">
+                <div className="min-w-0 space-y-2">
+                  <LijnTegel line={div.line} size="sm" layout="rij" tone={expired ? 'muted' : 'accent'} />
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     {/* data-vt-record: DetailPaneel leest er de richting van een wissel uit. */}
                     <h3 className="text-md font-semibold leading-snug text-slate-900" data-vt-record={div.id}>{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
@@ -348,7 +348,6 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
           ]}
         />
       ) : undefined}
-      icon={<LijnTegel line={formData.line} />}
       footer={(
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="lg" className="flex-1" onClick={annuleer}>
@@ -370,12 +369,12 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         <Field label="Lijn(en)" htmlFor="omleiding-lijn" error={fouten.line} hint={lijnen.length === 0 ? 'Leeg laten betekent: geldt voor alle lijnen.' : undefined}>
           <div className={cn('flex min-h-11 flex-wrap items-center gap-1.5 rounded-xl border bg-surface-white px-2 py-1.5 focus-within:focus-ring', fouten.line ? 'border-red-400' : 'border-hairline')}>
             {lijnen.map((l) => (
-              <Badge key={l} tone={isAlleLijnen(l) ? 'slate' : 'oker'} className="gap-1 pr-0.5">
-                {isAlleLijnen(l) ? 'Alle lijnen' : l}
+              <span key={l} className="inline-flex items-center gap-0.5">
+                {isAlleLijnen(l) ? <Badge tone="slate">Alle lijnen</Badge> : <LijnTegel line={l} size="sm" />}
                 <IconButton label={`Lijn ${l} verwijderen`} size="sm" variant="ghost" onClick={() => verwijderLijn(l)}>
                   <X size={12} />
                 </IconButton>
-              </Badge>
+              </span>
             ))}
             {/* rauw: kaal invoerveld binnen de chip-rand (de rand zit op de wrapper, anders een dubbele kader) */}
             <input

@@ -351,7 +351,7 @@ export function DashboardView({ notes = [],
               <Fragment key={div.id}>
                 <OpsRow
                   tone="amber"
-                  leading={<LijnTegel line={div.line} size="sm" />}
+                  badges={<LijnTegel line={div.line} size="sm" layout="rij" />}
                   primary={[div.location, div.title].filter(Boolean).join(' · ')}
                   secondary={[omleidingsPeriode(div), omleidingsTijdshint(div)].filter(Boolean).join(' · ')}
                   onClick={() => setOpenDiversion(div)}
@@ -448,7 +448,6 @@ export function DashboardView({ notes = [],
         onClose={() => setOpenDiversion(null)}
         title={openDiversion?.title ?? 'Omleiding'}
         subtitle={openDiversion ? [lijnLabel(openDiversion.line), openDiversion.location].filter(Boolean).join(' · ') : undefined}
-        icon={openDiversion ? <LijnTegel line={openDiversion.line} /> : undefined}
       >
         {openDiversion && <OmleidingDetail diversion={openDiversion} />}
       </SlideOver>

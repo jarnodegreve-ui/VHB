@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, AlertTriangle, Calendar, FileText, MapPin, WifiOff, Wrench } from 'lucide-react';
-import { lijnLabel } from '../../shared/lijnen';
+import { ArrowLeftRight, Calendar, FileText, MapPin, WifiOff, Wrench } from 'lucide-react';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { lopendeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
@@ -15,6 +14,7 @@ import { cn } from '../lib/ui';
 import type { Diversion, Shift, User, View } from '../types';
 import { Card } from '../components/Card';
 import { OpsRow } from '../components/ops';
+import { LijnTegel } from '../components/LijnTegel';
 import { Badge, Button, Chip, Segmented } from '../components/primitives';
 import { Verwissel } from '../components/Verwissel';
 import { RichtingWissel } from '../components/RichtingWissel';
@@ -385,10 +385,9 @@ export function MijnDagView({
               <OpsRow
                 key={d.id}
                 tone="amber"
-                icon={<AlertTriangle size={16} />}
+                badges={<LijnTegel line={d.line} size="sm" layout="rij" />}
                 primary={d.title}
                 secondary={d.description}
-                meta={lijnLabel(d.line)}
                 onClick={() => onNavigate?.('omleidingen')}
               />
             ))}
