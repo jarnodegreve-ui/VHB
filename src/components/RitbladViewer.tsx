@@ -10,6 +10,7 @@ import { openHuidigRitblad } from '../lib/ritblad';
 import { isRitbladOpgeslagen } from '../lib/ritbladCache';
 import { useOnline } from '../lib/useOnline';
 import { haalRitbladMeta, laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbladPaginas';
+import { knijpNaarZoomStap, vingerAfstand } from '../lib/ritbladZoom';
 import { Fout, GeenBereik, NietGevonden } from './illustraties';
 
 /**
@@ -146,6 +147,8 @@ export function RitbladViewer({
   const [opgeslagen, setOpgeslagen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollBreedte, setScrollBreedte] = useState(0);
+  // Beginafstand van de twee vingers; null = niet aan het knijpen.
+  const knijpRef = useRef<number | null>(null);
 
   // Metadata vers ophalen → bundel (via de service-worker-cache, dus ook
   // offline) → pdfjs → pagina's zoeken (gecached per bundel). Sluiten of een
@@ -288,7 +291,30 @@ export function RitbladViewer({
           {/* Houd de verticale scrollbar-ruimte vast. Anders verkleint de
               scrollbar de gemeten breedte, past de PDF net weer in de hoogte
               en verdwijnt de scrollbar: een eindeloze resize-/zoomlus. */}
-          <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-scroll overscroll-contain bg-surface-muted">
+          {/* touch-action houdt het knijpen bij de viewer: zonder dit zoomt
+              iOS de hele PWA-schil (topbar en dock) mee en blijft die zo
+              staan. Knijpen schakelt tussen dezelfde zoomstappen als de
+              knopjes (lib/ritbladZoom.ts). */}
+          <div
+            ref={scrollRef}
+            className="min-h-0 min-w-0 flex-1 touch-pan-x touch-pan-y overflow-x-auto overflow-y-scroll overscroll-contain bg-surface-muted"
+            onTouchStart={(e) => {
+              if (e.touches.length === 2) knijpRef.current = vingerAfstand(e.touches[0], e.touches[1]);
+            }}
+            onTouchMove={(e) => {
+              if (e.touches.length !== 2 || knijpRef.current === null) return;
+              const nu = vingerAfstand(e.touches[0], e.touches[1]);
+              setZoomIdx((idx) => {
+                const { idx: volgende, herstart } = knijpNaarZoomStap(idx, knijpRef.current ?? 0, nu, ZOOM_STAPPEN.length);
+                if (herstart) knijpRef.current = nu;
+                return volgende;
+              });
+            }}
+            onTouchEnd={(e) => {
+              if (e.touches.length < 2) knijpRef.current = null;
+            }}
+            onTouchCancel={() => { knijpRef.current = null; }}
+          >
             <div className="flex w-max min-w-full flex-col items-center gap-3 p-3">
               {paginaBreedte > 0 && staat.paginas.map((n) => (
                 <PaginaCanvas key={n} doc={staat.doc} nummer={n} breedte={paginaBreedte} />
