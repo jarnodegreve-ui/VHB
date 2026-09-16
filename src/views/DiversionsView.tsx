@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Calendar, ChevronDown, ChevronRight, FileText, Search, X } from 'lucide-react';
+import { Calendar, Check, ChevronDown, ChevronRight, FileText, Search, X } from 'lucide-react';
 import { LijnTegel } from '../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenVan, raaktLijn } from '../../shared/lijnen';
 import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, type OmleidingsFase } from '../lib/diversions';
@@ -21,10 +21,9 @@ import { LegeLijst, NietGevonden } from '../components/illustraties';
  * Lijst + detail via het gedeelde DetailPaneel: op desktop staat de
  * omleiding rechts naast de lijst, op mobiel opent ze in een SlideOver.
  *
- * Verbeterronde 10-09 (Jarno: "in zijn geheel onoverzichtelijk"): de lijst
- * is verdeeld in secties "Nu geldig", "Binnenkort" en "Voorbij" (die laatste
- * standaard ingeklapt en na 30 dagen weg), elke rij toont periode + tijdshint
- * + eerste regel omschrijving, en de kop is één rij zoek + lijnfilter.
+ * Elke status heeft één rustige lijst met lijnnummers, titel en periode.
+ * De volledige omschrijving staat in het detail; verlopen items blijven
+ * standaard ingeklapt en verdwijnen na 30 dagen.
  */
 export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSyncedAt?: number | null }) {
   // De keuze staat in de URL (/omleidingen/<id>): deelbaar, en een melding
@@ -42,6 +41,8 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
   const uniqueLines = Array.from(new Set(diversions.flatMap((div) => lijnenVan(div.line)).filter((l) => !isAlleLijnen(l)))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   const zoek = searchQuery.trim().toLowerCase();
+  const heeftFilter = !!zoek || selectedLine !== 'all';
+  const wisFilters = () => { setSearchQuery(''); setSelectedLine('all'); };
   const gefilterd = diversions.filter((div) => {
     if (!isRecentGenoeg(div, vandaag)) return false;
     const matchesSearch = !zoek
@@ -77,12 +78,12 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
 
   const lijst = gefilterd.length === 0 ? (
     <EmptyState
-      illustratie={zoek ? <NietGevonden /> : <LegeLijst />}
-      title={zoek ? 'Geen resultaten' : 'Geen omleidingen'}
-      message={zoek ? `Geen omleidingen gevonden voor “${searchQuery}”` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
-      action={zoek ? (
-        <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
-          Wis zoekopdracht
+      illustratie={heeftFilter ? <NietGevonden /> : <LegeLijst />}
+      title={heeftFilter ? 'Geen resultaten' : 'Geen omleidingen'}
+      message={heeftFilter ? 'Geen omleidingen voor deze zoekopdracht of lijn.' : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
+      action={heeftFilter ? (
+        <Button variant="secondary" size="sm" onClick={wisFilters}>
+          Wis filters
         </Button>
       ) : undefined}
     />
@@ -91,11 +92,13 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
       {secties.filter((s) => s.items.length > 0).map((s) => (
         <section key={s.fase} aria-labelledby={`omleidingen-${s.fase}`}>
           <SectieKop id={`omleidingen-${s.fase}`} titel={s.titel} aantal={s.items.length} />
-          <ul className="space-y-2" aria-label={s.titel}>
-            {s.items.map((div) => (
-              <OmleidingRij key={div.id} div={div} vandaag={vandaag} isCurrent={detail?.id === div.id} onClick={() => kies(div.id)} />
-            ))}
-          </ul>
+          <Card padding="none" className="overflow-hidden">
+            <ul className="divide-y divide-hairline" aria-label={s.titel}>
+              {s.items.map((div) => (
+                <OmleidingRij key={div.id} div={div} vandaag={vandaag} isCurrent={detail?.id === div.id} onClick={() => kies(div.id)} />
+              ))}
+            </ul>
+          </Card>
         </section>
       ))}
 
@@ -120,11 +123,13 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
             </span>
           </button>
           <Uitklap open={verlopenOpen} id="omleidingen-verlopen-lijst">
-            <ul className="mt-2 space-y-2" aria-label="Voorbij">
-              {groepen.verlopen.map((div) => (
-                <OmleidingRij key={div.id} div={div} vandaag={vandaag} isCurrent={detail?.id === div.id} onClick={() => kies(div.id)} />
-              ))}
-            </ul>
+            <Card padding="none" className="mt-2 overflow-hidden">
+              <ul className="divide-y divide-hairline" aria-label="Voorbij">
+                {groepen.verlopen.map((div) => (
+                  <OmleidingRij key={div.id} div={div} vandaag={vandaag} isCurrent={detail?.id === div.id} onClick={() => kies(div.id)} />
+                ))}
+              </ul>
+            </Card>
           </Uitklap>
         </section>
       )}
@@ -135,59 +140,70 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
     <PageShell>
       <PageHeader
         title="Omleidingen"
-        description="Wat er anders rijdt, met begin en einde."
-        actions={(
-          <div className="flex w-full gap-2 md:w-auto">
-            <div className="relative min-w-0 flex-1 md:w-64 group">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
-              </div>
-              <Input
-                type="text"
-                placeholder="Zoek…"
-                aria-label="Zoek in omleidingen"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={cn('pl-9', searchQuery && 'pr-11')}
-              />
-              {searchQuery && (
-                <IconButton
-                  label="Wis zoekopdracht"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
-                >
-                  <X size={16} />
-                </IconButton>
-              )}
-            </div>
-            <Select
-              value={selectedLine}
-              onChange={(e) => setSelectedLine(e.target.value)}
-              aria-label="Filter op lijn"
-              className="w-auto shrink-0 font-semibold cursor-pointer md:w-40"
-            >
-              <option value="all">Alle lijnen</option>
-              {uniqueLines.map(line => (
-                <option key={line} value={line}>{lijnLabel(line)}</option>
-              ))}
-            </Select>
-          </div>
-        )}
+        description="Welke lijnen anders rijden en tot wanneer."
       />
 
+      <Card padding="sm" className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative min-w-0 flex-1 group">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+            </div>
+            <Input
+              type="text"
+              placeholder="Zoek op plaats, titel of lijn…"
+              aria-label="Zoek in omleidingen"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={cn('pl-9', searchQuery && 'pr-11')}
+            />
+            {searchQuery && (
+              <IconButton
+                label="Wis zoekopdracht"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+              >
+                <X size={16} />
+              </IconButton>
+            )}
+          </div>
+          <Select
+            value={selectedLine}
+            onChange={(e) => setSelectedLine(e.target.value)}
+            aria-label="Filter op lijn"
+            className="w-full shrink-0 font-semibold cursor-pointer sm:w-44"
+          >
+            <option value="all">Alle lijnen</option>
+            {uniqueLines.map(line => (
+              <option key={line} value={line}>{lijnLabel(line)}</option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <p aria-live="polite">
+            <span className="font-semibold text-slate-800">{groepen.lopend.length}</span> nu geldig
+            <span className="mx-2" aria-hidden="true">·</span>
+            <span className="font-semibold text-slate-800">{groepen.komend.length}</span> binnenkort
+            {heeftFilter && <span className="ml-2">(gefilterd)</span>}
+          </p>
+          {heeftFilter && <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={wisFilters}>Wis filters</Button>}
+        </div>
+      </Card>
+
       <MasterDetail
+        className="lg:grid-cols-[minmax(0,43%)_minmax(0,1fr)]"
         lijst={lijst}
         paneel={gefilterd.length > 0 ? (
           <DetailPaneel
             open={!!detail}
             onClose={() => setSelectedId(null)}
             title={detail?.title ?? 'Omleiding'}
+            titelTerugloop
             subtitle={detail ? [lijnLabel(detail.line), detail.location].filter(Boolean).join(' · ') : undefined}
             sleutel={detail?.id}
             leegTekst="Kies een omleiding."
-            icon={detail ? <LijnTegel line={detail.line} tone={omleidingsFase(detail, vandaag) === 'verlopen' ? 'muted' : 'accent'} /> : undefined}
             chip={detail ? <FaseBadge fase={omleidingsFase(detail, vandaag)} hint={omleidingsTijdshint(detail, vandaag)} /> : undefined}
           >
             {detail && <OmleidingDetail diversion={detail} />}
@@ -201,9 +217,9 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
 /** Rustige sectiekop met teller: "Nu geldig · 2". */
 function SectieKop({ id, titel, aantal, inline = false }: { id: string; titel: string; aantal: number; inline?: boolean }) {
   return (
-    <h3 id={id} className={cn('flex items-baseline gap-1.5', !inline && 'mb-2 px-0.5')}>
+    <h3 id={id} className={cn('flex items-center gap-2', !inline && 'mb-3 px-0.5')}>
       <MicroLabel>{titel}</MicroLabel>
-      <span className="text-xs font-medium tabular-nums text-slate-500">{aantal}</span>
+      <span className="rounded-md bg-slate-500/10 px-1.5 py-0.5 text-xs font-semibold text-slate-600">{aantal}</span>
     </h3>
   );
 }
@@ -214,54 +230,51 @@ function SectieKop({ id, titel, aantal, inline = false }: { id: string; titel: s
 function FaseBadge({ fase, hint }: { fase: OmleidingsFase; hint?: string }) {
   if (fase === 'komend') {
     const label = hint ? hint.charAt(0).toUpperCase() + hint.slice(1) : 'Komend';
-    return <Badge tone="oker" icon={<Calendar size={12} />}>{label}</Badge>;
+    return <Badge tone="slate" icon={<Calendar size={12} />}>{label}</Badge>;
   }
   if (fase === 'verlopen') return <Badge tone="slate">Verlopen</Badge>;
   return null;
 }
 
-/** Eén lijstrij: lijntegel, titel (+ PDF-icoontje), periode met tijdshint,
- *  eerste regel van de omschrijving. */
+/** Vaste leesvolgorde: lijnen, titel en locatie, dan de geldigheidsperiode. */
 function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; vandaag: string; isCurrent: boolean; onClick: () => void }) {
   const fase = omleidingsFase(div, vandaag);
   const hint = omleidingsTijdshint(div, vandaag);
   const verlopen = fase === 'verlopen';
   return (
-    <Card
-      as="li"
-      padding="none"
-      interactive
+    <li
       aria-current={isCurrent ? 'true' : undefined}
-      className={cn('overflow-hidden', verlopen && 'opacity-60', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
+      className={cn('min-w-0', isCurrent && 'bg-slate-100/60')}
     >
-      {/* rauw: lijstrij van het master-detail (kaart als knop: lijntegel + titel + periode + omschrijving + chevron) */}
+      {/* rauw: volledige master-detailrij als één aanraakdoel */}
       <button
         type="button"
         onClick={onClick}
-        className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-slate-50/50 md:px-4"
+        className="ios-pressable group block w-full min-w-0 space-y-2.5 p-4 text-left transition-colors hover:bg-slate-100/50"
       >
-        <LijnTegel line={div.line} size="sm" tone={verlopen ? 'muted' : 'accent'} className="mt-0.5 self-start" />
-        <div className="min-w-0 flex-1">
-          {/* Plaats vet en in oker vóór de titel: dát scant een chauffeur als eerste (Jarno 10-09). */}
-          <h4 className="text-md font-semibold leading-snug text-slate-900" data-vt-record={div.id}>
-            {div.location && <span className={verlopen ? 'text-slate-600' : 'text-oker-800'}>{div.location} · </span>}
-            {div.title}
-            {div.pdfUrl && (
-              <FileText size={14} className="ml-1.5 inline-block align-[-2px] text-slate-400" aria-label="Met PDF-bijlage" />
-            )}
-          </h4>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold tabular-nums">
-            <FaseBadge fase={fase} hint={hint} />
-            {fase === 'lopend' && <Calendar size={14} className="text-oker-500" />}
-            <span className={verlopen ? 'text-slate-500' : 'text-slate-700'}>{omleidingsPeriode(div, vandaag)}</span>
-            {hint && fase === 'lopend' && <span className="whitespace-nowrap font-medium text-slate-500">· {hint}</span>}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {isAlleLijnen(div.line) || lijnenVan(div.line).length === 0
+              ? <span className="text-xs font-semibold text-slate-600">{lijnLabel(div.line)}</span>
+              : lijnenVan(div.line).map((lijn) => <LijnTegel key={lijn} line={lijn} size="sm" tone="muted" className="text-slate-700" />)}
           </div>
-          {div.description && (
-            <p className="mt-1 truncate text-xs font-normal text-slate-500">{div.description}</p>
-          )}
+          <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
+            {div.pdfUrl && <span className="inline-flex items-center gap-1"><FileText size={14} aria-hidden="true" />PDF</span>}
+            {isCurrent ? <Check size={16} className="text-slate-800" aria-label="Geselecteerd" /> : <ChevronRight size={16} aria-hidden="true" />}
+          </span>
         </div>
-        <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
+        <div className="min-w-0 [overflow-wrap:anywhere]">
+          {div.location && <p className="mb-1 text-xs font-semibold text-slate-600">{div.location}</p>}
+          <h4 className={cn('text-md font-semibold leading-snug', verlopen ? 'text-slate-600' : 'text-slate-900')} data-vt-record={div.id}>{div.title}</h4>
+        </div>
+        <div className="space-y-1.5 text-xs text-slate-500">
+          <p className="flex items-start gap-1.5">
+            <Calendar size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">{omleidingsPeriode(div, vandaag) || 'Geen periode opgegeven'}</span>
+          </p>
+          {hint && <p className={cn('pl-5 font-medium', fase === 'lopend' && 'text-slate-700')}>{hint.charAt(0).toUpperCase() + hint.slice(1)}</p>}
+        </div>
       </button>
-    </Card>
+    </li>
   );
 }

@@ -187,6 +187,7 @@ export function DetailPaneel({
   onClose,
   title,
   subtitle,
+  titelTerugloop = false,
   icon,
   chip,
   acties,
@@ -205,6 +206,8 @@ export function DetailPaneel({
   onClose: () => void;
   title: string;
   subtitle?: string;
+  /** Toon lange titel/subtitel volledig; de kop kan zo nodig zelf scrollen. */
+  titelTerugloop?: boolean;
   /** Icoontegel links van de titel (zelf sizen, bv. h-9 w-9). */
   icon?: ReactNode;
   /** Statuschip(s) naast de titel (Badge). Op mobiel in een rij boven de inhoud. */
@@ -239,6 +242,7 @@ export function DetailPaneel({
 }) {
   const inline = useMinWidth(LG);
   const wortel = useRef<HTMLDivElement>(null);
+  const kopRef = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
   // Richting van de inhoudswissel, bepaald op het moment dat de sleutel
@@ -253,9 +257,10 @@ export function DetailPaneel({
   }
   const wissel = wisselRef.current;
 
-  // Nieuw item: de inhoud weer bovenaan tonen (vroeger deed een key-remount
-  // van de scroll-container dat; die blijft nu staan voor de cross-fade).
+  // Nieuw item: de inhoud én een eventueel gescrolde lange titel weer
+  // bovenaan tonen. De containers blijven staan voor de cross-fade.
   useLayoutEffect(() => {
+    kopRef.current?.scrollTo?.(0, 0);
     scroller.current?.scrollTo?.(0, 0);
   }, [sleutel]);
 
@@ -282,7 +287,7 @@ export function DetailPaneel({
 
   if (!inline) {
     return (
-      <SlideOver open={open} onClose={onClose} title={title} subtitle={subtitle} icon={icon} width={breedte} footer={footer}>
+      <SlideOver open={open} onClose={onClose} title={title} subtitle={subtitle} titelTerugloop={titelTerugloop} icon={icon} width={breedte} footer={footer}>
         {/* Een andere rij kiezen terwijl het paneel open staat: zachte wissel
             i.p.v. een harde; het openen zelf is de veer van de SlideOver. */}
         <RichtingWissel sleutel={sleutel ?? ''} richting={wissel.richting} as="y" stil={wissel.stil}>
@@ -315,7 +320,10 @@ export function DetailPaneel({
         aria-label={title}
         className={cn('flex flex-col overflow-hidden', plakkend && 'lg:max-h-[calc(100dvh_-_5rem)]')}
       >
-        <div className="flex items-start gap-3 border-b border-hairline p-5 md:p-6">
+        <div ref={kopRef} className={cn(
+          'flex shrink-0 items-start gap-3 border-b border-hairline p-5 md:p-6',
+          titelTerugloop && 'max-h-[40dvh] overflow-y-auto overscroll-contain',
+        )}>
           {icon}
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -323,14 +331,14 @@ export function DetailPaneel({
                   als de titel van de gekozen rij (data-vt-record), zodat die
                   bij een keuze van de lijst naar hier schuift. */}
               <h2
-                className="text-section-title min-w-0 truncate"
+                className={cn('text-section-title min-w-0', titelTerugloop ? '[overflow-wrap:anywhere]' : 'truncate')}
                 style={sleutel ? { viewTransitionName: recordNaam(sleutel) } : undefined}
               >
                 {title}
               </h2>
               {chip}
             </div>
-            {subtitle ? <p className="mt-0.5 text-md text-slate-500 truncate">{subtitle}</p> : null}
+            {subtitle ? <p className={cn('mt-0.5 text-md text-slate-500', titelTerugloop ? '[overflow-wrap:anywhere]' : 'truncate')}>{subtitle}</p> : null}
           </div>
           {acties ? <div className="-my-1 flex shrink-0 items-center gap-1">{acties}</div> : null}
         </div>

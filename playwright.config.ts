@@ -23,7 +23,7 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = Number(process.env.E2E_PORT) > 0 ? Number(process.env.E2E_PORT) : 4173;
 
 /** Specs die alleen op het desktop-project horen (én a11y, dat op beide draait). */
-const DESKTOP_SPECS = /(desktop|a11y)\.spec\.ts$/;
+const DESKTOP_SPECS = /(desktop|a11y|omleidingen-layout)\.spec\.ts$/;
 /** Specs die NIET op het mobiele standaardproject horen: desktop-only en de pwa-spec. */
 const NIET_MOBIEL = /(desktop|pwa)\.spec\.ts$/;
 const PWA_SPEC = /pwa\.spec\.ts$/;
@@ -51,7 +51,7 @@ export default defineConfig({
       // De mobiele regressies ook in Safari's engine: focus, History API en
       // view-transition-lagen gedragen zich daar anders dan in Chromium.
       name: 'iPhone 13 (webkit)',
-      testMatch: /(mobiele-navigatie|dock-transitie|activiteit-layout|beheer-dienstoverzicht-layout)\.spec\.ts$/,
+      testMatch: /(mobiele-navigatie|dock-transitie|activiteit-layout|beheer-dienstoverzicht-layout|omleidingen-layout)\.spec\.ts$/,
       use: { ...devices['iPhone 13'], browserName: 'webkit' },
     },
     {

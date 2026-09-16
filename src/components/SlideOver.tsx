@@ -21,6 +21,7 @@ export function SlideOver({
   onClose,
   title,
   subtitle,
+  titelTerugloop = false,
   icon,
   width = 'md',
   children,
@@ -30,6 +31,8 @@ export function SlideOver({
   onClose: () => void;
   title: string;
   subtitle?: string;
+  /** Lange titel en subtitel volledig leesbaar, ook op een smalle telefoon. */
+  titelTerugloop?: boolean;
   icon?: React.ReactNode;
   width?: 'md' | 'lg';
   children: React.ReactNode;
@@ -152,23 +155,31 @@ export function SlideOver({
                 header, inhoud en footer respecteren de zij-insets — anders valt
                 het sluitkruis deels achter de notch-hoek. */}
             <div
-              className="flex items-start gap-3 border-b border-hairline p-5"
+              className={cn(
+                'flex shrink-0 items-start gap-3 border-b border-hairline p-5',
+                // Een zeer lange titel krijgt een eigen scrollvak; ook in
+                // landscape blijft er ruimte voor de inhoud en de bijlage.
+                titelTerugloop && 'max-h-[40dvh] overflow-y-auto overscroll-contain',
+              )}
               style={{ paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
             >
               {icon}
               <div className="min-w-0 flex-1">
-                <h2 className="text-card-title truncate">
+                <h2 className={cn('text-card-title', titelTerugloop ? '[overflow-wrap:anywhere]' : 'truncate')}>
                   {title}
                 </h2>
                 {subtitle && (
-                  <p className="mt-0.5 text-xs text-slate-500 truncate">{subtitle}</p>
+                  <p className={cn('mt-0.5 text-xs text-slate-500', titelTerugloop ? '[overflow-wrap:anywhere]' : 'truncate')}>{subtitle}</p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Sluiten"
-                className="-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                className={cn(
+                  '-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700',
+                  titelTerugloop && 'sticky top-0 self-start',
+                )}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -177,7 +188,7 @@ export function SlideOver({
             {/* overscroll-contain: aan het einde van de inhoud mag de pagina
                 erachter niet meescrollen (zelfde fix als in Modal.tsx). */}
             <div
-              className="flex-1 overflow-y-auto overscroll-contain p-5"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5"
               style={{ paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
             >
               {children}
