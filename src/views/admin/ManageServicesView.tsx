@@ -12,7 +12,7 @@ import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '..
 import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
-import { Zijvak, ZijvakLayout, ZijvakRij } from '../../components/Zijvak';
+import { Zijvak, ZijvakRij } from '../../components/Zijvak';
 import { dienstStatistiek, formatDienstDuur } from '../../lib/dienstStatistiek';
 
 // Een deel telt alleen als het een geldige begin- én eindtijd (HH:MM) heeft.
@@ -356,12 +356,14 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         )}
       />
 
-      {/* Desktop: tabel als hoofdkolom + zijvak (afwerkingsronde 04-09);
-          xl omdat de acht kolommen op lg naast een vak te krap zitten. */}
-      <ZijvakLayout breekpunt="xl" zijvak={zijvak}>
-      {/* `overflow-clip` i.p.v. TableShell: die maakt een scrollcontainer en
-          dan plakt de kolomkop niet meer onder de topbar. De tabel is
-          desktop-only (mobiel = kaartlijst), dus horizontaal scrollen hoeft niet. */}
+      {/* Acht kolommen hebben voorrang op het zijvak: op een laptop staat
+          het overzicht eronder. Pas op een breed scherm kan het ernaast.
+          De tabel/kaart-keuze volgt de echte kolombreedte, inclusief de
+          ruimte die de navigatie en het zijvak innemen. */}
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:items-start">
+      <div className="@container min-w-0">
+      {/* Clip houdt de afgeronde rand én de plakkende kolomkop. Bij minder
+          dan 42rem beschikbare ruimte neemt de kaartlijst de tabel over. */}
       <div className="surface-table rounded-3xl overflow-clip">
         <div className="border-b border-hairline px-5 py-4 md:px-6">
           <TableToolbar
@@ -370,45 +372,46 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             placeholder="Zoek op dienst- of loopnummer…"
             telling={`${gesorteerd.length} van ${services.length}`}
             dichtheid={voorkeur.dichtheid}
+            className="md:flex-wrap"
           />
         </div>
 
         {gesorteerd.length > 0 && (
-          <div className="hidden md:block">
+          <div className="hidden @[42rem]:block">
             <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
               <StickyThead>
                 <tr>
                   {/* Zelfde indeling als het totaaloverzicht van de planning
                       en als de chauffeurs-weergave: loop vóór de uren. */}
-                  <SortTh kolom="dienst" sort={sort}>Dienst</SortTh>
-                  <SortTh kolom="loop1" sort={sort}>Loop 1</SortTh>
-                  <SortTh kolom="start" sort={sort}>Deel 1</SortTh>
-                  <Th>Loop 2</Th>
-                  <Th>Deel 2</Th>
-                  <Th>Loop 3</Th>
-                  <Th>Deel 3</Th>
-                  <Th className="text-right">Acties</Th>
+                  <SortTh kolom="dienst" sort={sort} className="[&_button]:px-3">Dienst</SortTh>
+                  <SortTh kolom="loop1" sort={sort} className="[&_button]:px-3">Loop 1</SortTh>
+                  <SortTh kolom="start" sort={sort} className="[&_button]:px-3">Deel 1</SortTh>
+                  <Th className="px-3">Loop 2</Th>
+                  <Th className="px-3">Deel 2</Th>
+                  <Th className="px-3">Loop 3</Th>
+                  <Th className="px-3">Deel 3</Th>
+                  <Th className="px-3 text-right">Acties</Th>
                 </tr>
               </StickyThead>
               <tbody>
                 {gesorteerd.map(s => (
                   <tr key={s.id} className="border-b border-hairline-subtle last:border-b-0 hover:bg-slate-50/50 transition-colors">
-                    <Td className="font-semibold text-slate-800 tabular-nums">{s.serviceNumber}</Td>
-                    <Td className="tabular-nums font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
-                    <Td className="tabular-nums whitespace-nowrap">{tijdvak(s.startTime, s.endTime)}</Td>
-                    <Td className="tabular-nums font-semibold text-slate-700">
+                    <Td className="px-3 font-semibold text-slate-800 tabular-nums">{s.serviceNumber}</Td>
+                    <Td className="px-3 tabular-nums font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
+                    <Td className="px-3 tabular-nums whitespace-nowrap">{tijdvak(s.startTime, s.endTime)}</Td>
+                    <Td className="px-3 tabular-nums font-semibold text-slate-700">
                       {hasValidTime(s.startTime2, s.endTime2) && s.loopnr2 ? s.loopnr2 : <span className="font-normal text-slate-300">—</span>}
                     </Td>
-                    <Td className="tabular-nums whitespace-nowrap">
+                    <Td className="px-3 tabular-nums whitespace-nowrap">
                       {hasValidTime(s.startTime2, s.endTime2) ? tijdvak(s.startTime2!, s.endTime2!) : ''}
                     </Td>
-                    <Td className="tabular-nums font-semibold text-slate-700">
+                    <Td className="px-3 tabular-nums font-semibold text-slate-700">
                       {hasValidTime(s.startTime3, s.endTime3) && s.loopnr3 ? s.loopnr3 : <span className="font-normal text-slate-300">—</span>}
                     </Td>
-                    <Td className="tabular-nums whitespace-nowrap">
+                    <Td className="px-3 tabular-nums whitespace-nowrap">
                       {hasValidTime(s.startTime3, s.endTime3) ? tijdvak(s.startTime3!, s.endTime3!) : ''}
                     </Td>
-                    <Td className="w-14 text-right">{rijActies(s)}</Td>
+                    <Td className="w-14 px-3 text-right">{rijActies(s)}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -416,8 +419,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
         )}
 
-        {/* Mobiel: kaart per dienst */}
-        <div className="md:hidden divide-y divide-slate-100">
+        {/* Smalle kolom: kaart per dienst; op tablet passen de drie delen
+            naast elkaar zonder dienst- of loopgegevens te verbergen. */}
+        <div className="@[42rem]:hidden divide-y divide-slate-100">
           {gesorteerd.map(s => (
             <div key={s.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors">
               <div className="flex justify-between items-center">
@@ -425,7 +429,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 {rijActies(s)}
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 gap-3 @[30rem]:grid-cols-3">
                 <div className="flex flex-col gap-1">
                   <MicroLabel>Deel 1{s.loopnr ? ` · loop ${s.loopnr}` : ''}</MicroLabel>
                   <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
@@ -476,7 +480,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
         )}
       </div>
-      </ZijvakLayout>
+      </div>
+      <aside className="min-w-0 self-start 2xl:sticky 2xl:top-[calc(var(--sticky-top)+1.25rem)]">{zijvak}</aside>
+      </div>
 
       <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex flex-col !p-0">
         <ModalHeader title={editingId ? 'Dienst bewerken' : 'Nieuwe dienst'} onClose={() => setShowModal(false)} />
@@ -609,5 +615,4 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     </PageShell>
   );
 }
-
 

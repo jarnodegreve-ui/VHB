@@ -3,12 +3,9 @@
 // - HTML/navigatie: network-first (zodat nieuwe deploys direct laden), met
 //   cache-fallback bij offline
 // - Assets (JS/CSS/fonts/images): cache-first (snel laden)
-// - Ritblaadje-metadata (/api/ritblaadje): stale-while-revalidate — toon
-//   meteen de gecachte versie, ververs op de achtergrond. Veilig want het
-//   ritblaadje is één gedeelde resource (id "current"), geen per-gebruiker
-//   data. Vraagt de app om een verse kopie (cache: 'no-store'), dan
-//   network-first met de cache als offline-fallback: de signed URL in de
-//   metadata verloopt na een uur, en de in-app viewer wil hem vers.
+// - Ritblaadje-metadata (/api/ritblaadje): network-first met offline-fallback.
+//   De signed URL verloopt na een uur: eerst de cache tonen leverde een
+//   verlopen PDF-link op, die pas bij een tweede bezoek werd vernieuwd.
 // - Ritblaadje-PDF (ondertekende storage-URL met /ritblaadjes/ in pad):
 //   cache-first met achtergrond-revalidate, zodat de PDF offline blijft
 //   werken in de iframe + download. Cache-key = URL zónder query: signed
@@ -78,7 +75,6 @@ const PRECACHE_EXTRA = PRECACHE_EXTRA_RAW.startsWith('__') ? [] : PRECACHE_EXTRA
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';
-const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
 
@@ -258,9 +254,10 @@ self.addEventListener('fetch', (event) => {
   // ?from=&to=), dus per gebruiker/venster apart; uitloggen wist alle
   // caches (ui.ts). Een antwoord uit de cache draagt `X-VHB-Bron: cache`
   // (markeerUitCache), zodat de app de versheid niet op "nu" zet.
-  // (De ritblad-metadata staat óók in die lijst, maar blijft SWR — zie
-  // het blok hieronder.)
-  if (url.pathname !== RITBLAADJE_API && (url.pathname === ME_API || url.pathname === PLANNING_API || self.VHB_RITBLADEN.isOfflineApi(url.pathname))) {
+  // Ritblad-metadata volgt dezelfde strategie: de PDF-link is tijdelijk,
+  // dus iedere online opening krijgt een vers ondertekende URL. Offline
+  // blijft de PDF beschikbaar onder zijn query-loze cache-sleutel.
+  if (url.pathname === ME_API || url.pathname === PLANNING_API || self.VHB_RITBLADEN.isOfflineApi(url.pathname)) {
     event.respondWith(
       fetch(req)
         .then((res) => {
@@ -271,31 +268,6 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() => caches.open(RITBLADEN_CACHE).then((cache) => cache.match(req)).then((c) => self.VHB_RITBLADEN.markeerUitCache(c) || Response.error())),
-    );
-    return;
-  }
-
-  // === Ritblaadje-metadata — stale-while-revalidate ===
-  // Keyed op de volledige URL (incl. query), dus per gebruiker/dag apart.
-  // Blijft bewust SWR: metadata die zelden wijzigt en waar een generatie
-  // vertraging niemand schaadt. Uitzondering: vraagt de app om een verse
-  // kopie (cache: 'no-store' of 'reload' — de in-app viewer, die de signed
-  // URL meteen zelf fetcht), dan network-first; de gecachte versie dient
-  // dan alleen als offline-fallback (de PDF zelf komt dan óók uit de cache,
-  // onder het query-loze pad, dus de verlopen token deert niet).
-  if (url.pathname === RITBLAADJE_API) {
-    const wilVers = req.cache === 'no-store' || req.cache === 'reload';
-    event.respondWith(
-      caches.open(RITBLADEN_CACHE).then((cache) =>
-        cache.match(req).then((cached) => {
-          const network = fetch(req).then((res) => {
-            if (res && res.ok) cache.put(req, res.clone());
-            return res;
-          });
-          if (wilVers) return network.catch(() => cached || Response.error());
-          return cached || network.catch(() => cached || Response.error());
-        }),
-      ),
     );
     return;
   }

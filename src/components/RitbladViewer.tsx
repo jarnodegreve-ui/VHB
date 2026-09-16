@@ -6,7 +6,6 @@ import { Modal } from './Modal';
 import { Button, IconButton } from './primitives';
 import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
-import { openPdfInNewTab } from '../lib/ui';
 import { openHuidigRitblad } from '../lib/ritblad';
 import { isRitbladOpgeslagen } from '../lib/ritbladCache';
 import { useOnline } from '../lib/useOnline';
@@ -24,7 +23,7 @@ import { Fout, GeenBereik, NietGevonden } from './illustraties';
  *
  * Vindt de viewer geen apart blad (scan zonder tekstlaag, ander nummer-
  * formaat), dan blijft de volledige bundel één tik weg — dat is de
- * bestaande openHuidigRitblad()/openPdfInNewTab-route, ongewijzigd.
+ * openHuidigRitblad-route, die bij iedere klik een verse PDF-link ophaalt.
  */
 
 type Staat =
@@ -278,7 +277,7 @@ export function RitbladViewer({
               illustratie={<NietGevonden />}
               title={`Geen apart blad gevonden voor ${nummerTekst}`}
               message="De bundel bevat geen pagina waarop dit dienstnummer herkenbaar staat, of het bestand is een scan zonder tekst. De volledige bundel werkt wel."
-              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => openPdfInNewTab(staat.url)}>Volledige bundel openen</Button>}
+              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => void openHuidigRitblad()}>Volledige bundel openen</Button>}
             />
           </div>
         </div>
@@ -302,7 +301,7 @@ export function RitbladViewer({
               <ZoomIn size={16} />
             </IconButton>
             <div className="flex-1" />
-            <Button variant="secondary" size="sm" icon={<FileText size={14} />} onClick={() => openPdfInNewTab(staat.url)}>
+            <Button variant="secondary" size="sm" icon={<FileText size={14} />} onClick={() => void openHuidigRitblad()}>
               Volledige bundel
             </Button>
           </footer>

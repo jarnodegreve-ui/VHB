@@ -77,6 +77,39 @@ const gecachtePaden = (page: Page) => page.evaluate(async (naam) => {
 }, RITBLADEN_CACHE);
 
 test.describe('pwa: service worker', () => {
+  test('ritbladlink: eerste opening vernieuwt verlopen cache, offline blijft de laatste metadata beschikbaar', async ({ page, context }) => {
+    await seedContext(context, page);
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+    await wachtOpControle(page);
+
+    const vers = { filename: 'bundel.pdf', url: 'https://storage.test/ritblaadjes/bundel.pdf?token=vers' };
+    await context.route('**/api/ritblaadje', (route) => route.fulfill({ json: vers }));
+    await page.evaluate(async ({ naam, meta }) => {
+      const cache = await caches.open(naam);
+      await cache.put('/api/ritblaadje', new Response(JSON.stringify(meta), {
+        headers: { 'content-type': 'application/json' },
+      }));
+    }, { naam: RITBLADEN_CACHE, meta: { ...vers, url: vers.url.replace('token=vers', 'token=verlopen') } });
+
+    // Gewone fetch, zoals de oude Ritbladen-pagina: de SW mag ook zonder
+    // expliciete no-store nooit eerst de verlopen link uit de cache geven.
+    expect(await page.evaluate(async () => (await fetch('/api/ritblaadje')).json())).toEqual(vers);
+    await expect.poll(() => page.evaluate(async (naam) => {
+      const cache = await caches.open(naam);
+      return (await cache.match('/api/ritblaadje'))?.json();
+    }, RITBLADEN_CACHE)).toEqual(vers);
+
+    await context.unroute('**/api/ritblaadje');
+    await context.unroute('**/api/**');
+    await context.setOffline(true);
+    const offline = await page.evaluate(async () => {
+      const res = await fetch('/api/ritblaadje', { cache: 'no-store' });
+      return { bron: res.headers.get('X-VHB-Bron'), meta: await res.json() };
+    });
+    expect(offline).toEqual({ bron: 'cache', meta: vers });
+  });
+
   test('eerste laad: SW registreert, neemt de controle en GET_VERSION antwoordt met de gestempelde cachenaam', async ({ page, context }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
