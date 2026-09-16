@@ -13,6 +13,7 @@ import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { formatDateHuman, formatShortDay, serviceNumberOf } from '../lib/format';
+import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { canRespondToSwap } from '../lib/authorization';
 import { notify } from '../lib/ui';
 import { AllesGedaan, LegeLijst } from '../components/illustraties';
@@ -51,7 +52,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // kaarten, en een samenvatting vóór het indienen (UX-review: dit was de
   // moeilijkste flow — keuze-overload met tot 56 opties in één select).
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
-  const [showBusyColleagues, setShowBusyColleagues] = useState(false);
   const [showAllReturns, setShowAllReturns] = useState(false);
   // Stap 1 toont eerst de komende ~2 weken; bij een volle 8-wekenplanning
   // stonden er anders 30-40 kaarten in één modal.
@@ -71,6 +71,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [swaps]);
   // Dienstruil-matching: wie is vrij op de dag van de gekozen dienst?
   const [freeForDate, setFreeForDate] = useState<Set<string> | null>(null);
+  // Dienstcode per collega die die dag rijdt, zodat een bezette collega
+  // "dienst 2104" toont i.p.v. een kaal "bezet" — bij een 1-op-1 ruil op
+  // dezelfde dag is dat net de collega die je zoekt.
+  const [linesForDate, setLinesForDate] = useState<Record<string, string>>({});
   // Ruil zonder tegenprestatie: per collega-id de planningcode ('vrij', 'bv',
   // 'tk', 'ta') waarop hij/zij de dienst die dag mag overnemen. Komt van de
   // server; alleen wie hierin staat, kan als overname aangeduid worden.
@@ -95,6 +99,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     if (!selectedShiftDate) {
       setFreeForDate(null);
       setTakeoverForDate(null);
+      setLinesForDate({});
       return;
     }
     let cancelled = false;
@@ -105,6 +110,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         const day = res.days.find((d) => d.date === selectedShiftDate);
         setFreeForDate(new Set(day?.free ?? []));
         setTakeoverForDate(day?.takeover ?? {});
+        setLinesForDate(day?.lines ?? {});
       })
       .catch(() => { if (!cancelled) { setFreeForDate(null); setTakeoverForDate(null); } })
       .finally(() => { if (!cancelled) setMatchLoading(false); });
@@ -172,10 +178,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   };
   const todayIso = isoDate(new Date());
   // Alleen kómende eigen diensten, chronologisch — verleden diensten ruilen
-  // heeft geen zin en vulde de keuzelijst nodeloos.
-  const myShifts = shifts
-    .filter(s => s.driverId === user.id && s.date >= todayIso)
-    .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime).localeCompare(String(b.startTime)));
+  // heeft geen zin en vulde de keuzelijst nodeloos. Eén kaart per dienst: een
+  // gesplitste dienst is meerdere planning-rijen, maar de ruil (en de
+  // doorvoer) gaat altijd over de hele dienst (zie lib/ruilWizard).
+  const myShifts = groepeerPerDienst(shifts.filter(s => s.driverId === user.id && s.date >= todayIso));
   /**
    * Dienst-info bij een ruil. `shifts` bevat alleen de éigen planning, dus de
    * aangeboden dienst zit er lang niet altijd in: de aangezochte collega heeft
@@ -202,7 +208,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // aangetikte dienst voorgeselecteerd (scheelt de chauffeur stap 1).
   useEffect(() => {
     if (!preselectShiftId) return;
-    const shift = myShifts.find((s) => s.id === preselectShiftId);
+    // De aangetikte rij kan het tweede deel van een gesplitste dienst zijn;
+    // de kaart draagt het id van het eerste deel.
+    const rij = shifts.find((s) => s.id === preselectShiftId);
+    const shift = rij ? myShifts.find((s) => dienstSleutel(s) === dienstSleutel(rij)) : undefined;
     if (shift) {
       setSelectedShift(shift.id);
       setSelectedTargetDriver('');
@@ -420,7 +429,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               setReturnPick('');
               setSwapType('ruil');
               setReason('');
-              setShowBusyColleagues(false);
               setShowAllReturns(false);
               setShowAllShifts(false);
               setShowOfferModal(true);
@@ -880,7 +888,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         >
                           <span className="min-w-0">
                             <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(s.date)}</span>
-                            <span className="block text-xs font-medium text-slate-500 tabular-nums">Dienst {serviceNumberOf(s)} · {s.startTime} – {s.endTime}</span>
+                            <span className="block text-xs font-medium text-slate-500 tabular-nums">Dienst {serviceNumberOf(s)} · {s.startTime} – {s.endTime}{s.delen > 1 ? ` · in ${s.delen} delen` : ''}</span>
                           </span>
                           <ChevronRight size={16} className="shrink-0 text-slate-300" />
                         </button>
@@ -907,12 +915,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <>
                         <div className="space-y-2">
                           {eligibleTargetDrivers
-                            .filter((u) => showBusyColleagues || !freeForDate || isAvailableOnShiftDate(u.id))
                             .map((u) => {
                               const free = freeForDate?.has(u.id);
                               // Planningcode ('bv', 'tk', 'ta') leest preciezer dan
                               // "vrij" — en zegt meteen of een overname kan.
                               const code = takeoverCodeFor(u.id);
+                              // Bezette collega: toon zijn dienst — bij een 1-op-1
+                              // ruil op dezelfde dag is dát de collega die je zoekt.
+                              const rijdt = linesForDate[u.id];
                               return (
                                 /* rauw: wizard-keuzekaart (naam + beschikbaarheidsbadge + chevron), eigen layout via cnCard */
                                 <button
@@ -936,7 +946,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                         ? <Badge tone="emerald" stil>{code}</Badge>
                                         : free || code
                                           ? <Badge tone="emerald" stil>vrij</Badge>
-                                          : <Badge tone="slate">bezet</Badge>
+                                          : <Badge tone="slate">{rijdt ? `dienst ${rijdt}` : 'bezet'}</Badge>
                                     )}
                                     <ChevronRight size={16} className="text-slate-300" />
                                   </span>
@@ -944,15 +954,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               );
                             })}
                         </div>
-                        {freeForDate && !showBusyColleagues && eligibleTargetDrivers.some((u) => !isAvailableOnShiftDate(u.id)) && (
-                          <Button variant="ghost" size="sm" full className="text-oker-700 hover:text-oker-800" onClick={() => setShowBusyColleagues(true)}>
-                            Toon ook bezette collega's ({eligibleTargetDrivers.filter((u) => !isAvailableOnShiftDate(u.id)).length})
-                          </Button>
+                        {freeForDate && freeCount === 0 && (
+                          <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)}, je kan wel met een collega die rijdt 1-op-1 ruilen.</p>
                         )}
-                        {freeForDate && freeCount === 0 && !showBusyColleagues && (
-                          <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)}, je kan wel een bezette collega vragen.</p>
-                        )}
-                        <p className="text-xs font-medium text-slate-500">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
+                        <p className="text-xs font-medium text-slate-500">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven; met een collega die die dag rijdt, ruil je 1-op-1.</p>
                       </>
                     )}
                   </>
@@ -962,15 +967,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 {wizardStep === 3 && (() => {
                   const target = users.find((u) => u.id === selectedTargetDriver);
                   const offered = shifts.find((s) => s.id === selectedShift);
-                  // Conflict-check op shift-niveau (niet dag-niveau): alleen de
-                  // aangeboden shift zelf telt niet mee — een tweede eigen
-                  // segment op dezelfde dag blijft een conflict. Ook eigen
+                  // Conflict-check op dienst-niveau: alle delen van de aangeboden
+                  // dienst tellen niet mee (die geeft de aanvrager net weg), een
+                  // ándere eigen dienst op die dag wel. Zo kan een 1-op-1 ruil op
+                  // dezelfde dag ook met een gesplitste dienst. Ook eigen
                   // goedgekeurd verlof blokkeert een tegenprestatie.
                   const ownConflictOn = (date: string): string | undefined => {
-                    const otherOwnShift = shifts.find(
-                      (s) => s.driverId === user.id && s.date === date && s.id !== selectedShift,
-                    );
-                    if (otherOwnShift) return `dienst ${String(otherOwnShift.line || '?').trim()}`;
+                    const andereDienst = eigenDienstOp(shifts, user.id, date, offered);
+                    if (andereDienst) return `dienst ${andereDienst}`;
                     const ownLeave = leaveRequests.find(
                       (l) => l.userId === user.id && l.status === 'approved' && l.startDate <= date && date <= l.endDate,
                     );
