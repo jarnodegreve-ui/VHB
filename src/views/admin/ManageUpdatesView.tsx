@@ -255,7 +255,7 @@ export function ManageUpdatesView({
               padding="none"
               interactive
               aria-current={isCurrent ? 'true' : undefined}
-              className={cn('rounded-2xl overflow-hidden', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
+              className={cn('rounded-2xl overflow-hidden', isCurrent && 'bg-surface-muted ring-1 ring-hairline-strong')}
             >
               {/* rauw: hele rij is de knop (titel + badges + datum + chevron) — opent het bewerkpaneel */}
               <button

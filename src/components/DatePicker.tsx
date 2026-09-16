@@ -289,7 +289,7 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
                     // 44 px raakvlak op touch, 36 px met een muis — zelfde recept als IconButton.
                     'ios-pressable mx-auto flex h-11 w-11 items-center justify-center rounded-lg text-sm tabular-nums transition-colors sm:pointer-fine:h-9 sm:pointer-fine:w-9',
                     inMaand ? 'text-slate-800' : 'text-slate-400',
-                    uit ? 'cursor-not-allowed opacity-40' : 'hover:bg-slate-100/70',
+                    uit ? 'cursor-not-allowed opacity-40' : 'hover:bg-surface-soft-hover',
                     isVandaag && !gekozen && 'ring-1 ring-inset ring-hairline-strong font-semibold',
                     gekozen && 'bg-oker-500 text-slate-950 font-semibold elev-accent hover:bg-oker-400',
                   )}

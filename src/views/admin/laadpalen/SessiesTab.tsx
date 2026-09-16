@@ -195,7 +195,7 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
                     <SortTh kolom="status" sort={sort}>Status</SortTh>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-hairline-subtle">
                   {pagina_.map((s) => {
                     const n = naam(s);
                     const bus = busVoorLaadpunt(n);

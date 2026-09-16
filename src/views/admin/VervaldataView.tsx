@@ -238,7 +238,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           value={tellers.verlopen}
           sub={tellers.verlopen > 0 ? 'direct actie nodig' : 'niets verlopen'}
           onClick={() => kiesFilter('verlopen')}
-          className={cn(filter === 'verlopen' && 'ring-2 ring-oker-500/40')}
+          actief={filter === 'verlopen'}
         />
         <OpsStat
           icon={<IdCard size={16} />}
@@ -247,7 +247,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           value={tellers.binnen30}
           sub="vernieuwing plannen"
           onClick={() => kiesFilter('binnen30')}
-          className={cn(filter === 'binnen30' && 'ring-2 ring-oker-500/40')}
+          actief={filter === 'binnen30'}
         />
         <OpsStat
           icon={<IdCard size={16} />}
@@ -256,7 +256,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           value={tellers.binnen90}
           sub="komt eraan"
           onClick={() => kiesFilter('binnen90')}
-          className={cn(filter === 'binnen90' && 'ring-2 ring-oker-500/40')}
+          actief={filter === 'binnen90'}
         />
         <OpsStat
           icon={<UserX size={16} />}
@@ -265,14 +265,14 @@ export function VervaldataView({ users }: { users: User[] }) {
           value={tellers.zonder}
           sub={tellers.zonder > 0 ? 'nog in te vullen' : 'alles ingevuld'}
           onClick={() => kiesFilter('zonder')}
-          className={cn(filter === 'zonder' && 'ring-2 ring-oker-500/40')}
+          actief={filter === 'zonder'}
         />
       </div>
 
       {zl.fout && expiries.length === 0 ? (
         <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && expiries.length === 0 ? (
-        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Vervaldata worden geladen">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Vervaldata worden geladen">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
@@ -352,7 +352,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                 </table>
               </div>
 
-              <div className="md:hidden divide-y divide-slate-100">
+              <div className="md:hidden divide-y divide-hairline-subtle">
                 {gesorteerd.map((rij) => (
                   // rauw: hele kaartrij (naam + datumpillen) is de knop die het bewerkvenster opent
                   <button

@@ -245,7 +245,7 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
             acties={<Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setBewerk({ ...LEEG_CODE, nieuw: true })}>Code toevoegen</Button>}
           />
         </div>
-        {zl.fout && codes.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && codes.length === 0 ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : lijst.length === 0 ? (
+        {zl.fout && codes.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && codes.length === 0 ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : lijst.length === 0 ? (
           <div className="p-6"><EmptyState title="Geen looncodes" message={codes.length ? 'Pas de zoekterm of het filter aan.' : 'Draai de migratie met de seed of voeg codes toe.'} /></div>
         ) : (
           <div className="overflow-x-auto">
@@ -362,7 +362,7 @@ function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
         <div className="border-b border-hairline px-5 py-4 md:px-6">
           <TableToolbar zoek={zoek} onZoek={setZoek} placeholder="Zoek chauffeur…" telling={`${lijst.length} van ${rijen.length}`} acties={<Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>Lijst plakken</Button>} />
         </div>
-        {zl.fout && rijen.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && rijen.length === 0 ? <div className="divide-y divide-slate-100"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
+        {zl.fout && rijen.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && rijen.length === 0 ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
           <table className="w-full text-left border-collapse">
             <StickyThead><tr><Th>Chauffeur</Th><Th num>Matricule</Th><Th>In export</Th></tr></StickyThead>
             <tbody>

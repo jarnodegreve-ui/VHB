@@ -768,7 +768,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                 {/* Tabelrijen: alleen opacity + 8 px (geen hoogte/layout, zie LijstRij). */}
                 <LijstAnimatie aantal={sortedUsers.length}>
                 {sortedUsers.map((u) => (
-                  <LijstRij as="tr" key={u.id} className={cn('group border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-slate-100/60')}>
+                  <LijstRij as="tr" key={u.id} className={cn('group border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover', selectedIds.has(u.id) && 'bg-slate-100/60')}>
                     <Td className="w-12 !py-1">
                       <Checkbox
                         checked={selectedIds.has(u.id)}
@@ -869,7 +869,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
             </table>
           </div>
         )}
-        <div className="md:hidden divide-y divide-slate-100">
+        <div className="md:hidden divide-y divide-hairline-subtle">
           <LijstAnimatie aantal={sortedUsers.length}>
           {sortedUsers.map((u) => (
             <LijstRij as="div" key={u.id} className={cn('p-5 space-y-4 active:bg-slate-50 transition-colors', selectedIds.has(u.id) && 'bg-slate-100/60')}>
@@ -1157,7 +1157,7 @@ function RowMenuItem({ icon, label, onClick, disabled = false, tone = 'default' 
         'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors min-h-11',
         tone === 'danger'
           ? 'text-red-700 hover:bg-red-50'
-          : 'text-slate-700 hover:bg-slate-100/70',
+          : 'text-slate-700 hover:bg-surface-soft-hover',
         disabled && 'opacity-40 cursor-not-allowed hover:bg-transparent',
       )}
     >

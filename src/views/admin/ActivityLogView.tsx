@@ -411,7 +411,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                     <h3 className="text-xs font-semibold text-slate-700">{dagKop(dag, vandaag)}{dag === vandaag || dag === addDagen(vandaag, -1) ? <span className="ml-2 font-normal text-slate-500">{formatDayLong(dag)}</span> : null}</h3>
                     <span className="text-xs font-medium font-mono text-slate-500">{rijen.reduce((a, b) => a + b.items.length, 0)} {rijen.reduce((a, b) => a + b.items.length, 0) === 1 ? 'actie' : 'acties'}</span>
                   </div>
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-hairline-subtle">
                     {rijen.map((b) => {
                       const e = b.eerste;
                       const n = b.items.length;

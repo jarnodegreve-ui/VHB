@@ -192,7 +192,7 @@ export function WerkvoorraadView({
             value={tellers[s]}
             sub={tegelSub(s)}
             onClick={() => kiesFilter(s)}
-            className={cn(filter === s && 'ring-2 ring-oker-500/40')}
+            actief={filter === s}
           />
         ))}
       </div>

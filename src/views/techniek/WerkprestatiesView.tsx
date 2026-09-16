@@ -82,6 +82,10 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
 
   const busLabel = (w: Werkprestatie) => (w.vehicleId ? voertuigNaam({ busnr: w.busnr ?? '', kortNr: w.kortNr }) : 'Garage / algemeen');
 
+  // De lege staat draagt dezelfde actie als de kopknop; dan hoort er maar
+  // één gouden knop in beeld te staan (punt 13, 16-09).
+  const legeStaat = rijen.length === 0 && !zl.laden && !zl.fout;
+
   return (
     <PageShell>
       <PageHeader
@@ -90,7 +94,7 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
         actions={(
           <>
             <VersheidRegel {...zl.versheid} />
-            <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>
+            {!legeStaat && <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>}
           </>
         )}
       />
@@ -132,7 +136,7 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
           {zl.fout && rijen.length === 0 ? (
             <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
           ) : zl.laden && rijen.length === 0 ? (
-            <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Werkprestaties worden geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
+            <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Werkprestaties worden geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
           ) : rijen.length === 0 ? (
             <EmptyState illustratie={<LegeLijst />} title="Nog geen werkprestaties in deze periode" message="Registreer wat je vandaag aan welke bus deed." action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>} />
           ) : (
@@ -143,7 +147,7 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
                     <h2 className="text-card-title">{datum === vandaag ? 'Vandaag' : formatShortDay(datum)}</h2>
                     <span className="text-xs font-medium text-slate-500">{urenTekst(lijst.reduce((s, w) => s + w.werkuren, 0))} u</span>
                   </div>
-                  <ul className="divide-y divide-slate-100">
+                  <ul className="divide-y divide-hairline-subtle">
                     {lijst.map((w) => (
                       <li key={w.id} className="flex items-start gap-3 px-5 py-3">
                         <div className="min-w-0 flex-1 space-y-1">
@@ -221,13 +225,13 @@ function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | n
         {jaren.map((j) => <FilterChip key={j} active={jaar === j} onClick={() => onJaar(j)}>{j}</FilterChip>)}
         {rapport && <span className="ml-auto text-xs font-medium text-slate-500">{urenTekst(rapport.totaalUren)} u in {rapport.aantal} prestaties</span>}
       </div>
-      {laden || !rapport ? <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card> : (
+      {laden || !rapport ? <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card> : (
         <div className={cn('grid gap-4', 'lg:grid-cols-2')}>
           {tabel('Per bus', rapport.perBus)}
           {tabel('Per technieker', rapport.perMecanicien)}
           <Card padding="none" className="overflow-clip lg:col-span-2">
             <div className="border-b border-hairline px-5 py-3"><h2 className="text-card-title">Per werkcode</h2></div>
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-hairline-subtle">
               {rapport.perWerkcode.map((r) => (
                 <li key={r.werkcode} className="flex items-center gap-3 px-5 py-2.5 text-sm">
                   <Chip mono={false}>{r.werkcode}</Chip>

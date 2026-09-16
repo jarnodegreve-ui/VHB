@@ -52,7 +52,7 @@ export function DashboardAanpassen({
           return (
             <section key={groep} aria-label={label} className="mb-5 last:mb-0">
               <MicroLabel className="px-1">{label}</MicroLabel>
-              <ul className="mt-2 divide-y divide-slate-100 rounded-2xl ring-1 ring-hairline">
+              <ul className="mt-2 divide-y divide-hairline-subtle rounded-2xl ring-1 ring-hairline">
                 {items.map((t) => {
                   const positie = rijen.findIndex((r) => r.id === t.id);
                   const verborgen = isVerborgen(tegels, voorkeuren, t.id);

@@ -106,7 +106,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             ) : docs.length === 0 ? (
               <p className="p-4 text-sm text-slate-500">Nog geen documenten voor deze gebruiker.</p>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-hairline-subtle">
                 {docs.map((doc) => (
                   <div key={doc.id} className="flex items-center gap-3 px-2 py-3">
                     <FileText size={18} className="text-slate-400 shrink-0" />

@@ -92,7 +92,7 @@ function FoutDetail({ groep }: { groep: FoutGroep }) {
         {kruimels.length === 0 ? (
           <p className="text-sm text-slate-500">Geen broodkruimels bij dit voorval.</p>
         ) : (
-          <ol className="divide-y divide-slate-200/60 rounded-xl ring-1 ring-hairline">
+          <ol className="divide-y divide-hairline rounded-xl ring-1 ring-hairline">
             {kruimels.map((k, i) => (
               <li key={`${k.t}-${i}`} className="flex items-baseline gap-2.5 px-3 py-1.5 text-xs">
                 <span className="shrink-0 font-mono text-xs tabular-nums text-slate-500">{k.t?.slice(11, 19)}</span>
@@ -204,7 +204,7 @@ function FoutenSectie() {
                     <Th className="w-12" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200/60">
+                <tbody className="divide-y divide-hairline">
                   {groepen.map((g) => {
                     const uit = open === g.fingerprint;
                     return (

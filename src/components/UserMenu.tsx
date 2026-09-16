@@ -28,7 +28,7 @@ function MenuItem({ icon, danger, className, children, ...rest }: ButtonHTMLAttr
       role="menuitem"
       className={cn(
         'flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 rounded-xl transition-colors duration-fast font-medium text-sm',
-        danger ? 'hover:text-red-700 hover:bg-red-50/70' : 'hover:text-slate-900 hover:bg-slate-100/70',
+        danger ? 'hover:text-red-700 hover:bg-red-50/70' : 'hover:text-slate-900 hover:bg-surface-soft-hover',
         className,
       )}
       {...rest}
@@ -77,7 +77,7 @@ export function UserMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Accountmenu"
-        className="flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 hover:bg-slate-100/80 transition-colors"
+        className="flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 hover:bg-surface-soft-hover transition-colors"
       >
         {/* Huisstijl-pairing: op goud altijd carbon-tekst, geen wit. */}
         <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-xs font-bold select-none">

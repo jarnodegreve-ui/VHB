@@ -213,11 +213,11 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                       <Th className="w-20 text-right">Acties</Th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-hairline-subtle">
                     {filteredCodes.map((code) => {
                       const index = draftCodes.findIndex((draft) => draft === code);
                       return (
-                        <tr key={code._key} className="hover:bg-slate-50/60 transition-colors">
+                        <tr key={code._key} className="hover:bg-surface-soft-hover transition-colors">
                           <Td>
                             <Input
                               aria-label="Code"
@@ -276,7 +276,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                 </table>
               </div>
 
-              <div className="divide-y divide-slate-100 xl:hidden">
+              <div className="divide-y divide-hairline-subtle xl:hidden">
                 {filteredCodes.map((code) => {
                   const index = draftCodes.findIndex((draft) => draft === code);
                   return (

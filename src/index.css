@@ -217,7 +217,7 @@
   --color-surface-white: #FFFFFF;                      /* opaak wit vlak (was bg-white) */
   --color-surface-muted: #F2F3F4;                      /* gedempt vlak / meter-track (was bg-slate-100) */
   --color-surface-soft: #F7F8F8;                       /* zachtste vlak (was bg-slate-50) */
-  --color-surface-soft-hover: #F7F8F8;                 /* (was hover:bg-slate-50) */
+  --color-surface-soft-hover: #F7F8F8;                 /* (was hover:bg-surface-soft-hover) */
   /* Hairline-ladder, drie gewichten (golf 1, 14-09): subtle = scheiding
      binnen een kaart (rijen, voetnoten; was border-slate-100), hairline =
      rand van kaarten/kopbalken (was border-slate-200 en -200/NN), strong =
@@ -1433,3 +1433,12 @@ html.vt-record::view-transition-new(hoofdinhoud) {
   animation: vhb-popover-in var(--duration-fast) var(--ease-spring) both;
   transform-origin: top;
 }
+
+/* De Lijn-lijnbadges (punt 12, 16-09). De originele PNG's houden hun kleuren,
+   maar drie ervan (801, 858, 884) hebben een wit binnenvlak dat op de donkere
+   canvas (#0D0D0F) het felste element van het scherm werd. Een lichte demping
+   plus een hairline haalt die gloed weg zonder de kleuren te verschuiven; in
+   het lichte thema verandert er niets. */
+:root { --badge-demping: 1; }
+html.dark { --badge-demping: 0.88; }
+.lijnbadge img { filter: brightness(var(--badge-demping)); }

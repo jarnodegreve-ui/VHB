@@ -27,7 +27,7 @@ export function InfoTip({ children, label = 'Uitleg', className, align = 'left' 
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((v) => !v)}
-        className={cn('inline-flex h-8 w-8 sm:pointer-fine:h-6 sm:pointer-fine:w-6 items-center justify-center rounded-md transition-colors', open ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600')}
+        className={cn('inline-flex h-8 w-8 sm:pointer-fine:h-6 sm:pointer-fine:w-6 items-center justify-center rounded-md transition-colors', open ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-surface-soft-hover hover:text-slate-600')}
       >
         <Info size={14} />
       </button>

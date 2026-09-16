@@ -186,7 +186,7 @@ export function SlideOver({
                 onClick={onClose}
                 aria-label="Sluiten"
                 className={cn(
-                  '-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700',
+                  '-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-400 transition-colors hover:bg-surface-soft-hover hover:text-slate-700',
                   titelTerugloop && 'sticky top-0 self-start',
                 )}
               >

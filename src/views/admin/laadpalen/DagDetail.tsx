@@ -150,7 +150,7 @@ export function DagDetail({ dag, onSluit, onDag, eersteDag }: { dag: string | nu
                             <Th>Start</Th><Th>Einde</Th><Th>Laadpunt</Th><Th num>kWh</Th><Th num>Laadtijd</Th><Th num>Gem. kW</Th><Th num>Batterij</Th><Th>Status</Th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-hairline-subtle">
                           {data.sessies.map((s) => {
                             const naam = puntNaam(s.evseUid, laadpunten);
                             const bus = busVoorLaadpunt(naam);

@@ -33,7 +33,7 @@ export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
           // plaats, geen actie. Neutrale chip met hairline; het enige merkmoment
           // is de gouden rail links. Goud blijft voor actie, focus en live.
           ? "bg-surface-muted text-slate-900 font-semibold ring-1 ring-hairline"
-          : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-900 font-medium"
+          : "text-slate-600 hover:bg-surface-soft-hover hover:text-slate-900 font-medium"
       )}
     >
       {/* Actieve accent-rail links — subtiel merk-moment i.p.v. icoon-box */}

@@ -192,7 +192,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         key={keyOf(device)}
         className={cn(
           'flex items-center gap-2 rounded-xl border px-3 py-2 border-amber-200 bg-amber-50/80',
-          isCurrent && 'ring-1 ring-oker-400',
+          isCurrent && 'ring-1 ring-hairline-strong',
         )}
       >
         {/* rauw: rij-inhoud (icoon + naam + status + meta) als knop naast de snelle actie — opent het detailpaneel */}
@@ -279,7 +279,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       <Card>
         <CardHeader title="Alle toestellen" description="Per gebruiker; klap een naam open voor de toestellen." />
         {devices === null ? (
-          <div className="mt-4 divide-y divide-slate-100" aria-busy="true" aria-label="Toestellen worden geladen">
+          <div className="mt-4 divide-y divide-hairline-subtle" aria-busy="true" aria-label="Toestellen worden geladen">
             <SkeletonRow className="px-2 py-3" />
             <SkeletonRow className="px-2 py-3" />
             <SkeletonRow className="px-2 py-3" />
@@ -318,7 +318,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                 />
               </div>
             ) : (
-              <div className="mt-3 divide-y divide-slate-100">
+              <div className="mt-3 divide-y divide-hairline-subtle">
                 {[...byUser.entries()].map(([userId, list]) => {
                   const open = filterActief || openUsers.includes(userId);
                   const attention = list.filter((d) => d.status !== 'approved').length;
