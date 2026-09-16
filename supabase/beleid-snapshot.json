@@ -466,12 +466,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "dienst_loops"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "dienst_loops"
@@ -694,12 +688,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "loop_vehicle_defaults"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "loop_vehicle_defaults"
@@ -1555,12 +1543,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "ritblaadje"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "service_loops"
     },
     {
       "grantable": false,
@@ -2239,12 +2221,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "vehicles"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "vehicles_chargeye_oud"
     },
     {
       "grantable": false,
@@ -2305,18 +2281,6 @@
     {
       "cmd": "SELECT",
       "permissive": "PERMISSIVE",
-      "policy": "dienst_loops_read_authenticated",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "dienst_loops",
-      "using": "true",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
       "policy": "diversions_read_authenticated",
       "rollen": [
         "authenticated"
@@ -2336,18 +2300,6 @@
       "schema": "public",
       "tabel": "leave",
       "using": "((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) OR (userid = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
-      "policy": "loop_vehicle_defaults_read_authenticated",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "loop_vehicle_defaults",
-      "using": "true",
       "with_check": null
     },
     {
@@ -2437,18 +2389,6 @@
     {
       "cmd": "SELECT",
       "permissive": "PERMISSIVE",
-      "policy": "service_loops_read_authenticated",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "service_loops",
-      "using": "true",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
       "policy": "services_read_authenticated",
       "rollen": [
         "authenticated"
@@ -2492,18 +2432,6 @@
       "schema": "public",
       "tabel": "users",
       "using": "((isactive AND ((authid = ( SELECT auth.uid() AS uid)) OR ((authid IS NULL) AND (lower(email) = lower(( SELECT auth.email() AS email)))))) OR (( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])))",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
-      "policy": "vehicles_read_authenticated",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "vehicles_chargeye_oud",
-      "using": "true",
       "with_check": null
     },
     {

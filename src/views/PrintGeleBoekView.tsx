@@ -67,7 +67,7 @@ export function PrintGeleBoekView({ filter }: { filter: 'open' | 'alles' }) {
               <h1 className="text-3xl font-black tracking-tight">{filter === 'open' ? 'Open meldingen' : 'Alle meldingen'}</h1>
               <p className="mt-1 text-sm font-medium text-slate-500">Stand van {formatDateHuman(nu.toISOString().slice(0, 10))}, {nu.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
-            <div className="flex items-stretch divide-x divide-slate-200">
+            <div className="flex items-stretch divide-x divide-hairline">
               <div className="pr-5">
                 <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500">Meldingen</p>
                 <p className="mt-1 text-xl font-black leading-none text-slate-900">{rijen.length}</p>

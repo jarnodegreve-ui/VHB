@@ -76,7 +76,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
         type="button"
         onClick={() => { setSelected(u); setCopied(false); }}
         aria-label={`Contactgegevens van ${u.name}`}
-        className="ios-pressable flex items-center gap-3 min-w-0 text-left flex-1 rounded-xl -m-1 p-1 hover:bg-slate-50/60 transition-colors"
+        className="ios-pressable flex items-center gap-3 min-w-0 text-left flex-1 rounded-xl -m-1 p-1 hover:bg-surface-soft-hover transition-colors"
       >
         <Avatar naam={u.name} size="lg" />
         <div className="min-w-0">

@@ -7,7 +7,7 @@ import { buildCalendar, type IcsEvent } from "../shared/ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
 
 import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
-import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, deletePushSubscriptionsForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
+import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isDeviceGateEnabled, DEVICE_TOKEN_HEADER } from "./middleware.js";
@@ -49,6 +49,8 @@ import {
   verwerkUsersOpslag,
   verwerkDiversionsOpslag,
   verwerkUpdatesOpslag,
+  trekToegangIn,
+  type ToegangIngetrokken,
 } from "./_lib/recordWrites.js";
 import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 import {
@@ -121,7 +123,6 @@ import {
   logCronHeartbeat,
   getCronHeartbeats,
   getDevice,
-  revokeAllDevices,
   getPlanningNotes,
   getMeldingen,
   telOngelezenMeldingen,
@@ -1992,12 +1993,17 @@ app.post("/api/users/:id/uitdienst", authenticate, requireRole("admin"), async (
     const wasActief = current.isActive !== false;
     const stappen: Array<{ stap: string; ok: boolean; detail: string }> = [];
 
-    // (1) Deactiveren, alleen als de gebruiker nog actief is.
+    // (1) Deactiveren, alleen als de gebruiker nog actief is. De schrijfkern
+    // trekt bij de overgang actief → inactief zelf toestellen en push in
+    // (trekToegangIn, zelfde pad als PUT /api/users/:id); een al inactieve
+    // gebruiker krijgt die intrekking hier alsnog (herhaalbaar, geeft nullen).
+    let intrek: ToegangIngetrokken;
     if (wasActief) {
       const newData = previousUsers.map((u) => (String(u.id) === id ? { ...u, isActive: false } : u));
       if (laatsteAdminVerdwijnt(newData)) return res.status(400).json({ error: "Er moet minstens 1 actieve admin overblijven." });
       try {
-        await verwerkUsersOpslag(req, previousUsers, newData, { samenvatting: false });
+        const resultaat = await verwerkUsersOpslag(req, previousUsers, newData, { samenvatting: false });
+        intrek = resultaat.ingetrokken[id] ?? (await trekToegangIn(id));
         stappen.push({ stap: "deactiveren", ok: true, detail: "Account gedeactiveerd en Auth-account geblokkeerd." });
       } catch (err: any) {
         // Zonder deactivering heeft de rest geen zin: de gebruiker kan nog
@@ -2007,30 +2013,18 @@ app.post("/api/users/:id/uitdienst", authenticate, requireRole("admin"), async (
       }
     } else {
       stappen.push({ stap: "deactiveren", ok: true, detail: "Account was al gedeactiveerd." });
+      intrek = await trekToegangIn(id);
     }
 
     // (2) Toestellen intrekken.
-    let toestellen = 0;
-    try {
-      toestellen = await revokeAllDevices(id);
-      stappen.push({ stap: "toestellen", ok: true, detail: `${toestellen} toestel${toestellen === 1 ? "" : "len"} ingetrokken.` });
-    } catch (err: any) {
-      if (isMissingTableError(err)) stappen.push({ stap: "toestellen", ok: true, detail: "Geen toestel-tabel, niets in te trekken." });
-      else {
-        console.error("Uit dienst: toestellen intrekken is mislukt.", err?.message || err);
-        stappen.push({ stap: "toestellen", ok: false, detail: "Toestellen intrekken is mislukt." });
-      }
-    }
+    const toestellen = intrek.toestellen;
+    if (intrek.fouten.includes("toestellen")) stappen.push({ stap: "toestellen", ok: false, detail: "Toestellen intrekken is mislukt." });
+    else stappen.push({ stap: "toestellen", ok: true, detail: `${toestellen} toestel${toestellen === 1 ? "" : "len"} ingetrokken.` });
 
     // (3) Push-abonnementen wissen.
-    let push = 0;
-    try {
-      push = await deletePushSubscriptionsForUser(id);
-      stappen.push({ stap: "push", ok: true, detail: `${push} push-abonnement${push === 1 ? "" : "en"} gewist.` });
-    } catch (err: any) {
-      console.error("Uit dienst: push-abonnementen wissen is mislukt.", err?.message || err);
-      stappen.push({ stap: "push", ok: false, detail: "Push-abonnementen wissen is mislukt." });
-    }
+    const push = intrek.push;
+    if (intrek.fouten.includes("push")) stappen.push({ stap: "push", ok: false, detail: "Push-abonnementen wissen is mislukt." });
+    else stappen.push({ stap: "push", ok: true, detail: `${push} push-abonnement${push === 1 ? "" : "en"} gewist.` });
 
     // (4) Sessies: de ban uit stap 1 blokkeert nieuwe logins en token-
     // refreshes; lopende access-tokens verlopen vanzelf (max. 1 uur).

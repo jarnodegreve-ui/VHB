@@ -289,7 +289,7 @@ function DriverMonthSheet({
             )}
           </div>
           {/* Lichte stat-strip: hairline-scheiders, geen kaders */}
-          <div className="flex items-stretch divide-x divide-slate-200">
+          <div className="flex items-stretch divide-x divide-hairline">
             <div className="pr-5">
               <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Diensten</p>
               <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{totalShiftsPrinted}</p>

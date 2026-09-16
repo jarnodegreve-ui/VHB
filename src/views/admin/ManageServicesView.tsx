@@ -395,7 +395,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               </StickyThead>
               <tbody>
                 {gesorteerd.map(s => (
-                  <tr key={s.id} className="border-b border-hairline-subtle last:border-b-0 hover:bg-slate-50/50 transition-colors">
+                  <tr key={s.id} className="border-b border-hairline-subtle last:border-b-0 hover:bg-surface-soft-hover transition-colors">
                     <Td className="px-3 font-semibold text-slate-800 tabular-nums">{s.serviceNumber}</Td>
                     <Td className="px-3 tabular-nums font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
                     <Td className="px-3 tabular-nums whitespace-nowrap">{tijdvak(s.startTime, s.endTime)}</Td>
@@ -421,9 +421,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
         {/* Smalle kolom: kaart per dienst; op tablet passen de drie delen
             naast elkaar zonder dienst- of loopgegevens te verbergen. */}
-        <div className="@[42rem]:hidden divide-y divide-slate-100">
+        <div className="@[42rem]:hidden divide-y divide-hairline-subtle">
           {gesorteerd.map(s => (
-            <div key={s.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors">
+            <div key={s.id} className="p-5 space-y-4 hover:bg-surface-soft-hover transition-colors">
               <div className="flex justify-between items-center">
                 <span className="text-card-title tabular-nums">{s.serviceNumber}</span>
                 {rijActies(s)}

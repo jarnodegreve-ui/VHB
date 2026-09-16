@@ -500,21 +500,26 @@ function MonthCalendar({
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',
                   !isSelected && 'hover:bg-surface-soft-hover',
-                  isSelected && 'bg-oker-500/15 ring-1 ring-oker-400',
-                  !isSelected && isToday && 'ring-1 ring-oker-300',
+                  // Gekozen dag = neutraal (punt 4); "vandaag" houdt de gouden ring, ook als hij gekozen is.
+                  // De gouden labels in de cel staan op oker-800: op het neutrale
+                  // vlak haalt oker-700 de 4,5 niet (het haalde die op het oude
+                  // gouden vlak trouwens ook niet, axe kon het daar alleen niet
+                  // meten door de transparantie).
+                  isSelected && 'bg-surface-muted ring-1 ring-hairline-strong',
+                  isToday && 'ring-1 ring-oker-300',
                   !isSelected && leave && leaveDayTint(leave.status, leave.type),
                 )}
               >
-                <span className={cn('text-xs font-semibold tabular-nums leading-none', isToday ? 'text-oker-700' : 'text-slate-700')}>
+                <span className={cn('text-xs font-semibold tabular-nums leading-none', isToday ? 'text-oker-800' : 'text-slate-700')}>
                   {day}
                 </span>
                 {td && td.kort === 'F' && (
-                  <span className="text-xs font-bold leading-none text-oker-700" title={td.titel}>
+                  <span className="text-xs font-bold leading-none text-oker-800" title={td.titel}>
                     {td.kort}
                   </span>
                 )}
                 {dayGroups.length > 0 ? (
-                  <span className={cn('max-w-full truncate text-xs font-mono font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-oker-700')}>
+                  <span className={cn('max-w-full truncate text-xs font-mono font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-oker-800')}>
                     {dayGroups[0].line}
                     {dayGroups.length > 1 && '+'}
                   </span>
@@ -538,10 +543,10 @@ function MonthCalendar({
 
         {/* Legende */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline-subtle pt-3 text-xs font-medium text-slate-500">
-          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-mono font-bold tabular-nums text-oker-700">2101</span> dienst</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-mono font-bold tabular-nums text-oker-800">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-bold text-oker-700">F</span> feestdag</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-bold text-oker-800">F</span> feestdag</span>
           <span className="inline-flex items-center gap-1.5"><span className="text-xs font-bold text-slate-500">v</span> vrij</span>
         </div>
       </Card>
@@ -656,7 +661,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                 <tr
                   key={g.key}
                   className={cn(
-                    'hover:bg-slate-50/60 transition-colors group border-t border-hairline-subtle',
+                    'hover:bg-surface-soft-hover transition-colors group border-t border-hairline-subtle',
                     isToday && 'bg-oker-50/30',
                     g.hasConflict && 'bg-red-50/40 hover:bg-red-50/60',
                   )}

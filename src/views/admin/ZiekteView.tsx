@@ -83,7 +83,6 @@ export function ZiekteView({
   const werkdagen = werkdagenUitShifts(shifts);
   const [vervangerPerDienst, setVervangerPerDienst] = useState<Record<string, string>>({});
   const [wisselBezig, setWisselBezig] = useState<string | null>(null);
-  const [overgezet, setOvergezet] = useState<Record<string, string>>({});
   const zetOver = async (r: LeaveRequest, dienst: Shift) => {
     const naarId = vervangerPerDienst[dienst.id];
     if (!naarId || wisselBezig) return;
@@ -101,7 +100,9 @@ export function ZiekteView({
       });
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) { notify(body.error || 'Overzetten is mislukt.', 'error'); return; }
-      setOvergezet((cur) => ({ ...cur, [dienst.id]: naamVan(naarId) }));
+      // Bevestiging als toast: de refetch hieronder haalt de dienst uit de
+      // open lijst, dus een rij-status zou nooit zichtbaar zijn (controle 16-09, nr. 19).
+      notify(`Dienst ${serviceNumberOf(dienst)} overgezet naar ${naamVan(naarId)}.`, 'success');
       await onShiftSwapped?.();
     } catch {
       notify('Overzetten is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
@@ -125,7 +126,7 @@ export function ZiekteView({
   // diensten (src/lib/herverdeel.ts); de bulk-lus met src/lib/bulk.ts.
   const adviesSleutelVan = (d: Shift) => adviesSleutel(d.date, serviceNumberOf(d));
   const haalKandidatenVoorstel = async (r: LeaveRequest) => {
-    const diensten = openDienstenLijst(r).filter((d) => !overgezet[d.id]);
+    const diensten = openDienstenLijst(r);
     if (diensten.length === 0 || batchLaden) return;
     setBatchLaden(true);
     try {
@@ -147,7 +148,7 @@ export function ZiekteView({
   };
   const verdeelAlles = async (r: LeaveRequest) => {
     if (verdeelBezig) return;
-    const diensten = openDienstenLijst(r).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]);
+    const diensten = openDienstenLijst(r).filter((d) => vervangerPerDienst[d.id]);
     if (diensten.length === 0) return;
     setVerdeelBezig(true);
     const resultaat = await bulkUitvoeren(diensten, async (dienst) => {
@@ -169,7 +170,8 @@ export function ZiekteView({
       }
       const body = await res.json().catch(() => ({} as { error?: string }));
       if (!res.ok) return { fout: body.error || 'Overzetten is mislukt.' };
-      setOvergezet((cur) => ({ ...cur, [dienst.id]: naamVan(naarId) }));
+      // Geen rij-status: de refetch na de bulk haalt de overgezette diensten
+      // uit de open lijst; meldBulkResultaat bevestigt (controle 16-09, nr. 19).
     });
     setVerdeelBezig(false);
     setVerdeelFouten(Object.fromEntries(resultaat.mislukt.map((m) => [m.item.id, m.fout])));
@@ -427,14 +429,14 @@ export function ZiekteView({
                         {/* Planner zonder adminrecht: één mail naar de admins
                             met de open diensten en hun deeplink (punt 17). */}
                         {!isAdmin && (() => {
-                          const open = openDienstenLijst(detail).filter((d) => !overgezet[d.id]);
+                          const open = openDienstenLijst(detail);
                           const href = open.length ? adminMailto(users, `Diensten overzetten na ziekmelding ${naamVan(detail.userId)}`, ziekmeldMailTekst(naamVan(detail.userId), open.map((d) => ({ date: d.date, nummer: serviceNumberOf(d) })), window.location.origin)) : undefined;
                           return href ? (
                             <Button variant="secondary" size="sm" className="shrink-0" icon={<Mail size={16} />} onClick={() => { window.location.href = href; }}>Vraag een admin</Button>
                           ) : null;
                         })()}
-                        {isAdmin && (openDienstenLijst(detail).filter((d) => !overgezet[d.id]).length > 1 || verdeelBezig) && (() => {
-                          const teVerdelen = openDienstenLijst(detail).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]).length;
+                        {isAdmin && (openDienstenLijst(detail).length > 1 || verdeelBezig) && (() => {
+                          const teVerdelen = openDienstenLijst(detail).filter((d) => vervangerPerDienst[d.id]).length;
                           return (
                             <div className="flex shrink-0 flex-wrap gap-2">
                               <Button variant="secondary" size="sm" disabled={batchLaden || verdeelBezig} onClick={() => void haalKandidatenVoorstel(detail)}>
@@ -451,7 +453,6 @@ export function ZiekteView({
                       </div>
                       <div className="space-y-2.5">
                         {openDienstenLijst(detail).map((dienst) => {
-                          const klaar = overgezet[dienst.id];
                           return (
                             <Card key={dienst.id} tone="muted" padding="none" className="px-3.5 py-3 space-y-2.5">
                               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -459,16 +460,14 @@ export function ZiekteView({
                                 <span className="flex flex-wrap items-center gap-2">
                                   <span className={cn(microLabelClass, 'tabular-nums')}>{formatShortDay(dienst.date)}</span>
                                   {/* Admin: rechtstreeks naar die dag in de Maandplanning. */}
-                                  {isAdmin && !klaar && (
+                                  {isAdmin && (
                                     <Button variant="ghost" size="sm" icon={<CalendarDays size={14} />} onClick={() => { setDetail(null); navigeer('bezetting', { params: maandplanningParams(dienst.date) }); }}>
                                       Maandplanning
                                     </Button>
                                   )}
                                 </span>
                               </div>
-                              {klaar ? (
-                                <p className="text-xs font-semibold text-emerald-700">Overgezet naar {klaar}</p>
-                              ) : isAdmin ? (
+                              {isAdmin ? (
                                 <>
                                 {batchAdvies[adviesSleutelVan(dienst)]?.samenvatting && (
                                   <p className="text-xs font-medium text-slate-500">{batchAdvies[adviesSleutelVan(dienst)].samenvatting}</p>
@@ -525,7 +524,7 @@ export function ZiekteView({
         }}
         title="Alle diensten herverdelen?"
         message={detail
-          ? `${openDienstenLijst(detail).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]).length} diensten van ${naamVan(detail.userId)} worden in één keer overgezet naar de gekozen vervangers. Elke chauffeur krijgt een melding; terugdraaien kan per dienst via de cel in de Maandplanning.`
+          ? `${openDienstenLijst(detail).filter((d) => vervangerPerDienst[d.id]).length} diensten van ${naamVan(detail.userId)} worden in één keer overgezet naar de gekozen vervangers. Elke chauffeur krijgt een melding; terugdraaien kan per dienst via de cel in de Maandplanning.`
           : ''}
         confirmText="Verdeel alles"
         cancelText="Annuleren"

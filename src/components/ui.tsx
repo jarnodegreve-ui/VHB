@@ -95,7 +95,7 @@ export function ModalHeader({
           type="button"
           aria-label="Sluiten"
           onClick={onClose}
-          className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors"
+          className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-surface-soft-hover hover:text-slate-700 rounded-xl transition-colors"
         >
           <X size={18} />
         </button>
@@ -195,7 +195,7 @@ export function EmptyState({
     return (
       <div className={cn('surface-muted @container min-w-0 rounded-2xl px-4 py-4', className)}>
         <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 @[28rem]:grid-cols-[auto_minmax(0,1fr)_auto]">
-          <span aria-hidden="true" className="flex items-center border-r border-hairline pr-4 text-slate-400 [&_svg]:h-8 [&_svg]:w-8 [&_svg]:stroke-[1.5]">{beeld}</span>
+          <span aria-hidden="true" className="flex items-center border-r border-hairline pr-4 text-slate-600 [&_svg]:h-8 [&_svg]:w-8 [&_svg]:stroke-[1.5]">{beeld}</span>
           <div className="min-w-0">
             <p className="text-md font-semibold text-slate-800 [overflow-wrap:anywhere]">{title}</p>
             {message ? <p className="mt-1 text-body-sm text-slate-500 [overflow-wrap:anywhere]">{message}</p> : null}
@@ -208,7 +208,7 @@ export function EmptyState({
 
   return (
     <div className={cn('surface-muted flex h-full min-w-0 flex-col items-start rounded-2xl p-5 text-left', className)}>
-      <span aria-hidden="true" className="mb-4 flex text-slate-400 [&_svg]:h-16 [&_svg]:w-16">{beeld}</span>
+      <span aria-hidden="true" className="mb-4 flex text-slate-600 [&_svg]:h-16 [&_svg]:w-16">{beeld}</span>
       <div className="min-w-0 max-w-md flex-1">
         <h3 className="text-card-title text-slate-800 [overflow-wrap:anywhere]">{title}</h3>
         {message ? <p className="mt-2 text-body-sm text-slate-500 [overflow-wrap:anywhere]">{message}</p> : null}
@@ -456,7 +456,7 @@ export function CredentialsModal({
             <h2 className="text-section-title">{title}</h2>
             <p className="mt-1.5 text-body text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
           </div>
-          <button aria-label="Sluiten" onClick={onClose} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors">
+          <button aria-label="Sluiten" onClick={onClose} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-surface-soft-hover hover:text-slate-700 rounded-xl transition-colors">
             <X size={18} />
           </button>
         </div>

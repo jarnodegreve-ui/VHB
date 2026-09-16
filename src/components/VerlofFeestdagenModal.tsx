@@ -93,7 +93,7 @@ export function VerlofFeestdagenModal({ open, onClose, extra, onSaved }: {
 
         <div className="space-y-2">
           <MicroLabel className="text-slate-500">Wettelijke feestdagen {jaar}</MicroLabel>
-          <Card padding="none" className="divide-y divide-slate-100">
+          <Card padding="none" className="divide-y divide-hairline-subtle">
             {wettelijk.map(([datum, naam]) => (
               <div key={datum} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                 <span className="font-medium text-slate-700">{naam}</span>
@@ -108,7 +108,7 @@ export function VerlofFeestdagenModal({ open, onClose, extra, onSaved }: {
           {extraDitJaar.length === 0 ? (
             <Card tone="muted" padding="sm" className="text-sm text-slate-500">Nog geen extra vrije dagen in {jaar}.</Card>
           ) : (
-            <Card padding="none" className="divide-y divide-slate-100">
+            <Card padding="none" className="divide-y divide-hairline-subtle">
               {extraDitJaar.map((d) => (
                 <div key={d.id} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                   <span className="flex min-w-0 items-center gap-2">

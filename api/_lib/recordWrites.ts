@@ -3,8 +3,9 @@ import crypto from "node:crypto";
 import type { AppUser, AuthenticatedRequest, IncomingUser } from "../types.js";
 import { supabaseAdmin } from "../db.js";
 import { sendWelcomeEmail } from "../email.js";
-import { sendPushToUsers } from "../push.js";
+import { deletePushSubscriptionsForUser, sendPushToUsers } from "../push.js";
 import { recordUrl } from "./meldingen.js";
+import { isMissingTableError } from "../deviceGate.js";
 import { invalidateUsersCache } from "../userCache.js";
 import {
   deleteAllDocumentsForUser,
@@ -14,6 +15,7 @@ import {
   getUsersData,
   kopieerOnthaalDocumentenNaar,
   logActivity,
+  revokeAllDevices,
   saveDiversionsData,
   saveUpdatesData,
   saveUsersData,
@@ -72,16 +74,80 @@ type WriteOpts = {
 
 // --- Gebruikers ---
 
+/** Wat er bij een deactivering naast de Auth-ban nog ingetrokken werd. */
+export type ToegangIngetrokken = {
+  toestellen: number;
+  push: number;
+  /** Stappen die mislukten (best-effort: de deactivering zelf staat al). */
+  fouten: Array<"toestellen" | "push">;
+};
+
+/**
+ * Toegang van een gedeactiveerd account intrekken: toestellen op 'revoked'
+ * en push-abonnementen weg. De Auth-ban zelf zet saveUsersData (reconciliatie
+ * op isActive). Eén functie voor élk schrijfpad dat isActive true→false kan
+ * zetten (PUT /api/users/:id, collectie-POST, uitdienst), zodat "pauzeren"
+ * in gebruikersbeheer niet stil een ingelogd toestel liet doorwerken
+ * (controle-ronde 16-09, bevinding 2). Best-effort en herhaalbaar: een tweede
+ * aanroep geeft nullen.
+ */
+export const trekToegangIn = async (userId: string): Promise<ToegangIngetrokken> => {
+  const resultaat: ToegangIngetrokken = { toestellen: 0, push: 0, fouten: [] };
+  try {
+    resultaat.toestellen = await revokeAllDevices(userId);
+  } catch (err: any) {
+    // Zonder toestel-tabel valt er niets in te trekken.
+    if (!isMissingTableError(err)) {
+      console.error("Toegang intrekken: toestellen intrekken is mislukt.", err?.message || err);
+      resultaat.fouten.push("toestellen");
+    }
+  }
+  try {
+    resultaat.push = await deletePushSubscriptionsForUser(userId);
+  } catch (err: any) {
+    console.error("Toegang intrekken: push-abonnementen wissen is mislukt.", err?.message || err);
+    resultaat.fouten.push("push");
+  }
+  return resultaat;
+};
+
+/** Ids van gebruikers die in deze save van actief naar inactief gaan. */
+export const gedeactiveerdeIds = (previousUsers: AppUser[], newData: IncomingUser[]): string[] => {
+  const nieuwById = new Map(newData.map((u) => [String(u.id), u]));
+  return previousUsers
+    .filter((u) => u.isActive !== false)
+    .map((u) => String(u.id))
+    .filter((id) => nieuwById.get(id)?.isActive === false);
+};
+
 export const verwerkUsersOpslag = async (
   req: AuthenticatedRequest,
   previousUsers: AppUser[],
   newData: IncomingUser[],
   opts: WriteOpts = {},
-): Promise<{ createdAccounts: Array<{ email: string; name: string }> }> => {
+): Promise<{ createdAccounts: Array<{ email: string; name: string }>; ingetrokken: Record<string, ToegangIngetrokken> }> => {
   const { createdAccounts } = (await saveUsersData(newData)) ?? { createdAccounts: [] };
   // Auth-cache verversen: rol/isActive/e-mail-wijzigingen moeten meteen
   // doorwerken, niet pas na de TTL.
   invalidateUsersCache();
+
+  // Gedeactiveerd (actief → inactief)? Dan ook toestellen en push intrekken,
+  // net als bij "Uit dienst": de Auth-ban uit saveUsersData stopt nieuwe
+  // logins, maar een goedgekeurd toestel met een lopende sessie werkte anders
+  // door tot tokenverloop en bleef pushes krijgen.
+  const ingetrokken: Record<string, ToegangIngetrokken> = {};
+  for (const id of gedeactiveerdeIds(previousUsers, newData)) {
+    const naam = previousUsers.find((u) => String(u.id) === id)?.name ?? id;
+    const r = await trekToegangIn(id);
+    ingetrokken[id] = r;
+    await logActivity(
+      req,
+      "users",
+      "Toegang ingetrokken",
+      `${naam}: Auth-account geblokkeerd, ${r.toestellen} toestel${r.toestellen === 1 ? "" : "len"} ingetrokken, ${r.push} push-abonnement${r.push === 1 ? "" : "en"} gewist.${r.fouten.length ? ` Mislukt: ${r.fouten.join(", ")}.` : ""}`,
+      { type: "user", id },
+    );
+  }
   if (opts.samenvatting !== false) {
     await logActivity(
       req,
@@ -142,7 +208,7 @@ export const verwerkUsersOpslag = async (
     }
   }
 
-  return { createdAccounts: createdAccounts ?? [] };
+  return { createdAccounts: createdAccounts ?? [], ingetrokken };
 };
 
 // --- Omleidingen ---

@@ -52,6 +52,14 @@ const REGELS = [
   // randen; flipt in dark via de tokens. Primitieven, Table en print blijven
   // hun eigen (bewuste) randen houden.
   { naam: 'border-slate-NNN / ring-slate-NNN (gebruik border-hairline-subtle | border-hairline | border-hairline-strong)', re: /\b(?:border|ring)-slate-\d+(?:\/\d+)?\b/g, zonderCommentaar: true, skip: new RegExp(`components\\/(?:primitives|Card|Field|Table)\\.tsx$|${PRINT.source}`) },
+  // divide-slate-* glipte langs de regel hierboven (controle 16-09, nr. 15):
+  // scheidingslijnen in lijsten en tabellen horen op dezelfde ladder, anders
+  // wijkt hun gewicht in dark mode af van de randen eromheen.
+  { naam: 'divide-slate-NNN (gebruik divide-hairline-subtle | divide-hairline | divide-hairline-strong)', re: /\bdivide-slate-\d+(?:\/\d+)?\b/g, zonderCommentaar: true, skip: new RegExp(`components\\/(?:primitives|Card|Field|Table)\\.tsx$|${PRINT.source}`) },
+  // Rij-hover had zes recepten door elkaar (controle 16-09, nr. 14); in dark
+  // mode lichtte elk scherm daardoor anders op. Eén token: surface-row-hover
+  // voor rijen, surface-soft-hover voor kaartachtige vlakken.
+  { naam: 'hover:bg-slate-50/100 (gebruik hover:bg-surface-soft-hover, of hover:bg-surface-row-hover op een bg-surface-row-rij)', re: /(?<!group-)\bhover:bg-slate-(?:50|100)(?:\/\d+)?\b/g, zonderCommentaar: true, skip: new RegExp(`components\\/(?:primitives|Card|Field|Table)\\.tsx$|${PRINT.source}`) },
   // Lopende tekst heeft een rol (golf 2, punt 5): text-body (15/1.55) of
   // text-body-sm (13/1.55), allebei met text-wrap: pretty. Een losse
   // leading-relaxed is dan een recept naast de rol. De textarea in Field.tsx

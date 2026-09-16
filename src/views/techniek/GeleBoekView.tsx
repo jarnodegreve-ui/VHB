@@ -3,7 +3,7 @@ import { AlertTriangle, Bus, CheckCircle2, Clock, Pencil, Phone, Plus, Printer, 
 import type { User } from '../../types';
 import { isStaf } from '../../types';
 import { DEFECT_STATUS_LABEL, WERKTYPES, WERKTYPE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werktype } from '../../../shared/techniek';
-import { cn, notify, openPdfInNewTab, telHref } from '../../lib/ui';
+import { notify, openPdfInNewTab, telHref } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { navigeer } from '../../app/router';
 import { useAppDataContext } from '../../app/AppDataContext';
@@ -145,8 +145,8 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       {zl.fout && rijen.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <OpsStat icon={<Wrench size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub={tellers.open === 1 ? 'melding wacht' : 'meldingen wachten'} onClick={() => { setFilter('open'); setBusFilter(''); setAlleenOud(false); }} className={cn(filter === 'open' && !alleenOud && 'ring-2 ring-oker-500/40')} />
-        <OpsStat icon={<Clock size={16} />} tone={tellers.oud > 0 ? 'red' : 'slate'} label="Ouder dan 14 dagen" value={tellers.oud} sub={tellers.oud > 0 ? 'blijft liggen, bekijk ze' : 'niets blijft liggen'} onClick={() => { setFilter('open'); setAlleenOud((v) => !v); }} className={cn(alleenOud && 'ring-2 ring-oker-500/40')} />
+        <OpsStat icon={<Wrench size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub={tellers.open === 1 ? 'melding wacht' : 'meldingen wachten'} onClick={() => { setFilter('open'); setBusFilter(''); setAlleenOud(false); }} actief={filter === 'open' && !alleenOud} />
+        <OpsStat icon={<Clock size={16} />} tone={tellers.oud > 0 ? 'red' : 'slate'} label="Ouder dan 14 dagen" value={tellers.oud} sub={tellers.oud > 0 ? 'blijft liggen, bekijk ze' : 'niets blijft liggen'} onClick={() => { setFilter('open'); setAlleenOud((v) => !v); }} actief={alleenOud} />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.technisch > 0 ? 'amber' : 'slate'} label="Technisch" value={tellers.technisch} sub="open, voor de garage" />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.lijn > 0 ? 'oker' : 'slate'} label="Voor De Lijn" value={tellers.lijn} sub="open, planning meldt door" />
       </div>
@@ -154,7 +154,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       {zl.fout && rijen.length === 0 ? (
         <Foutkaart titel="De gele boek kon niet laden" boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && rijen.length === 0 ? (
-        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Gele boek wordt geladen">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Gele boek wordt geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
         </Card>
       ) : (
@@ -232,7 +232,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                   </tbody>
                 </table>
               </div>
-              <ul className="md:hidden divide-y divide-slate-100">
+              <ul className="md:hidden divide-y divide-hairline-subtle">
                 {gesorteerd.map((d) => (
                   <li key={d.id} className="flex items-start gap-3 px-5 py-3.5">
                     <div className="min-w-0 flex-1 space-y-1">

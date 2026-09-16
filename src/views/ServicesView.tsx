@@ -136,9 +136,9 @@ export function ServicesView({ services }: { services: Service[] }) {
                 <Th>Deel 3</Th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-hairline-subtle">
               {filteredServices.map(s => (
-                <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                <tr key={s.id} className="hover:bg-surface-soft-hover transition-colors">
                   <Td>
                     <span className="font-semibold text-slate-800">{s.serviceNumber}</span>
                   </Td>
@@ -155,11 +155,11 @@ export function ServicesView({ services }: { services: Service[] }) {
         </div>
 
         {/* Mobile Card View — uitklapbaar */}
-        <div className="md:hidden divide-y divide-slate-50">
+        <div className="md:hidden divide-y divide-hairline-subtle">
           {filteredServices.map((s) => {
             const isExpanded = expandedIds.has(s.id);
             return (
-              <div key={s.id} className="hover:bg-slate-50/60 transition-colors">
+              <div key={s.id} className="hover:bg-surface-soft-hover transition-colors">
                 {/* rauw: hele uitklaprij is de knop (dienstnummer + badge + chevron) */}
                 <button
                   type="button"

@@ -51,18 +51,34 @@ describe('Ritbladviewer: volledige bundel openen', () => {
   it.each([
     { toestand: 'dienstpagina gevonden', paginas: [2], knop: 'Volledige bundel' },
     { toestand: 'geen dienstpagina gevonden', paginas: [], knop: 'Volledige bundel openen' },
-  ])('haalt een verse link op bij $toestand, ook als de viewer al langer openstaat', async ({ paginas, knop }) => {
-    apiFetchMock.mockResolvedValueOnce(antwoord(OUD)).mockResolvedValueOnce(antwoord(NIEUW));
+  ])('toont de hele bundel in de app bij $toestand, zonder de app te verlaten', async ({ paginas, knop }) => {
+    // Per aanroep een verse Response: een body is maar één keer leesbaar, en
+    // de viewer haalt de metadata opnieuw op als hij naar de bundel schakelt.
+    apiFetchMock.mockImplementation(async () => antwoord(OUD));
     zoekPaginasMock.mockResolvedValue(paginas);
     render(<RitbladViewer dienstnummer="2101" open onClose={() => {}} />);
     const openen = await screen.findByRole('button', { name: knop });
     expect(laadDocumentMock).toHaveBeenCalledWith(OUD, expect.any(Function));
 
-    // De viewer bevat nog OUD. De echte openHuidigRitblad moet metadata
-    // opnieuw lezen voordat de bundel in een extern venster opengaat.
+    // De bundel blijft binnen de viewer, dus binnen de PWA-schil en de
+    // service-worker-cache (controle 16-09, nr. 10): geen extern venster.
+    fireEvent.click(openen);
+    await waitFor(() => expect(screen.getByText('Ritblad · volledige bundel')).toBeTruthy());
+    expect(openPdfMock).not.toHaveBeenCalled();
+    // Alle pagina's van de bundel, niet alleen die van de dienst.
+    await waitFor(() => expect(screen.getByText(/pagina's 1–3 van 3/)).toBeTruthy());
+  });
+
+  it('valt terug op de externe PDF als het document niet te laden is', async () => {
+    apiFetchMock.mockResolvedValueOnce(antwoord(OUD)).mockResolvedValueOnce(antwoord(NIEUW));
+    laadDocumentMock.mockRejectedValueOnce(new Error('stuk'));
+    render(<RitbladViewer dienstnummer="2101" open onClose={() => {}} />);
+    const openen = await screen.findByRole('button', { name: 'Volledige bundel openen' });
+
+    // De viewer kreeg het document niet geladen, dus in de app tonen kan niet.
+    // Dan wél de oude route, met een verse link (de eerste kan verlopen zijn).
     fireEvent.click(openen);
     await waitFor(() => expect(openPdfMock).toHaveBeenCalledWith(NIEUW));
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
     expect(apiFetchMock).toHaveBeenLastCalledWith('/api/ritblaadje', { cache: 'no-store' });
     expect(openPdfMock).not.toHaveBeenCalledWith(OUD);
   });

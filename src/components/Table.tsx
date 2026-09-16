@@ -146,7 +146,7 @@ function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
             {keuzes.map((k) => {
               const inputId = `${id}-${k.key}`;
               return (
-                <div key={k.key} className="flex items-center gap-1.5 rounded-lg pl-1 pr-2 transition-colors hover:bg-slate-100/70">
+                <div key={k.key} className="flex items-center gap-1.5 rounded-lg pl-1 pr-2 transition-colors hover:bg-surface-soft-hover">
                   <Checkbox id={inputId} checked={!verborgen.has(k.key)} onChange={() => onToggle(k.key)} label={`Kolom ${k.label} tonen`} />
                   <label htmlFor={inputId} className="flex-1 cursor-pointer select-none py-1.5 text-sm font-medium text-slate-700">{k.label}</label>
                 </div>

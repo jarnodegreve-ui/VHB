@@ -107,14 +107,14 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                     padding="none"
                     interactive
                     aria-current={isCurrent ? 'true' : undefined}
-                    className={cn('relative overflow-hidden', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
+                    className={cn('relative overflow-hidden', isCurrent && 'bg-surface-muted ring-1 ring-hairline-strong')}
                   >
                     <div className={cn('absolute top-0 left-0 w-1 h-full', update.isUrgent ? 'bg-red-500' : 'bg-slate-300')} />
                     {/* rauw: lijstrij van het master-detail (kaart als knop: titel + datum + dringend-badge + eerste regel) */}
                     <button
                       type="button"
                       onClick={() => kiesRecord(update.id, detail?.id ?? null, () => setSelectedId(update.id))}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-slate-50/50"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-surface-soft-hover"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-md font-semibold text-slate-900" data-vt-record={update.id}>{update.title}</p>

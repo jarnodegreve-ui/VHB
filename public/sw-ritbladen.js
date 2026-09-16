@@ -5,7 +5,8 @@
 // De cache 'vhb-ritbladen' is BUILD-ONAFHANKELIJK: hij overleeft deploys
 // (activate wist alleen de build-gestempelde app-cache) en bevat:
 //  - de ritblad-PDF('s) die de app na Mijn dag/dashboard aanmeldt
-//    (postMessage {type:'cache-ritbladen', urls}) — hooguit MAX_RITBLADEN;
+//    (postMessage {type:'cache-ritbladen', urls}) — hooguit MAX_RITBLADEN,
+//    cache-first zónder revalidate: hetzelfde pad is altijd dezelfde bundel;
 //  - de API-antwoorden die de koude offline start nodig heeft (profiel,
 //    eigen planning, omleidingen, dienstnotities, ritblad-metadata, en
 //    sinds punt 19 (15-09) ook gebruikerslijst, updates, dienstruilen,

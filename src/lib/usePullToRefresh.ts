@@ -17,6 +17,25 @@ const DIR_SLOP = 6; // px voor de richting bepaald wordt (axis-lock)
  * + een fixed/sticky-overlay-guard voorkomen dat horizontale tabelvegen of
  * modals de sleep kapen.
  */
+/**
+ * Staat er tussen `target` en de PTR-container een voorouder die de sleep
+ * zelf moet krijgen? Dat is een fixed/sticky-laag (overlay in de container)
+ * of een eigen verticale scroller die niet bovenaan staat: een naar beneden
+ * gescrolde `overflow-y-auto`-lijst (dienstruil, verlofbeheer, activiteit)
+ * moet bij omlaag trekken gewoon terugscrollen, geen verversing starten.
+ */
+export function kaaptVoorouder(target: HTMLElement | null, container: HTMLElement): boolean {
+  let node = target;
+  while (node && node !== container) {
+    const stijl = window.getComputedStyle(node);
+    if (stijl.position === 'fixed' || stijl.position === 'sticky') return true;
+    const overflow = stijl.overflowY;
+    if ((overflow === 'auto' || overflow === 'scroll') && node.scrollTop > 0 && node.scrollHeight > node.clientHeight) return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+
 export function usePullToRefresh(
   scrollRef: RefObject<HTMLElement | null>,
   indicatorRef: RefObject<HTMLElement | null>,
@@ -67,15 +86,11 @@ export function usePullToRefresh(
         return;
       }
       // Niet kapen binnen een overlay/modal die als fixed/sticky-laag in de
-      // container zit (de niet-geportalde beheer-modals).
-      let node = e.target as HTMLElement | null;
-      while (node && node !== el) {
-        const pos = window.getComputedStyle(node).position;
-        if (pos === 'fixed' || pos === 'sticky') {
-          tracking = false;
-          return;
-        }
-        node = node.parentElement;
+      // container zit (de niet-geportalde beheer-modals), en niet binnen een
+      // geneste scroller die zelf nog omhoog kan (controle 16-09, nr. 5).
+      if (kaaptVoorouder(e.target as HTMLElement | null, el)) {
+        tracking = false;
+        return;
       }
       startY = e.touches[0].clientY;
       startX = e.touches[0].clientX;

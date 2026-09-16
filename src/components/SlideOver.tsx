@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { useKeyboardInset } from '../lib/useKeyboardInset';
 
 /**
  * Premium slide-over side panel (rechts) — het standaard detailvenster van
@@ -111,6 +112,11 @@ export function SlideOver({
     };
   }, [open]);
 
+  // iOS: het toetsenbord bedekt anders de voet met de opslaan-knop, want
+  // de layout-viewport (en dus `inset-y-0 h-full`) krimpt niet mee. Zelfde
+  // patroon als Modal.tsx (controle 16-09, nr. 7).
+  const keyboardInset = useKeyboardInset(open);
+
   if (typeof document === 'undefined') return null;
 
   const widthClass = width === 'lg' ? 'sm:max-w-[36rem]' : 'sm:max-w-[28rem]';
@@ -149,6 +155,9 @@ export function SlideOver({
               'bg-paper/95 border-l border-hairline elev-3',
               widthClass,
             )}
+            // Toetsenbord open: het paneel inkorten tot de zichtbare viewport,
+            // zodat de voet (opslaan) boven het toetsenbord blijft.
+            style={keyboardInset ? { height: `calc(100% - ${keyboardInset}px)` } : undefined}
           >
             <div className="statusbalk-strook shrink-0" aria-hidden="true" />
             {/* Landscape: iOS negeert de portrait-lock uit het manifest, dus
@@ -177,7 +186,7 @@ export function SlideOver({
                 onClick={onClose}
                 aria-label="Sluiten"
                 className={cn(
-                  '-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700',
+                  '-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-400 transition-colors hover:bg-surface-soft-hover hover:text-slate-700',
                   titelTerugloop && 'sticky top-0 self-start',
                 )}
               >

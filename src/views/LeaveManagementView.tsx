@@ -666,13 +666,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     aria-label={`${day}: ${BEZETTING_LABEL[bezetting]}${occupancyCount > 0 ? `, ${occupancyCount} van ${limiet} afwezig` : ''}`}
                     className={cn(
                       'aspect-square rounded-2xl border transition-all flex flex-col items-center justify-center relative group',
-                      isSelected && 'border-oker-500 bg-oker-50 ring-4 ring-oker-500/10',
+                      // Gekozen dag en getekend bereik = neutraal (punt 4): gedempt vlak, hairline-ladder, carbon cijfer.
+                      isSelected && 'border-hairline-strong bg-surface-muted',
                       !isSelected && !isInDraftRange && 'border-hairline-subtle hover:border-hairline bg-surface-white',
-                      isInDraftRange && 'border-oker-200 bg-oker-50/70',
-                      isDraftEdge && 'border-oker-500 bg-oker-100 ring-4 ring-oker-500/10'
+                      isInDraftRange && 'border-hairline bg-surface-muted',
+                      isDraftEdge && 'border-hairline-strong bg-surface-muted ring-1 ring-hairline-strong'
                     )}
                   >
-                    <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-oker-700' : 'text-slate-500 group-hover:text-slate-600')}>{day}</span>
+                    <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-slate-900' : 'text-slate-500 group-hover:text-slate-600')}>{day}</span>
                     <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} aria-hidden="true" />
                   </button>
                 );
@@ -785,7 +786,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         key={req.id}
                         className={cn(
                           'group flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1',
-                          isSelected && 'ring-2 ring-oker-400/50',
+                          isSelected && 'bg-slate-100/60 ring-hairline-strong',
                         )}
                       >
                         <input

@@ -1013,7 +1013,7 @@ export function CoverageView() {
       ) : visibleDays.length === 0 ? (
         <EmptyState variant="klaar" title={`Geen openstaande diensten in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message="Alle verwachte diensten zijn ingevuld." />
       ) : (
-        <Card padding="none" className="overflow-hidden divide-y divide-slate-100">
+        <Card padding="none" className="overflow-hidden divide-y divide-hairline-subtle">
           {visibleDays.map((d) => {
             const ok = d.missing.length === 0;
             return (

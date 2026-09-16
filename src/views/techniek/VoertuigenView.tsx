@@ -137,6 +137,10 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
     if (detail?.id === v.id) setDetail(v);
   };
 
+  // De lege staat draagt dezelfde actie als de kopknop; dan hoort er maar
+  // één gouden knop in beeld te staan (punt 13, 16-09).
+  const legeStaat = voertuigen.length === 0 && !zl.laden && !zl.fout;
+
   return (
     <PageShell>
       <PageHeader
@@ -145,23 +149,23 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
         actions={(
           <>
             <VersheidRegel {...zl.versheid} />
-            {staf && <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ voertuig: null })}>Voertuig toevoegen</Button>}
+            {staf && !legeStaat && <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ voertuig: null })}>Voertuig toevoegen</Button>}
           </>
         )}
       />
       {zl.fout && voertuigen.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <OpsStat icon={<Bus size={16} />} tone="slate" label="Actief" value={tellers.actief} sub="in dienst" onClick={() => setFilter('actief')} className={cn(filter === 'actief' && 'ring-2 ring-oker-500/40')} />
+        <OpsStat icon={<Bus size={16} />} tone="slate" label="Actief" value={tellers.actief} sub="in dienst" onClick={() => setFilter('actief')} actief={filter === 'actief'} />
         <OpsStat icon={<Zap size={16} />} tone="slate" label="Elektrisch" value={tellers.elektrisch} sub="e-bussen" />
-        <OpsStat icon={<ShieldCheck size={16} />} tone={tellers.verloopt > 0 ? 'amber' : 'slate'} label="Verloopt binnen 30 d" value={tellers.verloopt} sub={tellers.verloopt > 0 ? 'keuring of controle plannen' : 'alles in orde'} onClick={() => setFilter('verloopt')} className={cn(filter === 'verloopt' && 'ring-2 ring-oker-500/40')} />
+        <OpsStat icon={<ShieldCheck size={16} />} tone={tellers.verloopt > 0 ? 'amber' : 'slate'} label="Verloopt binnen 30 d" value={tellers.verloopt} sub={tellers.verloopt > 0 ? 'keuring of controle plannen' : 'alles in orde'} onClick={() => setFilter('verloopt')} actief={filter === 'verloopt'} />
         <OpsStat icon={<Wrench size={16} />} tone={tellers.metDefect > 0 ? 'amber' : 'slate'} label="Met open defect" value={tellers.metDefect} sub="in de gele boek" />
       </div>
 
       {zl.fout && voertuigen.length === 0 ? (
         <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && voertuigen.length === 0 ? (
-        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden" aria-busy="true" aria-label="Voertuigen worden geladen">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Voertuigen worden geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
         </Card>
       ) : voertuigen.length === 0 ? (
@@ -229,7 +233,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                   </tbody>
                 </table>
               </div>
-              <div className="md:hidden divide-y divide-slate-100">
+              <div className="md:hidden divide-y divide-hairline-subtle">
                 {gesorteerd.map((r) => (
                   // rauw: hele kaartrij (naam + pillen) is de knop die het detail opent
                   <button key={r.v.id} type="button" onClick={() => setDetail(r.v)} className="ios-pressable flex min-h-11 w-full flex-col gap-2 px-5 py-3.5 text-left transition-colors hover:bg-surface-soft-hover">
@@ -360,7 +364,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
           {defecten.length === 0 ? (
             <EmptyState compact variant="klaar" title="Niets open" message="Geen openstaande meldingen voor deze bus." />
           ) : (
-            <ul className="divide-y divide-slate-100 rounded-2xl border border-hairline">
+            <ul className="divide-y divide-hairline-subtle rounded-2xl border border-hairline">
               {defecten.map((d) => (
                 <li key={d.id} className="px-3.5 py-2.5">
                   <p className="text-sm text-slate-800"><span className="font-semibold">{WERKTYPE_LABEL[d.werktype]}</span> · {d.omschrijving}</p>
@@ -376,7 +380,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
           {prestaties === null ? <SkeletonRow className="px-2 py-2" /> : prestaties.length === 0 ? (
             <EmptyState compact title="Nog geen werkprestaties" message="Wat de garage aan deze bus doet, verschijnt hier." />
           ) : (
-            <ul className="divide-y divide-slate-100 rounded-2xl border border-hairline">
+            <ul className="divide-y divide-hairline-subtle rounded-2xl border border-hairline">
               {prestaties.map((w) => (
                 <li key={w.id} className="flex items-start gap-3 px-3.5 py-2.5">
                   <div className="min-w-0 flex-1">
