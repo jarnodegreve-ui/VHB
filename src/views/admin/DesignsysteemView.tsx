@@ -8,7 +8,6 @@ import { InfoTip } from '../../components/InfoTip';
 import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '../../components/Table';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
 import { Avatar } from '../../components/Avatar';
-import { BrandMotief } from '../../components/BrandMotief';
 import { BrandLogo } from '../../components/BrandLogo';
 import { BrandSpinner } from '../../components/BrandSpinner';
 import { ActieMenu } from '../../components/ActieMenu';
@@ -74,16 +73,21 @@ function Rij({ label, children }: { label: string; children: ReactNode }) {
 const INHOUD = [
   ['merk', 'Merk'], ['kleur', 'Kleur'], ['typografie', 'Typografie'], ['maat', 'Maat en beweging'], ['knoppen', 'Knoppen'], ['labels', 'Badges en chips'],
   ['kaarten', 'Kaarten'], ['zijvak', 'Zijvak en menu'], ['personen', 'Personen'], ['formulier', 'Formulier'], ['tabel', 'Tabel'], ['feedback', 'Feedback'],
-  ['illustraties', 'Illustraties'],
+  ['illustraties', 'Lege schermen en meldingen'],
 ] as const;
 
 const ILLUSTRATIES = [
-  { naam: 'LegeLijst', gebruik: 'lege lijst, inbox, nog geen …', El: LegeLijst },
-  { naam: 'AllesGedaan', gebruik: 'niets te doen, alles afgehandeld', El: AllesGedaan },
-  { naam: 'GeenBereik', gebruik: 'offline, geen verbinding', El: GeenBereik },
-  { naam: 'Fout', gebruik: 'iets ging mis, scherm kon niet laden', El: Fout },
-  { naam: 'NietGevonden', gebruik: 'geen zoekresultaat, 404', El: NietGevonden },
+  { naam: 'Lege lijst', El: LegeLijst },
+  { naam: 'Alles afgehandeld', El: AllesGedaan },
+  { naam: 'Geen verbinding', El: GeenBereik },
+  { naam: 'Laden mislukt', El: Fout },
+  { naam: 'Geen resultaten', El: NietGevonden },
 ] as const;
+
+async function probeerVoorbeeldOpnieuw() {
+  await new Promise<void>((resolve) => setTimeout(resolve, 1200));
+  notify('Voorbeeld opnieuw gecontroleerd.', 'success');
+}
 
 export function DesignsysteemView() {
   const [aan, setAan] = useState(true);
@@ -380,24 +384,11 @@ export function DesignsysteemView() {
         <Paginering totaal={48} perPagina={20} pagina={pagina} onPagina={setPagina} />
       </Sectie>
 
-      <Sectie id="feedback" titel="Feedback" uitleg="Skeletons tijdens het laden, EmptyState met een volgende stap, toasts kort en met hooguit één actie. Laadfouten altijd als Foutkaart met “Opnieuw proberen”; de versheid van een zelf-ladend scherm staat als stille regel rechts in de PageHeader-acties (useZelfLadend).">
+      <Sectie id="feedback" titel="Feedback" uitleg="Laadindicatoren, de laatste ververstijd en korte bevestigingen bij een actie.">
         <Rij label="Skeleton">
           <div className="w-full space-y-2"><SkeletonRow /><SkeletonRow /></div>
           <SkeletonTile className="w-40" />
           <Skeleton className="h-4 w-32" />
-        </Rij>
-        <Rij label="Motief">
-          <span className="text-slate-400"><BrandMotief variant="leeg" /></span>
-          <span className="text-slate-400"><BrandMotief variant="klaar" /></span>
-          <span className="text-slate-400"><BrandMotief variant="fout" /></span>
-        </Rij>
-        <div className="grid gap-3 lg:grid-cols-3">
-          <EmptyState variant="leeg" title="Nog geen omleidingen" message="Voeg de eerste omleiding toe; chauffeurs zien ze meteen op Mijn dag." action={<Button variant="primary" size="sm"><Plus size={16} />Omleiding toevoegen</Button>} />
-          <EmptyState variant="klaar" title="Alles afgehandeld" message="Er staan geen aanvragen meer open." />
-          <Foutkaart boodschap="Kon het gele boek niet laden." onOpnieuw={() => new Promise<void>((r) => setTimeout(r, 1200))} />
-        </div>
-        <Rij label="Foutkaart compact">
-          <div className="w-full"><Foutkaart compact boodschap="Kon de vervaldata niet verversen." onOpnieuw={() => new Promise<void>((r) => setTimeout(r, 1200))} /></div>
         </Rij>
         <Rij label="Versheid">
           <span className="rounded-lg bg-surface-muted px-2.5 py-1"><VersheidRegel laatstGeladen={Date.now()} verversen={false} online /></span>
@@ -412,26 +403,28 @@ export function DesignsysteemView() {
         </Rij>
       </Sectie>
 
-      <Sectie id="illustraties" titel="Illustraties" uitleg="Vijf lijntekeningen op het merkteken (src/components/illustraties): de V met de gouden schuine streep, lijnen in currentColor, de streep als merkcitaat. Voor de belangrijkste lege staten via EmptyState illustratie={…}; op mobiel 96 px hoog, op desktop 128.">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {ILLUSTRATIES.map(({ naam, gebruik, El }) => (
-            <Card key={naam} tone="muted" padding="sm" className="flex flex-col items-center gap-2 text-center">
-              <span className="text-slate-400"><El className="h-24 lg:h-32" /></span>
-              <p className="text-card-title">{naam}</p>
-              <p className="text-xs text-slate-500">{gebruik}</p>
-            </Card>
+      <Sectie id="illustraties" titel="Lege schermen & meldingen" uitleg="Duidelijke status. Een logische volgende stap.">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 py-4 sm:grid-cols-3 lg:grid-cols-5">
+          {ILLUSTRATIES.map(({ naam, El }) => (
+            <div key={naam} className="flex min-w-0 flex-col items-center gap-3 text-center">
+              <El className="h-20 w-20" />
+              <p className="text-body-sm font-medium text-slate-800">{naam}</p>
+            </div>
           ))}
         </div>
-        <Rij label="In EmptyState">
-          <div className="w-full">
-            <EmptyState illustratie={<AllesGedaan />} variant="klaar" title="Niets te doen vandaag" message="Alle aanvragen zijn afgehandeld, een rustpunt." />
+        <div className="space-y-4 border-t border-hairline pt-5">
+          <MicroLabel>In gebruik</MicroLabel>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <EmptyState title="Nog geen omleidingen" message="Voeg een omleiding toe. Chauffeurs zien die op Mijn dag." action={<Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => notify('Voorbeeld: hier voeg je een omleiding toe.', 'info')}>Omleiding toevoegen</Button>} />
+            <EmptyState variant="klaar" title="Alles afgehandeld" message="Er staan geen aanvragen meer open." />
+            <Foutkaart titel="De gele boek kon niet laden" boodschap="Probeer het over enkele ogenblikken opnieuw." onOpnieuw={probeerVoorbeeldOpnieuw} />
           </div>
-        </Rij>
-        <Rij label="Compact">
-          <div className="w-full">
-            <EmptyState compact illustratie={<NietGevonden />} title="Geen resultaten" message="Pas je zoekopdracht aan." />
-          </div>
-        </Rij>
+        </div>
+        <div className="space-y-3 pt-2">
+          <p className="text-body-sm text-slate-500">Compacte meldingen</p>
+          <Foutkaart compact boodschap="De vervaldata konden niet worden vernieuwd." onOpnieuw={probeerVoorbeeldOpnieuw} />
+          <EmptyState compact illustratie={<NietGevonden />} title="Geen resultaten" message="Pas je zoekopdracht of filters aan." />
+        </div>
       </Sectie>
     </PageShell>
   );

@@ -5,8 +5,8 @@ import { versheidTekst, type Versheid } from '../lib/zelfLadend';
 import { Button } from './primitives';
 import { Modal } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
-import { BrandMotief, type MotiefVariant } from './BrandMotief';
-import { Fout } from './illustraties';
+import type { MotiefVariant } from './BrandMotief';
+import { AllesGedaan, Fout, GeenBereik, LegeLijst } from './illustraties';
 
 export function PageShell({
   children,
@@ -163,15 +163,8 @@ export function ConfirmationModal({
   );
 }
 
-/**
- * Empty-state: streep-motief (BrandMotief) + boodschap. `variant` kiest het
- * motief: 'leeg' (niets hier), 'klaar' (alles afgehandeld — goud vinkje) of
- * 'fout' (uitroep-accent). Met een expliciet `icon` blijft de gedempte
- * icoon-tegel van vroeger; met `illustratie` (src/components/illustraties)
- * komt er een lijnillustratie op het merkteken — voor de belangrijkste
- * lege staten van een scherm (max. 96 px hoog op mobiel, 128 op desktop).
- * Het busje (BrandBus-mascotte) is 01-09 volledig uitgefaseerd (vraag
- * Jarno) — de git-historiek bewaart hem.
+/** Gedeelde lege staat: herkenbaar symbool, links uitgelijnde tekst en
+ * optioneel één actie. Compact gebruikt dezelfde taal in een korte rij.
  */
 export function EmptyState({
   icon,
@@ -183,55 +176,41 @@ export function EmptyState({
   compact = false,
   className,
 }: {
-  /** Compact: één rustige rij (motief klein links, tekst ernaast) — voor
-   *  detailpanelen en zijvakken, waar een hoge lege kaart uit de toon valt. */
   compact?: boolean;
   className?: string;
-  /** Eigen icoon in de tegel; zonder icoon toont de staat het lus-motief. */
   icon?: React.ReactNode;
-  /** Lijnillustratie (`<LegeLijst />`, `<AllesGedaan />`, …) i.p.v. motief of icoon. */
   illustratie?: React.ReactNode;
-  /** Motief zonder `icon`: 'klaar' waar leeg = alles afgehandeld/niets open. */
   variant?: MotiefVariant;
   title: string;
   message?: string;
-  /** Optionele call-to-action (knop/link) onder de uitleg — lege schermen
-   *  geven zo altijd een volgende stap. */
   action?: React.ReactNode;
 }) {
+  const StandaardIllustratie = variant === 'klaar' ? AllesGedaan : variant === 'fout' ? Fout : LegeLijst;
+  const beeld = illustratie ?? icon ?? <StandaardIllustratie compact={compact} />;
+
   if (compact) {
     return (
-      <div className={cn('surface-muted flex items-center gap-4 rounded-2xl px-4 py-3.5', className)}>
-        {illustratie ? (
-          <span className="flex shrink-0 items-center text-slate-400 [&_svg]:h-12 [&_svg]:w-auto">{illustratie}</span>
-        ) : icon ? (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-slate-400">{icon}</div>
-        ) : (
-          <BrandMotief variant={variant} className="h-7 w-14 shrink-0 text-slate-400" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-md font-semibold text-slate-800">{title}</p>
-          {message ? <p className="mt-0.5 text-xs text-slate-500">{message}</p> : null}
+      <div className={cn('surface-muted @container min-w-0 rounded-2xl px-4 py-4', className)}>
+        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 @[28rem]:grid-cols-[auto_minmax(0,1fr)_auto]">
+          <span aria-hidden="true" className="flex items-center border-r border-hairline pr-4 text-slate-400 [&_svg]:h-8 [&_svg]:w-8 [&_svg]:stroke-[1.5]">{beeld}</span>
+          <div className="min-w-0">
+            <p className="text-md font-semibold text-slate-800 [overflow-wrap:anywhere]">{title}</p>
+            {message ? <p className="mt-1 text-body-sm text-slate-500 [overflow-wrap:anywhere]">{message}</p> : null}
+          </div>
+          {action ? <div className="col-span-2 flex min-w-0 flex-wrap gap-2 @[28rem]:col-span-1 @[28rem]:col-start-3 @[28rem]:justify-end">{action}</div> : null}
         </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
     );
   }
-  // Rustige gedempte kaart i.p.v. de hoge stippellijn-kaart: een lege staat
-  // is geen dropzone, en op desktop vulde die kaart een half scherm
-  // (afwerkingsronde 04-09, nr. 4).
+
   return (
-    <div className={cn('surface-muted rounded-2xl px-6 py-7 text-center', className)}>
-      {illustratie ? (
-        <span className="mx-auto mb-3 flex justify-center text-slate-400 [&_svg]:h-24 [&_svg]:w-auto lg:[&_svg]:h-32">{illustratie}</span>
-      ) : icon ? (
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-muted text-slate-400">{icon}</div>
-      ) : (
-        <BrandMotief variant={variant} className="mx-auto mb-3 h-9 w-[4.5rem] text-slate-400" />
-      )}
-      <h3 className="text-md font-semibold text-slate-800">{title}</h3>
-      {message ? <p className="mx-auto mt-1 max-w-md text-body-sm text-slate-500">{message}</p> : null}
-      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+    <div className={cn('surface-muted flex h-full min-w-0 flex-col items-start rounded-2xl p-5 text-left', className)}>
+      <span aria-hidden="true" className="mb-4 flex text-slate-400 [&_svg]:h-16 [&_svg]:w-16">{beeld}</span>
+      <div className="min-w-0 max-w-md flex-1">
+        <h3 className="text-card-title text-slate-800 [overflow-wrap:anywhere]">{title}</h3>
+        {message ? <p className="mt-2 text-body-sm text-slate-500 [overflow-wrap:anywhere]">{message}</p> : null}
+      </div>
+      {action ? <div className="mt-5 flex max-w-full flex-wrap gap-2">{action}</div> : null}
     </div>
   );
 }
@@ -253,7 +232,7 @@ export function Foutkaart({
   compact = false,
   className,
 }: {
-  /** Korte boodschap ("Kon het gele boek niet laden."). */
+  /** Korte boodschap ("De gele boek kon niet laden."). */
   boodschap: string;
   titel?: string;
   /** Retry; een Promise houdt de knop bezig tot hij afgerond is. */
@@ -281,11 +260,11 @@ export function Foutkaart({
     </Button>
   ) : undefined;
   return (
-    <div role="alert" className={className}>
+    <div role="alert" className={cn('min-w-0', className)}>
       <EmptyState
         compact={compact}
         variant="fout"
-        illustratie={<Fout />}
+        illustratie={offline ? <GeenBereik /> : <Fout compact={compact} />}
         title={titel ?? (compact ? 'Bijwerken is niet gelukt' : 'Dit kon niet laden')}
         message={offline ? `${boodschap} Je bent offline; probeer opnieuw zodra er bereik is.` : boodschap}
         action={knop}
