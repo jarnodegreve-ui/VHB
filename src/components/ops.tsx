@@ -193,6 +193,7 @@ export function OpsRow({
   tone,
   icon,
   leading,
+  badges,
   primary,
   secondary,
   meta,
@@ -203,6 +204,8 @@ export function OpsRow({
   icon?: ReactNode;
   /** Eigen tegel links (bv. LijnTegel) in plaats van het icoonvak in `tone`. */
   leading?: ReactNode;
+  /** Badges boven de tekst; vervangen het icoonvak als er geen leading is. */
+  badges?: ReactNode;
   primary: string;
   secondary?: string;
   meta?: string;
@@ -218,12 +221,13 @@ export function OpsRow({
       onClick={onClick}
       className="group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 sm:pointer-fine:py-2 text-left transition-[background-color,box-shadow] hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1"
     >
-      {leading ?? (
+      {leading ?? (badges ? null : (
         <span className={cn('inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
           {icon}
         </span>
-      )}
+      ))}
       <span className="min-w-0 flex-1">
+        {badges && <span className="mb-2 block">{badges}</span>}
         <span className="block truncate text-sm font-medium text-slate-800">{primary}</span>
         {secondary && <span className="mt-px block truncate text-xs font-normal text-slate-500">{secondary}</span>}
       </span>

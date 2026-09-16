@@ -10,6 +10,7 @@ import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
 import { Avatar } from '../../components/Avatar';
 import { BrandLogo } from '../../components/BrandLogo';
 import { BrandSpinner } from '../../components/BrandSpinner';
+import { LijnTegel } from '../../components/LijnTegel';
 import { ActieMenu } from '../../components/ActieMenu';
 import { Zijvak, ZijvakRij, ZijvakTekst } from '../../components/Zijvak';
 import { DUR } from '../../lib/motion';
@@ -264,6 +265,9 @@ export function DesignsysteemView() {
         <Rij label="Badge · dot">{BADGE_TONES.map((t) => <Badge key={t} tone={t} dot>{t}</Badge>)}</Rij>
         <Rij label="Chip">{CHIP_TONES.map((t) => <Chip key={t} tone={t}>2601</Chip>)}</Rij>
         <Rij label="StatusBadge">{STATUSSEN.map((s) => <StatusBadge key={s} status={s} />)}</Rij>
+        <Rij label="De Lijn · klein"><LijnTegel line="50, 801, 858, 871, 872, 883, 884" size="sm" layout="rij" /></Rij>
+        <Rij label="De Lijn · groot"><LijnTegel line="50, 801, 858, 871, 872, 883, 884" layout="rij" /></Rij>
+        <Rij label="Overige lijnen"><LijnTegel line="58, X20" size="sm" layout="rij" tone="muted" /><LijnTegel line="Alle" size="sm" /></Rij>
       </Sectie>
 
       <Sectie id="kaarten" titel="Kaarten" uitleg="Card in acht tinten en vier paddings; CardHeader met eyebrow, titel, beschrijving en aside. Uitleg hoort in een InfoTip, niet als alinea in de kaart.">

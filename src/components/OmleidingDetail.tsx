@@ -3,6 +3,7 @@ import { omleidingsPeriode, omleidingsTijdshint } from '../lib/diversions';
 import type { Diversion } from '../types';
 import { openPdfInNewTab } from '../lib/ui';
 import { Button, MicroLabel } from './primitives';
+import { LijnTegel } from './LijnTegel';
 
 /**
  * Inhoud van één omleiding: periode bovenaan, dan de omschrijving met behoud
@@ -17,6 +18,7 @@ export function OmleidingDetail({ diversion: div }: { diversion: Diversion }) {
   const hint = omleidingsTijdshint(div);
   return (
     <div className="space-y-5">
+      <LijnTegel line={div.line} layout="rij" />
       <div className="border-b border-hairline pb-5">
         <dl className="grid grid-cols-2 gap-4">
           <div className="min-w-0">
