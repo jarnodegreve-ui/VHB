@@ -54,7 +54,7 @@ export function LijnTegel({ line, tone = 'accent', size = 'md', layout = 'kolom'
 function terugvalKlassen(size: Maat, tone: Toon) {
   return cn(
     'inline-flex shrink-0 items-center justify-center rounded-lg border px-1.5 font-bold tracking-tight',
-    size === 'sm' ? 'h-8 min-w-11 text-xs' : 'h-10 min-w-14 text-sm',
+    size === 'sm' ? 'h-6 min-w-9 text-xs' : 'h-8 min-w-12 text-sm',
     tone === 'muted' ? 'border-hairline bg-slate-500/12 text-slate-600' : 'border-oker-100 bg-oker-50 text-oker-800',
   );
 }
@@ -69,7 +69,7 @@ function LijnBadge({ lijn, size, tone }: { lijn: string; size: Maat; tone: Toon 
     <span
       role="img"
       aria-label={lijnLabel(lijn)}
-      className={cn('relative block shrink-0 overflow-hidden', size === 'sm' ? 'h-8' : 'h-10')}
+      className={cn('relative block shrink-0 overflow-hidden', size === 'sm' ? 'h-6' : 'h-8')}
       style={{ aspectRatio: '315 / 216', borderRadius: '15% / 22%' }}
     >
       <img
