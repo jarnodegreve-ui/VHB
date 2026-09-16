@@ -1,29 +1,37 @@
 /**
- * Pure dekking/gaten-helpers — API-lokaal (geen cross-import uit ../src).
- * Houd in sync met src/lib/coverageGaps.ts (door tests gedekt).
+ * Pure helpers voor dekking/gaten, gedeeld door api/ en src/ (één bron in
+ * shared/, geen browser- of Node-afhankelijkheden).
+ *
+ * Een "gat" = een verwachte dienst (per dag-type ingesteld) die op een
+ * concrete dag door niemand is ingevuld in de planning-matrix.
  */
 
-export const normalizeCode = (v: unknown) => String(v ?? "").trim().toLowerCase();
+export const normalizeCode = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
-/** Standaard dag-types + weekdag-toewijzing (dow 0=zondag..6=zaterdag). */
-export const DEFAULT_DAY_TYPES = ["schooldag", "vakantie", "zaterdag", "zondag"] as const;
-export const DEFAULT_WEEKDAYS: string[] = ["zondag", "schooldag", "schooldag", "schooldag", "schooldag", "schooldag", "zaterdag"];
+/**
+ * Standaard dag-types + standaard weekdag-toewijzing, gebruikt als de planner
+ * nog niets zelf ingesteld heeft. dow-index: 0=zondag .. 6=zaterdag.
+ */
+export const DEFAULT_DAY_TYPES = ['schooldag', 'vakantie', 'zaterdag', 'zondag'] as const;
+export const DEFAULT_WEEKDAYS: string[] = ['zondag', 'schooldag', 'schooldag', 'schooldag', 'schooldag', 'schooldag', 'zaterdag'];
 
 /** Een uitzondering: binnen [from,to] (yyyy-mm-dd, inclusief) geldt `dayType`. */
 export type DayTypeOverride = { from: string; to: string; dayType: string };
 
+/** Encodeer een uitzondering als opslag-string "from..to|dagtype". */
 export function encodeOverride(o: DayTypeOverride): string {
   const from = o.from <= o.to ? o.from : o.to;
   const to = o.from <= o.to ? o.to : o.from;
   return `${from}..${to}|${o.dayType}`;
 }
 
+/** Parse uitzonderingen uit opgeslagen strings "from..to|dagtype". */
 export function parseOverrides(raw: unknown): DayTypeOverride[] {
   if (!Array.isArray(raw)) return [];
   const out: DayTypeOverride[] = [];
   for (const item of raw) {
-    const s = String(item ?? "").trim();
-    const bar = s.lastIndexOf("|");
+    const s = String(item ?? '').trim();
+    const bar = s.lastIndexOf('|');
     if (bar < 0) continue;
     const dayType = s.slice(bar + 1).trim();
     const m = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(s.slice(0, bar));
@@ -37,7 +45,7 @@ export function parseOverrides(raw: unknown): DayTypeOverride[] {
 /** Weekdag-toewijzing met ingangsdatum: vanaf `vanaf` (yyyy-mm-dd) geldt deze
  *  toewijzing i.p.v. de basis — bv. het schooljaar-regime vanaf 1 september.
  *  Opgeslagen als reserved key "__weekdagen_<vanaf>__" naast "__weekdagen__".
- *  Houd in sync met src/lib/coverageGaps.ts. */
+ */
 export type WeekdagPeriode = { vanaf: string; weekdays: string[] };
 
 export const WEEKDAY_PERIOD_KEY_RE = /^__weekdagen_(\d{4}-\d{2}-\d{2})__$/;
@@ -62,9 +70,11 @@ export function weekdaysVoorDatum(basis: string[], perioden: WeekdagPeriode[], d
 }
 
 /**
- * Bepaal het dag-type van een planning-rij: 1) expliciet uit de import wint;
- * 2) een uitzondering die de datum bevat; 3) het standaard dag-type voor die
- * weekdag (weekdays[dow]). Houd in sync met src/lib/coverageGaps.ts.
+ * Bepaal het dag-type van een planning-rij:
+ *   1. Expliciet dag-type uit de import (kolom B) wint altijd.
+ *   2. Anders: een uitzondering waarvan [from,to] de datum bevat.
+ *   3. Anders: het standaard dag-type voor die weekdag (weekdays[dow]).
+ * Datum als yyyy-mm-dd; UTC zodat er geen tijdzone-drift op de weekdag zit.
  */
 export function resolveDayType(
   rawDayType: unknown,
@@ -72,27 +82,27 @@ export function resolveDayType(
   weekdays: string[] = [],
   overrides: DayTypeOverride[] = [],
 ): string {
-  const explicit = String(rawDayType ?? "").trim();
+  const explicit = String(rawDayType ?? '').trim();
   if (explicit) return explicit;
-  const iso = String(sourceDate ?? "").trim();
+  const iso = String(sourceDate ?? '').trim();
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return "";
+  if (!m) return '';
   for (const o of overrides) {
     if (iso >= o.from && iso <= o.to) return o.dayType;
   }
   const dow = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
-  return String(weekdays[dow] ?? "").trim();
+  return String(weekdays[dow] ?? '').trim();
 }
 
 /** Waar komt het dag-type van een dag vandaan? Voedt de uitleg op de dekking
  *  ("waarom is dit een schooldag?") — scheelt debuggen bij elke
- *  dienstregelingswissel. Houd in sync met src/lib/coverageGaps.ts. */
+ *  dienstregelingswissel. */
 export type DayTypeBron =
-  | { soort: "excel" }
-  | { soort: "uitzondering"; from: string; to: string }
-  | { soort: "periode"; vanaf: string }
-  | { soort: "basis" }
-  | { soort: "geen" };
+  | { soort: 'excel' }
+  | { soort: 'uitzondering'; from: string; to: string }
+  | { soort: 'periode'; vanaf: string }
+  | { soort: 'basis' }
+  | { soort: 'geen' };
 
 /** Zelfde beslisregels als resolveDayType, maar mét de herkomst erbij. De
  *  beslissing zelf wordt bewust gedelegeerd (resolveDayType + periodeVoorDatum)
@@ -104,26 +114,29 @@ export function resolveDayTypeMetBron(
   perioden: WeekdagPeriode[] = [],
   overrides: DayTypeOverride[] = [],
 ): { dayType: string; bron: DayTypeBron } {
-  const explicit = String(rawDayType ?? "").trim();
-  if (explicit) return { dayType: explicit, bron: { soort: "excel" } };
-  const iso = String(sourceDate ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { dayType: "", bron: { soort: "geen" } };
+  const explicit = String(rawDayType ?? '').trim();
+  if (explicit) return { dayType: explicit, bron: { soort: 'excel' } };
+  const iso = String(sourceDate ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { dayType: '', bron: { soort: 'geen' } };
   for (const o of overrides) {
     if (iso >= o.from && iso <= o.to) {
-      return { dayType: o.dayType, bron: { soort: "uitzondering", from: o.from, to: o.to } };
+      return { dayType: o.dayType, bron: { soort: 'uitzondering', from: o.from, to: o.to } };
     }
   }
   const periode = periodeVoorDatum(perioden, iso);
-  const dayType = resolveDayType("", iso, periode?.weekdays ?? basisWeekdays, []);
-  if (!dayType) return { dayType: "", bron: { soort: "geen" } };
-  return { dayType, bron: periode ? { soort: "periode", vanaf: periode.vanaf } : { soort: "basis" } };
+  const dayType = resolveDayType('', iso, periode?.weekdays ?? basisWeekdays, []);
+  if (!dayType) return { dayType: '', bron: { soort: 'geen' } };
+  return { dayType, bron: periode ? { soort: 'periode', vanaf: periode.vanaf } : { soort: 'basis' } };
 }
 
 export type DayGap = {
   date: string;
   dayType: string;
+  /** aantal verwachte diensten voor dit dag-type */
   expected: number;
+  /** hoeveel daarvan ingevuld zijn */
   covered: number;
+  /** dienstnummers die ontbreken (niet toegekend die dag) */
   missing: string[];
   /** Per opengevallen dienst (genormaliseerde code): wie viel uit en waarom.
    *  Alleen gevuld als het gat door een goedgekeurde afwezigheid komt —
@@ -159,7 +172,7 @@ export function vergelijkVerwachtingenMetPraktijk(
   const DIENSTCODE_RE = /^\d{3,4}$/;
   const perType = new Map<string, { dagen: number; aanwezig: Map<string, number>; extra: Map<string, number> }>();
   for (const r of rows) {
-    const date = String(r.source_date ?? "");
+    const date = String(r.source_date ?? '');
     const dayType = resolveDayType(r.day_type, date, weekdaysVoorDatum(basisWeekdays, perioden, date), overrides);
     if (!dayType) continue;
     const expected = expectationsByDayType[dayType];
@@ -171,7 +184,7 @@ export function vergelijkVerwachtingenMetPraktijk(
       perType.set(dayType, entry);
     }
     entry.dagen += 1;
-    const assignments = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
+    const assignments = r.assignments && typeof r.assignments === 'object' && !Array.isArray(r.assignments)
       ? (r.assignments as Record<string, unknown>)
       : {};
     const opDezeDag = new Set<string>();
@@ -210,6 +223,7 @@ export function vergelijkVerwachtingenMetPraktijk(
   return out.sort((a, b) => a.dayType.localeCompare(b.dayType));
 }
 
+/** Bereken ontbrekende diensten voor één dag. */
 export function computeDayGap(
   date: string,
   dayType: string,
@@ -219,7 +233,7 @@ export function computeDayGap(
   const assigned = new Set(assignmentValues.map(normalizeCode));
   // Dedupe op genormaliseerde sleutel (en negeer lege entries) zodat een
   // dubbel ingestelde verwachting niet dubbel telt; bewaar wel de originele
-  // schrijfwijze voor weergave. Houd in sync met src/lib/coverageGaps.ts.
+  // schrijfwijze voor weergave.
   const seen = new Set<string>();
   const expectedUnique: string[] = [];
   for (const s of expectedServiceNumbers) {
@@ -257,7 +271,7 @@ export function stelVerwachtingenVoor(
   const DIENSTCODE_RE = /^\d{3,4}$/;
   const perType = new Map<string, { dagen: number; telling: Map<string, { code: string; dagen: number }> }>();
   for (const r of rows) {
-    const date = String(r.source_date ?? "");
+    const date = String(r.source_date ?? '');
     const dayType = resolveDayType(r.day_type, date, weekdaysVoorDatum(basisWeekdays, perioden, date), overrides);
     if (!dayType) continue;
     let entry = perType.get(dayType);
@@ -266,12 +280,12 @@ export function stelVerwachtingenVoor(
       perType.set(dayType, entry);
     }
     entry.dagen += 1;
-    const assignments = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
+    const assignments = r.assignments && typeof r.assignments === 'object' && !Array.isArray(r.assignments)
       ? (r.assignments as Record<string, unknown>)
       : {};
     const gezien = new Set<string>();
     for (const v of Object.values(assignments)) {
-      const raw = String(v ?? "").trim();
+      const raw = String(v ?? '').trim();
       const key = normalizeCode(raw);
       if (!key || gezien.has(key) || !DIENSTCODE_RE.test(key)) continue;
       gezien.add(key);

@@ -3,7 +3,7 @@ import cors from "cors";
 import crypto from "node:crypto";
 import dotenv from "dotenv";
 
-import { buildCalendar, type IcsEvent } from "./ics.js";
+import { buildCalendar, type IcsEvent } from "../shared/ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
 
 import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";

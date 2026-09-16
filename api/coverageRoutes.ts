@@ -1,6 +1,6 @@
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
-import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "./coverageGaps.js";
+import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../shared/coverageGaps.js";
 import { beoordeelKandidaat, sorteerKandidaten, dagVenster, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 import { addDagenIso, brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType, matrixCodesForDate, isTakeoverCode } from "./helpers.js";
 import {

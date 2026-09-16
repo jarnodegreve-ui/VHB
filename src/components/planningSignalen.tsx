@@ -1,6 +1,6 @@
 import { Badge, Button } from './primitives';
 import { formatShortDay } from '../lib/format';
-import type { VerwachtingAfwijking } from '../lib/coverageGaps';
+import type { VerwachtingAfwijking } from '../../shared/coverageGaps';
 
 /**
  * Gedeelde bouwstenen voor de "Excel en portaal lopen uiteen"-signalen.

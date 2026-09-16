@@ -13,7 +13,7 @@ import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field, Input, Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
-import type { VerwachtingAfwijking } from '../../lib/coverageGaps';
+import type { VerwachtingAfwijking } from '../../../shared/coverageGaps';
 import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
 /** Inklapbare preview-sectie: de import-preview groeide naar acht blokken —
