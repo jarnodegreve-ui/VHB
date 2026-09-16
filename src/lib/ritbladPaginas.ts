@@ -183,12 +183,11 @@ export async function zoekPaginasVoorDienstGecached(
 
 /**
  * Metadata van de bundel, altijd vers van de server (`cache: 'no-store'`).
- * De service worker serveert /api/ritblaadje normaal stale-while-revalidate;
- * dat gaf de viewer een gecachte signed URL van soms > 1 uur oud → Supabase
- * 400 op de PDF → "kon niet geladen worden", en pas de tweede tik werkte.
- * Op no-store doet de SW network-first en valt hij alleen offline terug op
- * zijn cache — dan komt de PDF zelf ook uit de SW-cache (query-loos pad),
- * dus de oude token deert daar niet.
+ * Ook een oudere, nog actieve service worker gaat door no-store direct
+ * naar het netwerk in plaats van eerst een verlopen signed URL te geven.
+ * De huidige SW doet dit voor alle ritblad-metadata. Offline valt hij
+ * terug op zijn cache; de PDF zelf staat onder het query-loze pad, dus
+ * de verlopen token verhindert daar het openen niet.
  */
 export async function haalRitbladMeta(): Promise<RitbladMeta | null> {
   const res = await apiFetch('/api/ritblaadje', { cache: 'no-store' });

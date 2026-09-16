@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileText, Search, Trash2, Upload } from 'lucide-react';
 import type { User } from '../types';
-import { notify, openPdfInNewTab } from '../lib/ui';
+import { notify } from '../lib/ui';
+import { openHuidigRitblad } from '../lib/ritblad';
 import { prettySize, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/datum';
 import { useOptioneleAppData } from '../app/AppDataContext';
@@ -132,17 +133,20 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   const fetchCurrent = async () => {
     setIsLoading(true);
     try {
-      const response = await apiFetch('/api/ritblaadje');
+      // Ook onder een nog actieve oudere service worker direct vers laden:
+      // de signed URL uit diens metadata-cache kan al verlopen zijn.
+      const response = await apiFetch('/api/ritblaadje', { cache: 'no-store' });
       if (!response.ok) throw new Error(`Server antwoordde ${response.status}`);
       const data = await response.json();
       if (!mountedRef.current) return;
       setCurrent(data);
-      setFromCache(false);
+      const uitCache = response.headers.get('X-VHB-Bron') === 'cache';
+      setFromCache(uitCache);
       // Cache de metadata + sync-tijd voor offline-fallback.
       try {
-        const now = new Date().toISOString();
+        const now = uitCache ? localStorage.getItem(SYNCED_AT_KEY) : new Date().toISOString();
         setSyncedAt(now);
-        localStorage.setItem(SYNCED_AT_KEY, now);
+        if (now) localStorage.setItem(SYNCED_AT_KEY, now);
         if (data) localStorage.setItem(META_CACHE_KEY, JSON.stringify(cacheSafeMeta(data)));
         else localStorage.removeItem(META_CACHE_KEY);
       } catch {
@@ -259,12 +263,9 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       aside={fromCache ? <Badge tone="amber" dot>Offline</Badge> : undefined}
       voet={(
         <div className="flex flex-wrap items-center gap-2">
-          {/* openPdfInNewTab i.p.v. een download-anchor: het download-
-              attribuut wordt op een cross-origin signed URL genegeerd,
-              waardoor de PWA in standalone wegnavigeert. Openen in een
-              (nieuw) tabblad laat de gebruiker daar bewaren, met
-              same-window-fallback in standalone. */}
-          <Button variant="secondary" size="sm" disabled={!current.url} onClick={() => current.url && openPdfInNewTab(current.url)} icon={<Download size={14} />}>
+          {/* Bij elke klik opnieuw de actuele link ophalen; de pagina kan
+              al langer openstaan dan de geldigheid van de signed URL. */}
+          <Button variant="secondary" size="sm" disabled={!current.url} onClick={() => void openHuidigRitblad()} icon={<Download size={14} />}>
             Openen
           </Button>
           {canEdit && (
@@ -367,13 +368,12 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
 
           <Card padding="none" className="overflow-hidden">
             {current.url && touchToestel ? (
-              /* Opent het vólledige PDF via openPdfInNewTab (met standalone-
-                 fallback); de iframe-preview toont op iOS alleen pagina 1,
-                 zonder enige hint dat er meer is. */
+              /* Haalt bij de klik een verse link op en opent de volledige
+                 PDF; de iframe-preview toont op iOS alleen pagina 1. */
               /* rauw: grote open-kaart met eigen layout (icoontegel + titel + uitleg) */
               <button
                 type="button"
-                onClick={() => openPdfInNewTab(current.url!)}
+                onClick={() => void openHuidigRitblad()}
                 className="ios-pressable flex w-full flex-col items-center justify-center gap-3 px-8 py-14 text-center"
               >
                 <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-700">
