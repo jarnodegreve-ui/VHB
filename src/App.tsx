@@ -141,6 +141,7 @@ const LazyPlannerDashboardWidgets = lazyWithRetry(() => import('./views/PlannerD
 const LazyServicesView = lazyWithRetry(() => import('./views/ServicesView').then((module) => ({ default: module.ServicesView })));
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 const LazyPrintLeaveYearView = lazyWithRetry(() => import('./views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
+const LazyPrintDienstwisselsView = lazyWithRetry(() => import('./views/PrintDienstwisselsView').then((module) => ({ default: module.PrintDienstwisselsView })));
 const LazyPrintGeleBoekView = lazyWithRetry(() => import('./views/PrintGeleBoekView').then((module) => ({ default: module.PrintGeleBoekView })));
 
 
@@ -1309,6 +1310,19 @@ export default function App() {
     return (
       <Suspense fallback={<PrintLaden />}>
         <LazyPrintGeleBoekView filter={printGeleBoek} />
+      </Suspense>
+    );
+  }
+
+  // Dagoverzicht dienstwissels (bewijsstuk voor de map): planner/admin, wacht op de collecties.
+  const printDienstwissels = printParams?.get('print-dienstwissels');
+  if (printDienstwissels && /^\d{4}-\d{2}-\d{2}$/.test(printDienstwissels) && currentUser && (currentUser.role === 'planner' || currentUser.role === 'admin')) {
+    if (isInitialLoad) {
+      return <PrintLaden />;
+    }
+    return (
+      <Suspense fallback={<PrintLaden />}>
+        <LazyPrintDienstwisselsView datum={printDienstwissels} swaps={swaps} users={users} shifts={shifts} />
       </Suspense>
     );
   }

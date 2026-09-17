@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname, 'src');
-const PRINT = /Print(MonthlySchedule|LeaveYear|GeleBoek)View\.tsx$/;
+const PRINT = /Print(MonthlySchedule|LeaveYear|GeleBoek|Dienstwissels)View\.tsx$/;
 const PRIMITIVES = /components\/(primitives|ui|Card|Field|Modal|SlideOver|Navigation|BottomNav)\.tsx$/;
 
 const REGELS = [
