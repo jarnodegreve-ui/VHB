@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, X, Check, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
@@ -8,14 +8,14 @@ import { Badge, Button, IconButton, MicroLabel, StatusBadge, TableShell, Td, Th 
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
-import { Field, Textarea } from '../components/Field';
+import { DateInput, Field, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { formatDateHuman, formatShortDay, serviceNumberOf } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { canRespondToSwap } from '../lib/authorization';
-import { notify } from '../lib/ui';
+import { notify, openPdfInNewTab } from '../lib/ui';
 import { AllesGedaan, LegeLijst } from '../components/illustraties';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
@@ -57,6 +57,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // stonden er anders 30-40 kaarten in één modal.
   const [showAllShifts, setShowAllShifts] = useState(false);
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
+  // Dagoverzicht dienstwissels afdrukken (bewijsstuk voor de map, Jarno 17-09).
+  const [printDag, setPrintDag] = useState(() => new Date().toLocaleDateString('sv-SE'));
+  const drukDagoverzichtAf = (dag: string) => {
+    if (dag) openPdfInNewTab(`${window.location.origin}${window.location.pathname}?print-dienstwissels=${dag}`);
+  };
   // Beoordeling in een side panel: alle ruil-context + beslis-acties
   // zonder paginawissel (zelfde patroon als LeaveManagementView).
   const [reviewSwap, setReviewSwap] = useState<SwapRequest | null>(null);
@@ -609,6 +614,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       />
 
       {isPlanner && (() => {
+        const beheerKop = (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
+            <div className="flex items-center gap-2">
+              <DateInput size="sm" value={printDag} onChange={setPrintDag} aria-label="Dag van het overzicht" />
+              <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => drukDagoverzichtAf(printDag)}>Dagoverzicht</Button>
+            </div>
+          </div>
+        );
         const actionableSwaps = swaps.filter(s => {
           if (s.status !== 'pending' && s.status !== 'accepted' && s.status !== 'approved') return false;
           const requester = users.find(u => u.id === s.requesterId);
@@ -625,7 +639,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         if (actionableSwaps.length === 0) {
           return (
             <div className="space-y-4 pt-8">
-              <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
+              {beheerKop}
               <EmptyState
                 variant="klaar"
                 illustratie={<AllesGedaan />}
@@ -638,7 +652,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
         return (
           <div className="space-y-4 pt-8">
-            <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
+            {beheerKop}
             <TableShell>
               {/* Desktop table */}
               <div className="hidden md:block">
@@ -1162,6 +1176,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               onClick={() => setHistorySwap(reviewSwap)}
               aria-label="Wijzigingsgeschiedenis"
               title="Wijzigingsgeschiedenis"
+            />
+            <Button
+              variant="ghost"
+              size="md"
+              icon={<Printer size={14} />}
+              onClick={() => drukDagoverzichtAf(shiftInfoFor(reviewSwap).date)}
+              aria-label="Dagoverzicht van deze dag afdrukken"
+              title="Dagoverzicht van deze dag afdrukken"
             />
             {reviewSwap.status === 'accepted' && (
               <>
