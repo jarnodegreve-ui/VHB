@@ -25,6 +25,14 @@ export type MonthCell = {
   swapManual?: boolean;
   /** Naam van de chauffeur die de dienst afstond. */
   swapFrom?: string;
+  /** Deze chauffeur stond zijn dienst juist af en is daardoor vrij (de
+   *  tegenkant van de wissel) — in het maandbeeld rood, zodat een
+   *  weggeruilde dag niet op een gewone vrije dag lijkt (Jarno 17-09). */
+  swapAway?: boolean;
+  /** Naam van de chauffeur die de dienst overnam (alleen bij `swapAway`). */
+  swapTo?: string;
+  /** De ruil is afgehandeld: de wissel blijft staan, terugdraaien kan niet meer. */
+  swapDone?: boolean;
 };
 
 export type MonthPlanning = {

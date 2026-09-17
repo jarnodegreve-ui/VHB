@@ -1,5 +1,6 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { telDiensten } from '../../lib/dienstTelling';
+import { formatDatumDMJ, formatPeriodeDMJ } from '../../lib/format';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
@@ -373,7 +374,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       }
 
       const periode = data.startDate && data.endDate
-        ? ` (${new Date(data.startDate).toLocaleDateString('nl-BE')} t/m ${new Date(data.endDate).toLocaleDateString('nl-BE')} vervangen)`
+        ? ` (${formatDatumDMJ(data.startDate)} t/m ${formatDatumDMJ(data.endDate)} vervangen)`
         : '';
       notify(
         `Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen${periode}, ${data.generatedShifts || 0} roosterregels opgebouwd${syncNotes.length ? `, ${syncNotes.join(', ')}` : ''}.`,
@@ -544,7 +545,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                               <span>
                                 <span className="font-semibold">{l.userName}</span>
                                 {', '}
-                                {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
+                                {formatPeriodeDMJ(l.startDate, l.endDate)}
                                 {l.type ? ` (${l.type})` : ''}
                               </span>
                             </li>
@@ -563,7 +564,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                                 <span>
                                   <span className="font-semibold">{l.userName}</span>
                                   {', ziek '}
-                                  {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
+                                  {formatPeriodeDMJ(l.startDate, l.endDate)}
                                 </span>
                               </li>
                             ))}
@@ -917,8 +918,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                               <span>
                                 <span className="font-semibold">{c.driverName}</span>
                                 {', '}
-                                {c.date}, dienst {c.serviceNumber}
-                                <span className="text-red-700"> · verlof {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
+                                {formatDatumDMJ(c.date)}, dienst {c.serviceNumber}
+                                <span className="text-red-700"> · verlof {formatPeriodeDMJ(c.leaveStart, c.leaveEnd)}</span>
                               </span>
                             </li>
                           ))}
@@ -967,7 +968,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           {/* Datum ín de badge: een title-tooltip bestaat niet op
                               touch, en juist "t/m wanneer?" stuurt de beoordeling. */}
                           {matrixPreview.chauffeursVerdwenen.map((c) => (
-                            <Badge key={c.naam} tone="amber" className="tabular-nums">{c.naam} · t/m {new Date(c.laatste).toLocaleDateString('nl-BE')}</Badge>
+                            <Badge key={c.naam} tone="amber" className="tabular-nums">{c.naam} · t/m {formatDatumDMJ(c.laatste)}</Badge>
                           ))}
                         </div>
                       )}
@@ -1039,8 +1040,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           <span>
                             <span className="font-semibold">{c.driverName}</span>
                             {', '}
-                            {c.date}, dienst {c.serviceNumber}
-                            <span className="opacity-75"> · ziek {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
+                            {formatDatumDMJ(c.date)}, dienst {c.serviceNumber}
+                            <span className="opacity-75"> · ziek {formatPeriodeDMJ(c.leaveStart, c.leaveEnd)}</span>
                           </span>
                         </li>
                       ))}
@@ -1077,7 +1078,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       {isPreviewVerversen && <MicroLabel className="text-oker-700">Bijwerken…</MicroLabel>}
                     </div>
                     <p className="mt-2 text-sm font-medium text-slate-500">
-                      Het bestand loopt van {matrixPreview.fileStartDate ? new Date(matrixPreview.fileStartDate).toLocaleDateString('nl-BE') : '?'} t/m {matrixPreview.fileEndDate ? new Date(matrixPreview.fileEndDate).toLocaleDateString('nl-BE') : '?'}. Alleen de gekozen periode wordt geïmporteerd en vervangen, kort hem in als latere maanden nog niet vaststaan.
+                      Het bestand loopt van {matrixPreview.fileStartDate ? formatDatumDMJ(matrixPreview.fileStartDate) : '?'} t/m {matrixPreview.fileEndDate ? formatDatumDMJ(matrixPreview.fileEndDate) : '?'}. Alleen de gekozen periode wordt geïmporteerd en vervangen, kort hem in als latere maanden nog niet vaststaan.
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <Field label="Van" htmlFor="import-periode-van">
@@ -1127,7 +1128,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </div>
                     <Badge tone="oker" className="tabular-nums">
                       {matrixOverwriteSummary?.currentStartDate
-                        ? `Actief: ${new Date(matrixOverwriteSummary.currentStartDate).toLocaleDateString('nl-BE')}${matrixOverwriteSummary.currentEndDate && matrixOverwriteSummary.currentEndDate !== matrixOverwriteSummary.currentStartDate ? ` t/m ${new Date(matrixOverwriteSummary.currentEndDate).toLocaleDateString('nl-BE')}` : ''}`
+                        ? `Actief: ${formatDatumDMJ(matrixOverwriteSummary.currentStartDate)}${matrixOverwriteSummary.currentEndDate && matrixOverwriteSummary.currentEndDate !== matrixOverwriteSummary.currentStartDate ? ` t/m ${formatDatumDMJ(matrixOverwriteSummary.currentEndDate)}` : ''}`
                         : 'Nog geen actieve planning'}
                     </Badge>
                   </div>
@@ -1143,7 +1144,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       <div>
                         <MicroLabel className="text-amber-700">De periodes sluiten niet aan</MicroLabel>
                         <p className="mt-1 text-sm font-medium text-amber-900">
-                          Tussen {new Date(matrixOverwriteSummary.gap.van).toLocaleDateString('nl-BE')} en {new Date(matrixOverwriteSummary.gap.tot).toLocaleDateString('nl-BE')} {matrixOverwriteSummary.gap.dagen === 1 ? 'valt 1 dag' : `vallen ${matrixOverwriteSummary.gap.dagen} dagen`} zonder planning.
+                          Tussen {formatDatumDMJ(matrixOverwriteSummary.gap.van)} en {formatDatumDMJ(matrixOverwriteSummary.gap.tot)} {matrixOverwriteSummary.gap.dagen === 1 ? 'valt 1 dag' : `vallen ${matrixOverwriteSummary.gap.dagen} dagen`} zonder planning.
                           Klopt dat niet, controleer dan of je het juiste bestand uploadt, de import gaat anders gewoon door.
                         </p>
                       </div>

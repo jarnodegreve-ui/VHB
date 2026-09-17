@@ -8,7 +8,7 @@ import { navigeer } from '../../app/router';
 import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../../lib/uitweg';
 import { kandidaatLabel, nietBeschikbaarUitMatrix, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
-import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
+import { formatDatumDMJ, formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
@@ -479,7 +479,7 @@ export function ZiekteView({
                                 )}
                                 <div className="flex flex-col gap-2 sm:flex-row">
                                   <Select
-                                    aria-label={`Vervanger voor dienst ${serviceNumberOf(dienst)} op ${dienst.date}`}
+                                    aria-label={`Vervanger voor dienst ${serviceNumberOf(dienst)} op ${formatDatumDMJ(dienst.date)}`}
                                     value={vervangerPerDienst[dienst.id] ?? ''}
                                     onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [dienst.id]: e.target.value }))}
                                     className="min-w-0 flex-1"

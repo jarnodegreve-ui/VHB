@@ -5,7 +5,7 @@ import {
   getAppSetting, getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, setAppSetting,
 } from "../storage.js";
 import type { AuthenticatedRequest } from "../types.js";
-import { nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
+import { DAG_DMJ, nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
 import { loonCodeSleutel } from "../../shared/loon.js";
 import {
   LOON_INSTELLINGEN_KEY, dagPrestatieBodySchema, dagPrestatieNieuwSchema, heropenBodySchema, loonCodeBodySchema, loonInstellingenSchema,
@@ -234,7 +234,7 @@ export function mountLoonRoutes(app: express.Express) {
       const planning = await planningVanDag(datum);
       const dag = await openDag(datum, String(req.appUser?.id ?? "") || null);
       const rijen = await insertDagPrestaties(planning.chauffeurs.map((c) => ({ datum, userId: c.id, volgnr: 1, planningCode: planning.codeVan(c.id), geredenCode: planning.codeVan(c.id) })));
-      await logActivity(req, "system", "Dag geopend", `${datum}: ${rijen.length} chauffeurs uit de planning.`);
+      await logActivity(req, "system", "Dag geopend", `${DAG_DMJ(datum)}: ${rijen.length} chauffeurs uit de planning.`);
       res.status(201).json({ dag, rijen: rijen.map(metNamen(planning.users as any[])), planningAfwijkingen: [], ontbrekendeCodes: [], inPlanning: planning.inPlanning });
     } catch (err) {
       if (isUniqueError(err)) return res.status(409).json({ error: "Deze dag is al geopend." });
@@ -318,7 +318,7 @@ export function mountLoonRoutes(app: express.Express) {
       if (nieuw.length) {
         await insertDagPrestaties(nieuw.map((id) => ({ datum, userId: id, volgnr: 1, planningCode: planning.codeVan(id), geredenCode: planning.codeVan(id) })));
       }
-      await logActivity(req, "system", "Planning overgenomen in dagafsluiting", `${datum}: ${aangepast} rijen aangepast, ${nieuw.length} toegevoegd.`);
+      await logActivity(req, "system", "Planning overgenomen in dagafsluiting", `${DAG_DMJ(datum)}: ${aangepast} rijen aangepast, ${nieuw.length} toegevoegd.`);
       res.json({ aangepast, toegevoegd: nieuw.length });
     } catch (err) { fout(res, err, "Kon de planning niet overnemen."); }
   });
@@ -342,7 +342,7 @@ export function mountLoonRoutes(app: express.Express) {
       if (!bestaand) return res.status(404).json({ error: "Deze dag is nog niet geopend." });
       if (bestaand.status !== "afgesloten") return res.status(409).json({ error: "Deze dag is niet afgesloten." });
       const dag = await heropenDag(datum, String(req.appUser?.id ?? "") || null, body.reden);
-      await logActivity(req, "system", "Dag heropend", `${datum}: ${body.reden}`);
+      await logActivity(req, "system", "Dag heropend", `${DAG_DMJ(datum)}: ${body.reden}`);
       res.json(dag);
     } catch (err) { fout(res, err, "Kon de dag niet heropenen."); }
   });

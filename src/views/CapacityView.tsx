@@ -499,7 +499,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const celTitel = (cell: MonthCell, heeftNotitie: boolean) => [
     `${KIND_LABEL[cell.kind]} · ${cell.code}`,
     cell.hiddenService ? `dienst ${cell.hiddenService} nog niet herverdeeld` : '',
-    cell.swapId ? (cell.swapManual ? `handmatig overgezet van ${cell.swapFrom || 'een collega'}` : `geruild met ${cell.swapFrom || 'een collega'}`) : '',
+    cell.swapId
+      ? cell.swapAway
+        ? `dienst ${cell.swapManual ? 'overgezet' : 'weggeruild'} naar ${cell.swapTo || 'een collega'}`
+        : (cell.swapManual ? `handmatig overgezet van ${cell.swapFrom || 'een collega'}` : `geruild met ${cell.swapFrom || 'een collega'}`)
+      : '',
     heeftNotitie ? 'notitie' : '',
   ].filter(Boolean).join(' · ') + ', klik voor details';
 
@@ -1065,10 +1069,21 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       <span className="font-medium text-slate-700">{e.meaning}</span>
                     </span>
                   ))}
-                  <span className="inline-flex items-center gap-2">
-                    <Chip mono={false} className={cn('min-w-11 justify-center', celChipClass({ kind: 'service', code: '', swapId: 'x' }))}>{codeLegend.serviceExample ?? 'dienst'}</Chip>
-                    <span className="font-medium text-slate-700">Geruild of overgezet</span>
-                  </span>
+                  {/* Alleen tonen als er die maand écht een wissel in staat:
+                      anders legt de legende twee kleuren uit die nergens
+                      voorkomen (heeftRuil werd berekend maar nooit gelezen). */}
+                  {codeLegend.heeftRuil && (
+                    <>
+                      <span className="inline-flex items-center gap-2">
+                        <Chip mono={false} className={cn('min-w-11 justify-center', celChipClass({ kind: 'service', code: '', swapId: 'x' }))}>{codeLegend.serviceExample ?? 'dienst'}</Chip>
+                        <span className="font-medium text-slate-700">Geruild of overgezet</span>
+                      </span>
+                      <span className="inline-flex items-center gap-2">
+                        <Chip mono={false} className={cn('min-w-11 justify-center', celChipClass({ kind: 'absence', code: 'vrij', swapId: 'x', swapAway: true }))}>vrij</Chip>
+                        <span className="font-medium text-slate-700">Dienst weggeruild, daardoor vrij</span>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="min-w-0">
@@ -1117,14 +1132,27 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             {selected.cell.swapId && (
               <Card tone="muted" padding="none" className="mt-4 px-3.5 py-3 space-y-2.5">
                 <p className="text-body-sm font-medium text-slate-600">
-                  {selected.cell.swapManual ? 'Handmatig overgezet' : 'Geruild'}
-                  {selected.cell.swapFrom ? <> van <span className="font-semibold text-slate-700">{selected.cell.swapFrom}</span></> : null}.
+                  {selected.cell.swapAway ? (
+                    <>
+                      Dienst {selected.cell.swapManual ? 'overgezet' : 'weggeruild'}
+                      {selected.cell.swapTo ? <> naar <span className="font-semibold text-slate-700">{selected.cell.swapTo}</span></> : null}, daardoor vrij.
+                    </>
+                  ) : (
+                    <>
+                      {selected.cell.swapManual ? 'Handmatig overgezet' : 'Geruild'}
+                      {selected.cell.swapFrom ? <> van <span className="font-semibold text-slate-700">{selected.cell.swapFrom}</span></> : null}.
+                    </>
+                  )}
                 </p>
-                {canEditNotes && (
+                {canEditNotes && (selected.cell.swapDone ? (
+                  // Afgehandelde ruil: de state-machine laat geen overgang
+                  // meer toe, dus geen knop die gegarandeerd een fout geeft.
+                  <p className="text-body-sm font-medium text-slate-500">Afgehandeld, terugdraaien kan niet meer. Zet de dienst desnoods handmatig terug via Dienstwissel.</p>
+                ) : (
                   <Button variant="secondary" size="sm" full icon={<RotateCcw size={14} />} disabled={isTerugdraaien} onClick={() => setTerugdraaien(true)}>
                     {isTerugdraaien ? 'Terugdraaien…' : 'Wissel terugdraaien'}
                   </Button>
-                )}
+                ))}
               </Card>
             )}
 
@@ -1388,7 +1416,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         onConfirm={() => void uitvoerenTerugdraai()}
         title="Wissel terugdraaien?"
         message={selected
-          ? `Dienst ${selected.cell.code} op ${formatDateLong(selected.iso)} gaat terug naar ${selected.cell.swapFrom || 'de oorspronkelijke chauffeur'}. Beide chauffeurs krijgen een melding.`
+          ? selected.cell.swapAway
+            // Vanaf de kant die de dienst afstond: de dienst komt hier terug.
+            ? `De dienst die ${selected.driverName} op ${formatDateLong(selected.iso)} wegruilde, komt terug op naam van ${selected.driverName}. Beide chauffeurs krijgen een melding.`
+            : `Dienst ${selected.cell.code} op ${formatDateLong(selected.iso)} gaat terug naar ${selected.cell.swapFrom || 'de oorspronkelijke chauffeur'}. Beide chauffeurs krijgen een melding.`
           : ''}
         confirmText="Terugdraaien"
         cancelText="Annuleren"

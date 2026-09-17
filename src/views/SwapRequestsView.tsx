@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
@@ -349,6 +349,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         rejected: 'Dienstruil geweigerd.',
         accepted: 'Geaccepteerd, de planner beoordeelt de ruil nu.',
         cancelled: 'Aanvraag ingetrokken.',
+        completed: 'Afgehandeld, de wissel staat nu onder Afgehandeld.',
       };
       void onDecide(swapId, newStatus, seenStatus ?? swaps.find((s) => s.id === swapId)?.status).then((ok) => {
         if (ok && toastFor[newStatus]) notify(toastFor[newStatus]!, 'success');
@@ -414,6 +415,22 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       confirmText: 'Annuleren',
       variant: 'danger',
       run: () => handleStatusUpdate(swapId, 'cancelled', seen),
+    });
+  };
+
+  /** Afhandelen (Jarno 17-09): een goedgekeurde wissel verhuist naar
+   *  Afgehandeld, zodat de beheerlijst alleen toont wat nog een beslissing
+   *  vraagt. De wissel zelf blijft doorgevoerd (status 'completed' telt mee in
+   *  de planning-overlay en de import-replay), maar terugdraaien kan daarna
+   *  niet meer: 'completed' is een eindstatus. Vandaar de bevestiging. */
+  const handleAfhandelen = (swapId: string) => {
+    const seen = swaps.find((s) => s.id === swapId)?.status;
+    setConfirmAction({
+      title: 'Dienstruil afhandelen',
+      message: 'De wissel blijft doorgevoerd in de planning en verhuist naar Afgehandeld. Daarna kan je hem niet meer annuleren of terugdraaien.',
+      confirmText: 'Afhandelen',
+      variant: 'warning',
+      run: () => handleStatusUpdate(swapId, 'completed', seen),
     });
   };
 
@@ -644,7 +661,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 variant="klaar"
                 illustratie={<AllesGedaan />}
                 title="Geen dienstruilen om te beoordelen"
-                message="Zodra een chauffeur een ruil aanvraagt en zijn collega akkoord gaat, verschijnt die hier."
+                message="Zodra een chauffeur een ruil aanvraagt en de collega akkoord gaat, verschijnt die hier. Afgehandelde wissels staan onderaan."
               />
             </div>
           );
@@ -731,7 +748,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                 </>
                               ))}
                               {swap.status === 'approved' && (
-                                <Button variant="danger" size="sm" onClick={() => handleCancel(swap.id)}>Annuleren</Button>
+                                <>
+                                  <Button variant="secondary" size="sm" icon={<Archive size={14} />} title="Naar Afgehandeld, de wissel blijft doorgevoerd" onClick={() => handleAfhandelen(swap.id)}>Afhandelen</Button>
+                                  <Button variant="danger" size="sm" onClick={() => handleCancel(swap.id)}>Annuleren</Button>
+                                </>
                               )}
                             </div>
                           </Td>
@@ -811,9 +831,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </div>
                         ))}
                         {swap.status === 'approved' && (
-                          <Button variant="danger" full onClick={() => handleCancel(swap.id)}>
-                            Annuleren
-                          </Button>
+                          <>
+                            <Button variant="secondary" className="flex-1" icon={<Archive size={16} />} onClick={() => handleAfhandelen(swap.id)}>
+                              Afhandelen
+                            </Button>
+                            <Button variant="danger" className="flex-1" onClick={() => handleCancel(swap.id)}>
+                              Annuleren
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -826,20 +851,25 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       })()}
 
       {/* Afgehandeld (alleen staf): afgewezen en ingetrokken wissels van
-          iedereen, met een wisknop om testwissels op te ruimen (Jarno 09-09).
-          Doorgevoerde wissels staan er ter info bij, maar zonder wisknop: die
-          zitten in de heropbouw-replay en gaan via Annuleren. Compact en
-          gecapt op 30, nieuwste eerst; de tabel hierboven blijft de plek voor
-          wat nog actie vraagt. */}
+          iedereen, met een wisknop om testwissels op te ruimen (Jarno 09-09),
+          plus de wissels die via "Afhandelen" zijn weggezet (Jarno 17-09).
+          Doorgevoerde wissels staan er zonder wisknop: die zitten in de
+          heropbouw-replay. Compact en gecapt op 30, nieuwste eerst; de tabel
+          hierboven blijft de plek voor wat nog actie vraagt. */}
       {isStaf(user.role) && (() => {
-        const afgehandeld = swaps
+        const alleAfgehandeld = swaps
           .filter((s) => s.status === 'rejected' || s.status === 'cancelled' || s.status === 'completed')
-          .sort((a, b) => String(b.decidedAt ?? b.createdAt ?? '').localeCompare(String(a.decidedAt ?? a.createdAt ?? '')))
-          .slice(0, 30);
+          .sort((a, b) => String(b.decidedAt ?? b.createdAt ?? '').localeCompare(String(a.decidedAt ?? a.createdAt ?? '')));
+        const afgehandeld = alleAfgehandeld.slice(0, 30);
         if (afgehandeld.length === 0) return null;
         return (
           <div className="space-y-3">
-            <MicroLabel className="text-slate-500 ml-1">Afgehandeld</MicroLabel>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <MicroLabel className="text-slate-500 ml-1">Afgehandeld</MicroLabel>
+              {alleAfgehandeld.length > afgehandeld.length && (
+                <span className="text-xs font-medium text-slate-500">nieuwste {afgehandeld.length} van {alleAfgehandeld.length}</span>
+              )}
+            </div>
             <Card padding="none" className="divide-y divide-hairline-subtle">
               {afgehandeld.map((swap) => {
                 const info = shiftInfoFor(swap);
@@ -847,7 +877,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 return (
                   <div key={swap.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
                     <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="text-sm font-semibold text-slate-800 truncate">{requester?.name ?? 'Onbekend'}</span>
+                      <span className="text-sm font-semibold text-slate-800 truncate">
+                        {requester?.name ?? 'Onbekend'}
+                        {swap.targetDriverId && <span className="font-medium text-slate-500"> → {users.find((u) => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
+                      </span>
                       <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
                         Dienst {info.line}{info.date ? ` · ${formatDateHuman(info.date)}` : ''}
                       </span>
@@ -1239,14 +1272,25 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               </>
             ))}
             {reviewSwap.status === 'approved' && (
-              <Button
-                variant="danger"
-                size="lg"
-                className="flex-1"
-                onClick={() => { handleCancel(reviewSwap.id); setReviewSwap(null); }}
-              >
-                Annuleren
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="flex-1"
+                  icon={<Archive size={16} />}
+                  onClick={() => { handleAfhandelen(reviewSwap.id); setReviewSwap(null); }}
+                >
+                  Afhandelen
+                </Button>
+                <Button
+                  variant="danger"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => { handleCancel(reviewSwap.id); setReviewSwap(null); }}
+                >
+                  Annuleren
+                </Button>
+              </>
             )}
           </div>
         ) : undefined}
@@ -1262,7 +1306,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 <Badge tone="oker" className="tabular-nums">Dienst {info.line}</Badge>
 
                 {info.date && (
-                  <Badge tone="slate" className="tabular-nums">{info.date}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</Badge>
+                  <Badge tone="slate" className="tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</Badge>
                 )}
                 {isTakeoverSwap(reviewSwap) && <TakeoverBadge compact />}
               </div>

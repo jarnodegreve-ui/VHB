@@ -4,6 +4,7 @@ import { isMissingTableError } from "../deviceGate.js";
 import { getUsersData, logActivity } from "../storage.js";
 import { sendPushToUsers } from "../push.js";
 import { isStafRol, type AuthenticatedRequest, type Role } from "../types.js";
+import { DAG_DMJ } from "../helpers.js";
 import {
   defectMeldingBodySchema, defectPatchSchema, vehicleBodySchema, vehicleExpiryBodySchema, werkprestatieBodySchema,
   VOERTUIG_VERVAL_LABEL, WERKTYPE_LABEL, voertuigNaam, type Defect, type Werkprestatie,
@@ -136,7 +137,7 @@ export function mountTechniekRoutes(app: express.Express) {
       } else {
         await saveVehicleExpiry({ vehicleId: v.id, soort: body.soort, validUntil: body.validUntil, opmerking: body.opmerking ?? null, updatedBy: String(req.appUser?.id ?? "") || null });
       }
-      await logActivity(req, "system", body.validUntil ? "Vervaldatum voertuig bijgewerkt" : "Vervaldatum voertuig verwijderd", `${voertuigNaam(v)}: ${label}${body.validUntil ? ` geldig tot ${body.validUntil}` : ", datum verwijderd"}.`);
+      await logActivity(req, "system", body.validUntil ? "Vervaldatum voertuig bijgewerkt" : "Vervaldatum voertuig verwijderd", `${voertuigNaam(v)}: ${label}${body.validUntil ? ` geldig tot ${DAG_DMJ(body.validUntil)}` : ", datum verwijderd"}.`);
       res.json({ success: true });
     } catch (err) {
       fout(res, err, "Kon de vervaldatum niet opslaan.");
@@ -327,7 +328,7 @@ export function mountTechniekRoutes(app: express.Express) {
       const mecanicienId = isStafRol(req.appUser!.role) && body.mecanicienId ? body.mecanicienId : String(req.appUser!.id);
       const w = await createWerkprestatie({ ...body, mecanicienId });
       const users = await getUsersData();
-      await logActivity(req, "system", "Werkprestatie geregistreerd", `${w.datum}: ${w.vehicleId ? voertuigNaam({ busnr: w.busnr ?? "", kortNr: w.kortNr }) : "garage"}, ${w.werkcode}, ${w.werkuren} u.`);
+      await logActivity(req, "system", "Werkprestatie geregistreerd", `${DAG_DMJ(w.datum)}: ${w.vehicleId ? voertuigNaam({ busnr: w.busnr ?? "", kortNr: w.kortNr }) : "garage"}, ${w.werkcode}, ${w.werkuren} u.`);
       res.status(201).json(prestatieMetNaam(users)(w));
     } catch (err) {
       if (isForeignKeyError(err)) return res.status(400).json({ error: "Ongeldige invoer", details: "Kies een bestaande bus.", veldfouten: { vehicleId: "Kies een bestaande bus" } });
@@ -359,7 +360,7 @@ export function mountTechniekRoutes(app: express.Express) {
       if (!bestaand) return res.status(404).json({ error: "Werkprestatie niet gevonden." });
       if (!eigenaarOfStaf(req, bestaand)) return res.status(403).json({ error: "Je kunt alleen je eigen werkprestaties verwijderen." });
       await deleteWerkprestatie(bestaand.id);
-      await logActivity(req, "system", "Werkprestatie verwijderd", `${bestaand.datum}: ${bestaand.werkcode}, ${bestaand.werkuren} u.`);
+      await logActivity(req, "system", "Werkprestatie verwijderd", `${DAG_DMJ(bestaand.datum)}: ${bestaand.werkcode}, ${bestaand.werkuren} u.`);
       res.json({ success: true });
     } catch (err) {
       fout(res, err, "Kon de werkprestatie niet verwijderen.");

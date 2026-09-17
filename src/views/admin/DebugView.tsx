@@ -10,7 +10,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { ActieMenu } from '../../components/ActieMenu';
 import { BUILD_INFO, RELEASE, getServiceWorkerVersion } from '../../lib/appVersion';
 import { isoDate } from '../../lib/availability';
-import { formatDateTimeHuman, formatRelatief } from '../../lib/format';
+import { formatDateTimeHuman, formatDatumDMJ, formatRelatief } from '../../lib/format';
 import { OcpiCard } from './OcpiCard';
 
 const COLLECTION_LABELS: Record<string, string> = {
@@ -475,7 +475,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       driverId: currentUser.id,
     };
     await onSaveShifts([...shifts, newShift]);
-    notify(`Fictieve dienst ${sample.serviceNumber} (${sample.startTime}-${sample.endTime}) toegevoegd op ${dateStr}.`, 'success');
+    notify(`Fictieve dienst ${sample.serviceNumber} (${sample.startTime}-${sample.endTime}) toegevoegd op ${formatDatumDMJ(dateStr)}.`, 'success');
   };
 
   const clearTestShifts = async () => {

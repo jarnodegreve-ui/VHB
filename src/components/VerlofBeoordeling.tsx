@@ -7,7 +7,7 @@ import { cn } from '../lib/ui';
 import { apiJson } from '../lib/api';
 import { isVerlofdag, verlofBalans, verlofDagen } from '../lib/leaveBalance';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
-import { formatDateHuman, formatLeaveType, formatShortDay } from '../lib/format';
+import { formatDateHuman, formatLeaveType, formatPeriodeDMJ, formatShortDay } from '../lib/format';
 import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
 import { DetailPaneel } from './DetailPaneel';
 import { Avatar } from './Avatar';
@@ -137,7 +137,7 @@ export function VerlofBeoordelingInhoud({ aanvraag, users, shifts, leaveRequests
       <Card tone="muted" padding="sm">
         <MicroLabel className="text-slate-500">Periode</MicroLabel>
         <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
-          {reviewLeave.startDate}{reviewLeave.startDate !== reviewLeave.endDate ? ` → ${reviewLeave.endDate}` : ''}
+          {formatPeriodeDMJ(reviewLeave.startDate, reviewLeave.endDate)}
           <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'verlofdag' : 'verlofdagen'})</span>
         </p>
         {bevatVrijeDag(reviewLeave.startDate, reviewLeave.endDate) && (
@@ -209,7 +209,7 @@ export function VerlofBeoordelingInhoud({ aanvraag, users, shifts, leaveRequests
           <div className="mt-2 space-y-1.5">
             {conflictShifts.slice(0, 5).map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs">
-                <span className="font-semibold text-slate-800 tabular-nums">{s.date}</span>
+                <span className="font-semibold text-slate-800 tabular-nums">{formatShortDay(s.date)}</span>
                 <span className="font-medium text-slate-600 tabular-nums">Dienst {s.line} · {s.startTime}–{s.endTime}</span>
               </div>
             ))}
