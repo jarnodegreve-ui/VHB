@@ -2,10 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { celBadgeTone, celChipClass, celTextClass } from './planningKind';
 
 /**
- * Celkleuren van het maandbeeld. De twee rode gevallen naast elkaar: ziek
- * (de code) en een weggeruilde dienst (Jarno 17-09, "vrij" moet rood zodat
- * je ziet dat die chauffeur een dienst gewisseld heeft). De ontvangende kant
- * van dezelfde wissel blijft geel.
+ * Celkleuren van het maandbeeld. Sinds 17-09 spreekt het bord de taal van
+ * Jarno's Excel: rood = dienstruil (beide kanten), geel/oranje = ziekte.
  */
 describe('celkleuren', () => {
   const dienst = { kind: 'service' as const, code: '2101' };
@@ -15,15 +13,15 @@ describe('celkleuren', () => {
     expect(celBadgeTone(dienst)).toBe('oker');
   });
 
-  it('een geruilde of overgezette dienst is geel', () => {
-    expect(celChipClass({ ...dienst, swapId: 'sw1' })).toContain('amber');
-    expect(celBadgeTone({ ...dienst, swapId: 'sw1' })).toBe('amber');
+  it('een geruilde of overgezette dienst is rood', () => {
+    expect(celChipClass({ ...dienst, swapId: 'sw1' })).toContain('red');
+    expect(celTextClass({ ...dienst, swapId: 'sw1' })).toContain('red');
+    expect(celBadgeTone({ ...dienst, swapId: 'sw1' })).toBe('red');
   });
 
-  it('de kant die zijn dienst wegruilde staat rood vrij', () => {
-    const weg = { kind: 'absence' as const, code: 'vrij', swapId: 'sw1', swapAway: true };
-    expect(celChipClass(weg)).toContain('red');
-    expect(celTextClass(weg)).toContain('red');
+  it('de kant die zijn dienst wegruilde staat even rood vrij: één kleur per wissel', () => {
+    const weg = { kind: 'absence' as const, code: 'vrij', swapId: 'sw1' };
+    expect(celChipClass(weg)).toBe(celChipClass({ ...dienst, swapId: 'sw1' }));
     expect(celBadgeTone(weg)).toBe('red');
   });
 
@@ -33,7 +31,13 @@ describe('celkleuren', () => {
     expect(celBadgeTone(vrij)).toBe('slate');
   });
 
-  it('ziek blijft rood, ook zonder wissel', () => {
-    expect(celChipClass({ kind: 'absence', code: 'ziek' })).toContain('red');
+  it('ziek is geel/oranje, ook al staat de code in een andere categorie', () => {
+    expect(celChipClass({ kind: 'absence', code: 'ziek' })).toContain('amber');
+    expect(celTextClass({ kind: 'leave', code: 'Ziek' })).toContain('amber');
+    expect(celBadgeTone({ kind: 'absence', code: 'ziek' })).toBe('amber');
+  });
+
+  it('een ziekmelding die óók uit een wissel komt blijft rood: de wissel wint', () => {
+    expect(celChipClass({ kind: 'absence', code: 'ziek', swapId: 'sw1' })).toContain('red');
   });
 });

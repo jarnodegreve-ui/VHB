@@ -682,18 +682,21 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
-                      // De Lijn-typedag: feestdag (F, oker) of schoolvakantie
-                      // (V) subtiel in de dagkop — de regeling die rijdt.
+                      // De Lijn-typedag, alleen nog de feestdag (F, oker):
+                      // die bepaalt welke dienstregeling rijdt. De V van
+                      // schoolvakantie is eruit op vraag van Jarno (17-09),
+                      // die zegt niets over wie er rijdt.
                       const td = typedagLabel(iso);
-                      // Dag uit de ándere maand van het venster: leesbare
-                      // maandmarkering ("aug") i.p.v. de losse typedag-letter,
-                      // die onder "31" als een vreemd teken las.
-                      const andereMaand = monthOf(iso) !== monthParam;
+                      const feestdag = td?.kort === 'F';
+                      // Maandafkorting onder élke dag (Jarno 17-09): stond
+                      // eerst alleen bij dagen uit de ándere maand van het
+                      // 2-wekenvenster, waardoor de ene week een maand toonde
+                      // en de andere niet.
                       const maandKort = (MONTH_NAMES[Number(iso.slice(5, 7)) - 1] ?? '').slice(0, 3).toLowerCase();
                       return (
                         <th
                           key={iso}
-                          title={td?.titel}
+                          title={feestdag ? td?.titel : undefined}
                           className={cn(
                             'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-hairline-strong',
                             h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
@@ -704,11 +707,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
                           {/* 2xs: matrixcel van 3 px-hoog label onder de dag, dichte planningsmatrix */}
                           <div className="mt-0.5 h-3 text-2xs font-bold leading-3">
-                            {andereMaand ? (
-                              <span className={microLabelClass}>{maandKort}</span>
-                            ) : td && (
-                              <span className={td.kort === 'F' ? 'text-oker-700' : 'text-slate-500'}>{td.kort}</span>
-                            )}
+                            <span className={microLabelClass}>{maandKort}</span>
+                            {feestdag && <span className="ml-1 text-oker-700">F</span>}
                           </div>
                         </th>
                       );
@@ -916,10 +916,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       <span className={cn('relative z-10 text-sm font-bold tabular-nums leading-tight transition-colors', !gekozen && vandaag && 'text-oker-700')}>
                         {d.getDate()}
                       </span>
-                      {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
+                      {/* Feestdag (F) — zelfde signaal als de desktop-dagkop.
+                          De V van schoolvakantie is eruit (Jarno 17-09). De
+                          maand staat hier niet onder elke dag: de strip loopt
+                          binnen één maand en die staat in de kop erboven. */}
                       {/* 2xs: matrixcel, typedagletter in een vaste 3 px-hoge strook */}
-                      <span className={cn('relative z-10 h-3 text-2xs font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-500')}>
-                        {td?.kort ?? ''}
+                      <span className={cn('relative z-10 h-3 text-2xs font-bold leading-3 transition-colors', !gekozen ? 'text-oker-700' : 'text-slate-950/60')}>
+                        {td?.kort === 'F' ? 'F' : ''}
                       </span>
                     </button>
                   );
@@ -1076,11 +1079,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     <>
                       <span className="inline-flex items-center gap-2">
                         <Chip mono={false} className={cn('min-w-11 justify-center', celChipClass({ kind: 'service', code: '', swapId: 'x' }))}>{codeLegend.serviceExample ?? 'dienst'}</Chip>
-                        <span className="font-medium text-slate-700">Geruild of overgezet</span>
+                        <span className="font-medium text-slate-700">Geruild of overgezet, gekregen</span>
                       </span>
                       <span className="inline-flex items-center gap-2">
-                        <Chip mono={false} className={cn('min-w-11 justify-center', celChipClass({ kind: 'absence', code: 'vrij', swapId: 'x', swapAway: true }))}>vrij</Chip>
-                        <span className="font-medium text-slate-700">Dienst weggeruild, daardoor vrij</span>
+                        <Chip mono={false} className={cn('min-w-11 justify-center', celChipClass({ kind: 'absence', code: 'vrij', swapId: 'x' }))}>vrij</Chip>
+                        <span className="font-medium text-slate-700">Geruild of overgezet, weggegeven</span>
                       </span>
                     </>
                   )}
