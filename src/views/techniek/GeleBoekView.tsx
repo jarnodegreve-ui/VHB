@@ -65,7 +65,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
 
   const bussen = useMemo(() => {
     const m = new Map<string, string>();
-    for (const r of rijen) m.set(r.vehicleId, voertuigNaam(r));
+    for (const r of rijen) m.set(r.vehicleId, r.busnr);
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'nl', { numeric: true }));
   }, [rijen]);
 
@@ -85,7 +85,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
     .filter((r) => !soortFilter || r.werktype === soortFilter)
     .filter((r) => !zoekTerm || `${voertuigNaam(r)} ${r.busnr} ${r.omschrijving} ${r.gemeldDoorNaam ?? ''} ${r.uitgevoerdWerk ?? ''}`.toLowerCase().includes(zoekTerm));
   const gesorteerd = sort.sorteer(gefilterd, (r, k) => {
-    if (k === 'bus') return r.kortNr ?? r.busnr;
+    if (k === 'bus') return r.busnr;
     if (k === 'soort') return r.werktype;
     if (k === 'melder') return r.gemeldDoorNaam ?? '';
     if (k === 'status') return r.status;
@@ -224,8 +224,8 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                     {gesorteerd.map((d) => (
                       <tr key={d.id} className="border-b border-hairline-subtle last:border-b-0 align-top transition-colors hover:bg-surface-soft-hover">
                         <Td>
-                          <p className="font-semibold text-slate-800">{voertuigNaam(d)}</p>
-                          {d.kortNr !== null && d.kortNr !== undefined && <p className="text-xs font-medium text-slate-500">{d.busnr}</p>}
+                          {/* Volledig busnummer in de lijst, niet "Bus 38" (Jarno 17-09). */}
+                          <p className="font-semibold text-slate-800">{d.busnr}</p>
                         </Td>
                         <Td>{werktypeBadge(d.werktype)}</Td>
                         <Td className="max-w-md">
@@ -252,7 +252,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                   <li key={d.id} className="flex items-start gap-3 px-5 py-3.5">
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <p className="text-sm font-semibold text-slate-800">{voertuigNaam(d)}</p>
+                        <p className="text-sm font-semibold text-slate-800">{d.busnr}</p>
                         {werktypeBadge(d.werktype)}
                         {statusBadge(d)}
                       </div>
