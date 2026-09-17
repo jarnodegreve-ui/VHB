@@ -42,7 +42,12 @@ const DEELBUDGET_KB = {
 // zod-vendor (24 kB) mee; dat zit in beide sets.
 // Golf 4 (15-09): staf 100 → 112 kB door VerlofBeoordeling, verlofkalender-paneel en
 // planningsoverzicht-acties; budget mee omhoog met dezelfde ±10 % marge.
-const WARMUP_BUDGET_KB = { chauffeur: 83, staf: 124 };
+// 17-09: chauffeur 83 → 86. De set mat op main 82,81 kB lokaal en nét boven 83
+// op de CI-runner, dus het budget was geen marge meer maar een struikeldraad:
+// 0,12 kB feature-code (knop Afhandelen in Dienstruil) liet hem omvallen
+// terwijl er lokaal nog ruimte leek. Nieuwe waarde = de gemeten 82,9 + ±3 kB,
+// gelijk in geest aan de ±10 % marge van de andere deelbudgetten.
+const WARMUP_BUDGET_KB = { chauffeur: 86, staf: 124 };
 
 const dir = 'dist/assets';
 if (!fs.existsSync(dir)) {
