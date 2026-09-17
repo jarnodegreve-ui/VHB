@@ -48,14 +48,14 @@ export const VOERTUIG_STATUS_LABEL: Record<VoertuigStatus, string> = {
   uit_dienst: 'Uit dienst',
 };
 
-/** Soort melding in het gele boek (tblWerktype in Access). */
-export const WERKTYPES = ['T', 'C', 'I', 'L'] as const;
+/** Soort melding in het gele boek (tblWerktype in Access); volgorde en namen van Jarno 17-09. */
+export const WERKTYPES = ['T', 'I', 'C', 'L'] as const;
 export type Werktype = (typeof WERKTYPES)[number];
 export const WERKTYPE_LABEL: Record<Werktype, string> = {
-  T: 'Technisch',
-  C: 'Carrosserie',
+  T: 'Techniek',
   I: 'Interieur',
-  L: 'Voor De Lijn',
+  C: 'Carrosserie',
+  L: 'Lijn',
 };
 
 export const DEFECT_STATUSSEN = ['open', 'uitgevoerd', 'geannuleerd'] as const;

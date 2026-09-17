@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { AlertTriangle, Bus, CheckCircle2, Clock, Pencil, Phone, Plus, Printer, RotateCcw, Wrench, XCircle } from 'lucide-react';
+import { Armchair, Bus, Car, CheckCircle2, Pencil, Phone, Plus, Printer, RotateCcw, Route, Wrench, XCircle } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
 import { DEFECT_STATUS_LABEL, WERKTYPES, WERKTYPE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werktype } from '../../../shared/techniek';
@@ -28,6 +28,7 @@ type Filter = 'open' | 'recent' | 'alles';
 const RECENT_DAGEN = 62;
 
 const WERKTYPE_TONE: Record<Werktype, 'red' | 'amber' | 'blue' | 'oker'> = { T: 'red', C: 'amber', I: 'blue', L: 'oker' };
+const WERKTYPE_ICOON: Record<Werktype, typeof Wrench> = { T: Wrench, I: Armchair, C: Car, L: Route };
 
 /**
  * De gele boek (fase A Access-migratie, 13-09): alle gemelde defecten per
@@ -47,6 +48,8 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
   const [alleenOud, setAlleenOud] = useState(false);
   const [zoek, setZoek] = useState('');
   const [busFilter, setBusFilter] = useState('');
+  // Vervolg op de categorietegels (Jarno 17-09): alleen die soort tonen.
+  const [soortFilter, setSoortFilter] = useState<Werktype | null>(null);
   const [melden, setMelden] = useState(false);
   const [afhandelen, setAfhandelen] = useState<Defect | null>(null);
   const [bewerken, setBewerken] = useState<Defect | null>(null);
@@ -62,18 +65,16 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
 
   const bussen = useMemo(() => {
     const m = new Map<string, string>();
-    for (const r of rijen) m.set(r.vehicleId, voertuigNaam(r));
+    for (const r of rijen) m.set(r.vehicleId, r.busnr);
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'nl', { numeric: true }));
   }, [rijen]);
 
   const tellers = useMemo(() => {
     const open = rijen.filter((r) => r.status === 'open');
-    return {
-      open: open.length,
-      oud: open.filter((r) => ouderdom(r) > 14).length,
-      lijn: open.filter((r) => r.werktype === 'L').length,
-      technisch: open.filter((r) => r.werktype === 'T').length,
-    };
+    return Object.fromEntries(WERKTYPES.map((t) => {
+      const vanSoort = open.filter((r) => r.werktype === t);
+      return [t, { open: vanSoort.length, oud: vanSoort.filter((r) => ouderdom(r) > 14).length }];
+    })) as Record<Werktype, { open: number; oud: number }>;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rijen, vandaag]);
 
@@ -81,9 +82,10 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
   const gefilterd = rijen
     .filter((r) => !alleenOud || (r.status === 'open' && ouderdom(r) > 14))
     .filter((r) => !busFilter || r.vehicleId === busFilter)
+    .filter((r) => !soortFilter || r.werktype === soortFilter)
     .filter((r) => !zoekTerm || `${voertuigNaam(r)} ${r.busnr} ${r.omschrijving} ${r.gemeldDoorNaam ?? ''} ${r.uitgevoerdWerk ?? ''}`.toLowerCase().includes(zoekTerm));
   const gesorteerd = sort.sorteer(gefilterd, (r, k) => {
-    if (k === 'bus') return r.kortNr ?? r.busnr;
+    if (k === 'bus') return r.busnr;
     if (k === 'soort') return r.werktype;
     if (k === 'melder') return r.gemeldDoorNaam ?? '';
     if (k === 'status') return r.status;
@@ -145,10 +147,23 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       {zl.fout && rijen.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <OpsStat icon={<Wrench size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub={tellers.open === 1 ? 'melding wacht' : 'meldingen wachten'} onClick={() => { setFilter('open'); setBusFilter(''); setAlleenOud(false); }} actief={filter === 'open' && !alleenOud} />
-        <OpsStat icon={<Clock size={16} />} tone={tellers.oud > 0 ? 'red' : 'slate'} label="Ouder dan 14 dagen" value={tellers.oud} sub={tellers.oud > 0 ? 'blijft liggen, bekijk ze' : 'niets blijft liggen'} onClick={() => { setFilter('open'); setAlleenOud((v) => !v); }} actief={alleenOud} />
-        <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.technisch > 0 ? 'amber' : 'slate'} label="Technisch" value={tellers.technisch} sub="open, voor de garage" />
-        <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.lijn > 0 ? 'oker' : 'slate'} label="Voor De Lijn" value={tellers.lijn} sub="open, planning meldt door" />
+        {/* Eén tegel per categorie met het aantal open meldingen (Jarno 17-09); klikken filtert de lijst op die soort. */}
+        {WERKTYPES.map((t) => {
+          const { open, oud } = tellers[t];
+          const Icoon = WERKTYPE_ICOON[t];
+          return (
+            <OpsStat
+              key={t}
+              icon={<Icoon size={16} />}
+              tone={open > 0 ? WERKTYPE_TONE[t] : 'slate'}
+              label={WERKTYPE_LABEL[t]}
+              value={open}
+              sub={open === 0 ? 'niets open' : oud > 0 ? `open, ${oud} ouder dan 14 dagen` : 'open'}
+              onClick={() => setSoortFilter((v) => (v === t ? null : t))}
+              actief={soortFilter === t}
+            />
+          );
+        })}
       </div>
 
       {zl.fout && rijen.length === 0 ? (
@@ -184,8 +199,8 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
             <div className="p-6">
               <EmptyState
                 variant="klaar"
-                illustratie={filter === 'open' && !alleenOud && !zoekTerm && !busFilter ? <AllesGedaan /> : undefined}
-                title={zoekTerm ? `Geen meldingen voor “${zoek.trim()}”` : alleenOud ? 'Niets blijft liggen' : filter === 'open' ? 'Niets open in de gele boek' : 'Geen meldingen voor dit filter'}
+                illustratie={filter === 'open' && !alleenOud && !zoekTerm && !busFilter && !soortFilter ? <AllesGedaan /> : undefined}
+                title={zoekTerm ? `Geen meldingen voor “${zoek.trim()}”` : alleenOud ? 'Niets blijft liggen' : soortFilter ? `Niets in ${WERKTYPE_LABEL[soortFilter].toLowerCase()}` : filter === 'open' ? 'Niets open in de gele boek' : 'Geen meldingen voor dit filter'}
                 message={alleenOud && !zoekTerm ? 'Geen open melding is ouder dan 14 dagen.' : filter === 'open' && !zoekTerm ? 'Alle gemelde defecten zijn afgehandeld.' : 'Pas de zoekterm of het filter aan.'}
                 action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => setMelden(true)}>Melding toevoegen</Button>}
               />
@@ -209,8 +224,8 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                     {gesorteerd.map((d) => (
                       <tr key={d.id} className="border-b border-hairline-subtle last:border-b-0 align-top transition-colors hover:bg-surface-soft-hover">
                         <Td>
-                          <p className="font-semibold text-slate-800">{voertuigNaam(d)}</p>
-                          {d.kortNr !== null && d.kortNr !== undefined && <p className="text-xs font-medium text-slate-500">{d.busnr}</p>}
+                          {/* Volledig busnummer in de lijst, niet "Bus 38" (Jarno 17-09). */}
+                          <p className="font-semibold text-slate-800">{d.busnr}</p>
                         </Td>
                         <Td>{werktypeBadge(d.werktype)}</Td>
                         <Td className="max-w-md">
@@ -237,7 +252,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                   <li key={d.id} className="flex items-start gap-3 px-5 py-3.5">
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <p className="text-sm font-semibold text-slate-800">{voertuigNaam(d)}</p>
+                        <p className="text-sm font-semibold text-slate-800">{d.busnr}</p>
                         {werktypeBadge(d.werktype)}
                         {statusBadge(d)}
                       </div>

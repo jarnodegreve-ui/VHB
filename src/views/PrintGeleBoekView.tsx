@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { DEFECT_STATUS_LABEL, WERKTYPE_LABEL } from '../../shared/techniek';
-import { laadDefecten, urenTekst, type Defect } from '../lib/techniek';
-import { formatDateHuman } from '../lib/format';
+import { WERKTYPES, WERKTYPE_LABEL } from '../../shared/techniek';
+import { laadDefecten, type Defect } from '../lib/techniek';
 import { Button } from '../components/primitives';
 
 /**
@@ -9,8 +8,32 @@ import { Button } from '../components/primitives';
  * gele boek altijd al op papier bij, dat moet kunnen blijven. Zelfde opzet
  * als de andere printschermen (nieuw tabblad via ?print-gele-boek=open|alles,
  * automatische window.print()), maar zelf-ladend: de defecten zitten niet in
- * de collecties van de schil. Chronologisch oplopend, zoals een logboek.
+ * de collecties van de schil.
+ *
+ * Opmaak volgt het Access-rapport "openstaande aangevraagde werken" (Jarno
+ * 17-09): A4 staand, gegroepeerd per werktype, per bus oplopend, met de duur
+ * in dagen sinds de melding.
  */
+
+const MAANDEN = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+/** '24-apr-26', zoals in het Access-rapport. */
+const kortDatum = (iso: string | null | undefined): string => {
+  if (!iso) return '';
+  const [j, m, d] = iso.slice(0, 10).split('-');
+  return `${d}-${MAANDEN[Number(m) - 1] ?? m}-${j.slice(2)}`;
+};
+
+const dagNr = (iso: string) => Math.floor(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86_400_000);
+
+/** Dagen van melding tot uitvoering (of vandaag), de meldingsdag meegeteld zoals in Access. */
+const duurDagen = (d: Defect, vandaag: string): number | null => {
+  if (d.status === 'geannuleerd') return null;
+  return Math.max(1, dagNr(d.uitgevoerdOp ?? vandaag) - dagNr(d.gemeldOp) + 1);
+};
+
+const busSleutel = (d: Defect) => d.kortNr ?? (Number.parseInt(d.busnr, 10) || Number.MAX_SAFE_INTEGER);
+
 export function PrintGeleBoekView({ filter }: { filter: 'open' | 'alles' }) {
   const [rijen, setRijen] = useState<Defect[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
@@ -18,7 +41,10 @@ export function PrintGeleBoekView({ filter }: { filter: 'open' | 'alles' }) {
   useEffect(() => {
     let actief = true;
     laadDefecten({ status: filter === 'open' ? 'open' : 'alles', limit: 5000 })
-      .then((d) => { if (actief) setRijen([...d].sort((a, b) => a.gemeldOp.localeCompare(b.gemeldOp))); })
+      .then((d) => {
+        if (!actief) return;
+        setRijen([...d].sort((a, b) => busSleutel(a) - busSleutel(b) || a.busnr.localeCompare(b.busnr) || a.gemeldOp.localeCompare(b.gemeldOp)));
+      })
       .catch((e: unknown) => { if (actief) setFout(e instanceof Error ? e.message : 'Kon de gele boek niet laden.'); });
     return () => { actief = false; };
   }, [filter]);
@@ -40,89 +66,101 @@ export function PrintGeleBoekView({ filter }: { filter: 'open' | 'alles' }) {
     return <div className="min-h-screen flex items-center justify-center bg-surface-white text-slate-500 p-8">Gele boek wordt geladen…</div>;
   }
 
-  const open = rijen.filter((r) => r.status === 'open').length;
-  const nu = new Date();
+  const vandaagIso = new Date().toLocaleDateString('sv-SE');
+  const vandaagTekst = new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const titel = filter === 'open' ? 'Openstaande aangevraagde werken' : 'Aangevraagde werken';
+  const groepen = WERKTYPES.map((t) => ({ type: t, rijen: rijen.filter((r) => r.werktype === t) })).filter((g) => g.rijen.length > 0);
+
+  const th = 'pb-1 pr-2 text-left align-bottom text-[11px] font-bold text-black';
 
   return (
-    <div className="min-h-screen bg-surface-white text-slate-900 print:bg-white">
+    <div className="min-h-screen bg-surface-white text-black print:bg-white">
       <style>{`
         @media print {
-          @page { size: A4 landscape; margin: 12mm 12mm 14mm; }
+          @page {
+            size: A4 portrait;
+            margin: 14mm 14mm 18mm;
+            @bottom-left { content: "${vandaagTekst}"; font: 8pt Arial, sans-serif; }
+            @bottom-right { content: "Pagina " counter(page) " van " counter(pages); font: 8pt Arial, sans-serif; }
+          }
           body { background: white; }
           .no-print { display: none !important; }
+          tbody { break-inside: auto; }
           tr { break-inside: avoid; page-break-inside: avoid; }
           thead { display: table-header-group; }
+          .groepkop { break-after: avoid; page-break-after: avoid; }
         }
       `}</style>
 
-      <div className="mx-auto max-w-6xl p-8 md:p-10">
+      <div className="mx-auto max-w-[210mm] p-8 print:p-0" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
         <div className="no-print mb-4 flex justify-end">
           <Button variant="primary" onClick={() => window.print()}>Print / Opslaan als PDF</Button>
         </div>
 
-        <header className="mb-6 border-b-2 border-slate-900 pb-4">
-          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">VHB · Maldegem · Gele boek</p>
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">{filter === 'open' ? 'Open meldingen' : 'Alle meldingen'}</h1>
-              <p className="mt-1 text-sm font-medium text-slate-500">Stand van {formatDateHuman(nu.toISOString().slice(0, 10))}, {nu.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}</p>
-            </div>
-            <div className="flex items-stretch divide-x divide-hairline">
-              <div className="pr-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-500">Meldingen</p>
-                <p className="mt-1 text-xl font-black leading-none text-slate-900">{rijen.length}</p>
-              </div>
-              <div className="pl-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-oker-700">Open</p>
-                <p className="mt-1 text-xl font-black leading-none text-oker-700">{open}</p>
-              </div>
-            </div>
-          </div>
+        <header className="border-y-[3px] border-black py-2">
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight">{titel}</h1>
         </header>
 
-        {rijen.length === 0 ? (
-          <p className="py-16 text-center italic text-slate-400">Geen meldingen.</p>
+        {groepen.length === 0 ? (
+          <p className="py-16 text-center italic text-slate-500">Geen meldingen.</p>
         ) : (
-          <table className="w-full border-collapse text-[11px] leading-snug">
+          <table className="mt-5 w-full border-collapse text-[10px] leading-snug">
+            <colgroup>
+              <col className="w-[7%]" />
+              <col className="w-[11%]" />
+              <col className="w-[12%]" />
+              <col />
+              <col className="w-[6%]" />
+              <col className="w-[11%]" />
+              <col className="w-[6%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b-2 border-slate-300 text-left">
-                <th className="py-1.5 pr-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Gemeld</th>
-                <th className="py-1.5 pr-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Bus</th>
-                <th className="py-1.5 pr-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Soort</th>
-                <th className="py-1.5 pr-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Melding</th>
-                <th className="py-1.5 pr-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Melder</th>
-                <th className="py-1.5 pr-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Status</th>
-                <th className="py-1.5 pr-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Uitgevoerd</th>
-                <th className="py-1.5 pr-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Werk</th>
-                <th className="py-1.5 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">Uren</th>
+              <tr className="border-b-2 border-black">
+                <th className={`${th} text-right`}>bus</th>
+                <th className={`${th} text-center`}>datum</th>
+                <th className={th}>naam</th>
+                <th className={th}>aangevraagd werk</th>
+                <th className={`${th} text-center`}>type</th>
+                <th className={`${th} text-center`}>{filter === 'open' ? 'datum' : 'uitgevoerd'}</th>
+                <th className={`${th} pr-0 text-right`}>duur</th>
               </tr>
             </thead>
-            <tbody>
-              {rijen.map((d) => (
-                <tr key={d.id} className="border-b border-slate-100 align-top">
-                  <td className="whitespace-nowrap py-1.5 pr-2 font-semibold">{formatDateHuman(d.gemeldOp.slice(0, 10))}</td>
-                  <td className="whitespace-nowrap py-1.5 pr-2 font-bold">{d.busnr}</td>
-                  <td className="whitespace-nowrap py-1.5 pr-2">{WERKTYPE_LABEL[d.werktype]}</td>
-                  <td className="py-1.5 pr-2">
-                    {d.omschrijving}
-                    {d.opmerking && <span className="block text-[10px] text-slate-500">{d.opmerking}</span>}
+            {groepen.map((g) => (
+              <tbody key={g.type}>
+                <tr className="groepkop">
+                  <td colSpan={7} className="pt-3">
+                    <p className="border-b-[3px] border-double border-black pb-1 text-[13px] font-bold">
+                      werktype <span className="ml-2">{WERKTYPE_LABEL[g.type].toLowerCase()}</span>
+                    </p>
                   </td>
-                  <td className="whitespace-nowrap py-1.5 pr-2">{d.gemeldDoorNaam ?? '—'}</td>
-                  <td className="whitespace-nowrap py-1.5 pr-2">{DEFECT_STATUS_LABEL[d.status]}</td>
-                  <td className="whitespace-nowrap py-1.5 pr-2">
-                    {d.uitgevoerdOp ? formatDateHuman(d.uitgevoerdOp) : '—'}
-                    {d.uitgevoerdDoorNaam && <span className="block text-[10px] text-slate-500">{d.uitgevoerdDoorNaam}</span>}
-                  </td>
-                  <td className="py-1.5 pr-2">{d.uitgevoerdWerk ?? '—'}</td>
-                  <td className="whitespace-nowrap py-1.5 text-right">{d.manuren !== null && d.manuren !== undefined ? urenTekst(d.manuren) : '—'}</td>
                 </tr>
-              ))}
-            </tbody>
+                {g.rijen.map((d, i) => {
+                  const nieuweBus = i > 0 && g.rijen[i - 1].busnr !== d.busnr;
+                  const duur = duurDagen(d, vandaagIso);
+                  return (
+                    <tr key={d.id} className={`align-top ${nieuweBus ? 'border-t border-black' : ''}`}>
+                      <td className="py-0.5 pr-2 text-right">{d.kortNr ?? d.busnr}</td>
+                      <td className="whitespace-nowrap py-0.5 pr-2 text-center">{kortDatum(d.gemeldOp)}</td>
+                      <td className="py-0.5 pr-2">{d.gemeldDoorNaam ?? ''}</td>
+                      <td className="py-0.5 pr-2">
+                        {d.omschrijving}
+                        {filter === 'alles' && d.uitgevoerdWerk && <span className="block text-slate-600">→ {d.uitgevoerdWerk}</span>}
+                        {d.status === 'geannuleerd' && <span className="block italic text-slate-600">geannuleerd</span>}
+                      </td>
+                      <td className="py-0.5 pr-2 text-center">{d.werktype}</td>
+                      <td className="whitespace-nowrap py-0.5 pr-2 text-center">{kortDatum(d.uitgevoerdOp)}</td>
+                      <td className="py-0.5 text-right">{duur ?? ''}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            ))}
           </table>
         )}
 
-        <footer className="mt-8 border-t border-slate-200 pt-3 text-center text-[10px] font-medium text-slate-500">
-          Gegenereerd op {nu.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })} via VHB Portaal
+        <footer className="no-print mt-10 flex justify-between border-t-2 border-black pt-1 text-[10px]">
+          <span>{vandaagTekst}</span>
+          <span>VHB Portaal</span>
         </footer>
       </div>
     </div>
