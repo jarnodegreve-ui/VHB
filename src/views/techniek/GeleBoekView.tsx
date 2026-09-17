@@ -147,8 +147,8 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat icon={<Wrench size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub={tellers.open === 1 ? 'melding wacht' : 'meldingen wachten'} onClick={() => { setFilter('open'); setBusFilter(''); setAlleenOud(false); }} actief={filter === 'open' && !alleenOud} />
         <OpsStat icon={<Clock size={16} />} tone={tellers.oud > 0 ? 'red' : 'slate'} label="Ouder dan 14 dagen" value={tellers.oud} sub={tellers.oud > 0 ? 'blijft liggen, bekijk ze' : 'niets blijft liggen'} onClick={() => { setFilter('open'); setAlleenOud((v) => !v); }} actief={alleenOud} />
-        <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.technisch > 0 ? 'amber' : 'slate'} label="Technisch" value={tellers.technisch} sub="open, voor de garage" />
-        <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.lijn > 0 ? 'oker' : 'slate'} label="Voor De Lijn" value={tellers.lijn} sub="open, planning meldt door" />
+        <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.technisch > 0 ? 'amber' : 'slate'} label="Techniek" value={tellers.technisch} sub="open, voor de garage" />
+        <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.lijn > 0 ? 'oker' : 'slate'} label="Lijn" value={tellers.lijn} sub="open, planning meldt door" />
       </div>
 
       {zl.fout && rijen.length === 0 ? (
