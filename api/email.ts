@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { DAG_DMJ, PERIODE_DMJ } from "./helpers.js";
 
 /** Escape user-invoer vóór die in HTML-e-mails belandt (injectie-preventie).
  *  Eén bron: index.ts importeert deze i.p.v. een eigen kopie. */
@@ -137,7 +138,7 @@ const ACTION_CONFIG: Record<LeaveDecisionAction, { subject: string; bannerLabel:
   },
 };
 
-const formatPeriod = (start: string, end: string) => (start === end ? start : `${start} t/m ${end}`);
+const formatPeriod = (start: string, end: string) => PERIODE_DMJ(start, end);
 
 export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => {
   const config = ACTION_CONFIG[ctx.action];
@@ -279,7 +280,7 @@ export const sendExpiryReminderEmail = async (ctx: {
         <p style="color: #1e293b; font-size: 16px; margin-top: 0;">Hallo ${escapeHtml(ctx.name)},</p>
         <p style="color: #475569; line-height: 1.6;">
           Je <strong>${escapeHtml(ctx.soortLabel.toLowerCase())}</strong> is geldig tot
-          <strong>${escapeHtml(ctx.validUntil)}</strong>. Regel de vernieuwing tijdig en
+          <strong>${escapeHtml(DAG_DMJ(ctx.validUntil))}</strong>. Regel de vernieuwing tijdig en
           geef de nieuwe datum door aan de planning, dan blijf je zonder onderbreking inzetbaar.
         </p>
         <div style="margin-top: 30px; text-align: center;">
@@ -295,7 +296,7 @@ export const sendExpiryReminderEmail = async (ctx: {
   const text = [
     `Hallo ${ctx.name},`,
     "",
-    `Je ${ctx.soortLabel.toLowerCase()} ${wanneer} (geldig tot ${ctx.validUntil}).`,
+    `Je ${ctx.soortLabel.toLowerCase()} ${wanneer} (geldig tot ${DAG_DMJ(ctx.validUntil)}).`,
     "Regel de vernieuwing tijdig en geef de nieuwe datum door aan de planning.",
     "",
     `Portaal: ${url}`,

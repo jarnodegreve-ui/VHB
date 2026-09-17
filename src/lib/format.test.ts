@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatGetal, formatRelatief, metEenheid } from './format';
+import { formatDatumDMJ, formatGetal, formatPeriodeDMJ, formatRelatief, metEenheid } from './format';
 
 describe('formatGetal (komma als decimaalteken, smalle spatie als duizendtal, max. 2 decimalen)', () => {
   it('kapt ChargEye-decimalen af op twee cijfers na de komma', () => {
@@ -44,5 +44,24 @@ describe('metEenheid (smalle vaste spatie tussen getal en eenheid)', () => {
   it('laat een streepje (onbekend) zonder eenheid', () => {
     expect(metEenheid(Number.NaN, 'kW')).toBe('—');
     expect(metEenheid('—', 'kWh')).toBe('—');
+  });
+});
+
+
+describe('formatDatumDMJ / formatPeriodeDMJ (dag/maand/jaar, Jarno 17-09)', () => {
+  it('draait een ISO-dag om naar 17/09/2026', () => {
+    expect(formatDatumDMJ('2026-09-17')).toBe('17/09/2026');
+    // Een timestamp mag ook: alleen de dag telt.
+    expect(formatDatumDMJ('2026-01-02T08:30:00Z')).toBe('02/01/2026');
+  });
+  it('laat leegte leeg en een onherkenbare waarde ongemoeid', () => {
+    expect(formatDatumDMJ('')).toBe('');
+    expect(formatDatumDMJ(null)).toBe('');
+    expect(formatDatumDMJ('geen datum')).toBe('geen datum');
+  });
+  it('schrijft een periode van één dag als één datum', () => {
+    expect(formatPeriodeDMJ('2026-09-17', '2026-09-17')).toBe('17/09/2026');
+    expect(formatPeriodeDMJ('2026-09-17', '2026-09-20')).toBe('17/09/2026 t/m 20/09/2026');
+    expect(formatPeriodeDMJ('2026-09-17')).toBe('17/09/2026');
   });
 });

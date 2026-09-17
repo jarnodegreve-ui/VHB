@@ -409,6 +409,26 @@ export const matrixCodesForDate = (
   return out;
 };
 
+/**
+ * ISO-dag → "17/09/2026", en een periode → "17/09/2026 t/m 20/09/2026".
+ * Dag/maand/jaar in élke tekst die een mens leest: foutmeldingen, meldingen,
+ * mails en het activiteitenlog toonden de rauwe ISO-datum, en die las Jarno
+ * als jaar/maand/dag (17-09). Voor Telegram-lijstjes blijft DAG_KORT
+ * ("wo 17 sep") de vorm, die staat in api/telegram.ts.
+ */
+export const DAG_DMJ = (iso: string | null | undefined): string => {
+  const s = String(iso ?? "").slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso ?? "");
+};
+
+export const PERIODE_DMJ = (van: string | null | undefined, tot?: string | null): string => {
+  const a = DAG_DMJ(van);
+  const b = DAG_DMJ(tot);
+  if (!a) return b;
+  return !b || a === b ? a : `${a} t/m ${b}`;
+};
+
 /** Kalenderdag in Belgische tijd (server draait op UTC). Eén bron — werd
  *  eerst lokaal in api/index.ts gedefinieerd, maar de dekking-module en de
  *  ziekte-detectie hebben hem net zo hard nodig. */

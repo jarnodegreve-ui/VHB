@@ -14,7 +14,7 @@ import { Avatar } from '../../components/Avatar';
 import { DetailPaneel } from '../../components/DetailPaneel';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { aanvragerNaam, useVerlofLimieten, VerlofBeoordelingInhoud, VerlofBeoordelingKnoppen } from '../../components/VerlofBeoordeling';
-import { formatDateHuman, formatDayLong, MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/format';
+import { formatDateHuman, formatDayLong, formatPeriodeDMJ, MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import { limietVoorDag } from '../../../shared/schemas/verlofLimieten';
 
@@ -325,7 +325,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-800">{naam}</p>
                           <p className="truncate text-xs font-medium text-slate-500">
-                            {LEAVE_TYPE_LABELS[r.type] || r.type} · {r.startDate === r.endDate ? r.startDate : `${r.startDate} t/m ${r.endDate}`}
+                            {LEAVE_TYPE_LABELS[r.type] || r.type} · {formatPeriodeDMJ(r.startDate, r.endDate)}
                           </p>
                         </div>
                       </div>
@@ -434,7 +434,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                       const leave = userMap?.get(day);
                       const iso = dateIso(day);
                       const title = leave
-                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type}, ${STATUS_TEKST[leave.status] ?? leave.status} (${leave.startDate}${leave.startDate !== leave.endDate ? ` t/m ${leave.endDate}` : ''})`
+                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type}, ${STATUS_TEKST[leave.status] ?? leave.status} (${formatPeriodeDMJ(leave.startDate, leave.endDate)})`
                         : undefined;
                       return (
                         <td
@@ -585,7 +585,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
         onClose={() => setHistoryLeave(null)}
         entityType="leave"
         entityId={historyLeave?.id ?? ''}
-        title={historyLeave ? `${aanvragerNaam(users, historyLeave)}, ${historyLeave.startDate} t/m ${historyLeave.endDate}` : undefined}
+        title={historyLeave ? `${aanvragerNaam(users, historyLeave)}, ${formatPeriodeDMJ(historyLeave.startDate, historyLeave.endDate)}` : undefined}
       />
     </PageShell>
   );

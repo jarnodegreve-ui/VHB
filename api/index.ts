@@ -52,7 +52,7 @@ import {
   trekToegangIn,
   type ToegangIngetrokken,
 } from "./_lib/recordWrites.js";
-import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   swapRaaktBereik,
@@ -1022,7 +1022,7 @@ app.put("/api/user-expiries", authenticate, requireRole("planner", "admin"), asy
       req,
       "users",
       validUntil ? "Vervaldatum bijgewerkt" : "Vervaldatum verwijderd",
-      `${user.name}: ${label}${validUntil ? ` geldig tot ${validUntil}` : ", datum verwijderd"}.`,
+      `${user.name}: ${label}${validUntil ? ` geldig tot ${DAG_DMJ(validUntil)}` : ", datum verwijderd"}.`,
       { type: "user", id: userId },
     );
     res.json({ success: true });
@@ -1067,11 +1067,11 @@ app.put("/api/planning-notes", authenticate, requireRole("planner", "admin"), as
 
     if (!note) {
       await deletePlanningNote(driverId, date);
-      await logActivity(req, "planning", "Dienstnotitie verwijderd", `${driver.name}, ${date}.`);
+      await logActivity(req, "planning", "Dienstnotitie verwijderd", `${driver.name}, ${DAG_DMJ(date)}.`);
       return res.json({ success: true, removed: true });
     }
     await upsertPlanningNote(driverId, date, note, req.appUser?.name ?? null);
-    await logActivity(req, "planning", "Dienstnotitie geplaatst", `${driver.name}, ${date}: ${note.slice(0, 80)}`);
+    await logActivity(req, "planning", "Dienstnotitie geplaatst", `${driver.name}, ${DAG_DMJ(date)}: ${note.slice(0, 80)}`);
     // De chauffeur meteen op de hoogte — push is best-effort.
     await sendPushToUsers([driverId], {
       title: "Notitie bij je dienst",
@@ -1208,7 +1208,7 @@ const parseMatrixInputMetPeriode = (body: any) => {
   const selectie = rows.filter((row) =>
     (!van || row.source_date >= van) && (!tot || row.source_date <= tot));
   if (selectie.length === 0) {
-    throw new Error(`Geen dagen binnen de gekozen periode, het bestand loopt van ${fileStartDate ?? "?"} t/m ${fileEndDate ?? "?"}.`);
+    throw new Error(`Geen dagen binnen de gekozen periode, het bestand loopt van ${fileStartDate ? DAG_DMJ(fileStartDate) : "?"} t/m ${fileEndDate ? DAG_DMJ(fileEndDate) : "?"}.`);
   }
   return { rows: selectie, fileStartDate, fileEndDate, parserWaarschuwingen: waarschuwingen };
 };
@@ -1349,7 +1349,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     await sendPushToUsers(affectedDriverIds, {
       title: "Planning bijgewerkt",
       soort: "planning",
-      body: `Nieuwe planning geïmporteerd (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}). Bekijk je rooster.`,
+      body: `Nieuwe planning geïmporteerd (${rows[0]?.source_date ? DAG_DMJ(String(rows[0].source_date)) : "?"} t/m ${rows[rows.length - 1]?.source_date ? DAG_DMJ(String(rows[rows.length - 1].source_date)) : "?"}). Bekijk je rooster.`,
       url: viewUrl("rooster"),
     });
 
@@ -2674,7 +2674,7 @@ app.get("/api/cron/telegram-briefing", async (req, res) => {
       .filter((e) => e.dagen <= 7)
       .sort((a, b) => a.dagen - b.dagen);
     if (dringend.length > 0) {
-      delen.push(`📄 Documenten: ${dringend.map((e) => `${escapeHtml(naamVan(e.userId))}, ${EXPIRY_SOORT_LABEL[e.soort]} ${e.dagen < 0 ? `VERLOPEN (${e.validUntil})` : e.dagen === 0 ? "verloopt VANDAAG" : `nog ${e.dagen} dag${e.dagen === 1 ? "" : "en"}`}`).join("; ")}.`);
+      delen.push(`📄 Documenten: ${dringend.map((e) => `${escapeHtml(naamVan(e.userId))}, ${EXPIRY_SOORT_LABEL[e.soort]} ${e.dagen < 0 ? `VERLOPEN (${DAG_DMJ(e.validUntil)})` : e.dagen === 0 ? "verloopt VANDAAG" : `nog ${e.dagen} dag${e.dagen === 1 ? "" : "en"}`}`).join("; ")}.`);
     }
 
     // Kandidaten-knoppen voor de gaten van vandaag + morgen (max 8).
@@ -2753,7 +2753,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
           await sendPushToUsers([e.userId], {
             title: e.dagen === 0 ? `${e.label} verloopt vandaag` : `${e.label} verloopt over ${e.dagen} dagen`,
             soort: "systeem",
-            body: `Je ${e.label.toLowerCase()} is geldig tot ${e.validUntil}. Regel tijdig de vernieuwing en geef het door aan de planning.`,
+            body: `Je ${e.label.toLowerCase()} is geldig tot ${DAG_DMJ(e.validUntil)}. Regel tijdig de vernieuwing en geef het door aan de planning.`,
             url: "/",
           });
           // Óók per e-mail naar de chauffeur zelf (idee 46): push bereikt maar
@@ -2779,10 +2779,10 @@ app.get("/api/cron/error-digest", async (req, res) => {
       if (teMelden.length > 0) {
         const regel = (e: (typeof teMelden)[number]) =>
           e.dagen < 0
-            ? `${e.naam}, ${e.label} is VERLOPEN sinds ${e.validUntil} (${Math.abs(e.dagen)} dagen)`
+            ? `${e.naam}, ${e.label} is VERLOPEN sinds ${DAG_DMJ(e.validUntil)} (${Math.abs(e.dagen)} dagen)`
             : e.dagen === 0
-              ? `${e.naam}, ${e.label} verloopt VANDAAG (${e.validUntil})`
-              : `${e.naam}, ${e.label} verloopt over ${e.dagen} ${e.dagen === 1 ? "dag" : "dagen"} (${e.validUntil})`;
+              ? `${e.naam}, ${e.label} verloopt VANDAAG (${DAG_DMJ(e.validUntil)})`
+              : `${e.naam}, ${e.label} verloopt over ${e.dagen} ${e.dagen === 1 ? "dag" : "dagen"} (${DAG_DMJ(e.validUntil)})`;
         vervalTekst = `\n\nDocumenten (binnen 60 dagen):\n${teMelden.map((e) => `• ${regel(e)}`).join("\n")}`;
         vervalHtml = `<p><strong>Documenten (binnen 60 dagen)</strong></p><ul>${teMelden.map((e) => `<li>${escapeHtml(regel(e))}</li>`).join("")}</ul>`;
       }
@@ -2814,7 +2814,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
           await sendPushToUsers(ontvangers, {
             title: e.dagen === 0 ? `${e.naam}: ${e.label} verloopt vandaag` : `${e.naam}: ${e.label} verloopt over ${e.dagen} dagen`,
             soort: "techniek",
-            body: `Geldig tot ${e.validUntil}. Plan de keuring of vervanging in.`,
+            body: `Geldig tot ${DAG_DMJ(e.validUntil)}. Plan de keuring of vervanging in.`,
             url: "/?view=voertuigen",
           });
         }
@@ -2823,10 +2823,10 @@ app.get("/api/cron/error-digest", async (req, res) => {
       if (teMelden.length > 0) {
         const regel = (e: (typeof teMelden)[number]) =>
           e.dagen < 0
-            ? `${e.naam}, ${e.label} is VERLOPEN sinds ${e.validUntil} (${Math.abs(e.dagen)} dagen)`
+            ? `${e.naam}, ${e.label} is VERLOPEN sinds ${DAG_DMJ(e.validUntil)} (${Math.abs(e.dagen)} dagen)`
             : e.dagen === 0
-              ? `${e.naam}, ${e.label} verloopt VANDAAG (${e.validUntil})`
-              : `${e.naam}, ${e.label} verloopt over ${e.dagen} ${e.dagen === 1 ? "dag" : "dagen"} (${e.validUntil})`;
+              ? `${e.naam}, ${e.label} verloopt VANDAAG (${DAG_DMJ(e.validUntil)})`
+              : `${e.naam}, ${e.label} verloopt over ${e.dagen} ${e.dagen === 1 ? "dag" : "dagen"} (${DAG_DMJ(e.validUntil)})`;
         voertuigVervalTekst = `\n\nVoertuigen (binnen 60 dagen):\n${teMelden.map((e) => `• ${regel(e)}`).join("\n")}`;
         voertuigVervalHtml = `<p><strong>Voertuigen (binnen 60 dagen)</strong></p><ul>${teMelden.map((e) => `<li>${escapeHtml(regel(e))}</li>`).join("")}</ul>`;
       }
@@ -3502,14 +3502,14 @@ const describeSwapCarry = (
   const delen: string[] = [];
   delen.push(
     r.offeredMoved > 0
-      ? `dienst ${swap.shiftLine} op ${swap.shiftDate}: ${r.offeredMoved} rij(en) ${richting}`
-      : `LET OP: dienst ${swap.shiftLine} op ${swap.shiftDate} niet gevonden in de planning, controleer handmatig`,
+      ? `dienst ${swap.shiftLine} op ${DAG_DMJ(swap.shiftDate)}: ${r.offeredMoved} rij(en) ${richting}`
+      : `LET OP: dienst ${swap.shiftLine} op ${DAG_DMJ(swap.shiftDate)} niet gevonden in de planning, controleer handmatig`,
   );
   if (r.returnMoved !== null) {
     delen.push(
       r.returnMoved > 0
-        ? `terugruil ${swap.returnCode} op ${swap.returnDate}: ${r.returnMoved} rij(en) ${richting}`
-        : `LET OP: terugruil ${swap.returnCode} op ${swap.returnDate} niet gevonden, controleer handmatig`,
+        ? `terugruil ${swap.returnCode} op ${DAG_DMJ(swap.returnDate)}: ${r.returnMoved} rij(en) ${richting}`
+        : `LET OP: terugruil ${swap.returnCode} op ${DAG_DMJ(swap.returnDate)} niet gevonden, controleer handmatig`,
     );
   }
   return `Planning ${richting}: ${delen.join("; ")}.`;
@@ -3544,7 +3544,7 @@ const ruilAfwezigheidsFout = async (swap: {
     const afwezig = afwezigOp(leave as any[], c.userId, c.date);
     if (afwezig) {
       const naam = users.find((u: any) => String(u.id) === c.userId)?.name ?? (c.wie === "collega" ? "De collega" : "De aanvrager");
-      return `${naam} is ${AFWEZIG_LABEL[afwezig.type] ?? "afwezig gemeld"} op ${c.date}, deze ruil kan niet doorgaan.`;
+      return `${naam} is ${AFWEZIG_LABEL[afwezig.type] ?? "afwezig gemeld"} op ${DAG_DMJ(c.date)}, deze ruil kan niet doorgaan.`;
     }
   }
   return null;
@@ -3582,7 +3582,7 @@ const dubbeleInplanningFout = async (swap: {
   });
   if (bezet.length === 0) return null;
   const naam = (await getUsersData()).find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
-  return `${naam} rijdt op ${dienstDag} al dienst ${bezet[0].line}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
+  return `${naam} rijdt op ${DAG_DMJ(dienstDag)} al dienst ${bezet[0].line}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
 };
 
 /** Heropbouw-replay: goedgekeurde ruilen opnieuw toepassen op een vers
@@ -4006,8 +4006,8 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         const naam = (await getUsersData()).find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
         return res.status(400).json({
           error: code.includes("/")
-            ? `${naam} rijdt op ${date} meerdere diensten (${code}). Kies één dienst als tegenprestatie.`
-            : `Dienst ${code} staat op ${date} niet op naam van ${naam}, de planning is intussen gewijzigd. Vernieuw en kies opnieuw.`,
+            ? `${naam} rijdt op ${DAG_DMJ(date)} meerdere diensten (${code}). Kies één dienst als tegenprestatie.`
+            : `Dienst ${code} staat op ${DAG_DMJ(date)} niet op naam van ${naam}, de planning is intussen gewijzigd. Vernieuw en kies opnieuw.`,
         });
       }
     }
@@ -4045,8 +4045,8 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
             return res.status(409).json({
               error: code
-                ? `${naam} staat op ${date} ingepland als '${code}'. Ruilen zonder tegenprestatie kan alleen als de collega die dag ${TAKEOVER_CODES.join("/")} staat.`
-                : `Voor ${naam} staat er op ${date} niets in de planning. Ruilen zonder tegenprestatie kan alleen als de collega die dag ${TAKEOVER_CODES.join("/")} staat.`,
+                ? `${naam} staat op ${DAG_DMJ(date)} ingepland als '${code}'. Ruilen zonder tegenprestatie kan alleen als de collega die dag ${TAKEOVER_CODES.join("/")} staat.`
+                : `Voor ${naam} staat er op ${DAG_DMJ(date)} niets in de planning. Ruilen zonder tegenprestatie kan alleen als de collega die dag ${TAKEOVER_CODES.join("/")} staat.`,
             });
           }
           // Dubbelcheck op de planning zelf: de matrix is de bron van de
@@ -4054,7 +4054,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           const monthShifts = await getPlanningData({ monthIso: date.slice(0, 7) });
           if (monthShifts.some((s: any) => String(s.driverId) === targetId && String(s.date) === date)) {
             const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
-            return res.status(409).json({ error: `${naam} heeft op ${date} toch een dienst in de planning staan, ruilen zonder tegenprestatie kan dan niet.` });
+            return res.status(409).json({ error: `${naam} heeft op ${DAG_DMJ(date)} toch een dienst in de planning staan, ruilen zonder tegenprestatie kan dan niet.` });
           }
         }
       }
@@ -4245,9 +4245,11 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         if (action) {
           const carry = carryLogById.get(String(next.id));
           await logActivity(req, "swaps", action, `${userName(next.requesterId)}, dienstruil (${prev.status} → ${next.status}).${carry ? ` ${carry}` : ""}`, { type: "swap", id: next.id });
-          // Push naar de betrokkenen, behalve degene die de actie deed.
+          // Push naar de betrokkenen, behalve degene die de actie deed. Een
+          // afhandeling ('completed') is boekhouding van de planning en gaat
+          // stil, zie de delta-route.
           const actorId = String(req.appUser?.id ?? "");
-          const betrokkenen = [String(prev.requesterId), String(prev.targetDriverId ?? "")]
+          const betrokkenen = next.status === "completed" ? [] : [String(prev.requesterId), String(prev.targetDriverId ?? "")]
             .filter((id) => id && id !== actorId);
           await sendPushToUsers(betrokkenen, {
             title: action,
@@ -4427,7 +4429,10 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
     const action = actionLabels[status] ?? "Dienstruil bijgewerkt";
     await logActivity(actorReq(actor), "swaps", action, `${userName(String(current.requesterId))}, dienstruil (${current.status} → ${status}).${carry ? ` ${carry}` : ""}`, { type: "swap", id });
 
-    const betrokkenen = [String(current.requesterId), String(current.targetDriverId ?? "")]
+    // 'completed' = de planning zet een doorgevoerde wissel administratief weg
+    // (knop Afhandelen, Jarno 17-09). Voor de chauffeurs verandert er niets,
+    // dus geen melding: dat zou een tweede "ruil goedgekeurd"-bericht zijn.
+    const betrokkenen = status === "completed" ? [] : [String(current.requesterId), String(current.targetDriverId ?? "")]
       .filter((uid) => uid && uid !== selfId);
     await sendPushToUsers(betrokkenen, {
       title: action,
@@ -4533,7 +4538,7 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
     const lineToken = toLookupToken(line);
     const ownRows = dayRows.filter((r) => toLookupToken(r.line) === lineToken && String(r.driverId) === fromDriverId);
     if (ownRows.length === 0) {
-      return res.status(409).json({ error: `Dienst ${line} op ${date} staat niet (meer) op naam van ${fromUser.name}, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
+      return res.status(409).json({ error: `Dienst ${line} op ${DAG_DMJ(date)} staat niet (meer) op naam van ${fromUser.name}, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
     }
     // Vanaf hier de schrijfwijze uit de planning zelf: die gaat de swap in en
     // stuurt de doorvoer (movePlanningRows matcht exact op line).
@@ -4550,7 +4555,7 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
       if (returnToken === lineToken) return res.status(400).json({ error: "De terugdienst is dezelfde als de dienst die je overzet." });
       const terugRow = toRows.find((r) => toLookupToken(r.line) === returnToken);
       if (!terugRow) {
-        return res.status(409).json({ error: `${toUser.name} rijdt op ${date} geen dienst ${returnLine} (meer), de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
+        return res.status(409).json({ error: `${toUser.name} rijdt op ${DAG_DMJ(date)} geen dienst ${returnLine} (meer), de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
       }
       terugLine = String(terugRow.line);
       // De gever moet die dag zelf kunnen rijden: op een afwezigheidscel
@@ -5025,7 +5030,7 @@ async function registreerZiekmeldingIntern(
       String(l.startDate) <= endDate && startDate <= String(l.endDate),
     );
     if (overlappend) {
-      const p = overlappend.startDate === overlappend.endDate ? overlappend.startDate : `${overlappend.startDate} t/m ${overlappend.endDate}`;
+      const p = PERIODE_DMJ(overlappend.startDate, overlappend.endDate);
       return { fout: { status: 409, error: `${target.name} staat al ziek gemeld voor ${p}. Pas die melding aan via Verlofbeheer.` } };
     }
 
@@ -5045,7 +5050,7 @@ async function registreerZiekmeldingIntern(
     // collega-planner stil terug naar de stand van dit request.
     await saveLeaveData([record]);
 
-    const period = startDate === endDate ? startDate : `${startDate} t/m ${endDate}`;
+    const period = PERIODE_DMJ(startDate, endDate);
     await logActivity(actorReq(actor), "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period} (door ${actor.name}).`, { type: "leave", id: record.id });
 
     // Welke diensten vallen door deze ziekte open? Per dag van de periode de

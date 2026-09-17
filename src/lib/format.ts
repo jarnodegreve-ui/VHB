@@ -46,6 +46,29 @@ export function formatDateHuman(iso: string | undefined | null): string {
   }
 }
 
+/**
+ * 'YYYY-MM-DD' → '17/09/2026'. Dag/maand/jaar, want dat is de enige volgorde
+ * die in het portaal voorkomt: een rauwe ISO-datum las Jarno als
+ * jaar/maand/dag en dat is onduidelijk (17-09). Gebruik deze vorm in
+ * tabellen, periodes en titels waar een weekdag te breed is; in lopende tekst
+ * leest formatDateHuman ("do 17 september") beter.
+ */
+export function formatDatumDMJ(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const s = String(iso).slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso);
+}
+
+/** Periode als '17/09/2026' of '17/09/2026 t/m 20/09/2026' — één bron voor de
+ *  verlof-, ziekte- en omleidingslijsten, die dit elk apart uitschreven. */
+export function formatPeriodeDMJ(start: string | undefined | null, eind?: string | undefined | null): string {
+  const van = formatDatumDMJ(start);
+  const tot = formatDatumDMJ(eind);
+  if (!van) return tot;
+  return !tot || tot === van ? van : `${van} t/m ${tot}`;
+}
+
 /** 'HH:MM' uit een epoch-ms — voor de 'Bijgewerkt om …'-versheidsindicatie. */
 export function formatSyncedTime(ts: number | null | undefined): string {
   if (!ts) return '';

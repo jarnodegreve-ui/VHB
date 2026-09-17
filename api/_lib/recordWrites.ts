@@ -1,4 +1,5 @@
 import { lijnLabel } from "../../shared/lijnen.js";
+import { PERIODE_DMJ } from "../helpers.js";
 import crypto from "node:crypto";
 import type { AppUser, AuthenticatedRequest, IncomingUser } from "../types.js";
 import { supabaseAdmin } from "../db.js";
@@ -213,7 +214,7 @@ export const verwerkUsersOpslag = async (
 
 // --- Omleidingen ---
 
-const fmtDiversion = (d: any) => `${d.title} (${lijnLabel(d.line).toLowerCase()}), ${d.startDate}${d.endDate ? ` t/m ${d.endDate}` : ''}.`;
+const fmtDiversion = (d: any) => `${d.title} (${lijnLabel(d.line).toLowerCase()}), ${PERIODE_DMJ(d.startDate, d.endDate)}.`;
 
 export const verwerkDiversionsOpslag = async (
   req: AuthenticatedRequest,

@@ -19,7 +19,7 @@ import type { ExtraFeestdag } from '../../shared/feestdagen';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
-import { formatDateHuman, formatShortDay } from '../lib/format';
+import { formatDateHuman, formatPeriodeDMJ, formatShortDay } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 import { apiJson } from '../lib/api';
@@ -704,7 +704,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           <Avatar naam={requester?.name ?? 'Onbekend'} size="lg" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-md font-semibold text-slate-800">{requester?.name}</p>
-                            <p className="text-xs font-medium text-slate-500 tabular-nums">{formatLeaveType(req.type)} · {req.startDate} – {req.endDate}</p>
+                            <p className="text-xs font-medium text-slate-500 tabular-nums">{formatLeaveType(req.type)} · {formatPeriodeDMJ(req.startDate, req.endDate)}</p>
                           </div>
                           <ChevronRightSmall size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                         </button>
@@ -813,7 +813,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                               )}
                             </span>
                             <span className="mt-px block truncate text-xs font-normal text-slate-500 tabular-nums">
-                              {req.startDate}{req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · {formatLeaveType(req.type)}
+                              {formatPeriodeDMJ(req.startDate, req.endDate)} · {formatLeaveType(req.type)}
                             </span>
                           </span>
                           <ChevronRightSmall size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
@@ -1129,7 +1129,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         onClose={() => setHistoryLeave(null)}
         entityType="leave"
         entityId={historyLeave?.id ?? ''}
-        title={historyLeave ? `${users.find((u) => u.id === historyLeave.userId)?.name || 'Onbekend'}, ${historyLeave.startDate} t/m ${historyLeave.endDate}` : undefined}
+        title={historyLeave ? `${users.find((u) => u.id === historyLeave.userId)?.name || 'Onbekend'}, ${formatPeriodeDMJ(historyLeave.startDate, historyLeave.endDate)}` : undefined}
       />
 
       <ConfirmationModal

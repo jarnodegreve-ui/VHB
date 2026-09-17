@@ -11,6 +11,10 @@ import type { SwapRecord } from "../types.js";
  * 1. De Excel toont nog de oude eigenaar: de cellen van gever en ontvanger
  *    wisselen, met het merk {swapId, swapFrom, swapManual} op de verplaatste
  *    cel (bevinding Jarno 06-08).
+ *
+ * In alle gevallen krijgt óók de kant die de dienst afstaat een merk
+ * ({swapAway, swapTo}), zodat zijn "vrij" in het maandbeeld te onderscheiden
+ * is van een gewone vrije dag (Jarno 17-09).
  * 2. De planner heeft de ruil intussen óók in de Excel verwerkt, voorlopig
  *    de gangbare werkwijze (Jarno 12-09): de ontvanger heeft de dienst al.
  *    Vroeger bleef dan alles staan, dus verdween "geruild met X" bij de
@@ -33,6 +37,15 @@ export type OverlayCel = {
   swapId?: string;
   swapManual?: boolean;
   swapFrom?: string;
+  /** Deze chauffeur stond de dienst af en is daardoor vrij: de tegenkant van
+   *  de wissel. De weergave zet zo'n cel in het rood (Jarno 17-09). */
+  swapAway?: boolean;
+  /** Naam van de chauffeur die de dienst overnam (alleen bij `swapAway`). */
+  swapTo?: string;
+  /** De ruil is afgehandeld ('completed'): de wissel blijft staan, maar
+   *  terugdraaien kan niet meer (de state-machine laat geen overgang meer
+   *  toe uit een afgehandelde status). */
+  swapDone?: boolean;
 };
 
 /** cellen[chauffeurId][isoDatum] */
@@ -71,23 +84,33 @@ export function legRuilenOverMaandbeeld(
 
   const wisselCel = (
     date: string, vanId: string, naarId: string, verwachtCode: string,
-    merk: { swapId: string; swapManual: boolean; swapFrom: string },
+    merk: { swapId: string; swapManual: boolean; swapFrom: string; swapDone?: boolean },
   ) => {
     const vanCel = cells[vanId]?.[date];
     const naarCel = cells[naarId]?.[date];
+    // Merk voor de kant die de dienst afstaat: zonder dit bleef de gever een
+    // gewone lege/vrije cel en was aan het maandbeeld niet te zien dat hij
+    // die dag een dienst wegruilde (Jarno 17-09).
+    const wegMerk = { swapId: merk.swapId, swapManual: merk.swapManual, swapDone: merk.swapDone, swapAway: true, swapTo: opts.naamVanId(naarId) };
     if (toontCode(vanCel, verwachtCode)) {
       if (!cells[naarId]) cells[naarId] = {};
       cells[naarId][date] = { ...vanCel, ...merk };
       // Had de ontvanger zelf een dienst (1-op-1 op dezelfde dag), dan krijgt
       // de gever die; een afwezigheidscode van de ontvanger neemt hij niet
-      // over, dan wordt hij vrij. Geen cel = blijft leeg.
-      if (naarCel) cells[vanId][date] = naarCel.kind === "service" ? naarCel : { ...vrijCel };
-      else delete cells[vanId][date];
+      // over, dan wordt hij vrij. Ook zonder cel bij de ontvanger blijft de
+      // gever nu als "vrij (weggeruild)" staan i.p.v. leeg.
+      cells[vanId][date] = naarCel && naarCel.kind === "service" ? naarCel : { ...vrijCel, ...wegMerk };
       uit.gewisseld += 1;
       return;
     }
     if (toontCode(naarCel, verwachtCode)) {
       cells[naarId][date] = { ...naarCel, ...merk };
+      // De Excel had de ruil al verwerkt: de gever staat er al vrij/afwezig.
+      // Alleen merken, nooit een dienst van die dag overschrijven. (Opnieuw
+      // uit `cells` lezen: het type-predicaat hierboven versmalt `vanCel` in
+      // deze tak tot `undefined`.)
+      const geverCel = cells[vanId]?.[date];
+      if (geverCel && geverCel.kind !== "service") cells[vanId][date] = { ...geverCel, ...wegMerk };
       uit.gemarkeerd += 1;
       return;
     }
@@ -104,7 +127,7 @@ export function legRuilenOverMaandbeeld(
     if (!opts.chauffeurIds.has(van) || !opts.chauffeurIds.has(naar)) continue;
     const dienstDag = String(sw.shiftDate ?? "");
     const dienstCode = String(sw.shiftLine ?? "").trim();
-    const merk = { swapId: String(sw.id), swapManual: isHandmatigeWissel(sw), swapFrom: opts.naamVanId(van) };
+    const merk = { swapId: String(sw.id), swapManual: isHandmatigeWissel(sw), swapDone: sw.status === "completed", swapFrom: opts.naamVanId(van) };
     // Zonder dienst-info (aanvraag van vóór de shift_info-migratie) valt er
     // niets veilig te wisselen of te markeren.
     if (dienstDag && dienstCode && dateSet.has(dienstDag)) wisselCel(dienstDag, van, naar, dienstCode, merk);

@@ -23,7 +23,7 @@ import {
   Users,
   Smartphone,
 } from 'lucide-react';
-import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDatumDMJ, formatDayLong, formatPeriodeDMJ, formatShortDay, serviceNumberOf } from '../lib/format';
 import type { ActivityLogEntry, LeaveRequest, Shift, User, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { getDaypartGreeting } from '../lib/interactive';
@@ -655,10 +655,10 @@ export function PlannerDashboardWidgets({
             icon={<IdCard size={16} />}
             primary={`${EXPIRY_SOORT_LABELS[e.soort] ?? e.soort} · ${userNameById(e.userId)}`}
             secondary={e.dagen < 0
-              ? `Verlopen sinds ${e.validUntil}`
+              ? `Verlopen sinds ${formatDatumDMJ(e.validUntil)}`
               : e.dagen === 0
-                ? `Verloopt vandaag (${e.validUntil})`
-                : `Verloopt over ${e.dagen} ${e.dagen === 1 ? 'dag' : 'dagen'} (${e.validUntil})`}
+                ? `Verloopt vandaag (${formatDatumDMJ(e.validUntil)})`
+                : `Verloopt over ${e.dagen} ${e.dagen === 1 ? 'dag' : 'dagen'} (${formatDatumDMJ(e.validUntil)})`}
             onClick={() => onNavigate('vervaldata')}
           />
           </Fragment>
@@ -705,7 +705,7 @@ export function PlannerDashboardWidgets({
             tone="amber"
             icon={<CalendarDays size={16} />}
             primary={`Verlofaanvraag · ${userNameById(req.userId)}`}
-            secondary={`${req.startDate}${req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : 'klein verlet'}`}
+            secondary={`${formatPeriodeDMJ(req.startDate, req.endDate)} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : 'klein verlet'}`}
             meta={relTime(req.createdAt)}
             onClick={() => onNavigate('verlof')}
           />
@@ -776,7 +776,7 @@ export function PlannerDashboardWidgets({
               tone={u.isUrgent ? 'red' : 'slate'}
               icon={<Bell size={16} />}
               primary={u.title}
-              secondary={u.date}
+              secondary={formatDatumDMJ(u.date)}
               onClick={() => onNavigate('updates')}
             />
           ))}
@@ -1129,7 +1129,7 @@ export function PlannerDashboardWidgets({
                     ) : isAdmin ? (
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <Select
-                          aria-label={`Vervanger voor dienst ${serviceNumberOf(d)} op ${d.date}`}
+                          aria-label={`Vervanger voor dienst ${serviceNumberOf(d)} op ${formatDatumDMJ(d.date)}`}
                           value={vervangerPerDienst[d.id] ?? ''}
                           onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [d.id]: e.target.value }))}
                           className="min-w-0 flex-1"

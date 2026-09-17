@@ -177,15 +177,16 @@ export function Badge({
 }
 
 /** Toon + label per aanvraagstatus (verlof/ruil). Eén bron: de gebruikers-
- *  historiek had een eigen kopie ('Voltooid' i.p.v. 'Afgerond') en de verlof-
- *  historiek een losse accentkleur-map (controle-ronde 27-08, bevinding 22). */
+ *  historiek had een eigen kopie ('Voltooid') en de verlof-historiek een
+ *  losse accentkleur-map (controle-ronde 27-08, bevinding 22). 'completed'
+ *  heet 'Afgehandeld', gelijk aan de sectie en de knop in Dienstruil. */
 const STATUS_TONES: Record<string, { tone: BadgeTone; label: string }> = {
   pending: { tone: 'amber', label: 'In behandeling' },
   accepted: { tone: 'blue', label: 'Wacht op planner' },
   approved: { tone: 'emerald', label: 'Goedgekeurd' },
   rejected: { tone: 'red', label: 'Afgewezen' },
   cancelled: { tone: 'slate', label: 'Geannuleerd' },
-  completed: { tone: 'emerald', label: 'Afgerond' },
+  completed: { tone: 'emerald', label: 'Afgehandeld' },
 };
 const statusTone = (status: string) => STATUS_TONES[status] ?? { tone: 'slate' as BadgeTone, label: status };
 

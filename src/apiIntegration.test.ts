@@ -2911,7 +2911,8 @@ describe('maandplanning, goedgekeurde dienstruilen zichtbaar (bevinding Jarno 06
     const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
     expect(res.status).toBe(200);
     expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: '12', kind: 'service' });
-    expect(res.json.cells['3']?.['2026-07-15']).toBeUndefined();
+    // De gever komt vrij te staan, gemerkt als weggeruild (Jarno 17-09).
+    expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'vrij', swapAway: true, swapTo: 'Chauffeur B' });
   });
 
   it('een 1-op-1 ruil wisselt óók de terugruil-dag', async () => {
@@ -2921,7 +2922,7 @@ describe('maandplanning, goedgekeurde dienstruilen zichtbaar (bevinding Jarno 06
     const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
     expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: '12', kind: 'service' });
     expect(res.json.cells['3']['2026-07-16']).toMatchObject({ code: '11', kind: 'service' });
-    expect(res.json.cells['4']?.['2026-07-16']).toBeUndefined();
+    expect(res.json.cells['4']['2026-07-16']).toMatchObject({ code: 'vrij', swapAway: true, swapTo: 'Chauffeur A' });
   });
 
   it('geen dubbele doorvoer als de Excel de ruil al verwerkt heeft', async () => {
@@ -3221,8 +3222,8 @@ describe('planning-import, periode-selectie', () => {
     });
     expect(res.status).toBe(400);
     expect(String(res.json.error)).toContain('Geen dagen binnen de gekozen periode');
-    expect(String(res.json.error)).toContain('2030-09-01');
-    expect(String(res.json.error)).toContain('2030-10-01');
+    expect(String(res.json.error)).toContain('01/09/2030');
+    expect(String(res.json.error)).toContain('01/10/2030');
   });
 
   it('weigert een periode met begindatum na einddatum', async () => {

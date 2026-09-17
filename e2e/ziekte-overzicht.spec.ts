@@ -85,8 +85,12 @@ async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, u
   return { registraties, wijzigingen, dienstwissels };
 }
 
+/** ISO-dag → 17/09/2026, zoals het portaal elke datum toont (Jarno 17-09).
+ *  De testdata blijft ISO, alleen de zichtbare naam wordt omgezet. */
+const dmj = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
+
 function rij(scope: Page | Locator, chauffeur: number, vanaf: string) {
-  return scope.getByRole('button', { name: `Bekijk ziekmelding van ${CHAUFFEURS[chauffeur].name} vanaf ${vanaf}`, exact: true });
+  return scope.getByRole('button', { name: `Bekijk ziekmelding van ${CHAUFFEURS[chauffeur].name} vanaf ${dmj(vanaf)}`, exact: true });
 }
 
 async function pastBinnenScherm(page: Page) {

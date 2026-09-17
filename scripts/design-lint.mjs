@@ -65,6 +65,13 @@ const REGELS = [
   // leading-relaxed is dan een recept naast de rol. De textarea in Field.tsx
   // is een input, geen tekstrol, en blijft.
   { naam: 'leading-relaxed (gebruik text-body of text-body-sm)', re: /\bleading-relaxed\b/g, zonderCommentaar: true, skip: PRIMITIVES },
+  // Rauwe ISO-datum in beeld: '2026-09-17' leest als jaar/maand/dag en dat
+  // vond Jarno onduidelijk (17-09). Elke datum die een mens ziet gaat door
+  // src/lib/format.ts: formatDatumDMJ / formatPeriodeDMJ (17/09/2026) of
+  // formatDateHuman / formatShortDay / formatDayLong ("do 17 september").
+  // Deze regel kijkt naar JSX-uitvoer ({req.startDate}), niet naar sleutels
+  // of URL's in template-literals.
+  { naam: 'datumveld rechtstreeks in beeld (gebruik formatDatumDMJ/formatPeriodeDMJ/formatDateHuman uit lib/format)', re: /(?<![=$\w])\{[A-Za-z_$][\w$.?]*\.(?:startDate|endDate|shiftDate|returnDate|leaveStart|leaveEnd|validUntil|date|datum)\}/g, zonderCommentaar: true },
 ];
 
 // text-2xs (11 px) is sinds golf 2 alleen nog voor badges, tellers en de

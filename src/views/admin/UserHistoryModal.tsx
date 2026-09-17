@@ -7,7 +7,7 @@ import { Card } from '../../components/Card';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
-import { formatLeaveType, serviceNumberOf } from '../../lib/format';
+import { formatDatumDMJ, formatLeaveType, formatPeriodeDMJ, formatShortDay, serviceNumberOf } from '../../lib/format';
 
 
 export function UserHistoryModal({
@@ -93,7 +93,7 @@ export function UserHistoryModal({
                 <Card key={l.id} tone="muted" padding="sm" className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800">
-                      {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
+                      {formatPeriodeDMJ(l.startDate, l.endDate)}
                     </p>
                     <p className="text-xs font-medium text-slate-500">{formatLeaveType(l.type)}{l.comment ? `, "${l.comment}"` : ''}</p>
                   </div>
@@ -130,9 +130,9 @@ export function UserHistoryModal({
                     </div>
                     <p className="text-xs font-medium text-slate-500 tabular-nums">
                       {s.shiftLine ? `Dienst ${s.shiftLine}` : 'Dienst onbekend'}
-                      {s.shiftDate ? ` op ${s.shiftDate}` : ''}
+                      {s.shiftDate ? ` op ${formatDatumDMJ(s.shiftDate)}` : ''}
                       {handmatig ? ' · handmatig overgezet' : ''}
-                      {` · aangevraagd ${s.createdAt.slice(0, 10)}`}
+                      {` · aangevraagd ${formatDatumDMJ(s.createdAt)}`}
                     </p>
                     {s.reason && (
                       <p className="text-xs font-normal italic text-slate-500 line-clamp-2">"{s.reason}"</p>
@@ -155,7 +155,7 @@ export function UserHistoryModal({
                 <Card key={s.id} tone="muted" padding="sm" className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
-                    <span className="text-sm font-semibold text-slate-800">{s.date}</span>
+                    <span className="text-sm font-semibold text-slate-800">{formatShortDay(s.date)}</span>
                     <span className="text-xs font-medium text-slate-500">Dienst <span className="text-oker-700">{serviceNumberOf(s)}</span></span>
                   </div>
                   <span className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0">
@@ -180,7 +180,7 @@ export function UserHistoryModal({
                 <Card key={s.id} tone="muted" padding="sm" className="flex items-center justify-between gap-3 opacity-80">
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
-                    <span className="text-sm font-semibold text-slate-700">{s.date}</span>
+                    <span className="text-sm font-semibold text-slate-700">{formatShortDay(s.date)}</span>
                     <span className="text-xs font-medium text-slate-500">Dienst <span className="text-oker-700">{serviceNumberOf(s)}</span></span>
                   </div>
                   <span className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0">

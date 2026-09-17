@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { CalendarDays, ChevronRight, Search } from 'lucide-react';
 import type { LeaveRequest, User } from '../types';
 import { daysBetween } from '../lib/leaveBalance';
-import { formatShortDay } from '../lib/format';
+import { formatDatumDMJ, formatShortDay } from '../lib/format';
 import { cn } from '../lib/ui';
 import { Avatar } from './Avatar';
 import { Card, CardHeader } from './Card';
@@ -127,7 +127,7 @@ function ZiekteRij({ melding: r, naam, vandaag, diensten, historiek, onOpen }: {
       {/* rauw: complete ziekmelding als één knop, opent het bestaande detail */}
       <button
         type="button"
-        aria-label={`Bekijk ziekmelding van ${naam} vanaf ${r.startDate}`}
+        aria-label={`Bekijk ziekmelding van ${naam} vanaf ${formatDatumDMJ(r.startDate)}`}
         aria-describedby={`${beschrijvingId}-periode ${beschrijvingId}-dagen ${beschrijvingId}-status`}
         onClick={() => onOpen(r)}
         className="ios-pressable grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-3 p-4 text-left transition-colors hover:bg-surface-row-hover @[46rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,.8fr)_minmax(0,.9fr)_1rem] @[46rem]:items-center @[46rem]:gap-4"
