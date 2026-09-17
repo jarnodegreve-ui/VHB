@@ -529,6 +529,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               const info = shiftInfoFor(swap);
               const requester = users.find(u => u.id === swap.requesterId);
               const canRespond = canRespondToSwap(user, swap);
+              // Planner/admin ziet ook ruilen tussen twee collega's: dan is het
+              // niet "jij" die geeft, maar de collega aan wie de ruil gericht is.
+              const voorMij = swap.targetDriverId === user.id;
+              const ontvanger = swap.targetDriverId ? users.find(u => u.id === swap.targetDriverId) : undefined;
               return (
                 <Card key={swap.id} className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
@@ -539,10 +543,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
                       )}
                       <p className="text-xs font-medium text-slate-500">Door: {requester?.name}</p>
+                      {!voorMij && ontvanger && <p className="text-xs font-medium text-slate-500">Aan: {ontvanger.name}</p>}
                       {isTakeoverSwap(swap) ? (
                         <div className="mt-1.5"><TakeoverBadge /></div>
                       ) : returnLabel(swap) && (
-                        <p className="text-xs font-medium text-blue-700 mt-1">Jij geeft: {returnLabel(swap)}</p>
+                        <p className="text-xs font-medium text-blue-700 mt-1">
+                          {voorMij ? 'Jij geeft' : ontvanger ? `${ontvanger.name} geeft` : 'In ruil'}: {returnLabel(swap)}
+                        </p>
                       )}
                     </div>
                     <span className="shrink-0">
