@@ -2051,10 +2051,16 @@ export const pruneOldRecords = async (opts: { errorDays: number; logDays: number
     // tabel ontbreekt (migratie niet gedraaid) — bewust stil
   }
   try {
+    // Dienstwissels blijven staan, hoe oud ook (Jarno 18-09): hun logregels
+    // zijn de enige bron van "wanneer is deze wissel uitgevoerd en door wie",
+    // en het wekelijkse ruiloverzicht is een bewijsstuk voor het klassement.
+    // Het kost niets: het gaat om enkele regels per week, tegenover duizenden
+    // per week voor de rest van het log.
     const { count, error } = await db
       .from("activity_log")
       .delete({ count: "exact" })
-      .lt("created_at", cutoff(opts.logDays));
+      .lt("created_at", cutoff(opts.logDays))
+      .or("entity_type.is.null,entity_type.neq.swap");
     if (!error) summary.activityLog = count ?? 0;
   } catch {
     // idem
@@ -2461,6 +2467,38 @@ export const getSwapsData = async () => {
   const rows = await paginatedFetch((from, to) =>
     client.from('swaps').select('*').order('id', { ascending: true }).range(from, to),
   );
+  return rows.map(toPublicSwap);
+};
+
+/** Alleen de gevraagde wissels — het weekoverzicht heeft er een handvol nodig
+ *  en hoefde daarvoor niet de hele tabel te lezen. */
+/** Eerste en laatste dag waarvoor er planning geïmporteerd is (grenzen van
+ *  planning_matrix_rows). De maandplanning stopt daarop: voorbij de import is
+ *  er niets te zien en een leeg bord leest als "er staat niemand ingepland"
+ *  in plaats van "hier is nog niets geïmporteerd" (Jarno 18-09). */
+export const getPlanningMatrixGrenzen = async (): Promise<{ eerste: string | null; laatste: string | null }> => {
+  const client = requireDb();
+  const rand = async (ascending: boolean) => {
+    const { data, error } = await client
+      .from('planning_matrix_rows')
+      .select('source_date')
+      .order('source_date', { ascending })
+      .limit(1);
+    if (error) throw error;
+    const rij = (data ?? [])[0] as { source_date?: string } | undefined;
+    return rij?.source_date ? String(rij.source_date) : null;
+  };
+  const [eerste, laatste] = await Promise.all([rand(true), rand(false)]);
+  return { eerste, laatste };
+};
+
+export const getSwapsByIds = async (ids: string[]) => {
+  const unieke = [...new Set(ids.map((id) => String(id)).filter(Boolean))];
+  if (unieke.length === 0) return [];
+  const client = requireDb();
+  const rows = await paginatedFetch((from, to) =>
+    client.from('swaps').select('*').in('id', unieke).range(from, to),
+  unieke.length);
   return rows.map(toPublicSwap);
 };
 

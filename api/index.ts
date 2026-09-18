@@ -52,7 +52,7 @@ import {
   trekToegangIn,
   type ToegangIngetrokken,
 } from "./_lib/recordWrites.js";
-import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   swapRaaktBereik,
@@ -66,8 +66,10 @@ import {
   getLoginActivity,
   getCoverageExpectations,
   getEntityHistory,
+  getPlanningMatrixGrenzen,
   getSwapExecutions,
   getSwapHistories,
+  getSwapsByIds,
   getDiversionsData,
   getLeaveData,
   getPlanningCodesData,
@@ -909,7 +911,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
     if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
 
-    const [rows, users, services, codes, leave, swaps] = await Promise.all([
+    const [rows, users, services, codes, leave, swaps, grenzen] = await Promise.all([
       // Alleen de matrixrijen van deze maand: berekenCelWaarheid gooit de rest
       // toch weg (monthRows), maar ze reisden wel eerst mee uit Supabase.
       getPlanningMatrixRows({ month }),
@@ -920,6 +922,9 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       // groeit onbegrensd en is hier nooit nodig.
       getLeaveData({ endOnOrAfter: `${month}-01` }),
       getSwapsData(),
+      // Grenzen van de geïmporteerde planning, zodat het bord niet verder
+      // bladert dan er data is (Jarno 18-09).
+      getPlanningMatrixGrenzen(),
     ]);
 
     // De cel-waarheid (matrix + goedgekeurde ruilen + afwezigheden) is sinds
@@ -971,7 +976,13 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       return res.send(buffer);
     }
 
-    res.json({ month, dates, drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name, section: c.section || null })), cells });
+    res.json({
+      month,
+      dates,
+      drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name, section: c.section || null })),
+      cells,
+      geimporteerd: grenzen,
+    });
   } catch (err: any) {
     console.error("Error computing month planning:", err);
     res.status(500).json({ error: "Kon maandplanning niet berekenen." });
@@ -2560,7 +2571,8 @@ app.get("/api/cron/week-rapport", async (req, res) => {
   }
   try {
     const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const [sessies, leave, swaps, errors] = await Promise.all([
+    const nuIso = new Date().toISOString();
+    const [sessies, leave, swaps, errors, ruilUitvoeringen] = await Promise.all([
       // Actieve gebruikers uit de aanwezigheid, niet meer uit de auth-regels:
       // die telden alleen wie zich opnieuw aanmeldde plus één regel per dag
       // per persoon, en telden dus structureel te laag. Ontbreekt de migratie,
@@ -2572,12 +2584,17 @@ app.get("/api/cron/week-rapport", async (req, res) => {
       getLeaveData(),
       getSwapsData(),
       getClientErrorsSince(sinceIso),
+      // Uitgevoerde wissels uit het activiteitenlog, niet uit `decidedAt`:
+      // dat veld wordt door een latere afhandeling ('completed') overschreven,
+      // waardoor een wissel van vorige week deze week meegeteld werd (en
+      // omgekeerd). Zelfde bron als het wekelijkse ruiloverzicht.
+      getSwapExecutions(sinceIso, nuIso, SWAP_UITVOERING_ACTIES),
     ]);
     const uniekeGebruikers = new Set(sessies.map((s) => s.userId)).size;
     const inWindow = (iso?: string) => Boolean(iso && iso >= sinceIso);
     const verlofBeslist = leave.filter((l) => inWindow(l.decidedAt)).length;
     const verlofNieuw = leave.filter((l) => inWindow(l.createdAt)).length;
-    const ruilBeslist = swaps.filter((sw) => inWindow(sw.decidedAt)).length;
+    const ruilUitgevoerd = ruilUitvoeringen.length;
     const ruilNieuw = swaps.filter((sw) => inWindow(sw.createdAt)).length;
     const openVerlof = leave.filter((l) => l.status === "pending").length;
     const openRuil = swaps.filter((sw) => sw.status === "pending" || sw.status === "accepted").length;
@@ -2590,7 +2607,7 @@ app.get("/api/cron/week-rapport", async (req, res) => {
     const regels = [
       `Actieve gebruikers: ${uniekeGebruikers}`,
       `Verlof: ${verlofNieuw} nieuw · ${verlofBeslist} beslist · ${openVerlof} open`,
-      `Dienstruil: ${ruilNieuw} nieuw · ${ruilBeslist} beslist · ${openRuil} open`,
+      `Dienstruil: ${ruilNieuw} nieuw · ${ruilUitgevoerd} uitgevoerd · ${openRuil} open`,
       `Client-fouten: ${echteFouten} (sessie-meldingen niet meegeteld)`,
     ];
     await sendEmail({
@@ -3549,12 +3566,6 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
  * huidige status): hij ís die week doorgevoerd geweest, en het klassement is
  * een bewijsstuk van wat er gebeurd is.
  */
-const SWAP_UITVOERING_ACTIES = [
-  "Dienstruil goedgekeurd",
-  "Diensten handmatig gewisseld",
-  "Dienst handmatig overgezet",
-];
-
 app.get("/api/swaps/uitgevoerd", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
@@ -3581,12 +3592,12 @@ app.get("/api/swaps/uitgevoerd", authenticate, requireRole("planner", "admin"), 
     });
 
     const swapIds = [...new Set(uitvoeringen.map((regel) => String(regel.entityId ?? "")).filter(Boolean))];
-    const [alleSwaps, users, verloopPerSwap] = await Promise.all([
-      getSwapsData(),
+    const [betrokkenSwaps, users, verloopPerSwap] = await Promise.all([
+      getSwapsByIds(swapIds),
       getUsersData(),
       getSwapHistories(swapIds),
     ]);
-    const swapById = new Map(alleSwaps.map((s: any) => [String(s.id), s]));
+    const swapById = new Map(betrokkenSwaps.map((s: any) => [String(s.id), s]));
     const naamById = new Map(users.map((u: any) => [String(u.id), String(u.name)]));
     const naamVan = (id: unknown) => {
       const sleutel = String(id ?? "");
@@ -3881,6 +3892,35 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // wordt, bewaakt de eigendomscheck hieronder al: alleen de húidige
     // eigenaar kan hem aanbieden.
     const OPEN_SWAP_STATES = new Set(["pending", "accepted"]);
+    // Exclusiviteit geldt per VOLLEDIGE dienst (datum + dienstnummer), niet per
+    // planning-rij: een gesplitste dienst staat als meerdere rijen in de
+    // planning, dus een check op shiftId sloot alleen dát deel af en op het
+    // tweede deel kon een tweede verzoek starten — terwijl de doorvoer altijd
+    // de hele dienst verplaatst. Jarno 18-09: meerdere wissels ná elkaar op
+    // dezelfde dienst mogen, twee tegelijk op delen van één dienst niet.
+    const dienstSleutelVan = (date: unknown, line: unknown) => {
+      const dag = String(date ?? "").trim();
+      const nummer = toLookupToken(String(line ?? ""));
+      return dag && nummer ? `${dag}__${nummer}` : "";
+    };
+    const openDienstSleutels = new Set<string>();
+    const openShiftIds = new Set<string>();
+    for (const s of previousSwaps) {
+      if (!OPEN_SWAP_STATES.has(String(s.status))) continue;
+      const sleutel = dienstSleutelVan(s.shiftDate, s.shiftLine);
+      if (sleutel) openDienstSleutels.add(sleutel);
+      // Vangnet voor records van vóór de shift_info-migratie: die dragen geen
+      // datum/dienstnummer, daar blijft de rij-id het enige aanknopingspunt.
+      openShiftIds.add(String(s.shiftId));
+    }
+    /** Loopt er al een verzoek voor deze dienst? `shift` komt van de server
+     *  (getShiftById), nooit uit de payload: anders ontwijkt een verzonnen
+     *  shiftDate de controle. */
+    const looptAlEenVerzoek = (shiftId: unknown, shift: { date: string; line: string } | null) => {
+      const sleutel = dienstSleutelVan(shift?.date, shift?.line);
+      return (!!sleutel && openDienstSleutels.has(sleutel)) || openShiftIds.has(String(shiftId ?? ""));
+    };
+    const LOOPT_AL_FOUT = "Voor deze dienst loopt al een ruilverzoek, ook als dat over een ander deel van dezelfde dienst gaat. Trek dat eerst in of wacht de beslissing af.";
     // Wat er werkelijk weggeschreven wordt. Planner/admin schrijven de hele
     // payload (vertrouwde rol); voor een chauffeur bouwen we de set op uit
     // enkel de records die hij/zij legitiem toevoegt of beantwoordt — zo
@@ -3896,8 +3936,8 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         // Alleen echte nieuwe aanvragen ('pending'); andere creatie-statussen
         // worden verderop al met een strengere 403 geweigerd.
         if (String(next.status) !== "pending") continue;
-        if (previousSwaps.some((s) => String(s.shiftId) === String(next.shiftId) && OPEN_SWAP_STATES.has(String(s.status)))) {
-          return res.status(409).json({ error: "Voor deze dienst loopt al een ruilverzoek. Trek dat eerst in of wacht de beslissing af." });
+        if (looptAlEenVerzoek(next.shiftId, await getShiftById(String(next.shiftId ?? "")))) {
+          return res.status(409).json({ error: LOOPT_AL_FOUT });
         }
       }
     }
@@ -3961,9 +4001,10 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (!offeredShift || String(offeredShift.driverId) !== selfId) {
             return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen dienst te ruil aanbieden." });
           }
-          // Exclusiviteit per dienst: geen tweede open verzoek voor dezelfde shift.
-          if (previousSwaps.some((s) => String(s.shiftId) === String(next.shiftId) && OPEN_SWAP_STATES.has(String(s.status)))) {
-            return res.status(409).json({ error: "Voor deze dienst loopt al een ruilverzoek. Trek dat eerst in of wacht de beslissing af." });
+          // Exclusiviteit per dienst, dus ook over de delen van een
+          // gesplitste dienst heen (offeredShift komt van de server).
+          if (looptAlEenVerzoek(next.shiftId, offeredShift)) {
+            return res.status(409).json({ error: LOOPT_AL_FOUT });
           }
           const targetUser = allUsersForSwapChecks.find((u: any) => String(u.id) === String(next.targetDriverId));
           if (!targetUser || targetUser.isActive === false) {

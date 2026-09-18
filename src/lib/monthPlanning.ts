@@ -43,6 +43,9 @@ export type MonthPlanning = {
   drivers: { id: string; name: string; section?: string | null }[];
   /** cells[driverId][date] = { code, kind } — alleen niet-lege cellen */
   cells: Record<string, Record<string, MonthCell>>;
+  /** Eerste en laatste dag waarvoor er planning geïmporteerd is; het bord
+   *  bladert niet voorbij deze grenzen. null = nog niets geïmporteerd. */
+  geimporteerd?: { eerste: string | null; laatste: string | null };
 };
 
 export function fetchMonthPlanning(month: string): Promise<MonthPlanning> {

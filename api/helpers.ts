@@ -122,6 +122,17 @@ export const toDatabaseUser = (user: AppUser) => ({
 // Gedeeld met de client (badge in rooster/Mijn dag): shared/schemas/constanten.ts.
 export { HANDMATIGE_WISSEL_PREFIX };
 
+/** Log-acties waarmee een dienstwissel écht in de planning wordt doorgevoerd.
+ *  Dit is de bron voor "welke wissels zijn er in die periode uitgevoerd": het
+ *  wekelijkse ruiloverzicht én de tellers in het weekrapport lezen hem, want
+ *  `decidedAt` op de wissel wordt door een latere afhandeling ('completed')
+ *  overschreven en deugt daar niet voor. */
+export const SWAP_UITVOERING_ACTIES = [
+  "Dienstruil goedgekeurd",
+  "Diensten handmatig gewisseld",
+  "Dienst handmatig overgezet",
+];
+
 export const isHandmatigeWissel = (swap: { reason?: unknown } | null | undefined) =>
   String(swap?.reason ?? "").startsWith(HANDMATIGE_WISSEL_PREFIX);
 
