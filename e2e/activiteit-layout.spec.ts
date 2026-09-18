@@ -129,6 +129,16 @@ for (const profiel of PROFIELEN) {
       const gesplitst = aanwezigheid.getByLabel(/^Testgebruiker 4 actief van /);
       await expect(gesplitst).toHaveCount(2);
 
+      // Ingeklapt: acht balken zichtbaar, de rest achter de knop. Zonder dit
+      // werd "Vandaag" bij 12 tot 40 actieve mensen één lange lap waar je
+      // doorheen moest scrollen om bij het auditspoor te komen (Jarno 18-09).
+      const uitklapKnop = aanwezigheid.getByRole('button', { name: 'Toon alle 12' });
+      await expect(uitklapKnop).toBeVisible();
+      await expect(aanwezigheid.getByLabel(/ actief van /)).toHaveCount(9); // 8 rijen, person 3 heeft er twee
+      await uitklapKnop.click();
+      await expect(aanwezigheid.getByRole('button', { name: 'Toon minder' })).toBeVisible();
+      await expect(aanwezigheid.getByLabel(/ actief van /)).toHaveCount(13); // alle 12, person 3 telt dubbel
+
       // Een dag in de strip kiezen stuurt de tijdbalken eronder. De dagstrip
       // blijft aanklikbaar, ook wanneer de grafiek mobiel compacter wordt.
       const gisteren = aanwezigheid.getByRole('button', { name: /^gisteren: \d+ actief$/ });

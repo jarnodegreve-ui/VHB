@@ -16,7 +16,7 @@ import { Avatar } from '../../components/Avatar';
 import { Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import { LegeLijst, NietGevonden } from '../../components/illustraties';
-import { balkenVoorDag, duurKort, nuOnline, telPerDag, type AanwezigheidSessie } from '../../lib/aanwezigheid';
+import { balkenVoorDag, duurKort, nuOnline, telPerDag, type AanwezigheidSessie, type DagBalk } from '../../lib/aanwezigheid';
 
 /**
  * Activiteit (herwerking 08-09-2026, vraag Jarno: professioneler en
@@ -96,6 +96,16 @@ const TIJDBALK_NAAM = 'col-start-1 row-start-1 flex min-w-0 items-center gap-2';
 const TIJDBALK_BALK = 'col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1';
 const TIJDBALK_DUUR = 'col-start-2 row-start-1 text-right sm:col-start-3';
 
+/**
+ * Zoveel tijdbalken staan meteen open; de rest zit achter "Toon alle N".
+ * Op een gewone werkdag zijn er twaalf tot veertig mensen actief, en dan werd
+ * "Vandaag" één lange lap waar je doorheen moest scrollen om bij het
+ * auditspoor eronder te komen (Jarno 18-09). Acht toont de hele ochtendploeg
+ * in één oogopslag, en omdat de langst aanwezigen bovenaan staan is wie
+ * wegvalt per definitie de kortste bezoeker van die dag.
+ */
+const BALKEN_INGEKLAPT = 8;
+
 /** Minuten sinds middernacht als klok: 375 wordt "06:15", 1440 wordt "24:00". */
 const uurMin = (min: number): string => {
   const m = Math.max(0, Math.min(24 * 60, Math.round(min)));
@@ -143,6 +153,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
   // laatste kende per persoon hoogstens één auth-regel per dag, dus het kon
   // alleen "was aanwezig" zeggen en nooit "van wanneer tot wanneer".
   const [gekozenDag, setGekozenDag] = useState(vandaag);
+  const [alleBalken, setAlleBalken] = useState(false);
   const perDagTelling = useMemo(() => telPerDag(aanwezigheid), [aanwezigheid]);
   // Laatste 14 dagen als doorlopende reeks (dagen zonder gebruik = 0).
   const veertienDagen = useMemo(() => Array.from({ length: 14 }, (_, i) => {
@@ -158,6 +169,36 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
   const nuMinuten = new Date().getHours() * 60 + new Date().getMinutes();
   const isLopend = (userId: string, totMin: number) =>
     gekozenDag === vandaag && totMin >= nuMinuten - 10 && online.some((o) => o.userId === userId);
+  // balkenVoorDag sorteert al op duur, dus wie achter het uitklappen verdwijnt
+  // is per definitie de kortste bezoeker van die dag.
+  const zichtbareBalken = balken.slice(0, BALKEN_INGEKLAPT);
+  const restBalken = balken.slice(BALKEN_INGEKLAPT);
+
+  /** Eén tijdbalk. Losse functie omdat hij zowel boven als in de uitklap staat. */
+  const tijdbalkRij = (b: DagBalk) => (
+    <div key={b.userId} className={cn(TIJDBALK_RIJ, 'py-2')}>
+      <span className={TIJDBALK_NAAM}>
+        <Avatar naam={b.naam} size="sm" />
+        <span className="min-w-0 truncate text-sm font-semibold text-slate-800" title={b.naam}>{b.naam}</span>
+      </span>
+      <div className={cn(TIJDBALK_BALK, 'relative h-5 overflow-hidden rounded-md bg-surface-muted ring-1 ring-hairline-subtle')}>
+        {/* Ankers op 06, 12 en 18 uur, zodat een blok afleesbaar is zonder te mikken. */}
+        {[6, 12, 18].map((u) => (
+          <span key={u} className="absolute inset-y-0 w-px bg-hairline-strong/40" style={{ left: `${(u / 24) * 100}%` }} aria-hidden="true" />
+        ))}
+        {b.periodes.map((per) => (
+          <span
+            key={per.vanIso}
+            className={cn('absolute inset-y-0.5 rounded', isLopend(b.userId, per.totMin) ? 'bg-oker-500' : 'bg-slate-500')}
+            style={{ left: `${(per.vanMin / 1440) * 100}%`, width: `${Math.max(0.5, ((per.totMin - per.vanMin) / 1440) * 100)}%` }}
+            title={`${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}`}
+            aria-label={`${b.naam} actief van ${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}`}
+          />
+        ))}
+      </div>
+      <span className={cn(TIJDBALK_DUUR, 'text-xs font-medium font-mono text-slate-600')} title={`${b.periodes.length} ${b.periodes.length === 1 ? 'periode' : 'periodes'}`}>{duurKort(b.totaalMin)}</span>
+    </div>
+  );
   const recentLogins = useMemo(
     () => logins.filter((e) => e.action === 'Aangemeld').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30),
     [logins],
@@ -334,7 +375,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                       <button
                         key={d.day}
                         type="button"
-                        onClick={() => setGekozenDag(d.day)}
+                        onClick={() => { setGekozenDag(d.day); setAlleBalken(false); }}
                         aria-pressed={d.day === gekozenDag}
                         aria-label={`${dagKort(d.day, vandaag)}: ${d.count} actief`}
                         className="group flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-end gap-1 rounded-lg"
@@ -411,31 +452,27 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                       </div>
                     </div>
                     <div className="divide-y divide-hairline-subtle">
-                      {balken.map((b) => (
-                        <div key={b.userId} className={cn(TIJDBALK_RIJ, 'py-2')}>
-                          <span className={TIJDBALK_NAAM}>
-                            <Avatar naam={b.naam} size="sm" />
-                            <span className="min-w-0 truncate text-sm font-semibold text-slate-800" title={b.naam}>{b.naam}</span>
-                          </span>
-                          <div className={cn(TIJDBALK_BALK, 'relative h-5 overflow-hidden rounded-md bg-surface-muted ring-1 ring-hairline-subtle')}>
-                            {/* Ankers op 06, 12 en 18 uur, zodat een blok afleesbaar is zonder te mikken. */}
-                            {[6, 12, 18].map((u) => (
-                              <span key={u} className="absolute inset-y-0 w-px bg-hairline-strong/40" style={{ left: `${(u / 24) * 100}%` }} aria-hidden="true" />
-                            ))}
-                            {b.periodes.map((per) => (
-                              <span
-                                key={per.vanIso}
-                                className={cn('absolute inset-y-0.5 rounded', isLopend(b.userId, per.totMin) ? 'bg-oker-500' : 'bg-slate-500')}
-                                style={{ left: `${(per.vanMin / 1440) * 100}%`, width: `${Math.max(0.5, ((per.totMin - per.vanMin) / 1440) * 100)}%` }}
-                                title={`${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}`}
-                                aria-label={`${b.naam} actief van ${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}`}
-                              />
-                            ))}
-                          </div>
-                          <span className={cn(TIJDBALK_DUUR, 'text-xs font-medium font-mono text-slate-600')} title={`${b.periodes.length} ${b.periodes.length === 1 ? 'periode' : 'periodes'}`}>{duurKort(b.totaalMin)}</span>
-                        </div>
-                      ))}
+                      {zichtbareBalken.map(tijdbalkRij)}
                     </div>
+                    {restBalken.length > 0 && (
+                      <>
+                        <Uitklap open={alleBalken}>
+                          <div className="divide-y divide-hairline-subtle border-t border-hairline-subtle">
+                            {restBalken.map(tijdbalkRij)}
+                          </div>
+                        </Uitklap>
+                        <div className="mt-1 border-t border-hairline-subtle pt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAlleBalken((v) => !v)}
+                            icon={<ChevronDown size={16} className={uitklapChevron(alleBalken, 180)} />}
+                          >
+                            {alleBalken ? 'Toon minder' : `Toon alle ${balken.length}`}
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
