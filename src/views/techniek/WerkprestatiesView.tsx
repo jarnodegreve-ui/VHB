@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Clock, ClipboardList, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Clock, ClipboardList, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
 import { WERKCODES, WERKCODE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werkcode } from '../../../shared/techniek';
 import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
-import { formatShortDay } from '../../lib/format';
+import { formatDayLong, formatShortDay } from '../../lib/format';
 import { metOngedaan } from '../../lib/ongedaan';
 import {
   bewaarWerkprestatie, laadVoertuigen, laadWerkRapport, laadWerkprestaties, maakWerkprestatie, TechniekFout, urenTekst, urenTussen,
@@ -25,17 +25,182 @@ import { StickyThead } from '../../components/Table';
 type Tab = 'lijst' | 'rapport';
 type Periode = 'week' | 'maand' | 'kwartaal';
 
-const isoMin = (iso: string, dagen: number) => { const d = new Date(`${iso}T00:00:00`); d.setDate(d.getDate() - dagen); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+/** ISO-dag n dagen verder (negatief = terug). */
+const schuifDag = (iso: string, n: number) => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/** De prestatie terug als body, om hem na een undo opnieuw aan te maken. */
+const prestatieBody = (w: Werkprestatie): WerkprestatieBody => ({
+  datum: w.datum, vehicleId: w.vehicleId ?? null, werkcode: w.werkcode, omschrijving: w.omschrijving,
+  beginTijd: w.beginTijd ?? null, eindeTijd: w.eindeTijd ?? null, werkuren: w.werkuren,
+  kmstand: w.kmstand ?? null, defectId: w.defectId ?? null, mecanicienId: w.mecanicienId,
+});
+
+const busLabel = (w: Werkprestatie) => (w.vehicleId ? voertuigNaam({ busnr: w.busnr ?? '', kortNr: w.kortNr }) : 'Garage / algemeen');
+
+/** Chronologisch binnen een dag: begintijd eerst, anders volgorde van registreren. */
+const opTijd = (a: Werkprestatie, b: Werkprestatie) =>
+  (a.beginTijd ?? '99:99').localeCompare(b.beginTijd ?? '99:99') || (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
 
 /**
- * Werkprestaties (fase A Access-migratie, 13-09): wat de garage per dag aan
- * welke bus deed, met werkcode en bestede uren (tblUtgevoerdeWerken). Een
- * technieker registreert eigen prestaties en ziet alleen die; staf ziet alles
- * en kan voor een technieker registreren. Tab Rapport = de drie Access-
- * kruistabellen (per bus, per mecanicien, per kwartaal) voor een jaar.
+ * Dagadministratie (fase A Access-migratie, 13-09): wat de garage per dag aan
+ * welke bus deed, met werkcode en bestede uren (tblUtgevoerdeWerken). De
+ * route en de API heten nog werkprestaties, dat is de naam van het record.
+ *
+ * Twee schermen achter één route (Jarno 18-09):
+ * - technieker: een dagboek. Eén dag tegelijk, taken ingeven, terug naar
+ *   vorige dagen bladeren en een eigen taak rechtzetten. Geen cijfers, geen
+ *   periodelijst en geen rapport: die horen bij het opvolgen, niet bij het
+ *   ingeven.
+ * - staf: het volledige overzicht (periodes, filter per technieker, de drie
+ *   Access-kruistabellen) over alle techniekers heen.
  */
 export function WerkprestatiesView({ currentUser, users }: { currentUser: User; users: User[] }) {
   const staf = isStaf(currentUser.role);
+  const techniekers = useMemo(
+    () => users.filter((u) => (u.role === 'technieker' || (staf && isStaf(u.role))) && u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name, 'nl')),
+    [users, staf],
+  );
+  return staf
+    ? <StafOverzicht currentUser={currentUser} techniekers={techniekers} />
+    : <Dagboek currentUser={currentUser} />;
+}
+
+/** Het dagboek van één technieker: per dag ingeven, terugbladeren, rechtzetten. */
+function Dagboek({ currentUser }: { currentUser: User }) {
+  const vandaag = vandaagIso();
+  const [datum, setDatum] = useState(vandaag);
+  const [rijen, setRijen] = useState<Werkprestatie[]>([]);
+  const [voertuigen, setVoertuigen] = useState<Vehicle[]>([]);
+  const [bewerk, setBewerk] = useState<{ prestatie: Werkprestatie | null } | null>(null);
+
+  const zl = useZelfLadend(async () => {
+    const [w, v] = await Promise.all([laadWerkprestaties({ van: datum, tot: datum, limit: 200 }), laadVoertuigen()]);
+    setRijen([...w].sort(opTijd));
+    setVoertuigen(v);
+  }, { deps: [datum], boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon je werkprestaties niet laden.') });
+
+  const totaalUren = rijen.reduce((s, w) => s + w.werkuren, 0);
+  const isVandaag = datum === vandaag;
+  const legeStaat = rijen.length === 0 && !zl.laden && !zl.fout;
+  const toevoegen = <Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Taak toevoegen</Button>;
+
+  /** Een gewijzigde taak die naar een andere dag verhuist, verlaat deze dag. */
+  const naOpslaan = (w: Werkprestatie) => {
+    if (w.datum !== datum) { setDatum(w.datum); return; }
+    setRijen((lijst) => (lijst.some((x) => x.id === w.id) ? lijst.map((x) => (x.id === w.id ? w : x)) : [...lijst, w]).sort(opTijd));
+  };
+
+  const verwijderen = (w: Werkprestatie) => {
+    void metOngedaan({
+      boodschap: 'Taak verwijderd.',
+      uitvoeren: async () => { await verwijderWerkprestatie(w.id); setRijen((lijst) => lijst.filter((x) => x.id !== w.id)); },
+      herstellen: async () => { const terug = await maakWerkprestatie(prestatieBody(w)); naOpslaan(terug); },
+      toast: (message, tone, action, opties) => notify(message, tone, { action, opties }),
+    });
+  };
+
+  return (
+    <PageShell>
+      <PageHeader
+        eyebrow="Techniek"
+        title="Dagadministratie"
+        actions={(
+          <>
+            <VersheidRegel {...zl.versheid} />
+            {!legeStaat && toevoegen}
+          </>
+        )}
+      />
+      {zl.fout && rijen.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
+
+      {/* Datumnavigatie: vooruit stopt bij vandaag, een dagboek loopt niet voor. */}
+      <Card padding="sm" className="flex flex-wrap items-center gap-2">
+        <IconButton label="Vorige dag" onClick={() => setDatum(schuifDag(datum, -1))}><ChevronLeft size={18} /></IconButton>
+        <div className="min-w-0 flex-1 sm:w-44 sm:flex-none"><DateInput value={datum} max={vandaag} onChange={(v) => v && setDatum(v)} aria-label="Dag" /></div>
+        <IconButton label="Volgende dag" disabled={isVandaag} onClick={() => setDatum(schuifDag(datum, 1))}><ChevronRight size={18} /></IconButton>
+        {/* De dagnaam staat al in het datumveld; op een telefoon zou hij alleen
+            afkappen, daar dragen de knop en het veld het. */}
+        <p className="hidden min-w-0 flex-1 truncate text-sm font-semibold text-slate-800 sm:block">{isVandaag ? 'Vandaag' : formatDayLong(datum)}</p>
+        {!isVandaag && <Button variant="ghost" size="sm" icon={<CalendarDays size={14} />} onClick={() => setDatum(vandaag)}>Vandaag</Button>}
+      </Card>
+
+      {zl.fout && rijen.length === 0 ? (
+        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+      ) : zl.laden && rijen.length === 0 ? (
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Dagadministratie wordt geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
+      ) : rijen.length === 0 ? (
+        <EmptyState
+          illustratie={<LegeLijst />}
+          title={isVandaag ? 'Nog niets geregistreerd vandaag' : 'Deze dag staat leeg'}
+          message="Noteer per taak aan welke bus je werkte, welk soort werk het was en hoelang het duurde."
+          action={toevoegen}
+        />
+      ) : (
+        <Card padding="none" className="overflow-clip">
+          <div className="flex items-baseline justify-between border-b border-hairline px-5 py-3">
+            <h2 className="text-card-title">{rijen.length} {rijen.length === 1 ? 'taak' : 'taken'}</h2>
+            <span className="text-xs font-medium text-slate-500">{urenTekst(totaalUren)} u samen</span>
+          </div>
+          <ul className="divide-y divide-hairline-subtle">
+            {rijen.map((w) => (
+              <PrestatieRegel
+                key={w.id}
+                w={w}
+                acties={(
+                  <>
+                    <IconButton label="Aanpassen" size="sm" onClick={() => setBewerk({ prestatie: w })}><Pencil size={16} /></IconButton>
+                    <IconButton label="Verwijderen" size="sm" onClick={() => verwijderen(w)}><Trash2 size={16} /></IconButton>
+                  </>
+                )}
+              />
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {bewerk && (
+        <PrestatieModal
+          prestatie={bewerk.prestatie}
+          standaardDatum={datum}
+          voertuigen={voertuigen}
+          currentUser={currentUser}
+          staf={false}
+          onClose={() => setBewerk(null)}
+          onKlaar={(w) => { naOpslaan(w); setBewerk(null); }}
+        />
+      )}
+    </PageShell>
+  );
+}
+
+/** Eén taak in de lijst; `mecanicien` toont wie het deed (alleen zinvol voor staf). */
+function PrestatieRegel({ w, mecanicien, acties }: { w: Werkprestatie; mecanicien?: boolean; acties?: ReactNode }) {
+  return (
+    <li className="flex items-start gap-3 px-5 py-3">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="text-sm font-semibold text-slate-800">{busLabel(w)}</p>
+          <Chip mono={false} title={WERKCODE_LABEL[w.werkcode]}>{w.werkcode} · {WERKCODE_LABEL[w.werkcode]}</Chip>
+          {w.defectId && <Badge tone="oker" stil className="whitespace-nowrap">uit gele boek</Badge>}
+        </div>
+        <p className="whitespace-pre-wrap text-sm text-slate-700">{w.omschrijving}</p>
+        <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+          {mecanicien && w.mecanicienNaam && <span className="inline-flex items-center gap-1"><Avatar naam={w.mecanicienNaam} size="sm" />{w.mecanicienNaam}</span>}
+          {w.beginTijd && w.eindeTijd && <span>{w.beginTijd} tot {w.eindeTijd}</span>}
+        </p>
+      </div>
+      <span className="shrink-0 text-sm font-semibold text-slate-800">{urenTekst(w.werkuren)} u</span>
+      {acties && <div className="flex shrink-0 items-center gap-0.5">{acties}</div>}
+    </li>
+  );
+}
+
+/** Staf: alle techniekers, periodes, cijfers en de Access-kruistabellen. */
+function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techniekers: User[] }) {
   const [tab, setTab] = useState<Tab>('lijst');
   const [periode, setPeriode] = useState<Periode>('maand');
   const [rijen, setRijen] = useState<Werkprestatie[]>([]);
@@ -47,10 +212,10 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
   const [rapportLaden, setRapportLaden] = useState(false);
 
   const vandaag = vandaagIso();
-  const van = periode === 'week' ? isoMin(vandaag, 7) : periode === 'maand' ? isoMin(vandaag, 31) : isoMin(vandaag, 92);
+  const van = schuifDag(vandaag, periode === 'week' ? -7 : periode === 'maand' ? -31 : -92);
 
   const zl = useZelfLadend(async () => {
-    const [w, v] = await Promise.all([laadWerkprestaties({ van, mecanicienId: staf ? mecanicienFilter || undefined : undefined, limit: 2000 }), laadVoertuigen()]);
+    const [w, v] = await Promise.all([laadWerkprestaties({ van, mecanicienId: mecanicienFilter || undefined, limit: 2000 }), laadVoertuigen()]);
     setRijen(w); setVoertuigen(v);
   }, { deps: [van, mecanicienFilter], boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de werkprestaties niet laden.') });
   useEffect(() => {
@@ -59,19 +224,18 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
     void laadWerkRapport(rapportJaar).then(setRapport).catch(() => notify('Kon het rapport niet laden.', 'error')).finally(() => setRapportLaden(false));
   }, [tab, rapportJaar]);
 
-  const techniekers = useMemo(() => users.filter((u) => (u.role === 'technieker' || (staf && isStaf(u.role))) && u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name, 'nl')), [users, staf]);
   const totaalUren = rijen.reduce((s, w) => s + w.werkuren, 0);
   const perDag = useMemo(() => {
     const m = new Map<string, Werkprestatie[]>();
     for (const w of rijen) { const l = m.get(w.datum) ?? []; l.push(w); m.set(w.datum, l); }
-    return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    return [...m.entries()].map(([datum, l]) => [datum, [...l].sort(opTijd)] as const).sort((a, b) => b[0].localeCompare(a[0]));
   }, [rijen]);
   const dagenMetWerk = perDag.length;
 
   const naOpslaan = (w: Werkprestatie) => setRijen((lijst) => (lijst.some((x) => x.id === w.id) ? lijst.map((x) => (x.id === w.id ? w : x)) : [w, ...lijst]).sort((a, b) => b.datum.localeCompare(a.datum)));
 
   const verwijderen = (w: Werkprestatie) => {
-    const body: WerkprestatieBody = { datum: w.datum, vehicleId: w.vehicleId ?? null, werkcode: w.werkcode, omschrijving: w.omschrijving, beginTijd: w.beginTijd ?? null, eindeTijd: w.eindeTijd ?? null, werkuren: w.werkuren, kmstand: w.kmstand ?? null, defectId: w.defectId ?? null, mecanicienId: w.mecanicienId };
+    const body = prestatieBody(w);
     void metOngedaan({
       boodschap: 'Werkprestatie verwijderd.',
       uitvoeren: async () => { await verwijderWerkprestatie(w.id); setRijen((lijst) => lijst.filter((x) => x.id !== w.id)); },
@@ -79,8 +243,6 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
       toast: (message, tone, action, opties) => notify(message, tone, { action, opties }),
     });
   };
-
-  const busLabel = (w: Werkprestatie) => (w.vehicleId ? voertuigNaam({ busnr: w.busnr ?? '', kortNr: w.kortNr }) : 'Garage / algemeen');
 
   // De lege staat draagt dezelfde actie als de kopknop; dan hoort er maar
   // één gouden knop in beeld te staan (punt 13, 16-09).
@@ -90,7 +252,7 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
     <PageShell>
       <PageHeader
         eyebrow="Techniek"
-        title="Werkprestaties"
+        title="Dagadministratie"
         actions={(
           <>
             <VersheidRegel {...zl.versheid} />
@@ -125,20 +287,18 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
             <FilterChip active={periode === 'week'} onClick={() => setPeriode('week')}>Week</FilterChip>
             <FilterChip active={periode === 'maand'} onClick={() => setPeriode('maand')}>Maand</FilterChip>
             <FilterChip active={periode === 'kwartaal'} onClick={() => setPeriode('kwartaal')}>Kwartaal</FilterChip>
-            {staf && (
-              <Select aria-label="Technieker" value={mecanicienFilter} onChange={(e) => setMecanicienFilter(e.target.value)} className="ml-auto min-w-0 px-2.5 py-1.5 text-xs">
-                <option value="">Alle techniekers</option>
-                {techniekers.map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}
-              </Select>
-            )}
+            <Select aria-label="Technieker" value={mecanicienFilter} onChange={(e) => setMecanicienFilter(e.target.value)} className="ml-auto min-w-0 px-2.5 py-1.5 text-xs">
+              <option value="">Alle techniekers</option>
+              {techniekers.map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}
+            </Select>
           </div>
 
           {zl.fout && rijen.length === 0 ? (
             <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
           ) : zl.laden && rijen.length === 0 ? (
-            <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Werkprestaties worden geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
+            <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Dagadministratie wordt geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
           ) : rijen.length === 0 ? (
-            <EmptyState illustratie={<LegeLijst />} title="Nog geen werkprestaties in deze periode" message="Registreer wat je vandaag aan welke bus deed." action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>} />
+            <EmptyState illustratie={<LegeLijst />} title="Nog geen werkprestaties in deze periode" message="Registreer wat de garage vandaag aan welke bus deed." action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>} />
           ) : (
             <div className="space-y-4">
               {perDag.map(([datum, lijst]) => (
@@ -149,26 +309,17 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
                   </div>
                   <ul className="divide-y divide-hairline-subtle">
                     {lijst.map((w) => (
-                      <li key={w.id} className="flex items-start gap-3 px-5 py-3">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="text-sm font-semibold text-slate-800">{busLabel(w)}</p>
-                            <Chip mono={false} title={WERKCODE_LABEL[w.werkcode]}>{w.werkcode} · {WERKCODE_LABEL[w.werkcode]}</Chip>
-                            {w.defectId && <Badge tone="oker" stil className="whitespace-nowrap">uit gele boek</Badge>}
-                          </div>
-                          <p className="whitespace-pre-wrap text-sm text-slate-700">{w.omschrijving}</p>
-                          <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                            {staf && w.mecanicienNaam && <span className="inline-flex items-center gap-1"><Avatar naam={w.mecanicienNaam} size="sm" />{w.mecanicienNaam}</span>}
-                            {w.beginTijd && w.eindeTijd && <span>{w.beginTijd} tot {w.eindeTijd}</span>}
-                            {w.kmstand ? <span>{w.kmstand.toLocaleString('nl-BE')} km</span> : null}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-sm font-semibold text-slate-800">{urenTekst(w.werkuren)} u</span>
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          <IconButton label="Bewerken" size="sm" onClick={() => setBewerk({ prestatie: w })}><Pencil size={16} /></IconButton>
-                          <IconButton label="Verwijderen" size="sm" onClick={() => verwijderen(w)}><Trash2 size={16} /></IconButton>
-                        </div>
-                      </li>
+                      <PrestatieRegel
+                        key={w.id}
+                        w={w}
+                        mecanicien
+                        acties={(
+                          <>
+                            <IconButton label="Bewerken" size="sm" onClick={() => setBewerk({ prestatie: w })}><Pencil size={16} /></IconButton>
+                            <IconButton label="Verwijderen" size="sm" onClick={() => verwijderen(w)}><Trash2 size={16} /></IconButton>
+                          </>
+                        )}
+                      />
                     ))}
                   </ul>
                 </Card>
@@ -183,10 +334,11 @@ export function WerkprestatiesView({ currentUser, users }: { currentUser: User; 
       {bewerk && (
         <PrestatieModal
           prestatie={bewerk.prestatie}
+          standaardDatum={vandaag}
           voertuigen={voertuigen}
           techniekers={techniekers}
           currentUser={currentUser}
-          staf={staf}
+          staf
           onClose={() => setBewerk(null)}
           onKlaar={(w) => { naOpslaan(w); setBewerk(null); }}
         />
@@ -249,17 +401,16 @@ function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | n
   );
 }
 
-function PrestatieModal({ prestatie, voertuigen, techniekers, currentUser, staf, onClose, onKlaar }: {
-  prestatie: Werkprestatie | null; voertuigen: Vehicle[]; techniekers: User[]; currentUser: User; staf: boolean; onClose: () => void; onKlaar: (w: Werkprestatie) => void;
+function PrestatieModal({ prestatie, standaardDatum, voertuigen, techniekers = [], currentUser, staf, onClose, onKlaar }: {
+  prestatie: Werkprestatie | null; standaardDatum: string; voertuigen: Vehicle[]; techniekers?: User[]; currentUser: User; staf: boolean; onClose: () => void; onKlaar: (w: Werkprestatie) => void;
 }) {
-  const [datum, setDatum] = useState(prestatie?.datum ?? vandaagIso());
+  const [datum, setDatum] = useState(prestatie?.datum ?? standaardDatum);
   const [vehicleId, setVehicleId] = useState(prestatie?.vehicleId ?? '');
   const [werkcode, setWerkcode] = useState<Werkcode>(prestatie?.werkcode ?? 'H');
   const [omschrijving, setOmschrijving] = useState(prestatie?.omschrijving ?? '');
   const [beginTijd, setBeginTijd] = useState(prestatie?.beginTijd ?? '');
   const [eindeTijd, setEindeTijd] = useState(prestatie?.eindeTijd ?? '');
   const [werkuren, setWerkuren] = useState(prestatie ? urenTekst(prestatie.werkuren) : '');
-  const [kmstand, setKmstand] = useState(prestatie?.kmstand ? String(prestatie.kmstand) : '');
   const [mecanicienId, setMecanicienId] = useState(prestatie?.mecanicienId ?? String(currentUser.id));
   const [fouten, setFouten] = useState<Record<string, string>>({});
   const [bezig, setBezig] = useState(false);
@@ -278,12 +429,14 @@ function PrestatieModal({ prestatie, voertuigen, techniekers, currentUser, staf,
     const body: WerkprestatieBody = {
       datum, vehicleId: vehicleId || null, werkcode, omschrijving: omschrijving.trim(),
       beginTijd: beginTijd || null, eindeTijd: eindeTijd || null, werkuren: Number.isFinite(uren) ? uren : -1,
-      kmstand: kmstand.trim() ? Number(kmstand) : null, defectId: prestatie?.defectId ?? null,
+      // Kilometerstand staat niet meer in het formulier (Jarno 18-09, overbodig);
+      // wat er bij een oude prestatie in staat, blijft staan.
+      kmstand: prestatie?.kmstand ?? null, defectId: prestatie?.defectId ?? null,
       mecanicienId: staf ? mecanicienId : undefined,
     };
     try {
       const w = prestatie ? await bewaarWerkprestatie(prestatie.id, body) : await maakWerkprestatie(body);
-      notify(prestatie ? 'Werkprestatie bijgewerkt.' : 'Werkprestatie geregistreerd.', 'success');
+      notify(prestatie ? 'Taak bijgewerkt.' : 'Taak geregistreerd.', 'success');
       onKlaar(w);
     } catch (err) {
       if (err instanceof TechniekFout && err.veldfouten) setFouten(err.veldfouten);
@@ -291,12 +444,16 @@ function PrestatieModal({ prestatie, voertuigen, techniekers, currentUser, staf,
     } finally { setBezig(false); }
   };
 
+  const titel = staf
+    ? (prestatie ? 'Werkprestatie bewerken' : 'Werkprestatie registreren')
+    : (prestatie ? 'Taak aanpassen' : 'Taak toevoegen');
+
   return (
-    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={prestatie ? 'Werkprestatie bewerken' : 'Werkprestatie registreren'}>
+    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={titel}>
       <div className="p-6">
-        <CardHeader title={prestatie ? 'Werkprestatie bewerken' : 'Werkprestatie registreren'} description="Wat heb je aan welke bus gedaan en hoelang duurde het?" />
+        <CardHeader title={titel} description="Wat heb je aan welke bus gedaan en hoelang duurde het?" />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Datum" required error={fouten.datum}>{({ id }) => <DateInput id={id} value={datum} onChange={setDatum} />}</Field>
+          <Field label="Datum" required error={fouten.datum}>{({ id }) => <DateInput id={id} value={datum} max={staf ? undefined : vandaagIso()} onChange={setDatum} />}</Field>
           {staf && (
             <Field label="Technieker" error={fouten.mecanicienId}>{({ id }) => <Select id={id} value={mecanicienId} onChange={(e) => setMecanicienId(e.target.value)}>{techniekers.map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}{!techniekers.some((u) => String(u.id) === mecanicienId) && <option value={mecanicienId}>{currentUser.name}</option>}</Select>}</Field>
           )}
@@ -308,14 +465,13 @@ function PrestatieModal({ prestatie, voertuigen, techniekers, currentUser, staf,
               </Select>
             )}
           </Field>
-          <Field label="Werkcode" required error={fouten.werkcode}>{({ id }) => <Select id={id} value={werkcode} onChange={(e) => setWerkcode(e.target.value as Werkcode)}>{WERKCODES.map((c) => <option key={c} value={c}>{c} · {WERKCODE_LABEL[c]}</option>)}</Select>}</Field>
+          <Field label="Soort werk" required error={fouten.werkcode}>{({ id }) => <Select id={id} value={werkcode} onChange={(e) => setWerkcode(e.target.value as Werkcode)}>{WERKCODES.map((c) => <option key={c} value={c}>{c} · {WERKCODE_LABEL[c]}</option>)}</Select>}</Field>
           <Field label="Wat is er gedaan?" required className="sm:col-span-2" error={fouten.omschrijving}>
             {({ id, invalid }) => <Textarea id={id} invalid={invalid} value={omschrijving} rows={3} maxLength={WERK_OMSCHRIJVING_MAX} onChange={(e) => setOmschrijving(e.target.value)} placeholder="Bijvoorbeeld: remblokken vooraan vervangen, olie ververst" />}
           </Field>
           <Field label="Begin" error={fouten.beginTijd}>{({ id, invalid }) => <Input id={id} invalid={invalid} type="time" value={beginTijd} onChange={(e) => setBeginTijd(e.target.value)} />}</Field>
           <Field label="Einde" error={fouten.eindeTijd}>{({ id, invalid }) => <Input id={id} invalid={invalid} type="time" value={eindeTijd} onChange={(e) => setEindeTijd(e.target.value)} />}</Field>
           <Field label="Uren" required hint="Bijvoorbeeld 1,5" error={fouten.werkuren}>{({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="decimal" value={werkuren} onChange={(e) => setWerkuren(e.target.value)} />}</Field>
-          <Field label="Kilometerstand" error={fouten.kmstand}>{({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="numeric" value={kmstand} onChange={(e) => setKmstand(e.target.value)} />}</Field>
         </div>
         <div className="mt-5 flex gap-3">
           <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>

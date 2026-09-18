@@ -72,6 +72,17 @@ export const laadWerkprestaties = (q: WerkQuery = {}) => {
   const qs = p.toString();
   return vraag<Werkprestatie[]>(`/api/werkprestaties${qs ? `?${qs}` : ''}`);
 };
+/**
+ * Alle werken aan één bus, ongeacht wie ze deed (scherm Uitgevoerde werken
+ * per bus). Eigen route, want /api/werkprestaties beperkt een technieker tot
+ * zijn eigen rijen.
+ */
+export const laadVoertuigWerken = (vehicleId: string, q: { van?: string; tot?: string; limit?: number } = {}) => {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') p.set(k, String(v));
+  const qs = p.toString();
+  return vraag<Werkprestatie[]>(`/api/vehicles/${encodeURIComponent(vehicleId)}/werken${qs ? `?${qs}` : ''}`);
+};
 export const maakWerkprestatie = (body: WerkprestatieBody) => vraag<Werkprestatie>('/api/werkprestaties', json('POST', body));
 export const bewaarWerkprestatie = (id: string, body: WerkprestatieBody) => vraag<Werkprestatie>(`/api/werkprestaties/${encodeURIComponent(id)}`, json('PUT', body));
 export const verwijderWerkprestatie = (id: string) => vraag<{ success: true }>(`/api/werkprestaties/${encodeURIComponent(id)}`, { method: 'DELETE' });

@@ -305,12 +305,23 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/activity')) return json(ACTIVITY);
     if (p.endsWith('/api/ritblaadje')) return json(null);
     // Techniek (13-09): voertuigen, gele boek, werkprestaties, vervaldata.
+    if (p.endsWith('/werken') && p.includes('/api/vehicles/')) {
+      const id = p.split('/api/vehicles/')[1].split('/')[0];
+      const van = url.searchParams.get('van');
+      return json(WERKPRESTATIES.filter((w) => w.vehicleId === id && (!van || w.datum >= van)));
+    }
     if (p.endsWith('/api/vehicles')) return json(VEHICLES);
     if (p.endsWith('/api/vehicle-expiries')) return json(VEHICLE_EXPIRIES);
     if (p.endsWith('/api/defecten/aantal-open')) return json({ open: DEFECTEN.filter((d) => d.status === 'open').length });
     if (p.endsWith('/api/defecten')) return json(url.searchParams.get('mijn') === '1' ? DEFECTEN.filter((d) => d.gemeldDoor === user.id) : DEFECTEN);
     if (p.endsWith('/api/werkprestaties/rapport')) return json({ jaar: 2026, totaalUren: 3, aantal: 2, perBus: [{ label: 'Bus 26', uren: 3, aantal: 2, perKwartaal: [0, 0, 3, 0] }], perMecanicien: [{ label: 'Jelle Technieker', uren: 3, aantal: 2, perKwartaal: [0, 0, 3, 0] }], perWerkcode: [{ werkcode: 'H', uren: 3, aantal: 2 }] });
-    if (p.endsWith('/api/werkprestaties')) return json(WERKPRESTATIES);
+    if (p.endsWith('/api/werkprestaties')) {
+      // Het dagboek van de technieker vraagt één dag op (van=tot); honoreer
+      // dat hier, anders staat gisteren onder de kop van vandaag.
+      const van = url.searchParams.get('van');
+      const tot = url.searchParams.get('tot');
+      return json(WERKPRESTATIES.filter((w) => (!van || w.datum >= van) && (!tot || w.datum <= tot)));
+    }
     // Loon (13-09): dagafsluiting, looncodes, matricules, export.
     // Dienstopbouw (13-09).
     if (p.endsWith('/api/dienstopbouw/imports')) return json(SEGMENT_IMPORTS);
