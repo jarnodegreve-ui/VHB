@@ -535,6 +535,59 @@ export const getLatestAuthEventAt = async (userId: string): Promise<string | nul
   return (data[0] as { created_at: string }).created_at;
 };
 
+/** Activiteitenlog van een reeks dienstruilen, oudste eerst — het verloop
+ *  dat het weekoverzicht per wissel afdrukt. Eén query i.p.v. één per wissel:
+ *  een drukke week telt al snel 20 wissels. */
+export const getSwapHistories = async (
+  swapIds: string[],
+): Promise<Record<string, ActivityLogRecord[]>> => {
+  const ids = [...new Set(swapIds.map((id) => String(id)).filter(Boolean))];
+  if (ids.length === 0) return {};
+  const client = requireDb();
+  const rows = await paginatedFetch<ActivityLogRow>((from, to) =>
+    client
+      .from("activity_log")
+      .select("*")
+      .eq("entity_type", "swap")
+      .in("entity_id", ids)
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  ids.length * 40);
+  const perSwap: Record<string, ActivityLogRecord[]> = Object.fromEntries(ids.map((id) => [id, []]));
+  for (const row of rows) {
+    const entry = toPublicActivityLog(row);
+    const id = String(entry.entityId ?? "");
+    if (perSwap[id]) perSwap[id].push(entry);
+  }
+  return perSwap;
+};
+
+/** Log-regels die een dienstwissel écht doorvoeren, binnen [vanIso, totIso).
+ *  Dit is het antwoord op "welke wissels zijn die week uitgevoerd": niet de
+ *  wissels die díe week in de planning stonden, maar de wissels die in dat
+ *  venster in het portaal zijn doorgevoerd — goedkeuring van een ruil én de
+ *  handmatige wissels van de planning. Oudste eerst (chronologisch, zoals het
+ *  klassement ze wil). */
+export const getSwapExecutions = async (
+  vanIso: string,
+  totIso: string,
+  acties: string[],
+): Promise<ActivityLogRecord[]> => {
+  const client = requireDb();
+  const rows = await paginatedFetch<ActivityLogRow>((from, to) =>
+    client
+      .from("activity_log")
+      .select("*")
+      .eq("entity_type", "swap")
+      .in("action", acties)
+      .gte("created_at", vanIso)
+      .lt("created_at", totIso)
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  2000);
+  return rows.map(toPublicActivityLog);
+};
+
 /**
  * Per-entity geschiedenis: alle activity-log entries voor één specifieke
  * entity (bv. één service, één swap). Wordt gebruikt door de "Geschiedenis"-

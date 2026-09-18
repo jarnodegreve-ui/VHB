@@ -12,7 +12,10 @@ import { DateInput, Field, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
-import { formatDateHuman, formatShortDay, serviceNumberOf } from '../lib/format';
+import { addDagen } from '../lib/datum';
+import { maandagVan } from '../lib/roosterUren';
+import { isoWeekOf } from '../lib/week';
+import { formatDateHuman, formatPeriodeDMJ, formatShortDay, serviceNumberOf } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { canRespondToSwap } from '../lib/authorization';
 import { notify, openPdfInNewTab } from '../lib/ui';
@@ -57,10 +60,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // stonden er anders 30-40 kaarten in één modal.
   const [showAllShifts, setShowAllShifts] = useState(false);
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
-  // Dagoverzicht dienstwissels afdrukken (bewijsstuk voor de map, Jarno 17-09).
-  const [printDag, setPrintDag] = useState(() => new Date().toLocaleDateString('sv-SE'));
-  const drukDagoverzichtAf = (dag: string) => {
-    if (dag) openPdfInNewTab(`${window.location.origin}${window.location.pathname}?print-dienstwissels=${dag}`);
+  // Weekoverzicht van de uitgevoerde dienstwissels afdrukken (bewijsstuk voor
+  // het klassement, Jarno 18-09). De datum mag elke dag uit de week zijn, het
+  // printscherm neemt de maandag; standaard de lopende week.
+  const [printDag, setPrintDag] = useState(() => isoDate(new Date()));
+  const drukWeekoverzichtAf = (dag: string) => {
+    if (dag) openPdfInNewTab(`${window.location.origin}${window.location.pathname}?ruiloverzicht-week=${dag}`);
   };
   // Beoordeling in een side panel: alle ruil-context + beslis-acties
   // zonder paginawissel (zelfde patroon als LeaveManagementView).
@@ -635,8 +640,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           <div className="flex flex-wrap items-center justify-between gap-2">
             <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
             <div className="flex items-center gap-2">
-              <DateInput size="sm" value={printDag} onChange={setPrintDag} aria-label="Dag van het overzicht" />
-              <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => drukDagoverzichtAf(printDag)}>Dagoverzicht</Button>
+              <DateInput size="sm" value={printDag} onChange={setPrintDag} aria-label="Dag uit de week van het ruiloverzicht" />
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Printer size={14} />}
+                onClick={() => drukWeekoverzichtAf(printDag)}
+                title={`Uitgevoerde wissels van ${formatPeriodeDMJ(maandagVan(printDag), addDagen(maandagVan(printDag), 6))}`}
+              >
+                Ruiloverzicht week {isoWeekOf(maandagVan(printDag))}
+              </Button>
             </div>
           </div>
         );
@@ -1209,14 +1222,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               onClick={() => setHistorySwap(reviewSwap)}
               aria-label="Wijzigingsgeschiedenis"
               title="Wijzigingsgeschiedenis"
-            />
-            <Button
-              variant="ghost"
-              size="md"
-              icon={<Printer size={14} />}
-              onClick={() => drukDagoverzichtAf(shiftInfoFor(reviewSwap).date)}
-              aria-label="Dagoverzicht van deze dag afdrukken"
-              title="Dagoverzicht van deze dag afdrukken"
             />
             {reviewSwap.status === 'accepted' && (
               <>
