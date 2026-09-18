@@ -106,7 +106,10 @@ alter table public.user_presence enable row level security;
 revoke all on table public.user_presence from anon, authenticated;
 grant all on table public.user_presence to service_role;
 
--- Post-conditie: liever hier stuk dan stil half gedraaid.
+-- Post-conditie: liever hier stuk dan stil half gedraaid. Dekt élk onderdeel
+-- dat hierboven iets afsluit, niet alleen het bestaan van de tabel. Wie dit
+-- bestand in stukken in de SQL Editor plakt en per ongeluk een blok overslaat,
+-- krijgt hier een fout in plaats van een "geslaagde" migratie met een gat.
 do $$
 begin
   if to_regclass('public.user_presence') is null then
@@ -115,10 +118,22 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'user_presence_user_id_fkey') then
     raise exception 'post-conditie faalt: FK user_presence_user_id_fkey ontbreekt';
   end if;
+  if not exists (select 1 from pg_constraint where conname = 'user_presence_periode_check') then
+    raise exception 'post-conditie faalt: check-constraint user_presence_periode_check ontbreekt';
+  end if;
   if not exists (
     select 1 from pg_class where oid = 'public.user_presence'::regclass and relrowsecurity
   ) then
     raise exception 'post-conditie faalt: RLS staat uit op public.user_presence';
+  end if;
+  -- Het tweede slot: de revoke moet écht gewerkt hebben. Zonder deze check zou
+  -- een vergeten revoke pas bij de nachtelijke beleid-drift opvallen.
+  if exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'public' and table_name = 'user_presence'
+      and grantee in ('anon', 'authenticated')
+  ) then
+    raise exception 'post-conditie faalt: anon/authenticated hebben nog rechten op public.user_presence';
   end if;
 end
 $$;
