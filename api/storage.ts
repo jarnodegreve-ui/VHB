@@ -25,6 +25,7 @@ import {
   toDatabaseLeave,
   toDatabasePlanningCode,
   toDatabaseService,
+  maandGrenzen,
   toDatabaseSwap,
   toDatabaseUpdate,
   toDatabaseUser,
@@ -229,15 +230,33 @@ export const replacePlanningData = async (data: ShiftRecord[]) => {
 
 // --- Planning matrix rows ---
 
-export const getPlanningMatrixRows = async (): Promise<PlanningMatrixRow[]> => {
+/**
+ * Matrixrijen, standaard de volledige historiek.
+ *
+ * `month` ("JJJJ-MM") begrenst de lezing tot die kalendermaand. Aanroepers die
+ * tóch alleen die maand gebruiken (het maandbord, de dagafsluiting) lazen
+ * anders elke keer álles: de matrix dekte op 18-09 vier maanden (131 rijen,
+ * 141 kB) en groeit met elke ET-import, terwijl de maand er daarna in het
+ * geheugen uit gefilterd werd (`berekenCelWaarheid` → monthRows). De rem zit
+ * dus op de verkeerde plek: het verkeer Supabase → functie groeide mee met de
+ * leeftijd van het portaal, en het maandbord doet per keer twee van deze
+ * aanroepen (het tweewekenvenster valt bijna altijd over een maandgrens).
+ * Gebruikt de bestaande index `planning_matrix_rows_source_date_idx`.
+ */
+export const getPlanningMatrixRows = async (opts?: { month?: string }): Promise<PlanningMatrixRow[]> => {
   const client = requireDb();
-  return paginatedFetch<PlanningMatrixRow>((from, to) =>
-    client
+  // Alleen een welgevormde maand filtert; alles anders leest de hele matrix,
+  // zodat een tikfout nooit stil een halflege planning oplevert.
+  const grens = maandGrenzen(String(opts?.month ?? ''));
+  return paginatedFetch<PlanningMatrixRow>((from, to) => {
+    let q = client
       .from('planning_matrix_rows')
       .select('*')
       .order('source_date', { ascending: true })
-      .range(from, to),
-  );
+      .range(from, to);
+    if (grens) q = q.gte('source_date', grens.van).lte('source_date', grens.tot);
+    return q;
+  });
 };
 
 // Replace-semantiek: wis alle bestaande rijen, dan insert. Vroeger werd
