@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, ShieldAlert, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, ShieldAlert, ShieldCheck, Smartphone, Trash2, X } from 'lucide-react';
 import type { User } from '../../types';
 import { apiJson } from '../../lib/api';
 import { getDeviceToken } from '../../lib/device';
 import { cn, notify } from '../../lib/ui';
 import { formatDateHuman } from '../../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, FilterChip, IconButton, MicroLabel, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, Switch } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
-import { TableToolbar } from '../../components/Table';
-import { Card, CardHeader } from '../../components/Card';
+import { Card } from '../../components/Card';
+import { Avatar } from '../../components/Avatar';
+import { InfoTip } from '../../components/InfoTip';
 import { Field, Input } from '../../components/Field';
 import { SkeletonRow } from '../../components/Skeleton';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
@@ -46,7 +47,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const ownToken = getDeviceToken();
-  const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name ?? `Onbekende gebruiker (${id})`;
+  const userName = useCallback((id: string) => users.find((u) => String(u.id) === String(id))?.name ?? `Onbekende gebruiker (${id})`, [users]);
   const keyOf = (d: Device) => `${d.userId}:${d.deviceToken}`;
   const isOwnCurrent = (d: Device) => String(d.userId) === String(currentUserId) && d.deviceToken === ownToken;
 
@@ -151,17 +152,17 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     if (statusFilter !== 'all' && d.status !== statusFilter) return false;
     if (!zoekTerm) return true;
     return `${userName(d.userId)} ${d.name}`.toLowerCase().includes(zoekTerm);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [alle, statusFilter, zoekTerm, users]);
+  }), [alle, statusFilter, zoekTerm, userName]);
   const wisFilters = () => { setZoek(''); setStatusFilter('all'); };
 
-  // Desktop: het eerste toestel staat standaard open — de wachtrij eerst
-  // (dat is wat de admin hier komt doen), anders het eerste zichtbare; na
-  // schrappen schuift de keuze door naar de buur. De groep van een
-  // automatisch gekozen toestel klapt open, anders zie je de keuze niet.
+  // Eén lijst: wachtende toestellen eerst, binnen het gekozen filter.
+  // De detailkeuze mag nooit een weggefilterd toestel terughalen.
   const volgorde = useMemo(
-    () => [...pending, ...zichtbaar.filter((d) => d.status !== 'pending')],
-    [pending, zichtbaar],
+    () => [...zichtbaar].sort((a, b) =>
+      Number(b.status === 'pending') - Number(a.status === 'pending')
+      || userName(a.userId).localeCompare(userName(b.userId), 'nl'),
+    ),
+    [zichtbaar, userName],
   );
   const wisKeuze = useCallback(() => setGekozenKey(null), []);
   useStandaardKeuze({
@@ -174,182 +175,110 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     },
     wis: wisKeuze,
   });
-  // Groepeer per gebruiker, in de volgorde van de gebruikerslijst (actief eerst).
+  // Groepeer binnen het filter; ook binnen elke groep staan wachtende
+  // toestellen vooraan.
   const byUser = new Map<string, Device[]>();
-  for (const d of zichtbaar) {
+  for (const d of volgorde) {
     const list = byUser.get(String(d.userId)) ?? [];
     list.push(d);
     byUser.set(String(d.userId), list);
   }
   const telPerStatus = (status: Device['status']) => alle.filter((d) => d.status === status).length;
 
-  /** Rij in de wachtrij: de rij zelf opent het detail; "Keur goed" blijft als
-   *  snelle actie ernaast — dat is wat de admin hier negen van de tien keer doet. */
-  const renderPending = (device: Device) => {
-    const isCurrent = gekozen !== null && keyOf(gekozen) === keyOf(device);
-    return (
-      <div
-        key={keyOf(device)}
-        className={cn(
-          'flex items-center gap-2 rounded-xl border px-3 py-2 border-amber-200 bg-amber-50/80',
-          isCurrent && 'ring-1 ring-hairline-strong',
-        )}
-      >
-        {/* rauw: rij-inhoud (icoon + naam + status + meta) als knop naast de snelle actie — opent het detailpaneel */}
-        <button type="button" onClick={() => kies(device)} aria-current={isCurrent ? 'true' : undefined} className="group flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-slate-500">
-            <Smartphone size={16} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="truncate font-semibold text-slate-900">{device.name}</p>
-              {isOwnCurrent(device) ? <Badge tone="blue" stil>Dit toestel</Badge> : null}
-            </div>
-            <MicroLabel className="mt-0.5">
-              {userName(device.userId)} · geregistreerd {formatDateHuman(device.createdAt)}
-            </MicroLabel>
-          </div>
-          <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
-        </button>
-        {/* Secundair: bij meerdere wachtende toestellen stonden hier evenveel
-            gouden knoppen; de gouden "Keur goed" staat in het detailpaneel
-            (afwerking 04-09, nr. 5). */}
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<ShieldCheck size={14} />}
-          disabled={busyKey === keyOf(device)}
-          onClick={() => void act(device, 'approve')}
-        >
-          Keur goed
-        </Button>
-      </div>
-    );
-  };
-
-  /** Eénregel-rij voor de gegroepeerde lijst: status als stip (goedgekeurd is
-   *  de norm), alleen afwijkingen krijgen een badge; de acties staan in het
-   *  detailpaneel. */
-  const renderDeviceCompact = (device: Device) => {
-    const isCurrent = gekozen !== null && keyOf(gekozen) === keyOf(device);
-    return (
-      // rauw: hele rij is de knop (stip + naam + badges + chevron) — opent het detailpaneel
-      <button
-        key={keyOf(device)}
-        type="button"
-        onClick={() => kies(device)}
-        aria-current={isCurrent ? 'true' : undefined}
-        className={cn(
-          'group flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left transition-colors hover:bg-surface-soft-hover',
-          isCurrent && 'bg-oker-50/70',
-        )}
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          {/* Stip = status; voor screenreaders staat het label ernaast (sr-only),
-              afwijkingen krijgen daarnaast een zichtbare badge. */}
-          <span
-            aria-hidden="true"
-            className={cn('h-2 w-2 shrink-0 rounded-full', device.status === 'approved' ? 'bg-emerald-500' : device.status === 'pending' ? 'bg-amber-500' : 'bg-red-500')}
-          />
-          <span className="sr-only">{STATUS_BADGE[device.status].label}</span>
-          <span className="truncate text-sm font-semibold text-slate-800">{device.name}</span>
-          {device.status === 'revoked' && <Badge tone="red">Geblokkeerd</Badge>}
-          {device.status === 'pending' && <Badge tone="amber">Wacht</Badge>}
-          {isOwnCurrent(device) && <Badge tone="blue" stil>Dit toestel</Badge>}
-        </span>
-        <ChevronRight size={14} className={cn('shrink-0 transition-colors', isCurrent ? 'text-oker-500' : 'text-slate-300 group-hover:text-slate-600')} />
-      </button>
-    );
-  };
+  // De lijst behoudt de groepering per gebruiker. Naam, telling en chevron
+  // hebben elk een eigen kolom, zodat lange namen de uitlijning niet breken.
+  const groepen = [...byUser.entries()].sort(([a, da], [b, db]) =>
+    Number(db.some((d) => d.status === 'pending')) - Number(da.some((d) => d.status === 'pending'))
+    || userName(a).localeCompare(userName(b), 'nl'),
+  );
 
   const lijst = (
-    <div className="space-y-6 md:space-y-8">
-      {pending.length > 0 && (
-        <Card>
-          <CardHeader
-            title="Wacht op goedkeuring"
-            aside={<Badge tone="amber" dot className="shrink-0 tabular-nums">{pending.length}</Badge>}
+    <Card padding="none" className="overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-4 sm:px-5">
+        <h2 className="text-card-title">Gebruikers</h2>
+        <span className="text-xs text-slate-500">{devices === null ? 'Laden…' : `${groepen.length} ${groepen.length === 1 ? 'gebruiker' : 'gebruikers'}`}</span>
+      </div>
+      {devices === null ? (
+        <div className="divide-y divide-hairline-subtle" aria-busy="true" aria-label="Toestellen worden geladen">
+          <SkeletonRow className="px-5 py-4" />
+          <SkeletonRow className="px-5 py-4" />
+          <SkeletonRow className="px-5 py-4" />
+        </div>
+      ) : devices.length === 0 ? (
+        <div className="p-5">
+          <EmptyState icon={<Smartphone size={20} />} title="Nog geen toestellen" message="Toestellen verschijnen hier zodra gebruikers inloggen." />
+        </div>
+      ) : zichtbaar.length === 0 ? (
+        <div className="p-5">
+          <EmptyState
+            compact
+            title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Geen toestellen met deze status'}
+            message="Pas de zoekterm of het statusfilter aan."
+            action={<Button variant="secondary" size="sm" onClick={wisFilters}>Wis filters</Button>}
           />
-          <div className="mt-4 space-y-2">
-            {pending.map(renderPending)}
-          </div>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader title="Alle toestellen" description="Per gebruiker; klap een naam open voor de toestellen." />
-        {devices === null ? (
-          <div className="mt-4 divide-y divide-hairline-subtle" aria-busy="true" aria-label="Toestellen worden geladen">
-            <SkeletonRow className="px-2 py-3" />
-            <SkeletonRow className="px-2 py-3" />
-            <SkeletonRow className="px-2 py-3" />
-          </div>
-        ) : devices.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState
-              icon={<Smartphone size={20} />}
-              title="Nog geen toestellen"
-              message="Toestellen verschijnen hier zodra gebruikers inloggen. Blijft de lijst leeg, draai dan eerst de user_devices-migratie."
-            />
-          </div>
-        ) : (
-          <>
-            <TableToolbar
-              className="mt-4"
-              zoek={zoek}
-              onZoek={setZoek}
-              placeholder="Zoek op gebruiker of toestel…"
-              telling={`${zichtbaar.length} van ${alle.length} toestellen`}
-              filters={(
-                <>
-                  <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>Alles</FilterChip>
-                  <FilterChip active={statusFilter === 'pending'} onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}>Wacht ({telPerStatus('pending')})</FilterChip>
-                  <FilterChip active={statusFilter === 'revoked'} onClick={() => setStatusFilter(statusFilter === 'revoked' ? 'all' : 'revoked')}>Geblokkeerd ({telPerStatus('revoked')})</FilterChip>
-                </>
-              )}
-            />
-            {zichtbaar.length === 0 ? (
-              <div className="mt-4">
-                <EmptyState
-                  compact
-                  title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Geen toestellen met deze status'}
-                  message="Pas de zoekterm of het statusfilter aan."
-                  action={<Button variant="secondary" size="sm" onClick={wisFilters}>Wis filters</Button>}
-                />
-              </div>
-            ) : (
-              <div className="mt-3 divide-y divide-hairline-subtle">
-                {[...byUser.entries()].map(([userId, list]) => {
-                  const open = filterActief || openUsers.includes(userId);
-                  const attention = list.filter((d) => d.status !== 'approved').length;
-                  return (
-                    <div key={userId} className="py-1">
-                      {/* rauw: hele groepsrij is de knop (naam + telling + badge + chevron) */}
-                      <button
-                        type="button"
-                        onClick={() => toggleUser(userId)}
-                        aria-expanded={open}
-                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-soft-hover transition-colors"
-                      >
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <span className="truncate text-sm font-semibold text-slate-800">{userName(userId)}</span>
-                          <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
-                          {attention > 0 && <Badge tone="amber" dot className="tabular-nums">{attention}</Badge>}
+        </div>
+      ) : (
+        <div className="divide-y divide-hairline-subtle">
+          {groepen.map(([userId, list]) => {
+            const open = filterActief || openUsers.includes(userId);
+            const wacht = list.filter((d) => d.status === 'pending').length;
+            return (
+              <div key={userId} className="p-2 sm:px-3">
+                {/* rauw: groepsknop met avatar, naam, telling en uitklapindicator */}
+                <button
+                  type="button"
+                  onClick={() => toggleUser(userId)}
+                  aria-expanded={open}
+                  className="grid min-h-14 w-full grid-cols-[2rem_minmax(0,1fr)_auto_1rem] items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-surface-soft-hover"
+                >
+                  <Avatar naam={userName(userId)} />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-800 [overflow-wrap:anywhere]">{userName(userId)}</span>
+                    {wacht > 0 && <span className="mt-0.5 block text-xs font-medium text-amber-800">{wacht} wacht op goedkeuring</span>}
+                  </span>
+                  <span className="whitespace-nowrap text-xs text-slate-500">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
+                  <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-500')} />
+                </button>
+                <Uitklap open={open}>
+                  <div className="space-y-1 pb-2 pt-1">
+                    {list.map((device) => {
+                      const isCurrent = keyOf(device) === gekozenKey;
+                      return (
+                        <div key={keyOf(device)} className={cn('flex items-center gap-2 rounded-xl px-2', isCurrent && 'bg-surface-muted ring-1 ring-hairline')}>
+                          {/* rauw: toestelrij opent het detail; snelle goedkeuring is een aparte knop */}
+                          <button
+                            type="button"
+                            onClick={() => kies(device)}
+                            aria-current={isCurrent ? 'true' : undefined}
+                            className="group flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-lg py-2 text-left transition-colors hover:bg-surface-soft-hover"
+                          >
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-500"><Smartphone size={18} /></span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-semibold text-slate-800 [overflow-wrap:anywhere]">{device.name}</span>
+                              <span className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                                <span aria-hidden="true" className={cn('h-1.5 w-1.5 shrink-0 rounded-full', device.status === 'approved' ? 'bg-emerald-500' : device.status === 'pending' ? 'bg-amber-500' : 'bg-red-500')} />
+                                {device.status === 'pending' ? 'Wacht op akkoord' : STATUS_BADGE[device.status].label}
+                                {isOwnCurrent(device) && <span>· Dit toestel</span>}
+                              </span>
+                            </span>
+                            <ChevronRight size={14} className="shrink-0 text-slate-500" />
+                          </button>
+                          {device.status === 'pending' && (
+                            <Button variant="secondary" size="sm" className="shrink-0" disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'approve')} aria-label={`Keur ${device.name} van ${userName(userId)} goed`}>
+                              Keur goed
+                            </Button>
+                          )}
                         </div>
-                        <ChevronDown size={16} className={uitklapChevron(open, 180, 'shrink-0 text-slate-400')} />
-                      </button>
-                      <Uitklap open={open}>
-                        <div className="pb-1.5 pl-2">{list.map(renderDeviceCompact)}</div>
-                      </Uitklap>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                </Uitklap>
               </div>
-            )}
-          </>
-        )}
-      </Card>
-    </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 
   const bezig = gekozen !== null && busyKey === keyOf(gekozen);
@@ -361,24 +290,14 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       subtitle={gekozen ? userName(gekozen.userId) : undefined}
       sleutel={gekozenKey ?? undefined}
       leegTekst="Kies een toestel."
-      chip={gekozen ? (
-        <>
-          <Badge tone={STATUS_BADGE[gekozen.status].tone} dot stil={gekozen.status === 'approved'}>{STATUS_BADGE[gekozen.status].label}</Badge>
-          {isOwnCurrent(gekozen) ? <Badge tone="blue" stil>Dit toestel</Badge> : null}
-        </>
-      ) : undefined}
-      acties={gekozen && !isOwnCurrent(gekozen) ? (
-        <IconButton label="Toestel schrappen" title="Schrappen" variant="danger" size="sm" disabled={bezig} onClick={() => setConfirmDelete(gekozen)}>
-          <Trash2 size={16} />
-        </IconButton>
-      ) : undefined}
+      titelTerugloop
       icon={(
         <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-slate-500">
           <Smartphone size={16} />
         </span>
       )}
       footer={gekozen ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           {gekozen.status !== 'approved' && (
             <Button variant="primary" size="lg" className="flex-1" icon={<ShieldCheck size={16} />} disabled={bezig} onClick={() => void act(gekozen, 'approve')}>
               Keur goed
@@ -389,6 +308,11 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
               Blokkeer
             </Button>
           )}
+          {!isOwnCurrent(gekozen) && (
+            <Button variant="ghost" icon={<Trash2 size={16} />} disabled={bezig} onClick={() => setConfirmDelete(gekozen)}>
+              Schrappen
+            </Button>
+          )}
           {isOwnCurrent(gekozen) && (
             <p className="flex-1 text-xs text-slate-500">Dit is het toestel waarmee je nu bent aangemeld, blokkeren of schrappen kan niet.</p>
           )}
@@ -396,36 +320,35 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       ) : undefined}
     >
       {gekozen && (
-        <div className="space-y-5">
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={STATUS_BADGE[gekozen.status].tone} dot stil>{STATUS_BADGE[gekozen.status].label}</Badge>
+            {isOwnCurrent(gekozen) && <Badge tone="blue" stil>Dit toestel</Badge>}
+          </div>
+          <dl className="divide-y divide-hairline-subtle text-sm">
+            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 pb-3">
+              <dt className="text-slate-500">Gebruiker</dt>
+              <dd className="font-medium text-slate-800 [overflow-wrap:anywhere]">{userName(gekozen.userId)}</dd>
+            </div>
+            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 py-3">
+              <dt className="text-slate-500">Geregistreerd</dt>
+              <dd className="font-medium text-slate-800">{formatDateHuman(gekozen.createdAt)}</dd>
+            </div>
+            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 py-3">
+              <dt className="text-slate-500">Laatst gezien</dt>
+              <dd className="font-medium text-slate-800">{formatDateHuman(gekozen.lastSeenAt)}</dd>
+            </div>
+          </dl>
           <form onSubmit={(e) => { e.preventDefault(); void submitRename(gekozen); }}>
-            <Field label="Naam" hint="Bv. „iPhone van Jan”, zo herken je het toestel in de lijst.">
-              {({ id }) => (
-                <div className="flex items-center gap-2">
-                  <Input
-                    id={id}
-                    value={naamOntwerp}
-                    onChange={(e) => setNaamOntwerp(e.target.value)}
-                    enterKeyHint="done"
-                    maxLength={80}
-                  />
-                  <Button type="submit" variant="secondary" disabled={isRenaming || !naamOntwerp.trim() || naamOntwerp.trim() === gekozen.name}>
-                    {isRenaming ? 'Opslaan…' : 'Opslaan'}
-                  </Button>
+            <Field label="Toestelnaam" hint="Kies een herkenbare naam, bijvoorbeeld “iPhone van Jan”.">
+              {({ id, describedBy }) => (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input id={id} aria-describedby={describedBy} className="min-w-0 flex-1" value={naamOntwerp} onChange={(e) => setNaamOntwerp(e.target.value)} enterKeyHint="done" maxLength={80} />
+                  <Button type="submit" variant="secondary" className="shrink-0" bezig={isRenaming} disabled={isRenaming || !naamOntwerp.trim() || naamOntwerp.trim() === gekozen.name}>Opslaan</Button>
                 </div>
               )}
             </Field>
           </form>
-
-          <Card tone="muted" padding="sm">
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-label">Gebruiker</dt>
-              <dd className="font-medium text-slate-800">{userName(gekozen.userId)}</dd>
-              <dt className="text-label">Geregistreerd</dt>
-              <dd className="font-medium text-slate-800 tabular-nums">{formatDateHuman(gekozen.createdAt)}</dd>
-              <dt className="text-label">Laatst gezien</dt>
-              <dd className="font-medium text-slate-800 tabular-nums">{formatDateHuman(gekozen.lastSeenAt)}</dd>
-            </dl>
-          </Card>
 
           {gekozen.status === 'revoked' && (
             <p className="text-xs text-slate-500">Geblokkeerd: dit toestel komt niet meer in de app, ook niet na opnieuw aanmelden. Keur het goed om de toegang te herstellen.</p>
@@ -441,31 +364,46 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         title="Toestellen"
       />
 
-      <Card>
-        <CardHeader
-          title="Toestel-goedkeuring"
-          description={gateEnabled === false
-            ? 'Uit, elk toestel wordt bij aanmelden automatisch goedgekeurd en aan de lijst toegevoegd. Geblokkeerde toestellen blijven geblokkeerd.'
-            : 'Aan, elk nieuw toestel (behalve het eerste per chauffeur) wacht op jouw goedkeuring voordat het toegang krijgt.'}
-          aside={(
-            <Switch
-              checked={gateEnabled !== false}
-              onChange={() => void toggleGate()}
-              label="Toestel-goedkeuring vereist"
-              disabled={gateEnabled === null || isTogglingGate}
-            />
-          )}
-        />
+      <Card padding="sm">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <ShieldCheck size={20} className="hidden shrink-0 text-slate-500 sm:block" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-slate-800">Goedkeuring nieuwe toestellen</h2>
+              <InfoTip label="Uitleg over toestelgoedkeuring">
+                <p>Het eerste toestel van een chauffeur wordt automatisch goedgekeurd. Elk volgend toestel wacht op jouw akkoord.</p>
+                <p className="mt-2">Zet je dit uit, dan worden nieuwe toestellen automatisch goedgekeurd. Geblokkeerde toestellen blijven geblokkeerd.</p>
+              </InfoTip>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">{gateEnabled === null ? 'Instelling laden…' : gateEnabled ? 'Nieuwe toestellen wachten op jouw akkoord.' : 'Nieuwe toestellen worden automatisch goedgekeurd.'}</p>
+          </div>
+          <span className="hidden shrink-0 text-xs font-medium text-slate-500 sm:inline">{gateEnabled === null ? '…' : gateEnabled ? 'Aan' : 'Uit'}</span>
+          <Switch checked={gateEnabled !== false} onChange={() => void toggleGate()} label="Toestel-goedkeuring vereist" disabled={gateEnabled === null || isTogglingGate} />
+        </div>
         {gateEnabled === false && (
-          <p className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3.5 py-2.5 text-xs font-medium text-amber-800">
-            Tijdelijk bedoeld, bv. bij de uitrol naar alle chauffeurs. Zet de goedkeuring daarna weer aan; alles wat intussen aanmeldde staat dan al goedgekeurd in de lijst.
-          </p>
+          <p className="mt-3 border-t border-hairline pt-3 text-xs text-amber-800">Goedkeuring staat uit. Zet dit na de uitrol weer aan om nieuwe toestellen te beoordelen.</p>
         )}
       </Card>
 
-      {/* Lijst links, toestel-detail (naam, status, data, acties) rechts;
-          op mobiel opent het detail als SlideOver. */}
-      <MasterDetail lijst={lijst} paneel={devices !== null && devices.length === 0 ? undefined : paneel} />
+      {/* Buiten de smalle lijstkolom: het zoekveld blijft bruikbaar en de
+          statusfilters blijven één leesbare groep, ook rond het lg-breekpunt. */}
+      <div className="space-y-3" role="search" aria-label="Toestellen zoeken en filteren">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-md">
+            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Input type="search" aria-label="Zoek gebruiker of toestel" placeholder="Zoek gebruiker of toestel…" className="pl-10 pr-11" value={zoek} onChange={(e) => setZoek(e.target.value)} />
+            {zoek && <IconButton label="Zoekopdracht wissen" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => setZoek('')}><X size={16} /></IconButton>}
+          </div>
+          <p className="shrink-0 text-xs text-slate-500" aria-live="polite">{devices === null ? 'Toestellen laden…' : `${zichtbaar.length} van ${alle.length} ${alle.length === 1 ? 'toestel' : 'toestellen'}`}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter op toestelstatus">
+          <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>Alle toestellen</FilterChip>
+          <FilterChip active={statusFilter === 'pending'} onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}>Wacht op akkoord ({pending.length})</FilterChip>
+          <FilterChip active={statusFilter === 'revoked'} onClick={() => setStatusFilter(statusFilter === 'revoked' ? 'all' : 'revoked')}>Geblokkeerd ({telPerStatus('revoked')})</FilterChip>
+        </div>
+      </div>
+
+      <MasterDetail className="lg:grid-cols-[minmax(0,46%)_minmax(0,1fr)]" lijst={lijst} paneel={devices !== null && devices.length === 0 ? undefined : paneel} />
 
       <ConfirmationModal
         isOpen={!!confirmDelete}
