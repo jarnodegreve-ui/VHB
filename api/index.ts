@@ -66,6 +66,8 @@ import {
   getLoginActivity,
   getCoverageExpectations,
   getEntityHistory,
+  getSwapExecutions,
+  getSwapHistories,
   getDiversionsData,
   getLeaveData,
   getPlanningCodesData,
@@ -3531,6 +3533,92 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Dienstruilen laden is mislukt." });
+  }
+});
+
+/**
+ * Wekelijks ruiloverzicht voor het klassement (Jarno 18-09): alle wissels die
+ * in dat venster écht zijn UITGEVOERD in het portaal, niet de wissels die die
+ * week in de planning vielen. "Uitgevoerd" = het moment waarop de wissel in de
+ * planning werd doorgevoerd: de goedkeuring door de planning, plus de wissels
+ * die de planning zelf handmatig doorvoerde. Die momenten staan alleen in het
+ * activiteitenlog, want `decidedAt` op de swap wordt door een latere
+ * afhandeling ('completed') overschreven.
+ *
+ * Een wissel die later teruggedraaid werd, staat er bewust wél in (met zijn
+ * huidige status): hij ís die week doorgevoerd geweest, en het klassement is
+ * een bewijsstuk van wat er gebeurd is.
+ */
+const SWAP_UITVOERING_ACTIES = [
+  "Dienstruil goedgekeurd",
+  "Diensten handmatig gewisseld",
+  "Dienst handmatig overgezet",
+];
+
+app.get("/api/swaps/uitgevoerd", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
+    const van = String(req.query.van ?? "");
+    const tot = String(req.query.tot ?? "");
+    if (!ISO_DAG.test(van) || !ISO_DAG.test(tot) || tot < van) {
+      return res.status(400).json({ error: "Geef een geldige periode mee (van en tot als jjjj-mm-dd, tot niet vóór van)." });
+    }
+    const dagen = Math.round((Date.parse(`${tot}T00:00:00Z`) - Date.parse(`${van}T00:00:00Z`)) / 86_400_000) + 1;
+    if (dagen > 31) {
+      return res.status(400).json({ error: "De periode mag hoogstens 31 dagen beslaan." });
+    }
+
+    // Ruim in UTC ophalen en daarna filteren op de Brusselse kalenderdag: dat
+    // klopt ook in de weken van de zomer-/wintertijdwissel, zonder offsetwerk.
+    const logRegels = await getSwapExecutions(
+      `${addDagenIso(van, -1)}T00:00:00.000Z`,
+      `${addDagenIso(tot, 2)}T00:00:00.000Z`,
+      SWAP_UITVOERING_ACTIES,
+    );
+    const uitvoeringen = logRegels.filter((regel) => {
+      const dag = brusselsDay(regel.createdAt);
+      return dag >= van && dag <= tot;
+    });
+
+    const swapIds = [...new Set(uitvoeringen.map((regel) => String(regel.entityId ?? "")).filter(Boolean))];
+    const [alleSwaps, users, verloopPerSwap] = await Promise.all([
+      getSwapsData(),
+      getUsersData(),
+      getSwapHistories(swapIds),
+    ]);
+    const swapById = new Map(alleSwaps.map((s: any) => [String(s.id), s]));
+    const naamById = new Map(users.map((u: any) => [String(u.id), String(u.name)]));
+    const naamVan = (id: unknown) => {
+      const sleutel = String(id ?? "");
+      if (!sleutel) return "";
+      return naamById.get(sleutel) ?? "Onbekend";
+    };
+
+    // Eén regel per uitvoering, chronologisch: een wissel die deze week eerst
+    // doorgevoerd en daarna opnieuw doorgevoerd werd, hoort er twee keer in.
+    const wissels = uitvoeringen
+      .map((regel) => {
+        // getSwapsData levert al publieke records (toPublicSwap), dus geen
+        // tweede vertaalslag hier.
+        const swap = swapById.get(String(regel.entityId ?? ""));
+        if (!swap) return null; // verwijderde ruil: het logspoor blijft, het record niet
+        return {
+          swap,
+          aanvragerNaam: naamVan(swap.requesterId),
+          overnemerNaam: naamVan(swap.targetDriverId),
+          uitgevoerdOp: regel.createdAt,
+          uitgevoerdDoor: regel.actorName,
+          uitgevoerdDoorRol: regel.actorRole,
+          handmatig: regel.action !== "Dienstruil goedgekeurd",
+          verloop: verloopPerSwap[String(regel.entityId ?? "")] ?? [],
+        };
+      })
+      .filter(Boolean);
+
+    res.json({ van, tot, wissels });
+  } catch (err) {
+    console.error("Uitgevoerde dienstwissels laden is mislukt.", err);
+    res.status(500).json({ error: "Uitgevoerde dienstwissels laden is mislukt." });
   }
 });
 

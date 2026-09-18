@@ -1315,15 +1315,17 @@ export default function App() {
     );
   }
 
-  // Dagoverzicht dienstwissels (bewijsstuk voor de map): planner/admin, wacht op de collecties.
-  const printDienstwissels = printParams?.get('print-dienstwissels');
-  if (printDienstwissels && /^\d{4}-\d{2}-\d{2}$/.test(printDienstwissels) && currentUser && (currentUser.role === 'planner' || currentUser.role === 'admin')) {
+  // Weekoverzicht dienstwissels (bewijsstuk voor het klassement): planner/admin.
+  // De view haalt de uitgevoerde wissels zelf op, alleen de planning komt uit
+  // de collecties (voor de uren van de dienst).
+  const printRuilWeek = printParams?.get('ruiloverzicht-week');
+  if (printRuilWeek && /^\d{4}-\d{2}-\d{2}$/.test(printRuilWeek) && currentUser && (currentUser.role === 'planner' || currentUser.role === 'admin')) {
     if (isInitialLoad) {
       return <PrintLaden />;
     }
     return (
       <Suspense fallback={<PrintLaden />}>
-        <LazyPrintDienstwisselsView datum={printDienstwissels} swaps={swaps} users={users} shifts={shifts} />
+        <LazyPrintDienstwisselsView dag={printRuilWeek} shifts={shifts} />
       </Suspense>
     );
   }
