@@ -1430,11 +1430,57 @@ html.vt-record::view-transition-new(hoofdinhoud) {
   transform-origin: top;
 }
 
-/* De Lijn-lijnbadges (punt 12, 16-09). De originele PNG's houden hun kleuren,
-   maar drie ervan (801, 858, 884) hebben een wit binnenvlak dat op de donkere
-   canvas (#0D0D0F) het felste element van het scherm werd. Een lichte demping
-   plus een hairline haalt die gloed weg zonder de kleuren te verschuiven; in
-   het lichte thema verandert er niets. */
-:root { --badge-demping: 1; }
-html.dark { --badge-demping: 0.88; }
-.lijnbadge img { filter: brightness(var(--badge-demping)); }
+/* De Lijn-badges: echte tekst en CSS-randen blijven scherp op elke schaal.
+   Eigen kleur-tokens bewaren de lijnherkenning in beide thema's. De cijfers
+   op het lichte streeklijnvlak zijn donkerder voor leesbaarheid op 13 px. */
+:root {
+  --lijn-oranje: #ef7d00;
+  --lijn-oranje-inkt: #14181b;
+  --lijn-zand: #b19f71;
+  --lijn-zand-inkt: #756039;
+  --lijn-papier: #ffffff;
+}
+html.dark {
+  --lijn-oranje: #df7600;
+  --lijn-zand: #a28f60;
+  --lijn-zand-inkt: #68532e;
+  --lijn-papier: #e2e2df;
+}
+.lijnbadge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding-inline: 0.1875rem;
+  border-style: solid;
+  border-width: 1px;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.lijnbadge--sm {
+  min-width: 2.25rem;
+  height: 1.5rem;
+  border-radius: 0.375rem;
+  font-size: var(--text-sm);
+}
+.lijnbadge--md {
+  min-width: 3rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  font-size: var(--text-base);
+}
+.lijnbadge--oranje {
+  border-color: var(--lijn-oranje);
+  background: var(--lijn-oranje);
+  color: var(--lijn-oranje-inkt);
+}
+.lijnbadge--streek {
+  border-color: var(--lijn-zand);
+  background: var(--lijn-papier);
+  color: var(--lijn-zand-inkt);
+}
