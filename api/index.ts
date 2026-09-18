@@ -908,7 +908,9 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
 
     const [rows, users, services, codes, leave, swaps] = await Promise.all([
-      getPlanningMatrixRows(),
+      // Alleen de matrixrijen van deze maand: berekenCelWaarheid gooit de rest
+      // toch weg (monthRows), maar ze reisden wel eerst mee uit Supabase.
+      getPlanningMatrixRows({ month }),
       getUsersData(),
       getServicesData(),
       getPlanningCodesData(),

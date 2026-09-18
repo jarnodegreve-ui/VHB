@@ -435,6 +435,20 @@ export const PERIODE_DMJ = (van: string | null | undefined, tot?: string | null)
 export const brusselsDay = (iso: string) =>
   new Date(iso).toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
 
+/**
+ * Eerste en laatste kalenderdag van een maand "JJJJ-MM", voor `.gte`/`.lte`
+ * op een date-kolom. `null` bij alles wat geen welgevormde maand is, zodat
+ * een aanroeper die grens kan overslaan in plaats van stil een leeg bereik
+ * te lezen. De laatste dag komt uit dag 0 van de vólgende maand in UTC, dus
+ * schrikkeljaren kloppen zonder tabel.
+ */
+export const maandGrenzen = (maand: string): { van: string; tot: string } | null => {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(maand ?? ""))) return null;
+  const [jaar, m] = maand.split("-").map(Number);
+  const laatste = new Date(Date.UTC(jaar, m, 0)).getUTCDate();
+  return { van: `${maand}-01`, tot: `${maand}-${String(laatste).padStart(2, "0")}` };
+};
+
 /** ISO-dag + n dagen (puur datumrekenen in UTC-frame). Eén bron voor de
  *  hele API — advisor, telegram, index en ocpi (daar als alias `dagPlus`)
  *  hadden elk een eigen kopie (controle-ronde 27-08, bevinding 41). */

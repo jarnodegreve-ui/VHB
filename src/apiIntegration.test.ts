@@ -58,6 +58,10 @@ const mem = vi.hoisted(() => ({
   // false = de migratie is nog niet gedraaid; getAanwezigheid gooit dan een
   // missing-table-fout, precies zoals PostgREST dat doet.
   presenceTabel: true,
+  // De maand waarmee elke getPlanningMatrixRows-lezing begrensd werd
+  // (null = volledige matrix). Bewijst dat maand-gebonden routes niet
+  // stilletjes de hele historiek ophalen.
+  matrixMaandFilters: [] as Array<string | null>,
   clientErrors: [] as any[],
   // app_settings (key → jsonb): toestel-gate en onderhoudsmodus.
   appSettings: {} as Record<string, unknown>,
@@ -415,7 +419,15 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     noteerAanwezigheid: async () => {},
     updateUserSessionMeta: async (id: string, f: any) => { mem.sessionMetaWrites.push({ id, ...f }); },
     bumpActiveSessions: async () => {},
-    getPlanningMatrixRows: async () => mem.planningMatrix,
+    getPlanningMatrixRows: async (opts?: { month?: string }) => {
+      const maand = String(opts?.month ?? '');
+      mem.matrixMaandFilters.push(maand || null);
+      // Spiegelt de .gte/.lte op source_date in api/storage.ts, zodat een
+      // route die de maand vergeet hier evenveel rijen ziet als in productie.
+      return /^\d{4}-(0[1-9]|1[0-2])$/.test(maand)
+        ? mem.planningMatrix.filter((r: any) => String(r.source_date ?? '').startsWith(`${maand}-`))
+        : mem.planningMatrix;
+    },
     // Sinds de golden import-keten-suite (01-09) draait hier de ÉCHTE
     // opbouw-kern (bouwPlanningUitMatrix, pure functie) op de mem-store —
     // een mini-mock verstopte precies de keten-bugs die deze tests moeten
@@ -653,6 +665,7 @@ beforeEach(() => {
   mem.sessionMetaWrites = [];
   mem.presence = [];
   mem.presenceTabel = true;
+  mem.matrixMaandFilters = [];
   mem.clientErrors = [];
   mem.clientErrorStatus = [];
   mem.clientErrorStatusTabel = true;
@@ -2662,6 +2675,24 @@ describe('maandplanning, afwezigheidscodes zijn voor iedereen zichtbaar', () => 
       { id: 'm-z', source_date: '2026-07-15', day_type: 'week', assignments: { 'Chauffeur A': 'ziek', 'Chauffeur B': 'ziek' }, raw_row: '' },
       { id: 'm-v', source_date: '2026-07-16', day_type: 'week', assignments: { 'Chauffeur B': 'bv' }, raw_row: '' },
     ];
+  });
+
+  it('leest alleen de matrixrijen van de gevraagde maand', async () => {
+    // De matrix groeit met elke ET-import en dekte op 18-09 al vier maanden;
+    // berekenCelWaarheid gooide alles buiten de maand tóch weg, maar pas ná
+    // het transport uit Supabase. Zonder deze test glijdt die grens er bij
+    // een refactor zo weer uit en wordt het maandbord traag met de leeftijd
+    // van het portaal.
+    mem.planningMatrix = [
+      ...mem.planningMatrix,
+      { id: 'm-aug', source_date: '2026-08-03', day_type: 'week', assignments: { 'Chauffeur A': 'ziek' }, raw_row: '' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(mem.matrixMaandFilters).toContain('2026-07');
+    expect(mem.matrixMaandFilters).not.toContain(null);
+    // En de augustusdag zit niet in het antwoord.
+    expect(res.json.dates).toEqual(['2026-07-15', '2026-07-16']);
   });
 
   it('een chauffeur ziet de code van een collega ongewijzigd', async () => {

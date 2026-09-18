@@ -54,6 +54,11 @@ const monthOf = (iso: string) => iso.slice(0, 7);
 /** Hoofdmaand in de URL (`/maandplanning/2026-10`) — spiegel van `viewMonth`;
  *  een ongeldige waarde wordt genegeerd. */
 const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Wachttijd waarbinnen opeenvolgende planningswijzigingen tot één stille
+ *  verversing samenvouwen. Ruim genoeg voor een salvo schrijfacties, kort
+ *  genoeg dat het bord niet merkbaar achterloopt op een collega. */
+const PLANNING_SALVO_MS = 1200;
 const maandUitParam = (p: string | null): Date | null =>
   p && MAAND_PARAM.test(p) ? new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1, 1) : null;
 const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -334,10 +339,28 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     return () => { cancelled = true; };
   }, [extraMonth, reloadTick]);
 
+  // Eén tik per reeks wijzigingen. Elke 'vhb-planning-changed' verhoogde
+  // reloadTick, en elke tik herlaadt twee volledige maandberekeningen (de
+  // hoofdmaand plus de maand achter de vensterrand). Een planner die een paar
+  // wissels na elkaar doorvoert, of een herbouw van de planning, stuurt die
+  // events in een salvo: in de Vercel-logs van 17-09 liepen er zo elf
+  // /api/month-planning-aanroepen in 56 seconden, precies op het moment dat
+  // het scherm in gebruik was. Een trailing venster vouwt zo'n salvo samen;
+  // de timer schuift mee op, dus de laatste wijziging zit er altijd in.
   useEffect(() => {
-    const opWijziging = () => setReloadTick((t) => t + 1);
+    let timer: number | null = null;
+    const opWijziging = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        setReloadTick((t) => t + 1);
+      }, PLANNING_SALVO_MS);
+    };
     window.addEventListener('vhb-planning-changed', opWijziging);
-    return () => window.removeEventListener('vhb-planning-changed', opWijziging);
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+      window.removeEventListener('vhb-planning-changed', opWijziging);
+    };
   }, []);
 
   const dates = data?.dates ?? [];
