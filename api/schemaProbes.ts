@@ -55,6 +55,11 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // Meldingencentrum (2026-09-06_meldingen.sql): elke push wordt ook als rij
   // per gebruiker bewaard; snake_case zoals planning_notes.
   { table: "meldingen", columns: "id,user_id,titel,tekst,soort,doel,created_at,gelezen_op" },
+  // Aanwezigheid (2026-09-18_user_presence.sql): één rij per aaneengesloten
+  // sessie, geschreven vanuit de auth-middleware. Zonder de migratie werkt het
+  // portaal gewoon door (registreren is best-effort), dus alleen de
+  // schema-check maakt zichtbaar dat ze nog moet draaien.
+  { table: "user_presence", columns: "id,user_id,role,started_at,last_seen_at" },
   // Techniek (2026-09-13_techniek_voertuigen.sql): voertuigen, gele boek,
   // werkprestaties en vervaldata per voertuig; snake_case, API-only.
   { table: "vehicles", columns: "id,busnr,kort_nr,nummerplaat,chassisnr,merk,type,categorie,aandrijving,status,in_dienst,uit_dienst,zitplaatsen,opmerking,chargeye_mix_id,created_at,updated_at" },

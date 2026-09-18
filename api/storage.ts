@@ -38,6 +38,7 @@ import {
   toPublicUpdate,
   toPublicUser,
 } from "./helpers.js";
+import { hoortBijSessie } from "./_lib/aanwezigheid.js";
 import { db, supabaseAdmin } from "./db.js";
 import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import type { MeldingInvoer } from "./_lib/meldingen.js";
@@ -1940,10 +1941,23 @@ export const getClientErrorsSince = async (sinceIso: string, limit = 1000) => {
  * verwijderen. Best-effort per tabel — een ontbrekende tabel of fout mag de
  * back-upcron nooit laten falen.
  */
-export const pruneOldRecords = async (opts: { errorDays: number; logDays: number; noteDays: number; meldingDays: number }) => {
-  const summary = { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0 };
+export const pruneOldRecords = async (opts: { errorDays: number; logDays: number; noteDays: number; meldingDays: number; aanwezigheidDays: number }) => {
+  const summary = { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0, aanwezigheid: 0 };
   if (!db) return summary;
   const cutoff = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+  try {
+    // Aanwezigheid is een waarneming van dagelijks gebruik, geen bewijsstuk.
+    // Het overzicht kijkt hoogstens 90 dagen terug, dus alles daarvóór is
+    // dode ballast; zonder deze regel groeit de tabel eeuwig door met enkele
+    // tientallen rijen per dag.
+    const { count, error } = await db
+      .from("user_presence")
+      .delete({ count: "exact" })
+      .lt("last_seen_at", cutoff(opts.aanwezigheidDays));
+    if (!error) summary.aanwezigheid = count ?? 0;
+  } catch {
+    // tabel ontbreekt (migratie niet gedraaid) — bewust stil
+  }
   try {
     const { count, error } = await db
       .from("client_errors")
@@ -2938,4 +2952,85 @@ export const deleteUserExpiry = async (userId: string, soort: string): Promise<v
   const client = requireDb();
   const { error } = await client.from('user_expiries').delete().eq('user_id', String(userId)).eq('soort', soort);
   if (error) throw error;
+};
+
+// --- Aanwezigheid (wie was wanneer actief op het portaal) ---
+
+/** Eén aaneengesloten periode waarin iemand het portaal in de voorgrond had. */
+export type AanwezigheidSessie = {
+  userId: string;
+  rol: string | null;
+  /** ISO-tijdstip waarop deze sessie begon. */
+  van: string;
+  /** ISO-tijdstip van het laatste teken van leven in deze sessie. */
+  tot: string;
+};
+
+const toPublicAanwezigheid = (row: Record<string, unknown>): AanwezigheidSessie => ({
+  userId: String(row.user_id ?? ''),
+  rol: (row.role as string | null) ?? null,
+  van: String(row.started_at ?? ''),
+  tot: String(row.last_seen_at ?? ''),
+});
+
+/**
+ * Teken van leven van één gebruiker vastleggen: de lopende sessie oprekken,
+ * of er een nieuwe beginnen als het langer dan SESSIE_GAT_MS stil was.
+ *
+ * Best-effort en bewust stil: de aanroeper (auth-middleware) doet dit
+ * fire-and-forget, dus een mislukking mag nooit een request raken. Ontbreekt
+ * de tabel (migratie niet gedraaid), dan gebeurt er simpelweg niets.
+ *
+ * Twee queries, maar hoogstens één keer per gebruiker per 5 minuten: de rem
+ * zit in magSchrijven() vóór deze functie wordt aangeroepen.
+ */
+export const noteerAanwezigheid = async (
+  userId: string,
+  rol: string | null,
+  nu: Date = new Date(),
+): Promise<void> => {
+  const client = requireDb();
+  const nuIso = nu.toISOString();
+  const { data, error } = await client
+    .from('user_presence')
+    .select('id, last_seen_at')
+    .eq('user_id', String(userId))
+    .order('last_seen_at', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const jongste = (data ?? [])[0] as { id: string; last_seen_at: string } | undefined;
+  if (jongste && hoortBijSessie(jongste.last_seen_at, nu.getTime())) {
+    const { error: updateError } = await client
+      .from('user_presence')
+      .update({ last_seen_at: nuIso, role: rol })
+      .eq('id', jongste.id);
+    if (updateError) throw updateError;
+    return;
+  }
+  const { error: insertError } = await client
+    .from('user_presence')
+    .insert({ user_id: String(userId), role: rol, started_at: nuIso, last_seen_at: nuIso });
+  if (insertError) throw insertError;
+};
+
+/**
+ * Alle sessies die ná `sinceIso` nog liepen, nieuwste eerst. Gepagineerd om
+ * dezelfde reden als het auditlogboek: PostgREST kapt elke select op 1.000
+ * rijen, en bij enkele tientallen sessies per dag zit een maand daar dicht bij.
+ *
+ * Gooit bij een échte fout (een lege lijst is niet te onderscheiden van
+ * "niemand was actief"); de route vangt een ontbrekende tabel apart af en
+ * meldt dan welke migratie nog moet draaien.
+ */
+export const getAanwezigheid = async (sinceIso: string, limit = 5000): Promise<AanwezigheidSessie[]> => {
+  const client = requireDb();
+  const rows = await paginatedFetch<Record<string, unknown>>((from, to) =>
+    client
+      .from('user_presence')
+      .select('*')
+      .gte('last_seen_at', sinceIso)
+      .order('last_seen_at', { ascending: false })
+      .range(from, Math.min(to, limit - 1)),
+  limit);
+  return rows.map(toPublicAanwezigheid);
 };

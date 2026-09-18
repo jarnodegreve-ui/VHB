@@ -62,6 +62,7 @@ import {
   buildPlanningFromMatrix,
   getActivityLog,
   getLatestAuthEventAt,
+  getAanwezigheid,
   getLoginActivity,
   getCoverageExpectations,
   getEntityHistory,
@@ -494,11 +495,15 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
     // Activiteit toonde (15-09). Hooguit één schrijf per 5 minuten.
     if (action === "resume") {
       const nu = new Date().toISOString();
-      const latestAuthEventAt = await getLatestAuthEventAt(String(currentUser.id));
-      const today = brusselsDay(nu);
-      if (!latestAuthEventAt || brusselsDay(latestAuthEventAt) !== today) {
-        await logActivity(req, "auth", "Actief", `${currentUser.name} was actief op het portaal.`, { type: "user", id: String(currentUser.id) });
-      }
+      // Tot 18-09 werd hier een 'Actief'-regel in het auditlogboek gezet,
+      // gededupliceerd op de Brusselse kalenderdag. Dat was de enige bron voor
+      // "wie was vandaag actief", en meteen ook de reden dat die vraag nooit
+      // goed te beantwoorden was: hoogstens één regel per persoon per dag, dus
+      // alleen het éérste moment, en niets meer zodra de PWA warm bleef staan.
+      // Aanwezigheid komt nu uit public.user_presence, bijgehouden in de
+      // auth-middleware bij élk geauthenticeerd verzoek (gethrottled). Dit pad
+      // houdt alleen nog lastLogin bij ("Laatst actief" in Gebruikers); dat
+      // scheelt hier ook een DB-lezing per hervatting.
       const vorige = currentUser.lastLogin ? new Date(currentUser.lastLogin).getTime() : NaN;
       if (!(Date.now() - vorige < 5 * 60 * 1000)) {
         await updateUserSessionMeta(String(currentUser.id), { lastLogin: nu });
@@ -1137,6 +1142,38 @@ app.get("/api/activity/logins", authenticate, requireRole("admin"), async (req, 
   } catch (err: any) {
     console.error("Aanmeldingen laden is mislukt.", err);
     res.status(500).json({ error: "Aanmeldingen laden is mislukt." });
+  }
+});
+
+// Aanwezigheid: per persoon de periodes waarin hij het portaal in de
+// voorgrond had. Dit is de bron voor "wie was wanneer actief" — het
+// auditlogboek kon die vraag niet beantwoorden (hoogstens één auth-regel per
+// persoon per dag). Admin-only: dit is het meest persoonlijke wat het portaal
+// bijhoudt. Standaard 14 dagen; ?days= override (1-90).
+app.get("/api/activity/presence", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const reqDays = Number(req.query.days);
+    const days = Number.isFinite(reqDays) && reqDays >= 1 && reqDays <= 90 ? Math.floor(reqDays) : 14;
+    const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const [sessies, users] = await Promise.all([getAanwezigheid(sinceIso), getUsersData()]);
+    // Naam en rol komen uit users, niet uit de sessierij: een naamswijziging
+    // hoort meteen overal te kloppen. De rol van tóén blijft wel bewaard in
+    // de rij zelf en wint, zodat een promotie de geschiedenis niet herschrijft.
+    const perId = new Map(users.map((u) => [String(u.id), u]));
+    const uit = sessies
+      .filter((s) => perId.has(s.userId))
+      .map((s) => {
+        const u = perId.get(s.userId)!;
+        return { userId: s.userId, naam: u.name, rol: s.rol || u.role, van: s.van, tot: s.tot };
+      });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ days, sessies: uit });
+  } catch (err: any) {
+    if (isMissingTableError(err)) {
+      return res.json({ days: 0, sessies: [], migratie: "supabase/2026-09-18_user_presence.sql" });
+    }
+    console.error("Aanwezigheid laden is mislukt.", err);
+    res.status(500).json({ error: "Aanwezigheid laden is mislukt." });
   }
 });
 
@@ -2475,10 +2512,13 @@ app.get("/api/cron/backup", async (req, res) => {
     const noteDays = Number(process.env.RETENTION_NOTE_DAYS) > 0 ? Number(process.env.RETENTION_NOTE_DAYS) : 90;
     // Meldingen (meldingencentrum): na 90 dagen geschiedenis.
     const meldingDays = Number(process.env.RETENTION_MELDING_DAYS) > 0 ? Number(process.env.RETENTION_MELDING_DAYS) : 90;
-    const pruned = await pruneOldRecords({ errorDays, logDays, noteDays, meldingDays });
-    const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions + pruned.meldingen;
+    // Aanwezigheid: het overzicht kijkt hoogstens 90 dagen terug, dus verder
+    // bewaren levert niets op en is wél doorlopende registratie van gedrag.
+    const aanwezigheidDays = Number(process.env.RETENTION_AANWEZIGHEID_DAYS) > 0 ? Number(process.env.RETENTION_AANWEZIGHEID_DAYS) : 90;
+    const pruned = await pruneOldRecords({ errorDays, logDays, noteDays, meldingDays, aanwezigheidDays });
+    const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions + pruned.meldingen + pruned.aanwezigheid;
     if (prunedTotal > 0) {
-      console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
+      console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
     }
 
     await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.meldingen} meldingen + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
@@ -2516,13 +2556,20 @@ app.get("/api/cron/week-rapport", async (req, res) => {
   }
   try {
     const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const [logins, leave, swaps, errors] = await Promise.all([
-      getLoginActivity(sinceIso),
+    const [sessies, leave, swaps, errors] = await Promise.all([
+      // Actieve gebruikers uit de aanwezigheid, niet meer uit de auth-regels:
+      // die telden alleen wie zich opnieuw aanmeldde plus één regel per dag
+      // per persoon, en telden dus structureel te laag. Ontbreekt de migratie,
+      // dan is de telling 0 in plaats van dat de mail uitblijft.
+      getAanwezigheid(sinceIso).catch((err) => {
+        if (!isMissingTableError(err)) throw err;
+        return [];
+      }),
       getLeaveData(),
       getSwapsData(),
       getClientErrorsSince(sinceIso),
     ]);
-    const uniekeGebruikers = new Set(logins.map((l) => String(l.entityId || l.actorName))).size;
+    const uniekeGebruikers = new Set(sessies.map((s) => s.userId)).size;
     const inWindow = (iso?: string) => Boolean(iso && iso >= sinceIso);
     const verlofBeslist = leave.filter((l) => inWindow(l.decidedAt)).length;
     const verlofNieuw = leave.filter((l) => inWindow(l.createdAt)).length;

@@ -144,17 +144,17 @@ export function useAppData({
     fetchUnseenDocuments, markDocumentsSeen } = mensen;
   const { updates, diversions, fetchUpdates, saveUpdates, sendUrgentEmail, saveUpdate, createUpdate, deleteUpdate,
     fetchDiversions, saveDiversions, saveDiversion, createDiversion, deleteDiversion } = communicatie;
-  const { activityLog, loginActivity, fetchActivityLog, fetchLoginActivity } = activiteit;
+  const { activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, fetchActivityLog, fetchLoginActivity } = activiteit;
   const { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm } = meldingenData;
 
   // Data: alleen een nieuwe referentie wanneer een van de velden wijzigt.
   const data = useMemo(() => ({
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
-    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, coverageDays, vervaldata, pendingDevices,
+    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen,
   }), [
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
-    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, coverageDays, vervaldata, pendingDevices,
+    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen,
   ]);
 

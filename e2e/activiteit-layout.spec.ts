@@ -3,20 +3,50 @@ import { ADMIN, seed } from './helpers';
 
 const LANGE_NAAM = 'Jean-Christophe Van Den Broeck-De Smet';
 const NU = new Date('2026-09-15T12:00:00+02:00');
-// Een gebruikelijke werkweek: herhaalde sessies, 12 mensen vandaag,
-// 37 verschillende mensen in zeven dagen en 438 aanmeldingen totaal.
-const LOGINS = Array.from({ length: 438 }, (_, i) => {
-  const dag = i < 60 ? 0 : 1 + ((i - 60) % 6);
-  const persoon = i < 60 ? i % 12 : (i - 60) % 37;
-  return {
-    id: `login-layout-${i}`,
-    actorName: persoon === 0 ? LANGE_NAAM : `Testgebruiker ${persoon + 1}`,
-    actorRole: 'chauffeur',
-    entityId: `gebruiker-${persoon}`,
-    action: 'Aangemeld', category: 'auth', details: '',
-    createdAt: new Date(NU.getTime() - dag * 864e5 - i * 10_000).toISOString(),
-  };
+const UUR = 3600_000;
+
+const naamVan = (p: number) => (p === 0 ? LANGE_NAAM : `Testgebruiker ${p + 1}`);
+const sessie = (p: number, van: Date, duurMin: number) => ({
+  userId: `gebruiker-${p}`,
+  naam: naamVan(p),
+  rol: 'chauffeur',
+  van: van.toISOString(),
+  tot: new Date(van.getTime() + duurMin * 60_000).toISOString(),
 });
+
+/**
+ * Een gebruikelijke werkweek: 12 mensen vandaag (van wie er 3 nu nog online
+ * zijn), en 37 verschillende mensen over zeven dagen. Person 0 draagt de lange
+ * naam, zodat elke plek waar een naam staat op 320 px getoetst wordt.
+ */
+const SESSIES = [
+  // Nu bezig: hun laatste teken van leven is het huidige moment.
+  ...[0, 1, 2].map((p) => sessie(p, new Date(NU.getTime() - 2 * UUR), 120)),
+  // Vandaag geweest, intussen weg. Alle offsets blijven onder de twaalf uur,
+  // anders schuift een sessie over middernacht naar de vorige dag en klopt de
+  // dagtelling niet meer.
+  ...[3, 4, 5, 6, 7, 8, 9, 10, 11].map((p) => sessie(p, new Date(NU.getTime() - (p - 2) * UUR), 45)),
+  // Person 3 rijdt een gesplitste dienst: twee losse periodes op dezelfde dag,
+  // die niet tot één balk samengeplakt mogen worden.
+  sessie(3, new Date(NU.getTime() - 11 * UUR), 50),
+  // De zes dagen ervoor, samen goed voor 37 unieke mensen over de week.
+  ...Array.from({ length: 25 }, (_, i) => {
+    const p = 12 + i;
+    const dagenTerug = 1 + (i % 6);
+    return sessie(p, new Date(NU.getTime() - dagenTerug * 24 * UUR - 4 * UUR), 60);
+  }),
+];
+
+// Echte aanmeldingen zijn een ándere vraag met een andere bron: wie zich
+// opnieuw moest aanmelden. Blijft in de rechterkolom staan.
+const LOGINS = Array.from({ length: 30 }, (_, i) => ({
+  id: `login-layout-${i}`,
+  actorName: i === 0 ? LANGE_NAAM : `Testgebruiker ${(i % 12) + 1}`,
+  actorRole: 'chauffeur',
+  entityId: `gebruiker-${i % 12}`,
+  action: 'Aangemeld', category: 'auth', details: '',
+  createdAt: new Date(NU.getTime() - i * 600_000).toISOString(),
+}));
 
 /** Meet de getekende tekstregels, niet alleen de breedte van het element.
  *  Een ellipsis of overflow:hidden maakt een te lange tekst hiermee niet
@@ -39,7 +69,7 @@ const PROFIELEN = [
 ] as const;
 
 for (const profiel of PROFIELEN) {
-  test(`activiteit · ${profiel.naam}: volledige tegeltekst, namen en dagdetails`, async ({ browser, baseURL }) => {
+  test(`activiteit · ${profiel.naam}: volledige tegeltekst, namen en tijdbalken`, async ({ browser, baseURL }) => {
     const context = await browser.newContext({
       baseURL, viewport: { width: profiel.width, height: profiel.height },
       isMobile: profiel.width < 768, hasTouch: profiel.width < 768,
@@ -50,15 +80,21 @@ for (const profiel of PROFIELEN) {
       await page.clock.setFixedTime(NU);
       await seed(page, {
         user: ADMIN, view: 'activiteit', thema: 'dark',
-        extra: (pad) => pad.endsWith('/api/activity/logins') ? { logins: LOGINS } : undefined,
+        extra: (pad) => {
+          if (pad.endsWith('/api/activity/logins')) return { logins: LOGINS };
+          if (pad.endsWith('/api/activity/presence')) return { days: 14, sessies: SESSIES };
+          return undefined;
+        },
       });
       await page.goto('/beheer/activiteit');
-      const gebruik = page.locator('section').filter({
-        has: page.getByRole('heading', { name: 'Actieve gebruikers', exact: true }),
+      const aanwezigheid = page.locator('section').filter({
+        has: page.getByRole('heading', { name: 'Wie was wanneer actief', exact: true }),
       });
-      await expect(gebruik).toBeVisible({ timeout: 15_000 });
-      const kpis = gebruik.locator('dl');
-      for (const waarde of ['12', '37', '438']) {
+      await expect(aanwezigheid).toBeVisible({ timeout: 15_000 });
+
+      // De drie kengetallen: nu online, vandaag actief, uniek deze week.
+      const kpis = aanwezigheid.locator('dl');
+      for (const waarde of ['3', '12', '37']) {
         await expect(kpis.getByText(waarde, { exact: true })).toBeVisible();
       }
       await page.evaluate(() => document.fonts.ready);
@@ -82,35 +118,29 @@ for (const profiel of PROFIELEN) {
       expect(buitenTegel, 'ieder label, getal en onderschrift blijft volledig binnen zijn tegel').toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 
-      const recenteNaam = gebruik.getByText(LANGE_NAAM, { exact: true }).first();
+      const recenteNaam = aanwezigheid.getByText(LANGE_NAAM, { exact: true }).first();
       await expect(recenteNaam).toBeVisible();
       expect(await tekstBinnenVak(recenteNaam), 'de volledige naam past in de recente aanmelding').toBe(true);
 
-      // Een dag blijft aanklikbaar, ook wanneer de grafiek mobiel compacter
-      // wordt. Namen zijn ook in het geopende venster volledig leesbaar.
-      await gebruik.getByRole('button', { name: 'vandaag: 12 actief', exact: true }).click();
-      const dagvenster = page.getByRole('dialog').filter({
-        has: page.getByRole('heading', { name: 'Vandaag', exact: true }),
-      });
-      await expect(dagvenster).toBeVisible();
-      const dagNaam = dagvenster.getByText(LANGE_NAAM, { exact: true });
-      await expect(dagNaam).toBeVisible();
-      expect(await tekstBinnenVak(dagNaam), 'de volledige naam past in het dagvenster').toBe(true);
-      await dagvenster.getByRole('button', { name: 'Sluiten', exact: true }).click();
-      await expect(dagvenster).toHaveCount(0);
+      // De tijdbalken staan standaard op vandaag: twaalf mensen, en person 3
+      // heeft twee losse periodes (gesplitste dienst) die niet samengeplakt
+      // mogen worden.
+      await expect(aanwezigheid.getByText('12 personen', { exact: true })).toBeVisible();
+      const gesplitst = aanwezigheid.getByLabel(/^Testgebruiker 4 actief van /);
+      await expect(gesplitst).toHaveCount(2);
 
-      await gebruik.getByRole('button', { name: /^Alle dagen \(7\)$/ }).click();
-      const alleDagen = page.getByRole('dialog').filter({
-        has: page.getByRole('heading', { name: 'Actieve gebruikers per dag', exact: true }),
-      });
-      await expect(alleDagen).toBeVisible();
-      await alleDagen.getByRole('button', { name: /^vandaag/ }).click();
-      await expect(dagvenster).toBeVisible();
-      await expect(dagvenster.getByText(LANGE_NAAM, { exact: true })).toBeVisible();
-      await dagvenster.getByRole('button', { name: 'Sluiten', exact: true }).click();
-      await expect(alleDagen).toBeVisible();
-      await alleDagen.getByRole('button', { name: 'Sluiten', exact: true }).click();
-      await expect(page.getByRole('dialog')).toHaveCount(0);
+      // Een dag in de strip kiezen stuurt de tijdbalken eronder. De dagstrip
+      // blijft aanklikbaar, ook wanneer de grafiek mobiel compacter wordt.
+      const gisteren = aanwezigheid.getByRole('button', { name: /^gisteren: \d+ actief$/ });
+      await gisteren.click();
+      await expect(aanwezigheid.getByRole('heading', { name: /^Gisteren/ })).toBeVisible();
+      await expect(aanwezigheid.getByText('12 personen', { exact: true })).toHaveCount(0);
+
+      // En terug naar vandaag.
+      await aanwezigheid.getByRole('button', { name: 'vandaag: 12 actief', exact: true }).click();
+      await expect(aanwezigheid.getByRole('heading', { name: /^Vandaag/ })).toBeVisible();
+      await expect(aanwezigheid.getByText('12 personen', { exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     } finally {
       await context.close();
     }

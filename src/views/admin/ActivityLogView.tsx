@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState, type ComponentProps } from 'react';
-import { ChevronDown, Download, Users } from 'lucide-react';
+import { ChevronDown, Download } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
-import { Modal } from '../../components/Modal';
 import { isoDate, addDagen } from '../../lib/datum';
 import { formatDayLong, formatRelatief, WEEKDAY_SHORT_SUN } from '../../lib/format';
-import { EmptyState, ModalHeader, PageShell, PageHeader } from '../../components/ui';
+import { EmptyState, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, Segmented, Switch } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
@@ -17,13 +16,18 @@ import { Avatar } from '../../components/Avatar';
 import { Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import { LegeLijst, NietGevonden } from '../../components/illustraties';
+import { balkenVoorDag, duurKort, nuOnline, telPerDag, type AanwezigheidSessie } from '../../lib/aanwezigheid';
 
 /**
  * Activiteit (herwerking 08-09-2026, vraag Jarno: professioneler en
  * duidelijker). Twee vragen, twee kaarten:
  *
- *  1. Gebruik: wie was er actief (per dag, met namen) en wie meldde zich
- *     recent aan, met drie kengetallen bovenaan.
+ *  1. Aanwezigheid: wie was wanneer actief. Sinds 18-09 gevoed door
+ *     public.user_presence (sessies) in plaats van het auditlogboek, dat per
+ *     persoon hoogstens één auth-regel per dag kende en dus alleen "was
+ *     aanwezig" kon zeggen. Dagstrip van 14 dagen als keuzeknop, daaronder
+ *     per persoon een tijdbalk over de etmaal-as. "Recente aanmeldingen"
+ *     blijft over de échte logins gaan, een andere vraag met een andere bron.
  *  2. Activiteit: het auditspoor als feed per dag i.p.v. een platte tabel
  *     met volledige tijdstempels. Cron-hartslagen (±1.000 regels per maand)
  *     staan standaard uit, herhaalde acties van dezelfde persoon binnen tien
@@ -78,6 +82,26 @@ const dagKort = (dag: string, vandaag: string): string => {
   return new Date(`${dag}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' });
 };
 
+/**
+ * De rasterrij van een tijdbalk: naam, balk, duur. Eén definitie, zodat de
+ * uuras boven de balken exact op dezelfde kolommen valt als de rijen eronder.
+ *
+ * Twee vormen. Op een telefoon is er geen breedte voor een naamkolom naast een
+ * balk van 24 uur: elke naam werd dan "Jarno ..." en juist de naam is hier de
+ * hoofdzaak. Daar staan naam en duur dus op de eerste regel en loopt de balk
+ * eronder over de volle breedte. Vanaf sm past het wel naast elkaar.
+ */
+const TIJDBALK_RIJ = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[10.5rem_minmax(0,1fr)_3.5rem] sm:gap-y-0';
+const TIJDBALK_NAAM = 'col-start-1 row-start-1 flex min-w-0 items-center gap-2';
+const TIJDBALK_BALK = 'col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1';
+const TIJDBALK_DUUR = 'col-start-2 row-start-1 text-right sm:col-start-3';
+
+/** Minuten sinds middernacht als klok: 375 wordt "06:15", 1440 wordt "24:00". */
+const uurMin = (min: number): string => {
+  const m = Math.max(0, Math.min(24 * 60, Math.round(min)));
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+};
+
 type Bundel = {
   key: string;
   eerste: ActivityLogEntry;
@@ -106,47 +130,46 @@ const bundel = (entries: ActivityLogEntry[]): Bundel[] => {
   return uit;
 };
 
-export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLogEntry[]; logins?: ActivityLogEntry[] }) {
+export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwezigheidMigratie = null }: {
+  entries: ActivityLogEntry[];
+  logins?: ActivityLogEntry[];
+  aanwezigheid?: AanwezigheidSessie[];
+  aanwezigheidMigratie?: string | null;
+}) {
   const vandaag = isoDate(new Date());
 
-  // ---- Gebruik: actieve gebruikers per dag + aanmeldingen ----
-  const dailyActive = useMemo(() => {
-    const byDay = new Map<string, Map<string, string>>();
-    for (const e of logins) {
-      const day = isoDate(new Date(e.createdAt));
-      const key = String(e.entityId || e.actorName);
-      const users = byDay.get(day) ?? new Map<string, string>();
-      if (!users.has(key)) users.set(key, e.actorName);
-      byDay.set(day, users);
-    }
-    return [...byDay.entries()]
-      .map(([day, users]) => ({ day, count: users.size, names: [...users.values()].sort((a, b) => a.localeCompare(b, 'nl')) }))
-      .sort((a, b) => b.day.localeCompare(a.day));
-  }, [logins]);
-  const [openDay, setOpenDay] = useState<string | null>(null);
-  const [showDailyModal, setShowDailyModal] = useState(false);
-  const openDayData = openDay ? dailyActive.find((d) => d.day === openDay) : null;
+  // ---- Aanwezigheid: wie was wanneer actief ----
+  // Bron is public.user_presence (sessies), niet meer het auditlogboek. Dat
+  // laatste kende per persoon hoogstens één auth-regel per dag, dus het kon
+  // alleen "was aanwezig" zeggen en nooit "van wanneer tot wanneer".
+  const [gekozenDag, setGekozenDag] = useState(vandaag);
+  const perDagTelling = useMemo(() => telPerDag(aanwezigheid), [aanwezigheid]);
   // Laatste 14 dagen als doorlopende reeks (dagen zonder gebruik = 0).
-  const veertienDagen = useMemo(() => {
-    const per = new Map(dailyActive.map((d) => [d.day, d]));
-    return Array.from({ length: 14 }, (_, i) => {
-      const dag = addDagen(vandaag, i - 13);
-      const d = per.get(dag);
-      return { day: dag, count: d?.count ?? 0, names: d?.names ?? [], dow: new Date(`${dag}T00:00:00`).getDay() };
-    });
-  }, [dailyActive, vandaag]);
+  const veertienDagen = useMemo(() => Array.from({ length: 14 }, (_, i) => {
+    const dag = addDagen(vandaag, i - 13);
+    return { day: dag, count: perDagTelling.get(dag) ?? 0, dow: new Date(`${dag}T00:00:00`).getDay() };
+  }), [perDagTelling, vandaag]);
   const maxDaily = Math.max(1, ...veertienDagen.map((d) => d.count));
+  const balken = useMemo(() => balkenVoorDag(aanwezigheid, gekozenDag), [aanwezigheid, gekozenDag]);
+  const online = useMemo(() => nuOnline(aanwezigheid), [aanwezigheid]);
+  // Een blok kleurt goud zolang het nog loopt: vandaag, van iemand die online
+  // is, en eindigend op of na het huidige moment. Goud is in dit portaal de
+  // kleur van "nu", dus een afgelopen periode blijft bewust neutraal.
+  const nuMinuten = new Date().getHours() * 60 + new Date().getMinutes();
+  const isLopend = (userId: string, totMin: number) =>
+    gekozenDag === vandaag && totMin >= nuMinuten - 10 && online.some((o) => o.userId === userId);
   const recentLogins = useMemo(
     () => logins.filter((e) => e.action === 'Aangemeld').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30),
     [logins],
   );
   const kpi = useMemo(() => {
+    // Unieke personen over de week, niet de som van de dagtellingen: wie elke
+    // dag rijdt telt één keer mee.
     const weekGrens = addDagen(vandaag, -6);
     const week = new Set<string>();
-    for (const d of dailyActive) if (d.day >= weekGrens) for (const n of d.names) week.add(n);
-    const aanmeldingen7d = logins.filter((e) => e.action === 'Aangemeld' && isoDate(new Date(e.createdAt)) >= weekGrens).length;
-    return { vandaag: dailyActive.find((d) => d.day === vandaag)?.count ?? 0, week: week.size, aanmeldingen7d };
-  }, [dailyActive, logins, vandaag]);
+    for (const s of aanwezigheid) if (isoDate(new Date(s.tot)) >= weekGrens) week.add(s.userId);
+    return { vandaag: perDagTelling.get(vandaag) ?? 0, week: week.size, online: online.length };
+  }, [perDagTelling, aanwezigheid, online, vandaag]);
 
   // ---- Activiteit: venster, filters, bundeling ----
   const [activeCategory, setActiveCategory] = useState<'all' | Categorie>('all');
@@ -252,92 +275,172 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         )}
       />
 
-      {/* ---- Gebruik ---- */}
+      {/* ---- Aanwezigheid ---- */}
       <Card as="section" padding="lg" className="min-w-0 p-4 sm:p-6 md:p-8">
         <CardHeader
           size="lg"
-          eyebrow="Gebruik"
-          title="Actieve gebruikers"
-          description="Wie het portaal opent, telt die dag als actief. Ook zonder opnieuw aan te melden."
+          eyebrow="Aanwezigheid"
+          title="Wie was wanneer actief"
+          description="Het portaal legt vast wanneer iemand de app op de voorgrond had, in stappen van vijf minuten. Kies een dag om het verloop per persoon te zien."
         />
-        {/* Op mobiel staan de twee gebruikscijfers samen; aanmeldingen krijgt
-            een brede rij zodat het langere label volledig leesbaar blijft. */}
-        <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {[
-            { label: 'Vandaag', value: kpi.vandaag, sub: 'actieve gebruikers' },
-            { label: 'Laatste 7 dagen', value: kpi.week, sub: 'unieke gebruikers' },
-            { label: 'Aanmeldingen', value: kpi.aanmeldingen7d, sub: 'in de laatste 7 dagen', breed: true },
-          ].map(({ label, value, sub, breed }) => (
-            <div key={label} className={cn('min-w-0 rounded-xl bg-surface-soft p-3 ring-1 ring-hairline sm:p-4', breed && 'col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 sm:col-span-1 sm:block')}>
-              <dt className={cn('text-label break-words', breed ? 'col-start-1 row-start-1' : 'min-h-8 sm:min-h-0')}>{label}</dt>
-              <dd className={`text-stat ${cn('break-words text-slate-900', breed ? 'col-start-2 row-span-2 row-start-1 sm:mt-2' : 'mt-2')}`}>{value}</dd>
-              <dd className={cn('mt-1 text-xs font-medium break-words text-slate-500', breed && 'col-start-1 row-start-2')}>{sub}</dd>
-            </div>
-          ))}
-        </dl>
-        {logins.length === 0 ? (
+        {aanwezigheidMigratie ? (
           <div className="mt-5">
-            <EmptyState title="Nog geen gebruik geregistreerd" message="Zodra gebruikers het portaal openen, verschijnt hier per dag wie er actief was." />
+            <EmptyState
+              illustratie={<LegeLijst />}
+              title="Aanwezigheid staat nog uit"
+              message={`Draai ${aanwezigheidMigratie} in de SQL Editor. Daarna verschijnt hier per dag wie er wanneer actief was.`}
+            />
           </div>
         ) : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-5">
-            <div className="min-w-0 lg:col-span-3">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                <div>
-                  <h3 className="text-card-title">Gebruik per dag</h3>
-                  <p className="mt-1 text-xs text-slate-500">Laatste 14 dagen</p>
+          <>
+            <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {[
+                { label: 'Nu online', value: kpi.online, sub: 'op dit moment', live: true },
+                { label: 'Vandaag', value: kpi.vandaag, sub: 'actieve gebruikers', live: false },
+                { label: 'Laatste 7 dagen', value: kpi.week, sub: 'unieke gebruikers', breed: true, live: false },
+              ].map(({ label, value, sub, breed, live }) => (
+                <div key={label} className={cn('min-w-0 rounded-xl bg-surface-soft p-3 ring-1 ring-hairline sm:p-4', breed && 'col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 sm:col-span-1 sm:block')}>
+                  <dt className={cn('text-label inline-flex items-center gap-1.5 break-words', breed ? 'col-start-1 row-start-1' : 'min-h-8 sm:min-h-0')}>
+                    {live && value > 0 && <span className="size-1.5 shrink-0 rounded-full bg-oker-500 vhb-nu" aria-hidden="true" />}
+                    {label}
+                  </dt>
+                  <dd className={`text-stat ${cn('break-words', live && value > 0 ? 'text-oker-700' : 'text-slate-900', breed ? 'col-start-2 row-span-2 row-start-1 sm:mt-2' : 'mt-2')}`}>{value}</dd>
+                  <dd className={cn('mt-1 text-xs font-medium break-words text-slate-500', breed && 'col-start-1 row-start-2')}>{sub}</dd>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setShowDailyModal(true)}>Alle dagen ({dailyActive.length})</Button>
+              ))}
+            </dl>
+
+            {aanwezigheid.length === 0 ? (
+              <div className="mt-5">
+                <EmptyState
+                  illustratie={<LegeLijst />}
+                  title="Nog geen aanwezigheid geregistreerd"
+                  message="Zodra gebruikers het portaal openen, verschijnt hier per dag wie er wanneer actief was."
+                />
               </div>
-              {/* Kolommen: elke dag een staaf met het aantal erboven; tik/klik
-                  toont de namen van die dag. De hoogste staaf gebruikt 80%
-                  van de hoogte, zodat er altijd ruimte is voor de teller. */}
-              <div className="flex h-36 items-end gap-1 sm:gap-1.5" role="group" aria-label={`Actieve gebruikers per dag, laatste 14 dagen: vandaag ${kpi.vandaag}, hoogste ${maxDaily}`}>
-                {veertienDagen.map((d) => (
-                  // rauw: staaf-als-knop (namen van die dag), eigen layout
-                  <button
-                    key={d.day}
-                    type="button"
-                    onClick={() => d.count > 0 && setOpenDay(d.day)}
-                    aria-label={`${dagKort(d.day, vandaag)}: ${d.count} actief`}
-                    className={cn('group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1 rounded-lg', d.count > 0 ? 'cursor-pointer' : 'cursor-default')}
-                  >
-                    {/* 2xs: teller boven de dagstrip van de mini-grafiek */}
-                    <span className="text-2xs font-semibold font-mono text-slate-700">{d.count || ''}</span>
-                    <span
-                      className={cn('w-full rounded-t-md transition-colors', d.day === vandaag ? 'bg-oker-500' : d.count > 0 ? 'bg-slate-500 group-hover:bg-slate-700' : 'bg-surface-muted')}
-                      style={{ height: d.count > 0 ? `${Math.max(6, Math.round((d.count / maxDaily) * 80))}%` : '3px' }}
-                      aria-hidden="true"
-                    />
-                  </button>
-                ))}
+            ) : (
+              <div className="mt-6 grid gap-6 lg:grid-cols-5">
+                <div className="min-w-0 lg:col-span-3">
+                  <div className="mb-4">
+                    <h3 className="text-card-title">Actieve gebruikers per dag</h3>
+                    <p className="mt-1 text-xs text-slate-500">Laatste 14 dagen, tik een dag voor het verloop</p>
+                  </div>
+                  {/* Kolommen: elke dag een staaf met het aantal erboven; de dag
+                      die je kiest stuurt de tijdbalken eronder. De hoogste staaf
+                      gebruikt 80% van de hoogte, zodat er ruimte blijft voor de teller. */}
+                  <div className="flex h-36 items-end gap-1 sm:gap-1.5" role="group" aria-label={`Actieve gebruikers per dag, laatste 14 dagen: vandaag ${kpi.vandaag}, hoogste ${maxDaily}`}>
+                    {veertienDagen.map((d) => (
+                      // rauw: staaf-als-knop (kiest de dag van de tijdbalken), eigen layout
+                      <button
+                        key={d.day}
+                        type="button"
+                        onClick={() => setGekozenDag(d.day)}
+                        aria-pressed={d.day === gekozenDag}
+                        aria-label={`${dagKort(d.day, vandaag)}: ${d.count} actief`}
+                        className="group flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-end gap-1 rounded-lg"
+                      >
+                        {/* 2xs: teller boven de dagstrip van de mini-grafiek */}
+                        <span className={cn('text-2xs font-semibold font-mono', d.day === gekozenDag ? 'text-slate-900' : 'text-slate-700')}>{d.count || ''}</span>
+                        <span
+                          className={cn(
+                            'w-full rounded-t-md transition-colors',
+                            d.day === gekozenDag ? 'bg-oker-500' : d.count > 0 ? 'bg-slate-500 group-hover:bg-slate-700' : 'bg-surface-muted',
+                          )}
+                          style={{ height: d.count > 0 ? `${Math.max(6, Math.round((d.count / maxDaily) * 80))}%` : '3px' }}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-1.5 flex gap-1 sm:gap-1.5" aria-hidden="true">
+                    {veertienDagen.map((d) => (
+                      /* 2xs: daglabels van de mini-grafiek, 14 kolommen naast elkaar */
+                      <span key={d.day} className={cn('min-w-0 flex-1 truncate text-center text-2xs font-medium font-mono', d.day === gekozenDag ? 'text-oker-700' : 'text-slate-500')}>
+                        {d.day === vandaag ? 'nu' : WEEKDAY_SHORT_SUN[d.dow]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="min-w-0 border-t border-hairline pt-5 lg:col-span-2 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+                  <h3 className="mb-1 text-card-title">Recente aanmeldingen</h3>
+                  <p className="mb-3 text-xs text-slate-500">Alleen wie zich écht opnieuw moest aanmelden. Wie ingelogd blijft, telt mee in de aanwezigheid.</p>
+                  <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
+                    {recentLogins.length === 0 ? (
+                      <p className="text-sm text-slate-500">Nog geen aanmeldingen in de laatste 30 dagen.</p>
+                    ) : recentLogins.map((e) => (
+                      <div key={e.id} className="flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-soft-hover">
+                        <Avatar naam={e.actorName} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold break-words text-slate-800">{e.actorName}</p>
+                          <p className="mt-0.5 text-xs font-medium text-slate-500" title={new Date(e.createdAt).toLocaleString('nl-BE')}>{formatRelatief(e.createdAt)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="mt-1.5 flex gap-1 sm:gap-1.5" aria-hidden="true">
-                {veertienDagen.map((d) => (
-                  /* 2xs: daglabels van de mini-grafiek, 14 kolommen naast elkaar */
-                  <span key={d.day} className={cn('min-w-0 flex-1 truncate text-center text-2xs font-medium font-mono', d.day === vandaag ? 'text-oker-700' : 'text-slate-500')}>
-                    {d.day === vandaag ? 'nu' : WEEKDAY_SHORT_SUN[d.dow]}
+            )}
+
+            {/* ---- Tijdbalken van de gekozen dag ---- */}
+            {aanwezigheid.length > 0 && (
+              <div className="mt-8 border-t border-hairline pt-6">
+                <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <h3 className="text-card-title">
+                    {dagKop(gekozenDag, vandaag)}
+                    <span className="ml-2 text-sm font-normal text-slate-500">{formatDayLong(gekozenDag)}</span>
+                  </h3>
+                  <span className="text-xs font-medium font-mono text-slate-500">
+                    {balken.length} {balken.length === 1 ? 'persoon' : 'personen'}
                   </span>
-                ))}
-              </div>
-            </div>
-            <div className="min-w-0 border-t border-hairline pt-5 lg:col-span-2 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-              <h3 className="mb-3 text-card-title">Recente aanmeldingen</h3>
-              <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
-                {recentLogins.length === 0 ? (
-                  <p className="text-sm text-slate-500">Nog geen aanmeldingen in de laatste 30 dagen.</p>
-                ) : recentLogins.map((e) => (
-                  <div key={e.id} className="flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-soft-hover">
-                    <Avatar naam={e.actorName} size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold break-words text-slate-800">{e.actorName}</p>
-                      <p className="mt-0.5 text-xs font-medium text-slate-500" title={new Date(e.createdAt).toLocaleString('nl-BE')}>{formatRelatief(e.createdAt)}</p>
+                </div>
+                {balken.length === 0 ? (
+                  <EmptyState
+                    title="Niemand actief op deze dag"
+                    message="Kies een andere dag in de grafiek hierboven."
+                  />
+                ) : (
+                  <div className="min-w-0">
+                    {/* Uuras boven de balken: 00, 06, 12, 18 en 24 uur. */}
+                    <div className={cn(TIJDBALK_RIJ, 'mb-1')} aria-hidden="true">
+                      <div className={cn(TIJDBALK_BALK, 'relative h-4')}>
+                        {[0, 6, 12, 18].map((u) => (
+                          /* 2xs: uurlabel op de tijdas van de aanwezigheidsbalken */
+                          <span key={u} className="absolute top-0 text-2xs font-medium font-mono text-slate-500" style={{ left: `${(u / 24) * 100}%` }}>{String(u).padStart(2, '0')}</span>
+                        ))}
+                        <span className="absolute top-0 right-0 text-2xs font-medium font-mono text-slate-500">24</span>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-hairline-subtle">
+                      {balken.map((b) => (
+                        <div key={b.userId} className={cn(TIJDBALK_RIJ, 'py-2')}>
+                          <span className={TIJDBALK_NAAM}>
+                            <Avatar naam={b.naam} size="sm" />
+                            <span className="min-w-0 truncate text-sm font-semibold text-slate-800" title={b.naam}>{b.naam}</span>
+                          </span>
+                          <div className={cn(TIJDBALK_BALK, 'relative h-5 overflow-hidden rounded-md bg-surface-muted ring-1 ring-hairline-subtle')}>
+                            {/* Ankers op 06, 12 en 18 uur, zodat een blok afleesbaar is zonder te mikken. */}
+                            {[6, 12, 18].map((u) => (
+                              <span key={u} className="absolute inset-y-0 w-px bg-hairline-strong/40" style={{ left: `${(u / 24) * 100}%` }} aria-hidden="true" />
+                            ))}
+                            {b.periodes.map((per) => (
+                              <span
+                                key={per.vanIso}
+                                className={cn('absolute inset-y-0.5 rounded', isLopend(b.userId, per.totMin) ? 'bg-oker-500' : 'bg-slate-500')}
+                                style={{ left: `${(per.vanMin / 1440) * 100}%`, width: `${Math.max(0.5, ((per.totMin - per.vanMin) / 1440) * 100)}%` }}
+                                title={`${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}`}
+                                aria-label={`${b.naam} actief van ${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}`}
+                              />
+                            ))}
+                          </div>
+                          <span className={cn(TIJDBALK_DUUR, 'text-xs font-medium font-mono text-slate-600')} title={`${b.periodes.length} ${b.periodes.length === 1 ? 'periode' : 'periodes'}`}>{duurKort(b.totaalMin)}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -493,41 +596,6 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         </div>
       </Card>
 
-      <Modal open={showDailyModal} onClose={() => setShowDailyModal(false)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0">
-        <ModalHeader title="Actieve gebruikers per dag" description="Klik op een dag voor de namen" onClose={() => setShowDailyModal(false)} />
-        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-4 py-3">
-          {dailyActive.map((d) => (
-            // rauw: dagrij (datum + staaf + teller) is de knop naar de namen
-            <button key={d.day} type="button" onClick={() => setOpenDay(d.day)} className="flex w-full items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-soft-hover">
-              <span className="w-24 shrink-0 text-xs font-medium text-slate-500">{dagKort(d.day, vandaag)}</span>
-              <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-surface-muted"><span className="block h-full rounded-full bg-slate-500" style={{ width: `${Math.round((d.count / Math.max(1, ...dailyActive.map((x) => x.count))) * 100)}%` }} /></span>
-              <span className="w-6 shrink-0 text-right text-xs font-bold font-mono text-slate-700">{d.count}</span>
-            </button>
-          ))}
-        </div>
-      </Modal>
-
-      <Modal open={Boolean(openDayData)} onClose={() => setOpenDay(null)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0">
-        {openDayData && (
-          <>
-            <ModalHeader
-              eyebrow={`${openDayData.count} ${openDayData.count === 1 ? 'actieve gebruiker' : 'actieve gebruikers'}`}
-              title={dagKop(openDayData.day, vandaag)}
-              description={formatDayLong(openDayData.day)}
-              onClose={() => setOpenDay(null)}
-            />
-            <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-4 py-3">
-              {openDayData.names.map((name) => (
-                <div key={name} className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-surface-soft-hover">
-                  <Avatar naam={name} size="sm" />
-                  <span className="min-w-0 text-sm font-semibold break-words text-slate-800">{name}</span>
-                </div>
-              ))}
-              {openDayData.names.length === 0 && <p className="flex items-center gap-2 text-sm text-slate-500"><Users size={16} /> Niemand actief.</p>}
-            </div>
-          </>
-        )}
-      </Modal>
     </PageShell>
   );
 }
