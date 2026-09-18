@@ -192,6 +192,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // gesplitste dienst is meerdere planning-rijen, maar de ruil (en de
   // doorvoer) gaat altijd over de hele dienst (zie lib/ruilWizard).
   const myShifts = groepeerPerDienst(shifts.filter(s => s.driverId === user.id && s.date >= todayIso));
+  // Diensten waarvoor al een verzoek loopt: de server weigert een tweede met
+  // een 409, en dat geldt sinds 18-09 voor de hele dienst (ook het andere deel
+  // van een gesplitste dienst). Hier tonen we dat vóór het indienen, zodat de
+  // wizard niet doodloopt op een foutmelding.
+  const lopendeRuilSleutels = new Set(
+    swaps
+      .filter((s) => (s.status === 'pending' || s.status === 'accepted') && s.shiftDate && s.shiftLine)
+      .map((s) => dienstSleutel({ date: String(s.shiftDate), line: String(s.shiftLine) })),
+  );
+  const heeftLopendeRuil = (s: Pick<Shift, 'date' | 'line'>) => lopendeRuilSleutels.has(dienstSleutel(s));
   /**
    * Dienst-info bij een ruil. `shifts` bevat alleen de éigen planning, dus de
    * aangeboden dienst zit er lang niet altijd in: de aangezochte collega heeft
@@ -945,21 +955,29 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </Card>
                   ) : (
                     <div className="space-y-2">
-                      {(showAllShifts ? myShifts : myShifts.slice(0, 8)).map((s) => (
+                      {(showAllShifts ? myShifts : myShifts.slice(0, 8)).map((s) => {
+                        const bezet = heeftLopendeRuil(s);
+                        return (
                         /* rauw: wizard-keuzekaart (datum + dienst + chevron), eigen layout via cnCard */
                         <button
                           key={s.id}
                           type="button"
+                          disabled={bezet}
                           onClick={() => { setSelectedShift(s.id); setSelectedTargetDriver(''); setReturnPick(''); setWizardStep(2); }}
-                          className={cnCard(selectedShift === s.id)}
+                          className={`${cnCard(selectedShift === s.id)} disabled:cursor-not-allowed disabled:opacity-60`}
                         >
                           <span className="min-w-0">
                             <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(s.date)}</span>
                             <span className="block text-xs font-medium text-slate-500 tabular-nums">Dienst {serviceNumberOf(s)} · {s.startTime} – {s.endTime}{s.delen > 1 ? ` · in ${s.delen} delen` : ''}</span>
                           </span>
-                          <ChevronRight size={16} className="shrink-0 text-slate-300" />
+                          {bezet ? (
+                            <Badge tone="blue" stil className="shrink-0 whitespace-nowrap">Ruil loopt al</Badge>
+                          ) : (
+                            <ChevronRight size={16} className="shrink-0 text-slate-300" />
+                          )}
                         </button>
-                      ))}
+                        );
+                      })}
                       {!showAllShifts && myShifts.length > 8 && (
                         <Button variant="ghost" size="sm" full className="text-oker-700 hover:text-oker-800" onClick={() => setShowAllShifts(true)}>
                           Meer tonen ({myShifts.length - 8} extra)

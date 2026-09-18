@@ -139,6 +139,44 @@ test('chauffeur stelt een ruil voor via de 3-staps wizard', async ({ page }) => 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
 
+test('een dienst met een lopende ruil is niet opnieuw aanvraagbaar', async ({ page }) => {
+  // De server weigert een tweede verzoek op dezelfde dienst met een 409, en
+  // sinds 18-09 geldt dat voor de héle dienst (ook het andere deel van een
+  // gesplitste dienst). De wizard toont dat vooraf i.p.v. te laten doodlopen.
+  await seedSession(page, CHAUFFEUR);
+  const deel1 = { id: 's1', date: dayOffset(3), startTime: '05:00', endTime: '09:00', line: '2101', busNumber: '', driverId: CHAUFFEUR.id };
+  const deel2 = { id: 's1b', date: dayOffset(3), startTime: '15:00', endTime: '19:00', line: '2101', busNumber: '', driverId: CHAUFFEUR.id };
+  const vrijeDienst = { id: 's2', date: dayOffset(4), startTime: '08:00', endTime: '16:00', line: '2202', busNumber: '', driverId: CHAUFFEUR.id };
+  const lopend = {
+    id: 'sw-open', shiftId: deel1.id, requesterId: CHAUFFEUR.id, targetDriverId: COLLEGA.id,
+    status: 'pending', reason: '', createdAt: new Date().toISOString(),
+    shiftDate: deel1.date, shiftLine: deel1.line,
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.endsWith('/api/me')) return json(CHAUFFEUR);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([CHAUFFEUR, COLLEGA]);
+    if (path.endsWith('/api/planning')) return json([deel1, deel2, vrijeDienst]);
+    if (path.endsWith('/api/swaps')) return json([lopend]);
+    return json([]);
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Dienstruil aanvragen' }).click();
+  await expect(page.getByText('Stap 1 van 3')).toBeVisible();
+
+  // Eén kaart per dienst: 2101 staat in 2 delen en is geblokkeerd, 2202 niet.
+  // Binnen de wizard zoeken; de lijst eronder heeft dezelfde dienstnummers.
+  const wizard = page.getByRole('dialog');
+  const geblokkeerd = wizard.getByRole('button', { name: /Dienst 2101/ });
+  await expect(geblokkeerd).toBeDisabled();
+  await expect(geblokkeerd).toContainText('Ruil loopt al');
+  await expect(wizard.getByRole('button', { name: /Dienst 2202/ })).toBeEnabled();
+});
+
 test('chauffeur geeft een dienst door zonder tegenprestatie', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (err) => pageErrors.push(err.message));

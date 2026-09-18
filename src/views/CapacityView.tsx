@@ -20,7 +20,7 @@ import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind }
 import { KIND_CLS, KIND_LABEL, celChipClass, celTextClass } from '../lib/planningKind';
 import { isStaf } from '../types';
 import type { User } from '../types';
-import { formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
+import { formatDatumDMJ, formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 import { DUR, EASE_SPRING } from '../lib/motion';
 import { useRecordParam, useRouteParam } from '../app/router';
@@ -64,8 +64,10 @@ const maandUitParam = (p: string | null): Date | null =>
 const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 /** Vaste redenen voor een handmatige dienstwissel; bij 'Andere correctie' is
- *  de vrije toelichting verplicht (de server eist altijd een reden). */
-const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Andere correctie'] as const;
+ *  de vrije toelichting verplicht (de server eist altijd een reden). De
+ *  ondertekende papieren ruil staat erbij sinds 18-09 (Jarno): die komt als
+ *  briefje binnen en is het bewijsstuk waarnaar het ruiloverzicht verwijst. */
+const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Ruil op papier ondertekend', 'Andere correctie'] as const;
 
 /**
  * Maandplanning — read-only weergave van de planning-matrix (chauffeur ×
@@ -419,6 +421,21 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   };
   const goPrevWindow = () => verschuifVenster(-2);
   const goNextWindow = () => verschuifVenster(2);
+  // Grenzen van de geïmporteerde planning: verder bladeren toont een leeg bord
+  // dat leest als "er staat niemand ingepland", terwijl er simpelweg nog niets
+  // geïmporteerd is (Jarno 18-09, hij kon voorbij de laatste import scrollen).
+  // Zolang de server de grenzen niet meestuurt blijft alles gewoon bereikbaar.
+  const geimporteerd = data?.geimporteerd ?? extraData?.geimporteerd ?? null;
+  const eersteDag = geimporteerd?.eerste ?? null;
+  const laatsteDag = geimporteerd?.laatste ?? null;
+  // Het vórige venster eindigt de dag vóór dit venster; het vólgende begint
+  // twee weken later. Een venster dat helemaal buiten de import valt heeft
+  // niets te tonen.
+  const kanTerug = !eersteDag || addDaysIso(windowStart, -1) >= eersteDag;
+  const kanVooruit = !laatsteDag || addDaysIso(windowStart, 14) <= laatsteDag;
+  const maandGrens = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const kanMaandTerug = !eersteDag || maandGrens(new Date(year, monthIndex - 1, 1)) >= eersteDag.slice(0, 7);
+  const kanMaandVooruit = !laatsteDag || maandGrens(new Date(year, monthIndex + 1, 1)) <= laatsteDag.slice(0, 7);
   const goToday = () => {
     const n = new Date();
     setWindowStart(mondayOf(todayIso));
@@ -641,11 +658,25 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             {/* Het 2-weken-venster is een desktop-begrip; op mobiel navigeert
                 de datumstrip (met eigen maandwissel) en is dit cluster ruis. */}
             <div className="hidden md:flex items-center gap-2">
-              <IconButton label="Vorige 2 weken" variant="secondary" size="sm" onClick={goPrevWindow}>
+              <IconButton
+                label="Vorige 2 weken"
+                title={kanTerug ? 'Vorige 2 weken' : `De planning begint op ${formatDatumDMJ(eersteDag)}`}
+                variant="secondary"
+                size="sm"
+                disabled={!kanTerug}
+                onClick={goPrevWindow}
+              >
                 <ChevronLeft size={18} />
               </IconButton>
               <span className="px-3 text-sm font-semibold tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
-              <IconButton label="Volgende 2 weken" variant="secondary" size="sm" onClick={goNextWindow}>
+              <IconButton
+                label="Volgende 2 weken"
+                title={kanVooruit ? 'Volgende 2 weken' : `De planning is geïmporteerd tot ${formatDatumDMJ(laatsteDag)}`}
+                variant="secondary"
+                size="sm"
+                disabled={!kanVooruit}
+                onClick={goNextWindow}
+              >
                 <ChevronRight size={18} />
               </IconButton>
             </div>
@@ -857,9 +888,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <div className="flex items-center justify-between gap-2 px-1 pb-1">
                 <IconButton
                   label="Vorige maand"
+                  title={kanMaandTerug ? 'Vorige maand' : `De planning begint op ${formatDatumDMJ(eersteDag)}`}
                   variant="ghost"
                   size="md"
                   className="text-slate-400"
+                  disabled={!kanMaandTerug}
                   onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
                 >
                   <ChevronLeft size={16} />
@@ -882,9 +915,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   )}
                   <IconButton
                     label="Volgende maand"
+                    title={kanMaandVooruit ? 'Volgende maand' : `De planning is geïmporteerd tot ${formatDatumDMJ(laatsteDag)}`}
                     variant="ghost"
                     size="md"
                     className="text-slate-400"
+                    disabled={!kanMaandVooruit}
                     onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
                   >
                     <ChevronRight size={16} />

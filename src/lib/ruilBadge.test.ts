@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { geruildeDiensten, ruilBadgeLabel, ruilSleutel } from './ruilBadge';
+import { geruildeDiensten, kaleReden, ruilBadgeLabel, ruilSleutel } from './ruilBadge';
 import { HANDMATIGE_WISSEL_PREFIX } from '../../shared/schemas/constanten';
 import type { SwapRequest } from '../types';
 
@@ -73,5 +73,25 @@ describe('geruildeDiensten', () => {
     const b = geruildeDiensten('B', [...swaps], users);
     expect(b).not.toBe(a);
     expect(b.get(ruilSleutel('2026-09-15', '2101'))?.met).toBe('An');
+  });
+});
+
+describe('kaleReden', () => {
+  it('haalt het voorvoegsel en de naam van een handmatige wissel weg', () => {
+    expect(kaleReden(`${HANDMATIGE_WISSEL_PREFIX}Jarno De Greve, ziekte`)).toBe('ziekte');
+  });
+
+  it('houdt komma\u2019s in de reden zelf heel', () => {
+    expect(kaleReden(`${HANDMATIGE_WISSEL_PREFIX}Jarno, ruil op papier, getekend door beiden`))
+      .toBe('ruil op papier, getekend door beiden');
+  });
+
+  it('laat een gewone ruilreden ongemoeid en verdraagt leeg', () => {
+    expect(kaleReden('Familiefeest')).toBe('Familiefeest');
+    expect(kaleReden(undefined)).toBe('');
+  });
+
+  it('geeft niets terug als er na de naam geen reden staat', () => {
+    expect(kaleReden(`${HANDMATIGE_WISSEL_PREFIX}Jarno`)).toBe('');
   });
 });

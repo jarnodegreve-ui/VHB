@@ -428,6 +428,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         ? mem.planningMatrix.filter((r: any) => String(r.source_date ?? '').startsWith(`${maand}-`))
         : mem.planningMatrix;
     },
+    getPlanningMatrixGrenzen: async () => {
+      const dagen = mem.planningMatrix.map((r: any) => String(r.source_date ?? '')).filter(Boolean).sort();
+      return { eerste: dagen[0] ?? null, laatste: dagen[dagen.length - 1] ?? null };
+    },
     // Sinds de golden import-keten-suite (01-09) draait hier de ÉCHTE
     // opbouw-kern (bouwPlanningUitMatrix, pure functie) op de mem-store —
     // een mini-mock verstopte precies de keten-bugs die deze tests moeten
@@ -1061,6 +1065,40 @@ describe('dienstruil: autorisatieregels', () => {
     const sjoemel = scoped.map((s) => (s.id === 's-1' ? { ...s, status: 'accepted', returnCode: '99' } : s));
     const res = await api('POST', '/api/swaps', { token: 'tok-b', body: sjoemel });
     expect(res.status).toBe(403);
+  });
+
+  it('exclusiviteit geldt per volledige dienst, ook over de delen van een gesplitste dienst (409)', async () => {
+    // Dienst 12 van 2026-07-01 staat als twee rijen in de planning (ochtend +
+    // namiddag). Op het eerste deel loopt al een verzoek (s-1); een tweede
+    // verzoek op het ándere deel hoort geweigerd te worden, want de doorvoer
+    // verplaatst altijd de hele dienst (Jarno 18-09).
+    mem.planning = [
+      { id: 'sh-a', driverId: '3', date: '2026-07-01', line: '12' },
+      { id: 'sh-a2', driverId: '3', date: '2026-07-01', line: '12' },
+    ];
+    mem.swaps = [{ id: 's-1', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-01T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
+    const tweedeDeel = [...mem.swaps, {
+      id: 's-deel2', shiftId: 'sh-a2', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-12T08:00:00Z', returnDate: '2026-07-03', returnCode: 'VRIJ',
+    }];
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: tweedeDeel });
+    expect(res.status).toBe(409);
+    expect(mem.swaps).toHaveLength(1);
+  });
+
+  it('een dienst zonder lopend verzoek blijft gewoon aanvraagbaar', async () => {
+    mem.planning = [
+      { id: 'sh-a', driverId: '3', date: '2026-07-01', line: '12' },
+      { id: 'sh-c', driverId: '3', date: '2026-07-08', line: '13' },
+    ];
+    mem.swaps = [{ id: 's-1', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-01T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
+    const andereDienst = [...mem.swaps, {
+      id: 's-nieuw', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-12T08:00:00Z', returnDate: '2026-07-09', returnCode: 'VRIJ',
+    }];
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: andereDienst });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.map((s: any) => s.id)).toContain('s-nieuw');
   });
 
   it('weigert een overgang uit een afgehandelde status, rejected → approved via POST (409)', async () => {
@@ -2693,6 +2731,18 @@ describe('maandplanning, afwezigheidscodes zijn voor iedereen zichtbaar', () => 
     expect(mem.matrixMaandFilters).not.toContain(null);
     // En de augustusdag zit niet in het antwoord.
     expect(res.json.dates).toEqual(['2026-07-15', '2026-07-16']);
+  });
+
+  it('draagt de grenzen van de geïmporteerde planning mee, zodat het bord niet verder bladert dan de import', async () => {
+    // Jarno 18-09: je kon in de maandplanning voorbij de laatste geïmporteerde
+    // dag scrollen; het bord stond dan leeg alsof er niemand ingepland was.
+    mem.planningMatrix = [
+      ...mem.planningMatrix,
+      { id: 'm-nov', source_date: '2026-11-08', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.geimporteerd).toEqual({ eerste: '2026-07-15', laatste: '2026-11-08' });
   });
 
   it('een chauffeur ziet de code van een collega ongewijzigd', async () => {

@@ -6,6 +6,7 @@ import { formatDatumDMJ, formatDayLong, formatShortDay } from '../lib/format';
 import { maandagVan } from '../lib/roosterUren';
 import { isoWeekOf } from '../lib/week';
 import { addDagen, isoDate } from '../lib/datum';
+import { kaleReden } from '../lib/ruilBadge';
 
 /**
  * Weekoverzicht van de dienstwissels als bewijsstuk voor het klassement
@@ -142,6 +143,9 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
                   const s = wissel.swap;
                   const dienst = dienstVan(s);
                   const overname = s.swapType === 'overname';
+                  // Bij een handmatige wissel staat "door wie" al in de regel
+                  // Uitgevoerd om, dus alleen de kale reden hier.
+                  const reden = kaleReden(s.reason);
                   const inRuil = overname
                     ? 'niets, overname zonder tegenprestatie'
                     : s.returnCode && s.returnDate
@@ -170,7 +174,7 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
                         <dt className={label}>Geeft dienst af</dt><dd>{wissel.aanvragerNaam}</dd>
                         <dt className={label}>Neemt dienst over</dt><dd>{wissel.overnemerNaam || 'nog niet gekozen'}</dd>
                         {inRuil && (<><dt className={label}>In ruil</dt><dd>{inRuil}</dd></>)}
-                        {s.reason && (<><dt className={label}>Reden</dt><dd>“{s.reason}”</dd></>)}
+                        {reden && (<><dt className={label}>Reden</dt><dd>“{reden}”</dd></>)}
                         <dt className={label}>Aangevraagd op</dt><dd>{tijdstip(s.createdAt)}</dd>
                         {s.targetSeenAt && (<><dt className={label}>Gezien door collega</dt><dd>{tijdstip(s.targetSeenAt)}</dd></>)}
                       </dl>

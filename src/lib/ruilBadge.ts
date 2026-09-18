@@ -24,6 +24,18 @@ export type RuilBadge = {
 export const ruilBadgeLabel = (b: RuilBadge): string =>
   b.soort === 'ruil' ? `Geruild met ${b.met}` : b.soort === 'overname' ? `Overgenomen van ${b.met}` : `Overgezet van ${b.met}`;
 
+/** De kale reden van een handmatige wissel: `reason` draagt daar het voorvoegsel
+ *  "Handmatige wissel door <naam>, " en dat is dubbelop waar het scherm of het
+ *  blad zelf al toont dat het handmatig ging en door wie (Jarno 18-09). Een
+ *  gewone ruilreden komt ongewijzigd terug. */
+export const kaleReden = (reason: string | undefined | null): string => {
+  const tekst = String(reason ?? '').trim();
+  if (!tekst.startsWith(HANDMATIGE_WISSEL_PREFIX)) return tekst;
+  // Na het voorvoegsel staat "<naam>, <reden>"; zonder komma bleef alleen de naam over.
+  const naDeNaam = tekst.slice(HANDMATIGE_WISSEL_PREFIX.length).split(/,\s*/);
+  return naDeNaam.slice(1).join(', ').trim();
+};
+
 /** Sleutel per dienst: datum + genormaliseerd dienstnummer. */
 export const ruilSleutel = (date: string, line: string): string => `${date}__${String(line ?? '').trim().toLowerCase()}`;
 
