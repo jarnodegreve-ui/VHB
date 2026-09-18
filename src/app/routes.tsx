@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
-  Hash, HeartPulse, IdCard, Inbox, LayoutDashboard, ListChecks, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
+  Hash, HeartPulse, History, IdCard, Inbox, LayoutDashboard, ListChecks, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
   Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route } from 'lucide-react';
 import type { Role, View } from '../types';
 
@@ -80,7 +80,8 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'beheer-omleidingen', pad: 'beheer/omleidingen', label: 'Beheer omleidingen', omschrijving: 'Routewijzigingen en bijlagen voor chauffeurs.', icoon: MapIcon, sectie: 'communicatie', rollen: STAF },
   // — Techniek (fase A Access-migratie, 13-09) —
   { view: 'defecten', pad: 'techniek/defecten', label: 'Gele boek', omschrijving: 'Gemelde defecten per bus en hun opvolging.', icoon: Wrench, sectie: 'techniek', rollen: TECHNIEK },
-  { view: 'werkprestaties', pad: 'techniek/prestaties', label: 'Werkprestaties', kort: 'Prestaties', omschrijving: 'Wat de garage per dag aan welke bus deed.', icoon: ClipboardList, sectie: 'techniek', rollen: TECHNIEK },
+  { view: 'werkprestaties', pad: 'techniek/prestaties', label: 'Dagadministratie', kort: 'Dagadmin', omschrijving: 'Wat de garage per dag aan welke bus deed, dag per dag ingegeven.', icoon: ClipboardList, sectie: 'techniek', rollen: TECHNIEK },
+  { view: 'voertuig-werken', pad: 'techniek/werken', label: 'Uitgevoerde werken per bus', kort: 'Per bus', omschrijving: 'De volledige werkgeschiedenis van één bus, wie het deed en hoelang het duurde.', icoon: History, sectie: 'techniek', rollen: TECHNIEK },
   { view: 'voertuigen', pad: 'techniek/voertuigen', label: 'Voertuigen', omschrijving: 'Het wagenpark met keuringen en vervaldata.', icoon: Bus, sectie: 'techniek', rollen: TECHNIEK },
   // — Systeem —
   { view: 'gebruikers', pad: 'beheer/gebruikers', label: 'Gebruikers', omschrijving: 'Accounts, rollen en toegang.', icoon: Users, sectie: 'systeem', rollen: ADMIN },

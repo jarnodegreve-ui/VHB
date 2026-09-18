@@ -109,6 +109,7 @@ const LazyDebugView = lazyWithRetry(() => import('./views/admin/DebugView').then
 // Techniek (fase A Access-migratie, 13-09): gele boek, werkprestaties, voertuigen.
 const LazyGeleBoekView = lazyWithRetry(() => VIEW_LOADERS['defecten']().then((m) => ({ default: (m as typeof import('./views/techniek/GeleBoekView')).GeleBoekView })));
 const LazyWerkprestatiesView = lazyWithRetry(() => VIEW_LOADERS['werkprestaties']().then((m) => ({ default: (m as typeof import('./views/techniek/WerkprestatiesView')).WerkprestatiesView })));
+const LazyVoertuigWerkenView = lazyWithRetry(() => VIEW_LOADERS['voertuig-werken']().then((m) => ({ default: (m as typeof import('./views/techniek/VoertuigWerkenView')).VoertuigWerkenView })));
 const LazyVoertuigenView = lazyWithRetry(() => VIEW_LOADERS['voertuigen']().then((m) => ({ default: (m as typeof import('./views/techniek/VoertuigenView')).VoertuigenView })));
 // Loon (fase B Access-migratie, 13-09): dagafsluiting en looncontrole.
 const LazyDagafsluitingView = lazyWithRetry(() => VIEW_LOADERS['dagafsluiting']().then((m) => ({ default: (m as typeof import('./views/admin/DagafsluitingView')).DagafsluitingView })));
@@ -1857,6 +1858,7 @@ export default function App() {
               {resolvedCurrentView === 'werkvoorraad' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyWerkvoorraadView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'defecten' && <Suspense fallback={<ViewLoader />}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'werkprestaties' && <Suspense fallback={<ViewLoader />}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense>}
+              {resolvedCurrentView === 'voertuig-werken' && <Suspense fallback={<ViewLoader />}><LazyVoertuigWerkenView /></Suspense>}
               {resolvedCurrentView === 'voertuigen' && <Suspense fallback={<ViewLoader />}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'dienstopbouw' && <Suspense fallback={<ViewLoader />}><LazyDienstopbouwView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'dagafsluiting' && <Suspense fallback={<ViewLoader />}><LazyDagafsluitingView currentUser={currentUser!} users={users} /></Suspense>}

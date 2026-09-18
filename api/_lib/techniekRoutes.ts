@@ -115,6 +115,29 @@ export function mountTechniekRoutes(app: express.Express) {
     }
   });
 
+  /**
+   * Alle uitgevoerde werken aan één bus, ongeacht wie ze deed (scherm
+   * "Uitgevoerde werken per bus", Jarno 18-09). Bewust een eigen route: de
+   * lijst /api/werkprestaties snoert een technieker tot zijn eigen rijen,
+   * want dat is zijn dagadministratie. De vraag "wat is er aan deze bus
+   * gebeurd" is een andere vraag en mag hij wél volledig zien.
+   */
+  app.get("/api/vehicles/:id/werken", authenticate, requireRole(...TECHNIEK), async (req: AuthenticatedRequest, res) => {
+    try {
+      const v = await getVehicle(String(req.params.id));
+      if (!v) return res.status(404).json({ error: "Voertuig niet gevonden." });
+      const dag = (x: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(x ?? "")) ? String(x) : undefined);
+      const [rijen, users] = await Promise.all([
+        getWerkprestaties({ vehicleId: v.id, van: dag(req.query.van), tot: dag(req.query.tot), limit: Number(req.query.limit) || 1000 }),
+        getUsersData(),
+      ]);
+      res.setHeader("Cache-Control", "no-store");
+      res.json(rijen.map(prestatieMetNaam(users)));
+    } catch (err) {
+      fout(res, err, "Kon de werken van dit voertuig niet lezen.");
+    }
+  });
+
   // --- Vervaldata per voertuig ---
   app.get("/api/vehicle-expiries", authenticate, requireRole(...TECHNIEK), async (_req: AuthenticatedRequest, res) => {
     try {

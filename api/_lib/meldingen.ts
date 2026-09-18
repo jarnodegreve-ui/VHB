@@ -40,6 +40,7 @@ export const PAD_PER_VIEW: Record<string, string> = {
   vervaldata: "beheer/vervaldata",
   defecten: "techniek/defecten",
   werkprestaties: "techniek/prestaties",
+  "voertuig-werken": "techniek/werken",
   voertuigen: "techniek/voertuigen",
   "beheer-updates": "beheer/updates",
   "beheer-omleidingen": "beheer/omleidingen",
@@ -67,6 +68,7 @@ const SOORT_PER_VIEW: Record<string, MeldingSoort> = {
   documenten: "document",
   defecten: "techniek",
   werkprestaties: "techniek",
+  "voertuig-werken": "techniek",
   voertuigen: "techniek",
 };
 

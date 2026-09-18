@@ -13,7 +13,7 @@ import { useZelfLadend } from '../../lib/zelfLadend';
 import { useRouteParam } from '../../app/router';
 import { formatDateHuman, formatRelatief } from '../../lib/format';
 import {
-  bewaarVoertuig, dagenTot, laadDefecten, laadVoertuigVervaldata, laadVoertuigen, laadWerkprestaties, maakVoertuig, TechniekFout,
+  bewaarVoertuig, dagenTot, laadDefecten, laadVoertuigVervaldata, laadVoertuigWerken, laadVoertuigen, maakVoertuig, TechniekFout,
   urenTekst, verwijderVoertuig, zetVoertuigVervaldatum, type Defect, type Vehicle, type VehicleBody, type VehicleExpiry, type Werkprestatie,
 } from '../../lib/techniek';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel, ViewLoader } from '../../components/ui';
@@ -299,7 +299,9 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
   const [bezig, setBezig] = useState(false);
   const [prestaties, setPrestaties] = useState<Werkprestatie[] | null>(null);
   const [melden, setMelden] = useState(false);
-  useEffect(() => { void laadWerkprestaties({ vehicleId: voertuig.id, limit: 8 }).then(setPrestaties).catch(() => setPrestaties([])); }, [voertuig.id]);
+  // Alle werken aan deze bus, niet alleen die van de kijker: /api/werkprestaties
+  // beperkt een technieker tot zijn eigen rijen en toonde hem dus een halve fiche.
+  useEffect(() => { void laadVoertuigWerken(voertuig.id, { limit: 8 }).then(setPrestaties).catch(() => setPrestaties([])); }, [voertuig.id]);
 
   const opslaan = async () => {
     if (bezig) return;

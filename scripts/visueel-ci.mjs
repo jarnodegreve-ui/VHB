@@ -49,6 +49,7 @@ const SCHERMEN = [
   // Techniek (13-09): als technieker, de rol waarvoor de schermen gebouwd zijn.
   { naam: 'desktop-technieker-defecten', profiel: 'desktop', user: TECHNIEKER, view: 'defecten' },
   { naam: 'desktop-technieker-werkprestaties', profiel: 'desktop', user: TECHNIEKER, view: 'werkprestaties' },
+  { naam: 'desktop-technieker-werken-per-bus', profiel: 'desktop', user: TECHNIEKER, view: 'voertuig-werken' },
   { naam: 'desktop-technieker-voertuigen', profiel: 'desktop', user: TECHNIEKER, view: 'voertuigen' },
   // Mijn dag: hét chauffeursscherm, op telefoon én desktop (DienstBalk-geometrie).
   { naam: 'desktop-chauffeur-mijn-dag', profiel: 'desktop', user: CHAUFFEUR, view: 'mijn-dag' },

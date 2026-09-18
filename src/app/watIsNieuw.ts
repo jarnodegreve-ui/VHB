@@ -24,6 +24,23 @@ export const WAT_IS_NIEUW_TONEN = false;
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-18',
+    titel: 'Dagadministratie en werken per bus',
+    regels: {
+      chauffeur: [
+        'Techniekers houden hun werk nu per dag bij in Dagadministratie: één dag tegelijk, taken toevoegen en met de pijltjes terug naar een vorige dag.',
+        'Een eigen taak kun je nog altijd aanpassen of verwijderen als er iets fout ging; het veld Kilometerstand is uit het formulier verdwenen.',
+        'Nieuw scherm Uitgevoerde werken per bus: kies een bus en zie wat eraan gedaan is, door wie en hoelang het duurde.',
+      ],
+      staf: [
+        'Techniekers zien alleen nog hun eigen dag met de taken die ze zelf ingeven, zonder cijfers, periodelijst of rapport.',
+        'Het volledige overzicht over alle techniekers heen (periodes, filter, rapport) blijft bij de planning en de admins.',
+        'Daarnaast is er Uitgevoerde werken per bus, de volledige werkgeschiedenis van één voertuig; dat scherm zien techniekers wel.',
+      ],
+    },
+    bekijk: { staf: 'werkprestaties' },
+  },
+  {
     id: '2026-09-17',
     titel: 'Werkvoorraad op één scherm',
     regels: {

@@ -50,6 +50,7 @@ const VIEWS: Record<View, { pad: string; laad: Loader }> = {
   designsysteem: view('views/admin/DesignsysteemView', () => import('../views/admin/DesignsysteemView')),
   defecten: view('views/techniek/GeleBoekView', () => import('../views/techniek/GeleBoekView')),
   werkprestaties: view('views/techniek/WerkprestatiesView', () => import('../views/techniek/WerkprestatiesView')),
+  'voertuig-werken': view('views/techniek/VoertuigWerkenView', () => import('../views/techniek/VoertuigWerkenView')),
   voertuigen: view('views/techniek/VoertuigenView', () => import('../views/techniek/VoertuigenView')),
   dagafsluiting: view('views/admin/DagafsluitingView', () => import('../views/admin/DagafsluitingView')),
   looncontrole: view('views/admin/LooncontroleView', () => import('../views/admin/LooncontroleView')),
