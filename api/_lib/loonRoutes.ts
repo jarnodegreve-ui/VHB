@@ -47,7 +47,7 @@ const laatsteDagVan = (maand: string) => {
 const planningVanDag = async (datum: string) => {
   const maand = maandVan(datum);
   const [rows, users, services, codes, leave, swaps] = await Promise.all([
-    getPlanningMatrixRows(), getUsersData(), getServicesData(), getPlanningCodesData(), getLeaveData({ endOnOrAfter: `${maand}-01` }), getSwapsData(),
+    getPlanningMatrixRows({ month: maand }), getUsersData(), getServicesData(), getPlanningCodesData(), getLeaveData({ endOnOrAfter: `${maand}-01` }), getSwapsData(),
   ]);
   const uit = berekenCelWaarheid(maand, { rows: rows as any[], users: users as any[], services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[] });
   const inPlanning = uit.dates.includes(datum);
