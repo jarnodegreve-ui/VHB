@@ -56,6 +56,19 @@ export const DEVICES = [
   { userId: '43', deviceToken: 'tok-2', name: 'Android · browser', status: 'pending', createdAt: dayOffset(0), lastSeenAt: dayOffset(0) },
 ];
 export const LOGINS = USERS.map((u, i) => ({ id: `lg${i}`, actorName: u.name, action: 'Aangemeld', category: 'auth', createdAt: new Date(Date.now() - i * 7200e3).toISOString(), entityId: u.id, details: '' }));
+// Aanwezigheid (2026-09-18): één rij per aaneengesloten sessie. Een paar
+// mensen nu bezig, de rest verspreid over de dag en de dagen ervoor, zodat
+// de dagstrip en de tijdbalken in elk scherm iets te tonen hebben.
+export const PRESENCE = USERS.flatMap((u, i) => {
+  const beginMs = Date.now() - (i % 5) * 3600e3 - 5400e3;
+  const sessies = [{ userId: u.id, naam: u.name, rol: u.role, van: new Date(beginMs).toISOString(), tot: new Date(beginMs + (i < 3 ? 5400e3 : 2700e3)).toISOString() }];
+  // Elke derde persoon rijdt een gesplitste dienst: twee blokken op één dag.
+  if (i % 3 === 0) {
+    const tweede = beginMs - 6 * 3600e3;
+    sessies.push({ userId: u.id, naam: u.name, rol: u.role, van: new Date(tweede).toISOString(), tot: new Date(tweede + 3600e3).toISOString() });
+  }
+  return sessies;
+});
 // Activiteit: een realistische week — bursts van dezelfde actie (vouwen samen
 // in de feed), cron-hartslagen (standaard verborgen) en meerdere personen.
 const uurGeleden = (u) => new Date(Date.now() - u * 3600e3).toISOString();
@@ -288,6 +301,7 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/leave')) return json(user.role === 'chauffeur' ? LEAVE.filter((l) => l.userId === user.id) : LEAVE);
     if (p.endsWith('/api/swaps')) return json(SWAPS);
     if (p.endsWith('/api/activity/logins')) return json({ logins: LOGINS });
+    if (p.endsWith('/api/activity/presence')) return json({ days: 14, sessies: PRESENCE });
     if (p.endsWith('/api/activity')) return json(ACTIVITY);
     if (p.endsWith('/api/ritblaadje')) return json(null);
     // Techniek (13-09): voertuigen, gele boek, werkprestaties, vervaldata.

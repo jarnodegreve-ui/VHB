@@ -3,7 +3,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { supabase } from "./db.js";
 import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
-import { getAppSetting, getDevice, koppelAuthId } from "./storage.js";
+import { getAppSetting, getDevice, koppelAuthId, noteerAanwezigheid } from "./storage.js";
+import { magSchrijven } from "./_lib/aanwezigheid.js";
 import { getOnderhoud } from "./_lib/onderhoud.js";
 import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
 import { getUsersCached, invalidateUsersCache } from "./userCache.js";
@@ -301,7 +302,36 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   req.authUser = authUser;
   req.appUser = appUser;
   req.aal = check.aal;
+  registreerAanwezigheid(appUser);
   next();
+};
+
+/**
+ * Aanwezigheid bijhouden als bijwerking van een geslaagde authenticatie.
+ *
+ * Waarom hier en niet met een eigen hartslag vanuit de app: het portaal doet
+ * toch al elke minuut een geauthenticeerd verzoek zolang het scherm zichtbaar
+ * is (de onderhoud-poll, die zelf op visibilityState let). Meeliften kost dus
+ * nul extra netwerkverzoeken, nul extra timers en nul batterij op de telefoon,
+ * en "aanwezig" betekent automatisch "app op de voorgrond" in plaats van
+ * "toestel ligt aan".
+ *
+ * Bewust ná de toestel-gate: op een niet-goedgekeurd toestel wordt er niets
+ * vastgelegd, zodat een admin nooit iemand "actief" ziet die in werkelijkheid
+ * een buitenstaander met gestolen inloggegevens is (zelfde regel als de
+ * sessie-boekhouding in /api/auth/session).
+ *
+ * Fire-and-forget: geen await, dus het verzoek wacht er niet op en wordt geen
+ * milliseconde trager. Elke fout wordt gesmoord, inclusief een ontbrekende
+ * tabel wanneer de migratie nog niet gedraaid is.
+ */
+const registreerAanwezigheid = (appUser: { id: string | number; role: Role }) => {
+  const id = String(appUser.id);
+  if (!id || !magSchrijven(id)) return;
+  void noteerAanwezigheid(id, appUser.role).catch(() => {
+    // Aanwezigheid is een waarneming, geen functionaliteit: als ze niet
+    // wegschrijft mag daar niets van te merken zijn.
+  });
 };
 
 export const requireRole = (...roles: Role[]) => {

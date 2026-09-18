@@ -53,6 +53,11 @@ const mem = vi.hoisted(() => ({
   lastAuthEventAt: null as string | null,
   // updateUserSessionMeta-schrijfacties (lastLogin/activeSessions).
   sessionMetaWrites: [] as any[],
+  // Aanwezigheidssessies (public.user_presence, 2026-09-18).
+  presence: [] as any[],
+  // false = de migratie is nog niet gedraaid; getAanwezigheid gooit dan een
+  // missing-table-fout, precies zoals PostgREST dat doet.
+  presenceTabel: true,
   // De maand waarmee elke getPlanningMatrixRows-lezing begrensd werd
   // (null = volledige matrix). Bewijst dat maand-gebonden routes niet
   // stilletjes de hele historiek ophalen.
@@ -401,6 +406,17 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   },
     getLoginActivity: async () => mem.activity.filter((a: any) => a.action === 'Aangemeld' || a.action === 'Actief'),
     getLatestAuthEventAt: async () => mem.lastAuthEventAt,
+    getAanwezigheid: async (sinceIso: string) => {
+      if (!mem.presenceTabel) {
+        const err: any = new Error('relation "public.user_presence" does not exist');
+        err.code = '42P01';
+        throw err;
+      }
+      return mem.presence
+        .filter((r: any) => String(r.last_seen_at) >= sinceIso)
+        .map((r: any) => ({ userId: String(r.user_id), rol: r.role ?? null, van: String(r.started_at), tot: String(r.last_seen_at) }));
+    },
+    noteerAanwezigheid: async () => {},
     updateUserSessionMeta: async (id: string, f: any) => { mem.sessionMetaWrites.push({ id, ...f }); },
     bumpActiveSessions: async () => {},
     getPlanningMatrixRows: async (opts?: { month?: string }) => {
@@ -647,6 +663,8 @@ beforeEach(() => {
   mem.activity = [];
   mem.lastAuthEventAt = null;
   mem.sessionMetaWrites = [];
+  mem.presence = [];
+  mem.presenceTabel = true;
   mem.matrixMaandFilters = [];
   mem.clientErrors = [];
   mem.clientErrorStatus = [];
@@ -2186,26 +2204,16 @@ describe('aanmeldingen (login-activiteit)', () => {
     expect(admin.json.logins.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("resume zonder auth-event vandaag logt een 'Actief'-event", async () => {
-    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
-    expect(res.status).toBe(200);
-    const actief = mem.activity.find((a) => a.action === 'Actief');
-    expect(actief).toBeTruthy();
-    expect(actief.domain).toBe('auth');
-  });
-
-  it('resume met al een auth-event van vandaag logt niets (dedup)', async () => {
-    mem.lastAuthEventAt = new Date().toISOString();
+  // Tot 18-09 schreef 'resume' een 'Actief'-regel in het auditlogboek,
+  // gededupliceerd op de kalenderdag. Dat wás de bron voor "wie was vandaag
+  // actief", en meteen de reden dat die vraag onbeantwoordbaar bleef: één
+  // regel per persoon per dag, dus alleen het eerste moment. Aanwezigheid komt
+  // nu uit user_presence (zie de suite hieronder); het auditspoor gaat weer
+  // puur over beheeracties en echte aanmeldingen.
+  it('resume vervuilt het auditlogboek niet meer met aanwezigheid', async () => {
     const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
     expect(res.status).toBe(200);
     expect(mem.activity.find((a) => a.action === 'Actief')).toBeUndefined();
-  });
-
-  it("resume met laatste auth-event van gisteren logt wél een 'Actief'-event", async () => {
-    mem.lastAuthEventAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
-    expect(res.status).toBe(200);
-    expect(mem.activity.find((a) => a.action === 'Actief')).toBeTruthy();
   });
 
   it('resume werkt lastLogin (Laatst actief) bij, zodat Gebruikers niet achterloopt op Activiteit', async () => {
@@ -2216,12 +2224,45 @@ describe('aanmeldingen (login-activiteit)', () => {
     expect(Date.now() - new Date(res.json.lastLogin).getTime()).toBeLessThan(60_000);
   });
 
-  it("'Actief'-events tellen mee in /api/activity/logins", async () => {
-    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
-    const admin = await api('GET', '/api/activity/logins', { token: 'tok-admin' });
-    expect(admin.status).toBe(200);
-    expect(admin.json.logins.some((l: any) => l.action === 'Actief')).toBe(true);
+  it('een echte aanmelding blijft wél in het auditspoor staan', async () => {
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'start' } });
+    expect(res.status).toBe(200);
+    expect(mem.activity.find((a) => a.action === 'Aangemeld')).toBeTruthy();
   });
+});
+
+describe('aanwezigheid (wie was wanneer actief)', () => {
+  it('GET /api/activity/presence: admin krijgt sessies, planner 403', async () => {
+    mem.presence = [
+      { id: 'p1', user_id: '3', role: 'chauffeur', started_at: new Date(Date.now() - 3600_000).toISOString(), last_seen_at: new Date().toISOString() },
+    ];
+    expect((await api('GET', '/api/activity/presence', { token: 'tok-planner' })).status).toBe(403);
+    const admin = await api('GET', '/api/activity/presence', { token: 'tok-admin' });
+    expect(admin.status).toBe(200);
+    expect(admin.json.days).toBe(14);
+    expect(admin.json.sessies).toHaveLength(1);
+    // Naam komt uit users (een naamswijziging hoort meteen overal te kloppen),
+    // de rol uit de sessierij (een promotie herschrijft de historie niet).
+    expect(admin.json.sessies[0]).toMatchObject({ userId: '3', rol: 'chauffeur' });
+    expect(typeof admin.json.sessies[0].naam).toBe('string');
+  });
+
+  it('laat sessies van verwijderde gebruikers weg in plaats van een lege naam te tonen', async () => {
+    mem.presence = [
+      { id: 'p1', user_id: 'bestaat-niet', role: 'chauffeur', started_at: new Date().toISOString(), last_seen_at: new Date().toISOString() },
+    ];
+    const admin = await api('GET', '/api/activity/presence', { token: 'tok-admin' });
+    expect(admin.json.sessies).toHaveLength(0);
+  });
+
+  it('meldt netjes welke migratie mist in plaats van een 500', async () => {
+    mem.presenceTabel = false;
+    const admin = await api('GET', '/api/activity/presence', { token: 'tok-admin' });
+    expect(admin.status).toBe(200);
+    expect(admin.json.sessies).toEqual([]);
+    expect(admin.json.migratie).toContain('user_presence');
+  });
+
 });
 
 describe('OCPI 2.2.1, gehoste endpoints + handshake-auth', () => {
