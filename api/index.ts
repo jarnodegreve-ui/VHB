@@ -3548,11 +3548,15 @@ app.get("/api/updates/read-counts", authenticate, requireRole("planner", "admin"
 
 app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const data = await getSwapsData();
     // Privacy: een chauffeur ziet enkel ruilen waar hij zélf bij betrokken is
     // (aanvrager of aangezochte collega) — niet de ruilhistoriek van iedereen.
     // Planner/admin zien alles (nodig voor validatie + beheer).
-    if (!isStafRol(req.appUser!.role)) {
+    // Niet-staf: het filter zit al in de query (scheelt de hele tabel lezen);
+    // het JS-filter hieronder blijft als vangnet staan, zodat de privacygrens
+    // nooit van de filtersyntaxis van de query afhangt.
+    const staf = isStafRol(req.appUser!.role);
+    const data = await getSwapsData(staf ? undefined : { betrokkenUserId: String(req.appUser!.id) });
+    if (!staf) {
       const selfId = String(req.appUser.id);
       const scoped = data.filter(
         (s) => String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId,
@@ -5079,10 +5083,12 @@ app.put("/api/verlof/feestdagen", authenticate, requireRole("admin"), async (req
 
 app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const data = await getLeaveData();
     // Privacy: een chauffeur ziet enkel zijn eigen verlof (incl. de vrije-tekst
     // reden). Planner/admin zien alles (voor verlof-beheer en bezetting).
-    if (!isStafRol(req.appUser!.role)) {
+    // Niet-staf: filter in de query, JS-filter blijft als vangnet (zie /api/swaps).
+    const staf = isStafRol(req.appUser!.role);
+    const data = await getLeaveData(staf ? undefined : { userId: String(req.appUser!.id) });
+    if (!staf) {
       const selfId = String(req.appUser.id);
       return res.json(data.filter((l) => String(l.userId) === selfId));
     }
