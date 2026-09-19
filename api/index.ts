@@ -154,10 +154,13 @@ import {
 // vergeefse zoektocht naar een .env-bestand. Lokaal (`tsx api/index.ts`)
 // blijft het gedrag identiek: synchroon, op dezelfde plek in de opstart.
 // Via createRequire i.p.v. een statische import, zodat de module op Vercel
-// niet eens ingelezen wordt (en zonder top-level await).
+// niet eens ingelezen wordt (en zonder top-level await). Opgelost vanaf de
+// werkmap (lokaal altijd de repo-root) en bewust zonder `import.meta`: dit
+// bestand is dé functie, en niets hier mag afhangen van hoe de Vercel-bouw
+// de module-vorm kiest.
 if (!process.env.VERCEL) {
   try {
-    (createRequire(import.meta.url)("dotenv") as typeof import("dotenv")).config();
+    (createRequire(`${process.cwd()}/package.json`)("dotenv") as typeof import("dotenv")).config();
   } catch (err) {
     console.warn("[config] dotenv niet geladen, alleen de bestaande omgevingsvariabelen gelden:", (err as Error)?.message ?? err);
   }
