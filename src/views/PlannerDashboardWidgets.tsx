@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
   SlidersHorizontal,
@@ -186,6 +186,47 @@ export function PlannerDashboardWidgets({
   const [afgehandeld, setAfgehandeld] = useState<Record<string, string>>({});
   const closeSickModal = () => { setShowSickModal(false); setZiekVervolg(null); setVervangerPerDienst({}); setAfgehandeld({}); };
 
+  // --- Gememoïseerd rekenwerk (ronde 3, 19-09) ---------------------------------
+  // De cockpit rendert bij elke modal, select en minuuttik opnieuw, en deed
+  // dan telkens meerdere volledige passes over álle shifts (±1.700 rijen) en
+  // al het verlof. Elk blok hieronder hangt aan zijn échte afhankelijkheden:
+  // alleen wat van de klok afhangt herrekent per minuut.
+  //
+  // (a) Klok: welke shifts lopen nú. Eén pass per minuut, was drie per render.
+  const actieveShifts = useMemo(() => shifts.filter((s) => isShiftActiveAt(s, now)), [shifts, now]);
+  // (b) Geen klok: de shifts van de peildag (was twee passes per render).
+  const todayShifts = useMemo(() => shifts.filter((s) => s.date === peilDag), [shifts, peilDag]);
+  // (c) Geen klok: werkdagen per chauffeur voor de vervangersrangschikking.
+  const werkdagen = useMemo(() => werkdagenUitShifts(shifts), [shifts]);
+  // (d) Geen klok: goedgekeurde, geldige afwezigheid per chauffeur, in de
+  // volgorde van de lijst. afwezigOpDag liep anders per shift en per
+  // ingeplande chauffeur door álle aanvragen.
+  const afwezigheidPerChauffeur = useMemo(() => {
+    const isoDag = /^\d{4}-\d{2}-\d{2}$/;
+    const map = new Map<string, LeaveRequest[]>();
+    for (const l of leaveRequests) {
+      if (l.status !== 'approved') continue;
+      if (!isoDag.test(l.startDate) || !isoDag.test(l.endDate) || l.startDate > l.endDate) continue;
+      const id = String(l.userId);
+      const lijst = map.get(id);
+      if (lijst) lijst.push(l);
+      else map.set(id, [l]);
+    }
+    return map;
+  }, [leaveRequests]);
+  // (e) Werkvoorraad (bevat openstaandeDienstenVanAfwezigen: shifts × verlof).
+  // Van de klok gebruikt berekenWerkvoorraad alleen de dag en het aantal hele
+  // dagen sinds de laatste import; dáárop memoïseren, niet op de minuut.
+  const dagenSindsImportSleutel = matrixHistory[0]
+    ? Math.floor((now.getTime() - new Date(matrixHistory[0].createdAt).getTime()) / 86400000)
+    : null;
+  const werkvoorraad = useMemo(
+    () => berekenWerkvoorraad({ users, shifts, leaveRequests, swaps, matrixHistory, coverageDays, vervaldata, pendingDevices, now }),
+    // `now` zelf bewust niet: zie hierboven, dag + dagen-sinds-import dekken het.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [users, shifts, leaveRequests, swaps, matrixHistory, coverageDays, vervaldata, pendingDevices, todayKey, dagenSindsImportSleutel],
+  );
+
   // LET OP: geen hooks meer onder deze regel — de skeleton-return hieronder
   // betekent dat álle hooks vóór dit punt moeten staan (React #310).
   if (isInitialLoad) {
@@ -228,9 +269,8 @@ export function PlannerDashboardWidgets({
   const isoDagRe = /^\d{4}-\d{2}-\d{2}$/;
   const afwezigOpDag = (driverId: string, date: string): { label: string; tone: AftelTone; isSick: boolean } | null => {
     let gevonden: { label: string; tone: AftelTone; isSick: boolean } | null = null;
-    for (const l of leaveRequests) {
-      if (l.status !== 'approved' || String(l.userId) !== driverId) continue;
-      if (!isoDagRe.test(l.startDate) || !isoDagRe.test(l.endDate) || l.startDate > l.endDate) continue;
+    // Alleen de goedgekeurde, geldige aanvragen van déze chauffeur (index (d)).
+    for (const l of afwezigheidPerChauffeur.get(driverId) ?? []) {
       if (l.startDate <= date && date <= l.endDate) {
         const kandidaat = { label: ABSENCE_LABEL[l.type] ?? l.type, tone: ABSENCE_TONE[l.type] ?? ('verlof' as AftelTone), isSick: l.type === 'ziekte' };
         if (kandidaat.isSick) return kandidaat;
@@ -242,7 +282,7 @@ export function PlannerDashboardWidgets({
 
   // === Operationele kerncijfers (alles uit echte data; de bezetting volgt
   // de Vandaag|Morgen-peildag, live cijfers blijven op nu) ===
-  const ingeplandeIds = new Set(shifts.filter((s) => s.date === peilDag).map((s) => String(s.driverId)));
+  const ingeplandeIds = new Set(todayShifts.map((s) => String(s.driverId)));
   const driversActiveToday = ingeplandeIds.size;
   // Hoeveel van de ingeplanden zijn intussen afwezig gemeld? De tegel telt ze
   // bewust mee in het hoofdcijfer (ze stáán ingepland; de popup labelt ze),
@@ -254,8 +294,8 @@ export function PlannerDashboardWidgets({
   // houdt dit cijfer live. Gesplitste diensten: pauze telt niet mee, en wie
   // vandaag afwezig gemeld is telt níét als rijdend.
   const driversDrivingNow = new Set(
-    shifts
-      .filter((s) => isShiftActiveAt(s, now) && !afwezigOpDag(String(s.driverId), s.date))
+    actieveShifts
+      .filter((s) => !afwezigOpDag(String(s.driverId), s.date))
       .map((s) => String(s.driverId)),
   ).size;
   // Noemer van "Vandaag ingepland X / N": alleen inzetbare chauffeurs, zelfde
@@ -274,14 +314,12 @@ export function PlannerDashboardWidgets({
     planningHorizon, horizonDagenOver, horizonKrap,
     gapDays, vervalTaken, herverdeelPerChauffeur,
     pendingLeave, pendingSwaps, attentionCount,
-  } = berekenWerkvoorraad({ users, shifts, leaveRequests, swaps, matrixHistory, coverageDays, vervaldata, pendingDevices, now });
+  } = werkvoorraad;
 
   // Verlopen én nog niet gestarte omleidingen tellen niet mee: de tegel
   // zegt "actieve omleidingen" en moet dat dan ook zijn (gedeelde helper,
   // het chauffeursdashboard gebruikt dezelfde).
   const activeDiversions = lopendeDiversionsOf(diversions).length;
-
-  const werkdagen = werkdagenUitShifts(shifts);
 
   /** Dienst uit de ziekmeld-vervolgstap overzetten naar de gekozen collega. */
   const zetDienstOver = async (d: OpenstaandeDienst) => {
@@ -368,7 +406,6 @@ export function PlannerDashboardWidgets({
     ...todayAbsent.map((a) => nameKey(a.name)),
     ...matrix.busyNames.map(nameKey),
   ]);
-  const todayShifts = shifts.filter((s) => s.date === peilDag);
   // Eerste dienst van de peildag (voor de morgen-variant van de actief-tegel):
   // vroegste starttijd, afwezig gemelde chauffeurs uitgesloten.
   const eersteStartMorgen = (() => {
@@ -383,7 +420,7 @@ export function PlannerDashboardWidgets({
   const workingTodayIds = new Set(todayShifts.map((s) => String(s.driverId)));
   // Ook wie nú nog op de bus zit met een dienst van gisteren is niet vrij.
   const drivingNowIds = new Set(
-    shifts.filter((s) => isShiftActiveAt(s, now)).map((s) => String(s.driverId)),
+    actieveShifts.map((s) => String(s.driverId)),
   );
 
   // Popups "Vandaag ingepland" + "Chauffeurs actief": per chauffeur de
@@ -473,7 +510,7 @@ export function PlannerDashboardWidgets({
   // shifts, want een nachtdienst van gisteren kan nu nog bezig zijn. De
   // tijden tonen alleen de segmenten die op dit moment lopen.
   const drivingNow = groupShiftsByDriver(
-    shifts.filter((s) => isShiftActiveAt(s, now) && !afwezigOpDag(String(s.driverId), s.date)),
+    actieveShifts.filter((s) => !afwezigOpDag(String(s.driverId), s.date)),
   );
   const availableToday = users
     .filter(isRealDriver)

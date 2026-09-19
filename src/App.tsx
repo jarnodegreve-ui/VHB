@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, Suspense, useState, useEffect, useRef } from 'react';
+import { useCallback, Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { useRoute, routeUitUrl } from './app/router';
 import { isBreed, magView, routeVan, sectieLabel } from './app/routes';
 import { SidebarNav } from './app/SidebarNav';
@@ -1185,13 +1185,23 @@ export default function App() {
   // dashboard, zodat die drie nooit uiteenlopen. Op de échte rol berekend
   // (data blijft kloppen in chauffeur-preview; de knop verdwijnt daar wel).
   const isStafRol = currentUser?.role === 'planner' || currentUser?.role === 'admin';
-  const werkvoorraad = isStafRol
-    ? berekenWerkvoorraad({
-        users, shifts, leaveRequests, swaps,
-        matrixHistory: planningMatrixHistory, coverageDays,
-        vervaldata, pendingDevices, now: new Date(),
-      })
-    : null;
+  // Achter useMemo (ronde 3, 19-09): dit liep bij élke App-render (scroll,
+  // toast-timer, laadteller) en bevat een volledige pass over alle shifts ×
+  // goedgekeurd verlof (openstaandeDienstenVanAfwezigen). De minuutsleutel
+  // houdt de tijdsafhankelijke delen (vandaag, dagen sinds import) eerlijk
+  // zonder een eigen klok: hooguit één herberekening per minuut.
+  const minuutSleutel = Math.floor(Date.now() / 60_000);
+  const werkvoorraad = useMemo(
+    () => (isStafRol
+      ? berekenWerkvoorraad({
+          users, shifts, leaveRequests, swaps,
+          matrixHistory: planningMatrixHistory, coverageDays,
+          vervaldata, pendingDevices, now: new Date(),
+        })
+      : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isStafRol, users, shifts, leaveRequests, swaps, planningMatrixHistory, coverageDays, vervaldata, pendingDevices, minuutSleutel],
+  );
 
   // Badge op het app-icoon (iOS 16.4+ PWA, Chromium-desktop): wat op jou
   // wacht, zichtbaar zonder de app te openen. Chauffeur: ongelezen meldingen
