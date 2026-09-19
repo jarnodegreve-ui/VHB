@@ -14,6 +14,8 @@ import type {
   ShiftRecord,
   SwapRecord,
   AppUserIntern,
+  DeviceStatus,
+  UserDevice,
 } from "./types.js";
 import {
   countAdmins,
@@ -2303,18 +2305,8 @@ export const getUpdateReadCounts = async (
 // elk volgend toestel = pending tot de admin goedkeurt. Planner/admin-
 // toestellen zijn altijd approved (alleen zichtbaarheid, nooit uitsluiting).
 
-export type DeviceStatus = 'approved' | 'pending' | 'revoked';
-
-export type UserDevice = {
-  userId: string;
-  deviceToken: string;
-  name: string;
-  status: DeviceStatus;
-  createdAt: string;
-  lastSeenAt: string;
-  approvedAt: string | null;
-  approvedBy: string | null;
-};
+// De types zelf staan in api/types.ts (AuthenticatedRequest.device verwijst ernaar).
+export type { DeviceStatus, UserDevice };
 
 const toPublicDevice = (row: any): UserDevice => ({
   userId: String(row.user_id),

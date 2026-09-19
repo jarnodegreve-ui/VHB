@@ -2589,6 +2589,41 @@ describe('toestel-whitelist', () => {
     mem.devices.push({ userId: '3', deviceToken: 'dev-x', name: 'x', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
     expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', device: 'dev-admin', body: { userId: '3', deviceToken: 'dev-x' } })).status).toBe(200);
   });
+
+  // Toestel-cache in de gate (ronde 3): elke schrijfactie via de API moet
+  // meteen gelden, ook al is het toestel net nog als 'approved' gecacht.
+  it('blokkeren werkt meteen door, ook wanneer de gate het toestel net gecacht heeft', async () => {
+    expect((await api('GET', '/api/updates', { token: 'tok-a' })).status).toBe(200); // vult de cache met approved
+    expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-ok' } })).status).toBe(200);
+    const na = await api('GET', '/api/updates', { token: 'tok-a' });
+    expect(na.status).toBe(403);
+    expect(na.json?.code).toBe('device_revoked');
+    // Ook het PII-luik op het exempt-pad volgt meteen.
+    const sessie = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    expect(sessie.json?.email).toBeUndefined();
+  });
+
+  it('goedkeuren en registreren werken meteen door na een gecachte weigering', async () => {
+    // Onbekend toestel: "geen rij" wordt gecacht.
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-cache' })).json?.code).toBe('device_unknown');
+    expect((await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-cache', body: { name: 'iPad' } })).json?.status).toBe('pending');
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-cache' })).json?.code).toBe('device_pending');
+    expect((await api('POST', '/api/devices/approve', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-cache' } })).status).toBe(200);
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-cache' })).status).toBe(200);
+  });
+
+  it('uit dienst zetten trekt gecachte toestellen meteen in', async () => {
+    expect((await api('GET', '/api/updates', { token: 'tok-a' })).status).toBe(200);
+    const { trekToegangIn } = await import('../api/_lib/recordWrites');
+    await trekToegangIn('3');
+    expect((await api('GET', '/api/updates', { token: 'tok-a' })).json?.code).toBe('device_revoked');
+  });
+
+  it('/api/me hergebruikt het toestel van de gate', async () => {
+    const me = await api('GET', '/api/me', { token: 'tok-a' });
+    expect(me.status).toBe(200);
+    expect(me.json?.toestel?.status).toBe('approved');
+  });
 });
 
 describe('activiteitenlog: venster-parameter (#249)', () => {

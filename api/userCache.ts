@@ -56,7 +56,7 @@ const upstashEpochStore: EpochStore = {
 
 export function makeUserCache(
   fetcher: () => Promise<AppUser[]>,
-  opts?: { ttlMs?: number; now?: Clock; epochStore?: EpochStore | null; epochCheckMs?: number },
+  opts?: { ttlMs?: number; now?: Clock; epochStore?: EpochStore | null; epochCheckMs?: number; bijWissel?: () => void },
 ) {
   const ttlMs = opts?.ttlMs ?? DEFAULT_TTL_MS;
   const now = opts?.now ?? (() => Date.now());
@@ -72,11 +72,16 @@ export function makeUserCache(
   let remoteEpoch: number | null = null;
   let remoteCheckedAt = Number.NEGATIVE_INFINITY;
 
+  // bijWissel: meeliftende caches (toestel-lookup, zie _lib/deviceCache.ts)
+  // gaan mee weg bij een epoch-wissel én bij een lokale invalidate.
+  const meldWissel = () => { try { opts?.bijWissel?.(); } catch { /* luisteraar mag de auth-cache niet breken */ } };
+
   const verwerkRemote = (remote: number) => {
     if (remoteEpoch !== null && remote !== remoteEpoch) {
       cache = null;
       inflight = null;
       epoch += 1;
+      meldWissel();
     }
     remoteEpoch = remote;
   };
@@ -125,6 +130,7 @@ export function makeUserCache(
     cache = null;
     inflight = null;
     epoch += 1;
+    meldWissel();
     if (store) {
       // Andere instanties op de hoogte brengen; de eigen bijgewerkte waarde
       // wordt bij de volgende check gewoon overgenomen (remoteEpoch = null).
@@ -136,7 +142,16 @@ export function makeUserCache(
   return { get, invalidate };
 }
 
-const defaultCache = makeUserCache(getUsersData, { epochStore: upstashEpochStore });
+// Luisteraars op "de users-cache is weggegooid" (epoch-wissel of invalidate).
+const wisselLuisteraars: Array<() => void> = [];
+/** Registreer een cache die samen met de users-cache weg moet (bv. de
+ *  toestel-cache): één gedeelde epoch voor alles wat een toegangsbesluit voedt. */
+export const bijUsersCacheWissel = (fn: () => void) => { wisselLuisteraars.push(fn); };
+
+const defaultCache = makeUserCache(getUsersData, {
+  epochStore: upstashEpochStore,
+  bijWissel: () => { for (const fn of wisselLuisteraars) fn(); },
+});
 
 /** Gecachte gebruikerslijst voor de auth-hot-path. */
 export const getUsersCached = defaultCache.get;

@@ -14,6 +14,7 @@ const mem = vi.hoisted(() => ({
   deletePush: vi.fn(async (_id: string) => 1),
   logActivity: vi.fn(async () => undefined),
   saveUsersData: vi.fn(async () => ({ createdAccounts: [] })),
+  meldToestelWijziging: vi.fn(),
 }));
 
 vi.mock('../api/db.js', () => ({ db: null, supabase: null, supabaseAdmin: null }));
@@ -23,6 +24,8 @@ vi.mock('../api/push.js', () => ({
   deletePushSubscriptionsForUser: (id: string) => mem.deletePush(id),
 }));
 vi.mock('../api/userCache.js', () => ({ invalidateUsersCache: vi.fn() }));
+// Toestel-cache (ronde 3): intrekken moet de cache wissen + de epoch verhogen.
+vi.mock('../api/_lib/deviceCache.js', () => ({ meldToestelWijziging: () => mem.meldToestelWijziging() }));
 vi.mock('../api/storage.js', () => ({
   deleteAllDocumentsForUser: vi.fn(async () => 0),
   diffDiversionChanges: vi.fn(),
@@ -51,6 +54,7 @@ beforeEach(() => {
   mem.revokeAllDevices.mockClear();
   mem.deletePush.mockClear();
   mem.logActivity.mockClear();
+  mem.meldToestelWijziging.mockClear();
 });
 
 describe('gedeactiveerdeIds', () => {
@@ -72,6 +76,8 @@ describe('verwerkUsersOpslag, deactiveren via PUT/collectie', () => {
     const resultaat = await verwerkUsersOpslag(req, vorig, [gebruiker('a', false), gebruiker('b')], { samenvatting: false });
     expect(mem.revokeAllDevices).toHaveBeenCalledTimes(1);
     expect(mem.revokeAllDevices).toHaveBeenCalledWith('a');
+    // Zonder dit bleef een net ingetrokken toestel tot 30 s 'approved' in de gate-cache.
+    expect(mem.meldToestelWijziging).toHaveBeenCalledTimes(1);
     expect(mem.deletePush).toHaveBeenCalledWith('a');
     expect(resultaat.ingetrokken).toEqual({ a: { toestellen: 2, push: 1, fouten: [] } });
     const titels = mem.logActivity.mock.calls.map((c: any[]) => c[2]);

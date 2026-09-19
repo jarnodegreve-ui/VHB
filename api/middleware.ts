@@ -3,7 +3,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { supabase } from "./db.js";
 import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
-import { getAppSetting, getDevice, koppelAuthId, noteerAanwezigheid } from "./storage.js";
+import { getAppSetting, koppelAuthId, noteerAanwezigheid, type UserDevice } from "./storage.js";
+import { getDeviceCached } from "./_lib/deviceCache.js";
 import { magSchrijven } from "./_lib/aanwezigheid.js";
 import { getOnderhoud } from "./_lib/onderhoud.js";
 import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
@@ -267,9 +268,12 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   // alleen wanneer het verzoek een toesteltoken draagt.
   const gateVanToepassing = !isStafRol(appUser.role) || deviceToken.length > 0;
   if (gateVanToepassing && !DEVICE_GATE_EXEMPT.has(req.path)) {
-    let device: { status: string } | null = null;
+    let device: UserDevice | null = null;
     try {
-      device = deviceToken ? await getDevice(String(appUser.id), deviceToken) : null;
+      // Gecacht (30 s per instantie, gewist via de gedeelde epoch bij elke
+      // toestelwijziging): zie de afweging in _lib/deviceCache.ts. Fouten
+      // worden niet gecacht en komen hier ongewijzigd terecht.
+      device = deviceToken ? await getDeviceCached(String(appUser.id), deviceToken) : null;
     } catch (err) {
       // Fail-OPEN uitsluitend wanneer de user_devices-tabel nog niet bestaat
       // (migratie niet gedraaid) — dan mag de whitelist de app niet platleggen.
@@ -296,6 +300,9 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     if (!verdict.allow) {
       return res.status(verdict.status ?? 403).json(verdict.body ?? { error: "Dit toestel heeft geen toegang.", code: "device_unknown" });
     }
+    // Het opgezochte toestel meegeven: /api/me hoeft het dan niet nog eens
+    // te queryen.
+    req.device = device;
   }
 
   req.accessToken = accessToken;

@@ -17,6 +17,7 @@ import { symbolicateTopFrame } from "./symbolicate.js";
 import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
+import { getDeviceCached } from "./_lib/deviceCache.js";
 import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
 import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
 import { getVehicleExpiries, getVehicles } from "./_lib/techniekStorage.js";
@@ -127,7 +128,6 @@ import {
   isMissingDbFunction,
   logCronHeartbeat,
   getCronHeartbeats,
-  getDevice,
   getPlanningNotes,
   getMeldingen,
   telOngelezenMeldingen,
@@ -404,8 +404,13 @@ app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
   const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
   let toestel: { status: "approved" | "pending" | "revoked" | "onbekend"; gateActief: boolean } = { status: "onbekend", gateActief: false };
   try {
+    // Het toestel dat de gate al opzocht (req.device) hergebruiken; alleen
+    // wanneer de gate niet keek (staf zonder token, ontbrekende tabel) zelf
+    // opzoeken, via dezelfde korte cache.
     const [device, gateActief] = await Promise.all([
-      deviceToken ? getDevice(String(user.id), deviceToken) : Promise.resolve(null),
+      req.device !== undefined
+        ? Promise.resolve(req.device)
+        : deviceToken ? getDeviceCached(String(user.id), deviceToken) : Promise.resolve(null),
       isDeviceGateEnabled(),
     ]);
     toestel = { status: device?.status ?? "onbekend", gateActief };
@@ -483,7 +488,12 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
       const rawToken = String(req.headers["x-device-token"] ?? "").trim();
       const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
       try {
-        const device = deviceToken ? await getDevice(String(currentUser.id), deviceToken) : null;
+        // Exempt-pad: de gate zocht hier niets op, dus req.device is er
+        // normaal niet. De lookup gaat wel via dezelfde korte cache als de
+        // gate (zelfde venster, gewist bij elke toestelwijziging).
+        const device = req.device !== undefined
+          ? req.device
+          : deviceToken ? await getDeviceCached(String(currentUser.id), deviceToken) : null;
         deviceApproved = device?.status === "approved";
       } catch (err) {
         deviceApproved = isMissingTableError(err);
