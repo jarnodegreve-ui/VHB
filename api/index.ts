@@ -19,6 +19,7 @@ import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { getDeviceCached } from "./_lib/deviceCache.js";
 import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
+import { serverTiming } from "./_lib/serverTiming.js";
 import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
 import { getVehicleExpiries, getVehicles } from "./_lib/techniekStorage.js";
 import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../shared/schemas/techniek.js";
@@ -187,6 +188,11 @@ const viewUrl = (view: string) => `/?view=${view}`;
 
 const app = express();
 const PORT = 3000;
+
+// Meetbaarheid: Server-Timing op elk /api-antwoord + één logregel voor trage
+// requests. Als allereerste middleware, zodat ook CORS, body-parsing, de
+// rate-limiter en authenticate in de gemeten tijd zitten. Zie _lib/serverTiming.ts.
+app.use("/api", serverTiming());
 
 // CORS beperkt tot de eigen origins (prod, Vercel-previews van dit project,
 // lokale dev) i.p.v. wildcard. De app draait same-origin, dus browsers hebben

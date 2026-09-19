@@ -2654,6 +2654,16 @@ describe('toestel-whitelist', () => {
     expect((await api('GET', '/api/updates', { token: 'tok-a' })).json?.code).toBe('device_revoked');
   });
 
+  it('elk /api-antwoord draagt Server-Timing, ook een 401 en de health-ping', async () => {
+    for (const res of [
+      await api('GET', '/api/me', { token: 'tok-a' }),
+      await api('GET', '/api/me', {}),
+      await api('GET', '/api/health', {}),
+    ]) {
+      expect(res.headers.get('server-timing')).toMatch(/^app;dur=\d+$/);
+    }
+  });
+
   it('/api/me hergebruikt het toestel van de gate', async () => {
     const me = await api('GET', '/api/me', { token: 'tok-a' });
     expect(me.status).toBe(200);
