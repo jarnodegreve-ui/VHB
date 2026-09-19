@@ -195,6 +195,17 @@ export function DashboardView({ notes = [],
   const kleinSpan = kleineTegelSpan(kleineTegels.length);
   const laatsteKlein = kleineTegels.length % 2 === 1 ? kleineTegels[kleineTegels.length - 1]?.id : undefined;
   const kleinKlassen = (id: string) => cn(kleinSpan, id === laatsteKlein && 'col-span-2 md:col-span-1');
+  // Telefoon: opeenvolgende kleine tegels vormen samen één lijstkaart, een
+  // grote tegel blijft een tegel. De volgorde van de gebruiker (Dashboard
+  // aanpassen) blijft zo op elke breedte gelden. "Volgende dienst" zonder
+  // geplande dienst telt als klein: één regel i.p.v. een lege tegel.
+  const isKlein = (id: string) => !GROOT.has(id) || (id === 'volgende-dienst' && !nextShift);
+  const stripGroepen = stripZichtbaar.reduce<Array<{ sleutel: string; lijst: boolean; ids: string[] }>>((groepen, t) => {
+    const vorige = groepen[groepen.length - 1];
+    if (isKlein(t.id) && vorige?.lijst) vorige.ids.push(t.id);
+    else groepen.push({ sleutel: t.id, lijst: isKlein(t.id), ids: [t.id] });
+    return groepen;
+  }, []);
   const STRIP_TEGEL: Record<string, ReactNode> = {
     // Vandaag: het dienstnummer als kop, hoelang nog als boodschap, de
     // delen als regels en de dienstbalk (wijzerplaat) eronder — dezelfde
@@ -226,13 +237,13 @@ export function DashboardView({ notes = [],
         tone="slate"
         // Zonder volgende dienst rekt de tegel niet mee tot de hoogte van
         // de Vandaag-tegel: dat gaf een groot leeg vlak met alleen een streep.
-        className={cn('col-span-2 md:col-span-1 xl:col-span-3', !nextShift && 'self-start')}
+        className={cn('col-span-2 md:col-span-1 xl:col-span-3', !nextShift && 'md:self-start')}
         label="Volgende dienst"
         // Dienstnummer groot, net als in de Vandaag-tegel (Jarno 04-09:
         // het nummer is het belangrijkste); dag + afstand op de subregel.
-        text={nextShift ? serviceNumberOf(nextShift) : 'Geen'}
+        text={nextShift ? serviceNumberOf(nextShift) : '—'}
         mono={!!nextShift}
-        subClassName="text-sm font-semibold text-slate-600"
+        subClassName={nextShift ? 'text-sm font-semibold text-slate-600' : undefined}
         sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'er staat niets ingepland'}
         lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
         onClick={onNavigate ? () => onNavigate('rooster') : undefined}
@@ -378,20 +389,41 @@ export function DashboardView({ notes = [],
           ml-auto, zakt onder de kop als hij niet past). */}
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-1 pt-1 md:items-end">
         <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl">
-          <h1 className="text-greeting">
-            {greeting}, <span className="text-oker-700">{firstName}</span>
-          </h1>
-          <p className="mt-0.5 text-md font-normal text-slate-500">
-            {formatDayLong(isoDate(now))} ·{' '}
-            {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
-          </p>
+          {/* Telefoon (fix 19-09): het "…"-menu staat rechts naast de groet en
+              de statuschip verschijnt alleen als er iets in behandeling is.
+              Chip en menu stonden samen op een eigen, rechts uitgelijnde rij
+              die niets toevoegde: "Vrij vandaag" staat al in de Vandaag-tegel
+              er vlak onder. Vanaf md blijft de kop zoals hij was. */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-greeting">
+                {greeting}, <span className="text-oker-700">{firstName}</span>
+              </h1>
+              <p className="mt-0.5 text-md font-normal text-slate-500">
+                {formatDayLong(isoDate(now))} ·{' '}
+                {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+            <div className="shrink-0 md:hidden">
+              <ActieMenu
+                size="sm"
+                label="Meer acties"
+                items={[{ label: 'Dashboard aanpassen', icon: <SlidersHorizontal size={16} />, onClick: () => setAanpassen(true) }]}
+              />
+            </div>
+          </div>
+          {needsAttention && (
+            <Badge tone="amber" stil className="mt-2 w-fit md:hidden">
+              {`${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`}
+            </Badge>
+          )}
         </div>
         {/* Stille chip met gekleurd puntje: "Dienst vandaag" en "in
             behandeling" zijn informatie, geen alarm (afwerking 04-09, nr. 6).
             De stip staat stil — beweging voor "alles is normaal" maakt van
             rust een alarm. Ernaast de enige actie van de kop: "…" met
             Dashboard aanpassen (geen extra gouden knop). */}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto hidden items-center gap-2 md:flex">
           {/* "Vrij/Dienst vandaag" gaat over rijden; voor een technieker
               blijft alleen de verlofstatus over (Jarno 09-09). */}
           {(needsAttention || isRijdend(user.role)) && (
@@ -418,10 +450,21 @@ export function DashboardView({ notes = [],
           werden de kleine tegels smal en zo hoog als de Vandaag-tegel, met
           afgeknipte labels (Jarno 04-09). Volgorde en zichtbaarheid volgen
           de voorkeuren van de gebruiker (Dashboard aanpassen). */}
-      <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {stripZichtbaar.map((t) => (
-          <Fragment key={t.id}>{STRIP_TEGEL[t.id]}</Fragment>
-        ))}
+      {/* Op de telefoon in groepen (fix 19-09, zie stripGroepen): Vandaag en Volgende dienst
+          blijven volwaardige tegels, want dat zijn de blikvangers van de
+          chauffeur met dienstnummer, delen en dienstbalk; alleen de kleine
+          teltegels worden samen één kaart met rijen (`kpi-raster`). De hele
+          strip als lijst maakte van de Vandaag-tegel een gewone regel en liet
+          "Geen" midden in zijn rij hangen. Vanaf sm lossen de lijstgroepen op
+          (`sm:contents`) en is het weer één raster. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {stripGroepen.map((groep) => (groep.lijst ? (
+          <div key={groep.sleutel} className="kpi-raster col-span-2 sm:contents">
+            {groep.ids.map((id) => <Fragment key={id}>{STRIP_TEGEL[id]}</Fragment>)}
+          </div>
+        ) : (
+          <Fragment key={groep.sleutel}>{STRIP_TEGEL[groep.ids[0]!]}</Fragment>
+        )))}
       </div>
 
       {/* === Panelen === */}

@@ -52,7 +52,7 @@ export function PageHeader({
     // Voorheen stapelden drie volle-breedte-knoppen onder de kop
     // (afwerking 04-09, nr. 7).
     <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:items-end">
-      <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl">
+      <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl max-sm:grow-[999]">
         {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
         {/* Eén h1 per scherm, in de page-title-rol (24/30 px, Manrope 800
             conform huisstijl): de kop wint het van de rest door máát én de
@@ -64,7 +64,15 @@ export function PageHeader({
           <p className="mt-2 text-body font-normal text-slate-500">{description}</p>
         ) : null}
       </div>
-      {actions ? <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 md:gap-3">{actions}</div> : null}
+      {/* Telefoon: passen de acties naast de titel, dan staan ze rechts zoals
+          altijd. Zakken ze naar een eigen rij, dan staan ze LINKS, zodat
+          titel, uitleg en actie één leeslijn vormen; rechts uitgelijnd
+          zweefden ze los onder de tekst (Verlof, Dienstruil, zoekveld
+          Contacten). Dat werkt zonder meten: het titelblok groeit 999 keer
+          harder dan de acties, dus op dezelfde rij krijgen de acties geen
+          extra ruimte en blijven ze rechts; op een eigen rij vullen ze de
+          breedte en lijnt hun inhoud links uit. Vanaf sm ongewijzigd. */}
+      {actions ? <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 max-sm:ml-0 max-sm:grow max-sm:justify-start md:gap-3">{actions}</div> : null}
     </header>
   );
 }
@@ -301,7 +309,7 @@ export function VersheidRegel({ className, ...versheid }: Versheid & { className
     // Mobiel: eigen regel onder de knoppen (basis-full + order-last), zodat de
     // ene gouden knop niet door een tijdstip van zijn plek geduwd wordt;
     // vanaf md gewoon links van de knoppen op dezelfde rij.
-    <p className={cn('text-micro order-last basis-full self-center whitespace-nowrap text-right md:order-none md:basis-auto md:text-left', className)} aria-live="polite">
+    <p className={cn('text-micro order-last basis-full self-center whitespace-nowrap text-right max-sm:text-left md:order-none md:basis-auto md:text-left', className)} aria-live="polite">
       {tekst}
     </p>
   );

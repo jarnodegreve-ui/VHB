@@ -102,7 +102,7 @@ export function OpsStat({
       <p className={cn('kpi-sub mt-0.5 text-xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {typeof meter === 'number' && (
         <Meter className="kpi-extra mt-2 h-1.5">
-          <MeterVulling pct={Math.max(3, meter)} className={meter > 100 ? 'bg-red-500' : meter > 80 ? 'bg-amber-500' : 'bg-emerald-500'} />
+          <MeterVulling pct={meter <= 0 ? 0 : Math.max(3, meter)} className={meter > 100 ? 'bg-red-500' : meter > 80 ? 'bg-amber-500' : 'bg-emerald-500'} />
         </Meter>
       )}
       {lines && lines.length > 0 && (
