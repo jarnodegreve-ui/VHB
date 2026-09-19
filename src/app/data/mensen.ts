@@ -13,6 +13,11 @@ export function useMensenData(ctx: DataCtx) {
   const { session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog } = ctx;
   const [users, setUsers] = useState<User[]>([]);
   const [unseenDocuments, setUnseenDocuments] = useState(0);
+  // Chauffeur/technieker laden gebruikers en documenten ná de poort
+  // (useAppData): waar zodra de eerste laadpoging rond is. Voor staf zit
+  // users in de poort en is de vlag dus al waar wanneer de poort opent.
+  const [usersGeladen, setUsersGeladen] = useState(false);
+  const [documentenGeladen, setDocumentenGeladen] = useState(false);
   // Voer voor de werkvoorraad-knop in de topbar én het Open taken-paneel op
   // het dashboard: vervaldata (staf) en wachtende toestellen (admin-only API)
   // komen uit eigen endpoints. Best-effort — de app mag hier nooit op breken.
@@ -75,6 +80,8 @@ export function useMensenData(ctx: DataCtx) {
     } catch (error) {
       console.error('Error fetching users:', error);
       meldLaadfout('de gebruikerslijst');
+    } finally {
+      setUsersGeladen(true);
     }
   };
 
@@ -169,6 +176,8 @@ export function useMensenData(ctx: DataCtx) {
       setUnseenDocuments(unseen);
     } catch (error) {
       console.error('Error fetching documents badge:', error);
+    } finally {
+      setDocumentenGeladen(true);
     }
   };
 
@@ -185,10 +194,12 @@ export function useMensenData(ctx: DataCtx) {
   /** Bij uitloggen: de gebruikerslijst leeg (badge/werkvoorraad blijven, zoals voorheen). */
   const resetMensen = () => {
     setUsers([]);
+    setUsersGeladen(false);
+    setDocumentenGeladen(false);
   };
 
   return {
-    users, unseenDocuments, vervaldata, pendingDevices,
+    users, usersGeladen, unseenDocuments, documentenGeladen, vervaldata, pendingDevices,
     fetchUsers, saveUsers, saveUser, createUser, deleteUser,
     fetchUnseenDocuments, markDocumentsSeen, resetMensen,
   };

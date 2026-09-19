@@ -261,6 +261,7 @@ export default function App() {
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
     planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, setIsInitialLoad, lastSyncedAt, setLastSyncedAt,
+    servicesGeladen, planningMatrixGeladen, planningCodesGeladen, activityLogGeladen, usersGeladen, swapsGeladen,
     loadAppData, refreshAll, resetAll,
     fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog,
@@ -1130,6 +1131,10 @@ export default function App() {
 
   // Wachtende beslissingen voor planner/admin (sidebar badges op
   // Verlofbeheer en Dienstruil-tab).
+  // Rooster en dienstruil tonen per dienst of er al een ruil loopt en met
+  // wie er geruild is: die schermen wachten op ruilen én namen. Voor staf
+  // zitten beide in de poort; chauffeurs laden ze er direct na (useAppData).
+  const ruilDataKlaar = swapsGeladen && usersGeladen;
   const pendingLeaveCount = leaveRequests.filter((r) => r.status === 'pending').length;
   // Zelfde definitie als de cockpit: 'accepted' wacht óók op de planner
   // (validatie), dus telt mee als open werkvoorraad.
@@ -1804,13 +1809,13 @@ export default function App() {
               )}
               {resolvedCurrentView === 'mijn-dag' && <LazyMijnDagView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />}
               {resolvedCurrentView === 'omleidingen' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} /></Verwissel>}
-              {resolvedCurrentView === 'rooster' && <LazyScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
-              {resolvedCurrentView === 'dienstoverzicht' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyServicesView services={services} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'rooster' && <LazyScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad || !ruilDataKlaar} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
+              {resolvedCurrentView === 'dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyServicesView services={services} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'ritblaadjes' && <LazyRitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'documenten' && <LazyDocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
               {resolvedCurrentView === 'updates' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazyUpdatesView updates={updates} /></Verwissel>}
               {resolvedCurrentView === 'meldingen' && <LazyMeldingenView onNavigate={setCurrentView} />}
-              {resolvedCurrentView === 'contacten' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazyContactsView users={users} currentUser={currentUser!} /></Verwissel>}
+              {resolvedCurrentView === 'contacten' && <Verwissel laden={isInitialLoad || !usersGeladen} skelet={<ViewLoader />}><LazyContactsView users={users} currentUser={currentUser!} /></Verwissel>}
               {resolvedCurrentView === 'beheer-roosters' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
@@ -1825,7 +1830,7 @@ export default function App() {
                   }} />
                 </Suspense>
               </Verwissel>}
-              {resolvedCurrentView === 'planning-matrix' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
+              {resolvedCurrentView === 'planning-matrix' && <Verwissel laden={isInitialLoad || !servicesGeladen || !planningCodesGeladen || !planningMatrixGeladen} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyPlanningMatrixView
                     rows={planningMatrixRows}
@@ -1839,7 +1844,7 @@ export default function App() {
                   />
                 </Suspense>
               </Verwissel>}
-              {resolvedCurrentView === 'planning-codes' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'planning-codes' && <Verwissel laden={isInitialLoad || !planningCodesGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'beheer-updates' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSaveUpdate={saveUpdate} onCreateUpdate={createUpdate} onDeleteUpdate={deleteUpdate} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} />
@@ -1855,24 +1860,24 @@ export default function App() {
                   <LazyDevicesView users={users} currentUserId={currentUser!.id} />
                 </Suspense>
               )}
-              {resolvedCurrentView === 'activiteit' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} aanwezigheid={aanwezigheid} aanwezigheidMigratie={aanwezigheidMigratie} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'activiteit' && <Verwissel laden={isInitialLoad || !activityLogGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} aanwezigheid={aanwezigheid} aanwezigheidMigratie={aanwezigheidMigratie} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
               {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
               {resolvedCurrentView === 'werkvoorraad' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyWerkvoorraadView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'defecten' && <Suspense fallback={<ViewLoader />}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
-              {resolvedCurrentView === 'werkprestaties' && <Suspense fallback={<ViewLoader />}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense>}
+              {resolvedCurrentView === 'werkprestaties' && <Verwissel laden={!usersGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'voertuig-werken' && <Suspense fallback={<ViewLoader />}><LazyVoertuigWerkenView /></Suspense>}
               {resolvedCurrentView === 'voertuigen' && <Suspense fallback={<ViewLoader />}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'dienstopbouw' && <Suspense fallback={<ViewLoader />}><LazyDienstopbouwView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'dagafsluiting' && <Suspense fallback={<ViewLoader />}><LazyDagafsluitingView currentUser={currentUser!} users={users} /></Suspense>}
               {resolvedCurrentView === 'looncontrole' && <Suspense fallback={<ViewLoader />}><LazyLooncontroleView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense>}
               {resolvedCurrentView === 'beheer-omleidingen' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense></Verwissel>}
-              {resolvedCurrentView === 'beheer-dienstoverzicht' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
-              {resolvedCurrentView === 'ruil-verzoeken' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} /></Verwissel>}
+              {resolvedCurrentView === 'beheer-dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
+              {resolvedCurrentView === 'ruil-verzoeken' && <Verwissel laden={isInitialLoad || !ruilDataKlaar} skelet={<ViewLoader />}><LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} /></Verwissel>}
               {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} shifts={shifts} onDecide={isStaf(currentUser.role) ? decideLeave : undefined} /></Suspense></Verwissel>}
-              {resolvedCurrentView === 'verlof' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
+              {resolvedCurrentView === 'verlof' && <Verwissel laden={isInitialLoad || !usersGeladen} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView
                     user={currentUser}
@@ -1923,7 +1928,7 @@ export default function App() {
                   onNavigate={setCurrentView}
                 />
               )}
-              {resolvedCurrentView === 'beheer-debug' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
+              {resolvedCurrentView === 'beheer-debug' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
                 </Suspense>

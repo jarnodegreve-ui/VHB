@@ -22,6 +22,14 @@ export function usePlanningData(ctx: DataCtx) {
   // Center van planner/admin. null = (nog) niet geladen — de cockpit toont
   // dan 'onbekend' i.p.v. een vals-groen 'volledig gedekt'.
   const [coverageDays, setCoverageDays] = useState<DayGap[] | null>(null);
+  // Uitgestelde collecties (staf laadt ze ná de poort, zie useAppData): de
+  // vlag gaat aan zodra de eerste laadpoging rond is, ook als ze mislukte
+  // (dan toont de view leeg + de laadfout, zoals vroeger in de poort). Views
+  // houden hun skelet aan tot de vlag waar is, zodat "leeg" nooit "nog niet
+  // geladen" betekent.
+  const [servicesGeladen, setServicesGeladen] = useState(false);
+  const [planningMatrixGeladen, setPlanningMatrixGeladen] = useState(false);
+  const [planningCodesGeladen, setPlanningCodesGeladen] = useState(false);
 
   const fetchPlanning = async (accessToken = session?.access_token, filters?: { driverId?: string; month?: string }, opts?: { silent?: boolean }) => {
     try {
@@ -102,6 +110,7 @@ export function usePlanningData(ctx: DataCtx) {
       console.error('Error fetching services:', error);
       meldLaadfout('het dienstoverzicht');
     } finally {
+      setServicesGeladen(true);
       endLoading();
     }
   };
@@ -152,6 +161,8 @@ export function usePlanningData(ctx: DataCtx) {
       if (data && Array.isArray(data)) setPlanningMatrixRows(data);
     } catch (error) {
       console.error('Error fetching planning matrix:', error);
+    } finally {
+      setPlanningMatrixGeladen(true);
     }
   };
 
@@ -166,6 +177,8 @@ export function usePlanningData(ctx: DataCtx) {
       }
     } catch (error) {
       console.error('Error fetching planning codes:', error);
+    } finally {
+      setPlanningCodesGeladen(true);
     }
   };
 
@@ -259,10 +272,14 @@ export function usePlanningData(ctx: DataCtx) {
     setPlanningMatrixRows([]);
     setPlanningCodes([]);
     setPlanningMatrixHistory([]);
+    setServicesGeladen(false);
+    setPlanningMatrixGeladen(false);
+    setPlanningCodesGeladen(false);
   };
 
   return {
     shifts, services, myNotes, planningMatrixRows, planningCodes, planningMatrixHistory, coverageDays,
+    servicesGeladen, planningMatrixGeladen, planningCodesGeladen,
     fetchPlanning, savePlanning, fetchServices, saveServices,
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, savePlanningCodes,
     refreshCoverageGaps, fetchMyNotes, resetPlanning,

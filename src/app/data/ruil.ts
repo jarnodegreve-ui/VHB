@@ -11,6 +11,9 @@ import type { DataCtx } from './kern';
 export function useRuilData(ctx: DataCtx) {
   const { session, currentUser, showToast, meldLaadfout, fetchActivityLog } = ctx;
   const [swaps, setSwaps] = useState<SwapRequest[]>([]);
+  // Chauffeur laadt de ruilen ná de poort (useAppData): waar zodra de eerste
+  // laadpoging rond is; voor staf zit swaps in de poort.
+  const [swapsGeladen, setSwapsGeladen] = useState(false);
 
   const fetchSwaps = async (accessToken = session?.access_token) => {
     try {
@@ -25,6 +28,8 @@ export function useRuilData(ctx: DataCtx) {
     } catch (error) {
       console.error('Error fetching swaps:', error);
       meldLaadfout('de dienstruilen');
+    } finally {
+      setSwapsGeladen(true);
     }
   };
 
@@ -100,7 +105,8 @@ export function useRuilData(ctx: DataCtx) {
 
   const resetRuil = () => {
     setSwaps([]);
+    setSwapsGeladen(false);
   };
 
-  return { swaps, fetchSwaps, saveSwaps, decideSwap, confirmSwapSeen, resetRuil };
+  return { swaps, swapsGeladen, fetchSwaps, saveSwaps, decideSwap, confirmSwapSeen, resetRuil };
 }

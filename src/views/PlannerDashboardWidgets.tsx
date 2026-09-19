@@ -35,6 +35,7 @@ import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, mi
 import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { apiFetch } from '../lib/api';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
+import { Verwissel } from '../components/Verwissel';
 import { Modal } from '../components/Modal';
 import { EmptyState, ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
@@ -72,7 +73,7 @@ export function PlannerDashboardWidgets({
   // en de fetchers om na een dienstwissel te verversen.
   const {
     users, shifts, diversions, updates, leaveRequests, swaps,
-    planningMatrixRows, planningMatrixHistory: matrixHistory, activityLog, coverageDays, vervaldata, pendingDevices,
+    planningMatrixRows, planningMatrixGeladen, planningMatrixHistory: matrixHistory, activityLog, activityLogGeladen, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, reportSick: onSickReport,
     fetchPlanning, fetchSwaps, refreshCoverageGaps,
   } = useAppDataContext();
@@ -746,7 +747,10 @@ export function PlannerDashboardWidgets({
   // is bewust weg: import-status en dekking staan al in de status-strip
   // bovenaan, en "Portaal Online"/"Realtime Actief" waren hardcoded
   // (decoratie) — tegen het eigen niets-is-decoratief-principe in.
-  const paneelActiviteit: ReactNode = isAdmin && activityLog.length > 0 ? (
+  // Het log laadt voor een admin ná de poort (useAppData): tot het er is
+  // staat het paneel er al met een skelet, zodat het raster niet verspringt
+  // en "geen activiteit" nooit "nog niet geladen" betekent.
+  const paneelActiviteit: ReactNode = isAdmin && (!activityLogGeladen || activityLog.length > 0) ? (
     <OpsPanel
       className="flex-1"
       icon={<Activity size={16} />}
@@ -755,11 +759,20 @@ export function PlannerDashboardWidgets({
       onSeeAll={() => onNavigate('activiteit')}
       seeAllLabel="Volledige log"
     >
-      <div className="space-y-0.5">
-        {activityLog.slice(0, 6).map((entry) => (
-          <Fragment key={entry.id}><FeedRow entry={entry} /></Fragment>
-        ))}
-      </div>
+      <Verwissel
+        laden={!activityLogGeladen}
+        skelet={(
+          <div className="space-y-1.5" aria-busy="true" aria-label="Activiteit wordt geladen">
+            <SkeletonRow /><SkeletonRow /><SkeletonRow />
+          </div>
+        )}
+      >
+        <div className="space-y-0.5">
+          {activityLog.slice(0, 6).map((entry) => (
+            <Fragment key={entry.id}><FeedRow entry={entry} /></Fragment>
+          ))}
+        </div>
+      </Verwissel>
     </OpsPanel>
   ) : (
     updates.length > 0 && (
@@ -1133,12 +1146,16 @@ export function PlannerDashboardWidgets({
                           value={vervangerPerDienst[d.id] ?? ''}
                           onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [d.id]: e.target.value }))}
                           className="min-w-0 flex-1"
+                          disabled={!planningMatrixGeladen}
                         >
-                          <option value="">Kies een chauffeur…</option>
+                          {/* De matrix (wie is die dag niet beschikbaar) laadt
+                              ná de poort: tot ze er is geen kandidaten tonen,
+                              anders stond een afwezige even als vrij in de lijst. */}
+                          <option value="">{planningMatrixGeladen ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
                           {/* Vrij die dag bovenaan, daarbinnen minst gewerkt
                               die week — zelfde criteria als de advisor
                               (keuze Jarno 19-08). */}
-                          {rangschikKandidaten(
+                          {planningMatrixGeladen && rangschikKandidaten(
                             users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(d.driverId)),
                             vrijOpDatum(shifts, d.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, d.date)),
                             werkdagen,

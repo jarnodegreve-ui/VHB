@@ -55,6 +55,8 @@ export function ZiekteView({
   // Matrixrijen voor de vervangerlijst: wie in de Excel op ZIEK/OPL/... staat
   // telt niet als vrij (props blijven zoals ze waren, dit is extra context).
   const planningMatrixRows = useOptioneleAppData()?.planningMatrixRows ?? [];
+  // De matrix laadt ná de poort (useAppData); zonder context (tests) = klaar.
+  const planningMatrixGeladen = useOptioneleAppData()?.planningMatrixGeladen ?? true;
   const today = isoDate(new Date());
   const naamVan = (id: string) => users.find((u) => String(u.id) === String(id))?.name ?? 'Onbekend';
   const isAdmin = user.role === 'admin';
@@ -483,9 +485,12 @@ export function ZiekteView({
                                     value={vervangerPerDienst[dienst.id] ?? ''}
                                     onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [dienst.id]: e.target.value }))}
                                     className="min-w-0 flex-1"
+                                    disabled={!planningMatrixGeladen}
                                   >
-                                    <option value="">Kies een chauffeur…</option>
-                                    {rangschikKandidaten(
+                                    {/* Zonder matrix geen kandidaten: een afwezige
+                                        stond anders even als vrij in de lijst. */}
+                                    <option value="">{planningMatrixGeladen ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
+                                    {planningMatrixGeladen && rangschikKandidaten(
                                       users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId)),
                                       vrijOpDatum(shifts, dienst.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, dienst.date)),
                                       werkdagen,

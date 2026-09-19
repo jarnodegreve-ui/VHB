@@ -11,7 +11,7 @@ import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
 import { useOnline } from '../lib/useOnline';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, shiftWindowMinutes } from '../lib/shiftTime';
 import { cn } from '../lib/ui';
-import type { Diversion, Shift, User, View } from '../types';
+import type { Diversion, Shift, SwapRequest, User, View } from '../types';
 import { Card } from '../components/Card';
 import { OpsRow } from '../components/ops';
 import { LijnTegel } from '../components/LijnTegel';
@@ -43,6 +43,10 @@ const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal
  */
 
 
+// Stabiele lege invoer voor de ruilbadge zolang ruilen/namen nog laden
+// (geruildeDiensten cachet op referentie).
+const GEEN_RUILEN: readonly SwapRequest[] = [];
+const GEEN_NAMEN: ReadonlyArray<Pick<User, 'id' | 'name'>> = [];
 const hoofdletter = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 type Rij =
@@ -98,7 +102,13 @@ export function MijnDagView({
   // helper als het rooster; zonder context (tests) geen badge.
   const swaps = appData?.swaps;
   const users = appData?.users;
-  const geruild = useMemo(() => geruildeDiensten(user.id, swaps ?? [], users ?? []), [user.id, swaps, users]);
+  // Ruilen en namen laden voor een chauffeur ná de poort (useAppData): de
+  // badge verschijnt pas als béíde er zijn, anders stond er even "een collega".
+  const ruilDataKlaar = !!appData?.swapsGeladen && !!appData?.usersGeladen;
+  const geruild = useMemo(
+    () => geruildeDiensten(user.id, ruilDataKlaar ? swaps ?? [] : GEEN_RUILEN, ruilDataKlaar ? users ?? [] : GEEN_NAMEN),
+    [user.id, swaps, users, ruilDataKlaar],
+  );
 
   const vandaag = isOffset(now, 0);
   const mijnShifts = shifts.filter((s) => s.driverId === user.id);

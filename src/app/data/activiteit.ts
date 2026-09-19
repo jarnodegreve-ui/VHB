@@ -16,6 +16,9 @@ export function useActiviteitData({ session, currentUser, currentView }: {
   currentView: View;
 }) {
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  // Uitgesteld (admin laadt het log ná de poort): waar zodra de eerste
+  // laadpoging rond is; tot dan houden lezers hun skelet aan.
+  const [activityLogGeladen, setActivityLogGeladen] = useState(false);
   const [loginActivity, setLoginActivity] = useState<ActivityLogEntry[]>([]);
   const [aanwezigheid, setAanwezigheid] = useState<AanwezigheidSessie[]>([]);
   /** Naam van de migratie die nog moet draaien, of null als alles er is. */
@@ -30,6 +33,8 @@ export function useActiviteitData({ session, currentUser, currentView }: {
       }
     } catch (error) {
       console.error('Error fetching activity log:', error);
+    } finally {
+      setActivityLogGeladen(true);
     }
   };
 
@@ -84,11 +89,12 @@ export function useActiviteitData({ session, currentUser, currentView }: {
   /** Bij uitloggen: het logboek leeg (loginActivity blijft, zoals voorheen). */
   const resetActiviteit = () => {
     setActivityLog([]);
+    setActivityLogGeladen(false);
     setAanwezigheid([]);
   };
 
   return {
-    activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie,
+    activityLog, activityLogGeladen, loginActivity, aanwezigheid, aanwezigheidMigratie,
     fetchActivityLog, fetchLoginActivity, fetchAanwezigheid, resetActiviteit,
   };
 }
