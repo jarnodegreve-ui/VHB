@@ -151,6 +151,10 @@ const LazyPrintGeleBoekView = lazyWithRetry(() => import('./views/PrintGeleBoekV
 
 
 
+/** Rol van de vorige geslaagde start op dit toestel: alleen een hint voor
+ *  wát er bij de boot parallel mag starten (2FA-status), nooit voor toegang. */
+const LAST_ROLE_KEY = 'vhb-last-role';
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -1032,6 +1036,16 @@ export default function App() {
       // wachtscherm op een gloednieuw toestel.
       const registratie = registerThisDevice(accessToken);
       registratieRef.current = registratie;
+      // 2FA-status tegelijk met het profiel (ronde 3, 19-09): listFactors doet
+      // intern een netwerk-getUser en stond voor staf serieel ná /api/me. De
+      // poort zelf verandert niet: het resultaat wordt pas gelezen als de rol
+      // staf blijkt. De rol-hint van de vorige start bespaart chauffeurs de
+      // overbodige call; zonder hint (nieuw toestel) starten we hem wel. De
+      // hint stuurt alleen het moment, nooit de beslissing. Verwerpt nooit
+      // (leesTweeStapsStatus vangt zelf af), dus een ongelezen belofte is veilig.
+      let rolHint: string | null = null;
+      try { rolHint = window.localStorage.getItem(LAST_ROLE_KEY); } catch { /* opslag geblokkeerd */ }
+      const vroegeTweeStaps = rolHint === 'chauffeur' || rolHint === 'technieker' ? null : leesTweeStapsStatus();
       let profiel: Awaited<ReturnType<typeof fetchCurrentUser>>;
       try {
         profiel = await fetchCurrentUser(accessToken);
@@ -1068,7 +1082,7 @@ export default function App() {
       // alleen een oudere server zonder dat veld vraagt het nog apart.
       if (appUser.role === 'planner' || appUser.role === 'admin') {
         const [status, mfaVerplicht] = await Promise.all([
-          leesTweeStapsStatus(),
+          vroegeTweeStaps ?? leesTweeStapsStatus(),
           beveiliging
             ? Promise.resolve(!!beveiliging.mfaVerplicht)
             : (apiFetch('/api/me/beveiliging', { accessToken }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as Promise<{ mfaVerplicht?: boolean } | null>).then((b) => !!b?.mfaVerplicht),
@@ -1092,6 +1106,7 @@ export default function App() {
         const current = String(appUser.id);
         if (previous && previous !== current) await wisOfflineCaches();
         window.localStorage.setItem(LAST_USER_KEY, current);
+        window.localStorage.setItem(LAST_ROLE_KEY, appUser.role);
       } catch {
         // localStorage/Cache API geblokkeerd — geen blocker voor de boot
       }
