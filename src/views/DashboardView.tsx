@@ -193,19 +193,15 @@ export function DashboardView({ notes = [],
   // Op xl (6 kolommen) vullen de kleine tegels samen één rij; op de telefoon
   // (2 kolommen) spant een oneven laatste kleine tegel de volle breedte.
   const kleinSpan = kleineTegelSpan(kleineTegels.length);
-  const laatsteKlein = kleineTegels.length % 2 === 1 ? kleineTegels[kleineTegels.length - 1]?.id : undefined;
+  // Telefoon (2 kolommen): "Volgende dienst" zonder geplande dienst is een
+  // halve tegel i.p.v. een groot leeg vlak, en telt dus mee als kleine tegel.
+  // Een oneven laatste kleine tegel spant de volle breedte. Tegels, geen
+  // lijst: de lijstvorm (kpi-raster) is voor de teltegels van de staf; voor
+  // de chauffeur oogde ze als een instellingenscherm (Jarno 19-09).
+  const volgendeLeeg = !nextShift;
+  const kleinOpTelefoon = stripZichtbaar.filter((t) => !GROOT.has(t.id) || (t.id === 'volgende-dienst' && volgendeLeeg));
+  const laatsteKlein = kleinOpTelefoon.length % 2 === 1 ? kleinOpTelefoon[kleinOpTelefoon.length - 1]?.id : undefined;
   const kleinKlassen = (id: string) => cn(kleinSpan, id === laatsteKlein && 'col-span-2 md:col-span-1');
-  // Telefoon: opeenvolgende kleine tegels vormen samen één lijstkaart, een
-  // grote tegel blijft een tegel. De volgorde van de gebruiker (Dashboard
-  // aanpassen) blijft zo op elke breedte gelden. "Volgende dienst" zonder
-  // geplande dienst telt als klein: één regel i.p.v. een lege tegel.
-  const isKlein = (id: string) => !GROOT.has(id) || (id === 'volgende-dienst' && !nextShift);
-  const stripGroepen = stripZichtbaar.reduce<Array<{ sleutel: string; lijst: boolean; ids: string[] }>>((groepen, t) => {
-    const vorige = groepen[groepen.length - 1];
-    if (isKlein(t.id) && vorige?.lijst) vorige.ids.push(t.id);
-    else groepen.push({ sleutel: t.id, lijst: isKlein(t.id), ids: [t.id] });
-    return groepen;
-  }, []);
   const STRIP_TEGEL: Record<string, ReactNode> = {
     // Vandaag: het dienstnummer als kop, hoelang nog als boodschap, de
     // delen als regels en de dienstbalk (wijzerplaat) eronder — dezelfde
@@ -237,14 +233,17 @@ export function DashboardView({ notes = [],
         tone="slate"
         // Zonder volgende dienst rekt de tegel niet mee tot de hoogte van
         // de Vandaag-tegel: dat gaf een groot leeg vlak met alleen een streep.
-        className={cn('col-span-2 md:col-span-1 xl:col-span-3', !nextShift && 'md:self-start')}
+        className={cn(
+          'md:col-span-1 xl:col-span-3',
+          volgendeLeeg ? cn('md:self-start', laatsteKlein === 'volgende-dienst' && 'col-span-2') : 'col-span-2',
+        )}
         label="Volgende dienst"
         // Dienstnummer groot, net als in de Vandaag-tegel (Jarno 04-09:
         // het nummer is het belangrijkste); dag + afstand op de subregel.
-        text={nextShift ? serviceNumberOf(nextShift) : '—'}
+        text={nextShift ? serviceNumberOf(nextShift) : 'Geen'}
         mono={!!nextShift}
         subClassName={nextShift ? 'text-sm font-semibold text-slate-600' : undefined}
-        sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'er staat niets ingepland'}
+        sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'niets ingepland'}
         lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
         onClick={onNavigate ? () => onNavigate('rooster') : undefined}
       />
@@ -450,21 +449,10 @@ export function DashboardView({ notes = [],
           werden de kleine tegels smal en zo hoog als de Vandaag-tegel, met
           afgeknipte labels (Jarno 04-09). Volgorde en zichtbaarheid volgen
           de voorkeuren van de gebruiker (Dashboard aanpassen). */}
-      {/* Op de telefoon in groepen (fix 19-09, zie stripGroepen): Vandaag en Volgende dienst
-          blijven volwaardige tegels, want dat zijn de blikvangers van de
-          chauffeur met dienstnummer, delen en dienstbalk; alleen de kleine
-          teltegels worden samen één kaart met rijen (`kpi-raster`). De hele
-          strip als lijst maakte van de Vandaag-tegel een gewone regel en liet
-          "Geen" midden in zijn rij hangen. Vanaf sm lossen de lijstgroepen op
-          (`sm:contents`) en is het weer één raster. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {stripGroepen.map((groep) => (groep.lijst ? (
-          <div key={groep.sleutel} className="kpi-raster col-span-2 sm:contents">
-            {groep.ids.map((id) => <Fragment key={id}>{STRIP_TEGEL[id]}</Fragment>)}
-          </div>
-        ) : (
-          <Fragment key={groep.sleutel}>{STRIP_TEGEL[groep.ids[0]!]}</Fragment>
-        )))}
+        {stripZichtbaar.map((t) => (
+          <Fragment key={t.id}>{STRIP_TEGEL[t.id]}</Fragment>
+        ))}
       </div>
 
       {/* === Panelen === */}
