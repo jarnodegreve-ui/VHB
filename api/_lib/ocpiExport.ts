@@ -1,4 +1,6 @@
-import * as XLSX from "xlsx";
+// xlsx wordt lui geladen (±1 MB, alleen nodig bij een export): zie matrixXlsx.ts.
+import type { WorkSheet } from "xlsx";
+import { laadXlsx } from "./matrixXlsx.js";
 import type { DagRij, MaandRij, PuntRij, SessieDetail, Totalen } from "./ocpiOverzicht.js";
 
 /**
@@ -44,11 +46,11 @@ const klasseTekst = (k: string | null): string => (k ? (KLASSE_TEKST[k] ?? k.toL
 
 const puntNaam = (p: { evseId: string | null; physicalReference: string | null; evseUid: string }) => p.evseId ?? p.physicalReference ?? p.evseUid;
 
-const kolombreedtes = (ws: XLSX.WorkSheet, breedtes: number[]) => { ws["!cols"] = breedtes.map((wch) => ({ wch })); };
+const kolombreedtes = (ws: WorkSheet, breedtes: number[]) => { ws["!cols"] = breedtes.map((wch) => ({ wch })); };
 
 /** Werkboek voor één periode (maand of vrije periode): Overzicht · Per dag ·
  *  Per laadpunt · Sessies. */
-export const bouwPeriodeXlsx = (opts: {
+export const bouwPeriodeXlsx = async (opts: {
   label: string;
   van: string;
   tot: string;
@@ -60,7 +62,8 @@ export const bouwPeriodeXlsx = (opts: {
   puntNaamVan: (uid: string) => string;
   busVan: (evseId: string | null) => string | null;
   gemaaktOp: string;
-}): Buffer => {
+}): Promise<Buffer> => {
+  const XLSX = await laadXlsx();
   const t = opts.totalen;
   const overzicht: unknown[][] = [
     ["VHB laadplein", opts.label],
@@ -117,12 +120,13 @@ export const bouwPeriodeXlsx = (opts: {
 };
 
 /** Werkboek voor de historiek: Per maand + matrix laadpunt × maand. */
-export const bouwHistoriekXlsx = (opts: {
+export const bouwHistoriekXlsx = async (opts: {
   maanden: MaandRij[];
   matrix: Array<{ evseId: string | null; physicalReference: string | null; evseUid: string; perMaand: Record<string, number>; totaal: number }>;
   busVan: (evseId: string | null) => string | null;
   gemaaktOp: string;
-}): Buffer => {
+}): Promise<Buffer> => {
+  const XLSX = await laadXlsx();
   const perMaand: unknown[][] = [["Maand", "kWh", "Laadsessies", "Mislukt", "Aankoppelingen totaal", "Laaddagen", "Gem. kWh per laaddag", "Hoogste dag kWh", "Hoogste dag", "Piek kW", "Piekdag", "Piek om", "Gem. dagpiek kW", "Dagen met piekmeting", "Laadtijd (uur)"]];
   for (const m of opts.maanden) {
     perMaand.push([m.maand, m.kwh, m.laadbeurten, m.mislukt, m.sessies, m.laaddagen, m.gemPerLaaddag, m.hoogsteDag?.kwh ?? "", m.hoogsteDag?.dag ?? "", leeg(m.piekKw), m.piekDag ?? "", uur(m.piekTs), leeg(m.gemDagpiekKw), m.piekDagen, Math.round((m.laadMin / 60) * 10) / 10]);

@@ -8,6 +8,7 @@ import { deletePushSubscriptionsForUser, sendPushToUsers } from "../push.js";
 import { recordUrl } from "./meldingen.js";
 import { isMissingTableError } from "../deviceGate.js";
 import { invalidateUsersCache } from "../userCache.js";
+import { meldToestelWijziging } from "./deviceCache.js";
 import {
   deleteAllDocumentsForUser,
   diffDiversionChanges,
@@ -96,6 +97,9 @@ export const trekToegangIn = async (userId: string): Promise<ToegangIngetrokken>
   const resultaat: ToegangIngetrokken = { toestellen: 0, push: 0, fouten: [] };
   try {
     resultaat.toestellen = await revokeAllDevices(userId);
+    // De aanroepers wissen de users-cache al (isActive wijzigt), maar dit pad
+    // mag daar niet van afhangen: ingetrokken toestellen gelden meteen.
+    meldToestelWijziging();
   } catch (err: any) {
     // Zonder toestel-tabel valt er niets in te trekken.
     if (!isMissingTableError(err)) {

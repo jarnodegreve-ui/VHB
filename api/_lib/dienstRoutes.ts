@@ -1,9 +1,9 @@
 import type express from "express";
-import * as XLSX from "xlsx";
 import { authenticate, requireRole } from "../middleware.js";
 import { isMissingTableError } from "../deviceGate.js";
 import { logActivity } from "../storage.js";
 import type { AuthenticatedRequest } from "../types.js";
+import { laadXlsx } from "./matrixXlsx.js";
 import { dagtypeCodeBodySchema, segmentImportBodySchema } from "../../shared/schemas/dienst.js";
 import { parseImportET } from "../../shared/dienst/importET.js";
 import { controleerSegmenten } from "../../shared/dienst/controles.js";
@@ -67,6 +67,8 @@ export function mountDienstRoutes(app: express.Express) {
     try {
       const buffer = Buffer.from(body.bestandBase64, "base64");
       if (buffer.length > MAX_BESTAND_BYTES) return res.status(413).json({ error: "Bestand te groot (maximaal 5 MB)." });
+      // xlsx lui geladen: alleen deze importroute heeft de bibliotheek nodig.
+      const XLSX = await laadXlsx();
       const wb = XLSX.read(buffer, { type: "buffer", raw: false, cellDates: false });
       const ws = wb.Sheets[wb.SheetNames[0]];
       if (!ws) return res.status(400).json({ error: "Ongeldige invoer", details: "Het bestand heeft geen werkblad." });

@@ -1243,7 +1243,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       const maanden = bouwMaanden(sessies, pieken, huidigeMaand);
       const matrix = bouwPuntMatrix(sessies, maanden.map((m) => m.maand), evses);
       if (queryTekst(req)("format") === "xlsx") {
-        const buffer = bouwHistoriekXlsx({ maanden, matrix, busVan: busVoorLaadpunt, gemaaktOp: nowIso() });
+        const buffer = await bouwHistoriekXlsx({ maanden, matrix, busVan: busVoorLaadpunt, gemaaktOp: nowIso() });
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="vhb-laadplein-historiek-${huidigeDag}.xlsx"`);
         return res.send(buffer);
@@ -1347,7 +1347,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       const totVorige = bouwTotalen(bouwDagen(vorige, sessiesVorige, piekenVorige), sessiesVorige);
       const naamPerUid = new Map(evses.map((e) => [e.uid, e.evse_id ?? e.physical_reference ?? e.uid]));
       const label = maand ? maandTekst(maand) : `${van} t/m ${tot}`;
-      const buffer = bouwPeriodeXlsx({
+      const buffer = await bouwPeriodeXlsx({
         label, van, tot, totalen,
         vorige: { label: periodeTekst(vorige), kwh: totVorige.kwh, piekKw: totVorige.piekKw, laadbeurten: totVorige.laadbeurten },
         dagen,

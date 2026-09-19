@@ -1,13 +1,13 @@
 import type express from "express";
 import { createHash } from "node:crypto";
-import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache, isStafRol } from "./middleware.js";
+import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, meldDeviceGateWijziging, isStafRol } from "./middleware.js";
 import { DEVICE_GATE_SETTING_KEY, isMissingTableError } from "./deviceGate.js";
 import { sendPushToUsers } from "./push.js";
 import {
   logActivity,
   getUsersData,
   registerDevice,
-  userHasDevices,
+  listDevicesForUser,
   listAllDevices,
   setDeviceStatus,
   deleteDevice,
@@ -15,6 +15,7 @@ import {
   setAppSetting,
 } from "./storage.js";
 import { deviceRegisterRateLimit } from "./rateLimit.js";
+import { meldToestelWijziging } from "./_lib/deviceCache.js";
 import type { AuthenticatedRequest } from "./types.js";
 
 // Harde bovengrens op het aantal toestellen per gebruiker: een normale
@@ -110,8 +111,14 @@ export const mountDeviceRoutes = (app: express.Express) => {
       // Vroeger zetten we hier 'revoked', waardoor een zelf uitgelogd
       // toestel voorgoed "geblokkeerd" was (bevinding 15-09).
       const anderen = (await listAllDevices()).filter((d) => d.userId === String(appUser.id) && d.deviceToken !== ownToken && d.status !== "revoked");
-      for (const d of anderen) {
-        await deleteDevice(String(appUser.id), d.deviceToken);
+      try {
+        for (const d of anderen) {
+          await deleteDevice(String(appUser.id), d.deviceToken);
+        }
+      } finally {
+        // Ook bij een fout halverwege: wat al weg is moet overal meteen gelden
+        // (toestel-cache lokaal + gedeelde epoch, zie _lib/deviceCache.ts).
+        if (anderen.length > 0) meldToestelWijziging();
       }
       if (anderen.length > 0) {
         await logActivity(req, "system", "Uitgelogd op andere toestellen", `${appUser.name}: ${anderen.length} toestel${anderen.length === 1 ? "" : "len"} ingetrokken.`);
@@ -141,6 +148,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       // aanmelden kan gewoon; alleen een admin blokkeert ('revoked').
       if (toestel.status !== "revoked") {
         await deleteDevice(String(appUser.id), toestel.deviceToken);
+        meldToestelWijziging();
         await logActivity(req, "system", "Toestel uitgelogd", `${appUser.name}: ${toestel.name}.`);
       }
       res.json({ success: true, id });
@@ -162,8 +170,12 @@ export const mountDeviceRoutes = (app: express.Express) => {
       // al bekend token verstuurt straks enkel een last_seen-update en maakt
       // geen rij/push aan). Blokkeert de rij-/push-flood via geroteerde tokens
       // zonder een gewone gebruiker met meerdere toestellen te raken.
-      const mijnToestellen = (await listAllDevices()).filter((d) => d.userId === String(appUser.id));
-      const nieuwToken = !mijnToestellen.some((d) => d.deviceToken === deviceToken);
+      // Eén query op de eigen toestellen (ronde 3) levert alles wat hieronder
+      // nodig is: de cap, "is dit het eerste toestel" en de bestaande rij.
+      // Vroeger: de HELE tabel lezen, dan nog een count en nog een lookup.
+      const mijnToestellen = await listDevicesForUser(String(appUser.id));
+      const bekend = mijnToestellen.find((d) => d.deviceToken === deviceToken) ?? null;
+      const nieuwToken = !bekend;
       if (nieuwToken && mijnToestellen.length >= MAX_DEVICES_PER_USER) {
         return res.status(429).json({ error: "Maximum aantal toestellen bereikt. Verwijder eerst een oud toestel." });
       }
@@ -178,24 +190,30 @@ export const mountDeviceRoutes = (app: express.Express) => {
       const gateEnabled = await isDeviceGateEnabled();
       const autoApprove = isStafRol(appUser.role) || !gateEnabled
         ? true
-        : !(await userHasDevices(String(appUser.id)));
-      let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove);
+        : mijnToestellen.length === 0;
+      let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove, bekend);
+      // Nieuwe rij: de gate kan voor dit token "geen rij" gecacht hebben.
+      // Een bestaand toestel aanraken (last_seen) verandert geen status en
+      // hoeft de caches dus niet te wissen (dit pad loopt bij elke app-start).
+      if (created) meldToestelWijziging();
       // Bestond het toestel al als 'wachtend' terwijl de schakelaar uit
       // staat: alsnog goedkeuren (zelfde belofte: elke login komt erin).
       // Geblokkeerd blijft geblokkeerd — de schakelaar heropent geen
       // gestolen telefoon.
       if (!created && !gateEnabled && device.status === "pending") {
         await setDeviceStatus(String(appUser.id), device.deviceToken, "approved", "auto (schakelaar uit)");
+        meldToestelWijziging();
         device = { ...device, status: "approved" };
       }
       // Race-vangst: twee toestellen die ~tegelijk als "eerste" registreren zien
-      // allebei userHasDevices=false → allebei auto-approved. Zodra er ná de
+      // allebei een lege toestellenlijst → allebei auto-approved. Zodra er ná de
       // insert méér dan één toestel op dit account staat terwijl wij zojuist
       // auto-approveden, deze naar de veilige kant (pending) terugzetten.
       if (created && autoApprove && !isStafRol(appUser.role) && gateEnabled) {
-        const mine = (await listAllDevices()).filter((d) => d.userId === String(appUser.id));
+        const mine = await listDevicesForUser(String(appUser.id));
         if (mine.length > 1) {
           await setDeviceStatus(String(appUser.id), device.deviceToken, "pending", "auto");
+          meldToestelWijziging();
           device = { ...device, status: "pending" };
         }
       }
@@ -255,7 +273,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       }
       const enabled = req.body.enabled;
       await setAppSetting(DEVICE_GATE_SETTING_KEY, { enabled });
-      invalidateDeviceGateCache();
+      meldDeviceGateWijziging();
       await logActivity(
         req,
         "system",
@@ -282,6 +300,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       const deviceToken = String(req.body?.deviceToken ?? "");
       if (!userId || !deviceToken) return res.status(400).json({ error: "userId en deviceToken zijn verplicht." });
       await setDeviceStatus(userId, deviceToken, "approved", String(req.appUser!.id));
+      meldToestelWijziging();
       const owner = (await getUsersData()).find((u) => String(u.id) === userId);
       await logActivity(req, "system", "Toestel goedgekeurd", `${owner?.name ?? userId}.`);
       await sendPushToUsers([userId], {
@@ -307,6 +326,8 @@ export const mountDeviceRoutes = (app: express.Express) => {
         return res.status(400).json({ error: "Je kunt het toestel waarop je nu werkt niet blokkeren." });
       }
       await setDeviceStatus(userId, deviceToken, "revoked", String(req.appUser!.id));
+      // Intrekken: lokaal meteen, elders via de epoch binnen ±2 s.
+      meldToestelWijziging();
       const owner = (await getUsersData()).find((u) => String(u.id) === userId);
       await logActivity(req, "system", "Toestel geblokkeerd", `${owner?.name ?? userId}.`);
       res.json({ success: true });
@@ -337,6 +358,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
         });
       }
       await deleteDevice(userId, deviceToken);
+      meldToestelWijziging();
       const owner = (await getUsersData()).find((u) => String(u.id) === userId);
       await logActivity(req, "system", "Toestel geschrapt", `${owner?.name ?? userId}.`);
       res.json({ success: true });

@@ -159,6 +159,79 @@ export async function sharedCheck(
   }
 }
 
+// --- Eén Upstash-trip per request (ronde 3, 19-09) ---
+// De globale middleware deed twee REST-calls na elkaar (token-sleutel, dan de
+// IP-backstop) en de users-cache daarbovenop een derde voor de epoch. Elke
+// trip is een volledige HTTPS-roundtrip naar de store; sinds de functie in
+// dub1 draait en de store (vermoedelijk) in de VS staat, is dat de duurste
+// post vóór de handler. Alles wat de middleware van de store nodig heeft gaat
+// daarom in ÉÉN pipeline: INCR+EXPIRE per teller, plus een GET van de
+// users-cache-epoch die userCache.ts daarna zonder eigen call kan overnemen.
+export const USERS_EPOCH_KEY = "users-cache:epoch";
+let epochWaarneming: { waarde: number; at: number } | null = null;
+/** Laatste epoch-waarde die de limiter in zijn pipeline meekreeg (null =
+ *  nog nooit gezien, bv. zonder store of buiten /api). `at` = Date.now() op
+ *  het moment van ontvangst; de afnemer beslist zelf of dat vers genoeg is. */
+export const laatsteEpochWaarneming = (): { waarde: number; at: number } | null => epochWaarneming;
+/** Voor tests. */
+export const resetEpochWaarneming = () => { epochWaarneming = null; };
+
+type Uitslag = { allowed: boolean; retryAfterSec: number };
+const redisSleutel = (key: string, bucket: number) => `rl:${key}:${bucket}`;
+
+/**
+ * Meerdere fixed-window tellers in één pipeline-aanroep (zelfde sleutel- en
+ * venstervorm als sharedCheck). null = store niet geconfigureerd, onbereikbaar
+ * of een onleesbaar antwoord, zodat de aanroeper net als vroeger terugvalt op
+ * de in-memory limiters. Geeft de uitslagen in de volgorde van `tellers`.
+ */
+export async function sharedCheckSamen(
+  tellers: Array<{ key: string; max: number }>,
+  windowMs: number,
+): Promise<Uitslag[] | null> {
+  if (!hasSharedStore()) return null;
+  const windowSec = String(Math.max(1, Math.round(windowMs / 1000)));
+  const bucket = Math.floor(Date.now() / windowMs);
+  const commands: string[][] = [];
+  for (const t of tellers) {
+    const k = redisSleutel(t.key, bucket);
+    // EXPIRE zonder NX, zie sharedCheck.
+    commands.push(["INCR", k], ["EXPIRE", k, windowSec]);
+  }
+  commands.push(["GET", USERS_EPOCH_KEY]);
+  const data = await sharedPipeline(commands, 1500);
+  if (!data) return null;
+  const uitslagen: Uitslag[] = [];
+  const resetAt = (bucket + 1) * windowMs;
+  for (let i = 0; i < tellers.length; i++) {
+    const count = Number(data[i * 2]?.result);
+    if (!Number.isFinite(count)) return null;
+    uitslagen.push({
+      allowed: count <= tellers[i]!.max,
+      retryAfterSec: Math.max(1, Math.ceil((resetAt - Date.now()) / 1000)),
+    });
+  }
+  // Epoch: een ontbrekende sleutel (nog nooit verhoogd) telt als 0, net als
+  // in userCache. Een foutregel van de store (geen `result`) slaan we over:
+  // dan doet de users-cache gewoon zijn eigen check.
+  const epochRegel = data[tellers.length * 2];
+  if (epochRegel && "result" in epochRegel) {
+    const v = Number(epochRegel.result ?? 0);
+    if (Number.isFinite(v)) epochWaarneming = { waarde: v, at: Date.now() };
+  }
+  return uitslagen;
+}
+
+/** Eén hit terugdraaien (best-effort). Alleen gebruikt om de IP-backstop niet
+ *  te laten meetellen voor een request dat al op zijn eigen limiet sneuvelde. */
+async function sharedTelTerug(key: string, windowMs: number): Promise<void> {
+  const windowSec = String(Math.max(1, Math.round(windowMs / 1000)));
+  const k = redisSleutel(key, Math.floor(Date.now() / windowMs));
+  // EXPIRE erbij: mocht het venster net omgeslagen zijn, dan maakt DECR een
+  // nieuwe sleutel (-1) aan, en die mag nooit zonder TTL blijven staan.
+  await sharedPipeline([["DECR", k], ["EXPIRE", k, windowSec]], 800).catch(() => null);
+}
+
 const WINDOW_MS = num(process.env.RATE_LIMIT_WINDOW_MS, 60_000);
 // Ruim boven normaal gebruik (boot ~11 calls, realtime-refetches, bulk-acties)
 // maar ver onder een tollende lus. Configureerbaar via env.
@@ -214,31 +287,58 @@ const clientIp = (req: express.Request): string => {
  */
 export const rateLimitMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const auth = req.headers.authorization;
+  const ip = clientIp(req);
+  const anoniem = !(typeof auth === "string" && auth.startsWith("Bearer "));
   let key: string;
+  let sharedKey: string;
   let limiter: RateLimiter;
-  if (typeof auth === "string" && auth.startsWith("Bearer ")) {
+  if (!anoniem) {
     // Hash het token i.p.v. het ruw als sleutel te bewaren — geen rauwe
     // bearer-tokens in het geheugen, en de sleutel blijft uniek per token.
-    const token = auth.slice("Bearer ".length);
+    const token = (auth as string).slice("Bearer ".length);
     key = `tok:${createHash("sha256").update(token).digest("base64url")}`;
+    sharedKey = key;
     limiter = authedLimiter;
   } else {
-    key = `ip:${clientIp(req)}`;
+    key = `ip:${ip}`;
+    // In de gedeelde store een EIGEN sleutel voor de anon-limiet. Vroeger was
+    // dat dezelfde Redis-sleutel als de IP-backstop hieronder (`ip:X`): een
+    // anoniem request werd daardoor twee keer geteld (anon-limiet effectief
+    // gehalveerd) en al het ingelogde verkeer achter hetzelfde NAT-IP at mee
+    // van het anon-budget. In-memory waren het altijd al twee aparte tellers;
+    // de store volgt dat nu.
+    sharedKey = `anon:${ip}`;
     limiter = sharedStoreDegraded() ? anonLimiterDegraded : anonLimiter;
   }
   const max = limiter === authedLimiter ? AUTHED_MAX : ANON_MAX;
-  // Gedeelde store eerst; null = niet geconfigureerd of storing → in-memory.
-  const { allowed, retryAfterSec } = (await sharedCheck(key, WINDOW_MS, max)) ?? limiter.check(key);
-  if (!allowed) {
-    res.setHeader("Retry-After", String(retryAfterSec));
-    return res.status(429).json({ error: "Te veel verzoeken in korte tijd. Probeer het zo dadelijk opnieuw." });
-  }
   // Het token wordt hier niet gevalideerd (dat doet `authenticate` later),
   // dus een verzonnen Bearer mag niet volstaan om aan elke IP-limiet te
   // ontsnappen: de ruime IP-backstop telt altijd mee.
-  const guardKey = `ip:${clientIp(req)}`;
-  const guard = (await sharedCheck(guardKey, WINDOW_MS, IP_GUARD_MAX)) ?? ipGuardLimiter.check(guardKey);
-  if (!guard.allowed) {
+  const guardKey = `ip:${ip}`;
+
+  // Gedeelde store eerst, beide tellers (+ de users-epoch) in één trip;
+  // null = niet geconfigureerd of storing → in-memory, exact zoals voorheen.
+  const samen = await sharedCheckSamen([{ key: sharedKey, max }, { key: guardKey, max: IP_GUARD_MAX }], WINDOW_MS);
+  let eigen: Uitslag;
+  let guard: Uitslag | null;
+  if (samen) {
+    eigen = samen[0]!;
+    guard = samen[1]!;
+    // Vroeger telde de backstop alleen mee voor requests die hun eigen limiet
+    // haalden. Dat moet zo blijven: anders duwt één tollende client (al lang
+    // geblokkeerd op zijn token) het hele depot achter hetzelfde NAT-IP over
+    // de IP-limiet. De pipeline telt vooraf, dus hier terugdraaien. Alleen op
+    // het 429-pad, waar een extra trip niemand hindert.
+    if (!eigen.allowed) await sharedTelTerug(guardKey, WINDOW_MS);
+  } else {
+    eigen = limiter.check(key);
+    guard = eigen.allowed ? ipGuardLimiter.check(guardKey) : null;
+  }
+  if (!eigen.allowed) {
+    res.setHeader("Retry-After", String(eigen.retryAfterSec));
+    return res.status(429).json({ error: "Te veel verzoeken in korte tijd. Probeer het zo dadelijk opnieuw." });
+  }
+  if (guard && !guard.allowed) {
     res.setHeader("Retry-After", String(guard.retryAfterSec));
     return res.status(429).json({ error: "Te veel verzoeken in korte tijd. Probeer het zo dadelijk opnieuw." });
   }

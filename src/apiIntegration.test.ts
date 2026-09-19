@@ -62,6 +62,10 @@ const mem = vi.hoisted(() => ({
   // (null = volledige matrix). Bewijst dat maand-gebonden routes niet
   // stilletjes de hele historiek ophalen.
   matrixMaandFilters: [] as Array<string | null>,
+  // Filters waarmee getLeaveData/getSwapsData aangeroepen werden: bewijst dat
+  // niet-staf in de query filtert i.p.v. de hele tabel te lezen.
+  leaveFilters: [] as any[],
+  swapFilters: [] as any[],
   clientErrors: [] as any[],
   // app_settings (key → jsonb): toestel-gate en onderhoudsmodus.
   appSettings: {} as Record<string, unknown>,
@@ -325,11 +329,20 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.users = data;
       return { createdAccounts };
     },
-    getLeaveData: async () => mem.leave,
+    // Zelfde contract als de echte: optioneel gefilterd op één gebruiker
+    // (GET /api/leave voor niet-staf filtert in de query).
+    getLeaveData: async (filters?: { userId?: string }) => {
+      mem.leaveFilters.push(filters ?? null);
+      return filters?.userId ? mem.leave.filter((l: any) => String(l.userId) === String(filters.userId)) : mem.leave;
+    },
     saveLeaveData: async (data: any[], idsToDelete: string[] = []) => {
       mem.leave = replaceById(mem.leave, data, idsToDelete);
     },
-    getSwapsData: async () => mem.swaps,
+    getSwapsData: async (filters?: { betrokkenUserId?: string }) => {
+      mem.swapFilters.push(filters ?? null);
+      const id = filters?.betrokkenUserId;
+      return id ? mem.swaps.filter((s: any) => String(s.requesterId) === String(id) || String(s.targetDriverId ?? '') === String(id)) : mem.swaps;
+    },
     saveSwapsData: async (data: any[], idsToDelete: string[] = []) => {
       mem.swaps = replaceById(mem.swaps, data, idsToDelete);
     },
@@ -419,14 +432,16 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     noteerAanwezigheid: async () => {},
     updateUserSessionMeta: async (id: string, f: any) => { mem.sessionMetaWrites.push({ id, ...f }); },
     bumpActiveSessions: async () => {},
-    getPlanningMatrixRows: async (opts?: { month?: string }) => {
+    getPlanningMatrixRows: async (opts?: { month?: string; van?: string; tot?: string }) => {
       const maand = String(opts?.month ?? '');
-      mem.matrixMaandFilters.push(maand || null);
+      const isoDag = (v?: string) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+      const venster = isoDag(opts?.van) && isoDag(opts?.tot) ? `${opts!.van}..${opts!.tot}` : null;
+      mem.matrixMaandFilters.push(maand || venster || null);
       // Spiegelt de .gte/.lte op source_date in api/storage.ts, zodat een
       // route die de maand vergeet hier evenveel rijen ziet als in productie.
-      return /^\d{4}-(0[1-9]|1[0-2])$/.test(maand)
-        ? mem.planningMatrix.filter((r: any) => String(r.source_date ?? '').startsWith(`${maand}-`))
-        : mem.planningMatrix;
+      if (/^\d{4}-(0[1-9]|1[0-2])$/.test(maand)) return mem.planningMatrix.filter((r: any) => String(r.source_date ?? '').startsWith(`${maand}-`));
+      if (venster) return mem.planningMatrix.filter((r: any) => String(r.source_date ?? '') >= opts!.van! && String(r.source_date ?? '') <= opts!.tot!);
+      return mem.planningMatrix;
     },
     getPlanningMatrixGrenzen: async () => {
       const dagen = mem.planningMatrix.map((r: any) => String(r.source_date ?? '')).filter(Boolean).sort();
@@ -490,8 +505,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       if (deviceToken === 'dev-dberror') throw { code: '08006', message: 'connection failure' };
       return mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken) ?? null;
     },
-    userHasDevices: async (userId: string) =>
-      mem.devices.some((d: any) => String(d.userId) === String(userId)),
+    listDevicesForUser: async (userId: string) =>
+      mem.devices.filter((d: any) => String(d.userId) === String(userId)),
     registerDevice: async (userId: string, deviceToken: string, name: string, autoApprove: boolean) => {
       const existing = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
       if (existing) {
@@ -670,6 +685,8 @@ beforeEach(() => {
   mem.presence = [];
   mem.presenceTabel = true;
   mem.matrixMaandFilters = [];
+  mem.leaveFilters = [];
+  mem.swapFilters = [];
   mem.clientErrors = [];
   mem.clientErrorStatus = [];
   mem.clientErrorStatusTabel = true;
@@ -761,6 +778,24 @@ describe('PII-scoping voor chauffeurs', () => {
   it('GET /api/leave geeft planner alles', async () => {
     const res = await api('GET', '/api/leave', { token: 'tok-planner' });
     expect(res.json).toHaveLength(3);
+  });
+
+  it('GET /api/leave en /api/swaps filteren voor niet-staf in de query, staf leest ongefilterd', async () => {
+    await api('GET', '/api/leave', { token: 'tok-a' });
+    await api('GET', '/api/swaps', { token: 'tok-a' });
+    expect(mem.leaveFilters).toEqual([{ userId: '3' }]);
+    expect(mem.swapFilters).toEqual([{ betrokkenUserId: '3' }]);
+    mem.leaveFilters = []; mem.swapFilters = [];
+    await api('GET', '/api/leave', { token: 'tok-planner' });
+    await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(mem.leaveFilters).toEqual([null]);
+    expect(mem.swapFilters).toEqual([null]);
+  });
+
+  it('GET /api/swaps: ook als aangezochte collega (niet alleen als aanvrager)', async () => {
+    const res = await api('GET', '/api/swaps', { token: 'tok-b' });
+    // s-1: B is de collega; s-2: B is de aanvrager.
+    expect(res.json.map((s: any) => s.id).sort()).toEqual(['s-1', 's-2']);
   });
 
   // GET /api/leave hierboven geeft een chauffeur bewust enkel eigen verlof;
@@ -2589,6 +2624,51 @@ describe('toestel-whitelist', () => {
     mem.devices.push({ userId: '3', deviceToken: 'dev-x', name: 'x', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
     expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', device: 'dev-admin', body: { userId: '3', deviceToken: 'dev-x' } })).status).toBe(200);
   });
+
+  // Toestel-cache in de gate (ronde 3): elke schrijfactie via de API moet
+  // meteen gelden, ook al is het toestel net nog als 'approved' gecacht.
+  it('blokkeren werkt meteen door, ook wanneer de gate het toestel net gecacht heeft', async () => {
+    expect((await api('GET', '/api/updates', { token: 'tok-a' })).status).toBe(200); // vult de cache met approved
+    expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-ok' } })).status).toBe(200);
+    const na = await api('GET', '/api/updates', { token: 'tok-a' });
+    expect(na.status).toBe(403);
+    expect(na.json?.code).toBe('device_revoked');
+    // Ook het PII-luik op het exempt-pad volgt meteen.
+    const sessie = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    expect(sessie.json?.email).toBeUndefined();
+  });
+
+  it('goedkeuren en registreren werken meteen door na een gecachte weigering', async () => {
+    // Onbekend toestel: "geen rij" wordt gecacht.
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-cache' })).json?.code).toBe('device_unknown');
+    expect((await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-cache', body: { name: 'iPad' } })).json?.status).toBe('pending');
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-cache' })).json?.code).toBe('device_pending');
+    expect((await api('POST', '/api/devices/approve', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-cache' } })).status).toBe(200);
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-cache' })).status).toBe(200);
+  });
+
+  it('uit dienst zetten trekt gecachte toestellen meteen in', async () => {
+    expect((await api('GET', '/api/updates', { token: 'tok-a' })).status).toBe(200);
+    const { trekToegangIn } = await import('../api/_lib/recordWrites');
+    await trekToegangIn('3');
+    expect((await api('GET', '/api/updates', { token: 'tok-a' })).json?.code).toBe('device_revoked');
+  });
+
+  it('elk /api-antwoord draagt Server-Timing, ook een 401 en de health-ping', async () => {
+    for (const res of [
+      await api('GET', '/api/me', { token: 'tok-a' }),
+      await api('GET', '/api/me', {}),
+      await api('GET', '/api/health', {}),
+    ]) {
+      expect(res.headers.get('server-timing')).toMatch(/^app;dur=\d+$/);
+    }
+  });
+
+  it('/api/me hergebruikt het toestel van de gate', async () => {
+    const me = await api('GET', '/api/me', { token: 'tok-a' });
+    expect(me.status).toBe(200);
+    expect(me.json?.toestel?.status).toBe('approved');
+  });
 });
 
 describe('activiteitenlog: venster-parameter (#249)', () => {
@@ -2865,6 +2945,25 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     expect(dag16.missing).toEqual(['11']);
     // 11 was nooit toegewezen → géén uitval-info (kale chip in de UI).
     expect(dag16.uitval).toBeUndefined();
+    // De matrix is alleen voor het gevraagde venster gelezen, niet volledig.
+    expect(mem.matrixMaandFilters).toEqual(['2030-07-15..2030-07-16']);
+  });
+
+  it('coverage-gaps: het venster in de query geeft hetzelfde als de volledige matrix (rijen buiten het venster tellen niet mee)', async () => {
+    const buiten = [
+      { id: 'm-voor', source_date: '2030-07-14', day_type: 'week', assignments: { 'Chauffeur B': '11' }, raw_row: '' },
+      { id: 'm-na', source_date: '2030-07-17', day_type: 'week', assignments: { 'Chauffeur B': '11' }, raw_row: '' },
+    ];
+    mem.planningMatrix = [
+      { id: 'm-t1', source_date: '2030-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' },
+      { id: 'm-t2', source_date: '2030-07-16', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11'] };
+    const zonder = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-16', { token: 'tok-planner' });
+    mem.planningMatrix = [...mem.planningMatrix, ...buiten];
+    const met = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-16', { token: 'tok-planner' });
+    expect(met.json).toEqual(zonder.json);
+    expect(met.json.days.map((d: any) => d.date)).toEqual(['2030-07-15', '2030-07-16']);
   });
 
   it('weekdag-periode: vanaf de ingangsdatum geldt een ander regime (dienstregelingswissel)', async () => {

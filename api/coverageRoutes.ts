@@ -67,7 +67,10 @@ export async function berekenVerwachtingsCheck(rows: Array<{ source_date?: unkno
 export async function berekenDekkingsGaten(from: string, to: string): Promise<DayGap[]> {
     const [stored, rows, usersForLeave, leaveAll, swapsAll] = await Promise.all([
       getCoverageExpectations(),
-      getPlanningMatrixRows(),
+      // Alleen de matrixrijen van [from, to]: de berekening hieronder gebruikt
+      // van de matrix uitsluitend `inRange` (zelfde grenzen, inclusief), dus
+      // het resultaat is identiek; de hele, groeiende matrix hoeft niet mee.
+      getPlanningMatrixRows({ van: from, tot: to }),
       getUsersData(),
       // Alleen afwezigheid die het gevraagde bereik nog raakt.
       getLeaveData({ endOnOrAfter: from }),

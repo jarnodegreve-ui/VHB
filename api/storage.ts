@@ -14,6 +14,8 @@ import type {
   ShiftRecord,
   SwapRecord,
   AppUserIntern,
+  DeviceStatus,
+  UserDevice,
 } from "./types.js";
 import {
   countAdmins,
@@ -65,25 +67,80 @@ export const isMissingDbFunction = (error: any): boolean =>
 // data kwijt zodra de tabel de cap overschrijdt. Dat was de oorzaak van
 // het "eind mei verdwijnt"-incident.
 const PAGE_SIZE = 1000;
+// Hoeveel vervolgpagina's tegelijk: ruim voor wat we hebben (planning = 3
+// pagina's), maar begrensd zodat een grote tabel de pool niet leegtrekt.
+const PAGINA_PARALLEL = 6;
+
+/** Derde argument van de query-bouwer: geef het door aan `.select(kolommen,
+ *  telling)`. Alleen de eerste pagina krijgt het mee (count: 'exact'). */
+export type PaginaTelling = { count: "exact" };
+type PaginaAntwoord<T> = { data: T[] | null; error: any; count?: number | null };
+
 // Geëxporteerd zodat ook de losse opslagmodules (api/_lib/loonStorage.ts)
 // dezelfde paginering gebruiken in plaats van een eigen limit.
+//
+// PARALLEL (ronde 3, 19-09): de pagina's kwamen strikt na elkaar, dus een
+// tabel van 3 pagina's kostte 3 roundtrips achter elkaar. Een bouwer die het
+// derde argument doorgeeft aan `.select('*', telling)` krijgt op de eerste
+// pagina het exacte totaal terug; de overige pagina's gaan dan gelijktijdig
+// weg en worden in dezelfde volgorde aaneengezet. Klopt het totaal achteraf
+// niet met de telling (de tabel wijzigde tussendoor), dan begint de oude
+// seriële lus opnieuw: die is traag maar stopt pas op een niet-volle pagina.
+// Bouwers zonder telling (of met `max`) blijven serieel, exact zoals vroeger.
+// Voorwaarde voor beide paden: een stabiele, unieke sortering in de bouwer.
 export const paginatedFetch = async <T = any>(
-  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+  buildQuery: (from: number, to: number, telling?: PaginaTelling) => PromiseLike<PaginaAntwoord<T>>,
   max?: number,
 ): Promise<T[]> => {
-  const all: T[] = [];
-  let from = 0;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    const batch = (data ?? []) as T[];
-    all.push(...batch);
-    if (max !== undefined && all.length >= max) return all.slice(0, max);
-    if (batch.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
+  const serieel = async (all: T[], vanaf: number): Promise<T[]> => {
+    let from = vanaf;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      const batch = (data ?? []) as T[];
+      all.push(...batch);
+      if (max !== undefined && all.length >= max) return all.slice(0, max);
+      if (batch.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+    return all;
+  };
+
+  const eerste = await buildQuery(0, PAGE_SIZE - 1, { count: "exact" });
+  if (eerste.error) throw eerste.error;
+  const eersteBatch = (eerste.data ?? []) as T[];
+  if (max !== undefined && eersteBatch.length >= max) return eersteBatch.slice(0, max);
+  if (eersteBatch.length < PAGE_SIZE) return eersteBatch;
+
+  const totaal = typeof eerste.count === "number" && Number.isFinite(eerste.count) ? eerste.count : null;
+  if (totaal === null || max !== undefined || totaal <= PAGE_SIZE) {
+    return serieel([...eersteBatch], PAGE_SIZE);
   }
+
+  const paginas = Math.ceil(totaal / PAGE_SIZE);
+  const rest: T[][] = [];
+  for (let start = 1; start < paginas; start += PAGINA_PARALLEL) {
+    const nummers = Array.from({ length: Math.min(PAGINA_PARALLEL, paginas - start) }, (_, i) => start + i);
+    const antwoorden = await Promise.all(nummers.map((n) => buildQuery(n * PAGE_SIZE, n * PAGE_SIZE + PAGE_SIZE - 1)));
+    for (const a of antwoorden) {
+      if (a.error) throw a.error;
+      rest.push((a.data ?? []) as T[]);
+    }
+  }
+  const all = [...eersteBatch];
+  for (const batch of rest) all.push(...batch);
+  // Elke pagina behalve de laatste hoort vol te zijn en het totaal hoort te
+  // kloppen; anders is de tabel tussendoor gewijzigd → opnieuw, serieel.
+  const middenVol = rest.slice(0, -1).every((b) => b.length === PAGE_SIZE);
+  if (all.length !== totaal || !middenVol) return serieel([], 0);
   return all;
+};
+
+const isEchteIsoDag = (v: unknown): boolean => {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 };
 
 // --- Planning ---
@@ -95,8 +152,9 @@ export type PlanningFilters = { driverId?: string; monthIso?: string };
 
 export const getPlanningData = async (filters?: PlanningFilters) => {
   const client = requireDb();
-  return paginatedFetch((from, to) => {
-    let q = client.from('planning').select('*').order('id', { ascending: true });
+  // Telling doorgeven: planning is meerdere pagina's, die gaan dan parallel.
+  return paginatedFetch((from, to, telling) => {
+    let q = client.from('planning').select('*', telling).order('id', { ascending: true });
     if (filters?.driverId) {
       q = q.eq('driverId', filters.driverId);
     }
@@ -123,8 +181,8 @@ export const savePlanningData = async (data: any) => {
   const incomingIds = new Set(data.map((s: any) => String(s.id)));
   // Gepagineerd ophalen: een ongepagineerde select('id') cap't op 1000 rijen,
   // waardoor planning >1000 shifts stale rijen liet staan na import/herstel.
-  const existing = await paginatedFetch((from, to) =>
-    client.from('planning').select('id').order('id', { ascending: true }).range(from, to),
+  const existing = await paginatedFetch((from, to, telling) =>
+    client.from('planning').select('id', telling).order('id', { ascending: true }).range(from, to),
   );
   const { error } = await client.from('planning').upsert(data);
   if (error) throw error;
@@ -244,11 +302,16 @@ export const replacePlanningData = async (data: ShiftRecord[]) => {
  * aanroepen (het tweewekenvenster valt bijna altijd over een maandgrens).
  * Gebruikt de bestaande index `planning_matrix_rows_source_date_idx`.
  */
-export const getPlanningMatrixRows = async (opts?: { month?: string }): Promise<PlanningMatrixRow[]> => {
+export const getPlanningMatrixRows = async (opts?: { month?: string; van?: string; tot?: string }): Promise<PlanningMatrixRow[]> => {
   const client = requireDb();
   // Alleen een welgevormde maand filtert; alles anders leest de hele matrix,
   // zodat een tikfout nooit stil een halflege planning oplevert.
-  const grens = maandGrenzen(String(opts?.month ?? ''));
+  // `van`/`tot` (ronde 3): zelfde idee voor een dagvenster, bv. de dekking
+  // over [from, to]. Beide moeten een échte ISO-dag zijn (source_date is een
+  // date-kolom: een ongeldige waarde zou daar een fout geven waar de
+  // JS-filter vroeger gewoon niets vond); anders geen grens.
+  const grens = maandGrenzen(String(opts?.month ?? ''))
+    ?? (isEchteIsoDag(opts?.van) && isEchteIsoDag(opts?.tot) ? { van: String(opts!.van), tot: String(opts!.tot) } : null);
   return paginatedFetch<PlanningMatrixRow>((from, to) => {
     let q = client
       .from('planning_matrix_rows')
@@ -2303,18 +2366,8 @@ export const getUpdateReadCounts = async (
 // elk volgend toestel = pending tot de admin goedkeurt. Planner/admin-
 // toestellen zijn altijd approved (alleen zichtbaarheid, nooit uitsluiting).
 
-export type DeviceStatus = 'approved' | 'pending' | 'revoked';
-
-export type UserDevice = {
-  userId: string;
-  deviceToken: string;
-  name: string;
-  status: DeviceStatus;
-  createdAt: string;
-  lastSeenAt: string;
-  approvedAt: string | null;
-  approvedBy: string | null;
-};
+// De types zelf staan in api/types.ts (AuthenticatedRequest.device verwijst ernaar).
+export type { DeviceStatus, UserDevice };
 
 const toPublicDevice = (row: any): UserDevice => ({
   userId: String(row.user_id),
@@ -2350,9 +2403,13 @@ export const registerDevice = async (
   deviceToken: string,
   name: string,
   autoApprove: boolean,
+  // Optioneel: de aanroeper heeft de toestellen van deze gebruiker net al
+  // opgehaald (listDevicesForUser) en geeft de gevonden rij (of null) mee;
+  // dat spaart hier een lezing. undefined = zelf opzoeken, zoals vroeger.
+  bekend?: UserDevice | null,
 ): Promise<{ device: UserDevice; created: boolean }> => {
   const client = requireDb();
-  const existing = await getDevice(userId, deviceToken);
+  const existing = bekend !== undefined ? bekend : await getDevice(userId, deviceToken);
   if (existing) {
     const { error } = await client
       .from('user_devices')
@@ -2372,7 +2429,8 @@ export const registerDevice = async (
   };
   // Race (dubbele boot-call): bij een PK-conflict is de rij er al — negeren
   // en de bestaande status teruggeven i.p.v. een 500.
-  const { error } = await client.from('user_devices').insert(row);
+  // insert + de rij meteen terug (één trip i.p.v. insert en dan opnieuw lezen).
+  const { data: inserted, error } = await client.from('user_devices').insert(row).select('*').maybeSingle();
   if (error) {
     if ((error as any).code === '23505') {
       const raced = await getDevice(userId, deviceToken);
@@ -2380,20 +2438,19 @@ export const registerDevice = async (
     }
     throw error;
   }
-  const device = await getDevice(userId, deviceToken);
+  const device = inserted ? toPublicDevice(inserted) : await getDevice(userId, deviceToken);
   if (!device) throw new Error('Toestel-registratie niet teruggevonden.');
   return { device, created: true };
 };
 
-/** Heeft deze gebruiker al één of meer toestellen? (bepaalt auto-approve) */
-export const userHasDevices = async (userId: string): Promise<boolean> => {
+/** De toestellen van één gebruiker (hooguit MAX_DEVICES_PER_USER rijen): de
+ *  registratie hoeft daarvoor niet de hele tabel te lezen. */
+export const listDevicesForUser = async (userId: string): Promise<UserDevice[]> => {
   const client = requireDb();
-  const { count, error } = await client
-    .from('user_devices')
-    .select('device_token', { count: 'exact', head: true })
-    .eq('user_id', String(userId));
-  if (error) throw error;
-  return (count ?? 0) > 0;
+  const rows = await paginatedFetch((from, to) =>
+    client.from('user_devices').select('*').eq('user_id', String(userId)).order('created_at', { ascending: false }).order('device_token', { ascending: true }).range(from, to),
+  );
+  return rows.map(toPublicDevice);
 };
 
 export const listAllDevices = async (): Promise<UserDevice[]> => {
@@ -2462,11 +2519,26 @@ export const revokeAllDevices = async (userId: string): Promise<number> => {
 
 // --- Swaps ---
 
-export const getSwapsData = async () => {
+/** Waarde veilig in een PostgREST `or=(...)`-filter: tussen dubbele
+ *  aanhalingstekens, met \\ en " ge-escaped (komma's, punten en haakjes in een
+ *  id breken de filtersyntaxis anders). */
+const orWaarde = (v: string) => `"${String(v).replace(/[\\"]/g, "\\$&")}"`;
+
+/**
+ * `betrokkenUserId`: alleen de wissels waar die gebruiker aanvrager ÓF
+ * aangezochte collega is, gefilterd in de query i.p.v. de hele (groeiende)
+ * tabel op te halen en in JS te filteren. Kolommen zijn hier lowercase
+ * (requesterid/targetdriverid, zie supabase/setup_security.sql); dezelfde
+ * voorwaarde als de RLS-policy swaps_read_involved_or_staff.
+ */
+export const getSwapsData = async (filters?: { betrokkenUserId?: string }) => {
   const client = requireDb();
-  const rows = await paginatedFetch((from, to) =>
-    client.from('swaps').select('*').order('id', { ascending: true }).range(from, to),
-  );
+  const betrokken = filters?.betrokkenUserId ? String(filters.betrokkenUserId) : null;
+  const rows = await paginatedFetch((from, to) => {
+    let q = client.from('swaps').select('*');
+    if (betrokken) q = q.or(`requesterid.eq.${orWaarde(betrokken)},targetdriverid.eq.${orWaarde(betrokken)}`);
+    return q.order('id', { ascending: true }).range(from, to);
+  });
   return rows.map(toPublicSwap);
 };
 
@@ -2686,7 +2758,7 @@ export const swapToestandInPlanning = async (swap: SwapCarryFields): Promise<'do
 
 // --- Leave ---
 
-export const getLeaveData = async (filters?: { endOnOrAfter?: string }) => {
+export const getLeaveData = async (filters?: { endOnOrAfter?: string; userId?: string }) => {
   const client = requireDb();
   // Optioneel afkappen op einddatum: lezers die alleen actuele/toekomstige
   // afwezigheid nodig hebben (maandplanning-overlay, dekking, availability)
@@ -2694,9 +2766,13 @@ export const getLeaveData = async (filters?: { endOnOrAfter?: string }) => {
   const endOnOrAfter = filters?.endOnOrAfter && /^\d{4}-\d{2}-\d{2}$/.test(filters.endOnOrAfter)
     ? filters.endOnOrAfter
     : null;
+  const userId = filters?.userId ? String(filters.userId) : null;
   const rows = await paginatedFetch((from, to) => {
     let q = client.from('leave').select('*');
     if (endOnOrAfter) q = q.gte('enddate', endOnOrAfter);
+    // Alleen het verlof van één gebruiker (GET /api/leave voor niet-staf):
+    // filter in de query i.p.v. de hele historiek ophalen. Kolom = lowercase.
+    if (userId) q = q.eq('userid', userId);
     return q.order('id', { ascending: true }).range(from, to);
   });
   return rows.map(toPublicLeave);

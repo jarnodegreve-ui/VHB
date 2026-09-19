@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import crypto from "node:crypto";
-import dotenv from "dotenv";
+import { createRequire } from "node:module";
 
 import { buildCalendar, type IcsEvent } from "../shared/ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
@@ -17,7 +17,9 @@ import { symbolicateTopFrame } from "./symbolicate.js";
 import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
+import { getDeviceCached } from "./_lib/deviceCache.js";
 import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
+import { serverTiming } from "./_lib/serverTiming.js";
 import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
 import { getVehicleExpiries, getVehicles } from "./_lib/techniekStorage.js";
 import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../shared/schemas/techniek.js";
@@ -52,7 +54,9 @@ import {
   trekToegangIn,
   type ToegangIngetrokken,
 } from "./_lib/recordWrites.js";
-import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+// Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
+import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./_lib/matrixXlsx.js";
 import {
   applySwapsToPlanningRows,
   swapRaaktBereik,
@@ -127,7 +131,6 @@ import {
   isMissingDbFunction,
   logCronHeartbeat,
   getCronHeartbeats,
-  getDevice,
   getPlanningNotes,
   getMeldingen,
   telOngelezenMeldingen,
@@ -146,7 +149,22 @@ import {
   getAppSetting, setAppSetting,
 } from "./storage.js";
 
-dotenv.config();
+// dotenv alleen buiten Vercel (ronde 3): daar komen de env-vars van het
+// platform en was dit bij elke koude start een overbodige module + een
+// vergeefse zoektocht naar een .env-bestand. Lokaal (`tsx api/index.ts`)
+// blijft het gedrag identiek: synchroon, op dezelfde plek in de opstart.
+// Via createRequire i.p.v. een statische import, zodat de module op Vercel
+// niet eens ingelezen wordt (en zonder top-level await). Opgelost vanaf de
+// werkmap (lokaal altijd de repo-root) en bewust zonder `import.meta`: dit
+// bestand is dé functie, en niets hier mag afhangen van hoe de Vercel-bouw
+// de module-vorm kiest.
+if (!process.env.VERCEL) {
+  try {
+    (createRequire(`${process.cwd()}/package.json`)("dotenv") as typeof import("dotenv")).config();
+  } catch (err) {
+    console.warn("[config] dotenv niet geladen, alleen de bestaande omgevingsvariabelen gelden:", (err as Error)?.message ?? err);
+  }
+}
 
 // Env-dump alleen buiten productie: op serverless herhaalt dit zich bij elke
 // koude start en verdunt het de echte fouten in de logs.
@@ -174,6 +192,11 @@ const viewUrl = (view: string) => `/?view=${view}`;
 const app = express();
 const PORT = 3000;
 
+// Meetbaarheid: Server-Timing op elk /api-antwoord + één logregel voor trage
+// requests. Als allereerste middleware, zodat ook CORS, body-parsing, de
+// rate-limiter en authenticate in de gemeten tijd zitten. Zie _lib/serverTiming.ts.
+app.use("/api", serverTiming());
+
 // CORS beperkt tot de eigen origins (prod, Vercel-previews van dit project,
 // lokale dev) i.p.v. wildcard. De app draait same-origin, dus browsers hebben
 // dit zelden nodig — maar wildcard liet elke website met een gestolen token
@@ -200,6 +223,16 @@ app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision"
 // niets meer zodra de globale al geparset heeft, dus die slaat dat pad over.
 const jsonBody = express.json({ limit: '5mb' });
 app.use((req, res, next) => (req.path === "/api/client-errors" ? next() : jsonBody(req, res, next)));
+
+// Health check — publiek maar kaal: geen tabelstatussen/foutmeldingen/env
+// naar buiten (info-disclosure). Gedetailleerde checks alleen voor admins.
+// Bewust VÓÓR de rate-limiter: het antwoord is statisch (geen DB, geen
+// store), en de online-ping van de client (HEAD, 4 s timeout) mag niet op
+// een trage of haperende Upstash wachten, anders toont de app "offline"
+// terwijl alleen de limiter-store traag is.
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString() });
+});
 
 // Rem op tollende/vastgelopen clients — per ingelogde gebruiker (token),
 // niet per IP, zodat het hele bedrijfsnetwerk achter één NAT niet samen één
@@ -253,11 +286,6 @@ mountLoonRoutes(app);
 // Dienstopbouw op rit-niveau (fase C Access-migratie, 13-09). Zie api/_lib/dienstRoutes.ts.
 mountDienstRoutes(app);
 
-// Health check — publiek maar kaal: geen tabelstatussen/foutmeldingen/env
-// naar buiten (info-disclosure). Gedetailleerde checks alleen voor admins.
-app.get("/api/health", async (_req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
-});
 
 app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, res) => {
   let supabaseStatus = "not configured";
@@ -399,8 +427,13 @@ app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
   const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
   let toestel: { status: "approved" | "pending" | "revoked" | "onbekend"; gateActief: boolean } = { status: "onbekend", gateActief: false };
   try {
+    // Het toestel dat de gate al opzocht (req.device) hergebruiken; alleen
+    // wanneer de gate niet keek (staf zonder token, ontbrekende tabel) zelf
+    // opzoeken, via dezelfde korte cache.
     const [device, gateActief] = await Promise.all([
-      deviceToken ? getDevice(String(user.id), deviceToken) : Promise.resolve(null),
+      req.device !== undefined
+        ? Promise.resolve(req.device)
+        : deviceToken ? getDeviceCached(String(user.id), deviceToken) : Promise.resolve(null),
       isDeviceGateEnabled(),
     ]);
     toestel = { status: device?.status ?? "onbekend", gateActief };
@@ -478,7 +511,12 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
       const rawToken = String(req.headers["x-device-token"] ?? "").trim();
       const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
       try {
-        const device = deviceToken ? await getDevice(String(currentUser.id), deviceToken) : null;
+        // Exempt-pad: de gate zocht hier niets op, dus req.device is er
+        // normaal niet. De lookup gaat wel via dezelfde korte cache als de
+        // gate (zelfde venster, gewist bij elke toestelwijziging).
+        const device = req.device !== undefined
+          ? req.device
+          : deviceToken ? await getDeviceCached(String(currentUser.id), deviceToken) : null;
         deviceApproved = device?.status === "approved";
       } catch (err) {
         deviceApproved = isMissingTableError(err);
@@ -518,23 +556,31 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
 
     // Teller atomair bijwerken (RPC) i.p.v. read-modify-write op de gecachte
     // waarde — anders telt het mis bij ~gelijktijdig in/uitloggen.
-    await bumpActiveSessions(String(currentUser.id), action === "start" ? 1 : -1);
     // ISO opslaan (was een nl-BE-string in UTC-servertijd → stond 1-2u fout
     // en sorteerde niet); de client formatteert naar Belgische tijd.
     const lastLogin = action === "start" ? new Date().toISOString() : currentUser.lastLogin;
     if (action === "start") {
-      await updateUserSessionMeta(String(currentUser.id), { lastLogin });
+      // Drie onafhankelijke DB-trips tegelijk i.p.v. na elkaar (ronde 3): de
+      // teller (RPC op activesessions), lastLogin (eigen kolom) en de lezing
+      // van het laatste auth-event raken elkaar niet. De logregel hieronder
+      // volgt pas daarna, want die hangt van de lezing af.
+      const [, , latestAuthEventAt] = await Promise.all([
+        bumpActiveSessions(String(currentUser.id), 1),
+        updateUserSessionMeta(String(currentUser.id), { lastLogin }),
+        getLatestAuthEventAt(String(currentUser.id)),
+      ]);
       // Login-event vastleggen: lastLogin wordt overschreven, maar de
       // activiteitenlog bewaart elke aanmelding apart → historiek "wie wanneer"
       // + basis voor het per-dag-actieve-gebruikers-overzicht. Dedup binnen
       // 10 minuten: 'start' is anders onbeperkt herhaalbaar en daarmee was
       // het aanwezigheidslog te vervuilen (controle-ronde #31); een échte
       // her-login binnen 10 min verliest hooguit één historiekregel.
-      const latestAuthEventAt = await getLatestAuthEventAt(String(currentUser.id));
       const tenMinAgo = Date.now() - 10 * 60 * 1000;
       if (!latestAuthEventAt || new Date(latestAuthEventAt).getTime() < tenMinAgo) {
         await logActivity(req, "auth", "Aangemeld", `${currentUser.name} meldde zich aan.`, { type: "user", id: String(currentUser.id) });
       }
+    } else {
+      await bumpActiveSessions(String(currentUser.id), -1);
     }
     // Optimistische teller in de respons (exact-genoeg voor weergave; de
     // DB-waarde is gezaghebbend en nu wél race-vrij).
@@ -970,7 +1016,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       // uren, ziekte, verlof, vrij) op dezelfde cel-waarheid — opstap naar de
       // loonadministratie zonder aparte export.
       const overzicht = bouwMaandoverzichtAoa(month, dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[]);
-      const buffer = bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
+      const buffer = await bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="planning-${month}.xlsx"`);
       return res.send(buffer);
@@ -1214,7 +1260,7 @@ app.get(
 });
 
 // Helper: decode de geüploade Excel-buffer en parse de praktijk-tab.
-const parseMatrixInput = (body: any) => {
+const parseMatrixInput = async (body: any) => {
   const xlsxBase64 = typeof body?.xlsxBase64 === "string" ? body.xlsxBase64 : "";
   if (!xlsxBase64) {
     throw new Error("Geen Excel-bestand meegegeven (verwacht xlsxBase64 in body).");
@@ -1238,8 +1284,8 @@ const parseMatrixInput = (body: any) => {
 // deel mag het portaal in: rijen buiten [van, tot] worden genegeerd alsof ze
 // niet in het bestand stonden. Het te vervangen bereik volgt daardoor vanzelf
 // de overgebleven rijen (de RPC leidt het af uit min/max source_date).
-const parseMatrixInputMetPeriode = (body: any) => {
-  const { rows, waarschuwingen } = parseMatrixInput(body);
+const parseMatrixInputMetPeriode = async (body: any) => {
+  const { rows, waarschuwingen } = await parseMatrixInput(body);
   const bestandDates = rows.map((row) => row.source_date).filter(Boolean);
   const fileStartDate = bestandDates[0] || null;
   const fileEndDate = bestandDates[bestandDates.length - 1] || null;
@@ -1269,7 +1315,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
   try {
     let rows, fileStartDate, fileEndDate, parserWaarschuwingen;
     try {
-      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = parseMatrixInputMetPeriode(req.body));
+      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = await parseMatrixInputMetPeriode(req.body));
     } catch (parseErr: any) {
       return res.status(400).json({ error: parseErr.message });
     }
@@ -1473,7 +1519,7 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
   try {
     let rows, fileStartDate, fileEndDate, parserWaarschuwingen;
     try {
-      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = parseMatrixInputMetPeriode(req.body));
+      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = await parseMatrixInputMetPeriode(req.body));
     } catch (parseErr: any) {
       return res.status(400).json({ error: parseErr.message });
     }
@@ -3533,11 +3579,15 @@ app.get("/api/updates/read-counts", authenticate, requireRole("planner", "admin"
 
 app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const data = await getSwapsData();
     // Privacy: een chauffeur ziet enkel ruilen waar hij zélf bij betrokken is
     // (aanvrager of aangezochte collega) — niet de ruilhistoriek van iedereen.
     // Planner/admin zien alles (nodig voor validatie + beheer).
-    if (!isStafRol(req.appUser!.role)) {
+    // Niet-staf: het filter zit al in de query (scheelt de hele tabel lezen);
+    // het JS-filter hieronder blijft als vangnet staan, zodat de privacygrens
+    // nooit van de filtersyntaxis van de query afhangt.
+    const staf = isStafRol(req.appUser!.role);
+    const data = await getSwapsData(staf ? undefined : { betrokkenUserId: String(req.appUser!.id) });
+    if (!staf) {
       const selfId = String(req.appUser.id);
       const scoped = data.filter(
         (s) => String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId,
@@ -5064,10 +5114,12 @@ app.put("/api/verlof/feestdagen", authenticate, requireRole("admin"), async (req
 
 app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const data = await getLeaveData();
     // Privacy: een chauffeur ziet enkel zijn eigen verlof (incl. de vrije-tekst
     // reden). Planner/admin zien alles (voor verlof-beheer en bezetting).
-    if (!isStafRol(req.appUser!.role)) {
+    // Niet-staf: filter in de query, JS-filter blijft als vangnet (zie /api/swaps).
+    const staf = isStafRol(req.appUser!.role);
+    const data = await getLeaveData(staf ? undefined : { userId: String(req.appUser!.id) });
+    if (!staf) {
       const selfId = String(req.appUser.id);
       return res.json(data.filter((l) => String(l.userId) === selfId));
     }

@@ -239,6 +239,22 @@ export interface ShiftRecord {
   driverId: string;
 }
 
+// Toestel-whitelist (user_devices). De types staan hier en niet in storage.ts
+// zodat AuthenticatedRequest ernaar kan verwijzen zonder storage.ts mee te
+// trekken (types.ts blijft zonder afhankelijkheden; lint:strict leest het mee).
+export type DeviceStatus = 'approved' | 'pending' | 'revoked';
+
+export type UserDevice = {
+  userId: string;
+  deviceToken: string;
+  name: string;
+  status: DeviceStatus;
+  createdAt: string;
+  lastSeenAt: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
+};
+
 export type AuthenticatedRequest = express.Request & {
   /** Alleen id + e-mail: sinds de lokale JWT-verificatie (getClaims) is er
    *  geen volledig Auth-User-object meer per request (controle-ronde 27-08, nr. 55). */
@@ -247,4 +263,8 @@ export type AuthenticatedRequest = express.Request & {
   accessToken?: string;
   /** Authenticator Assurance Level uit het JWT: 'aal2' = na twee-stapsverificatie. */
   aal?: "aal1" | "aal2";
+  /** Het toestel dat de gate in `authenticate` opzocht: rij, of null = geen
+   *  rij/geen token. `undefined` = niet opgezocht (exempt-pad, staf zonder
+   *  token, ontbrekende tabel); routes vallen dan terug op een eigen lookup. */
+  device?: UserDevice | null;
 };

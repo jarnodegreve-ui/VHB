@@ -1,4 +1,6 @@
-import { SourceMapConsumer } from "source-map-js";
+// Alleen het type hier; de bibliotheek zelf wordt lui geladen in
+// loadConsumer (ronde 3): alleen de foutendigest symboliseert stacks.
+import type { SourceMapConsumer } from "source-map-js";
 
 /**
  * Vertaalt geminifieerde client-stacks ("assets/index-Ab12Cd.js:1:23456")
@@ -52,7 +54,10 @@ const loadConsumer = async (jsUrl: string): Promise<SourceMapConsumer | null> =>
     if (res.ok) {
       const text = await res.text();
       if (text.length <= MAX_MAP_BYTES) {
-        consumer = new SourceMapConsumer(JSON.parse(text));
+        const mod = await import("source-map-js");
+        // CJS-pakket: benoemde export, met `default` als terugval.
+        const Consumer = mod.SourceMapConsumer ?? (mod as unknown as { default: typeof mod }).default.SourceMapConsumer;
+        consumer = new Consumer(JSON.parse(text));
       }
     }
   } catch {

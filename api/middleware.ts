@@ -3,11 +3,13 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { supabase } from "./db.js";
 import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
-import { getAppSetting, getDevice, koppelAuthId, noteerAanwezigheid } from "./storage.js";
+import { getAppSetting, koppelAuthId, noteerAanwezigheid, type UserDevice } from "./storage.js";
+import { getDeviceCached } from "./_lib/deviceCache.js";
 import { magSchrijven } from "./_lib/aanwezigheid.js";
 import { getOnderhoud } from "./_lib/onderhoud.js";
 import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
-import { getUsersCached, invalidateUsersCache } from "./userCache.js";
+import { bijUsersCacheWissel, epochStand, getUsersCached, invalidateUsersCache } from "./userCache.js";
+import { maakSwrCache, SWR_STALE_MS } from "./_lib/swrCache.js";
 import { isStafRol } from "./types.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, Role } from "./types.js";
 
@@ -25,21 +27,32 @@ export const DEVICE_TOKEN_HEADER = "x-device-token";
 // wanneer een toestel NIET approved is (goedgekeurde toestellen passeren
 // zonder extra query), maar ook dan willen we geen query per request.
 // Default (geen tabel/rij/fout) = true — de veilige kant.
-let gateSettingCache: { value: boolean; at: number } | null = null;
-export const isDeviceGateEnabled = async (): Promise<boolean> => {
-  if (gateSettingCache && Date.now() - gateSettingCache.at < 30_000) return gateSettingCache.value;
-  let value = true;
-  try {
-    const setting = await getAppSetting<DeviceGateSetting>(DEVICE_GATE_SETTING_KEY);
-    value = setting?.enabled !== false;
-  } catch {
-    value = true;
-  }
-  gateSettingCache = { value, at: Date.now() };
-  return value;
+//
+// Sinds ronde 3 (19-09) stale-while-revalidate (api/_lib/swrCache.ts): na de
+// TTL de oude waarde (max. 5 min) en verversen op de achtergrond, maar alleen
+// zolang de gedeelde epoch nét geverifieerd en ongewijzigd is. De schakelaar
+// omzetten verhoogt die epoch (meldDeviceGateWijziging), dus AANzetten geldt
+// binnen ±2 s op elke instantie i.p.v. pas na haar TTL.
+const gateSettingCache = maakSwrCache<boolean>(
+  async () => {
+    try {
+      const setting = await getAppSetting<DeviceGateSetting>(DEVICE_GATE_SETTING_KEY);
+      return setting?.enabled !== false;
+    } catch {
+      return true;
+    }
+  },
+  { ttlMs: 30_000, staleMs: SWR_STALE_MS, epoch: epochStand },
+);
+export const isDeviceGateEnabled = (): Promise<boolean> => gateSettingCache.get();
+/** Alleen de lokale cache wissen (tests, epoch-wissel). */
+export const invalidateDeviceGateCache = () => { gateSettingCache.invalidate(); };
+bijUsersCacheWissel(invalidateDeviceGateCache);
+/** Na een wijziging via de API: lokaal meteen, elders via de gedeelde epoch. */
+export const meldDeviceGateWijziging = () => {
+  invalidateDeviceGateCache();
+  invalidateUsersCache();
 };
-/** Na een wijziging via de API meteen de nieuwe waarde laten gelden. */
-export const invalidateDeviceGateCache = () => { gateSettingCache = null; };
 
 /**
  * Timing-veilige CRON_SECRET-controle. Beide kanten worden eerst gehasht
@@ -267,9 +280,12 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   // alleen wanneer het verzoek een toesteltoken draagt.
   const gateVanToepassing = !isStafRol(appUser.role) || deviceToken.length > 0;
   if (gateVanToepassing && !DEVICE_GATE_EXEMPT.has(req.path)) {
-    let device: { status: string } | null = null;
+    let device: UserDevice | null = null;
     try {
-      device = deviceToken ? await getDevice(String(appUser.id), deviceToken) : null;
+      // Gecacht (30 s per instantie, gewist via de gedeelde epoch bij elke
+      // toestelwijziging): zie de afweging in _lib/deviceCache.ts. Fouten
+      // worden niet gecacht en komen hier ongewijzigd terecht.
+      device = deviceToken ? await getDeviceCached(String(appUser.id), deviceToken) : null;
     } catch (err) {
       // Fail-OPEN uitsluitend wanneer de user_devices-tabel nog niet bestaat
       // (migratie niet gedraaid) — dan mag de whitelist de app niet platleggen.
@@ -296,6 +312,9 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     if (!verdict.allow) {
       return res.status(verdict.status ?? 403).json(verdict.body ?? { error: "Dit toestel heeft geen toegang.", code: "device_unknown" });
     }
+    // Het opgezochte toestel meegeven: /api/me hoeft het dan niet nog eens
+    // te queryen.
+    req.device = device;
   }
 
   req.accessToken = accessToken;
