@@ -533,6 +533,7 @@ export function PlannerDashboardWidgets({
         tone="slate"
         label="Eerste start morgen"
         text={eersteStartMorgen ? eersteStartMorgen.tijd : '—'}
+        mono={!!eersteStartMorgen}
         sub={eersteStartMorgen ? `${eersteStartMorgen.naam} · dienst ${eersteStartMorgen.dienst}` : 'nog geen diensten ingepland'}
         onClick={() => setShowScheduled(true)}
       />

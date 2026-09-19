@@ -210,6 +210,7 @@ export function DashboardView({ notes = [],
         tone={activeBlok ? 'oker' : 'slate'}
         label="Vandaag"
         text={todayParts.length === 0 ? 'Vrij' : todayServices.join(' / ') || todayParts[0].startTime}
+        mono={todayParts.length > 0}
         sub={todayStatus}
         subClassName={activeBlok ? 'text-sm font-semibold text-oker-800' : 'text-sm font-semibold text-slate-600'}
         lines={todayLines}
@@ -228,6 +229,7 @@ export function DashboardView({ notes = [],
         // Dienstnummer groot, net als in de Vandaag-tegel (Jarno 04-09:
         // het nummer is het belangrijkste); dag + afstand op de subregel.
         text={nextShift ? serviceNumberOf(nextShift) : '—'}
+        mono={!!nextShift}
         subClassName="text-sm font-semibold text-slate-600"
         sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'niets ingepland'}
         lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}

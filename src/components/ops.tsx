@@ -43,6 +43,7 @@ export function OpsStat({
   balk,
   meter,
   note,
+  mono = false,
   onClick,
   actief = false,
   className,
@@ -68,6 +69,9 @@ export function OpsStat({
   meter?: number;
   /** Notitie van de planner bij deze dag — opvallend maar gedempt (oker). */
   note?: string;
+  /** Het grote veld toont een dienstnummer of tijd i.p.v. een telling: dan
+   *  blijft het mono (instrument-signaal), tellingen staan in de koprol. */
+  mono?: boolean;
   onClick?: () => void;
   /** Gekozen filtertegel (punt 4, 16-09): neutraal zoals elke selectie,
    *  gedempt vlak + sterke hairline, geen goud (goud = actie, focus, nu). */
@@ -87,9 +91,11 @@ export function OpsStat({
           <span className="truncate text-label">{label}</span>
         </span>
       </div>
-      {/* Mono: de cijfers zijn het instrumentpaneel — zelfde accent als
-          dienstnummers en tijden (rol text-stat, index.css). */}
-      <p className="mt-2.5 min-w-0 truncate text-stat text-slate-900">
+      {/* Telling = koprol (text-stat); dienstnummer of tijd = mono erbij,
+          zelfde accent als overal elders (ronde 3, 19-09). */}
+      {/* Bewust geen cn(): tailwind-merge ziet `text-stat` en `text-slate-900`
+          als dezelfde text-groep en gooit de rol weg. */}
+      <p className={`mt-2.5 min-w-0 truncate text-stat text-slate-900${mono ? ' text-stat-mono' : ''}`}>
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
       </p>

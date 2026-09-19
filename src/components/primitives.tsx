@@ -43,8 +43,11 @@ const BUTTON_SIZES: Record<ButtonSize, string> = {
   // pointer (muis) krimpt hij naar de oorspronkelijke 32px, zoals de rest van
   // de app dat met sm:pointer-fine: doet.
   sm: 'gap-1.5 rounded-lg px-3 py-2 text-xs min-h-11 sm:pointer-fine:min-h-8',
-  md: 'gap-2 rounded-xl px-4 py-2.5 text-sm min-h-11',
-  lg: 'gap-2 rounded-xl px-5 py-3 text-sm min-h-12',
+  // md en lg volgen sinds ronde 3 (19-09) dezelfde regel: 44/48 px is een
+  // aanraakmaat, met een muis leest dat als een mobiele app op een groot
+  // scherm. Fijne pointer = 36 resp. 40 px (Linear/Vercel-dichtheid).
+  md: 'gap-2 rounded-xl px-4 py-2.5 text-sm min-h-11 sm:pointer-fine:min-h-9 sm:pointer-fine:px-3.5 sm:pointer-fine:py-2',
+  lg: 'gap-2 rounded-xl px-5 py-3 text-sm min-h-12 sm:pointer-fine:min-h-10 sm:pointer-fine:px-4 sm:pointer-fine:py-2.5',
 };
 
 /** Spinner-spoor per variant: donkere solide knoppen het lichte spoor, de
