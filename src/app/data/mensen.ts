@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '../../types';
 import { apiFetch, apiJson } from '../../lib/api';
 import type { VervaldataRij, PendingDevice } from '../../lib/werkvoorraad';
+import { startRustigePoll } from '../../lib/rustigePoll';
 import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 
 /**
@@ -23,7 +24,8 @@ export function useMensenData(ctx: DataCtx) {
   // komen uit eigen endpoints. Best-effort — de app mag hier nooit op breken.
   const [vervaldata, setVervaldata, zetVervaldataUitAntwoord] = useCollectieState<VervaldataRij[]>([]);
   const [pendingDevices, setPendingDevices, zetDevicesUitAntwoord] = useCollectieState<PendingDevice[]>([]);
-  // Ververst elke 10 min én bij tab-focus: het portaal staat bij de planner
+  // Ververst elke 10 min (alleen in een zichtbaar tabblad) én bij tab-focus,
+  // hooguit 1× per 5 min (startRustigePoll): het portaal staat bij de planner
   // de hele dag open en de werkvoorraad-badge moet blijven kloppen.
   useEffect(() => {
     const rol = currentUser?.role;
@@ -34,13 +36,10 @@ export function useMensenData(ctx: DataCtx) {
         .then((rows) => { if (!cancelled && Array.isArray(rows)) zetVervaldataUitAntwoord(null, rows, rows); })
         .catch(() => { /* geen data = geen rijen */ });
     };
-    haal();
-    const timer = window.setInterval(haal, 10 * 60 * 1000);
-    window.addEventListener('focus', haal);
+    const stop = startRustigePoll(haal);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener('focus', haal);
+      stop();
     };
   }, [currentUser?.role]);
   useEffect(() => {
@@ -56,14 +55,10 @@ export function useMensenData(ctx: DataCtx) {
         // stil: de werkvoorraad mag niet breken op een toestellen-fetch
       }
     };
-    void haal();
-    const timer = window.setInterval(haal, 10 * 60 * 1000);
-    const opFocus = () => { void haal(); };
-    window.addEventListener('focus', opFocus);
+    const stop = startRustigePoll(() => { void haal(); });
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener('focus', opFocus);
+      stop();
     };
   }, [currentUser?.role]);
 
