@@ -224,14 +224,16 @@ export function DashboardView({ notes = [],
       <OpsStat
         icon={<Calendar size={16} />}
         tone="slate"
-        className="col-span-2 md:col-span-1 xl:col-span-3"
+        // Zonder volgende dienst rekt de tegel niet mee tot de hoogte van
+        // de Vandaag-tegel: dat gaf een groot leeg vlak met alleen een streep.
+        className={cn('col-span-2 md:col-span-1 xl:col-span-3', !nextShift && 'self-start')}
         label="Volgende dienst"
         // Dienstnummer groot, net als in de Vandaag-tegel (Jarno 04-09:
         // het nummer is het belangrijkste); dag + afstand op de subregel.
-        text={nextShift ? serviceNumberOf(nextShift) : '—'}
+        text={nextShift ? serviceNumberOf(nextShift) : 'Geen'}
         mono={!!nextShift}
         subClassName="text-sm font-semibold text-slate-600"
-        sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'niets ingepland'}
+        sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'er staat niets ingepland'}
         lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
         onClick={onNavigate ? () => onNavigate('rooster') : undefined}
       />

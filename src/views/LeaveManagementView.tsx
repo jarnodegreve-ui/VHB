@@ -1180,7 +1180,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
   ));
 
   return (
-    <div className="space-y-4">
+    <div className={requests.length > 0 ? 'space-y-4' : 'space-y-1.5'}>
       <div className="flex items-center justify-between px-1">
         <MicroLabel className="text-slate-500">{title}</MicroLabel>
         <MicroLabel>{count}</MicroLabel>
@@ -1229,9 +1229,9 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
             </Card>
           );
         }) : (
-          <Card padding="md" className="text-center">
-            <p className="text-body-sm font-medium text-slate-500">{emptyText}</p>
-          </Card>
+          // Eén stille regel i.p.v. een lege kaart: drie lege secties onder
+          // elkaar gaven drie grote dozen met elk één zin (ronde 3, 19-09).
+          <p className="px-1 text-body-sm text-slate-500">{emptyText}</p>
         )}
       </div>
     </div>

@@ -320,7 +320,7 @@ export function LoginView({
                           setMode('forgot');
                           resetFeedback();
                         }}
-                        className={cn(microLabelClass, '-my-2 inline-flex min-h-11 items-center !text-slate-400 hover:!text-oker-400 transition-colors')}
+                        className="-my-2 inline-flex min-h-11 items-center text-xs font-medium text-slate-500 transition-colors hover:text-oker-400"
                       >
                         Wachtwoord vergeten?
                       </button>
