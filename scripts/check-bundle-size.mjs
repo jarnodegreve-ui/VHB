@@ -42,7 +42,12 @@ const DEELBUDGET_KB = {
   // 18-09: main (3646295) faalt zelf op de 70-kB-grens in CI. Dezelfde bron
   // meet lokaal 69,92 kB; de badgebranch heeft evenveel ongecomprimeerde
   // bytes (232.726). 2 kB marge voorkomt dat gzip-/hashvariatie blokkeert.
-  index: 72,
+  // 19-09 (ronde 3): 72 → 74. De startbundel groeit 70,0 → 71,7 kB door de
+  // laadlogica zelf (poort per rol met uitgestelde collecties, gelijkheids-
+  // check in de datalaag, refetch-regime, rustige polls); dat hoort in de
+  // schil. Daartegenover staat 24 kB zod-vendor minder op elk startscherm en
+  // 3 tot 5 calls minder in de poort. Zelfde ±2 kB marge als hierboven.
+  index: 74,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
