@@ -276,12 +276,12 @@ export function PlanningMatrixView({
     return (
     <PageShell breed>
       <PageHeader
-        eyebrow="Planning"
+        view="planning-matrix"
         title="Planningsoverzicht"
       />
       {/* OpsStat i.p.v. StatCard (vaste regel voor KPI-strips): vaste
           twee-regel-labelzone, dus cijfers en subteksten op één lijn. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-3">
         <OpsStat
           icon={<Clock size={16} />}
           tone="emerald"
@@ -498,7 +498,7 @@ export function PlanningMatrixView({
                 description={<span className="tabular-nums">Dagtype {selectedRow.day_type || '—'} · {assignments.length} ingevulde chauffeurcodes.</span>}
               />
 
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-3">
                 <OpsStat
                   icon={<Users size={16} />}
                   tone="oker"

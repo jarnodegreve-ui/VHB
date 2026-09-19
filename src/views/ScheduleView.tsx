@@ -285,7 +285,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
           onChange={setWeergave}
         />
         {lastSyncedAt && (
-          <p className="text-xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep naar beneden om te vernieuwen</p>
+          <p className="text-xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)}{/* De sleep-hint alleen waar je kán slepen: met een muis stond hier een instructie die niet werkt. */}<span className="pointer-fine:hidden"> · sleep naar beneden om te vernieuwen</span></p>
         )}
       </div>
 
@@ -298,7 +298,8 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
             deze week {formatUren(uren.weekMinuten)} · deze maand {formatUren(uren.maandMinuten)} · {uren.maandDienstdagen} {uren.maandDienstdagen === 1 ? 'dag' : 'dagen'} met dienst
           </span>
           <span className="sr-only">, </span>
-          <span className="text-micro">geplande uren, geen loonberekening</span>
+          {/* Gewone metatekst: in hoofdletters schreeuwde deze voetnoot harder dan de uren zelf. */}
+          <span className="text-xs font-medium text-slate-500">geplande uren, geen loonberekening</span>
         </p>
       )}
 

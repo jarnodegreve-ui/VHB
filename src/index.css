@@ -99,11 +99,14 @@
      `font-mono` is dus overal het "instrument"-signaal. */
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  /* Strakkere radius-schaal (pro-tool i.p.v. bento): xl 10 · 2xl 14 · 3xl 18.
+  /* Strakkere radius-schaal (pro-tool i.p.v. bento). Ronde 3 (19-09) trok de
+     bovenste treden nog een stap in (was xl 10 · 2xl 14 · 3xl 18): met 18 px
+     op de kaart en 14 px op de doos erin oogde het scherm zacht en
+     consumentachtig. Nu xl 8 · 2xl 10 · 3xl 12.
      Alle kaarten/inputs verwijzen naar deze tokens. */
-  --radius-xl: 0.625rem;
-  --radius-2xl: 0.875rem;
-  --radius-3xl: 1.125rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
+  --radius-3xl: 0.75rem;
 
   /* === VHB Amber (huisstijl #E2A323 als anker op 500) ===
      De `oker`-naam blijft (honderden usages); de waardes zijn de
@@ -261,11 +264,12 @@
   --default-transition-duration: 150ms;
 
   /* === Radius-ladder ===
-     md 6 (chips, kbd) · lg 8 (icoontegels, kleine knoppen) · xl 10 (knoppen,
-     inputs) · 2xl 14 (tegels, modals-binnenkant) · 3xl 18 (kaarten) · full.
+     md 5 (chips, kbd) · lg 6 (icoontegels, kleine knoppen) · xl 8 (knoppen,
+     inputs) · 2xl 10 (tegels, rijen in een kaart) · 3xl 12 (kaarten, modals)
+     · full. Een doos in een kaart zit altijd één trede lager dan die kaart.
      `rounded-sm` en `rounded-[Npx]` niet gebruiken. */
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
+  --radius-md: 0.3125rem;
+  --radius-lg: 0.375rem;
 }
 
 /* === Schil-tokens (next-level 2, punt 7) ===
@@ -646,7 +650,7 @@ html.dark {
                           een veld, zijvak-voet, tooltip), 13/1.55
        text-label         veldlabel / tabelkop (sentence-case)
        text-micro         uppercase eyebrow (MicroLabel)
-       text-stat          groot cijfer in een KPI-tegel/statkaart (mono, kleur per plek)
+       text-stat          groot cijfer in een KPI-tegel/statkaart (Manrope tabular; + text-stat-mono voor dienstnummers/tijden)
      UI-laag = text-sm (13: chips, knoppen, tabelcellen, rijtitels); inputs
      text-base (16, iOS-zoomgrens); code = font-mono. Tracking-ladder:
      -0.025em op 30 · -0.02em op 24 · -0.015em op 20 · -0.01em op 17/18 ·
@@ -734,16 +738,27 @@ html.dark {
     color: var(--color-slate-400);
   }
   .text-stat {
-    /* Groot cijfer (OpsStat, statkaarten in beheer): mono = instrument-
-       signaal, tabular zodat kolommen niet verspringen. Geen kleur: die
-       zet de plek zelf (text-slate-900, text-oker-700, …) — controle 05-09
-       nr. 23. */
+    /* Groot cijfer (OpsStat, statkaarten in beheer). Tellingen staan sinds
+       ronde 3 (19-09) in de koprol (Manrope 800, tabular, gewone nul): een
+       aantal is geen instrumentwaarde, en de doorstreepte mono-nul las als
+       code. Mono blijft het signaal voor dienst- en loopnummers en tijden:
+       een tegel die zo'n nummer toont zet `text-stat-mono` erbij. Geen
+       kleur: die zet de plek zelf (text-slate-900, text-oker-700, …). */
+    font-family: var(--font-display);
+    /* 1.5rem op 2.125rem: Manrope's inhoudsvlak is ±1,37× de lettermaat, dus
+       een krappere regelhoogte laat het cijfer buiten zijn eigen vak steken
+       (e2e/activiteit-layout bewaakt dat). */
+    font-size: 1.5rem;
+    line-height: 2.125rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .text-stat-mono {
     font-family: var(--font-mono);
     font-size: 1.5rem;
-    line-height: 2rem;
     font-weight: 600;
     letter-spacing: -0.01em;
-    font-variant-numeric: tabular-nums;
   }
 
 }
@@ -979,7 +994,9 @@ html.dark {
      handgeschreven regels stonden er nog buiten. */
   @media (hover: hover) and (pointer: fine) {
     .ios-pressable:hover {
-      transform: translateY(-1px) scale(1.01);
+      /* Alleen nog 1 px optillen: de schaalsprong van 1 % op elke knop en rij
+         las als speels (ronde 3, 19-09). */
+      transform: translateY(-1px);
     }
   }
 
@@ -988,17 +1005,84 @@ html.dark {
     transition-duration: 140ms;
   }
 
+  /* KPI-raster op mobiel (ronde 3, 19-09): de tegels worden één kaart met
+     rijen: label en toelichting links, cijfer rechts. In twee smalle kolommen
+     kapten label en toelichting af ("Vandaag ingepl…") en duwden vijf tot
+     zeven tegels de echte inhoud onder de vouw. Vanaf sm blijven het tegels.
+     Zet `kpi-raster` op de grid rond `OpsStat`. */
+  @media (max-width: 639px) {
+    .kpi-raster {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      border-radius: var(--radius-3xl);
+      background: color-mix(in srgb, var(--laag-kaart) 96%, transparent);
+      border: 1px solid var(--elev-1-rim);
+      box-shadow: var(--elev-1);
+    }
+    .kpi-raster > .kpi-tegel {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: 0.75rem;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      transform: none;
+    }
+    .kpi-raster > .kpi-tegel + .kpi-tegel {
+      border-top: 1px solid var(--color-hairline);
+    }
+    .kpi-raster > .kpi-tegel[aria-pressed="true"] {
+      background: var(--color-surface-muted, transparent);
+    }
+    .kpi-raster .kpi-kop { grid-column: 1; grid-row: 1; }
+    .kpi-raster .kpi-sub {
+      grid-column: 1;
+      grid-row: 2;
+      margin-top: 0.125rem;
+      margin-left: 2.25rem; /* onder het label, voorbij de icoontegel */
+      white-space: normal;
+      overflow: visible;
+    }
+    .kpi-raster .kpi-getal {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      margin-top: 0;
+      font-size: 1.375rem;
+      line-height: 1.75rem;
+      text-align: right;
+    }
+    .kpi-raster .kpi-extra { grid-column: 1 / -1; }
+  }
+
+  /* Filterrij van TableToolbar: één regel, schuift horizontaal zonder
+     zichtbare schuifbalk (de chips zelf tonen dat er meer is). */
+  .filter-rij {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-rij::-webkit-scrollbar {
+    display: none;
+  }
+
   .btn-primary {
-    background: linear-gradient(180deg, var(--color-oker-400) 0%, var(--color-oker-500) 100%);
+    /* Effen goud met een fijne rand (ronde 3, 19-09): het verloop en de
+       gekleurde gloed eronder oogden als een sjabloon. De diepte komt nu van
+       één binnenrand en de neutrale schaduw van trede 1. */
+    background: var(--color-oker-500);
     /* VHB Black op amber — wit op #E2A323 haalt maar 2,2:1 contrast,
        zwart haalt ~10:1 en is de huisstijl-pairing (amber + black). */
     color: #14181B;
     font-weight: 700;
-    border-radius: 0.75rem;
+    border-radius: var(--radius-xl);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      0 1px 2px rgba(162, 105, 26, 0.25),
-      0 4px 12px rgba(226, 163, 35, 0.2);
+      inset 0 0 0 1px rgba(122, 78, 12, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 1px 2px rgba(13, 13, 15, 0.12);
     transition:
       transform var(--duration-base) var(--ease-standard),
       box-shadow var(--duration-base) var(--ease-standard),
@@ -1006,11 +1090,11 @@ html.dark {
   }
 
   .btn-primary:hover {
-    background: linear-gradient(180deg, var(--color-oker-500) 0%, var(--color-oker-600) 100%);
+    background: var(--color-oker-400);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.16),
-      0 1px 2px rgba(162, 105, 26, 0.3),
-      0 6px 16px rgba(226, 163, 35, 0.24);
+      inset 0 0 0 1px rgba(122, 78, 12, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.24),
+      0 2px 6px rgba(13, 13, 15, 0.14);
   }
 
   .btn-primary:active {

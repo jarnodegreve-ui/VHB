@@ -43,6 +43,7 @@ export function OpsStat({
   balk,
   meter,
   note,
+  mono = false,
   onClick,
   actief = false,
   className,
@@ -68,6 +69,9 @@ export function OpsStat({
   meter?: number;
   /** Notitie van de planner bij deze dag — opvallend maar gedempt (oker). */
   note?: string;
+  /** Het grote veld toont een dienstnummer of tijd i.p.v. een telling: dan
+   *  blijft het mono (instrument-signaal), tellingen staan in de koprol. */
+  mono?: boolean;
   onClick?: () => void;
   /** Gekozen filtertegel (punt 4, 16-09): neutraal zoals elke selectie,
    *  gedempt vlak + sterke hairline, geen goud (goud = actie, focus, nu). */
@@ -79,7 +83,7 @@ export function OpsStat({
       {/* Kop: icoon en label op één regel (het pijltje is weg — de hele tegel
           is klikbaar). Compacter dan de oude icoon-boven-label-opbouw: ±40 px
           minder in de smalle mobiele tegel (Jarno 04-09). */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="kpi-kop flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
           <span className={cn('inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
             {icon}
@@ -87,20 +91,22 @@ export function OpsStat({
           <span className="truncate text-label">{label}</span>
         </span>
       </div>
-      {/* Mono: de cijfers zijn het instrumentpaneel — zelfde accent als
-          dienstnummers en tijden (rol text-stat, index.css). */}
-      <p className="mt-2.5 min-w-0 truncate text-stat text-slate-900">
+      {/* Telling = koprol (text-stat); dienstnummer of tijd = mono erbij,
+          zelfde accent als overal elders (ronde 3, 19-09). */}
+      {/* Bewust geen cn(): tailwind-merge ziet `text-stat` en `text-slate-900`
+          als dezelfde text-groep en gooit de rol weg. */}
+      <p className={`kpi-getal mt-2.5 min-w-0 truncate text-stat text-slate-900${mono ? ' text-stat-mono' : ''}`}>
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
       </p>
-      <p className={cn('mt-0.5 text-xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
+      <p className={cn('kpi-sub mt-0.5 text-xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {typeof meter === 'number' && (
-        <Meter className="mt-2 h-1.5">
+        <Meter className="kpi-extra mt-2 h-1.5">
           <MeterVulling pct={Math.max(3, meter)} className={meter > 100 ? 'bg-red-500' : meter > 80 ? 'bg-amber-500' : 'bg-emerald-500'} />
         </Meter>
       )}
       {lines && lines.length > 0 && (
-        <div className="mt-1.5 space-y-0.5">
+        <div className="kpi-extra mt-1.5 space-y-0.5">
           {lines.map((l) => (
             <div
               key={`${l.left}-${l.right ?? ''}`}
@@ -125,9 +131,9 @@ export function OpsStat({
           ))}
         </div>
       )}
-      {balk}
+      {balk && <div className="kpi-extra">{balk}</div>}
       {note && (
-        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-xs font-medium leading-snug text-oker-800">
+        <p className="kpi-extra mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-xs font-medium leading-snug text-oker-800">
           {note}
         </p>
       )}
@@ -142,12 +148,12 @@ export function OpsStat({
       // hoogte). Zonder dit hingen icoon en kop van een kortere tegel lager
       // dan die van de buurtegel.
       // rauw: KPI-tegel-als-knop met eigen layout (kaart-als-knop).
-      <button type="button" onClick={onClick} aria-pressed={actief || undefined} className={cn('group surface-card surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', actief && 'bg-surface-muted ring-1 ring-hairline-strong', className)}>
+      <button type="button" onClick={onClick} aria-pressed={actief || undefined} className={cn('kpi-tegel group surface-card surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', actief && 'bg-surface-muted ring-1 ring-hairline-strong', className)}>
         {inner}
       </button>
     );
   }
-  return <div className={cn('surface-card flex flex-col items-stretch justify-start rounded-3xl p-4', className)}>{inner}</div>;
+  return <div className={cn('kpi-tegel surface-card flex flex-col items-stretch justify-start rounded-3xl p-4', className)}>{inner}</div>;
 }
 
 /** Cockpit-paneel met titelrij en optionele 'bekijk alle'-actie. */

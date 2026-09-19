@@ -585,6 +585,7 @@ export function CoverageView() {
   return (
     <PageShell breed>
       <PageHeader
+        view="dekking"
         title="Openstaande diensten"
         actions={(
           <>

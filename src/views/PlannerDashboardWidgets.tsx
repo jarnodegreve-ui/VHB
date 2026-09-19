@@ -533,6 +533,7 @@ export function PlannerDashboardWidgets({
         tone="slate"
         label="Eerste start morgen"
         text={eersteStartMorgen ? eersteStartMorgen.tijd : '—'}
+        mono={!!eersteStartMorgen}
         sub={eersteStartMorgen ? `${eersteStartMorgen.naam} · dienst ${eersteStartMorgen.dienst}` : 'nog geen diensten ingepland'}
         onClick={() => setShowScheduled(true)}
       />
@@ -921,7 +922,7 @@ export function PlannerDashboardWidgets({
           ) : undefined}
         />
       )}
-      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', stripLayout.xl)}>
+      <div className={cn('kpi-raster grid grid-cols-2 gap-3 md:grid-cols-6', stripLayout.xl)}>
         {stripZichtbaar.map((t, i) => (
           <Fragment key={t.id}>
             {STRIP_TEGEL[t.id]?.(cn(
@@ -944,7 +945,9 @@ export function PlannerDashboardWidgets({
           — dat zijn korte rijen en er staan er meestal maar twee of drie.
           Op xl+ komt er een derde kolom bij ("Deze week", fase C13); onder
           xl blijft alles zoals het was. */}
-      <div className={cn('grid grid-cols-1 gap-4', panelenRechts.length > 0 && 'lg:grid-cols-2')}>
+      {/* items-start: het linkerpaneel rekte mee tot de hoogte van de rechterkolom
+          en toonde dan een half leeg vlak onder "Volledige werkvoorraad". */}
+      <div className={cn('grid grid-cols-1 items-start gap-4', panelenRechts.length > 0 && 'lg:grid-cols-2')}>
         {panelenLinks}
         {panelenRechts.length > 0 && (
           <div className="flex flex-col gap-4">

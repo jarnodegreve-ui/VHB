@@ -46,7 +46,9 @@ async function auditPage(context, role, user, view, profileKey, dark) {
     const inAnHour = Math.floor(Date.now() / 1000) + 3600;
     window.localStorage.setItem(key, JSON.stringify({ access_token: 'e2e', refresh_token: 'e2e', token_type: 'bearer', expires_in: 3600, expires_at: inAnHour, user: { id: 'auth-e2e', email: u.email, aud: 'authenticated' } }));
     window.localStorage.setItem('vhb-current-view', v);
-    if (isDark) window.localStorage.setItem('vhb-theme', 'dark');
+    // Altijd expliciet: staf start standaard donker, dus zonder deze regel
+    // fotografeerde de audit de beheerschermen nooit in het lichte thema.
+    window.localStorage.setItem('vhb-theme', isDark ? 'dark' : 'light');
   }, [SESSION_KEY, user, view, dark]);
   await page.route('**/api/**', apiFixtures(user));
 
@@ -103,13 +105,16 @@ for (const profile of PROFILES) {
     for (const view of ['dashboard', 'rooster', 'verlof']) await auditPage(context, 'chauffeur', CHAUFFEUR, view, profile.key, true);
   }
 
-  // Login-scherm (zonder sessie)
-  const page = await context.newPage();
+  // Login-scherm (zonder sessie). Verse context: in de gedeelde context stond
+  // de sessie van het laatste scherm nog in localStorage, waardoor dit shot
+  // Instellingen toonde i.p.v. het loginscherm (ronde 3, 19-09).
+  const loginContext = await browser.newContext({ ...profile.device, serviceWorkers: 'block' });
+  const page = await loginContext.newPage();
   await page.route('**/api/**', apiFixtures(CHAUFFEUR));
   await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${OUT}/${profile.key}-login.png`, fullPage: true });
-  await page.close();
+  await loginContext.close();
 
   await browser.close();
 }

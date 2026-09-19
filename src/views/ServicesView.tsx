@@ -67,6 +67,7 @@ export function ServicesView({ services }: { services: Service[] }) {
   return (
     <PageShell>
       <PageHeader
+        view="dienstoverzicht"
         title="Dienstoverzicht"
         actions={(
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">

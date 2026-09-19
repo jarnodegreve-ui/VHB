@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Coins, Download, FileSpreadsheet, Hash, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Coins, Download, FileSpreadsheet, Hash, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import type { User } from '../../types';
 import { DIENST_TYPES, DIENST_TYPE_LABEL, loonCodeSleutel } from '../../../shared/loon';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
 import { useZelfLadend, type Versheid } from '../../lib/zelfLadend';
-import { formatShortDay, MONTH_NAMES } from '../../lib/format';
+import { MaandNavigatie } from '../../components/MaandNavigatie';
+import { formatShortDay, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import {
   bewaarInstellingen, bewaarLoonCode, bewaarMedewerker, dagenInMaand, importeerMedewerkers, laadExportControle, laadInstellingen, laadLoonCodes,
@@ -40,7 +41,7 @@ export function LooncontroleView({ currentUser, onNavigate }: { currentUser: Use
   const [versheid, setVersheid] = useState<Versheid | null>(null);
   return (
     <PageShell breed>
-      <PageHeader eyebrow="Beheer · Loon" title="Looncontrole" actions={versheid ? <VersheidRegel {...versheid} /> : undefined} />
+      <PageHeader view="looncontrole" title="Looncontrole" actions={versheid ? <VersheidRegel {...versheid} /> : undefined} />
       <Segmented<Tab>
         label="Onderdeel"
         className="shrink-0"
@@ -121,15 +122,18 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
 
   return (
     <div className="space-y-4">
-      <Card padding="sm" className="flex flex-wrap items-center gap-2">
-        <IconButton label="Vorige maand" onClick={() => zetMaand(schuifMaand(maand, -1))}><ChevronLeft size={18} /></IconButton>
-        <p className="min-w-0 flex-1 text-sm font-semibold text-slate-800">{titel}</p>
-        <IconButton label="Volgende maand" onClick={() => zetMaand(schuifMaand(maand, 1))}><ChevronRight size={18} /></IconButton>
-      </Card>
+      {/* Dezelfde maandnavigatie als Rooster, Verlof en Maandplanning; hier
+          stond een eigen variant als kaart over de volle breedte. */}
+      <MaandNavigatie
+        label={titel}
+        labelClassName="min-w-36"
+        onVorige={() => zetMaand(schuifMaand(maand, -1))}
+        onVolgende={() => zetMaand(schuifMaand(maand, 1))}
+      />
 
       {zl.fout && <Foutkaart compact={zl.laatstGeladen !== null} boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
       {zl.fout && zl.laatstGeladen === null ? null : (<>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat icon={<CheckCircle2 size={16} />} tone="slate" label="Afgesloten" value={tellers.afgesloten} sub={`van ${alle.filter((d) => d <= vandaag).length} dagen tot vandaag`} />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub="geopend, nog niet afgesloten" />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.nietGeopend > 0 ? 'red' : 'slate'} label="Niet geopend" value={tellers.nietGeopend} sub="dagen met planning, tot vandaag" />
@@ -138,7 +142,17 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
 
       {/* Dagenraster */}
       <Card padding="sm">
+        {/* Op weekdag uitgelijnd met een kopregel, zoals elke andere kalender
+            in het portaal (ronde 3, 19-09): de dagen liepen hier gewoon door
+            vanaf kolom één, waardoor 1 augustus onder "maandag" leek te
+            staan. */}
         <div className="grid grid-cols-7 gap-1.5">
+          {WEEKDAY_SHORT_MON.map((dag) => (
+            <span key={dag} className="pb-0.5 text-center text-micro">{dag}</span>
+          ))}
+          {alle.length > 0 && Array.from({ length: (new Date(`${alle[0]}T12:00:00`).getDay() + 6) % 7 }, (_, i) => (
+            <span key={`leeg-${i}`} aria-hidden />
+          ))}
           {alle.map((iso) => {
             const d = perDag.get(iso);
             const tone = dagTone(iso);
@@ -271,7 +285,7 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
                     <Td num>{c.easypayTypePrest}</Td>
                     <Td className="font-mono text-xs">{[c.tik1, c.tik2, c.tik3, c.tik4, c.tik5, c.tik6].filter(Boolean).join(' · ') || '—'}</Td>
                     <Td num className="text-slate-600">{c.lbRijtijd ?? '—'}</Td>
-                    <Td><Badge tone={c.inExport ? 'emerald' : 'slate'} stil dot>{c.inExport ? 'ja' : 'nee'}</Badge></Td>
+                    <Td><Badge tone={c.inExport ? 'emerald' : 'slate'} kaal>{c.inExport ? 'ja' : 'nee'}</Badge></Td>
                     <Td className="text-right">
                       <IconButton label={`${c.codeWeergave} bewerken`} size="sm" onClick={() => setBewerk({ ...c, omschrijving: c.omschrijving ?? '', tik1: c.tik1 ?? '', tik2: c.tik2 ?? '', tik3: c.tik3 ?? '', tik4: c.tik4 ?? '', tik5: c.tik5 ?? '', tik6: c.tik6 ?? '' })}><Pencil size={16} /></IconButton>
                       <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => void verwijder(c)}><Trash2 size={16} /></IconButton>

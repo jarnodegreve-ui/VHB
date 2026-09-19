@@ -220,7 +220,7 @@ export function VervaldataView({ users }: { users: User[] }) {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Beheer"
+        view="vervaldata"
         title="Vervaldata"
         actions={<VersheidRegel {...zl.versheid} />}
       />
@@ -230,7 +230,7 @@ export function VervaldataView({ users }: { users: User[] }) {
       {/* Ops-tegels (zelfde als de status-strip op het dashboard): vaste
           twee-regel-labelzone, dus cijfers en subteksten van alle vier de
           tegels liggen op exact dezelfde lijn. Klik op een tegel = filter. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat
           icon={<AlertTriangle size={16} />}
           tone={tellers.verlopen > 0 ? 'red' : 'slate'}

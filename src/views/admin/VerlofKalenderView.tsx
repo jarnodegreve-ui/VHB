@@ -228,6 +228,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
   return (
     <PageShell>
       <PageHeader
+        view="verlof-kalender"
         title="Verlofkalender"
         actions={(
           <div className="flex items-center gap-2">

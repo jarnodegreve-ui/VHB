@@ -132,7 +132,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Techniek"
+        view="defecten"
         title="Gele boek"
         actions={(
           <>

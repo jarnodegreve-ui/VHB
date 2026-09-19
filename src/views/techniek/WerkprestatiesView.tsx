@@ -106,7 +106,7 @@ function Dagboek({ currentUser }: { currentUser: User }) {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Techniek"
+        view="werkprestaties"
         title="Dagadministratie"
         actions={(
           <>
@@ -251,7 +251,7 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Techniek"
+        view="werkprestaties"
         title="Dagadministratie"
         actions={(
           <>
@@ -278,7 +278,7 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
 
       {tab === 'lijst' ? (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-3">
             <OpsStat icon={<Clock size={16} />} tone="slate" label="Uren" text={urenTekst(totaalUren)} sub={periode === 'week' ? 'laatste 7 dagen' : periode === 'maand' ? 'laatste 31 dagen' : 'laatste kwartaal'} />
             <OpsStat icon={<ClipboardList size={16} />} tone="slate" label="Prestaties" value={rijen.length} sub={`op ${dagenMetWerk} ${dagenMetWerk === 1 ? 'dag' : 'dagen'}`} />
             <OpsStat icon={<Clock size={16} />} tone="slate" label="Per dag" text={dagenMetWerk ? urenTekst(totaalUren / dagenMetWerk) : '0'} sub="uren gemiddeld" className="col-span-2 md:col-span-1" />

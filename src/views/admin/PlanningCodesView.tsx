@@ -130,7 +130,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Planning"
+        view="planning-codes"
         title="Planningscodes"
         actions={(
           <>

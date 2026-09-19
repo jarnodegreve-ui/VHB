@@ -116,7 +116,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Beheer · Loon"
+        view="dagafsluiting"
         title="Dagafsluiting"
         actions={(
           <>

@@ -41,7 +41,7 @@ export function DienstopbouwView({ currentUser }: { currentUser: User }) {
   const actief = imports.find((i) => i.actief) ?? null;
   return (
     <PageShell>
-      <PageHeader eyebrow="Beheer · Planning" title="Dienstopbouw" actions={<Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>} />
+      <PageHeader view="dienstopbouw" title="Dienstopbouw" actions={<Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>} />
       <Segmented<Tab>
         label="Onderdeel"
         className="shrink-0"
@@ -127,7 +127,7 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
               <li key={i.id} className="space-y-2 px-5 py-3.5">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="min-w-0 truncate text-sm font-semibold text-slate-800">{i.filename ?? 'import'}</p>
-                  {i.actief ? <Badge tone="emerald" dot>actief</Badge> : <Badge tone="slate" stil>niet actief</Badge>}
+                  {i.actief ? <Badge tone="emerald" dot>actief</Badge> : <Badge tone="slate" kaal>niet actief</Badge>}
                 </div>
                 <p className="text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)} · {i.rijen} ritdelen · {i.diensten} diensten · {i.dagtypes.join(', ')}</p>
                 <div className="flex flex-wrap gap-1">
@@ -244,7 +244,7 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
   const p = detail ? params.get(gekozen!) : null;
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat icon={<Route size={16} />} tone="slate" label="Diensten" value={diensten.length} sub="in de actieve import" />
         <OpsStat icon={<ListChecks size={16} />} tone="slate" label="Ritdelen" value={segmenten.length} sub="alle dagtypes" />
         <OpsStat icon={<CheckCircle2 size={16} />} tone="slate" label="Dagtypes" value={dagtypes.length} sub={dagtypes.join(', ')} />

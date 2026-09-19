@@ -645,7 +645,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Gebruikersbeheer"
+        view="gebruikers"
         title={title}
         actions={(
           <>
@@ -783,8 +783,12 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                         <Avatar naam={u.name} size="md" className="mt-px" />
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-800">{u.name}</div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
+                          {/* Rol als gewone metaregel: een pil per rij voor iets dat
+                              bij 40 van de 45 rijen "chauffeur" is, maakt de echte
+                              signalen (Niet in planning) onzichtbaar. Staf krijgt
+                              wat meer gewicht, geen kleur. */}
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                            <span className={cn('text-xs capitalize', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{u.role}</span>
                             {nietInPlanning(u) && (
                               <Badge
                                 tone="amber"
@@ -800,17 +804,17 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                         </div>
                       </div>
                     </Td>
-                    {voorkeur.zichtbaar('status') && <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} stil>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>}
+                    {voorkeur.zichtbaar('status') && <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} kaal>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>}
                     {/* Zonder abonnement komt géén enkele melding aan. */}
                     {voorkeur.zichtbaar('meldingen') && (
                       <Td>
                         {pushUserIds.has(String(u.id))
-                          ? <Badge tone="emerald" stil>Aan</Badge>
-                          : <Badge tone="slate" stil>Uit</Badge>}
+                          ? <Badge tone="emerald" kaal>Aan</Badge>
+                          : <Badge tone="slate" kaal>Uit</Badge>}
                       </Td>
                     )}
                     {voorkeur.zichtbaar('laatst') && <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-500">Nooit</span>}</Td>}
-                    {voorkeur.zichtbaar('sessies') && <Td><Badge tone={(toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">{toestellenPerUser.get(String(u.id)) ?? 0}</Badge></Td>}
+                    {voorkeur.zichtbaar('sessies') && <Td className={(toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'text-slate-800' : 'text-slate-400'}>{toestellenPerUser.get(String(u.id)) ?? 0}</Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
                         <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
