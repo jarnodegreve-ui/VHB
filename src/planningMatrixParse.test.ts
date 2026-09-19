@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parsePlanningMatrixXlsxMetWaarschuwingen } from '../api/helpers';
+import { parsePlanningMatrixXlsxMetWaarschuwingen } from '../api/_lib/matrixXlsx';
 
 // De parser levert { rows, waarschuwingen }; deze suite test vooral de rijen.
-const parseRijen = (buffer: Buffer) => parsePlanningMatrixXlsxMetWaarschuwingen(buffer).rows;
+// Async sinds de xlsx-bibliotheek lui geladen wordt (api/_lib/matrixXlsx.ts).
+const parseRijen = async (buffer: Buffer) => (await parsePlanningMatrixXlsxMetWaarschuwingen(buffer)).rows;
 
 /**
  * Fixture-tests voor het import-entrypoint (had 0 tests, terwijl de import
@@ -25,13 +26,13 @@ const serial = (iso: string) => {
 };
 
 describe('parsePlanningMatrixXlsxMetWaarschuwingen', () => {
-  it('parseert een geldige praktijk-tab naar matrix-rijen', () => {
+  it('parseert een geldige praktijk-tab naar matrix-rijen', async () => {
     const buffer = buildXlsx([
       ['datum', 'dagtype', 'Jan Peeters', 'Mia Claes', 'aantal'],
       [serial('2026-07-06'), 'W', '4101', 'bv', 2],
       [serial('2026-07-07'), 'W', '', '4102', 1],
     ]);
-    const rows = parseRijen(buffer);
+    const rows = await parseRijen(buffer);
     expect(rows).toHaveLength(2);
     expect(rows[0].source_date).toBe('2026-07-06');
     expect(rows[0].day_type).toBe('W');
@@ -40,53 +41,53 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen', () => {
     expect(rows[1].assignments).toEqual({ 'Mia Claes': '4102' });
   });
 
-  it('weigert een werkboek zonder praktijk-tab met een duidelijke fout', () => {
+  it('weigert een werkboek zonder praktijk-tab met een duidelijke fout', async () => {
     const buffer = buildXlsx([['datum', 'dagtype', 'X', 'aantal'], [serial('2026-07-06'), 'W', '1', 1]], 'blad1');
-    expect(() => parseRijen(buffer)).toThrow(/praktijk/i);
+    await expect(parseRijen(buffer)).rejects.toThrow(/praktijk/i);
   });
 
-  it('weigert een tab zonder aantal-kolom', () => {
+  it('weigert een tab zonder aantal-kolom', async () => {
     const buffer = buildXlsx([
       ['datum', 'dagtype', 'Jan Peeters'],
       [serial('2026-07-06'), 'W', '4101'],
     ]);
-    expect(() => parseRijen(buffer)).toThrow(/aantal/i);
+    await expect(parseRijen(buffer)).rejects.toThrow(/aantal/i);
   });
 
-  it('weigert dubbele datumrijen (laatste-wint zou data stil laten verdwijnen)', () => {
+  it('weigert dubbele datumrijen (laatste-wint zou data stil laten verdwijnen)', async () => {
     const buffer = buildXlsx([
       ['datum', 'dagtype', 'Jan Peeters', 'aantal'],
       [serial('2026-07-06'), 'W', '4101', 1],
       [serial('2026-07-06'), 'W', '4102', 1],
     ]);
-    expect(() => parseRijen(buffer)).toThrow(/dubbele datumrijen/i);
+    await expect(parseRijen(buffer)).rejects.toThrow(/dubbele datumrijen/i);
   });
 
-  it('weigert dubbele chauffeur-kolommen', () => {
+  it('weigert dubbele chauffeur-kolommen', async () => {
     const buffer = buildXlsx([
       ['datum', 'dagtype', 'Jan Peeters', 'Jan Peeters', 'aantal'],
       [serial('2026-07-06'), 'W', '4101', '4102', 2],
     ]);
-    expect(() => parseRijen(buffer)).toThrow(/dubbele chauffeur-kolommen/i);
+    await expect(parseRijen(buffer)).rejects.toThrow(/dubbele chauffeur-kolommen/i);
   });
 
-  it('negeert spacer-kolommen zoals Flexi/invallers', () => {
+  it('negeert spacer-kolommen zoals Flexi/invallers', async () => {
     const buffer = buildXlsx([
       ['datum', 'dagtype', 'Jan Peeters', 'Flexi/invallers', 'Mia Claes', 'aantal'],
       [serial('2026-07-06'), 'W', '4101', 'x', 'bv', 2],
     ]);
-    const rows = parseRijen(buffer);
+    const rows = await parseRijen(buffer);
     expect(Object.keys(rows[0].assignments)).toEqual(['Jan Peeters', 'Mia Claes']);
   });
 
-  it('parseert tekstuele datums (dd-mmm-jj-display) via de fallback', () => {
+  it('parseert tekstuele datums (dd-mmm-jj-display) via de fallback', async () => {
     // Sommige exports leveren strings i.p.v. serials; de parser valt terug op
     // normalizePlanningMatrixDate.
     const buffer = buildXlsx([
       ['datum', 'dagtype', 'Jan Peeters', 'aantal'],
       ['06/07/2026', 'W', '4101', 1],
     ]);
-    const rows = parseRijen(buffer);
+    const rows = await parseRijen(buffer);
     expect(rows).toHaveLength(1);
     expect(rows[0].source_date).toBe('2026-07-06');
   });
@@ -94,12 +95,12 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen', () => {
 
 describe('parsePlanningMatrixXlsxMetWaarschuwingen, kolommen ná "aantal"', () => {
   it('waarschuwt voor een naamachtige kolom achter de aantal-kolom', async () => {
-    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/helpers');
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/_lib/matrixXlsx');
     const buffer = buildXlsx([
       ['datum', 'dagtype', 'Jan Peeters', 'aantal', 'Cherlet Luc'],
       [serial('2026-07-06'), 'W', '4101', 1, '4102'],
     ]);
-    const { rows, waarschuwingen } = parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
+    const { rows, waarschuwingen } = await parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
     // De kolom wordt níét gelezen (bestaand gedrag) …
     expect(rows[0].assignments).toEqual({ 'Jan Peeters': '4101' });
     // … maar verdwijnt niet langer geruisloos.
@@ -109,17 +110,17 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen, kolommen ná "aantal"', () =
   });
 
   it('waarschuwt niet voor tellingen-headers of losse woorden achter aantal', async () => {
-    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/helpers');
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/_lib/matrixXlsx');
     const buffer = buildXlsx([
       ['datum', 'dagtype', 'Jan Peeters', 'aantal', 'uur', '17', 'Flexi', ''],
       [serial('2026-07-06'), 'W', '4101', 1, '', '', '', ''],
     ]);
-    const { waarschuwingen } = parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
+    const { waarschuwingen } = await parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
     expect(waarschuwingen).toEqual([]);
   });
 
   it('waarschuwt niet voor chauffeurnamen die het tellingen-blok herhaalt', async () => {
-    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/helpers');
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/_lib/matrixXlsx');
     // De praktijk-tab van VHB herhaalt ná "aantal" elke chauffeur als kopje van
     // de tellingen (25-08: 114 meldingen bij 38 chauffeurs). Alleen een naam
     // die vóór "aantal" ontbreekt is mogelijk een vergeten chauffeur.
@@ -127,7 +128,7 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen, kolommen ná "aantal"', () =
       ['datum', 'dagtype', 'Jan Peeters', 'Mia Claes', 'aantal', 'Jan Peeters', 'Mia Claes', 'uur', 'Peeters Jan', 'Cherlet Luc'],
       [serial('2026-07-06'), 'W', '4101', '4102', 2, 1, 1, '', 1, '4103'],
     ]);
-    const { rows, waarschuwingen } = parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
+    const { rows, waarschuwingen } = await parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
     expect(rows[0].assignments).toEqual({ 'Jan Peeters': '4101', 'Mia Claes': '4102' });
     expect(waarschuwingen).toHaveLength(1);
     expect(waarschuwingen[0]).toContain('Cherlet Luc');
@@ -141,7 +142,7 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen, golden file: echte praktijk-
   // zorgde op 25-08 voor 114 valse "kolom ná aantal"-meldingen — deze test
   // laat elke toekomstige parser-wijziging tegen de echte vorm draaien.
   it('parseert 30 dagen × 38 chauffeurs zonder waarschuwingen', async () => {
-    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/helpers');
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/_lib/matrixXlsx');
     const chauffeurs = Array.from({ length: 38 }, (_, i) =>
       `Testman ${String.fromCharCode(65 + Math.floor(i / 26))}${String.fromCharCode(97 + (i % 26))}`);
     const codeVoor = (dag: number, chauffeur: number) => {
@@ -163,7 +164,7 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen, golden file: echte praktijk-
       const tellingen = chauffeurs.map((_, i) => (codes[i] ? 1 : 0));
       rows.push([serial(iso), dagtype, ...codes, aantal, ...tellingen, '', ...tellingen, '', ...tellingen]);
     }
-    const { rows: parsed, waarschuwingen } = parsePlanningMatrixXlsxMetWaarschuwingen(buildXlsx(rows));
+    const { rows: parsed, waarschuwingen } = await parsePlanningMatrixXlsxMetWaarschuwingen(buildXlsx(rows));
     expect(waarschuwingen).toEqual([]);
     expect(parsed).toHaveLength(30);
     // Lege cellen laat de parser bewust weg — per dag dus precies de

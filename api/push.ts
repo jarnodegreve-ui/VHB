@@ -1,4 +1,3 @@
-import webpush from "web-push";
 import { db } from "./db.js";
 import type { MeldingSoort } from "../shared/schemas/meldingen.js";
 import { filterPushOntvangers } from "../shared/schemas/dashboardVoorkeuren.js";
@@ -13,20 +12,39 @@ import { bewaarMeldingen } from "./storage.js";
  * abonneren niet maar breekt er ook niets.
  */
 
-let vapidConfigured = false;
-
-const ensureConfigured = () => {
-  if (vapidConfigured) return true;
+// web-push wordt LUI geladen (ronde 3, 19-09): de bibliotheek (met haar
+// crypto-/jws-afhankelijkheden) hoort niet in elke koude start, alleen een
+// request dat echt een push verstuurt heeft haar nodig. De publieke sleutel
+// is gewoon een env-var: getVapidPublicKey laadt de bibliotheek dus niet.
+type WebPush = typeof import("web-push");
+const vapidEnv = () => {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT || "mailto:info@vanhoorebeke.be";
-  if (!publicKey || !privateKey) return false;
-  webpush.setVapidDetails(subject, publicKey, privateKey);
-  vapidConfigured = true;
-  return true;
+  return publicKey && privateKey ? { publicKey, privateKey, subject } : null;
 };
 
-export const getVapidPublicKey = () => (ensureConfigured() ? process.env.VAPID_PUBLIC_KEY ?? null : null);
+let webpushBelofte: Promise<WebPush> | null = null;
+/** Geladen en met de VAPID-gegevens ingesteld; alleen aanroepen wanneer
+ *  vapidEnv() iets teruggeeft. Een mislukte poging (ongeldige sleutels) wordt
+ *  niet onthouden, zodat een gecorrigeerde env zonder herstart werkt. */
+const laadWebpush = (): Promise<WebPush> => {
+  webpushBelofte ??= (async () => {
+    const env = vapidEnv();
+    if (!env) throw new Error("VAPID-sleutels ontbreken.");
+    const mod = await import("web-push");
+    // CJS-pakket: in Node-ESM zit module.exports onder `default`.
+    const webpush = ((mod as unknown as { default?: WebPush }).default ?? mod) as WebPush;
+    webpush.setVapidDetails(env.subject, env.publicKey, env.privateKey);
+    return webpush;
+  })().catch((err) => {
+    webpushBelofte = null;
+    throw err;
+  });
+  return webpushBelofte;
+};
+
+export const getVapidPublicKey = () => vapidEnv()?.publicKey ?? null;
 
 export type PushSubscriptionRecord = {
   userId: string;
@@ -201,12 +219,14 @@ export const sendPushToUsers = async (userIds: string[], payload: PushPayload): 
     }
   }
 
-  if (!ensureConfigured()) return;
+  if (!vapidEnv()) return;
   const pushOntvangers = filterPushOntvangers(ontvangers, await getVoorkeurenVoorUsers(ontvangers), melding.soort);
   if (pushOntvangers.length === 0) return;
   const subscriptions = await getSubscriptionsForUsers(pushOntvangers);
   if (subscriptions.length === 0) return;
 
+  // Pas hier, wanneer er echt iets te versturen valt, de bibliotheek laden.
+  const webpush = await laadWebpush();
   // De client-SW kent alleen title/body/url; soort/doel blijven server-side.
   const body = JSON.stringify({ title: payload.title, body: payload.body, url: payload.url });
   await Promise.all(

@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import crypto from "node:crypto";
-import dotenv from "dotenv";
+import { createRequire } from "node:module";
 
 import { buildCalendar, type IcsEvent } from "../shared/ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
@@ -53,7 +53,9 @@ import {
   trekToegangIn,
   type ToegangIngetrokken,
 } from "./_lib/recordWrites.js";
-import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+// Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
+import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./_lib/matrixXlsx.js";
 import {
   applySwapsToPlanningRows,
   swapRaaktBereik,
@@ -146,7 +148,19 @@ import {
   getAppSetting, setAppSetting,
 } from "./storage.js";
 
-dotenv.config();
+// dotenv alleen buiten Vercel (ronde 3): daar komen de env-vars van het
+// platform en was dit bij elke koude start een overbodige module + een
+// vergeefse zoektocht naar een .env-bestand. Lokaal (`tsx api/index.ts`)
+// blijft het gedrag identiek: synchroon, op dezelfde plek in de opstart.
+// Via createRequire i.p.v. een statische import, zodat de module op Vercel
+// niet eens ingelezen wordt (en zonder top-level await).
+if (!process.env.VERCEL) {
+  try {
+    (createRequire(import.meta.url)("dotenv") as typeof import("dotenv")).config();
+  } catch (err) {
+    console.warn("[config] dotenv niet geladen, alleen de bestaande omgevingsvariabelen gelden:", (err as Error)?.message ?? err);
+  }
+}
 
 // Env-dump alleen buiten productie: op serverless herhaalt dit zich bij elke
 // koude start en verdunt het de echte fouten in de logs.
@@ -985,7 +999,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       // uren, ziekte, verlof, vrij) op dezelfde cel-waarheid — opstap naar de
       // loonadministratie zonder aparte export.
       const overzicht = bouwMaandoverzichtAoa(month, dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[]);
-      const buffer = bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
+      const buffer = await bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="planning-${month}.xlsx"`);
       return res.send(buffer);
@@ -1229,7 +1243,7 @@ app.get(
 });
 
 // Helper: decode de geüploade Excel-buffer en parse de praktijk-tab.
-const parseMatrixInput = (body: any) => {
+const parseMatrixInput = async (body: any) => {
   const xlsxBase64 = typeof body?.xlsxBase64 === "string" ? body.xlsxBase64 : "";
   if (!xlsxBase64) {
     throw new Error("Geen Excel-bestand meegegeven (verwacht xlsxBase64 in body).");
@@ -1253,8 +1267,8 @@ const parseMatrixInput = (body: any) => {
 // deel mag het portaal in: rijen buiten [van, tot] worden genegeerd alsof ze
 // niet in het bestand stonden. Het te vervangen bereik volgt daardoor vanzelf
 // de overgebleven rijen (de RPC leidt het af uit min/max source_date).
-const parseMatrixInputMetPeriode = (body: any) => {
-  const { rows, waarschuwingen } = parseMatrixInput(body);
+const parseMatrixInputMetPeriode = async (body: any) => {
+  const { rows, waarschuwingen } = await parseMatrixInput(body);
   const bestandDates = rows.map((row) => row.source_date).filter(Boolean);
   const fileStartDate = bestandDates[0] || null;
   const fileEndDate = bestandDates[bestandDates.length - 1] || null;
@@ -1284,7 +1298,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
   try {
     let rows, fileStartDate, fileEndDate, parserWaarschuwingen;
     try {
-      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = parseMatrixInputMetPeriode(req.body));
+      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = await parseMatrixInputMetPeriode(req.body));
     } catch (parseErr: any) {
       return res.status(400).json({ error: parseErr.message });
     }
@@ -1488,7 +1502,7 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
   try {
     let rows, fileStartDate, fileEndDate, parserWaarschuwingen;
     try {
-      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = parseMatrixInputMetPeriode(req.body));
+      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = await parseMatrixInputMetPeriode(req.body));
     } catch (parseErr: any) {
       return res.status(400).json({ error: parseErr.message });
     }

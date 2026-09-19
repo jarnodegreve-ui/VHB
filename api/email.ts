@@ -1,4 +1,3 @@
-import nodemailer from "nodemailer";
 import { DAG_DMJ, PERIODE_DMJ } from "./helpers.js";
 
 /** Escape user-invoer vóór die in HTML-e-mails belandt (injectie-preventie).
@@ -77,6 +76,11 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
 
   try {
     const smtp = getSmtpConfig();
+    // nodemailer lui geladen (ronde 3): alleen wie echt mailt betaalt het
+    // inlezen, niet elke koude start. CJS-pakket: module.exports zit onder
+    // `default`.
+    const mod = await import("nodemailer");
+    const nodemailer = (mod as unknown as { default?: typeof mod }).default ?? mod;
     const transporter = nodemailer.createTransport(smtp);
     const fromAddress = process.env.SMTP_FROM || smtp.auth.user;
     // BCC bij meerdere ontvangers: met alles in `To:` kreeg elke chauffeur bij
