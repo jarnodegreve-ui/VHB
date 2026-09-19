@@ -5,7 +5,7 @@ import { logActivity, setAppSetting } from "../storage.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { onderhoudBodySchema, type OnderhoudPubliek } from "../../shared/schemas/onderhoud.js";
 import { valideerRecord } from "./valideer.js";
-import { getOnderhoud, invalidateOnderhoudCache } from "./onderhoud.js";
+import { getOnderhoud, meldOnderhoudWijziging } from "./onderhoud.js";
 import { ONDERHOUD_SETTING_KEY } from "./onderhoudRegels.js";
 
 /**
@@ -35,7 +35,7 @@ export function mountOnderhoudRoutes(app: express.Express) {
     try {
       const vorige = await getOnderhoud();
       await setAppSetting(ONDERHOUD_SETTING_KEY, body);
-      invalidateOnderhoudCache();
+      meldOnderhoudWijziging();
       // Activity-log alleen bij een échte omslag (aan/uit of schrijfblok);
       // een tekstcorrectie is geen gebeurtenis voor de historiek.
       if (vorige.actief !== body.actief || (body.actief && vorige.schrijfblok !== body.schrijfblok)) {

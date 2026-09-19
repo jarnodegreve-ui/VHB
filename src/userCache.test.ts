@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { makeUserCache } from '../api/userCache';
 import type { AppUser } from '../api/types';
 
@@ -108,5 +108,112 @@ describe('makeUserCache, gedeelde epoch over instanties (controle-ronde 27-08, n
     c.invalidate(); // verhoog() faalt, mag niet gooien
     await c.get();
     expect(calls).toBe(2);
+  });
+});
+
+describe('makeUserCache, stale-while-revalidate (ronde 3)', () => {
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const opzet = (o: { staleMs?: number } = {}) => {
+    const s = { t: 0, calls: 0, epoch: 0, storeOk: true, hang: null as null | (() => void) };
+    const store = { lees: async () => (s.storeOk ? s.epoch : null), verhoog: async () => { s.epoch += 1; } };
+    const cache = makeUserCache(async () => {
+      s.calls++;
+      const n = s.calls;
+      if (s.hang === null && n > 1) await new Promise<void>((r) => { s.hang = r; });
+      return users(n);
+    }, { ttlMs: 1000, staleMs: o.staleMs ?? 10_000, now: () => s.t, epochStore: store, epochCheckMs: 100 });
+    return { s, cache };
+  };
+
+  it('geeft na de TTL meteen de oude lijst terug en ververst op de achtergrond (één keer)', async () => {
+    const { s, cache } = opzet();
+    expect(await cache.get()).toHaveLength(1);
+    s.t += 1500;
+    const [a, b] = await Promise.all([cache.get(), cache.get()]);
+    expect(a).toHaveLength(1); // oud, zonder wachten: de fetch hangt nog
+    expect(b).toHaveLength(1);
+    expect(s.calls).toBe(2);   // één verversing, niet twee
+    s.hang?.();
+    await tick();
+    expect(await cache.get()).toHaveLength(2); // verse lijst staat klaar
+    expect(s.calls).toBe(2);
+  });
+
+  it('wacht wél wanneer de lijst ouder is dan het stale-venster', async () => {
+    const { s, cache } = opzet({ staleMs: 5000 });
+    await cache.get();
+    s.hang = () => {}; // fetches lossen meteen op
+    s.t += 5001;
+    expect(await cache.get()).toHaveLength(2);
+  });
+
+  it('een epoch-wissel gooit alles weg: geen stale lijst, wachten op verse data', async () => {
+    const { s, cache } = opzet();
+    await cache.get();
+    s.hang = () => {};
+    s.epoch += 1; // elders ingetrokken
+    s.t += 1500;
+    expect(await cache.get()).toHaveLength(2);
+  });
+
+  it('invalidate() gooit alles weg, ook tijdens een lopende achtergrondverversing', async () => {
+    const { s, cache } = opzet();
+    await cache.get();
+    s.t += 1500;
+    await cache.get();          // start achtergrondverversing (#2, hangt)
+    cache.invalidate();
+    const p = cache.get();      // moet wachten op een NIEUWE fetch (#3)
+    s.hang?.();
+    expect(await p).toHaveLength(3);
+    expect(await cache.get()).toHaveLength(3); // #2 heeft de cache niet gevuld
+  });
+
+  it('zonder bereikbare store geen stale-pad: gedrag zoals vóór SWR', async () => {
+    const { s, cache } = opzet();
+    await cache.get();
+    s.hang = () => {};
+    s.storeOk = false;
+    s.t += 1500;
+    expect(await cache.get()).toHaveLength(2);
+  });
+
+  it('zonder store (tests, lokaal) geen stale-pad', async () => {
+    let calls = 0;
+    let t = 0;
+    const cache = makeUserCache(async () => { calls++; return users(calls); }, { ttlMs: 1000, staleMs: 10_000, now: () => t });
+    await cache.get();
+    t += 1500;
+    expect(await cache.get()).toHaveLength(2);
+  });
+
+  it('een lijst die vlak na een eigen invalidate is opgehaald (basis onbekend) wordt niet stale geserveerd', async () => {
+    const { s, cache } = opzet();
+    await cache.get();
+    cache.invalidate();     // basis-epoch onbekend tot de volgende check
+    s.hang = () => {};
+    await cache.get();      // fetch #2 start met basis = null... tenzij de check eerst slaagt
+    s.epoch += 5;           // elders gewijzigd terwijl deze instantie stil lag
+    s.t += 1500;
+    const na = await cache.get();
+    expect(na).toHaveLength(3); // verse fetch, niet de oude lijst (#2)
+  });
+
+  it('een mislukte achtergrondverversing laat de oude lijst staan en gooit niet', async () => {
+    let calls = 0;
+    let t = 0;
+    const store = { lees: async () => 0, verhoog: async () => {} };
+    const fout = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const cache = makeUserCache(async () => { calls++; if (calls === 2) throw new Error('db weg'); return users(calls); },
+      { ttlMs: 1000, staleMs: 10_000, now: () => t, epochStore: store, epochCheckMs: 100 });
+    await cache.get();
+    t += 1500;
+    expect(await cache.get()).toHaveLength(1);
+    await tick();
+    expect(fout).toHaveBeenCalled();
+    t += 200;
+    expect(await cache.get()).toHaveLength(1); // nog steeds oud, nieuwe poging loopt
+    await tick();
+    expect(await cache.get()).toHaveLength(3);
+    fout.mockRestore();
   });
 });

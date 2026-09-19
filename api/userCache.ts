@@ -23,7 +23,18 @@ const num = (v: string | undefined, d: number) => {
 // gooit ze haar cache weg. Revocatie is zo binnen ±2 s globaal. Zonder
 // Upstash (lokaal, of store onbereikbaar) valt het terug op het oude
 // TTL-gedrag; de rate-limiter degradeert op dezelfde manier.
+//
+// STALE-WHILE-REVALIDATE (ronde 3, 19-09): na de TTL haalde het eerstvolgende
+// request de hele users-tabel op terwijl de gebruiker wachtte. Nu krijgt dat
+// request de oude lijst (tot max. STALE_MS oud) en loopt de verversing op de
+// achtergrond. Dat mag ALLEEN wanneer de gedeelde epoch in ditzelfde
+// check-venster met succes geverifieerd is ÉN gelijk is aan de epoch waarmee
+// de lijst opgehaald werd: dan is er sinds onze fetch nergens een gebruiker
+// of toestel gewijzigd, en is "oud" dus niet "fout".
+// Geen store, store onbereikbaar, epoch gewijzigd of expliciete invalidate →
+// geen stale-pad, wachten zoals vroeger. Revocatie wordt hierdoor niet trager.
 const DEFAULT_TTL_MS = num(process.env.USER_CACHE_TTL_MS, 30_000);
+const DEFAULT_STALE_MS = num(process.env.USER_CACHE_STALE_MS, 5 * 60_000);
 const DEFAULT_EPOCH_CHECK_MS = num(process.env.USER_CACHE_EPOCH_CHECK_MS, 2_000);
 
 /** Gedeelde epoch-teller: lees() = huidige waarde (null = store niet
@@ -56,13 +67,19 @@ const upstashEpochStore: EpochStore = {
 
 export function makeUserCache(
   fetcher: () => Promise<AppUser[]>,
-  opts?: { ttlMs?: number; now?: Clock; epochStore?: EpochStore | null; epochCheckMs?: number; bijWissel?: () => void },
+  opts?: { ttlMs?: number; staleMs?: number; now?: Clock; epochStore?: EpochStore | null; epochCheckMs?: number; bijWissel?: () => void },
 ) {
   const ttlMs = opts?.ttlMs ?? DEFAULT_TTL_MS;
+  const staleMs = opts?.staleMs ?? DEFAULT_STALE_MS;
   const now = opts?.now ?? (() => Date.now());
   const store = opts?.epochStore ?? null;
   const epochCheckMs = opts?.epochCheckMs ?? DEFAULT_EPOCH_CHECK_MS;
-  let cache: { users: AppUser[]; at: number } | null = null;
+  // basis = de gedeelde epoch zoals bekend toen de fetch STARTTE (null =
+  // onbekend, bv. vlak na een eigen invalidate). Alleen een lijst met een
+  // bekende basis die nog steeds de huidige epoch is, mag stale geserveerd
+  // worden: anders kan er tussen onze fetch en de eerstvolgende waarneming
+  // ongemerkt iets ingetrokken zijn.
+  let cache: { users: AppUser[]; at: number; basis: number | null } | null = null;
   let inflight: Promise<AppUser[]> | null = null;
   // Epoch: invalidate() verhoogt dit. Een fetch die vóór de invalidate startte
   // mag de cache daarna NIET meer vullen (anders herleeft net-overschreven
@@ -71,6 +88,8 @@ export function makeUserCache(
   // Gedeelde epoch (Upstash): laatst geziene waarde + wanneer gecheckt.
   let remoteEpoch: number | null = null;
   let remoteCheckedAt = Number.NEGATIVE_INFINITY;
+  // Laatste GESLAAGDE epoch-verificatie (voorwaarde voor het stale-pad).
+  let remoteOkAt = Number.NEGATIVE_INFINITY;
 
   // bijWissel: meeliftende caches (toestel-lookup, zie _lib/deviceCache.ts)
   // gaan mee weg bij een epoch-wissel én bij een lokale invalidate.
@@ -86,44 +105,84 @@ export function makeUserCache(
     remoteEpoch = remote;
   };
 
+  /** Neem een verse waarneming van de limiter over (synchroon, geen I/O). */
+  const neemWaarnemingOver = (t: number): boolean => {
+    const gezien = store?.recent?.() ?? null;
+    if (gezien && gezien.at > remoteCheckedAt && t - gezien.at < epochCheckMs) {
+      remoteCheckedAt = gezien.at;
+      remoteOkAt = gezien.at;
+      verwerkRemote(gezien.waarde);
+      return true;
+    }
+    return false;
+  };
+
   const syncRemoteEpoch = async () => {
     if (!store) return;
     const t = now();
     // Meegelezen waarde van de limiter: alleen als ze verser is dan onze
     // laatste check én binnen het check-venster valt. Zo ziet in de praktijk
     // élk /api-request de epoch, zonder eigen roundtrip.
-    const gezien = store.recent?.() ?? null;
-    if (gezien && gezien.at > remoteCheckedAt && t - gezien.at < epochCheckMs) {
-      remoteCheckedAt = gezien.at;
-      verwerkRemote(gezien.waarde);
-      return;
-    }
+    if (neemWaarnemingOver(t)) return;
     if (t - remoteCheckedAt < epochCheckMs) return;
     remoteCheckedAt = t;
     let remote: number | null = null;
     try { remote = await store.lees(); } catch { remote = null; }
     if (remote === null) return; // store onbereikbaar → TTL-gedrag
+    remoteOkAt = now();
     verwerkRemote(remote);
+  };
+
+  /** Stand van de gedeelde epoch: `waarde` = laatst geziene epoch (null =
+   *  onbekend), `vers` = binnen het check-venster met succes geverifieerd.
+   *  Synchroon; neemt een verse limiter-waarneming mee. Ook de voorwaarde
+   *  voor het stale-pad van de andere auth-caches (onderhoud, toestel-gate,
+   *  zie _lib/swrCache.ts). */
+  const epochStand = (): { waarde: number | null; vers: boolean } => {
+    if (!store) return { waarde: null, vers: false };
+    const t = now();
+    neemWaarnemingOver(t);
+    return { waarde: remoteEpoch, vers: t - remoteOkAt < epochCheckMs };
+  };
+
+  const haalOp = (): Promise<AppUser[]> => {
+    // Stampede-bescherming: gelijktijdige misses delen één fetch.
+    if (inflight) return inflight;
+    const startedEpoch = epoch;
+    const basis = remoteEpoch;
+    const p: Promise<AppUser[]> = (async () => {
+      try {
+        const users = await fetcher();
+        // Alleen cachen als er ondertussen geen invalidate gebeurde.
+        if (epoch === startedEpoch) cache = { users, at: now(), basis };
+        return users;
+      } finally {
+        if (inflight === p) inflight = null;
+      }
+    })();
+    inflight = p;
+    return p;
   };
 
   const get = async (): Promise<AppUser[]> => {
     if (store) await syncRemoteEpoch();
     const t = now();
-    if (cache && t - cache.at < ttlMs) return cache.users;
-    // Stampede-bescherming: gelijktijdige misses delen één fetch.
-    if (inflight) return inflight;
-    const startedEpoch = epoch;
-    inflight = (async () => {
-      try {
-        const users = await fetcher();
-        // Alleen cachen als er ondertussen geen invalidate gebeurde.
-        if (epoch === startedEpoch) cache = { users, at: now() };
-        return users;
-      } finally {
-        inflight = null;
+    // Eerst de epoch-stand (kan een verse waarneming overnemen en daarbij de
+    // cache wissen), pas daarna de cache lezen.
+    const stand = epochStand();
+    const huidig = cache;
+    if (huidig) {
+      const leeftijd = t - huidig.at;
+      if (leeftijd < ttlMs) return huidig.users;
+      // Stale-while-revalidate, zie de kop van dit bestand.
+      if (leeftijd < staleMs && stand.vers && huidig.basis !== null && huidig.basis === stand.waarde) {
+        void haalOp().catch((err) => {
+          console.error("[userCache] achtergrondverversing mislukt, oude lijst blijft staan:", (err as Error)?.message ?? err);
+        });
+        return huidig.users;
       }
-    })();
-    return inflight;
+    }
+    return haalOp();
   };
 
   const invalidate = () => {
@@ -139,7 +198,7 @@ export function makeUserCache(
     }
   };
 
-  return { get, invalidate };
+  return { get, invalidate, epochStand };
 }
 
 // Luisteraars op "de users-cache is weggegooid" (epoch-wissel of invalidate).
@@ -152,6 +211,10 @@ const defaultCache = makeUserCache(getUsersData, {
   epochStore: upstashEpochStore,
   bijWissel: () => { for (const fn of wisselLuisteraars) fn(); },
 });
+
+/** Stand van de gedeelde epoch (waarde + "zonet geverifieerd"): de voorwaarde
+ *  voor het stale-pad van de andere auth-caches (api/_lib/swrCache.ts). */
+export const epochStand = defaultCache.epochStand;
 
 /** Gecachte gebruikerslijst voor de auth-hot-path. */
 export const getUsersCached = defaultCache.get;

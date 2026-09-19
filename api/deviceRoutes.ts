@@ -1,6 +1,6 @@
 import type express from "express";
 import { createHash } from "node:crypto";
-import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache, isStafRol } from "./middleware.js";
+import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, meldDeviceGateWijziging, isStafRol } from "./middleware.js";
 import { DEVICE_GATE_SETTING_KEY, isMissingTableError } from "./deviceGate.js";
 import { sendPushToUsers } from "./push.js";
 import {
@@ -269,7 +269,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       }
       const enabled = req.body.enabled;
       await setAppSetting(DEVICE_GATE_SETTING_KEY, { enabled });
-      invalidateDeviceGateCache();
+      meldDeviceGateWijziging();
       await logActivity(
         req,
         "system",
