@@ -505,8 +505,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       if (deviceToken === 'dev-dberror') throw { code: '08006', message: 'connection failure' };
       return mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken) ?? null;
     },
-    userHasDevices: async (userId: string) =>
-      mem.devices.some((d: any) => String(d.userId) === String(userId)),
+    listDevicesForUser: async (userId: string) =>
+      mem.devices.filter((d: any) => String(d.userId) === String(userId)),
     registerDevice: async (userId: string, deviceToken: string, name: string, autoApprove: boolean) => {
       const existing = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
       if (existing) {

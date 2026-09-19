@@ -2403,9 +2403,13 @@ export const registerDevice = async (
   deviceToken: string,
   name: string,
   autoApprove: boolean,
+  // Optioneel: de aanroeper heeft de toestellen van deze gebruiker net al
+  // opgehaald (listDevicesForUser) en geeft de gevonden rij (of null) mee;
+  // dat spaart hier een lezing. undefined = zelf opzoeken, zoals vroeger.
+  bekend?: UserDevice | null,
 ): Promise<{ device: UserDevice; created: boolean }> => {
   const client = requireDb();
-  const existing = await getDevice(userId, deviceToken);
+  const existing = bekend !== undefined ? bekend : await getDevice(userId, deviceToken);
   if (existing) {
     const { error } = await client
       .from('user_devices')
@@ -2425,7 +2429,8 @@ export const registerDevice = async (
   };
   // Race (dubbele boot-call): bij een PK-conflict is de rij er al — negeren
   // en de bestaande status teruggeven i.p.v. een 500.
-  const { error } = await client.from('user_devices').insert(row);
+  // insert + de rij meteen terug (één trip i.p.v. insert en dan opnieuw lezen).
+  const { data: inserted, error } = await client.from('user_devices').insert(row).select('*').maybeSingle();
   if (error) {
     if ((error as any).code === '23505') {
       const raced = await getDevice(userId, deviceToken);
@@ -2433,20 +2438,19 @@ export const registerDevice = async (
     }
     throw error;
   }
-  const device = await getDevice(userId, deviceToken);
+  const device = inserted ? toPublicDevice(inserted) : await getDevice(userId, deviceToken);
   if (!device) throw new Error('Toestel-registratie niet teruggevonden.');
   return { device, created: true };
 };
 
-/** Heeft deze gebruiker al één of meer toestellen? (bepaalt auto-approve) */
-export const userHasDevices = async (userId: string): Promise<boolean> => {
+/** De toestellen van één gebruiker (hooguit MAX_DEVICES_PER_USER rijen): de
+ *  registratie hoeft daarvoor niet de hele tabel te lezen. */
+export const listDevicesForUser = async (userId: string): Promise<UserDevice[]> => {
   const client = requireDb();
-  const { count, error } = await client
-    .from('user_devices')
-    .select('device_token', { count: 'exact', head: true })
-    .eq('user_id', String(userId));
-  if (error) throw error;
-  return (count ?? 0) > 0;
+  const rows = await paginatedFetch((from, to) =>
+    client.from('user_devices').select('*').eq('user_id', String(userId)).order('created_at', { ascending: false }).order('device_token', { ascending: true }).range(from, to),
+  );
+  return rows.map(toPublicDevice);
 };
 
 export const listAllDevices = async (): Promise<UserDevice[]> => {

@@ -553,23 +553,31 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
 
     // Teller atomair bijwerken (RPC) i.p.v. read-modify-write op de gecachte
     // waarde — anders telt het mis bij ~gelijktijdig in/uitloggen.
-    await bumpActiveSessions(String(currentUser.id), action === "start" ? 1 : -1);
     // ISO opslaan (was een nl-BE-string in UTC-servertijd → stond 1-2u fout
     // en sorteerde niet); de client formatteert naar Belgische tijd.
     const lastLogin = action === "start" ? new Date().toISOString() : currentUser.lastLogin;
     if (action === "start") {
-      await updateUserSessionMeta(String(currentUser.id), { lastLogin });
+      // Drie onafhankelijke DB-trips tegelijk i.p.v. na elkaar (ronde 3): de
+      // teller (RPC op activesessions), lastLogin (eigen kolom) en de lezing
+      // van het laatste auth-event raken elkaar niet. De logregel hieronder
+      // volgt pas daarna, want die hangt van de lezing af.
+      const [, , latestAuthEventAt] = await Promise.all([
+        bumpActiveSessions(String(currentUser.id), 1),
+        updateUserSessionMeta(String(currentUser.id), { lastLogin }),
+        getLatestAuthEventAt(String(currentUser.id)),
+      ]);
       // Login-event vastleggen: lastLogin wordt overschreven, maar de
       // activiteitenlog bewaart elke aanmelding apart → historiek "wie wanneer"
       // + basis voor het per-dag-actieve-gebruikers-overzicht. Dedup binnen
       // 10 minuten: 'start' is anders onbeperkt herhaalbaar en daarmee was
       // het aanwezigheidslog te vervuilen (controle-ronde #31); een échte
       // her-login binnen 10 min verliest hooguit één historiekregel.
-      const latestAuthEventAt = await getLatestAuthEventAt(String(currentUser.id));
       const tenMinAgo = Date.now() - 10 * 60 * 1000;
       if (!latestAuthEventAt || new Date(latestAuthEventAt).getTime() < tenMinAgo) {
         await logActivity(req, "auth", "Aangemeld", `${currentUser.name} meldde zich aan.`, { type: "user", id: String(currentUser.id) });
       }
+    } else {
+      await bumpActiveSessions(String(currentUser.id), -1);
     }
     // Optimistische teller in de respons (exact-genoeg voor weergave; de
     // DB-waarde is gezaghebbend en nu wél race-vrij).
