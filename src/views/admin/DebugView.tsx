@@ -498,7 +498,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Systeem"
+        view="beheer-debug"
         title="Systeemstatus"
         actions={(
           <>

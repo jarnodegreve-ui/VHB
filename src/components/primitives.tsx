@@ -148,12 +148,18 @@ export function Badge({
   tone = 'slate',
   dot = false,
   stil = false,
+  kaal = false,
   icon,
   className,
   title,
   children,
 }: {
   tone?: BadgeTone;
+  /** Kaal: puntje in `tone` + tekst, zónder chip. Voor een rusttoestand in
+   *  een tabelcel (actief, aan/uit): als elke cel een pil is, valt geen
+   *  enkele pil nog op (ronde 3, 19-09). Een pil blijft voor wat aandacht
+   *  vraagt; een telling is gewoon een getal in `<Td num>`. */
+  kaal?: boolean;
   /** Status-dot vóór het label (voor live/lopende toestanden). */
   dot?: boolean;
   /** Stil: neutrale chip met alleen een gekleurd puntje in `tone` — voor
@@ -167,6 +173,15 @@ export function Badge({
   children: ReactNode;
 }) {
   const t = BADGE_TONES[tone];
+  if (kaal) {
+    return (
+      <span title={title} className={cn('inline-flex items-center gap-1.5 text-xs font-medium text-slate-600', className)}>
+        <span style={BASE_TRANSITIE} className={cn('h-1.5 w-1.5 shrink-0 rounded-full transition-colors', t.dot)} />
+        {icon}
+        {children}
+      </span>
+    );
+  }
   const chip = stil ? BADGE_TONES.slate.chip : t.chip;
   // transition-colors op DUR.base: een statuswissel op dezelfde badge (In
   // behandeling → Goedgekeurd) vloeit van kleur i.p.v. te knippen.

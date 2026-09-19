@@ -1002,6 +1002,16 @@ html.dark {
     transition-duration: 140ms;
   }
 
+  /* Filterrij van TableToolbar: één regel, schuift horizontaal zonder
+     zichtbare schuifbalk (de chips zelf tonen dat er meer is). */
+  .filter-rij {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-rij::-webkit-scrollbar {
+    display: none;
+  }
+
   .btn-primary {
     /* Effen goud met een fijne rand (ronde 3, 19-09): het verloop en de
        gekleurde gloed eronder oogden als een sjabloon. De diepte komt nu van

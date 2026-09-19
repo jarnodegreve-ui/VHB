@@ -144,7 +144,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Techniek"
+        view="voertuigen"
         title="Voertuigen"
         actions={(
           <>

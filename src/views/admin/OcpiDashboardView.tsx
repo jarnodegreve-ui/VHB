@@ -90,7 +90,7 @@ export function OcpiDashboardView() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Laadinfrastructuur"
+        view="ocpi-monitoring"
         title="Laadpalen"
         actions={(
           <>

@@ -492,7 +492,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       {/* De enige primaire actie staat in de paginakop; ze opent hetzelfde
           paneel als een rij, maar leeg. */}
       <PageHeader
-        eyebrow="Communicatie"
+        view="beheer-omleidingen"
         title="Beheer omleidingen"
         actions={(
           <>

@@ -309,7 +309,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Beheer"
+        view="beheer-dienstoverzicht"
         title="Beheer dienstoverzicht"
         actions={(
           <>

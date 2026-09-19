@@ -462,7 +462,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Planning"
+        view="beheer-roosters"
         title="Beheer roosters"
         actions={<AanwezigOpScherm />}
       />

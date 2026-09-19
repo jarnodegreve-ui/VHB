@@ -375,7 +375,7 @@ export function ManageUpdatesView({
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Communicatie"
+        view="beheer-updates"
         title="Beheer updates"
         actions={(
           <>

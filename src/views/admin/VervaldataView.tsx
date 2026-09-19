@@ -220,7 +220,7 @@ export function VervaldataView({ users }: { users: User[] }) {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Beheer"
+        view="vervaldata"
         title="Vervaldata"
         actions={<VersheidRegel {...zl.versheid} />}
       />

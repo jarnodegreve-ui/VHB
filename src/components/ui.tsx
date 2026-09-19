@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { cn } from '../lib/ui';
+import type { View } from '../types';
+import { sectieLabel } from '../app/routes';
 import { versheidTekst, type Versheid } from '../lib/zelfLadend';
 import { Button } from './primitives';
 import { Modal } from './Modal';
@@ -24,16 +26,26 @@ export function PageShell({
 }
 
 export function PageHeader({
-  eyebrow,
+  view,
+  eyebrow: eyebrowProp,
   title,
   description,
   actions,
 }: {
+  /** Het scherm uit de routetabel. De regel boven de titel is dan het
+   *  sectiewoord van de zijbalk (`sectieLabel`: Beheer · Planning, Techniek,
+   *  Systeem…), één bron voor zijbalk, topbar en kop. Schermen in 'Algemeen'
+   *  krijgen er geen. Ronde 3 (19-09): de koppen droegen elk een eigen,
+   *  handgeschreven eyebrow ("Beheer", "Planning", "Gebruikersbeheer" boven
+   *  "Gebruikersbeheer") of geen, zonder regel. */
+  view?: View;
+  /** Alleen nog voor koppen buiten de routetabel (print, subschermen). */
   eyebrow?: string;
   title: string;
   description?: string;
   actions?: React.ReactNode;
 }) {
+  const eyebrow = eyebrowProp ?? (view ? sectieLabel(view) ?? undefined : undefined);
   return (
     // flex-wrap: op mobiel staat de (nu ene) primaire knop + "…" naast de
     // titel zolang dat past; bij een lange titel zakt de actie eronder.

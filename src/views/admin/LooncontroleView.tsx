@@ -40,7 +40,7 @@ export function LooncontroleView({ currentUser, onNavigate }: { currentUser: Use
   const [versheid, setVersheid] = useState<Versheid | null>(null);
   return (
     <PageShell breed>
-      <PageHeader eyebrow="Beheer · Loon" title="Looncontrole" actions={versheid ? <VersheidRegel {...versheid} /> : undefined} />
+      <PageHeader view="looncontrole" title="Looncontrole" actions={versheid ? <VersheidRegel {...versheid} /> : undefined} />
       <Segmented<Tab>
         label="Onderdeel"
         className="shrink-0"
@@ -271,7 +271,7 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
                     <Td num>{c.easypayTypePrest}</Td>
                     <Td className="font-mono text-xs">{[c.tik1, c.tik2, c.tik3, c.tik4, c.tik5, c.tik6].filter(Boolean).join(' · ') || '—'}</Td>
                     <Td num className="text-slate-600">{c.lbRijtijd ?? '—'}</Td>
-                    <Td><Badge tone={c.inExport ? 'emerald' : 'slate'} stil dot>{c.inExport ? 'ja' : 'nee'}</Badge></Td>
+                    <Td><Badge tone={c.inExport ? 'emerald' : 'slate'} kaal>{c.inExport ? 'ja' : 'nee'}</Badge></Td>
                     <Td className="text-right">
                       <IconButton label={`${c.codeWeergave} bewerken`} size="sm" onClick={() => setBewerk({ ...c, omschrijving: c.omschrijving ?? '', tik1: c.tik1 ?? '', tik2: c.tik2 ?? '', tik3: c.tik3 ?? '', tik4: c.tik4 ?? '', tik5: c.tik5 ?? '', tik6: c.tik6 ?? '' })}><Pencil size={16} /></IconButton>
                       <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => void verwijder(c)}><Trash2 size={16} /></IconButton>

@@ -361,6 +361,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   return (
     <PageShell>
       <PageHeader
+        view="toestellen"
         title="Toestellen"
       />
 

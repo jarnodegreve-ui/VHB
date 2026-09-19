@@ -258,6 +258,7 @@ export function ZiekteView({
   return (
     <PageShell>
       <PageHeader
+        view="ziekte"
         title="Ziekte"
         description="Actuele meldingen, opvolging en inzicht in geregistreerde ziektedagen."
         actions={(

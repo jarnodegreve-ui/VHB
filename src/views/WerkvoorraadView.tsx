@@ -175,7 +175,7 @@ export function WerkvoorraadView({
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Beheer"
+        view="werkvoorraad"
         title="Overzicht"
         description="Alles wat op een beslissing wacht, het dringendste eerst. Een rij opent het scherm waar je beslist."
       />

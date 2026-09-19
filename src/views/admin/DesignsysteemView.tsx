@@ -109,6 +109,7 @@ export function DesignsysteemView() {
   return (
     <PageShell>
       <PageHeader
+        view="designsysteem"
         title="Designsysteem"
       />
       <nav aria-label="Inhoud" className="flex flex-wrap gap-2">

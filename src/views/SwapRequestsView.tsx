@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
+import { Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
@@ -457,7 +457,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         actions={(
           <Button
             variant="primary"
-            size="lg"
+            icon={<Plus size={16} />}
             onClick={() => {
               // Verse wizard bij elk openen — geen halve vorige aanvraag.
               setWizardStep(1);

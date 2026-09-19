@@ -106,7 +106,7 @@ function Dagboek({ currentUser }: { currentUser: User }) {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Techniek"
+        view="werkprestaties"
         title="Dagadministratie"
         actions={(
           <>
@@ -251,7 +251,7 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Techniek"
+        view="werkprestaties"
         title="Dagadministratie"
         actions={(
           <>

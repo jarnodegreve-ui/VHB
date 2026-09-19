@@ -10,6 +10,7 @@ import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge, st
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
+import { ActieMenu } from '../components/ActieMenu';
 import { Field, Select, Textarea } from '../components/Field';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { verlofBalans, verlofDagen } from '../lib/leaveBalance';
@@ -584,31 +585,33 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         title="Verlof"
         description={isPlanner ? 'Beheer verlofaanvragen en bekijk de bezetting.' : 'Vraag verlof aan en volg je aanvragen op.'}
         actions={(
-          <div className="flex flex-wrap items-center gap-2">
-            {user.role === 'admin' && (
-              <>
-                <Button variant="secondary" size="lg" icon={<CalendarOff size={18} />} onClick={() => setShowFeestdagenModal(true)}>
-                  Feestdagen
-                </Button>
-                <Button variant="secondary" size="lg" icon={<SlidersHorizontal size={18} />} onClick={() => setShowLimietenModal(true)}>
-                  Limieten
-                </Button>
-              </>
+          // Kop-recept (ronde 3, 19-09): één gouden knop, hoogstens één
+          // gewone knop ernaast en de rest in het "…"-menu. Hier stonden vijf
+          // grote knoppen op een rij; instellingen (feestdagen, limieten,
+          // saldo's) open je zelden en horen in het menu.
+          <>
+            {isPlanner && (
+              <ActieMenu
+                label="Meer acties"
+                align="left"
+                items={[
+                  { label: "Saldo's", icon: <Users size={16} />, onClick: () => setShowSaldoModal(true) },
+                  ...(user.role === 'admin' ? [
+                    { label: 'Feestdagen', icon: <CalendarOff size={16} />, onClick: () => setShowFeestdagenModal(true) },
+                    { label: 'Limieten', icon: <SlidersHorizontal size={16} />, onClick: () => setShowLimietenModal(true) },
+                  ] : []),
+                ]}
+              />
             )}
             {isPlanner && (
-              <>
-                <Button variant="secondary" size="lg" icon={<Users size={18} />} onClick={() => setShowSaldoModal(true)}>
-                  Saldo's
-                </Button>
-                <Button variant="secondary" size="lg" icon={<ClipboardCheck size={18} />} onClick={openRegistratie}>
-                  Verlof registreren
-                </Button>
-              </>
+              <Button variant="secondary" icon={<ClipboardCheck size={16} />} onClick={openRegistratie}>
+                Verlof registreren
+              </Button>
             )}
-            <Button variant="primary" size="lg" icon={<Plus size={18} />} onClick={openAanvraag}>
+            <Button variant="primary" icon={<Plus size={16} />} onClick={openAanvraag}>
               Verlof aanvragen
             </Button>
-          </div>
+          </>
         )}
       />
 

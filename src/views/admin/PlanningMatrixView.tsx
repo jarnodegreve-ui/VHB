@@ -276,7 +276,7 @@ export function PlanningMatrixView({
     return (
     <PageShell breed>
       <PageHeader
-        eyebrow="Planning"
+        view="planning-matrix"
         title="Planningsoverzicht"
       />
       {/* OpsStat i.p.v. StatCard (vaste regel voor KPI-strips): vaste

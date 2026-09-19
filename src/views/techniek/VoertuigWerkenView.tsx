@@ -83,7 +83,7 @@ export function VoertuigWerkenView() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Techniek"
+        view="voertuig-werken"
         title="Uitgevoerde werken per bus"
         actions={<VersheidRegel {...zlVoertuigen.versheid} />}
       />

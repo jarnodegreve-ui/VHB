@@ -177,32 +177,40 @@ export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling,
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-2.5 md:flex-row md:items-center', className)}>
-      {onZoek && (
-        <div className="relative w-full md:max-w-xs">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="search"
-            value={zoek ?? ''}
-            onChange={(e) => onZoek(e.target.value)}
-            placeholder={placeholder}
-            aria-label={placeholder}
-            className="control-input w-full rounded-xl py-2 pl-9 pr-9 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none"
-          />
-          {zoek ? (
-            <IconButton label="Zoekopdracht wissen" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => onZoek('')}>
-              <X size={14} />
-            </IconButton>
-          ) : null}
+    // Vaste opbouw (ronde 3, 19-09): rij 1 = zoekveld links, telling en
+    // tabelinstellingen rechts; rij 2 = de filters op ÉÉN regel die op smalle
+    // schermen horizontaal schuift. Voorheen stonden filters tussen zoekveld
+    // en instellingen en liepen ze rafelig over twee of drie regels.
+    <div className={cn('flex flex-col gap-2.5', className)}>
+      <div className="flex flex-col gap-2.5 md:flex-row md:items-center">
+        {onZoek && (
+          <div className="relative w-full md:max-w-xs">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={zoek ?? ''}
+              onChange={(e) => onZoek(e.target.value)}
+              placeholder={placeholder}
+              aria-label={placeholder}
+              className="control-input w-full rounded-xl py-2 pl-9 pr-9 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none"
+            />
+            {zoek ? (
+              <IconButton label="Zoekopdracht wissen" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => onZoek('')}>
+                <X size={14} />
+              </IconButton>
+            ) : null}
+          </div>
+        )}
+        <div className="flex items-center gap-2.5 md:ml-auto">
+          {telling ? <span className="shrink-0 whitespace-nowrap text-xs font-medium tabular-nums text-slate-500">{telling}</span> : null}
+          {dichtheid ? <DichtheidSchakelaar {...dichtheid} /> : null}
+          {kolommen ? <KolommenMenu {...kolommen} /> : null}
+          {acties}
         </div>
-      )}
-      {filters ? <div className="flex flex-wrap items-center gap-1.5">{filters}</div> : null}
-      <div className="flex items-center gap-2.5 md:ml-auto">
-        {telling ? <span className="shrink-0 whitespace-nowrap text-xs font-medium tabular-nums text-slate-500">{telling}</span> : null}
-        {dichtheid ? <DichtheidSchakelaar {...dichtheid} /> : null}
-        {kolommen ? <KolommenMenu {...kolommen} /> : null}
-        {acties}
       </div>
+      {/* -m/p van 1: de focus-outline (2 px + 2 px offset) mag niet door de
+          overflow afgesneden worden. */}
+      {filters ? <div className="filter-rij -m-1 flex items-center gap-1.5 overflow-x-auto p-1 [&>*]:shrink-0">{filters}</div> : null}
     </div>
   );
 }
