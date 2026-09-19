@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Melding } from '../../types';
 import { apiFetch } from '../../lib/api';
-import type { DataCtx } from './kern';
+import { useCollectieState, type DataCtx } from './kern';
 
 /**
  * Meldingencentrum: de eigen meldingen (alles wat de server als push
@@ -14,7 +14,7 @@ import type { DataCtx } from './kern';
  */
 export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'>) {
   const { session } = ctx;
-  const [meldingen, setMeldingen] = useState<Melding[]>([]);
+  const [meldingen, setMeldingen, zetMeldingenUitAntwoord] = useCollectieState<Melding[]>([]);
   const [ongelezenMeldingen, setOngelezenMeldingen] = useState(0);
   // Actuele lijst voor markeerMeldingenGelezenVoorScherm zonder dat de
   // schermwissel-hook op elke meldingenwijziging opnieuw hoeft te vuren.
@@ -30,8 +30,12 @@ export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'
       // Vorm: { meldingen, ongelezen }. Een kale lijst (oude server, mock)
       // tellen we zelf.
       const lijst: Melding[] = Array.isArray(data) ? data : Array.isArray(data?.meldingen) ? data.meldingen : [];
-      setMeldingen(lijst);
-      setOngelezenMeldingen(typeof data?.ongelezen === 'number' ? data.ongelezen : lijst.filter((m) => !m.gelezenOp).length);
+      // Lijst en teller komen uit hetzelfde antwoord: gelijk antwoord = beide
+      // laten staan. Lokaal "gelezen" markeren gaat via setMeldingen en maakt
+      // de afdruk ongeldig, dus de server-waarheid komt daarna altijd terug.
+      if (zetMeldingenUitAntwoord(response, data, lijst)) {
+        setOngelezenMeldingen(typeof data?.ongelezen === 'number' ? data.ongelezen : lijst.filter((m) => !m.gelezenOp).length);
+      }
     } catch (error) {
       // Meldingen zijn nice-to-have: geen laadfout-toast, de bel blijft leeg.
       console.error('Error fetching meldingen:', error);

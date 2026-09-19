@@ -418,6 +418,26 @@ export default function App() {
         void fetchUsers();
       }
     },
+    // Lichte catch-up (tabblad terug binnen 5 min na de laatste volledige
+    // ronde, src/lib/realtime.ts): alleen wat vaak wijzigt. De planning hoort
+    // er alleen bij als planning_version wijzigde (of niet te lezen was), en
+    // dan stil: een wijziging die via de socket binnenkwam gaf haar toast al.
+    refetchLicht: ({ planning }) => {
+      void fetchMeldingen();
+      void fetchLeave();
+      void fetchSwaps();
+      if (!planning) return;
+      const planningFilter = currentUser && !isStaf(currentUser.role)
+        ? { driverId: String(currentUser.id) }
+        : undefined;
+      void fetchPlanning(undefined, planningFilter, { silent: true });
+      window.dispatchEvent(new Event('vhb-planning-changed'));
+      if (currentUser && isStaf(currentUser.role)) {
+        refreshCoverageGaps();
+        void fetchPlanningMatrix();
+        void fetchPlanningMatrixHistory();
+      }
+    },
   });
 
   // Terug online (offline-banner verdwijnt): zelfde catch-up als realtime —

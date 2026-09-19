@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { User } from '../../types';
 import { apiFetch } from '../../lib/api';
@@ -75,6 +75,58 @@ export const antwoordDatum = (response: Response): number | null => {
   const t = d ? Date.parse(d) : Number.NaN;
   return Number.isFinite(t) ? t : null;
 };
+
+/**
+ * Vingerafdruk van een GET-antwoord voor de gelijkheidscheck hieronder: de
+ * ETag als de server er een meegeeft (Express zet een inhouds-hash op elke
+ * res.json), samen met de URL zodat twee filters van dezelfde collectie nooit
+ * op elkaar lijken; anders de geserialiseerde payload. Goedkoop én stabiel:
+ * dezelfde server-JSON geeft dezelfde string.
+ */
+export const antwoordAfdruk = (response: Pick<Response, 'headers' | 'url'> | null | undefined, payload: unknown): string => {
+  const etag = response?.headers.get('etag');
+  if (etag) return `etag:${response?.url ?? ''}:${etag}`;
+  try {
+    return `json:${JSON.stringify(payload)}`;
+  } catch {
+    // Niet te serialiseren (kringverwijzing): nooit gelijk, dus altijd zetten.
+    return `uniek:${Math.random()}`;
+  }
+};
+
+/**
+ * Collectie-state met gelijkheidscheck (ronde 3, 19-09). Een catch-up na het
+ * heropenen van het tabblad haalt ±10 collecties opnieuw op; elke fetcher deed
+ * blind `setX(data)`, en omdat `response.json()` altijd een nieuwe array geeft
+ * betekende dat ±10 volledige tree-renders, ook als er niets gewijzigd was.
+ *
+ * - `zetUitAntwoord(response, payload, volgende)`: alleen voor een GET. Slaat de
+ *   setState over wanneer het antwoord inhoudelijk gelijk is aan het vorige
+ *   toegepaste antwoord (`antwoordAfdruk`); geeft terug of er gezet is.
+ * - `zet`: de gewone setter, voor alles wat de lokale staat los van de server
+ *   wijzigt (optimistische stap, overnemen na een save, reset). Die maakt de
+ *   afdruk ongeldig: daarna kan de lokale staat afwijken van het laatste
+ *   antwoord, dus de eerstvolgende GET wordt altijd toegepast, ook als hij
+ *   gelijk is aan de vorige (bv. een collega draaide jouw wijziging terug).
+ *
+ * Nieuwe collectie-fetcher = deze hook, nooit een kale useState + setX(data).
+ */
+export function useCollectieState<T>(initieel: T | (() => T)) {
+  const [waarde, setWaarde] = useState<T>(initieel);
+  const afdrukRef = useRef<string | null>(null);
+  const zet = useCallback<React.Dispatch<React.SetStateAction<T>>>((volgende) => {
+    afdrukRef.current = null;
+    setWaarde(volgende);
+  }, []);
+  const zetUitAntwoord = useCallback((response: Pick<Response, 'headers' | 'url'> | null | undefined, payload: unknown, volgende: T): boolean => {
+    const afdruk = antwoordAfdruk(response, payload);
+    if (afdrukRef.current === afdruk) return false;
+    afdrukRef.current = afdruk;
+    setWaarde(volgende);
+    return true;
+  }, []);
+  return [waarde, zet, zetUitAntwoord] as const;
+}
 
 export type BronMeting = { uitCache: number; vers: number; oudste: number | null };
 

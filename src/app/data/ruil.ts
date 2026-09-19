@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { SwapRequest } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { notify } from '../../lib/ui';
-import type { DataCtx } from './kern';
+import { useCollectieState, type DataCtx } from './kern';
 
 /**
  * Dienstruil: de verzoeken, beslissen (PATCH met seenStatus-guard) en de
@@ -10,7 +10,7 @@ import type { DataCtx } from './kern';
  */
 export function useRuilData(ctx: DataCtx) {
   const { session, currentUser, showToast, meldLaadfout, fetchActivityLog } = ctx;
-  const [swaps, setSwaps] = useState<SwapRequest[]>([]);
+  const [swaps, setSwaps, zetSwapsUitAntwoord] = useCollectieState<SwapRequest[]>([]);
   // Chauffeur laadt de ruilen ná de poort (useAppData): waar zodra de eerste
   // laadpoging rond is; voor staf zit swaps in de poort.
   const [swapsGeladen, setSwapsGeladen] = useState(false);
@@ -22,7 +22,7 @@ export function useRuilData(ctx: DataCtx) {
       ctx.captureRevision('swaps', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setSwaps(data);
+        zetSwapsUitAntwoord(response, data, data);
         ctx.markCollectionLoaded('swaps');
       }
     } catch (error) {

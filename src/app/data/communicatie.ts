@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import type { Diversion, Update, User } from '../../types';
 import { apiFetch } from '../../lib/api';
-import { replaceById, withoutId, type DataCtx, type OpVeldfouten } from './kern';
+import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 import { metOngedaan } from '../../lib/ongedaan';
 
 /**
@@ -11,8 +10,8 @@ import { metOngedaan } from '../../lib/ongedaan';
  */
 export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
   const { session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog, users } = ctx;
-  const [updates, setUpdates] = useState<Update[]>([]);
-  const [diversions, setDiversions] = useState<Diversion[]>([]);
+  const [updates, setUpdates, zetUpdatesUitAntwoord] = useCollectieState<Update[]>([]);
+  const [diversions, setDiversions, zetDiversionsUitAntwoord] = useCollectieState<Diversion[]>([]);
 
   const fetchUpdates = async (accessToken = session?.access_token) => {
     try {
@@ -20,7 +19,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       ctx.noteerAntwoord(response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setUpdates(ctx.stripRecordRevisions<Update>('updates', data));
+        zetUpdatesUitAntwoord(response, data, ctx.stripRecordRevisions<Update>('updates', data));
         ctx.markCollectionLoaded('updates');
         ctx.captureRevision('updates', response);
       }
@@ -89,7 +88,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       ctx.noteerAntwoord(response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setDiversions(ctx.stripRecordRevisions<Diversion>('diversions', data));
+        zetDiversionsUitAntwoord(response, data, ctx.stripRecordRevisions<Diversion>('diversions', data));
         ctx.markCollectionLoaded('diversions');
         ctx.captureRevision('diversions', response);
       }

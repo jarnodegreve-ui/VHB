@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '../../types';
 import { apiFetch, apiJson } from '../../lib/api';
 import type { VervaldataRij, PendingDevice } from '../../lib/werkvoorraad';
-import { replaceById, withoutId, type DataCtx, type OpVeldfouten } from './kern';
+import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 
 /**
  * Mensen: de gebruikerslijst (collectie- én per-record-savers), de
@@ -11,7 +11,7 @@ import { replaceById, withoutId, type DataCtx, type OpVeldfouten } from './kern'
  */
 export function useMensenData(ctx: DataCtx) {
   const { session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog } = ctx;
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers, zetUsersUitAntwoord] = useCollectieState<User[]>([]);
   const [unseenDocuments, setUnseenDocuments] = useState(0);
   // Chauffeur/technieker laden gebruikers en documenten ná de poort
   // (useAppData): waar zodra de eerste laadpoging rond is. Voor staf zit
@@ -21,8 +21,8 @@ export function useMensenData(ctx: DataCtx) {
   // Voer voor de werkvoorraad-knop in de topbar én het Open taken-paneel op
   // het dashboard: vervaldata (staf) en wachtende toestellen (admin-only API)
   // komen uit eigen endpoints. Best-effort — de app mag hier nooit op breken.
-  const [vervaldata, setVervaldata] = useState<VervaldataRij[]>([]);
-  const [pendingDevices, setPendingDevices] = useState<PendingDevice[]>([]);
+  const [vervaldata, setVervaldata, zetVervaldataUitAntwoord] = useCollectieState<VervaldataRij[]>([]);
+  const [pendingDevices, setPendingDevices, zetDevicesUitAntwoord] = useCollectieState<PendingDevice[]>([]);
   // Ververst elke 10 min én bij tab-focus: het portaal staat bij de planner
   // de hele dag open en de werkvoorraad-badge moet blijven kloppen.
   useEffect(() => {
@@ -31,7 +31,7 @@ export function useMensenData(ctx: DataCtx) {
     let cancelled = false;
     const haal = () => {
       apiJson<VervaldataRij[]>('/api/user-expiries')
-        .then((rows) => { if (!cancelled && Array.isArray(rows)) setVervaldata(rows); })
+        .then((rows) => { if (!cancelled && Array.isArray(rows)) zetVervaldataUitAntwoord(null, rows, rows); })
         .catch(() => { /* geen data = geen rijen */ });
     };
     haal();
@@ -51,7 +51,7 @@ export function useMensenData(ctx: DataCtx) {
         const res = await apiFetch('/api/devices');
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled && Array.isArray(data)) setPendingDevices(data.filter((d: { status?: string }) => d.status === 'pending'));
+        if (!cancelled && Array.isArray(data)) zetDevicesUitAntwoord(res, data, data.filter((d: { status?: string }) => d.status === 'pending'));
       } catch {
         // stil: de werkvoorraad mag niet breken op een toestellen-fetch
       }
@@ -74,7 +74,9 @@ export function useMensenData(ctx: DataCtx) {
       ctx.captureRevision('users', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setUsers(ctx.stripRecordRevisions<User>('users', data));
+        // De revisies altijd bijwerken (stripRecordRevisions), de lijst alleen
+        // bij gewijzigde inhoud.
+        zetUsersUitAntwoord(response, data, ctx.stripRecordRevisions<User>('users', data));
         ctx.markCollectionLoaded('users');
       }
     } catch (error) {

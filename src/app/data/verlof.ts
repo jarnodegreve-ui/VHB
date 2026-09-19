@@ -4,7 +4,7 @@ import { apiFetch, apiJson } from '../../lib/api';
 import { stelExtraFeestdagenIn } from '../../lib/leaveBalance';
 // Zod-vrij (shared/feestdagen.ts): deze hook zit in de startbundel.
 import { parseExtraFeestdagenLos, type ExtraFeestdag } from '../../../shared/feestdagen';
-import type { DataCtx } from './kern';
+import { useCollectieState, type DataCtx } from './kern';
 
 /**
  * Verlof: de aanvragen, beslissen (PATCH met seenStatus-guard), de
@@ -14,7 +14,7 @@ import type { DataCtx } from './kern';
  */
 export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promise<void> }) {
   const { session, currentUser, showToast, meldLaadfout, fetchActivityLog, refreshCoverageGaps } = ctx;
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [leaveRequests, setLeaveRequests, zetLeaveUitAntwoord] = useCollectieState<LeaveRequest[]>([]);
   const [lastSeenLeaveDecisionAt, setLastSeenLeaveDecisionAt] = useState<string | null>(null);
 
   const fetchLeave = async (accessToken = session?.access_token) => {
@@ -24,7 +24,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
       ctx.captureRevision('leave', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setLeaveRequests(data);
+        zetLeaveUitAntwoord(response, data, data);
         ctx.markCollectionLoaded('leave');
       }
     } catch (error) {

@@ -3,7 +3,7 @@ import type { PlanningCode, PlanningMatrixImportHistory, PlanningMatrixRow, Serv
 import { apiFetch } from '../../lib/api';
 import { fetchCoverageGaps, type DayGap } from '../../lib/coverage';
 import { addDays, isoDate } from '../../lib/availability';
-import type { DataCtx } from './kern';
+import { useCollectieState, type DataCtx } from './kern';
 
 /**
  * Planning: de shifts, het dienstoverzicht (services), de planningsmatrix
@@ -12,16 +12,18 @@ import type { DataCtx } from './kern';
  */
 export function usePlanningData(ctx: DataCtx) {
   const { session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog } = ctx;
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [myNotes, setMyNotes] = useState<Array<{ date: string; note: string }>>([]);
-  const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
-  const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
-  const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
+  // Collecties via useCollectieState: een GET met ongewijzigde inhoud slaat
+  // de setState (en dus de tree-render) over, zie kern.ts.
+  const [shifts, setShifts, zetShiftsUitAntwoord] = useCollectieState<Shift[]>([]);
+  const [services, setServices, zetServicesUitAntwoord] = useCollectieState<Service[]>([]);
+  const [myNotes, setMyNotes, zetMyNotesUitAntwoord] = useCollectieState<Array<{ date: string; note: string }>>([]);
+  const [planningMatrixRows, setPlanningMatrixRows, zetMatrixUitAntwoord] = useCollectieState<PlanningMatrixRow[]>([]);
+  const [planningCodes, setPlanningCodes, zetCodesUitAntwoord] = useCollectieState<PlanningCode[]>([]);
+  const [planningMatrixHistory, setPlanningMatrixHistory, zetHistoryUitAntwoord] = useCollectieState<PlanningMatrixImportHistory[]>([]);
   // Dekkingsgaten (vandaag + 6 dagen = 7-daags venster) voor het Operations
   // Center van planner/admin. null = (nog) niet geladen — de cockpit toont
   // dan 'onbekend' i.p.v. een vals-groen 'volledig gedekt'.
-  const [coverageDays, setCoverageDays] = useState<DayGap[] | null>(null);
+  const [coverageDays, , zetCoverageUitAntwoord] = useCollectieState<DayGap[] | null>(null);
   // Uitgestelde collecties (staf laadt ze ná de poort, zie useAppData): de
   // vlag gaat aan zodra de eerste laadpoging rond is, ook als ze mislukte
   // (dan toont de view leeg + de laadfout, zoals vroeger in de poort). Views
@@ -51,7 +53,7 @@ export function usePlanningData(ctx: DataCtx) {
       // planning gewist) → die moet ook écht leeg tonen. Vroeger hield
       // `length > 0` de oude/mock-data staan; nu enkel guarden op array-vorm.
       if (Array.isArray(data)) {
-        setShifts(data);
+        zetShiftsUitAntwoord(response, data, data);
         ctx.markCollectionLoaded('planning');
       }
     } catch (error) {
@@ -102,7 +104,7 @@ export function usePlanningData(ctx: DataCtx) {
       const response = await apiFetch('/api/services', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setServices(data);
+        zetServicesUitAntwoord(response, data, data);
         ctx.markCollectionLoaded('services');
         ctx.captureRevision('services', response);
       }
@@ -158,7 +160,7 @@ export function usePlanningData(ctx: DataCtx) {
     try {
       const response = await apiFetch('/api/planning-matrix', { accessToken });
       const data = await response.json();
-      if (data && Array.isArray(data)) setPlanningMatrixRows(data);
+      if (data && Array.isArray(data)) zetMatrixUitAntwoord(response, data, data);
     } catch (error) {
       console.error('Error fetching planning matrix:', error);
     } finally {
@@ -171,7 +173,7 @@ export function usePlanningData(ctx: DataCtx) {
       const response = await apiFetch('/api/planning-codes', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setPlanningCodes(data);
+        zetCodesUitAntwoord(response, data, data);
         ctx.markCollectionLoaded('planningCodes');
         ctx.captureRevision('planningCodes', response);
       }
@@ -187,7 +189,7 @@ export function usePlanningData(ctx: DataCtx) {
       const response = await apiFetch('/api/planning-matrix/history', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setPlanningMatrixHistory(data);
+        zetHistoryUitAntwoord(response, data, data);
       }
     } catch (error) {
       console.error('Error fetching planning matrix history:', error);
@@ -232,7 +234,9 @@ export function usePlanningData(ctx: DataCtx) {
       const from = isoDate(new Date());
       const to = isoDate(addDays(new Date(), 6));
       const res = await fetchCoverageGaps(from, to);
-      setCoverageDays(res.days);
+      // fetchCoverageGaps geeft de geparste body terug (geen Response): de
+      // vergelijking valt terug op de payload.
+      zetCoverageUitAntwoord(null, res.days, res.days);
     } catch (error) {
       // State blijft null (of houdt de vorige succesvolle fetch) — de
       // cockpit toont dan 'onbekend' i.p.v. vals-groen.
@@ -252,7 +256,7 @@ export function usePlanningData(ctx: DataCtx) {
       const response = await apiFetch(`/api/planning-notes?from=${iso(from)}&to=${iso(to)}`, { accessToken });
       ctx.noteerAntwoord(response);
       const data = await response.json();
-      if (Array.isArray(data)) setMyNotes(data.map((n: any) => ({ date: String(n.date), note: String(n.note) })));
+      if (Array.isArray(data)) zetMyNotesUitAntwoord(response, data, data.map((n: any) => ({ date: String(n.date), note: String(n.note) })));
     } catch { /* notities zijn nice-to-have */ }
   };
 

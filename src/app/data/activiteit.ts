@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import type { ActivityLogEntry, User, View } from '../../types';
 import type { AanwezigheidSessie } from '../../lib/aanwezigheid';
 import { apiFetch } from '../../lib/api';
+import { useCollectieState } from './kern';
 
 /**
  * Activiteit (admin): het logboek en de inlog-activiteit. Heeft de kern
@@ -15,12 +16,12 @@ export function useActiviteitData({ session, currentUser, currentView }: {
   currentUser: User | null;
   currentView: View;
 }) {
-  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [activityLog, setActivityLog, zetLogUitAntwoord] = useCollectieState<ActivityLogEntry[]>([]);
   // Uitgesteld (admin laadt het log ná de poort): waar zodra de eerste
   // laadpoging rond is; tot dan houden lezers hun skelet aan.
   const [activityLogGeladen, setActivityLogGeladen] = useState(false);
-  const [loginActivity, setLoginActivity] = useState<ActivityLogEntry[]>([]);
-  const [aanwezigheid, setAanwezigheid] = useState<AanwezigheidSessie[]>([]);
+  const [loginActivity, , zetLoginsUitAntwoord] = useCollectieState<ActivityLogEntry[]>([]);
+  const [aanwezigheid, setAanwezigheid, zetAanwezigheidUitAntwoord] = useCollectieState<AanwezigheidSessie[]>([]);
   /** Naam van de migratie die nog moet draaien, of null als alles er is. */
   const [aanwezigheidMigratie, setAanwezigheidMigratie] = useState<string | null>(null);
 
@@ -29,7 +30,7 @@ export function useActiviteitData({ session, currentUser, currentView }: {
       const response = await apiFetch('/api/activity', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setActivityLog(data);
+        zetLogUitAntwoord(response, data, data);
       }
     } catch (error) {
       console.error('Error fetching activity log:', error);
@@ -43,7 +44,7 @@ export function useActiviteitData({ session, currentUser, currentView }: {
       const response = await apiFetch('/api/activity/logins', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data.logins)) {
-        setLoginActivity(data.logins);
+        zetLoginsUitAntwoord(response, data.logins, data.logins);
       }
     } catch (error) {
       console.error('Error fetching login activity:', error);
@@ -59,7 +60,7 @@ export function useActiviteitData({ session, currentUser, currentView }: {
     try {
       const response = await apiFetch('/api/activity/presence', { accessToken });
       const data = await response.json();
-      if (data && Array.isArray(data.sessies)) setAanwezigheid(data.sessies);
+      if (data && Array.isArray(data.sessies)) zetAanwezigheidUitAntwoord(response, data.sessies, data.sessies);
       setAanwezigheidMigratie(typeof data?.migratie === 'string' ? data.migratie : null);
     } catch (error) {
       console.error('Error fetching aanwezigheid:', error);
