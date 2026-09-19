@@ -1,6 +1,6 @@
 import type { AppUser } from "./types.js";
 import { getUsersData } from "./storage.js";
-import { sharedPipeline } from "./rateLimit.js";
+import { laatsteEpochWaarneming, sharedPipeline, USERS_EPOCH_KEY } from "./rateLimit.js";
 
 type Clock = () => number;
 
@@ -27,9 +27,20 @@ const DEFAULT_TTL_MS = num(process.env.USER_CACHE_TTL_MS, 30_000);
 const DEFAULT_EPOCH_CHECK_MS = num(process.env.USER_CACHE_EPOCH_CHECK_MS, 2_000);
 
 /** Gedeelde epoch-teller: lees() = huidige waarde (null = store niet
- *  beschikbaar), verhoog() = best-effort INCR. Injecteerbaar voor tests. */
-export type EpochStore = { lees: () => Promise<number | null>; verhoog: () => Promise<void> };
-const EPOCH_KEY = "users-cache:epoch";
+ *  beschikbaar), verhoog() = best-effort INCR. Injecteerbaar voor tests.
+ *
+ *  recent() (optioneel) = een waarde die iemand anders nét al ophaalde, met
+ *  het tijdstip erbij. De rate-limiter leest de epoch mee in zijn ene
+ *  pipeline-aanroep per request (api/rateLimit.ts); is die waarneming verser
+ *  dan onze laatste check, dan nemen we haar over en doet de cache GEEN eigen
+ *  geawaite Upstash-call. Zonder verse waarneming (tests, buiten /api, store
+ *  weg) blijft het bij lees(), hooguit één keer per EPOCH_CHECK_MS. */
+export type EpochStore = {
+  lees: () => Promise<number | null>;
+  verhoog: () => Promise<void>;
+  recent?: () => { waarde: number; at: number } | null;
+};
+const EPOCH_KEY = USERS_EPOCH_KEY;
 const upstashEpochStore: EpochStore = {
   lees: async () => {
     const r = await sharedPipeline([["GET", EPOCH_KEY]], 800);
@@ -40,6 +51,7 @@ const upstashEpochStore: EpochStore = {
   verhoog: async () => {
     await sharedPipeline([["INCR", EPOCH_KEY]], 800);
   },
+  recent: laatsteEpochWaarneming,
 };
 
 export function makeUserCache(
@@ -60,20 +72,33 @@ export function makeUserCache(
   let remoteEpoch: number | null = null;
   let remoteCheckedAt = Number.NEGATIVE_INFINITY;
 
-  const syncRemoteEpoch = async () => {
-    if (!store) return;
-    const t = now();
-    if (t - remoteCheckedAt < epochCheckMs) return;
-    remoteCheckedAt = t;
-    let remote: number | null = null;
-    try { remote = await store.lees(); } catch { remote = null; }
-    if (remote === null) return; // store onbereikbaar → TTL-gedrag
+  const verwerkRemote = (remote: number) => {
     if (remoteEpoch !== null && remote !== remoteEpoch) {
       cache = null;
       inflight = null;
       epoch += 1;
     }
     remoteEpoch = remote;
+  };
+
+  const syncRemoteEpoch = async () => {
+    if (!store) return;
+    const t = now();
+    // Meegelezen waarde van de limiter: alleen als ze verser is dan onze
+    // laatste check én binnen het check-venster valt. Zo ziet in de praktijk
+    // élk /api-request de epoch, zonder eigen roundtrip.
+    const gezien = store.recent?.() ?? null;
+    if (gezien && gezien.at > remoteCheckedAt && t - gezien.at < epochCheckMs) {
+      remoteCheckedAt = gezien.at;
+      verwerkRemote(gezien.waarde);
+      return;
+    }
+    if (t - remoteCheckedAt < epochCheckMs) return;
+    remoteCheckedAt = t;
+    let remote: number | null = null;
+    try { remote = await store.lees(); } catch { remote = null; }
+    if (remote === null) return; // store onbereikbaar → TTL-gedrag
+    verwerkRemote(remote);
   };
 
   const get = async (): Promise<AppUser[]> => {

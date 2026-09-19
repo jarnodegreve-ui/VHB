@@ -201,6 +201,16 @@ app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision"
 const jsonBody = express.json({ limit: '5mb' });
 app.use((req, res, next) => (req.path === "/api/client-errors" ? next() : jsonBody(req, res, next)));
 
+// Health check — publiek maar kaal: geen tabelstatussen/foutmeldingen/env
+// naar buiten (info-disclosure). Gedetailleerde checks alleen voor admins.
+// Bewust VÓÓR de rate-limiter: het antwoord is statisch (geen DB, geen
+// store), en de online-ping van de client (HEAD, 4 s timeout) mag niet op
+// een trage of haperende Upstash wachten, anders toont de app "offline"
+// terwijl alleen de limiter-store traag is.
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString() });
+});
+
 // Rem op tollende/vastgelopen clients — per ingelogde gebruiker (token),
 // niet per IP, zodat het hele bedrijfsnetwerk achter één NAT niet samen één
 // limiet deelt. Zie rateLimit.ts voor de serverless-nuance.
@@ -253,11 +263,6 @@ mountLoonRoutes(app);
 // Dienstopbouw op rit-niveau (fase C Access-migratie, 13-09). Zie api/_lib/dienstRoutes.ts.
 mountDienstRoutes(app);
 
-// Health check — publiek maar kaal: geen tabelstatussen/foutmeldingen/env
-// naar buiten (info-disclosure). Gedetailleerde checks alleen voor admins.
-app.get("/api/health", async (_req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
-});
 
 app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, res) => {
   let supabaseStatus = "not configured";
