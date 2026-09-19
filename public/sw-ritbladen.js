@@ -98,6 +98,29 @@
     return uit;
   }
 
+  /**
+   * Build-asset met een inhouds-hash in de naam (Vite: /assets/naam-HASH.ext)?
+   * Zo'n bestand is onveranderlijk: dezelfde naam = dezelfde bytes. De
+   * precache van een nieuwe versie mag het daarom uit een oudere cache
+   * kopiëren i.p.v. opnieuw te downloaden (vendor-chunks wijzigen zelden,
+   * de build-stempel wijzigt alleen index-*.js). Alleen same-origin paden.
+   */
+  function isOnveranderlijkAsset(pad) {
+    return /^\/assets\/[A-Za-z0-9._-]+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/.test(String(pad || ''));
+  }
+
+  /**
+   * Mag dit gecachte antwoord naar de nieuwe cache gekopieerd worden? Alleen
+   * een geslaagd antwoord dat geen HTML is: de SPA-rewrite beantwoordt een
+   * onbestaand asset-pad met 200 + index.html, en zo'n vergissing (v4-caches)
+   * mag nooit van cache naar cache meereizen.
+   */
+  function bruikbaarUitCache(response) {
+    if (!response || !response.ok) return false;
+    var type = (response.headers && response.headers.get('content-type')) || '';
+    return type.indexOf('text/html') === -1;
+  }
+
   root.VHB_RITBLADEN = {
     RITBLADEN_CACHE: RITBLADEN_CACHE,
     MAX_RITBLADEN: MAX_RITBLADEN,
@@ -109,5 +132,7 @@
     markeerUitCache: markeerUitCache,
     snoeiSleutels: snoeiSleutels,
     ritbladUrlsUitBericht: ritbladUrlsUitBericht,
+    isOnveranderlijkAsset: isOnveranderlijkAsset,
+    bruikbaarUitCache: bruikbaarUitCache,
   };
 })(typeof self !== 'undefined' ? self : globalThis);

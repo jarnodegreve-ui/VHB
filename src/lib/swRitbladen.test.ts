@@ -18,6 +18,8 @@ type Api = {
   markeerUitCache: (response: Response | null | undefined) => Response | null;
   snoeiSleutels: (keys: Array<string | { url: string }>, max?: number) => string[];
   ritbladUrlsUitBericht: (data: unknown) => Array<{ url: string; key: string }>;
+  isOnveranderlijkAsset: (pad: string) => boolean;
+  bruikbaarUitCache: (response: Response | null | undefined) => boolean;
 };
 
 const laad = (): Api => {
@@ -95,5 +97,24 @@ describe('sw-ritbladen.js', () => {
     // Geen cache-treffer: null, zodat de SW op Response.error() terugvalt.
     expect(api.markeerUitCache(undefined)).toBeNull();
     expect(api.markeerUitCache(null)).toBeNull();
+  });
+  it('herkent gehashte build-assets als onveranderlijk (kopiëren uit de oude cache mag)', () => {
+    for (const p of ['/assets/react-vendor-BnGCNdwk.js', '/assets/index-BZRLgnPS.css', '/assets/inter-latin-400-normal-C38fXH4l.woff2', '/assets/pdf.worker-Dx3kP_aB.mjs']) {
+      expect(api.isOnveranderlijkAsset(p), p).toBe(true);
+    }
+    // Zonder hash, buiten /assets/ of cross-origin: altijd vers ophalen.
+    for (const p of ['/assets/logo.svg', '/', '/sw.js', '/api/me', '/vhb-icoon-192.png', 'https://elders.test/assets/a-12345678.js', '']) {
+      expect(api.isOnveranderlijkAsset(p), p).toBe(false);
+    }
+  });
+
+  it('kopieert nooit een mislukt of HTML-antwoord van cache naar cache', () => {
+    expect(api.bruikbaarUitCache(new Response('x', { headers: { 'content-type': 'text/javascript' } }))).toBe(true);
+    expect(api.bruikbaarUitCache(new Response('x', { headers: { 'content-type': 'font/woff2' } }))).toBe(true);
+    // SPA-rewrite: 200 + index.html onder een asset-URL.
+    expect(api.bruikbaarUitCache(new Response('<!doctype html>', { headers: { 'content-type': 'text/html; charset=utf-8' } }))).toBe(false);
+    expect(api.bruikbaarUitCache(new Response('weg', { status: 404 }))).toBe(false);
+    expect(api.bruikbaarUitCache(null)).toBe(false);
+    expect(api.bruikbaarUitCache(undefined)).toBe(false);
   });
 });
