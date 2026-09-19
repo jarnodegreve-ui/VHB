@@ -82,7 +82,11 @@ export function prefetchView(view: View, opts: { ookZwaar?: boolean } = {}) {
  * (wie op een deeplink landt heeft het dashboard nog niet, en Mijn dag is de
  * eerste tik van elke chauffeur). Niet 'verlof' (14-09): die view sleept de
  * schemas- en zod-chunk mee (±20 kB brotli) en de nav-prefetch bij hover of
- * aanraken dekt hem al. Niet de xlsx-views (500 kB): die laden pas bij echt
+ * aanraken dekt hem al. De startschermen zelf (dashboard, cockpit, Mijn dag,
+ * rooster) zijn sinds 19-09 zod-vrij: ze lezen de voorkeuren via de parser in
+ * shared/dashboardVoorkeuren.ts, en check-bundle-size faalt als zod in hun
+ * chunk-set terugkeert. In de staf-set zit zod nog wel, via dekking en de
+ * verlofkalender. Niet de xlsx-views (500 kB): die laden pas bij echt
  * gebruik. scripts/check-bundle-size.mjs leest deze lijst en bewaakt de
  * totale grootte van de warmup-set.
  */

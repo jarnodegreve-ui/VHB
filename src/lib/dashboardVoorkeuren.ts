@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LEGE_DASHBOARD_VOORKEUREN, parseDashboardVoorkeuren, type DashboardVoorkeuren, type DashboardVoorkeurenPatch } from '../../shared/schemas/dashboardVoorkeuren';
+// Zod-vrij (shared/dashboardVoorkeuren.ts): dit bestand zit in de chunks van
+// de startschermen (dashboard, Mijn dag, rooster); het schema met zod hoort
+// daar niet (scripts/check-bundle-size.mjs bewaakt dat).
+import { LEGE_DASHBOARD_VOORKEUREN, parseDashboardVoorkeurenLos, type DashboardVoorkeuren, type DashboardVoorkeurenPatch } from '../../shared/dashboardVoorkeuren';
 import type { User } from '../types';
 import { apiFetch } from './api';
 import { onthoudStartschermLokaal } from './startscherm';
@@ -140,7 +143,7 @@ const lokaleSleutel = (userId: string) => `vhb-dashboard-voorkeuren-${userId}`;
 export const leesLokaleVoorkeuren = (userId: string): DashboardVoorkeuren | null => {
   try {
     const raw = window.localStorage.getItem(lokaleSleutel(userId));
-    return raw ? parseDashboardVoorkeuren(JSON.parse(raw)) : null;
+    return raw ? parseDashboardVoorkeurenLos(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
@@ -167,7 +170,7 @@ export async function bewaarVoorkeurDeel(patch: DashboardVoorkeurenPatch): Promi
     throw new Error(data?.error || `Opslaan mislukt (${res.status})`);
   }
   const data = await res.json().catch(() => null) as { dashboardVoorkeuren?: unknown } | null;
-  return parseDashboardVoorkeuren(data?.dashboardVoorkeuren);
+  return parseDashboardVoorkeurenLos(data?.dashboardVoorkeuren);
 }
 
 /**

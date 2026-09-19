@@ -6,22 +6,13 @@ import { optioneel } from './basis.js';
  * kennen en de body van POST /api/meldingen/gelezen. Eén bron voor server
  * (validatie) en client (chips, type).
  */
-export const MELDING_SOORTEN = ['planning', 'verlof', 'ruil', 'update', 'omleiding', 'document', 'techniek', 'systeem'] as const;
-export type MeldingSoort = (typeof MELDING_SOORTEN)[number];
+// De soorten en labels wonen zod-vrij in shared/meldingSoorten.ts (de
+// startschermen hebben ze nodig zonder zod); hier doorgeëxporteerd zodat
+// bestaande imports, ook die van `api/`, gelijk blijven.
+import { MELDING_SOORTEN, MELDING_SOORT_LABEL, type MeldingSoort } from '../meldingSoorten.js';
+export { MELDING_SOORTEN, MELDING_SOORT_LABEL, type MeldingSoort };
 
 export const meldingSoortSchema = z.enum(MELDING_SOORTEN);
-
-/** Label per soort — chips in de app en de melding-rij. */
-export const MELDING_SOORT_LABEL: Record<MeldingSoort, string> = {
-  planning: 'Planning',
-  verlof: 'Verlof',
-  ruil: 'Dienstruil',
-  update: 'Updates',
-  omleiding: 'Omleidingen',
-  document: 'Documenten',
-  techniek: 'Techniek',
-  systeem: 'Systeem',
-};
 
 /** Alles gelezen = geen ids; anders de gegeven ids (eigen rijen, server-side gescoped). */
 export const meldingenGelezenBodySchema = z.object({

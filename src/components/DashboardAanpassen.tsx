@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import type { DashboardVoorkeuren } from '../types';
 import { isStandaard, isVerborgen, verplaats, volledigeVolgorde, zetZichtbaar, type TegelDef } from '../lib/dashboardVoorkeuren';
-import { LEGE_DASHBOARD_VOORKEUREN } from '../../shared/schemas/dashboardVoorkeuren';
+import { LEGE_DASHBOARD_VOORKEUREN } from '../../shared/dashboardVoorkeuren';
 import { cn } from '../lib/ui';
 import { Modal } from './Modal';
 import { Button, IconButton, MicroLabel, Switch } from './primitives';
