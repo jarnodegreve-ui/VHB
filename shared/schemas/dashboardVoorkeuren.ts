@@ -1,5 +1,10 @@
 import { z } from './zod.js';
-import { MELDING_SOORTEN, type MeldingSoort } from './meldingen.js';
+import type { MeldingSoort } from '../meldingSoorten.js';
+// Constanten en de lege waarde wonen zod-vrij in shared/dashboardVoorkeuren.ts
+// (de startschermen lezen ze zonder zod); hier doorgeëxporteerd zodat
+// bestaande imports, ook die van `api/`, gelijk blijven.
+import { LEGE_DASHBOARD_VOORKEUREN, STARTSCHERMEN, UITZETBARE_MELDING_SOORTEN, type Startscherm } from '../dashboardVoorkeuren.js';
+export { LEGE_DASHBOARD_VOORKEUREN, STARTSCHERMEN, UITZETBARE_MELDING_SOORTEN, type Startscherm };
 
 /**
  * Dashboardvoorkeuren — "Dashboard aanpassen" (next-level 2, 06-09-2026):
@@ -26,14 +31,6 @@ import { MELDING_SOORTEN, type MeldingSoort } from './meldingen.js';
  * al staat, zodat het ene scherm de voorkeur van het andere niet overschrijft.
  */
 const tegelId = z.string().trim().min(1).max(40).regex(/^[a-z0-9-]+$/, 'Ongeldig tegel-id');
-
-/** Schermen die als startscherm te kiezen zijn (views uit src/app/routes.tsx;
- *  src/lib/startscherm.test.ts bewaakt dat de zod-vrije kopie gelijk blijft). */
-export const STARTSCHERMEN = ['dashboard', 'mijn-dag', 'rooster'] as const;
-export type Startscherm = (typeof STARTSCHERMEN)[number];
-
-/** Soorten die een gebruiker kan uitzetten; 'systeem' komt altijd. */
-export const UITZETBARE_MELDING_SOORTEN: readonly MeldingSoort[] = MELDING_SOORTEN.filter((s) => s !== 'systeem');
 
 const meldingSoortUit = z.enum(UITZETBARE_MELDING_SOORTEN as [MeldingSoort, ...MeldingSoort[]]);
 
@@ -72,8 +69,6 @@ export type DashboardVoorkeurenPatch = z.input<typeof dashboardVoorkeurenPatchSc
 
 /** Body van PATCH /api/me/voorkeuren. */
 export const meVoorkeurenBodySchema = z.object({ dashboard: dashboardVoorkeurenPatchSchema });
-
-export const LEGE_DASHBOARD_VOORKEUREN: DashboardVoorkeuren = { verborgen: [], volgorde: [] };
 
 /** Onbekende invoer (db-jsonb, localStorage) → geldige voorkeuren of null. */
 export const parseDashboardVoorkeuren = (waarde: unknown): DashboardVoorkeuren | null => {

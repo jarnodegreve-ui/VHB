@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, BellRing, CalendarPlus, Clock, HeartPulse, Home, Info, KeyRound, LifeBuoy, LogOut, Monitor, Moon, ShieldCheck, Smartphone, Tablet, Users } from 'lucide-react';
-import { MELDING_SOORT_LABEL, type MeldingSoort } from '../../shared/schemas/meldingen';
-import { UITZETBARE_MELDING_SOORTEN } from '../../shared/schemas/dashboardVoorkeuren';
+import { MELDING_SOORT_LABEL, type MeldingSoort } from '../../shared/meldingSoorten';
+import { UITZETBARE_MELDING_SOORTEN } from '../../shared/dashboardVoorkeuren';
 import { Card, CardHeader } from '../components/Card';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';

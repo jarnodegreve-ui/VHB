@@ -105,6 +105,8 @@ export function CoverageView() {
   const appData = useOptioneleAppData();
   const chauffeurs = useMemo(() => (appData?.users ?? []).filter((u) => u.role === 'chauffeur' && u.isActive !== false), [appData?.users]);
   const alleShifts = appData?.shifts ?? [];
+  // De matrix laadt ná de poort (useAppData); zonder context (tests) = klaar.
+  const planningMatrixGeladen = appData?.planningMatrixGeladen ?? true;
   const werkdagen = useMemo(() => werkdagenUitShifts(alleShifts), [alleShifts]);
   const [batch, setBatch] = useState<{ date: string; codes: string[] } | null>(null);
   const [batchAdvies, setBatchAdvies] = useState<Record<string, BatchAdvies>>({});
@@ -1297,11 +1299,13 @@ export function CoverageView() {
                       <Select
                         aria-label={`Chauffeur voor dienst ${code}`}
                         value={batchKeuze[sleutel] ?? ''}
-                        disabled={batchBezig}
+                        disabled={batchBezig || !planningMatrixGeladen}
                         onChange={(e) => setBatchKeuze((cur) => ({ ...cur, [sleutel]: e.target.value }))}
                       >
-                        <option value="">Kies een chauffeur…</option>
-                        {optiesVoor(batch.date, code).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                        {/* Zonder matrix geen kandidaten: een afwezige stond
+                            anders even als vrij in de lijst. */}
+                        <option value="">{planningMatrixGeladen ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
+                        {planningMatrixGeladen && optiesVoor(batch.date, code).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                       </Select>
                     )}
                   </Card>

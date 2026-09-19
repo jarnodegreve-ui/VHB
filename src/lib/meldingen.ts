@@ -1,5 +1,5 @@
 import type { Melding, MeldingSoort } from '../types';
-import { MELDING_SOORTEN } from '../../shared/schemas/meldingen';
+import { MELDING_SOORTEN } from '../../shared/meldingSoorten';
 import { addDagen, isoDate } from './datum';
 import { formatDateHuman } from './format';
 

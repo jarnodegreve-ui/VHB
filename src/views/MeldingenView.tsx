@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw, Wrench } from 'lucide-react';
 import { useAppDataContext } from '../app/AppDataContext';
 import { navigeer, routeUitUrl } from '../app/router';
-import { MELDING_SOORT_LABEL } from '../../shared/schemas/meldingen';
+import { MELDING_SOORT_LABEL } from '../../shared/meldingSoorten';
 import { isoDate } from '../lib/datum';
 import { filterMeldingen, groepeerPerDag, soortenIn, tijdVan, type MeldingFilter } from '../lib/meldingen';
 import { cn } from '../lib/ui';

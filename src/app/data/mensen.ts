@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { User } from '../../types';
 import { apiFetch, apiJson } from '../../lib/api';
 import type { VervaldataRij, PendingDevice } from '../../lib/werkvoorraad';
-import { replaceById, withoutId, type DataCtx, type OpVeldfouten } from './kern';
+import { startRustigePoll } from '../../lib/rustigePoll';
+import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 
 /**
  * Mensen: de gebruikerslijst (collectie- én per-record-savers), de
@@ -11,14 +12,20 @@ import { replaceById, withoutId, type DataCtx, type OpVeldfouten } from './kern'
  */
 export function useMensenData(ctx: DataCtx) {
   const { session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog } = ctx;
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers, zetUsersUitAntwoord] = useCollectieState<User[]>([]);
   const [unseenDocuments, setUnseenDocuments] = useState(0);
+  // Chauffeur/technieker laden gebruikers en documenten ná de poort
+  // (useAppData): waar zodra de eerste laadpoging rond is. Voor staf zit
+  // users in de poort en is de vlag dus al waar wanneer de poort opent.
+  const [usersGeladen, setUsersGeladen] = useState(false);
+  const [documentenGeladen, setDocumentenGeladen] = useState(false);
   // Voer voor de werkvoorraad-knop in de topbar én het Open taken-paneel op
   // het dashboard: vervaldata (staf) en wachtende toestellen (admin-only API)
   // komen uit eigen endpoints. Best-effort — de app mag hier nooit op breken.
-  const [vervaldata, setVervaldata] = useState<VervaldataRij[]>([]);
-  const [pendingDevices, setPendingDevices] = useState<PendingDevice[]>([]);
-  // Ververst elke 10 min én bij tab-focus: het portaal staat bij de planner
+  const [vervaldata, setVervaldata, zetVervaldataUitAntwoord] = useCollectieState<VervaldataRij[]>([]);
+  const [pendingDevices, setPendingDevices, zetDevicesUitAntwoord] = useCollectieState<PendingDevice[]>([]);
+  // Ververst elke 10 min (alleen in een zichtbaar tabblad) én bij tab-focus,
+  // hooguit 1× per 5 min (startRustigePoll): het portaal staat bij de planner
   // de hele dag open en de werkvoorraad-badge moet blijven kloppen.
   useEffect(() => {
     const rol = currentUser?.role;
@@ -26,16 +33,13 @@ export function useMensenData(ctx: DataCtx) {
     let cancelled = false;
     const haal = () => {
       apiJson<VervaldataRij[]>('/api/user-expiries')
-        .then((rows) => { if (!cancelled && Array.isArray(rows)) setVervaldata(rows); })
+        .then((rows) => { if (!cancelled && Array.isArray(rows)) zetVervaldataUitAntwoord(null, rows, rows); })
         .catch(() => { /* geen data = geen rijen */ });
     };
-    haal();
-    const timer = window.setInterval(haal, 10 * 60 * 1000);
-    window.addEventListener('focus', haal);
+    const stop = startRustigePoll(haal);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener('focus', haal);
+      stop();
     };
   }, [currentUser?.role]);
   useEffect(() => {
@@ -46,19 +50,15 @@ export function useMensenData(ctx: DataCtx) {
         const res = await apiFetch('/api/devices');
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled && Array.isArray(data)) setPendingDevices(data.filter((d: { status?: string }) => d.status === 'pending'));
+        if (!cancelled && Array.isArray(data)) zetDevicesUitAntwoord(res, data, data.filter((d: { status?: string }) => d.status === 'pending'));
       } catch {
         // stil: de werkvoorraad mag niet breken op een toestellen-fetch
       }
     };
-    void haal();
-    const timer = window.setInterval(haal, 10 * 60 * 1000);
-    const opFocus = () => { void haal(); };
-    window.addEventListener('focus', opFocus);
+    const stop = startRustigePoll(() => { void haal(); });
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener('focus', opFocus);
+      stop();
     };
   }, [currentUser?.role]);
 
@@ -69,12 +69,16 @@ export function useMensenData(ctx: DataCtx) {
       ctx.captureRevision('users', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setUsers(ctx.stripRecordRevisions<User>('users', data));
+        // De revisies altijd bijwerken (stripRecordRevisions), de lijst alleen
+        // bij gewijzigde inhoud.
+        zetUsersUitAntwoord(response, data, ctx.stripRecordRevisions<User>('users', data));
         ctx.markCollectionLoaded('users');
       }
     } catch (error) {
       console.error('Error fetching users:', error);
       meldLaadfout('de gebruikerslijst');
+    } finally {
+      setUsersGeladen(true);
     }
   };
 
@@ -94,9 +98,8 @@ export function useMensenData(ctx: DataCtx) {
       }
       if (response.ok) {
         await fetchUsers();
-        if (currentUser?.role === 'admin') {
-          await fetchActivityLog();
-        }
+        // Logboek stil op de achtergrond: de overlay wacht er niet op.
+        if (currentUser?.role === 'admin') void fetchActivityLog();
         showToast('Gebruikers succesvol opgeslagen.', 'success');
         return true;
       } else {
@@ -170,6 +173,8 @@ export function useMensenData(ctx: DataCtx) {
       setUnseenDocuments(unseen);
     } catch (error) {
       console.error('Error fetching documents badge:', error);
+    } finally {
+      setDocumentenGeladen(true);
     }
   };
 
@@ -186,10 +191,12 @@ export function useMensenData(ctx: DataCtx) {
   /** Bij uitloggen: de gebruikerslijst leeg (badge/werkvoorraad blijven, zoals voorheen). */
   const resetMensen = () => {
     setUsers([]);
+    setUsersGeladen(false);
+    setDocumentenGeladen(false);
   };
 
   return {
-    users, unseenDocuments, vervaldata, pendingDevices,
+    users, usersGeladen, unseenDocuments, documentenGeladen, vervaldata, pendingDevices,
     fetchUsers, saveUsers, saveUser, createUser, deleteUser,
     fetchUnseenDocuments, markDocumentsSeen, resetMensen,
   };

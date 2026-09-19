@@ -103,26 +103,28 @@ async function precacheShell() {
   const html = await res.clone().text();
   await cache.put('/', res);
   const assets = [...new Set(html.match(/\/assets\/[A-Za-z0-9._-]+/g) || [])];
-  await Promise.all(
-    assets.map((pad) =>
-      fetch(new Request(pad, { cache: 'reload' }))
-        .then((r) => (r.ok ? cache.put(pad, r) : null))
-        .catch(() => null),
-    ),
-  );
-  // De pdf-chunks (±1,7 MB) zijn onveranderlijk per hash: staat dezelfde
-  // bestandsnaam al in een oudere cache (pdfjs zelf wijzigde niet), dan
-  // kopiëren we die i.p.v. hem op een 4G-verbinding opnieuw te downloaden.
-  await Promise.all(
-    PRECACHE_EXTRA.filter((pad) => !assets.includes(pad)).map(async (pad) => {
-      try {
-        const bestaand = await caches.match(pad);
-        if (bestaand) return cache.put(pad, bestaand);
-        const r = await fetch(new Request(pad, { cache: 'reload' }));
-        if (r.ok) await cache.put(pad, r);
-      } catch (_) { /* best-effort: eerste online opening cachet hem alsnog */ }
-    }),
-  );
+  // Gehashte assets zijn onveranderlijk: staat dezelfde bestandsnaam al in een
+  // oudere cache, dan kopiëren we die i.p.v. hem opnieuw te downloaden. Elke
+  // deploy stempelt alleen index-*.js opnieuw; de vendor-chunks (react, ui,
+  // supabase: ±180 kB gzip) en fonts/css houden meestal hun hash en werden
+  // toch bij élke deploy op 4G opnieuw binnengehaald (ronde 3, 19-09). Zelfde
+  // patroon als de pdf-chunks (±1,7 MB) uit PRECACHE_EXTRA. De navigatie-
+  // strategie (network-first) verandert hier niet door.
+  const extra = PRECACHE_EXTRA.filter((pad) => !assets.includes(pad));
+  await Promise.all([...assets, ...extra].map((pad) => precacheAsset(cache, pad)));
+}
+
+async function precacheAsset(cache, pad) {
+  try {
+    if (self.VHB_RITBLADEN.isOnveranderlijkAsset(pad)) {
+      const bestaand = await caches.match(pad);
+      // Nooit een HTML-antwoord onder een asset-URL meenemen (SPA-rewrite).
+      if (self.VHB_RITBLADEN.bruikbaarUitCache(bestaand)) return await cache.put(pad, bestaand);
+    }
+    const r = await fetch(new Request(pad, { cache: 'reload' }));
+    const contentType = r.headers.get('content-type') || '';
+    if (r.ok && !contentType.includes('text/html')) await cache.put(pad, r);
+  } catch (_) { /* best-effort: de eerste online opening cachet hem alsnog */ }
 }
 
 self.addEventListener('activate', (event) => {

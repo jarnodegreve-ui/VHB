@@ -20,6 +20,15 @@
  *     terug). Vroeger keek dit script naar de strings `safeParse|ZodError`
  *     in de code; de sourcemap-bronnen zijn eenduidig.
  *
+ *  5. zod-vrije startschermen (ronde 3, 19-09): de chunk-set van Mijn dag,
+ *     het chauffeursdashboard, de plannercockpit en het rooster (de schermen
+ *     waar de app op opent: `STARTSCHERMEN` plus de cockpit) mag
+ *     node_modules/zod niet bevatten, ook niet via een gedeelde chunk. Ze
+ *     lezen constanten en de voorkeuren-parser uit de zod-vrije modules
+ *     shared/dashboardVoorkeuren.ts en shared/meldingSoorten.ts; een import
+ *     uit shared/schemas/* (behalve constanten.ts of `import type`) zet
+ *     zod-vendor (85 kB) terug in het eerste scherm.
+ *
  * Budget verhogen? Mag, maar doe het expliciet hier, met een reden erbij.
  */
 import fs from 'node:fs';
@@ -33,7 +42,12 @@ const DEELBUDGET_KB = {
   // 18-09: main (3646295) faalt zelf op de 70-kB-grens in CI. Dezelfde bron
   // meet lokaal 69,92 kB; de badgebranch heeft evenveel ongecomprimeerde
   // bytes (232.726). 2 kB marge voorkomt dat gzip-/hashvariatie blokkeert.
-  index: 72,
+  // 19-09 (ronde 3): 72 → 74. De startbundel groeit 70,0 → 71,7 kB door de
+  // laadlogica zelf (poort per rol met uitgestelde collecties, gelijkheids-
+  // check in de datalaag, refetch-regime, rustige polls); dat hoort in de
+  // schil. Daartegenover staat 24 kB zod-vendor minder op elk startscherm en
+  // 3 tot 5 calls minder in de poort. Zelfde ±2 kB marge als hierboven.
+  index: 74,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
@@ -41,8 +55,10 @@ const DEELBUDGET_KB = {
 };
 
 // Warmup-set in kB gzip (stand 14-09: chauffeur 75 kB / 29 bestanden, staf
-// 100 kB / 36 bestanden). Het dashboard trekt via parseDashboardVoorkeuren
-// zod-vendor (24 kB) mee; dat zit in beide sets.
+// 100 kB / 36 bestanden). Tot 19-09 trok het dashboard via
+// parseDashboardVoorkeuren zod-vendor (24 kB) mee in beide sets; sinds de
+// zod-vrije startschermen (bewaker 5) zit zod alleen nog in de staf-set, via
+// de beheerschermen dekking en verlofkalender.
 // Golf 4 (15-09): staf 100 → 112 kB door VerlofBeoordeling, verlofkalender-paneel en
 // planningsoverzicht-acties; budget mee omhoog met dezelfde ±10 % marge.
 // 17-09: chauffeur 83 → 86. De set mat op main 82,81 kB lokaal en nét boven 83
@@ -50,7 +66,12 @@ const DEELBUDGET_KB = {
 // 0,12 kB feature-code (knop Afhandelen in Dienstruil) liet hem omvallen
 // terwijl er lokaal nog ruimte leek. Nieuwe waarde = de gemeten 82,9 + ±3 kB,
 // gelijk in geest aan de ±10 % marge van de andere deelbudgetten.
-const WARMUP_BUDGET_KB = { chauffeur: 86, staf: 124 };
+// 19-09: chauffeur 86 → 66. Zonder zod-vendor meet de set 59 kB; het oude
+// budget zou zod ongemerkt laten terugkomen. Zelfde ±10 % marge.
+const WARMUP_BUDGET_KB = { chauffeur: 66, staf: 124 };
+
+// Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
+const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
 
 const dir = 'dist/assets';
 if (!fs.existsSync(dir)) {
@@ -128,6 +149,21 @@ if (!kaartMatch) {
   fouten.push('Geen chunk-kaart (globalThis.__VHB_VIEW_CHUNKS__) achteraan index-*.js; de plugin vhb-view-chunks in vite.config.ts werkt niet meer en de warmup valt terug op import().');
 } else {
   const kaart = JSON.parse(kaartMatch[1]);
+
+  // --- 5. zod-vrije startschermen --------------------------------------------
+  for (const view of ZOD_VRIJE_VIEWS) {
+    const files = kaart[view];
+    if (!files) {
+      fouten.push(`Startscherm '${view}' staat niet in de chunk-kaart; is de view hernoemd? Pas dan ZOD_VRIJE_VIEWS aan.`);
+      continue;
+    }
+    const metZod = files.map((f) => f.replace(/^.*\/assets\//, '')).filter((f) => zodIn(bronnen(f) ?? []));
+    if (metZod.length > 0) {
+      fouten.push(`Startscherm '${view}' sleept zod mee via ${metZod.join(', ')}. Importeer in deze view en in wat ze statisch gebruikt alleen de zod-vrije modules (shared/dashboardVoorkeuren.ts, shared/meldingSoorten.ts, shared/schemas/constanten.ts) of 'import type'.`);
+    }
+  }
+  console.log(`  zod-vrij         ${ZOD_VRIJE_VIEWS.map((v) => v.replace('views/', '')).join(', ')}`);
+
   const loaders = fs.readFileSync('src/app/viewLoaders.ts', 'utf8');
   // View → pad, en drift tussen het pad en de import ernaast.
   const padPerView = new Map();
