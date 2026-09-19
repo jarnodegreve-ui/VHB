@@ -1814,12 +1814,13 @@ export default function App() {
               {resolvedCurrentView === 'beheer-roosters' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
+                    // Logboek stil op de achtergrond: de import wacht er niet op.
+                    if (currentUser?.role === 'admin') void fetchActivityLog();
                     await Promise.all([
                       fetchPlanningMatrix(),
                       fetchPlanning(),
                       fetchPlanningMatrixHistory(),
                       refreshCoverageGaps(),
-                      ...(currentUser?.role === 'admin' ? [fetchActivityLog()] : []),
                     ]);
                   }} />
                 </Suspense>

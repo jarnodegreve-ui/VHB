@@ -94,9 +94,8 @@ export function useMensenData(ctx: DataCtx) {
       }
       if (response.ok) {
         await fetchUsers();
-        if (currentUser?.role === 'admin') {
-          await fetchActivityLog();
-        }
+        // Logboek stil op de achtergrond: de overlay wacht er niet op.
+        if (currentUser?.role === 'admin') void fetchActivityLog();
         showToast('Gebruikers succesvol opgeslagen.', 'success');
         return true;
       } else {

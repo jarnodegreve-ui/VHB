@@ -71,9 +71,8 @@ export function usePlanningData(ctx: DataCtx) {
       if (response.ok) {
         setShifts(newShifts);
         ctx.captureRevision('planning', response);
-        if (currentUser?.role === 'admin') {
-          await fetchActivityLog();
-        }
+        // Logboek stil op de achtergrond: de overlay wacht er niet op.
+        if (currentUser?.role === 'admin') void fetchActivityLog();
         showToast('Planning succesvol opgeslagen.', 'success');
         return true;
       }
@@ -129,9 +128,8 @@ export function usePlanningData(ctx: DataCtx) {
       if (response.ok) {
         setServices(newServices);
         ctx.captureRevision('services', response);
-        if (currentUser?.role === 'admin') {
-          await fetchActivityLog();
-        }
+        // Logboek stil op de achtergrond: de overlay wacht er niet op.
+        if (currentUser?.role === 'admin') void fetchActivityLog();
         showToast('Diensten succesvol opgeslagen.', 'success');
         return true;
       }
@@ -203,9 +201,8 @@ export function usePlanningData(ctx: DataCtx) {
       }
       setPlanningCodes(newCodes);
       ctx.captureRevision('planningCodes', response);
-      if (currentUser?.role === 'admin') {
-        await fetchActivityLog();
-      }
+      // Logboek stil op de achtergrond: de overlay wacht er niet op.
+      if (currentUser?.role === 'admin') void fetchActivityLog();
       showToast('Planningscodes succesvol opgeslagen.', 'success');
       return true;
     } catch (error: any) {

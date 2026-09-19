@@ -51,9 +51,8 @@ export function useRuilData(ctx: DataCtx) {
         // zit. Schreven we de client-array terug, dan bleef het dienstlabel
         // leeg tot de volgende fetch. fetchSwaps legt zelf de revisie vast.
         await fetchSwaps();
-        if (currentUser?.role === 'admin') {
-          await fetchActivityLog();
-        }
+        // Logboek stil op de achtergrond: de overlay wacht er niet op.
+        if (currentUser?.role === 'admin') void fetchActivityLog();
         showToast(isNewRequest ? 'Ruilverzoek verstuurd, je collega moet eerst accepteren.' : 'Dienstruil bijgewerkt.', 'success');
         return true;
       }

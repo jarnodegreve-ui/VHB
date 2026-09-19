@@ -51,9 +51,8 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       ctx.captureRevision('updates', response);
       // Verse per-record-revisies ophalen (de collectie-save kent ze niet).
       void fetchUpdates();
-      if (currentUser?.role === 'admin') {
-        await fetchActivityLog();
-      }
+      // Logboek stil op de achtergrond: de overlay wacht er niet op.
+      if (currentUser?.role === 'admin') void fetchActivityLog();
       return true;
     } catch (error) {
       console.error('Error saving updates:', error);
@@ -120,9 +119,8 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
         ctx.captureRevision('diversions', response);
         // Verse per-record-revisies ophalen (de collectie-save kent ze niet).
         void fetchDiversions(undefined, { silent: true });
-        if (currentUser?.role === 'admin') {
-          await fetchActivityLog();
-        }
+        // Logboek stil op de achtergrond: de overlay wacht er niet op.
+        if (currentUser?.role === 'admin') void fetchActivityLog();
         showToast('Omleidingen succesvol opgeslagen.', 'success');
       } else {
         const err = await response.json().catch(() => ({} as any));

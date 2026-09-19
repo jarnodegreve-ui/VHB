@@ -52,9 +52,8 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         // Verlof verandert de dekking (afwezige telt als gat): meteen mee
         // verversen, anders bleven dashboard en topbar op de oude stand staan.
         void refreshCoverageGaps();
-        if (currentUser?.role === 'admin') {
-          await fetchActivityLog();
-        }
+        // Logboek stil op de achtergrond: de overlay wacht er niet op.
+        if (currentUser?.role === 'admin') void fetchActivityLog();
         const isNewRequest = newLeave.some((r) => !leaveRequests.some((p) => p.id === r.id));
         showToast(isNewRequest ? 'Aanvraag ingediend, de planner beoordeelt ze.' : 'Verlofaanvraag bijgewerkt.', 'success');
         return true;
