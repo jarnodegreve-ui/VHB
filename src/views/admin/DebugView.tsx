@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Bug, CheckCircle2, ChevronDown, ChevronRight, DownloadCloud, EyeOff, FlaskConical, Mail, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
+import { Bug, CheckCircle2, Gauge, ChevronDown, ChevronRight, DownloadCloud, EyeOff, FlaskConical, Mail, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
@@ -104,6 +104,75 @@ function FoutDetail({ groep }: { groep: FoutGroep }) {
         )}
       </div>
     </div>
+  );
+}
+
+// --- Laadtijd bij gebruikers (ronde 3, 19-09) ---
+// De prestatiebewaking (src/lib/monitoring.ts) meldt een sessie alleen als ze
+// bóven de drempel zit (LCP > 4 s of INP > 300 ms op Mijn dag, één keer per
+// sessie). Dit blok telt die meldingen per dag over de laatste 14 dagen, zodat
+// "het voelt trager" een getal wordt en een verbetering (regio, boot) zichtbaar
+// is. Bron = de platte foutenlijst (laatste 100 rapporten); staan er veel
+// andere fouten tussen, dan dekt de lijst minder dagen en zegt de voetregel dat.
+const PRESTATIE_DAGEN = 14;
+function PrestatieTrend() {
+  const [rijen, setRijen] = useState<PlatteFout[] | null>(null);
+  useEffect(() => {
+    let weg = false;
+    void (async () => {
+      try {
+        const json = await apiJson<unknown>('/api/client-errors');
+        if (!weg && Array.isArray(json)) setRijen(json as PlatteFout[]);
+      } catch {
+        if (!weg) setRijen([]);
+      }
+    })();
+    return () => { weg = true; };
+  }, []);
+  if (rijen === null) return null;
+
+  const dagen: string[] = [];
+  for (let i = PRESTATIE_DAGEN - 1; i >= 0; i -= 1) dagen.push(isoDate(new Date(Date.now() - i * 86_400_000)));
+  const perDag = new Map(dagen.map((d) => [d, { lcp: 0, inp: 0, traagste: 0 }]));
+  for (const r of rijen) {
+    if (r.source !== 'prestatie') continue;
+    const dag = perDag.get(isoDate(new Date(r.createdAt)));
+    if (!dag) continue;
+    const ms = Number(/(\d+)\s*ms/.exec(r.message)?.[1] ?? 0);
+    if (r.message.includes('LCP')) { dag.lcp += 1; dag.traagste = Math.max(dag.traagste, ms); } else dag.inp += 1;
+  }
+  const totaalLcp = dagen.reduce((n, d) => n + perDag.get(d)!.lcp, 0);
+  const totaalInp = dagen.reduce((n, d) => n + perDag.get(d)!.inp, 0);
+  const traagste = Math.max(0, ...dagen.map((d) => perDag.get(d)!.traagste));
+  const piek = Math.max(1, ...dagen.map((d) => perDag.get(d)!.lcp + perDag.get(d)!.inp));
+  const oudste = rijen.length > 0 ? rijen[rijen.length - 1]!.createdAt : null;
+  const dektAlles = !oudste || isoDate(new Date(oudste)) <= dagen[0]! || rijen.length < 100;
+
+  return (
+    <Card padding="lg">
+      <CardHeader
+        icon={<Gauge size={16} />}
+        title="Laadtijd bij gebruikers"
+        description="Sessies op Mijn dag die trager waren dan de drempel (start boven 4 s, reactie boven 300 ms), per dag."
+        aside={<Badge tone={totaalLcp + totaalInp > 0 ? 'amber' : 'emerald'} stil>{totaalLcp + totaalInp} in {PRESTATIE_DAGEN} dagen</Badge>}
+      />
+      <div className="mt-4 flex h-16 items-end gap-1" role="img" aria-label={`${totaalLcp} trage starts en ${totaalInp} trage reacties in de laatste ${PRESTATIE_DAGEN} dagen`}>
+        {dagen.map((d) => {
+          const v = perDag.get(d)!;
+          const n = v.lcp + v.inp;
+          return (
+            <div key={d} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${formatDatumDMJ(d)}: ${v.lcp} trage start${v.lcp === 1 ? '' : 's'}, ${v.inp} trage reactie${v.inp === 1 ? '' : 's'}${v.traagste ? `, traagste ${(v.traagste / 1000).toLocaleString('nl-BE', { maximumFractionDigits: 1 })} s` : ''}`}>
+              <div className={cn('w-full rounded-md', n > 0 ? 'bg-amber-500' : 'bg-surface-muted')} style={{ height: n > 0 ? `${Math.max(12, (n / piek) * 100)}%` : '4px' }} />
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs font-medium text-slate-500">
+        {totaalLcp} trage start{totaalLcp === 1 ? '' : 's'}, {totaalInp} trage reactie{totaalInp === 1 ? '' : 's'}
+        {traagste > 0 ? `, traagste start ${(traagste / 1000).toLocaleString('nl-BE', { maximumFractionDigits: 1 })} s` : ''}.
+        {!dektAlles && ' De lijst bevat de laatste 100 rapporten en dekt daardoor niet alle 14 dagen.'}
+      </p>
+    </Card>
   );
 }
 
@@ -698,6 +767,8 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           onChange={(e) => handleRestoreFile(e.target.files?.[0])}
         />
       </Card>
+
+      <PrestatieTrend />
 
       <FoutenSectie />
 

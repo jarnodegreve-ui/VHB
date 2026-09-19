@@ -745,8 +745,11 @@ html.dark {
        een tegel die zo'n nummer toont zet `text-stat-mono` erbij. Geen
        kleur: die zet de plek zelf (text-slate-900, text-oker-700, …). */
     font-family: var(--font-display);
-    font-size: 1.625rem;
-    line-height: 2rem;
+    /* 1.5rem op 2.125rem: Manrope's inhoudsvlak is ±1,37× de lettermaat, dus
+       een krappere regelhoogte laat het cijfer buiten zijn eigen vak steken
+       (e2e/activiteit-layout bewaakt dat). */
+    font-size: 1.5rem;
+    line-height: 2.125rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
