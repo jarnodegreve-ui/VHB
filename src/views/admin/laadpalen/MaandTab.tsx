@@ -179,7 +179,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
       {fout ? (
         <EmptyState variant="fout" title={fout} message="Probeer het opnieuw met Ververs." />
       ) : !data || !t ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <SkeletonTile key={i} />)}</div>
+        <div className="kpi-raster grid grid-cols-2 gap-3 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <SkeletonTile key={i} />)}</div>
       ) : (
         <div className={cn('space-y-6 transition-opacity', laadt && 'opacity-60')} aria-busy={laadt}>
           {/* KPI's: de vier getallen die je uit een maand wilt halen, elk met

@@ -129,7 +129,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
 
       {zl.fout && <Foutkaart compact={zl.laatstGeladen !== null} boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
       {zl.fout && zl.laatstGeladen === null ? null : (<>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat icon={<CheckCircle2 size={16} />} tone="slate" label="Afgesloten" value={tellers.afgesloten} sub={`van ${alle.filter((d) => d <= vandaag).length} dagen tot vandaag`} />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.open > 0 ? 'amber' : 'slate'} label="Open" value={tellers.open} sub="geopend, nog niet afgesloten" />
         <OpsStat icon={<AlertTriangle size={16} />} tone={tellers.nietGeopend > 0 ? 'red' : 'slate'} label="Niet geopend" value={tellers.nietGeopend} sub="dagen met planning, tot vandaag" />

@@ -922,7 +922,7 @@ export function PlannerDashboardWidgets({
           ) : undefined}
         />
       )}
-      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', stripLayout.xl)}>
+      <div className={cn('kpi-raster grid grid-cols-2 gap-3 md:grid-cols-6', stripLayout.xl)}>
         {stripZichtbaar.map((t, i) => (
           <Fragment key={t.id}>
             {STRIP_TEGEL[t.id]?.(cn(

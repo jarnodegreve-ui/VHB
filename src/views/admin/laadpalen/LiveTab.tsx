@@ -107,7 +107,7 @@ export function LiveTab({ data, onDag }: { data: Dashboard; onDag: (dag: string)
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="kpi-raster grid grid-cols-2 gap-3 lg:grid-cols-4">
         <OpsStat icon={<BatteryCharging size={16} />} tone={kpi.laden > 0 ? 'blue' : 'slate'} label="Aan de lader" value={kpi.laden} suffix={` / ${data.totals.evses}`} sub={data.totals.totalPowerKw > 0 ? `${tekstKw(data.totals.totalPowerKw)} nu` : 'geen vermogen nu'} />
         <OpsStat icon={<Zap size={16} />} tone="slate" label="Beschikbaar" value={kpi.beschikbaar} sub="vrije laadpunten" />
         <OpsStat icon={<AlertTriangle size={16} />} tone={kpi.afwijkend > 0 ? 'red' : 'slate'} label="Afwijkend" value={kpi.afwijkend} sub={kpi.afwijkend > 0 ? kpi.afwijkendTekst : 'alles operationeel'} />

@@ -244,7 +244,7 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
   const p = detail ? params.get(gekozen!) : null;
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat icon={<Route size={16} />} tone="slate" label="Diensten" value={diensten.length} sub="in de actieve import" />
         <OpsStat icon={<ListChecks size={16} />} tone="slate" label="Ritdelen" value={segmenten.length} sub="alle dagtypes" />
         <OpsStat icon={<CheckCircle2 size={16} />} tone="slate" label="Dagtypes" value={dagtypes.length} sub={dagtypes.join(', ')} />

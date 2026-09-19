@@ -1002,6 +1002,60 @@ html.dark {
     transition-duration: 140ms;
   }
 
+  /* KPI-raster op mobiel (ronde 3, 19-09): de tegels worden één kaart met
+     rijen: label en toelichting links, cijfer rechts. In twee smalle kolommen
+     kapten label en toelichting af ("Vandaag ingepl…") en duwden vijf tot
+     zeven tegels de echte inhoud onder de vouw. Vanaf sm blijven het tegels.
+     Zet `kpi-raster` op de grid rond `OpsStat`. */
+  @media (max-width: 639px) {
+    .kpi-raster {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      border-radius: var(--radius-3xl);
+      background: color-mix(in srgb, var(--laag-kaart) 96%, transparent);
+      border: 1px solid var(--elev-1-rim);
+      box-shadow: var(--elev-1);
+    }
+    .kpi-raster > .kpi-tegel {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: 0.75rem;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      transform: none;
+    }
+    .kpi-raster > .kpi-tegel + .kpi-tegel {
+      border-top: 1px solid var(--color-hairline);
+    }
+    .kpi-raster > .kpi-tegel[aria-pressed="true"] {
+      background: var(--color-surface-muted, transparent);
+    }
+    .kpi-raster .kpi-kop { grid-column: 1; grid-row: 1; }
+    .kpi-raster .kpi-sub {
+      grid-column: 1;
+      grid-row: 2;
+      margin-top: 0.125rem;
+      margin-left: 2.25rem; /* onder het label, voorbij de icoontegel */
+      white-space: normal;
+      overflow: visible;
+    }
+    .kpi-raster .kpi-getal {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      margin-top: 0;
+      font-size: 1.375rem;
+      line-height: 1.75rem;
+      text-align: right;
+    }
+    .kpi-raster .kpi-extra { grid-column: 1 / -1; }
+  }
+
   /* Filterrij van TableToolbar: één regel, schuift horizontaal zonder
      zichtbare schuifbalk (de chips zelf tonen dat er meer is). */
   .filter-rij {

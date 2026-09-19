@@ -416,7 +416,7 @@ export function DashboardView({ notes = [],
           werden de kleine tegels smal en zo hoog als de Vandaag-tegel, met
           afgeknipte labels (Jarno 04-09). Volgorde en zichtbaarheid volgen
           de voorkeuren van de gebruiker (Dashboard aanpassen). */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {stripZichtbaar.map((t) => (
           <Fragment key={t.id}>{STRIP_TEGEL[t.id]}</Fragment>
         ))}
