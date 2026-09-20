@@ -31,7 +31,10 @@ test('maandplanning bladert niet voorbij de laatste geïmporteerde dag', async (
             String(u.id),
             Object.fromEntries(dagen.map((d) => [d, { code: `21${(i + 1) * 2}`, kind: 'service', label: '', segments: [] }])),
           ])),
-          geimporteerd: { eerste: dagen[0], laatste },
+          // Ruim vóór het venster: met `dagen[0]` (vandaag - 6) viel de eerste dag op
+          // zondag precies op de maandag waarmee het tweewekenvenster begint, en
+          // stond "Vorige 2 weken" terecht uit. De test faalde dus elke zondag.
+          geimporteerd: { eerste: plus(-30), laatste },
         }
       : undefined,
   });
