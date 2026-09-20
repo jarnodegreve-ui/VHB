@@ -22,6 +22,7 @@ export type RuilVerloopDoor = 'aanvrager' | 'collega' | 'planner';
 
 export type RuilVerloopSoort =
   | 'aangevraagd'
+  | 'bekeken'
   | 'geaccepteerd'
   | 'goedgekeurd'
   | 'geweigerd'
@@ -43,12 +44,35 @@ export interface RuilVerloopStap {
   naam?: string;
 }
 
+/**
+ * "De collega heeft de aanvraag gezien" (Jarno 20-09). De server schrijft deze
+ * logregel één keer per ruil, zodra de aangezochte collega een nog
+ * onbeantwoorde aanvraag in beeld krijgt (`POST /api/swaps/:id/bekeken`).
+ * Bewust een logregel en geen kolom: `target_seen_at` betekent iets anders (de
+ * bevestiging van de nieuwe rijder NA de doorvoer) en blijft ongemoeid.
+ *
+ * De regel is een waarneming, geen handeling: hij hoort in het verloop van de
+ * ruil, maar niet in het auditspoor van het scherm Activiteit, niet in het
+ * weekoverzicht van de uitgevoerde wissels en niet in `SWAP_UITVOERING_ACTIES`.
+ */
+export const RUIL_BEKEKEN_ACTIE = 'Dienstruil bekeken';
+
+/**
+ * Vanaf dit aanmaakmoment weten we van een ruil of de collega hem bekeek. Een
+ * oudere ruil zonder bekeken-regel zegt niets: de collega kan hem gezien hebben
+ * toen dat nog niet werd bijgehouden. Daar blijft het dus "Wacht op antwoord",
+ * en "Nog niet bekeken" staat er alleen bij ruilen die aangevraagd zijn nadat
+ * de registratie liep. 22/09/2026 00:00 Belgische tijd, ruim na de release.
+ */
+export const BEKEKEN_BIJGEHOUDEN_SINDS = '2026-09-21T22:00:00.000Z';
+
 /** De log-acties waaruit het verloop wordt afgeleid. De letterlijke teksten
  *  staan ook in api/index.ts (`beslisRuilIntern`, de array-route, de handmatige
- *  wissel en de gezien-bevestiging); `shared/ruilVerloop.test.ts` faalt als
- *  ze uit elkaar lopen. */
+ *  wissel, de gezien-bevestiging en bekeken); `shared/ruilVerloop.test.ts`
+ *  faalt als ze uit elkaar lopen. */
 export const RUIL_LOG_ACTIES: Record<string, RuilVerloopSoort> = {
   'Dienstruil aangevraagd': 'aangevraagd',
+  [RUIL_BEKEKEN_ACTIE]: 'bekeken',
   'Dienstruil geaccepteerd': 'geaccepteerd',
   'Dienstruil goedgekeurd': 'goedgekeurd',
   'Dienstruil afgewezen': 'geweigerd',
@@ -80,9 +104,11 @@ const doorVoor = (soort: RuilVerloopSoort, regel: RuilLogRegel, van: string | un
   switch (soort) {
     case 'aangevraagd':
       return 'aanvrager';
+    case 'bekeken':
     case 'geaccepteerd':
     case 'bevestigd':
-      // Alleen de aangezochte collega kan accepteren of bevestigen (server).
+      // Alleen de aangezochte collega kan bekijken, accepteren of bevestigen
+      // (server).
       return 'collega';
     case 'goedgekeurd':
     case 'afgehandeld':
@@ -176,12 +202,26 @@ export const isHandmatigeRuil = (swap: { reason?: unknown } | null | undefined):
 
 const DOORGEVOERD = new Set(['approved', 'completed']);
 
-export function persoonsVerloop(swap: RuilVoorVerloop): VerloopRegel[] {
+/** Wordt van deze ruil bijgehouden of de collega hem bekeek? Alleen als hij
+ *  aangevraagd is nadat de registratie liep; zonder (leesbaar) aanmaakmoment
+ *  weten we het niet. */
+const bekekenBijgehouden = (createdAt: string | undefined): boolean => {
+  const ms = createdAt ? Date.parse(createdAt) : NaN;
+  return Number.isFinite(ms) && ms >= Date.parse(BEKEKEN_BIJGEHOUDEN_SINDS);
+};
+
+/**
+ * `kijkerId` = de ingelogde gebruiker. De collega leest bij zijn eigen regel
+ * geen "bekeken": dat hij kijkt weet hij zelf, hij moet alleen nog antwoorden.
+ */
+export function persoonsVerloop(swap: RuilVoorVerloop, opties: { kijkerId?: string } = {}): VerloopRegel[] {
   const stappen = Array.isArray(swap.verloop) ? swap.verloop : [];
   const laatste = (soort: RuilVerloopSoort) => {
     for (let i = stappen.length - 1; i >= 0; i--) if (stappen[i].soort === soort) return stappen[i];
     return undefined;
   };
+  // Eén keer per ruil; schreef een race er toch twee, dan telt het eerste moment.
+  const bekeken = stappen.find((s) => s.soort === 'bekeken');
   const status = String(swap.status);
   const overname = swap.swapType === 'overname';
   const handmatig = isHandmatigeRuil(swap);
@@ -204,7 +244,7 @@ export function persoonsVerloop(swap: RuilVoorVerloop): VerloopRegel[] {
     : undefined;
 
   // Bevestiging van de nieuwe rijder ná de doorvoer (targetSeenAt). Dit is
-  // géén "aanvraag gezien": dat moment wordt nergens bijgehouden.
+  // géén "aanvraag gezien": dat is de logregel 'bekeken' hierboven.
   const bevestiging = (): VerloopRegel['extra'] => {
     if (!DOORGEVOERD.has(status)) return undefined;
     if (swap.targetSeenAt) return { label: 'Wissel bevestigd', op: String(swap.targetSeenAt) };
@@ -267,7 +307,15 @@ export function persoonsVerloop(swap: RuilVoorVerloop): VerloopRegel[] {
     ({ status: tekst, toon: 'neutraal', aanZet: false });
   let collega: VerloopRegel;
   if (status === 'pending') {
-    collega = { ...collegaBasis, status: 'Wacht op antwoord', toon: 'neutraal', aanZet: true };
+    // Zolang er geen antwoord is: heeft de collega de aanvraag al gezien? Na
+    // een antwoord telt alleen het antwoord (de takken hieronder). "Nog niet
+    // bekeken" beweren we alleen waar het bijgehouden wordt én het log geladen
+    // is; een oudere ruil blijft eerlijk "Wacht op antwoord".
+    const zelf = !!collegaId && collegaId === opties.kijkerId;
+    if (zelf) collega = { ...collegaBasis, status: 'Wacht op antwoord', toon: 'neutraal', aanZet: true };
+    else if (bekeken) collega = { ...collegaBasis, status: 'Bekeken, nog geen antwoord', toon: 'neutraal', aanZet: true, op: bekeken.op };
+    else if (Array.isArray(swap.verloop) && bekekenBijgehouden(swap.createdAt)) collega = { ...collegaBasis, status: 'Nog niet bekeken', toon: 'neutraal', aanZet: true };
+    else collega = { ...collegaBasis, status: 'Wacht op antwoord', toon: 'neutraal', aanZet: true };
   } else if (status === 'accepted') {
     collega = { ...collegaBasis, ...akkoord() };
   } else if (status === 'rejected' && geweigerd?.door === 'collega') {
@@ -277,7 +325,7 @@ export function persoonsVerloop(swap: RuilVoorVerloop): VerloopRegel[] {
   } else if (goedgekeurd?.van === 'pending') {
     // Een admin keurde rechtstreeks goed, zonder het antwoord af te wachten.
     collega = { ...collegaBasis, ...geenAntwoord('Antwoord niet afgewacht') };
-  } else if (stappen.length === 0 || (status === 'rejected' && !geweigerd?.door)) {
+  } else if (stappen.every((s) => s.soort === 'bekeken') || (status === 'rejected' && !geweigerd?.door)) {
     collega = { ...collegaBasis, ...geenAntwoord('Antwoord niet geregistreerd') };
   } else {
     collega = { ...collegaBasis, ...geenAntwoord('Geen antwoord gegeven') };

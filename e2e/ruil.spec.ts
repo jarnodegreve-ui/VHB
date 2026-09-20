@@ -318,6 +318,104 @@ test('collega accepteert een aan hem gerichte ruil (PATCH met ifStatus-guard)', 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
 
+test('de collega opent het ruilscherm, de aanvrager ziet daarna "Bekeken" in het verloop', async ({ page }) => {
+  // Eén gedeelde "server": COLLEGA vroeg de ruil aan, CHAUFFEUR is de
+  // aangezochte collega. `wie` bepaalt wie er ingelogd is; de bekeken-regel die
+  // de ene schrijft, komt bij de andere terug in GET /api/swaps › verloop.
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seedSession(page, CHAUFFEUR);
+
+  // Vast aanmaakmoment ná BEKEKEN_BIJGEHOUDEN_SINDS (shared/ruilVerloop.ts):
+  // alleen dan mag er "Nog niet bekeken" staan.
+  const ruil = {
+    id: 'w9',
+    shiftId: 'r9',
+    requesterId: COLLEGA.id,
+    targetDriverId: CHAUFFEUR.id,
+    status: 'pending',
+    createdAt: '2026-10-05T06:00:00.000Z',
+    shiftDate: dayOffset(5),
+    shiftLine: '2323',
+    returnDate: dayOffset(9),
+    returnCode: 'vrij',
+  };
+  const BEKEKEN_OP = '2026-10-05T07:40:00.000Z'; // 09:40 in België
+  let wie: typeof CHAUFFEUR = COLLEGA;
+  const bekekenAanroepen: Array<{ methode: string; pad: string; door: string }> = [];
+  const foutAanroepen: string[] = [];
+
+  await page.route('**/api/**', async (route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+    if (path.endsWith('/api/me')) return json(wie);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([CHAUFFEUR, COLLEGA]);
+    if (path.endsWith('/bekeken')) {
+      bekekenAanroepen.push({ methode: req.method(), pad: path, door: wie.id });
+      return json({ success: true, nieuw: bekekenAanroepen.length === 1 });
+    }
+    // Het bestaande bevestig-endpoint betekent iets anders en mag hier nooit vuren.
+    if (path.endsWith('/gezien')) { foutAanroepen.push(path); return json({ success: true }); }
+    if (path.endsWith('/api/swaps') && req.method() === 'GET') {
+      return json([{
+        ...ruil,
+        verloop: [
+          { soort: 'aangevraagd', op: ruil.createdAt, door: 'aanvrager' },
+          ...(bekekenAanroepen.length > 0 ? [{ soort: 'bekeken', op: BEKEKEN_OP, door: 'collega' }] : []),
+        ],
+      }]);
+    }
+    return json([]);
+  });
+
+  const verloop = page.getByRole('region', { name: 'Verloop per persoon' });
+  const opCollegaRegel = () => verloop.getByRole('listitem').nth(1);
+
+  // 1. De aanvrager kijkt eerst: nog niemand heeft de aanvraag gezien.
+  await page.goto('/');
+  await page.getByRole('button', { name: /Dienst 2323/ }).click();
+  await expect(opCollegaRegel()).toContainText(CHAUFFEUR.name);
+  await expect(opCollegaRegel()).toContainText('Nog niet bekeken');
+  // De aanvrager zelf registreert niets, ook niet na het verblijf in beeld.
+  await page.waitForTimeout(1200);
+  expect(bekekenAanroepen).toEqual([]);
+
+  // 2. De collega opent het ruilscherm: de kaart staat in beeld → één melding.
+  wie = CHAUFFEUR;
+  await page.reload();
+  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => bekekenAanroepen.length, { timeout: 10_000 }).toBe(1);
+  expect(bekekenAanroepen[0]).toEqual({ methode: 'POST', pad: '/api/swaps/w9/bekeken', door: CHAUFFEUR.id });
+  // Zijn eigen regel zegt gewoon dat hij nog moet antwoorden.
+  await expect(opCollegaRegel()).toContainText('(jij)');
+  await expect(opCollegaRegel()).toContainText('Wacht op antwoord');
+  await expect(verloop).not.toContainText('ekeken');
+
+  // Opnieuw openen: de server kent de regel al, dus er vuurt niets meer.
+  await page.reload();
+  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(1500);
+  expect(bekekenAanroepen).toHaveLength(1);
+
+  // 3. Terug bij de aanvrager: bekeken, met het moment (dd/mm uu:mm, 24-uurs).
+  wie = COLLEGA;
+  await page.reload();
+  await page.getByRole('button', { name: /Dienst 2323/ }).click();
+  await expect(opCollegaRegel()).toContainText('Bekeken, nog geen antwoord');
+  // (formatMomentKort zet het jaartal erbij zodra het niet meer dit jaar is.)
+  await expect(opCollegaRegel()).toContainText(/05\/10(\/2026)? 09:40/);
+  await expect(verloop).not.toContainText('Nog niet bekeken');
+  // De planner wacht nog altijd op de collega: bekeken is geen antwoord.
+  await expect(verloop.getByRole('listitem').nth(2)).toContainText('Wacht op collega');
+
+  expect(foutAanroepen, 'het bevestig-endpoint /gezien hoort hier niet te vuren').toEqual([]);
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});
+
 test('de wizard biedt geen dag aan waarop de collega twee diensten rijdt', async ({ page }) => {
   // Blok 3 (#21): rijdt de collega die dag twee verschillende diensten, dan
   // plakt /api/availability ze samen tot "2202/2303". Zo'n code matcht geen

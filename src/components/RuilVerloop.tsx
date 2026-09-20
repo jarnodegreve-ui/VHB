@@ -27,7 +27,7 @@ export function RuilVerloop({ swap, naamVan, kijkerId, compact = false, classNam
   compact?: boolean;
   className?: string;
 }) {
-  const regels = persoonsVerloop(swap);
+  const regels = persoonsVerloop(swap, { kijkerId });
 
   if (compact) {
     return (
