@@ -241,23 +241,31 @@ export function useSort<K extends string>(standaard: K, richting: SortRichting =
   return { key, dir, toggle, sorteer };
 }
 
-/** Sorteerbare kolomkop: klik wisselt richting, aria-sort voor screenreaders. */
-export function SortTh<K extends string>({ kolom, sort, children, className, title, align = 'left' }: {
+/**
+ * Sorteerbare kolomkop: klik wisselt richting, aria-sort voor screenreaders.
+ * `dicht` = de smalle variant voor een tabel op de telefoon (RapportTabel):
+ * krappe zijmarge en de pijl alleen bij de actieve kolom, zodat drie
+ * cijferkolommen naast een naam passen. `naam` = de volledige kolomnaam voor
+ * hulptechnologie als de zichtbare kop een afkorting is ("Opgen.").
+ */
+export function SortTh<K extends string>({ kolom, sort, children, className, title, align = 'left', dicht = false, naam }: {
   kolom: K;
   sort: { key: K; dir: SortRichting; toggle: (k: K) => void };
   children: ReactNode;
   className?: string;
   title?: string;
   align?: 'left' | 'right';
+  dicht?: boolean;
+  naam?: string;
 }) {
   const actief = sort.key === kolom;
   const Pijl = !actief ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
   return (
     <Th className={cn('p-0', className)} title={title} sort={actief ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
       {/* rauw: kolomkop-knop (tekst + sorteerpijl) in een tabelkop. */}
-      <button type="button" onClick={() => sort.toggle(kolom)} className={cn('group inline-flex min-h-11 sm:pointer-fine:min-h-9 w-full items-center gap-1 px-4 text-xs font-medium transition-colors hover:text-slate-800', align === 'right' ? 'justify-end text-right' : 'text-left', actief ? 'text-slate-800' : 'text-slate-500')}>
+      <button type="button" aria-label={naam} onClick={() => sort.toggle(kolom)} className={cn('group inline-flex min-h-11 sm:pointer-fine:min-h-9 w-full items-center text-xs font-medium transition-colors hover:text-slate-800', dicht ? 'gap-0.5 px-2' : 'gap-1 px-4', align === 'right' ? 'justify-end text-right' : 'text-left', actief ? 'text-slate-800' : 'text-slate-500')}>
         <span>{children}</span>
-        <Pijl size={12} className={cn('shrink-0 transition-opacity', actief ? 'opacity-100' : 'opacity-0 group-hover:opacity-60')} />
+        {dicht && !actief ? null : <Pijl size={12} className={cn('shrink-0 transition-opacity', actief ? 'opacity-100' : 'opacity-0 group-hover:opacity-60')} />}
       </button>
     </Th>
   );

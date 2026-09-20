@@ -25,15 +25,16 @@ export const WAT_IS_NIEUW_TONEN = false;
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
     id: '2026-09-20',
-    titel: 'Activiteit: uurraster en plaats van aanmelden',
+    titel: 'Rapporten op één plek, en meer zicht in Activiteit',
     regels: {
       staf: [
+        'Nieuw scherm Rapporten: alle overzichten per domein op één plek, met filters, een sorteerbare tabel, afdrukken of opslaan als PDF en een CSV voor Excel.',
+        'Het eerste rapport is Verlofsaldo, met dezelfde cijfers als het saldo-overzicht in Verlof. De bestaande printbladen (maandrooster, verlofjaar, ruiloverzicht, gele boek) staan er ook tussen.',
         'De tijdbalken in Activiteit hebben een lijn per uur, en onder elke balk staan de exacte periodes uitgeschreven.',
-        'Per sessie zie je de plaats van aanmelden (stad en land, afgeleid van het IP-adres; het adres zelf wordt niet bewaard).',
-        'Een aanmelding van buiten België krijgt een badge, en “Buiten België” werkt als filter.',
+        'Per sessie zie je de plaats van aanmelden (stad en land, afgeleid van het IP-adres; het adres zelf wordt niet bewaard). Een aanmelding van buiten België krijgt een badge, en “Buiten België” werkt als filter.',
       ],
     },
-    bekijk: { staf: 'activiteit' },
+    bekijk: { staf: 'rapporten' },
   },
   {
     id: '2026-09-18',

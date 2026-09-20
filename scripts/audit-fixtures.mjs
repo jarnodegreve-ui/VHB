@@ -285,6 +285,43 @@ export const SEGMENTEN = [
   segm('s6', 6, 'RIT', 935, 1010, { lijn: '50', rit: '31', vertrek: 'Brugge Station', aankomst: 'Eeklo Station', afstandKm: 31.4 }),
 ];
 
+// Rapporten (20-09): het antwoord van GET /api/rapporten/verlofsaldo. Vaste
+// cijfers, zodat de visuele regressie en de e2e-spec stabiel blijven. De bron
+// "begint" op 05/01/2026: een vroeger jaar is een periode zonder gegevens.
+const SALDO_RIJEN = [
+  ['42', 'Test Chauffeur', 'Reguliere diensten', 20, 9, 0],
+  ['43', 'Alex Du Priez', 'Reguliere diensten', 24, 14, 5],
+  ['44', 'Diether Van Haute', 'Nachtdiensten', 24, 21, 3],
+  ['55', 'Jelle Technieker', 'Garage', 20, 6, 0],
+  ['60', 'Annelies Verstraete', 'Reguliere diensten', 24, 18, 0],
+  ['61', 'Bart Claeys', 'Flexi', 12, 4, 0],
+  ['62', 'Carine De Smet', 'Schoolvervoer', 24, 24, 0],
+  ['63', 'Dirk Maes', 'Reguliere diensten', 26, 11, 2],
+  ['64', 'Els Goossens', 'Nachtdiensten', 24, 7, 0],
+  ['65', 'Filip Wauters', 'Reguliere diensten', 24, 16, 4],
+  ['66', 'Greet Lambrecht', 'Schoolvervoer', 24, 2, 0],
+  ['67', 'Hans Vermeulen', 'Flexi', 12, 12, 0],
+];
+export const RAPPORT_VERLOFSALDO = (jaar = 2026, chauffeur = '') => {
+  const leeg = jaar !== 2026;
+  const rijen = SALDO_RIJEN
+    .filter(([id]) => !chauffeur || id === chauffeur)
+    .map(([id, naam, sectie, budget, opgenomen, aangevraagd], i) => ({
+      id, naam, sectie, budget,
+      opgenomen: leeg ? 0 : opgenomen,
+      aangevraagd: leeg ? 0 : aangevraagd,
+      vrij: leeg ? budget : Math.max(0, budget - opgenomen - aangevraagd),
+      kleinVerlet: leeg ? 0 : i % 4 === 1 ? 1 : 0,
+    }));
+  const som = (k) => rijen.reduce((n, r) => n + r[k], 0);
+  return {
+    rijen,
+    totalen: { budget: som('budget'), opgenomen: som('opgenomen'), aangevraagd: som('aangevraagd'), vrij: som('vrij'), kleinVerlet: som('kleinVerlet') },
+    bereik: { van: '2026-01-05', tot: '2026-12-23' },
+    gegenereerdOp: '2026-09-15T08:30:00.000Z',
+  };
+};
+
 export function apiFixtures(user, extra) {
   return async (route) => {
     const url = new URL(route.request().url());
@@ -351,6 +388,7 @@ export function apiFixtures(user, extra) {
       if (!dag) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Deze dag is nog niet geopend.', inPlanning: true, voorstel: USERS.filter((u) => u.role === 'chauffeur').map((u) => ({ userId: u.id, naam: u.name, planningCode: u.id === '42' ? '2101' : 'vrij' })) }) });
       return json({ dag, rijen: DAG_PRESTATIES.map((r) => ({ ...r, datum })), planningAfwijkingen: [], ontbrekendeCodes: [], inPlanning: true });
     }
+    if (p.endsWith('/api/rapporten/verlofsaldo')) return json(RAPPORT_VERLOFSALDO(Number(url.searchParams.get('jaar')) || 2026, url.searchParams.get('chauffeur') || ''));
     if (p.endsWith('/api/push/subscribers')) return json({ userIds: ['42'] });
     if (p.endsWith('/api/planning-matrix/changes-since-import')) return json({ lastImport: { createdAt: new Date(Date.now() - 5 * 864e5).toISOString(), importedDays: 31 }, approvedLeave: [], approvedSwaps: [] });
     if (p.includes('/api/coverage-gaps')) return json({ days: [{ date: new Date().toISOString().slice(0, 10), expected: ['2101', '2607'], scheduled: ['2101'], missing: ['2607'], unknown: [] }] });
