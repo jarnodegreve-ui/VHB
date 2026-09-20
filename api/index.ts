@@ -28,6 +28,7 @@ import { mountLoonRoutes } from "./_lib/loonRoutes.js";
 import { mountDienstRoutes } from "./_lib/dienstRoutes.js";
 import { mountRapportRoutes } from "./_lib/rapportRoutes.js";
 import { metPdfTitel } from "./_lib/pdfTitel.js";
+import { dienstenVerschillenVoorPlanning, heropbouwNaDienstoverzicht, heropbouwPlanning, reapplyApprovedSwaps, verstuurRoosterMeldingen, ROOSTER_MELDING_RUST_MINUTEN } from "./_lib/planningHeropbouw.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
@@ -59,8 +60,6 @@ import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, toRoleS
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./_lib/matrixXlsx.js";
 import {
-  applySwapsToPlanningRows,
-  swapRaaktBereik,
   applySwapToPlanning,
   revertSwapFromPlanning,
   swapToestandInPlanning,
@@ -106,7 +105,6 @@ import {
   deleteUserDocument,
   DOCUMENTS_BUCKET,
   restoreFromBackup,
-  replacePlanningData,
   replacePlanningAndMatrix,
   saveLeaveData,
   savePlanningCodesData,
@@ -410,8 +408,8 @@ const runSchemaCheck = async (res: express.Response) => {
 
   // Cron-heartbeats: stale = ouder dan 2× het verwachte interval.
   const now = Date.now();
-  const beats = await getCronHeartbeats(["backup", "error-digest", "ocpi-sync"]);
-  const CRON_MAX_AGE_H: Record<string, number> = { backup: 48, "error-digest": 48, "ocpi-sync": 2 };
+  const beats = await getCronHeartbeats(["backup", "error-digest", "ocpi-sync", "rooster-meldingen"]);
+  const CRON_MAX_AGE_H: Record<string, number> = { backup: 48, "error-digest": 48, "ocpi-sync": 2, "rooster-meldingen": 2 };
   const crons = Object.fromEntries(
     Object.entries(beats).map(([name, last]) => {
       const ageH = last ? (now - Date.parse(last)) / 36e5 : null;
@@ -1686,68 +1684,19 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
   }
 });
 
-app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+// De knop "Planning opnieuw opbouwen". De kern (opbouw, ruil-replay, vangrails,
+// log, push-diff) staat in api/_lib/planningHeropbouw.ts en wordt gedeeld met
+// het automatisch bijwerken na een save van het dienstoverzicht.
+app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
   try {
-    const generatedPlanning = await buildPlanningFromMatrix();
-    // Goedgekeurde ruilen opnieuw toepassen — de matrix kent ze niet.
-    const reapplied = await reapplyApprovedSwaps(generatedPlanning.shifts);
-    // Zelfde vangrails als /import: zonder deze guard liet een naamswijziging
-    // in gebruikersbeheer ("unmatched driver") hier stilletjes alle diensten
-    // van die chauffeur uit de planning vallen bij het heropbouwen.
-    if (
-      generatedPlanning.summary.unknownCodes.length > 0 ||
-      generatedPlanning.summary.unmatchedDrivers.length > 0
-    ) {
-      return res.status(400).json({
-        error: "Opnieuw opbouwen geblokkeerd: er zijn onbekende codes of niet-gematchte chauffeurs. Los deze eerst op (planningscodes/gebruikersnamen) en probeer opnieuw.",
-        unknownCodes: generatedPlanning.summary.unknownCodes,
-        unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
-        blocked: true,
-      });
+    const uit = await heropbouwPlanning(req, "handmatig");
+    if (uit.status === "geblokkeerd") {
+      return res.status(400).json({ error: uit.melding, unknownCodes: uit.unknownCodes, unmatchedDrivers: uit.unmatchedDrivers, blocked: true });
     }
-    // Diff vóór het vervangen: alleen chauffeurs van wie het rooster écht
-    // wijzigt krijgen straks een push. Jarno herbouwt tijdens de testfase
-    // meerdere keren per dag — iedereen elke keer pingen traint mensen om
-    // meldingen te negeren, en dan mist iemand de wijziging die wél telt.
-    const vorigePlanning = await getPlanningData();
-    const dienstSleutel = (r: any) => `${r.date}|${r.startTime ?? ""}|${r.endTime ?? ""}|${r.line ?? ""}|${r.loopnr ?? ""}|${r.busNumber ?? ""}`;
-    const perChauffeur = (rows: any[]) => {
-      // Eerst lijsten verzamelen, dan één keer sorteren/joinen — de oude
-      // opbouw her-splitte en her-sorteerde de string per rij (O(n²)) en
-      // smokkelde via "".split("\n") een lege regel in elke sleutel.
-      const lijsten = new Map<string, string[]>();
-      for (const r of rows) {
-        const id = String(r.driverId ?? "");
-        if (!id) continue;
-        const lijst = lijsten.get(id) ?? [];
-        lijst.push(dienstSleutel(r));
-        lijsten.set(id, lijst);
-      }
-      return new Map([...lijsten].map(([id, keys]) => [id, keys.sort().join("\n")] as const));
-    };
-    const oud = perChauffeur(vorigePlanning as any[]);
-    const nieuwSet = perChauffeur(generatedPlanning.shifts); // ruilen zijn in-place toegepast
-    const gewijzigd = [...new Set([...oud.keys(), ...nieuwSet.keys()])]
-      .filter((id) => oud.get(id) !== nieuwSet.get(id));
-
-    await replacePlanningData(generatedPlanning.shifts);
-    await logActivity(
-      _req,
-      "planning",
-      "Planning opnieuw opgebouwd",
-      `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}.`,
-    );
-    // "Staat mijn rooster er al op?" is dé vraag van personeel — beantwoord
-    // hem proactief, maar alleen bij wie er iets veranderde.
-    if (gewijzigd.length > 0) {
-      await sendPushToUsers(gewijzigd, {
-        title: "Rooster bijgewerkt",
-        soort: "planning",
-        body: "Je rooster is gewijzigd, bekijk je diensten.",
-        url: viewUrl("rooster"),
-      });
-    }
-    res.json({ success: true, ...generatedPlanning.summary, notifiedDrivers: gewijzigd.length });
+    if (uit.status === "bezet") return res.status(409).json({ error: uit.melding });
+    // "ongewijzigd" en "overgeslagen" bestaan alleen op de automatische weg.
+    if (uit.status !== "bijgewerkt") return res.status(500).json({ error: "Planning opnieuw opbouwen is mislukt." });
+    res.json({ success: true, ...uit.summary, notifiedDrivers: uit.gemeld });
   } catch (err: any) {
     console.error("Planning opnieuw opbouwen is mislukt.", err);
     res.status(500).json({ error: "Planning opnieuw opbouwen is mislukt." });
@@ -2822,6 +2771,26 @@ app.get("/api/cron/telegram-briefing", async (req, res) => {
   }
 });
 
+// Rooster-meldingen na automatisch bijgewerkte planning: één melding per
+// chauffeur zodra het dienstoverzicht ROOSTER_MELDING_RUST_MINUTEN stil is
+// (zie de meldingswachtrij in api/_lib/planningHeropbouw.ts). Elke 5 minuten;
+// zonder wachtrij is dit één kleine lezing van app_settings.
+app.get("/api/cron/rooster-meldingen", async (req, res) => {
+  if (!isCronAuthorized(req)) {
+    return res.status(401).json({ error: "Niet toegestaan." });
+  }
+  try {
+    const uit = await verstuurRoosterMeldingen();
+    // Hartslag hooguit één keer per uur: valt deze cron stil, dan blijven de
+    // uitgestelde meldingen liggen, en dat hoort de health-check te zien.
+    await logCronHeartbeat("rooster-meldingen", uit.status === "verstuurd" ? `Melding naar ${uit.ontvangers} chauffeur(s).` : `Niets te versturen (${uit.status}).`, 60);
+    res.json({ success: true, ...uit });
+  } catch (err) {
+    console.error("Rooster-meldingen versturen is mislukt.", err);
+    res.status(500).json({ error: "Rooster-meldingen versturen is mislukt." });
+  }
+});
+
 app.get("/api/cron/error-digest", async (req, res) => {
   if (!isCronAuthorized(req)) {
     return res.status(401).json({ error: "Niet toegestaan." });
@@ -3384,6 +3353,26 @@ app.get("/api/services", authenticate, async (_req, res) => {
 });
 
 
+/** Wat POST /api/services over de automatische heropbouw terugmeldt: genoeg
+ *  voor een toast die zegt wat er gebeurde, zonder de volledige samenvatting. */
+const planningUitkomstVoorAntwoord = (uit: Awaited<ReturnType<typeof heropbouwNaDienstoverzicht>>) => {
+  if (uit.status === "bijgewerkt") {
+    return {
+      status: uit.status,
+      generatedShifts: uit.summary.generatedShifts,
+      gewijzigdeChauffeurs: uit.gewijzigdeChauffeurs,
+      meldingUitgesteld: uit.meldingUitgesteld,
+      meldingNaMinuten: ROOSTER_MELDING_RUST_MINUTEN,
+    };
+  }
+  if (uit.status === "ongewijzigd") return { status: uit.status };
+  if (uit.status === "geblokkeerd") {
+    return { status: uit.status, reden: uit.reden, melding: uit.melding, unknownCodes: uit.unknownCodes, unmatchedDrivers: uit.unmatchedDrivers };
+  }
+  if (uit.status === "overgeslagen") return { status: uit.status, reden: uit.reden, melding: uit.melding };
+  return { status: uit.status, melding: uit.melding };
+};
+
 app.post("/api/services", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
@@ -3405,6 +3394,9 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
         if (servicesRemoved !== null) return massDeleteResponse(res, servicesRemoved, previousServices.length, "diensten");
       }
       await saveServicesData(newData);
+      // Eén lezing van wat er nu écht staat (genormaliseerd door de opslag):
+      // voor de revisie-header én om te beslissen of de planning mee moet.
+      const opgeslagen = await getServicesData();
 
       // Global summary entry (zoals voorheen)
       await logActivity(
@@ -3428,8 +3420,17 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
         await logActivity(req, "services", "Dienst verwijderd", formatService(s), { type: "service", id: s.id });
       }
 
-      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getServicesData()));
-      res.json({ success: true, count: newData.length });
+      // Planning automatisch bijwerken (Jarno 20-09): de tijden, delen en
+      // loopnummers uit het dienstoverzicht komen anders pas bij de chauffeurs
+      // na een klik op "Planning opnieuw opbouwen". Alleen bij een inhoudelijk
+      // verschil; de save hierboven is op dit punt al geslaagd en blijft dat,
+      // wat de heropbouw ook doet (heropbouwNaDienstoverzicht gooit nooit).
+      const planning = dienstenVerschillenVoorPlanning(previousServices as any[], opgeslagen as any[])
+        ? planningUitkomstVoorAntwoord(await heropbouwNaDienstoverzicht(req))
+        : { status: "niet-nodig" as const };
+
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(opgeslagen));
+      res.json({ success: true, count: newData.length, planning });
     } else {
       res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
@@ -3803,34 +3804,8 @@ const dubbeleInplanningFout = async (swap: {
   return `${naam} rijdt op ${DAG_DMJ(dienstDag)} al dienst ${bezet[0].line}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
 };
 
-/** Heropbouw-replay: goedgekeurde ruilen opnieuw toepassen op een vers
- *  gegenereerde planning. De matrix (Excel) kent de ruilen immers niet —
- *  zonder deze stap veegde elke import/heropbouw alle doorgevoerde wissels
- *  weer weg (en moest de planner ze in Excel overtypen). Volgorde op
- *  decidedAt zodat een latere ruil op het resultaat van een eerdere werkt. */
-const reapplyApprovedSwaps = async (
-  shifts: Array<{ date: string; line: string; driverId: string }>,
-  bereik?: { van: string | null; tot: string | null },
-) => {
-  // Ook 'completed': een voltooide ruil is gereden zoals gewisseld (zelfde
-  // regel als de maandplanning-weergave). Zonder 'completed' draaide een
-  // heropbouw die wissel stil terug en spraken rooster en maandplanning
-  // elkaar tegen.
-  const approved = (await getSwapsData())
-    .filter((sw) => sw.status === "approved" || sw.status === "completed")
-    .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")));
-  // Alleen ruilen binnen het geïmporteerde bereik meetellen. Zonder deze filter
-  // telde élke historische ruil buiten het bereik als "niet toepasbaar", zodat
-  // de import-log een almaar groeiend "(x niet toepasbaar)" meldde terwijl er
-  // niets mis was — en een échte mismatch (dienst intussen handmatig verlegd)
-  // daarin verdronk.
-  // Beide benen tellen (swapRaaktBereik): een maandoverschrijdende 1-op-1-
-  // ruil met het terugbeen ín de periode moest anders stil terug.
-  const relevant = bereik?.van && bereik?.tot
-    ? approved.filter((sw) => swapRaaktBereik(sw, { van: bereik.van!, tot: bereik.tot! }))
-    : approved;
-  return applySwapsToPlanningRows(shifts, relevant);
-};
+// reapplyApprovedSwaps (de heropbouw-replay van goedgekeurde ruilen) staat in
+// api/_lib/planningHeropbouw.ts, naast de heropbouw-kern die hem ook gebruikt.
 
 /** Verlof-conflicten in een set planning-rijen: de chauffeur staat ingepland
  *  op een dag waarop hij goedgekeurd verlof heeft. */

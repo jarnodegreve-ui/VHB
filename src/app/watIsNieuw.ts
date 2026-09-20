@@ -25,13 +25,14 @@ export const WAT_IS_NIEUW_TONEN = false;
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
     id: '2026-09-20',
-    titel: 'Rapporten op één plek, en meer zicht in Activiteit',
+    titel: 'Rapporten, meer zicht in Activiteit, en een planning die zichzelf bijwerkt',
     regels: {
       staf: [
         'Nieuw scherm Rapporten: alle overzichten per domein op één plek, met filters, een sorteerbare tabel, afdrukken of opslaan als PDF en een CSV voor Excel.',
         'Het eerste rapport is Verlofsaldo, met dezelfde cijfers als het saldo-overzicht in Verlof. De bestaande printbladen (maandrooster, verlofjaar, ruiloverzicht, gele boek) staan er ook tussen.',
         'De tijdbalken in Activiteit hebben een lijn per uur, en onder elke balk staan de exacte periodes uitgeschreven.',
         'Per sessie zie je de plaats van aanmelden (stad en land, afgeleid van het IP-adres; het adres zelf wordt niet bewaard). Een aanmelding van buiten België krijgt een badge, en “Buiten België” werkt als filter.',
+        'Wijzig je in Beheer dienstoverzicht tijden, delen of loopnummers, dan werkt het portaal de planning meteen zelf bij; goedgekeurde dienstruilen blijven staan. Chauffeurs krijgen één melding zodra het 10 minuten stil is, en lukt het bijwerken niet, dan zegt de melding na het opslaan waarom.',
       ],
     },
     bekijk: { staf: 'rapporten' },

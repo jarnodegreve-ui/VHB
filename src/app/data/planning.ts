@@ -4,6 +4,8 @@ import { apiFetch } from '../../lib/api';
 import { fetchCoverageGaps, type DayGap } from '../../lib/coverage';
 import { addDays, isoDate } from '../../lib/availability';
 import { useCollectieState, type DataCtx } from './kern';
+import { navigeer } from '../router';
+import { dienstoverzichtToast } from '../../lib/dienstoverzichtToast';
 
 /**
  * Planning: de shifts, het dienstoverzicht (services), de planningsmatrix
@@ -141,7 +143,22 @@ export function usePlanningData(ctx: DataCtx) {
         ctx.captureRevision('services', response);
         // Logboek stil op de achtergrond: de overlay wacht er niet op.
         if (currentUser?.role === 'admin') void fetchActivityLog();
-        showToast('Diensten succesvol opgeslagen.', 'success');
+        // De server werkt de planning zelf bij na een inhoudelijke wijziging
+        // (api/_lib/planningHeropbouw.ts). De save is hoe dan ook geslaagd; de
+        // toast zegt wat er met de planning gebeurde.
+        const antwoord = await response.json().catch(() => null);
+        const melding = dienstoverzichtToast(antwoord?.planning);
+        showToast(
+          melding.tekst,
+          melding.toon,
+          melding.naarRoosters ? { label: 'Naar Beheer roosters', run: () => navigeer('beheer-roosters') } : undefined,
+          // Lang genoeg om te lezen: de reden van een overgeslagen heropbouw
+          // is een instructie, de gewone bevestiging mag snel weg.
+          melding.naarRoosters ? { duurMs: 15000 } : melding.tekst.length > 60 ? { duurMs: 8000 } : undefined,
+        );
+        // Bijgewerkte planning meteen ophalen, stil: de schermen van deze
+        // gebruiker hoeven niet op het realtime-signaal te wachten.
+        if (antwoord?.planning?.status === 'bijgewerkt') void fetchPlanning(undefined, undefined, { silent: true });
         return true;
       }
       const err = await response.json().catch(() => ({} as any));

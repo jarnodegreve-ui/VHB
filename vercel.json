@@ -23,6 +23,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/rooster-meldingen",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/week-rapport",
       "schedule": "3 5 * * 1"
     },
