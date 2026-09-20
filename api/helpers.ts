@@ -124,8 +124,9 @@ export { HANDMATIGE_WISSEL_PREFIX };
 /** Log-acties waarmee een dienstwissel écht in de planning wordt doorgevoerd.
  *  Dit is de bron voor "welke wissels zijn er in die periode uitgevoerd": het
  *  wekelijkse ruiloverzicht én de tellers in het weekrapport lezen hem, want
- *  `decidedAt` op de wissel wordt door een latere afhandeling ('completed')
- *  overschreven en deugt daar niet voor. */
+ *  `decidedAt` op de wissel deugt daar niet voor: een latere terugdraai
+ *  (annuleren, afwijzen) overschrijft het, en tot 20-09 deed afhandelen
+ *  ('completed') dat ook. */
 export const SWAP_UITVOERING_ACTIES = [
   "Dienstruil goedgekeurd",
   "Diensten handmatig gewisseld",
