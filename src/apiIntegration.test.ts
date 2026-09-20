@@ -2776,6 +2776,64 @@ describe('dienstruil, dóórgeef-ketting en stale goedkeuring', () => {
     expect(res.status).toBe(409);
     expect(mem.swaps.find((s: any) => s.id === 'x-stale')?.status).toBe('accepted');
   });
+
+  // Regel Jarno: een dienst mag meerdere keren na elkaar geruild worden. De
+  // heropbouw-replay sorteert op decidedAt; "Afhandelen" (approved →
+  // completed) schreef daar het afhandelmoment over, zodat de eerste schakel
+  // van een ketting achteraan in de replay belandde en de dienst terugviel
+  // op de tussenpersoon.
+  describe('ketting A → B → C overleeft afhandelen + heropbouw', () => {
+    const DAG = '2026-07-08';
+    const zaaiKetting = () => {
+      mem.users.push({ id: '5', name: 'Chauffeur C', email: 'c@vhb.be', role: 'chauffeur', isActive: true });
+      invalidateUsersCache();
+      // Matrix (Excel) kent de ruilen niet: dienst 12 staat er nog bij A.
+      mem.planningMatrix = [
+        { id: 'm-k', source_date: DAG, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij', 'Chauffeur C': 'vrij' }, raw_row: '' },
+      ];
+      mem.planningCodes = [
+        { code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true },
+      ];
+      // Beide schakels goedgekeurd en doorgevoerd: dienst 12 staat bij C.
+      mem.planning = [{ id: 'sh-c', driverId: '5', date: DAG, line: '12' }];
+      mem.swaps = [
+        { id: 'k-1', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'approved', swapType: 'overname', reason: '', createdAt: '2026-06-20T08:00:00', decidedAt: '2026-06-21T08:00:00', shiftDate: DAG, shiftLine: '12' },
+        { id: 'k-2', shiftId: 'sh-c', requesterId: '4', targetDriverId: '5', status: 'approved', swapType: 'overname', reason: '', createdAt: '2026-06-22T08:00:00', decidedAt: '2026-06-23T08:00:00', shiftDate: DAG, shiftLine: '12' },
+      ];
+    };
+    const eigenaarNaHeropbouw = async () => {
+      const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-planner' });
+      expect(res.status).toBe(200);
+      const rijen = mem.planning.filter((p: any) => p.date === DAG && String(p.line) === '12');
+      expect(rijen.length).toBeGreaterThan(0);
+      return [...new Set(rijen.map((p: any) => String(p.driverId)))];
+    };
+
+    it('controle: zonder afhandelen komt de dienst na een heropbouw bij C uit', async () => {
+      zaaiKetting();
+      expect(await eigenaarNaHeropbouw()).toEqual(['5']);
+    });
+
+    it('eerste schakel afhandelen verlegt haar beslismoment niet, de dienst blijft bij C', async () => {
+      zaaiKetting();
+      const af = await api('PATCH', '/api/swaps/k-1', { token: 'tok-planner', body: { status: 'completed', ifStatus: 'approved' } });
+      expect(af.status).toBe(200);
+      expect(af.json.swap.status).toBe('completed');
+      expect(await eigenaarNaHeropbouw()).toEqual(['5']);
+      // Het beslismoment is dat van de goedkeuring, niet dat van het afhandelen.
+      expect(af.json.swap.decidedAt).toBe('2026-06-21T08:00:00');
+      expect(mem.swaps.find((s: any) => s.id === 'k-1')?.decidedAt).toBe('2026-06-21T08:00:00');
+    });
+
+    it('beide schakels afhandelen in omgekeerde volgorde verandert de uitkomst niet', async () => {
+      zaaiKetting();
+      for (const id of ['k-2', 'k-1']) {
+        const af = await api('PATCH', `/api/swaps/${id}`, { token: 'tok-planner', body: { status: 'completed', ifStatus: 'approved' } });
+        expect(af.status).toBe(200);
+      }
+      expect(await eigenaarNaHeropbouw()).toEqual(['5']);
+    });
+  });
 });
 
 describe('maandplanning, afwezigheidscodes zijn voor iedereen zichtbaar', () => {

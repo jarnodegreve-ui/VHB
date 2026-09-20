@@ -2631,9 +2631,10 @@ app.get("/api/cron/week-rapport", async (req, res) => {
       getSwapsData(),
       getClientErrorsSince(sinceIso),
       // Uitgevoerde wissels uit het activiteitenlog, niet uit `decidedAt`:
-      // dat veld wordt door een latere afhandeling ('completed') overschreven,
-      // waardoor een wissel van vorige week deze week meegeteld werd (en
-      // omgekeerd). Zelfde bron als het wekelijkse ruiloverzicht.
+      // dat veld wordt door een latere terugdraai overschreven (en tot 20-09
+      // ook door afhandelen, 'completed'), waardoor een wissel van vorige
+      // week deze week meegeteld werd (en omgekeerd). Zelfde bron als het
+      // wekelijkse ruiloverzicht.
       getSwapExecutions(sinceIso, nuIso, SWAP_UITVOERING_ACTIES),
     ]);
     const uniekeGebruikers = new Set(sessies.map((s) => s.userId)).size;
@@ -3610,7 +3611,7 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
  * planning werd doorgevoerd: de goedkeuring door de planning, plus de wissels
  * die de planning zelf handmatig doorvoerde. Die momenten staan alleen in het
  * activiteitenlog, want `decidedAt` op de swap wordt door een latere
- * afhandeling ('completed') overschreven.
+ * terugdraai overschreven (en tot 20-09 ook door afhandelen, 'completed').
  *
  * Een wissel die later teruggedraaid werd, staat er bewust wél in (met zijn
  * huidige status): hij ís die week doorgevoerd geweest, en het klassement is
@@ -4640,7 +4641,18 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
     // 'accepted' is een tussenstap (collega akkoord), nog géén beslismoment —
     // decidedAt hoort pas bij een definitieve beslissing (zelfde semantiek
     // als de array-route/UI).
-    const updated = status === "accepted"
+    //
+    // 'completed' (knop Afhandelen) is evenmin een beslissing: de wissel is al
+    // goedgekeurd en doorgevoerd, hij wordt alleen administratief weggezet.
+    // Het beslismoment van de goedkeuring blijft dus staan. De heropbouw-
+    // replay, de maandplanning-overlay, de dekking en de ruil-badge spelen
+    // goedgekeurde én afgehandelde ruilen af in volgorde van decidedAt; een
+    // overschreven moment zette de eerste schakel van een doorgeefketting
+    // (A → B, daarna B → C) achteraan, waardoor de dienst na een heropbouw
+    // terugviel op B. Het afhandelmoment zelf staat in het activiteitenlog
+    // ("Dienstruil voltooid").
+    const behoudtBeslismoment = status === "accepted" || status === "completed";
+    const updated = behoudtBeslismoment
       ? { ...current, status }
       : { ...current, status, decidedAt: new Date().toISOString() };
     await saveSwapsData([updated], []);
