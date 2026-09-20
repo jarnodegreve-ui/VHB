@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RapportDefinitie, RapportRij } from './types';
-import { berekenTotalen, csvRijen, formatAantal, formatDuur, formatWaarde, heeftTotaalrij, isRechts, rijBevat, sorteerRijen } from './opmaak';
+import { berekenTotalen, csvRijen, formatAantal, formatDuur, formatWaarde, heeftTotaalrij, isRechts, kolomIndeling, onderEersteTekst, rijBevat, sorteerRijen } from './opmaak';
+import { RAPPORTEN, rapportVan } from './register';
 
 const DEF: RapportDefinitie = {
   id: 'test',
@@ -117,5 +118,74 @@ describe('csvRijen', () => {
 
   it('zonder rijen alleen de kopregel (geen totaalrij met nullen)', () => {
     expect(csvRijen(DEF, [], berekenTotalen(DEF, []))).toEqual([['Naam', 'Datum', 'Dagen', 'Gewerkt', 'Attest']]);
+  });
+});
+
+describe('kolomIndeling (rol van een kolom op een smal scherm)', () => {
+  const SMAL: RapportDefinitie = {
+    ...DEF,
+    kolommen: [
+      { id: 'naam', titel: 'Naam', type: 'tekst', smal: 'verberg' }, // de eerste kolom negeert haar rol
+      { id: 'sectie', titel: 'Sectie', type: 'tekst', smal: 'onderEerste' },
+      { id: 'datum', titel: 'Datum', type: 'datum', smal: 'onderEerste' },
+      { id: 'dagen', titel: 'Dagen', type: 'getal', totaal: true },
+      { id: 'aangevraagd', titel: 'Aangevraagd', kort: 'Aangevr.', type: 'getal', smal: 'achteraan' },
+      { id: 'gewerkt', titel: 'Gewerkt', type: 'duur', totaal: true },
+      { id: 'attest', titel: 'Attest', type: 'janee', smal: 'verberg' },
+      { id: 'opmerking', titel: 'Opmerking', type: 'tekst', smal: 'achteraan' },
+    ],
+  };
+  const ids = (kolommen: { id: string }[]) => kolommen.map((k) => k.id);
+
+  it('breed: alle kolommen in de volgorde van de definitie, niets onder de eerste', () => {
+    const uit = kolomIndeling(SMAL, 'breed');
+    expect(ids(uit.kolommen)).toEqual(ids([...SMAL.kolommen]));
+    expect(uit.onderEerste).toEqual([]);
+  });
+
+  it('smal: onderEerste wordt een regel, achteraan schuift naar het einde, verberg valt weg', () => {
+    const uit = kolomIndeling(SMAL, 'smal');
+    expect(ids(uit.kolommen)).toEqual(['naam', 'dagen', 'gewerkt', 'aangevraagd', 'opmerking']);
+    expect(ids(uit.onderEerste)).toEqual(['sectie', 'datum']);
+  });
+
+  it('de eerste kolom blijft de eerste, wat haar rol ook zegt', () => {
+    expect(kolomIndeling(SMAL, 'smal').kolommen[0].id).toBe('naam');
+  });
+
+  it('een definitie zonder rollen is smal en breed hetzelfde', () => {
+    expect(kolomIndeling(DEF, 'smal')).toEqual(kolomIndeling(DEF, 'breed'));
+  });
+
+  it('de invoer blijft ongemoeid en een lege definitie geeft niets', () => {
+    const voor = ids([...SMAL.kolommen]);
+    kolomIndeling(SMAL, 'smal').kolommen.reverse();
+    expect(ids([...SMAL.kolommen])).toEqual(voor);
+    expect(kolomIndeling({ ...DEF, kolommen: [] }, 'smal')).toEqual({ kolommen: [], onderEerste: [] });
+  });
+
+  it('onderEersteTekst: opgemaakte waarden met een middenpunt ertussen, lege overgeslagen', () => {
+    const { onderEerste } = kolomIndeling(SMAL, 'smal');
+    expect(onderEersteTekst(onderEerste, { id: '1', sectie: 'Nachtdiensten', datum: '2026-09-17' })).toBe('Nachtdiensten · 17/09/2026');
+    expect(onderEersteTekst(onderEerste, { id: '2', sectie: null, datum: '2026-09-17' })).toBe('17/09/2026');
+    expect(onderEersteTekst(onderEerste, { id: '3', sectie: '', datum: null })).toBe('');
+    expect(onderEersteTekst([], { id: '4', sectie: 'Flexi' })).toBe('');
+  });
+
+  it('printblad en CSV kennen de rol niet: csvRijen geeft altijd alle kolommen', () => {
+    expect(csvRijen(SMAL, [])[0]).toEqual(['Naam', 'Sectie', 'Datum', 'Dagen', 'Aangevraagd', 'Gewerkt', 'Attest', 'Opmerking']);
+  });
+
+  it('Verlofsaldo op de telefoon: naam (met sectie eronder), Budget, Opgenomen, Vrij; de rest achter het scrollen', () => {
+    const uit = kolomIndeling(rapportVan('verlofsaldo')!, 'smal');
+    expect(ids(uit.kolommen)).toEqual(['naam', 'budget', 'opgenomen', 'vrij', 'aangevraagd', 'kleinVerlet']);
+    expect(ids(uit.onderEerste)).toEqual(['sectie']);
+  });
+
+  it('in het register: de eerste kolom heeft geen rol, en wat in de totaalrij telt verdwijnt nooit', () => {
+    for (const r of RAPPORTEN) {
+      expect(r.kolommen[0].smal, r.id).toBeUndefined();
+      for (const k of r.kolommen) if (k.totaal) expect(k.smal === 'verberg' || k.smal === 'onderEerste', `${r.id}.${k.id}`).toBe(false);
+    }
   });
 });

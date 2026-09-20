@@ -51,6 +51,21 @@ export type RapportKolom = {
   uitlijning?: 'links' | 'rechts';
   /** Telt mee in de totaalrij (alleen zinvol voor getal en duur). */
   totaal?: boolean;
+  /**
+   * Rol van de kolom op een smal scherm (telefoon), waar niet alles naast
+   * elkaar past. Alleen de tabel op het scherm luistert hiernaar: het
+   * printblad, de CSV en het brede scherm tonen altijd alle kolommen in de
+   * volgorde van de definitie.
+   *  - `onderEerste`  geen eigen kolom, maar een tweede, gedempte regel onder
+   *                   de waarde van de eerste kolom (sectie onder de naam)
+   *  - `achteraan`    blijft een kolom, maar schuift naar het einde: achter
+   *                   het horizontaal scrollen in plaats van ervoor
+   *  - `verberg`      op een smal scherm weg
+   * De eerste kolom heeft nooit een rol: die blijft links staan.
+   */
+  smal?: 'onderEerste' | 'achteraan' | 'verberg';
+  /** Korte kolomkop voor het smalle scherm ("Opgen."); de volledige titel blijft de naam voor hulptechnologie. */
+  kort?: string;
 };
 
 export type RapportDefinitie = {

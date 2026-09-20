@@ -36,12 +36,15 @@ const VERLOFSALDO: RapportDefinitie = {
   filters: [{ soort: 'jaar' }, { soort: 'chauffeur', label: 'Medewerker' }],
   kolommen: [
     { id: 'naam', titel: 'Naam', type: 'tekst' },
-    { id: 'sectie', titel: 'Sectie', type: 'tekst' },
+    // Telefoon: de sectie staat onder de naam, Aangevraagd en Klein verlet
+    // schuiven naar achteren (in die volgorde), zodat Budget, Opgenomen en Vrij
+    // zonder scrollen in beeld staan.
+    { id: 'sectie', titel: 'Sectie', type: 'tekst', smal: 'onderEerste' },
     { id: 'budget', titel: 'Budget', type: 'getal', totaal: true },
-    { id: 'opgenomen', titel: 'Opgenomen', type: 'getal', totaal: true },
-    { id: 'aangevraagd', titel: 'Aangevraagd', type: 'getal', totaal: true },
+    { id: 'opgenomen', titel: 'Opgenomen', kort: 'Opgen.', type: 'getal', totaal: true },
+    { id: 'aangevraagd', titel: 'Aangevraagd', kort: 'Aangevr.', type: 'getal', totaal: true, smal: 'achteraan' },
     { id: 'vrij', titel: 'Vrij', type: 'getal', totaal: true },
-    { id: 'kleinVerlet', titel: 'Klein verlet', type: 'getal', totaal: true },
+    { id: 'kleinVerlet', titel: 'Klein verlet', kort: 'Kl. verlet', type: 'getal', totaal: true, smal: 'achteraan' },
   ],
   sortering: { kolom: 'naam', richting: 'asc' },
   print: 'staand',

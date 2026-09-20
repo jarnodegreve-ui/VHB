@@ -40,6 +40,32 @@ export const formatWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undefi
   }
 };
 
+/**
+ * Welke kolommen de tabel op het scherm toont. Breed (en overal buiten het
+ * scherm: printblad, CSV) zijn dat alle kolommen in de volgorde van de
+ * definitie. Smal volgt de rol `smal` van elke kolom: `onderEerste` wordt een
+ * regel onder de eerste kolom, `achteraan` schuift naar het einde (achter het
+ * horizontaal scrollen), `verberg` valt weg. De eerste kolom blijft altijd
+ * de eerste, wat haar rol ook zegt.
+ */
+export type KolomIndeling = { kolommen: RapportKolom[]; onderEerste: RapportKolom[] };
+export const kolomIndeling = (def: RapportDefinitie, breedte: 'smal' | 'breed'): KolomIndeling => {
+  if (breedte === 'breed') return { kolommen: [...def.kolommen], onderEerste: [] };
+  const [eerste, ...rest] = def.kolommen;
+  if (!eerste) return { kolommen: [], onderEerste: [] };
+  return {
+    kolommen: [eerste, ...rest.filter((k) => !k.smal), ...rest.filter((k) => k.smal === 'achteraan')],
+    onderEerste: rest.filter((k) => k.smal === 'onderEerste'),
+  };
+};
+
+/** De regel onder de eerste kolom: de opgemaakte waarden van de `onderEerste`-kolommen, lege overgeslagen. */
+export const onderEersteTekst = (onderEerste: readonly RapportKolom[], rij: RapportRij): string =>
+  onderEerste
+    .filter((k) => rij[k.id] !== null && rij[k.id] !== undefined && rij[k.id] !== '')
+    .map((k) => formatWaarde(k, rij[k.id]))
+    .join(' · ');
+
 /** Som per optelbare kolom; een kolom zonder één getal telt als 0. */
 export const berekenTotalen = (def: RapportDefinitie, rijen: readonly RapportRij[]): Record<string, number> => {
   const uit: Record<string, number> = {};

@@ -97,6 +97,45 @@ test('het blad toont alle rijen met de totaalrij', async ({ page }) => {
   await expect(page.getByRole('row', { name: /Totaal \(12\)\s+258\s+144\s+14\s+100\s+3/ })).toBeVisible();
 });
 
+test('telefoon: naam met sectie eronder en Budget, Opgenomen en Vrij zonder scrollen; breed: alle kolommen', async ({ page }) => {
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await page.goto('/rapporten/verlof/verlofsaldo?jaar=2026');
+  await expect(page.getByRole('cell', { name: /Alex Du Priez/ })).toBeVisible({ timeout: 15_000 });
+  const koppen = page.getByRole('columnheader');
+  const smal = (page.viewportSize()?.width ?? 0) < 768;
+
+  if (!smal) {
+    await expect(koppen.filter({ hasText: /^(Naam|Sectie|Budget|Opgenomen|Aangevraagd|Vrij|Klein verlet)$/ })).toHaveCount(7);
+    await expect(page.getByRole('cell', { name: 'Reguliere diensten' }).first()).toBeVisible();
+    return;
+  }
+
+  // Geen eigen kolom Sectie: ze staat als tweede regel onder de naam.
+  await expect(page.getByRole('columnheader', { name: 'Sectie' })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'Alex Du Priez Reguliere diensten' })).toBeVisible();
+  // Korte kop in beeld, de volledige naam voor hulptechnologie.
+  await expect(page.getByRole('button', { name: 'Opgenomen' })).toHaveText('Opgen.');
+
+  // Naam, Budget, Opgenomen en Vrij vallen binnen het kader; Aangevraagd en Klein verlet erachter.
+  const binnenKader = await page.evaluate(() => {
+    const kader = document.querySelector('table')!.parentElement!.getBoundingClientRect();
+    return [...document.querySelectorAll('thead th')].map((th) => th.getBoundingClientRect().right <= kader.right + 0.5);
+  });
+  expect(binnenKader).toEqual([true, true, true, true, false, false]);
+  await expect(koppen.nth(4)).toHaveText('Aangevr.');
+  await paginaScrolltNiet(page);
+
+  // De totaalrij volgt dezelfde kolommen, en sorteren werkt op de smalle koppen.
+  await expect(page.getByRole('row', { name: /Totaal \(12\)\s*258\s*144\s*100\s*14\s*3/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Vrij' }).click();
+  await expect(koppen.nth(3)).toHaveAttribute('aria-sort', 'ascending');
+  // Drie mensen staan op 0 vrij; wie bovenaan staat hangt van de aanlevering af.
+  await expect(page.getByRole('row').nth(1)).toContainText(/Carine De Smet|Diether Van Haute|Hans Vermeulen/);
+  await page.getByRole('button', { name: 'Vrij' }).click();
+  await expect(koppen.nth(3)).toHaveAttribute('aria-sort', 'descending');
+  await expect(page.getByRole('row').nth(1)).toContainText('Greet Lambrecht');
+});
+
 test('periode zonder gegevens zegt vanaf wanneer, een laadfout is een foutkaart', async ({ page }) => {
   await seed(page, { user: ADMIN, view: 'rapporten' });
   await page.goto('/rapporten/verlof/verlofsaldo?jaar=2024');
