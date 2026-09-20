@@ -1,5 +1,6 @@
 import type { DashboardVoorkeuren } from '../shared/schemas/dashboardVoorkeuren';
 import type { Melding, MeldingSoort } from '../shared/schemas/meldingen';
+import type { RuilVerloopStap } from '../shared/ruilVerloop';
 
 export type Role = 'chauffeur' | 'technieker' | 'planner' | 'admin';
 
@@ -84,6 +85,9 @@ export interface SwapRequest {
   shiftLine?: string;
   /** Moment waarop de ontvangende chauffeur de wissel bevestigde ("gezien"). */
   targetSeenAt?: string;
+  /** Verloop per persoon, door de server afgeleid uit het activiteitenlog
+   *  (alleen-lezen; ontbreekt als het log niet te lezen was). */
+  verloop?: RuilVerloopStap[];
 }
 
 export interface LeaveRequest {

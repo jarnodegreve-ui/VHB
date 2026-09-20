@@ -278,13 +278,27 @@ test('collega accepteert een aan hem gerichte ruil (PATCH met ifStatus-guard)', 
     if (path.endsWith('/api/swaps') && req.method() === 'GET') return json([ruil]);
     if (path.includes('/api/swaps/') && req.method() === 'PATCH') {
       patched = { path, body: JSON.parse(req.postData() ?? 'null') };
-      return json({ swap: { ...ruil, status: 'accepted' } });
+      // De server geeft het bijgewerkte verloop mee (zie PATCH /api/swaps/:id).
+      return json({ swap: { ...ruil, status: 'accepted', verloop: [
+        { soort: 'aangevraagd', op: ruil.createdAt, door: 'aanvrager' },
+        { soort: 'geaccepteerd', op: new Date().toISOString(), door: 'collega', van: 'pending' },
+      ] } });
     }
     return json([]);
   });
 
   await page.goto('/');
   await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+
+  // Verloop per persoon: de collega (ik) is aan zet, de planner nog niet.
+  const verloop = page.getByRole('region', { name: 'Verloop per persoon' });
+  await expect(verloop.getByRole('listitem')).toHaveCount(3);
+  await expect(verloop.getByRole('listitem').nth(0)).toContainText(COLLEGA.name);
+  await expect(verloop.getByRole('listitem').nth(0)).toContainText('Aangevraagd');
+  await expect(verloop.getByRole('listitem').nth(1)).toContainText('(jij)');
+  await expect(verloop.getByRole('listitem').nth(1)).toContainText('Wacht op antwoord');
+  await expect(verloop.getByRole('listitem').nth(1)).toContainText('Krijgt dienst 2323');
+  await expect(verloop.getByRole('listitem').nth(2)).toContainText('Wacht op collega');
 
   // Accepteren → bevestigingsmodal → bevestigen (zelfde label, dus .last()).
   await page.getByRole('button', { name: 'Accepteren' }).click();
@@ -297,6 +311,9 @@ test('collega accepteert een aan hem gerichte ruil (PATCH met ifStatus-guard)', 
 
   // Lokale update: de tussenstand "wacht op de planner" verschijnt.
   await expect(page.getByText('Je accepteerde deze ruil, de planner valideert nog (rij-/rusttijden).')).toBeVisible();
+  // En het verloop volgt mee: ik accepteerde, nu is de planner aan zet.
+  await expect(verloop.getByRole('listitem').nth(1)).toContainText('Geaccepteerd');
+  await expect(verloop.getByRole('listitem').nth(2)).toContainText('Te beoordelen');
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });

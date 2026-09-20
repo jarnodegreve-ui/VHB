@@ -11,6 +11,7 @@ import { Avatar } from '../components/Avatar';
 import { DateInput, Field, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
+import { RuilVerloop } from '../components/RuilVerloop';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
 import { maandagVan } from '../lib/roosterUren';
@@ -166,6 +167,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
+  /** Naam bij een id, voor het verloop per persoon (RuilVerloop). */
+  const naamVan = (id: string) => users.find((u) => u.id === id)?.name;
 
   /** Kan staf deze wissel uit de geschiedenis wissen? Alleen afgewezen of
    *  ingetrokken: een doorgevoerde (approved/completed) zit in de
@@ -219,6 +222,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       startTime: shift?.startTime,
       endTime: shift?.endTime,
     };
+  };
+  /** De ruil voor het verloop per persoon: oude ruilen dragen zelf geen
+   *  shiftDate/shiftLine, dan vult de planning-rij aan (zoals shiftInfoFor),
+   *  zodat "krijgt dienst …" ook daar klopt. */
+  const voorVerloop = (swap: SwapRequest): SwapRequest => {
+    if (swap.shiftDate && swap.shiftLine) return swap;
+    const info = shiftInfoFor(swap);
+    return { ...swap, shiftDate: info.date || undefined, shiftLine: info.line !== '--' ? info.line : undefined };
   };
   // Gedeelde compacte dag-vorm ('vr 18 jul') — gelijk aan Dekking, i.p.v. de
   // eigen 'vr 18/07'-variant (datum-consolidatie).
@@ -478,14 +489,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
-          <MicroLabel className="text-slate-500 ml-1">Mijn verzoeken</MicroLabel>
+          <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
           {mySwaps.length > 0 ? (
             /* Compacte, uitklapbare rijen in een eigen scrollcontainer: deze
                lijst groeit onbegrensd mee met de historiek (wens Jarno). */
             <div className="max-h-[420px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
               {mySwaps.map(swap => {
                 const info = shiftInfoFor(swap);
-                const target = users.find(u => u.id === swap.targetDriverId);
                 const open = expandedSwapIds.includes(swap.id);
                 return (
                   <Card key={swap.id} padding="none" className="overflow-hidden">
@@ -510,14 +520,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {info.startTime && info.endTime && (
                           <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
                         )}
-                        {target && (
-                          <p className="text-xs font-medium text-slate-500 mt-1.5">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
-                        )}
-                        {isTakeoverSwap(swap) ? (
-                          <div className="mt-1.5"><TakeoverBadge /></div>
-                        ) : returnLabel(swap) && (
-                          <p className="text-xs font-medium text-blue-700 mt-1">In ruil: {returnLabel(swap)}</p>
-                        )}
+                        {isTakeoverSwap(swap) && <div className="mt-1.5"><TakeoverBadge /></div>}
+                        {/* Wie staat waar: de collega en wat elk krijgt staan
+                            in het verloop, dus geen losse "Aan:" en "In ruil:"
+                            meer erboven. */}
+                        <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} className="mt-3" />
                         {/* Intrekken zolang de ruil nog niet door de planner is
                             goedgekeurd — verlof kon dit al, dienstruil dwong
                             een belletje naar de planner af. */}
@@ -560,16 +567,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         </div>
 
         <div className="space-y-4">
-          <MicroLabel className="text-slate-500 ml-1">Openstaande dienstruilen</MicroLabel>
+          <MicroLabel className="ml-1">Openstaande dienstruilen</MicroLabel>
           {availableSwaps.length > 0 ? (
             availableSwaps.map(swap => {
               const info = shiftInfoFor(swap);
-              const requester = users.find(u => u.id === swap.requesterId);
               const canRespond = canRespondToSwap(user, swap);
-              // Planner/admin ziet ook ruilen tussen twee collega's: dan is het
-              // niet "jij" die geeft, maar de collega aan wie de ruil gericht is.
-              const voorMij = swap.targetDriverId === user.id;
-              const ontvanger = swap.targetDriverId ? users.find(u => u.id === swap.targetDriverId) : undefined;
+              // Staf ziet hier ELKE open ruil, ook die tussen twee collega's. Met
+              // het volledige blok per kaart werd die kolom erg lang, terwijl
+              // dezelfde ruilen eronder in de beheertabel staan: daar dus de
+              // compacte regels, met de namen in de kaartkop. Wie zelf moet
+              // antwoorden (of de chauffeur) houdt het volledige blok.
+              const compactKaart = isPlanner && swap.targetDriverId !== user.id;
+              const ontvanger = swap.targetDriverId ? naamVan(swap.targetDriverId) : undefined;
               return (
                 <Card key={swap.id} className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
@@ -579,14 +588,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {info.startTime && info.endTime && (
                         <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
                       )}
-                      <p className="text-xs font-medium text-slate-500">Door: {requester?.name}</p>
-                      {!voorMij && ontvanger && <p className="text-xs font-medium text-slate-500">Aan: {ontvanger.name}</p>}
+                      {compactKaart && (
+                        <p className="text-xs font-medium text-slate-500">
+                          {naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger ? ` → ${ontvanger}` : ''}
+                        </p>
+                      )}
                       {isTakeoverSwap(swap) ? (
                         <div className="mt-1.5"><TakeoverBadge /></div>
-                      ) : returnLabel(swap) && (
-                        <p className="text-xs font-medium text-blue-700 mt-1">
-                          {voorMij ? 'Jij geeft' : ontvanger ? `${ontvanger.name} geeft` : 'In ruil'}: {returnLabel(swap)}
-                        </p>
+                      ) : compactKaart && returnLabel(swap) && (
+                        <p className="text-xs font-medium text-blue-700 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                       )}
                     </div>
                     <span className="shrink-0">
@@ -595,6 +605,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
+                  {/* Wie vraagt, wie geeft wat en wie nog moet antwoorden. */}
+                  {compactKaart
+                    ? <RuilVerloop compact swap={voorVerloop(swap)} naamVan={naamVan} className="space-y-0.5" />
+                    : <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />}
                   {canRespond ? (
                     <div className="flex gap-2 pt-1">
                       <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAccept(swap.id)}>
@@ -648,7 +662,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       {isPlanner && (() => {
         const beheerKop = (
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
+            <MicroLabel className="ml-1">Beheer dienstruilen</MicroLabel>
             <div className="flex items-center gap-2">
               <DateInput size="sm" value={printDag} onChange={setPrintDag} aria-label="Dag uit de week van het ruiloverzicht" />
               <Button
@@ -739,7 +753,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             )}
                           </Td>
                           <Td>
-                            <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-flex flex-wrap items-center gap-1.5">
                               <StatusBadge status={swap.status} stil />
                               {/* Weet de nieuwe rijder het al? Bij approved is
                                   dát de vraag die telt (push bereikt weinigen). */}
@@ -749,6 +763,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">Niet bevestigd</Badge>
                               )}
                             </span>
+                            <RuilVerloop compact swap={voorVerloop(swap)} naamVan={naamVan} className="mt-1.5 space-y-0.5" />
                           </Td>
                           <Td>
                             <div className="flex items-center gap-1.5">
@@ -808,13 +823,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             </span>
                             <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                           </button>
-                          <MicroLabel className="text-oker-700 mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
+                          <MicroLabel className="!text-oker-700 mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
                           <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</p>
-                          {isTakeoverSwap(swap) ? (
-                            <div className="mt-1"><TakeoverBadge compact /></div>
-                          ) : returnLabel(swap) && (
-                            <p className="text-xs font-medium text-blue-700 mt-1">↔ in ruil: {returnLabel(swap)}</p>
-                          )}
+                          {isTakeoverSwap(swap) && <div className="mt-1"><TakeoverBadge compact /></div>}
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1">
                           <StatusBadge status={swap.status} stil />
@@ -825,6 +836,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           )}
                         </span>
                       </div>
+                      <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
                       <div className="flex gap-2 pt-1">
                         {swap.status === 'accepted' && (
                           <>
@@ -888,7 +900,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         return (
           <div className="space-y-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <MicroLabel className="text-slate-500 ml-1">Afgehandeld</MicroLabel>
+              <MicroLabel className="ml-1">Afgehandeld</MicroLabel>
               {alleAfgehandeld.length > afgehandeld.length && (
                 <span className="text-xs font-medium text-slate-500">nieuwste {afgehandeld.length} van {alleAfgehandeld.length}</span>
               )}
@@ -897,19 +909,34 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               {afgehandeld.map((swap) => {
                 const info = shiftInfoFor(swap);
                 const requester = users.find((u) => u.id === swap.requesterId);
+                // Eigen sleutel: dezelfde wissel kan ook bij "Mijn verzoeken" staan.
+                const sleutel = `afgehandeld:${swap.id}`;
+                const open = expandedSwapIds.includes(sleutel);
                 return (
-                  <div key={swap.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="text-sm font-semibold text-slate-800 truncate">
-                        {requester?.name ?? 'Onbekend'}
-                        {swap.targetDriverId && <span className="font-medium text-slate-500"> → {users.find((u) => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
+                  <div key={swap.id}>
+                  <div className="flex items-center justify-between gap-2 px-4 py-2.5">
+                    {/* rauw: de rij is de uitklapknop (namen + dienst + status + chevron); "geweigerd" zegt pas in het verloop door wie */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSwapExpanded(sleutel)}
+                      aria-expanded={open}
+                      className="min-w-0 flex flex-1 items-center justify-between gap-3 text-left"
+                    >
+                      <span className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <span className="text-sm font-semibold text-slate-800 truncate">
+                          {requester?.name ?? 'Onbekend'}
+                          {swap.targetDriverId && <span className="font-medium text-slate-500"> → {users.find((u) => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
+                        </span>
+                        <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
+                          Dienst {info.line}{info.date ? ` · ${formatDateHuman(info.date)}` : ''}
+                        </span>
                       </span>
-                      <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
-                        Dienst {info.line}{info.date ? ` · ${formatDateHuman(info.date)}` : ''}
+                      <span className="flex shrink-0 items-center gap-2">
+                        <StatusBadge status={swap.status} stil />
+                        <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
                       </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <StatusBadge status={swap.status} stil />
+                    </button>
+                    <div className="flex items-center shrink-0">
                       {kanWissen(swap) ? (
                         <IconButton label="Uit geschiedenis wissen" size="sm" variant="ghost" className="text-red-700 hover:text-red-700 hover:bg-red-50" onClick={() => vraagWissen(swap)}>
                           <Trash2 size={16} />
@@ -920,6 +947,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         </IconButton>
                       )}
                     </div>
+                  </div>
+                  <Uitklap open={open}>
+                    <div className="px-4 pb-3">
+                      {isTakeoverSwap(swap) && <div className="mb-2"><TakeoverBadge compact /></div>}
+                      {/* Begrensd: op een breed scherm staat de status anders een halve meter van de naam. */}
+                      <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} className="max-w-xl" />
+                    </div>
+                  </Uitklap>
                   </div>
                 );
               })}
@@ -1320,8 +1355,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       >
         {reviewSwap && (() => {
           const info = shiftInfoFor(reviewSwap);
-          const requester = users.find((u) => u.id === reviewSwap.requesterId);
-          const target = reviewSwap.targetDriverId ? users.find((u) => u.id === reviewSwap.targetDriverId) : undefined;
           return (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2">
@@ -1334,19 +1367,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 {isTakeoverSwap(reviewSwap) && <TakeoverBadge compact />}
               </div>
 
-              <Card tone="muted" padding="sm">
-                <MicroLabel className="text-slate-500">{isTakeoverSwap(reviewSwap) ? 'Overname' : 'Ruil'}</MicroLabel>
-                <p className="mt-1.5 text-sm font-semibold text-slate-800">
-                  {requester?.name ?? 'Onbekend'}
-                  <span className="mx-1.5 font-medium text-slate-500">→</span>
-                  {target?.name ?? 'open verzoek'}
-                </p>
-                {isTakeoverSwap(reviewSwap) ? (
-                  <p className="mt-1 text-xs font-medium text-blue-700">De collega neemt de dienst over, zonder tegenprestatie.</p>
-                ) : returnLabel(reviewSwap) && (
-                  <p className="mt-1 text-xs font-medium text-blue-700">↔ in ruil: {returnLabel(reviewSwap)}</p>
-                )}
-              </Card>
+              {/* Wie ruilt met wie, wat elk krijgt en wie al antwoordde: het
+                  verloop per persoon vervangt de oude "A → B"-kaart. */}
+              <RuilVerloop swap={voorVerloop(reviewSwap)} naamVan={naamVan} kijkerId={user.id} />
 
               {reviewSwap.reason && (
                 <div>

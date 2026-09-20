@@ -29,6 +29,31 @@ export function formatDateTimeHuman(value: string | undefined | null): string {
   }
 }
 
+/**
+ * Kort moment voor een tijdlijn of verloop: "19/09 14:02", met jaartal als het
+ * niet dit jaar is ("19/09/2025 14:02"). Een timestamp mét zone (Z of offset,
+ * zo slaat de server ze op) wordt naar Belgische tijd omgerekend; een
+ * zone-loze waarde is al wandkloktijd en blijft staan. Alleen een datum → dd/mm.
+ */
+export function formatMomentKort(value: string | undefined | null, nu: Date = new Date()): string {
+  if (!value) return '';
+  const s = String(value);
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(s);
+  if (!m) return '';
+  let [, jaar, maand, dag, uur, minuut] = m;
+  if (uur !== undefined && /(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return '';
+    const delen = new Intl.DateTimeFormat('nl-BE', {
+      timeZone: 'Europe/Brussels', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(d);
+    const deel = (type: string) => delen.find((p) => p.type === type)?.value ?? '';
+    jaar = deel('year'); maand = deel('month'); dag = deel('day'); uur = deel('hour'); minuut = deel('minute');
+  }
+  const datum = `${dag}/${maand}${Number(jaar) === nu.getFullYear() ? '' : `/${jaar}`}`;
+  return uur === undefined ? datum : `${datum} ${uur}:${minuut}`;
+}
+
 export function formatDateHuman(iso: string | undefined | null): string {
   if (!iso) return '';
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);

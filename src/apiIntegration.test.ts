@@ -68,6 +68,10 @@ const mem = vi.hoisted(() => ({
   // niet-staf in de query filtert i.p.v. de hele tabel te lezen.
   leaveFilters: [] as any[],
   swapFilters: [] as any[],
+  // Id-filters waarmee getSwapVerloopRegels aangeroepen werd (null = alles),
+  // en een schakelaar om de logquery te laten mislukken.
+  verloopFilters: [] as Array<string[] | null>,
+  verloopFaalt: false,
   clientErrors: [] as any[],
   // app_settings (key → jsonb): toestel-gate en onderhoudsmodus.
   appSettings: {} as Record<string, unknown>,
@@ -426,7 +430,23 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     getPlanningCodesData: async () => mem.planningCodes,
     savePlanningCodesData: async (data: any[]) => { mem.planningCodes = data; },
     logActivity: async (_req: any, domain: string, action: string, message: string, entity?: { type?: string; id?: string }) => {
-      mem.activity.push({ domain, action, message, entityType: entity?.type, entityId: entity?.id });
+      // actorName/actorRole/gelogdOp: wie de regel schreef, zoals de echte
+      // logActivity dat uit req.appUser haalt (bron van het ruilverloop).
+      mem.activity.push({ domain, action, message, entityType: entity?.type, entityId: entity?.id, actorName: _req?.appUser?.name, actorRole: _req?.appUser?.role, gelogdOp: new Date().toISOString() });
+    },
+    // Zelfde contract als de echte: logregels van ruilen per ruil-id, oudste
+    // eerst; zonder id's = alle ruilen (staf). De filters bewaren we, zodat
+    // een test kan aantonen dat een chauffeur alleen zijn eigen ruilen opvraagt.
+    getSwapVerloopRegels: async (ids?: string[]) => {
+      mem.verloopFilters.push(ids ?? null);
+      if (mem.verloopFaalt) throw new Error('activity_log onbereikbaar');
+      const uit: Record<string, any[]> = {};
+      for (const a of mem.activity) {
+        if (a.entityType !== 'swap' || !a.entityId) continue;
+        if (ids && !ids.includes(String(a.entityId))) continue;
+        (uit[String(a.entityId)] ??= []).push({ createdAt: a.gelogdOp ?? a.createdAt, action: a.action, actorRole: a.actorRole ?? null, actorName: a.actorName ?? null, details: a.message ?? a.details ?? '' });
+      }
+      return uit;
     },
     getActivityLog: async (opts?: { sinceIso?: string | null; max?: number }) => {
     // Mock respecteert de opts — anders kan de #249-regressie ("UI beloofde
@@ -726,6 +746,8 @@ beforeEach(() => {
   mem.matrixMaandFilters = [];
   mem.leaveFilters = [];
   mem.swapFilters = [];
+  mem.verloopFilters = [];
+  mem.verloopFaalt = false;
   mem.clientErrors = [];
   mem.clientErrorStatus = [];
   mem.clientErrorStatusTabel = true;
@@ -1012,6 +1034,90 @@ describe('PII-scoping voor chauffeurs', () => {
   it('GET /api/swaps geeft een chauffeur alleen ruilen waar die bij betrokken is', async () => {
     const res = await api('GET', '/api/swaps', { token: 'tok-a' });
     expect(res.json.map((s: any) => s.id)).toEqual(['s-1']);
+  });
+
+  describe('verloop per persoon (GET /api/swaps › verloop)', () => {
+    // Logregels zoals de routes ze schrijven: s-1 (A → B) geweigerd door de
+    // planner, s-2 (B → planner) is de ruil van iemand anders.
+    const logRegel = (entityId: string, action: string, actorName: string, actorRole: string, message: string, gelogdOp: string) =>
+      ({ domain: 'swaps', action, message, entityType: 'swap', entityId, actorName, actorRole, gelogdOp });
+    beforeEach(() => {
+      mem.swaps = mem.swaps.map((s: any) => (s.id === 's-1' ? { ...s, status: 'rejected', decidedAt: '2026-06-02T10:00:00Z' } : s));
+      mem.activity = [
+        logRegel('s-1', 'Dienstruil aangevraagd', 'Chauffeur A', 'chauffeur', 'Chauffeur A bood een dienst aan voor ruil.', '2026-06-01T08:00:02Z'),
+        logRegel('s-1', 'Dienstruil geaccepteerd', 'Chauffeur B', 'chauffeur', 'Chauffeur A, dienstruil (pending → accepted).', '2026-06-01T12:00:00Z'),
+        logRegel('s-1', 'Dienstruil afgewezen', 'Pieter Planner', 'planner', 'Chauffeur A, dienstruil (accepted → rejected).', '2026-06-02T10:00:00Z'),
+        logRegel('s-2', 'Dienstruil aangevraagd', 'Chauffeur B', 'chauffeur', 'Chauffeur B bood een dienst aan voor ruil.', '2026-06-01T09:00:02Z'),
+      ];
+    });
+
+    it('chauffeur: alleen het verloop van zijn eigen ruilen, zonder de naam van de planner', async () => {
+      const res = await api('GET', '/api/swaps', { token: 'tok-a' });
+      expect(res.status).toBe(200);
+      expect(res.json.map((s: any) => s.id)).toEqual(['s-1']);
+      expect(res.json[0].verloop).toEqual([
+        { soort: 'aangevraagd', op: '2026-06-01T08:00:02Z', door: 'aanvrager' },
+        { soort: 'geaccepteerd', op: '2026-06-01T12:00:00Z', door: 'collega', van: 'pending' },
+        { soort: 'geweigerd', op: '2026-06-02T10:00:00Z', door: 'planner', van: 'accepted' },
+      ]);
+      // De logquery vroeg alleen de eigen ruil op, niet die van een ander.
+      expect(mem.verloopFilters).toEqual([['s-1']]);
+      // Geen stafnaam, geen vrije logtekst, niets van s-2.
+      const tekst = JSON.stringify(res.json);
+      expect(tekst).not.toContain('Pieter Planner');
+      expect(tekst).not.toContain('bood een dienst aan');
+      expect(tekst).not.toContain('s-2');
+    });
+
+    it('de aangezochte collega ziet hetzelfde verloop, ook zonder stafnaam', async () => {
+      const res = await api('GET', '/api/swaps', { token: 'tok-b' });
+      const eigen = res.json.find((s: any) => s.id === 's-1');
+      expect(eigen.verloop.map((st: any) => st.door)).toEqual(['aanvrager', 'collega', 'planner']);
+      expect(JSON.stringify(res.json)).not.toContain('Pieter Planner');
+      expect([...mem.verloopFilters[0]!].sort()).toEqual(['s-1', 's-2']);
+    });
+
+    it('staf: elk verloop in één logquery, mét wie besliste', async () => {
+      const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
+      expect(mem.verloopFilters).toEqual([null]);
+      const s1 = res.json.find((s: any) => s.id === 's-1');
+      expect(s1.verloop.at(-1)).toEqual({ soort: 'geweigerd', op: '2026-06-02T10:00:00Z', door: 'planner', van: 'accepted', naam: 'Pieter Planner' });
+      expect(res.json.find((s: any) => s.id === 's-2').verloop).toHaveLength(1);
+    });
+
+    it('de collectie-revisie rekent het verloop niet mee: een array-save na de GET geeft geen vals 409', async () => {
+      const get = await api('GET', '/api/swaps', { token: 'tok-admin' });
+      const revisie = get.headers.get('x-collection-revision');
+      expect(revisie).toBeTruthy();
+      // De client stuurt de records terug zoals hij ze kreeg, verloop incluis.
+      const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: get.json, headers: { 'x-collection-revision': revisie! } });
+      expect(res.status).toBe(200);
+      expect(mem.swaps.every((s: any) => !('verloop' in s))).toBe(true);
+      // Idem voor een chauffeur: zijn gescopede lijst mét verloop terugsturen
+      // (zo werkt intrekken en aanvragen) is geen poging tot sjoemelen.
+      const eigen = await api('GET', '/api/swaps', { token: 'tok-b' });
+      const terug = await api('POST', '/api/swaps', { token: 'tok-b', body: eigen.json });
+      expect(terug.status).toBe(200);
+      expect(mem.swaps.map((s: any) => s.id).sort()).toEqual(['s-1', 's-2']);
+    });
+
+    it('een mislukte logquery breekt de ruilen niet: ze komen zonder verloop terug', async () => {
+      mem.verloopFaalt = true;
+      const res = await api('GET', '/api/swaps', { token: 'tok-a' });
+      expect(res.status).toBe(200);
+      expect(res.json.map((s: any) => s.id)).toEqual(['s-1']);
+      expect(res.json[0].verloop).toBeUndefined();
+    });
+
+    it('PATCH geeft het bijgewerkte verloop mee, en wie weigerde volgt uit de rol van de actor', async () => {
+      mem.swaps = mem.swaps.map((s: any) => (s.id === 's-1' ? { ...s, status: 'pending', decidedAt: undefined } : s));
+      mem.activity = mem.activity.filter((a: any) => a.action === 'Dienstruil aangevraagd');
+      const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'rejected', ifStatus: 'pending' } });
+      expect(res.status).toBe(200);
+      const stap = res.json.swap.verloop.at(-1);
+      expect(stap).toMatchObject({ soort: 'geweigerd', door: 'collega', van: 'pending' });
+      expect(stap.naam).toBeUndefined();
+    });
   });
 });
 

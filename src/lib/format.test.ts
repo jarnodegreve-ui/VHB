@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDatumDMJ, formatGetal, formatPeriodeDMJ, formatRelatief, metEenheid } from './format';
+import { formatDatumDMJ, formatGetal, formatMomentKort, formatPeriodeDMJ, formatRelatief, metEenheid } from './format';
 
 describe('formatGetal (komma als decimaalteken, smalle spatie als duizendtal, max. 2 decimalen)', () => {
   it('kapt ChargEye-decimalen af op twee cijfers na de komma', () => {
@@ -63,5 +63,27 @@ describe('formatDatumDMJ / formatPeriodeDMJ (dag/maand/jaar, Jarno 17-09)', () =
     expect(formatPeriodeDMJ('2026-09-17', '2026-09-17')).toBe('17/09/2026');
     expect(formatPeriodeDMJ('2026-09-17', '2026-09-20')).toBe('17/09/2026 t/m 20/09/2026');
     expect(formatPeriodeDMJ('2026-09-17')).toBe('17/09/2026');
+  });
+});
+
+describe('formatMomentKort (dd/mm uu:mm, 24-uurs, nooit een rauwe ISO)', () => {
+  // Zone-loos "nu", zodat het jaartal niet van de tijdzone van de runner afhangt.
+  const nu = new Date('2026-09-20T12:00:00');
+  it('laat een zone-loos moment staan zoals het is (wandkloktijd), onder elke TZ', () => {
+    expect(formatMomentKort('2026-09-19T14:02:00', nu)).toBe('19/09 14:02');
+    expect(formatMomentKort('2026-01-05T00:07:30.123', nu)).toBe('05/01 00:07');
+  });
+  it('rekent een moment met zone om naar Belgische tijd, zomer en winter', () => {
+    expect(formatMomentKort('2026-09-19T12:02:06.771Z', nu)).toBe('19/09 14:02');
+    expect(formatMomentKort('2026-01-05T23:30:00Z', nu)).toBe('06/01 00:30');
+    expect(formatMomentKort('2026-09-19T12:02:06.771+00:00', nu)).toBe('19/09 14:02');
+  });
+  it('zet het jaartal erbij zodra het niet dit jaar is', () => {
+    expect(formatMomentKort('2025-12-31T09:15:00', nu)).toBe('31/12/2025 09:15');
+  });
+  it('alleen een datum geeft dd/mm; leeg of onleesbaar geeft niets, nooit de rauwe waarde', () => {
+    expect(formatMomentKort('2026-09-19', nu)).toBe('19/09');
+    expect(formatMomentKort(null, nu)).toBe('');
+    expect(formatMomentKort('gisteren', nu)).toBe('');
   });
 });
