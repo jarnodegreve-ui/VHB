@@ -16,7 +16,8 @@ import { kaleReden } from '../lib/ruilBadge';
  * Wat er in staat: de wissels die die week in het portaal zijn UITGEVOERD,
  * niet de wissels die die week in de planning vielen. Het uitvoeringsmoment
  * komt uit het activiteitenlog (server: GET /api/swaps/uitgevoerd), want de
- * `decidedAt` op de wissel wordt door een latere afhandeling overschreven.
+ * `decidedAt` op de wissel wordt door een latere terugdraai overschreven (en
+ * tot 20-09 ook door afhandelen).
  * Opmaak volgt de gele boek-print.
  */
 

@@ -1102,8 +1102,10 @@ html.dark {
   }
 
   .btn-primary:disabled {
-    background: #E4E6E8;
-    color: #9AA1A9;
+    /* Via tokens, zodat de uitgeschakelde hoofdknop mee flipt naar dark mode;
+       hardgecodeerd grijs werd daar een lichtgrijs blok op carbon. */
+    background: var(--color-surface-muted);
+    color: var(--color-slate-500);
     box-shadow: none;
     cursor: not-allowed;
     transform: none;

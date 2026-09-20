@@ -1,6 +1,6 @@
 import type express from "express";
 import { createHash } from "node:crypto";
-import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, meldDeviceGateWijziging, isStafRol } from "./middleware.js";
+import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, meldDeviceGateWijziging, isStafRol, sessieUitJwt } from "./middleware.js";
 import { DEVICE_GATE_SETTING_KEY, isMissingTableError } from "./deviceGate.js";
 import { sendPushToUsers } from "./push.js";
 import {
@@ -191,11 +191,21 @@ export const mountDeviceRoutes = (app: express.Express) => {
       const autoApprove = isStafRol(appUser.role) || !gateEnabled
         ? true
         : mijnToestellen.length === 0;
-      let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove, bekend);
+      // Sessie uit het geverifieerde JWT vastleggen op de toestelrij: daarmee
+      // herkent de gate een ingetrokken toestel ook zonder de client-header
+      // (controle-ronde 09-09, nr. 2).
+      const sessie = sessieUitJwt(String(req.accessToken ?? ""));
+      const vorigeSessie = bekend?.sessionId ?? null;
+      let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove, bekend, sessie);
       // Nieuwe rij: de gate kan voor dit token "geen rij" gecacht hebben.
       // Een bestaand toestel aanraken (last_seen) verandert geen status en
       // hoeft de caches dus niet te wissen (dit pad loopt bij elke app-start).
-      if (created) meldToestelWijziging();
+      // Eén uitzondering: een INGETROKKEN toestel dat zich met een nieuwe
+      // aanmelding meldt. Die nieuwe sessie moet meteen in de gecachte lijst
+      // met ingetrokken sessies staan, anders is ze tot 30 s bruikbaar zonder
+      // header.
+      const nieuweSessieOpIngetrokken = !created && device.status === "revoked" && Boolean(sessie) && vorigeSessie !== sessie;
+      if (created || nieuweSessieOpIngetrokken) meldToestelWijziging();
       // Bestond het toestel al als 'wachtend' terwijl de schakelaar uit
       // staat: alsnog goedkeuren (zelfde belofte: elke login komt erin).
       // Geblokkeerd blijft geblokkeerd — de schakelaar heropent geen
@@ -244,7 +254,9 @@ export const mountDeviceRoutes = (app: express.Express) => {
 
   app.get("/api/devices", authenticate, requireRole("admin"), async (_req, res) => {
     try {
-      res.json(await listAllDevices());
+      // sessionId blijft server-side: die is alleen voor de gate en heeft in de
+      // adminbrowser niets te zoeken (SQL-review 09-09).
+      res.json((await listAllDevices()).map(({ sessionId: _sessionId, ...toestel }) => toestel));
     } catch (err: any) {
       console.error("Toestellen laden is mislukt.", err);
       res.status(500).json({ error: "Toestellen laden is mislukt." });
@@ -326,7 +338,8 @@ export const mountDeviceRoutes = (app: express.Express) => {
         return res.status(400).json({ error: "Je kunt het toestel waarop je nu werkt niet blokkeren." });
       }
       await setDeviceStatus(userId, deviceToken, "revoked", String(req.appUser!.id));
-      // Intrekken: lokaal meteen, elders via de epoch binnen ±2 s.
+      // Intrekken: lokaal meteen, elders via de epoch binnen ±2 s. Dezelfde
+      // aanroep wist ook de lijst met ingetrokken sessies (zelfde cache).
       meldToestelWijziging();
       const owner = (await getUsersData()).find((u) => String(u.id) === userId);
       await logActivity(req, "system", "Toestel geblokkeerd", `${owner?.name ?? userId}.`);
