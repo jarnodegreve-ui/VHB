@@ -24,6 +24,18 @@ export const WAT_IS_NIEUW_TONEN = false;
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-20',
+    titel: 'Activiteit: uurraster en plaats van aanmelden',
+    regels: {
+      staf: [
+        'De tijdbalken in Activiteit hebben een lijn per uur, en onder elke balk staan de exacte periodes uitgeschreven.',
+        'Per sessie zie je de plaats van aanmelden (stad en land, afgeleid van het IP-adres; het adres zelf wordt niet bewaard).',
+        'Een aanmelding van buiten België krijgt een badge, en “Buiten België” werkt als filter.',
+      ],
+    },
+    bekijk: { staf: 'activiteit' },
+  },
+  {
     id: '2026-09-18',
     titel: 'Dagadministratie en werken per bus',
     regels: {

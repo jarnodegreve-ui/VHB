@@ -41,7 +41,7 @@ import {
   toPublicUpdate,
   toPublicUser,
 } from "./helpers.js";
-import { hoortBijSessie } from "./_lib/aanwezigheid.js";
+import { hoortBijSessie, type AanwezigheidLocatie } from "./_lib/aanwezigheid.js";
 import { db, supabaseAdmin } from "./db.js";
 import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import type { MeldingInvoer } from "./_lib/meldingen.js";
@@ -3215,14 +3215,66 @@ export type AanwezigheidSessie = {
   van: string;
   /** ISO-tijdstip van het laatste teken van leven in deze sessie. */
   tot: string;
+  /** Plaats van aanmelden (2026-09-20_user_presence_locatie.sql), afgeleid
+   *  van het IP-adres; null = onbekend (lokaal, oude rij, migratie mist). */
+  land: string | null;
+  regio: string | null;
+  stad: string | null;
+  /** false = de rij heeft de plaatskolommen niet: de migratie moet nog. */
+  locatieBekend: boolean;
 };
+
+const tekstOfNull = (w: unknown): string | null => (typeof w === 'string' && w.trim() ? w : null);
 
 const toPublicAanwezigheid = (row: Record<string, unknown>): AanwezigheidSessie => ({
   userId: String(row.user_id ?? ''),
   rol: (row.role as string | null) ?? null,
   van: String(row.started_at ?? ''),
   tot: String(row.last_seen_at ?? ''),
+  land: tekstOfNull(row.land),
+  regio: tekstOfNull(row.regio),
+  stad: tekstOfNull(row.stad),
+  // select('*') levert de sleutel alleen wanneer de kolom bestaat.
+  locatieBekend: 'land' in row,
 });
+
+// Per warme lambda onthouden dat de plaatskolommen ontbreken (zelfde patroon
+// als clientErrorsUitgebreid en diversionsMetLocation), maar met een
+// houdbaarheid: een instantie kan uren warm blijven, en Jarno draait de
+// migratie wanneer het hem past. Na dit venster probeert ze het opnieuw, zodat
+// de plaats vanzelf begint te lopen zonder nieuwe deploy. Kost in de tussentijd
+// één mislukte schrijfactie per instantie per venster.
+const LOCATIE_HERKANS_MS = 10 * 60 * 1000;
+let presenceLocatieMistSinds: number | null = null;
+
+/** Alleen voor tests: de onthouden kolomstand vergeten. */
+export const vergeetPresenceLocatie = () => { presenceLocatieMistSinds = null; };
+
+/**
+ * Eén schrijfactie op user_presence, eerst mét en zo nodig zonder de plaats.
+ *
+ * De plaats is bijzaak, de aanwezigheid is de waarneming: wát er ook misgaat
+ * met de plaatskolommen (migratie nog niet gedraaid, een waarde die de
+ * check-constraint weigert), dezelfde schrijfactie gaat meteen opnieuw zonder
+ * plaats. Alleen een ontbrekende kolom wordt onthouden; elke andere fout kan
+ * aan die ene waarde liggen en mag de volgende poging niet uitschakelen.
+ */
+const schrijfMetLocatie = async (
+  locatie: AanwezigheidLocatie | null | undefined,
+  schrijf: (plaats: Record<string, string | null>) => PromiseLike<{ error: unknown }>,
+): Promise<void> => {
+  const kolommenMissen = presenceLocatieMistSinds !== null && Date.now() - presenceLocatieMistSinds < LOCATIE_HERKANS_MS;
+  if (locatie && !kolommenMissen) {
+    const { error } = await schrijf({ land: locatie.land, regio: locatie.regio, stad: locatie.stad });
+    if (!error) {
+      presenceLocatieMistSinds = null;
+      return;
+    }
+    if (isMissingColumnError(error)) presenceLocatieMistSinds = Date.now();
+  }
+  const { error } = await schrijf({});
+  if (error) throw error;
+};
 
 /**
  * Teken van leven van één gebruiker vastleggen: de lopende sessie oprekken,
@@ -3234,13 +3286,19 @@ const toPublicAanwezigheid = (row: Record<string, unknown>): AanwezigheidSessie 
  *
  * Twee queries, maar hoogstens één keer per gebruiker per 5 minuten: de rem
  * zit in magSchrijven() vóór deze functie wordt aangeroepen.
+ *
+ * `locatie` (stad, regio, land uit de Vercel-headers) reist mee op dezelfde
+ * schrijfactie. Bestaan de kolommen nog niet, dan valt de schrijfactie stil
+ * terug op het gedrag van vóór 20-09; zie schrijfMetLocatie.
  */
 export const noteerAanwezigheid = async (
   userId: string,
   rol: string | null,
-  nu: Date = new Date(),
+  opties: { nu?: Date; locatie?: AanwezigheidLocatie | null } = {},
 ): Promise<void> => {
   const client = requireDb();
+  const nu = opties.nu ?? new Date();
+  const { locatie } = opties;
   const nuIso = nu.toISOString();
   const { data, error } = await client
     .from('user_presence')
@@ -3251,17 +3309,18 @@ export const noteerAanwezigheid = async (
   if (error) throw error;
   const jongste = (data ?? [])[0] as { id: string; last_seen_at: string } | undefined;
   if (jongste && hoortBijSessie(jongste.last_seen_at, nu.getTime())) {
-    const { error: updateError } = await client
+    // De plaats gaat mee in dezelfde update: wisselt iemand binnen een sessie
+    // van netwerk, dan wint de laatste waarde. Zonder plaats (null) blijft
+    // staan wat er stond; een ontbrekende header wist niets.
+    await schrijfMetLocatie(locatie, (plaats) => client
       .from('user_presence')
-      .update({ last_seen_at: nuIso, role: rol })
-      .eq('id', jongste.id);
-    if (updateError) throw updateError;
+      .update({ last_seen_at: nuIso, role: rol, ...plaats })
+      .eq('id', jongste.id));
     return;
   }
-  const { error: insertError } = await client
+  await schrijfMetLocatie(locatie, (plaats) => client
     .from('user_presence')
-    .insert({ user_id: String(userId), role: rol, started_at: nuIso, last_seen_at: nuIso });
-  if (insertError) throw insertError;
+    .insert({ user_id: String(userId), role: rol, started_at: nuIso, last_seen_at: nuIso, ...plaats }));
 };
 
 /**

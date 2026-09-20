@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { ChevronDown, Download } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob } from '../../lib/ui';
@@ -7,7 +7,7 @@ import { isoDate, addDagen } from '../../lib/datum';
 import { formatDayLong, formatRelatief, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { EmptyState, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, Segmented, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, Segmented, Switch } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Paginering, TableToolbar } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
@@ -16,7 +16,9 @@ import { Avatar } from '../../components/Avatar';
 import { Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import { LegeLijst, NietGevonden } from '../../components/illustraties';
-import { balkenVoorDag, duurKort, nuOnline, telPerDag, type AanwezigheidSessie, type DagBalk } from '../../lib/aanwezigheid';
+import { balkenVoorDag, duurKort, isBuitenland, nuOnline, telBuitenlandPerDag, telPerDag, type AanwezigheidSessie, type DagBalk } from '../../lib/aanwezigheid';
+import { asMarkeringen, asVenster, blokOpAs, labelStapVoor } from '../../lib/tijdAs';
+import { useMinWidth } from '../../lib/useMinWidth';
 
 /**
  * Activiteit (herwerking 08-09-2026, vraag Jarno: professioneler en
@@ -26,7 +28,9 @@ import { balkenVoorDag, duurKort, nuOnline, telPerDag, type AanwezigheidSessie, 
  *     public.user_presence (sessies) in plaats van het auditlogboek, dat per
  *     persoon hoogstens één auth-regel per dag kende en dus alleen "was
  *     aanwezig" kon zeggen. Dagstrip van 14 dagen als keuzeknop, daaronder
- *     per persoon een tijdbalk over de etmaal-as. "Recente aanmeldingen"
+ *     per persoon een tijdbalk over de etmaal-as, met een uurraster en onder
+ *     elke balk de exacte periodes en de plaats van aanmelden (20-09; sessies
+ *     van buiten België krijgen een amber badge en een filter). "Recente aanmeldingen"
  *     blijft over de échte logins gaan, een andere vraag met een andere bron.
  *  2. Activiteit: het auditspoor als feed per dag i.p.v. een platte tabel
  *     met volledige tijdstempels. Cron-hartslagen (±1.000 regels per maand)
@@ -91,10 +95,12 @@ const dagKort = (dag: string, vandaag: string): string => {
  * hoofdzaak. Daar staan naam en duur dus op de eerste regel en loopt de balk
  * eronder over de volle breedte. Vanaf sm past het wel naast elkaar.
  */
-const TIJDBALK_RIJ = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[10.5rem_minmax(0,1fr)_3.5rem] sm:gap-y-0';
+const TIJDBALK_RIJ = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[10.5rem_minmax(0,1fr)_3.5rem]';
 const TIJDBALK_NAAM = 'col-start-1 row-start-1 flex min-w-0 items-center gap-2';
 const TIJDBALK_BALK = 'col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1';
 const TIJDBALK_DUUR = 'col-start-2 row-start-1 text-right sm:col-start-3';
+/** De regel onder de balk: exacte periodes en plaats, in de kolom van de balk. */
+const TIJDBALK_META = 'col-span-2 col-start-1 row-start-3 sm:col-span-1 sm:col-start-2 sm:row-start-2';
 
 /**
  * Zoveel tijdbalken staan meteen open; de rest zit achter "Toon alle N".
@@ -140,11 +146,13 @@ const bundel = (entries: ActivityLogEntry[]): Bundel[] => {
   return uit;
 };
 
-export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwezigheidMigratie = null }: {
+export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwezigheidMigratie = null, locatieMigratie = null }: {
   entries: ActivityLogEntry[];
   logins?: ActivityLogEntry[];
   aanwezigheid?: AanwezigheidSessie[];
   aanwezigheidMigratie?: string | null;
+  /** Naam van de migratie voor de plaats van aanmelden, zolang die nog moet draaien. */
+  locatieMigratie?: string | null;
 }) {
   const vandaag = isoDate(new Date());
 
@@ -171,34 +179,86 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
     gekozenDag === vandaag && totMin >= nuMinuten - 10 && online.some((o) => o.userId === userId);
   // balkenVoorDag sorteert al op duur, dus wie achter het uitklappen verdwijnt
   // is per definitie de kortste bezoeker van die dag.
-  const zichtbareBalken = balken.slice(0, BALKEN_INGEKLAPT);
-  const restBalken = balken.slice(BALKEN_INGEKLAPT);
+  //
+  // Plaats van aanmelden. Het filter geldt alleen op een dag waar het iets te
+  // filteren heeft: wie met het filter aan naar een dag zonder buitenlandse
+  // sessie bladert, ziet gewoon iedereen in plaats van een lege lijst.
+  const metPlaats = !locatieMigratie;
+  const [alleenBuitenland, setAlleenBuitenland] = useState(false);
+  const buitenlandPerDag = useMemo(() => telBuitenlandPerDag(aanwezigheid), [aanwezigheid]);
+  const buitenlandVandaagGekozen = balken.filter((b) => b.buitenland).length;
+  const filterAan = metPlaats && alleenBuitenland && buitenlandVandaagGekozen > 0;
+  const getoondeBalken = filterAan ? balken.filter((b) => b.buitenland) : balken;
+  const zichtbareBalken = getoondeBalken.slice(0, BALKEN_INGEKLAPT);
+  const restBalken = getoondeBalken.slice(BALKEN_INGEKLAPT);
+  const tijdbalkenRef = useRef<HTMLDivElement>(null);
+
+  // De as: uurlijnen altijd, labels om de 2 uur op een breed scherm, om de 3
+  // op een tablet en om de 6 op een telefoon. Het venster volgt álle balken
+  // van de dag, niet de gefilterde, zodat de as niet verspringt als het filter
+  // aan- of uitgaat.
+  const isSm = useMinWidth(640);
+  const isLg = useMinWidth(1024);
+  const venster = useMemo(() => asVenster(balken.flatMap((b) => b.periodes)), [balken]);
+  const markeringen = useMemo(
+    () => asMarkeringen(venster, labelStapVoor(isLg ? 'desktop' : isSm ? 'tablet' : 'telefoon')),
+    [venster, isLg, isSm],
+  );
 
   /** Eén tijdbalk. Losse functie omdat hij zowel boven als in de uitklap staat. */
-  const tijdbalkRij = (b: DagBalk) => (
-    <div key={b.userId} className={cn(TIJDBALK_RIJ, 'py-2')}>
-      <span className={TIJDBALK_NAAM}>
-        <Avatar naam={b.naam} size="sm" />
-        <span className="min-w-0 truncate text-sm font-semibold text-slate-800" title={b.naam}>{b.naam}</span>
-      </span>
-      <div className={cn(TIJDBALK_BALK, 'relative h-5 overflow-hidden rounded-md bg-surface-muted ring-1 ring-hairline-subtle')}>
-        {/* Ankers op 06, 12 en 18 uur, zodat een blok afleesbaar is zonder te mikken. */}
-        {[6, 12, 18].map((u) => (
-          <span key={u} className="absolute inset-y-0 w-px bg-hairline-strong/40" style={{ left: `${(u / 24) * 100}%` }} aria-hidden="true" />
-        ))}
-        {b.periodes.map((per) => (
-          <span
-            key={per.vanIso}
-            className={cn('absolute inset-y-0.5 rounded', isLopend(b.userId, per.totMin) ? 'bg-oker-500' : 'bg-slate-500')}
-            style={{ left: `${(per.vanMin / 1440) * 100}%`, width: `${Math.max(0.5, ((per.totMin - per.vanMin) / 1440) * 100)}%` }}
-            title={`${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}`}
-            aria-label={`${b.naam} actief van ${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}`}
-          />
-        ))}
+  const tijdbalkRij = (b: DagBalk) => {
+    // Eén plaats die dag: één keer achteraan. Meerdere: bij elke periode de
+    // hare, anders weet je niet welk blok van waar kwam.
+    const plaatsPerPeriode = metPlaats && b.plaatsen.length > 1;
+    return (
+      <div key={b.userId} className={cn(TIJDBALK_RIJ, 'py-2.5')}>
+        <span className={TIJDBALK_NAAM}>
+          <Avatar naam={b.naam} size="sm" />
+          <span className="min-w-0 truncate text-sm font-semibold text-slate-800" title={b.naam}>{b.naam}</span>
+        </span>
+        <div className={cn(TIJDBALK_BALK, 'relative h-5 overflow-hidden rounded-md bg-surface-muted ring-1 ring-hairline-subtle')}>
+          {/* Uurraster: een fijne lijn per uur, iets sterker waar de as een label
+              draagt. Onder de blokken, zodat het raster de balk nooit doorsnijdt. */}
+          {markeringen.filter((m) => m.lijn === 'midden').map((m) => (
+            <span key={m.uur} data-uurlijn={m.label ? 'sterk' : 'fijn'} className={cn('absolute inset-y-0 w-px', m.label ? 'bg-hairline-strong' : 'bg-hairline-strong/45')} style={{ left: `${m.pct}%` }} aria-hidden="true" />
+          ))}
+          {b.periodes.map((per) => {
+            const { links, breedte } = blokOpAs(per, venster);
+            const plaats = metPlaats && per.plaatsen?.length ? per.plaatsen.join(' en ') : '';
+            return (
+              <span
+                key={per.vanIso}
+                className={cn('absolute inset-y-0.5 rounded', isLopend(b.userId, per.totMin) ? 'bg-oker-500' : 'bg-slate-500')}
+                style={{ left: `${links}%`, width: `${breedte}%` }}
+                title={`${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}${plaats ? ` · ${plaats}` : ''}`}
+                aria-label={`${b.naam} actief van ${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}${plaats ? `, ${plaats}` : ''}`}
+              />
+            );
+          })}
+        </div>
+        <span className={cn(TIJDBALK_DUUR, 'text-xs font-medium font-mono text-slate-600')} title={`${b.periodes.length} ${b.periodes.length === 1 ? 'periode' : 'periodes'}`}>{duurKort(b.totaalMin)}</span>
+        {/* Exacte tijden en plaats, altijd leesbaar: een title-tooltip bestaat
+            niet op een telefoon, en de balk alleen laat je tussen twee
+            uurlijnen gokken. */}
+        <p className={cn(TIJDBALK_META, 'flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500')}>
+          {/* Witruimte als scheiding, geen middelpuntjes: die belanden bij het
+              omlopen op een telefoon los vooraan op de volgende regel. */}
+          {b.periodes.map((per) => (
+            <span key={per.vanIso} className="inline-flex items-baseline gap-x-1.5 whitespace-nowrap">
+              <span className="font-mono">{uurMin(per.vanMin)}–{uurMin(per.totMin)}</span>
+              {plaatsPerPeriode && per.plaatsen?.length ? (
+                <span className={cn(per.buitenland && 'font-medium text-amber-700')}>{per.plaatsen.join(' en ')}</span>
+              ) : null}
+            </span>
+          ))}
+          {metPlaats && !plaatsPerPeriode && b.plaatsen.length === 1 && (
+            <span className={cn(b.buitenland && 'font-medium text-amber-700')}>{b.plaatsen[0]}</span>
+          )}
+          {metPlaats && b.buitenland && <Badge tone="amber">Buiten België</Badge>}
+        </p>
       </div>
-      <span className={cn(TIJDBALK_DUUR, 'text-xs font-medium font-mono text-slate-600')} title={`${b.periodes.length} ${b.periodes.length === 1 ? 'periode' : 'periodes'}`}>{duurKort(b.totaalMin)}</span>
-    </div>
-  );
+    );
+  };
   const recentLogins = useMemo(
     () => logins.filter((e) => e.action === 'Aangemeld').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30),
     [logins],
@@ -208,9 +268,25 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
     // dag rijdt telt één keer mee.
     const weekGrens = addDagen(vandaag, -6);
     const week = new Set<string>();
-    for (const s of aanwezigheid) if (isoDate(new Date(s.tot)) >= weekGrens) week.add(s.userId);
-    return { vandaag: perDagTelling.get(vandaag) ?? 0, week: week.size, online: online.length };
+    const buitenland = new Set<string>();
+    for (const s of aanwezigheid) {
+      if (isoDate(new Date(s.tot)) < weekGrens) continue;
+      week.add(s.userId);
+      if (isBuitenland(s.land)) buitenland.add(s.userId);
+    }
+    return { vandaag: perDagTelling.get(vandaag) ?? 0, week: week.size, online: online.length, buitenland: buitenland.size };
   }, [perDagTelling, aanwezigheid, online, vandaag]);
+
+  /** Vanuit de tegel: naar de recentste dag met een sessie van buiten België, filter aan. */
+  const toonBuitenland = () => {
+    const recentste = [...buitenlandPerDag.keys()].filter((d) => d >= addDagen(vandaag, -13)).sort().pop();
+    if (!recentste) return;
+    setGekozenDag(recentste);
+    setAlleenBuitenland(true);
+    setAlleBalken(false);
+    const rustig = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    requestAnimationFrame(() => tijdbalkenRef.current?.scrollIntoView({ block: 'nearest', behavior: rustig ? 'auto' : 'smooth' }));
+  };
 
   // ---- Activiteit: venster, filters, bundeling ----
   const [activeCategory, setActiveCategory] = useState<'all' | Categorie>('all');
@@ -335,18 +411,32 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
           </div>
         ) : (
           <>
-            <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {[
+            <dl className={cn('mt-5 grid grid-cols-2 gap-3', metPlaats ? 'sm:grid-cols-4' : 'sm:grid-cols-3')}>
+              {([
                 { label: 'Nu online', value: kpi.online, sub: 'op dit moment', live: true },
-                { label: 'Vandaag', value: kpi.vandaag, sub: 'actieve gebruikers', live: false },
-                { label: 'Laatste 7 dagen', value: kpi.week, sub: 'unieke gebruikers', breed: true, live: false },
-              ].map(({ label, value, sub, breed, live }) => (
-                <div key={label} className={cn('min-w-0 rounded-xl bg-surface-soft p-3 ring-1 ring-hairline sm:p-4', breed && 'col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 sm:col-span-1 sm:block')}>
+                { label: 'Vandaag', value: kpi.vandaag, sub: 'actieve gebruikers' },
+                // Zonder de plaats zijn het er drie en krijgt de derde op een
+                // telefoon de volle breedte; met vier is het een net 2×2.
+                { label: 'Laatste 7 dagen', value: kpi.week, sub: 'unieke gebruikers', breed: !metPlaats },
+                ...(metPlaats ? [{
+                  label: 'Buiten België',
+                  value: kpi.buitenland,
+                  waarschuwing: kpi.buitenland > 0,
+                  sub: kpi.buitenland > 0 ? (
+                    // rauw: uitgerekte knop over de hele tegel (after:inset-0); de tegel zelf is een dl-groep en kan geen button zijn
+                    <button type="button" onClick={toonBuitenland} aria-label="Bekijk wie buiten België aanmeldde" className="cursor-pointer text-left font-medium after:absolute after:inset-0 after:rounded-xl">
+                      laatste 7 dagen, <span className="font-semibold text-amber-700 underline decoration-amber-700/40 underline-offset-2">bekijk</span>
+                    </button>
+                  ) : 'laatste 7 dagen',
+                }] : []),
+              ] as Array<{ label: string; value: number; sub: ReactNode; live?: boolean; breed?: boolean; waarschuwing?: boolean }>).map(({ label, value, sub, breed, live, waarschuwing }) => (
+                <div key={label} className={cn('relative min-w-0 rounded-xl bg-surface-soft p-3 ring-1 ring-hairline sm:p-4', waarschuwing && 'transition-colors hover:bg-surface-soft-hover', breed && 'col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 sm:col-span-1 sm:block')}>
                   <dt className={cn('text-label inline-flex items-center gap-1.5 break-words', breed ? 'col-start-1 row-start-1' : 'min-h-8 sm:min-h-0')}>
                     {live && value > 0 && <span className="size-1.5 shrink-0 rounded-full bg-oker-500 vhb-nu" aria-hidden="true" />}
+                    {waarschuwing && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />}
                     {label}
                   </dt>
-                  <dd className={`text-stat ${cn('break-words', live && value > 0 ? 'text-oker-700' : 'text-slate-900', breed ? 'col-start-2 row-span-2 row-start-1 sm:mt-2' : 'mt-2')}`}>{value}</dd>
+                  <dd className={`text-stat ${cn('break-words', live && value > 0 ? 'text-oker-700' : waarschuwing ? 'text-amber-700' : 'text-slate-900', breed ? 'col-start-2 row-span-2 row-start-1 sm:mt-2' : 'mt-2')}`}>{value}</dd>
                   <dd className={cn('mt-1 text-xs font-medium break-words text-slate-500', breed && 'col-start-1 row-start-2')}>{sub}</dd>
                 </div>
               ))}
@@ -378,7 +468,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                         type="button"
                         onClick={() => { setGekozenDag(d.day); setAlleBalken(false); }}
                         aria-pressed={d.day === gekozenDag}
-                        aria-label={`${dagKort(d.day, vandaag)}: ${d.count} actief`}
+                        aria-label={`${dagKort(d.day, vandaag)}: ${d.count} actief${metPlaats && buitenlandPerDag.get(d.day) ? `, ${buitenlandPerDag.get(d.day)} buiten België` : ''}`}
                         className="group flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-end gap-1 rounded-lg"
                       >
                         {/* 2xs: teller boven de dagstrip van de mini-grafiek */}
@@ -397,8 +487,13 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                   <div className="mt-1.5 flex gap-1 sm:gap-1.5" aria-hidden="true">
                     {veertienDagen.map((d) => (
                       /* 2xs: daglabels van de mini-grafiek, 14 kolommen naast elkaar */
-                      <span key={d.day} className={cn('min-w-0 flex-1 truncate text-center text-2xs font-medium font-mono', d.day === gekozenDag ? 'text-oker-700' : 'text-slate-500')}>
-                        {d.day === vandaag ? 'nu' : WEEKDAY_SHORT_SUN[d.dow]}
+                      <span key={d.day} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+                        <span className={cn('w-full truncate text-center text-2xs font-medium font-mono', d.day === gekozenDag ? 'text-oker-700' : 'text-slate-500')}>
+                          {d.day === vandaag ? 'nu' : WEEKDAY_SHORT_SUN[d.dow]}
+                        </span>
+                        {/* Amber stip: die dag kwam er iemand van buiten België. Elke
+                            dag reserveert de hoogte, zodat de labels op één lijn blijven. */}
+                        <span className={cn('size-1 rounded-full', metPlaats && buitenlandPerDag.get(d.day) ? 'bg-amber-500' : 'bg-transparent')} />
                       </span>
                     ))}
                   </div>
@@ -425,16 +520,39 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
 
             {/* ---- Tijdbalken van de gekozen dag ---- */}
             {aanwezigheid.length > 0 && (
-              <div className="mt-8 border-t border-hairline pt-6">
-                <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <div ref={tijdbalkenRef} className="mt-8 scroll-mt-24 border-t border-hairline pt-6">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <h3 className="text-card-title">
                     {dagKop(gekozenDag, vandaag)}
-                    <span className="ml-2 text-sm font-normal text-slate-500">{formatDayLong(gekozenDag)}</span>
+                    {/* Alleen bij "Vandaag" en "Gisteren": voor oudere dagen ís de kop al de volle datum. */}
+                    {(gekozenDag === vandaag || gekozenDag === addDagen(vandaag, -1)) && (
+                      <span className="ml-2 text-sm font-normal text-slate-500">{formatDayLong(gekozenDag)}</span>
+                    )}
                   </h3>
-                  <span className="text-xs font-medium font-mono text-slate-500">
-                    {balken.length} {balken.length === 1 ? 'persoon' : 'personen'}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {metPlaats && (
+                      <span className="inline-flex items-center gap-0.5">
+                        {buitenlandVandaagGekozen > 0 ? (
+                          <FilterChip tone="amber" active={filterAan} onClick={() => { setAlleenBuitenland((v) => !v); setAlleBalken(false); }}>
+                            Buiten België: <span className="font-mono">{buitenlandVandaagGekozen}</span>
+                          </FilterChip>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-500">Buiten België: <span className="font-mono">0</span></span>
+                        )}
+                        <InfoTip label="Uitleg plaats van aanmelden" align="right">
+                          <p>De plaats wordt afgeleid van het IP-adres waarmee iemand verbinding maakt. Op mobiel internet is dat vaak de stad van de provider (Brussel, Antwerpen) en niet de plek waar iemand staat: lees het als een streek, niet als een adres. Het land klopt vrijwel altijd.</p>
+                          <p className="mt-2">Een VPN kan een ander land tonen, dus “Buiten België” is een reden om het na te vragen, geen bewijs. Het IP-adres zelf wordt niet bewaard, en de plaats verdwijnt na 90 dagen samen met de sessie.</p>
+                        </InfoTip>
+                      </span>
+                    )}
+                    <span className="text-xs font-medium font-mono text-slate-500">
+                      {filterAan ? `${getoondeBalken.length} van ${balken.length}` : balken.length} {balken.length === 1 ? 'persoon' : 'personen'}
+                    </span>
+                  </div>
                 </div>
+                {locatieMigratie && (
+                  <p className="mb-4 text-xs text-slate-500">De plaats van aanmelden staat nog uit: draai {locatieMigratie} in de SQL Editor.</p>
+                )}
                 {balken.length === 0 ? (
                   <EmptyState
                     title="Niemand actief op deze dag"
@@ -442,14 +560,20 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                   />
                 ) : (
                   <div className="min-w-0">
-                    {/* Uuras boven de balken: 00, 06, 12, 18 en 24 uur. */}
+                    {/* Uuras boven de balken. Dezelfde markeringen als het raster in
+                        de balken, dus een label staat exact boven zijn lijn. */}
                     <div className={cn(TIJDBALK_RIJ, 'mb-1')} aria-hidden="true">
-                      <div className={cn(TIJDBALK_BALK, 'relative h-4')}>
-                        {[0, 6, 12, 18].map((u) => (
+                      <div className={cn(TIJDBALK_BALK, 'relative h-4')} data-uuras>
+                        {markeringen.filter((m) => m.label).map((m) => (
                           /* 2xs: uurlabel op de tijdas van de aanwezigheidsbalken */
-                          <span key={u} className="absolute top-0 text-2xs font-medium font-mono text-slate-500" style={{ left: `${(u / 24) * 100}%` }}>{String(u).padStart(2, '0')}</span>
+                          <span
+                            key={m.uur}
+                            className={cn('absolute top-0 text-2xs font-medium font-mono text-slate-500', m.lijn === 'midden' && '-translate-x-1/2')}
+                            style={m.lijn === 'eind' ? { right: 0 } : { left: `${m.pct}%` }}
+                          >
+                            {m.label}
+                          </span>
                         ))}
-                        <span className="absolute top-0 right-0 text-2xs font-medium font-mono text-slate-500">24</span>
                       </div>
                     </div>
                     <div className="divide-y divide-hairline-subtle">
@@ -469,7 +593,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                             onClick={() => setAlleBalken((v) => !v)}
                             icon={<ChevronDown size={16} className={uitklapChevron(alleBalken, 180)} />}
                           >
-                            {alleBalken ? 'Toon minder' : `Toon alle ${balken.length}`}
+                            {alleBalken ? 'Toon minder' : `Toon alle ${getoondeBalken.length}`}
                           </Button>
                         </div>
                       </>

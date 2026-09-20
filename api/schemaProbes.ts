@@ -59,7 +59,9 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // sessie, geschreven vanuit de auth-middleware. Zonder de migratie werkt het
   // portaal gewoon door (registreren is best-effort), dus alleen de
   // schema-check maakt zichtbaar dat ze nog moet draaien.
-  { table: "user_presence", columns: "id,user_id,role,started_at,last_seen_at" },
+  // land/regio/stad: plaats van aanmelden (2026-09-20_user_presence_locatie.sql);
+  // zonder die migratie schrijft noteerAanwezigheid zonder plaats verder.
+  { table: "user_presence", columns: "id,user_id,role,started_at,last_seen_at,land,regio,stad" },
   // Techniek (2026-09-13_techniek_voertuigen.sql): voertuigen, gele boek,
   // werkprestaties en vervaldata per voertuig; snake_case, API-only.
   { table: "vehicles", columns: "id,busnr,kort_nr,nummerplaat,chassisnr,merk,type,categorie,aandrijving,status,in_dienst,uit_dienst,zitplaatsen,opmerking,chargeye_mix_id,created_at,updated_at" },

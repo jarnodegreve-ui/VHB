@@ -5,7 +5,7 @@ import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMiss
 import { normalizeEmail } from "./helpers.js";
 import { getAppSetting, koppelAuthId, noteerAanwezigheid, type UserDevice } from "./storage.js";
 import { getDeviceCached, isSessieIngetrokken } from "./_lib/deviceCache.js";
-import { magSchrijven } from "./_lib/aanwezigheid.js";
+import { locatieUitHeaders, magSchrijven } from "./_lib/aanwezigheid.js";
 import { getOnderhoud } from "./_lib/onderhoud.js";
 import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
 import { bijUsersCacheWissel, epochStand, getUsersCached, invalidateUsersCache } from "./userCache.js";
@@ -374,7 +374,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   req.authUser = authUser;
   req.appUser = appUser;
   req.aal = check.aal;
-  registreerAanwezigheid(appUser);
+  registreerAanwezigheid(appUser, req.headers);
   next();
 };
 
@@ -397,10 +397,14 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
  * milliseconde trager. Elke fout wordt gesmoord, inclusief een ontbrekende
  * tabel wanneer de migratie nog niet gedraaid is.
  */
-const registreerAanwezigheid = (appUser: { id: string | number; role: Role }) => {
+const registreerAanwezigheid = (appUser: { id: string | number; role: Role }, headers?: express.Request["headers"]) => {
   const id = String(appUser.id);
   if (!id || !magSchrijven(id)) return;
-  void noteerAanwezigheid(id, appUser.role).catch(() => {
+  // De plaats (stad, regio, land) komt uit de geo-headers van Vercel en lift
+  // mee op dezelfde schrijfactie: geen extra verzoek, geen extra query. Pas
+  // ná de rem uitlezen, dus hoogstens één keer per gebruiker per 5 minuten.
+  // locatieUitHeaders gooit nooit en geeft null zonder headers (lokaal, tests).
+  void noteerAanwezigheid(id, appUser.role, { locatie: locatieUitHeaders(headers) }).catch(() => {
     // Aanwezigheid is een waarneming, geen functionaliteit: als ze niet
     // wegschrijft mag daar niets van te merken zijn.
   });
