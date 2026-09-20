@@ -261,6 +261,7 @@ export function DesignsysteemView() {
           <FilterChip active={filter === 'alle'} onClick={() => setFilter('alle')}>Alle</FilterChip>
           <FilterChip active={filter === 'open'} onClick={() => setFilter('open')}>Open</FilterChip>
           <FilterChip active tone="red" icon={<Bell size={14} />}>Dringend</FilterChip>
+          <FilterChip active={false} tone="amber">Buiten België: 1</FilterChip>
         </Rij>
         <Rij label="Switch">
           <Switch checked={aan} onChange={setAan} label="Meldingen" />

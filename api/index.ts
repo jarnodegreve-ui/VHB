@@ -326,6 +326,14 @@ app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, 
   });
 });
 
+// Kale POST-echo voor de knop "Schrijftest" in Systeemstatus: bevestigt dat
+// POST-routing door Vercel heen werkt zonder ook maar iets te schrijven.
+// Voorheen wees die knop naar /api/test, een route die nooit heeft bestaan,
+// waardoor de test structureel 404 gaf en een serverprobleem suggereerde.
+app.post("/api/health/echo", authenticate, requireRole("admin"), (req: AuthenticatedRequest, res) => {
+  res.json({ status: "ok", ontvangen: typeof req.body === "object" && req.body !== null, time: new Date().toISOString() });
+});
+
 // Testmail naar de ingelogde admin zelf: de enige manier om te bevestigen dat
 // de SMTP-gegevens écht kloppen. Geeft de rauwe serverfout terug (alleen aan
 // admins) zodat een verkeerd wachtwoord/poort meteen te zien is.
@@ -1214,7 +1222,9 @@ app.get("/api/activity/logins", authenticate, requireRole("admin"), async (req, 
 // voorgrond had. Dit is de bron voor "wie was wanneer actief" — het
 // auditlogboek kon die vraag niet beantwoorden (hoogstens één auth-regel per
 // persoon per dag). Admin-only: dit is het meest persoonlijke wat het portaal
-// bijhoudt. Standaard 14 dagen; ?days= override (1-90).
+// bijhoudt, zeker sinds elke sessie ook de plaats van aanmelden draagt (stad,
+// regio, land uit het IP-adres; het adres zelf wordt niet bewaard).
+// Standaard 14 dagen; ?days= override (1-90).
 app.get("/api/activity/presence", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
   try {
     const reqDays = Number(req.query.days);
@@ -1229,10 +1239,15 @@ app.get("/api/activity/presence", authenticate, requireRole("admin"), async (req
       .filter((s) => perId.has(s.userId))
       .map((s) => {
         const u = perId.get(s.userId)!;
-        return { userId: s.userId, naam: u.name, rol: s.rol || u.role, van: s.van, tot: s.tot };
+        return { userId: s.userId, naam: u.name, rol: s.rol || u.role, van: s.van, tot: s.tot, land: s.land, regio: s.regio, stad: s.stad };
       });
     res.setHeader("Cache-Control", "no-store");
-    res.json({ days, sessies: uit });
+    // Plaats van aanmelden: bestaan de kolommen nog niet, dan draagt geen
+    // enkele rij de sleutel. Het scherm toont dan welke migratie nog moet,
+    // in plaats van stil overal "onbekend" te zetten. Zonder rijen valt er
+    // niets af te leiden en ook niets te tonen.
+    const locatieMist = sessies.length > 0 && sessies.every((s) => !s.locatieBekend);
+    res.json({ days, sessies: uit, ...(locatieMist ? { locatieMigratie: "supabase/2026-09-20_user_presence_locatie.sql" } : {}) });
   } catch (err: any) {
     if (isMissingTableError(err)) {
       return res.json({ days: 0, sessies: [], migratie: "supabase/2026-09-18_user_presence.sql" });
@@ -2635,9 +2650,10 @@ app.get("/api/cron/week-rapport", async (req, res) => {
       getSwapsData(),
       getClientErrorsSince(sinceIso),
       // Uitgevoerde wissels uit het activiteitenlog, niet uit `decidedAt`:
-      // dat veld wordt door een latere afhandeling ('completed') overschreven,
-      // waardoor een wissel van vorige week deze week meegeteld werd (en
-      // omgekeerd). Zelfde bron als het wekelijkse ruiloverzicht.
+      // dat veld wordt door een latere terugdraai overschreven (en tot 20-09
+      // ook door afhandelen, 'completed'), waardoor een wissel van vorige
+      // week deze week meegeteld werd (en omgekeerd). Zelfde bron als het
+      // wekelijkse ruiloverzicht.
       getSwapExecutions(sinceIso, nuIso, SWAP_UITVOERING_ACTIES),
     ]);
     const uniekeGebruikers = new Set(sessies.map((s) => s.userId)).size;
@@ -3614,7 +3630,7 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
  * planning werd doorgevoerd: de goedkeuring door de planning, plus de wissels
  * die de planning zelf handmatig doorvoerde. Die momenten staan alleen in het
  * activiteitenlog, want `decidedAt` op de swap wordt door een latere
- * afhandeling ('completed') overschreven.
+ * terugdraai overschreven (en tot 20-09 ook door afhandelen, 'completed').
  *
  * Een wissel die later teruggedraaid werd, staat er bewust wél in (met zijn
  * huidige status): hij ís die week doorgevoerd geweest, en het klassement is
@@ -4644,7 +4660,18 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
     // 'accepted' is een tussenstap (collega akkoord), nog géén beslismoment —
     // decidedAt hoort pas bij een definitieve beslissing (zelfde semantiek
     // als de array-route/UI).
-    const updated = status === "accepted"
+    //
+    // 'completed' (knop Afhandelen) is evenmin een beslissing: de wissel is al
+    // goedgekeurd en doorgevoerd, hij wordt alleen administratief weggezet.
+    // Het beslismoment van de goedkeuring blijft dus staan. De heropbouw-
+    // replay, de maandplanning-overlay, de dekking en de ruil-badge spelen
+    // goedgekeurde én afgehandelde ruilen af in volgorde van decidedAt; een
+    // overschreven moment zette de eerste schakel van een doorgeefketting
+    // (A → B, daarna B → C) achteraan, waardoor de dienst na een heropbouw
+    // terugviel op B. Het afhandelmoment zelf staat in het activiteitenlog
+    // ("Dienstruil voltooid").
+    const behoudtBeslismoment = status === "accepted" || status === "completed";
+    const updated = behoudtBeslismoment
       ? { ...current, status }
       : { ...current, status, decidedAt: new Date().toISOString() };
     await saveSwapsData([updated], []);

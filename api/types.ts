@@ -253,6 +253,11 @@ export type UserDevice = {
   lastSeenAt: string;
   approvedAt: string | null;
   approvedBy: string | null;
+  /** Supabase auth session_id van de laatste aanmelding op dit toestel. Blijft
+   *  server-side (nooit naar de client). null zolang de migratie
+   *  2026-09-09_user_devices_sessie.sql niet draaide of er nog geen nieuwe
+   *  aanmelding was. */
+  sessionId: string | null;
 };
 
 export type AuthenticatedRequest = express.Request & {

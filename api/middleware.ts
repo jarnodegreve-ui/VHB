@@ -4,8 +4,8 @@ import { supabase } from "./db.js";
 import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
 import { getAppSetting, koppelAuthId, noteerAanwezigheid, type UserDevice } from "./storage.js";
-import { getDeviceCached } from "./_lib/deviceCache.js";
-import { magSchrijven } from "./_lib/aanwezigheid.js";
+import { getDeviceCached, isSessieIngetrokken } from "./_lib/deviceCache.js";
+import { locatieUitHeaders, magSchrijven } from "./_lib/aanwezigheid.js";
 import { getOnderhoud } from "./_lib/onderhoud.js";
 import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
 import { bijUsersCacheWissel, epochStand, getUsersCached, invalidateUsersCache } from "./userCache.js";
@@ -52,6 +52,27 @@ bijUsersCacheWissel(invalidateDeviceGateCache);
 export const meldDeviceGateWijziging = () => {
   invalidateDeviceGateCache();
   invalidateUsersCache();
+};
+
+// Sessiegebonden intrekking (controle-ronde 09-09, nr. 2). De header
+// X-Device-Token komt van de client: wie hem wegliet (of een verzonnen token
+// stuurde) viel als staf volledig buiten de gate en werd als chauffeur een
+// "onbekend" in plaats van een ingetrokken toestel. De session_id-claim zit in
+// het al geverifieerde JWT en is dus niet weg te laten of te vervalsen; de
+// registratie legt hem vast op de toestelrij. De lijst met ingetrokken sessies
+// zit in DEZELFDE cache als de toestel-lookup (_lib/deviceCache.ts): één TTL,
+// één clear(), één epoch, en dus ook gewist door meldToestelWijziging.
+/** Leest de `session_id`-claim uit een al geverifieerd JWT. Alleen aanroepen
+ *  ná verificatie, de payload wordt hier niet gecontroleerd. */
+export const sessieUitJwt = (token: string): string | null => {
+  try {
+    const deel = token.split(".")[1] ?? "";
+    const json = Buffer.from(deel.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    const sid = (JSON.parse(json) as { session_id?: unknown }).session_id;
+    return typeof sid === "string" && sid ? sid : null;
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -268,7 +289,8 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   // boekhouding). Chauffeurs: altijd. Planner/admin: alleen wanneer het
   // verzoek een toesteltoken draagt, en dan enkel om een expliciet
   // ingetrokken toestel tegen te houden (geen goedkeuring vereist, dus geen
-  // lock-out). Zonder token blijft stafverkeer zonder extra query.
+  // lock-out). Zonder token doet stafverkeer geen toestel-lookup; alleen de
+  // sessiecontrole hieronder geldt dan (één gecachte lijst per 30 s).
   //
   // Een geldig token is een 36-teken UUID. Alles langer dan 100 tekens is
   // onzin (en zou de PostgREST-URL kunnen opblazen → een geforceerde DB-fout
@@ -276,10 +298,34 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   // zónder DB-lookup.
   const rawToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
   const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
+  const gateExempt = DEVICE_GATE_EXEMPT.has(req.path);
+
+  // Sessiegebonden intrekking: hoort het JWT waarmee dit verzoek binnenkomt
+  // bij een ingetrokken toestel, dan is de header irrelevant. Dit sluit het
+  // gat waarbij een ingetrokken staf-toestel (of een chauffeurstoestel terwijl
+  // de schakelaar uit staat) de gate omzeilde door X-Device-Token weg te laten
+  // of een verzonnen token te sturen. De lookup start hier en loopt gelijk op
+  // met de toestel-lookup hieronder (warm: beide uit het geheugen; koud: één
+  // DB-wachttijd i.p.v. twee na elkaar).
+  //
+  // Fail-OPEN op déze laag, anders dan de header-gate: de query hangt niet van
+  // client-invoer af en is dus niet te forceren, en fail-closed zou bij een
+  // DB-hik ook elke admin buitensluiten. De header-gate hieronder blijft
+  // fail-closed. Ontbreekt de kolom session_id (migratie 2026-09-09 nog niet
+  // gedraaid), dan levert storage een lege lijst: exact het oude gedrag.
+  const sessie = gateExempt ? null : sessieUitJwt(accessToken);
+  const sessieIngetrokken: Promise<boolean> = sessie
+    ? isSessieIngetrokken(sessie).catch((err) => {
+        if (!isMissingTableError(err)) console.error("Kon ingetrokken sessies niet ophalen (fail-open op deze laag):", err);
+        return false;
+      })
+    : Promise.resolve(false);
+  const SESSIE_INGETROKKEN = { error: "Dit toestel is uitgelogd voor dit account. Meld je opnieuw aan.", code: "device_revoked" };
+
   // Niet-staf (chauffeur én technieker) valt altijd onder de gate; staf
   // alleen wanneer het verzoek een toesteltoken draagt.
   const gateVanToepassing = !isStafRol(appUser.role) || deviceToken.length > 0;
-  if (gateVanToepassing && !DEVICE_GATE_EXEMPT.has(req.path)) {
+  if (gateVanToepassing && !gateExempt) {
     let device: UserDevice | null = null;
     try {
       // Gecacht (30 s per instantie, gewist via de gedeelde epoch bij elke
@@ -304,6 +350,10 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
       return res.status(503).json({ error: "Toestel-controle is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "device_check_failed" });
     }
 
+    // De sessie gaat vóór het oordeel over de header: een verzonnen of
+    // weggelaten token maakt van een ingetrokken toestel geen "onbekend".
+    if (await sessieIngetrokken) return res.status(403).json(SESSIE_INGETROKKEN);
+
     // Alleen wanneer het toestel niet al goedgekeurd is maakt de schakelaar
     // het verschil, dan pas (gecacht) ophalen. Voor staf is de schakelaar
     // irrelevant (enkel de revoked-check telt), dus geen extra query.
@@ -315,13 +365,16 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     // Het opgezochte toestel meegeven: /api/me hoeft het dan niet nog eens
     // te queryen.
     req.device = device;
+  } else if (await sessieIngetrokken) {
+    // Staf zonder toesteltoken: geen header-gate, wel de sessiecontrole.
+    return res.status(403).json(SESSIE_INGETROKKEN);
   }
 
   req.accessToken = accessToken;
   req.authUser = authUser;
   req.appUser = appUser;
   req.aal = check.aal;
-  registreerAanwezigheid(appUser);
+  registreerAanwezigheid(appUser, req.headers);
   next();
 };
 
@@ -344,10 +397,14 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
  * milliseconde trager. Elke fout wordt gesmoord, inclusief een ontbrekende
  * tabel wanneer de migratie nog niet gedraaid is.
  */
-const registreerAanwezigheid = (appUser: { id: string | number; role: Role }) => {
+const registreerAanwezigheid = (appUser: { id: string | number; role: Role }, headers?: express.Request["headers"]) => {
   const id = String(appUser.id);
   if (!id || !magSchrijven(id)) return;
-  void noteerAanwezigheid(id, appUser.role).catch(() => {
+  // De plaats (stad, regio, land) komt uit de geo-headers van Vercel en lift
+  // mee op dezelfde schrijfactie: geen extra verzoek, geen extra query. Pas
+  // ná de rem uitlezen, dus hoogstens één keer per gebruiker per 5 minuten.
+  // locatieUitHeaders gooit nooit en geeft null zonder headers (lokaal, tests).
+  void noteerAanwezigheid(id, appUser.role, { locatie: locatieUitHeaders(headers) }).catch(() => {
     // Aanwezigheid is een waarneming, geen functionaliteit: als ze niet
     // wegschrijft mag daar niets van te merken zijn.
   });
