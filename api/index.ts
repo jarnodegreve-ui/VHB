@@ -322,6 +322,14 @@ app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, 
   });
 });
 
+// Kale POST-echo voor de knop "Schrijftest" in Systeemstatus: bevestigt dat
+// POST-routing door Vercel heen werkt zonder ook maar iets te schrijven.
+// Voorheen wees die knop naar /api/test, een route die nooit heeft bestaan,
+// waardoor de test structureel 404 gaf en een serverprobleem suggereerde.
+app.post("/api/health/echo", authenticate, requireRole("admin"), (req: AuthenticatedRequest, res) => {
+  res.json({ status: "ok", ontvangen: typeof req.body === "object" && req.body !== null, time: new Date().toISOString() });
+});
+
 // Testmail naar de ingelogde admin zelf: de enige manier om te bevestigen dat
 // de SMTP-gegevens écht kloppen. Geeft de rauwe serverfout terug (alleen aan
 // admins) zodat een verkeerd wachtwoord/poort meteen te zien is.

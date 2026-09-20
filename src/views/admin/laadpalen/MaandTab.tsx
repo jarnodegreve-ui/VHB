@@ -133,7 +133,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
     exporteerCsv(`vhb-laadplein-${paramUitPeriode(keuze ?? { modus: 'maand', maand: maandGekozen })}-per-laadpunt.csv`, [
       ['Laadpunt', 'Bus', `kWh (${label})`, 'Aandeel %', `kWh (${vorigeLabel})`, 'Laadsessies', 'Mislukt', 'Laadtijd (min)', 'Gem. kW', 'Max. kW', 'Max. vermogen paal kW'],
       ...data.punten.map((p) => [puntNaam(p), busVoorLaadpunt(p.evseId) ?? '', p.kwh, p.aandeel, p.kwhVorige ?? 0, p.laadbeurten, p.mislukt, p.laadMin, p.gemKw ?? '', p.maxKw ?? '', p.maxElectricPowerKw ?? '']),
-      ['Totaal', '', data.totalen.kwh, 100, data.vorige.kwh, data.totalen.laadbeurten, data.totalen.mislukt, data.totalen.laadMin, '', '', ''],
+      ['Totaal', '', data.totalen.kwh, 100, data.vorige.kwh, data.totalen.laadbeurten, data.totalen.mislukt, data.totalen.laadMin ?? '', '', '', ''],
     ]);
   };
   const exporteerDagen = () => {
@@ -330,7 +330,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                     <Td num className="max-md:hidden">{fmtKwh(data.vorige.kwh)}</Td>
                     <Td num>{t.laadbeurten}</Td>
                     <Td num className="max-md:hidden">{t.mislukt || '—'}</Td>
-                    <Td num className="max-lg:hidden">{duurLabel(t.laadMin)}</Td>
+                    <Td num className="max-lg:hidden">{t.laadMin !== null ? duurLabel(t.laadMin) : '—'}</Td>
                     <Td num className="max-lg:hidden">—</Td>
                     <Td num className="max-lg:hidden">—</Td>
                   </tr>
@@ -396,7 +396,9 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                 </tfoot>
               </table>
             </TableShell>
-            <p className="mt-2 px-1 text-xs text-slate-500">Laadtijd totaal {duurLabel(t.laadMin)} · {metEenheid(formatGetal(t.laadMin > 0 ? t.kwh / (t.laadMin / 60) : 0, 1), 'kW')} gemiddeld tijdens het laden</p>
+            {t.laadMin !== null && (
+              <p className="mt-2 px-1 text-xs text-slate-500">Laadtijd totaal {duurLabel(t.laadMin)} · {metEenheid(formatGetal(t.laadMin > 0 ? t.kwh / (t.laadMin / 60) : 0, 1), 'kW')} gemiddeld tijdens het laden</p>
+            )}
           </div>
         </div>
       )}

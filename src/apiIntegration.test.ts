@@ -120,6 +120,14 @@ vi.mock('../api/db.js', () => {
         getClaims: async (token: string) => {
           if (token === 'tok-storing' || token === 'tok-auth-500') return { data: null, error: { name: 'AuthRetryableFetchError', message: 'fetch failed', status: 0 } };
           if (token === 'tok-verlopen') return { data: null, error: { name: 'AuthInvalidJwtError', message: 'JWT has expired', status: 400 } };
+          // JWT-vormig token (header.payload.sig): claims uit de payload zelf,
+          // zodat tests met een echte session_id-claim kunnen werken.
+          if (token.split('.').length === 3) {
+            try {
+              const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+              if (claims?.email) return { data: { claims: { aal: 'aal1', ...claims } }, error: null };
+            } catch { /* val door naar de vaste mapping */ }
+          }
           const email = tokenToEmail[token];
           const basis = token.replace(/-2fa$/, '');
           return email
@@ -507,10 +515,11 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     listDevicesForUser: async (userId: string) =>
       mem.devices.filter((d: any) => String(d.userId) === String(userId)),
-    registerDevice: async (userId: string, deviceToken: string, name: string, autoApprove: boolean) => {
+    registerDevice: async (userId: string, deviceToken: string, name: string, autoApprove: boolean, _bekend?: unknown, sessionId?: string | null) => {
       const existing = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
       if (existing) {
         existing.lastSeenAt = '2026-07-18T12:00:00Z';
+        if (sessionId) existing.sessionId = sessionId;
         return { device: existing, created: false };
       }
       const device = {
@@ -518,11 +527,14 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         status: autoApprove ? 'approved' : 'pending',
         createdAt: '2026-07-18T12:00:00Z', lastSeenAt: '2026-07-18T12:00:00Z',
         approvedAt: autoApprove ? '2026-07-18T12:00:00Z' : null, approvedBy: autoApprove ? 'auto' : null,
+        sessionId: sessionId ?? null,
       };
       mem.devices.push(device);
       return { device, created: true };
     },
     listAllDevices: async () => mem.devices,
+    listRevokedSessionIds: async () =>
+      mem.devices.filter((d: any) => d.status === 'revoked' && d.sessionId).map((d: any) => String(d.sessionId)),
     setDeviceStatus: async (userId: string, deviceToken: string, status: string) => {
       const device = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
       if (device) device.status = status;
@@ -1663,6 +1675,90 @@ describe('eigen toestellen en sessies (/api/me/toestellen)', () => {
     expect(mem.devices.find((d: any) => d.deviceToken === 'dev-oud')?.status).not.toBe('revoked');
   });
 
+  // Controle-ronde 09-09, nr. 2: de gate herkende een toestel alleen aan de
+  // X-Device-Token-header. Wie die wegliet, viel voor staf volledig buiten de
+  // gate en werd voor chauffeurs een "onbekend" i.p.v. een ingetrokken
+  // toestel. De sessie uit het JWT is niet weg te laten, dus daar hangt de
+  // intrekking nu aan.
+  describe('intrekking hangt aan de auth-sessie, niet aan de header', () => {
+    const jwt = (email: string, sub: string, sessie: string) =>
+      `x.${Buffer.from(JSON.stringify({ sub, email, session_id: sessie })).toString('base64')}.y`;
+
+    it('blokkeert een ingetrokken staf-toestel dat de header weglaat', async () => {
+      const token = jwt('planner@vhb.be', 'auth-tok-planner', 'sess-planner');
+      // Aanmelden legt de sessie vast op de toestelrij.
+      expect((await api('POST', '/api/devices/register', { token, device: 'dev-planner', body: { name: 'Mac · browser' } })).status).toBe(200);
+      expect(mem.devices.find((d: any) => d.deviceToken === 'dev-planner')?.sessionId).toBe('sess-planner');
+      expect((await api('GET', '/api/leave', { token, device: 'dev-planner' })).status).toBe(200);
+
+      // Admin trekt het toestel in.
+      expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', body: { userId: '2', deviceToken: 'dev-planner' } })).status).toBe(200);
+
+      // Mét header: geblokkeerd (dat werkte al).
+      expect((await api('GET', '/api/leave', { token, device: 'dev-planner' })).json.code).toBe('device_revoked');
+      // Zónder header: vroeger volledige toegang, nu ook geblokkeerd.
+      const zonderHeader = await api('GET', '/api/leave', { token, device: null });
+      expect(zonderHeader.status).toBe(403);
+      expect(zonderHeader.json.code).toBe('device_revoked');
+      // En met een willekeurig ander toestel-token evenmin.
+      expect((await api('GET', '/api/leave', { token, device: 'dev-verzonnen' })).json.code).toBe('device_revoked');
+    });
+
+    it('blokkeert een ingetrokken chauffeurstoestel ook als de goedkeuringsschakelaar uit staat', async () => {
+      mem.appSettings.device_gate = { enabled: false };
+      const token = jwt('a@vhb.be', 'auth-tok-a', 'sess-chauffeur');
+      expect((await api('POST', '/api/devices/register', { token, device: 'dev-tel', body: { name: 'iPhone · app' } })).status).toBe(200);
+      expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-tel' } })).status).toBe(200);
+      // Zonder header was dit een "onbekend toestel" en liet de uitgeschakelde
+      // schakelaar het door.
+      const zonderHeader = await api('GET', '/api/leave', { token, device: null });
+      expect(zonderHeader.status).toBe(403);
+      expect(zonderHeader.json.code).toBe('device_revoked');
+    });
+
+    it('een ingetrokken toestel dat zich opnieuw aanmeldt: ook de nieuwe sessie is meteen geblokkeerd', async () => {
+      const eerst = jwt('planner@vhb.be', 'auth-tok-planner', 'sess-oud');
+      expect((await api('POST', '/api/devices/register', { token: eerst, device: 'dev-planner', body: { name: 'Mac · browser' } })).status).toBe(200);
+      expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', body: { userId: '2', deviceToken: 'dev-planner' } })).status).toBe(200);
+      // Vult de gecachte lijst met alleen de oude sessie.
+      expect((await api('GET', '/api/leave', { token: eerst, device: null })).json.code).toBe('device_revoked');
+      // Opnieuw aanmelden op hetzelfde (ingetrokken) toestel geeft een nieuwe
+      // sessie; de registratie legt die vast en wist de cache, anders was ze
+      // tot 30 s bruikbaar door de header weg te laten.
+      const opnieuw = jwt('planner@vhb.be', 'auth-tok-planner', 'sess-nieuw');
+      const reg = await api('POST', '/api/devices/register', { token: opnieuw, device: 'dev-planner', body: { name: 'Mac · browser' } });
+      expect(reg.json.status).toBe('revoked');
+      const zonderHeader = await api('GET', '/api/leave', { token: opnieuw, device: null });
+      expect(zonderHeader.status).toBe(403);
+      expect(zonderHeader.json.code).toBe('device_revoked');
+      // Na goedkeuren door de admin mag dezelfde sessie weer door.
+      expect((await api('POST', '/api/devices/approve', { token: 'tok-admin', body: { userId: '2', deviceToken: 'dev-planner' } })).status).toBe(200);
+      expect((await api('GET', '/api/leave', { token: opnieuw, device: null })).status).toBe(200);
+    });
+
+    it('de sessie-id gaat nooit naar de adminbrowser', async () => {
+      const token = jwt('planner@vhb.be', 'auth-tok-planner', 'sess-geheim');
+      await api('POST', '/api/devices/register', { token, device: 'dev-planner', body: { name: 'Mac · browser' } });
+      const lijst = await api('GET', '/api/devices', { token: 'tok-admin' });
+      expect(lijst.status).toBe(200);
+      expect(JSON.stringify(lijst.json)).not.toContain('sess-geheim');
+    });
+
+    it('laat een gewone sessie op een goedgekeurd toestel ongemoeid', async () => {
+      const chauffeur = jwt('a@vhb.be', 'auth-tok-a', 'sess-ok');
+      expect((await api('POST', '/api/devices/register', { token: chauffeur, device: 'dev-ok', body: { name: 'iPhone · app' } })).status).toBe(200);
+      expect((await api('GET', '/api/leave', { token: chauffeur, device: 'dev-ok' })).status).toBe(200);
+      // Chauffeur zonder header blijft 'onbekend toestel' zolang de
+      // goedkeuringsschakelaar aanstaat, maar niet 'ingetrokken'.
+      expect((await api('GET', '/api/leave', { token: chauffeur, device: null })).json.code).toBe('device_unknown');
+      // Staf zonder header mag gewoon door: de sessiecontrole voegt alleen een
+      // blokkade toe voor ingetrokken toestellen, geen nieuwe lock-out.
+      const planner = jwt('planner@vhb.be', 'auth-tok-planner', 'sess-planner-ok');
+      expect((await api('POST', '/api/devices/register', { token: planner, device: 'dev-planner-ok', body: { name: 'Mac' } })).status).toBe(200);
+      expect((await api('GET', '/api/leave', { token: planner, device: null })).status).toBe(200);
+    });
+  });
+
   it('"uitloggen op alle andere toestellen" trekt alles behalve het huidige in', async () => {
     mem.devices.push(
       { userId: '3', deviceToken: 'dev-2', name: 'Mac · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' },
@@ -2668,6 +2764,28 @@ describe('toestel-whitelist', () => {
     const me = await api('GET', '/api/me', { token: 'tok-a' });
     expect(me.status).toBe(200);
     expect(me.json?.toestel?.status).toBe('approved');
+  });
+});
+
+// Controle-ronde 09-09, nr. 4: de knop "Schrijftest" in Systeemstatus riep
+// /api/test aan, een route die nooit bestond (structureel 404).
+describe('POST /api/health/echo (schrijftest in Systeemstatus)', () => {
+  it('admin krijgt een echo, er wordt niets geschreven', async () => {
+    const voor = JSON.stringify(mem.activity);
+    const res = await api('POST', '/api/health/echo', { token: 'tok-admin', body: { test: true } });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ status: 'ok', ontvangen: true });
+    expect(JSON.stringify(mem.activity)).toBe(voor);
+  });
+
+  it('alleen voor admins, en niet zonder aanmelding', async () => {
+    expect((await api('POST', '/api/health/echo', { token: 'tok-planner', body: { test: true } })).status).toBe(403);
+    expect((await api('POST', '/api/health/echo', { token: 'tok-a', body: { test: true } })).status).toBe(403);
+    expect((await api('POST', '/api/health/echo', { body: { test: true } })).status).toBe(401);
+  });
+
+  it('de oude route bestaat niet (dat was de bug)', async () => {
+    expect((await api('POST', '/api/test', { token: 'tok-admin', body: { test: true } })).status).toBe(404);
   });
 });
 
