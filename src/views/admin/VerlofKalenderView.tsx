@@ -342,7 +342,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
               </ul>
             )}
             <Card tone={dagBezetting === 'volzet' ? 'danger' : 'muted'} padding="none" className="px-4 py-3">
-              <MicroLabel className={dagBezetting === 'volzet' ? 'text-red-700' : 'text-slate-500'}>Verloflimiet op deze dag</MicroLabel>
+              <MicroLabel className={dagBezetting === 'volzet' ? 'text-red-700' : 'text-slate-600'}>Verloflimiet op deze dag</MicroLabel>
               <p className="mt-1 text-xs font-normal text-slate-600">
                 Maximaal {dagLimiet} {dagLimiet === 1 ? 'chauffeur' : 'chauffeurs'} tegelijk met verlof; er {dagBezet === 1 ? 'is' : 'zijn'} er nu {dagBezet} goedgekeurd. Een flexi-job of technieker telt niet mee.
               </p>

@@ -757,7 +757,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
             return (
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
-                  <MicroLabel className="text-slate-500">Wachtend op goedkeuring</MicroLabel>
+                  <MicroLabel className="text-slate-600">Wachtend op goedkeuring</MicroLabel>
                   {plannerPending.length > 1 && (
                     <Button
                       variant="ghost"
@@ -906,7 +906,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </Field>
                 )}
 
-                <Card tone="accent" padding="none" className="px-5 py-4 text-body-sm text-slate-600">
+                <Card tone="accent" padding="none" className="px-5 py-4 text-body text-slate-600">
                   <MicroLabel className="text-oker-700">Periode kiezen</MicroLabel>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
@@ -1076,7 +1076,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   return (
                     <Card tone="muted" padding="sm" className="space-y-2">
                       <div className="flex items-center justify-between gap-3">
-                        <MicroLabel className="text-slate-500">Al vastgelegd in {jaar}</MicroLabel>
+                        <MicroLabel className="text-slate-600">Al vastgelegd in {jaar}</MicroLabel>
                         <span className="text-xs font-semibold tabular-nums text-slate-700">
                           {balans.betaaldGebruikt} / {balans.betaaldBudget} betaald{balans.kleinVerletDagen > 0 ? ` · ${balans.kleinVerletDagen} klein verlet` : ''}
                         </span>
@@ -1182,7 +1182,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
   return (
     <div className={requests.length > 0 ? 'space-y-4' : 'space-y-1.5'}>
       <div className="flex items-center justify-between px-1">
-        <MicroLabel className="text-slate-500">{title}</MicroLabel>
+        <MicroLabel className="text-slate-600">{title}</MicroLabel>
         <MicroLabel>{count}</MicroLabel>
       </div>
       <div className="max-h-[420px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">

@@ -486,7 +486,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                     {waarschuwing && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />}
                     {label}
                   </dt>
-                  <dd className={`text-stat ${cn('break-words', live && value > 0 ? 'text-oker-700' : waarschuwing ? 'text-amber-700' : 'text-slate-900', breed ? 'col-start-2 row-span-2 row-start-1 sm:mt-2' : 'mt-2')}`}>{value}</dd>
+                  <dd className={cn('text-stat break-words', live && value > 0 ? 'text-oker-700' : waarschuwing ? 'text-amber-700' : 'text-slate-900', breed ? 'col-start-2 row-span-2 row-start-1 sm:mt-2' : 'mt-2')}>{value}</dd>
                   {/* slate-600: op het zachte tegelvlak haalt slate-500 maar 4,3:1 (axe, 20-09). */}
                   <dd className={cn('mt-1 text-xs font-medium break-words text-slate-600', breed && 'col-start-1 row-start-2')}>{sub}</dd>
                 </div>
