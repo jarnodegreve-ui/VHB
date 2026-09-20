@@ -16,7 +16,7 @@ import { Avatar } from '../../components/Avatar';
 import { Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import { LegeLijst, NietGevonden } from '../../components/illustraties';
-import { balkenVoorDag, duurKort, isBuitenland, nuOnline, telBuitenlandPerDag, telPerDag, type AanwezigheidSessie, type DagBalk } from '../../lib/aanwezigheid';
+import { balkenVoorDag, duurKort, isBuitenland, nuOnline, periodeRegels, rijStaatOpen, telBuitenlandPerDag, telPerDag, type AanwezigheidSessie, type DagBalk } from '../../lib/aanwezigheid';
 import { asMarkeringen, asVenster, blokOpAs, labelStapVoor } from '../../lib/tijdAs';
 import { useMinWidth } from '../../lib/useMinWidth';
 
@@ -28,10 +28,14 @@ import { useMinWidth } from '../../lib/useMinWidth';
  *     public.user_presence (sessies) in plaats van het auditlogboek, dat per
  *     persoon hoogstens één auth-regel per dag kende en dus alleen "was
  *     aanwezig" kon zeggen. Dagstrip van 14 dagen als keuzeknop, daaronder
- *     per persoon een tijdbalk over de etmaal-as, met een uurraster en onder
- *     elke balk de exacte periodes en de plaats van aanmelden (20-09; sessies
- *     van buiten België krijgen een amber badge en een filter). "Recente aanmeldingen"
- *     blijft over de échte logins gaan, een andere vraag met een andere bron.
+ *     per persoon één compacte rij: naam, tijdbalk over de etmaal-as met een
+ *     uurraster, en de totale tijd. De exacte periodes en de plaats van
+ *     aanmelden klappen pas open na een tik op de rij (Jarno 20-09: de lijst
+ *     was te lang op de telefoon). Een sessie van buiten België blijft ook in
+ *     de dichte rij zichtbaar als amber stip bij de totale tijd, en met het
+ *     filter "Buiten België" aan staan die rijen meteen open. "Recente
+ *     aanmeldingen" blijft over de échte logins gaan, een andere vraag met een
+ *     andere bron.
  *  2. Activiteit: het auditspoor als feed per dag i.p.v. een platte tabel
  *     met volledige tijdstempels. Cron-hartslagen (±1.000 regels per maand)
  *     staan standaard uit, herhaalde acties van dezelfde persoon binnen tien
@@ -87,20 +91,22 @@ const dagKort = (dag: string, vandaag: string): string => {
 };
 
 /**
- * De rasterrij van een tijdbalk: naam, balk, duur. Eén definitie, zodat de
- * uuras boven de balken exact op dezelfde kolommen valt als de rijen eronder.
+ * De rasterrij van een tijdbalk: naam, balk, duur, chevron. Eén definitie,
+ * zodat de uuras boven de balken exact op dezelfde kolommen valt als de rijen
+ * eronder.
  *
  * Twee vormen. Op een telefoon is er geen breedte voor een naamkolom naast een
  * balk van 24 uur: elke naam werd dan "Jarno ..." en juist de naam is hier de
- * hoofdzaak. Daar staan naam en duur dus op de eerste regel en loopt de balk
- * eronder over de volle breedte. Vanaf sm past het wel naast elkaar.
+ * hoofdzaak. Daar staan naam, duur en chevron dus op de eerste regel en loopt
+ * de balk eronder over de volle breedte. Vanaf sm past het wel naast elkaar.
  */
-const TIJDBALK_RIJ = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[10.5rem_minmax(0,1fr)_3.5rem]';
+const TIJDBALK_RIJ = 'grid grid-cols-[minmax(0,1fr)_auto_1rem] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[10.5rem_minmax(0,1fr)_4.25rem_1rem]';
 const TIJDBALK_NAAM = 'col-start-1 row-start-1 flex min-w-0 items-center gap-2';
-const TIJDBALK_BALK = 'col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1';
-const TIJDBALK_DUUR = 'col-start-2 row-start-1 text-right sm:col-start-3';
-/** De regel onder de balk: exacte periodes en plaats, in de kolom van de balk. */
-const TIJDBALK_META = 'col-span-2 col-start-1 row-start-3 sm:col-span-1 sm:col-start-2 sm:row-start-2';
+const TIJDBALK_BALK = 'col-span-3 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1';
+const TIJDBALK_DUUR = 'col-start-2 row-start-1 inline-flex items-center justify-end gap-1.5 sm:col-start-3';
+const TIJDBALK_CHEVRON = 'col-start-3 row-start-1 justify-self-end text-slate-400 sm:col-start-4';
+/** Het uitgeklapte paneel lijnt vanaf sm uit op de kolom van de balk (naamkolom + gap). */
+const TIJDBALK_PANEEL = 'sm:pl-[calc(10.5rem+0.75rem)]';
 
 /**
  * Zoveel tijdbalken staan meteen open; de rest zit achter "Toon alle N".
@@ -185,6 +191,12 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
   // sessie bladert, ziet gewoon iedereen in plaats van een lege lijst.
   const metPlaats = !locatieMigratie;
   const [alleenBuitenland, setAlleenBuitenland] = useState(false);
+  // Welke rijen de kijker zelf omklapte. Meerdere tegelijk open mag: bij "één
+  // tegelijk" klapt de vorige dicht terwijl je een rij lager aantikt, en dan
+  // schuift precies de rij onder je vinger weg. Een andere dag of het filter
+  // omzetten begint weer rustig, met de standaard van rijStaatOpen.
+  const [omgezet, setOmgezet] = useState<Set<string>>(new Set());
+  const klapOm = (userId: string) => setOmgezet((s) => { const n = new Set(s); if (n.has(userId)) n.delete(userId); else n.add(userId); return n; });
   const buitenlandPerDag = useMemo(() => telBuitenlandPerDag(aanwezigheid), [aanwezigheid]);
   const buitenlandVandaagGekozen = balken.filter((b) => b.buitenland).length;
   const filterAan = metPlaats && alleenBuitenland && buitenlandVandaagGekozen > 0;
@@ -205,57 +217,94 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
     [venster, isLg, isSm],
   );
 
-  /** Eén tijdbalk. Losse functie omdat hij zowel boven als in de uitklap staat. */
+  /**
+   * Eén persoon. Dicht: naam, balk en totale tijd. De hele rij is de knop; de
+   * periodes en de plaats klappen eronder open. Losse functie omdat hij zowel
+   * boven als achter "Toon alle N" staat.
+   */
   const tijdbalkRij = (b: DagBalk) => {
-    // Eén plaats die dag: één keer achteraan. Meerdere: bij elke periode de
-    // hare, anders weet je niet welk blok van waar kwam.
-    const plaatsPerPeriode = metPlaats && b.plaatsen.length > 1;
+    const isOpen = rijStaatOpen(b, filterAan, omgezet);
+    const paneelId = `tijdbalk-periodes-${b.userId}`;
+    const buitenland = metPlaats && b.buitenland;
+    const aantal = `${b.periodes.length} ${b.periodes.length === 1 ? 'periode' : 'periodes'}`;
     return (
-      <div key={b.userId} className={cn(TIJDBALK_RIJ, 'py-2.5')}>
-        <span className={TIJDBALK_NAAM}>
-          <Avatar naam={b.naam} size="sm" />
-          <span className="min-w-0 truncate text-sm font-semibold text-slate-800" title={b.naam}>{b.naam}</span>
-        </span>
-        <div className={cn(TIJDBALK_BALK, 'relative h-5 overflow-hidden rounded-md bg-surface-muted ring-1 ring-hairline-subtle')}>
-          {/* Uurraster: een fijne lijn per uur, iets sterker waar de as een label
-              draagt. Onder de blokken, zodat het raster de balk nooit doorsnijdt. */}
-          {markeringen.filter((m) => m.lijn === 'midden').map((m) => (
-            <span key={m.uur} data-uurlijn={m.label ? 'sterk' : 'fijn'} className={cn('absolute inset-y-0 w-px', m.label ? 'bg-hairline-strong' : 'bg-hairline-strong/45')} style={{ left: `${m.pct}%` }} aria-hidden="true" />
-          ))}
-          {b.periodes.map((per) => {
-            const { links, breedte } = blokOpAs(per, venster);
-            const plaats = metPlaats && per.plaatsen?.length ? per.plaatsen.join(' en ') : '';
-            return (
-              <span
-                key={per.vanIso}
-                className={cn('absolute inset-y-0.5 rounded', isLopend(b.userId, per.totMin) ? 'bg-oker-500' : 'bg-slate-500')}
-                style={{ left: `${links}%`, width: `${breedte}%` }}
-                title={`${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}${plaats ? ` · ${plaats}` : ''}`}
-                aria-label={`${b.naam} actief van ${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}${plaats ? `, ${plaats}` : ''}`}
-              />
-            );
-          })}
-        </div>
-        <span className={cn(TIJDBALK_DUUR, 'text-xs font-medium font-mono text-slate-600')} title={`${b.periodes.length} ${b.periodes.length === 1 ? 'periode' : 'periodes'}`}>{duurKort(b.totaalMin)}</span>
-        {/* Exacte tijden en plaats, altijd leesbaar: een title-tooltip bestaat
-            niet op een telefoon, en de balk alleen laat je tussen twee
-            uurlijnen gokken. */}
-        <p className={cn(TIJDBALK_META, 'flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500')}>
-          {/* Witruimte als scheiding, geen middelpuntjes: die belanden bij het
-              omlopen op een telefoon los vooraan op de volgende regel. */}
-          {b.periodes.map((per) => (
-            <span key={per.vanIso} className="inline-flex items-baseline gap-x-1.5 whitespace-nowrap">
-              <span className="font-mono">{uurMin(per.vanMin)}–{uurMin(per.totMin)}</span>
-              {plaatsPerPeriode && per.plaatsen?.length ? (
-                <span className={cn(per.buitenland && 'font-medium text-amber-700')}>{per.plaatsen.join(' en ')}</span>
-              ) : null}
-            </span>
-          ))}
-          {metPlaats && !plaatsPerPeriode && b.plaatsen.length === 1 && (
-            <span className={cn(b.buitenland && 'font-medium text-amber-700')}>{b.plaatsen[0]}</span>
-          )}
-          {metPlaats && b.buitenland && <Badge tone="amber">Buiten België</Badge>}
-        </p>
+      <div key={b.userId}>
+        {/* rauw: hele rij is de knop die de periodes open- en dichtklapt (eigen rasterlayout, gedeeld met de uuras) */}
+        <button
+          type="button"
+          onClick={() => klapOm(b.userId)}
+          aria-expanded={isOpen}
+          aria-controls={paneelId}
+          aria-label={`${b.naam}, ${duurKort(b.totaalMin)} actief in ${aantal}${buitenland ? ', aanmelding van buiten België' : ''}`}
+          className={cn(TIJDBALK_RIJ, 'ios-pressable -mx-2 min-h-11 w-[calc(100%+1rem)] cursor-pointer rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-surface-soft-hover')}
+        >
+          <span className={TIJDBALK_NAAM}>
+            <Avatar naam={b.naam} size="sm" />
+            <span className="min-w-0 truncate text-sm font-semibold text-slate-800" title={b.naam}>{b.naam}</span>
+          </span>
+          <span className={cn(TIJDBALK_BALK, 'relative block h-5 overflow-hidden rounded-md bg-surface-muted ring-1 ring-hairline-subtle')}>
+            {/* Uurraster: een fijne lijn per uur, iets sterker waar de as een label
+                draagt. Onder de blokken, zodat het raster de balk nooit doorsnijdt. */}
+            {markeringen.filter((m) => m.lijn === 'midden').map((m) => (
+              <span key={m.uur} data-uurlijn={m.label ? 'sterk' : 'fijn'} className={cn('absolute inset-y-0 w-px', m.label ? 'bg-hairline-strong' : 'bg-hairline-strong/45')} style={{ left: `${m.pct}%` }} aria-hidden="true" />
+            ))}
+            {b.periodes.map((per) => {
+              const { links, breedte } = blokOpAs(per, venster);
+              const plaats = metPlaats && per.plaatsen?.length ? per.plaatsen.join(' en ') : '';
+              return (
+                <span
+                  key={per.vanIso}
+                  className={cn('absolute inset-y-0.5 rounded', isLopend(b.userId, per.totMin) ? 'bg-oker-500' : 'bg-slate-500')}
+                  style={{ left: `${links}%`, width: `${breedte}%` }}
+                  title={`${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}${plaats ? ` · ${plaats}` : ''}`}
+                  aria-label={`${b.naam} actief van ${uurMin(per.vanMin)} tot ${uurMin(per.totMin)}${plaats ? `, ${plaats}` : ''}`}
+                />
+              );
+            })}
+          </span>
+          <span className={TIJDBALK_DUUR}>
+            {/* Het veiligheidssignaal blijft in de dichte rij staan: dezelfde amber
+                stip als op de tegel en in de dagstrip, zodat je weet wie je moet
+                openklappen. Amber is hier waarschuwing, nooit goud. */}
+            {buitenland && <span data-buitenland role="img" aria-label="Aanmelding van buiten België" title="Aanmelding van buiten België" className="size-2 shrink-0 rounded-full bg-amber-600" />}
+            <span className="text-xs font-medium font-mono whitespace-nowrap text-slate-600" title={aantal}>{duurKort(b.totaalMin)}</span>
+          </span>
+          <ChevronDown size={16} className={uitklapChevron(isOpen, 180, TIJDBALK_CHEVRON)} aria-hidden="true" />
+        </button>
+        <Uitklap open={isOpen} id={paneelId}>
+          {/* Eén regel per periode: tijd, duur, plaats. De ul is het raster en
+              de li's zijn `contents`, zodat de kolommen over alle regels gelijk
+              lopen zonder vaste breedtes (op 320 px telt elke pixel). */}
+          <ul className={cn(TIJDBALK_PANEEL, 'grid grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 pt-0.5 pb-3 text-sm sm:gap-x-4')} aria-label={`Periodes van ${b.naam}`}>
+            {periodeRegels(b).map((regel) => {
+              const lopend = isLopend(b.userId, regel.totMin);
+              return (
+                <li key={regel.sleutel} className="contents">
+                  {/* Goud alleen voor de periode die nu nog loopt. */}
+                  <span className={cn('font-mono whitespace-nowrap', lopend ? 'font-medium text-oker-700' : 'text-slate-700')}>
+                    {uurMin(regel.vanMin)}–{uurMin(regel.totMin)}
+                    {lopend && <span className="sr-only">, loopt nog</span>}
+                  </span>
+                  <span className="font-mono whitespace-nowrap text-slate-500">{duurKort(regel.duurMin)}</span>
+                  {/* Buiten België: dezelfde amber stip als in de dichte rij, en het
+                      land voluit. Geen pil: die paste op een telefoon niet naast de
+                      plaats en viel dan los op een eigen regel. */}
+                  <span className="flex min-w-0 items-baseline justify-end gap-x-1.5 text-right sm:justify-start sm:text-left">
+                    {metPlaats && regel.buitenland && <span className="size-2 shrink-0 self-center rounded-full bg-amber-600" aria-hidden="true" />}
+                    {metPlaats && (regel.plaats
+                      ? (
+                        <span className={cn('min-w-0 break-words', regel.buitenland ? 'font-medium text-amber-700' : 'text-slate-600')} title={regel.buitenland ? 'Aanmelding van buiten België' : undefined}>
+                          {regel.plaats}
+                          {regel.buitenland && <span className="sr-only">, buiten België</span>}
+                        </span>
+                      )
+                      : <span className="text-slate-500">Plaats onbekend</span>)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Uitklap>
       </div>
     );
   };
@@ -284,6 +333,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
     setGekozenDag(recentste);
     setAlleenBuitenland(true);
     setAlleBalken(false);
+    setOmgezet(new Set());
     const rustig = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     requestAnimationFrame(() => tijdbalkenRef.current?.scrollIntoView({ block: 'nearest', behavior: rustig ? 'auto' : 'smooth' }));
   };
@@ -437,7 +487,8 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                     {label}
                   </dt>
                   <dd className={`text-stat ${cn('break-words', live && value > 0 ? 'text-oker-700' : waarschuwing ? 'text-amber-700' : 'text-slate-900', breed ? 'col-start-2 row-span-2 row-start-1 sm:mt-2' : 'mt-2')}`}>{value}</dd>
-                  <dd className={cn('mt-1 text-xs font-medium break-words text-slate-500', breed && 'col-start-1 row-start-2')}>{sub}</dd>
+                  {/* slate-600: op het zachte tegelvlak haalt slate-500 maar 4,3:1 (axe, 20-09). */}
+                  <dd className={cn('mt-1 text-xs font-medium break-words text-slate-600', breed && 'col-start-1 row-start-2')}>{sub}</dd>
                 </div>
               ))}
             </dl>
@@ -466,7 +517,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                       <button
                         key={d.day}
                         type="button"
-                        onClick={() => { setGekozenDag(d.day); setAlleBalken(false); }}
+                        onClick={() => { setGekozenDag(d.day); setAlleBalken(false); setOmgezet(new Set()); }}
                         aria-pressed={d.day === gekozenDag}
                         aria-label={`${dagKort(d.day, vandaag)}: ${d.count} actief${metPlaats && buitenlandPerDag.get(d.day) ? `, ${buitenlandPerDag.get(d.day)} buiten België` : ''}`}
                         className="group flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-end gap-1 rounded-lg"
@@ -533,7 +584,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                     {metPlaats && (
                       <span className="inline-flex items-center gap-0.5">
                         {buitenlandVandaagGekozen > 0 ? (
-                          <FilterChip tone="amber" active={filterAan} onClick={() => { setAlleenBuitenland((v) => !v); setAlleBalken(false); }}>
+                          <FilterChip tone="amber" active={filterAan} onClick={() => { setAlleenBuitenland((v) => !v); setAlleBalken(false); setOmgezet(new Set()); }}>
                             Buiten België: <span className="font-mono">{buitenlandVandaagGekozen}</span>
                           </FilterChip>
                         ) : (

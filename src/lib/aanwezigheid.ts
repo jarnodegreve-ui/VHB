@@ -236,3 +236,40 @@ export const duurKort = (minuten: number): string => {
   const rest = m % 60;
   return rest === 0 ? `${u} u` : `${u} u ${rest}`;
 };
+
+// --- Uitklapbare rij (20-09) ---
+
+/** Eén regel in het uitgeklapte paneel van een persoon: tijd, duur en plaats. */
+export type PeriodeRegel = {
+  sleutel: string;
+  vanMin: number;
+  totMin: number;
+  /** Zelfde afronding als `totaalMin`, zodat de regels samen het totaal van de rij geven. */
+  duurMin: number;
+  /** Leesbare plaats, of null wanneer de sessie geen plaats droeg (van vóór de migratie). */
+  plaats: string | null;
+  buitenland: boolean;
+};
+
+export const periodeRegels = (balk: Pick<DagBalk, 'periodes'>): PeriodeRegel[] =>
+  balk.periodes.map((p) => ({
+    sleutel: p.vanIso,
+    vanMin: p.vanMin,
+    totMin: p.totMin,
+    duurMin: Math.max(1, p.totMin - p.vanMin),
+    plaats: p.plaatsen?.length ? p.plaatsen.join(' en ') : null,
+    buitenland: Boolean(p.buitenland),
+  }));
+
+/**
+ * Staat de rij van deze persoon open? Standaard is alles dicht. Met het filter
+ * "Buiten België" aan staan de gefilterde rijen standaard open: wie filtert
+ * wil juist zien wanneer en van waar, en zou anders elke rij apart moeten
+ * aantikken. `omgezet` bevat wie de kijker zelf omklapte ten opzichte van die
+ * standaard, zodat een opengezette rij dicht kan en omgekeerd.
+ */
+export const rijStaatOpen = (
+  balk: Pick<DagBalk, 'userId' | 'buitenland'>,
+  filterAan: boolean,
+  omgezet: ReadonlySet<string>,
+): boolean => (filterAan && balk.buitenland) !== omgezet.has(balk.userId);

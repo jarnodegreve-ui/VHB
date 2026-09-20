@@ -70,6 +70,7 @@ async function tekstBinnenVak(tekst: Locator) {
 
 const PROFIELEN = [
   { naam: 'mobiel 320', width: 320, height: 780 },
+  { naam: 'mobiel 375', width: 375, height: 812 },
   { naam: 'mobiel 402', width: 402, height: 874 },
   { naam: 'desktop', width: 1440, height: 1000 },
 ] as const;
@@ -175,22 +176,86 @@ for (const profiel of PROFIELEN) {
       });
       expect(verschil, 'label 12 staat boven de lijn van 12 uur').toBeLessThanOrEqual(1);
 
-      // Exacte tijden staan uitgeschreven onder de balk (een title-tooltip
-      // bestaat niet op een telefoon), en de plaats erachter.
-      const rijPerson3 = aanwezigheid.getByText('Testgebruiker 4', { exact: true }).locator('xpath=ancestor::div[contains(@class,"grid")][1]');
-      await expect(rijPerson3.getByText('01:00–01:50')).toBeVisible();
-      await expect(rijPerson3.getByText('11:00–11:45')).toBeVisible();
-      await expect(rijPerson3.getByText('Lille, Frankrijk')).toBeVisible();
-      await expect(rijPerson3.getByText('Buiten België', { exact: true })).toBeVisible();
-      await expect(aanwezigheid.getByText('Buiten België', { exact: true })).toHaveCount(2); // tegel + één rij
+      // Dicht (standaard, Jarno 20-09): per persoon alleen naam, balk en
+      // totale tijd. Geen periodes en geen plaats in beeld, en de rij is een
+      // knop van minstens 44 px hoog.
+      const knopPerson3 = aanwezigheid.getByRole('button', { name: /^Testgebruiker 4, 1 u 35 actief in 2 periodes, aanmelding van buiten België$/ });
+      const paneelPerson3 = aanwezigheid.getByRole('list', { name: 'Periodes van Testgebruiker 4' });
+      // Een dichtgeklapt paneel blijft in de DOM staan (Uitklap houdt de
+      // inhoud vast voor de sluitbeweging), dus "dicht" is: uit de
+      // toegankelijkheidsboom, inert, en nul pixels hoog.
+      const paneelDicht = async () => {
+        await expect(paneelPerson3).toHaveCount(0);
+        const houder = page.locator('[id="tijdbalk-periodes-gebruiker-3"]');
+        await expect(houder).toHaveAttribute('aria-hidden', 'true');
+        await expect.poll(() => houder.evaluate((el) => Math.round(el.getBoundingClientRect().height))).toBe(0);
+      };
+      await expect(knopPerson3).toHaveAttribute('aria-expanded', 'false');
+      await expect(aanwezigheid.getByText('01:00–01:50')).toBeHidden();
+      await expect(aanwezigheid.getByText('Lille, Frankrijk')).toBeHidden();
+      await expect(aanwezigheid.getByText(/^\d{2}:\d{2}–\d{2}:\d{2}$/).filter({ visible: true })).toHaveCount(0);
+      await expect(aanwezigheid.getByText('Gent, BE').filter({ visible: true })).toHaveCount(0);
+      const rijHoogtes = await aanwezigheid.locator('button[aria-controls^="tijdbalk-periodes-"]').evaluateAll((knoppen) => knoppen.map((k) => k.getBoundingClientRect().height));
+      expect(rijHoogtes).toHaveLength(12);
+      expect(Math.min(...rijHoogtes), 'elke rij is een aanraakdoel van minstens 44 px').toBeGreaterThanOrEqual(44);
 
-      // Het filter: alleen wie van buiten België kwam, en weer terug.
+      // Het veiligheidssignaal blijft in de dichte rij staan: één amber stip,
+      // bij de persoon met de sessie uit Frankrijk en bij niemand anders.
+      await expect(aanwezigheid.locator('[data-buitenland]')).toHaveCount(1);
+      await expect(knopPerson3.locator('[data-buitenland]')).toBeVisible();
+
+      // Open met het toetsenbord: de rij is een echte knop, dus Enter en de
+      // spatiebalk werken. Eén regel per periode met tijd, duur en plaats.
+      await knopPerson3.focus();
+      await page.keyboard.press('Enter');
+      await expect(knopPerson3).toHaveAttribute('aria-expanded', 'true');
+      await expect(paneelPerson3.getByRole('listitem')).toHaveCount(2);
+      await expect(paneelPerson3.getByText('01:00–01:50')).toBeVisible();
+      await expect(paneelPerson3.getByText('50 min')).toBeVisible();
+      await expect(paneelPerson3.getByText('Lille, Frankrijk')).toBeVisible();
+      await expect(paneelPerson3.getByText('11:00–11:45')).toBeVisible();
+      await expect(paneelPerson3.getByText('Gent, BE')).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      const paneelBinnenKaart = await paneelPerson3.evaluate((ul) => {
+        const kaart = ul.closest('section')!.getBoundingClientRect();
+        return [...ul.querySelectorAll('li > span')].every((cel) => {
+          const r = cel.getBoundingClientRect();
+          return r.width === 0 || (r.left >= kaart.left - 1 && r.right <= kaart.right + 1);
+        });
+      });
+      expect(paneelBinnenKaart, 'tijd, duur en plaats blijven binnen de kaart').toBe(true);
+
+      // Meerdere tegelijk open: een tweede rij openen laat de eerste staan,
+      // zodat er niets boven je vinger dichtklapt en de lijst niet verspringt.
+      // Person 5 heeft een sessie van vóór de migratie, zonder plaats.
+      const knopPerson5 = aanwezigheid.getByRole('button', { name: /^Testgebruiker 6, / });
+      await knopPerson5.click();
+      await expect(knopPerson5).toHaveAttribute('aria-expanded', 'true');
+      await expect(knopPerson3).toHaveAttribute('aria-expanded', 'true');
+      await expect(aanwezigheid.getByRole('list', { name: 'Periodes van Testgebruiker 6' }).getByText('Plaats onbekend')).toBeVisible();
+      // En weer dicht met de spatiebalk.
+      await knopPerson3.focus();
+      await page.keyboard.press('Space');
+      await expect(knopPerson3).toHaveAttribute('aria-expanded', 'false');
+      await paneelDicht();
+      await knopPerson5.click();
+
+      // Het filter: alleen wie van buiten België kwam, en die rij staat dan
+      // meteen open (wie filtert wil zien wanneer en van waar). Dichtklappen
+      // kan nog steeds, en het filter uitzetten brengt alles terug naar dicht.
       const chip = aanwezigheid.getByRole('button', { name: 'Buiten België: 1' });
       await chip.click();
       await expect(aanwezigheid.getByText('1 van 12 personen', { exact: true })).toBeVisible();
       await expect(aanwezigheid.getByLabel(/ actief van /)).toHaveCount(2);
+      await expect(knopPerson3).toHaveAttribute('aria-expanded', 'true');
+      await expect(paneelPerson3.getByText('Lille, Frankrijk')).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      await knopPerson3.click();
+      await expect(knopPerson3).toHaveAttribute('aria-expanded', 'false');
       await chip.click();
       await expect(aanwezigheid.getByText('12 personen', { exact: true })).toBeVisible();
+      await expect(knopPerson3).toHaveAttribute('aria-expanded', 'false');
+      await paneelDicht();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 
       // Een dag in de strip kiezen stuurt de tijdbalken eronder. De dagstrip
