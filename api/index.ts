@@ -41,6 +41,7 @@ import { recordUrl } from "./_lib/meldingen.js";
 import { meVoorkeurenBodySchema, pasVoorkeurenPatchToe } from "../shared/schemas/dashboardVoorkeuren.js";
 import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
 import { teltInVerlofbezetting } from "../shared/verlofbezetting.js";
+import { verloopUitLog, type RuilVerloopStap } from "../shared/ruilVerloop.js";
 import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, verlofFeestdagenSchema } from "../shared/schemas/verlofFeestdagen.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
 import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, referentieVan, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
@@ -73,6 +74,8 @@ import {
   getPlanningMatrixGrenzen,
   getSwapExecutions,
   getSwapHistories,
+  getSwapVerloopRegels,
+  type SwapVerloopLogRegel,
   getSwapsByIds,
   getDiversionsData,
   getLeaveData,
@@ -3598,6 +3601,32 @@ app.get("/api/updates/read-counts", authenticate, requireRole("planner", "admin"
   }
 });
 
+/**
+ * Hangt aan elke ruil het verloop per persoon (`verloop`, zie
+ * shared/ruilVerloop.ts): wie vroeg aan, accepteerde, weigerde, keurde goed,
+ * en wanneer. Afgeleid uit het activiteitenlog, in één query voor alle ruilen
+ * samen. Alleen-lezen en nooit blokkerend: mislukt de logquery, dan komen de
+ * ruilen gewoon zonder verloop terug en toont de client wat de ruil zelf zegt.
+ *
+ * Privacy: de aanroeper geeft alleen ruilen door die de kijker mag zien, en
+ * het verloop wordt uitsluitend aan díe ruilen gehangen. De naam van de
+ * planner gaat alleen naar staf mee.
+ */
+const metRuilVerloop = async <T extends { id: string }>(
+  swaps: T[],
+  staf: boolean,
+  regels?: Promise<Record<string, SwapVerloopLogRegel[]>>,
+): Promise<Array<T & { verloop?: RuilVerloopStap[] }>> => {
+  if (swaps.length === 0) return swaps;
+  try {
+    const perSwap = await (regels ?? getSwapVerloopRegels(swaps.map((s) => String(s.id))));
+    return swaps.map((s) => ({ ...s, verloop: verloopUitLog(perSwap[String(s.id)] ?? [], { metStafNaam: staf }) }));
+  } catch (err) {
+    console.error("Verloop van de dienstruilen laden is mislukt.", err);
+    return swaps;
+  }
+};
+
 app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     // Privacy: een chauffeur ziet enkel ruilen waar hij zélf bij betrokken is
@@ -3607,18 +3636,25 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // het JS-filter hieronder blijft als vangnet staan, zodat de privacygrens
     // nooit van de filtersyntaxis van de query afhangt.
     const staf = isStafRol(req.appUser!.role);
+    // Staf leest elke ruil, dus ook elk verloop: die query start tegelijk met
+    // de ruilen. Een chauffeur vraagt alleen het verloop van zijn eigen ruilen
+    // op, en dat kan pas als hun id's bekend zijn.
+    const alleRegels = staf ? getSwapVerloopRegels() : undefined;
+    alleRegels?.catch(() => undefined); // de fout wordt in metRuilVerloop afgehandeld
     const data = await getSwapsData(staf ? undefined : { betrokkenUserId: String(req.appUser!.id) });
     if (!staf) {
       const selfId = String(req.appUser.id);
       const scoped = data.filter(
         (s) => String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId,
       );
-      return res.json(scoped);
+      return res.json(await metRuilVerloop(scoped, false));
     }
     // Revisie enkel voor planner/admin (volledige weergave) — de POST-check
     // geldt ook alleen voor hen (chauffeur-payloads worden delta-gereconstrueerd).
+    // Over de ruilen ZONDER verloop: de POST-check vergelijkt met
+    // revisionOf(getSwapsData()), en het verloop is afgeleid, geen invoer.
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
-    res.json(data);
+    res.json(await metRuilVerloop(data, true, alleRegels));
   } catch (err) {
     res.status(500).json({ error: "Dienstruilen laden is mislukt." });
   }
@@ -3895,6 +3931,9 @@ const stripSwapAliassen = (record: any): any => {
   if (!record || typeof record !== "object") return record;
   const schoon: Record<string, unknown> = { ...record };
   for (const alias of SWAP_DB_ALIASSEN) delete schoon[alias];
+  // `verloop` is door GET /api/swaps afgeleid uit het activiteitenlog en komt
+  // met de array-save gewoon terug van de client: het is nooit invoer.
+  delete schoon.verloop;
   return schoon;
 };
 
@@ -4720,7 +4759,11 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
     // Verse collectie-revisie meegeven zodat een volgende array-save van
     // dezelfde client geen vals 409 krijgt na deze delta-wijziging.
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getSwapsData()));
-    res.json({ success: true, swap: uit.swap });
+    // De client voegt dit record lokaal in zonder de lijst opnieuw te halen:
+    // het verloop moet dus mee, anders toont het blok per persoon de nieuwe
+    // status zonder moment en zonder wie besliste.
+    const [metVerloop] = await metRuilVerloop([uit.swap], isStafRol(req.appUser!.role));
+    res.json({ success: true, swap: metVerloop });
   } catch (err: any) {
     console.error("Beslissing opslaan is mislukt", err);
     res.status(500).json({ error: "Beslissing opslaan is mislukt" });

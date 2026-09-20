@@ -646,6 +646,51 @@ export const getSwapHistories = async (
   return perSwap;
 };
 
+/** Boven dit aantal ruilen gaat het id-filter niet meer in de URL (PostgREST
+ *  zet `in.(...)` in de querystring; 100 uuid's is ±4 kB) en lezen we alle
+ *  ruil-logregels in één keer. Dat zijn er enkele per ruil. */
+const VERLOOP_ID_FILTER_MAX = 100;
+
+export type SwapVerloopLogRegel = Pick<ActivityLogRecord, "createdAt" | "action" | "actorRole" | "actorName" | "details">;
+
+/**
+ * De logregels waaruit het verloop per persoon wordt afgeleid
+ * (shared/ruilVerloop.ts), voor ALLE gevraagde ruilen in één query, gegroepeerd
+ * per ruil-id en oudste eerst. `swapIds` weglaten = elke ruil (staf). Alleen
+ * de kolommen die de afleiding nodig heeft.
+ */
+export const getSwapVerloopRegels = async (swapIds?: string[]): Promise<Record<string, SwapVerloopLogRegel[]>> => {
+  const ids = swapIds ? [...new Set(swapIds.map((id) => String(id)).filter(Boolean))] : null;
+  if (ids && ids.length === 0) return {};
+  const metFilter = !!ids && ids.length <= VERLOOP_ID_FILTER_MAX;
+  const client = requireDb();
+  type Rij = Pick<ActivityLogRow, "id" | "created_at" | "action" | "actor_role" | "actor_name" | "details" | "entity_id">;
+  const rows = await paginatedFetch<Rij>((from, to) => {
+    let q = client
+      .from("activity_log")
+      .select("id, created_at, action, actor_role, actor_name, details, entity_id")
+      .eq("entity_type", "swap");
+    if (metFilter) q = q.in("entity_id", ids!);
+    // Unieke sortering (created_at + id), anders kan een paginagrens een regel
+    // overslaan of dubbel geven.
+    return q.order("created_at", { ascending: true }).order("id", { ascending: true }).range(from, to);
+  });
+  const gevraagd = ids ? new Set(ids) : null;
+  const perSwap: Record<string, SwapVerloopLogRegel[]> = {};
+  for (const row of rows) {
+    const id = String(row.entity_id ?? "");
+    if (!id || (gevraagd && !gevraagd.has(id))) continue;
+    (perSwap[id] ??= []).push({
+      createdAt: row.created_at,
+      action: row.action,
+      actorRole: row.actor_role,
+      actorName: row.actor_name,
+      details: row.details,
+    });
+  }
+  return perSwap;
+};
+
 /** Log-regels die een dienstwissel écht doorvoeren, binnen [vanIso, totIso).
  *  Dit is het antwoord op "welke wissels zijn die week uitgevoerd": niet de
  *  wissels die díe week in de planning stonden, maar de wissels die in dat
