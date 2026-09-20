@@ -182,7 +182,7 @@ jobs:
           GITLEAKS_ENABLE_COMMENTS: "false"
 
   # Visuele regressie (verbeterronde 03-09, nr. 11): de sleutelschermen
-  # (lijst SCHERMEN in scripts/visueel-ci.mjs; sinds golf 4 zestien, met
+  # (lijst SCHERMEN in scripts/visueel-ci.mjs; sinds 20-09 achttien, met
   # Mijn dag, designsysteem, werkvoorraad en de techniek-/loonschermen) op
   # deze branch én op de basis-branch schieten (gemockte API) en per pixel
   # vergelijken — scripts/visueel-ci.mjs. Geen baselines in de repo: de

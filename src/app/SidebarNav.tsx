@@ -41,6 +41,7 @@ export function SidebarNav({
   const planning = sidebarRoutes(rol, 'planning');
   const mensen = sidebarRoutes(rol, 'mensen');
   const communicatie = sidebarRoutes(rol, 'communicatie');
+  const rapporten = sidebarRoutes(rol, 'rapporten');
   const techniek = sidebarRoutes(rol, 'techniek');
   const systeem = sidebarRoutes(rol, 'systeem');
   const beheer = [...planning, ...mensen, ...communicatie];
@@ -57,6 +58,15 @@ export function SidebarNav({
           <NavSubLabel>Communicatie</NavSubLabel>
           {communicatie.map(item)}
         </NavSection>
+      )}
+      {/* Rapporten: één ingang naar de catalogus (de rapporten zelf staan
+          dáár, niet in het menu), dus een los item zoals onder Algemeen en
+          geen uitklapsectie met één regel. */}
+      {rapporten.length > 0 && (
+        <>
+          <MicroLabel className="mb-1 px-3 pt-3">Rapporten</MicroLabel>
+          {rapporten.map(item)}
+        </>
       )}
       {/* Techniek: garagewerk voor de technieker (zijn enige beheerblok) en
           voor staf (bussen inplannen, opvolgen). */}

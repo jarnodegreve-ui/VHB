@@ -26,6 +26,7 @@ import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../shared/schemas/techniek.
 import { berekenCelWaarheid } from "./_lib/celWaarheid.js";
 import { mountLoonRoutes } from "./_lib/loonRoutes.js";
 import { mountDienstRoutes } from "./_lib/dienstRoutes.js";
+import { mountRapportRoutes } from "./_lib/rapportRoutes.js";
 import { metPdfTitel } from "./_lib/pdfTitel.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
@@ -285,6 +286,9 @@ mountLoonRoutes(app);
 
 // Dienstopbouw op rit-niveau (fase C Access-migratie, 13-09). Zie api/_lib/dienstRoutes.ts.
 mountDienstRoutes(app);
+
+// Rapporten: GET /api/rapporten/:id (register in shared/rapporten). Zie api/_lib/rapportRoutes.ts.
+mountRapportRoutes(app);
 
 
 app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, res) => {

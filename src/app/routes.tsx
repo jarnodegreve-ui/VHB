@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
   Hash, HeartPulse, History, IdCard, Inbox, LayoutDashboard, ListChecks, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
-  Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route } from 'lucide-react';
+  Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route, FileBarChart } from 'lucide-react';
 import type { Role, View } from '../types';
 
 /**
@@ -14,7 +14,7 @@ import type { Role, View } from '../types';
  * `pad` = de URL zonder leidende slash ('' = dashboard). Parameters komen
  * erachter als extra segmenten (`/bezetting/2026-03`), zie router.ts.
  */
-export type Sectie = 'algemeen' | 'planning' | 'mensen' | 'communicatie' | 'techniek' | 'systeem' | 'account';
+export type Sectie = 'algemeen' | 'planning' | 'mensen' | 'communicatie' | 'rapporten' | 'techniek' | 'systeem' | 'account';
 
 export type RouteDef = {
   view: View;
@@ -78,6 +78,10 @@ export const ROUTES: readonly RouteDef[] = [
   // — Beheer › Communicatie —
   { view: 'beheer-updates', pad: 'beheer/updates', label: 'Beheer updates', omschrijving: 'Publiceer updates en dringende meldingen.', icoon: Plus, sectie: 'communicatie', rollen: STAF },
   { view: 'beheer-omleidingen', pad: 'beheer/omleidingen', label: 'Beheer omleidingen', omschrijving: 'Routewijzigingen en bijlagen voor chauffeurs.', icoon: MapIcon, sectie: 'communicatie', rollen: STAF },
+  // — Rapporten (20-09): één plek voor alle overzichten, zoals het rapportenmenu
+  // in Access. Catalogus op /rapporten, één rapport op /rapporten/<domein>/<id>
+  // met de filters in de querystring (register in shared/rapporten). —
+  { view: 'rapporten', pad: 'rapporten', label: 'Rapporten', omschrijving: 'Alle overzichten op één plek: filteren, afdrukken en exporteren.', icoon: FileBarChart, sectie: 'rapporten', breed: true, rollen: STAF },
   // — Techniek (fase A Access-migratie, 13-09) —
   { view: 'defecten', pad: 'techniek/defecten', label: 'Gele boek', omschrijving: 'Gemelde defecten per bus en hun opvolging.', icoon: Wrench, sectie: 'techniek', rollen: TECHNIEK },
   { view: 'werkprestaties', pad: 'techniek/prestaties', label: 'Dagadministratie', kort: 'Dagadmin', omschrijving: 'Wat de garage per dag aan welke bus deed, dag per dag ingegeven.', icoon: ClipboardList, sectie: 'techniek', rollen: TECHNIEK },
@@ -117,6 +121,10 @@ const SECTIE_LABEL: Record<Sectie, string | null> = {
   planning: 'Beheer · Planning',
   mensen: 'Beheer · Mensen',
   communicatie: 'Beheer · Communicatie',
+  // Eén scherm in deze sectie en het heet zelf Rapporten: een sectiewoord zou
+  // "Rapporten" boven "Rapporten" zetten. Een geopend rapport zet zelf
+  // "Rapporten · <domein>" boven zijn titel (subscherm).
+  rapporten: null,
   techniek: 'Techniek',
   systeem: 'Systeem',
   account: 'Account',

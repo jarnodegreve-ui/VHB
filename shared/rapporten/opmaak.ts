@@ -1,0 +1,99 @@
+import type { RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from './types.js';
+
+/**
+ * Eén opmaak per kolomtype, gedeeld door de tabel op het scherm, het
+ * printblad en de CSV. Zod-vrij en zonder DOM, dus ook de server kan ermee
+ * tellen (totalen in het antwoord).
+ */
+
+/** Minuten → 'u:mm' (125 → '2:05', -30 → '-0:30'); uren lopen door boven 24. */
+export const formatDuur = (minuten: number): string => {
+  const m = Math.round(Math.abs(minuten));
+  return `${minuten < 0 && m > 0 ? '-' : ''}${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+};
+
+/** Getal met decimale komma en hoogstens twee decimalen (12,5). Geen duizendtallen: een CSV moet een getal blijven. */
+export const formatAantal = (n: number): string => String(Math.round(n * 100) / 100).replace('.', ',');
+
+const dmj = (iso: string): string => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+};
+
+export const isGetalKolom = (k: RapportKolom): boolean => k.type === 'getal' || k.type === 'duur';
+export const isRechts = (k: RapportKolom): boolean => (k.uitlijning ? k.uitlijning === 'rechts' : isGetalKolom(k));
+
+/**
+ * Waarde → tekst. `doel: 'csv'` houdt datums in ISO (machineleesbaar, zoals
+ * elke export in het portaal) en geeft een lege cel in plaats van een streep.
+ * Nul blijft "0" (of "0:00"): een rapport verzwijgt geen nul.
+ */
+export const formatWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undefined, doel: 'beeld' | 'csv' = 'beeld'): string => {
+  const leeg = doel === 'csv' ? '' : '—';
+  if (waarde === null || waarde === undefined || waarde === '') return leeg;
+  switch (kolom.type) {
+    case 'datum': return doel === 'csv' ? String(waarde).slice(0, 10) : dmj(String(waarde));
+    case 'getal': return typeof waarde === 'number' && Number.isFinite(waarde) ? formatAantal(waarde) : String(waarde);
+    case 'duur': return typeof waarde === 'number' && Number.isFinite(waarde) ? formatDuur(waarde) : String(waarde);
+    case 'janee': return waarde === true ? 'ja' : waarde === false ? 'nee' : String(waarde);
+    case 'tekst': return String(waarde);
+  }
+};
+
+/** Som per optelbare kolom; een kolom zonder één getal telt als 0. */
+export const berekenTotalen = (def: RapportDefinitie, rijen: readonly RapportRij[]): Record<string, number> => {
+  const uit: Record<string, number> = {};
+  for (const k of def.kolommen) {
+    if (!k.totaal || !isGetalKolom(k)) continue;
+    uit[k.id] = rijen.reduce((som, rij) => {
+      const w = rij[k.id];
+      return typeof w === 'number' && Number.isFinite(w) ? som + w : som;
+    }, 0);
+  }
+  return uit;
+};
+
+export const heeftTotaalrij = (def: RapportDefinitie): boolean => def.kolommen.some((k) => k.totaal && isGetalKolom(k));
+
+/** Sorteerwaarde: getallen als getal, ja/nee als 1/0, de rest als tekst (ISO-datums sorteren vanzelf goed). */
+export const sorteerWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undefined): string | number | null => {
+  if (waarde === null || waarde === undefined || waarde === '') return null;
+  if (typeof waarde === 'boolean') return waarde ? 1 : 0;
+  if (isGetalKolom(kolom)) return typeof waarde === 'number' ? waarde : Number(waarde);
+  return String(waarde);
+};
+
+export const sorteerRijen = (def: RapportDefinitie, rijen: readonly RapportRij[], kolomId: string, richting: 'asc' | 'desc'): RapportRij[] => {
+  const kolom = def.kolommen.find((k) => k.id === kolomId) ?? def.kolommen[0];
+  const f = richting === 'asc' ? 1 : -1;
+  return [...rijen].sort((a, b) => {
+    const va = sorteerWaarde(kolom, a[kolom.id]);
+    const vb = sorteerWaarde(kolom, b[kolom.id]);
+    if (va === null && vb === null) return 0;
+    if (va === null) return 1;
+    if (vb === null) return -1;
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * f;
+    return String(va).localeCompare(String(vb), 'nl', { numeric: true, sensitivity: 'base' }) * f;
+  });
+};
+
+/** Bevat deze rij de zoekterm? (in de opgemaakte tekst van om het even welke kolom) */
+export const rijBevat = (def: RapportDefinitie, rij: RapportRij, zoekterm: string): boolean => {
+  const q = zoekterm.trim().toLowerCase();
+  if (!q) return true;
+  return def.kolommen.some((k) => formatWaarde(k, rij[k.id], 'csv').toLowerCase().includes(q));
+};
+
+/**
+ * De cellen van de CSV: kopregel, de rijen en (als de definitie er één heeft)
+ * de totaalrij. Nog geen tekst: het escapen en de formule-guard zitten in
+ * src/lib/csv.ts (`csvTekst`), die hier bewust niet gedupliceerd wordt.
+ */
+export const csvRijen = (def: RapportDefinitie, rijen: readonly RapportRij[], totalen?: Record<string, number> | null): string[][] => {
+  const uit: string[][] = [def.kolommen.map((k) => k.titel)];
+  for (const rij of rijen) uit.push(def.kolommen.map((k) => formatWaarde(k, rij[k.id], 'csv')));
+  if (totalen && heeftTotaalrij(def) && rijen.length > 0) {
+    uit.push(def.kolommen.map((k, i) => (k.id in totalen ? formatWaarde(k, totalen[k.id], 'csv') : i === 0 ? 'Totaal' : '')));
+  }
+  return uit;
+};

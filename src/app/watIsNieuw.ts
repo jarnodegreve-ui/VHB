@@ -24,6 +24,18 @@ export const WAT_IS_NIEUW_TONEN = false;
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-20',
+    titel: 'Rapporten op één plek',
+    regels: {
+      staf: [
+        'Nieuw scherm Rapporten: alle overzichten per domein op één plek, met filters, een sorteerbare tabel, afdrukken of opslaan als PDF en een CSV voor Excel.',
+        'Het eerste rapport is Verlofsaldo: budget, opgenomen, aangevraagd en vrij per medewerker, per jaar, met totalen. Dezelfde cijfers als het saldo-overzicht in Verlof.',
+        'De bestaande printbladen (maandrooster, verlofjaar, ruiloverzicht, gele boek) staan er ook tussen. Een link naar een rapport onthoudt de filters.',
+      ],
+    },
+    bekijk: { staf: 'rapporten' },
+  },
+  {
     id: '2026-09-18',
     titel: 'Dagadministratie en werken per bus',
     regels: {

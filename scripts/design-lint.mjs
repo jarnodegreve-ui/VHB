@@ -194,8 +194,9 @@ function loop(dir) {
         fouten++;
       }
     }
-    // (a) Elke view rendert één kop: PageHeader (h1) of een eigen <h1>.
-    if (/views\/(?:.*\/)?[^/]*View\.tsx$/.test(p) && !PRINT.test(p) && !/Modal/.test(naam) && !/<PageHeader\b|<h1\b/.test(bron)) {
+    // (a) Elke view rendert één kop: PageHeader (h1), een eigen <h1>, of
+    // PrintBlad (het printblad zet de titel zelf als h1).
+    if (/views\/(?:.*\/)?[^/]*View\.tsx$/.test(p) && !PRINT.test(p) && !/Modal/.test(naam) && !/<PageHeader\b|<h1\b|<PrintBlad\b/.test(bron)) {
       waarschuw(rel, 1, 'view zonder PageHeader of <h1> (één kop per scherm)');
     }
     // (b) title= als enige uitleg.

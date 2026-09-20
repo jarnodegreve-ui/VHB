@@ -5565,3 +5565,59 @@ describe('Loon: dagafsluiting en Easypay-export', () => {
     expect(download.json.rijen.length).toBeGreaterThan(0);
   });
 });
+
+describe('rapporten (GET /api/rapporten/:id)', () => {
+  it('zonder sessie 401; chauffeur en technieker 403', async () => {
+    mem.users.push({ id: '5', name: 'Tom Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    expect((await api('GET', '/api/rapporten/verlofsaldo?jaar=2026')).status).toBe(401);
+    expect((await api('GET', '/api/rapporten/verlofsaldo?jaar=2026', { token: 'tok-a' })).status).toBe(403);
+    expect((await api('GET', '/api/rapporten/verlofsaldo?jaar=2026', { token: 'tok-tech' })).status).toBe(403);
+  });
+
+  it('een onbekend rapport is 404, ook voor een admin', async () => {
+    const res = await api('GET', '/api/rapporten/bestaat-niet?jaar=2026', { token: 'tok-admin' });
+    expect(res.status).toBe(404);
+    expect(res.json.error).toBe('Dit rapport bestaat niet.');
+  });
+
+  it('ongeldige filters: 400 met de fout bij het veld', async () => {
+    for (const q of ['', '?jaar=abc', '?jaar=1850', '?jaar=2025&jaar=2026']) {
+      const res = await api('GET', `/api/rapporten/verlofsaldo${q}`, { token: 'tok-planner' });
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Ongeldige invoer');
+      expect(res.json.veldfouten).toEqual({ jaar: 'Kies een jaar' });
+    }
+  });
+
+  it('planner en admin: rijen, totalen, bereik en tijdstip', async () => {
+    const res = await api('GET', '/api/rapporten/verlofsaldo?jaar=2026', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    // Chauffeur A: 3 dagen goedgekeurd (10-12/08) en 3 aangevraagd (01-03/07);
+    // chauffeur B: alleen een wachtend klein verlet, dat telt pas na goedkeuring.
+    expect(res.json.rijen).toEqual([
+      { id: '3', naam: 'Chauffeur A', sectie: null, budget: 24, opgenomen: 3, aangevraagd: 3, vrij: 18, kleinVerlet: 0 },
+      { id: '4', naam: 'Chauffeur B', sectie: null, budget: 24, opgenomen: 0, aangevraagd: 0, vrij: 24, kleinVerlet: 0 },
+    ]);
+    expect(res.json.totalen).toEqual({ budget: 48, opgenomen: 3, aangevraagd: 3, vrij: 42, kleinVerlet: 0 });
+    expect(res.json.bereik).toEqual({ van: '2026-07-01', tot: '2026-08-12' });
+    expect(Number.isNaN(Date.parse(res.json.gegenereerdOp))).toBe(false);
+    expect((await api('GET', '/api/rapporten/verlofsaldo?jaar=2026', { token: 'tok-admin' })).status).toBe(200);
+  });
+
+  it('medewerkerfilter en de extra vrije dag van de beheerder werken door', async () => {
+    mem.appSettings.verlof_feestdagen = { extra: [{ id: 'x1', datum: '2026-08-11', naam: 'Brugdag' }] };
+    const res = await api('GET', '/api/rapporten/verlofsaldo?jaar=2026&chauffeur=3', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.rijen).toEqual([
+      { id: '3', naam: 'Chauffeur A', sectie: null, budget: 24, opgenomen: 2, aangevraagd: 3, vrij: 19, kleinVerlet: 0 },
+    ]);
+    expect(res.json.totalen.opgenomen).toBe(2);
+  });
+
+  it('een verwijderde gebruiker blijft staan als "Onbekend (<id>)"', async () => {
+    const res = await api('GET', '/api/rapporten/verlofsaldo?jaar=2026&chauffeur=999', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.rijen.map((r: any) => r.naam)).toEqual(['Onbekend (999)']);
+  });
+});

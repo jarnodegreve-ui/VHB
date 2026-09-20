@@ -118,6 +118,7 @@ const LazyLooncontroleView = lazyWithRetry(() => VIEW_LOADERS['looncontrole']().
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
 const LazyDevicesView = lazyWithRetry(() => import('./views/admin/DevicesView').then((module) => ({ default: module.DevicesView })));
+const LazyRapportenView = lazyWithRetry(() => VIEW_LOADERS['rapporten']().then((m) => ({ default: (m as typeof import('./views/admin/RapportenView')).RapportenView })));
 const LazyWerkvoorraadView = lazyWithRetry(() => VIEW_LOADERS['werkvoorraad']().then((m) => ({ default: (m as typeof import('./views/WerkvoorraadView')).WerkvoorraadView })));
 const LazyLeaveManagementView = lazyWithRetry(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
 // Ook lazy (planner/admin-only, maar stond eager in de hoofdbundel): de
@@ -143,6 +144,7 @@ const LazyServicesView = lazyWithRetry(() => import('./views/ServicesView').then
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 const LazyPrintLeaveYearView = lazyWithRetry(() => import('./views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
 const LazyPrintDienstwisselsView = lazyWithRetry(() => import('./views/PrintDienstwisselsView').then((module) => ({ default: module.PrintDienstwisselsView })));
+const LazyPrintRapportView = lazyWithRetry(() => import('./views/PrintRapportView').then((module) => ({ default: module.PrintRapportView })));
 const LazyPrintGeleBoekView = lazyWithRetry(() => import('./views/PrintGeleBoekView').then((module) => ({ default: module.PrintGeleBoekView })));
 
 
@@ -1380,6 +1382,22 @@ export default function App() {
     );
   }
 
+  // Rapporten (register in shared/rapporten): één printblad voor elk rapport,
+  // met dezelfde filterparameters als het scherm (?print-rapport=<id>&jaar=…).
+  // Het blad haalt zijn cijfers zelf op; de gebruikerslijst komt uit de
+  // collecties (de naam van de gekozen chauffeur in de kop).
+  const printRapport = printParams?.get('print-rapport');
+  if (printRapport && currentUser && (currentUser.role === 'planner' || currentUser.role === 'admin')) {
+    if (isInitialLoad) {
+      return <PrintLaden />;
+    }
+    return (
+      <Suspense fallback={<PrintLaden />}>
+        <LazyPrintRapportView rapportId={printRapport} users={users} door={currentUser.name} />
+      </Suspense>
+    );
+  }
+
   const printVerlofDriverId = printParams?.get('print-verlof-driver');
   const printVerlofJaar = Number(printParams?.get('print-verlof-jaar'));
   if (printVerlofDriverId && Number.isInteger(printVerlofJaar) && printVerlofJaar > 2000 && currentUser) {
@@ -1915,6 +1933,7 @@ export default function App() {
               {resolvedCurrentView === 'voertuigen' && <Suspense fallback={<ViewLoader />}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'dienstopbouw' && <Suspense fallback={<ViewLoader />}><LazyDienstopbouwView currentUser={currentUser!} /></Suspense>}
               {resolvedCurrentView === 'dagafsluiting' && <Suspense fallback={<ViewLoader />}><LazyDagafsluitingView currentUser={currentUser!} users={users} /></Suspense>}
+              {resolvedCurrentView === 'rapporten' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyRapportenView currentUser={currentUser!} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'looncontrole' && <Suspense fallback={<ViewLoader />}><LazyLooncontroleView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense>}
               {resolvedCurrentView === 'beheer-omleidingen' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
