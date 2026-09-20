@@ -19,12 +19,74 @@ export type AanwezigheidSessie = {
   van: string;
   /** ISO-tijdstip van het laatste teken van leven. */
   tot: string;
+  /**
+   * Plaats van aanmelden, door de server afgeleid van het IP-adres (het adres
+   * zelf wordt niet bewaard). Ontbreekt of null = onbekend: een sessie van
+   * vóór 20-09, lokaal ontwikkelen, of een adres dat niet te plaatsen was.
+   */
+  land?: string | null;
+  regio?: string | null;
+  stad?: string | null;
 };
 
-/** Eén blok op de tijdbalk: minuten sinds middernacht, binnen één dag. */
-export type Periode = { vanMin: number; totMin: number; vanIso: string; totIso: string };
+/**
+ * Eén blok op de tijdbalk: minuten sinds middernacht, binnen één dag.
+ * `plaatsen` zijn de leesbare plaatsen van de sessies in dit blok (meestal
+ * één; meer wanneer overlappende sessies van twee netwerken samensmolten).
+ */
+export type Periode = { vanMin: number; totMin: number; vanIso: string; totIso: string; plaatsen?: string[]; buitenland?: boolean };
 
-export type DagBalk = { userId: string; naam: string; rol: string; periodes: Periode[]; totaalMin: number };
+export type DagBalk = {
+  userId: string;
+  naam: string;
+  rol: string;
+  periodes: Periode[];
+  totaalMin: number;
+  /** De verschillende plaatsen van die dag, in volgorde van eerste voorkomen. */
+  plaatsen: string[];
+  /** Minstens één sessie die dag kwam van buiten België. */
+  buitenland: boolean;
+};
+
+// --- Plaats van aanmelden ---
+
+/** Het portaal wordt in België gebruikt; alles daarbuiten valt op. */
+export const THUISLAND = 'BE';
+
+/** Komt deze sessie aantoonbaar van buiten België? Onbekend telt niet mee. */
+export const isBuitenland = (land: string | null | undefined): boolean =>
+  typeof land === 'string' && land.trim() !== '' && land.trim().toUpperCase() !== THUISLAND;
+
+let landNamen: Intl.DisplayNames | null | undefined;
+/** "FR" wordt "Frankrijk". Valt terug op de code waar Intl.DisplayNames ontbreekt. */
+export const landNaam = (code: string): string => {
+  const c = code.trim().toUpperCase();
+  if (landNamen === undefined) {
+    try {
+      landNamen = new Intl.DisplayNames(['nl-BE'], { type: 'region' });
+    } catch {
+      landNamen = null;
+    }
+  }
+  try {
+    return landNamen?.of(c) ?? c;
+  } catch {
+    return c;
+  }
+};
+
+/**
+ * Leesbare plaats: "Gent, BE" in België (kort, want dat is de gewone toestand),
+ * "Parijs, Frankrijk" daarbuiten (voluit, want dat is wat opvalt en een
+ * landcode leest niet iedereen). Null wanneer het land onbekend is.
+ */
+export const plaatsLabel = (s: { land?: string | null; stad?: string | null }): string | null => {
+  const land = (s.land ?? '').trim().toUpperCase();
+  if (!land) return null;
+  const stad = (s.stad ?? '').trim();
+  const landDeel = land === THUISLAND ? THUISLAND : landNaam(land);
+  return stad ? `${stad}, ${landDeel}` : land === THUISLAND ? 'België' : landDeel;
+};
 
 const MIN_PER_DAG = 24 * 60;
 
@@ -80,13 +142,17 @@ export const balkenVoorDag = (sessies: AanwezigheidSessie[], dag: string): DagBa
   const stukken = knipPerDag(sessies).get(dag) ?? [];
   const per = new Map<string, DagBalk>();
   for (const s of stukken) {
-    const balk = per.get(s.userId) ?? { userId: s.userId, naam: s.naam, rol: s.rol, periodes: [], totaalMin: 0 };
-    balk.periodes.push({ vanMin: s.vanMin, totMin: s.totMin, vanIso: s.vanIso, totIso: s.totIso });
+    const balk: DagBalk = per.get(s.userId) ?? { userId: s.userId, naam: s.naam, rol: s.rol, periodes: [], totaalMin: 0, plaatsen: [], buitenland: false };
+    const plaats = plaatsLabel(s);
+    balk.periodes.push({ vanMin: s.vanMin, totMin: s.totMin, vanIso: s.vanIso, totIso: s.totIso, plaatsen: plaats ? [plaats] : [], buitenland: isBuitenland(s.land) });
     per.set(s.userId, balk);
   }
   for (const balk of per.values()) {
     balk.periodes = voegSamen(balk.periodes);
     balk.totaalMin = balk.periodes.reduce((som, p) => som + Math.max(1, p.totMin - p.vanMin), 0);
+    // Na het samensmelten staan de periodes chronologisch, dus de plaatsen ook.
+    balk.plaatsen = [...new Set(balk.periodes.flatMap((p) => p.plaatsen ?? []))];
+    balk.buitenland = balk.periodes.some((p) => p.buitenland);
   }
   return [...per.values()].sort((a, b) => b.totaalMin - a.totaalMin || a.naam.localeCompare(b.naam, 'nl'));
 };
@@ -111,9 +177,13 @@ export const voegSamen = (periodes: Periode[]): Periode[] => {
         vorige.totMin = p.totMin;
         vorige.totIso = p.totIso;
       }
+      // Telefoon op 4G én bureau op wifi tegelijk: het blok draagt beide
+      // plaatsen, en één buitenlandse sessie maakt het hele blok buitenlands.
+      vorige.plaatsen = [...new Set([...(vorige.plaatsen ?? []), ...(p.plaatsen ?? [])])];
+      vorige.buitenland = Boolean(vorige.buitenland || p.buitenland);
       continue;
     }
-    uit.push({ ...p });
+    uit.push({ ...p, plaatsen: [...(p.plaatsen ?? [])], buitenland: Boolean(p.buitenland) });
   }
   return uit;
 };
@@ -122,6 +192,18 @@ export const voegSamen = (periodes: Periode[]): Periode[] => {
 export const telPerDag = (sessies: AanwezigheidSessie[]): Map<string, number> => {
   const uit = new Map<string, Set<string>>();
   for (const [dag, stukken] of knipPerDag(sessies)) {
+    uit.set(dag, new Set(stukken.map((s) => s.userId)));
+  }
+  return new Map([...uit].map(([dag, set]) => [dag, set.size]));
+};
+
+/**
+ * Per dag het aantal verschillende personen met minstens één sessie van buiten
+ * België. Dagen zonder zo'n sessie staan niet in de kaart.
+ */
+export const telBuitenlandPerDag = (sessies: AanwezigheidSessie[]): Map<string, number> => {
+  const uit = new Map<string, Set<string>>();
+  for (const [dag, stukken] of knipPerDag(sessies.filter((s) => isBuitenland(s.land)))) {
     uit.set(dag, new Set(stukken.map((s) => s.userId)));
   }
   return new Map([...uit].map(([dag, set]) => [dag, set.size]));

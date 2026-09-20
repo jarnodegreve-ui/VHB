@@ -322,7 +322,9 @@ export type Totalen = {
   gemDagpiekKw: number | null;
   /** Dagen waarvoor een piekmeting bestaat (bewaking van de dekking). */
   piekDagen: number;
-  laadMin: number;
+  /** Som van de effectieve laadtijd in minuten; null = niet berekenbaar
+   *  (geen enkele sessie met charging_periods). */
+  laadMin: number | null;
 };
 
 /** Totalen over een reeks dagrijen (maand, vrije periode, jaar). */
@@ -340,7 +342,13 @@ export const bouwTotalen = (dagen: DagRij[], sessies: SessieDetail[] = []): Tota
       if (!piek || d.piekKw > piek.kw) piek = { kw: d.piekKw, ts: d.piekTs, dag: d.dag, charging: d.piekCharging };
     }
   }
-  const laadMin = sessies.reduce((a, s) => a + (s.ongeldig ? 0 : (s.laadMin ?? 0)), 0);
+  // null = laadtijd is onbekend voor deze reeks, niet nul: geen enkele sessie
+  // droeg charging_periods (oude of onvolledige ChargEye-data). Die 0 belandde
+  // anders als een echt getal in het jaartotaal en de export (controle-ronde
+  // 09-09, nr. 1; de historiek zelf laadt de periodes sinds #524 wel mee).
+  const laadMin = sessies.some((s) => s.laadMin !== null)
+    ? sessies.reduce((a, s) => a + (s.ongeldig ? 0 : (s.laadMin ?? 0)), 0)
+    : null;
   return {
     kwh: rond1(kwh),
     sessies: sess,

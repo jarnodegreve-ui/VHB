@@ -2,7 +2,7 @@
 /**
  * Visuele regressie in CI (verbeterronde 03-09, nr. 11).
  *
- * De sleutelschermen in SCHERMEN hieronder (sinds golf 4 zestien: desktop
+ * De sleutelschermen in SCHERMEN hieronder (sinds 20-09 achttien: desktop
  * 1440×900 voor de beheer-, techniek- en loonschermen, het designsysteem en
  * Mijn dag; iPhone 13/WebKit voor chauffeur-dashboard, Mijn dag, rooster en
  * verlof; licht thema) worden met gemockte API (scripts/audit-fixtures.mjs)
@@ -46,6 +46,10 @@ const SCHERMEN = [
   { naam: 'desktop-admin-dienstopbouw', profiel: 'desktop', user: ADMIN, view: 'dienstopbouw' },
   { naam: 'desktop-admin-dagafsluiting', profiel: 'desktop', user: ADMIN, view: 'dagafsluiting' },
   { naam: 'desktop-admin-looncontrole', profiel: 'desktop', user: ADMIN, view: 'looncontrole' },
+  // Rapporten (20-09): de catalogus en één rapport uit het register (`pad` =
+  // dieper dan de view, want een rapport staat op /rapporten/<domein>/<id>).
+  { naam: 'desktop-admin-rapporten', profiel: 'desktop', user: ADMIN, view: 'rapporten' },
+  { naam: 'desktop-admin-rapport-verlofsaldo', profiel: 'desktop', user: ADMIN, view: 'rapporten', pad: '/rapporten/verlof/verlofsaldo?jaar=2026' },
   // Techniek (13-09): als technieker, de rol waarvoor de schermen gebouwd zijn.
   { naam: 'desktop-technieker-defecten', profiel: 'desktop', user: TECHNIEKER, view: 'defecten' },
   { naam: 'desktop-technieker-werkprestaties', profiel: 'desktop', user: TECHNIEKER, view: 'werkprestaties' },
@@ -134,7 +138,7 @@ async function schiet({ out, app = '.', port = '4173' }) {
       // Vandaag 09:20 (dag blijft die van de fixtures, die rekenen vanaf
       // vandaag); alleen Date staat vast, timers lopen gewoon door.
       await page.clock.setFixedTime(vasteKlok());
-      await page.goto(url, { waitUntil: 'networkidle' });
+      await page.goto(scherm.pad ? new URL(scherm.pad, url).href : url, { waitUntil: 'networkidle' });
       // Fonts + lazy chunks binnen; de korte extra wacht dekt count-ups en
       // late layout (zelfde budget als mobile-audit).
       await page.evaluate(() => document.fonts.ready);

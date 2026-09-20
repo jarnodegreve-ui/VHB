@@ -24,6 +24,8 @@ export function useActiviteitData({ session, currentUser, currentView }: {
   const [aanwezigheid, setAanwezigheid, zetAanwezigheidUitAntwoord] = useCollectieState<AanwezigheidSessie[]>([]);
   /** Naam van de migratie die nog moet draaien, of null als alles er is. */
   const [aanwezigheidMigratie, setAanwezigheidMigratie] = useState<string | null>(null);
+  /** Idem voor de plaats van aanmelden (kolommen land, regio, stad). */
+  const [aanwezigheidLocatieMigratie, setAanwezigheidLocatieMigratie] = useState<string | null>(null);
 
   const fetchActivityLog = async (accessToken = session?.access_token) => {
     try {
@@ -62,6 +64,7 @@ export function useActiviteitData({ session, currentUser, currentView }: {
       const data = await response.json();
       if (data && Array.isArray(data.sessies)) zetAanwezigheidUitAntwoord(response, data.sessies, data.sessies);
       setAanwezigheidMigratie(typeof data?.migratie === 'string' ? data.migratie : null);
+      setAanwezigheidLocatieMigratie(typeof data?.locatieMigratie === 'string' ? data.locatieMigratie : null);
     } catch (error) {
       console.error('Error fetching aanwezigheid:', error);
     }
@@ -95,7 +98,7 @@ export function useActiviteitData({ session, currentUser, currentView }: {
   };
 
   return {
-    activityLog, activityLogGeladen, loginActivity, aanwezigheid, aanwezigheidMigratie,
+    activityLog, activityLogGeladen, loginActivity, aanwezigheid, aanwezigheidMigratie, aanwezigheidLocatieMigratie,
     fetchActivityLog, fetchLoginActivity, fetchAanwezigheid, resetActiviteit,
   };
 }

@@ -342,7 +342,7 @@ export function MeterVulling({ pct, className }: { pct: number; className?: stri
 
 // === FilterChip ===
 
-type FilterChipTone = 'oker' | 'red';
+type FilterChipTone = 'oker' | 'red' | 'amber';
 
 const FILTER_CHIP_TONES: Record<FilterChipTone, { on: string; off: string }> = {
   oker: {
@@ -358,6 +358,13 @@ const FILTER_CHIP_TONES: Record<FilterChipTone, { on: string; off: string }> = {
   red: {
     on: 'bg-red-600 text-white shadow-sm shadow-red-600/20',
     off: 'border border-red-200 bg-paper/90 text-red-700 hover:bg-red-50',
+  },
+  // Waarschuwingsfilter (aanmeldingen van buiten België): uit trekt hij met een
+  // amber rand de aandacht, aan is hij een gewone gekozen chip. Een filter is
+  // een toestand, dus geen gevuld amber vlak.
+  amber: {
+    on: 'bg-keuze-vlak text-keuze-vlak-tekst ring-1 ring-hairline-strong elev-1',
+    off: 'border border-amber-200 bg-paper/90 text-amber-700 hover:bg-amber-50',
   },
 };
 

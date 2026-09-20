@@ -8,8 +8,8 @@ import { Input } from './Field';
 import { Avatar } from './Avatar';
 import { downloadBlob, cn } from '../lib/ui';
 import { csvTekst } from '../lib/csv';
-import { verlofBalans, type LeaveBalance } from '../lib/leaveBalance';
-import { isStaf } from '../types';
+import type { LeaveBalance } from '../lib/leaveBalance';
+import { verlofSaldoRijen } from '../lib/verlofSaldoRijen';
 import type { LeaveRequest, User } from '../types';
 
 type Kolom = 'naam' | 'budget' | 'gebruikt' | 'aangevraagd' | 'vrij' | 'kleinVerlet';
@@ -30,11 +30,9 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
   const [zoek, setZoek] = useState('');
   const sort = useSort<Kolom>('naam');
 
-  // Iedereen die verlof opneemt: chauffeurs en techniekers, actief, niet
-  // het beheerdersaccount. Staf houdt zijn saldo niet in het portaal bij.
-  const rijen = useMemo(() => users
-    .filter((u) => !isStaf(u.role) && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
-    .map((u) => ({ user: u, balans: verlofBalans(leaveRequests, u.id, jaar, u.verlofBudget) })), [users, leaveRequests, jaar]);
+  // Iedereen die verlof opneemt (zie verlofSaldoRijen); het rapport
+  // Verlofsaldo telt op de server met dezelfde regel.
+  const rijen = useMemo(() => verlofSaldoRijen(users, leaveRequests, jaar), [users, leaveRequests, jaar]);
   const zichtbaar = useMemo(() => {
     const q = zoek.trim().toLowerCase();
     const gefilterd = q ? rijen.filter((r) => r.user.name.toLowerCase().includes(q)) : rijen;

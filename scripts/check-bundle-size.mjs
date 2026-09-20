@@ -35,7 +35,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-const BUDGET_KB = 600; // gzip, alle JS in dist/assets samen zonder de lazy pdf/xlsx-chunks (stand 14-09: ±528 kB)
+// gzip, alle JS in dist/assets samen zonder de lazy pdf/xlsx-chunks.
+// 20-09: 600 → 615. Gemeten: main 585,9 kB (14-09 was dat ±528), met de
+// pagina Rapporten 602,0 kB (+16,1: scherm, printblad, gedeelde
+// filterbouwstenen, voorbeeld in het designsysteem, alles lui geladen). Dat
+// is 2 kB over het oude budget; 615 = de gemeten stand plus ±2 % marge, niet
+// meer. Dit totaal groeit met elk nieuw lui geladen scherm; wat de start
+// bewaakt zijn de deelbudgetten hieronder (index, vendors, warmup, zod-vrij),
+// en die zijn niet verschoven.
+const BUDGET_KB = 615;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

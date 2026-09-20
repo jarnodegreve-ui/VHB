@@ -16,6 +16,9 @@ import { Zijvak, ZijvakRij, ZijvakTekst } from '../../components/Zijvak';
 import { DUR } from '../../lib/motion';
 import { notify } from '../../lib/ui';
 import { AllesGedaan, Fout, GeenBereik, LegeLijst, NietGevonden } from '../../components/illustraties';
+import { JaarKiezer, Periodekiezer } from '../../components/Periodekiezer';
+import { Chauffeurkiezer } from '../../components/Chauffeurkiezer';
+import { Voertuigkiezer } from '../../components/Voertuigkiezer';
 
 /**
  * Designsysteem — alle bouwstenen, tokens en toestanden op één pagina
@@ -100,6 +103,10 @@ export function DesignsysteemView() {
   const sort = useSort<'naam' | 'dienst'>('naam');
   const [fout, setFout] = useState(false);
   const [datum, setDatum] = useState('');
+  const [periode, setPeriode] = useState({ van: '2026-09-01', tot: '2026-09-30' });
+  const [jaar, setJaar] = useState(2026);
+  const [chauffeur, setChauffeur] = useState('');
+  const [voertuig, setVoertuig] = useState('');
 
   const rijen = sort.sorteer([...RIJEN], (r, k) => r[k])
     .filter((r) => (filter === 'open' ? r.status === 'pending' : true))
@@ -254,6 +261,7 @@ export function DesignsysteemView() {
           <FilterChip active={filter === 'alle'} onClick={() => setFilter('alle')}>Alle</FilterChip>
           <FilterChip active={filter === 'open'} onClick={() => setFilter('open')}>Open</FilterChip>
           <FilterChip active tone="red" icon={<Bell size={14} />}>Dringend</FilterChip>
+          <FilterChip active={false} tone="amber">Buiten België: 1</FilterChip>
         </Rij>
         <Rij label="Switch">
           <Switch checked={aan} onChange={setAan} label="Meldingen" />
@@ -349,6 +357,23 @@ export function DesignsysteemView() {
           <Checkbox checked={aan} onChange={setAan} label="Ik ga akkoord" />
           <Checkbox checked={false} indeterminate onChange={() => {}} label="Gedeeltelijk" />
         </Rij>
+      </Sectie>
+
+      <Sectie id="rapportfilters" titel="Rapportfilters" uitleg="De filterbouwstenen van de pagina Rapporten, ook los bruikbaar: Periodekiezer (snelkeuze plus de twee datums, zone-loze ISO), JaarKiezer, Chauffeurkiezer en Voertuigkiezer (Select met Alle, gesorteerd, wie uit dienst is in een eigen groep). De tabel en het blad erbij zijn RapportTabel en PrintBlad.">
+        <Periodekiezer waarde={periode} onChange={setPeriode} vandaag="2026-09-15" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <JaarKiezer waarde={jaar} onChange={setJaar} huidigJaar={2026} />
+          <Chauffeurkiezer
+            users={[{ id: '1', name: 'Bart Peeters' }, { id: '2', name: 'An Claes' }, { id: '3', name: 'Tom Wouters', isActive: false }]}
+            waarde={chauffeur}
+            onChange={setChauffeur}
+          />
+          <Voertuigkiezer
+            voertuigen={[{ id: 'v1', busnr: '5226', kortNr: 26, status: 'actief' }, { id: 'v2', busnr: '5231', kortNr: 31, status: 'actief' }, { id: 'v3', busnr: '4410', kortNr: 10, status: 'verkocht' }]}
+            waarde={voertuig}
+            onChange={setVoertuig}
+          />
+        </div>
       </Sectie>
 
       <Sectie id="tabel" titel="Tabel" uitleg="TableToolbar (zoek, telling, filters, acties), sorteerbare koppen, selectie met BulkBar en paginering, hetzelfde recept in elke beheertabel.">

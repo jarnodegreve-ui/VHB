@@ -31,6 +31,9 @@ const uur = (iso: string | null): string => (iso ? tijdstip(iso).slice(11) : "")
 const WEEKDAG = ["zo", "ma", "di", "wo", "do", "vr", "za"];
 const weekdag = (dag: string) => WEEKDAG[new Date(`${dag}T00:00:00Z`).getUTCDay()] ?? "";
 const minutenAlsUren = (min: number | null): string => (min === null ? "" : `${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")}`);
+/** Minuten als decimale uren; onbekend (null) blijft een lege cel i.p.v. 0. */
+const urenUitMinuten = (min: number | null | undefined): number | "" =>
+  typeof min === "number" ? Math.round((min / 60) * 10) / 10 : "";
 const leeg = (v: number | null | undefined): number | "" => (typeof v === "number" ? v : "");
 
 export const KLASSE_TEKST: Record<string, string> = {
@@ -79,7 +82,7 @@ export const bouwPeriodeXlsx = async (opts: {
     ["Hoogste dag", t.hoogsteDag ? t.hoogsteDag.kwh : "", "kWh", t.hoogsteDag ? `${weekdag(t.hoogsteDag.dag)} ${t.hoogsteDag.dag}` : ""],
     ["Piekvermogen (kwartier)", leeg(t.piekKw), "kW", t.piekDag ? `${weekdag(t.piekDag)} ${t.piekDag} om ${uur(t.piekTs)}${typeof t.piekCharging === "number" ? `, ${t.piekCharging} bussen aan de lader` : ""}` : "geen meting"],
     ["Gemiddelde dagpiek", leeg(t.gemDagpiekKw), "kW", `over ${t.piekDagen} dagen met meting`],
-    ["Laadtijd totaal", Math.round((t.laadMin / 60) * 10) / 10, "uur", "Som van de effectieve laadtijd van alle sessies."],
+    ["Laadtijd totaal", urenUitMinuten(t.laadMin), "uur", "Som van de effectieve laadtijd van alle sessies."],
   ];
   if (opts.vorige) {
     overzicht.push([], ["Vergelijking", opts.vorige.label, "", ""]);
@@ -129,11 +132,11 @@ export const bouwHistoriekXlsx = async (opts: {
   const XLSX = await laadXlsx();
   const perMaand: unknown[][] = [["Maand", "kWh", "Laadsessies", "Mislukt", "Aankoppelingen totaal", "Laaddagen", "Gem. kWh per laaddag", "Hoogste dag kWh", "Hoogste dag", "Piek kW", "Piekdag", "Piek om", "Gem. dagpiek kW", "Dagen met piekmeting", "Laadtijd (uur)"]];
   for (const m of opts.maanden) {
-    perMaand.push([m.maand, m.kwh, m.laadbeurten, m.mislukt, m.sessies, m.laaddagen, m.gemPerLaaddag, m.hoogsteDag?.kwh ?? "", m.hoogsteDag?.dag ?? "", leeg(m.piekKw), m.piekDag ?? "", uur(m.piekTs), leeg(m.gemDagpiekKw), m.piekDagen, Math.round((m.laadMin / 60) * 10) / 10]);
+    perMaand.push([m.maand, m.kwh, m.laadbeurten, m.mislukt, m.sessies, m.laaddagen, m.gemPerLaaddag, m.hoogsteDag?.kwh ?? "", m.hoogsteDag?.dag ?? "", leeg(m.piekKw), m.piekDag ?? "", uur(m.piekTs), leeg(m.gemDagpiekKw), m.piekDagen, urenUitMinuten(m.laadMin)]);
   }
   const som = (f: (m: MaandRij) => number) => Math.round(opts.maanden.reduce((a, m) => a + f(m), 0) * 10) / 10;
   const piekste = opts.maanden.reduce<MaandRij | null>((best, m) => (m.piekKw !== null && (!best || (best.piekKw ?? 0) < m.piekKw) ? m : best), null);
-  perMaand.push(["Totaal", som((m) => m.kwh), som((m) => m.laadbeurten), som((m) => m.mislukt), som((m) => m.sessies), som((m) => m.laaddagen), "", "", "", leeg(piekste?.piekKw ?? null), piekste?.piekDag ?? "", uur(piekste?.piekTs ?? null), "", som((m) => m.piekDagen), som((m) => m.laadMin / 60)]);
+  perMaand.push(["Totaal", som((m) => m.kwh), som((m) => m.laadbeurten), som((m) => m.mislukt), som((m) => m.sessies), som((m) => m.laaddagen), "", "", "", leeg(piekste?.piekKw ?? null), piekste?.piekDag ?? "", uur(piekste?.piekTs ?? null), "", som((m) => m.piekDagen), opts.maanden.some((m) => m.laadMin !== null) ? som((m) => (m.laadMin ?? 0) / 60) : ""]);
 
   const maandKeys = opts.maanden.map((m) => m.maand);
   const matrix: unknown[][] = [["Laadpunt", "Bus", ...maandKeys, "Totaal kWh"]];

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { getDevice, type UserDevice } from "../storage.js";
+import { getDevice, listRevokedSessionIds, type UserDevice } from "../storage.js";
 import { bijUsersCacheWissel, invalidateUsersCache } from "../userCache.js";
 
 type Clock = () => number;
@@ -25,12 +25,22 @@ type Clock = () => number;
 //  - FOUTEN worden nooit gecacht en gaan ongewijzigd door naar de aanroeper:
 //    de gate blijft fail-closed (503) bij een DB-fout en fail-open uitsluitend
 //    bij een ontbrekende tabel, exact zoals vóór de cache.
+//
+// INGETROKKEN SESSIES (controle-ronde 09-09, nr. 2). De lookup hierboven hangt
+// aan de header X-Device-Token, en die kan een client weglaten of verzinnen.
+// Daarom houdt dezelfde cache ook de korte lijst bij van auth-sessies
+// (session_id uit het geverifieerde JWT) die bij een ingetrokken toestel
+// horen. Bewust géén tweede cache: zelfde TTL, zelfde generatie, zelfde
+// clear(), dus meldToestelWijziging en de gedeelde epoch wissen beide tegelijk
+// en een intrekking geldt voor header én sessie binnen dezelfde ±2 s. Eén
+// lijst voor alle gebruikers (ingetrokken toestellen zijn zeldzaam, partiële
+// index): dat is één query per 30 s per instantie, niet één per gebruiker.
 const DEFAULT_TTL_MS = 30_000;
 const DEFAULT_MAX = 500;
 
 export function makeDeviceCache(
   fetcher: (userId: string, deviceToken: string) => Promise<UserDevice | null>,
-  opts?: { ttlMs?: number; max?: number; now?: Clock },
+  opts?: { ttlMs?: number; max?: number; now?: Clock; sessieFetcher?: () => Promise<string[]> },
 ) {
   const ttlMs = opts?.ttlMs ?? DEFAULT_TTL_MS;
   const max = opts?.max ?? DEFAULT_MAX;
@@ -77,19 +87,56 @@ export function makeDeviceCache(
     return p;
   };
 
+  // De ingetrokken sessies: één gedeelde waarde naast de per-toestel-rijen,
+  // onder dezelfde TTL en generatie. Zonder sessieFetcher (tests van de
+  // toestel-lookup) is geen enkele sessie ingetrokken.
+  const sessieFetcher = opts?.sessieFetcher;
+  let sessies: { set: Set<string>; at: number } | null = null;
+  let sessiesLopend: Promise<Set<string>> | null = null;
+
+  const ingetrokkenSessies = async (): Promise<Set<string>> => {
+    if (!sessieFetcher) return new Set();
+    if (sessies && now() - sessies.at < ttlMs) return sessies.set;
+    sessies = null;
+    if (sessiesLopend) return sessiesLopend;
+    const gestart = generatie;
+    const p = (async () => {
+      try {
+        const set = new Set(await sessieFetcher());
+        if (generatie === gestart) sessies = { set, at: now() };
+        return set;
+      } finally {
+        if (sessiesLopend === p) sessiesLopend = null;
+      }
+    })();
+    sessiesLopend = p;
+    return p;
+  };
+
+  const isSessieIngetrokken = async (sessionId: string): Promise<boolean> =>
+    sessionId ? (await ingetrokkenSessies()).has(sessionId) : false;
+
   const clear = () => {
     cache.clear();
     inflight.clear();
+    sessies = null;
+    sessiesLopend = null;
     generatie += 1;
   };
 
-  return { get, clear, grootte: () => cache.size };
+  return { get, isSessieIngetrokken, clear, grootte: () => cache.size };
 }
 
-const defaultCache = makeDeviceCache((userId, deviceToken) => getDevice(userId, deviceToken));
+const defaultCache = makeDeviceCache((userId, deviceToken) => getDevice(userId, deviceToken), {
+  sessieFetcher: () => listRevokedSessionIds(),
+});
 
 /** Gecachte toestel-lookup (zie de afweging hierboven). */
 export const getDeviceCached = defaultCache.get;
+
+/** Hoort deze auth-sessie bij een ingetrokken toestel? Zelfde cache, zelfde
+ *  wis-regels; fouten gaan ongewijzigd naar de aanroeper (nooit gecacht). */
+export const isSessieIngetrokken = defaultCache.isSessieIngetrokken;
 
 /** Alleen de lokale cache wissen. */
 export const invalidateDeviceCache = defaultCache.clear;

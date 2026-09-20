@@ -67,7 +67,7 @@ visuele audits, zodat een nieuw veld overal tegelijk zichtbaar wordt.
 ## Visuele regressie (CI-job `visueel`)
 
 Op elke PR schiet `scripts/visueel-ci.mjs` de sleutelschermen uit zijn lijst
-`SCHERMEN` (sinds golf 4 zestien: desktop admin-dashboard, gebruikers,
+`SCHERMEN` (sinds 20-09 achttien, met Rapporten erbij: desktop admin-dashboard, gebruikers,
 maandplanning, werkvoorraad, designsysteem, dienstopbouw, dagafsluiting,
 looncontrole; desktop technieker gele boek, werkprestaties, voertuigen;
 Mijn dag op desktop én iPhone; iPhone/WebKit chauffeur-dashboard, rooster,
