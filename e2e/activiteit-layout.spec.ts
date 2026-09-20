@@ -77,6 +77,12 @@ const PROFIELEN = [
 
 for (const profiel of PROFIELEN) {
   test(`activiteit · ${profiel.naam}: volledige tegeltekst, namen en tijdbalken`, async ({ browser, baseURL }) => {
+    // Eén lange doorloop (tegels, as, uitklappen, filter, dagwissel). Lokaal
+    // ±4 s, maar WebKit op de CI-runner haalde de standaard 30 s niet meer:
+    // sinds 20-09 viel het desktopprofiel daar bij elke run om op de
+    // time-out, ook bij de herpoging, en kleurde main rood. Driedubbele
+    // limiet; een echte hang valt zo nog altijd om.
+    test.slow();
     const context = await browser.newContext({
       baseURL, viewport: { width: profiel.width, height: profiel.height },
       isMobile: profiel.width < 768, hasTouch: profiel.width < 768,
