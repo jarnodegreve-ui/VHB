@@ -489,7 +489,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
-          <MicroLabel className="text-slate-500 ml-1">Mijn verzoeken</MicroLabel>
+          <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
           {mySwaps.length > 0 ? (
             /* Compacte, uitklapbare rijen in een eigen scrollcontainer: deze
                lijst groeit onbegrensd mee met de historiek (wens Jarno). */
@@ -567,11 +567,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         </div>
 
         <div className="space-y-4">
-          <MicroLabel className="text-slate-500 ml-1">Openstaande dienstruilen</MicroLabel>
+          <MicroLabel className="ml-1">Openstaande dienstruilen</MicroLabel>
           {availableSwaps.length > 0 ? (
             availableSwaps.map(swap => {
               const info = shiftInfoFor(swap);
               const canRespond = canRespondToSwap(user, swap);
+              // Staf ziet hier ELKE open ruil, ook die tussen twee collega's. Met
+              // het volledige blok per kaart werd die kolom erg lang, terwijl
+              // dezelfde ruilen eronder in de beheertabel staan: daar dus de
+              // compacte regels, met de namen in de kaartkop. Wie zelf moet
+              // antwoorden (of de chauffeur) houdt het volledige blok.
+              const compactKaart = isPlanner && swap.targetDriverId !== user.id;
+              const ontvanger = swap.targetDriverId ? naamVan(swap.targetDriverId) : undefined;
               return (
                 <Card key={swap.id} className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
@@ -581,7 +588,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {info.startTime && info.endTime && (
                         <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
                       )}
-                      {isTakeoverSwap(swap) && <div className="mt-1.5"><TakeoverBadge /></div>}
+                      {compactKaart && (
+                        <p className="text-xs font-medium text-slate-500">
+                          {naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger ? ` → ${ontvanger}` : ''}
+                        </p>
+                      )}
+                      {isTakeoverSwap(swap) ? (
+                        <div className="mt-1.5"><TakeoverBadge /></div>
+                      ) : compactKaart && returnLabel(swap) && (
+                        <p className="text-xs font-medium text-blue-700 mt-1">↔ in ruil: {returnLabel(swap)}</p>
+                      )}
                     </div>
                     <span className="shrink-0">
                       {/* "Jouw antwoord" vraagt actie en blijft amber; de status is stil. */}
@@ -589,9 +605,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
-                  {/* Wie vraagt, wie geeft wat en wie nog moet antwoorden:
-                      planner/admin zien hier ook ruilen tussen twee collega's. */}
-                  <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
+                  {/* Wie vraagt, wie geeft wat en wie nog moet antwoorden. */}
+                  {compactKaart
+                    ? <RuilVerloop compact swap={voorVerloop(swap)} naamVan={naamVan} className="space-y-0.5" />
+                    : <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />}
                   {canRespond ? (
                     <div className="flex gap-2 pt-1">
                       <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAccept(swap.id)}>
@@ -645,7 +662,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       {isPlanner && (() => {
         const beheerKop = (
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
+            <MicroLabel className="ml-1">Beheer dienstruilen</MicroLabel>
             <div className="flex items-center gap-2">
               <DateInput size="sm" value={printDag} onChange={setPrintDag} aria-label="Dag uit de week van het ruiloverzicht" />
               <Button
@@ -806,7 +823,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             </span>
                             <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                           </button>
-                          <MicroLabel className="text-oker-700 mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
+                          <MicroLabel className="!text-oker-700 mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
                           <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</p>
                           {isTakeoverSwap(swap) && <div className="mt-1"><TakeoverBadge compact /></div>}
                         </div>
@@ -883,7 +900,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         return (
           <div className="space-y-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <MicroLabel className="text-slate-500 ml-1">Afgehandeld</MicroLabel>
+              <MicroLabel className="ml-1">Afgehandeld</MicroLabel>
               {alleAfgehandeld.length > afgehandeld.length && (
                 <span className="text-xs font-medium text-slate-500">nieuwste {afgehandeld.length} van {alleAfgehandeld.length}</span>
               )}
