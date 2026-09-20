@@ -633,7 +633,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             aside={(
               <InfoTip label="Uitleg bij opnieuw opbouwen" align="right">
                 <p>Opnieuw opbouwen gebruikt de matrix die al in het portaal staat, je Excel hoef je niet opnieuw te uploaden.</p>
-                <p className="mt-2">Doe dit nadat je in het Dienstoverzicht tijden of loopnummers wijzigde: zo komen die bij de chauffeurs terecht. Handmatige wijzigingen in de planning gaan daarbij verloren.</p>
+                <p className="mt-2">Na een wijziging van tijden of loopnummers in het Dienstoverzicht werkt het portaal de planning zelf bij, je hoeft daarvoor niet meer hierheen. Deze knop blijft nodig wanneer het dienstoverzicht meldt dat dat niet lukte (onbekende codes, niet-gematchte chauffeurs, of een heropbouw die ook zou wijzigen wie welke dienst rijdt), en na een aanpassing van planningscodes of gebruikersnamen.</p>
+                <p className="mt-2">Handmatige wijzigingen in de planning gaan bij opnieuw opbouwen verloren.</p>
               </InfoTip>
             )}
           />

@@ -13,6 +13,8 @@ import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { Zijvak, ZijvakRij } from '../../components/Zijvak';
+import { InfoTip } from '../../components/InfoTip';
+import { ROOSTER_MELDING_RUST_MINUTEN } from '../../../shared/roosterMelding';
 import { dienstStatistiek, formatDienstDuur } from '../../lib/dienstStatistiek';
 
 // Een deel telt alleen als het een geldige begin- én eindtijd (HH:MM) heeft.
@@ -297,6 +299,13 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   const zijvak = (
     <Zijvak
       titel="Overzicht"
+      aside={(
+        <InfoTip label="Wat gebeurt er na het opslaan?" align="right">
+          <p>Wijzig je tijden, delen of loopnummers, dan werkt het portaal de planning van de chauffeurs meteen zelf bij. Goedgekeurde dienstruilen blijven staan.</p>
+          <p className="mt-2">Chauffeurs van wie het rooster wijzigt krijgen één melding, zodra je {ROOSTER_MELDING_RUST_MINUTEN} minuten niets meer wijzigt. Meerdere diensten na elkaar aanpassen geeft dus geen reeks meldingen.</p>
+          <p className="mt-2">Lukt het bijwerken niet, dan lees je de reden in de melding na het opslaan en bouw je de planning zelf opnieuw op in Beheer roosters. Het dienstoverzicht is dan wel gewoon opgeslagen.</p>
+        </InfoTip>
+      )}
       voet={canAdminOverride ? undefined : 'Excel-import is alleen voor admins; CSV downloaden kan via het menu (…) in de kop.'}
     >
       <ZijvakRij label="Diensten" waarde={stat.diensten} mono />
@@ -578,7 +587,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               />
             </Field>
           </div>
-          <Button type="submit" variant="primary" size="lg" full className="mt-4" disabled={isSaving}>
+          {/* bezig i.p.v. disabled: na het opslaan werkt de server ook de
+              planning bij, de knop toont dat er nog iets loopt. */}
+          <Button type="submit" variant="primary" size="lg" full className="mt-4" bezig={isSaving}>
             {editingId ? 'Dienst bijwerken' : 'Dienst toevoegen'}
           </Button>
         </form>

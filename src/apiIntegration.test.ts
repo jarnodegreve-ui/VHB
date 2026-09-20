@@ -97,6 +97,15 @@ const mem = vi.hoisted(() => ({
     dag_prestaties: [] as any[],
   } as Record<string, any[]>,
   loonVolgnummer: 0,
+  // planning_version-teller voor de heropbouw-vangrail: null = niet te lezen
+  // (controle overgeslagen); een lijst = de opeenvolgende lezingen, de laatste
+  // waarde blijft gelden. Zo simuleert een test een import of ruil-doorvoer
+  // die tijdens het rekenen van de heropbouw schrijft. 'loopt' = elke lezing
+  // een andere stand (er wordt onafgebroken geschreven).
+  planningVersies: null as number[] | 'loopt' | null,
+  planningVersieTeller: 0,
+  // true = replace_planning faalt (databasefout midden in de heropbouw).
+  planningVervangenFaalt: false,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -458,7 +467,15 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         services: mem.services,
         planningCodes: mem.planningCodes,
       }),
-    replacePlanningData: async (shifts: any[]) => { mem.planning = shifts; },
+    replacePlanningData: async (shifts: any[]) => {
+      if (mem.planningVervangenFaalt) throw new Error('replace_planning: connection failure');
+      mem.planning = shifts;
+    },
+    getPlanningVersion: async () => {
+      if (mem.planningVersies === 'loopt') return ++mem.planningVersieTeller;
+      if (!mem.planningVersies || mem.planningVersies.length === 0) return null;
+      return mem.planningVersies.length > 1 ? mem.planningVersies.shift()! : mem.planningVersies[0];
+    },
     replacePlanningAndMatrix: async (rows: any[], shifts: any[]) => { mem.planningMatrix = rows; mem.planning = shifts; },
     // Herstelpunt-keten (import → historiek + snapshot → restore), in-memory.
     savePlanningMatrixHistoryEntry: async (entry: any) => {
@@ -707,6 +724,9 @@ beforeEach(() => {
   mem.authEmailBezet = null;
   mem.loonRijen = { loon_codes: [], loon_medewerkers: [], dag_afsluitingen: [], dag_prestaties: [] };
   mem.loonVolgnummer = 0;
+  mem.planningVersies = null;
+  mem.planningVersieTeller = 0;
+  mem.planningVervangenFaalt = false;
   mem.devices = [
     { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
     { userId: '4', deviceToken: 'dev-ok', name: 'Android · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
@@ -1384,6 +1404,254 @@ describe('urgente-update-mail: ontvangers server-side', () => {
     expect(sent).toBeTruthy();
     expect(sent!.to).not.toContain('attacker@evil.example');
     expect((sent!.to as string[]).every((addr) => addr.endsWith('@vhb.be'))).toBe(true);
+  });
+});
+
+describe('planning automatisch bijwerken na het dienstoverzicht', () => {
+  const WACHTRIJ = 'rooster_melding_wachtrij';
+  const CRON = { headers: { Authorization: 'Bearer test-cron-secret' } };
+  const metDienst12 = (patch: Record<string, unknown>) =>
+    mem.services.map((s: any) => (s.serviceNumber === '12' ? { ...s, ...patch } : s));
+  const automatischLog = () => mem.activity.filter((a: any) => String(a.action).startsWith('Planning automatisch') || String(a.action).startsWith('Planning niet automatisch'));
+  const roosterPushes = () => mem.pushesSent.filter((p: any) => p.payload.title === 'Rooster bijgewerkt');
+  /** Wachtrij oud genoeg maken zonder de klok te verzetten: de cron kijkt naar `laatsteWijziging`. */
+  const maakWachtrijRijp = () => {
+    const w: any = mem.appSettings[WACHTRIJ];
+    mem.appSettings[WACHTRIJ] = { ...w, laatsteWijziging: new Date(Date.now() - 11 * 60 * 1000).toISOString() };
+  };
+
+  // Uitgangspunt van elke test: een planning die klopt met matrix en
+  // dienstoverzicht (zoals in productie na een import of heropbouw).
+  // 01/07: A rijdt 12, B rijdt 14. 08/07: A rijdt 12, B heeft bv.
+  beforeEach(async () => {
+    mem.planningCodes = [
+      { code: 'bv', category: 'absence', description: 'Betaald verlof', countsAsShift: false, isPaidAbsence: true, isDayOff: false },
+      { code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true },
+    ];
+    mem.swaps = [];
+    const opbouw = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+    expect(opbouw.status).toBe(200);
+    mem.activity = [];
+    mem.pushesSent = [];
+    mem.meldingen = [];
+    mem.appSettings = {};
+  });
+
+  it('(a) een gewijzigde dienst herbouwt de planning, logt de automatische bron en stelt de melding uit', async () => {
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30', endTime: '16:30' }) });
+    expect(res.status).toBe(200);
+    expect(res.json.success).toBe(true);
+    expect(res.json.planning).toMatchObject({ status: 'bijgewerkt', gewijzigdeChauffeurs: 1, meldingUitgesteld: true, meldingNaMinuten: 10 });
+    const dienst12 = mem.planning.filter((p: any) => String(p.line) === '12');
+    expect(dienst12).toHaveLength(2);
+    for (const rij of dienst12) expect(rij).toMatchObject({ driverId: '3', startTime: '08:30', endTime: '16:30' });
+    // Dienst 14 van chauffeur B is niet aangeraakt.
+    expect(mem.planning.find((p: any) => String(p.line) === '14')).toMatchObject({ driverId: '4', startTime: '10:00', endTime: '18:00' });
+    // Het logboek noemt de bron; de handmatige knop heeft een andere actie.
+    const log = automatischLog();
+    expect(log).toHaveLength(1);
+    expect(log[0].action).toBe('Planning automatisch bijgewerkt');
+    expect(log[0].message).toContain('wijziging in het dienstoverzicht');
+    expect(mem.activity.some((a: any) => a.action === 'Planning opnieuw opgebouwd')).toBe(false);
+    // Nog geen push: chauffeur A staat in de wachtrij.
+    expect(roosterPushes()).toHaveLength(0);
+    expect(Object.keys((mem.appSettings[WACHTRIJ] as any).basis)).toEqual(['3']);
+  });
+
+  it('(b) een save zonder inhoudelijk verschil bouwt niets op', async () => {
+    const voor = mem.planning;
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: mem.services.map((s: any) => ({ ...s })) });
+    expect(res.status).toBe(200);
+    expect(res.json.planning).toEqual({ status: 'niet-nodig' });
+    expect(mem.planning).toBe(voor);
+    expect(automatischLog()).toHaveLength(0);
+    expect(mem.appSettings[WACHTRIJ]).toBeUndefined();
+  });
+
+  it('(b) verse ids bij een Excel-import van identieke diensten tellen niet als wijziging', async () => {
+    const voor = mem.planning;
+    const res = await api('POST', '/api/services', {
+      token: 'tok-admin', headers: { 'x-bulk-replace': '1' },
+      body: mem.services.map((s: any, i: number) => ({ ...s, id: `vers-${i}` })),
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.planning).toEqual({ status: 'niet-nodig' });
+    expect(mem.planning).toBe(voor);
+  });
+
+  it('(b) een gewijzigde dienst die niemand rijdt schrijft de planning niet opnieuw weg', async () => {
+    const voor = mem.planning;
+    const res = await api('POST', '/api/services', {
+      token: 'tok-planner',
+      body: mem.services.map((s: any) => (s.serviceNumber === '10' ? { ...s, startTime: '05:45' } : s)),
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.planning).toEqual({ status: 'ongewijzigd' });
+    expect(mem.planning).toBe(voor);
+    expect(roosterPushes()).toHaveLength(0);
+  });
+
+  it('(c) een geblokkeerde heropbouw laat de save slagen en meldt de blokkade', async () => {
+    mem.planningMatrix = [...mem.planningMatrix, { id: 'm-x', source_date: '2026-07-09', day_type: 'week', assignments: { 'Chauffeur A': 'XYZ' }, raw_row: '' }];
+    const voor = mem.planning;
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30' }) });
+    expect(res.status).toBe(200);
+    expect(res.json.success).toBe(true);
+    // De diensten zijn wél opgeslagen…
+    expect(mem.services.find((s: any) => s.serviceNumber === '12').startTime).toBe('08:30');
+    // …de planning niet, en het antwoord zegt waarom en waarheen.
+    expect(res.json.planning).toMatchObject({ status: 'geblokkeerd', reden: 'onbekende-codes', unknownCodes: ['XYZ'] });
+    expect(res.json.planning.melding).toContain('XYZ');
+    expect(res.json.planning.melding).toContain('Beheer roosters');
+    expect(mem.planning).toBe(voor);
+    expect(automatischLog().map((a: any) => a.action)).toEqual(['Planning niet automatisch bijgewerkt']);
+    expect(roosterPushes()).toHaveLength(0);
+  });
+
+  it('(c) weigert automatisch te herverdelen: een dienst die de heropbouw zou laten verdwijnen blokkeert', async () => {
+    // Testdienst die niet in de matrix staat (System Debug): de knop zou hem
+    // wissen, de automatische weg blijft eraf.
+    mem.planning = [...mem.planning, { id: 'test-1', driverId: '4', date: '2026-07-09', line: '15', startTime: '11:00', endTime: '19:00' }];
+    const voor = mem.planning;
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30' }) });
+    expect(res.status).toBe(200);
+    expect(res.json.planning).toMatchObject({ status: 'geblokkeerd', reden: 'toewijzing' });
+    expect(res.json.planning.melding).toContain('09/07/2026 dienst 15');
+    expect(mem.planning).toBe(voor);
+  });
+
+  it('(c) vult een gewiste planning niet stil opnieuw', async () => {
+    mem.planning = [];
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30' }) });
+    expect(res.status).toBe(200);
+    expect(res.json.planning).toMatchObject({ status: 'overgeslagen', reden: 'lege-planning' });
+    expect(mem.planning).toEqual([]);
+  });
+
+  it('(c) zonder matrix valt er niets bij te werken, en dat is geen fout', async () => {
+    mem.planningMatrix = [];
+    const voor = mem.planning;
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30' }) });
+    expect(res.status).toBe(200);
+    expect(res.json.planning).toMatchObject({ status: 'overgeslagen', reden: 'geen-matrix' });
+    expect(mem.planning).toBe(voor);
+    expect(automatischLog()).toHaveLength(0);
+  });
+
+  it('(c) een databasefout in de heropbouw laat de save niet mislukken', async () => {
+    mem.planningVervangenFaalt = true;
+    const voor = mem.planning;
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30' }) });
+    expect(res.status).toBe(200);
+    expect(res.json.success).toBe(true);
+    expect(mem.services.find((s: any) => s.serviceNumber === '12').startTime).toBe('08:30');
+    expect(res.json.planning.status).toBe('mislukt');
+    expect(res.json.planning.melding).toContain('Beheer roosters');
+    expect(mem.planning).toBe(voor);
+    expect(automatischLog().map((a: any) => a.action)).toEqual(['Planning niet automatisch bijgewerkt']);
+  });
+
+  it('(d) een goedgekeurde en een afgehandelde ruil overleven de automatische heropbouw', async () => {
+    // Overname 08/07 (goedgekeurd): dienst 12 van A naar B. Handmatige wissel
+    // 01/07 (afgehandeld): dienst 14 van B naar A. Eerst opbouwen mét de
+    // ruilen, zodat de planning de wissels al bevat zoals na een goedkeuring.
+    mem.planningMatrix = mem.planningMatrix.map((r: any) => (r.id === 'm-1' ? { ...r, assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' } } : r));
+    mem.swaps = [
+      { id: 's-goed', shiftId: 'x', requesterId: '3', targetDriverId: '4', status: 'approved', reason: '', createdAt: '2026-06-20T08:00:00', decidedAt: '2026-06-21T08:00:00', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' },
+      { id: 's-klaar', shiftId: 'y', requesterId: '4', targetDriverId: '3', status: 'completed', reason: '', createdAt: '2026-06-22T08:00:00', decidedAt: '2026-06-23T08:00:00', swapType: 'overname', shiftDate: '2026-07-01', shiftLine: '14' },
+    ];
+    await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+    mem.pushesSent = [];
+    mem.appSettings = {};
+    expect(mem.planning.find((p: any) => p.date === '2026-07-08' && String(p.line) === '12').driverId).toBe('4');
+
+    const res = await api('POST', '/api/services', {
+      token: 'tok-planner',
+      body: mem.services.map((s: any) => (s.serviceNumber === '12' ? { ...s, startTime: '08:30' } : s.serviceNumber === '14' ? { ...s, endTime: '18:30' } : s)),
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.planning.status).toBe('bijgewerkt');
+    // Nieuwe tijden, en de gewisselde diensten staan nog bij de overnemer.
+    expect(mem.planning.find((p: any) => p.date === '2026-07-08' && String(p.line) === '12')).toMatchObject({ driverId: '4', startTime: '08:30' });
+    expect(mem.planning.find((p: any) => p.date === '2026-07-01' && String(p.line) === '14')).toMatchObject({ driverId: '3', endTime: '18:30' });
+    expect(mem.planning.find((p: any) => p.date === '2026-07-01' && String(p.line) === '12')).toMatchObject({ driverId: '3', startTime: '08:30' });
+  });
+
+  it('geen salvo: drie saves na elkaar geven na de rust één melding per chauffeur', async () => {
+    for (const startTime of ['08:10', '08:20', '08:30']) {
+      const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime }) });
+      expect(res.json.planning.status).toBe('bijgewerkt');
+    }
+    expect(roosterPushes()).toHaveLength(0);
+    // Te vroeg: de cron wacht.
+    const vroeg = await api('GET', '/api/cron/rooster-meldingen', CRON);
+    expect(vroeg.json).toMatchObject({ status: 'wacht', ontvangers: 0 });
+    expect(roosterPushes()).toHaveLength(0);
+
+    maakWachtrijRijp();
+    const rijp = await api('GET', '/api/cron/rooster-meldingen', CRON);
+    expect(rijp.json).toMatchObject({ status: 'verstuurd', ontvangers: 1 });
+    expect(roosterPushes()).toHaveLength(1);
+    expect(roosterPushes()[0].userIds).toEqual(['3']);
+    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd, bekijk je diensten.');
+    // Wachtrij leeg: een volgende beurt verstuurt niets meer.
+    const daarna = await api('GET', '/api/cron/rooster-meldingen', CRON);
+    expect(daarna.json).toMatchObject({ status: 'leeg' });
+    expect(roosterPushes()).toHaveLength(1);
+  });
+
+  it('geen salvo: wie na een vergissing weer zijn oude rooster heeft, krijgt geen melding', async () => {
+    await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '09:00' }) });
+    await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:00' }) });
+    maakWachtrijRijp();
+    const res = await api('GET', '/api/cron/rooster-meldingen', CRON);
+    expect(res.json).toMatchObject({ status: 'verstuurd', ontvangers: 0 });
+    expect(roosterPushes()).toHaveLength(0);
+  });
+
+  it('de cron is afgeschermd met het cron-geheim', async () => {
+    expect((await api('GET', '/api/cron/rooster-meldingen')).status).toBe(401);
+    expect((await api('GET', '/api/cron/rooster-meldingen', { token: 'tok-admin' })).status).toBe(401);
+  });
+
+  it('de handmatige knop neemt de wachtrij mee: meteen één melding, daarna niets meer van de cron', async () => {
+    await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30' }) });
+    expect(roosterPushes()).toHaveLength(0);
+    // De knop zelf wijzigt niets meer (de planning is al actueel), maar
+    // chauffeur A wacht nog op zijn melding.
+    const knop = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+    expect(knop.status).toBe(200);
+    expect(knop.json.notifiedDrivers).toBe(1);
+    expect(roosterPushes().map((p: any) => p.userIds)).toEqual([['3']]);
+    expect(mem.activity.some((a: any) => a.action === 'Planning opnieuw opgebouwd')).toBe(true);
+    const cron = await api('GET', '/api/cron/rooster-meldingen', CRON);
+    expect(cron.json).toMatchObject({ status: 'leeg' });
+    expect(roosterPushes()).toHaveLength(1);
+  });
+
+  it('schreef iemand anders tijdens het rekenen in de planning, dan rekent de heropbouw één keer opnieuw', async () => {
+    // Lezingen: poging 1 vóór = 7, vlak voor het schrijven = 8 (import of
+    // ruil kwam ertussen) → opnieuw; poging 2 vóór = 8, daarna = 8 → schrijven.
+    mem.planningVersies = [7, 8, 8];
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30' }) });
+    expect(res.status).toBe(200);
+    expect(res.json.planning.status).toBe('bijgewerkt');
+    expect(mem.planning.filter((p: any) => String(p.line) === '12').every((p: any) => p.startTime === '08:30')).toBe(true);
+  });
+
+  it('blijft de planning wijzigen tijdens het rekenen, dan schrijft de heropbouw niet en slaagt de save toch', async () => {
+    mem.planningVersies = 'loopt';
+    const voor = mem.planning;
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30' }) });
+    expect(res.status).toBe(200);
+    expect(res.json.success).toBe(true);
+    expect(res.json.planning.status).toBe('bezet');
+    expect(res.json.planning.melding).toContain('Beheer roosters');
+    expect(mem.planning).toBe(voor);
+    // Dezelfde toestand op de knop: 409, niets geschreven.
+    const knop = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+    expect(knop.status).toBe(409);
+    expect(mem.planning).toBe(voor);
   });
 });
 

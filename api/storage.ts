@@ -287,6 +287,27 @@ export const replacePlanningData = async (data: ShiftRecord[]) => {
   if (insertError) throw insertError;
 };
 
+/**
+ * Stand van `planning_version` (supabase/2026-08-02_planning_version.sql): de
+ * teller die een statement-trigger ophoogt bij élke schrijfactie op planning
+ * of matrix (import, heropbouw, ruil-doorvoer). De heropbouw leest hem vóór
+ * het rekenen en vlak vóór het vervangen: verschilt hij, dan schreef iemand
+ * anders intussen en zou de verse set die wijziging overschrijven. null = niet
+ * te lezen (tabel ontbreekt, geen db): de aanroeper slaat de controle dan
+ * over, zoals vóór deze vangrail.
+ */
+export const getPlanningVersion = async (): Promise<number | null> => {
+  try {
+    const client = requireDb();
+    const { data, error } = await client.from('planning_version').select('version').limit(1).maybeSingle();
+    if (error) return null;
+    const versie = Number((data as { version?: unknown } | null)?.version);
+    return Number.isFinite(versie) ? versie : null;
+  } catch {
+    return null;
+  }
+};
+
 // --- Planning matrix rows ---
 
 /**

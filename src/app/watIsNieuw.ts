@@ -24,6 +24,18 @@ export const WAT_IS_NIEUW_TONEN = false;
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-20',
+    titel: 'Planning werkt zichzelf bij na het dienstoverzicht',
+    regels: {
+      staf: [
+        'Wijzig je in Beheer dienstoverzicht tijden, delen of loopnummers, dan werkt het portaal de planning van de chauffeurs meteen zelf bij; goedgekeurde dienstruilen blijven staan.',
+        'Chauffeurs krijgen één melding zodra het 10 minuten stil is, ook als je meerdere diensten na elkaar aanpast.',
+        'Lukt het bijwerken niet, dan zegt de melding na het opslaan waarom. De knop Planning opnieuw opbouwen in Beheer roosters blijft daarvoor bestaan.',
+      ],
+    },
+    bekijk: { staf: 'beheer-dienstoverzicht' },
+  },
+  {
     id: '2026-09-18',
     titel: 'Dagadministratie en werken per bus',
     regels: {
