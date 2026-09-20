@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { balkenVoorDag, duurKort, isBuitenland, knipPerDag, landNaam, nuOnline, plaatsLabel, telBuitenlandPerDag, telPerDag, voegSamen, type AanwezigheidSessie } from './aanwezigheid';
+import { balkenVoorDag, duurKort, isBuitenland, knipPerDag, landNaam, nuOnline, periodeRegels, plaatsLabel, rijStaatOpen, telBuitenlandPerDag, telPerDag, voegSamen, type AanwezigheidSessie } from './aanwezigheid';
 
 /**
  * Tijdstippen zonder zone: JS leest die als lokale tijd, dus de test meet de
@@ -223,5 +223,50 @@ describe('plaats van aanmelden', () => {
   it('een buitenlandse sessie over middernacht telt op beide dagen', () => {
     const telling = telBuitenlandPerDag([met(sessie('Marc', '2026-09-17T23:40:00', '2026-09-18T00:20:00'), LILLE)]);
     expect([...telling.keys()].sort()).toEqual(['2026-09-17', '2026-09-18']);
+  });
+
+  it('periodeRegels geeft per periode tijd, duur en plaats, en de duren tellen op tot het totaal van de rij', () => {
+    const [balk] = balkenVoorDag([
+      met(sessie('Alex', `${dag}T05:05:00`, `${dag}T05:30:00`), LILLE),
+      met(sessie('Alex', `${dag}T12:05:00`, `${dag}T13:31:00`), GENT),
+      // Een sessie van nul minuten telt, net als in het totaal, voor één minuut.
+      sessie('Alex', `${dag}T20:00:00`, `${dag}T20:00:00`),
+    ], dag);
+    const regels = periodeRegels(balk);
+    expect(regels.map((r) => [r.vanMin, r.totMin, r.duurMin, r.plaats, r.buitenland])).toEqual([
+      [5 * 60 + 5, 5 * 60 + 30, 25, `Lille, ${landNaam('FR')}`, true],
+      [12 * 60 + 5, 13 * 60 + 31, 86, 'Gent, BE', false],
+      [20 * 60, 20 * 60, 1, null, false],
+    ]);
+    expect(regels.reduce((som, r) => som + r.duurMin, 0)).toBe(balk.totaalMin);
+    expect(new Set(regels.map((r) => r.sleutel)).size).toBe(3);
+  });
+
+  it('samengesmolten periodes van twee netwerken tonen beide plaatsen op één regel', () => {
+    const [balk] = balkenVoorDag([
+      met(sessie('Jarno', `${dag}T08:00:00`, `${dag}T10:00:00`), GENT),
+      met(sessie('Jarno', `${dag}T09:00:00`, `${dag}T11:00:00`), LILLE),
+    ], dag);
+    expect(periodeRegels(balk)).toMatchObject([{ plaats: `Gent, BE en Lille, ${landNaam('FR')}`, buitenland: true, duurMin: 180 }]);
+  });
+});
+
+describe('rijStaatOpen', () => {
+  const thuis = { userId: 'a', buitenland: false };
+  const weg = { userId: 'b', buitenland: true };
+
+  it('standaard is elke rij dicht, ook die met een buitenlandse sessie', () => {
+    expect(rijStaatOpen(thuis, false, new Set())).toBe(false);
+    expect(rijStaatOpen(weg, false, new Set())).toBe(false);
+  });
+
+  it('met het filter aan staan de buitenlandse rijen open', () => {
+    expect(rijStaatOpen(weg, true, new Set())).toBe(true);
+    expect(rijStaatOpen(thuis, true, new Set())).toBe(false);
+  });
+
+  it('een tik keert de standaard om, in beide richtingen', () => {
+    expect(rijStaatOpen(thuis, false, new Set(['a']))).toBe(true);
+    expect(rijStaatOpen(weg, true, new Set(['b']))).toBe(false);
   });
 });
