@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { HARTSLAG_MS, SESSIE_GAT_MS, hoortBijSessie, magSchrijven, vergeetHartslagen } from '../api/_lib/aanwezigheid';
+import { HARTSLAG_MS, LOCATIE_MAX, SESSIE_GAT_MS, hoortBijSessie, locatieUitHeaders, magSchrijven, vergeetHartslagen } from '../api/_lib/aanwezigheid';
 
 /**
  * De twee beslissingen die bepalen hoeveel het bijhouden van aanwezigheid het
@@ -84,5 +84,79 @@ describe('hoortBijSessie', () => {
     const ochtendEinde = Date.parse('2026-09-18T06:00:00Z');
     const avondStart = Date.parse('2026-09-18T16:00:00Z');
     expect(hoortBijSessie(new Date(ochtendEinde).toISOString(), avondStart)).toBe(false);
+  });
+});
+
+/**
+ * De plaats van aanmelden komt uit headers, dus uit invoer van buitenaf. Wat
+ * er ook binnenkomt: het resultaat is een nette plaats of null, nooit een
+ * exception (de aanroeper zit in de auth-middleware) en nooit een waarde die
+ * de check-constraints in 2026-09-20_user_presence_locatie.sql zou breken.
+ */
+describe('locatieUitHeaders', () => {
+  it('leest land, regio en stad uit de Vercel-headers', () => {
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-country-region': 'VOV', 'x-vercel-ip-city': 'Gent' }))
+      .toEqual({ land: 'BE', regio: 'VOV', stad: 'Gent' });
+  });
+
+  it('decodeert een URL-gecodeerde plaatsnaam', () => {
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BR', 'x-vercel-ip-city': 'S%C3%A3o%20Paulo' })?.stad).toBe('São Paulo');
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-city': 'Sint-Pieters-Leeuw' })?.stad).toBe('Sint-Pieters-Leeuw');
+  });
+
+  it('geeft null zonder headers: lokaal en in tests zet niemand ze', () => {
+    expect(locatieUitHeaders({})).toBeNull();
+    expect(locatieUitHeaders(undefined)).toBeNull();
+    expect(locatieUitHeaders(null)).toBeNull();
+    expect(locatieUitHeaders({ 'x-vercel-ip-city': 'Gent' })).toBeNull();
+  });
+
+  it('houdt het land over wanneer regio of stad ontbreken', () => {
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'NL' })).toEqual({ land: 'NL', regio: null, stad: null });
+  });
+
+  it('zet het land in hoofdletters en weigert wat geen landcode is', () => {
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'be' })?.land).toBe('BE');
+    for (const kapot of ['', 'B', 'BEL', 'B3', 'XX', '<script>', '  ']) {
+      expect(locatieUitHeaders({ 'x-vercel-ip-country': kapot, 'x-vercel-ip-city': 'Gent' })).toBeNull();
+    }
+  });
+
+  it('overleeft een kapot gecodeerde plaatsnaam: stad null, land blijft', () => {
+    // decodeURIComponent gooit een URIError op een losse % of een afgebroken reeks.
+    for (const kapot of ['%', '%E0%A4%A', 'Gent%', '%C3']) {
+      expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-city': kapot })).toEqual({ land: 'BE', regio: null, stad: null });
+    }
+  });
+
+  it('weigert een te lange plaatsnaam in plaats van hem af te kappen', () => {
+    const opDeRand = 'x'.repeat(LOCATIE_MAX.stad);
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-city': opDeRand })?.stad).toBe(opDeRand);
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-city': `${opDeRand}x` })?.stad).toBeNull();
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-city': 'x'.repeat(5000) })?.stad).toBeNull();
+    // Gecodeerd kort genoeg lijken telt niet: de grens geldt ná het decoderen,
+    // en omgekeerd mag een lange codering van een korte naam gewoon door.
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-city': '%C3%A9'.repeat(LOCATIE_MAX.stad) })?.stad).toHaveLength(LOCATIE_MAX.stad);
+  });
+
+  it('weigert een regio die geen ISO-deel kan zijn', () => {
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-country-region': 'vov' })?.regio).toBe('VOV');
+    for (const kapot of ['VOVX', 'V-B', '', '%20']) {
+      expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-country-region': kapot })?.regio).toBeNull();
+    }
+  });
+
+  it('haalt stuurtekens en regeleindes uit de plaatsnaam', () => {
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-city': 'Gent%0D%0AX-Kwaad%3A%201' })?.stad).toBe('Gent X-Kwaad: 1');
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 'BE', 'x-vercel-ip-city': '%20%09%20' })?.stad).toBeNull();
+  });
+
+  it('neemt bij een herhaalde header de eerste waarde', () => {
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': ['BE', 'FR'], 'x-vercel-ip-city': ['Gent', 'Lille'] })).toEqual({ land: 'BE', regio: null, stad: 'Gent' });
+  });
+
+  it('gooit nooit, ook niet op onzin', () => {
+    expect(() => locatieUitHeaders({ 'x-vercel-ip-country': 42 as unknown as string })).not.toThrow();
+    expect(locatieUitHeaders({ 'x-vercel-ip-country': 42 as unknown as string })).toBeNull();
   });
 });

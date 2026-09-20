@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { balkenVoorDag, duurKort, knipPerDag, nuOnline, telPerDag, voegSamen, type AanwezigheidSessie } from './aanwezigheid';
+import { balkenVoorDag, duurKort, isBuitenland, knipPerDag, landNaam, nuOnline, plaatsLabel, telBuitenlandPerDag, telPerDag, voegSamen, type AanwezigheidSessie } from './aanwezigheid';
 
 /**
  * Tijdstippen zonder zone: JS leest die als lokale tijd, dus de test meet de
@@ -138,5 +138,90 @@ describe('duurKort', () => {
     expect(duurKort(48)).toBe('48 min');
     expect(duurKort(120)).toBe('2 u');
     expect(duurKort(372)).toBe('6 u 12');
+  });
+});
+
+describe('plaats van aanmelden', () => {
+  const dag = '2026-09-18';
+  const met = (s: AanwezigheidSessie, plaats: Partial<AanwezigheidSessie>): AanwezigheidSessie => ({ ...s, ...plaats });
+  const GENT = { land: 'BE', regio: 'VOV', stad: 'Gent' };
+  const LILLE = { land: 'FR', regio: 'HDF', stad: 'Lille' };
+
+  it('isBuitenland: alleen een bekend land dat niet België is', () => {
+    expect(isBuitenland('FR')).toBe(true);
+    expect(isBuitenland('fr')).toBe(true);
+    expect(isBuitenland('BE')).toBe(false);
+    expect(isBuitenland('be')).toBe(false);
+    // Onbekend is geen alarm: oude sessies en lokaal ontwikkelen hebben geen land.
+    expect(isBuitenland(null)).toBe(false);
+    expect(isBuitenland(undefined)).toBe(false);
+    expect(isBuitenland('')).toBe(false);
+  });
+
+  it('plaatsLabel: kort in België, het land voluit daarbuiten', () => {
+    expect(plaatsLabel(GENT)).toBe('Gent, BE');
+    expect(plaatsLabel(LILLE)).toBe(`Lille, ${landNaam('FR')}`);
+    expect(plaatsLabel({ land: 'BE', stad: null })).toBe('België');
+    expect(plaatsLabel({ land: 'NL' })).toBe(landNaam('NL'));
+    expect(plaatsLabel({ land: null, stad: 'Gent' })).toBeNull();
+    expect(plaatsLabel({})).toBeNull();
+  });
+
+  it('landNaam schrijft het land voluit en gooit niet op onzin', () => {
+    expect(landNaam('FR')).toMatch(/Frankrijk|FR/);
+    expect(() => landNaam('??')).not.toThrow();
+  });
+
+  it('balkenVoorDag draagt per persoon de plaatsen van die dag, in volgorde', () => {
+    const [balk] = balkenVoorDag([
+      met(sessie('Alex', `${dag}T12:05:00`, `${dag}T12:31:00`), LILLE),
+      met(sessie('Alex', `${dag}T05:05:00`, `${dag}T05:30:00`), GENT),
+    ], dag);
+    expect(balk.plaatsen).toEqual(['Gent, BE', `Lille, ${landNaam('FR')}`]);
+    expect(balk.buitenland).toBe(true);
+    expect(balk.periodes.map((p) => p.buitenland)).toEqual([false, true]);
+    expect(balk.periodes[1].plaatsen).toEqual([`Lille, ${landNaam('FR')}`]);
+  });
+
+  it('telt dezelfde plaats één keer en markeert een Belgische dag niet', () => {
+    const [balk] = balkenVoorDag([
+      met(sessie('Jesus', `${dag}T04:41:00`, `${dag}T05:15:00`), GENT),
+      met(sessie('Jesus', `${dag}T09:12:00`, `${dag}T09:33:00`), GENT),
+    ], dag);
+    expect(balk.plaatsen).toEqual(['Gent, BE']);
+    expect(balk.buitenland).toBe(false);
+  });
+
+  it('sessies zonder plaats (van vóór 20-09) geven een lege lijst, geen fout', () => {
+    const [balk] = balkenVoorDag([sessie('Oud', `${dag}T08:00:00`, `${dag}T09:00:00`)], dag);
+    expect(balk.plaatsen).toEqual([]);
+    expect(balk.buitenland).toBe(false);
+  });
+
+  it('overlappende sessies van twee netwerken smelten samen en houden beide plaatsen', () => {
+    const [balk] = balkenVoorDag([
+      met(sessie('Jarno', `${dag}T08:00:00`, `${dag}T10:00:00`), GENT),
+      met(sessie('Jarno', `${dag}T09:00:00`, `${dag}T11:00:00`), LILLE),
+    ], dag);
+    expect(balk.periodes).toHaveLength(1);
+    expect(balk.periodes[0].plaatsen).toEqual(['Gent, BE', `Lille, ${landNaam('FR')}`]);
+    expect(balk.periodes[0].buitenland).toBe(true);
+  });
+
+  it('telBuitenlandPerDag telt personen, niet sessies, en alleen dagen met een treffer', () => {
+    const telling = telBuitenlandPerDag([
+      met(sessie('Alex', `${dag}T05:05:00`, `${dag}T05:30:00`), LILLE),
+      met(sessie('Alex', `${dag}T12:05:00`, `${dag}T12:31:00`), LILLE),
+      met(sessie('Marc', `${dag}T21:10:00`, `${dag}T21:45:00`), { land: 'ES', stad: 'Málaga' }),
+      met(sessie('Jesus', `${dag}T04:41:00`, `${dag}T05:15:00`), GENT),
+      met(sessie('Oud', '2026-09-17T08:00:00', '2026-09-17T09:00:00'), {}),
+    ]);
+    expect(telling.get(dag)).toBe(2);
+    expect(telling.has('2026-09-17')).toBe(false);
+  });
+
+  it('een buitenlandse sessie over middernacht telt op beide dagen', () => {
+    const telling = telBuitenlandPerDag([met(sessie('Marc', '2026-09-17T23:40:00', '2026-09-18T00:20:00'), LILLE)]);
+    expect([...telling.keys()].sort()).toEqual(['2026-09-17', '2026-09-18']);
   });
 });

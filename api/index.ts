@@ -1210,7 +1210,9 @@ app.get("/api/activity/logins", authenticate, requireRole("admin"), async (req, 
 // voorgrond had. Dit is de bron voor "wie was wanneer actief" — het
 // auditlogboek kon die vraag niet beantwoorden (hoogstens één auth-regel per
 // persoon per dag). Admin-only: dit is het meest persoonlijke wat het portaal
-// bijhoudt. Standaard 14 dagen; ?days= override (1-90).
+// bijhoudt, zeker sinds elke sessie ook de plaats van aanmelden draagt (stad,
+// regio, land uit het IP-adres; het adres zelf wordt niet bewaard).
+// Standaard 14 dagen; ?days= override (1-90).
 app.get("/api/activity/presence", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
   try {
     const reqDays = Number(req.query.days);
@@ -1225,10 +1227,15 @@ app.get("/api/activity/presence", authenticate, requireRole("admin"), async (req
       .filter((s) => perId.has(s.userId))
       .map((s) => {
         const u = perId.get(s.userId)!;
-        return { userId: s.userId, naam: u.name, rol: s.rol || u.role, van: s.van, tot: s.tot };
+        return { userId: s.userId, naam: u.name, rol: s.rol || u.role, van: s.van, tot: s.tot, land: s.land, regio: s.regio, stad: s.stad };
       });
     res.setHeader("Cache-Control", "no-store");
-    res.json({ days, sessies: uit });
+    // Plaats van aanmelden: bestaan de kolommen nog niet, dan draagt geen
+    // enkele rij de sleutel. Het scherm toont dan welke migratie nog moet,
+    // in plaats van stil overal "onbekend" te zetten. Zonder rijen valt er
+    // niets af te leiden en ook niets te tonen.
+    const locatieMist = sessies.length > 0 && sessies.every((s) => !s.locatieBekend);
+    res.json({ days, sessies: uit, ...(locatieMist ? { locatieMigratie: "supabase/2026-09-20_user_presence_locatie.sql" } : {}) });
   } catch (err: any) {
     if (isMissingTableError(err)) {
       return res.json({ days: 0, sessies: [], migratie: "supabase/2026-09-18_user_presence.sql" });

@@ -74,3 +74,73 @@ export const hoortBijSessie = (laatstGezien: string | null, nu: number = Date.no
   if (t > nu) return true;
   return nu - t <= SESSIE_GAT_MS;
 };
+
+// --- Plaats van aanmelden (2026-09-20) ---
+
+/**
+ * De plaats waar een sessie vandaan komt, op stadsniveau.
+ *
+ * Bron zijn de geo-headers die Vercel op elk verzoek zet, afgeleid van het
+ * IP-adres van de bezoeker. Het IP-adres zelf komt hier nooit voorbij en wordt
+ * nergens bewaard: stad, regio en land volstaan om een aanmelding van een
+ * onverwachte plek te herkennen, en ze zijn veel minder persoonlijk dan een
+ * adres dat naar één aansluiting wijst.
+ */
+export type AanwezigheidLocatie = {
+  /** ISO 3166-1 alpha-2, hoofdletters ("BE"). */
+  land: string;
+  /** ISO 3166-2-deel zonder landprefix ("VOV"), of null. */
+  regio: string | null;
+  /** Plaatsnaam zoals Vercel hem levert ("Gent"), of null. */
+  stad: string | null;
+};
+
+/** Spiegelt de check-constraints in 2026-09-20_user_presence_locatie.sql. */
+export const LOCATIE_MAX = { regio: 3, stad: 80 } as const;
+
+type HeaderWaarde = string | string[] | undefined;
+const eersteWaarde = (w: HeaderWaarde): string => (Array.isArray(w) ? w[0] ?? '' : w ?? '');
+
+/**
+ * Plaatsnaam uit de header: URL-gecodeerd ("S%C3%A3o%20Paulo"). Alles wat geen
+ * plaatsnaam kan zijn wordt null in plaats van half opgeslagen: kapotte
+ * codering, of langer dan een echte plaatsnaam ooit is.
+ */
+const leesStad = (ruw: string): string | null => {
+  if (!ruw) return null;
+  let tekst: string;
+  try {
+    tekst = decodeURIComponent(ruw);
+  } catch {
+    return null;
+  }
+  // Stuurtekens (categorie Cc, dus ook regeleindes) horen niet in een
+  // plaatsnaam en al zeker niet in een beheerscherm.
+  tekst = tekst.replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (!tekst || tekst.length > LOCATIE_MAX.stad) return null;
+  return tekst;
+};
+
+const REGIO_PATROON = new RegExp(`^[A-Z0-9]{1,${LOCATIE_MAX.regio}}$`);
+
+/**
+ * Leest de plaats uit de request-headers. Geeft null wanneer er geen bruikbaar
+ * land is: lokaal, in tests en achter elke andere host dan Vercel ontbreken de
+ * headers gewoon, en zonder land valt er niets te zeggen over binnen of buiten
+ * België. Gooit nooit.
+ */
+export const locatieUitHeaders = (headers: Record<string, HeaderWaarde> | undefined | null): AanwezigheidLocatie | null => {
+  try {
+    if (!headers) return null;
+    const land = eersteWaarde(headers['x-vercel-ip-country']).trim().toUpperCase();
+    // Vercel laat de header weg, of stuurt "XX", voor een adres dat het niet
+    // kan plaatsen.
+    if (!/^[A-Z]{2}$/.test(land) || land === 'XX') return null;
+    const regioRuw = eersteWaarde(headers['x-vercel-ip-country-region']).trim().toUpperCase();
+    const regio = REGIO_PATROON.test(regioRuw) ? regioRuw : null;
+    const stad = leesStad(eersteWaarde(headers['x-vercel-ip-city']).trim());
+    return { land, regio, stad };
+  } catch {
+    return null;
+  }
+};

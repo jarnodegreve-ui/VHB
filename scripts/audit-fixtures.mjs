@@ -59,13 +59,24 @@ export const LOGINS = USERS.map((u, i) => ({ id: `lg${i}`, actorName: u.name, ac
 // Aanwezigheid (2026-09-18): één rij per aaneengesloten sessie. Een paar
 // mensen nu bezig, de rest verspreid over de dag en de dagen ervoor, zodat
 // de dagstrip en de tijdbalken in elk scherm iets te tonen hebben.
+// Plaats van aanmelden (2026-09-20): stad, regio en land uit het IP-adres. Op
+// mobiel internet is dat de stad van de provider, vandaar Brussel en Antwerpen.
+const PLAATSEN = [
+  { land: 'BE', regio: 'VOV', stad: 'Gent' },
+  { land: 'BE', regio: 'BRU', stad: 'Brussels' },
+  { land: 'BE', regio: 'VAN', stad: 'Antwerpen' },
+];
 export const PRESENCE = USERS.flatMap((u, i) => {
   const beginMs = Date.now() - (i % 5) * 3600e3 - 5400e3;
-  const sessies = [{ userId: u.id, naam: u.name, rol: u.role, van: new Date(beginMs).toISOString(), tot: new Date(beginMs + (i < 3 ? 5400e3 : 2700e3)).toISOString() }];
+  const plaats = PLAATSEN[i % PLAATSEN.length];
+  const sessies = [{ userId: u.id, naam: u.name, rol: u.role, van: new Date(beginMs).toISOString(), tot: new Date(beginMs + (i < 3 ? 5400e3 : 2700e3)).toISOString(), ...plaats }];
   // Elke derde persoon rijdt een gesplitste dienst: twee blokken op één dag.
+  // De laatste van hen meldde zich voor het eerste blok aan vanuit Frankrijk,
+  // zodat de badge "Buiten België" en het filter in elke audit te zien zijn.
   if (i % 3 === 0) {
     const tweede = beginMs - 6 * 3600e3;
-    sessies.push({ userId: u.id, naam: u.name, rol: u.role, van: new Date(tweede).toISOString(), tot: new Date(tweede + 3600e3).toISOString() });
+    const buitenland = i > 0 ? { land: 'FR', regio: 'HDF', stad: 'Lille' } : plaats;
+    sessies.push({ userId: u.id, naam: u.name, rol: u.role, van: new Date(tweede).toISOString(), tot: new Date(tweede + 3600e3).toISOString(), ...buitenland });
   }
   return sessies;
 });

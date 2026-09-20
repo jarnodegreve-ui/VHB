@@ -55,6 +55,8 @@ const mem = vi.hoisted(() => ({
   sessionMetaWrites: [] as any[],
   // Aanwezigheidssessies (public.user_presence, 2026-09-18).
   presence: [] as any[],
+  // Elke aanroep van noteerAanwezigheid vanuit de auth-middleware.
+  presenceSchrijf: [] as Array<{ userId: string; rol: string | null; locatie: unknown }>,
   // false = de migratie is nog niet gedraaid; getAanwezigheid gooit dan een
   // missing-table-fout, precies zoals PostgREST dat doet.
   presenceTabel: true,
@@ -427,9 +429,16 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       }
       return mem.presence
         .filter((r: any) => String(r.last_seen_at) >= sinceIso)
-        .map((r: any) => ({ userId: String(r.user_id), rol: r.role ?? null, van: String(r.started_at), tot: String(r.last_seen_at) }));
+        .map((r: any) => ({
+          userId: String(r.user_id), rol: r.role ?? null, van: String(r.started_at), tot: String(r.last_seen_at),
+          // Zoals select('*'): de plaatssleutels bestaan alleen mét de migratie
+          // 2026-09-20_user_presence_locatie.sql.
+          land: r.land ?? null, regio: r.regio ?? null, stad: r.stad ?? null, locatieBekend: 'land' in r,
+        }));
     },
-    noteerAanwezigheid: async () => {},
+    noteerAanwezigheid: async (userId: string, rol: string | null, opties?: { locatie?: unknown }) => {
+      mem.presenceSchrijf.push({ userId, rol, locatie: opties?.locatie ?? null });
+    },
     updateUserSessionMeta: async (id: string, f: any) => { mem.sessionMetaWrites.push({ id, ...f }); },
     bumpActiveSessions: async () => {},
     getPlanningMatrixRows: async (opts?: { month?: string; van?: string; tot?: string }) => {
@@ -683,6 +692,7 @@ beforeEach(() => {
   mem.lastAuthEventAt = null;
   mem.sessionMetaWrites = [];
   mem.presence = [];
+  mem.presenceSchrijf = [];
   mem.presenceTabel = true;
   mem.matrixMaandFilters = [];
   mem.leaveFilters = [];
@@ -2334,6 +2344,50 @@ describe('aanwezigheid (wie was wanneer actief)', () => {
     expect(admin.status).toBe(200);
     expect(admin.json.sessies).toEqual([]);
     expect(admin.json.migratie).toContain('user_presence');
+  });
+
+  it('geeft de plaats van aanmelden door, zonder een migratiemelding', async () => {
+    const nu = new Date().toISOString();
+    mem.presence = [
+      { id: 'p1', user_id: '3', role: 'chauffeur', started_at: nu, last_seen_at: nu, land: 'FR', regio: 'HDF', stad: 'Lille' },
+      { id: 'p2', user_id: '3', role: 'chauffeur', started_at: nu, last_seen_at: nu, land: null, regio: null, stad: null },
+    ];
+    const admin = await api('GET', '/api/activity/presence', { token: 'tok-admin' });
+    expect(admin.json.sessies).toHaveLength(2);
+    expect(admin.json.sessies[0]).toMatchObject({ land: 'FR', regio: 'HDF', stad: 'Lille' });
+    expect(admin.json.sessies[1]).toMatchObject({ land: null, stad: null });
+    expect(admin.json.locatieMigratie).toBeUndefined();
+  });
+
+  it('meldt de plaatsmigratie zolang de kolommen ontbreken, en levert de sessies gewoon', async () => {
+    const nu = new Date().toISOString();
+    mem.presence = [{ id: 'p1', user_id: '3', role: 'chauffeur', started_at: nu, last_seen_at: nu }];
+    const admin = await api('GET', '/api/activity/presence', { token: 'tok-admin' });
+    expect(admin.status).toBe(200);
+    expect(admin.json.sessies).toHaveLength(1);
+    expect(admin.json.sessies[0].land).toBeNull();
+    expect(admin.json.locatieMigratie).toContain('2026-09-20_user_presence_locatie.sql');
+  });
+
+  it('de auth-middleware geeft de plaats uit de Vercel-headers mee, en nooit een IP-adres', async () => {
+    const { vergeetHartslagen } = await import('../api/_lib/aanwezigheid');
+    vergeetHartslagen();
+    const res = await api('GET', '/api/me', {
+      token: 'tok-a',
+      headers: { 'x-vercel-ip-country': 'BE', 'x-vercel-ip-country-region': 'VOV', 'x-vercel-ip-city': 'Sint-Niklaas', 'x-forwarded-for': '203.0.113.7', 'x-real-ip': '203.0.113.7' },
+    });
+    expect(res.status).toBe(200);
+    expect(mem.presenceSchrijf).toHaveLength(1);
+    expect(mem.presenceSchrijf[0].locatie).toEqual({ land: 'BE', regio: 'VOV', stad: 'Sint-Niklaas' });
+    expect(JSON.stringify(mem.presenceSchrijf)).not.toContain('203.0.113.7');
+  });
+
+  it('zonder geo-headers (lokaal, tests) blijft de plaats null en loopt de registratie door', async () => {
+    const { vergeetHartslagen } = await import('../api/_lib/aanwezigheid');
+    vergeetHartslagen();
+    expect((await api('GET', '/api/me', { token: 'tok-a' })).status).toBe(200);
+    expect(mem.presenceSchrijf).toHaveLength(1);
+    expect(mem.presenceSchrijf[0].locatie).toBeNull();
   });
 
 });
