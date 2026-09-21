@@ -652,7 +652,7 @@ export function PlannerDashboardWidgets({
       // filteren, zoeken) staat op /werkvoorraad (15-09). Verving de regel
       // "+N niet getoond, open Verlof, Dienstruil, …".
       onSeeAll={attentionCount > 0 ? () => onNavigate('werkvoorraad') : undefined}
-      seeAllLabel={hiddenAttentionCount > 0 ? `Alle ${attentionCount} bekijken` : 'Volledige werkvoorraad'}
+      seeAllLabel={hiddenAttentionCount > 0 ? `Alle ${attentionCount} bekijken` : 'Volledig overzicht'}
     >
       <div className="space-y-1.5">
         {planningStale && (
@@ -996,7 +996,7 @@ export function PlannerDashboardWidgets({
           Op xl+ komt er een derde kolom bij ("Deze week", fase C13); onder
           xl blijft alles zoals het was. */}
       {/* items-start: het linkerpaneel rekte mee tot de hoogte van de rechterkolom
-          en toonde dan een half leeg vlak onder "Volledige werkvoorraad". */}
+          en toonde dan een half leeg vlak onder "Volledig overzicht". */}
       <div className={cn('grid grid-cols-1 items-start gap-4', panelenRechts.length > 0 && 'lg:grid-cols-2')}>
         {panelenLinks}
         {panelenRechts.length > 0 && (

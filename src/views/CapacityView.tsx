@@ -819,7 +819,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <span className="inline-flex items-center gap-1.5">
                             {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500" aria-hidden />}
                             {drv.name}
-                            {isOwn && <span className={cn(microLabelClass, 'text-oker-700')}>jij</span>}
+                            {/* Het woordje "jij" stond naast de naam; de gouden rij
+                                (en de stip) zegt het al. Alleen nog voor schermlezers,
+                                die de kleur niet horen (puntje Jarno 21-09). */}
+                            {isOwn && <span className="sr-only"> (jij)</span>}
                           </span>
                         </td>
                         {visibleDates.map((iso) => {
@@ -1037,7 +1040,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           )}>{cell.code}</Chip>
                           <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', isOwn ? 'text-oker-800' : 'text-slate-800')}>
                             {drv.name}
-                            {isOwn && <span className={cn(microLabelClass, 'ml-1.5 text-oker-700')}>jij</span>}
+                            {isOwn && <span className="sr-only"> (jij)</span>}
                           </span>
                           {/* Uren compact rechts; bij een open dienst de melding. */}
                           <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">
@@ -1079,7 +1082,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           )}>{cell?.code ?? '—'}</Chip>
                           <span className={cn('min-w-0 flex-1 truncate text-sm font-medium', isOwn ? 'text-oker-800' : 'text-slate-600')}>
                             {drv.name}
-                            {isOwn && <span className={cn(microLabelClass, 'ml-1.5 text-oker-700')}>jij</span>}
+                            {isOwn && <span className="sr-only"> (jij)</span>}
                           </span>
                           <span className="shrink-0 text-xs font-medium text-slate-500">{cell?.label ?? ''}</span>
                         </>

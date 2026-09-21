@@ -25,7 +25,7 @@ export const PAD_PER_VIEW: Record<string, string> = {
   contacten: "contacten",
   bezetting: "maandplanning",
   meldingen: "meldingen",
-  werkvoorraad: "werkvoorraad",
+  werkvoorraad: "overzicht",
   "beheer-roosters": "beheer/roosters",
   "planning-matrix": "beheer/planningsoverzicht",
   "planning-codes": "beheer/planningscodes",

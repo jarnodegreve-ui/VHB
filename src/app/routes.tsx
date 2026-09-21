@@ -61,7 +61,7 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'contacten', pad: 'contacten', label: 'Contacten', omschrijving: 'Contactgegevens van alle medewerkers.', icoon: Phone, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'bezetting', pad: 'maandplanning', label: 'Maandplanning', omschrijving: 'Wie rijdt welke dienst, zoals in het chauffeurslokaal.', icoon: Users, sectie: 'algemeen', breed: true, rollen: RIJDEND_EN_STAF },
   // — Beheer › Planning —
-  { view: 'werkvoorraad', pad: 'werkvoorraad', label: 'Overzicht', omschrijving: 'Alles wat op een beslissing van de planning wacht, op één scherm.', icoon: ListChecks, sectie: 'planning', rollen: STAF },
+  { view: 'werkvoorraad', pad: 'overzicht', label: 'Overzicht', omschrijving: 'Alles wat op een beslissing van de planning wacht, op één scherm.', icoon: ListChecks, sectie: 'planning', rollen: STAF },
   { view: 'beheer-roosters', pad: 'beheer/roosters', label: 'Beheer roosters', omschrijving: 'Importeer en herbouw de planning.', icoon: CalendarCog, sectie: 'planning', rollen: STAF },
   { view: 'planning-matrix', pad: 'beheer/planningsoverzicht', label: 'Planningsoverzicht', omschrijving: 'Controleer de geïmporteerde matrix per dag en chauffeur.', icoon: FileText, sectie: 'planning', breed: true, rollen: STAF },
   { view: 'planning-codes', pad: 'beheer/planningscodes', label: 'Planningscodes', omschrijving: 'Betekenis van matrixcodes.', icoon: Hash, sectie: 'planning', rollen: STAF },
@@ -101,8 +101,21 @@ export const ROUTES: readonly RouteDef[] = [
 const PER_VIEW = new Map<View, RouteDef>(ROUTES.map((r) => [r.view, r]));
 const PER_PAD = new Map<string, RouteDef>(ROUTES.map((r) => [r.pad, r]));
 
+/** Hernoemde paden: het oude pad blijft naar dezelfde view wijzen, zodat
+ *  bladwijzers en de `doel`-link van meldingen die al verstuurd zijn niet
+ *  in een 'pagina niet gevonden' eindigen. */
+const OUDE_PADEN = new Map<string, string>([
+  // 21-09: het scherm heet in de app al "Overzicht"; het pad zei nog werkvoorraad.
+  ['werkvoorraad', 'overzicht'],
+]);
+
 export const routeVan = (view: View): RouteDef => PER_VIEW.get(view) ?? ROUTES[0];
-export const routeVanPad = (pad: string): RouteDef | undefined => PER_PAD.get(pad);
+export const routeVanPad = (pad: string): RouteDef | undefined => {
+  const direct = PER_PAD.get(pad);
+  if (direct) return direct;
+  const nieuwPad = OUDE_PADEN.get(pad);
+  return nieuwPad ? PER_PAD.get(nieuwPad) : undefined;
+};
 
 /** Alle views die voor minstens één rol bestaan (whitelist voor deeplinks). */
 export const ALLE_VIEWS: readonly View[] = ROUTES.map((r) => r.view);

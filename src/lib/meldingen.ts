@@ -53,6 +53,17 @@ export const groepeerPerDag = (meldingen: Melding[], vandaagIso: string): Meldin
   return groepen;
 };
 
+/**
+ * Datums in de tekst van oude meldingen: tot 21-09 schreven drie sjablonen in
+ * de API de rauwe ISO-datum ("2026-10-03"), die Jarno las als jaar/maand/dag.
+ * De API stuurt nu dd/mm/jjjj (DAG_DMJ), maar de rijen die er al staan blijven
+ * zoals ze verstuurd zijn — daarom zetten we ze bij het tonen om. Alleen een
+ * volledige ISO-dag wordt geraakt; tijdstippen en losse getallen niet.
+ */
+const ISO_DAG = /\b(\d{4})-(\d{2})-(\d{2})\b(?!T)/g;
+export const datumsLeesbaar = (tekst: string | null | undefined): string =>
+  String(tekst ?? '').replace(ISO_DAG, (_, j, m, d) => `${d}/${m}/${j}`);
+
 /** 'HH:MM' in Belgische tijd voor de rij. */
 export const tijdVan = (createdAt: string): string => {
   const d = new Date(createdAt);

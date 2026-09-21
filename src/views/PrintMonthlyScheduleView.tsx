@@ -2,19 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { telDiensten } from '../lib/dienstTelling';
 import type { Shift, User } from '../types';
 import { isoWeekNumber } from '../lib/week';
-import { shiftCategory } from '../lib/shiftTime';
 import { MONTH_NAMES, serviceNumberOf } from '../lib/format';
 import { apiFetch } from '../lib/api';
 import { Button } from '../components/primitives';
 
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
-
-const CATEGORY_LABEL: Record<string, string> = {
-  ochtend: 'Vroeg',
-  middag: 'Middag',
-  avond: 'Laat',
-};
 
 export const minutesBetween = (start: string, end: string) => {
   const s = start.split(':').map(Number);
@@ -365,19 +358,9 @@ function DriverMonthSheet({
                             <span className="text-sm font-bold text-slate-700">{absence.label}</span>
                           </div>
                         ) : dayShifts.map((s, i) => {
-                          const cat = shiftCategory(s.startTime);
-                          const catColors = {
-                            ochtend: 'border-amber-200 bg-amber-50 text-amber-700',
-                            middag: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                            avond: 'border-slate-300 bg-surface-muted text-slate-700',
-                          }[cat];
-
                           return (
                             <div key={i} className="flex items-baseline justify-between gap-3">
                               <div className="flex items-baseline gap-2 min-w-0">
-                                <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${catColors}`}>
-                                  {CATEGORY_LABEL[cat]}
-                                </span>
                                 <span className="text-sm font-black text-slate-900">
                                   Dienst {serviceNumberOf(s)}
                                 </span>

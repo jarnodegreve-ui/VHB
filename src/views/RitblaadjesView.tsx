@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileText, Search, Trash2, Upload } from 'lucide-react';
-import type { User } from '../types';
+import { isStaf, type User } from '../types';
 import { notify } from '../lib/ui';
 import { openHuidigRitblad } from '../lib/ritblad';
 import { prettySize, serviceNumberOf } from '../lib/format';
@@ -121,6 +121,9 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
 
   const canEdit = currentUser.role === 'admin';
   const canDelete = currentUser.role === 'admin';
+  // Bestandsnaam, uploadmoment, uploader en grootte zijn beheerinfo: voor een
+  // chauffeur is alleen de knop Openen van belang (puntje Jarno 21-09).
+  const toonBestandsinfo = isStaf(currentUser.role);
 
   // Unmount-guard: fetchCurrent kan nog lopen terwijl de gebruiker al
   // weggenavigeerd is — geen setState/fouttoast meer op een andere pagina.
@@ -281,10 +284,14 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         </div>
       )}
     >
-      <ZijvakRij label="Bestand" waarde={<span title={current.filename}>{current.filename}</span>} />
-      <ZijvakRij label="Geüpload op" waarde={formatUploadedAt(current.uploadedAt)} mono />
-      {current.uploadedBy ? <ZijvakRij label="Door" waarde={current.uploadedBy} /> : null}
-      <ZijvakRij label="Grootte" waarde={current.sizeBytes ? prettySize(current.sizeBytes) : '—'} mono={!!current.sizeBytes} />
+      {toonBestandsinfo && (
+        <>
+          <ZijvakRij label="Bestand" waarde={<span title={current.filename}>{current.filename}</span>} />
+          <ZijvakRij label="Geüpload op" waarde={formatUploadedAt(current.uploadedAt)} mono />
+          {current.uploadedBy ? <ZijvakRij label="Door" waarde={current.uploadedBy} /> : null}
+          <ZijvakRij label="Grootte" waarde={current.sizeBytes ? prettySize(current.sizeBytes) : '—'} mono={!!current.sizeBytes} />
+        </>
+      )}
       {formatSyncedAt(syncedAt) ? <ZijvakRij label="Laatst bijgewerkt" waarde={formatSyncedAt(syncedAt)} mono /> : null}
     </Zijvak>
   ) : undefined;
