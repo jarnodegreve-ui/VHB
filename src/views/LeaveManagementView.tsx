@@ -6,7 +6,7 @@ import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
-import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge, statusAccentClass } from '../components/primitives';
+import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
@@ -19,8 +19,9 @@ import { VerlofSaldoModal } from '../components/VerlofSaldoModal';
 import type { ExtraFeestdag } from '../../shared/feestdagen';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
+import { groepeerPerJaar } from '../lib/verlofGroepen';
 import { isoDate } from '../lib/availability';
-import { formatDateHuman, formatPeriodeDMJ, formatShortDay } from '../lib/format';
+import { formatDateHuman, formatPeriodeDMJ, formatPeriodeKort, formatShortDay } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 import { apiJson } from '../lib/api';
@@ -858,6 +859,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
             emptyText="Nog geen afgehandelde aanvragen."
             requests={myHistory}
             isNew={isNewlyDecided}
+            perJaar
           />
         </div>
       </div>
@@ -1170,70 +1172,141 @@ function PeriodeVak({ label, naam, iso, actief, fout }: { label: string; naam: s
   );
 }
 
-function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, onWithdraw }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void; onWithdraw?: (id: string) => void }) {
-  // Compacte, uitklapbare rijen in een eigen scrollcontainer: de historiek
-  // groeit onbegrensd mee, dus de dichte kaarten werden onoverzichtelijk
-  // (wens Jarno). Dicht = periode + status; open = de details + acties.
+/** Eén verlofrij: dicht = periode, dagen, type en status; open = de details
+ *  en de acties. Het aantal dagen telt zoals het saldo telt (zondag en
+ *  feestdagen niet mee), zodat de rij hetzelfde zegt als de saldokaart. */
+function MyLeaveRow({ req, fresh, open, toonStatus, onToggle, onCancel, onWithdraw }: {
+  req: LeaveRequest;
+  fresh: boolean;
+  open: boolean;
+  /** Statuspil tonen? In de historiek wisselt de status, in de twee andere
+   *  secties zegt de titel hem al ("openstaand", "gepland"). */
+  toonStatus: boolean;
+  onToggle: () => void;
+  onCancel?: (id: string) => void;
+  onWithdraw?: (id: string) => void;
+}) {
+  const dagen = verlofDagen(req.startDate, req.endDate);
+  return (
+    <li className="relative">
+      {/* Net beslist: een gouden streep langs de rij. Een getinte achtergrond
+          gaf bij een historiek vol verse beslissingen één groot geel vlak. */}
+      {fresh && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-0.5 bg-oker-500" />}
+      {/* rauw: uitklapbare lijstrij (periode, type en dagen, status, chevron),
+          hele rij klikbaar; Button centreert en dwingt semibold/min-h af */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors duration-fast hover:bg-surface-soft-hover"
+      >
+        <span className="min-w-0 flex-1">
+          {/* De periode eerst en alleen: dat is waaraan je de aanvraag
+              herkent, inclusief het jaar. Al de rest staat eronder, want in
+              de smalle zijkolom van 338 px kapte een pil ernaast net het
+              jaartal af. */}
+          <span className="block truncate text-md font-semibold text-slate-900">{formatPeriodeKort(req.startDate, req.endDate)}</span>
+          <span className="mt-1 flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-body-sm text-slate-500">
+              {formatLeaveType(req.type)} · {dagen} {dagen === 1 ? 'dag' : 'dagen'}
+            </span>
+            {fresh && <Badge tone="oker">Nieuw</Badge>}
+            {toonStatus && <StatusBadge status={req.status} stil />}
+          </span>
+        </span>
+        <ChevronDown size={16} className={uitklapChevron(open, 180, 'mt-0.5 shrink-0 text-slate-400')} />
+      </button>
+      <Uitklap open={open}>
+        <div className="px-4 pb-4 pt-0.5">
+          <p className="text-xs font-medium text-slate-500">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
+          {req.comment && <p className="mt-2 text-xs italic text-slate-500">“{req.comment}”</p>}
+          {onCancel && req.status === 'approved' && (
+            <Button variant="danger" size="sm" full className="mt-3" onClick={() => onCancel(req.id)}>
+              Verlof annuleren
+            </Button>
+          )}
+          {onWithdraw && req.status === 'pending' && (
+            <Button variant="secondary" size="sm" full className="mt-3" onClick={() => onWithdraw(req.id)}>
+              Aanvraag intrekken
+            </Button>
+          )}
+        </div>
+      </Uitklap>
+    </li>
+  );
+}
+
+function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, onWithdraw, perJaar = false }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void; onWithdraw?: (id: string) => void; /** Historiek: groepeer per jaar (alleen het jongste open) en toon de status, die daar wisselt. */ perJaar?: boolean }) {
+  // Eén lijstkaart met hairlines in plaats van een stapel losse kaarten in een
+  // scrollvak: die kaarten kostten veel hoogte en de periode had geen jaar,
+  // dus een oude aanvraag was niet te plaatsen (wens Jarno 21-09). De
+  // historiek groeit bovendien onbegrensd, vandaar de jaargroepen.
   const [openIds, setOpenIds] = useState<string[]>([]);
   const toggle = (id: string) => setOpenIds((cur) => (
     cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
   ));
+  const groepen = useMemo(() => (perJaar ? groepeerPerJaar(requests) : []), [perJaar, requests]);
+  // Standaard staat het jongste jaar open en zijn oudere jaren dicht; deze
+  // lijst houdt bij welke jaren de gebruiker zelf omklapte.
+  const [omgeklapt, setOmgeklapt] = useState<string[]>([]);
+  const jaarOpen = (jaar: string, index: number) => (index === 0) !== omgeklapt.includes(jaar);
+  const klapJaar = (jaar: string) => setOmgeklapt((cur) => (cur.includes(jaar) ? cur.filter((j) => j !== jaar) : [...cur, jaar]));
+
+  const rij = (req: LeaveRequest) => (
+    <MyLeaveRow
+      key={req.id}
+      req={req}
+      fresh={isNew?.(req) ?? false}
+      open={openIds.includes(req.id)}
+      toonStatus={perJaar}
+      onToggle={() => toggle(req.id)}
+      onCancel={onCancel}
+      onWithdraw={onWithdraw}
+    />
+  );
 
   return (
-    <div className={requests.length > 0 ? 'space-y-4' : 'space-y-1.5'}>
+    <div className={requests.length > 0 ? 'space-y-2' : 'space-y-1.5'}>
       <div className="flex items-center justify-between px-1">
         <MicroLabel className="text-slate-600">{title}</MicroLabel>
         <MicroLabel>{count}</MicroLabel>
       </div>
-      <div className="max-h-[420px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
-        {requests.length > 0 ? requests.map((req) => {
-          const fresh = isNew?.(req) ?? false;
-          const open = openIds.includes(req.id);
-          return (
-            <Card key={req.id} padding="none" className={cn('relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
-              <div className={cn('absolute top-0 left-0 w-1 h-full', statusAccentClass(req.status))} />
-              {/* rauw: uitklapbare kaartkop (periode + type + status + chevron) — hele rij klikbaar */}
-              <button
-                type="button"
-                onClick={() => toggle(req.id)}
-                aria-expanded={open}
-                className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
-              >
-                <div className="min-w-0 flex items-baseline gap-2.5">
-                  <span className="text-md font-semibold text-slate-900 whitespace-nowrap">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</span>
-                  <span className="text-xs font-medium text-slate-500 truncate">{formatLeaveType(req.type)}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {fresh && <Badge tone="oker">Nieuw</Badge>}
-                  <StatusBadge status={req.status} stil />
-
-                  <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
-                </div>
-              </button>
-              <Uitklap open={open}>
-                <div className="px-4 pb-4 pt-0.5">
-                  <p className="text-xs font-medium text-slate-500">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
-                  {req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}
-                  {onCancel && req.status === 'approved' && (
-                    <Button variant="danger" size="sm" full className="mt-3" onClick={() => onCancel(req.id)}>
-                      Verlof annuleren
-                    </Button>
-                  )}
-                  {onWithdraw && req.status === 'pending' && (
-                    <Button variant="secondary" size="sm" full className="mt-3" onClick={() => onWithdraw(req.id)}>
-                      Aanvraag intrekken
-                    </Button>
-                  )}
-                </div>
-              </Uitklap>
-            </Card>
-          );
-        }) : (
-          // Eén stille regel i.p.v. een lege kaart: drie lege secties onder
-          // elkaar gaven drie grote dozen met elk één zin (ronde 3, 19-09).
-          <p className="px-1 text-body-sm text-slate-500">{emptyText}</p>
-        )}
-      </div>
+      {requests.length === 0 ? (
+        // Eén stille regel i.p.v. een lege kaart: drie lege secties onder
+        // elkaar gaven drie grote dozen met elk één zin (ronde 3, 19-09).
+        <p className="px-1 text-body-sm text-slate-500">{emptyText}</p>
+      ) : perJaar ? (
+        <div className="space-y-2">
+          {groepen.map((groep, i) => {
+            const open = jaarOpen(groep.jaar, i);
+            return (
+              <div key={groep.jaar} className="space-y-1.5">
+                {/* rauw: jaarkop als schakelaar (jaartal + aantal + chevron),
+                    hele regel klikbaar; Button maakt er een knopvlak van */}
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => klapJaar(groep.jaar)}
+                  className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors duration-fast hover:bg-surface-soft-hover"
+                >
+                  <span className="text-label text-slate-700">{groep.jaar}</span>
+                  <span className="text-xs font-medium text-slate-500">{groep.items.length}</span>
+                  <ChevronDown size={14} className={uitklapChevron(open, 180, 'ml-auto text-slate-400')} />
+                </button>
+                <Uitklap open={open}>
+                  <Card padding="none" className="overflow-hidden">
+                    <ul className="divide-y divide-hairline-subtle">{groep.items.map(rij)}</ul>
+                  </Card>
+                </Uitklap>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <Card padding="none" className="overflow-hidden">
+          <ul className="divide-y divide-hairline-subtle">{requests.map(rij)}</ul>
+        </Card>
+      )}
     </div>
   );
 }
