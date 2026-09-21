@@ -43,9 +43,13 @@ const per = (regels: VerloopRegel[]) => Object.fromEntries(regels.map((r) => [r.
 
 describe('verloopUitLog', () => {
   it('kent elke log-actie die de server voor een ruil schrijft', () => {
-    const bron = readFileSync(path.resolve(__dirname, '../api/index.ts'), 'utf8');
+    // De ruilroutes wonen sinds 21-09 in api/_lib/ruilRoutes.ts (voorheen
+    // api/index.ts); de gedeelde ruilregels in ruilRegels.ts.
+    const bron = ['../api/_lib/ruilRoutes.ts', '../api/_lib/ruilRegels.ts']
+      .map((pad) => readFileSync(path.resolve(__dirname, pad), 'utf8'))
+      .join('\n');
     for (const actie of Object.keys(RUIL_LOG_ACTIES)) {
-      expect(bron, `api/index.ts logt "${actie}" niet meer`).toContain(`"${actie}"`);
+      expect(bron, `api/_lib/ruilRoutes.ts logt "${actie}" niet meer`).toContain(`"${actie}"`);
     }
     // En omgekeerd: elke "Dienstruil …"-actie van een statuswissel is gekend.
     const gelogd = [...bron.matchAll(/"(Dienstruil (?:aangevraagd|geaccepteerd|goedgekeurd|afgewezen|geannuleerd|voltooid))"/g)].map((m) => m[1]);

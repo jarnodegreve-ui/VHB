@@ -6,7 +6,7 @@
  *  - db.js: auth.getUser → vaste token→gebruiker-mapping
  *  - storage.js: data-functies → in-memory store (mem); de pure diff/
  *    summarize-helpers blijven de échte implementatie.
- * De handlers zelf (api/index.ts) draaien dus integraal.
+ * De handlers zelf (api/index.ts en de domeinroutes in api/_lib) draaien dus integraal.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import type { AddressInfo } from 'node:net';

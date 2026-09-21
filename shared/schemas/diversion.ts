@@ -18,7 +18,7 @@ const diversionVelden = {
   endDate: optioneel(isoDatum('Vul een einddatum in als JJJJ-MM-DD')),
   // Alleen geaccepteerd omdat het formulier het record heen en terug stuurt;
   // de server negeert de waarde en leidt pdfUrl af uit Storage (`${id}.pdf`,
-  // zie metServerPdfUrl in api/index.ts) — een vrije externe link kan zo
+  // zie metServerPdfUrl in api/_lib/communicatieRoutes.ts) — een vrije externe link kan zo
   // nooit als "officiële PDF" bij een omleiding komen (controle 05-09, nr. 28).
   pdfUrl: optioneel(z.string()),
 };
