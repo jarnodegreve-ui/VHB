@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Bug, CheckCircle2, Gauge, ChevronDown, ChevronRight, DownloadCloud, EyeOff, FlaskConical, Mail, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
-import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
+import { PageHeader, PageShell } from '../../components/ui';
 import { apiFetch, apiJson } from '../../lib/api';
 import { Badge, Button, Chip, IconButton, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
@@ -12,6 +12,8 @@ import { BUILD_INFO, RELEASE, getServiceWorkerVersion } from '../../lib/appVersi
 import { isoDate } from '../../lib/availability';
 import { formatDateTimeHuman, formatDatumDMJ, formatRelatief } from '../../lib/format';
 import { OcpiCard } from './OcpiCard';
+import { HerstelPlanModal } from '../../components/HerstelPlanModal';
+import type { HerstelPlan } from '../../../shared/herstelPlan';
 
 const COLLECTION_LABELS: Record<string, string> = {
   users: 'Gebruikers',
@@ -374,6 +376,9 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   const [pendingRestore, setPendingRestore] = useState<{ exportedAt?: string; collections: Record<string, any> } | null>(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  // Droge run van de server: wat het herstel zou doen, vóór de bevestiging.
+  const [herstelPlan, setHerstelPlan] = useState<HerstelPlan | null>(null);
+  const [planLaden, setPlanLaden] = useState(false);
 
   const handleRestoreFile = async (file: File | undefined) => {
     if (!file) return;
@@ -388,11 +393,24 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         notify('Herstel geweigerd: deze back-up bevat geen admin-account.', 'error');
         return;
       }
+      setPlanLaden(true);
+      const droog = await apiFetch('/api/restore?droog=1', { method: 'POST', body: JSON.stringify(parsed) });
+      if (droog.status === 413) {
+        notify('De back-up is te groot om te herstellen via de browser. Neem contact op zodat we hem rechtstreeks kunnen terugzetten.', 'error');
+        return;
+      }
+      const antwoord = await droog.json().catch(() => ({} as any));
+      if (!droog.ok || !antwoord?.plan) {
+        notify(antwoord?.error || 'De droge herstelrun is mislukt, er is niets gewijzigd.', 'error');
+        return;
+      }
+      setHerstelPlan(antwoord.plan as HerstelPlan);
       setPendingRestore(parsed);
       setRestoreConfirmOpen(true);
     } catch {
       notify('Kon het bestand niet lezen, is het een geldig JSON-back-upbestand?', 'error');
     } finally {
+      setPlanLaden(false);
       if (restoreInputRef.current) restoreInputRef.current.value = '';
     }
   };
@@ -426,18 +444,10 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     } finally {
       setIsRestoring(false);
       setPendingRestore(null);
+      setHerstelPlan(null);
+      setRestoreConfirmOpen(false);
     }
   };
-
-  const restorePreview = pendingRestore
-    ? Object.entries(pendingRestore.collections)
-        .filter(([key]) => key in COLLECTION_LABELS)
-        .map(([key, value]) => ({
-          key,
-          label: COLLECTION_LABELS[key],
-          count: Array.isArray(value) ? value.length : (value && typeof value === 'object' ? Object.keys(value).length : 0),
-        }))
-    : [];
 
   const downloadBackup = async () => {
     try {
@@ -753,7 +763,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                 <p>Zet planning, gebruikers, verlof, dienstruilen en de andere collecties terug naar de inhoud van het bestand, gebruik dit enkel om een verlies te herstellen.</p>
                 <p className="mt-2">De audit-log en de import-historiek blijven ongewijzigd.</p>
               </InfoTip>
-              <Button variant="danger" size="sm" onClick={() => restoreInputRef.current?.click()}>
+              <Button variant="danger" size="sm" bezig={planLaden} disabled={planLaden} onClick={() => restoreInputRef.current?.click()}>
                 Kies back-upbestand…
               </Button>
             </>
@@ -793,18 +803,13 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         </div>
       </Card>
 
-      <ConfirmationModal
-        isOpen={restoreConfirmOpen}
-        onClose={() => { setRestoreConfirmOpen(false); setPendingRestore(null); }}
-        onConfirm={applyRestore}
-        title="Back-up terugzetten?"
-        variant="danger"
-        confirmText={isRestoring ? 'Bezig…' : 'Ja, alles terugzetten'}
-        message={
-          pendingRestore
-            ? `Je staat op het punt de huidige gegevens te overschrijven met de back-up${pendingRestore.exportedAt ? ` van ${new Date(pendingRestore.exportedAt).toLocaleString('nl-BE')}` : ''}. Dit wordt teruggezet: ${restorePreview.map((p) => `${p.label} (${p.count})`).join(' · ')}. Deze actie kan niet ongedaan gemaakt worden, maak desgewenst eerst een verse back-up.`
-            : ''
-        }
+      <HerstelPlanModal
+        open={restoreConfirmOpen}
+        plan={herstelPlan}
+        labels={COLLECTION_LABELS}
+        bezig={isRestoring}
+        onClose={() => { setRestoreConfirmOpen(false); setPendingRestore(null); setHerstelPlan(null); }}
+        onBevestig={applyRestore}
       />
     </PageShell>
   );
