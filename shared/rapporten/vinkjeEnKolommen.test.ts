@@ -4,7 +4,7 @@ import type { RapportDefinitie, RapportRij } from './types';
 import { RAPPORTEN, rapportVan } from './register';
 import { VASTE_PARAMS, filterParams, filtersInWoorden, filtersNaarQuery, heeftEigenFilters, leesFilters, standaardFilters } from './filters';
 import { filterSchemaVoor } from './filterSchema';
-import { NADRUK_TEKEN, csvRijen, formatWaarde, kolomIndeling, nadrukVan, sorteerRijen } from './opmaak';
+import { NADRUK_TEKEN, celToon, csvRijen, formatWaarde, kolomIndeling, sorteerRijen, toonOpBlad } from './opmaak';
 
 /**
  * Wat het fundament bij stap 2 (ziekte en verlof) bijleerde: het vinkje-filter,
@@ -107,20 +107,23 @@ describe('sorteerOp', () => {
 describe('nadruk op een ja/nee-waarde', () => {
   const boven = rapportVan('verlofbezetting')!.kolommen.find((k) => k.id === 'bovenLimiet')!;
 
-  it('Boven limiet: "ja" valt op als danger, "nee" blijft stil', () => {
-    expect(boven).toMatchObject({ type: 'janee', nadruk: { ja: 'danger' } });
-    expect(nadrukVan(boven, true)).toBe('danger');
-    expect(nadrukVan(boven, false)).toBeNull();
+  it('Boven limiet: "ja" valt op als gevaar (danger), "nee" blijft stil; zelfde tonen als elke andere kolom', () => {
+    expect(boven).toMatchObject({ type: 'janee', nadruk: { ja: 'gevaar' } });
+    expect(celToon(boven, true)).toBe('gevaar');
+    expect(celToon(boven, false)).toBeNull();
+    // Op het blad: vet met een stip ervoor, net als een statustekst ("● Vervallen").
+    expect(toonOpBlad(boven, true)).toEqual({ vet: true, teken: `${NADRUK_TEKEN} ` });
+    expect(toonOpBlad(boven, false)).toEqual({ vet: false, teken: '' });
   });
 
   it('alleen een echte boolean in een janee-kolom met nadruk valt op', () => {
-    for (const waarde of [null, undefined, '', 'ja', 1]) expect(nadrukVan(boven, waarde)).toBeNull();
-    expect(nadrukVan({ id: 'x', titel: 'X', type: 'janee' }, true)).toBeNull();
+    for (const waarde of [null, undefined, '', 'ja', 1]) expect(celToon(boven, waarde)).toBeNull();
+    expect(celToon({ id: 'x', titel: 'X', type: 'janee' }, true)).toBeNull();
     // Een andere kolomsoort luistert er niet naar, ook niet met de eigenschap erop.
-    expect(nadrukVan({ id: 'x', titel: 'X', type: 'tekst', nadruk: { ja: 'danger' } }, true)).toBeNull();
+    expect(celToon({ id: 'x', titel: 'X', type: 'tekst', nadruk: { ja: 'gevaar' } }, true)).toBeNull();
     // Ook "nee" kan de waarde zijn die aandacht vraagt (bv. "gekeurd: nee").
-    const gekeurd = { id: 'g', titel: 'Gekeurd', type: 'janee', nadruk: { nee: 'warning' } } as const;
-    expect([nadrukVan(gekeurd, false), nadrukVan(gekeurd, true)]).toEqual(['warning', null]);
+    const gekeurd = { id: 'g', titel: 'Gekeurd', type: 'janee', nadruk: { nee: 'waarschuwing' } } as const;
+    expect([celToon(gekeurd, false), celToon(gekeurd, true)]).toEqual(['waarschuwing', null]);
   });
 
   it('de tekst zelf verandert niet: scherm en CSV blijven "ja"/"nee", het teken is alleen voor het blad', () => {

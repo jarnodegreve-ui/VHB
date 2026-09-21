@@ -1,6 +1,8 @@
 import type { RapportDefinitie, RapportDomein } from './types.js';
 import { VERLOF_RAPPORTEN } from './definities/verlof.js';
 import { ZIEKTE_RAPPORTEN } from './definities/ziekte.js';
+import { VOERTUIG_RAPPORTEN } from './definities/voertuigen.js';
+import { PERSONEEL_RAPPORTEN } from './definities/personeel.js';
 
 /**
  * Dé lijst van rapporten. Nieuw rapport:
@@ -28,6 +30,7 @@ export const DOMEINEN: readonly DomeinDef[] = [
   { id: 'ziekte', titel: 'Ziekte', omschrijving: 'Ziekmeldingen in kalenderdagen, per chauffeur en per maand.' },
   { id: 'ruilen', titel: 'Ruilen', omschrijving: 'Dienstwissels en hun verloop.' },
   { id: 'voertuigen', titel: 'Voertuigen', omschrijving: 'Werken, defecten en het wagenpark.' },
+  { id: 'personeel', titel: 'Personeel', omschrijving: 'Contactgegevens, de lijst van actieven en vervaldata per chauffeur.' },
   { id: 'uren', titel: 'Gewerkte uren', omschrijving: 'Prestaties per chauffeur en per periode.', volgtLater: true },
 ];
 
@@ -37,7 +40,7 @@ export const DOMEINEN: readonly DomeinDef[] = [
  * elkaar hier niet in de weg zitten: dit bestand voegt ze alleen samen.
  * Volgorde = volgorde binnen het domein in de catalogus.
  */
-export const RAPPORTEN: readonly RapportDefinitie[] = [...VERLOF_RAPPORTEN, ...ZIEKTE_RAPPORTEN];
+export const RAPPORTEN: readonly RapportDefinitie[] = [...VERLOF_RAPPORTEN, ...ZIEKTE_RAPPORTEN, ...VOERTUIG_RAPPORTEN, ...PERSONEEL_RAPPORTEN];
 
 const PER_ID = new Map(RAPPORTEN.map((r) => [r.id, r]));
 

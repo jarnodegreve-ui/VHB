@@ -3,15 +3,18 @@ import { authenticate, requireRole } from "../middleware.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { rapportVan } from "../../shared/rapporten/register.js";
 import { filterSchemaVoor } from "../../shared/rapporten/filterSchema.js";
-import { berekenTotalen, metKolommen } from "../../shared/rapporten/opmaak.js";
+import { totalenVoor } from "../../shared/rapporten/opmaak.js";
 import type { RapportAntwoord, RapportLader } from "../../shared/rapporten/types.js";
 import { valideerRecord } from "./valideer.js";
 import { VERLOF_LADERS, ZIEKTE_LADERS } from "./rapporten/ladersZiekteVerlof.js";
+import { VOERTUIG_LADERS } from "./rapporten/voertuigLaders.js";
+import { PERSONEEL_LADERS } from "./rapporten/personeelLaders.js";
 
 /**
  * Rapporten (20-09): één namespace, GET /api/rapporten/:id. De definitie van
  * een rapport staat in shared/rapporten/register.ts; waar de bron vandaan komt
- * staat per domein in api/_lib/rapporten/laders<Domein>.ts. Het rekenwerk zelf
+ * staat per domein in api/_lib/rapporten/ (ladersZiekteVerlof.ts, voertuigLaders.ts,
+ * personeelLaders.ts). Het rekenwerk zelf
  * is een pure functie in api/_lib/rapporten/ (bron + filters → rijen + bereik),
  * de route vult totalen en tijdstip aan.
  *
@@ -30,6 +33,8 @@ import { VERLOF_LADERS, ZIEKTE_LADERS } from "./rapporten/ladersZiekteVerlof.js"
 export const RAPPORT_LADERS: Record<string, RapportLader> = {
   ...VERLOF_LADERS,
   ...ZIEKTE_LADERS,
+  ...VOERTUIG_LADERS,
+  ...PERSONEEL_LADERS,
 };
 
 export function mountRapportRoutes(app: express.Express) {
@@ -42,14 +47,16 @@ export function mountRapportRoutes(app: express.Express) {
     if (!filters) return;
 
     try {
-      const { rijen, bereik, kolommen, totalen } = await lader(filters);
+      const { rijen, bereik, kolommen, totalen, peildatum } = await lader(filters);
       const antwoord: RapportAntwoord = {
         rijen,
         ...(kolommen ? { kolommen } : {}),
-        // Sommen volgens de (eventueel meegeleverde) kolommen; wat geen som is
-        // (unieke chauffeurs over de hele periode) geeft de lader zelf mee.
-        totalen: { ...berekenTotalen(metKolommen(def, kolommen), rijen), ...(totalen ?? {}) },
+        // De totaalrij volgens de (eventueel meegeleverde) kolommen: som, kleinste, grootste of
+        // gemiddelde uit de definitie; wat niet uit de rijen te rekenen is (unieke chauffeurs
+        // over de hele periode) geeft de lader zelf mee, en dat wint per kolom.
+        totalen: totalenVoor(def, rijen, { kolommen, vanLader: totalen }),
         bereik,
+        ...(peildatum ? { peildatum } : {}),
         gegenereerdOp: new Date().toISOString(),
       };
       res.setHeader("Cache-Control", "no-store");

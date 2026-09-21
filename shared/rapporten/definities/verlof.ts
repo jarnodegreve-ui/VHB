@@ -124,7 +124,7 @@ const VERLOFBEZETTING: RapportDefinitie = {
     { id: 'dag', titel: 'Dag', type: 'tekst', sorteerOp: 'datum', smal: 'onderEerste' },
     { id: 'afwezig', titel: 'Afwezig', type: 'getal' },
     { id: 'limiet', titel: 'Limiet', type: 'getal' },
-    { id: 'bovenLimiet', titel: 'Boven limiet', kort: 'Boven', type: 'janee', nadruk: { ja: 'danger' } },
+    { id: 'bovenLimiet', titel: 'Boven limiet', kort: 'Boven', type: 'janee', nadruk: { ja: 'gevaar' } },
     { id: 'namen', titel: 'Namen', type: 'tekst', lang: true, smal: 'achteraan' },
   ],
   sortering: { kolom: 'datum', richting: 'asc' },

@@ -116,13 +116,14 @@ export const onbekendLabel = (id: string): string => `Onbekend (${id})`;
  * De gekozen filters in woorden, voor de kop van het printblad en de
  * bestandsnaam-loze samenvatting op het scherm: ["Jaar 2026", "Medewerker: Jan
  * Peeters"]. `namen` zet een id om naar een naam; zonder treffer blijft het id
- * zichtbaar als "Onbekend (<id>)".
+ * zichtbaar als "Onbekend (<id>)". Een rapport dat tegenover vandaag rekent
+ * sluit af met zijn peildatum.
  */
 export const filtersInWoorden = (
   def: RapportDefinitie,
   filters: RapportFilters,
-  namen: { chauffeur?: (id: string) => string | undefined; voertuig?: (id: string) => string | undefined } = {},
-): string[] => def.filters.map((f): string | null => {
+  namen: { chauffeur?: (id: string) => string | undefined; voertuig?: (id: string) => string | undefined; /** Peildatum van de server (ISO), voor een rapport met `peildatum`. */ peildatum?: string } = {},
+): string[] => [...def.filters.map((f): string | null => {
   switch (f.soort) {
     case 'periode': return filters.van && filters.tot ? `Periode ${dmj(filters.van)} t/m ${dmj(filters.tot)}` : 'Periode niet gekozen';
     case 'jaar': return `Jaar ${filters.jaar ?? ''}`.trim();
@@ -138,7 +139,7 @@ export const filtersInWoorden = (
     // Een vinkje dat uit staat zegt niets: het staat alleen op het blad als het aan staat.
     case 'vinkje': return filters.vinkjes?.[f.id] ? f.label : null;
   }
-}).filter((woord): woord is string => woord !== null);
+}).filter((woord): woord is string => woord !== null), ...(def.peildatum && namen.peildatum ? [`Peildatum ${dmj(namen.peildatum)}`] : [])];
 
 /** Stuk voor de bestandsnaam: de periode of het jaar, machineleesbaar (ISO). */
 export const bestandsPeriode = (def: RapportDefinitie, filters: RapportFilters): string => {

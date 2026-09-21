@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { Printer } from 'lucide-react';
 import type { RapportDefinitie, RapportRij } from '../../shared/rapporten/types';
-import { NADRUK_TEKEN, formatWaarde, heeftTotaalrij, isRechts, nadrukVan, sorteerRijen } from '../../shared/rapporten/opmaak';
+import { formatWaarde, heeftTotaalrij, isRechts, sorteerRijen, toonOpBlad } from '../../shared/rapporten/opmaak';
 import { BrandLogo } from './BrandLogo';
 import { Button } from './primitives';
 
@@ -58,6 +58,7 @@ const bladCss = (richting: 'staand' | 'liggend', voet: string) => `
   .printblad-tabel tr { break-inside: avoid; page-break-inside: avoid; }
   .printblad-tabel td.nadruk { font-weight: 700; white-space: nowrap; }
   .printblad-tabel tr.totaal td { border-top: 0.75pt solid var(--color-slate-900); border-bottom: 1.5pt solid var(--color-slate-900); font-weight: 700; }
+  .printblad-tabel td:first-child { white-space: nowrap; }
   @media print {
     @page {
       size: A4 ${richting === 'liggend' ? 'landscape' : 'portrait'};
@@ -161,11 +162,12 @@ export function PrintTabel({ def, rijen, totalen, leegTekst = 'Geen gegevens voo
         {gesorteerd.map((rij) => (
           <tr key={rij.id}>
             {def.kolommen.map((k) => {
-              // Nadruk op papier: vet met een stip ervoor, geen kleur (een blad is vaak zwart-wit).
-              const nadruk = nadrukVan(k, rij[k.id]);
+              // Toon op papier: vet, en bij een statuswaarde een stip ervoor; geen kleur (een blad is vaak
+              // zwart-wit). Eén regel voor elke soort toon: `nadruk`, `tonen`, `signaal` en `leeg`.
+              const { vet, teken } = toonOpBlad(k, rij[k.id]);
               return (
-                <td key={k.id} className={[isRechts(k) ? 'rechts' : '', nadruk ? 'nadruk' : ''].filter(Boolean).join(' ') || undefined}>
-                  {nadruk ? `${NADRUK_TEKEN} ` : ''}{formatWaarde(k, rij[k.id])}
+                <td key={k.id} className={[isRechts(k) ? 'rechts' : '', vet ? 'nadruk' : ''].filter(Boolean).join(' ') || undefined}>
+                  {teken}{formatWaarde(k, rij[k.id])}
                 </td>
               );
             })}

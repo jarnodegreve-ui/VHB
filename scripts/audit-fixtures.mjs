@@ -9,6 +9,8 @@
  * valideren) en elke /api/**-call wordt met vaste data beantwoord.
  */
 
+import { rapportFixture } from './fixtures-rapporten-wagenpark-personeel.mjs';
+
 export const SESSION_KEY = 'sb-localhost-auth-token';
 
 /** Vandaag + n dagen als yyyy-mm-dd (lokale tijd, zoals de app rekent). */
@@ -424,6 +426,11 @@ export function apiFixtures(user, extra) {
       const dag = DAG_AFSLUITINGEN.find((d) => d.datum === datum);
       if (!dag) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Deze dag is nog niet geopend.', inPlanning: true, voorstel: USERS.filter((u) => u.role === 'chauffeur').map((u) => ({ userId: u.id, naam: u.name, planningCode: u.id === '42' ? '2101' : 'vrij' })) }) });
       return json({ dag, rijen: DAG_PRESTATIES.map((r) => ({ ...r, datum })), planningAfwijkingen: [], ontbrekendeCodes: [], inPlanning: true });
+    }
+    // Rapporten van voertuigen en personeel: eigen bestand, kent het rapport het niet dan zoekt dit verder.
+    if (p.includes('/api/rapporten/')) {
+      const antwoord = rapportFixture(p.split('/api/rapporten/')[1], url.searchParams);
+      if (antwoord) return json(antwoord);
     }
     if (p.endsWith('/api/rapporten/ziekte-kalenderdagen')) return json(RAPPORT_ZIEKTE_KALENDERDAGEN(url.searchParams.get('chauffeur') || ''));
     if (p.endsWith('/api/rapporten/verlofbezetting')) return json(RAPPORT_VERLOFBEZETTING(url.searchParams.get('van') || undefined, url.searchParams.get('tot') || undefined, url.searchParams.get('bovenLimiet') === '1'));

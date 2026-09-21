@@ -1,4 +1,5 @@
 import type { RapportDefinitie, RapportFilters } from '../../shared/rapporten/types';
+import { formatDatumDMJ } from '../lib/format';
 import { Field, Select } from './Field';
 import { FilterChip } from './primitives';
 import { JaarKiezer, Periodekiezer } from './Periodekiezer';
@@ -16,7 +17,7 @@ import { Voertuigkiezer, type KiesbaarVoertuig } from './Voertuigkiezer';
  */
 type Persoon = { id: string; name: string; isActive?: boolean };
 
-export function RapportFilterbalk({ def, filters, onChange, users, voertuigen, vandaag, jaarVanaf }: {
+export function RapportFilterbalk({ def, filters, onChange, users, voertuigen, vandaag, jaarVanaf, peildatum }: {
   def: RapportDefinitie;
   filters: RapportFilters;
   onChange: (wijziging: Partial<Omit<RapportFilters, 'keuzes' | 'vinkjes'>> & { keuzes?: Record<string, string>; vinkjes?: Record<string, boolean> }) => void;
@@ -26,8 +27,10 @@ export function RapportFilterbalk({ def, filters, onChange, users, voertuigen, v
   vandaag: string;
   /** Eerste jaar met gegevens, voor de jaarkeuze. */
   jaarVanaf?: number;
+  /** Alleen bij een rapport dat tegenover vandaag rekent (leeftijd, resterende dagen): de dag waartegen gerekend is (ISO). */
+  peildatum?: string;
 }) {
-  if (def.filters.length === 0) return null;
+  if (def.filters.length === 0 && !peildatum) return null;
   const veld = 'sm:w-52';
   return (
     <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-start">
@@ -71,6 +74,14 @@ export function RapportFilterbalk({ def, filters, onChange, users, voertuigen, v
             );
         }
       })}
+      {peildatum ? (
+        // Geen veld: de peildatum is altijd vandaag en staat hier alleen te lezen,
+        // op de lijn van de keuzes ernaast.
+        <div className="space-y-1.5">
+          <p className="text-label">Peildatum</p>
+          <p className="flex min-h-[2.875rem] items-center text-base font-medium text-slate-800 sm:min-h-[2.625rem] sm:text-sm sm:pointer-fine:min-h-[2.375rem]">{formatDatumDMJ(peildatum)}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

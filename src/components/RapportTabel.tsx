@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { KolomNadruk, RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from '../../shared/rapporten/types';
-import { formatWaarde, heeftTotaalrij, isGetalKolom, isRechts, kolomIndeling, nadrukVan, onderEersteTekst, sorteerRijen } from '../../shared/rapporten/opmaak';
+import type { KolomToon, RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from '../../shared/rapporten/types';
+import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRechts, kolomIndeling, onderEersteTekst, sorteerRijen } from '../../shared/rapporten/opmaak';
 import { cn } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Badge, type BadgeTone } from './primitives';
@@ -28,9 +28,10 @@ const PER_PAGINA = 50;
 /** Vanaf hier passen de kolommen naast elkaar (md); eronder geldt de smalle indeling. */
 const BREED_VANAF = 768;
 
-/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, ja/nee, datum, tekst, lange tekst (`lang`). */
+/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, ja/nee, datum, tekst, lopende tekst (`lang`) achter het scrollen. */
 // `lang` = 11,5 rem: zo breed als er op 375 px naast de vaste eerste kolom past,
-// zodat een opmerking na het scrollen in haar geheel in beeld staat.
+// zodat een opmerking na het scrollen in haar geheel in beeld staat. Een `lang`-kolom
+// die vóór het scrollen staat (de omschrijving van een defect) houdt de gewone tekstmaat.
 // Ja/nee is zo smal als een cijfer ("ja", "nee", of een pil met "ja" erin).
 const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, janee: 3.75, kort: 5.5, tekst: 8, lang: 11.5 };
 const smalleBreedte = (k: RapportKolom, eerste: boolean): number => {
@@ -38,16 +39,8 @@ const smalleBreedte = (k: RapportKolom, eerste: boolean): number => {
   if (isGetalKolom(k)) return SMAL_BREEDTE.getal;
   if (k.type === 'janee') return SMAL_BREEDTE.janee;
   if (k.type !== 'tekst') return SMAL_BREEDTE.kort;
-  return k.lang ? SMAL_BREEDTE.lang : SMAL_BREEDTE.tekst;
+  return k.lang && k.smal === 'achteraan' ? SMAL_BREEDTE.lang : SMAL_BREEDTE.tekst;
 };
-
-/**
- * Nadruk uit de definitie → toon van de statuspil. Een pil alleen voor wat
- * aandacht vraagt (ronde 3): de waarde zonder nadruk blijft stille tekst.
- * Contrast nagerekend op het tabelvlak: rood 6,86:1 licht en 7,33:1 donker,
- * amber 4,88:1 en 9,09:1. Nooit goud.
- */
-const NADRUK_TOON: Record<KolomNadruk, BadgeTone> = { danger: 'red', warning: 'amber' };
 
 /**
  * De eerste kolom (de naam) blijft onder xl links staan terwijl de cijfers
@@ -64,11 +57,49 @@ const VASTE_KOLOM = 'max-xl:sticky max-xl:left-0 max-xl:z-[1] max-xl:bg-paper';
 const VASTE_KOP = 'max-xl:shadow-[0_1px_0_var(--color-slate-200)]';
 const VASTE_VOET = 'max-xl:shadow-[0_-1px_0_var(--color-hairline-strong)]';
 
-const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerste: boolean, smal: boolean): string => cn(
-  eerste ? cn('font-medium text-slate-800', VASTE_KOLOM, smal ? 'pl-4 pr-2' : 'whitespace-nowrap') : cn(smal ? 'px-2' : kolom.type === 'tekst' && 'sm:min-w-36'),
+/**
+ * Toon van een cel (`celToon`: `tonen`, `nadruk` op ja/nee, `signaal`, `leeg`).
+ * Wat aandacht vraagt is een pil (vervallen of een overschrijding = danger,
+ * binnenkort = amber; ronde 3: een pil alleen voor wat aandacht vraagt), een
+ * rusttoestand een puntje met tekst; een getal met een grens kleurt zelf.
+ * Contrast nagerekend op het tabelvlak: rood 6,86:1 licht en 7,33:1 donker,
+ * amber 4,88:1 en 9,09:1. Nooit goud.
+ */
+const TOON_BADGE: Record<KolomToon, { tone: BadgeTone; kaal: boolean }> = {
+  gevaar: { tone: 'red', kaal: false },
+  waarschuwing: { tone: 'amber', kaal: false },
+  aandacht: { tone: 'amber', kaal: true },
+  goed: { tone: 'emerald', kaal: true },
+  rust: { tone: 'slate', kaal: true },
+};
+/** Een getal met een grens of een ontbrekende waarde met een toon kleurt zelf, zonder pil. */
+const TOON_TEKST: Partial<Record<KolomToon, string>> = { gevaar: 'font-semibold text-red-700', waarschuwing: 'font-semibold text-amber-700', aandacht: 'font-semibold text-amber-700' };
+
+const celInhoud = (kolom: RapportKolom, waarde: RapportWaarde | undefined) => {
+  const toon = isPilKolom(kolom) ? celToon(kolom, waarde) : null;
+  if (!toon) return formatWaarde(kolom, waarde);
+  const { tone, kaal } = TOON_BADGE[toon];
+  // De pil zit strak in de cel: haar eigen hoogte mag de rij niet hoger maken dan haar buren.
+  return <Badge tone={tone} kaal={kaal} className={kaal ? undefined : 'px-2 py-0.5'}>{formatWaarde(kolom, waarde)}</Badge>;
+};
+
+/**
+ * Vanaf zoveel kolommen staat de brede tabel dichter (smallere cijferkolommen,
+ * minder lucht tussen de cellen), zodat tien kolommen op een scherm van 1440 px
+ * zonder horizontaal scrollen naast elkaar passen.
+ */
+const DICHT_VANAF = 9;
+
+const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerste: boolean, smal: boolean, dicht: boolean): string => cn(
+  // Korte tekst (type, status, naam) blijft op één regel; lopende tekst (`lang`) mag afbreken en houdt een minimumbreedte.
+  eerste ? cn('font-medium text-slate-800', VASTE_KOLOM, smal ? 'pl-4 pr-2' : 'whitespace-nowrap') : cn(smal ? 'px-2' : kolom.type === 'tekst' && (kolom.lang ? 'min-w-40' : 'whitespace-nowrap')),
+  dicht && !eerste && 'px-2',
   // Een nul blijft staan ("0"), maar stiller dan een cijfer dat iets zegt.
   isGetalKolom(kolom) && waarde === 0 && 'text-slate-500',
   (waarde === null || waarde === undefined || waarde === '') && 'text-slate-500',
+  !isPilKolom(kolom) && TOON_TEKST[celToon(kolom, waarde) ?? 'rust'],
+  // "Geen datum" in een datumkolom blijft op één regel (ze mag een paar pixels in de lucht van de buurcel steken).
+  kolom.leeg && (waarde === null || waarde === undefined || waarde === '') && 'whitespace-nowrap',
 );
 
 export function RapportTabel({ def, rijen, totalen, className }: {
@@ -91,6 +122,7 @@ export function RapportTabel({ def, rijen, totalen, className }: {
   const huidig = Math.min(pagina, paginas);
   const zichtbaar = gesorteerd.slice((huidig - 1) * PER_PAGINA, huidig * PER_PAGINA);
   const metTotaal = Boolean(totalen) && heeftTotaalrij(def) && rijen.length > 0;
+  const dicht = !smal && kolommen.length >= DICHT_VANAF;
   const smalleTabelBreedte = kolommen.reduce((som, k, i) => som + smalleBreedte(k, i === 0), 0);
 
   return (
@@ -119,9 +151,9 @@ export function RapportTabel({ def, rijen, totalen, className }: {
                   kolom={k.id}
                   sort={sort}
                   align={isRechts(k) ? 'right' : 'left'}
-                  dicht={smal && i > 0}
+                  dicht={(smal || dicht) && i > 0}
                   naam={smal && k.kort ? k.titel : undefined}
-                  className={cn(!smal && isGetalKolom(k) && 'w-28 xl:w-32', i === 0 && cn(VASTE_KOLOM, VASTE_KOP))}
+                  className={cn(!smal && isGetalKolom(k) && (dicht ? 'w-20' : 'w-28 xl:w-32'), i === 0 && cn(VASTE_KOLOM, VASTE_KOP))}
                 >
                   {smal ? k.kort ?? k.titel : k.titel}
                 </SortTh>
@@ -133,18 +165,14 @@ export function RapportTabel({ def, rijen, totalen, className }: {
               <tr key={rij.id} className="border-b border-hairline-subtle transition-colors last:border-b-0 hover:bg-surface-soft-hover">
                 {kolommen.map((k, i) => {
                   const onder = i === 0 ? onderEersteTekst(onderEerste, rij) : '';
-                  const nadruk = nadrukVan(k, rij[k.id]);
                   return (
-                    <Td key={k.id} num={isRechts(k)} className={celKlasse(k, rij[k.id], i === 0, smal)}>
+                    <Td key={k.id} num={isRechts(k)} className={celKlasse(k, rij[k.id], i === 0, smal, dicht)}>
                       {i === 0 && smal ? (
                         <>
                           <span className="block truncate">{formatWaarde(k, rij[k.id])}</span>
                           {onder ? <span className="block truncate text-xs font-normal text-slate-500">{onder}</span> : null}
                         </>
-                      ) : nadruk ? (
-                        // De pil zit strak in de cel: haar eigen hoogte mag de rij niet hoger maken dan haar buren.
-                        <Badge tone={NADRUK_TOON[nadruk]} className="px-2 py-0.5">{formatWaarde(k, rij[k.id])}</Badge>
-                      ) : formatWaarde(k, rij[k.id])}
+                      ) : celInhoud(k, rij[k.id])}
                     </Td>
                   );
                 })}
@@ -157,7 +185,7 @@ export function RapportTabel({ def, rijen, totalen, className }: {
                   ook in zwart-wit, en de vaste eerste kolom blijft één kleur. */}
               <tr className="border-t border-hairline-strong">
                 {kolommen.map((k, i) => (
-                  <Th key={k.id} num={isRechts(k)} className={cn('py-3.5 text-sm font-semibold text-slate-900', i === 0 && cn(VASTE_KOLOM, VASTE_VOET), smal && (i === 0 ? 'pl-4 pr-2' : 'px-2'))}>
+                  <Th key={k.id} num={isRechts(k)} className={cn('py-3.5 text-sm font-semibold text-slate-900', i === 0 && cn(VASTE_KOLOM, VASTE_VOET), smal && (i === 0 ? 'pl-4 pr-2' : 'px-2'), dicht && i > 0 && 'px-2')}>
                     {k.id in totalen ? formatWaarde(k, totalen[k.id]) : i === 0 ? `Totaal (${rijen.length})` : ''}
                   </Th>
                 ))}

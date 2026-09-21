@@ -30,7 +30,7 @@ export function useVoertuigen(actief: boolean): KiesbaarVoertuig[] {
 
 /**
  * Voertuigkiezer: één bus of "Alle", op kort nummer en busnummer gesorteerd;
- * wat niet meer actief is staat onderaan in een eigen groep. Zelfde opzet als
+ * wat uit dienst is staat onderaan in een eigen groep (een reservebus rijdt nog en hoort bij de gewone lijst). Zelfde opzet als
  * de Chauffeurkiezer.
  */
 export function Voertuigkiezer({ voertuigen, waarde, onChange, label = 'Voertuig', className }: {
@@ -41,8 +41,8 @@ export function Voertuigkiezer({ voertuigen, waarde, onChange, label = 'Voertuig
   className?: string;
 }) {
   const { actief, uitDienst } = useMemo(() => ({
-    actief: voertuigen.filter((v) => v.status === 'actief').sort(opBus),
-    uitDienst: voertuigen.filter((v) => v.status !== 'actief').sort(opBus),
+    actief: voertuigen.filter((v) => v.status !== 'uit_dienst').sort(opBus),
+    uitDienst: voertuigen.filter((v) => v.status === 'uit_dienst').sort(opBus),
   }), [voertuigen]);
   const onbekend = waarde !== '' && !voertuigen.some((v) => v.id === waarde);
   return (

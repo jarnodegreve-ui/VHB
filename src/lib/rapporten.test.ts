@@ -107,6 +107,14 @@ describe('bereikUitleg (periode zonder gegevens)', () => {
 
   it('binnen het bereik of zonder periode: geen tekst', () => {
     expect(bereikUitleg(verlofsaldo, { van: '2026-04-01', tot: '2026-04-30' }, bereik)).toEqual({ toestand: 'binnen', tekst: null });
-    expect(bereikUitleg(verlofsaldo, null, null)).toEqual({ toestand: 'binnen', tekst: null });
+    expect(bereikUitleg(verlofsaldo, null, bereik)).toEqual({ toestand: 'binnen', tekst: null });
+  });
+
+  it('een lege bron is leeg, ook zonder periode, en de definitie zegt waar de gegevens ingevuld worden', () => {
+    expect(bereikUitleg(verlofsaldo, null, null)).toEqual({ toestand: 'geen-bron', tekst: 'Er zijn nog geen verlofgegevens geregistreerd.' });
+    expect(bereikUitleg(rapportVan('vervaldata-voertuigen')!, null, null)).toEqual({
+      toestand: 'geen-bron',
+      tekst: 'Er zijn nog geen vervaldata van voertuigen geregistreerd. Je vult ze in op de fiche van een voertuig, onder Vervaldata.',
+    });
   });
 });
