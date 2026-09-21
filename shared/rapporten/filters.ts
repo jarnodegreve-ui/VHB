@@ -14,8 +14,11 @@ import { isIsoDag, jaarPeriode, periodeVoor, type Periode } from './periode.js';
 export const JAAR_MIN = 2000;
 export const JAAR_MAX = 2100;
 
-/** Vaste parameternamen; een keuzelijst mag deze niet als `id` gebruiken. */
+/** Vaste parameternamen; een keuzelijst of vinkje mag deze niet als `id` gebruiken. */
 export const VASTE_PARAMS = ['van', 'tot', 'jaar', 'chauffeur', 'voertuig'] as const;
+
+/** Een vinkje dat aan staat in de URL (`?bovenLimiet=1`); uit = de parameter ontbreekt. */
+export const VINKJE_AAN = '1';
 
 const keuzeStandaard = (f: Extract<RapportFilter, { soort: 'keuze' }>): string => f.standaard ?? f.opties[0]?.waarde ?? '';
 
@@ -27,6 +30,7 @@ export const filterParams = (def: RapportDefinitie): string[] => def.filters.fla
     case 'chauffeur': return ['chauffeur'];
     case 'voertuig': return ['voertuig'];
     case 'keuze': return [f.id];
+    case 'vinkje': return [f.id];
   }
 });
 
@@ -34,9 +38,10 @@ export const filterParams = (def: RapportDefinitie): string[] => def.filters.fla
 export const standaardFilters = (def: RapportDefinitie, vandaag: string): RapportFilters => {
   const uit: RapportFilters = { keuzes: {} };
   for (const f of def.filters) {
-    if (f.soort === 'periode') Object.assign(uit, periodeVoor('deze-maand', vandaag));
+    if (f.soort === 'periode') Object.assign(uit, periodeVoor(f.standaard ?? 'deze-maand', vandaag));
     else if (f.soort === 'jaar') uit.jaar = Number(vandaag.slice(0, 4));
     else if (f.soort === 'keuze') uit.keuzes[f.id] = keuzeStandaard(f);
+    else if (f.soort === 'vinkje') (uit.vinkjes ??= {})[f.id] = false;
   }
   return uit;
 };
@@ -58,6 +63,8 @@ export const leesFilters = (def: RapportDefinitie, query: Lezer, vandaag: string
     } else if (f.soort === 'chauffeur' || f.soort === 'voertuig') {
       const waarde = (query.get(f.soort) ?? '').trim();
       if (waarde) uit[f.soort] = waarde;
+    } else if (f.soort === 'vinkje') {
+      (uit.vinkjes ??= {})[f.id] = query.get(f.id) === VINKJE_AAN;
     } else {
       const waarde = query.get(f.id);
       if (waarde && f.opties.some((o) => o.waarde === waarde)) uit.keuzes[f.id] = waarde;
@@ -79,6 +86,9 @@ export const filtersNaarQuery = (def: RapportDefinitie, filters: RapportFilters)
     } else if (f.soort === 'chauffeur' || f.soort === 'voertuig') {
       const waarde = filters[f.soort];
       if (waarde) q.set(f.soort, waarde);
+    } else if (f.soort === 'vinkje') {
+      // Uit = afwezig: een vinkje heeft geen "standaard aan", dus de link blijft ook zo volledig.
+      if (filters.vinkjes?.[f.id]) q.set(f.id, VINKJE_AAN);
     } else if (filters.keuzes[f.id]) {
       q.set(f.id, filters.keuzes[f.id]);
     }
@@ -112,7 +122,7 @@ export const filtersInWoorden = (
   def: RapportDefinitie,
   filters: RapportFilters,
   namen: { chauffeur?: (id: string) => string | undefined; voertuig?: (id: string) => string | undefined } = {},
-): string[] => def.filters.map((f) => {
+): string[] => def.filters.map((f): string | null => {
   switch (f.soort) {
     case 'periode': return filters.van && filters.tot ? `Periode ${dmj(filters.van)} t/m ${dmj(filters.tot)}` : 'Periode niet gekozen';
     case 'jaar': return `Jaar ${filters.jaar ?? ''}`.trim();
@@ -125,8 +135,10 @@ export const filtersInWoorden = (
       const waarde = filters.keuzes[f.id];
       return `${f.label}: ${f.opties.find((o) => o.waarde === waarde)?.label ?? waarde}`;
     }
+    // Een vinkje dat uit staat zegt niets: het staat alleen op het blad als het aan staat.
+    case 'vinkje': return filters.vinkjes?.[f.id] ? f.label : null;
   }
-});
+}).filter((woord): woord is string => woord !== null);
 
 /** Stuk voor de bestandsnaam: de periode of het jaar, machineleesbaar (ISO). */
 export const bestandsPeriode = (def: RapportDefinitie, filters: RapportFilters): string => {

@@ -66,6 +66,16 @@ export const onderEersteTekst = (onderEerste: readonly RapportKolom[], rij: Rapp
     .map((k) => formatWaarde(k, rij[k.id]))
     .join(' · ');
 
+/**
+ * De definitie met de kolommen van het antwoord erin. Een rapport waarvan de
+ * kolommen van de gegevens afhangen (één kolom per verloftype dat voorkomt)
+ * levert ze mee; al wat kolommen leest (tabel, blad, CSV, zoeken, totalen)
+ * krijgt deze definitie in plaats van de kale. Zonder meegeleverde kolommen
+ * is het gewoon dezelfde definitie (zelfde object, dus geen herberekening).
+ */
+export const metKolommen = (def: RapportDefinitie, kolommen?: readonly RapportKolom[] | null): RapportDefinitie =>
+  (kolommen && kolommen.length > 0 ? { ...def, kolommen } : def);
+
 /** Som per optelbare kolom; een kolom zonder één getal telt als 0. */
 export const berekenTotalen = (def: RapportDefinitie, rijen: readonly RapportRij[]): Record<string, number> => {
   const uit: Record<string, number> = {};
@@ -92,9 +102,12 @@ export const sorteerWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undef
 export const sorteerRijen = (def: RapportDefinitie, rijen: readonly RapportRij[], kolomId: string, richting: 'asc' | 'desc'): RapportRij[] => {
   const kolom = def.kolommen.find((k) => k.id === kolomId) ?? def.kolommen[0];
   const f = richting === 'asc' ? 1 : -1;
+  // `sorteerOp`: de kolom toont "Augustus 2026" maar sorteert op '2026-08'.
+  // Dat veld is geen kolom, dus het vergelijkt als wat het is (getal of tekst).
+  const waarde = (rij: RapportRij) => (kolom.sorteerOp ? rij[kolom.sorteerOp] ?? null : sorteerWaarde(kolom, rij[kolom.id]));
   return [...rijen].sort((a, b) => {
-    const va = sorteerWaarde(kolom, a[kolom.id]);
-    const vb = sorteerWaarde(kolom, b[kolom.id]);
+    const va = waarde(a);
+    const vb = waarde(b);
     if (va === null && vb === null) return 0;
     if (va === null) return 1;
     if (vb === null) return -1;

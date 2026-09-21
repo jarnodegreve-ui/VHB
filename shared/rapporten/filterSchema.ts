@@ -1,7 +1,7 @@
 import { z } from '../schemas/zod.js';
 import { isoDatum } from '../schemas/basis.js';
 import type { RapportDefinitie, RapportFilters } from './types.js';
-import { JAAR_MAX, JAAR_MIN } from './filters.js';
+import { JAAR_MAX, JAAR_MIN, VINKJE_AAN } from './filters.js';
 import { periodeFout } from './periode.js';
 
 /**
@@ -31,6 +31,12 @@ export const filterSchemaVoor = (def: RapportDefinitie) => {
       );
     } else if (f.soort === 'chauffeur' || f.soort === 'voertuig') {
       vorm[f.soort] = id;
+    } else if (f.soort === 'vinkje') {
+      // Aan = '1', uit = afwezig of leeg; al de rest is een tikfout in de link, geen stille "uit".
+      vorm[f.id] = z.preprocess(
+        (v) => (v === '' || v == null ? false : v === VINKJE_AAN ? true : v),
+        z.boolean({ error: 'Ongeldige keuze' }),
+      );
     } else {
       const waarden = f.opties.map((o) => o.waarde);
       const standaard = f.standaard ?? waarden[0] ?? '';
@@ -41,6 +47,7 @@ export const filterSchemaVoor = (def: RapportDefinitie) => {
     }
   }
   const keuzeIds = def.filters.flatMap((f) => (f.soort === 'keuze' ? [f.id] : []));
+  const vinkjeIds = def.filters.flatMap((f) => (f.soort === 'vinkje' ? [f.id] : []));
   return z.object(vorm)
     .superRefine((waarden, ctx) => {
       if (!def.filters.some((f) => f.soort === 'periode')) return;
@@ -56,6 +63,7 @@ export const filterSchemaVoor = (def: RapportDefinitie) => {
       if (typeof w.chauffeur === 'string' && w.chauffeur) uit.chauffeur = w.chauffeur;
       if (typeof w.voertuig === 'string' && w.voertuig) uit.voertuig = w.voertuig;
       for (const k of keuzeIds) if (typeof w[k] === 'string') uit.keuzes[k] = w[k] as string;
+      for (const k of vinkjeIds) (uit.vinkjes ??= {})[k] = w[k] === true;
       return uit;
     });
 };

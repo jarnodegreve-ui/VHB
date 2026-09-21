@@ -27,10 +27,12 @@ const PER_PAGINA = 50;
 /** Vanaf hier passen de kolommen naast elkaar (md); eronder geldt de smalle indeling. */
 const BREED_VANAF = 768;
 
-/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, datum/ja-nee, tekst. */
-const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, kort: 5.5, tekst: 8 };
+/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, datum/ja-nee, tekst, lange tekst (`lang`). */
+// `lang` = 11,5 rem: zo breed als er op 375 px naast de vaste eerste kolom past,
+// zodat een opmerking na het scrollen in haar geheel in beeld staat.
+const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, kort: 5.5, tekst: 8, lang: 11.5 };
 const smalleBreedte = (k: RapportKolom, eerste: boolean): number =>
-  eerste ? SMAL_BREEDTE.eerste : isGetalKolom(k) ? SMAL_BREEDTE.getal : k.type === 'tekst' ? SMAL_BREEDTE.tekst : SMAL_BREEDTE.kort;
+  eerste ? SMAL_BREEDTE.eerste : isGetalKolom(k) ? SMAL_BREEDTE.getal : k.type !== 'tekst' ? SMAL_BREEDTE.kort : k.lang ? SMAL_BREEDTE.lang : SMAL_BREEDTE.tekst;
 
 /**
  * De eerste kolom (de naam) blijft onder xl links staan terwijl de cijfers

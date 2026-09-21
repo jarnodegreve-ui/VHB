@@ -1,8 +1,11 @@
 import type { RapportDefinitie, RapportDomein } from './types.js';
+import { VERLOF_RAPPORTEN } from './definities/verlof.js';
+import { ZIEKTE_RAPPORTEN } from './definities/ziekte.js';
 
 /**
  * Dé lijst van rapporten. Nieuw rapport:
- *  1. een definitie hier (id, domein, filters, kolommen, sortering, print),
+ *  1. een definitie in definities/<domein>.ts (id, domein, filters, kolommen,
+ *     sortering, print), hieronder samengevoegd,
  *  2. een laadfunctie in api/_lib/rapporten/<id>.ts (puur: bron + filters →
  *     rijen + bereik) en één regel in de LADERS-tabel van
  *     api/_lib/rapportRoutes.ts,
@@ -21,37 +24,20 @@ export type DomeinDef = {
 /** Volgorde = volgorde in de catalogus. */
 export const DOMEINEN: readonly DomeinDef[] = [
   { id: 'planning', titel: 'Planning', omschrijving: 'Roosters en diensten per chauffeur.' },
-  { id: 'verlof', titel: 'Verlof', omschrijving: 'Saldo, opgenomen dagen en jaaroverzichten.' },
-  { id: 'ziekte', titel: 'Ziekte', omschrijving: 'Ziekmeldingen en afwezigheid.' },
+  { id: 'verlof', titel: 'Verlof', omschrijving: 'Saldo, aanvragen, bezetting en jaaroverzichten.' },
+  { id: 'ziekte', titel: 'Ziekte', omschrijving: 'Ziekmeldingen in kalenderdagen, per chauffeur en per maand.' },
   { id: 'ruilen', titel: 'Ruilen', omschrijving: 'Dienstwissels en hun verloop.' },
   { id: 'voertuigen', titel: 'Voertuigen', omschrijving: 'Werken, defecten en het wagenpark.' },
   { id: 'uren', titel: 'Gewerkte uren', omschrijving: 'Prestaties per chauffeur en per periode.', volgtLater: true },
 ];
 
-const VERLOFSALDO: RapportDefinitie = {
-  id: 'verlofsaldo',
-  domein: 'verlof',
-  titel: 'Verlofsaldo',
-  omschrijving: 'Betaald verlof per medewerker: budget, opgenomen, aangevraagd en wat nog vrij is.',
-  filters: [{ soort: 'jaar' }, { soort: 'chauffeur', label: 'Medewerker' }],
-  kolommen: [
-    { id: 'naam', titel: 'Naam', type: 'tekst' },
-    // Telefoon: de sectie staat onder de naam, Aangevraagd en Klein verlet
-    // schuiven naar achteren (in die volgorde), zodat Budget, Opgenomen en Vrij
-    // zonder scrollen in beeld staan.
-    { id: 'sectie', titel: 'Sectie', type: 'tekst', smal: 'onderEerste' },
-    { id: 'budget', titel: 'Budget', type: 'getal', totaal: true },
-    { id: 'opgenomen', titel: 'Opgenomen', kort: 'Opgen.', type: 'getal', totaal: true },
-    { id: 'aangevraagd', titel: 'Aangevraagd', kort: 'Aangevr.', type: 'getal', totaal: true, smal: 'achteraan' },
-    { id: 'vrij', titel: 'Vrij', type: 'getal', totaal: true },
-    { id: 'kleinVerlet', titel: 'Klein verlet', kort: 'Kl. verlet', type: 'getal', totaal: true, smal: 'achteraan' },
-  ],
-  sortering: { kolom: 'naam', richting: 'asc' },
-  print: 'staand',
-  bronNaam: 'verlofgegevens',
-};
-
-export const RAPPORTEN: readonly RapportDefinitie[] = [VERLOFSALDO];
+/**
+ * De definities staan per domein in een eigen bestand (shared/rapporten/
+ * definities/<domein>.ts), zodat twee mensen die elk aan een domein werken
+ * elkaar hier niet in de weg zitten: dit bestand voegt ze alleen samen.
+ * Volgorde = volgorde binnen het domein in de catalogus.
+ */
+export const RAPPORTEN: readonly RapportDefinitie[] = [...VERLOF_RAPPORTEN, ...ZIEKTE_RAPPORTEN];
 
 const PER_ID = new Map(RAPPORTEN.map((r) => [r.id, r]));
 
