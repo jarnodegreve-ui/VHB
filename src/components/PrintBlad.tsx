@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { Printer } from 'lucide-react';
 import type { RapportDefinitie, RapportRij } from '../../shared/rapporten/types';
-import { formatWaarde, heeftTotaalrij, isRechts, sorteerRijen } from '../../shared/rapporten/opmaak';
+import { celToon, formatWaarde, heeftTotaalrij, isRechts, sorteerRijen } from '../../shared/rapporten/opmaak';
 import { BrandLogo } from './BrandLogo';
 import { Button } from './primitives';
 
@@ -55,8 +55,10 @@ const bladCss = (richting: 'staand' | 'liggend', voet: string) => `
   .printblad-tabel th { padding: 1.6mm 2mm; border-bottom: 0.75pt solid var(--color-slate-900); font-size: 7.5pt; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; text-align: left; vertical-align: bottom; color: var(--color-slate-700); }
   .printblad-tabel td { padding: 1.5mm 2mm; border-bottom: 0.4pt solid var(--color-slate-300); vertical-align: top; }
   .printblad-tabel .rechts { text-align: right; white-space: nowrap; }
+  .printblad-tabel .nadruk { font-weight: 700; }
   .printblad-tabel tr { break-inside: avoid; page-break-inside: avoid; }
   .printblad-tabel tr.totaal td { border-top: 0.75pt solid var(--color-slate-900); border-bottom: 1.5pt solid var(--color-slate-900); font-weight: 700; }
+  .printblad-tabel td:first-child { white-space: nowrap; }
   @media print {
     @page {
       size: A4 ${richting === 'liggend' ? 'landscape' : 'portrait'};
@@ -159,7 +161,8 @@ export function PrintTabel({ def, rijen, totalen, leegTekst = 'Geen gegevens voo
       <tbody>
         {gesorteerd.map((rij) => (
           <tr key={rij.id}>
-            {def.kolommen.map((k) => <td key={k.id} className={isRechts(k) ? 'rechts' : undefined}>{formatWaarde(k, rij[k.id])}</td>)}
+            {/* Papier is zwart-wit: wat op het scherm rood is (vervallen) staat hier vet, de statustekst draagt de betekenis. */}
+            {def.kolommen.map((k) => <td key={k.id} className={[isRechts(k) ? 'rechts' : '', celToon(k, rij[k.id]) === 'gevaar' ? 'nadruk' : ''].filter(Boolean).join(' ') || undefined}>{formatWaarde(k, rij[k.id])}</td>)}
           </tr>
         ))}
         {totalen && heeftTotaalrij(def) && (

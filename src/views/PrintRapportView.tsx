@@ -51,6 +51,7 @@ export function PrintRapportView({ rapportId, users, door }: { rapportId: string
   const woorden = filtersInWoorden(def, filters, {
     chauffeur: (id) => users.find((u) => u.id === id)?.name,
     voertuig: (id) => { const v = voertuigen.find((x) => x.id === id); return v ? voertuigLabel(v) : undefined; },
+    peildatum: data.peildatum,
   });
   if (zoek) woorden.push(`Zoekterm: “${zoek}”`);
   // De zoekterm van het scherm telt als filter: dezelfde rijen, en de totalen
@@ -73,7 +74,7 @@ export function PrintRapportView({ rapportId, users, door }: { rapportId: string
         def={def}
         rijen={buiten ? [] : rijen}
         totalen={buiten ? null : totalen}
-        leegTekst={buiten && regel ? `Geen gegevens voor deze periode. ${regel}` : 'Geen gegevens voor deze periode.'}
+        leegTekst={toestand === 'geen-bron' && regel ? regel : buiten && regel ? `Geen gegevens voor deze periode. ${regel}` : periodeVanFilters(def, filters) ? 'Geen gegevens voor deze periode.' : 'Geen gegevens voor deze filters.'}
       />
     </PrintBlad>
   );

@@ -7,7 +7,7 @@
  */
 
 /** Het domein bepaalt onder welke kop een rapport in de catalogus staat. */
-export type RapportDomein = 'ziekte' | 'verlof' | 'ruilen' | 'planning' | 'voertuigen' | 'uren';
+export type RapportDomein = 'ziekte' | 'verlof' | 'ruilen' | 'planning' | 'voertuigen' | 'personeel' | 'uren';
 
 /**
  * De filters van een rapport, in de volgorde waarin ze op het scherm staan.
@@ -19,7 +19,13 @@ export type RapportDomein = 'ziekte' | 'verlof' | 'ruilen' | 'planning' | 'voert
 export type RapportFilter =
   | { soort: 'periode' }
   | { soort: 'jaar' }
-  | { soort: 'chauffeur'; /** Veldlabel, standaard "Chauffeur". */ label?: string }
+  | {
+    soort: 'chauffeur';
+    /** Veldlabel, standaard "Chauffeur". */
+    label?: string;
+    /** Wie er in de kiezer staat, op rol (['technieker', 'planner', 'admin'] voor een mecanicien); zonder opgave iedereen die niet tot de staf hoort. */
+    rollen?: readonly string[];
+  }
   | { soort: 'voertuig' }
   | {
     soort: 'keuze';
@@ -42,6 +48,21 @@ export type RapportFilter =
  */
 export type KolomType = 'tekst' | 'datum' | 'getal' | 'duur' | 'janee';
 
+/**
+ * Toon van een cel: `gevaar` (vervallen, danger) en `waarschuwing` (binnenkort,
+ * amber) vragen aandacht en zijn een pil; `aandacht` (amber), `goed` en `rust`
+ * zijn een puntje met tekst, voor een toestand die op veel rijen tegelijk
+ * staat (een open melding). Nooit goud: dat is geen statuskleur.
+ */
+export type KolomToon = 'gevaar' | 'waarschuwing' | 'aandacht' | 'goed' | 'rust';
+
+/**
+ * Hoe een kolom in de totaalrij telt: `som` (standaard bij `true`), de
+ * kleinste of grootste waarde, of het gemiddelde. Een gemiddelde weegt met
+ * `totaalGewicht` als de rijen zelf al groepen zijn.
+ */
+export type TotaalSoort = 'som' | 'min' | 'max' | 'gemiddelde';
+
 export type RapportKolom = {
   /** Sleutel in de rij. */
   id: string;
@@ -49,8 +70,29 @@ export type RapportKolom = {
   type: KolomType;
   /** Standaard: getal en duur rechts, de rest links. */
   uitlijning?: 'links' | 'rechts';
-  /** Telt mee in de totaalrij (alleen zinvol voor getal en duur). */
-  totaal?: boolean;
+  /** Telt mee in de totaalrij (alleen zinvol voor getal en duur); `true` = som. */
+  totaal?: boolean | TotaalSoort;
+  /**
+   * Bij `totaal: 'gemiddelde'`: de sleutel in de rij met het gewicht (hoeveel
+   * stuks er achter het gemiddelde van die rij zitten). Mag een waarde zijn
+   * die geen eigen kolom heeft. Zonder opgave weegt elke rij even zwaar.
+   */
+  totaalGewicht?: string;
+  /**
+   * Tekstkolom met lopende tekst (omschrijving, opmerking, merk en model): krijgt op het brede
+   * scherm een minimumbreedte en mag afbreken. Andere tekstkolommen zijn korte
+   * waarden en blijven op één regel, zodat tien kolommen naast elkaar passen.
+   */
+  breed?: boolean;
+  /** Vast aantal decimalen voor een getal (leeftijd 7,0); zonder opgave hoogstens twee, zonder nullen achteraan. */
+  decimalen?: number;
+  /** Tekstkolom met een status: waarde → toon. Wat er niet in staat krijgt geen toon. */
+  tonen?: Readonly<Record<string, KolomToon>>;
+  /**
+   * Getalkolom met een grens (resterende dagen): onder `gevaarOnder` is de cel
+   * `gevaar`, van daar tot en met `waarschuwingTot` `waarschuwing`.
+   */
+  signaal?: { gevaarOnder?: number; waarschuwingTot?: number };
   /**
    * Rol van de kolom op een smal scherm (telefoon), waar niet alles naast
    * elkaar past. Alleen de tabel op het scherm luistert hiernaar: het
@@ -82,6 +124,20 @@ export type RapportDefinitie = {
   print: 'staand' | 'liggend';
   /** Naam van de gegevens in de lege teksten: "Er zijn pas verlofgegevens vanaf …". */
   bronNaam: string;
+  /**
+   * Het rapport rekent tegenover vandaag (leeftijd, resterende dagen): de
+   * server geeft zijn peildatum mee en scherm en blad tonen die in de
+   * filterregel. Bewust geen parameter in de URL: een gedeelde link naar
+   * "vervalt binnen 30 dagen" hoort morgen vanaf morgen te tellen.
+   */
+  peildatum?: boolean;
+  /**
+   * Als de bron nog helemaal leeg is: waar die gegevens ingevuld worden. De
+   * tekst komt na "Er zijn nog geen <bronNaam> geregistreerd."; de actie is
+   * een scherm uit de routetabel (`view`), zodat een lege staat nooit een
+   * instructie zonder knop is.
+   */
+  geenBron?: { tekst: string; actie?: { label: string; view: string } };
 };
 
 export type RapportWaarde = string | number | boolean | null;
@@ -105,12 +161,14 @@ export type RapportBereik = { van: string; tot: string } | null;
 
 export type RapportAntwoord = {
   rijen: RapportRij[];
-  /** Som per optelbare kolom over álle rijen (ook nul, dus "0" op het blad). */
+  /** Totaal per optelbare kolom over álle rijen (een som ook bij nul, dus "0" op het blad). */
   totalen: Record<string, number>;
   bereik: RapportBereik;
+  /** Alleen bij een rapport met `peildatum`: de kalenderdag (Brussel) waartegen gerekend is. */
+  peildatum?: string;
   /** ISO-tijdstip van de server. */
   gegenereerdOp: string;
 };
 
 /** Wat een laadfunctie teruggeeft; de route vult totalen en tijdstip aan. */
-export type RapportResultaat = { rijen: RapportRij[]; bereik: RapportBereik };
+export type RapportResultaat = { rijen: RapportRij[]; bereik: RapportBereik; peildatum?: string };

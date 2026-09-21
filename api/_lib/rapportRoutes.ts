@@ -6,10 +6,13 @@ import type { AuthenticatedRequest } from "../types.js";
 import { rapportVan } from "../../shared/rapporten/register.js";
 import { filterSchemaVoor } from "../../shared/rapporten/filterSchema.js";
 import { berekenTotalen } from "../../shared/rapporten/opmaak.js";
-import type { RapportAntwoord, RapportFilters, RapportResultaat } from "../../shared/rapporten/types.js";
+import type { RapportAntwoord } from "../../shared/rapporten/types.js";
 import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen } from "../../shared/schemas/verlofFeestdagen.js";
 import { valideerRecord } from "./valideer.js";
 import { bouwVerlofsaldo } from "./rapporten/verlofsaldo.js";
+import type { Lader } from "./rapporten/lader.js";
+import { VOERTUIG_LADERS } from "./rapporten/voertuigLaders.js";
+import { PERSONEEL_LADERS } from "./rapporten/personeelLaders.js";
 
 /**
  * Rapporten (20-09): één namespace, GET /api/rapporten/:id. De definitie van
@@ -23,8 +26,6 @@ import { bouwVerlofsaldo } from "./rapporten/verlofsaldo.js";
  * dagen). Geen PDF op de server: afdrukken gebeurt in de browser, zodat deze
  * functie geen zware bibliotheek hoeft te laden (koude start).
  */
-
-type Lader = (filters: RapportFilters) => Promise<RapportResultaat>;
 
 /** Extra vrije dagen zoals GET /api/verlof/feestdagen ze geeft: bij een fout leeg, zodat scherm en rapport hetzelfde tellen. */
 const extraFeestdagen = async (): Promise<ReadonlySet<string>> => {
@@ -46,6 +47,9 @@ export const RAPPORT_LADERS: Record<string, Lader> = {
     const [users, leave, extra] = await Promise.all([getUsersData(), getLeaveData(), extraFeestdagen()]);
     return bouwVerlofsaldo({ users, leave, extraFeestdagen: extra }, filters);
   },
+  // Per domein een eigen bestand met laders (api/_lib/rapporten/<domein>Laders.ts).
+  ...VOERTUIG_LADERS,
+  ...PERSONEEL_LADERS,
 };
 
 export function mountRapportRoutes(app: express.Express) {
@@ -58,8 +62,8 @@ export function mountRapportRoutes(app: express.Express) {
     if (!filters) return;
 
     try {
-      const { rijen, bereik } = await lader(filters);
-      const antwoord: RapportAntwoord = { rijen, totalen: berekenTotalen(def, rijen), bereik, gegenereerdOp: new Date().toISOString() };
+      const { rijen, bereik, peildatum } = await lader(filters);
+      const antwoord: RapportAntwoord = { rijen, totalen: berekenTotalen(def, rijen), bereik, gegenereerdOp: new Date().toISOString(), ...(peildatum ? { peildatum } : {}) };
       res.setHeader("Cache-Control", "no-store");
       res.json(antwoord);
     } catch (err) {

@@ -1,12 +1,12 @@
 import { Children, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowUpRight, ChevronRight, Download, Info, Link2, Printer, RotateCcw } from 'lucide-react';
-import type { User } from '../../types';
+import type { User, View } from '../../types';
 import { isStaf } from '../../types';
 import { useQueryParams, useRoute } from '../../app/router';
 import { padVan } from '../../app/routes';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { DOMEINEN, rapportVan, rapportenVanDomein, type DomeinDef } from '../../../shared/rapporten/register';
-import type { RapportDefinitie, RapportFilters } from '../../../shared/rapporten/types';
+import type { RapportDefinitie, RapportFilter, RapportFilters } from '../../../shared/rapporten/types';
 import { filterParams, filtersNaarQuery, heeftEigenFilters, leesFilters, periodeVanFilters } from '../../../shared/rapporten/filters';
 import { periodeFout } from '../../../shared/rapporten/periode';
 import { berekenTotalen, rijBevat } from '../../../shared/rapporten/opmaak';
@@ -300,7 +300,15 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
   }, { deps: [def.id, sleutel], boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Het rapport kon niet geladen worden.') });
 
   const voertuigen = useVoertuigen(def.filters.some((f) => f.soort === 'voertuig'));
-  const mensen = useMemo(() => users.filter((u) => !isStaf(u.role) && u.name.trim().toLowerCase() !== 'beheerder'), [users]);
+  // Wie er in de personenkiezer staat volgt uit het filter: standaard iedereen
+  // buiten de staf, of de rollen die de definitie noemt (mecaniciens).
+  const kiesRollen = def.filters.find((f): f is Extract<RapportFilter, { soort: 'chauffeur' }> => f.soort === 'chauffeur')?.rollen;
+  const mensen = useMemo(
+    () => users.filter((u) => (kiesRollen ? kiesRollen.includes(u.role) : !isStaf(u.role)) && u.name.trim().toLowerCase() !== 'beheerder'),
+    [users, kiesRollen],
+  );
+  const { navigeer } = useRoute();
+  const geenBronActie = def.geenBron?.actie;
 
   const wijzig = (w: Partial<Omit<RapportFilters, 'keuzes'>> & { keuzes?: Record<string, string> }) => {
     const volgende: RapportFilters = { ...filters, ...w, keuzes: { ...filters.keuzes, ...(w.keuzes ?? {}) } };
@@ -368,8 +376,9 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
           Foutkaart zijn zelf al een vlak, en een doos in een doos is geen ontwerp. */}
       <div className="surface-table overflow-clip rounded-3xl">
         {/* Vanaf lg staan filters en zoekveld op één regel (de labels boven de
-            filters, het zoekveld op hun onderlijn); daaronder stapelen ze. */}
-        <div className={cn('flex flex-col gap-4 px-4 py-4 md:px-6 md:py-5 lg:flex-row lg:items-end', (toestand === 'laden' || toestand === 'tabel') && 'border-b border-hairline')}>
+            filters, het zoekveld op hun onderlijn); daaronder stapelen ze. Met
+            veel filters krijgt het zoekveld zijn eigen regel in plaats van te krimpen. */}
+        <div className={cn('flex flex-col gap-4 px-4 py-4 md:px-6 md:py-5 lg:flex-row lg:flex-wrap lg:items-end', (toestand === 'laden' || toestand === 'tabel') && 'border-b border-hairline')}>
           <RapportFilterbalk
             def={def}
             filters={filters}
@@ -378,12 +387,13 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
             voertuigen={voertuigen}
             vandaag={vandaag}
             jaarVanaf={data?.bereik ? Number(data.bereik.van.slice(0, 4)) : undefined}
+            peildatum={def.peildatum ? data?.peildatum ?? vandaag : undefined}
           />
           <TableToolbar
             zoek={zoek}
             onZoek={(v) => zetQuery({ [ZOEK_PARAM]: v })}
             placeholder="Zoek in dit rapport…"
-            className="lg:min-w-0 lg:flex-1"
+            className="lg:min-w-80 lg:flex-1"
             telling={data && !buiten ? (zoek.trim() ? `${zichtbaar.length} van ${alle.length}` : `${alle.length} ${alle.length === 1 ? 'rij' : 'rijen'}`) : undefined}
           />
         </div>
@@ -409,7 +419,15 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
       {toestand === 'fout' && zl.fout && <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
       {toestand === 'tabel' && zl.fout && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
       {toestand === 'ongeldig' && ongeldig && <EmptyState compact title="Kies eerst een geldige periode" message={ongeldig.tekst} />}
-      {toestand === 'buiten' && (
+      {toestand === 'buiten' && uitleg?.toestand === 'geen-bron' && (
+        // De bron is nog leeg: zeggen waar die gegevens ingevuld worden, met de knop erbij.
+        <EmptyState
+          title="Nog niets geregistreerd"
+          message={uitleg.tekst ?? undefined}
+          action={geenBronActie ? <Button variant="secondary" icon={<ArrowUpRight size={16} />} onClick={() => navigeer(geenBronActie.view as View)}>{geenBronActie.label}</Button> : undefined}
+        />
+      )}
+      {toestand === 'buiten' && uitleg?.toestand !== 'geen-bron' && (
         <EmptyState
           title="Geen gegevens voor deze periode"
           message={uitleg?.tekst ?? undefined}
@@ -420,7 +438,7 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
         <EmptyState
           illustratie={<NietGevonden />}
           title="Geen resultaten voor deze filters"
-          message="In deze periode zijn er wel gegevens, maar niets past bij wat je koos. Afdrukken kan nog: het blad toont dan de filters en dat er niets was."
+          message={`${periodeVanFilters(def, filters) ? 'In deze periode zijn er wel gegevens' : 'Er zijn wel gegevens'}, maar niets past bij wat je koos. Afdrukken kan nog: het blad toont dan de filters en dat er niets was.`}
           action={<Button variant="secondary" icon={<RotateCcw size={16} />} onClick={wisFilters}>Filters wissen</Button>}
         />
       )}

@@ -6,7 +6,8 @@ import { ADMIN, CHAUFFEUR, seed } from './helpers';
  * Rapporten: catalogus → rapport → filter → leeg → de print-URL klopt en het
  * blad toont wat het scherm toonde. Draait op de telefoon én op desktop; de
  * API komt uit scripts/audit-fixtures.mjs (RAPPORT_VERLOFSALDO: twaalf
- * medewerkers, gegevens vanaf 05/01/2026).
+ * medewerkers, gegevens vanaf 05/01/2026) en, voor voertuigen en personeel,
+ * uit scripts/fixtures-rapporten-wagenpark-personeel.mjs.
  */
 
 /** Vangt window.open af (openPdfInNewTab) zodat de test de URL kan lezen zonder een tweede tabblad. */
@@ -176,10 +177,107 @@ test('een chauffeur komt niet op Rapporten', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Rapporten' })).toHaveCount(0);
 });
 
+// === Stap 3: voertuigen en personeel (fixtures in scripts/fixtures-rapporten-wagenpark-personeel.mjs) ===
+
+test('voertuigrapport: wagenpark met keuzelijsten, peildatum, totaalrij en het blad', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await vangNieuwTabblad(page);
+  await page.goto('/rapporten');
+  await expect(page.getByRole('heading', { name: 'Personeel', level: 2 })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('link', { name: /Wagenpark, overzicht/ }).click();
+  await expect(page).toHaveURL(/\/rapporten\/voertuigen\/wagenpark-overzicht$/);
+  await expect(page.getByRole('heading', { name: 'Wagenpark, overzicht', level: 1 })).toBeVisible();
+
+  // Standaard alles wat in dienst is; de peildatum staat in de filterregel, in dd/mm/jjjj.
+  await expect(page.getByText('7 rijen')).toBeVisible();
+  await expect(page.getByText('21/09/2026')).toBeVisible();
+  await expect(page.getByRole('cell', { name: /Oud 01/ })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: 'Totaal (7)' })).toBeVisible();
+  await paginaScrolltNiet(page);
+
+  // Uit dienst zit achter een keuze, en die keuze staat in de URL.
+  await page.getByLabel('Status').selectOption('uit_dienst');
+  await expect(page).toHaveURL(/status=uit_dienst/);
+  await expect(page.getByRole('cell', { name: /Oud 01/ })).toBeVisible();
+  await expect(page.getByText('1 rij', { exact: true })).toBeVisible();
+  await page.getByLabel('Aandrijving').selectOption('elektrisch');
+  await expect(page.getByRole('heading', { name: 'Geen resultaten voor deze filters' })).toBeVisible();
+  await expect(page.getByText(/^Er zijn wel gegevens, maar niets past/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Afdrukken' }).click();
+  const url = new URL((await geopend(page))[0]);
+  expect(Object.fromEntries(url.searchParams)).toEqual({ 'print-rapport': 'wagenpark-overzicht', status: 'uit_dienst', categorie: 'alle', aandrijving: 'elektrisch' });
+
+  // Het blad: keuzes en peildatum in woorden, liggend, met de totaalrij.
+  await page.goto('/?print-rapport=wagenpark-overzicht&status=alle');
+  await expect(page.getByRole('heading', { name: 'Wagenpark, overzicht', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Status: Alle, ook uit dienst · Categorie: Alle · Aandrijving: Alle · Peildatum 21/09/2026')).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(10); // kop + 8 + totaal
+  await expect(page.getByRole('row', { name: /Totaal \(8\)\s+277\s+7,7/ })).toBeVisible();
+  await expect(page.getByRole('cell', { name: '23/01/2019' })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
+test('personeelsrapport: medische schiftingen, dringendste eerst, termijn en wie geen datum heeft', async ({ page }) => {
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await page.goto('/rapporten/personeel/medische-schiftingen');
+  await expect(page.getByRole('heading', { name: 'Medische schiftingen', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('6 rijen')).toBeVisible();
+  const smal = (page.viewportSize()?.width ?? 0) < 768;
+
+  // Vervallen bovenaan, wie geen datum heeft onderaan.
+  const rijen = page.getByRole('row');
+  await expect(rijen.nth(1)).toContainText('Annelies Verstraete');
+  await expect(rijen.nth(1)).toContainText('-7');
+  await expect(rijen.nth(6)).toContainText('Carine De Smet');
+  if (smal) {
+    // Telefoon: personeelsnummer onder de naam; Geldig tot en Dagen zonder scrollen, Status erachter.
+    await expect(page.getByRole('cell', { name: 'Annelies Verstraete VHB-000060' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Personeelsnr.' })).toHaveCount(0);
+    const binnenKader = await page.evaluate(() => {
+      const kader = document.querySelector('table')!.parentElement!.getBoundingClientRect();
+      return [...document.querySelectorAll('thead th')].map((th) => th.getBoundingClientRect().right <= kader.right + 0.5);
+    });
+    expect(binnenKader.slice(0, 3)).toEqual([true, true, true]);
+    await paginaScrolltNiet(page);
+  } else {
+    await expect(rijen.nth(1)).toContainText('Vervallen');
+    await expect(rijen.nth(6)).toContainText('Geen datum');
+    await expect(rijen.nth(1).getByRole('cell', { name: '14/09/2026', exact: true })).toBeVisible();
+  }
+
+  // Binnen 30 dagen: wat vervallen is hoort erbij, wie geen datum heeft ook.
+  await page.getByLabel('Vervalt').selectOption('30');
+  await expect(page).toHaveURL(/termijn=30/);
+  await expect(page.getByText('3 rijen')).toBeVisible();
+  await expect(page.getByRole('cell', { name: /Bart Claeys/ })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: /Carine De Smet/ })).toBeVisible();
+});
+
+test('een tabel die nog leeg is zegt dat eerlijk, en waar je ze invult', async ({ page }) => {
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await page.goto('/rapporten/voertuigen/vervaldata-voertuigen');
+  await expect(page.getByRole('heading', { name: 'Nog niets geregistreerd' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Er zijn nog geen vervaldata van voertuigen geregistreerd. Je vult ze in op de fiche van een voertuig, onder Vervaldata.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Geen (gegevens|resultaten)/ })).toHaveCount(0);
+  await expect(page.getByRole('table')).toHaveCount(0);
+
+  // Met een periode erbij: dezelfde eerlijke tekst, niet "geen gegevens voor deze periode".
+  await page.goto('/rapporten/voertuigen/uitgevoerde-werken');
+  await expect(page.getByRole('heading', { name: 'Nog niets geregistreerd' })).toBeVisible();
+  await expect(page.getByText(/Er zijn nog geen werkprestaties geregistreerd\./)).toBeVisible();
+
+  await page.goto('/rapporten/voertuigen/vervaldata-voertuigen');
+  await page.getByRole('button', { name: 'Naar Voertuigen' }).click();
+  await expect(page).toHaveURL(/\/techniek\/voertuigen$/);
+});
+
 for (const thema of ['light', 'dark'] as const) {
   test(`a11y (WCAG 2.1 AA): catalogus en rapport, ${thema === 'dark' ? 'donker' : 'licht'}`, async ({ page }) => {
     await seed(page, { user: ADMIN, view: 'rapporten', thema });
-    for (const pad of ['/rapporten', '/rapporten/verlof/verlofsaldo?jaar=2026']) {
+    for (const pad of ['/rapporten', '/rapporten/verlof/verlofsaldo?jaar=2026', '/rapporten/voertuigen/wagenpark-overzicht?status=alle', '/rapporten/personeel/medische-schiftingen']) {
       await page.goto(pad);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
       await page.evaluate(() => document.fonts.ready);

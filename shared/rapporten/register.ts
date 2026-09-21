@@ -1,8 +1,12 @@
 import type { RapportDefinitie, RapportDomein } from './types.js';
+import { VOERTUIG_RAPPORTEN } from './definities/voertuigen.js';
+import { PERSONEEL_RAPPORTEN } from './definities/personeel.js';
 
 /**
  * Dé lijst van rapporten. Nieuw rapport:
- *  1. een definitie hier (id, domein, filters, kolommen, sortering, print),
+ *  1. een definitie (id, domein, filters, kolommen, sortering, print) in het
+ *     bestand van haar domein, shared/rapporten/definities/<domein>.ts; dit
+ *     bestand voegt de domeinen alleen samen,
  *  2. een laadfunctie in api/_lib/rapporten/<id>.ts (puur: bron + filters →
  *     rijen + bereik) en één regel in de LADERS-tabel van
  *     api/_lib/rapportRoutes.ts,
@@ -25,6 +29,7 @@ export const DOMEINEN: readonly DomeinDef[] = [
   { id: 'ziekte', titel: 'Ziekte', omschrijving: 'Ziekmeldingen en afwezigheid.' },
   { id: 'ruilen', titel: 'Ruilen', omschrijving: 'Dienstwissels en hun verloop.' },
   { id: 'voertuigen', titel: 'Voertuigen', omschrijving: 'Werken, defecten en het wagenpark.' },
+  { id: 'personeel', titel: 'Personeel', omschrijving: 'Contactgegevens, de lijst van actieven en vervaldata per chauffeur.' },
   { id: 'uren', titel: 'Gewerkte uren', omschrijving: 'Prestaties per chauffeur en per periode.', volgtLater: true },
 ];
 
@@ -51,7 +56,7 @@ const VERLOFSALDO: RapportDefinitie = {
   bronNaam: 'verlofgegevens',
 };
 
-export const RAPPORTEN: readonly RapportDefinitie[] = [VERLOFSALDO];
+export const RAPPORTEN: readonly RapportDefinitie[] = [VERLOFSALDO, ...VOERTUIG_RAPPORTEN, ...PERSONEEL_RAPPORTEN];
 
 const PER_ID = new Map(RAPPORTEN.map((r) => [r.id, r]));
 
