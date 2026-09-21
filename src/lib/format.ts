@@ -85,6 +85,20 @@ export function formatDatumDMJ(iso: string | undefined | null): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso);
 }
 
+/**
+ * Periode compact: '17/09/2026' (één dag), '17/09 – 20/09/2026' (zelfde jaar)
+ * of '28/12/2026 – 03/01/2027'. Voor lijstrijen op een telefoon, waar de
+ * volledige vorm ('17/09/2026 t/m 20/09/2026') de rij doet omslaan; het jaar
+ * staat er altijd één keer in, zodat een oude aanvraag herkenbaar blijft.
+ */
+export function formatPeriodeKort(start: string | undefined | null, eind?: string | undefined | null): string {
+  const van = formatDatumDMJ(start);
+  const tot = formatDatumDMJ(eind);
+  if (!van) return tot;
+  if (!tot || tot === van) return van;
+  return van.slice(6) === tot.slice(6) ? `${van.slice(0, 5)} – ${tot}` : `${van} – ${tot}`;
+}
+
 /** Periode als '17/09/2026' of '17/09/2026 t/m 20/09/2026' — één bron voor de
  *  verlof-, ziekte- en omleidingslijsten, die dit elk apart uitschreven. */
 export function formatPeriodeDMJ(start: string | undefined | null, eind?: string | undefined | null): string {

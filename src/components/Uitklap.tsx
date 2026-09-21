@@ -12,6 +12,11 @@ import { DUR } from '../lib/motion';
  *   de binnenkant vervaagt mee. Open op DUR.base, dicht op DUR.fast, beide
  *   op `--ease-standard` (CSS-variabelen uit index.css, dus geen extra
  *   stylesheet nodig). Alleen `grid-template-rows` en `opacity` bewegen.
+ *   `grid-cols-1` staat er expliciet bij (= `minmax(0, 1fr)`): zonder die
+ *   regel is de impliciete kolom `auto`, en dan rekt inhoud die niet kan
+ *   afbreken de hele uitklap breder dan zijn container, in plaats van te
+ *   krimpen of af te kappen (21-09 gezien bij de verloflijst in de smalle
+ *   zijkolom, zelfde valkuil als bij het raster van de verlofpagina).
  * - `overflow: hidden` staat alleen tijdens de beweging en zolang de inhoud
  *   dicht is; eenmaal open komt het vrij (`onTransitionEnd`), zodat ringen,
  *   schaduwen en popovers in de inhoud niet worden afgeknipt.
@@ -65,7 +70,7 @@ export function Uitklap({ open, children, id, className, innerClassName, style }
   return (
     <div
       id={id}
-      className={cn('grid', className)}
+      className={cn('grid grid-cols-1', className)}
       style={{
         gridTemplateRows: open ? '1fr' : '0fr',
         transition: reduced ? 'none' : `grid-template-rows ${duur} var(--ease-standard)`,

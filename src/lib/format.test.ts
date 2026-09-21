@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDatumDMJ, formatGetal, formatMomentKort, formatPeriodeDMJ, formatRelatief, metEenheid } from './format';
+import { formatDatumDMJ, formatGetal, formatMomentKort, formatPeriodeDMJ, formatPeriodeKort, formatRelatief, metEenheid } from './format';
 
 describe('formatGetal (komma als decimaalteken, smalle spatie als duizendtal, max. 2 decimalen)', () => {
   it('kapt ChargEye-decimalen af op twee cijfers na de komma', () => {
@@ -85,5 +85,21 @@ describe('formatMomentKort (dd/mm uu:mm, 24-uurs, nooit een rauwe ISO)', () => {
     expect(formatMomentKort('2026-09-19', nu)).toBe('19/09');
     expect(formatMomentKort(null, nu)).toBe('');
     expect(formatMomentKort('gisteren', nu)).toBe('');
+  });
+});
+
+describe('formatPeriodeKort (lijstrijen op een telefoon)', () => {
+  it('laat het jaar één keer staan binnen hetzelfde jaar', () => {
+    expect(formatPeriodeKort('2026-08-10', '2026-08-12')).toBe('10/08 – 12/08/2026');
+  });
+
+  it('schrijft beide jaren voluit over een jaargrens', () => {
+    expect(formatPeriodeKort('2026-12-28', '2027-01-03')).toBe('28/12/2026 – 03/01/2027');
+  });
+
+  it('één dag is één datum; een lege waarde valt terug op wat er is', () => {
+    expect(formatPeriodeKort('2026-08-10', '2026-08-10')).toBe('10/08/2026');
+    expect(formatPeriodeKort('2026-08-10')).toBe('10/08/2026');
+    expect(formatPeriodeKort(null, '2026-08-10')).toBe('10/08/2026');
   });
 });
