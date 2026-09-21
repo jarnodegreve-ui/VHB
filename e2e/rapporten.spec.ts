@@ -7,8 +7,9 @@ import { ADMIN, CHAUFFEUR, seed } from './helpers';
  * blad toont wat het scherm toonde. Draait op de telefoon én op desktop; de
  * API komt uit scripts/audit-fixtures.mjs (RAPPORT_VERLOFSALDO: twaalf
  * medewerkers, gegevens vanaf 05/01/2026; sinds stap 2 ook
- * RAPPORT_ZIEKTE_KALENDERDAGEN en RAPPORT_VERLOFBEZETTING) en, voor voertuigen
- * en personeel, uit scripts/fixtures-rapporten-wagenpark-personeel.mjs.
+ * RAPPORT_ZIEKTE_KALENDERDAGEN en RAPPORT_VERLOFBEZETTING), voor voertuigen
+ * en personeel uit scripts/fixtures-rapporten-wagenpark-personeel.mjs, en voor
+ * ruilen en planning uit scripts/fixtures-rapporten-ruilen-planning.mjs.
  */
 
 /** Vangt window.open af (openPdfInNewTab) zodat de test de URL kan lezen zonder een tweede tabblad. */
@@ -391,6 +392,141 @@ test('personeelsrapport: medische schiftingen, dringendste eerst, termijn en wie
   await expect(page.getByRole('cell', { name: /Carine De Smet/ })).toBeVisible();
 });
 
+test('ruilrapport: ruilaanvragen met status, antwoord van de collega, peildatum en het blad', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await vangNieuwTabblad(page);
+  await page.goto('/rapporten');
+  await expect(page.getByRole('heading', { name: 'Ruilen', level: 2 })).toBeVisible({ timeout: 15_000 });
+  // De drie rapporten staan naast het bestaande weekblad.
+  await expect(page.getByRole('link', { name: /Uitgevoerde wissels/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Ruilen per chauffeur/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Ruiloverzicht per week/ })).toBeVisible();
+  await page.getByRole('link', { name: /Ruilaanvragen/ }).click();
+  await expect(page).toHaveURL(/\/rapporten\/ruilen\/ruilaanvragen$/);
+
+  await page.goto('/rapporten/ruilen/ruilaanvragen?van=2026-09-01&tot=2026-09-30');
+  await expect(page.getByRole('heading', { name: 'Ruilaanvragen', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('8 rijen')).toBeVisible();
+  // De peildatum (open aanvragen tellen door tot vandaag) staat in de filterregel, in dd/mm/jjjj.
+  await expect(page.getByText('21/09/2026')).toBeVisible();
+  await paginaScrolltNiet(page);
+  const smal = (page.viewportSize()?.width ?? 0) < 768;
+
+  if (smal) {
+    // Telefoon: de status staat onder de dag van de aanvraag, aanvrager en dienst in beeld, geen doorgesneden pil.
+    await expect(page.getByRole('cell', { name: '19/09/2026 Bij planning' })).toBeVisible();
+    for (const breedte of [375, 390]) {
+      await page.setViewportSize({ width: breedte, height: 800 });
+      const rand = await randVanDeTabel(page);
+      expect(rand.koppenBinnen, `${breedte} px`).toEqual(['Aangevr.', 'Aanvrager', 'Dienst']);
+      expect(rand.doorgesnedenPil, `${breedte} px`).toBe(false);
+      await paginaScrolltNiet(page);
+    }
+  } else {
+    const eerste = page.getByRole('row').nth(1);
+    await expect(eerste).toContainText('19/09/2026');
+    await expect(eerste).toContainText('Bij planning');
+    await expect(eerste).toContainText('Geaccepteerd');
+    // Rechtstreeks goedgekeurd: het antwoord van de collega is niet afgewacht.
+    await expect(page.getByRole('row', { name: /Bart Claeys.*Niet afgewacht.*18\/09\/2026.*Jarno De Greve/ })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /Totaal \(8\)/ })).toBeVisible();
+    // Elf kolommen passen niet altijd in het kader: dan schuift de tabel erin (ook vanaf xl), niets valt afgesneden buiten beeld.
+    const kader = await page.evaluate(() => {
+      const k = document.querySelector('table')!.parentElement!;
+      return { past: k.scrollWidth <= k.clientWidth + 1, overloop: getComputedStyle(k).overflowX };
+    });
+    expect(kader.past || kader.overloop === 'auto', JSON.stringify(kader)).toBe(true);
+  }
+
+  // Status en soort zijn keuzelijsten, in de URL.
+  await page.getByLabel('Status').selectOption('teruggedraaid');
+  await expect(page).toHaveURL(/status=teruggedraaid/);
+  await expect(page.getByText('1 rij', { exact: true })).toBeVisible();
+  await page.getByLabel('Soort').selectOption('ruil');
+  await expect(page.getByRole('heading', { name: 'Geen resultaten voor deze filters' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Afdrukken' }).click();
+  const url = new URL((await geopend(page))[0]);
+  expect(Object.fromEntries(url.searchParams)).toEqual({ 'print-rapport': 'ruilaanvragen', van: '2026-09-01', tot: '2026-09-30', status: 'teruggedraaid', soort: 'ruil' });
+
+  // Het blad: filters en peildatum in woorden, de status met een stip waar ze aandacht vraagt, het gemiddelde in de totaalrij.
+  await page.goto('/?print-rapport=ruilaanvragen&van=2026-09-01&tot=2026-09-30');
+  await expect(page.getByRole('heading', { name: 'Ruilaanvragen', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Periode 01/09/2026 t/m 30/09/2026 · Status: Alle · Chauffeur: alle · Soort: Alle · Peildatum 21/09/2026')).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(10); // kop + 8 + totaal
+  await expect(page.getByRole('cell', { name: '● Bij planning' })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Totaal \(8\)\s+2,33/ })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
+test('planningsrapport: diensten per dag met delen en uren, zonder bus, en hele maanden in het overzicht', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await vangNieuwTabblad(page);
+  await page.goto('/rapporten/planning/diensten-per-dag?van=2026-09-21&tot=2026-09-27');
+  await expect(page.getByRole('heading', { name: 'Diensten per dag', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('12 rijen')).toBeVisible();
+  await paginaScrolltNiet(page);
+  const smal = (page.viewportSize()?.width ?? 0) < 768;
+
+  if (smal) {
+    // Telefoon: dag en chauffeur onder de datum; dienst, start en einde passen ervoor.
+    await expect(page.getByRole('cell', { name: '21/09/2026 ma · Test Chauffeur' }).first()).toBeVisible();
+    for (const breedte of [375, 390]) {
+      await page.setViewportSize({ width: breedte, height: 800 });
+      expect((await randVanDeTabel(page)).koppenBinnen, `${breedte} px`).toEqual(['Datum', 'Dienst', 'Start', 'Einde']);
+      await paginaScrolltNiet(page);
+      // Na één veeg: deel, duur en loop staan samen volledig in beeld naast de vaste datum (er is geen kolom Bus meer die ze wegduwt).
+      await page.evaluate(() => { const k = document.querySelector('table')!.parentElement!; k.scrollLeft = k.scrollWidth; });
+      expect((await randVanDeTabel(page)).koppenBinnen, `${breedte} px, gescrold`).toEqual(expect.arrayContaining(['Datum', 'Deel', 'Duur', 'Loop']));
+      await page.evaluate(() => { document.querySelector('table')!.parentElement!.scrollLeft = 0; });
+    }
+  } else {
+    // Een gesplitste dienst staat er met elk deel in, in volgorde; tijden in 24 uur, de duur als u:mm.
+    const rijen = page.getByRole('row');
+    await expect(rijen.nth(1)).toContainText('2101');
+    await expect(rijen.nth(1)).toContainText('04:36');
+    await expect(rijen.nth(1)).toContainText('3:16');
+    await expect(rijen.nth(2)).toContainText('13:39');
+    // Een busdag loopt voorbij middernacht door: 26:16 blijft 26:16.
+    await expect(page.getByRole('cell', { name: '26:16', exact: true })).toBeVisible();
+    // Geen bus: het portaal houdt er geen bij en toont bewust ook geen geplande bus. De loop staat er wel.
+    await expect(page.getByRole('columnheader', { name: 'Bus' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Loop' })).toBeVisible();
+    await expect(rijen.nth(1)).toContainText('4500');
+  }
+
+  // Filter op chauffeur, in de URL; de print-URL draagt dezelfde periode.
+  await page.getByLabel('Chauffeur', { exact: true }).selectOption({ label: 'Alex Du Priez' });
+  await expect(page).toHaveURL(/chauffeur=43/);
+  await expect(page.getByText('4 rijen')).toBeVisible();
+  await page.getByRole('button', { name: 'Afdrukken' }).click();
+  const url = new URL((await geopend(page))[0]);
+  expect(Object.fromEntries(url.searchParams)).toEqual({ 'print-rapport': 'diensten-per-dag', van: '2026-09-21', tot: '2026-09-27', chauffeur: '43' });
+
+  // Overzicht per chauffeur telt per hele maand: twee maandvelden, en een link met losse datums wordt afgerond.
+  await page.goto('/rapporten/planning/overzicht-per-chauffeur?van=2026-09-10&tot=2026-09-20');
+  await expect(page.getByRole('heading', { name: 'Overzicht per chauffeur', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel('Van maand')).toHaveValue('2026-09');
+  await expect(page.getByLabel('Tot en met maand')).toHaveValue('2026-09');
+  await expect(page.getByText('6 rijen')).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Totaal (6)' })).toBeVisible();
+  await page.getByLabel('Van maand').selectOption('2026-07');
+  await expect(page).toHaveURL(/van=2026-07-01&tot=2026-09-30/);
+  await paginaScrolltNiet(page);
+
+  // Er is geen rapport per voertuig op de planning: de catalogus toont het niet en een oude link zegt dat eerlijk.
+  await page.goto('/rapporten/voertuigen/inzet-per-voertuig');
+  await expect(page.getByRole('heading', { name: 'Dit rapport bestaat niet' })).toBeVisible({ timeout: 15_000 });
+  await page.goto('/rapporten');
+  await expect(page.getByRole('heading', { name: 'Voertuigen', level: 2 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('link', { name: /Inzet per voertuig/ })).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
 test('een tabel die nog leeg is zegt dat eerlijk, en waar je ze invult', async ({ page }) => {
   await seed(page, { user: ADMIN, view: 'rapporten' });
   await page.goto('/rapporten/voertuigen/vervaldata-voertuigen');
@@ -409,17 +545,27 @@ test('een tabel die nog leeg is zegt dat eerlijk, en waar je ze invult', async (
   await expect(page).toHaveURL(/\/techniek\/voertuigen$/);
 });
 
+// Eén test per pad en thema. Eerst liep één test alle paden na; met elf
+// rapporten haalde WebKit op de CI-runner daarmee de 30 s niet meer (21-09).
+// Zo krijgt elk rapport zijn eigen limiet en noemt een fout meteen het pad.
+const A11Y_PADEN = [
+  '/rapporten',
+  '/rapporten/verlof/verlofsaldo?jaar=2026',
+  '/rapporten/verlof/verlofbezetting?van=2026-08-01&tot=2026-08-31&bovenLimiet=1',
+  '/rapporten/ziekte/ziekte-kalenderdagen?van=2026-01-01&tot=2026-12-31',
+  '/rapporten/voertuigen/wagenpark-overzicht?status=alle',
+  '/rapporten/personeel/medische-schiftingen',
+  '/rapporten/ruilen/ruilaanvragen?van=2026-09-01&tot=2026-09-30',
+  '/rapporten/ruilen/uitgevoerde-wissels?van=2026-09-01&tot=2026-09-30',
+  '/rapporten/planning/diensten-per-dag?van=2026-09-21&tot=2026-09-27',
+  '/rapporten/planning/overzicht-per-chauffeur?van=2026-09-01&tot=2026-09-30',
+  '/rapporten/planning/openstaande-diensten?van=2026-09-21&tot=2026-10-18',
+] as const;
+
 for (const thema of ['light', 'dark'] as const) {
-  test(`a11y (WCAG 2.1 AA): catalogus en rapport, ${thema === 'dark' ? 'donker' : 'licht'}`, async ({ page }) => {
-    await seed(page, { user: ADMIN, view: 'rapporten', thema });
-    for (const pad of [
-      '/rapporten',
-      '/rapporten/verlof/verlofsaldo?jaar=2026',
-      '/rapporten/verlof/verlofbezetting?van=2026-08-01&tot=2026-08-31&bovenLimiet=1',
-      '/rapporten/ziekte/ziekte-kalenderdagen?van=2026-01-01&tot=2026-12-31',
-      '/rapporten/voertuigen/wagenpark-overzicht?status=alle',
-      '/rapporten/personeel/medische-schiftingen',
-    ]) {
+  for (const pad of A11Y_PADEN) {
+    test(`a11y (WCAG 2.1 AA), ${thema === 'dark' ? 'donker' : 'licht'}: ${pad.split('?')[0]}`, async ({ page }) => {
+      await seed(page, { user: ADMIN, view: 'rapporten', thema });
       await page.goto(pad);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
       await page.evaluate(() => document.fonts.ready);
@@ -428,6 +574,6 @@ for (const thema of ['light', 'dark'] as const) {
       const resultaat = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('nav[aria-label="Hoofdnavigatie"]').analyze();
       const blokkerend = resultaat.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
       expect(blokkerend.map((v) => `${v.id}: ${v.help} (${JSON.stringify(v.nodes[0]?.target)})`), `${pad} (${thema})`).toEqual([]);
-    }
-  });
+    });
+  }
 }

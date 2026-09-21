@@ -9,12 +9,13 @@ import { valideerRecord } from "./valideer.js";
 import { VERLOF_LADERS, ZIEKTE_LADERS } from "./rapporten/ladersZiekteVerlof.js";
 import { VOERTUIG_LADERS } from "./rapporten/voertuigLaders.js";
 import { PERSONEEL_LADERS } from "./rapporten/personeelLaders.js";
+import { PLANNING_LADERS, RUIL_LADERS } from "./rapporten/ruilPlanningLaders.js";
 
 /**
  * Rapporten (20-09): één namespace, GET /api/rapporten/:id. De definitie van
  * een rapport staat in shared/rapporten/register.ts; waar de bron vandaan komt
  * staat per domein in api/_lib/rapporten/ (ladersZiekteVerlof.ts, voertuigLaders.ts,
- * personeelLaders.ts). Het rekenwerk zelf
+ * personeelLaders.ts, ruilPlanningLaders.ts). Het rekenwerk zelf
  * is een pure functie in api/_lib/rapporten/ (bron + filters → rijen + bereik),
  * de route vult totalen en tijdstip aan.
  *
@@ -35,6 +36,8 @@ export const RAPPORT_LADERS: Record<string, RapportLader> = {
   ...ZIEKTE_LADERS,
   ...VOERTUIG_LADERS,
   ...PERSONEEL_LADERS,
+  ...RUIL_LADERS,
+  ...PLANNING_LADERS,
 };
 
 export function mountRapportRoutes(app: express.Express) {

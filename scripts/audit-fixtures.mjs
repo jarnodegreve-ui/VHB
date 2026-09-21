@@ -10,6 +10,7 @@
  */
 
 import { rapportFixture } from './fixtures-rapporten-wagenpark-personeel.mjs';
+import { rapportFixtureRuilenPlanning } from './fixtures-rapporten-ruilen-planning.mjs';
 
 export const SESSION_KEY = 'sb-localhost-auth-token';
 
@@ -427,9 +428,10 @@ export function apiFixtures(user, extra) {
       if (!dag) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Deze dag is nog niet geopend.', inPlanning: true, voorstel: USERS.filter((u) => u.role === 'chauffeur').map((u) => ({ userId: u.id, naam: u.name, planningCode: u.id === '42' ? '2101' : 'vrij' })) }) });
       return json({ dag, rijen: DAG_PRESTATIES.map((r) => ({ ...r, datum })), planningAfwijkingen: [], ontbrekendeCodes: [], inPlanning: true });
     }
-    // Rapporten van voertuigen en personeel: eigen bestand, kent het rapport het niet dan zoekt dit verder.
+    // Rapporten van voertuigen, personeel, ruilen en planning: eigen bestanden, kent geen van beide het rapport dan zoekt dit verder.
     if (p.includes('/api/rapporten/')) {
-      const antwoord = rapportFixture(p.split('/api/rapporten/')[1], url.searchParams);
+      const rapportId = p.split('/api/rapporten/')[1];
+      const antwoord = rapportFixture(rapportId, url.searchParams) ?? rapportFixtureRuilenPlanning(rapportId, url.searchParams);
       if (antwoord) return json(antwoord);
     }
     if (p.endsWith('/api/rapporten/ziekte-kalenderdagen')) return json(RAPPORT_ZIEKTE_KALENDERDAGEN(url.searchParams.get('chauffeur') || ''));

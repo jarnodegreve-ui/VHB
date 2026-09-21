@@ -43,7 +43,13 @@ import zlib from 'node:zlib';
 // meer. Dit totaal groeit met elk nieuw lui geladen scherm; wat de start
 // bewaakt zijn de deelbudgetten hieronder (index, vendors, warmup, zod-vrij),
 // en die zijn niet verschoven.
-const BUDGET_KB = 615;
+// 21-09: 615 → 630. Gemeten: main 614 kB (na rapportstap 2 en 3), met stap 4
+// (ruilen en planning: zes definities, de maandkiezer en de tabel die in haar
+// kader blijft schuiven) 617 kB (+3, alles in de lui geladen rapportchunks).
+// 630 = de eerste meting van stap 4 (617,1) plus ±2 % (629,4), afgerond. De
+// entry staat op 73,45 kB (budget 74, ongewijzigd) en de warmup-sets op 63 en
+// 121 kB (66 en 124): de rapportcode zit niet in de entry en niet in de warmup.
+const BUDGET_KB = 630;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

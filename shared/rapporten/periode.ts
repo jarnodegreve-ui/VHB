@@ -7,15 +7,43 @@
  */
 
 export type Periode = { van: string; tot: string };
-export type PeriodeKeuze = 'deze-maand' | 'vorige-maand' | 'dit-kwartaal' | 'dit-jaar' | 'vrij';
+export type PeriodeKeuze =
+  | 'deze-week' | 'vorige-week' | 'komende-4-weken'
+  | 'deze-maand' | 'vorige-maand' | 'volgende-maand' | 'dit-kwartaal' | 'dit-jaar' | 'vrij';
+/** Een snelkeuze met een eigen periode (alles behalve 'vrij'). */
+export type VastePeriodeKeuze = Exclude<PeriodeKeuze, 'vrij'>;
 
-export const PERIODE_KEUZES: ReadonlyArray<{ waarde: PeriodeKeuze; label: string }> = [
-  { waarde: 'deze-maand', label: 'Deze maand' },
-  { waarde: 'vorige-maand', label: 'Vorige maand' },
-  { waarde: 'dit-kwartaal', label: 'Dit kwartaal' },
-  { waarde: 'dit-jaar', label: 'Dit jaar' },
-  { waarde: 'vrij', label: 'Vrije periode' },
-];
+const KEUZE_LABEL: Record<PeriodeKeuze, string> = {
+  'deze-week': 'Deze week',
+  'vorige-week': 'Vorige week',
+  'komende-4-weken': 'Komende 4 weken',
+  'deze-maand': 'Deze maand',
+  'vorige-maand': 'Vorige maand',
+  'volgende-maand': 'Volgende maand',
+  'dit-kwartaal': 'Dit kwartaal',
+  'dit-jaar': 'Dit jaar',
+  vrij: 'Vrije periode',
+};
+
+/**
+ * Welke snelkeuzes een periodefilter aanbiedt. Een rapport kijkt terug over
+ * maanden (`terug`, de standaard: ziekte, verlof, werken), leest de planning
+ * per dag (`dagen`: deze week, vorige week) of kijkt vooruit (`vooruit`:
+ * openstaande diensten, waar het verleden niets meer zegt).
+ */
+export type PeriodeSnelkeuze = 'terug' | 'dagen' | 'vooruit';
+
+const KEUZES_PER_SOORT: Record<PeriodeSnelkeuze, readonly PeriodeKeuze[]> = {
+  terug: ['deze-maand', 'vorige-maand', 'dit-kwartaal', 'dit-jaar', 'vrij'],
+  dagen: ['deze-week', 'vorige-week', 'deze-maand', 'vorige-maand', 'vrij'],
+  vooruit: ['deze-week', 'komende-4-weken', 'deze-maand', 'volgende-maand', 'vrij'],
+};
+
+export const periodeKeuzesVoor = (soort: PeriodeSnelkeuze = 'terug'): ReadonlyArray<{ waarde: PeriodeKeuze; label: string }> =>
+  KEUZES_PER_SOORT[soort].map((waarde) => ({ waarde, label: KEUZE_LABEL[waarde] }));
+
+/** De snelkeuzes van een rapport dat terugkijkt (de standaard). */
+export const PERIODE_KEUZES = periodeKeuzesVoor('terug');
 
 /** Langste periode die een rapport in één keer mag opvragen (een schrikkeljaar past net). */
 export const MAX_PERIODE_DAGEN = 366;
@@ -48,10 +76,28 @@ const maandPeriode = (jaar: number, maand: number): Periode => ({
 
 export const jaarPeriode = (jaar: number): Periode => ({ van: `${jaar}-01-01`, tot: `${jaar}-12-31` });
 
+/** ISO-dag plus n dagen, op de cijfers van de string (UTC): een zomeruurwissel kost geen dag. */
+export const dagPlus = (iso: string, n: number): string => {
+  const [j, m, d] = delen(iso);
+  return uitUtc(new Date(Date.UTC(j, m - 1, d + n)));
+};
+
+/** De maandag van de week waarin deze dag valt (ISO-week: maandag tot en met zondag). */
+export const maandagVanWeek = (iso: string): string => {
+  const [j, m, d] = delen(iso);
+  const weekdag = new Date(Date.UTC(j, m - 1, d)).getUTCDay();
+  return dagPlus(iso, -((weekdag + 6) % 7));
+};
+
 /** De periode van een snelkeuze, gerekend vanaf `vandaag`. 'vrij' heeft geen eigen periode. */
-export const periodeVoor = (keuze: Exclude<PeriodeKeuze, 'vrij'>, vandaag: string): Periode => {
+export const periodeVoor = (keuze: VastePeriodeKeuze, vandaag: string): Periode => {
   const [jaar, maand] = delen(vandaag);
   switch (keuze) {
+    case 'deze-week': return { van: maandagVanWeek(vandaag), tot: dagPlus(maandagVanWeek(vandaag), 6) };
+    case 'vorige-week': return { van: dagPlus(maandagVanWeek(vandaag), -7), tot: dagPlus(maandagVanWeek(vandaag), -1) };
+    // Vandaag en de 27 dagen erna: vier volle weken, te beginnen bij vandaag (gisteren is geen gat meer).
+    case 'komende-4-weken': return { van: vandaag, tot: dagPlus(vandaag, 27) };
+    case 'volgende-maand': return maandPeriode(jaar, maand + 1);
     case 'deze-maand': return maandPeriode(jaar, maand);
     case 'vorige-maand': return maandPeriode(jaar, maand - 1);
     case 'dit-kwartaal': {
@@ -62,9 +108,10 @@ export const periodeVoor = (keuze: Exclude<PeriodeKeuze, 'vrij'>, vandaag: strin
   }
 };
 
-/** Welke snelkeuze hoort bij deze datums? Geen enkele = 'vrij'. */
-export const herkenPeriode = (periode: Periode, vandaag: string): PeriodeKeuze => {
-  for (const keuze of ['deze-maand', 'vorige-maand', 'dit-kwartaal', 'dit-jaar'] as const) {
+/** Welke snelkeuze (uit de lijst van dit filter) hoort bij deze datums? Geen enkele = 'vrij'. */
+export const herkenPeriode = (periode: Periode, vandaag: string, soort: PeriodeSnelkeuze = 'terug'): PeriodeKeuze => {
+  for (const keuze of KEUZES_PER_SOORT[soort]) {
+    if (keuze === 'vrij') continue;
     const p = periodeVoor(keuze, vandaag);
     if (p.van === periode.van && p.tot === periode.tot) return keuze;
   }
@@ -79,12 +126,47 @@ export const dagenInPeriode = ({ van, tot }: Periode): number => {
   return Math.round((Date.UTC(tj, tm - 1, td) - Date.UTC(vj, vm - 1, vd)) / 86_400_000) + 1;
 };
 
-/** Reden waarom een periode niet kan, of null als ze geldig is. */
-export const periodeFout = (periode: Partial<Periode>): { veld: 'van' | 'tot'; tekst: string } | null => {
-  if (!isIsoDag(periode.van)) return { veld: 'van', tekst: 'Kies een begindatum' };
-  if (!isIsoDag(periode.tot)) return { veld: 'tot', tekst: 'Kies een einddatum' };
-  if (periode.tot < periode.van) return { veld: 'tot', tekst: 'De einddatum ligt voor de begindatum' };
-  if (dagenInPeriode({ van: periode.van, tot: periode.tot }) > MAX_PERIODE_DAGEN) return { veld: 'tot', tekst: `Kies een periode van hoogstens ${MAX_PERIODE_DAGEN} dagen` };
+/** Eerste dag van de maand van deze dag. */
+export const eersteVanMaand = (iso: string): string => `${iso.slice(0, 7)}-01`;
+/** Laatste dag van de maand van deze dag (schrikkeljaren kloppen: dag 0 van de volgende maand, in UTC). */
+export const laatsteVanMaand = (iso: string): string => {
+  const [j, m] = delen(iso);
+  return maandPeriode(j, m).tot;
+};
+/** Bestaat deze periode uit hele kalendermaanden (van de 1e tot en met de laatste dag)? */
+export const isHeleMaanden = ({ van, tot }: Periode): boolean =>
+  isIsoDag(van) && isIsoDag(tot) && van === eersteVanMaand(van) && tot === laatsteVanMaand(tot);
+/** Rondt een periode af op hele maanden: terug naar de 1e, vooruit naar de laatste dag. */
+export const opHeleMaanden = ({ van, tot }: Periode): Periode => ({ van: eersteVanMaand(van), tot: laatsteVanMaand(tot) });
+
+/** De maanden ('JJJJ-MM') die een periode raakt, in volgorde. */
+export const maandenInPeriode = ({ van, tot }: Periode): string[] => {
+  if (!isIsoDag(van) || !isIsoDag(tot) || tot < van) return [];
+  const uit: string[] = [];
+  let [j, m] = delen(van);
+  const einde = tot.slice(0, 7);
+  while (`${j}-${twee(m)}` <= einde) {
+    uit.push(`${j}-${twee(m)}`);
+    m += 1;
+    if (m > 12) { m = 1; j += 1; }
+  }
+  return uit;
+};
+
+/**
+ * Reden waarom een periode niet kan, of null als ze geldig is. `heleMaanden`:
+ * het rapport telt per kalendermaand (zoals het maandoverzicht), dus een
+ * periode die midden in een maand begint of eindigt is daar een fout.
+ */
+export const periodeFout = (periode: Partial<Periode>, opties: { heleMaanden?: boolean } = {}): { veld: 'van' | 'tot'; tekst: string } | null => {
+  if (!isIsoDag(periode.van)) return { veld: 'van', tekst: opties.heleMaanden ? 'Kies een beginmaand' : 'Kies een begindatum' };
+  if (!isIsoDag(periode.tot)) return { veld: 'tot', tekst: opties.heleMaanden ? 'Kies een eindmaand' : 'Kies een einddatum' };
+  if (periode.tot < periode.van) return { veld: 'tot', tekst: opties.heleMaanden ? 'De eindmaand ligt voor de beginmaand' : 'De einddatum ligt voor de begindatum' };
+  if (opties.heleMaanden) {
+    if (periode.van !== eersteVanMaand(periode.van)) return { veld: 'van', tekst: 'Dit rapport telt per hele maand: begin op de eerste dag van een maand' };
+    if (periode.tot !== laatsteVanMaand(periode.tot)) return { veld: 'tot', tekst: 'Dit rapport telt per hele maand: eindig op de laatste dag van een maand' };
+  }
+  if (dagenInPeriode({ van: periode.van, tot: periode.tot }) > MAX_PERIODE_DAGEN) return { veld: 'tot', tekst: opties.heleMaanden ? 'Kies hoogstens twaalf maanden' : `Kies een periode van hoogstens ${MAX_PERIODE_DAGEN} dagen` };
   return null;
 };
 

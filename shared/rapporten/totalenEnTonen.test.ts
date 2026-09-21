@@ -3,7 +3,7 @@ import type { RapportDefinitie, RapportRij } from './types';
 import { DOMEINEN, RAPPORTEN, rapportVan, rapportenVanDomein } from './register';
 import { VASTE_PARAMS, filtersInWoorden, filtersNaarQuery, leesFilters, standaardFilters } from './filters';
 import { filterSchemaVoor } from './filterSchema';
-import { NADRUK_TEKEN, berekenTotalen, celToon, csvRijen, formatWaarde, heeftTotaalrij, isPilKolom, kolomIndeling, toonOpBlad, totaalSoort, totalenVoor } from './opmaak';
+import { NADRUK_TEKEN, SMAL_BREEDTE, SMAL_SCHERM_REM, berekenTotalen, celToon, csvRijen, formatWaarde, heeftTotaalrij, isPilKolom, kolomIndeling, smalleBreedte, toonOpBlad, totaalSoort, totalenVoor } from './opmaak';
 
 /**
  * Wat het fundament in stap 3 bijleerde: totalen die geen som zijn (kleinste,
@@ -209,8 +209,8 @@ describe('de definities van voertuigen en personeel', () => {
     expect(rapportenVanDomein('personeel').map((r) => r.id)).toEqual(['contactlijst', 'actieve-medewerkers', 'medische-schiftingen', 'vakbekwaamheden']);
     expect(DOMEINEN.map((d) => d.id)).toContain('personeel');
     expect(new Set(RAPPORTEN.map((r) => r.id)).size).toBe(RAPPORTEN.length);
-    // Na het samenvoegen met ziekte en verlof: 1 verlofsaldo + 6 + 11.
-    expect(RAPPORTEN).toHaveLength(18);
+    // Na het samenvoegen met ziekte en verlof: 1 verlofsaldo + 6 + 11; stap 4 voegt 3 ruilrapporten en 3 planningsrapporten toe.
+    expect(RAPPORTEN).toHaveLength(24);
     expect(rapportVan('verlofsaldo')!.domein).toBe('verlof');
   });
 
@@ -225,13 +225,13 @@ describe('de definities van voertuigen en personeel', () => {
   });
 
   it('telefoon: hoogstens de eerste kolom plus drie smalle of twee bredere kolommen vóór het scrollen', () => {
-    // Zelfde breedtes als RapportTabel (rem): eerste 9,5 · getal 3,75 · datum 5,5 · ja/nee 3,75 · tekst 8; een telefoon van 375 px is 23,4 rem.
-    const breedte = (type: string) => (type === 'getal' || type === 'duur' || type === 'janee' ? 3.75 : type === 'tekst' ? 8 : 5.5);
+    // Dezelfde maten als RapportTabel (`smalleBreedte`): eerste 9,5 · getal 3,75 · datum 5,5 · ja/nee 3,75 · tekst 8; een telefoon van 375 px is 23,4 rem.
+    expect(SMAL_BREEDTE).toMatchObject({ eerste: 9.5, getal: 3.75, janee: 3.75, kort: 5.5, tekst: 8 });
     for (const def of NIEUW) {
       const { kolommen } = kolomIndeling(def, 'smal');
       const vooraan = kolommen.slice(1).filter((k) => !k.smal);
-      const som = 9.5 + vooraan.reduce((n, k) => n + breedte(k.type), 0);
-      expect(som, def.id).toBeLessThanOrEqual(23.4);
+      const som = SMAL_BREEDTE.eerste + vooraan.reduce((n, k) => n + smalleBreedte(k, false), 0);
+      expect(som, def.id).toBeLessThanOrEqual(SMAL_SCHERM_REM);
       expect(vooraan.length, def.id).toBeGreaterThan(0);
     }
   });

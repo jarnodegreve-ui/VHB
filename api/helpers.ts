@@ -281,6 +281,51 @@ export const berekenMaandoverzicht = (
   return { rijen, totaal };
 };
 
+export type Maandoverzicht = ReturnType<typeof berekenMaandoverzicht>;
+
+/**
+ * Meerdere maandoverzichten opgeteld tot één overzicht (rapport "Overzicht per
+ * chauffeur": een kwartaal of een jaar). Het bord telt per kalendermaand
+ * (`berekenCelWaarheid` legt ruilen en afwezigheden per maand over de matrix),
+ * dus een periode is de som van haar maanden, niet een tweede telling: met
+ * één maand komt er precies dat maandoverzicht uit. Een chauffeur staat op de
+ * plaats waar hij het eerst voorkomt (de bordvolgorde van de eerste maand).
+ */
+export const telMaandoverzichtenOp = (overzichten: readonly Maandoverzicht[]): Maandoverzicht => {
+  const perChauffeur = new Map<string, MaandoverzichtRij>();
+  const totaal = { diensten: 0, minuten: 0, anderWerk: 0, ziek: 0, betaald: 0, vrij: 0, overig: 0, dagen: 0 };
+  for (const overzicht of overzichten) {
+    for (const r of overzicht.rijen) {
+      const som = perChauffeur.get(r.driverId);
+      if (!som) {
+        perChauffeur.set(r.driverId, { ...r, overig: r.overig.map((o) => ({ ...o })) });
+        continue;
+      }
+      som.diensten += r.diensten;
+      som.minuten += r.minuten;
+      som.anderWerk += r.anderWerk;
+      som.ziek += r.ziek;
+      som.betaald += r.betaald;
+      som.vrij += r.vrij;
+      som.dagen += r.dagen;
+      for (const o of r.overig) {
+        const bestaand = som.overig.find((x) => x.code === o.code);
+        if (bestaand) bestaand.keren += o.keren;
+        else som.overig.push({ ...o });
+      }
+    }
+    totaal.diensten += overzicht.totaal.diensten;
+    totaal.minuten += overzicht.totaal.minuten;
+    totaal.anderWerk += overzicht.totaal.anderWerk;
+    totaal.ziek += overzicht.totaal.ziek;
+    totaal.betaald += overzicht.totaal.betaald;
+    totaal.vrij += overzicht.totaal.vrij;
+    totaal.overig += overzicht.totaal.overig;
+    totaal.dagen += overzicht.totaal.dagen;
+  }
+  return { rijen: [...perChauffeur.values()], totaal };
+};
+
 export const bouwMaandoverzichtAoa = (
   month: string,
   dates: string[],

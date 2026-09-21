@@ -103,6 +103,8 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
     const chauffeursVoorNaam = (usersForLeave as any[]).filter((u) => u?.role === "chauffeur" && u?.isActive !== false);
     const idByNameToken = nameIdIndex(chauffeursVoorNaam);
     const userNameById = new Map<string, string>(chauffeursVoorNaam.map((u) => [String(u.id), String(u.name ?? "")]));
+    // Wie een dienst overnam kan ook een flexi of iemand van de staf zijn: daarvoor de naam van élk account.
+    const elkeNaamById = new Map<string, string>((usersForLeave as any[]).map((u) => [String(u.id), String(u.name ?? "")]));
     const UITVAL_REDEN: Record<string, string> = { ziekte: "ziek", betaald_verlof: "verlof", klein_verlet: "klein verlet" };
 
     // Doorgevoerde ruilen en handmatige wissels: de matrix is een momentopname
@@ -144,6 +146,7 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
       // tegel ("4407 · Pascal · ziek"). afwezigOp geeft ziekte voorrang bij
       // overlappende records en negeert kapotte datums.
       const uitvalByCode = new Map<string, { name: string; reason: string }>();
+      const opgevangenByCode = new Map<string, { name: string; reason: string; door: string }>();
       const assignmentValues: string[] = [];
       const entries = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
         ? Object.entries(r.assignments)
@@ -163,6 +166,16 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
           });
         } else {
           assignmentValues.push(String(v));
+          // Overgenomen van een afwezige: geen gat meer, maar wel te onthouden
+          // voor het rapport (wie viel uit, en wie rijdt de dienst nu).
+          const uitgevallen = !historisch && matrixId && id && id !== matrixId ? afwezigOp(approvedLeaveAll, matrixId, date) : null;
+          if (uitgevallen && matrixId && id) {
+            opgevangenByCode.set(normalizeCode(String(v)), {
+              name: userNameById.get(matrixId) || String(naam),
+              reason: UITVAL_REDEN[uitgevallen.type] ?? uitgevallen.type,
+              door: elkeNaamById.get(id) || "",
+            });
+          }
         }
       }
       const gap = computeDayGap(date, dayType, expected, assignmentValues);
@@ -173,7 +186,20 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
         const info = uitvalByCode.get(normalizeCode(svc));
         if (info) uitval[normalizeCode(svc)] = info;
       }
-      return Object.keys(uitval).length > 0 ? { ...gap, bron, uitval } : { ...gap, bron };
+      // Idem voor wat opgevangen is: alleen verwachte diensten die nu gedekt zijn.
+      const ontbreekt = new Set(gap.missing.map(normalizeCode));
+      const opgevangen: NonNullable<DayGap["opgevangen"]> = {};
+      for (const svc of expected) {
+        const code = normalizeCode(svc);
+        const info = opgevangenByCode.get(code);
+        if (info && !ontbreekt.has(code)) opgevangen[code] = info;
+      }
+      return {
+        ...gap,
+        bron,
+        ...(Object.keys(uitval).length > 0 ? { uitval } : {}),
+        ...(Object.keys(opgevangen).length > 0 ? { opgevangen } : {}),
+      };
     });
     return days;
 }
