@@ -18,7 +18,7 @@ import { SkeletonRow } from '../components/Skeleton';
 import { cn, telHref } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
-import { formatDuration, shiftCategory } from '../lib/shiftTime';
+import { formatDuration } from '../lib/shiftTime';
 import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUren';
 import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
 import { formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
@@ -34,20 +34,6 @@ const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;
 const maandUitParam = (p: string | null): Date | null =>
   p && MAAND_PARAM.test(p) ? new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1, 1) : null;
 const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-
-/**
- * Dagdeel-chip. Stond met alle drie op 'slate': dezelfde grijze badge voor
- * Vroeg, Middag en Laat, dus de kleur droeg geen informatie en kostte alleen
- * breedte. De tinten volgen nu het moment van de dag — als stille chip (alleen
- * het puntje kleurt), want het is een terzijde naast het dienstnummer, geen
- * statusmelding (afwerking 04-09, nr. 6).
- */
-
-const CATEGORY_PILL: Record<string, { label: string; tone: 'amber' | 'emerald' | 'slate' }> = {
-  ochtend: { label: 'Vroeg', tone: 'amber' },
-  middag: { label: 'Middag', tone: 'slate' },
-  avond: { label: 'Laat', tone: 'emerald' },
-};
 
 /**
  * Breekpunt als React-state (Tailwind `xl` = 1280 px). Onder `xl` kiest de
@@ -660,8 +646,6 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
           <tbody>
             {shifts.map((g) => {
               const isToday = g.date === today;
-              const cat = shiftCategory(g.earliestStart);
-              const pill = CATEGORY_PILL[cat];
 
               return (
                 <tr
@@ -701,7 +685,6 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                   </Td>
                   <Td className="px-6 py-4">
                     <div className="inline-flex items-center gap-2">
-                      <Badge tone={pill.tone} stil>{pill.label}</Badge>
                       <span className="text-lg font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
                         <span className="text-xs font-medium text-slate-500 tabular-nums">
@@ -745,8 +728,6 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
       <div className={cn('space-y-3', !compact && 'md:hidden')}>
         {shifts.map((g) => {
           const isToday = g.date === today;
-          const cat = shiftCategory(g.earliestStart);
-          const pill = CATEGORY_PILL[cat];
 
           return (
             <Card
@@ -787,7 +768,6 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Badge tone={pill.tone} stil>{pill.label}</Badge>
                   <span className="text-base font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
                 </div>
               </div>

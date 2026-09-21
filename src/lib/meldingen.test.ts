@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Melding } from '../types';
-import { dagLabel, dagVan, filterMeldingen, groepeerPerDag, soortenIn, tijdVan } from './meldingen';
+import { dagLabel, dagVan, datumsLeesbaar, filterMeldingen, groepeerPerDag, soortenIn, tijdVan } from './meldingen';
 
 const m = (id: string, createdAt: string, extra: Partial<Melding> = {}): Melding => ({
   id, titel: `Melding ${id}`, soort: 'planning', createdAt, ...extra,
@@ -51,5 +51,20 @@ describe('meldingen, helpers', () => {
   it('tijdVan: HH:MM in Belgische tijd', () => {
     expect(tijdVan('2026-07-06T10:05:00Z')).toBe('12:05');
     expect(tijdVan('kapot')).toBe('');
+  });
+});
+
+describe('datumsLeesbaar', () => {
+  it('zet een rauwe ISO-dag om naar dd/mm/jjjj', () => {
+    expect(datumsLeesbaar('Je rijdt dienst 2101 op 2026-10-03. Bekijk je rooster.'))
+      .toBe('Je rijdt dienst 2101 op 03/10/2026. Bekijk je rooster.');
+    expect(datumsLeesbaar('Verlof (2026-10-03 t/m 2026-10-07) goedgekeurd.'))
+      .toBe('Verlof (03/10/2026 t/m 07/10/2026) goedgekeurd.');
+  });
+
+  it('laat tijdstippen, reeds omgezette datums en lege waarden met rust', () => {
+    expect(datumsLeesbaar('Aangemeld om 2026-10-03T08:15:00Z.')).toBe('Aangemeld om 2026-10-03T08:15:00Z.');
+    expect(datumsLeesbaar('Dienst 2101 op 03/10/2026.')).toBe('Dienst 2101 op 03/10/2026.');
+    expect(datumsLeesbaar(null)).toBe('');
   });
 });

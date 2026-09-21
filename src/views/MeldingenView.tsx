@@ -4,7 +4,7 @@ import { useAppDataContext } from '../app/AppDataContext';
 import { navigeer, routeUitUrl } from '../app/router';
 import { MELDING_SOORT_LABEL } from '../../shared/meldingSoorten';
 import { isoDate } from '../lib/datum';
-import { filterMeldingen, groepeerPerDag, soortenIn, tijdVan, type MeldingFilter } from '../lib/meldingen';
+import { datumsLeesbaar, filterMeldingen, groepeerPerDag, soortenIn, tijdVan, type MeldingFilter } from '../lib/meldingen';
 import { cn } from '../lib/ui';
 import type { Melding, MeldingSoort, View } from '../types';
 import { Card } from '../components/Card';
@@ -127,10 +127,10 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className={cn('block truncate text-md', ongelezen ? 'font-semibold text-slate-900' : 'font-medium text-slate-700')}>
-                              {m.titel}
+                              {datumsLeesbaar(m.titel)}
                             </span>
                             {m.tekst && (
-                              <span className="mt-0.5 line-clamp-2 block text-sm font-normal leading-snug text-slate-500">{m.tekst}</span>
+                              <span className="mt-0.5 line-clamp-2 block text-sm font-normal leading-snug text-slate-500">{datumsLeesbaar(m.tekst)}</span>
                             )}
                           </span>
                           <span className="flex shrink-0 items-center gap-2 pt-0.5">

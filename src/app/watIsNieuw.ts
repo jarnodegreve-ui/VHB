@@ -56,10 +56,10 @@ export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   },
   {
     id: '2026-09-17',
-    titel: 'Werkvoorraad op één scherm',
+    titel: 'Alles op één overzicht',
     regels: {
       staf: [
-        'Nieuw scherm Werkvoorraad (Beheer › Planning): alles wat op een beslissing wacht, oudste eerst, met een filter per soort.',
+        'Nieuw scherm Overzicht (Beheer › Planning): alles wat op een beslissing wacht, oudste eerst, met een filter per soort.',
         'Het Open taken-paneel op het dashboard en het menu in de topbar linken er nu naartoe in plaats van “+N niet getoond”.',
       ],
     },

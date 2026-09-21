@@ -4917,8 +4917,8 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
       "swaps",
       terugLine ? "Diensten handmatig gewisseld" : "Dienst handmatig overgezet",
       terugLine
-        ? `${fromUser.name} ⇄ ${toUser.name} op ${date}: dienst ${dienstLine} naar ${toUser.name}, dienst ${terugLine} naar ${fromUser.name}. Reden: ${reason}. ${carry}`
-        : `${fromUser.name} → ${toUser.name}, dienst ${dienstLine} op ${date}. Reden: ${reason}. ${carry}`,
+        ? `${fromUser.name} ⇄ ${toUser.name} op ${DAG_DMJ(date)}: dienst ${dienstLine} naar ${toUser.name}, dienst ${terugLine} naar ${fromUser.name}. Reden: ${reason}. ${carry}`
+        : `${fromUser.name} → ${toUser.name}, dienst ${dienstLine} op ${DAG_DMJ(date)}. Reden: ${reason}. ${carry}`,
       { type: "swap", id: swap.id },
     );
 
@@ -4926,8 +4926,8 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
       title: "Planning aangepast",
       soort: "planning",
       body: terugLine
-        ? `Op ${date} zijn de diensten gewisseld: ${toUser.name} rijdt dienst ${dienstLine}, ${fromUser.name} rijdt dienst ${terugLine}. Reden: ${reason}.`
-        : `Dienst ${dienstLine} op ${date} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
+        ? `Op ${DAG_DMJ(date)} zijn de diensten gewisseld: ${toUser.name} rijdt dienst ${dienstLine}, ${fromUser.name} rijdt dienst ${terugLine}. Reden: ${reason}.`
+        : `Dienst ${dienstLine} op ${DAG_DMJ(date)} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
       url: viewUrl("rooster"),
     });
 
@@ -5104,12 +5104,12 @@ async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber: unkno
       actorReq(actor),
       "planning",
       "Dienst toegewezen",
-      `Dienst ${service.serviceNumber} op ${date} toegewezen aan ${driver.name} (was onbemand). ${nieuweRijen.length} rij(en) toegevoegd; matrix bijgewerkt.`,
+      `Dienst ${service.serviceNumber} op ${DAG_DMJ(date)} toegewezen aan ${driver.name} (was onbemand). ${nieuweRijen.length} rij(en) toegevoegd; matrix bijgewerkt.`,
     );
     await sendPushToUsers([driverId], {
       title: "Dienst toegewezen",
       soort: "planning",
-      body: `Je rijdt dienst ${service.serviceNumber} op ${date}. Bekijk je rooster.`,
+      body: `Je rijdt dienst ${service.serviceNumber} op ${DAG_DMJ(date)}. Bekijk je rooster.`,
       url: viewUrl("rooster"),
     });
     return { rows: nieuweRijen.length, serviceNumber: String(service.serviceNumber), driverName: driver.name, date };
@@ -5491,7 +5491,6 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     const previousById = new Map(previousLeave.map((r) => [r.id, r]));
     const users = await getUsersData();
     const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
-    const formatPeriod = (start: string, end: string) => start === end ? start : `${start} t/m ${end}`;
     const formatLeaveType = (t: string) => LEAVE_TYPE_LABEL[t] ?? t;
 
     // Server-side autorisatie: chauffeurs kunnen alleen eigen pending-aanvragen
@@ -5607,7 +5606,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
 
     for (const next of recordsToWrite) {
       const prev = previousById.get(next.id);
-      const period = formatPeriod(next.startDate, next.endDate);
+      const period = PERIODE_DMJ(next.startDate, next.endDate);
       const typeLabel = formatLeaveType(next.type);
 
       if (!prev) {
@@ -5732,7 +5731,7 @@ async function beslisVerlofIntern(opts: { id: string; status: string; ifStatus: 
     const users = await getUsersData();
     const requester = users.find((u) => String(u.id) === String(current.userId));
     const requesterName = requester?.name || `Onbekende gebruiker (${current.userId})`;
-    const period = current.startDate === current.endDate ? DAG_KORT(String(current.startDate)) : `${DAG_KORT(String(current.startDate))} t/m ${DAG_KORT(String(current.endDate))}`;
+    const period = PERIODE_DMJ(String(current.startDate), String(current.endDate));
     const typeLabel = LEAVE_TYPE_LABEL[current.type] ?? current.type;
     const actionLabels: Record<string, string> = {
       approved: "Verlof goedgekeurd",
