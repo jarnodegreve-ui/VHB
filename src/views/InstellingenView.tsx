@@ -19,7 +19,7 @@ import { STARTSCHERMEN, onthoudStartschermLokaal, type Startscherm } from '../li
 import { supabase } from '../lib/supabase';
 import { leesTweeStapsStatus, schakelUit, type TweeStapsStatus } from '../lib/tweeStaps';
 import { notify } from '../lib/ui';
-import type { User, View } from '../types';
+import { ROL_LABEL, type User, type View } from '../types';
 import { OnderhoudBeheer } from './instellingen/OnderhoudBeheer';
 
 // --- Toestellen en sessies (GET /api/me/toestellen) ---
@@ -461,7 +461,7 @@ export function InstellingenView({
   onLogout: () => void;
   onNavigate: (view: View) => void;
 }) {
-  const rolLabel = { admin: 'Beheerder', planner: 'Planner', chauffeur: 'Chauffeur' }[user.role] ?? user.role;
+  const rolLabel = ROL_LABEL[user.role];
   const isAdmin = user.role === 'admin';
   return (
     <PageShell>

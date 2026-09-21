@@ -241,7 +241,7 @@ export interface ShiftRecord {
 
 // Toestel-whitelist (user_devices). De types staan hier en niet in storage.ts
 // zodat AuthenticatedRequest ernaar kan verwijzen zonder storage.ts mee te
-// trekken (types.ts blijft zonder afhankelijkheden; lint:strict leest het mee).
+// trekken (types.ts blijft zonder afhankelijkheden; de typecheck leest het mee).
 export type DeviceStatus = 'approved' | 'pending' | 'revoked';
 
 export type UserDevice = {

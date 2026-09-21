@@ -37,7 +37,12 @@ export function maakSwrCache<T>(
     // luisteraar invalidate() aanroepen.
     const basis = opts.epoch().waarde;
     const gestart = generatie;
-    const p = (async () => {
+    // `let p!`: de `finally` hieronder leest `p`, maar draait pas na een
+    // `await`, wanneer de toewijzing allang gebeurd is. Dat kan de compiler
+    // niet bewijzen (TS2454 onder `strict`); de `!` zegt het hem, zonder één
+    // byte aan het gedrag te veranderen.
+    let p!: Promise<T>;
+    p = (async () => {
       try {
         const value = await laad();
         if (generatie === gestart) cache = { value, at: now(), basis };

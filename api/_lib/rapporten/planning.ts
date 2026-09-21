@@ -94,7 +94,9 @@ export function bouwDienstenPerDag(bron: DienstenBron, filters: RapportFilters):
   const persoon = persoonZoeker(bron.users);
   const geldig = bron.planning.filter((p) => ISO_DAG.test(tekst(p.date)));
 
-  let bereik: RapportBereik = null;
+  // `null as RapportBereik`: met `: RapportBereik = null` vernauwt de compiler
+  // de variabele tot null en ziet hij de tak `bereik ? …` als onbereikbaar.
+  let bereik = null as RapportBereik;
   for (const p of geldig) {
     const dag = tekst(p.date);
     bereik = bereik ? { van: dag < bereik.van ? dag : bereik.van, tot: dag > bereik.tot ? dag : bereik.tot } : { van: dag, tot: dag };

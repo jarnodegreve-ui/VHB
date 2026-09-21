@@ -21,6 +21,11 @@
       ]
     },
     "allowImportingTsExtensions": true,
+    // Strict staat sinds 21-09 aan voor de hele codebase (verbeterronde 4,
+    // punt 14). Daarvoor gold het alleen voor shared/ en src/lib via een
+    // aparte tsconfig.strict.json; de rest telde 130 fouten, waarvan 89 één
+    // oorzaak hadden (de typering van lazyWithRetry).
+    "strict": true,
     "noUnusedLocals": true,
     "noEmit": true
   },

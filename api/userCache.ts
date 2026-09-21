@@ -150,7 +150,12 @@ export function makeUserCache(
     if (inflight) return inflight;
     const startedEpoch = epoch;
     const basis = remoteEpoch;
-    const p: Promise<AppUser[]> = (async () => {
+    // `let p!`: de `finally` hieronder leest `p`, maar draait pas na een
+    // `await`, wanneer de toewijzing allang gebeurd is. Dat kan de compiler
+    // niet bewijzen (TS2454 onder `strict`); de `!` zegt het hem, zonder één
+    // byte aan het gedrag te veranderen.
+    let p!: Promise<AppUser[]>;
+    p = (async () => {
       try {
         const users = await fetcher();
         // Alleen cachen als er ondertussen geen invalidate gebeurde.

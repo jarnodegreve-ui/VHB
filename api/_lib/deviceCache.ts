@@ -66,7 +66,12 @@ export function makeDeviceCache(
     const lopend = inflight.get(k);
     if (lopend) return lopend;
     const gestart = generatie;
-    const p = (async () => {
+    // `let p!`: de `finally` hieronder leest `p`, maar draait pas na een
+    // `await`, wanneer de toewijzing allang gebeurd is. Dat kan de compiler
+    // niet bewijzen (TS2454 onder `strict`); de `!` zegt het hem, zonder één
+    // byte aan het gedrag te veranderen.
+    let p!: Promise<UserDevice | null>;
+    p = (async () => {
       try {
         const device = await fetcher(userId, deviceToken);
         if (generatie === gestart) {
@@ -100,7 +105,12 @@ export function makeDeviceCache(
     sessies = null;
     if (sessiesLopend) return sessiesLopend;
     const gestart = generatie;
-    const p = (async () => {
+    // `let p!`: de `finally` hieronder leest `p`, maar draait pas na een
+    // `await`, wanneer de toewijzing allang gebeurd is. Dat kan de compiler
+    // niet bewijzen (TS2454 onder `strict`); de `!` zegt het hem, zonder één
+    // byte aan het gedrag te veranderen.
+    let p!: Promise<Set<string>>;
+    p = (async () => {
       try {
         const set = new Set(await sessieFetcher());
         if (generatie === gestart) sessies = { set, at: now() };

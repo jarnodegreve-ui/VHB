@@ -149,7 +149,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     const nieuw = lijnenNaarTekst([...lijnen, ...lijnenVan(tekst)]);
     setFormData((f) => ({ ...f, line: nieuw }));
     setLijnDraft('');
-    setFouten((f) => ({ ...f, line: undefined }));
+    // De sleutel weghalen, niet op undefined zetten: `fouten` is een
+    // Record<string, string> en een lege waarde is geen fouttekst.
+    setFouten(({ line: _opgelost, ...rest }) => rest);
   };
   const verwijderLijn = (l: string) => {
     setFormData((f) => ({ ...f, line: lijnenNaarTekst(lijnen.filter((x) => x !== l)) }));
@@ -445,7 +447,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               invalid={Boolean(fouten.startDate)}
               id="omleiding-start"
               required
-              value={formData.startDate}
+              value={formData.startDate ?? ''}
               max={formData.endDate || undefined}
               onChange={(v) => setFormData({...formData, startDate: v})}
             />

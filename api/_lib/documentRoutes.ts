@@ -196,7 +196,9 @@ export function mountDocumentRoutes(app: express.Express) {
       const withUrls = await Promise.all(
         docs.map(async (d) => {
           try {
-            const { data: signed } = await db.storage.from(DOCUMENTS_BUCKET).createSignedUrl(d.storagePath, DOCUMENT_URL_TTL_SEC);
+            // `db!`: zonder Supabase gooit dit en vangt de catch hieronder het op
+            // (url: null), precies zoals voorheen.
+            const { data: signed } = await db!.storage.from(DOCUMENTS_BUCKET).createSignedUrl(d.storagePath, DOCUMENT_URL_TTL_SEC);
             return { ...d, url: signed?.signedUrl ?? null };
           } catch {
             return { ...d, url: null };

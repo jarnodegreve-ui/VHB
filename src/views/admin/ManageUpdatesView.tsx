@@ -148,7 +148,7 @@ export function ManageUpdatesView({
     setEditingId(update.id);
     setUpdateForm({
       title: update.title,
-      category: update.category,
+      category: update.category ?? 'algemeen',
       content: update.content,
       isUrgent: Boolean(update.isUrgent),
       bijlagenTonen: Boolean(update.bijlagenTonen),

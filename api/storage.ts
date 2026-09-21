@@ -1719,9 +1719,11 @@ export const storeBackup = async (filename: string, body: string): Promise<{ rem
   if (!supabaseAdmin) {
     throw new Error("Back-ups vereisen de service-role client (SUPABASE_SERVICE_ROLE_KEY).");
   }
+  // Lokale const: de null-check hierboven geldt niet meer binnen de closures.
+  const admin = supabaseAdmin;
 
   const upload = () =>
-    supabaseAdmin.storage.from(BACKUPS_BUCKET).upload(filename, Buffer.from(body, "utf8"), {
+    admin.storage.from(BACKUPS_BUCKET).upload(filename, Buffer.from(body, "utf8"), {
       contentType: "application/json",
       upsert: true,
     });
@@ -1771,10 +1773,12 @@ export const storeImportSnapshot = async (snapshot: ImportSnapshot): Promise<str
   if (!supabaseAdmin) {
     throw new Error('Herstelpunten vereisen de service-role client (SUPABASE_SERVICE_ROLE_KEY).');
   }
+  // Lokale const: de null-check hierboven geldt niet meer binnen de closures.
+  const admin = supabaseAdmin;
   const filename = `${SNAPSHOT_PREFIX}${snapshot.createdAt.replace(/[:.]/g, '-')}.json`;
   const body = JSON.stringify(snapshot);
   const upload = () =>
-    supabaseAdmin.storage.from(BACKUPS_BUCKET).upload(filename, Buffer.from(body, 'utf8'), {
+    admin.storage.from(BACKUPS_BUCKET).upload(filename, Buffer.from(body, 'utf8'), {
       contentType: 'application/json',
       upsert: true,
     });

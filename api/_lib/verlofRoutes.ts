@@ -358,7 +358,7 @@ export function mountVerlofRoutes(app: express.Express) {
       const staf = isStafRol(req.appUser!.role);
       const data = await getLeaveData(staf ? undefined : { userId: String(req.appUser!.id) });
       if (!staf) {
-        const selfId = String(req.appUser.id);
+        const selfId = String(req.appUser!.id);
         return res.json(data.filter((l) => String(l.userId) === selfId));
       }
       // Revisie enkel voor planner/admin (volledige weergave), zie /api/swaps.
@@ -474,7 +474,7 @@ export function mountVerlofRoutes(app: express.Express) {
 
       if (!isStafRol(req.appUser!.role)) {
         const newById = new Map(newData.map((r: any) => [String(r.id), r]));
-        const selfId = String(req.appUser.id);
+        const selfId = String(req.appUser!.id);
 
         for (const [id, prev] of previousById) {
           if (!newById.has(String(id))) {
