@@ -132,13 +132,15 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
           </Card>
 
           {filteredUsers.length === 0 ? leeg : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-2 sm:gap-y-3">
               {filteredUsers.map(kaart)}
             </div>
           )}
         </>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-5">
+        // gap-y-2 op een telefoon (dichtheidsronde 22-09): met 20 px tussen de
+        // kaarten pasten er vier contacten op een scherm, nu vijf.
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-2 sm:gap-y-3">
           {filteredUsers.map(kaart)}
           {filteredUsers.length === 0 && (
             <div className="col-span-full">{leeg}</div>

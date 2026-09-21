@@ -559,6 +559,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 );
               })}
             </div>
+          ) : availableSwaps.length > 0 ? (
+            // Wacht er een ruil van een collega op antwoord, dan is dát de
+            // inhoud van dit scherm: de lege staat duwde ze op een telefoon
+            // onder de vouw (dichtheidsronde 22-09). Een lege sectie is dan één
+            // stille regel, geen kaart.
+            <p className="px-1 text-body-sm text-slate-500">Je hebt zelf geen ruil lopen.</p>
           ) : (
             <EmptyState
               compact

@@ -25,6 +25,9 @@ import { LegeLijst, NietGevonden } from '../components/illustraties';
  * De volledige omschrijving staat in het detail; verlopen items blijven
  * standaard ingeklapt en verdwijnen na 30 dagen.
  */
+/** Vanaf dit aantal omleidingen krijgt de lijst een zoekveld en lijnfilter. */
+const FILTER_VANAF = 5;
+
 export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSyncedAt?: number | null }) {
   // De keuze staat in de URL (/omleidingen/<id>): deelbaar, en een melding
   // over één omleiding landt meteen op dat item. Alleen een klik schrijft;
@@ -42,6 +45,10 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
 
   const zoek = searchQuery.trim().toLowerCase();
   const heeftFilter = !!zoek || selectedLine !== 'all';
+  // Zoeken en filteren pas vanaf een lijst die je niet meer in één blik
+  // overziet (dichtheidsronde 22-09): met twee omleidingen was de filterkaart
+  // op een telefoon hoger dan de lijst zelf en duwde ze die onder de vouw.
+  const toonFilters = diversions.length >= FILTER_VANAF || heeftFilter;
   const wisFilters = () => { setSearchQuery(''); setSelectedLine('all'); };
   const gefilterd = diversions.filter((div) => {
     if (!isRecentGenoeg(div, vandaag)) return false;
@@ -143,6 +150,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
         description="Welke lijnen anders rijden en tot wanneer."
       />
 
+      {toonFilters ? (
       <Card padding="sm" className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative min-w-0 flex-1 group">
@@ -191,6 +199,13 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
           {heeftFilter && <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={wisFilters}>Wis filters</Button>}
         </div>
       </Card>
+      ) : (
+        <p className="-mt-2 px-1 text-xs text-slate-500" aria-live="polite">
+          <span className="font-semibold text-slate-800">{groepen.lopend.length}</span> nu geldig
+          <span className="mx-2" aria-hidden="true">·</span>
+          <span className="font-semibold text-slate-800">{groepen.komend.length}</span> binnenkort
+        </p>
+      )}
 
       <MasterDetail
         className="lg:grid-cols-[minmax(0,43%)_minmax(0,1fr)]"
