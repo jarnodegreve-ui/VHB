@@ -30,7 +30,7 @@ export const isRechts = (k: RapportKolom): boolean => (k.uitlijning ? k.uitlijni
  * Nul blijft "0" (of "0:00"): een rapport verzwijgt geen nul.
  */
 export const formatWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undefined, doel: 'beeld' | 'csv' = 'beeld'): string => {
-  const leeg = doel === 'csv' ? '' : '—';
+  const leeg = doel === 'csv' ? '' : kolom.leeg?.tekst ?? '—';
   if (waarde === null || waarde === undefined || waarde === '') return leeg;
   switch (kolom.type) {
     case 'datum': return doel === 'csv' ? String(waarde).slice(0, 10) : dmj(String(waarde));
@@ -46,7 +46,7 @@ export const formatWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undefi
  * scherm: printblad, CSV) zijn dat alle kolommen in de volgorde van de
  * definitie. Smal volgt de rol `smal` van elke kolom: `onderEerste` wordt een
  * regel onder de eerste kolom, `achteraan` schuift naar het einde (achter het
- * horizontaal scrollen), `verberg` valt weg. De eerste kolom blijft altijd
+ * horizontaal scrollen; statuskolommen met een pil als allerlaatste), `verberg` valt weg. De eerste kolom blijft altijd
  * de eerste, wat haar rol ook zegt.
  */
 export type KolomIndeling = { kolommen: RapportKolom[]; onderEerste: RapportKolom[] };
@@ -55,7 +55,9 @@ export const kolomIndeling = (def: RapportDefinitie, breedte: 'smal' | 'breed'):
   const [eerste, ...rest] = def.kolommen;
   if (!eerste) return { kolommen: [], onderEerste: [] };
   return {
-    kolommen: [eerste, ...rest.filter((k) => !k.smal), ...rest.filter((k) => k.smal === 'achteraan')],
+    // Achteraan: eerst de gewone kolommen, dan die met een statuspil (`tonen`). De eerste kolom
+    // achter het scrollen staat op de telefoon half in beeld, en een doorgesneden pil oogt slordig.
+    kolommen: [eerste, ...rest.filter((k) => !k.smal), ...rest.filter((k) => k.smal === 'achteraan' && !k.tonen), ...rest.filter((k) => k.smal === 'achteraan' && k.tonen)],
     onderEerste: rest.filter((k) => k.smal === 'onderEerste'),
   };
 };
@@ -105,9 +107,9 @@ export const berekenTotalen = (def: RapportDefinitie, rijen: readonly RapportRij
 
 export const heeftTotaalrij = (def: RapportDefinitie): boolean => def.kolommen.some((k) => totaalSoort(k) !== null);
 
-/** De toon van een cel volgens de definitie (`tonen` voor een statustekst, `signaal` voor een getal met een grens), of null. */
+/** De toon van een cel volgens de definitie (`tonen` voor een statustekst, `signaal` voor een getal met een grens, `leeg.toon` als de waarde ontbreekt), of null. */
 export const celToon = (kolom: RapportKolom, waarde: RapportWaarde | undefined): KolomToon | null => {
-  if (waarde === null || waarde === undefined || waarde === '') return null;
+  if (waarde === null || waarde === undefined || waarde === '') return kolom.leeg?.toon ?? null;
   if (kolom.tonen) return kolom.tonen[String(waarde)] ?? null;
   if (kolom.signaal && typeof waarde === 'number' && Number.isFinite(waarde)) {
     const { gevaarOnder, waarschuwingTot } = kolom.signaal;

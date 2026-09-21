@@ -46,5 +46,18 @@ const VERVAL_TONEN: Record<string, KolomToon> = {
   [VERVAL_STATUS_LABEL.in_orde]: 'goed',
 };
 
-/** De status in woorden: op papier (zwart-wit) draagt de tekst wat op het scherm de kleur doet. */
-export const VERVAL_STATUS_KOLOM: RapportKolom = { id: 'status', titel: 'Status', type: 'tekst', tonen: VERVAL_TONEN, smal: 'achteraan' };
+/**
+ * De status in woorden: op papier (zwart-wit) draagt de tekst wat op het scherm de kleur doet.
+ * Op de telefoon valt de kolom weg: naam, Geldig tot en Dagen passen dan volledig in het kader
+ * (geen half zichtbare pil aan de rand), het signaal zit in de kleur van Dagen en, voor wie
+ * geen datum heeft, in "Geen datum" in de cel Geldig tot. Tablet, desktop, blad en CSV tonen ze.
+ */
+export const VERVAL_STATUS_KOLOM: RapportKolom = { id: 'status', titel: 'Status', type: 'tekst', tonen: VERVAL_TONEN, smal: 'verberg' };
+
+/** Geldig tot: een ontbrekende datum is net wat gezien moet worden, dus "Geen datum" in amber in plaats van een streepje. */
+export const GELDIG_TOT_KOLOM: RapportKolom = {
+  id: 'geldigTot',
+  titel: 'Geldig tot',
+  type: 'datum',
+  leeg: { tekst: VERVAL_STATUS_LABEL.geen_datum, toon: 'waarschuwing' },
+};

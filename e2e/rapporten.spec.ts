@@ -25,6 +25,21 @@ const paginaScrolltNiet = async (page: Page) => {
   expect(breed).toBeLessThanOrEqual(venster);
 };
 
+/**
+ * De rechterrand van de tabel op een smal scherm: welke kolomkoppen volledig binnen het kader vallen, en of
+ * er een cel met een statuspil of -puntje (Badge) half in beeld staat. Een kolom `achteraan` mag half in
+ * beeld staan (dat toont dat er meer is), een doorgesneden pil niet.
+ */
+const randVanDeTabel = (page: Page) => page.evaluate(() => {
+  const kader = document.querySelector('table')!.parentElement!.getBoundingClientRect();
+  const binnen = (el: Element) => el.getBoundingClientRect().right <= kader.right + 0.5;
+  const snijdt = (el: Element) => { const r = el.getBoundingClientRect(); return r.left < kader.right - 0.5 && r.right > kader.right + 0.5; };
+  return {
+    koppenBinnen: [...document.querySelectorAll('thead th')].filter(binnen).map((th) => (th.textContent ?? '').trim()),
+    doorgesnedenPil: [...document.querySelectorAll('tbody td')].some((td) => snijdt(td) && td.querySelector('.rounded-full') !== null),
+  };
+});
+
 test('catalogus, rapport, filter, leeg en de print-URL', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (err) => pageErrors.push(err.message));
@@ -197,6 +212,17 @@ test('voertuigrapport: wagenpark met keuzelijsten, peildatum, totaalrij en het b
   await expect(page.getByRole('columnheader', { name: 'Totaal (7)' })).toBeVisible();
   await paginaScrolltNiet(page);
 
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    // Telefoon: Status (een puntje met tekst) staat als laatste achter het scrollen, nooit half in beeld.
+    for (const breedte of [375, 390]) {
+      await page.setViewportSize({ width: breedte, height: 800 });
+      await expect(page.getByRole('columnheader', { name: 'Leeftijd (jaar)' })).toBeVisible();
+      const rand = await randVanDeTabel(page);
+      expect(rand.koppenBinnen, `${breedte} px`).toEqual(['Busnr.', 'Merk', 'Leeft.']);
+      expect(rand.doorgesnedenPil, `${breedte} px`).toBe(false);
+    }
+  }
+
   // Uit dienst zit achter een keuze, en die keuze staat in de URL.
   await page.getByLabel('Status').selectOption('uit_dienst');
   await expect(page).toHaveURL(/status=uit_dienst/);
@@ -232,19 +258,22 @@ test('personeelsrapport: medische schiftingen, dringendste eerst, termijn en wie
   await expect(rijen.nth(1)).toContainText('Annelies Verstraete');
   await expect(rijen.nth(1)).toContainText('-7');
   await expect(rijen.nth(6)).toContainText('Carine De Smet');
+  // Wie geen datum heeft: "Geen datum" staat in de cel Geldig tot zelf, dus ook zonder de statuskolom zichtbaar.
+  await expect(rijen.nth(6).getByRole('cell', { name: 'Geen datum', exact: true }).first()).toBeVisible();
   if (smal) {
-    // Telefoon: personeelsnummer onder de naam; Geldig tot en Dagen zonder scrollen, Status erachter.
+    // Telefoon (375 en 390 px): personeelsnummer onder de naam; Naam, Geldig tot en Dagen passen volledig
+    // in het kader en de kolom Status valt weg: geen half zichtbare, doorgesneden pil aan de rechterrand.
     await expect(page.getByRole('cell', { name: 'Annelies Verstraete VHB-000060' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Personeelsnr.' })).toHaveCount(0);
-    const binnenKader = await page.evaluate(() => {
-      const kader = document.querySelector('table')!.parentElement!.getBoundingClientRect();
-      return [...document.querySelectorAll('thead th')].map((th) => th.getBoundingClientRect().right <= kader.right + 0.5);
-    });
-    expect(binnenKader.slice(0, 3)).toEqual([true, true, true]);
-    await paginaScrolltNiet(page);
+    await expect(page.getByRole('columnheader', { name: 'Status' })).toHaveCount(0);
+    for (const breedte of [375, 390]) {
+      await page.setViewportSize({ width: breedte, height: 800 });
+      await expect(page.getByRole('columnheader', { name: 'Resterende dagen' })).toBeVisible();
+      expect(await randVanDeTabel(page), `${breedte} px`).toEqual({ koppenBinnen: ['Naam', 'Geldig tot', 'Dagen'], doorgesnedenPil: false });
+      await paginaScrolltNiet(page);
+    }
   } else {
     await expect(rijen.nth(1)).toContainText('Vervallen');
-    await expect(rijen.nth(6)).toContainText('Geen datum');
     await expect(rijen.nth(1).getByRole('cell', { name: '14/09/2026', exact: true })).toBeVisible();
   }
 

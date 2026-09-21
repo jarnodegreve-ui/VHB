@@ -1,6 +1,6 @@
 import type { RapportDefinitie, RapportFilter } from '../types.js';
 import { ROLLEN, ROL_LABELS } from '../../schemas/constanten.js';
-import { RESTEREND_KOLOM, TERMIJN_FILTER, VERVAL_STATUS_KOLOM, keuzeUit } from './bouwstenen.js';
+import { GELDIG_TOT_KOLOM, RESTEREND_KOLOM, TERMIJN_FILTER, VERVAL_STATUS_KOLOM, keuzeUit } from './bouwstenen.js';
 
 /**
  * De rapporten van het domein Personeel (stap 3, 21-09): de contactlijst, de
@@ -83,7 +83,7 @@ const vervalRapport = (id: PersoneelVervalRapport, titel: string, omschrijving: 
   kolommen: [
     { id: 'naam', titel: 'Naam', type: 'tekst' },
     { id: 'personeelsnr', titel: 'Personeelsnr.', type: 'tekst', smal: 'onderEerste' },
-    { id: 'geldigTot', titel: 'Geldig tot', type: 'datum' },
+    GELDIG_TOT_KOLOM,
     RESTEREND_KOLOM,
     VERVAL_STATUS_KOLOM,
     { id: 'bijgewerktOp', titel: 'Bijgewerkt op', type: 'datum', smal: 'achteraan' },

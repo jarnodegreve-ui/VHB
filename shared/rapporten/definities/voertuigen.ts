@@ -3,7 +3,7 @@ import {
   AANDRIJVINGEN, AANDRIJVING_LABEL, DEFECT_STATUSSEN, DEFECT_STATUS_LABEL, VOERTUIG_CATEGORIEEN, VOERTUIG_CATEGORIE_LABEL,
   VOERTUIG_STATUS_LABEL, VOERTUIG_VERVAL_LABEL, VOERTUIG_VERVAL_SOORTEN, WERKCODES, WERKCODE_LABEL, WERKTYPES, WERKTYPE_LABEL,
 } from '../../techniek.js';
-import { RESTEREND_KOLOM, TERMIJN_FILTER, VERVAL_STATUS_KOLOM, keuzeUit } from './bouwstenen.js';
+import { GELDIG_TOT_KOLOM, RESTEREND_KOLOM, TERMIJN_FILTER, VERVAL_STATUS_KOLOM, keuzeUit } from './bouwstenen.js';
 
 /**
  * De rapporten van het domein Voertuigen (stap 3, 21-09): het wagenpark zoals
@@ -165,7 +165,7 @@ const VERVALDATA_VOERTUIGEN: RapportDefinitie = {
     { id: 'nummerplaat', titel: 'Nummerplaat', type: 'tekst', smal: 'verberg' },
     // Drie soorten per bus: op de telefoon staat de soort onder het busnummer.
     { id: 'soort', titel: 'Soort', type: 'tekst', smal: 'onderEerste' },
-    { id: 'geldigTot', titel: 'Geldig tot', type: 'datum' },
+    GELDIG_TOT_KOLOM,
     RESTEREND_KOLOM,
     VERVAL_STATUS_KOLOM,
     { id: 'opmerking', titel: 'Opmerking', type: 'tekst', breed: true, smal: 'achteraan' },

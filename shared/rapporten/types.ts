@@ -86,6 +86,12 @@ export type RapportKolom = {
   breed?: boolean;
   /** Vast aantal decimalen voor een getal (leeftijd 7,0); zonder opgave hoogstens twee, zonder nullen achteraan. */
   decimalen?: number;
+  /**
+   * Wat er staat als de waarde ontbreekt, in plaats van een streepje, met een
+   * toon als dat ontbreken zelf het signaal is ("Geen datum" in amber bij een
+   * vervaldatum). Alleen in beeld en op het blad; in de CSV blijft de cel leeg.
+   */
+  leeg?: { tekst: string; toon?: KolomToon };
   /** Tekstkolom met een status: waarde → toon. Wat er niet in staat krijgt geen toon. */
   tonen?: Readonly<Record<string, KolomToon>>;
   /**

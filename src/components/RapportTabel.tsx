@@ -29,7 +29,7 @@ const PER_PAGINA = 50;
 const BREED_VANAF = 768;
 
 /** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, datum/ja-nee, tekst. */
-const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, kort: 5.5, tekst: 8 };
+const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, kort: 6, tekst: 8 };
 const smalleBreedte = (k: RapportKolom, eerste: boolean): number =>
   eerste ? SMAL_BREEDTE.eerste : isGetalKolom(k) ? SMAL_BREEDTE.getal : k.type === 'tekst' ? SMAL_BREEDTE.tekst : SMAL_BREEDTE.kort;
 
@@ -60,7 +60,8 @@ const TOON_BADGE: Record<KolomToon, { tone: BadgeTone; kaal: boolean }> = {
   goed: { tone: 'emerald', kaal: true },
   rust: { tone: 'slate', kaal: true },
 };
-const TOON_GETAL: Partial<Record<KolomToon, string>> = { gevaar: 'font-semibold text-red-700', waarschuwing: 'font-semibold text-amber-700' };
+/** Een getal met een grens of een ontbrekende waarde met een toon kleurt zelf, zonder pil. */
+const TOON_TEKST: Partial<Record<KolomToon, string>> = { gevaar: 'font-semibold text-red-700', waarschuwing: 'font-semibold text-amber-700', aandacht: 'font-semibold text-amber-700' };
 
 const celInhoud = (kolom: RapportKolom, waarde: RapportWaarde | undefined) => {
   const toon = kolom.tonen ? celToon(kolom, waarde) : null;
@@ -83,7 +84,9 @@ const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerst
   // Een nul blijft staan ("0"), maar stiller dan een cijfer dat iets zegt.
   isGetalKolom(kolom) && waarde === 0 && 'text-slate-500',
   (waarde === null || waarde === undefined || waarde === '') && 'text-slate-500',
-  kolom.signaal && TOON_GETAL[celToon(kolom, waarde) ?? 'rust'],
+  !kolom.tonen && TOON_TEKST[celToon(kolom, waarde) ?? 'rust'],
+  // "Geen datum" in een datumkolom blijft op één regel.
+  kolom.leeg && (waarde === null || waarde === undefined || waarde === '') && 'whitespace-nowrap',
 );
 
 export function RapportTabel({ def, rijen, totalen, className }: {

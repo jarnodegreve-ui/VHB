@@ -97,6 +97,50 @@ describe('celToon', () => {
   });
 });
 
+describe('een ontbrekende waarde met een eigen tekst en toon', () => {
+  const geldigTot = rapportVan('medische-schiftingen')!.kolommen.find((k) => k.id === 'geldigTot')!;
+
+  it('"Geen datum" in amber in plaats van een streepje, in beeld en op het blad; de CSV blijft leeg', () => {
+    expect(formatWaarde(geldigTot, null)).toBe('Geen datum');
+    expect(formatWaarde(geldigTot, '')).toBe('Geen datum');
+    expect(formatWaarde(geldigTot, null, 'csv')).toBe('');
+    expect(formatWaarde(geldigTot, '2026-09-24')).toBe('24/09/2026');
+    expect(celToon(geldigTot, null)).toBe('waarschuwing');
+    expect(celToon(geldigTot, '2026-09-24')).toBeNull();
+  });
+
+  it('zonder opgave blijft leeg een streepje zonder toon', () => {
+    expect(formatWaarde(DEF.kolommen[1], null)).toBe('—');
+    expect(celToon(DEF.kolommen[6], null)).toBeNull();
+  });
+});
+
+describe('telefoon: geen half zichtbare statuspil aan de rand', () => {
+  it('vervaldata (voertuigen, medische schiftingen, vakbekwaamheden): Status valt weg, Geldig tot en Dagen blijven', () => {
+    for (const id of ['vervaldata-voertuigen', 'medische-schiftingen', 'vakbekwaamheden']) {
+      const def = rapportVan(id)!;
+      const smal = kolomIndeling(def, 'smal').kolommen.map((k) => k.id);
+      expect(smal.slice(1, 3), id).toEqual(['geldigTot', 'resterend']);
+      expect(smal, id).not.toContain('status');
+      // Breed, blad en CSV houden de kolom.
+      expect(kolomIndeling(def, 'breed').kolommen.map((k) => k.id), id).toContain('status');
+      // Het signaal zit op de telefoon in Dagen (grens) en in Geldig tot (geen datum).
+      expect(def.kolommen.find((k) => k.id === 'resterend')!.signaal, id).toBeTruthy();
+      expect(def.kolommen.find((k) => k.id === 'geldigTot')!.leeg, id).toEqual({ tekst: 'Geen datum', toon: 'waarschuwing' });
+    }
+  });
+
+  it('achter het scrollen komen statuskolommen (met een pil) als laatste, de rest houdt de volgorde van de definitie', () => {
+    expect(kolomIndeling(rapportVan('defecten')!, 'smal').kolommen.map((k) => k.id))
+      .toEqual(['gemeldOp', 'omschrijving', 'doorlooptijd', 'gemeldDoor', 'uitgevoerdOp', 'uitgevoerdDoor', 'manuren', 'status']);
+    // In elk rapport: de eerste kolom achter het scrollen (die half in beeld kan staan) is nooit een statuspil, tenzij er geen andere is.
+    for (const def of RAPPORTEN) {
+      const achteraan = kolomIndeling(def, 'smal').kolommen.filter((k) => k.smal === 'achteraan');
+      if (achteraan.some((k) => !k.tonen)) expect(achteraan[0].tonen, def.id).toBeUndefined();
+    }
+  });
+});
+
 describe('peildatum in de filterregel', () => {
   it('sluit de filters in woorden af, in dd/mm/jjjj, en alleen bij een rapport met een peildatum', () => {
     const filters = standaardFilters(DEF, '2026-09-21');
@@ -133,8 +177,8 @@ describe('de definities van voertuigen en personeel', () => {
   });
 
   it('telefoon: hoogstens de eerste kolom plus drie smalle of twee bredere kolommen vóór het scrollen', () => {
-    // Zelfde breedtes als RapportTabel (rem): eerste 9,5 · getal 3,75 · datum en ja/nee 5,5 · tekst 8; een telefoon van 375 px is 23,4 rem.
-    const breedte = (type: string) => (type === 'getal' || type === 'duur' ? 3.75 : type === 'tekst' ? 8 : 5.5);
+    // Zelfde breedtes als RapportTabel (rem): eerste 9,5 · getal 3,75 · datum en ja/nee 6 · tekst 8; een telefoon van 375 px is 23,4 rem.
+    const breedte = (type: string) => (type === 'getal' || type === 'duur' ? 3.75 : type === 'tekst' ? 8 : 6);
     for (const def of NIEUW) {
       const { kolommen } = kolomIndeling(def, 'smal');
       const vooraan = kolommen.slice(1).filter((k) => !k.smal);
