@@ -1,9 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, Calendar, FileText, MapPin, WifiOff, Wrench } from 'lucide-react';
+import { ArrowLeftRight, Calendar, FileText, WifiOff, Wrench } from 'lucide-react';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { lopendeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
-import { relatieveDag } from '../lib/datum';
 import { formatDayLong, formatShortDay, formatSyncedTime, serviceNumberOf } from '../lib/format';
 import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '../lib/ruilBadge';
 import { warmRitbladCache } from '../lib/ritbladCache';
@@ -23,6 +22,8 @@ import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { DienstBalk } from '../components/DienstBalk';
 import { RitbladViewer } from '../components/RitbladViewer';
+import { MijnWeek } from '../components/MijnWeek';
+import { MIJN_WEEK_DAGEN, bouwMijnWeek } from '../lib/mijnWeek';
 
 // Defect melden (techniek, 13-09): pas laden bij de klik, de chunk van Mijn dag blijft licht.
 const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
@@ -32,8 +33,8 @@ const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal
  *
  * Eén dag (vandaag of morgen) als tijdlijn: elk blok van de dienst groot en
  * leesbaar op armlengte, de pauze ertussen, een live "nu"-lijn, de notitie
- * van de planning, het ritblad, de actieve omleidingen en de volgende
- * dienst. Bewust geen tellers of tegels: wat de chauffeur nú moet weten
+ * van de planning, het ritblad, de actieve omleidingen en de komende
+ * week. Bewust geen tellers of tegels: wat de chauffeur nú moet weten
  * staat bovenaan, de rest is stil (productprincipes 1, 3 en 5).
  *
  * Zelfde bronnen als het dashboard (shifts/notes/diversions); alle tijd-
@@ -171,6 +172,23 @@ export function MijnDagView({
   const volgende = volgendeDag[0];
   const volgendeDelen = volgende ? volgendeDag.filter((s) => s.date === volgende.date) : [];
 
+  // Mijn week (verbeterronde 4): de zeven dagen vanaf vandaag, los van de
+  // Vandaag|Morgen-schakelaar; die markeert alleen welke cel erboven open staat.
+  const leaveRequests = appData?.leaveRequests;
+  const planningTot = appData?.planningTot ?? null;
+  const week = useMemo(
+    () => bouwMijnWeek({
+      vanaf: vandaag,
+      // Filteren binnen de memo: `shifts` is de stabiele bron, de minuutklok
+      // rendert dit scherm elke minuut opnieuw.
+      shifts: shifts.filter((s) => s.driverId === user.id),
+      leaves: (leaveRequests ?? []).filter((l) => l.userId === user.id),
+      planningTot,
+    }),
+    [vandaag, shifts, user.id, leaveRequests, planningTot],
+  );
+  const laatsteWeekdag = isOffset(now, MIJN_WEEK_DAGEN - 1);
+
   // Mijn dag gaat over vandaag: alleen omleidingen die nu echt lopen.
   const liveOmleidingen = lopendeDiversions(diversions);
 
@@ -286,7 +304,7 @@ export function MijnDagView({
         <Card tone="muted" padding="sm">
           <p className="text-md font-semibold text-slate-800">Geen dienst ingepland</p>
           <p className="mt-0.5 text-body-sm text-slate-500">
-            {volgende ? 'Je volgende dienst staat hieronder.' : 'Er staat op dit moment niets ingepland.'}
+            {volgende ? 'Je week staat hieronder.' : 'Er staat op dit moment niets ingepland.'}
           </p>
         </Card>
       ) : (
@@ -410,33 +428,25 @@ export function MijnDagView({
         </section>
       )}
 
-      {/* === Volgende dienst === */}
-      <section aria-label="Volgende dienst" className="space-y-2">
-        <h2 className="px-1 text-card-title">Volgende dienst</h2>
-        <RichtingWissel sleutel={dagOffset} richting={dagRichting} stil={overgangActief()}>
-        {volgende ? (
-          <OpsRow
-            tone="oker"
-            icon={<Calendar size={16} />}
-            primary={`${hoofdletter(relatieveDag(volgende.date, vandaag))} · ${formatShortDay(volgende.date)}`}
-            secondary={
-              volgendeDelen.length > 1
-                ? `${volgende.startTime} · ${volgendeDelen.length} delen · tot ${volgendeDelen[volgendeDelen.length - 1].endTime}`
-                : `${volgende.startTime}–${volgende.endTime}${volgende.loopnr ? ` · loop ${volgende.loopnr}` : ''}`
-            }
-            trailing={<ServiceChip serviceNumber={serviceNumberOf(volgende)} tone="oker" />}
-            onClick={() => onNavigate?.('rooster')}
-          />
-        ) : (
-          <Card tone="muted" padding="sm" className="flex items-center gap-3">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
-              <MapPin size={16} />
-            </span>
-            <p className="text-body-sm font-medium text-slate-600">Niets ingepland na {dagWoord}.</p>
-          </Card>
-        )}
-        </RichtingWissel>
-      </section>
+      {/* === Mijn week: de zeven dagen vanaf vandaag. Verving het blok
+          "Volgende dienst" (22-09): dat toonde één dag, de strook toont ze
+          allemaal. Alleen wanneer de eerstvolgende dienst verder weg ligt dan
+          de strook (na verlof bijvoorbeeld) staat hij er nog onder. === */}
+      <MijnWeek dagen={week} vandaag={vandaag} gekozen={peildag} onRooster={onNavigate ? () => onNavigate('rooster') : undefined} />
+      {volgende && volgende.date > laatsteWeekdag && (
+        <OpsRow
+          tone="oker"
+          icon={<Calendar size={16} />}
+          primary={`Volgende dienst · ${formatShortDay(volgende.date)}`}
+          secondary={
+            volgendeDelen.length > 1
+              ? `${volgende.startTime} · ${volgendeDelen.length} delen · tot ${volgendeDelen[volgendeDelen.length - 1].endTime}`
+              : `${volgende.startTime}–${volgende.endTime}${volgende.loopnr ? ` · loop ${volgende.loopnr}` : ''}`
+          }
+          trailing={<ServiceChip serviceNumber={serviceNumberOf(volgende)} tone="oker" />}
+          onClick={() => onNavigate?.('rooster')}
+        />
+      )}
     </div>
     </Verwissel>
   );
