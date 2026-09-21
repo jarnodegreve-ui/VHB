@@ -21,7 +21,7 @@ import { isoDate } from '../lib/availability';
 import { formatDuration } from '../lib/shiftTime';
 import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUren';
 import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
-import { formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
+import { formatDatumDMJ, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openHuidigRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
@@ -110,7 +110,7 @@ const planningTelefoon = (users: User[]): string | undefined => {
   return telHref(kandidaat?.phone);
 };
 
-export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
+export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, planningTot = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; /** Laatste dag waarvoor er planning in het portaal staat (ISO). */ planningTot?: string | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   // Lijst of maandgrid — de keuze blijft bewaard (localStorage kan in
@@ -236,9 +236,17 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
       <PageHeader
         title="Mijn rooster"
         description={
-          upcoming.length > 0
-            ? `${upcoming.length} ${upcoming.length === 1 ? 'aankomende dienst' : 'aankomende diensten'}.`
-            : 'Persoonlijk overzicht van je komende diensten.'
+          /* Tot wanneer de planning loopt erbij (puntje Jarno 21-09): zonder
+             die regel ziet "nog geen diensten in december" er hetzelfde uit
+             als "de planning is nog niet zo ver". De horizon komt van de
+             server (header x-planning-tot); ontbreekt hij, dan blijft de
+             oude zin staan. */
+          [
+            upcoming.length > 0
+              ? `${upcoming.length} ${upcoming.length === 1 ? 'aankomende dienst' : 'aankomende diensten'}.`
+              : 'Persoonlijk overzicht van je komende diensten.',
+            planningTot ? `Planning bijgewerkt t/m ${formatDatumDMJ(planningTot)}.` : '',
+          ].filter(Boolean).join(' ')
         }
         actions={
           /* Geen kopknop voor de agenda-koppeling: dat is een eenmalige

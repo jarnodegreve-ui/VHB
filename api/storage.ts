@@ -167,6 +167,36 @@ export const getPlanningData = async (filters?: PlanningFilters) => {
   });
 };
 
+/**
+ * Tot wanneer reikt de planning in het portaal? De geïmporteerde matrix is de
+ * bron: die bepaalt tot welke dag de planning bekend is, ook als er op de
+ * laatste dagen toevallig niemand rijdt. Staat de matrix er (nog) niet, dan
+ * valt hij terug op de laatste dag waarvoor een dienst is opgebouwd.
+ *
+ * Eén rij, op de bestaande index `planning_matrix_rows_source_date_idx`.
+ * null = geen planning (leeg portaal, of de tabel bestaat nog niet).
+ */
+export const getPlanningHorizon = async (): Promise<string | null> => {
+  const client = requireDb();
+  const uitMatrix = await client
+    .from('planning_matrix_rows')
+    .select('source_date')
+    .order('source_date', { ascending: false })
+    .limit(1);
+  const matrixDag = String(uitMatrix.data?.[0]?.source_date ?? '').slice(0, 10);
+  if (!uitMatrix.error && /^\d{4}-\d{2}-\d{2}$/.test(matrixDag)) return matrixDag;
+  // `planning.date` is een tekstkolom in ISO-vorm: lexicografisch sorteren
+  // geeft daar dezelfde volgorde als chronologisch.
+  const uitPlanning = await client
+    .from('planning')
+    .select('date')
+    .order('date', { ascending: false })
+    .limit(1);
+  if (uitPlanning.error) throw uitPlanning.error;
+  const planningDag = String(uitPlanning.data?.[0]?.date ?? '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(planningDag) ? planningDag : null;
+};
+
 export const savePlanningData = async (data: any) => {
   const client = requireDb();
   if (!Array.isArray(data)) {

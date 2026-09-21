@@ -82,6 +82,7 @@ import {
   getLeaveData,
   getPlanningCodesData,
   getPlanningData,
+  getPlanningHorizon,
   getPlanningMatrixHistory,
   getPlanningMatrixRows,
   getServicesData,
@@ -218,7 +219,7 @@ const ALLOWED_ORIGINS: Array<string | RegExp> = [
   /^https:\/\/vhb-[a-z0-9-]+-jarnodegreve-uis-projects\.vercel\.app$/,
   ...(process.env.VERCEL_ENV === "production" ? [] : [/^http:\/\/localhost:\d+$/]),
 ];
-app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision", "Retry-After"] }));
+app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision", "X-Planning-Tot", "Retry-After"] }));
 // 5 MB is eerlijk: Vercel kapt request-bodies sowieso op ~4,5 MB af — de
 // oude 25mb-limiet wekte de indruk dat grotere uploads (PDF's, Excels) konden.
 // /api/client-errors (open, zonder auth) krijgt een eigen, veel kleinere
@@ -674,12 +675,21 @@ app.get("/api/planning", authenticate, async (req: AuthenticatedRequest, res) =>
     const monthIso = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month)
       ? req.query.month
       : undefined;
-    const data = await getPlanningData({ driverId, monthIso });
+    // Horizon meteen mee: een chauffeur krijgt alleen zijn eigen rijen en kan
+    // daar niet uit afleiden tot wanneer de planning loopt ("nog niets in
+    // december" of "nog niet geïmporteerd" zien er voor hem hetzelfde uit).
+    // Als header op deze fetch, zodat het geen extra rondje kost. Mislukt de
+    // horizonquery, dan gaat de planning gewoon door zonder de regel.
+    const [data, horizon] = await Promise.all([
+      getPlanningData({ driverId, monthIso }),
+      getPlanningHorizon().catch(() => null),
+    ]);
     // Revisie alleen over de volledige collectie (ongefilterd) — een revisie
     // over een subset zou bij het opslaan altijd een vals conflict geven.
     if (!driverId && !monthIso) {
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
     }
+    if (horizon) res.setHeader(PLANNING_TOT_HEADER, horizon);
     res.json(data);
   } catch (err) {
     console.error("Error reading planning data:", err);
@@ -1811,6 +1821,8 @@ const massDeleteResponse = (res: any, removed: number, total: number, label: str
  * behandelt de waarde als ondoorzichtig en hasht zelf niets.
  */
 const COLLECTION_REVISION_HEADER = "x-collection-revision";
+/** Tot wanneer de planning in het portaal loopt (ISO-dag) — zie GET /api/planning. */
+const PLANNING_TOT_HEADER = "x-planning-tot";
 const revisionOf = (rows: any[]): string => {
   const sorted = [...(Array.isArray(rows) ? rows : [])].sort((a, b) =>
     String(a?.id ?? a?.code ?? "").localeCompare(String(b?.id ?? b?.code ?? "")),
