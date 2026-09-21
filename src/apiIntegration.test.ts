@@ -325,6 +325,11 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.meldingen.filter((m: any) => m.userId === String(userId)).sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)).slice(0, max)
         .map(({ userId: _u, ...rest }: any) => ({ ...rest, tekst: rest.tekst ?? undefined, doel: rest.doel ?? undefined, gelezenOp: rest.gelezenOp ?? undefined })),
     telOngelezenMeldingen: async (userId: string) => mem.meldingen.filter((m: any) => m.userId === String(userId) && !m.gelezenOp).length,
+    verwijderMeldingen: async (userId: string, ids: string[]) => {
+      const voor = mem.meldingen.length;
+      mem.meldingen = mem.meldingen.filter((m: any) => !(m.userId === String(userId) && ids.includes(m.id)));
+      return voor - mem.meldingen.length;
+    },
     markeerMeldingenGelezen: async (userId: string, ids?: string[]) => {
       let n = 0;
       for (const m of mem.meldingen) {
@@ -5803,6 +5808,25 @@ describe('meldingencentrum (public.meldingen)', () => {
     const alles = await api('POST', '/api/meldingen/gelezen', { token: 'tok-b', body: {} });
     expect(alles.json.gelezen).toBe(1);
     expect((await api('GET', '/api/meldingen', { token: 'tok-b' })).json.ongelezen).toBe(0);
+  });
+
+  it('verwijderen raakt alleen eigen rijen; andermans id doet niets', async () => {
+    zaai();
+    const res = await api('DELETE', '/api/meldingen', { token: 'tok-a', body: { ids: ['m-a2', 'm-b1'] } });
+    expect(res.status).toBe(200);
+    expect(res.json.verwijderd).toBe(1);
+    expect(mem.meldingen.map((m: any) => m.id).sort()).toEqual(['m-a1', 'm-b1']);
+    // De teller volgt: m-a2 was al gelezen, dus die blijft op 1 staan.
+    expect((await api('GET', '/api/meldingen', { token: 'tok-a' })).json.ongelezen).toBe(1);
+  });
+
+  it('verwijderen eist minstens één id (400) en een sessie (401)', async () => {
+    zaai();
+    const leeg = await api('DELETE', '/api/meldingen', { token: 'tok-a', body: { ids: [] } });
+    expect(leeg.status).toBe(400);
+    expect(leeg.json.error).toBe('Ongeldige invoer');
+    expect((await api('DELETE', '/api/meldingen', { body: { ids: ['m-a1'] } })).status).toBe(401);
+    expect(mem.meldingen).toHaveLength(3);
   });
 
   it('valideert de body (400) en eist een sessie (401)', async () => {

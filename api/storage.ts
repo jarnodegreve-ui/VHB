@@ -2334,6 +2334,20 @@ export const markeerMeldingenGelezen = async (userId: string, ids?: string[]): P
   return count ?? 0;
 };
 
+/** Verwijderen: alleen eigen rijen (user_id in de query, dus andermans ids
+ *  doen niets). Geeft het aantal verwijderde rijen. */
+export const verwijderMeldingen = async (userId: string, ids: string[]): Promise<number> => {
+  if (ids.length === 0) return 0;
+  const client = requireDb();
+  const { count, error } = await client
+    .from('meldingen')
+    .delete({ count: 'exact' })
+    .eq('user_id', String(userId))
+    .in('id', ids.map(String));
+  if (error) throw error;
+  return count ?? 0;
+};
+
 // --- Updates ---
 
 export const getUpdatesData = async () => {
