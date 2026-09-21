@@ -118,10 +118,12 @@ test.describe('meldingencentrum', () => {
     await page.getByRole('button', { name: 'Ongedaan maken' }).click();
     await expect(rij).toBeVisible();
 
-    // Echt verwijderen: weg uit de lijst, DELETE volgt als de toast verlopen is.
+    // Echt verwijderen: weg uit de lijst, DELETE volgt als de toast verlopen
+    // is. Die wachttijd is 6 s toast plus 1,5 s marge, dus de poll krijgt
+    // ruim het dubbele: op een trage runner start de timer later.
     await page.getByRole('button', { name: 'Melding verwijderen' }).nth(1).click();
     await expect(rij).toHaveCount(0);
-    await expect.poll(() => deletes, { timeout: 15_000 }).toEqual([{ ids: ['m2'] }]);
+    await expect.poll(() => deletes, { timeout: 25_000 }).toEqual([{ ids: ['m2'] }]);
   });
 
   test('lege staat zonder meldingen', async ({ page }) => {
