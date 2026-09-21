@@ -48,7 +48,11 @@ async function canvasBlijftStil(canvas: Locator) {
     }
     return [...new Set(metingen)];
   }), {
-    timeout: 5_000,
+    // 15 s, niet 5: op een belaste WebKit-runner tikt requestAnimationFrame soms
+    // trager dan 10 per seconde, en dan haalt één meetreeks van 45 frames de
+    // 5 s niet (main faalde zo op 21-09 zonder dat er iets bewoog). Een echte
+    // lus blijft wisselende maten geven en faalt ook binnen 15 s.
+    timeout: 15_000,
     message: 'het ritblad blijft na aanpassen 45 frames stabiel, zonder resize-/zoomlus',
   }).toHaveLength(1);
 }
