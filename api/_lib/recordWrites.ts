@@ -20,6 +20,7 @@ import {
   revokeAllDevices,
   saveDiversionsData,
   saveUpdatesData,
+  verwijderUpdateBijlagen,
   saveUsersData,
   summarizeDiversionChanges,
   summarizeUpdateChanges,
@@ -281,6 +282,11 @@ export const verwerkUpdatesOpslag = async (
   }
   for (const u of updDiff.removed) {
     await logActivity(req, "updates", "Update verwijderd", fmtUpdate(u), { type: "update", id: u.id });
+  }
+  // Bestanden van weggehaalde updates mee opruimen: anders blijft er een PDF
+  // in de bucket staan die niemand nog kan bereiken. Best-effort.
+  if (updDiff.removed.length > 0) {
+    await verwijderUpdateBijlagen(updDiff.removed.map((u: any) => String(u.id)));
   }
 
   // Nieuwe update → push naar alle actieve chauffeurs. Urgente updates mailen

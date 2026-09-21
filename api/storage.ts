@@ -2374,6 +2374,71 @@ export const getUpdatesData = async () => {
   return rows.map(toPublicUpdate);
 };
 
+export const UPDATE_BIJLAGEN_BUCKET = "update-bijlagen";
+
+/** Sleutel in de bucket: één vaste plek per update en slot, dus opnieuw
+ *  uploaden overschrijft en laat niets rondslingeren. */
+export const updateBijlagePad = (updateId: string, slot: number) => `${updateId}-${slot}.pdf`;
+
+/** PDF wegschrijven op de vaste plek van deze update en dit slot; opnieuw
+ *  uploaden vervangt het vorige bestand. */
+export const uploadUpdateBijlage = async (updateId: string, slot: number, buffer: Buffer): Promise<void> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { error } = await supabaseAdmin.storage
+    .from(UPDATE_BIJLAGEN_BUCKET)
+    .upload(updateBijlagePad(updateId, slot), buffer, { contentType: "application/pdf", upsert: true });
+  if (error) throw error;
+};
+
+/** Eén bijlage weghalen. "Not found" is geen fout: dan stond er al niets. */
+export const verwijderUpdateBijlage = async (updateId: string, slot: number): Promise<void> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { error } = await supabaseAdmin.storage
+    .from(UPDATE_BIJLAGEN_BUCKET)
+    .remove([updateBijlagePad(updateId, slot)]);
+  if (error && !/not.?found/i.test(String(error.message || ""))) throw error;
+};
+
+/** Tijdelijke, ondertekende URL van één bijlage; undefined als het bestand er
+ *  niet (meer) is. De bucket is privé, dus dit is de enige weg naar het PDF. */
+export const UPDATE_BIJLAGE_URL_TTL_SEC = 60 * 60 * 12;
+export const ondertekenUpdateBijlage = async (updateId: string, slot: number): Promise<string | undefined> => {
+  if (!db) return undefined;
+  try {
+    const { data } = await db.storage
+      .from(UPDATE_BIJLAGEN_BUCKET)
+      .createSignedUrl(updateBijlagePad(updateId, slot), UPDATE_BIJLAGE_URL_TTL_SEC);
+    return data?.signedUrl || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** De bijlagenlijst van één update bijwerken (alleen deze kolom). */
+export const zetUpdateBijlagen = async (
+  updateId: string,
+  bijlagen: Array<{ slot: number; filename: string; sizeBytes?: number }>,
+): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('updates')
+    .update({ bijlagen: bijlagen.length > 0 ? bijlagen : null })
+    .eq('id', String(updateId));
+  if (error) throw error;
+};
+
+/** Bestanden van verwijderde updates opruimen; best-effort, zoals bij de
+ *  omleidingen: een achtergebleven PDF mag een delete niet laten mislukken. */
+export const verwijderUpdateBijlagen = async (updateIds: string[]): Promise<void> => {
+  if (!supabaseAdmin || updateIds.length === 0) return;
+  const paden = updateIds.flatMap((id) => [updateBijlagePad(id, 1), updateBijlagePad(id, 2)]);
+  const { error } = await supabaseAdmin.storage.from(UPDATE_BIJLAGEN_BUCKET).remove(paden);
+  // "not found" is de normale uitkomst voor een update zonder bijlage.
+  if (error && !/not.?found/i.test(String(error.message || ""))) {
+    console.warn("Opruimen van update-bijlagen is mislukt:", error);
+  }
+};
+
 export const saveUpdatesData = async (data: any) => {
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicUpdate) : [];
@@ -2394,10 +2459,23 @@ export const saveUpdatesData = async (data: any) => {
     category: update.category || "algemeen",
     content: update.content || "",
   }));
+  // De kolom `bijlagen` staat er bewust NIET bij: die wordt alleen door de
+  // upload- en verwijderroute geschreven (Storage is de bron). Een upsert
+  // noemt hier alleen de kolommen hierboven, dus een gewone save laat de
+  // bijlagen van een update met rust.
+  const payloadMetTonen = payloadWithoutUrgent.map((rij, i) => ({
+    ...rij,
+    bijlagen_tonen: Boolean(normalizedData[i]?.bijlagenTonen),
+  }));
   // Eerst upserten, dan pas de ontbrekende rijen verwijderen — faalt de
   // upsert, dan zijn er nog geen records verloren.
   if (payloadWithoutUrgent.length > 0) {
-    const { error } = await client.from('updates').upsert(payloadWithoutUrgent);
+    // Zonder de migratie van 21-09 bestaat `bijlagen_tonen` nog niet; dan
+    // schrijven we de update gewoon zonder dat vinkje weg.
+    let { error } = await client.from('updates').upsert(payloadMetTonen);
+    if (error && /bijlagen_tonen/i.test(String(error.message || ""))) {
+      ({ error } = await client.from('updates').upsert(payloadWithoutUrgent));
+    }
     if (error) throw error;
   }
 

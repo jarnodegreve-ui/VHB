@@ -1910,7 +1910,7 @@ export default function App() {
               {resolvedCurrentView === 'planning-codes' && <Verwissel laden={isInitialLoad || !planningCodesGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense></Verwissel>}
               {resolvedCurrentView === 'beheer-updates' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSaveUpdate={saveUpdate} onCreateUpdate={createUpdate} onDeleteUpdate={deleteUpdate} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} />
+                  <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSaveUpdate={saveUpdate} onCreateUpdate={createUpdate} onDeleteUpdate={deleteUpdate} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} onHerlaad={() => void fetchUpdates()} />
                 </Suspense>
               </Verwissel>}
               {resolvedCurrentView === 'gebruikers' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>

@@ -727,14 +727,36 @@ export const toDatabasePlanningCode = (code: PlanningCodeRecord) => ({
   is_day_off: code.isDayOff === true,
 });
 
-export const toPublicUpdate = (update: any) => ({
-  id: String(update.id),
-  date: String(update.date || ""),
-  title: update.title || "",
-  category: update.category || "algemeen",
-  content: update.content || "",
-  isUrgent: Boolean(update.isUrgent ?? update.isurgent),
-});
+/** Bijlagenlijst uit de kolom `updates.bijlagen` (jsonb), opgeschoond en
+ *  op slot gesorteerd. Onbekende vormen leveren een lege lijst: de bijlage
+ *  is een extra, nooit een reden om de update zelf te laten vallen. */
+export const bijlagenUitKolom = (waarde: any): Array<{ slot: number; filename: string; sizeBytes?: number }> => {
+  if (!Array.isArray(waarde)) return [];
+  return waarde
+    .map((b: any) => ({
+      slot: Number(b?.slot),
+      filename: String(b?.filename || ""),
+      ...(Number.isFinite(Number(b?.sizeBytes)) ? { sizeBytes: Number(b.sizeBytes) } : {}),
+    }))
+    .filter((b) => Number.isInteger(b.slot) && b.slot >= 1 && b.slot <= 2 && b.filename)
+    .sort((a, b) => a.slot - b.slot);
+};
+
+export const toPublicUpdate = (update: any) => {
+  const bijlagen = bijlagenUitKolom(update.bijlagen);
+  return {
+    id: String(update.id),
+    date: String(update.date || ""),
+    title: update.title || "",
+    category: update.category || "algemeen",
+    content: update.content || "",
+    isUrgent: Boolean(update.isUrgent ?? update.isurgent),
+    // Lege lijst niet meesturen: dan blijft het antwoord (en de
+    // collectie-revisie) gelijk aan vóór de migratie.
+    ...(bijlagen.length > 0 ? { bijlagen } : {}),
+    ...(update.bijlagen_tonen ?? update.bijlagenTonen ? { bijlagenTonen: true } : {}),
+  };
+};
 
 export const toDatabaseUpdate = (update: any) => ({
   id: String(update.id),

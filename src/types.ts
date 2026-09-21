@@ -113,6 +113,15 @@ export interface Shift {
   driverId: string;
 }
 
+export interface UpdateBijlage {
+  /** 1 of 2: de plek in de bucket (`<update-id>-<slot>.pdf`). */
+  slot: number;
+  filename: string;
+  sizeBytes?: number;
+  /** Ondertekend en tijdelijk; komt van de server, wordt nooit bewaard. */
+  url?: string;
+}
+
 export interface Update {
   id: string;
   date: string;
@@ -122,6 +131,10 @@ export interface Update {
    *  rijen behouden hun waarde, nieuwe krijgen 'algemeen'. */
   category?: 'algemeen' | 'veiligheid' | 'technisch';
   isUrgent?: boolean;
+  /** Hoogstens twee PDF's; de lijst komt van de server (Storage is de bron). */
+  bijlagen?: UpdateBijlage[];
+  /** Bijlage meteen ingebed tonen bij het openklappen. */
+  bijlagenTonen?: boolean;
 }
 
 export interface Service {
