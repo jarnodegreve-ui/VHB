@@ -119,7 +119,7 @@ const gewarmd = new Set<string>();
  *  doet een gewone fetch met dezelfde credentials hetzelfde werk, precies
  *  zoals Vite's modulepreload-polyfill dat voor Safari doet. Mislukt het,
  *  dan is er niets verloren: de navigatie haalt de chunk dan gewoon op. */
-function warmChunk(url: string): Promise<void> {
+function warmChunk(url: string, signaal?: AbortSignal): Promise<void> {
   if (gewarmd.has(url)) return Promise.resolve();
   gewarmd.add(url);
   if (prefetchLinkOndersteund()) {
@@ -136,9 +136,13 @@ function warmChunk(url: string): Promise<void> {
       document.head.appendChild(link);
     });
   }
-  return fetch(url, { credentials: 'same-origin', ...({ priority: 'low' } as RequestInit) })
+  // `signaal`: de warmup breekt zijn eigen fetch af zodra de pagina verlaten
+  // wordt (zie warmViews). Laat je dat aan WebKit over, dan komt de afwijzing
+  // pas terwijl de pagina al afbreekt, draaien de handlers hieronder niet meer
+  // en meldt WebKit elke chunk als onafgehandelde fout.
+  return fetch(url, { credentials: 'same-origin', signal: signaal, ...({ priority: 'low' } as RequestInit) })
     .then((r) => r.arrayBuffer())
-    .then(() => undefined, () => undefined);
+    .then(() => undefined, () => { gewarmd.delete(url); });
 }
 
 const idle = (cb: () => void, timeout: number): (() => void) => {
@@ -184,6 +188,24 @@ export function warmViews(views: readonly View[]): () => void {
   let gestart = false;
   const opruimers: Array<() => void> = [];
   const ruimOp = () => { opruimers.splice(0).forEach((f) => f()); };
+  // Verlaat de gebruiker de pagina midden in de warmup (een harde navigatie,
+  // bv. naar een printblad), dan stoppen we zelf: de lopende fetch afbreken en
+  // geen volgende meer starten. Zonder dit brak WebKit de fetch af, startte de
+  // lus meteen de volgende chunk, die ook sneuvelde, enzovoort: 30 tot 50
+  // "Fetch API cannot load … due to access control checks" per keer (gezien in
+  // de e2e van 21-09, en op iOS belanden die in de foutrapportage).
+  // `beforeunload` is nodig: op `pagehide` heeft WebKit de fetches al
+  // afgebroken (gemeten: alleen pagehide gaf nog 41 tot 49 fouten, met
+  // beforeunload erbij 0). De luisteraars hangen alleen zolang de warmup
+  // loopt, een paar seconden, zodat ze de back/forward-cache niet hinderen.
+  const afbreker = typeof AbortController === 'function' ? new AbortController() : null;
+  const bijVerlaten = () => { gestopt = true; afbreker?.abort(); ruimOp(); };
+  window.addEventListener('pagehide', bijVerlaten);
+  window.addEventListener('beforeunload', bijVerlaten);
+  const losVanVerlaten = () => {
+    window.removeEventListener('pagehide', bijVerlaten);
+    window.removeEventListener('beforeunload', bijVerlaten);
+  };
 
   const draai = async () => {
     const kaart = chunkKaart();
@@ -194,7 +216,7 @@ export function warmViews(views: readonly View[]): () => void {
       if (bestanden) {
         for (const url of bestanden) {
           if (gestopt) return;
-          await warmChunk(url);
+          await warmChunk(url, afbreker?.signal);
         }
       } else {
         // Geen kaart (dev/oude shell): evalueren dan maar, maar gespreid.
@@ -210,7 +232,7 @@ export function warmViews(views: readonly View[]): () => void {
     gestart = true;
     ruimOp();
     const timer = window.setTimeout(() => {
-      opruimers.push(idle(() => { void draai(); }, 2000));
+      opruimers.push(idle(() => { void draai().finally(losVanVerlaten); }, 2000));
     }, marge);
     opruimers.push(() => window.clearTimeout(timer));
   };
@@ -234,6 +256,7 @@ export function warmViews(views: readonly View[]): () => void {
 
   return () => {
     gestopt = true;
+    losVanVerlaten();
     ruimOp();
   };
 }
