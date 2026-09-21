@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, FileText, Phone } from 'lucide-react';
-import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
+import { isStaf, type LeaveRequest, type Shift, type SwapRequest, type User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
 import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
@@ -232,7 +232,12 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
 
   // Geplande uren deze week/maand (punt 15): afgeleid uit de dienstvensters,
   // geen loonberekening (src/lib/roosterUren.ts); de strook zegt dat ook.
+  // Alleen voor staf: chauffeurs zagen hier een weektotaal dat als
+  // gepresteerde tijd gelezen werd, terwijl het de geplande dienstvensters
+  // zijn. Planner/admin houden het (ook per chauffeur in Planning →
+  // maandoverzicht).
   const uren = useMemo(() => berekenRoosterUren(myShifts, today), [myShifts, today]);
+  const toonUren = isStaf(user.role);
   const planningTel = useMemo(() => planningTelefoon(users), [users]);
   // Startscherm-voorkeur naar de lokale kopie (router leest die bij de start).
   useEffect(() => { spiegelStartscherm(user); }, [user]);
@@ -292,7 +297,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
       {/* Stille urenstrook: geen kaart, één regel micro-tekst. Het label
           "geplande uren, geen loonberekening" is verplicht: dit zijn de
           dienstvensters uit de planning, geen gepresteerde of betaalde uren. */}
-      {!isInitialLoad && myShifts.length > 0 && (
+      {toonUren && !isInitialLoad && myShifts.length > 0 && (
         <p className="-mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-0.5" aria-label="Geplande uren">
           <span className="text-xs font-semibold text-slate-600 tabular-nums">
             deze week {formatUren(uren.weekMinuten)} · deze maand {formatUren(uren.maandMinuten)} · {uren.maandDienstdagen} {uren.maandDienstdagen === 1 ? 'dag' : 'dagen'} met dienst
