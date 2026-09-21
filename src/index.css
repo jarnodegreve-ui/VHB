@@ -295,6 +295,13 @@
 }
 
 :root {
+  /* Tint van de microlabels (eyebrows, sectiekopjes). Eén trede donkerder
+     dan slate-400 (Jarno 21-09): die haalde nergens AA (2,6:1 op wit). Dit
+     ligt net onder slate-500 en haalt 4,65:1 op het canvas en 5,17:1 op
+     wit; gewoon slate-500 strandde op het canvas op 4,14:1. In donker is
+     het de gespiegelde slate-500 (5,96:1 op een gedempt vlak, 7,44:1 op
+     het canvas). */
+  --tekst-micro: #666E77;
   --duration-fast: 150ms;
   --duration-base: 220ms;
   --duration-slow: 320ms;
@@ -378,6 +385,7 @@
 }
 
 html.dark {
+  --tekst-micro: var(--color-slate-500);
   /* Lagen in donker: canvas = VHB Black, daarboven kaart, dock en sticky
      kop elk een fractie lichter. Dit zijn de vroegere losse hexen van
      html.dark, --tile-bg, .bottom-dock en --surface-sticky-head. */
@@ -728,14 +736,15 @@ html.dark {
     color: var(--color-slate-600);
   }
   .text-micro {
-    /* Eyebrow/microlabel gedempt (afwerking 04-09, nr. 8): slate-400 i.p.v.
-       500 en iets ruimer gespatieerd — een label wijst, het schreeuwt niet. */
+    /* Eyebrow/microlabel: gedempt en iets ruimer gespatieerd, een label
+       wijst, het schreeuwt niet. De tint is --tekst-micro (21-09): gedempt,
+       maar wel leesbaar. */
     font-size: 0.6875rem;
     line-height: 1rem;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--color-slate-400);
+    color: var(--tekst-micro);
   }
   .text-stat {
     /* Groot cijfer (OpsStat, statkaarten in beheer). Tellingen staan sinds
