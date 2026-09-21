@@ -254,6 +254,33 @@ export function MijnDagView({
       {/* Alles wat van de gekozen dag afhangt wisselt met richting (opacity +
           4 px, stil tijdens een view transition en bij reduced motion). */}
       <RichtingWissel sleutel={dagOffset} richting={dagRichting} stil={overgangActief()} knip innerClassName="space-y-5">
+      {/* === Ritblad en Defect melden: de twee dingen die een chauffeur hier
+          écht komt doen. Stonden onderaan, ná de omleidingen, en waren op een
+          telefoon zelden in beeld (puntje Jarno 21-09). Nu boven de tijdlijn,
+          met het ritblad als enige gouden knop van dit scherm.
+          Het ritblad toont meteen de pagina's van jóuw dienstnummer (04-09);
+          ook voor morgen zodra het nummer bekend is, zodat je 's avonds al
+          kan klaarleggen wat je morgen rijdt. Het blad is altijd de actuele
+          bundel. Defect melden schrijft rechtstreeks in het gele boek van de
+          garage (13-09) en staat er ook op een dag zonder dienst. === */}
+      <div className={cn('grid gap-2', delen.length > 0 && 'grid-cols-2')}>
+        {delen.length > 0 && (
+          <Button variant="primary" size="lg" full icon={<FileText size={18} />} onClick={() => setRitbladOpen(true)}>
+            Ritblad van {dagWoord}
+          </Button>
+        )}
+        <Button variant="secondary" size="lg" full icon={<Wrench size={18} />} onClick={() => setDefectMelden(true)}>
+          Defect melden
+        </Button>
+      </div>
+      {delen.length > 0 && (
+        <RitbladViewer dienstnummer={dienstnummers} open={ritbladOpen} onClose={() => setRitbladOpen(false)} />
+      )}
+      {defectMelden && (
+        <Suspense fallback={null}>
+          <LazyDefectMeldenModal open onClose={() => setDefectMelden(false)} currentUser={user} />
+        </Suspense>
+      )}
       {/* === Tijdlijn === */}
       {rijen.length === 0 ? (
         <Card tone="muted" padding="sm">
@@ -358,29 +385,7 @@ export function MijnDagView({
         </Card>
       )}
 
-      {/* === Ritblad: de bundel is voor iedereen, maar de viewer toont meteen de
-          pagina's van jóuw dienstnummer (Jarno 04-09). Ook voor morgen zodra
-          het dienstnummer bekend is (punt 15): 's avonds klaarleggen wat je
-          morgen rijdt. Het blad is altijd de actuele bundel. === */}
-      {delen.length > 0 && (
-        <>
-          <Button variant="secondary" size="lg" full icon={<FileText size={18} />} onClick={() => setRitbladOpen(true)}>
-            Ritblad van {dagWoord}
-          </Button>
-          <RitbladViewer dienstnummer={dienstnummers} open={ritbladOpen} onClose={() => setRitbladOpen(false)} />
-        </>
-      )}
       </RichtingWissel>
-
-      {/* === Defect melden: rechtstreeks in het gele boek van de garage (13-09). === */}
-      <Button variant="secondary" size="lg" full icon={<Wrench size={18} />} onClick={() => setDefectMelden(true)}>
-        Defect melden
-      </Button>
-      {defectMelden && (
-        <Suspense fallback={null}>
-          <LazyDefectMeldenModal open onClose={() => setDefectMelden(false)} currentUser={user} />
-        </Suspense>
-      )}
 
       {/* === Omleidingen: allemaal, met lijnnummer — de koppeling omleiding ↔
           dienst zit niet in de data, dus we kiezen er niet voor de chauffeur. === */}

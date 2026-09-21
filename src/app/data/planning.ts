@@ -31,6 +31,9 @@ export function usePlanningData(ctx: DataCtx) {
   // (dan toont de view leeg + de laadfout, zoals vroeger in de poort). Views
   // houden hun skelet aan tot de vlag waar is, zodat "leeg" nooit "nog niet
   // geladen" betekent.
+  // Tot wanneer loopt de planning? Komt als header mee met /api/planning (de
+  // chauffeur ziet alleen zijn eigen rijen en kan het er niet uit afleiden).
+  const [planningTot, setPlanningTot] = useState<string | null>(null);
   const [servicesGeladen, setServicesGeladen] = useState(false);
   const [planningMatrixGeladen, setPlanningMatrixGeladen] = useState(false);
   const [planningCodesGeladen, setPlanningCodesGeladen] = useState(false);
@@ -50,6 +53,8 @@ export function usePlanningData(ctx: DataCtx) {
       // Revisie alleen bij een ongefilterde fetch (de server zet 'm ook
       // alleen dan) — een subset-revisie zou valse conflicten geven.
       if (!qs) ctx.captureRevision('planning', response);
+      const tot = response.headers.get('x-planning-tot');
+      if (tot && /^\d{4}-\d{2}-\d{2}$/.test(tot)) setPlanningTot(tot);
       const data = await response.json();
       // Een lege lijst is een geldig resultaat (chauffeur zonder diensten, of
       // planning gewist) → die moet ook écht leeg tonen. Vroeger hield
@@ -293,6 +298,7 @@ export function usePlanningData(ctx: DataCtx) {
     setPlanningMatrixRows([]);
     setPlanningCodes([]);
     setPlanningMatrixHistory([]);
+    setPlanningTot(null);
     setServicesGeladen(false);
     setPlanningMatrixGeladen(false);
     setPlanningCodesGeladen(false);
@@ -300,6 +306,7 @@ export function usePlanningData(ctx: DataCtx) {
 
   return {
     shifts, services, myNotes, planningMatrixRows, planningCodes, planningMatrixHistory, coverageDays,
+    planningTot,
     servicesGeladen, planningMatrixGeladen, planningCodesGeladen,
     fetchPlanning, savePlanning, fetchServices, saveServices,
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, savePlanningCodes,

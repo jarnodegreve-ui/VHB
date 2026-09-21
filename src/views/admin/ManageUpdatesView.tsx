@@ -14,6 +14,7 @@ import { updateSchema } from '../../../shared/schemas/update';
 import { InfoTip } from '../../components/InfoTip';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
+import { UpdateBijlagen } from '../../components/UpdateBijlagen';
 import { ActieMenu } from '../../components/ActieMenu';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 import { useRecordParam } from '../../app/router';
@@ -28,6 +29,7 @@ export function ManageUpdatesView({
   onDeleteUpdate,
   onSendUrgentEmail,
   canSendUrgentEmail,
+  onHerlaad,
 }: {
   updates: Update[];
   /** Collectie-saver (hele lijst) — alleen nog de terugval als de
@@ -39,8 +41,10 @@ export function ManageUpdatesView({
   onDeleteUpdate?: (id: string) => Promise<boolean>;
   onSendUrgentEmail: (u: Update) => Promise<void>;
   canSendUrgentEmail: boolean;
+  /** Updates opnieuw ophalen na een bijlage-actie (die schrijft server-side). */
+  onHerlaad: () => void;
 }) {
-  const emptyUpdateForm = { title: '', category: 'algemeen', content: '', isUrgent: false };
+  const emptyUpdateForm = { title: '', category: 'algemeen', content: '', isUrgent: false, bijlagenTonen: false };
   const [updateForm, setUpdateForm] = useState(emptyUpdateForm);
   const [isPublishing, setIsPublishing] = useState(false);
   // Veldfouten: gedeeld schema vóór submit + server-veldfouten van een 400.
@@ -84,6 +88,7 @@ export function ManageUpdatesView({
       category: updateForm.category as any,
       content: updateForm.content,
       isUrgent: updateForm.isUrgent,
+      bijlagenTonen: updateForm.bijlagenTonen,
     };
 
     // Gedeeld contract (shared/schemas/update.ts): fouten bij het veld.
@@ -146,6 +151,7 @@ export function ManageUpdatesView({
       category: update.category,
       content: update.content,
       isUrgent: Boolean(update.isUrgent),
+      bijlagenTonen: Boolean(update.bijlagenTonen),
     });
     setFouten({});
     setPaneelOpen(true);
@@ -368,6 +374,15 @@ export function ManageUpdatesView({
             <Badge tone="slate">Alleen admin</Badge>
           )}
         </Card>
+
+        {/* PDF's hangen aan het opgeslagen record (de bucket-sleutel is het
+            id), dus bij een nieuwe update staat hier eerst "publiceer eerst". */}
+        <UpdateBijlagen
+          update={editingId ? updates.find((u) => u.id === editingId) ?? null : null}
+          tonen={updateForm.bijlagenTonen}
+          onTonenChange={(v) => setUpdateForm({ ...updateForm, bijlagenTonen: v })}
+          onGewijzigd={onHerlaad}
+        />
       </form>
     </DetailPaneel>
   );

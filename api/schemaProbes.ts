@@ -28,6 +28,11 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // location: plaats van de omleiding (2026-09-10_diversions_location.sql);
   // zonder migratie valt de upsert terug op de kolommen zonder location.
   { table: "diversions", columns: "id,line,title,description,startDate,endDate,severity,pdfUrl,location" },
+  // updates stond hier niet; sinds 2026-09-21_updates_bijlagen.sql meldt de
+  // schema-check ook de twee kolommen van de PDF-bijlagen. Bewust zónder
+  // `isurgent`: die kolom bestaat live niet, toDatabaseUpdate schrijft hem
+  // best-effort en zou de check dus altijd rood zetten.
+  { table: "updates", columns: "id,date,title,content,category,bijlagen,bijlagen_tonen" },
   // swap_type: ruil zonder tegenprestatie (supabase/swaps_swap_type.sql).
   // shift_date/shift_line: planning-doorvoer (2026-08-01_swaps_shift_info.sql).
   // target_seen_at: gezien-bevestiging door de ontvanger (2026-08-16_swaps_target_seen.sql).

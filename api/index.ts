@@ -11,7 +11,7 @@ import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser,
 import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isDeviceGateEnabled, DEVICE_TOKEN_HEADER } from "./middleware.js";
-import { isMissingTableError } from "./deviceGate.js";
+import { isMissingColumnError, isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
 import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit } from "./rateLimit.js";
@@ -36,7 +36,7 @@ import { invalidateUsersCache } from "./userCache.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { userBodySchema, userLijstSchema, WACHTWOORD_MIN } from "../shared/schemas/user.js";
 import { diversionBodySchema, diversionLijstSchema } from "../shared/schemas/diversion.js";
-import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js";
+import { MAX_UPDATE_BIJLAGEN, updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js";
 import { meldingenGelezenBodySchema, meldingenVerwijderBodySchema } from "../shared/schemas/meldingen.js";
 import { recordUrl } from "./_lib/meldingen.js";
 import { meVoorkeurenBodySchema, pasVoorkeurenPatchToe } from "../shared/schemas/dashboardVoorkeuren.js";
@@ -58,7 +58,7 @@ import {
   trekToegangIn,
   type ToegangIngetrokken,
 } from "./_lib/recordWrites.js";
-import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf , redenVoorChauffeur} from "./helpers.js";
+import { addDagenIso, bijlagenUitKolom, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf , redenVoorChauffeur} from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./_lib/matrixXlsx.js";
 import {
@@ -82,6 +82,7 @@ import {
   getLeaveData,
   getPlanningCodesData,
   getPlanningData,
+  getPlanningHorizon,
   getPlanningMatrixHistory,
   getPlanningMatrixRows,
   getServicesData,
@@ -126,6 +127,10 @@ import {
   saveServicesData,
   saveSwapsData,
   DIVERSIONS_BUCKET,
+  uploadUpdateBijlage,
+  verwijderUpdateBijlage,
+  ondertekenUpdateBijlage,
+  zetUpdateBijlagen,
   summarizePlanningCodeChanges,
   diffPlanningCodeChanges,
   summarizeServiceChanges,
@@ -219,7 +224,7 @@ const ALLOWED_ORIGINS: Array<string | RegExp> = [
   /^https:\/\/vhb-[a-z0-9-]+-jarnodegreve-uis-projects\.vercel\.app$/,
   ...(process.env.VERCEL_ENV === "production" ? [] : [/^http:\/\/localhost:\d+$/]),
 ];
-app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision", "Retry-After"] }));
+app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision", "X-Planning-Tot", "Retry-After"] }));
 // 5 MB is eerlijk: Vercel kapt request-bodies sowieso op ~4,5 MB af — de
 // oude 25mb-limiet wekte de indruk dat grotere uploads (PDF's, Excels) konden.
 // /api/client-errors (open, zonder auth) krijgt een eigen, veel kleinere
@@ -675,12 +680,21 @@ app.get("/api/planning", authenticate, async (req: AuthenticatedRequest, res) =>
     const monthIso = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month)
       ? req.query.month
       : undefined;
-    const data = await getPlanningData({ driverId, monthIso });
+    // Horizon meteen mee: een chauffeur krijgt alleen zijn eigen rijen en kan
+    // daar niet uit afleiden tot wanneer de planning loopt ("nog niets in
+    // december" of "nog niet geïmporteerd" zien er voor hem hetzelfde uit).
+    // Als header op deze fetch, zodat het geen extra rondje kost. Mislukt de
+    // horizonquery, dan gaat de planning gewoon door zonder de regel.
+    const [data, horizon] = await Promise.all([
+      getPlanningData({ driverId, monthIso }),
+      getPlanningHorizon().catch(() => null),
+    ]);
     // Revisie alleen over de volledige collectie (ongefilterd) — een revisie
     // over een subset zou bij het opslaan altijd een vals conflict geven.
     if (!driverId && !monthIso) {
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
     }
+    if (horizon) res.setHeader(PLANNING_TOT_HEADER, horizon);
     res.json(data);
   } catch (err) {
     console.error("Error reading planning data:", err);
@@ -1812,6 +1826,8 @@ const massDeleteResponse = (res: any, removed: number, total: number, label: str
  * behandelt de waarde als ondoorzichtig en hasht zelf niets.
  */
 const COLLECTION_REVISION_HEADER = "x-collection-revision";
+/** Tot wanneer de planning in het portaal loopt (ISO-dag) — zie GET /api/planning. */
+const PLANNING_TOT_HEADER = "x-planning-tot";
 const revisionOf = (rows: any[]): string => {
   const sorted = [...(Array.isArray(rows) ? rows : [])].sort((a, b) =>
     String(a?.id ?? a?.code ?? "").localeCompare(String(b?.id ?? b?.code ?? "")),
@@ -3466,12 +3482,40 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
 app.get("/api/updates", authenticate, async (_req, res) => {
   try {
     const data = await getUpdatesData();
+    // Revisie over de opgeslagen vorm (zonder ondertekende URL's): die
+    // veranderen elke 12 uur en zouden anders elke fetch een valse wijziging
+    // opleveren.
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
-    res.json(data.map((u: any) => withRecordRevision(u, recordRevisionOf(u))));
+    const metUrls = await metOndertekendeBijlagen(data);
+    res.json(metUrls.map((u: any, i: number) => withRecordRevision(u, recordRevisionOf(data[i]))));
   } catch (err) {
     res.status(500).json({ error: "Updates laden is mislukt." });
   }
 });
+
+// --- PDF-bijlagen bij een update (2026-09-21_updates_bijlagen.sql) ---
+// Zelfde afspraak als bij de omleidingen: het bestand staat in een privé
+// bucket op een vaste sleutel (`<id>-<slot>.pdf`) en de URL wordt per
+// request ondertekend. De kolom `bijlagen` zegt alleen wát er hangt
+// (bestandsnaam, grootte), nooit waar het staat, zodat een planner geen
+// externe link als "de PDF van deze update" kan laten doorgaan.
+/** Elke bijlage een verse, ondertekende URL geven; wat niet te ondertekenen
+ *  is (bestand weg) valt uit de lijst in plaats van als dode link mee te gaan. */
+const metOndertekendeBijlagen = async (updates: any[]): Promise<any[]> =>
+  Promise.all(
+    updates.map(async (u: any) => {
+      if (!Array.isArray(u?.bijlagen) || u.bijlagen.length === 0) return u;
+      const bijlagen = (
+        await Promise.all(
+          u.bijlagen.map(async (b: any) => {
+            const url = await ondertekenUpdateBijlage(String(u.id), Number(b.slot));
+            return url ? { ...b, url } : null;
+          }),
+        )
+      ).filter(Boolean);
+      return bijlagen.length > 0 ? { ...u, bijlagen } : { ...u, bijlagen: undefined };
+    }),
+  );
 
 app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
@@ -3546,6 +3590,81 @@ app.put("/api/updates/:id", authenticate, requireRole("planner", "admin"), async
   } catch (err: any) {
     console.error("Update opslaan is mislukt.", err?.message || err);
     res.status(500).json({ error: "Updates opslaan is mislukt." });
+  }
+});
+
+// PDF bij een update zetten. Zelfde vorm als POST /api/diversions/pdf: een
+// base64 data-URL in de body, een strak id (de sleutel in de bucket) en
+// upsert, zodat opnieuw uploaden het vorige bestand vervangt.
+const MAX_UPDATE_BIJLAGE_BYTES = 4 * 1024 * 1024;
+app.post("/api/updates/:id/bijlage", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    // Strak formaat: het id wordt rechtstreeks de storage-sleutel, dus zonder
+    // deze check kon '../iets' naar een andere plek in de bucket schrijven.
+    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: "Ongeldig update-id." });
+    const slot = Number(req.body?.slot);
+    if (!Number.isInteger(slot) || slot < 1 || slot > MAX_UPDATE_BIJLAGEN) {
+      return res.status(400).json({ error: `Kies plaats 1 of ${MAX_UPDATE_BIJLAGEN}.` });
+    }
+    const filename = String(req.body?.filename || "").trim();
+    if (!filename || !filename.toLowerCase().endsWith(".pdf")) {
+      return res.status(400).json({ error: "Geef een PDF-bestand met een .pdf extensie." });
+    }
+    const base64Match = String(req.body?.dataUrl || "").match(/^data:application\/pdf;base64,(.+)$/);
+    if (!base64Match) return res.status(400).json({ error: "Bestand is geen geldige PDF (base64 data URL verwacht)." });
+    const buffer = Buffer.from(base64Match[1], "base64");
+    if (buffer.length === 0) return res.status(400).json({ error: "Bestand is leeg." });
+    if (buffer.length > MAX_UPDATE_BIJLAGE_BYTES) {
+      return res.status(413).json({ error: `Bestand is te groot (max ${Math.round(MAX_UPDATE_BIJLAGE_BYTES / (1024 * 1024))} MB).` });
+    }
+
+    const updates = await getUpdatesData();
+    const huidig = updates.find((u: any) => String(u.id) === id);
+    if (!huidig) return res.status(404).json({ error: "Update niet gevonden, mogelijk intussen verwijderd." });
+
+    await uploadUpdateBijlage(id, slot, buffer);
+
+    const lijst = [
+      ...bijlagenUitKolom((huidig as any).bijlagen).filter((b) => b.slot !== slot),
+      { slot, filename, sizeBytes: buffer.length },
+    ].sort((a, b) => a.slot - b.slot);
+    await zetUpdateBijlagen(id, lijst);
+    await logActivity(req, "updates", "Bijlage toegevoegd", `${filename} bij update "${huidig.title}".`, { type: "update", id });
+    res.json({ success: true, update: await updateResponseRecord(id) });
+  } catch (err: any) {
+    if (isMissingColumnError(err)) {
+      return res.status(503).json({ error: "De kolommen voor bijlagen bestaan nog niet: draai supabase/2026-09-21_updates_bijlagen.sql in de SQL Editor." });
+    }
+    console.error("Bijlage bij update opslaan is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Kon de PDF niet opslaan." });
+  }
+});
+
+app.delete("/api/updates/:id/bijlage/:slot", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: "Ongeldig update-id." });
+    const slot = Number(req.params.slot);
+    if (!Number.isInteger(slot) || slot < 1 || slot > MAX_UPDATE_BIJLAGEN) {
+      return res.status(400).json({ error: `Kies plaats 1 of ${MAX_UPDATE_BIJLAGEN}.` });
+    }
+    const updates = await getUpdatesData();
+    const huidig = updates.find((u: any) => String(u.id) === id);
+    if (!huidig) return res.status(404).json({ error: "Update niet gevonden, mogelijk intussen verwijderd." });
+
+    await verwijderUpdateBijlage(id, slot);
+
+    const lijst = bijlagenUitKolom((huidig as any).bijlagen).filter((b) => b.slot !== slot);
+    await zetUpdateBijlagen(id, lijst);
+    await logActivity(req, "updates", "Bijlage verwijderd", `Bijlage ${slot} bij update "${huidig.title}".`, { type: "update", id });
+    res.json({ success: true, update: await updateResponseRecord(id) });
+  } catch (err: any) {
+    if (isMissingColumnError(err)) {
+      return res.status(503).json({ error: "De kolommen voor bijlagen bestaan nog niet: draai supabase/2026-09-21_updates_bijlagen.sql in de SQL Editor." });
+    }
+    console.error("Bijlage bij update verwijderen is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Kon de PDF niet verwijderen." });
   }
 });
 
