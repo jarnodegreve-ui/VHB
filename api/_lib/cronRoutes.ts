@@ -8,6 +8,7 @@
  * domeinen in dezelfde volgorde als voorheen.
  */
 
+import { bouwHerstelPlan } from "../../shared/herstelPlan.js";
 import express from "express";
 import { sendEmail, sendExpiryReminderEmail, escapeHtml } from "../email.js";
 import { sendPushToUsers } from "../push.js";
@@ -303,6 +304,7 @@ export function mountCronRoutes(app: express.Express) {
     try {
       const issues: string[] = [];
       let filename = "";
+      let drogeRun = "";
       try {
         const backup = await getLatestBackup();
         if (!backup) {
@@ -322,6 +324,18 @@ export function mountCronRoutes(app: express.Express) {
             const liveUsers = (await getUsersData()).length;
             const backupUsers = Array.isArray(payload?.collections?.users) ? payload.collections.users.length : 0;
             if (liveUsers > 0 && backupUsers === 0) issues.push("back-up bevat 0 gebruikers terwijl er live wél zijn");
+            // Droge herstelrun: dezelfde controle als het beheerscherm vóór een
+            // echt herstel. Alleen blokkades alarmeren; dat er sinds vannacht
+            // records bijkwamen is normaal.
+            if (payload.collections && typeof payload.collections === "object") {
+              const plan = bouwHerstelPlan({
+                backup: payload.collections,
+                live: (await buildBackupPayload()).collections as Record<string, unknown>,
+                exportedAt: typeof payload.exportedAt === "string" ? payload.exportedAt : null,
+              });
+              issues.push(...plan.blokkades.map((b) => `droge herstelrun: ${b}`));
+              drogeRun = `${plan.totaalBackup} records over ${plan.regels.filter((r) => r.inBackup && !r.overgeslagen).length} collecties herstelbaar`;
+            }
           }
         }
       } catch (err: any) {
@@ -342,8 +356,8 @@ export function mountCronRoutes(app: express.Express) {
         await logCronHeartbeat("restore-proef", `GEFAALD: ${issues.join("; ")}`);
         return res.json({ success: false, issues });
       }
-      await logCronHeartbeat("restore-proef", `${filename} teruggelezen en integriteitscheck geslaagd.`);
-      res.json({ success: true, filename });
+      await logCronHeartbeat("restore-proef", `${filename} teruggelezen, integriteitscheck en droge herstelrun geslaagd${drogeRun ? ` (${drogeRun})` : ""}.`);
+      res.json({ success: true, filename, drogeRun });
     } catch (err: any) {
       console.error("[restore-proef] mislukt:", err?.message || err);
       res.status(500).json({ error: "Restore-proef mislukt" });
@@ -752,6 +766,23 @@ export function mountCronRoutes(app: express.Express) {
         if (!hasAdmin) {
           return res.status(400).json({ error: "Herstel geweigerd: de back-up bevat geen admin-account." });
         }
+      }
+      // Droge run (22-09): wat ZOU dit herstel doen, zonder iets te schrijven.
+      // Het beheerscherm toont dit plan vóór de bevestiging; blokkades houden
+      // de echte run hieronder ook tegen, want een herstel is niet
+      // transactioneel en strandt anders halverwege.
+      const live = (await buildBackupPayload()).collections as Record<string, unknown>;
+      const plan = bouwHerstelPlan({
+        backup: collections,
+        live,
+        exportedAt: typeof body.exportedAt === "string" ? body.exportedAt : null,
+        actorId: req.appUser ? String(req.appUser.id) : null,
+      });
+      if (req.query.droog === "1") {
+        return res.json({ droog: true, plan });
+      }
+      if (plan.blokkades.length > 0) {
+        return res.status(400).json({ error: `Herstel geweigerd: ${plan.blokkades.join("; ")}.`, plan });
       }
       const summary = await restoreFromBackup(collections);
       // Restore kan de gebruikers (incl. rollen) hebben vervangen → auth-cache wissen.

@@ -2407,6 +2407,43 @@ describe('restore vanuit back-up', () => {
   });
 });
 
+describe('droge herstelrun (POST /api/restore?droog=1)', () => {
+  const backup = (collections: any) => ({ exportedAt: new Date().toISOString(), version: 2, collections });
+
+  it('zegt wat een herstel zou doen en schrijft niets', async () => {
+    const voor = { services: mem.services.length, leave: mem.leave.length, log: mem.activity.length };
+    const res = await api('POST', '/api/restore?droog=1', {
+      token: 'tok-admin',
+      body: backup({ users: mem.users, services: mem.services.slice(0, 1), leave: [] }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.droog).toBe(true);
+    const services = res.json.plan.regels.find((r: any) => r.collectie === 'services');
+    expect(services).toMatchObject({ backup: 1, live: voor.services, weg: voor.services - 1, blijft: 1 });
+    expect(res.json.plan.blokkades).toEqual([]);
+    // Niets geschreven, ook geen logregel.
+    expect(mem.services).toHaveLength(voor.services);
+    expect(mem.leave).toHaveLength(voor.leave);
+    expect(mem.activity).toHaveLength(voor.log);
+  });
+
+  it('is alleen voor admins', async () => {
+    const res = await api('POST', '/api/restore?droog=1', { token: 'tok-planner', body: backup({ users: mem.users }) });
+    expect(res.status).toBe(403);
+  });
+
+  it('een back-up met dubbele id’s wordt ook bij een echt herstel geweigerd, vóór er iets geschreven is', async () => {
+    const voor = mem.services.length;
+    const dubbel = [mem.services[0], mem.services[0]];
+    const droog = await api('POST', '/api/restore?droog=1', { token: 'tok-admin', body: backup({ users: mem.users, services: dubbel }) });
+    expect(droog.json.plan.blokkades.join(' ')).toMatch(/dubbele id/);
+    const echt = await api('POST', '/api/restore', { token: 'tok-admin', body: backup({ users: mem.users, services: dubbel }) });
+    expect(echt.status).toBe(400);
+    expect(echt.json.error).toMatch(/dubbele id/);
+    expect(mem.services).toHaveLength(voor);
+  });
+});
+
 describe('back-up export', () => {
   it('is alleen toegankelijk voor admins (403 voor planner/chauffeur)', async () => {
     const planner = await api('GET', '/api/backup', { token: 'tok-planner' });
