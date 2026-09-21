@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
 import { rapportVan } from '../../shared/rapporten/register';
 import { filtersInWoorden, leesFilters, periodeVanFilters } from '../../shared/rapporten/filters';
-import { berekenTotalen, rijBevat } from '../../shared/rapporten/opmaak';
+import { berekenTotalen, metKolommen, rijBevat } from '../../shared/rapporten/opmaak';
 import { ZOEK_PARAM, laadRapport, type RapportAntwoord } from '../lib/rapporten';
 import { bereikUitleg } from '../lib/rapportBereik';
 import { isoDate } from '../lib/datum';
@@ -55,8 +55,9 @@ export function PrintRapportView({ rapportId, users, door }: { rapportId: string
   if (zoek) woorden.push(`Zoekterm: “${zoek}”`);
   // De zoekterm van het scherm telt als filter: dezelfde rijen, en de totalen
   // van precies die rijen (zonder zoekterm zijn dat de totalen van de server).
-  const rijen = zoek ? data.rijen.filter((r) => rijBevat(def, r, zoek)) : data.rijen;
-  const totalen = zoek ? berekenTotalen(def, rijen) : data.totalen;
+  const tabelDef = metKolommen(def, data.kolommen);
+  const rijen = zoek ? data.rijen.filter((r) => rijBevat(tabelDef, r, zoek)) : data.rijen;
+  const totalen = zoek ? berekenTotalen(tabelDef, rijen) : data.totalen;
 
   return (
     <PrintBlad
@@ -70,7 +71,7 @@ export function PrintRapportView({ rapportId, users, door }: { rapportId: string
       {/* Periode zonder gegevens: geen tabel met nullen, wel een blad dat zegt
           vanaf wanneer er gegevens zijn (een leeg blad is soms het bewijsstuk). */}
       <PrintTabel
-        def={def}
+        def={tabelDef}
         rijen={buiten ? [] : rijen}
         totalen={buiten ? null : totalen}
         leegTekst={buiten && regel ? `Geen gegevens voor deze periode. ${regel}` : 'Geen gegevens voor deze periode.'}

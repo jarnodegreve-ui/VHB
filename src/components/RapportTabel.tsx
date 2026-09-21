@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from '../../shared/rapporten/types';
-import { formatWaarde, heeftTotaalrij, isGetalKolom, isRechts, kolomIndeling, onderEersteTekst, sorteerRijen } from '../../shared/rapporten/opmaak';
+import type { KolomNadruk, RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from '../../shared/rapporten/types';
+import { formatWaarde, heeftTotaalrij, isGetalKolom, isRechts, kolomIndeling, nadrukVan, onderEersteTekst, sorteerRijen } from '../../shared/rapporten/opmaak';
 import { cn } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
+import { Badge, type BadgeTone } from './primitives';
 import { Paginering, SortTh, StickyThead, Td, Th, useSort } from './Table';
 
 /**
@@ -27,10 +28,26 @@ const PER_PAGINA = 50;
 /** Vanaf hier passen de kolommen naast elkaar (md); eronder geldt de smalle indeling. */
 const BREED_VANAF = 768;
 
-/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, datum/ja-nee, tekst. */
-const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, kort: 5.5, tekst: 8 };
-const smalleBreedte = (k: RapportKolom, eerste: boolean): number =>
-  eerste ? SMAL_BREEDTE.eerste : isGetalKolom(k) ? SMAL_BREEDTE.getal : k.type === 'tekst' ? SMAL_BREEDTE.tekst : SMAL_BREEDTE.kort;
+/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, ja/nee, datum, tekst, lange tekst (`lang`). */
+// `lang` = 11,5 rem: zo breed als er op 375 px naast de vaste eerste kolom past,
+// zodat een opmerking na het scrollen in haar geheel in beeld staat.
+// Ja/nee is zo smal als een cijfer ("ja", "nee", of een pil met "ja" erin).
+const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, janee: 3.75, kort: 5.5, tekst: 8, lang: 11.5 };
+const smalleBreedte = (k: RapportKolom, eerste: boolean): number => {
+  if (eerste) return SMAL_BREEDTE.eerste;
+  if (isGetalKolom(k)) return SMAL_BREEDTE.getal;
+  if (k.type === 'janee') return SMAL_BREEDTE.janee;
+  if (k.type !== 'tekst') return SMAL_BREEDTE.kort;
+  return k.lang ? SMAL_BREEDTE.lang : SMAL_BREEDTE.tekst;
+};
+
+/**
+ * Nadruk uit de definitie → toon van de statuspil. Een pil alleen voor wat
+ * aandacht vraagt (ronde 3): de waarde zonder nadruk blijft stille tekst.
+ * Contrast nagerekend op het tabelvlak: rood 6,86:1 licht en 7,33:1 donker,
+ * amber 4,88:1 en 9,09:1. Nooit goud.
+ */
+const NADRUK_TOON: Record<KolomNadruk, BadgeTone> = { danger: 'red', warning: 'amber' };
 
 /**
  * De eerste kolom (de naam) blijft onder xl links staan terwijl de cijfers
@@ -116,6 +133,7 @@ export function RapportTabel({ def, rijen, totalen, className }: {
               <tr key={rij.id} className="border-b border-hairline-subtle transition-colors last:border-b-0 hover:bg-surface-soft-hover">
                 {kolommen.map((k, i) => {
                   const onder = i === 0 ? onderEersteTekst(onderEerste, rij) : '';
+                  const nadruk = nadrukVan(k, rij[k.id]);
                   return (
                     <Td key={k.id} num={isRechts(k)} className={celKlasse(k, rij[k.id], i === 0, smal)}>
                       {i === 0 && smal ? (
@@ -123,6 +141,9 @@ export function RapportTabel({ def, rijen, totalen, className }: {
                           <span className="block truncate">{formatWaarde(k, rij[k.id])}</span>
                           {onder ? <span className="block truncate text-xs font-normal text-slate-500">{onder}</span> : null}
                         </>
+                      ) : nadruk ? (
+                        // De pil zit strak in de cel: haar eigen hoogte mag de rij niet hoger maken dan haar buren.
+                        <Badge tone={NADRUK_TOON[nadruk]} className="px-2 py-0.5">{formatWaarde(k, rij[k.id])}</Badge>
                       ) : formatWaarde(k, rij[k.id])}
                     </Td>
                   );

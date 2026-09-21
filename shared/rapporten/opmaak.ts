@@ -1,4 +1,4 @@
-import type { RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from './types.js';
+import type { KolomNadruk, RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from './types.js';
 
 /**
  * Eén opmaak per kolomtype, gedeeld door de tabel op het scherm, het
@@ -41,6 +41,20 @@ export const formatWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undefi
 };
 
 /**
+ * De nadruk van een cel, of null: alleen een `janee`-kolom met `nadruk`, en
+ * alleen voor een echte boolean (een lege of vreemde waarde valt nooit op).
+ * Scherm (pil) en printblad (vet met een stip) lezen allebei deze functie; de
+ * tekst zelf blijft `formatWaarde`, dus de CSV verandert niet.
+ */
+export const nadrukVan = (kolom: RapportKolom, waarde: RapportWaarde | undefined): KolomNadruk | null => {
+  if (kolom.type !== 'janee' || !kolom.nadruk || typeof waarde !== 'boolean') return null;
+  return (waarde ? kolom.nadruk.ja : kolom.nadruk.nee) ?? null;
+};
+
+/** Het teken vóór een benadrukte waarde op het printblad: nadruk mag daar nooit alleen van kleur of gewicht afhangen. */
+export const NADRUK_TEKEN = '●';
+
+/**
  * Welke kolommen de tabel op het scherm toont. Breed (en overal buiten het
  * scherm: printblad, CSV) zijn dat alle kolommen in de volgorde van de
  * definitie. Smal volgt de rol `smal` van elke kolom: `onderEerste` wordt een
@@ -65,6 +79,16 @@ export const onderEersteTekst = (onderEerste: readonly RapportKolom[], rij: Rapp
     .filter((k) => rij[k.id] !== null && rij[k.id] !== undefined && rij[k.id] !== '')
     .map((k) => formatWaarde(k, rij[k.id]))
     .join(' · ');
+
+/**
+ * De definitie met de kolommen van het antwoord erin. Een rapport waarvan de
+ * kolommen van de gegevens afhangen (één kolom per verloftype dat voorkomt)
+ * levert ze mee; al wat kolommen leest (tabel, blad, CSV, zoeken, totalen)
+ * krijgt deze definitie in plaats van de kale. Zonder meegeleverde kolommen
+ * is het gewoon dezelfde definitie (zelfde object, dus geen herberekening).
+ */
+export const metKolommen = (def: RapportDefinitie, kolommen?: readonly RapportKolom[] | null): RapportDefinitie =>
+  (kolommen && kolommen.length > 0 ? { ...def, kolommen } : def);
 
 /** Som per optelbare kolom; een kolom zonder één getal telt als 0. */
 export const berekenTotalen = (def: RapportDefinitie, rijen: readonly RapportRij[]): Record<string, number> => {
@@ -92,9 +116,12 @@ export const sorteerWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undef
 export const sorteerRijen = (def: RapportDefinitie, rijen: readonly RapportRij[], kolomId: string, richting: 'asc' | 'desc'): RapportRij[] => {
   const kolom = def.kolommen.find((k) => k.id === kolomId) ?? def.kolommen[0];
   const f = richting === 'asc' ? 1 : -1;
+  // `sorteerOp`: de kolom toont "Augustus 2026" maar sorteert op '2026-08'.
+  // Dat veld is geen kolom, dus het vergelijkt als wat het is (getal of tekst).
+  const waarde = (rij: RapportRij) => (kolom.sorteerOp ? rij[kolom.sorteerOp] ?? null : sorteerWaarde(kolom, rij[kolom.id]));
   return [...rijen].sort((a, b) => {
-    const va = sorteerWaarde(kolom, a[kolom.id]);
-    const vb = sorteerWaarde(kolom, b[kolom.id]);
+    const va = waarde(a);
+    const vb = waarde(b);
     if (va === null && vb === null) return 0;
     if (va === null) return 1;
     if (vb === null) return -1;

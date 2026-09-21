@@ -1,22 +1,19 @@
 import type express from "express";
 import { authenticate, requireRole } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
-import { getAppSetting, getLeaveData, getUsersData } from "../storage.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { rapportVan } from "../../shared/rapporten/register.js";
 import { filterSchemaVoor } from "../../shared/rapporten/filterSchema.js";
-import { berekenTotalen } from "../../shared/rapporten/opmaak.js";
-import type { RapportAntwoord, RapportFilters, RapportResultaat } from "../../shared/rapporten/types.js";
-import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen } from "../../shared/schemas/verlofFeestdagen.js";
+import { berekenTotalen, metKolommen } from "../../shared/rapporten/opmaak.js";
+import type { RapportAntwoord, RapportLader } from "../../shared/rapporten/types.js";
 import { valideerRecord } from "./valideer.js";
-import { bouwVerlofsaldo } from "./rapporten/verlofsaldo.js";
+import { VERLOF_LADERS, ZIEKTE_LADERS } from "./rapporten/ladersZiekteVerlof.js";
 
 /**
  * Rapporten (20-09): één namespace, GET /api/rapporten/:id. De definitie van
- * een rapport staat in shared/rapporten/register.ts; hier staat per rapport
- * alleen waar de bron vandaan komt. Het rekenwerk zelf is een pure functie in
- * api/_lib/rapporten/<id>.ts (bron + filters → rijen + bereik), de route vult
- * totalen en tijdstip aan.
+ * een rapport staat in shared/rapporten/register.ts; waar de bron vandaan komt
+ * staat per domein in api/_lib/rapporten/laders<Domein>.ts. Het rekenwerk zelf
+ * is een pure functie in api/_lib/rapporten/ (bron + filters → rijen + bereik),
+ * de route vult totalen en tijdstip aan.
  *
  * Staf-only. Filters komen uit de querystring en gaan door het zod-schema dat
  * uit de definitie volgt (400 met veldfouten; een periode is hooguit 366
@@ -24,28 +21,15 @@ import { bouwVerlofsaldo } from "./rapporten/verlofsaldo.js";
  * functie geen zware bibliotheek hoeft te laden (koude start).
  */
 
-type Lader = (filters: RapportFilters) => Promise<RapportResultaat>;
-
-/** Extra vrije dagen zoals GET /api/verlof/feestdagen ze geeft: bij een fout leeg, zodat scherm en rapport hetzelfde tellen. */
-const extraFeestdagen = async (): Promise<ReadonlySet<string>> => {
-  try {
-    return new Set(parseVerlofFeestdagen(await getAppSetting(VERLOF_FEESTDAGEN_KEY)).extra.map((d) => d.datum));
-  } catch (err) {
-    if (!isMissingTableError(err)) console.error("Extra vrije dagen laden is mislukt.", err);
-    return new Set();
-  }
-};
-
 /**
- * Nieuw rapport = één regel hier (naast de definitie en de pure laadfunctie).
- * Geëxporteerd voor de pariteitstest: elk rapport in het register heeft een
- * lader en omgekeerd (src/rapportRoutes.test.ts).
+ * Nieuw rapport = één regel in de laderstabel van zijn domein (naast de
+ * definitie en de pure laadfunctie); hier worden die tabellen alleen
+ * samengevoegd. Geëxporteerd voor de pariteitstest: elk rapport in het register
+ * heeft een lader en omgekeerd (src/rapportRoutes.test.ts).
  */
-export const RAPPORT_LADERS: Record<string, Lader> = {
-  verlofsaldo: async (filters) => {
-    const [users, leave, extra] = await Promise.all([getUsersData(), getLeaveData(), extraFeestdagen()]);
-    return bouwVerlofsaldo({ users, leave, extraFeestdagen: extra }, filters);
-  },
+export const RAPPORT_LADERS: Record<string, RapportLader> = {
+  ...VERLOF_LADERS,
+  ...ZIEKTE_LADERS,
 };
 
 export function mountRapportRoutes(app: express.Express) {
@@ -58,8 +42,16 @@ export function mountRapportRoutes(app: express.Express) {
     if (!filters) return;
 
     try {
-      const { rijen, bereik } = await lader(filters);
-      const antwoord: RapportAntwoord = { rijen, totalen: berekenTotalen(def, rijen), bereik, gegenereerdOp: new Date().toISOString() };
+      const { rijen, bereik, kolommen, totalen } = await lader(filters);
+      const antwoord: RapportAntwoord = {
+        rijen,
+        ...(kolommen ? { kolommen } : {}),
+        // Sommen volgens de (eventueel meegeleverde) kolommen; wat geen som is
+        // (unieke chauffeurs over de hele periode) geeft de lader zelf mee.
+        totalen: { ...berekenTotalen(metKolommen(def, kolommen), rijen), ...(totalen ?? {}) },
+        bereik,
+        gegenereerdOp: new Date().toISOString(),
+      };
       res.setHeader("Cache-Control", "no-store");
       res.json(antwoord);
     } catch (err) {

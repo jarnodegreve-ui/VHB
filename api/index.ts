@@ -40,7 +40,7 @@ import { meldingenGelezenBodySchema } from "../shared/schemas/meldingen.js";
 import { recordUrl } from "./_lib/meldingen.js";
 import { meVoorkeurenBodySchema, pasVoorkeurenPatchToe } from "../shared/schemas/dashboardVoorkeuren.js";
 import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
-import { teltInVerlofbezetting } from "../shared/verlofbezetting.js";
+import { bezettingPerDag } from "../shared/verlofbezettingPerDag.js";
 import { RUIL_BEKEKEN_ACTIE, verloopUitLog, type RuilVerloopStap } from "../shared/ruilVerloop.js";
 import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, verlofFeestdagenSchema } from "../shared/schemas/verlofFeestdagen.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
@@ -5269,21 +5269,12 @@ app.get("/api/leave/bezetting", authenticate, async (req: AuthenticatedRequest, 
     }
     // Zelfde regels als bezettingOp/anderenAfwezigOp aan de client-kant:
     // goedgekeurd, geen ziekte, en de aanvrager telt in de verlofbezetting
-    // (een onbekende aanvrager telt mee, net als daar).
-    const teltMee = leave.filter((l: any) => {
-      if (l.status !== "approved" || l.type === "ziekte") return false;
-      const u = users.find((x: any) => String(x.id) === String(l.userId));
-      return !u || teltInVerlofbezetting(u);
-    });
-    const dagen: Array<{ datum: string; aantal: number; limiet: number }> = [];
-    for (const d = new Date(start); d <= eind; d.setUTCDate(d.getUTCDate() + 1)) {
-      const datum = d.toISOString().slice(0, 10);
-      dagen.push({
-        datum,
-        aantal: teltMee.filter((l: any) => l.startDate <= datum && l.endDate >= datum).length,
-        limiet: limietVoorDag(limieten, datum),
-      });
-    }
+    // (een onbekende aanvrager telt mee, net als daar). De telling zelf staat
+    // in shared/verlofbezettingPerDag.ts, want ook het rapport
+    // "Verlofbezetting per dag" gebruikt ze. Hier gaan BEWUST alleen datum,
+    // aantal en limiet naar buiten: elke rol mag dit lezen, namen niet.
+    const dagen = bezettingPerDag({ leave, users, van, tot, limietVoor: (dag) => limietVoorDag(limieten, dag) })
+      .map(({ datum, aantal, limiet }) => ({ datum, aantal, limiet }));
     res.json({ dagen });
   } catch (err) {
     console.error("Verlofbezetting laden is mislukt.", err);

@@ -6359,3 +6359,90 @@ describe('rapporten (GET /api/rapporten/:id)', () => {
     expect(res.json.rijen.map((r: any) => r.naam)).toEqual(['Onbekend (999)']);
   });
 });
+
+describe('rapporten ziekte en verlof (GET /api/rapporten/:id)', () => {
+  const FEB = 'van=2026-02-01&tot=2026-02-28';
+  const RAPPORTEN_STAP2 = [
+    `ziekte-kalenderdagen?${FEB}`, `ziekte-details?${FEB}`, `ziekte-per-maand?${FEB}`,
+    `verlofaanvragen?${FEB}`, `verlofbezetting?${FEB}`, 'verlof-per-type?jaar=2026',
+  ];
+
+  it('ziekte is gevoelig: zonder sessie 401, chauffeur en technieker 403, planner en admin 200', async () => {
+    mem.users.push({ id: '5', name: 'Tom Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    for (const pad of RAPPORTEN_STAP2) {
+      expect((await api('GET', `/api/rapporten/${pad}`)).status, pad).toBe(401);
+      expect((await api('GET', `/api/rapporten/${pad}`, { token: 'tok-a' })).status, pad).toBe(403);
+      expect((await api('GET', `/api/rapporten/${pad}`, { token: 'tok-tech' })).status, pad).toBe(403);
+      expect((await api('GET', `/api/rapporten/${pad}`, { token: 'tok-planner' })).status, pad).toBe(200);
+      expect((await api('GET', `/api/rapporten/${pad}`, { token: 'tok-admin' })).status, pad).toBe(200);
+    }
+  });
+
+  it('een onbekend type, een onbekende status of een kapot vinkje is 400 met de fout bij het veld', async () => {
+    const type = await api('GET', `/api/rapporten/verlofaanvragen?${FEB}&type=ziekte`, { token: 'tok-planner' });
+    expect(type.status).toBe(400);
+    expect(type.json.veldfouten).toEqual({ type: 'Ongeldige keuze' });
+    const status = await api('GET', `/api/rapporten/verlofaanvragen?${FEB}&status=completed`, { token: 'tok-planner' });
+    expect(status.status).toBe(400);
+    expect(status.json.veldfouten).toEqual({ status: 'Ongeldige keuze' });
+    const vinkje = await api('GET', `/api/rapporten/verlofbezetting?${FEB}&bovenLimiet=ja`, { token: 'tok-planner' });
+    expect(vinkje.status).toBe(400);
+    expect(vinkje.json.veldfouten).toEqual({ bovenLimiet: 'Ongeldige keuze' });
+    // Zonder periode kan geen enkel van deze rapporten.
+    expect((await api('GET', '/api/rapporten/ziekte-details', { token: 'tok-planner' })).json.veldfouten).toEqual({ van: 'Kies een begindatum', tot: 'Kies een einddatum' });
+  });
+
+  it('ziekte: alleen goedgekeurde meldingen, met de totalen die geen som zijn', async () => {
+    mem.leave.push(
+      { id: 'z-1', userId: '3', startDate: '2026-01-30', endDate: '2026-02-03', type: 'ziekte', status: 'approved', comment: 'Griep', createdAt: '2026-01-30T06:00:00Z' },
+      { id: 'z-2', userId: '4', startDate: '2026-02-10', endDate: '2026-02-10', type: 'ziekte', status: 'cancelled', createdAt: '2026-02-10T06:00:00Z' },
+    );
+    const perChauffeur = await api('GET', `/api/rapporten/ziekte-kalenderdagen?${FEB}`, { token: 'tok-planner' });
+    expect(perChauffeur.json.rijen).toEqual([
+      { id: '3', naam: 'Chauffeur A', personeelsnr: null, meldingen: 1, kalenderdagen: 3, langstePeriode: 3, laatsteMelding: '2026-01-30' },
+    ]);
+    expect(perChauffeur.json.totalen).toEqual({ meldingen: 1, kalenderdagen: 3 });
+    expect(perChauffeur.json.bereik).toEqual({ van: '2026-01-30', tot: '2026-02-03' });
+
+    const details = await api('GET', `/api/rapporten/ziekte-details?${FEB}&chauffeur=3`, { token: 'tok-planner' });
+    expect(details.json.rijen).toEqual([
+      { id: 'z-1', naam: 'Chauffeur A', personeelsnr: null, van: '2026-01-30', tot: '2026-02-03', kalenderdagen: 3, opmerking: 'Griep' },
+    ]);
+
+    const perMaand = await api('GET', '/api/rapporten/ziekte-per-maand?van=2026-01-01&tot=2026-02-28', { token: 'tok-planner' });
+    expect(perMaand.json.rijen.map((r: any) => [r.maand, r.meldingen, r.kalenderdagen, r.chauffeurs])).toEqual([['Januari 2026', 1, 2, 1], ['Februari 2026', 1, 3, 1]]);
+    // Kalenderdagen is een som; de melding en de chauffeur tellen één keer, niet per maand.
+    expect(perMaand.json.totalen).toEqual({ kalenderdagen: 5, meldingen: 1, chauffeurs: 1 });
+  });
+
+  it('verlof: aanvragen met filters, bezetting met het vinkje en de limiet uit de instellingen, kolommen per type', async () => {
+    const aanvragen = await api('GET', '/api/rapporten/verlofaanvragen?van=2026-07-01&tot=2026-08-31&status=pending', { token: 'tok-planner' });
+    expect(aanvragen.json.rijen.map((r: any) => [r.id, r.naam, r.type, r.dagen, r.status, r.aangevraagdOp, r.beslistOp, r.opmerking])).toEqual([
+      ['l-a1', 'Chauffeur A', 'Betaald verlof', 3, 'In behandeling', '2026-06-01', null, 'rust'],
+      // zo 05/07 telt niet, ma 06/07 wel.
+      ['l-b1', 'Chauffeur B', 'Klein verlet', 1, 'In behandeling', '2026-06-02', null, 'privé'],
+    ]);
+    expect(aanvragen.json.totalen).toEqual({ dagen: 4 });
+
+    mem.appSettings.verlof_limieten = { standaard: 0, periodes: [] };
+    const week = 'van=2026-08-09&tot=2026-08-13';
+    const bezetting = await api('GET', `/api/rapporten/verlofbezetting?${week}`, { token: 'tok-planner' });
+    expect(bezetting.json.rijen.map((r: any) => [r.datum, r.dag, r.afwezig, r.limiet, r.bovenLimiet, r.namen])).toEqual([
+      ['2026-08-09', 'zo', 0, 0, false, null],
+      ['2026-08-10', 'ma', 1, 0, true, 'Chauffeur A'],
+      ['2026-08-11', 'di', 1, 0, true, 'Chauffeur A'],
+      ['2026-08-12', 'wo', 1, 0, true, 'Chauffeur A'],
+      ['2026-08-13', 'do', 0, 0, false, null],
+    ]);
+    const boven = await api('GET', `/api/rapporten/verlofbezetting?${week}&bovenLimiet=1`, { token: 'tok-planner' });
+    expect(boven.json.rijen.map((r: any) => r.datum)).toEqual(['2026-08-10', '2026-08-11', '2026-08-12']);
+    // Dezelfde telling als het endpoint van de verlofkalender, dat geen namen geeft.
+    const kalender = await api('GET', `/api/leave/bezetting?${week}`, { token: 'tok-a' });
+    expect(kalender.json.dagen).toEqual(bezetting.json.rijen.map((r: any) => ({ datum: r.datum, aantal: r.afwezig, limiet: r.limiet })));
+
+    const perType = await api('GET', '/api/rapporten/verlof-per-type?jaar=2026', { token: 'tok-planner' });
+    expect(perType.json.kolommen.map((k: any) => k.id)).toEqual(['maand', 'type_betaald_verlof', 'totaal']);
+    expect(perType.json.rijen).toHaveLength(12);
+    expect(perType.json.totalen).toEqual({ type_betaald_verlof: 3, totaal: 3 });
+  });
+});

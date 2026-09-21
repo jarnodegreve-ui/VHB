@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { Printer } from 'lucide-react';
 import type { RapportDefinitie, RapportRij } from '../../shared/rapporten/types';
-import { formatWaarde, heeftTotaalrij, isRechts, sorteerRijen } from '../../shared/rapporten/opmaak';
+import { NADRUK_TEKEN, formatWaarde, heeftTotaalrij, isRechts, nadrukVan, sorteerRijen } from '../../shared/rapporten/opmaak';
 import { BrandLogo } from './BrandLogo';
 import { Button } from './primitives';
 
@@ -56,6 +56,7 @@ const bladCss = (richting: 'staand' | 'liggend', voet: string) => `
   .printblad-tabel td { padding: 1.5mm 2mm; border-bottom: 0.4pt solid var(--color-slate-300); vertical-align: top; }
   .printblad-tabel .rechts { text-align: right; white-space: nowrap; }
   .printblad-tabel tr { break-inside: avoid; page-break-inside: avoid; }
+  .printblad-tabel td.nadruk { font-weight: 700; white-space: nowrap; }
   .printblad-tabel tr.totaal td { border-top: 0.75pt solid var(--color-slate-900); border-bottom: 1.5pt solid var(--color-slate-900); font-weight: 700; }
   @media print {
     @page {
@@ -159,7 +160,15 @@ export function PrintTabel({ def, rijen, totalen, leegTekst = 'Geen gegevens voo
       <tbody>
         {gesorteerd.map((rij) => (
           <tr key={rij.id}>
-            {def.kolommen.map((k) => <td key={k.id} className={isRechts(k) ? 'rechts' : undefined}>{formatWaarde(k, rij[k.id])}</td>)}
+            {def.kolommen.map((k) => {
+              // Nadruk op papier: vet met een stip ervoor, geen kleur (een blad is vaak zwart-wit).
+              const nadruk = nadrukVan(k, rij[k.id]);
+              return (
+                <td key={k.id} className={[isRechts(k) ? 'rechts' : '', nadruk ? 'nadruk' : ''].filter(Boolean).join(' ') || undefined}>
+                  {nadruk ? `${NADRUK_TEKEN} ` : ''}{formatWaarde(k, rij[k.id])}
+                </td>
+              );
+            })}
           </tr>
         ))}
         {totalen && heeftTotaalrij(def) && (
