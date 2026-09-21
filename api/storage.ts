@@ -17,6 +17,7 @@ import type {
   DeviceStatus,
   UserDevice,
 } from "./types.js";
+import { RUIL_BEKEKEN_ACTIE } from "../shared/ruilVerloop.js";
 import {
   countAdmins,
   ensureUniqueUserEmails,
@@ -535,7 +536,7 @@ const toPublicActivityLog = (row: ActivityLogRow | ActivityLogRecord): ActivityL
 });
 
 export const getActivityLog = async (
-  opts?: { sinceIso?: string | null; max?: number },
+  opts?: { sinceIso?: string | null; max?: number; metRuilBekeken?: boolean },
 ): Promise<ActivityLogRecord[]> => {
   const client = requireDb();
   // Aanwezigheids-events ('auth' / 'Aangemeld' + 'Actief') worden bewust uit
@@ -546,13 +547,20 @@ export const getActivityLog = async (
   // sinceIso/max i.p.v. een vaste .limit(100): de UI beloofde "30 dagen" en
   // "Alles" terwijl de server nooit meer dan 100 rijen gaf — filters en
   // CSV-export logen daarmee stil (en de back-up bevatte max 100 regels).
+  //
+  // Zelfde redenering voor "Dienstruil bekeken" (de collega kreeg een aanvraag
+  // in beeld): een waarneming, geen beheeractie. Ze voedt het verloop van de
+  // ruil (getSwapVerloopRegels) en hoort niet als ruis tussen de handelingen
+  // op het scherm Activiteit. Alleen de back-up vraagt ze wél mee op.
   const sinceIso = opts?.sinceIso ?? null;
   const max = Math.max(1, opts?.max ?? 100);
   const rows = await paginatedFetch<ActivityLogRow>((from, to) => {
     let q = client
       .from("activity_log")
       .select("*")
-      .or("category.neq.auth,and(action.neq.Aangemeld,action.neq.Actief)")
+      .or("category.neq.auth,and(action.neq.Aangemeld,action.neq.Actief)");
+    if (!opts?.metRuilBekeken) q = q.neq("action", RUIL_BEKEKEN_ACTIE);
+    q = q
       .order("created_at", { ascending: false })
       .range(from, Math.min(to, max - 1));
     if (sinceIso) q = q.gte("created_at", sinceIso);
@@ -621,7 +629,8 @@ export const getLatestAuthEventAt = async (userId: string): Promise<string | nul
 
 /** Activiteitenlog van een reeks dienstruilen, oudste eerst — het verloop
  *  dat het weekoverzicht per wissel afdrukt. Eén query i.p.v. één per wissel:
- *  een drukke week telt al snel 20 wissels. */
+ *  een drukke week telt al snel 20 wissels. Zonder "Dienstruil bekeken": het
+ *  blad is een bewijsstuk van wat er gedaan is, niet van wie wanneer keek. */
 export const getSwapHistories = async (
   swapIds: string[],
 ): Promise<Record<string, ActivityLogRecord[]>> => {
@@ -634,6 +643,7 @@ export const getSwapHistories = async (
       .select("*")
       .eq("entity_type", "swap")
       .in("entity_id", ids)
+      .neq("action", RUIL_BEKEKEN_ACTIE)
       .order("created_at", { ascending: true })
       .range(from, to),
   ids.length * 40);
