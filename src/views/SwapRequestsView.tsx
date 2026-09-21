@@ -6,6 +6,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { Modal } from '../components/Modal';
 import { Badge, Button, IconButton, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
+import { LijstKaart, RecordRij } from '../components/RecordRij';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { DateInput, Field, Textarea } from '../components/Field';
@@ -495,28 +496,24 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           {mySwaps.length > 0 ? (
             /* Compacte, uitklapbare rijen in een eigen scrollcontainer: deze
                lijst groeit onbegrensd mee met de historiek (wens Jarno). */
-            <div className="max-h-[420px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
+            <div className="max-h-[420px] overflow-y-auto overscroll-contain -mx-1 px-1">
+              {/* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
+                  in plaats van een stapel losse kaarten, de dag als titel
+                  (daaraan herken je de ruil), de dienst eronder. */}
+              <LijstKaart aria-label="Mijn verzoeken">
               {mySwaps.map(swap => {
                 const info = shiftInfoFor(swap);
                 const open = expandedSwapIds.includes(swap.id);
                 return (
-                  <Card key={swap.id} padding="none" className="overflow-hidden">
-                    {/* rauw: hele uitklaprij is de knop (dienst + datum + statusbadge + chevron) */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSwapExpanded(swap.id)}
-                      aria-expanded={open}
-                      className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
-                    >
-                      <div className="min-w-0 flex items-baseline gap-2.5">
-                        <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap tabular-nums">Dienst {info.line}</span>
-                        <span className="text-xs font-medium text-slate-500 capitalize truncate">{formatDateHuman(info.date)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <StatusBadge status={swap.status} stil />
-                        <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
-                      </div>
-                    </button>
+                  <RecordRij
+                    key={swap.id}
+                    titel={<span className="capitalize">{formatDateHuman(info.date)}</span>}
+                    meta={`Dienst ${info.line}`}
+                    status={<StatusBadge status={swap.status} stil />}
+                    richting="omlaag"
+                    open={open}
+                    onClick={() => toggleSwapExpanded(swap.id)}
+                  >
                     <Uitklap open={open}>
                       <div className="px-4 pb-4 pt-0.5">
                         {info.startTime && info.endTime && (
@@ -555,9 +552,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         )}
                       </div>
                     </Uitklap>
-                  </Card>
+                  </RecordRij>
                 );
               })}
+              </LijstKaart>
             </div>
           ) : availableSwaps.length > 0 ? (
             // Wacht er een ruil van een collega op antwoord, dan is dát de

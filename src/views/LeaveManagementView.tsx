@@ -8,6 +8,7 @@ import { Modal } from '../components/Modal';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
+import { RecordRij } from '../components/RecordRij';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { ActieMenu } from '../components/ActieMenu';
@@ -1193,34 +1194,19 @@ function MyLeaveRow({ req, fresh, open, toonStatus, onToggle, onCancel, onWithdr
 }) {
   const dagen = verlofDagen(req.startDate, req.endDate);
   return (
-    <li className="relative">
-      {/* Net beslist: een gouden streep langs de rij. Een getinte achtergrond
-          gaf bij een historiek vol verse beslissingen één groot geel vlak. */}
-      {fresh && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-0.5 bg-oker-500" />}
-      {/* rauw: uitklapbare lijstrij (periode, type en dagen, status, chevron),
-          hele rij klikbaar; Button centreert en dwingt semibold/min-h af */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors duration-fast hover:bg-surface-soft-hover"
-      >
-        <span className="min-w-0 flex-1">
-          {/* De periode eerst en alleen: dat is waaraan je de aanvraag
-              herkent, inclusief het jaar. Al de rest staat eronder, want in
-              de smalle zijkolom van 338 px kapte een pil ernaast net het
-              jaartal af. */}
-          <span className="block truncate text-md font-semibold text-slate-900">{formatPeriodeKort(req.startDate, req.endDate)}</span>
-          <span className="mt-1 flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-body-sm text-slate-500">
-              {formatLeaveType(req.type)} · {dagen} {dagen === 1 ? 'dag' : 'dagen'}
-            </span>
-            {fresh && <Badge tone="oker">Nieuw</Badge>}
-            {toonStatus && <StatusBadge status={req.status} stil />}
-          </span>
-        </span>
-        <ChevronDown size={16} className={uitklapChevron(open, 180, 'mt-0.5 shrink-0 text-slate-400')} />
-      </button>
+    // Het rijrecept (RecordRij, 22-09) is van deze rij afgeleid: de periode
+    // eerst en alleen, want daaraan herken je de aanvraag, inclusief het jaar;
+    // in de smalle zijkolom van 338 px kapte een pil ernaast net het jaartal
+    // af. Net beslist = een gouden streep, geen getint vlak.
+    <RecordRij
+      titel={formatPeriodeKort(req.startDate, req.endDate)}
+      meta={`${formatLeaveType(req.type)} · ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}`}
+      status={<>{fresh && <Badge tone="oker">Nieuw</Badge>}{toonStatus && <StatusBadge status={req.status} stil />}</>}
+      accent={fresh ? 'nieuw' : undefined}
+      richting="omlaag"
+      open={open}
+      onClick={onToggle}
+    >
       <Uitklap open={open}>
         <div className="px-4 pb-4 pt-0.5">
           <p className="text-xs font-medium text-slate-500">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
@@ -1237,7 +1223,7 @@ function MyLeaveRow({ req, fresh, open, toonStatus, onToggle, onCancel, onWithdr
           )}
         </div>
       </Uitklap>
-    </li>
+    </RecordRij>
   );
 }
 
