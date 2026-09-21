@@ -11,6 +11,7 @@ import { Badge, Button } from '../components/primitives';
 import { Card } from '../components/Card';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
 import { LegeLijst } from '../components/illustraties';
+import { UpdateBijlagenLezen } from '../components/UpdateBijlagenLezen';
 
 /**
  * Titels links, het volledige bericht in het gedeelde DetailPaneel: op
@@ -180,6 +181,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                     </div>
                   )}
                   <p className="max-w-2xl text-body font-normal text-slate-600 whitespace-pre-wrap">{detail.content}</p>
+                  <UpdateBijlagenLezen update={detail} />
                 </article>
               )}
             </DetailPaneel>

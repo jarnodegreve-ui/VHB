@@ -42,6 +42,8 @@ const mem = vi.hoisted(() => ({
   // Ruwe planning-matrix (chauffeur × datum met codes) — bron voor de
   // 'vrij/bv/tk/ta'-check bij een ruil zonder tegenprestatie.
   planningMatrix: [] as any[],
+  // Sleutels in Supabase Storage ('<bucket>/<pad>'), voor de bijlage-routes.
+  opslag: new Set<string>(),
   importHistory: [] as any[],
   snapshots: {} as Record<string, any>,
   historiekFaalt: false,
@@ -424,7 +426,37 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     getServicesData: async () => mem.services,
     saveServicesData: async (data: any[]) => { mem.services = data; },
     getUpdatesData: async () => mem.updates,
-    saveUpdatesData: async (data: any[]) => { mem.updates = data; },
+    // Zoals de echte: een upsert noemt alleen de eigen kolommen, dus
+    // `bijlagen` van een bestaande rij blijft staan. Rijen die niet in de
+    // payload zitten verdwijnen.
+    saveUpdatesData: async (data: any[]) => {
+      const bestaand = new Map(mem.updates.map((u: any) => [String(u.id), u]));
+      mem.updates = (Array.isArray(data) ? data : []).map((u: any) => {
+        const oud = bestaand.get(String(u.id));
+        return oud?.bijlagen ? { ...u, bijlagen: oud.bijlagen } : u;
+      });
+    },
+    // Storage voor de bijlagen: mem.opslag houdt de sleutels bij, zodat een
+    // test kan zien dat een bestand echt weg is.
+    uploadUpdateBijlage: async (updateId: string, slot: number) => {
+      mem.opslag.add(`update-bijlagen/${updateId}-${slot}.pdf`);
+    },
+    verwijderUpdateBijlage: async (updateId: string, slot: number) => {
+      mem.opslag.delete(`update-bijlagen/${updateId}-${slot}.pdf`);
+    },
+    ondertekenUpdateBijlage: async (updateId: string, slot: number) =>
+      mem.opslag.has(`update-bijlagen/${updateId}-${slot}.pdf`) ? `https://opslag.test/${updateId}-${slot}.pdf?sig=test` : undefined,
+    zetUpdateBijlagen: async (updateId: string, bijlagen: any[]) => {
+      const u = mem.updates.find((x: any) => String(x.id) === String(updateId));
+      if (!u) return;
+      // De kolom wordt null bij een lege lijst; toPublicUpdate laat het veld
+      // dan weg, dus zo ziet de client het ook hier.
+      if (bijlagen.length > 0) u.bijlagen = bijlagen;
+      else delete u.bijlagen;
+    },
+    verwijderUpdateBijlagen: async (ids: string[]) => {
+      for (const id of ids) for (const slot of [1, 2]) mem.opslag.delete(`update-bijlagen/${id}-${slot}.pdf`);
+    },
     getDiversionsData: async () => mem.diversions,
     saveDiversionsData: async (data: any[]) => { mem.diversions = data; },
     getPlanningCodesData: async () => mem.planningCodes,
@@ -700,6 +732,7 @@ beforeEach(() => {
   invalidateUsersCache();
   invalidateOnderhoudCache();
   mem.appSettings = {};
+  mem.opslag.clear();
   mem.users = [
     { id: '1', name: 'Annelies Admin', email: 'admin@vhb.be', role: 'admin', isActive: true },
     { id: '2', name: 'Pieter Planner', email: 'planner@vhb.be', role: 'planner', isActive: true },
@@ -6467,5 +6500,90 @@ describe('rapporten ziekte en verlof (GET /api/rapporten/:id)', () => {
     expect(perType.json.kolommen.map((k: any) => k.id)).toEqual(['maand', 'type_betaald_verlof', 'totaal']);
     expect(perType.json.rijen).toHaveLength(12);
     expect(perType.json.totalen).toEqual({ type_betaald_verlof: 3, totaal: 3 });
+  });
+});
+
+
+// --- PDF-bijlagen bij een update (2026-09-21_updates_bijlagen.sql) ---
+describe('bijlagen bij een update', () => {
+  const PDF = 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=';
+  const eersteId = () => String(mem.updates[0].id);
+
+  it('planner hangt een PDF aan een update; de lijst komt terug in het record', async () => {
+    const id = eersteId();
+    const res = await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'mededeling.pdf', dataUrl: PDF } });
+    expect(res.status).toBe(200);
+    expect(res.json.update.bijlagen).toEqual([{ slot: 1, filename: 'mededeling.pdf', sizeBytes: expect.any(Number) }]);
+    expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(true);
+  });
+
+  it('een tweede PDF komt erbij, een derde plaats bestaat niet', async () => {
+    const id = eersteId();
+    await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'een.pdf', dataUrl: PDF } });
+    const tweede = await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 2, filename: 'twee.pdf', dataUrl: PDF } });
+    expect(tweede.json.update.bijlagen.map((b: any) => b.slot)).toEqual([1, 2]);
+    const derde = await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 3, filename: 'drie.pdf', dataUrl: PDF } });
+    expect(derde.status).toBe(400);
+  });
+
+  it('dezelfde plaats opnieuw vervangt de vorige, geen dubbele rij', async () => {
+    const id = eersteId();
+    await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'oud.pdf', dataUrl: PDF } });
+    const res = await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'nieuw.pdf', dataUrl: PDF } });
+    expect(res.json.update.bijlagen).toEqual([{ slot: 1, filename: 'nieuw.pdf', sizeBytes: expect.any(Number) }]);
+  });
+
+  it('weigert niet-PDF, een leeg bestand, een onbekende update en een chauffeur', async () => {
+    const id = eersteId();
+    expect((await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'foto.png', dataUrl: PDF } })).status).toBe(400);
+    expect((await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'leeg.pdf', dataUrl: 'data:application/pdf;base64,' } })).status).toBe(400);
+    expect((await api('POST', '/api/updates/bestaat-niet/bijlage', { token: 'tok-planner', body: { slot: 1, filename: 'x.pdf', dataUrl: PDF } })).status).toBe(404);
+    expect((await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-a', body: { slot: 1, filename: 'x.pdf', dataUrl: PDF } })).status).toBe(403);
+  });
+
+  it('een id met een schuine streep komt de bucket niet in', async () => {
+    const res = await api('POST', '/api/updates/..%2Fgeheim/bijlage', { token: 'tok-planner', body: { slot: 1, filename: 'x.pdf', dataUrl: PDF } });
+    expect(res.status).toBe(400);
+    expect([...mem.opslag]).toEqual([]);
+  });
+
+  it('verwijderen haalt het bestand én de rij weg', async () => {
+    const id = eersteId();
+    await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'weg.pdf', dataUrl: PDF } });
+    const res = await api('DELETE', `/api/updates/${id}/bijlage/1`, { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.update.bijlagen).toBeUndefined();
+    expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(false);
+  });
+
+  it('een gewone save van de updates laat de bijlagen staan', async () => {
+    const id = eersteId();
+    await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'blijft.pdf', dataUrl: PDF } });
+    const lijst = mem.updates.map((u: any) => ({ id: u.id, date: u.date, title: u.title, content: u.content, category: u.category ?? 'algemeen' }));
+    const res = await api('POST', '/api/updates', { token: 'tok-planner', body: lijst.map((u: any) => (String(u.id) === id ? { ...u, title: 'Nieuwe titel' } : u)) });
+    expect(res.status).toBe(200);
+    const bewaard = mem.updates.find((u: any) => String(u.id) === id);
+    expect(bewaard.title).toBe('Nieuwe titel');
+    expect(bewaard.bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number) }]);
+  });
+
+  it('GET /api/updates ondertekent elke bijlage en laat een verdwenen bestand weg', async () => {
+    const id = eersteId();
+    await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'met-url.pdf', dataUrl: PDF } });
+    const metUrl = (await api('GET', '/api/updates', { token: 'tok-a' })).json.find((u: any) => String(u.id) === id);
+    expect(metUrl.bijlagen[0].url).toMatch(/^https:\/\/opslag\.test\//);
+    // Bestand weg uit de bucket, rij nog in de kolom: dan geen dode link.
+    mem.opslag.clear();
+    const zonder = (await api('GET', '/api/updates', { token: 'tok-a' })).json.find((u: any) => String(u.id) === id);
+    expect(zonder.bijlagen).toBeUndefined();
+  });
+
+  it('een verwijderde update neemt haar bestanden mee', async () => {
+    const id = eersteId();
+    await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'mee.pdf', dataUrl: PDF } });
+    const rev = (await api('GET', '/api/updates', { token: 'tok-planner' })).json.find((u: any) => String(u.id) === id)._rev;
+    const res = await api('DELETE', `/api/updates/${id}`, { token: 'tok-planner', headers: { 'X-Record-Revision': rev } });
+    expect(res.status).toBe(200);
+    expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(false);
   });
 });

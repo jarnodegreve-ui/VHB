@@ -103,6 +103,7 @@ draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
 67. `supabase/2026-09-20_swaps_beslismoment_herstel.sql`, dataherstel: `swaps.decidedat` van afgehandelde ruilen terug naar het gelogde beslismoment (geen schemawijziging; op staging een no-op zolang daar geen afgehandelde ruilen met een overschreven moment staan)
 68. `supabase/2026-09-09_user_devices_sessie.sql`, `session_id` op `user_devices` zodat toestel-intrekking niet meer van de client-header afhangt (controle-ronde 09-09; alleen kolom + index, raakt geen RLS of grants)
 69. `supabase/2026-09-20_user_presence_locatie.sql`, aanwezigheid: nullable kolommen `land`, `regio`, `stad` (plaats van aanmelden uit de Vercel-geo-headers, geen IP-adres) met lengte-checks; raakt geen RLS, policies of grants, dus geen snapshot-update (op staging gedraaid op 20-09, twee keer, post-conditie groen)
+70. `supabase/2026-09-21_updates_bijlagen.sql`, PDF-bijlagen bij een update: kolommen `bijlagen` (jsonb, check op hoogstens twee) en `bijlagen_tonen` (boolean, not null default false) op `public.updates`, plus de privé bucket `update-bijlagen`; raakt geen RLS, policies of grants, dus geen snapshot-update. Draai óók de bucket-statements, anders mislukt het uploaden op staging.
 
 **Bewust overgeslagen** (alleen zinvol op het historische productieschema; ze
 falen op een verse database):

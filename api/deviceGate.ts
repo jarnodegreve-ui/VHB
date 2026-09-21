@@ -37,6 +37,23 @@ export const isMissingTableError = (err: unknown): boolean => {
   );
 };
 
+/**
+ * Herkent "die kolom bestaat nog niet" (migratie niet gedraaid). Postgres:
+ * 42703 (undefined_column); PostgREST: PGRST204 (schema-cache kent de kolom
+ * niet). Staat hier naast isMissingTableError, zodat routes die op een verse
+ * migratie wachten één plek hebben om naar te wijzen.
+ */
+export const isMissingColumnError = (err: unknown): boolean => {
+  const code = String((err as { code?: unknown })?.code ?? "");
+  const msg = String((err as { message?: unknown })?.message ?? "").toLowerCase();
+  return (
+    code === "42703" ||
+    code === "PGRST204" ||
+    /column .* does not exist/.test(msg) ||
+    /could not find the .* column/.test(msg)
+  );
+};
+
 /** Pure beslissingsfunctie: mag deze (rol, pad, toestel) door de gate?
  *  gateEnabled=false = de schakelaar "toestel-goedkeuring" staat uit:
  *  onbekende/wachtende toestellen mogen dan door, maar een GEBLOKKEERD
