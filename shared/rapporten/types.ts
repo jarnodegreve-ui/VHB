@@ -50,6 +50,13 @@ export type RapportFilter =
  */
 export type KolomType = 'tekst' | 'datum' | 'getal' | 'duur' | 'janee';
 
+/**
+ * Nadruk op een ja/nee-waarde die aandacht vraagt. De namen volgen de tonen
+ * van `Card`: `danger` = een overschrijding of fout (rood), `warning` = let op
+ * (amber). Nooit goud: dat is voor acties, focus en "nu".
+ */
+export type KolomNadruk = 'danger' | 'warning';
+
 export type RapportKolom = {
   /** Sleutel in de rij. */
   id: string;
@@ -74,6 +81,13 @@ export type RapportKolom = {
   smal?: 'onderEerste' | 'achteraan' | 'verberg';
   /** Korte kolomkop voor het smalle scherm ("Opgen."); de volledige titel blijft de naam voor hulptechnologie. */
   kort?: string;
+  /**
+   * Alleen voor `janee`: welke waarde opvalt, en hoe. `{ ja: 'danger' }` maakt
+   * van "ja" op het scherm een rode statuspil; "nee" blijft stille tekst. Op het
+   * printblad wordt dat vet met een stip ervoor (leesbaar in zwart-wit, nooit
+   * kleur alleen), in de CSV blijft het gewoon "ja"/"nee".
+   */
+  nadruk?: { ja?: KolomNadruk; nee?: KolomNadruk };
   /**
    * Lange tekst (een opmerking, een lijst namen). Op een smal scherm krijgt de
    * kolom dan een bredere vaste maat (zo breed als er naast de vaste eerste

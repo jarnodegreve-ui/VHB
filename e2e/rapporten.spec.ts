@@ -245,6 +245,18 @@ test('verlofbezetting: het vinkje "alleen boven de limiet" staat in de URL, op h
   await expect(page.getByText('2 rijen')).toBeVisible();
   await expect(page.getByRole('cell', { name: /^13\/08\/2026/ })).toBeVisible();
   await expect(page.getByRole('cell', { name: /^12\/08\/2026/ })).toHaveCount(0);
+  // "Boven limiet: ja" is een rode pil, ook op de telefoon in beeld; "nee" blijft stille tekst.
+  const pil = page.getByRole('cell', { name: 'ja', exact: true }).first().locator('span');
+  await expect(pil).toBeVisible();
+  await expect(pil).toHaveClass(/text-red-700/);
+  if (smal) {
+    await expect(page.getByRole('button', { name: 'Boven limiet' })).toHaveText('Boven');
+    const binnenKader = await page.evaluate(() => {
+      const kader = document.querySelector('table')!.parentElement!.getBoundingClientRect();
+      return [...document.querySelectorAll('thead th')].map((th) => th.getBoundingClientRect().right <= kader.right + 0.5);
+    });
+    expect(binnenKader).toEqual([true, true, true, true, false]);
+  }
   await paginaScrolltNiet(page);
 
   await page.getByRole('button', { name: 'Afdrukken' }).click();
@@ -253,7 +265,9 @@ test('verlofbezetting: het vinkje "alleen boven de limiet" staat in de URL, op h
   await page.goto(url.pathname + url.search);
   await expect(page.getByText('Periode 01/08/2026 t/m 31/08/2026 · Alleen boven de limiet')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('row')).toHaveCount(3); // kop + 2, geen totaalrij
-  await expect(page.getByRole('cell', { name: 'ja' })).toHaveCount(2);
+  // Op papier valt "ja" op zonder kleur: vet, met een stip ervoor.
+  await expect(page.getByRole('cell', { name: '● ja' })).toHaveCount(2);
+  expect(await page.getByRole('cell', { name: '● ja' }).first().evaluate((td) => getComputedStyle(td).fontWeight)).toBe('700');
 
   // Uitvinken haalt de parameter weer uit de URL ("Filters wissen" doet hetzelfde).
   await page.goBack();

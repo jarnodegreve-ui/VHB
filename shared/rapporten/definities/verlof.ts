@@ -118,13 +118,13 @@ const VERLOFBEZETTING: RapportDefinitie = {
   filters: [{ soort: 'periode' }, { soort: 'vinkje', id: 'bovenLimiet', label: 'Alleen boven de limiet' }],
   kolommen: [
     { id: 'datum', titel: 'Datum', type: 'datum' },
-    // Telefoon: de weekdag onder de datum, afwezig en limiet in beeld. "Boven
-    // limiet" volgt uit die twee (en heeft zijn eigen filter), dus valt weg; de
-    // namen staan achter het scrollen.
+    // Telefoon: de weekdag onder de datum; afwezig, limiet en "boven" in beeld,
+    // de namen achter het scrollen. "Boven limiet: ja" is waarvoor je dit
+    // rapport opent, dus die waarde valt op (rode pil, op het blad vet).
     { id: 'dag', titel: 'Dag', type: 'tekst', sorteerOp: 'datum', smal: 'onderEerste' },
     { id: 'afwezig', titel: 'Afwezig', type: 'getal' },
     { id: 'limiet', titel: 'Limiet', type: 'getal' },
-    { id: 'bovenLimiet', titel: 'Boven limiet', type: 'janee', smal: 'verberg' },
+    { id: 'bovenLimiet', titel: 'Boven limiet', kort: 'Boven', type: 'janee', nadruk: { ja: 'danger' } },
     { id: 'namen', titel: 'Namen', type: 'tekst', lang: true, smal: 'achteraan' },
   ],
   sortering: { kolom: 'datum', richting: 'asc' },

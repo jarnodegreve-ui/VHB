@@ -4,7 +4,7 @@ import type { RapportDefinitie, RapportRij } from './types';
 import { RAPPORTEN, rapportVan } from './register';
 import { VASTE_PARAMS, filterParams, filtersInWoorden, filtersNaarQuery, heeftEigenFilters, leesFilters, standaardFilters } from './filters';
 import { filterSchemaVoor } from './filterSchema';
-import { kolomIndeling, sorteerRijen } from './opmaak';
+import { NADRUK_TEKEN, csvRijen, formatWaarde, kolomIndeling, nadrukVan, sorteerRijen } from './opmaak';
 
 /**
  * Wat het fundament bij stap 2 (ziekte en verlof) bijleerde: het vinkje-filter,
@@ -104,6 +104,44 @@ describe('sorteerOp', () => {
   });
 });
 
+describe('nadruk op een ja/nee-waarde', () => {
+  const boven = rapportVan('verlofbezetting')!.kolommen.find((k) => k.id === 'bovenLimiet')!;
+
+  it('Boven limiet: "ja" valt op als danger, "nee" blijft stil', () => {
+    expect(boven).toMatchObject({ type: 'janee', nadruk: { ja: 'danger' } });
+    expect(nadrukVan(boven, true)).toBe('danger');
+    expect(nadrukVan(boven, false)).toBeNull();
+  });
+
+  it('alleen een echte boolean in een janee-kolom met nadruk valt op', () => {
+    for (const waarde of [null, undefined, '', 'ja', 1]) expect(nadrukVan(boven, waarde)).toBeNull();
+    expect(nadrukVan({ id: 'x', titel: 'X', type: 'janee' }, true)).toBeNull();
+    // Een andere kolomsoort luistert er niet naar, ook niet met de eigenschap erop.
+    expect(nadrukVan({ id: 'x', titel: 'X', type: 'tekst', nadruk: { ja: 'danger' } }, true)).toBeNull();
+    // Ook "nee" kan de waarde zijn die aandacht vraagt (bv. "gekeurd: nee").
+    const gekeurd = { id: 'g', titel: 'Gekeurd', type: 'janee', nadruk: { nee: 'warning' } } as const;
+    expect([nadrukVan(gekeurd, false), nadrukVan(gekeurd, true)]).toEqual(['warning', null]);
+  });
+
+  it('de tekst zelf verandert niet: scherm en CSV blijven "ja"/"nee", het teken is alleen voor het blad', () => {
+    expect([formatWaarde(boven, true), formatWaarde(boven, false), formatWaarde(boven, true, 'csv')]).toEqual(['ja', 'nee', 'ja']);
+    const def = rapportVan('verlofbezetting')!;
+    const csv = csvRijen(def, [{ id: 'd', datum: '2026-08-13', dag: 'do', afwezig: 3, limiet: 2, bovenLimiet: true, namen: 'A, B, C' }]);
+    expect(csv[1]).toEqual(['2026-08-13', 'do', '3', '2', 'ja', 'A, B, C']);
+    expect(csv.flat().join('')).not.toContain(NADRUK_TEKEN);
+  });
+
+  it('in het register: nadruk staat alleen op janee-kolommen, en nooit op een kolom die op de telefoon verdwijnt', () => {
+    for (const r of RAPPORTEN) {
+      for (const k of r.kolommen) {
+        if (!k.nadruk) continue;
+        expect(k.type, `${r.id}: ${k.id}`).toBe('janee');
+        expect(k.smal, `${r.id}: ${k.id}`).not.toBe('verberg');
+      }
+    }
+  });
+});
+
 describe('ziekte en verlof op de telefoon (375 px: eerste kolom + hoogstens drie smalle kolommen in beeld)', () => {
   const smal = (id: string) => {
     const { kolommen, onderEerste } = kolomIndeling(rapportVan(id)!, 'smal');
@@ -122,7 +160,7 @@ describe('ziekte en verlof op de telefoon (375 px: eerste kolom + hoogstens drie
   it('Verlofaanvragen: naam (status eronder), van en tot in beeld', () => {
     expect(smal('verlofaanvragen')).toEqual({ kolommen: ['naam', 'van', 'tot', 'type', 'dagen', 'aangevraagdOp', 'beslistOp', 'opmerking'], onder: ['status'] });
   });
-  it('Verlofbezetting: datum (weekdag eronder), afwezig en limiet in beeld; de namen erachter', () => {
-    expect(smal('verlofbezetting')).toEqual({ kolommen: ['datum', 'afwezig', 'limiet', 'namen'], onder: ['dag'] });
+  it('Verlofbezetting: datum (weekdag eronder), afwezig, limiet en boven in beeld; de namen erachter', () => {
+    expect(smal('verlofbezetting')).toEqual({ kolommen: ['datum', 'afwezig', 'limiet', 'bovenLimiet', 'namen'], onder: ['dag'] });
   });
 });
