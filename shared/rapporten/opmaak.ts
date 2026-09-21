@@ -37,9 +37,47 @@ export const formatWaarde = (kolom: RapportKolom, waarde: RapportWaarde | undefi
     case 'getal': return typeof waarde === 'number' && Number.isFinite(waarde) ? formatAantal(waarde, kolom.decimalen) : String(waarde);
     case 'duur': return typeof waarde === 'number' && Number.isFinite(waarde) ? formatDuur(waarde) : String(waarde);
     case 'janee': return waarde === true ? 'ja' : waarde === false ? 'nee' : String(waarde);
+    case 'tijd':
     case 'tekst': return String(waarde);
   }
 };
+
+/**
+ * Vaste kolombreedtes op een smal scherm, in rem: de eerste kolom, cijfers,
+ * ja/nee, kloktijd, een korte code (een dienst- of loopnummer van vier tekens), datum, tekst en lopende
+ * tekst (`lang`) achter het scrollen. Een telefoon van 375 px is 23,4 rem: de
+ * eerste kolom plus drie cijferkolommen staan er zonder scrollen in. `lang` =
+ * 11,5 rem: zo breed als er naast de vaste eerste kolom past, zodat een
+ * opmerking na het scrollen in haar geheel in beeld staat; een `lang`-kolom
+ * die vóór het scrollen staat houdt de gewone tekstmaat. Hier en niet in de
+ * tabel, zodat de registertests met dezelfde maten rekenen als het scherm.
+ */
+export const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, janee: 3.75, tijd: 3.75, code: 3.75, kort: 5.5, tekst: 8, lang: 11.5 } as const;
+export const SMAL_SCHERM_REM = 23.4;
+/** Wat er binnen het tabelkader past op 375 px: het scherm min de twee zijmarges van de pagina (2 × 16 px) en de rand. */
+export const SMAL_KADER_REM = 21.4;
+export const smalleBreedte = (k: RapportKolom, eerste: boolean): number => {
+  if (eerste) return SMAL_BREEDTE.eerste;
+  if (isGetalKolom(k)) return SMAL_BREEDTE.getal;
+  if (k.type === 'janee') return SMAL_BREEDTE.janee;
+  if (k.type === 'tijd') return SMAL_BREEDTE.tijd;
+  if (k.type !== 'tekst') return SMAL_BREEDTE.kort;
+  if (k.code) return SMAL_BREEDTE.code;
+  return k.lang && k.smal === 'achteraan' ? SMAL_BREEDTE.lang : SMAL_BREEDTE.tekst;
+};
+
+/**
+ * Vanaf zoveel rijen zegt het scherm erbij dat dit veel is: de tabel bladert
+ * per 50, maar een blad van 40 pagina's drukt niemand af. Geen grens op wat
+ * het rapport toont of exporteert, alleen een duwtje naar een smaller filter.
+ */
+export const VEEL_RIJEN = 1000;
+/** Rijen per pagina in de tabel op het scherm. */
+export const RAPPORT_PER_PAGINA = 50;
+export const veelRijenUitleg = (aantal: number): string | null =>
+  (aantal >= VEEL_RIJEN
+    ? `Dit zijn ${aantal} rijen, ${Math.ceil(aantal / RAPPORT_PER_PAGINA)} pagina’s op het scherm en nog meer op papier. Kies een kortere periode of één chauffeur voor een blad dat je kunt afdrukken; de CSV bevat altijd alles.`
+    : null);
 
 /** Het teken vóór een benadrukte waarde op het printblad (`toonOpBlad`): nadruk mag daar nooit alleen van kleur of gewicht afhangen. */
 export const NADRUK_TEKEN = '●';

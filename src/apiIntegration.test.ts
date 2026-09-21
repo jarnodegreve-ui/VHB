@@ -3572,6 +3572,29 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     expect(mem.matrixMaandFilters).toEqual(['2030-07-15..2030-07-16']);
   });
 
+  it('coverage-gaps: een dienst die een collega overnam van een zieke is geen gat meer, maar staat bij `opgevangen` (rapport Openstaande diensten)', async () => {
+    mem.planningMatrix = [
+      { id: 'm-o1', source_date: '2030-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    mem.leave = [
+      { id: 'l-o', userId: '3', startDate: '2030-07-15', endDate: '2030-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-15T06:00:00Z', decidedAt: '2030-07-15T06:00:00Z' },
+    ];
+    mem.coverageExpectations = { week: ['12'] };
+    // Nog niet herverdeeld: een gat, met wie uitviel.
+    const voor = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-15', { token: 'tok-planner' });
+    expect(voor.json.days[0]).toMatchObject({ missing: ['12'], uitval: { '12': { name: 'Chauffeur A', reason: 'ziek' } } });
+    expect(voor.json.days[0].opgevangen).toBeUndefined();
+    // De planning zet de dienst over naar Chauffeur B: gedekt, en het rapport weet door wie.
+    mem.swaps = [{
+      id: 's-o', shiftId: 'sh-o', requesterId: '3', targetDriverId: '4', status: 'approved', reason: 'Handmatige wissel door Planner, ziekte',
+      createdAt: '2030-07-14T08:00:00Z', decidedAt: '2030-07-14T08:00:00Z', shiftDate: '2030-07-15', shiftLine: '12', swapType: 'overname',
+    }];
+    const na = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-15', { token: 'tok-planner' });
+    expect(na.json.days[0]).toMatchObject({ missing: [], covered: 1, opgevangen: { '12': { name: 'Chauffeur A', reason: 'ziek', door: 'Chauffeur B' } } });
+    expect(na.json.days[0].uitval).toBeUndefined();
+    mem.swaps = [];
+  });
+
   it('coverage-gaps: het venster in de query geeft hetzelfde als de volledige matrix (rijen buiten het venster tellen niet mee)', async () => {
     const buiten = [
       { id: 'm-voor', source_date: '2030-07-14', day_type: 'week', assignments: { 'Chauffeur B': '11' }, raw_row: '' },

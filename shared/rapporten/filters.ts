@@ -1,5 +1,5 @@
 import type { RapportDefinitie, RapportFilter, RapportFilters } from './types.js';
-import { isIsoDag, jaarPeriode, periodeVoor, type Periode } from './periode.js';
+import { isIsoDag, jaarPeriode, opHeleMaanden, periodeVoor, type Periode } from './periode.js';
 
 /**
  * De filters van een rapport tussen URL en definitie (zod-vrij, voor de
@@ -55,8 +55,9 @@ export const leesFilters = (def: RapportDefinitie, query: Lezer, vandaag: string
     if (f.soort === 'periode') {
       const van = query.get('van');
       const tot = query.get('tot');
-      // Alleen als paar: een halve periode uit de URL zegt niets.
-      if (isIsoDag(van) && isIsoDag(tot)) { uit.van = van; uit.tot = tot; }
+      // Alleen als paar: een halve periode uit de URL zegt niets. Een rapport per
+      // hele maand rondt af (een link met 15/09 toont september), de server is streng.
+      if (isIsoDag(van) && isIsoDag(tot)) Object.assign(uit, f.heleMaanden && van <= tot ? opHeleMaanden({ van, tot }) : { van, tot });
     } else if (f.soort === 'jaar') {
       const jaar = Number(query.get('jaar'));
       if (Number.isInteger(jaar) && jaar >= JAAR_MIN && jaar <= JAAR_MAX) uit.jaar = jaar;

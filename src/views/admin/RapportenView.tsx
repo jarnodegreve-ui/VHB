@@ -9,7 +9,7 @@ import { DOMEINEN, rapportVan, rapportenVanDomein, type DomeinDef } from '../../
 import type { RapportDefinitie, RapportFilter, RapportFilters } from '../../../shared/rapporten/types';
 import { filterParams, filtersNaarQuery, heeftEigenFilters, leesFilters, periodeVanFilters } from '../../../shared/rapporten/filters';
 import { periodeFout } from '../../../shared/rapporten/periode';
-import { berekenTotalen, metKolommen, rijBevat } from '../../../shared/rapporten/opmaak';
+import { berekenTotalen, metKolommen, rijBevat, veelRijenUitleg } from '../../../shared/rapporten/opmaak';
 import { ZOEK_PARAM, csvBestandsnaam, laadRapport, printUrlVoor, rapportCsv, type RapportAntwoord } from '../../lib/rapporten';
 import { printbladKlaar, printbladUrl, printbladenVanDomein, type PrintbladDef, type PrintbladWaarden } from '../../lib/rapportPrintbladen';
 import { bereikUitleg } from '../../lib/rapportBereik';
@@ -288,8 +288,8 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
   const zoek = query.get(ZOEK_PARAM) ?? '';
   const domein = DOMEINEN.find((d) => d.id === def.domein);
 
-  const heeftPeriode = def.filters.some((f) => f.soort === 'periode');
-  const ongeldig = heeftPeriode ? periodeFout({ van: filters.van, tot: filters.tot }) : null;
+  const periodeFilter = def.filters.find((f): f is Extract<RapportFilter, { soort: 'periode' }> => f.soort === 'periode');
+  const ongeldig = periodeFilter ? periodeFout({ van: filters.van, tot: filters.tot }, { heleMaanden: periodeFilter.heleMaanden }) : null;
   const sleutel = filtersNaarQuery(def, filters).toString();
 
   const [data, setData] = useState<RapportAntwoord | null>(null);
@@ -327,6 +327,8 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
   const tabelDef = useMemo(() => metKolommen(def, kolommenUitAntwoord), [def, kolommenUitAntwoord]);
   const zichtbaar = useMemo(() => (zoek.trim() ? alle.filter((r) => rijBevat(tabelDef, r, zoek)) : alle), [alle, tabelDef, zoek]);
   const totalen = useMemo(() => (zoek.trim() || !data ? berekenTotalen(tabelDef, zichtbaar) : data.totalen), [data, tabelDef, zichtbaar, zoek]);
+
+  const veelRijen = veelRijenUitleg(zichtbaar.length);
 
   const basis = `${window.location.origin}${window.location.pathname}`;
   const drukAf = () => openPdfInNewTab(printUrlVoor(def, filters, basis, zoek));
@@ -412,6 +414,12 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
               <p className="flex items-start gap-2 border-b border-hairline px-4 py-3 text-body-sm text-slate-600 md:px-6">
                 <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-slate-500" />
                 {uitleg.tekst}
+              </p>
+            ) : null}
+            {veelRijen ? (
+              <p className="flex items-start gap-2 border-b border-hairline px-4 py-3 text-body-sm text-slate-600 md:px-6">
+                <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-slate-500" />
+                {veelRijen}
               </p>
             ) : null}
             <RapportTabel def={tabelDef} rijen={zichtbaar} totalen={totalen} />

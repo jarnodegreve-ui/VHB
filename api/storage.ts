@@ -627,6 +627,11 @@ export const getLatestAuthEventAt = async (userId: string): Promise<string | nul
   return (data[0] as { created_at: string }).created_at;
 };
 
+/** Zoveel id's gaan hoogstens in één `in.(...)`-filter (100 uuid's is ±4 kB querystring). */
+const IN_FILTER_MAX = 100;
+const inStukken = <T,>(lijst: readonly T[], grootte: number): T[][] =>
+  Array.from({ length: Math.ceil(lijst.length / grootte) }, (_, i) => lijst.slice(i * grootte, (i + 1) * grootte));
+
 /** Activiteitenlog van een reeks dienstruilen, oudste eerst — het verloop
  *  dat het weekoverzicht per wissel afdrukt. Eén query i.p.v. één per wissel:
  *  een drukke week telt al snel 20 wissels. Zonder "Dienstruil bekeken": het
@@ -637,16 +642,22 @@ export const getSwapHistories = async (
   const ids = [...new Set(swapIds.map((id) => String(id)).filter(Boolean))];
   if (ids.length === 0) return {};
   const client = requireDb();
-  const rows = await paginatedFetch<ActivityLogRow>((from, to) =>
-    client
-      .from("activity_log")
-      .select("*")
-      .eq("entity_type", "swap")
-      .in("entity_id", ids)
-      .neq("action", RUIL_BEKEKEN_ACTIE)
-      .order("created_at", { ascending: true })
-      .range(from, to),
-  ids.length * 40);
+  // In stukken van 100 id's: PostgREST zet `in.(...)` in de querystring, en
+  // sinds het overzicht een jaar mag beslaan (rapportgrens) past een drukke
+  // periode niet meer in één URL. Per stuk oudste eerst; de groepering per
+  // wissel hieronder houdt die volgorde.
+  const stukken = await Promise.all(inStukken(ids, IN_FILTER_MAX).map((deel) =>
+    paginatedFetch<ActivityLogRow>((from, to) =>
+      client
+        .from("activity_log")
+        .select("*")
+        .eq("entity_type", "swap")
+        .in("entity_id", deel)
+        .neq("action", RUIL_BEKEKEN_ACTIE)
+        .order("created_at", { ascending: true })
+        .range(from, to),
+    deel.length * 40)));
+  const rows = stukken.flat();
   const perSwap: Record<string, ActivityLogRecord[]> = Object.fromEntries(ids.map((id) => [id, []]));
   for (const row of rows) {
     const entry = toPublicActivityLog(row);
@@ -723,7 +734,9 @@ export const getSwapExecutions = async (
       .lt("created_at", totIso)
       .order("created_at", { ascending: true })
       .range(from, to),
-  2000);
+  // Vangnet, geen verwachting: het venster is hoogstens 366 dagen en VHB voert
+  // enkele wissels per week door.
+  5000);
   return rows.map(toPublicActivityLog);
 };
 
@@ -2709,10 +2722,9 @@ export const getSwapsByIds = async (ids: string[]) => {
   const unieke = [...new Set(ids.map((id) => String(id)).filter(Boolean))];
   if (unieke.length === 0) return [];
   const client = requireDb();
-  const rows = await paginatedFetch((from, to) =>
-    client.from('swaps').select('*').in('id', unieke).range(from, to),
-  unieke.length);
-  return rows.map(toPublicSwap);
+  const stukken = await Promise.all(inStukken(unieke, IN_FILTER_MAX).map((deel) =>
+    paginatedFetch((from, to) => client.from('swaps').select('*').in('id', deel).range(from, to), deel.length)));
+  return stukken.flat().map(toPublicSwap);
 };
 
 export const saveSwapsData = async (data: any, idsToDelete: string[] = [], opties: { alleenPending?: boolean } = {}) => {

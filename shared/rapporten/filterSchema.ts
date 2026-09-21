@@ -50,8 +50,9 @@ export const filterSchemaVoor = (def: RapportDefinitie) => {
   const vinkjeIds = def.filters.flatMap((f) => (f.soort === 'vinkje' ? [f.id] : []));
   return z.object(vorm)
     .superRefine((waarden, ctx) => {
-      if (!def.filters.some((f) => f.soort === 'periode')) return;
-      const fout = periodeFout(waarden as { van?: string; tot?: string });
+      const periode = def.filters.find((f) => f.soort === 'periode');
+      if (!periode || periode.soort !== 'periode') return;
+      const fout = periodeFout(waarden as { van?: string; tot?: string }, { heleMaanden: periode.heleMaanden });
       if (fout) ctx.addIssue({ code: 'custom', path: [fout.veld], message: fout.tekst });
     })
     .transform((waarden): RapportFilters => {

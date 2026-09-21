@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KolomToon, RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from '../../shared/rapporten/types';
-import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRechts, kolomIndeling, onderEersteTekst, sorteerRijen } from '../../shared/rapporten/opmaak';
+import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRechts, kolomIndeling, onderEersteTekst, RAPPORT_PER_PAGINA, smalleBreedte, sorteerRijen } from '../../shared/rapporten/opmaak';
 import { cn } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Badge, type BadgeTone } from './primitives';
@@ -24,23 +24,9 @@ import { Paginering, SortTh, StickyThead, Td, Th, useSort } from './Table';
  * `rijen` = wat er te zien is (na de zoekterm); `totalen` hoort bij precies
  * die rijen. Het printblad heeft zijn eigen tabel (PrintBlad) en toont alles.
  */
-const PER_PAGINA = 50;
+const PER_PAGINA = RAPPORT_PER_PAGINA;
 /** Vanaf hier passen de kolommen naast elkaar (md); eronder geldt de smalle indeling. */
 const BREED_VANAF = 768;
-
-/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, ja/nee, datum, tekst, lopende tekst (`lang`) achter het scrollen. */
-// `lang` = 11,5 rem: zo breed als er op 375 px naast de vaste eerste kolom past,
-// zodat een opmerking na het scrollen in haar geheel in beeld staat. Een `lang`-kolom
-// die vóór het scrollen staat (de omschrijving van een defect) houdt de gewone tekstmaat.
-// Ja/nee is zo smal als een cijfer ("ja", "nee", of een pil met "ja" erin).
-const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, janee: 3.75, kort: 5.5, tekst: 8, lang: 11.5 };
-const smalleBreedte = (k: RapportKolom, eerste: boolean): number => {
-  if (eerste) return SMAL_BREEDTE.eerste;
-  if (isGetalKolom(k)) return SMAL_BREEDTE.getal;
-  if (k.type === 'janee') return SMAL_BREEDTE.janee;
-  if (k.type !== 'tekst') return SMAL_BREEDTE.kort;
-  return k.lang && k.smal === 'achteraan' ? SMAL_BREEDTE.lang : SMAL_BREEDTE.tekst;
-};
 
 /**
  * De eerste kolom (de naam) blijft onder xl links staan terwijl de cijfers
@@ -48,6 +34,10 @@ const smalleBreedte = (k: RapportKolom, eerste: boolean): number => {
  * één veeg niet meer van wie de rij is.
  */
 const VASTE_KOLOM = 'max-xl:sticky max-xl:left-0 max-xl:z-[1] max-xl:bg-paper';
+/** Dezelfde drie, zonder breekpunt: voor een tabel die ook vanaf xl niet in haar kader past (zie `overloopt`). */
+const VASTE_KOLOM_BREED = 'sticky left-0 z-[1] bg-paper';
+const VASTE_KOP_BREED = 'shadow-[0_1px_0_var(--color-slate-200)]';
+const VASTE_VOET_BREED = 'shadow-[0_-1px_0_var(--color-hairline-strong)]';
 /**
  * Met `border-collapse` verliest een sticky cel haar eigen rand (de browser
  * tekent die op de tabel, en het opake vlak van de cel schuift eroverheen).
@@ -90,9 +80,9 @@ const celInhoud = (kolom: RapportKolom, waarde: RapportWaarde | undefined) => {
  */
 const DICHT_VANAF = 9;
 
-const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerste: boolean, smal: boolean, dicht: boolean): string => cn(
+const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerste: boolean, smal: boolean, dicht: boolean, overloopt: boolean): string => cn(
   // Korte tekst (type, status, naam) blijft op één regel; lopende tekst (`lang`) mag afbreken en houdt een minimumbreedte.
-  eerste ? cn('font-medium text-slate-800', VASTE_KOLOM, smal ? 'pl-4 pr-2' : 'whitespace-nowrap') : cn(smal ? 'px-2' : kolom.type === 'tekst' && (kolom.lang ? 'min-w-40' : 'whitespace-nowrap')),
+  eerste ? cn('font-medium text-slate-800', VASTE_KOLOM, overloopt && VASTE_KOLOM_BREED, smal ? 'pl-4 pr-2' : 'whitespace-nowrap') : cn(smal ? 'px-2' : kolom.type === 'tekst' && (kolom.lang ? 'min-w-40' : 'whitespace-nowrap')),
   dicht && !eerste && 'px-2',
   // Een nul blijft staan ("0"), maar stiller dan een cijfer dat iets zegt.
   isGetalKolom(kolom) && waarde === 0 && 'text-slate-500',
@@ -125,10 +115,32 @@ export function RapportTabel({ def, rijen, totalen, className }: {
   const dicht = !smal && kolommen.length >= DICHT_VANAF;
   const smalleTabelBreedte = kolommen.reduce((som, k, i) => som + smalleBreedte(k, i === 0), 0);
 
+  // Vanaf xl schuift de tabel niet meer in haar kader (dan kan de kop onder de
+  // topbar plakken), maar een rapport met elf kolommen past ook op 1440 px niet
+  // altijd: wat buiten het kader viel was dan afgesneden en onbereikbaar. Past
+  // de tabel niet, dan blijft ze ook vanaf xl in haar kader schuiven, met de
+  // vaste eerste kolom en een gewone kop, precies zoals onder xl.
+  const kaderRef = useRef<HTMLDivElement>(null);
+  const tabelRef = useRef<HTMLTableElement>(null);
+  const [overloopt, setOverloopt] = useState(false);
+  useLayoutEffect(() => {
+    const kader = kaderRef.current;
+    const tabel = tabelRef.current;
+    if (!kader || !tabel) return;
+    const meet = () => setOverloopt(tabel.offsetWidth > kader.clientWidth + 1);
+    meet();
+    if (typeof ResizeObserver === 'undefined') return;
+    const waarnemer = new ResizeObserver(meet);
+    waarnemer.observe(kader);
+    waarnemer.observe(tabel);
+    return () => waarnemer.disconnect();
+  }, [kolommen, zichtbaar]);
+
   return (
     <div className={className}>
-      <div className="overflow-x-auto xl:overflow-visible">
+      <div ref={kaderRef} className={cn('overflow-x-auto', !overloopt && 'xl:overflow-visible')}>
         <table
+          ref={tabelRef}
           className={cn('w-full border-collapse text-left', smal && 'table-fixed')}
           // Smal: de som van de vaste kolommen, maar nooit smaller dan het kader.
           style={smal ? { width: `max(100%, ${smalleTabelBreedte}rem)` } : undefined}
@@ -141,7 +153,7 @@ export function RapportTabel({ def, rijen, totalen, className }: {
           {/* Onder xl schuift de tabel in haar eigen kader: daar is `sticky` relatief
               aan dat kader en zou de kop 64 px naar beneden over de eerste rijen
               schuiven. Plakken doet hij dus pas vanaf xl. */}
-          <StickyThead className="max-xl:static">
+          <StickyThead className={cn('max-xl:static', overloopt && 'static')}>
             <tr>
               {kolommen.map((k, i) => (
                 // Cijferkolommen smal en vast, de tekstkolommen krijgen de rest:
@@ -153,7 +165,7 @@ export function RapportTabel({ def, rijen, totalen, className }: {
                   align={isRechts(k) ? 'right' : 'left'}
                   dicht={(smal || dicht) && i > 0}
                   naam={smal && k.kort ? k.titel : undefined}
-                  className={cn(!smal && isGetalKolom(k) && (dicht ? 'w-20' : 'w-28 xl:w-32'), i === 0 && cn(VASTE_KOLOM, VASTE_KOP))}
+                  className={cn(!smal && isGetalKolom(k) && (dicht ? 'w-20' : 'w-28 xl:w-32'), i === 0 && cn(VASTE_KOLOM, VASTE_KOP, overloopt && cn(VASTE_KOLOM_BREED, VASTE_KOP_BREED)))}
                 >
                   {smal ? k.kort ?? k.titel : k.titel}
                 </SortTh>
@@ -166,7 +178,7 @@ export function RapportTabel({ def, rijen, totalen, className }: {
                 {kolommen.map((k, i) => {
                   const onder = i === 0 ? onderEersteTekst(onderEerste, rij) : '';
                   return (
-                    <Td key={k.id} num={isRechts(k)} className={celKlasse(k, rij[k.id], i === 0, smal, dicht)}>
+                    <Td key={k.id} num={isRechts(k)} className={celKlasse(k, rij[k.id], i === 0, smal, dicht, overloopt)}>
                       {i === 0 && smal ? (
                         <>
                           <span className="block truncate">{formatWaarde(k, rij[k.id])}</span>
@@ -185,7 +197,7 @@ export function RapportTabel({ def, rijen, totalen, className }: {
                   ook in zwart-wit, en de vaste eerste kolom blijft één kleur. */}
               <tr className="border-t border-hairline-strong">
                 {kolommen.map((k, i) => (
-                  <Th key={k.id} num={isRechts(k)} className={cn('py-3.5 text-sm font-semibold text-slate-900', i === 0 && cn(VASTE_KOLOM, VASTE_VOET), smal && (i === 0 ? 'pl-4 pr-2' : 'px-2'), dicht && i > 0 && 'px-2')}>
+                  <Th key={k.id} num={isRechts(k)} className={cn('py-3.5 text-sm font-semibold text-slate-900', i === 0 && cn(VASTE_KOLOM, VASTE_VOET, overloopt && cn(VASTE_KOLOM_BREED, VASTE_VOET_BREED)), smal && (i === 0 ? 'pl-4 pr-2' : 'px-2'), dicht && i > 0 && 'px-2')}>
                     {k.id in totalen ? formatWaarde(k, totalen[k.id]) : i === 0 ? `Totaal (${rijen.length})` : ''}
                   </Th>
                 ))}

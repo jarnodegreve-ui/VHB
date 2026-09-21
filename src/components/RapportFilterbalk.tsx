@@ -42,6 +42,8 @@ export function RapportFilterbalk({ def, filters, onChange, users, voertuigen, v
                 key="periode"
                 className="col-span-2 sm:w-full sm:max-w-xl"
                 vandaag={vandaag}
+                snelkeuze={f.snelkeuze}
+                heleMaanden={f.heleMaanden}
                 waarde={{ van: filters.van ?? '', tot: filters.tot ?? '' }}
                 onChange={(p) => onChange({ van: p.van, tot: p.tot })}
               />

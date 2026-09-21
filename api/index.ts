@@ -24,6 +24,7 @@ import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
 import { getVehicleExpiries, getVehicles } from "./_lib/techniekStorage.js";
 import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../shared/schemas/techniek.js";
 import { berekenCelWaarheid } from "./_lib/celWaarheid.js";
+import { uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from "./_lib/ruilUitvoeringen.js";
 import { mountLoonRoutes } from "./_lib/loonRoutes.js";
 import { mountDienstRoutes } from "./_lib/dienstRoutes.js";
 import { mountRapportRoutes } from "./_lib/rapportRoutes.js";
@@ -3681,28 +3682,20 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
  */
 app.get("/api/swaps/uitgevoerd", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
-    const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
     const van = String(req.query.van ?? "");
     const tot = String(req.query.tot ?? "");
-    if (!ISO_DAG.test(van) || !ISO_DAG.test(tot) || tot < van) {
-      return res.status(400).json({ error: "Geef een geldige periode mee (van en tot als jjjj-mm-dd, tot niet vóór van)." });
-    }
-    const dagen = Math.round((Date.parse(`${tot}T00:00:00Z`) - Date.parse(`${van}T00:00:00Z`)) / 86_400_000) + 1;
-    if (dagen > 31) {
-      return res.status(400).json({ error: "De periode mag hoogstens 31 dagen beslaan." });
-    }
+    // Zelfde grens als de rapporten (366 dagen; was 31, genoeg voor het
+    // weekblad): ruil-logregels ruimt de nachtcron nooit op, dus een jaar
+    // terugkijken kan. Periode, venster en dagfilter komen uit één kern
+    // (api/_lib/ruilUitvoeringen.ts), gedeeld met het rapport Uitgevoerde wissels.
+    const periodeFout = uitvoeringPeriodeFout(van, tot);
+    if (periodeFout) return res.status(400).json({ error: periodeFout });
 
     // Ruim in UTC ophalen en daarna filteren op de Brusselse kalenderdag: dat
     // klopt ook in de weken van de zomer-/wintertijdwissel, zonder offsetwerk.
-    const logRegels = await getSwapExecutions(
-      `${addDagenIso(van, -1)}T00:00:00.000Z`,
-      `${addDagenIso(tot, 2)}T00:00:00.000Z`,
-      SWAP_UITVOERING_ACTIES,
-    );
-    const uitvoeringen = logRegels.filter((regel) => {
-      const dag = brusselsDay(regel.createdAt);
-      return dag >= van && dag <= tot;
-    });
+    const venster = utcVensterVoor(van, tot);
+    const logRegels = await getSwapExecutions(venster.vanIso, venster.totIso, SWAP_UITVOERING_ACTIES);
+    const uitvoeringen = uitvoeringenOpDagen(logRegels, van, tot);
 
     const swapIds = [...new Set(uitvoeringen.map((regel) => String(regel.entityId ?? "")).filter(Boolean))];
     const [betrokkenSwaps, users, verloopPerSwap] = await Promise.all([

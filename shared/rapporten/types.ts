@@ -6,6 +6,8 @@
  * Zod-vrij: alleen types en gewone data.
  */
 
+import type { PeriodeSnelkeuze, VastePeriodeKeuze } from './periode.js';
+
 /** Het domein bepaalt onder welke kop een rapport in de catalogus staat. */
 export type RapportDomein = 'ziekte' | 'verlof' | 'ruilen' | 'planning' | 'voertuigen' | 'personeel' | 'uren';
 
@@ -18,7 +20,25 @@ export type RapportDomein = 'ziekte' | 'verlof' | 'ruilen' | 'planning' | 'voert
  * `<id>=1`) alleen haar parameter en label.
  */
 export type RapportFilter =
-  | { soort: 'periode'; /** Periode zonder keuze in de URL; zonder opgave "deze maand". */ standaard?: 'deze-maand' | 'vorige-maand' | 'dit-kwartaal' | 'dit-jaar' }
+  | {
+    soort: 'periode';
+    /** Periode zonder keuze in de URL; zonder opgave "deze maand". */
+    standaard?: VastePeriodeKeuze;
+    /**
+     * Welke snelkeuzes de kiezer aanbiedt: `terug` (standaard: maanden,
+     * kwartaal, jaar), `dagen` (een rapport per dag: deze en vorige week) of
+     * `vooruit` (wat nog komt: deze week, komende 4 weken, volgende maand).
+     */
+    snelkeuze?: PeriodeSnelkeuze;
+    /**
+     * Het rapport telt per kalendermaand (zoals het maandoverzicht van de
+     * planning): de kiezer toont dan twee maanden in plaats van twee datums, de
+     * URL blijft `van`/`tot` (de 1e en de laatste dag), de lezer aan de
+     * clientkant rondt een andere datum af op hele maanden en de server
+     * weigert ze (400).
+     */
+    heleMaanden?: boolean;
+  }
   | { soort: 'jaar' }
   | {
     soort: 'chauffeur';
@@ -53,8 +73,10 @@ export type RapportFilter =
  *  - `getal`  aantal (dagen, stuks), optelbaar
  *  - `duur`   MINUTEN, in beeld u:mm, optelbaar
  *  - `janee`  boolean, in beeld ja/nee
+ *  - `tijd`   kloktijd 'UU:MM' (24 uur; een busdag mag tot 47:59 lopen), zoals
+ *             aangeleverd, smal op de telefoon
  */
-export type KolomType = 'tekst' | 'datum' | 'getal' | 'duur' | 'janee';
+export type KolomType = 'tekst' | 'datum' | 'getal' | 'duur' | 'janee' | 'tijd';
 
 /**
  * Toon van een cel, één woordenschat voor elke manier waarop een kolom een
@@ -136,6 +158,13 @@ export type RapportKolom = {
    * vaste eerste kolom past, zodat de tekst niet elke rij vijf regels hoog maakt.
    */
   lang?: boolean;
+  /**
+   * Korte code van een viertal tekens (dienstnummer, loopnummer): een
+   * tekstkolom die op de telefoon zo smal is als een cijferkolom, zodat datum,
+   * dienst, start en einde samen voor het scrollen passen. Een busnummer
+   * ("013 023") is daar te lang voor en blijft een gewone tekstkolom.
+   */
+  code?: boolean;
   /**
    * Sorteer op een ander veld van de rij dan wat er in beeld staat: een maand
    * toont "Augustus 2026" maar sorteert op '2026-08'. Het veld hoeft geen

@@ -142,6 +142,12 @@ export type DayGap = {
    *  Alleen gevuld als het gat door een goedgekeurde afwezigheid komt —
    *  een dienst die nooit toegewezen was, heeft geen uitval-info. */
   uitval?: Record<string, { name: string; reason: string }>;
+  /** Per verwachte dienst (genormaliseerde code) die GEEN gat meer is doordat
+   *  een collega hem overnam van een afwezige: wie viel uit, waarom, en wie
+   *  rijdt hem nu (doorgevoerde ruil of handmatige wissel). Alleen voor vandaag
+   *  en later, zoals `uitval`. Voedt het rapport Openstaande diensten
+   *  ("ingevuld door"); de dekking zelf toont alleen wat nog open staat. */
+  opgevangen?: Record<string, { name: string; reason: string; door: string }>;
   /** Herkomst van het dag-type (uitleg-tooltip); ouder cachemateriaal mist dit veld. */
   bron?: DayTypeBron;
 };
