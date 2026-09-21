@@ -11,14 +11,29 @@
          vhb-theme = expliciete keuze; vhb-theme-effectief = wat er effectief
          stond (ook de rol-standaard van planner/admin, die niet als keuze
          wordt bewaard). -->
+    <!-- Warme start vóór de eerste paint (22-09): staat er een opgeslagen
+         sessie, dan toont de voorgerenderde schil in #root het skelet van de
+         app in plaats van het carbon laadscherm (zie de stijlregels hieronder
+         en scripts/voorrender-schil.tsx). Zelfde sleutel als
+         heeftOpgeslagenSessie() in src/app/AppSkeleton.tsx. -->
     <script>
       (function () {
         try {
           var t = localStorage.getItem('vhb-theme') || localStorage.getItem('vhb-theme-effectief');
           if (t === 'dark') document.documentElement.classList.add('dark');
-        } catch (e) { /* privacy-modus: val terug op licht */ }
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i) || '';
+            if (k.indexOf('sb-') === 0 && k.slice(-11) === '-auth-token') { document.documentElement.classList.add('vhb-warm'); break; }
+          }
+        } catch (e) { /* privacy-modus: val terug op licht en op het laadscherm */ }
       })();
     </script>
+    <!-- Welke van de twee voorgerenderde schillen zichtbaar is. Inline, zodat
+         de keuze al geldt vóór het stijlblad binnen is. React vervangt de
+         inhoud van #root bij zijn eerste render. -->
+    <style>
+      html.vhb-warm #voorschil-koud, html:not(.vhb-warm) #voorschil-warm { display: none; }
+    </style>
 
     <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />

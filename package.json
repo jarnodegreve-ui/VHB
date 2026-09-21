@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx api/index.ts",
     "start": "tsx api/index.ts",
-    "build": "vite build",
+    "build": "vite build && node scripts/voorrender-schil.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
