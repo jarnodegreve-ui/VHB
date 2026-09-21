@@ -4,10 +4,10 @@ import type { MeldingSoort } from "../../shared/schemas/meldingen.js";
  * Meldingencentrum: van een push-payload naar de rij in public.meldingen.
  *
  * Elke push die de API verstuurt krijgt een `soort` (filterchip) en een
- * `doel` (pad in de app). De callers in api/index.ts geven de soort expliciet
+ * `doel` (pad in de app). De callers (de domeinroutes in api/_lib) geven de soort expliciet
  * mee; ontbreekt hij (oudere caller, deviceRoutes), dan leiden we hem af uit
  * de deeplink-URL. Het doel komt altijd uit die URL: pushes gebruiken
- * `/?view=<view>` (viewUrl in api/index.ts), de app navigeert op paden.
+ * `/?view=<view>` (viewUrl in api/_lib/collectie.ts), de app navigeert op paden.
  *
  * PAD_PER_VIEW spiegelt src/app/routes.tsx (api/ en src/ delen bewust geen
  * code); src/lib/meldingDoel.test.ts bewaakt dat beide lijsten gelijk blijven.

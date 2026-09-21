@@ -4,7 +4,7 @@ import { legRuilenOverMaandbeeld, type OverlayCel, type OverlayRuil } from "./ru
 /**
  * De cel-waarheid van een maand: wat de planning per chauffeur per dag zegt,
  * met de goedgekeurde dienstruilen en afwezigheden erover gelegd. Stond
- * inline in GET /api/month-planning (api/index.ts); sinds fase B van de
+ * inline in GET /api/month-planning (nu api/_lib/planningRoutes.ts); sinds fase B van de
  * Access-migratie (13-09) is dit een pure functie, zodat de dagafsluiting
  * dezelfde waarheid gebruikt als het maandbord. Gedrag ongewijzigd
  * (karakterisatietest in src/lib/celWaarheid.test.ts).
@@ -100,7 +100,7 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
 
   // BEWUSTE KEUZE (Jarno, 01-08-2026): afwezigheidscodes, ziekte incluis,
   // blijven voor iedereen zichtbaar, gelijk aan het bord in het lokaal. Zie
-  // de toelichting bij de route (api/index.ts) en commit f2a9b33 voor de
+  // de toelichting bij de route (api/_lib/planningRoutes.ts) en commit f2a9b33 voor de
   // maskering mocht die ooit terug moeten.
   const cells: Record<string, Record<string, OverlayCel>> = {};
   for (const row of monthRows) {

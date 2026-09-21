@@ -67,7 +67,7 @@ export const RUIL_BEKEKEN_ACTIE = 'Dienstruil bekeken';
 export const BEKEKEN_BIJGEHOUDEN_SINDS = '2026-09-21T22:00:00.000Z';
 
 /** De log-acties waaruit het verloop wordt afgeleid. De letterlijke teksten
- *  staan ook in api/index.ts (`beslisRuilIntern`, de array-route, de handmatige
+ *  staan ook in api/_lib/ruilRoutes.ts (`beslisRuilIntern`, de array-route, de handmatige
  *  wissel, de gezien-bevestiging en bekeken); `shared/ruilVerloop.test.ts`
  *  faalt als ze uit elkaar lopen. */
 export const RUIL_LOG_ACTIES: Record<string, RuilVerloopSoort> = {
