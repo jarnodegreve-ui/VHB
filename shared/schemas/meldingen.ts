@@ -19,6 +19,12 @@ export const meldingenGelezenBodySchema = z.object({
   ids: optioneel(z.array(z.string().trim().min(1).max(64)).max(500)),
 });
 
+/** Verwijderen: de gegeven ids (eigen rijen, server-side gescoped). Minstens
+ *  één id — "alles wissen" bestaat bewust niet, verwijderen gaat per stuk. */
+export const meldingenVerwijderBodySchema = z.object({
+  ids: z.array(z.string().trim().min(1).max(64)).min(1).max(500),
+});
+
 /** Eén melding zoals GET /api/meldingen ze teruggeeft. */
 export const meldingSchema = z.object({
   id: z.string(),

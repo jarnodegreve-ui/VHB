@@ -2,9 +2,12 @@ import { test, expect } from '@playwright/test';
 import { CHAUFFEUR, seed } from './helpers';
 
 /**
- * Meldingencentrum (06-09): bel met ongelezen-teller in de topbar, lijst per
- * dag met filterchips, tik = gelezen + navigatie naar het doel, "Alles
- * gelezen" als stille actie. API gemockt; de POST-body's worden vastgelegd.
+ * Meldingencentrum (06-09, paneel sinds 21-09): bel met ongelezen-teller in de
+ * topbar opent een paneel met de laatste meldingen; van daaruit naar het doel,
+ * naar het volledige scherm, of een melding weg met het kruisje. Op het scherm
+ * zelf: lijst per dag met filterchips, tik = gelezen + navigatie, "Markeer
+ * alles als gelezen" en hetzelfde kruisje. API gemockt; de body's van POST en
+ * DELETE worden vastgelegd.
  */
 const nu = Date.now();
 const iso = (msTerug: number) => new Date(nu - msTerug).toISOString();
@@ -15,7 +18,7 @@ const MELDINGEN = [
 ];
 
 test.describe('meldingencentrum', () => {
-  test('bel-teller, lijst per dag, tik markeert gelezen en navigeert, alles gelezen', async ({ page }) => {
+  test('paneel onder de bel: lijst, doel, alles gelezen en de weg naar het scherm', async ({ page }) => {
     const posts: unknown[] = [];
     await seed(page, {
       user: CHAUFFEUR,
@@ -34,11 +37,50 @@ test.describe('meldingencentrum', () => {
     await expect(bel).toBeVisible({ timeout: 15_000 });
     await bel.click();
 
+    // Het paneel, niet meteen het scherm.
+    const paneel = page.getByRole('menu', { name: 'Meldingen' });
+    await expect(paneel).toBeVisible();
+    await expect(paneel.getByRole('menuitem', { name: /Verlof goedgekeurd/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Meldingen', level: 1 })).toHaveCount(0);
+
+    // Een rij in het paneel brengt je naar het doel en markeert gelezen.
+    await paneel.getByRole('menuitem', { name: /Verlof goedgekeurd/ }).click();
+    await expect(page.getByRole('heading', { name: /Verlof/, level: 1 })).toBeVisible();
+    expect(posts).toEqual([{ ids: ['m1'] }]);
+    await expect(page.getByRole('button', { name: 'Meldingen (1 ongelezen)' })).toBeVisible();
+
+    // Alles gelezen vanuit het paneel = POST zonder ids; de teller valt weg.
+    await page.getByRole('button', { name: 'Meldingen (1 ongelezen)' }).click();
+    await page.getByRole('menu', { name: 'Meldingen' }).getByRole('button', { name: 'Alles gelezen' }).click();
+    expect(posts).toEqual([{ ids: ['m1'] }, {}]);
+    // Scope op de topbar: de zijbalk heeft óók een 'Meldingen'-knop.
+    await expect(page.locator('header').getByRole('button', { name: 'Meldingen', exact: true })).toBeVisible();
+
+    // Het paneel blijft open na "Alles gelezen"; de voet brengt je naar het
+    // volledige scherm.
+    await page.getByRole('menuitem', { name: 'Alle meldingen' }).click();
     await expect(page.getByRole('heading', { name: 'Meldingen', level: 1 })).toBeVisible();
+  });
+
+  test('scherm: lijst per dag, filterchip en markeer alles als gelezen', async ({ page }) => {
+    const posts: unknown[] = [];
+    await seed(page, {
+      user: CHAUFFEUR,
+      view: 'meldingen',
+      extra: (pad, request) => {
+        if (pad.endsWith('/api/meldingen/gelezen')) {
+          posts.push(request.postDataJSON());
+          return { success: true, gelezen: 1 };
+        }
+        if (pad.endsWith('/api/meldingen')) return { meldingen: MELDINGEN, ongelezen: 2 };
+        return undefined;
+      },
+    });
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { name: 'Meldingen', level: 1 })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'Vandaag', level: 2 })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ongelezen · 2' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Verlof goedgekeurd/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Nieuwe update/ })).toBeVisible();
 
     // Filterchip op soort.
     await page.getByRole('button', { name: 'Planning', exact: true }).click();
@@ -46,19 +88,42 @@ test.describe('meldingencentrum', () => {
     await expect(page.getByRole('button', { name: /Rooster bijgewerkt/ })).toBeVisible();
     await page.getByRole('button', { name: 'Alles', exact: true }).click();
 
-    // Tik = gelezen (POST met het id) + naar het doel (Verlof).
-    await page.getByRole('button', { name: /Verlof goedgekeurd/ }).click();
-    await expect(page.getByRole('heading', { name: /Verlof/, level: 1 })).toBeVisible();
-    expect(posts).toEqual([{ ids: ['m1'] }]);
-    await expect(page.getByRole('button', { name: 'Meldingen (1 ongelezen)' })).toBeVisible();
+    await page.getByRole('button', { name: 'Markeer alles als gelezen' }).click();
+    expect(posts).toEqual([{}]);
+    await expect(page.getByRole('button', { name: 'Markeer alles als gelezen' })).toHaveCount(0);
+  });
 
-    // Terug naar de lijst: "Alles gelezen" = POST zonder ids, bel zonder teller.
-    await page.getByRole('button', { name: 'Meldingen (1 ongelezen)' }).click();
-    await page.getByRole('button', { name: 'Alles gelezen' }).click();
-    expect(posts).toEqual([{ ids: ['m1'] }, {}]);
-    // Scope op de topbar: de zijbalk heeft óók een 'Meldingen'-knop.
-    await expect(page.locator('header').getByRole('button', { name: 'Meldingen', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Alles gelezen' })).toHaveCount(0);
+  test('verwijderen: meteen weg, DELETE pas na de ongedaan-toast, ongedaan houdt hem', async ({ page }) => {
+    const deletes: unknown[] = [];
+    await seed(page, {
+      user: CHAUFFEUR,
+      view: 'meldingen',
+      extra: (pad, request) => {
+        if (pad.endsWith('/api/meldingen') && request.method() === 'DELETE') {
+          deletes.push(request.postDataJSON());
+          return { success: true, verwijderd: 1 };
+        }
+        if (pad.endsWith('/api/meldingen')) return { meldingen: MELDINGEN, ongelezen: 2 };
+        return undefined;
+      },
+    });
+    await page.goto('/');
+
+    const rij = page.getByRole('button', { name: /Rooster bijgewerkt/ });
+    await expect(rij).toBeVisible({ timeout: 15_000 });
+
+    // Ongedaan maken: de melding komt terug en er vertrekt geen DELETE.
+    await page.getByRole('button', { name: 'Melding verwijderen' }).nth(1).click();
+    await expect(rij).toHaveCount(0);
+    await page.getByRole('button', { name: 'Ongedaan maken' }).click();
+    await expect(rij).toBeVisible();
+
+    // Echt verwijderen: weg uit de lijst, DELETE volgt als de toast verlopen
+    // is. Die wachttijd is 6 s toast plus 1,5 s marge, dus de poll krijgt
+    // ruim het dubbele: op een trage runner start de timer later.
+    await page.getByRole('button', { name: 'Melding verwijderen' }).nth(1).click();
+    await expect(rij).toHaveCount(0);
+    await expect.poll(() => deletes, { timeout: 25_000 }).toEqual([{ ids: ['m2'] }]);
   });
 
   test('lege staat zonder meldingen', async ({ page }) => {

@@ -1,24 +1,26 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw, Wrench } from 'lucide-react';
+import { Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw, Wrench, X } from 'lucide-react';
 import { useAppDataContext } from '../app/AppDataContext';
 import { navigeer, routeUitUrl } from '../app/router';
 import { MELDING_SOORT_LABEL } from '../../shared/meldingSoorten';
 import { isoDate } from '../lib/datum';
 import { datumsLeesbaar, filterMeldingen, groepeerPerDag, soortenIn, tijdVan, type MeldingFilter } from '../lib/meldingen';
+import { verwijderMeldingMetOngedaan } from '../lib/meldingVerwijderen';
 import { cn } from '../lib/ui';
 import type { Melding, MeldingSoort, View } from '../types';
 import { Card } from '../components/Card';
 import { LijstAnimatie, LijstRij } from '../components/LijstRij';
-import { Button, FilterChip } from '../components/primitives';
+import { Button, FilterChip, IconButton } from '../components/primitives';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 
 /**
  * Meldingencentrum: alles wat het portaal voor jou verstuurde — ook als je
  * geen push aan hebt staan. Eén lijst, per dag gegroepeerd, met een stille
  * oker-stip voor wat je nog niet las. Een tik markeert de melding gelezen en
- * brengt je naar het scherm waar het over gaat (`doel`). "Alles gelezen" is
- * bewust een stille secundaire actie: dit scherm is een overzicht, geen
- * werklijst.
+ * brengt je naar het scherm waar het over gaat (`doel`). "Markeer alles als
+ * gelezen" is bewust een stille secundaire actie: dit scherm is een overzicht,
+ * geen werklijst. Het kruisje rechts doet een melding weg, met een
+ * ongedaan-toast (src/lib/meldingVerwijderen.ts).
  */
 
 const ICOON_PER_SOORT: Record<MeldingSoort, ReactNode> = {
@@ -33,7 +35,7 @@ const ICOON_PER_SOORT: Record<MeldingSoort, ReactNode> = {
 };
 
 export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => void }) {
-  const { meldingen, ongelezenMeldingen, markeerMeldingenGelezen } = useAppDataContext();
+  const { meldingen, ongelezenMeldingen, markeerMeldingenGelezen, verwijderMelding, herstelMelding } = useAppDataContext();
   const [filter, setFilter] = useState<MeldingFilter>('alles');
   const vandaag = isoDate(new Date());
 
@@ -61,7 +63,7 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
         description="Wat er voor jou binnenkwam: planning, verlof, ruil en updates."
         actions={ongelezenMeldingen > 0 ? (
           <Button variant="secondary" size="sm" icon={<CheckCheck size={14} />} onClick={() => void markeerMeldingenGelezen()}>
-            Alles gelezen
+            Markeer alles als gelezen
           </Button>
         ) : undefined}
       />
@@ -106,13 +108,14 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
                     const ongelezen = !m.gelezenOp;
                     return (
                       <LijstRij key={m.id}>
-                        {/* rauw: lijstrij met eigen layout (icoon, twee tekstregels, tijd + stip);
-                            Button centreert en dwingt semibold/min-h af */}
+                        {/* rauw: lijstrij met eigen layout (icoon, twee tekstregels, tijd + stip)
+                            en het kruisje ernaast; Button centreert en dwingt semibold/min-h af */}
+                        <div className="group/rij flex items-stretch transition-colors hover:bg-surface-row">
                         <button
                           type="button"
                           onClick={() => open(m)}
                           className={cn(
-                            'ios-pressable flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-row',
+                            'ios-pressable flex min-w-0 flex-1 items-start gap-3 py-3 pl-4 pr-2 text-left',
                             !m.doel && 'cursor-default',
                           )}
                         >
@@ -142,6 +145,20 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
                             )}
                           </span>
                         </button>
+                        {/* Met een muis verschijnt het kruisje pas bij hover of
+                            focus; op een aanraakscherm staat het er altijd. */}
+                        <span className="flex shrink-0 items-center pr-2">
+                          <IconButton
+                            label="Melding verwijderen"
+                            variant="ghost"
+                            size="sm"
+                            className="text-slate-400 opacity-100 hover:text-slate-800 pointer-fine:opacity-0 pointer-fine:group-hover/rij:opacity-100 pointer-fine:focus-visible:opacity-100"
+                            onClick={() => verwijderMeldingMetOngedaan(m.id, verwijderMelding, herstelMelding)}
+                          >
+                            <X size={16} />
+                          </IconButton>
+                        </span>
+                        </div>
                       </LijstRij>
                     );
                   })}

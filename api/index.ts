@@ -37,7 +37,7 @@ import { invalidateUsersCache } from "./userCache.js";
 import { userBodySchema, userLijstSchema, WACHTWOORD_MIN } from "../shared/schemas/user.js";
 import { diversionBodySchema, diversionLijstSchema } from "../shared/schemas/diversion.js";
 import { MAX_UPDATE_BIJLAGEN, updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js";
-import { meldingenGelezenBodySchema } from "../shared/schemas/meldingen.js";
+import { meldingenGelezenBodySchema, meldingenVerwijderBodySchema } from "../shared/schemas/meldingen.js";
 import { recordUrl } from "./_lib/meldingen.js";
 import { meVoorkeurenBodySchema, pasVoorkeurenPatchToe } from "../shared/schemas/dashboardVoorkeuren.js";
 import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
@@ -143,6 +143,7 @@ import {
   getMeldingen,
   telOngelezenMeldingen,
   markeerMeldingenGelezen,
+  verwijderMeldingen,
   updateUserDashboardVoorkeuren,
   upsertPlanningNote,
   getUserExpiries,
@@ -2219,6 +2220,22 @@ app.post("/api/meldingen/gelezen", authenticate, async (req: AuthenticatedReques
     if (isMissingTableError(err)) return res.status(503).json({ error: "De meldingen-tabel bestaat nog niet: draai supabase/2026-09-06_meldingen.sql in de SQL Editor." });
     console.error("Meldingen gelezen markeren is mislukt.", err);
     res.status(500).json({ error: "Meldingen bijwerken is mislukt." });
+  }
+});
+
+// Verwijderen: { ids: [...] }. Altijd op de eigen rijen gescoped (user_id in
+// de query), dus andermans ids doen niets. Bewust geen "alles wissen": een
+// melding weg is weg, dus gaat het per stuk (met ongedaan maken in de app).
+app.delete("/api/meldingen", authenticate, async (req: AuthenticatedRequest, res) => {
+  const body = valideerRecord(res, meldingenVerwijderBodySchema, isPlainRecord(req.body) ? req.body : {});
+  if (!body) return;
+  try {
+    const verwijderd = await verwijderMeldingen(String(req.appUser!.id), body.ids);
+    res.json({ success: true, verwijderd });
+  } catch (err) {
+    if (isMissingTableError(err)) return res.status(503).json({ error: "De meldingen-tabel bestaat nog niet: draai supabase/2026-09-06_meldingen.sql in de SQL Editor." });
+    console.error("Meldingen verwijderen is mislukt.", err);
+    res.status(500).json({ error: "Meldingen verwijderen is mislukt." });
   }
 });
 
