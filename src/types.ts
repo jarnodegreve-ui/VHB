@@ -1,6 +1,7 @@
 import type { DashboardVoorkeuren } from '../shared/schemas/dashboardVoorkeuren';
 import type { Melding, MeldingSoort } from '../shared/schemas/meldingen';
 import type { RuilVerloopStap } from '../shared/ruilVerloop';
+import type { RuilRustRegel } from '../shared/ruilRust';
 
 export type Role = 'chauffeur' | 'technieker' | 'planner' | 'admin';
 
@@ -99,6 +100,10 @@ export interface SwapRequest {
   /** Verloop per persoon, door de server afgeleid uit het activiteitenlog
    *  (alleen-lezen; ontbreekt als het log niet te lezen was). */
   verloop?: RuilVerloopStap[];
+  /** Rust van wie door deze ruil een dienst krijgt (shared/ruilRust.ts), door
+   *  de server nagerekend zolang de ruil nog beslist moet worden. Staf ziet
+   *  beide regels, een chauffeur alleen die over zichzelf. */
+  rust?: RuilRustRegel[];
 }
 
 export interface LeaveRequest {
