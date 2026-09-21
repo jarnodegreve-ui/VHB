@@ -9,9 +9,13 @@ on:
   push:
     branches: [main]
 
+# Op een PR annuleert een nieuwe push de vorige run (die uitslag wil niemand
+# meer). Op main niet: bij een reeks merges vlak na elkaar annuleerden de runs
+# elkaar, en stond er voor drie van de vier commits nooit een uitslag
+# (21-09). Elke commit op main krijgt nu zijn eigen groen of rood.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Minimale token-rechten (controle 05-09, nr. 30): geen enkele job schrijft
 # naar de repo. Cache, artifacts en de job-samenvatting lopen via het
@@ -64,17 +68,48 @@ jobs:
       - name: Bundelgrootte
         run: node scripts/check-bundle-size.mjs
 
-      # De e2e-webServer bouwt zelf opnieuw mét VITE_SUPABASE-dummy-env
-      # (zie playwright.config.ts) — de build hierboven bewaakt alleen dat
-      # de productie-build slaagt.
+  # E2E in drie parallelle shards (21-09). In één job duurde deze stap 469 s
+  # van de ±630 s, en Lighthouse wachtte daar nog eens 6,5 min achter: 17 min
+  # per run. Nu lopen statische checks, drie e2e-shards en Lighthouse naast
+  # elkaar en bepaalt de traagste de doorlooptijd (±7 min). Playwright
+  # verdeelt de tests zelf over de shards, over alle projecten heen
+  # (`fullyParallel` staat aan in playwright.config.ts).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    name: e2e (${{ matrix.shard }}/3)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencies
+        run: npm ci
+
+      - name: Playwright-browsers-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # --with-deps ook bij een cache-hit: de systeembibliotheken (vooral
+      # voor WebKit) zitten niet in de cache.
       - name: Playwright-browsers
         run: npx playwright install --with-deps chromium webkit
 
-      # Mobiel en desktop in Chromium, plus mobiele navigatieregressies in
-      # WebKit. a11y.spec.ts (axe, WCAG 2.1 AA) draait op beide Chromium-
-      # viewports. Het afzonderlijke PWA-project staat hieronder.
-      - name: E2E-smoke
-        run: npm run test:e2e
+      # De e2e-webServer bouwt zelf mét VITE_SUPABASE-dummy-env (zie
+      # playwright.config.ts). Mobiel en desktop in Chromium, plus mobiele
+      # navigatieregressies in WebKit. a11y.spec.ts (axe, WCAG 2.1 AA) draait
+      # op beide Chromium-viewports.
+      - name: E2E-smoke (shard ${{ matrix.shard }} van 3)
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
 
       # PWA-e2e (golf 4, punt 20): het project `pwa` draait mét service
       # worker: registratie + GET_VERSION, koude offline start van Mijn dag
@@ -85,7 +120,9 @@ jobs:
       # TODO: continue-on-error weghalen zodra hij een paar weken groen is.
       # E2E_SKIP_BUILD hergebruikt de dist die de smoke hierboven net met
       # dezelfde dummy-env bouwde (geen tweede build).
+      # Alleen in de eerste shard: het is één klein project.
       - name: E2E PWA (service worker, niet-blokkerend)
+        if: matrix.shard == 1
         continue-on-error: true
         env:
           E2E_SKIP_BUILD: "1"
@@ -117,8 +154,9 @@ jobs:
   # draait. Rapporten (HTML + JSON) komen als artifact mee; bewust géén
   # temporary-public-storage — dat is tokenloos, maar zet het rapport op een
   # publieke URL van Google, en dat heeft niemand nodig.
+  # Geen `needs: checks` meer (21-09): Lighthouse bouwt zelf en hangt van
+  # niets uit die job af; het wachten kostte alleen 10 minuten doorlooptijd.
   lighthouse:
-    needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
