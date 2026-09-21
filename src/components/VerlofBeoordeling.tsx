@@ -135,7 +135,7 @@ export function VerlofBeoordelingInhoud({ aanvraag, users, shifts, leaveRequests
       </div>
 
       <Card tone="muted" padding="sm">
-        <MicroLabel className="text-slate-500">Periode</MicroLabel>
+        <MicroLabel className="text-slate-600">Periode</MicroLabel>
         <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
           {formatPeriodeDMJ(reviewLeave.startDate, reviewLeave.endDate)}
           <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'verlofdag' : 'verlofdagen'})</span>
@@ -151,7 +151,7 @@ export function VerlofBeoordelingInhoud({ aanvraag, users, shifts, leaveRequests
       {reviewLeave.type === 'betaald_verlof' && (
         <Card tone={exceeds ? 'danger' : 'muted'} padding="none" className="px-4 py-3">
           <div className="flex items-center justify-between gap-3">
-            <MicroLabel className={exceeds ? 'text-red-700' : 'text-slate-500'}>
+            <MicroLabel className={exceeds ? 'text-red-700' : 'text-slate-600'}>
               Verlofsaldo {requestYear}
             </MicroLabel>
             <span className={cn('text-sm font-semibold tabular-nums', exceeds ? 'text-red-700' : 'text-slate-800')}>
@@ -180,7 +180,7 @@ export function VerlofBeoordelingInhoud({ aanvraag, users, shifts, leaveRequests
         }
         return (
           <Card tone="muted" padding="none" className="px-4 py-3">
-            <MicroLabel className="text-slate-500">Dekking deze periode</MicroLabel>
+            <MicroLabel className="text-slate-600">Dekking deze periode</MicroLabel>
             <p className="mt-1 text-xs font-normal text-slate-600">
               {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} met goedgekeurd verlof in deze periode{peak > 1 ? `, tot ${peak} tegelijk op de drukste dag` : ''}.
             </p>
