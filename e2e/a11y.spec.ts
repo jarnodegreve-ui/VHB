@@ -49,6 +49,7 @@ const SCHERMEN: Scherm[] = [
   { naam: 'chauffeur-rooster', user: CHAUFFEUR, view: 'rooster', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Mijn rooster', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
   { naam: 'chauffeur-verlof', user: CHAUFFEUR, view: 'verlof', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Verlof', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
   { naam: 'admin-dashboard', user: ADMIN, view: 'dashboard', klaar: async (page) => { await expect(page.getByText('Open taken').first()).toBeVisible({ timeout: 15_000 }); } },
+  { naam: 'admin-vandaag', user: ADMIN, view: 'vandaag', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Vandaag', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
   { naam: 'admin-gebruikers', user: ADMIN, view: 'gebruikers', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Gebruikers', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
 ];
 

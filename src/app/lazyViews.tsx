@@ -58,6 +58,7 @@ export const LazyManageUpdatesView = scherm<typeof import('../views/admin/Manage
 export const LazyManageUsersView = scherm<typeof import('../views/admin/ManageUsersView'), 'ManageUsersView'>('gebruikers', 'ManageUsersView');
 export const LazyDevicesView = scherm<typeof import('../views/admin/DevicesView'), 'DevicesView'>('toestellen', 'DevicesView');
 export const LazyRapportenView = scherm<typeof import('../views/admin/RapportenView'), 'RapportenView'>('rapporten', 'RapportenView');
+export const LazyVandaagView = scherm<typeof import('../views/VandaagView'), 'VandaagView'>('vandaag', 'VandaagView');
 export const LazyWerkvoorraadView = scherm<typeof import('../views/WerkvoorraadView'), 'WerkvoorraadView'>('werkvoorraad', 'WerkvoorraadView');
 export const LazyLeaveManagementView = scherm<typeof import('../views/LeaveManagementView'), 'LeaveManagementView'>('verlof', 'LeaveManagementView');
 // Ook lazy (planner/admin-only, maar stond eager in de hoofdbundel): de

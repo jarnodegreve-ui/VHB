@@ -58,7 +58,7 @@ const SCHERMEN = [
   'dashboard', 'mijn-dag', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten',
   'contacten', 'updates', 'ruil-verzoeken', 'verlof', 'bezetting',
   'dekking', 'verlof-kalender', 'dienstoverzicht', 'planning-codes',
-  'vervaldata', 'gebruikers', 'toestellen', 'activiteit',
+  'vervaldata', 'gebruikers', 'toestellen', 'activiteit', 'vandaag',
 ] as const;
 
 for (const view of SCHERMEN) {
