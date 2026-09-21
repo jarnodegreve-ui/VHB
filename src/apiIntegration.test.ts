@@ -1069,6 +1069,22 @@ describe('PII-scoping voor chauffeurs', () => {
       expect(tekst).not.toContain('s-2');
     });
 
+    it('handmatige wissel: de chauffeur leest "door de planner", staf houdt de naam (Jarno 21-09)', async () => {
+      const reden = 'Handmatige wissel door Jarno De Greve, Ziekte, vervanging';
+      mem.swaps = mem.swaps.map((s: any) => (s.id === 's-1' ? { ...s, status: 'approved', reason: reden } : s));
+      for (const token of ['tok-a', 'tok-b']) {
+        const res = await api('GET', '/api/swaps', { token });
+        const eigen = res.json.find((s: any) => s.id === 's-1');
+        // Het voorvoegsel blijft, zodat de client de wissel als handmatig herkent.
+        expect(eigen.reason).toBe('Handmatige wissel door de planner, Ziekte, vervanging');
+        expect(JSON.stringify(res.json)).not.toContain('Jarno De Greve');
+      }
+      const staf = await api('GET', '/api/swaps', { token: 'tok-planner' });
+      expect(staf.json.find((s: any) => s.id === 's-1').reason).toBe(reden);
+      // De opslag is niet aangeraakt: de attributie blijft voor staf en het weekblad.
+      expect(mem.swaps.find((s: any) => s.id === 's-1').reason).toBe(reden);
+    });
+
     it('de aangezochte collega ziet hetzelfde verloop, ook zonder stafnaam', async () => {
       const res = await api('GET', '/api/swaps', { token: 'tok-b' });
       const eigen = res.json.find((s: any) => s.id === 's-1');

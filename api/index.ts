@@ -57,7 +57,7 @@ import {
   trekToegangIn,
   type ToegangIngetrokken,
 } from "./_lib/recordWrites.js";
-import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf , redenVoorChauffeur} from "./helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./_lib/matrixXlsx.js";
 import {
@@ -3618,12 +3618,18 @@ const metRuilVerloop = async <T extends { id: string }>(
   regels?: Promise<Record<string, SwapVerloopLogRegel[]>>,
 ): Promise<Array<T & { verloop?: RuilVerloopStap[] }>> => {
   if (swaps.length === 0) return swaps;
+  // Een chauffeur leest "door de planner" waar de opslag de naam van de
+  // uitvoerder draagt (zie redenVoorChauffeur). Hier, op de ene plek waar
+  // elke ruil naar buiten gaat, zodat ook het pad zonder verloop gedekt is.
+  const uit = staf
+    ? swaps
+    : swaps.map((s) => ("reason" in s ? { ...s, reason: redenVoorChauffeur((s as { reason?: unknown }).reason) } : s));
   try {
-    const perSwap = await (regels ?? getSwapVerloopRegels(swaps.map((s) => String(s.id))));
-    return swaps.map((s) => ({ ...s, verloop: verloopUitLog(perSwap[String(s.id)] ?? [], { metStafNaam: staf }) }));
+    const perSwap = await (regels ?? getSwapVerloopRegels(uit.map((s) => String(s.id))));
+    return uit.map((s) => ({ ...s, verloop: verloopUitLog(perSwap[String(s.id)] ?? [], { metStafNaam: staf }) }));
   } catch (err) {
     console.error("Verloop van de dienstruilen laden is mislukt.", err);
-    return swaps;
+    return uit;
   }
 };
 

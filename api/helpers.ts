@@ -136,6 +136,29 @@ export const SWAP_UITVOERING_ACTIES = [
 export const isHandmatigeWissel = (swap: { reason?: unknown } | null | undefined) =>
   String(swap?.reason ?? "").startsWith(HANDMATIGE_WISSEL_PREFIX);
 
+/** Wat een chauffeur in de plaats van de naam van de uitvoerder leest. */
+export const UITVOERDER_VOOR_CHAUFFEUR = "de planner";
+
+/**
+ * De reden van een handmatige wissel zoals een chauffeur ze te zien krijgt:
+ * "Handmatige wissel door <naam>, <reden>" wordt "Handmatige wissel door de
+ * planner, <reden>" (Jarno 21-09: chauffeurs hoeven niet te zien WIE van de
+ * planning het deed). De opslag blijft de naam dragen: staf, het weekblad en
+ * het auditspoor hebben die attributie nodig. Het voorvoegsel blijft staan,
+ * zodat `isHandmatigeWissel` en `kaleReden` op de client blijven werken.
+ * Een gewone ruilreden, en een handmatige zonder ", <reden>", komt heel terug.
+ */
+export const redenVoorChauffeur = (reason: unknown): string | undefined => {
+  if (reason === undefined || reason === null) return undefined;
+  const tekst = String(reason);
+  if (!tekst.startsWith(HANDMATIGE_WISSEL_PREFIX)) return tekst;
+  const rest = tekst.slice(HANDMATIGE_WISSEL_PREFIX.length);
+  const komma = rest.indexOf(",");
+  return komma === -1
+    ? `${HANDMATIGE_WISSEL_PREFIX}${UITVOERDER_VOOR_CHAUFFEUR}`
+    : `${HANDMATIGE_WISSEL_PREFIX}${UITVOERDER_VOOR_CHAUFFEUR}${rest.slice(komma)}`;
+};
+
 // Formule-injectie neutraliseren: een celwaarde die met = + - @ (of een
 // tab/CR die Excel negeert) begint, wordt door sommige spreadsheets als
 // formule uitgevoerd bij het openen. In .xlsx typeert aoa_to_sheet strings
