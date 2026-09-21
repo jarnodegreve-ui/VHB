@@ -620,8 +620,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           kind (een niet-krimpbare rij) de héle kolom oprekken, waardoor de
           kalender op mobiel rechts buiten beeld viel (melding Jarno 01-09).
           minmax(0,1fr) + min-w-0 klemt alles op de viewport. */}
+      {/* 7/5 i.p.v. 8/4 (21-09): de kalender stond op twee derde met grote,
+          lege vierkante cellen, terwijl de zijkolom met 338 px de periode en
+          het type van een aanvraag afkapte. De cellen zijn `aspect-square`,
+          dus een smallere kalender is ook een lagere: de eigen aanvragen
+          komen hoger in beeld. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="min-w-0 lg:col-span-8 space-y-6">
+        <div className="min-w-0 lg:col-span-7 space-y-6">
           {/* Beoordeling: op desktop een paneel bovenaan deze kolom (breed
               genoeg voor saldo, dekking en conflicten; scrolt in beeld bij
               openen), op mobiel een SlideOver. Alleen zichtbaar terwijl er
@@ -726,7 +731,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           )}
         </div>
 
-        <div className="min-w-0 lg:col-span-4 space-y-8">
+        <div className="min-w-0 lg:col-span-5 space-y-8">
           <div className="space-y-2">
             <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)} year={new Date().getFullYear()} compact />
             {/* Nieuw tabblad: de print-modus rendert een kale pagina in plaats

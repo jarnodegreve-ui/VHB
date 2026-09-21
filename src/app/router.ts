@@ -126,6 +126,27 @@ function zorgVoorScrollHerstel() {
   });
 }
 
+/**
+ * Schermwissel zonder skeletflits (21-09). Rendert React een lazy scherm dat
+ * nog niet geladen is, dan toont het de Suspense-fallback, en een eenmaal
+ * getoonde fallback houdt React ±300 ms vast, ook als de code er na 20 ms al
+ * is. Gemeten: bij elk eerste bezoek stond er 230 tot 280 ms een skelet zonder
+ * kop, zelfs wanneer de chunk al uit de warmup in de cache zat.
+ *
+ * Daarom wacht de router heel even tot de code van het nieuwe scherm klaar
+ * is, en wisselt dan pas: het oude scherm blijft die paar tientallen
+ * milliseconden staan en het nieuwe staat er in één keer. Duurt het langer
+ * dan de bovengrens (trage verbinding), dan wisselen we toch en is het skelet
+ * eerlijk: er wordt dan echt geladen.
+ *
+ * De wachter wordt geregistreerd door viewLoaders.ts (dat alle schermen
+ * kent); zonder registratie, zoals in de unit-tests, blijft alles synchroon.
+ */
+type SchermWachter = { isGeladen: (view: View) => boolean; wacht: (view: View, maxMs: number) => Promise<void> };
+let schermWachter: SchermWachter | null = null;
+export const registreerSchermWachter = (w: SchermWachter | null) => { schermWachter = w; };
+export const WACHT_OP_SCHERM_MS = 250;
+
 /** Navigeren buiten React om (service-worker-bericht, tests). */
 export function navigeer(view: View, opts: { params?: readonly string[]; replace?: boolean } = {}) {
   if (typeof window === 'undefined') return;
@@ -162,8 +183,14 @@ export function navigeer(view: View, opts: { params?: readonly string[]; replace
   }
   huidigPad = pad;
   onthoud(view);
+  // `melden` leest de URL op het moment zelf, dus een uitgestelde melding die
+  // door een volgende navigatie is ingehaald doet geen kwaad.
   const melden = () => window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
-  if (anderScherm) metOvergang(melden); else melden();
+  const toon = () => { if (anderScherm) metOvergang(melden); else melden(); };
+  // De historiek hierboven is al gewisseld, synchroon in de tik; alleen het
+  // schilderen wacht even op de code van het nieuwe scherm.
+  if (anderScherm && schermWachter && !schermWachter.isGeladen(view)) void schermWachter.wacht(view, WACHT_OP_SCHERM_MS).then(toon);
+  else toon();
 }
 
 export function useRoute() {

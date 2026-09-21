@@ -8,17 +8,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  * dezelfde oude shell teruggeven. Daarom eerst de wachtende worker laten
  * aantreden en de shell-cache wissen.
  */
+/** De retry-logica staat los van React (`metRetry`), dus de tests roepen hem
+ *  rechtstreeks aan in plaats van in een privéveld van React.lazy te grijpen. */
 const laadModule = async () => {
   vi.resetModules();
-  return (await import('./lazyRetry')).lazyWithRetry;
+  return (await import('./lazyRetry')).metRetry;
 };
 
-/** React.lazy stelt de factory uit tot het renderen; hier roepen we de
- *  binnenkant rechtstreeks aan via het _payload-veld van het lazy-object. */
-const draaiFactory = async (lazyObj: unknown): Promise<unknown> => {
-  const payload = (lazyObj as { _payload: { _result: () => Promise<unknown> } })._payload;
-  return payload._result();
-};
+const draaiFactory = async (metVangnet: unknown): Promise<unknown> => (metVangnet as () => Promise<unknown>)();
 
 const opzet = (opts: { waiting?: boolean } = {}) => {
   const gewist: string[] = [];

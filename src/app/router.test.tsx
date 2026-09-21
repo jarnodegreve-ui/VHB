@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useRecordParam, useRoute } from './router';
+import { registreerSchermWachter, useRecordParam, useRoute } from './router';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 
 /**
@@ -113,6 +113,50 @@ describe('navigeren vanuit de mobiele zijbalk', () => {
     expect(window.location.pathname).toBe('/verlof');
     expect(zichtbareView()).toBe('verlof');
     await act(async () => { root.unmount(); });
+  });
+
+  it('wacht met schilderen tot de code van het nieuwe scherm klaar is, maar nooit met de historiek', async () => {
+    // Zonder dit toonde React bij elk eerste bezoek zijn Suspense-fallback, en
+    // die houdt hij ±300 ms vast: een skeletflits op elke schermwissel (21-09).
+    let klaar: () => void = () => {};
+    const gewacht: string[] = [];
+    registreerSchermWachter({
+      isGeladen: () => false,
+      wacht: (view) => { gewacht.push(view); return new Promise<void>((los) => { klaar = los; }); },
+    });
+    try {
+      const overgang = handmatigeOvergang();
+      const root = await monteer(<Schil />);
+      await act(async () => { klik('naar-rooster'); await tikken(); });
+      // De URL is al gewisseld (terugknop en overlays rekenen daarop)…
+      expect(window.location.pathname).toBe('/rooster');
+      expect(gewacht).toEqual(['rooster']);
+      // …maar het oude scherm staat er nog: er is nog niets geschilderd.
+      expect(zichtbareView()).toBe('verlof');
+
+      await act(async () => { klaar(); await tikken(); });
+      await act(async () => { overgang.schilder(); await tikken(); });
+      expect(zichtbareView()).toBe('rooster');
+      await act(async () => { root.unmount(); });
+    } finally {
+      registreerSchermWachter(null);
+    }
+  });
+
+  it('een scherm waarvan de code er al is wisselt meteen', async () => {
+    const wacht = vi.fn(() => Promise.resolve());
+    registreerSchermWachter({ isGeladen: () => true, wacht });
+    try {
+      const overgang = handmatigeOvergang();
+      const root = await monteer(<Schil />);
+      await act(async () => { klik('naar-rooster'); });
+      await act(async () => { overgang.schilder(); await tikken(); });
+      expect(zichtbareView()).toBe('rooster');
+      expect(wacht).not.toHaveBeenCalled();
+      await act(async () => { root.unmount(); });
+    } finally {
+      registreerSchermWachter(null);
+    }
   });
 
   it('navigeert gewoon door zonder open lade', async () => {
