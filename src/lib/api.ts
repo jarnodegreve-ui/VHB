@@ -40,11 +40,14 @@ import { supabase } from './supabase';
 export type ApiFetchInit = RequestInit & {
   /** Expliciet token i.p.v. de huidige sessie (bv. direct na inloggen). */
   accessToken?: string;
+  /** Achtergrondregistratie (bv. "aanvraag bekeken"): geen onderhoud-toast en
+   *  geen "eigen schrijfactie"-markering; de aanroeper slikt de fout zelf. */
+  stil?: boolean;
 };
 
 export async function apiFetch(input: RequestInfo | URL, init: ApiFetchInit = {}): Promise<Response> {
-  const { accessToken, ...rest } = init;
-  return verstuur(input, rest, accessToken ?? (await huidigToken()), false, false);
+  const { accessToken, stil, ...rest } = init;
+  return verstuur(input, rest, accessToken ?? (await huidigToken()), false, false, stil);
 }
 
 /** apiFetch + JSON: gooit bij een niet-ok respons een Error met de
@@ -113,6 +116,7 @@ async function verstuur(
   token: string | undefined,
   netwerkAlGeprobeerd: boolean,
   authAlGeprobeerd: boolean,
+  stil = false,
 ): Promise<Response> {
   const headers = new Headers(init.headers || {});
   const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
@@ -133,16 +137,16 @@ async function verstuur(
   } catch (netwerkfout) {
     if (!isLezen || netwerkAlGeprobeerd) throw netwerkfout;
     await wacht(600);
-    return verstuur(input, init, token, true, authAlGeprobeerd);
+    return verstuur(input, init, token, true, authAlGeprobeerd, stil);
   }
   if (response.status >= 500 && isLezen && !netwerkAlGeprobeerd) {
     await wacht(600);
-    return verstuur(input, init, token, true, authAlGeprobeerd);
+    return verstuur(input, init, token, true, authAlGeprobeerd, stil);
   }
   if (response.status === 401) {
     if (!authAlGeprobeerd) {
       const versToken = await vernieuwSessie();
-      if (versToken) return verstuur(input, init, versToken, netwerkAlGeprobeerd, true);
+      if (versToken) return verstuur(input, init, versToken, netwerkAlGeprobeerd, true, stil);
     }
     meld('vhb-auth-expired', { reden: 'sessie' });
     throw new Error('Je sessie is verlopen.');
@@ -169,12 +173,12 @@ async function verstuur(
     const body = await response.clone().json().catch(() => ({} as any));
     if (body?.code === 'onderhoud') {
       const tekst: string = body.error || 'Het portaal is even in onderhoud, probeer het zo opnieuw.';
-      meld('vhb-onderhoud', { tekst });
+      if (!stil) meld('vhb-onderhoud', { tekst });
       throw new Error(tekst);
     }
   }
   // Eigen schrijfactie: de realtime-echo daarvan hoort geen "bijgewerkt"-toast
   // te geven (src/lib/liveSignaal.ts).
-  if (!isLezen && response.ok) markeerEigenSchrijfactie();
+  if (!isLezen && response.ok && !stil) markeerEigenSchrijfactie();
   return response;
 }

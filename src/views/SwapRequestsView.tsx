@@ -12,6 +12,7 @@ import { DateInput, Field, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { RuilVerloop } from '../components/RuilVerloop';
+import { RuilBekekenBaken } from '../components/RuilBekekenBaken';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
 import { maandagVan } from '../lib/roosterUren';
@@ -579,8 +580,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               // antwoorden (of de chauffeur) houdt het volledige blok.
               const compactKaart = isPlanner && swap.targetDriverId !== user.id;
               const ontvanger = swap.targetDriverId ? naamVan(swap.targetDriverId) : undefined;
+              // De aangezochte collega heeft deze onbeantwoorde aanvraag in
+              // beeld: dat hoort de server één keer, en de aanvrager leest het
+              // in het verloop. Weet de server het al, dan vuurt er niets.
+              const nogTeMelden = canRespond && !swap.verloop?.some((st) => st.soort === 'bekeken');
               return (
-                <Card key={swap.id} className="space-y-4">
+                <RuilBekekenBaken key={swap.id} swapId={swap.id} actief={nogTeMelden}>
+                <Card className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <MicroLabel className="tabular-nums">Dienst {info.line}</MicroLabel>
@@ -635,6 +641,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </Button>
                   ) : null}
                 </Card>
+                </RuilBekekenBaken>
               );
             })
           ) : (

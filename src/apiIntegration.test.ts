@@ -448,10 +448,13 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       }
       return uit;
     },
-    getActivityLog: async (opts?: { sinceIso?: string | null; max?: number }) => {
+    getActivityLog: async (opts?: { sinceIso?: string | null; max?: number; metRuilBekeken?: boolean }) => {
     // Mock respecteert de opts — anders kan de #249-regressie ("UI beloofde
     // 30 dagen, server gaf 100") ongemerkt terugkomen terwijl alles groen blijft.
+    // Zelfde filter als de echte: "Dienstruil bekeken" is een waarneming en
+    // hoort niet in het auditspoor, tenzij de back-up er expliciet om vraagt.
     let rows = mem.activity;
+    if (!opts?.metRuilBekeken) rows = rows.filter((a: any) => a.action !== 'Dienstruil bekeken');
     if (opts?.sinceIso) rows = rows.filter((a) => a.createdAt >= opts.sinceIso!);
     if (opts?.max !== undefined) rows = rows.slice(0, opts.max);
     return rows;
@@ -4321,6 +4324,121 @@ describe('gezien-bevestiging op een doorgevoerde wissel', () => {
     await api('POST', '/api/swaps/s-app/gezien', { token: 'tok-b' });
     const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
     expect(res.json.find((s: any) => s.id === 's-app')?.targetSeenAt).toBeTruthy();
+  });
+});
+
+describe('aanvraag bekeken door de collega (POST /api/swaps/:id/bekeken)', () => {
+  const bekekenRegels = () => mem.activity.filter((a: any) => a.action === 'Dienstruil bekeken');
+  beforeEach(() => {
+    mem.users.push({ id: '5', name: 'Toon Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    // Een technieker valt onder dezelfde toestel-gate als een chauffeur.
+    mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    invalidateUsersCache();
+    mem.swaps = [
+      // A (3) vraagt B (4): nog onbeantwoord. Dienst sh-a uit de gedeelde
+      // planning-fixture (chauffeur 3, 01/07, dienst 12), zodat goedkeuren kan.
+      { id: 's-pend', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-10-01T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', returnDate: '2026-07-02', returnCode: 'VRIJ' },
+      // Dezelfde twee, al geaccepteerd en al doorgevoerd.
+      { id: 's-acc', shiftId: 'sh-b', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-10-01T09:00:00Z' },
+      { id: 's-app', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'approved', reason: '', createdAt: '2026-10-01T10:00:00Z', decidedAt: '2026-10-02T08:00:00Z' },
+      // De ruil van iemand anders: de technieker (5) vraagt B (4).
+      { id: 's-tech', shiftId: 'sh-d', requesterId: '5', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-10-01T11:00:00Z' },
+    ];
+    mem.activity = [];
+  });
+
+  it('de aangezochte collega + pending = één logregel op de ruil, met zijn rol', async () => {
+    const res = await api('POST', '/api/swaps/s-pend/bekeken', { token: 'tok-b' });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, nieuw: true });
+    expect(bekekenRegels()).toHaveLength(1);
+    expect(bekekenRegels()[0]).toMatchObject({ domain: 'swaps', entityType: 'swap', entityId: 's-pend', actorName: 'Chauffeur B', actorRole: 'chauffeur' });
+    // dd/mm/jjjj in de logtekst, geen rauwe ISO-datum.
+    expect(bekekenRegels()[0].message).toBe('Chauffeur B bekeek de aanvraag voor dienst 12 op 01/07/2026.');
+    // De lezing is op de aanroeper gescoped, niet de hele tabel.
+    expect(mem.swapFilters).toContainEqual({ betrokkenUserId: '4' });
+  });
+
+  it('idempotent: een tweede aanroep (ander toestel, nieuwe sessie) schrijft geen tweede regel', async () => {
+    await api('POST', '/api/swaps/s-pend/bekeken', { token: 'tok-b' });
+    const opnieuw = await api('POST', '/api/swaps/s-pend/bekeken', { token: 'tok-b' });
+    expect(opnieuw.status).toBe(200);
+    expect(opnieuw.json).toEqual({ success: true, nieuw: false });
+    expect(bekekenRegels()).toHaveLength(1);
+  });
+
+  it('aanvrager, derde en staf worden geweigerd (403) zonder schrijfactie', async () => {
+    for (const token of ['tok-a', 'tok-tech', 'tok-planner', 'tok-admin']) {
+      const res = await api('POST', '/api/swaps/s-pend/bekeken', { token });
+      expect(res.status, token).toBe(403);
+    }
+    // Ook een onbestaande ruil: zelfde antwoord, dus geen lek over wat bestaat.
+    expect((await api('POST', '/api/swaps/bestaat-niet/bekeken', { token: 'tok-b' })).status).toBe(403);
+    expect(mem.activity).toEqual([]);
+  });
+
+  it('niet-pending wordt geweigerd (409) zonder schrijfactie', async () => {
+    for (const id of ['s-acc', 's-app']) {
+      const res = await api('POST', `/api/swaps/${id}/bekeken`, { token: 'tok-b' });
+      expect(res.status, id).toBe(409);
+    }
+    expect(mem.activity).toEqual([]);
+  });
+
+  it('onderhoudsmodus met schrijfblok: 503, geen logregel', async () => {
+    mem.appSettings.onderhoud = { actief: true, tekst: 'Even geduld.', schrijfblok: true };
+    invalidateOnderhoudCache();
+    const res = await api('POST', '/api/swaps/s-pend/bekeken', { token: 'tok-b' });
+    expect(res.status).toBe(503);
+    expect(res.json.code).toBe('onderhoud');
+    expect(mem.activity).toEqual([]);
+  });
+
+  it('het verloop draagt de stap naar de aanvrager en naar staf, en alleen bij díe ruil', async () => {
+    await api('POST', '/api/swaps/s-pend/bekeken', { token: 'tok-b' });
+    const aanvrager = await api('GET', '/api/swaps', { token: 'tok-a' });
+    const stap = aanvrager.json.find((s: any) => s.id === 's-pend').verloop.find((st: any) => st.soort === 'bekeken');
+    expect(stap).toEqual({ soort: 'bekeken', op: expect.any(String), door: 'collega' });
+    // Privacy: een chauffeur ziet alleen zijn eigen ruilen. De technieker zit
+    // niet in s-pend en krijgt die ruil, met haar verloop, dus niet te zien.
+    const derde = await api('GET', '/api/swaps', { token: 'tok-tech' });
+    expect(derde.json.map((s: any) => s.id)).toEqual(['s-tech']);
+    expect(JSON.stringify(derde.json)).not.toContain('bekeken');
+    const staf = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(staf.json.find((s: any) => s.id === 's-pend').verloop.map((st: any) => st.soort)).toContain('bekeken');
+    expect(staf.json.find((s: any) => s.id === 's-tech').verloop).toEqual([]);
+  });
+
+  it('raakt de ruil zelf niet: geen decidedAt, geen targetSeenAt, status blijft pending', async () => {
+    const voor = JSON.stringify(mem.swaps);
+    await api('POST', '/api/swaps/s-pend/bekeken', { token: 'tok-b' });
+    expect(JSON.stringify(mem.swaps)).toBe(voor);
+  });
+
+  it('een admin keurt daarna nog altijd rechtstreeks goed, zonder het antwoord af te wachten', async () => {
+    await api('POST', '/api/swaps/s-pend/bekeken', { token: 'tok-b' });
+    const res = await api('PATCH', '/api/swaps/s-pend', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'pending' } });
+    expect(res.status).toBe(200);
+    expect(res.json.swap.status).toBe('approved');
+    expect(res.json.swap.verloop.map((st: any) => st.soort)).toEqual(['bekeken', 'goedgekeurd']);
+  });
+
+  it('geen ruis in het auditspoor van Activiteit; de back-up bewaart de regel wel', async () => {
+    const nu = new Date().toISOString();
+    mem.activity = [
+      { id: 'act-bekeken', createdAt: nu, actorName: 'Chauffeur B', actorRole: 'chauffeur', category: 'swaps', action: 'Dienstruil bekeken', details: '', entityType: 'swap', entityId: 's-pend' },
+      { id: 'act-akkoord', createdAt: nu, actorName: 'Chauffeur B', actorRole: 'chauffeur', category: 'swaps', action: 'Dienstruil geaccepteerd', details: '', entityType: 'swap', entityId: 's-acc' },
+    ];
+    const scherm = await api('GET', '/api/activity', { token: 'tok-admin' });
+    expect(scherm.json.map((a: any) => a.id)).toEqual(['act-akkoord']);
+    const backup = await api('GET', '/api/backup', { token: 'tok-admin' });
+    expect(backup.status).toBe(200);
+    expect(JSON.stringify(backup.json)).toContain('act-bekeken');
+  });
+
+  it('telt niet mee als uitgevoerde wissel (weekoverzicht en weekrapport)', async () => {
+    const { SWAP_UITVOERING_ACTIES } = await import('../api/helpers');
+    expect(SWAP_UITVOERING_ACTIES).not.toContain('Dienstruil bekeken');
   });
 });
 

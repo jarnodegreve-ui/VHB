@@ -41,7 +41,7 @@ import { recordUrl } from "./_lib/meldingen.js";
 import { meVoorkeurenBodySchema, pasVoorkeurenPatchToe } from "../shared/schemas/dashboardVoorkeuren.js";
 import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../shared/schemas/verlofLimieten.js";
 import { teltInVerlofbezetting } from "../shared/verlofbezetting.js";
-import { verloopUitLog, type RuilVerloopStap } from "../shared/ruilVerloop.js";
+import { RUIL_BEKEKEN_ACTIE, verloopUitLog, type RuilVerloopStap } from "../shared/ruilVerloop.js";
 import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, verlofFeestdagenSchema } from "../shared/schemas/verlofFeestdagen.js";
 import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
 import { FOUT_STATUSSEN, fingerprintVan, groepeerFouten, referentieVan, type FoutStatusWaarde } from "./_lib/foutgroepen.js";
@@ -2398,7 +2398,7 @@ const buildBackupPayload = async () => {
     getCoverageExpectations(),
     // Volledig auditspoor (binnen retentie) — met de default-cap van 100
     // bevatte de "volledige" back-up stil maar 100 logregels.
-    getActivityLog({ sinceIso: null, max: 50000 }),
+    getActivityLog({ sinceIso: null, max: 50000, metRuilBekeken: true }),
   ]);
   // Auth-accounts (id+e-mail): een restore van een verwijderde gebruiker
   // maakt anders een account met random wachtwoord aan zonder dat je weet
@@ -4979,6 +4979,49 @@ app.post("/api/swaps/:id/gezien", authenticate, async (req: AuthenticatedRequest
   } catch (err) {
     console.error("Bevestigen van de dienstwissel is mislukt.", err);
     res.status(500).json({ error: "Bevestigen is mislukt." });
+  }
+});
+
+// --- Aanvraag bekeken door de aangezochte collega ---------------------------
+//
+// Iets anders dan /gezien hierboven. Dáár bevestigt de nieuwe rijder een
+// DOORGEVOERDE wissel (knop, `target_seen_at`). Hier registreert de server dat
+// de aangezochte collega een nog ONBEANTWOORDE aanvraag in beeld kreeg, zodat
+// de aanvrager en de planning in het verloop "Bekeken, nog geen antwoord"
+// lezen i.p.v. te moeten gissen (Jarno 20-09). Geen kolom en geen migratie:
+// één logregel per ruil, de bron van het verloop (shared/ruilVerloop.ts).
+//
+// Alleen de collega van díe ruil, alleen zolang ze 'pending' is; al het andere
+// schrijft niets. De lezing is op de aanroeper gescoped, dus een derde of een
+// planner die niet in de ruil zit krijgt dezelfde 403 als bij een onbestaand
+// id. Idempotent: staat de regel er al, dan komt er geen tweede. Het schrijfblok
+// van de onderhoudsmodus en de rate-limit gelden zoals voor elke POST.
+app.post("/api/swaps/:id/bekeken", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id ?? "");
+    const selfId = String(req.appUser?.id ?? "");
+    const swap = (await getSwapsData({ betrokkenUserId: selfId })).find((s) => String(s.id) === id);
+    if (!swap || String(swap.targetDriverId ?? "") !== selfId) {
+      return res.status(403).json({ error: "Alleen de collega aan wie de ruil gevraagd is, kan ze als bekeken melden." });
+    }
+    if (swap.status !== "pending") {
+      return res.status(409).json({ error: "Deze dienstruil wacht niet meer op een antwoord.", currentStatus: swap.status });
+    }
+    const regels = (await getSwapVerloopRegels([id]))[id] ?? [];
+    if (regels.some((r) => r.action === RUIL_BEKEKEN_ACTIE)) {
+      return res.json({ success: true, nieuw: false });
+    }
+    await logActivity(
+      req,
+      "swaps",
+      "Dienstruil bekeken",
+      `${req.appUser?.name ?? "Chauffeur"} bekeek de aanvraag${swap.shiftLine ? ` voor dienst ${swap.shiftLine}` : ""}${swap.shiftDate ? ` op ${DAG_DMJ(String(swap.shiftDate))}` : ""}.`,
+      { type: "swap", id },
+    );
+    res.json({ success: true, nieuw: true });
+  } catch (err) {
+    console.error("Bekeken-registratie van de dienstruil is mislukt.", err);
+    res.status(500).json({ error: "Registreren is mislukt." });
   }
 });
 
