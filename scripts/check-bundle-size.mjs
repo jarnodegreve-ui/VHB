@@ -61,7 +61,12 @@ const DEELBUDGET_KB = {
   // check in de datalaag, refetch-regime, rustige polls); dat hoort in de
   // schil. Daartegenover staat 24 kB zod-vendor minder op elk startscherm en
   // 3 tot 5 calls minder in de poort. Zelfde ±2 kB marge als hierboven.
-  index: 74,
+  // 21-09: 74 → 76. De bel in de topbar is een uitklapmenu geworden en houdt
+  // dus open/dicht-gedrag (useDropdown) en een lazy-grens in de schil; het
+  // paneel zelf (motion, acht iconen) is een eigen chunk, zoals bij
+  // WerkvoorraadMenu. Lokaal 73,97 kB, wat op 74 geen marge meer is maar een
+  // struikeldraad: de CI-runner mat dezelfde bron eerder ±0,3 kB hoger.
+  index: 76,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
