@@ -1,6 +1,7 @@
 import type { RapportDefinitie, RapportFilters } from '../../shared/rapporten/types';
 import { formatDatumDMJ } from '../lib/format';
 import { Field, Select } from './Field';
+import { FilterChip } from './primitives';
 import { JaarKiezer, Periodekiezer } from './Periodekiezer';
 import { Chauffeurkiezer } from './Chauffeurkiezer';
 import { Voertuigkiezer, type KiesbaarVoertuig } from './Voertuigkiezer';
@@ -8,7 +9,8 @@ import { Voertuigkiezer, type KiesbaarVoertuig } from './Voertuigkiezer';
 /**
  * De filters van een rapport, in de volgorde van de definitie. Elke soort is
  * een eigen bouwsteen (Periodekiezer, JaarKiezer, Chauffeurkiezer,
- * Voertuigkiezer, of een gewone Select voor een keuzelijst); deze balk zet ze
+ * Voertuigkiezer, een gewone Select voor een keuzelijst, een FilterChip voor
+ * een vinkje); deze balk zet ze
  * alleen naast elkaar en geeft wijzigingen door als deelwijziging van de
  * filters. Telefoon: twee kolommen (een periode neemt de volle breedte), zodat
  * er geen rafelige rij ontstaat; vanaf sm vloeien de velden op één regel.
@@ -18,7 +20,7 @@ type Persoon = { id: string; name: string; isActive?: boolean };
 export function RapportFilterbalk({ def, filters, onChange, users, voertuigen, vandaag, jaarVanaf, peildatum }: {
   def: RapportDefinitie;
   filters: RapportFilters;
-  onChange: (wijziging: Partial<Omit<RapportFilters, 'keuzes'>> & { keuzes?: Record<string, string> }) => void;
+  onChange: (wijziging: Partial<Omit<RapportFilters, 'keuzes' | 'vinkjes'>> & { keuzes?: Record<string, string>; vinkjes?: Record<string, boolean> }) => void;
   users: readonly Persoon[];
   voertuigen: readonly KiesbaarVoertuig[];
   /** Lokale kalenderdag van de gebruiker (ISO). */
@@ -59,6 +61,16 @@ export function RapportFilterbalk({ def, filters, onChange, users, voertuigen, v
                   </Select>
                 )}
               </Field>
+            );
+          case 'vinkje':
+            return (
+              // Geen veldlabel: de chip zegt zelf wat hij doet. Hij staat op de
+              // onderlijn van de velden, zodat hij naast de invoervakken uitkomt.
+              <div key={f.id} className="col-span-2 flex items-end sm:self-end">
+                <FilterChip active={Boolean(filters.vinkjes?.[f.id])} onClick={() => onChange({ vinkjes: { [f.id]: !filters.vinkjes?.[f.id] } })}>
+                  {f.label}
+                </FilterChip>
+              </div>
             );
         }
       })}

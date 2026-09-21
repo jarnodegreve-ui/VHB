@@ -17,16 +17,20 @@ export const keuzeUit = <T extends string>(id: string, label: string, waarden: r
   opties: [{ waarde: 'alle', label: alle }, ...waarden.map((w) => ({ waarde: w, label: labels[w] }))],
 });
 
-/** "Vervalt binnen 30 / 60 / 90 dagen", standaard alles. Wat al vervallen is hoort bij elke termijn. */
+/**
+ * "Vervalt binnen 30 / 60 / 90 dagen", standaard alles. Wat al vervallen is hoort bij elke termijn.
+ * Het woord "binnen" staat in het veldlabel en de opties zijn kort: op de telefoon is het veld een
+ * halve regel breed en werd "Binnen 30 dagen" afgekapt. Het blad leest "Vervalt binnen: 30 dagen".
+ */
 export const TERMIJN_FILTER: Keuze = {
   soort: 'keuze',
   id: 'termijn',
-  label: 'Vervalt',
+  label: 'Vervalt binnen',
   opties: [
     { waarde: 'alles', label: 'Alles' },
-    { waarde: '30', label: 'Binnen 30 dagen' },
-    { waarde: '60', label: 'Binnen 60 dagen' },
-    { waarde: '90', label: 'Binnen 90 dagen' },
+    { waarde: '30', label: '30 dagen' },
+    { waarde: '60', label: '60 dagen' },
+    { waarde: '90', label: '90 dagen' },
   ],
 };
 

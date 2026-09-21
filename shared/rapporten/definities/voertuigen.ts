@@ -57,7 +57,7 @@ const WAGENPARK_OVERZICHT: RapportDefinitie = {
     // Telefoon: de nummerplaat onder het busnummer; merk en leeftijd staan
     // zonder scrollen in beeld, de rest schuift erachter.
     { id: 'nummerplaat', titel: 'Nummerplaat', type: 'tekst', smal: 'onderEerste' },
-    { id: 'merk', titel: 'Merk', type: 'tekst', breed: true },
+    { id: 'merk', titel: 'Merk', type: 'tekst' },
     { id: 'type', titel: 'Type', type: 'tekst', smal: 'achteraan' },
     { id: 'aandrijving', titel: 'Aandrijving', type: 'tekst', smal: 'achteraan' },
     { id: 'categorie', titel: 'Categorie', type: 'tekst', smal: 'achteraan' },
@@ -119,12 +119,12 @@ const WAGENPARK_TECHNISCH: RapportDefinitie = {
     { id: 'nummerplaat', titel: 'Nummerplaat', type: 'tekst', smal: 'onderEerste' },
     // Het chassisnummer is waarvoor dit rapport dient: op de telefoon meteen naast het busnummer.
     { id: 'chassisnr', titel: 'Chassisnr.', type: 'tekst' },
-    { id: 'merk', titel: 'Merk', type: 'tekst', breed: true, smal: 'achteraan' },
+    { id: 'merk', titel: 'Merk', type: 'tekst', smal: 'achteraan' },
     { id: 'type', titel: 'Type', type: 'tekst', smal: 'achteraan' },
     { id: 'aandrijving', titel: 'Aandrijving', type: 'tekst', smal: 'achteraan' },
     { id: 'zitplaatsen', titel: 'Zitplaatsen', kort: 'Zitpl.', type: 'getal', totaal: 'som', smal: 'achteraan' },
     { id: 'inDienst', titel: 'In dienst', type: 'datum', smal: 'achteraan' },
-    { id: 'opmerking', titel: 'Opmerking', type: 'tekst', breed: true, smal: 'achteraan' },
+    { id: 'opmerking', titel: 'Opmerking', type: 'tekst', lang: true, smal: 'achteraan' },
   ],
   sortering: { kolom: 'busnr', richting: 'asc' },
   print: 'liggend',
@@ -168,7 +168,7 @@ const VERVALDATA_VOERTUIGEN: RapportDefinitie = {
     GELDIG_TOT_KOLOM,
     RESTEREND_KOLOM,
     VERVAL_STATUS_KOLOM,
-    { id: 'opmerking', titel: 'Opmerking', type: 'tekst', breed: true, smal: 'achteraan' },
+    { id: 'opmerking', titel: 'Opmerking', type: 'tekst', lang: true, smal: 'achteraan' },
   ],
   sortering: { kolom: 'resterend', richting: 'asc' },
   print: 'staand',
@@ -194,7 +194,7 @@ const DEFECTEN: RapportDefinitie = {
     // doorlooptijd; wie, wanneer uitgevoerd en de manuren schuiven erachter.
     { id: 'bus', titel: 'Bus', type: 'tekst', smal: 'onderEerste' },
     { id: 'werktype', titel: 'Werktype', type: 'tekst', smal: 'onderEerste' },
-    { id: 'omschrijving', titel: 'Omschrijving', type: 'tekst', breed: true },
+    { id: 'omschrijving', titel: 'Omschrijving', type: 'tekst', lang: true },
     { id: 'status', titel: 'Status', type: 'tekst', tonen: DEFECT_TONEN, smal: 'achteraan' },
     // In dagen (staat in de omschrijving; de kop blijft kort). Open = tot de peildatum; het totaal is
     // de gemiddelde doorlooptijd. Bewust vóór wie en wanneer: op een scherm waar elf kolommen niet
@@ -227,7 +227,7 @@ const UITGEVOERDE_WERKEN: RapportDefinitie = {
     { id: 'datum', titel: 'Datum', type: 'datum' },
     { id: 'bus', titel: 'Bus', type: 'tekst', smal: 'onderEerste' },
     { id: 'werkcode', titel: 'Werkcode', type: 'tekst', smal: 'onderEerste' },
-    { id: 'omschrijving', titel: 'Omschrijving', type: 'tekst', breed: true },
+    { id: 'omschrijving', titel: 'Omschrijving', type: 'tekst', lang: true },
     { id: 'mecanicien', titel: 'Mecanicien', type: 'tekst', smal: 'achteraan' },
     { id: 'begin', titel: 'Begin', type: 'tekst', smal: 'achteraan' },
     { id: 'einde', titel: 'Einde', type: 'tekst', smal: 'achteraan' },

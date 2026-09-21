@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { KolomToon, RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from '../../shared/rapporten/types';
-import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isRechts, kolomIndeling, onderEersteTekst, sorteerRijen } from '../../shared/rapporten/opmaak';
+import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRechts, kolomIndeling, onderEersteTekst, sorteerRijen } from '../../shared/rapporten/opmaak';
 import { cn } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Badge, type BadgeTone } from './primitives';
@@ -28,10 +28,19 @@ const PER_PAGINA = 50;
 /** Vanaf hier passen de kolommen naast elkaar (md); eronder geldt de smalle indeling. */
 const BREED_VANAF = 768;
 
-/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, datum/ja-nee, tekst. */
-const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, kort: 6, tekst: 8 };
-const smalleBreedte = (k: RapportKolom, eerste: boolean): number =>
-  eerste ? SMAL_BREEDTE.eerste : isGetalKolom(k) ? SMAL_BREEDTE.getal : k.type === 'tekst' ? SMAL_BREEDTE.tekst : SMAL_BREEDTE.kort;
+/** Vaste kolombreedtes op een smal scherm, in rem: eerste kolom, cijfers, ja/nee, datum, tekst, lopende tekst (`lang`) achter het scrollen. */
+// `lang` = 11,5 rem: zo breed als er op 375 px naast de vaste eerste kolom past,
+// zodat een opmerking na het scrollen in haar geheel in beeld staat. Een `lang`-kolom
+// die vóór het scrollen staat (de omschrijving van een defect) houdt de gewone tekstmaat.
+// Ja/nee is zo smal als een cijfer ("ja", "nee", of een pil met "ja" erin).
+const SMAL_BREEDTE = { eerste: 9.5, getal: 3.75, janee: 3.75, kort: 5.5, tekst: 8, lang: 11.5 };
+const smalleBreedte = (k: RapportKolom, eerste: boolean): number => {
+  if (eerste) return SMAL_BREEDTE.eerste;
+  if (isGetalKolom(k)) return SMAL_BREEDTE.getal;
+  if (k.type === 'janee') return SMAL_BREEDTE.janee;
+  if (k.type !== 'tekst') return SMAL_BREEDTE.kort;
+  return k.lang && k.smal === 'achteraan' ? SMAL_BREEDTE.lang : SMAL_BREEDTE.tekst;
+};
 
 /**
  * De eerste kolom (de naam) blijft onder xl links staan terwijl de cijfers
@@ -49,9 +58,12 @@ const VASTE_KOP = 'max-xl:shadow-[0_1px_0_var(--color-slate-200)]';
 const VASTE_VOET = 'max-xl:shadow-[0_-1px_0_var(--color-hairline-strong)]';
 
 /**
- * Toon van een cel (definitie: `tonen` of `signaal`). Wat aandacht vraagt is
- * een pil (vervallen = danger, binnenkort = amber), een rusttoestand een
- * puntje met tekst; een getal met een grens kleurt zelf. Nooit goud.
+ * Toon van een cel (`celToon`: `tonen`, `nadruk` op ja/nee, `signaal`, `leeg`).
+ * Wat aandacht vraagt is een pil (vervallen of een overschrijding = danger,
+ * binnenkort = amber; ronde 3: een pil alleen voor wat aandacht vraagt), een
+ * rusttoestand een puntje met tekst; een getal met een grens kleurt zelf.
+ * Contrast nagerekend op het tabelvlak: rood 6,86:1 licht en 7,33:1 donker,
+ * amber 4,88:1 en 9,09:1. Nooit goud.
  */
 const TOON_BADGE: Record<KolomToon, { tone: BadgeTone; kaal: boolean }> = {
   gevaar: { tone: 'red', kaal: false },
@@ -64,10 +76,11 @@ const TOON_BADGE: Record<KolomToon, { tone: BadgeTone; kaal: boolean }> = {
 const TOON_TEKST: Partial<Record<KolomToon, string>> = { gevaar: 'font-semibold text-red-700', waarschuwing: 'font-semibold text-amber-700', aandacht: 'font-semibold text-amber-700' };
 
 const celInhoud = (kolom: RapportKolom, waarde: RapportWaarde | undefined) => {
-  const toon = kolom.tonen ? celToon(kolom, waarde) : null;
+  const toon = isPilKolom(kolom) ? celToon(kolom, waarde) : null;
   if (!toon) return formatWaarde(kolom, waarde);
   const { tone, kaal } = TOON_BADGE[toon];
-  return <Badge tone={tone} kaal={kaal}>{formatWaarde(kolom, waarde)}</Badge>;
+  // De pil zit strak in de cel: haar eigen hoogte mag de rij niet hoger maken dan haar buren.
+  return <Badge tone={tone} kaal={kaal} className={kaal ? undefined : 'px-2 py-0.5'}>{formatWaarde(kolom, waarde)}</Badge>;
 };
 
 /**
@@ -78,14 +91,14 @@ const celInhoud = (kolom: RapportKolom, waarde: RapportWaarde | undefined) => {
 const DICHT_VANAF = 9;
 
 const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerste: boolean, smal: boolean, dicht: boolean): string => cn(
-  // Korte tekst (type, status, naam) blijft op één regel; lopende tekst (`breed`) mag afbreken en houdt een minimumbreedte.
-  eerste ? cn('font-medium text-slate-800', VASTE_KOLOM, smal ? 'pl-4 pr-2' : 'whitespace-nowrap') : cn(smal ? 'px-2' : kolom.type === 'tekst' && (kolom.breed ? 'min-w-40' : 'whitespace-nowrap')),
+  // Korte tekst (type, status, naam) blijft op één regel; lopende tekst (`lang`) mag afbreken en houdt een minimumbreedte.
+  eerste ? cn('font-medium text-slate-800', VASTE_KOLOM, smal ? 'pl-4 pr-2' : 'whitespace-nowrap') : cn(smal ? 'px-2' : kolom.type === 'tekst' && (kolom.lang ? 'min-w-40' : 'whitespace-nowrap')),
   dicht && !eerste && 'px-2',
   // Een nul blijft staan ("0"), maar stiller dan een cijfer dat iets zegt.
   isGetalKolom(kolom) && waarde === 0 && 'text-slate-500',
   (waarde === null || waarde === undefined || waarde === '') && 'text-slate-500',
-  !kolom.tonen && TOON_TEKST[celToon(kolom, waarde) ?? 'rust'],
-  // "Geen datum" in een datumkolom blijft op één regel.
+  !isPilKolom(kolom) && TOON_TEKST[celToon(kolom, waarde) ?? 'rust'],
+  // "Geen datum" in een datumkolom blijft op één regel (ze mag een paar pixels in de lucht van de buurcel steken).
   kolom.leeg && (waarde === null || waarde === undefined || waarde === '') && 'whitespace-nowrap',
 );
 

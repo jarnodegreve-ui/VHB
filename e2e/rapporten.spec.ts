@@ -6,8 +6,9 @@ import { ADMIN, CHAUFFEUR, seed } from './helpers';
  * Rapporten: catalogus → rapport → filter → leeg → de print-URL klopt en het
  * blad toont wat het scherm toonde. Draait op de telefoon én op desktop; de
  * API komt uit scripts/audit-fixtures.mjs (RAPPORT_VERLOFSALDO: twaalf
- * medewerkers, gegevens vanaf 05/01/2026) en, voor voertuigen en personeel,
- * uit scripts/fixtures-rapporten-wagenpark-personeel.mjs.
+ * medewerkers, gegevens vanaf 05/01/2026; sinds stap 2 ook
+ * RAPPORT_ZIEKTE_KALENDERDAGEN en RAPPORT_VERLOFBEZETTING) en, voor voertuigen
+ * en personeel, uit scripts/fixtures-rapporten-wagenpark-personeel.mjs.
  */
 
 /** Vangt window.open af (openPdfInNewTab) zodat de test de URL kan lezen zonder een tweede tabblad. */
@@ -185,6 +186,111 @@ test('een bestaand printblad opent zijn eigen print-URL na het kiezen van de par
   expect((await geopend(page))[1]).toMatch(/\?print-verlof-driver=43&print-verlof-jaar=2026$/);
 });
 
+// === Stap 2 (21-09): ziekte en verlof ===
+
+test('ziekte in kalenderdagen: standaard dit jaar, chauffeurfilter, totaalrij en het blad', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await vangNieuwTabblad(page);
+  const smal = (page.viewportSize()?.width ?? 0) < 768;
+
+  // Via de catalogus: het domein Ziekte heeft nu rapporten.
+  await page.goto('/rapporten');
+  await page.getByRole('link', { name: /Ziekte in kalenderdagen/ }).click();
+  await expect(page).toHaveURL(/\/rapporten\/ziekte\/ziekte-kalenderdagen$/);
+  await expect(page.getByRole('heading', { name: 'Ziekte in kalenderdagen', level: 1 })).toBeVisible();
+  // Ziekte lees je per jaar: de periode staat standaard op "Dit jaar".
+  await expect(page.getByLabel('Periode', { exact: true })).toHaveValue('dit-jaar');
+  // Verder met een vast jaar, zodat de spec ook na 2026 hetzelfde toont.
+  await page.goto('/rapporten/ziekte/ziekte-kalenderdagen?van=2026-01-01&tot=2026-12-31');
+  await expect(page.getByText('4 rijen')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('row', { name: /Totaal \(4\)\s*6\s*59/ })).toBeVisible();
+  // Standaardsortering: meeste kalenderdagen eerst.
+  await expect(page.getByRole('row').nth(1)).toContainText('Diether Van Haute');
+
+  if (smal) {
+    // Personeelsnummer onder de naam; meldingen, dagen en langste periode zonder scrollen, de datum erachter.
+    await expect(page.getByRole('cell', { name: 'Diether Van Haute VHB-044' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Kalenderdagen' })).toHaveText('Dagen');
+    const binnenKader = await page.evaluate(() => {
+      const kader = document.querySelector('table')!.parentElement!.getBoundingClientRect();
+      return [...document.querySelectorAll('thead th')].map((th) => th.getBoundingClientRect().right <= kader.right + 0.5);
+    });
+    expect(binnenKader).toEqual([true, true, true, true, false]);
+  } else {
+    // Alleen de kop: de totaalrij bestaat ook uit kopcellen.
+    await expect(page.locator('thead th')).toHaveCount(6);
+    // Datums in dd/mm/jjjj, nooit rauwe ISO.
+    await expect(page.getByRole('cell', { name: '17/08/2026' })).toBeVisible();
+  }
+  await paginaScrolltNiet(page);
+
+  await page.getByLabel('Chauffeur', { exact: true }).selectOption({ label: 'Alex Du Priez' });
+  await expect(page).toHaveURL(/chauffeur=43/);
+  await expect(page.getByText('1 rij', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Afdrukken' }).click();
+  const url = new URL((await geopend(page))[0]);
+  expect(url.searchParams.get('print-rapport')).toBe('ziekte-kalenderdagen');
+  expect(url.searchParams.get('chauffeur')).toBe('43');
+  expect(url.searchParams.get('van')).toBe('2026-01-01');
+
+  await page.goto('/?print-rapport=ziekte-kalenderdagen&van=2026-01-01&tot=2026-12-31');
+  await expect(page.getByRole('heading', { name: 'Ziekte in kalenderdagen', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Periode 01/01/2026 t/m 31/12/2026 · Chauffeur: alle')).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(6); // kop + 4 + totaal
+  expect(pageErrors).toEqual([]);
+});
+
+test('verlofbezetting: het vinkje "alleen boven de limiet" staat in de URL, op het blad en filtert', async ({ page }) => {
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await vangNieuwTabblad(page);
+  const smal = (page.viewportSize()?.width ?? 0) < 768;
+  await page.goto('/rapporten/verlof/verlofbezetting?van=2026-08-01&tot=2026-08-31');
+  await expect(page.getByRole('heading', { name: 'Verlofbezetting per dag', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('31 rijen')).toBeVisible();
+  await expect(page.getByRole('cell', { name: smal ? '01/08/2026 za' : '01/08/2026' })).toBeVisible();
+  if (!smal) await expect(page.getByRole('cell', { name: 'Alex Du Priez, Dirk Maes, Els Goossens, Bart Claeys (flexi, telt niet mee)' })).toBeVisible();
+
+  const vinkje = page.getByRole('button', { name: 'Alleen boven de limiet' });
+  await expect(vinkje).toHaveAttribute('aria-pressed', 'false');
+  await vinkje.click();
+  await expect(page).toHaveURL(/bovenLimiet=1/);
+  await expect(vinkje).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('2 rijen')).toBeVisible();
+  await expect(page.getByRole('cell', { name: /^13\/08\/2026/ })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /^12\/08\/2026/ })).toHaveCount(0);
+  // "Boven limiet: ja" is een rode pil, ook op de telefoon in beeld; "nee" blijft stille tekst.
+  const pil = page.getByRole('cell', { name: 'ja', exact: true }).first().locator('span');
+  await expect(pil).toBeVisible();
+  await expect(pil).toHaveClass(/text-red-700/);
+  if (smal) {
+    await expect(page.getByRole('button', { name: 'Boven limiet' })).toHaveText('Boven');
+    const binnenKader = await page.evaluate(() => {
+      const kader = document.querySelector('table')!.parentElement!.getBoundingClientRect();
+      return [...document.querySelectorAll('thead th')].map((th) => th.getBoundingClientRect().right <= kader.right + 0.5);
+    });
+    expect(binnenKader).toEqual([true, true, true, true, false]);
+  }
+  await paginaScrolltNiet(page);
+
+  await page.getByRole('button', { name: 'Afdrukken' }).click();
+  const url = new URL((await geopend(page))[0]);
+  expect(Object.fromEntries(url.searchParams)).toEqual({ 'print-rapport': 'verlofbezetting', van: '2026-08-01', tot: '2026-08-31', bovenLimiet: '1' });
+  await page.goto(url.pathname + url.search);
+  await expect(page.getByText('Periode 01/08/2026 t/m 31/08/2026 · Alleen boven de limiet')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('row')).toHaveCount(3); // kop + 2, geen totaalrij
+  // Op papier valt "ja" op zonder kleur: vet, met een stip ervoor.
+  await expect(page.getByRole('cell', { name: '● ja' })).toHaveCount(2);
+  expect(await page.getByRole('cell', { name: '● ja' }).first().evaluate((td) => getComputedStyle(td).fontWeight)).toBe('700');
+
+  // Uitvinken haalt de parameter weer uit de URL ("Filters wissen" doet hetzelfde).
+  await page.goBack();
+  await page.getByRole('button', { name: 'Alleen boven de limiet' }).click();
+  await expect(page).not.toHaveURL(/bovenLimiet/);
+});
+
 test('een chauffeur komt niet op Rapporten', async ({ page }) => {
   await seed(page, { user: CHAUFFEUR, view: 'dashboard' });
   await page.goto('/rapporten/verlof/verlofsaldo');
@@ -278,7 +384,7 @@ test('personeelsrapport: medische schiftingen, dringendste eerst, termijn en wie
   }
 
   // Binnen 30 dagen: wat vervallen is hoort erbij, wie geen datum heeft ook.
-  await page.getByLabel('Vervalt').selectOption('30');
+  await page.getByLabel('Vervalt binnen').selectOption('30');
   await expect(page).toHaveURL(/termijn=30/);
   await expect(page.getByText('3 rijen')).toBeVisible();
   await expect(page.getByRole('cell', { name: /Bart Claeys/ })).toHaveCount(0);
@@ -306,7 +412,14 @@ test('een tabel die nog leeg is zegt dat eerlijk, en waar je ze invult', async (
 for (const thema of ['light', 'dark'] as const) {
   test(`a11y (WCAG 2.1 AA): catalogus en rapport, ${thema === 'dark' ? 'donker' : 'licht'}`, async ({ page }) => {
     await seed(page, { user: ADMIN, view: 'rapporten', thema });
-    for (const pad of ['/rapporten', '/rapporten/verlof/verlofsaldo?jaar=2026', '/rapporten/voertuigen/wagenpark-overzicht?status=alle', '/rapporten/personeel/medische-schiftingen']) {
+    for (const pad of [
+      '/rapporten',
+      '/rapporten/verlof/verlofsaldo?jaar=2026',
+      '/rapporten/verlof/verlofbezetting?van=2026-08-01&tot=2026-08-31&bovenLimiet=1',
+      '/rapporten/ziekte/ziekte-kalenderdagen?van=2026-01-01&tot=2026-12-31',
+      '/rapporten/voertuigen/wagenpark-overzicht?status=alle',
+      '/rapporten/personeel/medische-schiftingen',
+    ]) {
       await page.goto(pad);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
       await page.evaluate(() => document.fonts.ready);

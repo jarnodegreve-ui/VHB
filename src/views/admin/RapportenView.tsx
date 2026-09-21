@@ -9,7 +9,7 @@ import { DOMEINEN, rapportVan, rapportenVanDomein, type DomeinDef } from '../../
 import type { RapportDefinitie, RapportFilter, RapportFilters } from '../../../shared/rapporten/types';
 import { filterParams, filtersNaarQuery, heeftEigenFilters, leesFilters, periodeVanFilters } from '../../../shared/rapporten/filters';
 import { periodeFout } from '../../../shared/rapporten/periode';
-import { berekenTotalen, rijBevat } from '../../../shared/rapporten/opmaak';
+import { berekenTotalen, metKolommen, rijBevat } from '../../../shared/rapporten/opmaak';
 import { ZOEK_PARAM, csvBestandsnaam, laadRapport, printUrlVoor, rapportCsv, type RapportAntwoord } from '../../lib/rapporten';
 import { printbladKlaar, printbladUrl, printbladenVanDomein, type PrintbladDef, type PrintbladWaarden } from '../../lib/rapportPrintbladen';
 import { bereikUitleg } from '../../lib/rapportBereik';
@@ -310,8 +310,8 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
   const { navigeer } = useRoute();
   const geenBronActie = def.geenBron?.actie;
 
-  const wijzig = (w: Partial<Omit<RapportFilters, 'keuzes'>> & { keuzes?: Record<string, string> }) => {
-    const volgende: RapportFilters = { ...filters, ...w, keuzes: { ...filters.keuzes, ...(w.keuzes ?? {}) } };
+  const wijzig = (w: Partial<Omit<RapportFilters, 'keuzes' | 'vinkjes'>> & { keuzes?: Record<string, string>; vinkjes?: Record<string, boolean> }) => {
+    const volgende: RapportFilters = { ...filters, ...w, keuzes: { ...filters.keuzes, ...(w.keuzes ?? {}) }, vinkjes: { ...filters.vinkjes, ...(w.vinkjes ?? {}) } };
     const q = filtersNaarQuery(def, volgende);
     zetQuery(Object.fromEntries(filterParams(def).map((naam) => [naam, q.get(naam)])));
   };
@@ -321,13 +321,17 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
   const uitleg = data ? bereikUitleg(def, periodeVanFilters(def, filters), data.bereik) : null;
   const buiten = uitleg?.toestand === 'geen-bron' || uitleg?.toestand === 'buiten';
   const alle = data && !buiten ? data.rijen : GEEN_RIJEN;
-  const zichtbaar = useMemo(() => (zoek.trim() ? alle.filter((r) => rijBevat(def, r, zoek)) : alle), [alle, def, zoek]);
-  const totalen = useMemo(() => (zoek.trim() || !data ? berekenTotalen(def, zichtbaar) : data.totalen), [data, def, zichtbaar, zoek]);
+  // Kolommen die van de gegevens afhangen komen met het antwoord mee; tabel,
+  // zoeken, totalen en CSV lezen dan die lijst. De filters blijven van `def`.
+  const kolommenUitAntwoord = data?.kolommen;
+  const tabelDef = useMemo(() => metKolommen(def, kolommenUitAntwoord), [def, kolommenUitAntwoord]);
+  const zichtbaar = useMemo(() => (zoek.trim() ? alle.filter((r) => rijBevat(tabelDef, r, zoek)) : alle), [alle, tabelDef, zoek]);
+  const totalen = useMemo(() => (zoek.trim() || !data ? berekenTotalen(tabelDef, zichtbaar) : data.totalen), [data, tabelDef, zichtbaar, zoek]);
 
   const basis = `${window.location.origin}${window.location.pathname}`;
   const drukAf = () => openPdfInNewTab(printUrlVoor(def, filters, basis, zoek));
   const exporteer = () => {
-    void downloadBlob(csvBestandsnaam(def, filters), new Blob([rapportCsv(def, zichtbaar, totalen)], { type: 'text/csv;charset=utf-8' }));
+    void downloadBlob(csvBestandsnaam(def, filters), new Blob([rapportCsv(tabelDef, zichtbaar, totalen)], { type: 'text/csv;charset=utf-8' }));
   };
   const kopieerLink = async () => {
     const q = filtersNaarQuery(def, filters);
@@ -410,7 +414,7 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
                 {uitleg.tekst}
               </p>
             ) : null}
-            <RapportTabel def={def} rijen={zichtbaar} totalen={totalen} />
+            <RapportTabel def={tabelDef} rijen={zichtbaar} totalen={totalen} />
           </>
         )}
       </div>

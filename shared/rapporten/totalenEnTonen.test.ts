@@ -3,7 +3,7 @@ import type { RapportDefinitie, RapportRij } from './types';
 import { DOMEINEN, RAPPORTEN, rapportVan, rapportenVanDomein } from './register';
 import { VASTE_PARAMS, filtersInWoorden, filtersNaarQuery, leesFilters, standaardFilters } from './filters';
 import { filterSchemaVoor } from './filterSchema';
-import { berekenTotalen, celToon, csvRijen, formatWaarde, heeftTotaalrij, kolomIndeling, totaalSoort } from './opmaak';
+import { NADRUK_TEKEN, berekenTotalen, celToon, csvRijen, formatWaarde, heeftTotaalrij, isPilKolom, kolomIndeling, toonOpBlad, totaalSoort, totalenVoor } from './opmaak';
 
 /**
  * Wat het fundament in stap 3 bijleerde: totalen die geen som zijn (kleinste,
@@ -64,6 +64,28 @@ describe('totalen die geen som zijn', () => {
   it('heeftTotaalrij kent elke soort', () => {
     expect(heeftTotaalrij({ ...DEF, kolommen: [DEF.kolommen[0], DEF.kolommen[5]] })).toBe(true);
     expect(heeftTotaalrij({ ...DEF, kolommen: [DEF.kolommen[0], DEF.kolommen[6]] })).toBe(false);
+  });
+});
+
+describe('totaalrij uit twee bronnen: de definitie rekent, de lader wint per kolom (totalenVoor)', () => {
+  it('zonder totalen van de lader: de regels uit de definitie', () => {
+    expect(totalenVoor(DEF, RIJEN)).toEqual(berekenTotalen(DEF, RIJEN));
+  });
+
+  it('een totaal van de lader wint voor die kolom, de rest blijft de regel uit de definitie', () => {
+    // "aantal" is een som (7), maar de lader weet dat er maar 6 unieke voertuigen zijn; "uniek" heeft geen regel in de definitie.
+    expect(totalenVoor(DEF, RIJEN, { vanLader: { aantal: 6, uniek: 3 } })).toEqual({ aantal: 6, gemiddeld: 5, gewoon: 4, oudste: 10, jongste: 0.2, uniek: 3 });
+  });
+
+  it('meegeleverde kolommen tellen mee volgens hun eigen regel', () => {
+    const extra = [...DEF.kolommen, { id: 'ziek', titel: 'Ziek', type: 'getal', totaal: true } as const];
+    const rijen: RapportRij[] = [{ id: 'a', groep: 'A', aantal: 1, ziek: 2 }, { id: 'b', groep: 'B', aantal: 1, ziek: 3 }];
+    expect(totalenVoor(DEF, rijen, { kolommen: extra })).toMatchObject({ aantal: 2, ziek: 5 });
+    expect(totalenVoor(DEF, rijen)).not.toHaveProperty('ziek');
+  });
+
+  it('bij een zoekterm rekent de client met berekenTotalen op de zichtbare rijen: het totaal van de lader valt weg', () => {
+    expect(berekenTotalen(DEF, [RIJEN[0]])).toEqual({ aantal: 4, gemiddeld: 6, gewoon: 6, oudste: 10, jongste: 0.2 });
   });
 });
 
@@ -141,6 +163,29 @@ describe('telefoon: geen half zichtbare statuspil aan de rand', () => {
   });
 });
 
+describe('één weergave voor elke toon: pil of gekleurd getal op het scherm, vet (met stip) op het blad', () => {
+  const dagen = DEF.kolommen[6];
+  const status = DEF.kolommen[7];
+  const boven = { id: 'b', titel: 'Boven limiet', type: 'janee', nadruk: { ja: 'gevaar' } } as const;
+  const geldigTot = rapportVan('medische-schiftingen')!.kolommen.find((k) => k.id === 'geldigTot')!;
+
+  it('statustekst en ja/nee zijn een pil, een getal en een lege waarde kleuren zelf', () => {
+    expect([isPilKolom(status), isPilKolom(boven), isPilKolom(dagen), isPilKolom(geldigTot)]).toEqual([true, true, false, false]);
+    expect(isPilKolom({ id: 'x', titel: 'X', type: 'janee' })).toBe(false);
+  });
+
+  it('blad: wat aandacht vraagt staat vet; een statuswaarde krijgt de stip, een getal en "Geen datum" niet', () => {
+    expect(toonOpBlad(status, 'Vervallen')).toEqual({ vet: true, teken: `${NADRUK_TEKEN} ` });
+    expect(toonOpBlad(status, 'Binnenkort')).toEqual({ vet: true, teken: `${NADRUK_TEKEN} ` });
+    expect(toonOpBlad(boven, true)).toEqual({ vet: true, teken: `${NADRUK_TEKEN} ` });
+    expect(toonOpBlad(dagen, -9)).toEqual({ vet: true, teken: '' });
+    expect(toonOpBlad(geldigTot, null)).toEqual({ vet: true, teken: '' });
+    // Een rusttoestand en een gewone waarde blijven gewone tekst.
+    expect(toonOpBlad(status, 'In orde')).toEqual({ vet: false, teken: '' });
+    expect(toonOpBlad(dagen, 400)).toEqual({ vet: false, teken: '' });
+  });
+});
+
 describe('peildatum in de filterregel', () => {
   it('sluit de filters in woorden af, in dd/mm/jjjj, en alleen bij een rapport met een peildatum', () => {
     const filters = standaardFilters(DEF, '2026-09-21');
@@ -164,6 +209,9 @@ describe('de definities van voertuigen en personeel', () => {
     expect(rapportenVanDomein('personeel').map((r) => r.id)).toEqual(['contactlijst', 'actieve-medewerkers', 'medische-schiftingen', 'vakbekwaamheden']);
     expect(DOMEINEN.map((d) => d.id)).toContain('personeel');
     expect(new Set(RAPPORTEN.map((r) => r.id)).size).toBe(RAPPORTEN.length);
+    // Na het samenvoegen met ziekte en verlof: 1 verlofsaldo + 6 + 11.
+    expect(RAPPORTEN).toHaveLength(18);
+    expect(rapportVan('verlofsaldo')!.domein).toBe('verlof');
   });
 
   it('een keuzelijst botst nooit met een vaste parameter, de zoekterm of de printparameter, en is uniek binnen het rapport', () => {
@@ -177,8 +225,8 @@ describe('de definities van voertuigen en personeel', () => {
   });
 
   it('telefoon: hoogstens de eerste kolom plus drie smalle of twee bredere kolommen vóór het scrollen', () => {
-    // Zelfde breedtes als RapportTabel (rem): eerste 9,5 · getal 3,75 · datum en ja/nee 6 · tekst 8; een telefoon van 375 px is 23,4 rem.
-    const breedte = (type: string) => (type === 'getal' || type === 'duur' ? 3.75 : type === 'tekst' ? 8 : 6);
+    // Zelfde breedtes als RapportTabel (rem): eerste 9,5 · getal 3,75 · datum 5,5 · ja/nee 3,75 · tekst 8; een telefoon van 375 px is 23,4 rem.
+    const breedte = (type: string) => (type === 'getal' || type === 'duur' || type === 'janee' ? 3.75 : type === 'tekst' ? 8 : 5.5);
     for (const def of NIEUW) {
       const { kolommen } = kolomIndeling(def, 'smal');
       const vooraan = kolommen.slice(1).filter((k) => !k.smal);
@@ -205,6 +253,16 @@ describe('de definities van voertuigen en personeel', () => {
 
   it('geen em dash als zinsscheiding in titels en omschrijvingen', () => {
     for (const def of NIEUW) expect(`${def.titel} ${def.omschrijving} ${def.geenBron?.tekst ?? ''}`, def.id).not.toMatch(/ — /);
+  });
+});
+
+describe('termijnfilter: korte opties voor het veld, een volledige zin op het blad', () => {
+  it('"Vervalt binnen" staat in het label, de opties passen in een half veld op de telefoon', () => {
+    const medisch = rapportVan('medische-schiftingen')!;
+    const termijn = medisch.filters.find((f) => f.soort === 'keuze' && f.id === 'termijn');
+    expect(termijn).toMatchObject({ label: 'Vervalt binnen', opties: [{ label: 'Alles' }, { label: '30 dagen' }, { label: '60 dagen' }, { label: '90 dagen' }] });
+    if (termijn?.soort === 'keuze') for (const o of termijn.opties) expect(o.label.length, o.label).toBeLessThanOrEqual(9);
+    expect(filtersInWoorden(medisch, { keuzes: { termijn: '30' } }, { peildatum: '2026-09-21' })).toEqual(['Vervalt binnen: 30 dagen', 'Chauffeur: alle', 'Peildatum 21/09/2026']);
   });
 });
 

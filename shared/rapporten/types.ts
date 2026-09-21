@@ -14,10 +14,11 @@ export type RapportDomein = 'ziekte' | 'verlof' | 'ruilen' | 'planning' | 'voert
  * De vier vaste soorten hebben elk hun eigen bouwsteen (Periodekiezer,
  * jaarkeuze, Chauffeurkiezer, Voertuigkiezer) en hun eigen vaste parameter in
  * de URL (`van`+`tot`, `jaar`, `chauffeur`, `voertuig`); een keuzelijst brengt
- * haar eigen parameter (`id`) en opties mee.
+ * haar eigen parameter (`id`) en opties mee, een vinkje (aan/uit, in de URL
+ * `<id>=1`) alleen haar parameter en label.
  */
 export type RapportFilter =
-  | { soort: 'periode' }
+  | { soort: 'periode'; /** Periode zonder keuze in de URL; zonder opgave "deze maand". */ standaard?: 'deze-maand' | 'vorige-maand' | 'dit-kwartaal' | 'dit-jaar' }
   | { soort: 'jaar' }
   | {
     soort: 'chauffeur';
@@ -35,6 +36,13 @@ export type RapportFilter =
     opties: ReadonlyArray<{ waarde: string; label: string }>;
     /** Waarde zonder keuze in de URL; zonder opgave de eerste optie. */
     standaard?: string;
+  }
+  | {
+    soort: 'vinkje';
+    /** Parameternaam in de URL (`<id>=1` = aan, afwezig = uit); mag niet botsen met de vaste namen. */
+    id: string;
+    /** Wat het vinkje doet als het aan staat: "Alleen boven de limiet". */
+    label: string;
   };
 
 /**
@@ -49,10 +57,13 @@ export type RapportFilter =
 export type KolomType = 'tekst' | 'datum' | 'getal' | 'duur' | 'janee';
 
 /**
- * Toon van een cel: `gevaar` (vervallen, danger) en `waarschuwing` (binnenkort,
- * amber) vragen aandacht en zijn een pil; `aandacht` (amber), `goed` en `rust`
- * zijn een puntje met tekst, voor een toestand die op veel rijen tegelijk
- * staat (een open melding). Nooit goud: dat is geen statuskleur.
+ * Toon van een cel, één woordenschat voor elke manier waarop een kolom een
+ * waarde laat opvallen (`tonen` op tekst, `signaal` op een getal, `nadruk` op
+ * ja/nee, `leeg.toon` op een ontbrekende waarde): `gevaar` (vervallen, een
+ * overschrijding; danger, rood) en `waarschuwing` (binnenkort, let op; amber)
+ * vragen aandacht en zijn een pil; `aandacht` (amber), `goed` en `rust` zijn
+ * een puntje met tekst, voor een toestand die op veel rijen tegelijk staat (een
+ * open melding). Nooit goud: dat is voor acties, focus en "nu".
  */
 export type KolomToon = 'gevaar' | 'waarschuwing' | 'aandacht' | 'goed' | 'rust';
 
@@ -78,12 +89,6 @@ export type RapportKolom = {
    * die geen eigen kolom heeft. Zonder opgave weegt elke rij even zwaar.
    */
   totaalGewicht?: string;
-  /**
-   * Tekstkolom met lopende tekst (omschrijving, opmerking, merk en model): krijgt op het brede
-   * scherm een minimumbreedte en mag afbreken. Andere tekstkolommen zijn korte
-   * waarden en blijven op één regel, zodat tien kolommen naast elkaar passen.
-   */
-  breed?: boolean;
   /** Vast aantal decimalen voor een getal (leeftijd 7,0); zonder opgave hoogstens twee, zonder nullen achteraan. */
   decimalen?: number;
   /**
@@ -114,6 +119,29 @@ export type RapportKolom = {
   smal?: 'onderEerste' | 'achteraan' | 'verberg';
   /** Korte kolomkop voor het smalle scherm ("Opgen."); de volledige titel blijft de naam voor hulptechnologie. */
   kort?: string;
+  /**
+   * Alleen voor `janee`: welke waarde opvalt, en hoe. `{ ja: 'gevaar' }` maakt
+   * van "ja" op het scherm een rode statuspil; "nee" blijft stille tekst. Zelfde
+   * tonen en zelfde weergave als `tonen` en `signaal` (`celToon`): op het
+   * printblad vet met een stip ervoor (leesbaar in zwart-wit, nooit kleur
+   * alleen), in de CSV blijft het gewoon "ja"/"nee".
+   */
+  nadruk?: { ja?: KolomToon; nee?: KolomToon };
+  /**
+   * Lopende tekst (een omschrijving, een opmerking, een lijst namen). Op het
+   * brede scherm houdt de kolom een minimumbreedte en mag ze afbreken; andere
+   * tekstkolommen zijn korte waarden en blijven op één regel, zodat tien
+   * kolommen naast elkaar passen. Op een smal scherm krijgt ze achter het
+   * scrollen (`achteraan`) een bredere vaste maat, zo breed als er naast de
+   * vaste eerste kolom past, zodat de tekst niet elke rij vijf regels hoog maakt.
+   */
+  lang?: boolean;
+  /**
+   * Sorteer op een ander veld van de rij dan wat er in beeld staat: een maand
+   * toont "Augustus 2026" maar sorteert op '2026-08'. Het veld hoeft geen
+   * kolom te zijn.
+   */
+  sorteerOp?: string;
 };
 
 export type RapportDefinitie = {
@@ -124,6 +152,13 @@ export type RapportDefinitie = {
   /** Eén regel, voor de catalogus en onder de titel. */
   omschrijving: string;
   filters: readonly RapportFilter[];
+  /**
+   * De kolommen. Een rapport waarvan de kolommen van de gegevens afhangen (één
+   * kolom per verloftype dat in het jaar voorkomt) zet hier zijn vaste
+   * kolommen en laat zijn laadfunctie de volledige lijst meegeven
+   * (`RapportResultaat.kolommen`); scherm, blad en CSV gebruiken dan die lijst
+   * (`metKolommen` in opmaak.ts). De sorteerkolom moet in beide staan.
+   */
   kolommen: readonly RapportKolom[];
   sortering: { kolom: string; richting: 'asc' | 'desc' };
   /** A4 staand of liggend op het printblad. */
@@ -160,6 +195,8 @@ export type RapportFilters = {
   voertuig?: string;
   /** Keuzelijst-filters per `id`. */
   keuzes: Record<string, string>;
+  /** Vinkje-filters per `id`; alleen aanwezig bij een rapport dat er heeft. */
+  vinkjes?: Record<string, boolean>;
 };
 
 /** Van wanneer tot wanneer de bron gegevens heeft; null = nog niets geregistreerd. */
@@ -167,7 +204,9 @@ export type RapportBereik = { van: string; tot: string } | null;
 
 export type RapportAntwoord = {
   rijen: RapportRij[];
-  /** Totaal per optelbare kolom over álle rijen (een som ook bij nul, dus "0" op het blad). */
+  /** Alleen bij een rapport met kolommen die van de gegevens afhangen: de volledige lijst, in plaats van die uit de definitie. */
+  kolommen?: RapportKolom[];
+  /** Totaal per optelbare kolom over álle rijen (een som ook bij nul, dus "0" op het blad); een totaal van de lader wint van de regel uit de definitie. */
   totalen: Record<string, number>;
   bereik: RapportBereik;
   /** Alleen bij een rapport met `peildatum`: de kalenderdag (Brussel) waartegen gerekend is. */
@@ -177,4 +216,23 @@ export type RapportAntwoord = {
 };
 
 /** Wat een laadfunctie teruggeeft; de route vult totalen en tijdstip aan. */
-export type RapportResultaat = { rijen: RapportRij[]; bereik: RapportBereik; peildatum?: string };
+export type RapportResultaat = {
+  rijen: RapportRij[];
+  bereik: RapportBereik;
+  /** Kolommen die van de gegevens afhangen: de volledige lijst (zie `RapportDefinitie.kolommen`). */
+  kolommen?: RapportKolom[];
+  /** Alleen bij een rapport met `peildatum`: de kalenderdag (Brussel) waartegen gerekend is. */
+  peildatum?: string;
+  /**
+   * Totalen die geen som van de rijen zijn (unieke chauffeurs over de hele
+   * periode, een melding die in twee maanden telt maar één keer in het
+   * totaal) en die ook niet uit de rijen af te leiden zijn met een regel uit de
+   * definitie (`totaal: 'min' | 'max' | 'gemiddelde'`). Per kolom wint het totaal
+   * van de lader van de regel uit de definitie; zoekt de gebruiker in de tabel,
+   * dan vallen ze weg en blijft alleen wat uit de zichtbare rijen te rekenen is.
+   */
+  totalen?: Record<string, number>;
+};
+
+/** De lader van een rapport op de server: haalt de bron op en geeft ze aan de pure laadfunctie. */
+export type RapportLader = (filters: RapportFilters) => Promise<RapportResultaat>;

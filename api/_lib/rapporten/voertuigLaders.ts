@@ -1,5 +1,6 @@
 import { getDefecten, getVehicleExpiries, getVehicles, getWerkprestaties } from "../techniekStorage.js";
-import { vandaagInBelgie, type Lader } from "./lader.js";
+import type { RapportLader } from "../../../shared/rapporten/types.js";
+import { vandaagInBelgie } from "./peildatumServer.js";
 import { getRapportMedewerkers } from "./personeelBron.js";
 import {
   bouwDefecten, bouwUitgevoerdeWerken, bouwVervaldataVoertuigen, bouwWagenparkLeeftijd, bouwWagenparkOverzicht,
@@ -12,7 +13,7 @@ import {
  * `bereik` moet zeggen van wanneer tot wanneer er gegevens zijn, ook buiten
  * de gevraagde periode.
  */
-export const VOERTUIG_LADERS: Record<string, Lader> = {
+export const VOERTUIG_LADERS: Record<string, RapportLader> = {
   "wagenpark-overzicht": async (filters) => bouwWagenparkOverzicht(await getVehicles(), filters, vandaagInBelgie()),
   "wagenpark-leeftijd": async (filters) => bouwWagenparkLeeftijd(await getVehicles(), filters, vandaagInBelgie()),
   "wagenpark-technisch": async (filters) => bouwWagenparkTechnisch(await getVehicles(), filters, vandaagInBelgie()),

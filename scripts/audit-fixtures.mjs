@@ -324,6 +324,43 @@ export const RAPPORT_VERLOFSALDO = (jaar = 2026, chauffeur = '') => {
   };
 };
 
+// Rapporten stap 2 (21-09): één ziekte- en één verlofrapport voor de e2e-spec.
+// Vaste cijfers in de vorm die de laders geven (api/_lib/rapporten/ziekte.ts en
+// verlof.ts); de filters werken zoals op de server.
+const ZIEKTE_RIJEN = [
+  ['44', 'Diether Van Haute', 'VHB-044', 1, 36, 36, '2026-08-17'],
+  ['60', 'Annelies Verstraete', 'VHB-060', 2, 12, 11, '2026-08-25'],
+  ['43', 'Alex Du Priez', 'VHB-043', 2, 8, 8, '2026-09-05'],
+  ['63', 'Dirk Maes', null, 1, 3, 3, '2026-02-09'],
+];
+export const RAPPORT_ZIEKTE_KALENDERDAGEN = (chauffeur = '') => {
+  const rijen = ZIEKTE_RIJEN
+    .filter(([id]) => !chauffeur || id === chauffeur)
+    .map(([id, naam, personeelsnr, meldingen, kalenderdagen, langstePeriode, laatsteMelding]) => ({ id, naam, personeelsnr, meldingen, kalenderdagen, langstePeriode, laatsteMelding }));
+  const som = (k) => rijen.reduce((n, r) => n + r[k], 0);
+  return { rijen, totalen: { meldingen: som('meldingen'), kalenderdagen: som('kalenderdagen') }, bereik: { van: '2026-02-09', tot: '2026-09-15' }, gegenereerdOp: '2026-09-15T08:30:00.000Z' };
+};
+
+const BEZETTING_AUGUSTUS = {
+  '2026-08-10': ['Alex Du Priez'],
+  '2026-08-11': ['Alex Du Priez'],
+  '2026-08-12': ['Alex Du Priez', 'Dirk Maes', 'Bart Claeys (flexi, telt niet mee)'],
+  '2026-08-13': ['Alex Du Priez', 'Dirk Maes', 'Els Goossens', 'Bart Claeys (flexi, telt niet mee)'],
+  '2026-08-14': ['Alex Du Priez', 'Els Goossens', 'Filip Wauters'],
+  '2026-08-24': ['Carine De Smet'],
+};
+export const RAPPORT_VERLOFBEZETTING = (van = '2026-08-01', tot = '2026-08-31', alleenBoven = false) => {
+  const rijen = [];
+  for (let ms = Date.parse(`${van}T00:00:00Z`); ms <= Date.parse(`${tot}T00:00:00Z`); ms += 864e5) {
+    const datum = new Date(ms).toISOString().slice(0, 10);
+    const namen = BEZETTING_AUGUSTUS[datum] ?? [];
+    const afwezig = namen.filter((n) => !n.includes('telt niet mee')).length;
+    const rij = { id: datum, datum, dag: ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'][new Date(ms).getUTCDay()], afwezig, limiet: 2, bovenLimiet: afwezig > 2, namen: namen.join(', ') || null };
+    if (!alleenBoven || rij.bovenLimiet) rijen.push(rij);
+  }
+  return { rijen, totalen: {}, bereik: { van: '2026-01-05', tot: '2026-12-23' }, gegenereerdOp: '2026-09-15T08:30:00.000Z' };
+};
+
 export function apiFixtures(user, extra) {
   return async (route) => {
     const url = new URL(route.request().url());
@@ -395,6 +432,8 @@ export function apiFixtures(user, extra) {
       const antwoord = rapportFixture(p.split('/api/rapporten/')[1], url.searchParams);
       if (antwoord) return json(antwoord);
     }
+    if (p.endsWith('/api/rapporten/ziekte-kalenderdagen')) return json(RAPPORT_ZIEKTE_KALENDERDAGEN(url.searchParams.get('chauffeur') || ''));
+    if (p.endsWith('/api/rapporten/verlofbezetting')) return json(RAPPORT_VERLOFBEZETTING(url.searchParams.get('van') || undefined, url.searchParams.get('tot') || undefined, url.searchParams.get('bovenLimiet') === '1'));
     if (p.endsWith('/api/rapporten/verlofsaldo')) return json(RAPPORT_VERLOFSALDO(Number(url.searchParams.get('jaar')) || 2026, url.searchParams.get('chauffeur') || ''));
     if (p.endsWith('/api/push/subscribers')) return json({ userIds: ['42'] });
     if (p.endsWith('/api/planning-matrix/changes-since-import')) return json({ lastImport: { createdAt: new Date(Date.now() - 5 * 864e5).toISOString(), importedDays: 31 }, approvedLeave: [], approvedSwaps: [] });
