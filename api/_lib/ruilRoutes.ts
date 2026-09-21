@@ -269,7 +269,7 @@ export function mountRuilRoutes(app: express.Express) {
       alleRegels?.catch(() => undefined); // de fout wordt in metRuilVerloop afgehandeld
       const data = await getSwapsData(staf ? undefined : { betrokkenUserId: String(req.appUser!.id) });
       if (!staf) {
-        const selfId = String(req.appUser.id);
+        const selfId = String(req.appUser!.id);
         const scoped = data.filter(
           (s) => String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId,
         );
@@ -441,7 +441,7 @@ export function mountRuilRoutes(app: express.Express) {
       }
 
       if (!isStafRol(req.appUser!.role)) {
-        const selfId = String(req.appUser.id);
+        const selfId = String(req.appUser!.id);
         const writes: any[] = [];
 
         // Verwijderingen: alleen eigen pending-aanvragen mogen weg.

@@ -10,6 +10,17 @@ export type Role = 'chauffeur' | 'technieker' | 'planner' | 'admin';
  *  plannerrechten geven (Jarno 09-09). */
 export const isStaf = (role: Role | string): boolean => role === 'planner' || role === 'admin';
 
+/** Rollen in gewone taal. `Record<Role, …>`: een nieuwe rol zonder label is
+ *  een typefout, geen stille terugval op de ruwe rolnaam. Dat gebeurde met
+ *  'technieker': die rol kwam er op 13-09 bij en Instellingen toonde er
+ *  sindsdien "technieker" in kleine letters (gevonden door `strict`, 21-09). */
+export const ROL_LABEL: Record<Role, string> = {
+  chauffeur: 'Chauffeur',
+  technieker: 'Technieker',
+  planner: 'Planner',
+  admin: 'Beheerder',
+};
+
 // De telregels van de verlofbezetting (isRijdend, isFlexi,
 // teltInVerlofbezetting) verhuisden naar shared/verlofbezetting.ts: de
 // server telt sinds GET /api/leave/bezetting per dag mee en moet exact

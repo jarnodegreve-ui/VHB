@@ -19,7 +19,9 @@ export type VerlofRij = {
   decidedAt?: string | null;
 };
 
-export type RapportGebruiker = { id: string | number; name: string; role: string; isActive?: boolean; section?: string | null; employeeId?: string | null };
+// `isActive` mag null zijn: zo komt de kolom uit de database (RapportMedewerker),
+// en alleen `false` betekent "uit dienst".
+export type RapportGebruiker = { id: string | number; name: string; role: string; isActive?: boolean | null; section?: string | null; employeeId?: string | null };
 
 export type Persoon = { naam: string; personeelsnr: string | null; gebruiker: RapportGebruiker | null };
 

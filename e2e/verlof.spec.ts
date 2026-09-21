@@ -65,7 +65,9 @@ test('chauffeur vraagt verlof aan via de kalender-modal', async ({ page }) => {
   page.on('pageerror', (err) => pageErrors.push(err.message));
   await seedSession(page, CHAUFFEUR);
 
-  let postedLeave: any[] | null = null;
+  // `null as …`: de toewijzing gebeurt in een route-callback; met een gewone
+  // annotatie vernauwt de compiler de variabele hier tot null.
+  let postedLeave = null as any[] | null;
   await page.route('**/api/**', async (route) => {
     const req = route.request();
     const path = new URL(req.url()).pathname;

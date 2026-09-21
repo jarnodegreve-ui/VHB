@@ -5,7 +5,7 @@ import { valideer } from '../../lib/valideer';
 import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
 import { CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
-import type { User } from '../../types';
+import type { Role, User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
@@ -30,7 +30,10 @@ import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 type UserDraft = User & { password?: string };
 
 /** Rol → badge-tint (presentatie, geen logica). */
-const ROLE_BADGE_TONE = { admin: 'oker', planner: 'blue', chauffeur: 'slate' } as const;
+// `Record<Role, …>`: de technieker ontbrak hier en kreeg dus `tone={undefined}`
+// (gevonden door `strict`, 21-09). Neutraal zoals de chauffeur: het label
+// onderscheidt, niet de kleur.
+const ROLE_BADGE_TONE: Record<Role, 'oker' | 'blue' | 'slate'> = { admin: 'oker', planner: 'blue', chauffeur: 'slate', technieker: 'slate' };
 
 /** Uitschakelbare kolommen van de gebruikerstabel (Medewerker en Acties blijven altijd). */
 const KOLOMMEN = [

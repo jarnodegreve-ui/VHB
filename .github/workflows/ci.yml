@@ -44,15 +44,9 @@ jobs:
       - name: Dependency-audit
         run: npm audit --omit=dev --audit-level=high
 
+      # `strict` staat aan voor de hele codebase (tsconfig.json, sinds 21-09).
       - name: Typecheck
         run: npm run lint
-
-      # Strict in fases (golf 4, punt 20): `strict: true` voor shared/** en
-      # src/lib/** via tsconfig.strict.json. Blokkerend, want die kring is
-      # groen; de rest van src/ (bij de meting 121 fouten, 94 in App.tsx)
-      # volgt in latere fases door `include` daar uit te breiden.
-      - name: Typecheck (strict, shared + lib)
-        run: npm run lint:strict
 
       # Design-systeem-bewaking (fase A, 03-09-2026): geen dark:-utilities,
       # rauwe knoppen, off-ladder maten/radii — zie scripts/design-lint.mjs.

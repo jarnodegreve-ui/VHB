@@ -67,7 +67,11 @@ function meldVastgelopenVersie(): void {
   }
 }
 
-export function lazyWithRetry<T extends ComponentType<unknown>>(factory: () => Promise<{ default: T }>) {
+// `ComponentType<any>`, zoals React.lazy zelf: props zijn contravariant, dus
+// onder `strict` past geen enkele component met eigen props in
+// `ComponentType<unknown>` (dat gaf 89 van de 130 strict-fouten, 21-09).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyWithRetry<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
   return lazy(async () => {
     try {
       const mod = await factory();

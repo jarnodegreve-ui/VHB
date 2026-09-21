@@ -84,7 +84,8 @@ test('chauffeur stelt een ruil voor via de 3-staps wizard', async ({ page }) => 
     ],
   };
 
-  let postedSwaps: any[] | null = null;
+  // `null as …`: toegewezen in een route-callback, zie verlof.spec.ts.
+  let postedSwaps = null as any[] | null;
   await page.route('**/api/**', async (route) => {
     const req = route.request();
     const path = new URL(req.url()).pathname;
@@ -198,7 +199,8 @@ test('chauffeur geeft een dienst door zonder tegenprestatie', async ({ page }) =
     ],
   };
 
-  let postedSwaps: any[] | null = null;
+  // `null as …`: toegewezen in een route-callback, zie verlof.spec.ts.
+  let postedSwaps = null as any[] | null;
   await page.route('**/api/**', async (route) => {
     const req = route.request();
     const path = new URL(req.url()).pathname;
@@ -238,8 +240,8 @@ test('chauffeur geeft een dienst door zonder tegenprestatie', async ({ page }) =
     status: 'pending',
     swapType: 'overname',
   });
-  expect(nieuw.returnDate).toBeUndefined();
-  expect(nieuw.returnCode).toBeUndefined();
+  expect(nieuw?.returnDate).toBeUndefined();
+  expect(nieuw?.returnCode).toBeUndefined();
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
