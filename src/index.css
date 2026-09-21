@@ -1482,14 +1482,17 @@ html.login-donker {
 }
 /* Schermwissel-inloop zonder view transition (SchermInloop, Verwissel.tsx):
    opacity 0 → 1 en 4 px omhoog op de ladder. Als CSS-animatie zodat hij
-   ook loopt wanneer het scherm bij het mounten op zijn chunk wacht; tijdens
-   een view transition (html.vt-route) beweegt die al, dus dan niets. */
+   ook loopt wanneer het scherm bij het mounten op zijn chunk wacht.
+   Beweegt de view transition al, dan zet SchermInloop deze klasse gewoon
+   niet. Hier stond vroeger `html.vt-route .view-in { animation: none }`, en
+   dat was de stotter van 21-09: zodra `vt-route` na de overgang van <html>
+   verdween, gold de animatie opnieuw en startte ze dus alsnog. Elk scherm
+   stond er ±230 ms, verdween één frame en fadede een tweede keer in. */
 @keyframes view-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
 }
 .view-in { animation: view-in var(--duration-base) var(--ease-standard) both; }
-html.vt-route .view-in { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .view-in { animation: none; }
 }
