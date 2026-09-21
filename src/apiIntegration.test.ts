@@ -417,6 +417,12 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       const returnMoved = hasReturn ? move(swap.returnDate, swap.returnCode, swap.requesterId, swap.targetDriverId) : null;
       return { offeredMoved, returnMoved };
     },
+    // Horizon: matrix wint, anders de opgebouwde planning (zoals de echte).
+    getPlanningHorizon: async () => {
+      const uitMatrix = mem.planningMatrix.map((r: any) => String(r.source_date ?? '')).filter((d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().pop();
+      if (uitMatrix) return uitMatrix;
+      return mem.planning.map((r: any) => String(r.date ?? '')).filter((d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().pop() ?? null;
+    },
     getPlanningData: async (f?: { driverId?: string; monthIso?: string }) =>
       mem.planning.filter((s: any) =>
         (!f?.driverId || String(s.driverId) === String(f.driverId)) &&
@@ -3281,6 +3287,26 @@ describe('auth-storing ≠ uitloggen (middleware 401 vs 503)', () => {
   it('een écht ongeldig token blijft 401', async () => {
     const res = await api('GET', '/api/planning', { token: 'tok-bestaat-niet' });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('planning-horizon (x-planning-tot)', () => {
+  it('GET /api/planning geeft de laatste dag van de matrix mee, ook aan een chauffeur', async () => {
+    mem.planningMatrix = [
+      { source_date: '2026-08-05', naam: 'A', code: '2101' },
+      { source_date: '2026-11-08', naam: 'A', code: '2101' },
+    ];
+    const res = await api('GET', '/api/planning', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-planning-tot')).toBe('2026-11-08');
+  });
+
+  it('zonder matrix valt hij terug op de laatste opgebouwde dienst', async () => {
+    mem.planningMatrix = [];
+    const res = await api('GET', '/api/planning', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    const laatste = mem.planning.map((r: any) => String(r.date ?? '')).sort().pop();
+    expect(res.headers.get('x-planning-tot')).toBe(laatste);
   });
 });
 
