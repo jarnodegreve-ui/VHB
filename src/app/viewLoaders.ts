@@ -1,4 +1,5 @@
 import type { View } from '../types';
+import { registreerSchermWachter } from './router';
 
 type Loader = () => Promise<unknown>;
 
@@ -15,7 +16,14 @@ type Loader = () => Promise<unknown>;
  * hem te evalueren. scripts/check-bundle-size.mjs controleert dat pad en
  * import hier hetzelfde bestand noemen.
  */
-const view = (pad: string, laad: Loader) => ({ pad, laad });
+/** Modules die al geladen én geëvalueerd zijn, per pad. Daarmee kan een lazy
+ *  scherm meteen renderen zonder langs Suspense te gaan (zie lazyRetry.ts) en
+ *  weet de router of hij op de code moet wachten. */
+const geladenPerPad = new Map<string, unknown>();
+const view = (pad: string, laad: Loader) => ({
+  pad,
+  laad: () => laad().then((m) => { geladenPerPad.set(pad, m); return m; }),
+});
 
 const VIEWS: Record<View, { pad: string; laad: Loader }> = {
   dashboard: view('views/DashboardView', () => import('../views/DashboardView')),
@@ -62,6 +70,19 @@ const VIEWS: Record<View, { pad: string; laad: Loader }> = {
 export const VIEW_LOADERS: Record<View, Loader> = Object.fromEntries(
   (Object.keys(VIEWS) as View[]).map((v) => [v, VIEWS[v].laad]),
 ) as Record<View, Loader>;
+
+/** De geladen module van een scherm, of null als die er nog niet is. */
+export const geladenView = (v: View): unknown => geladenPerPad.get(VIEWS[v].pad) ?? null;
+
+/** Wacht tot de code van een scherm klaar is, hoogstens `maxMs`. Mislukt het
+ *  laden, dan lost dit gewoon op: het scherm zelf toont dan zijn fout. */
+export const wachtOpView = (v: View, maxMs: number): Promise<void> => {
+  if (geladenPerPad.has(VIEWS[v].pad)) return Promise.resolve();
+  return new Promise<void>((klaar) => {
+    const timer = setTimeout(klaar, maxMs);
+    VIEWS[v].laad().then(() => { clearTimeout(timer); klaar(); }, () => { clearTimeout(timer); klaar(); });
+  });
+};
 
 const ZWAAR: ReadonlySet<View> = new Set<View>(['beheer-roosters', 'beheer-dienstoverzicht', 'gebruikers']);
 const gedaan = new Set<View>();
@@ -260,3 +281,7 @@ export function warmViews(views: readonly View[]): () => void {
     ruimOp();
   };
 }
+
+// De router wacht bij een schermwissel even op de code van het nieuwe scherm
+// (zie router.ts). Hier geregistreerd omdat dit bestand alle schermen kent.
+registreerSchermWachter({ isGeladen: (v) => geladenView(v) !== null, wacht: wachtOpView });

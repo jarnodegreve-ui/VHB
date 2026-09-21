@@ -1468,10 +1468,14 @@ export default function App() {
             <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500', ptrRefreshing && 'animate-spin')} />
           </div>
         </div>
+        {/* scrollbar-gutter:stable (21-09): met een klassieke scrollbalk (muis,
+            Windows) versprong de hele pagina ±15 px tussen een kort scherm zonder
+            balk en een lang scherm met. De goot is nu altijd gereserveerd; met
+            overlay-scrollbalken (iPhone, trackpad) verandert er niets. */}
         <div
           ref={scrollContainerRef}
           data-scroll-root
-          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7 pb-[calc(9.5rem+env(safe-area-inset-bottom))] md:pb-8"
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7 pb-[calc(9.5rem+env(safe-area-inset-bottom))] md:pb-8"
           onScroll={(e) => {
             const top = e.currentTarget.scrollTop ?? 0;
             const next = top > 8;

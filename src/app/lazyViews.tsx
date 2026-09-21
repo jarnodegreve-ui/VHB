@@ -5,56 +5,78 @@
  * of de nav-prefetch zitten laden via `VIEW_LOADERS` (viewLoaders.ts), zodat
  * prefetch en render dezelfde import delen.
  */
+import type { ComponentType } from 'react';
+import type { View } from '../types';
 import { lazyWithRetry } from '../lib/lazyRetry';
-import { VIEW_LOADERS } from './viewLoaders';
+import { VIEW_LOADERS, geladenView } from './viewLoaders';
+
+/**
+ * Eén scherm: lazy geladen via de loader uit viewLoaders.ts (zodat prefetch,
+ * warmup en render dezelfde import delen), en meteen gerenderd als zijn
+ * module al geladen is. Dat laatste voorkomt de skeletflits bij een
+ * schermwissel: de router wacht even op de code (router.ts) en daarna staat
+ * het scherm er zonder langs Suspense te gaan (zie lazyRetry.ts).
+ *
+ * `M` is het moduletype, `K` de naam van de geëxporteerde component; de
+ * props van het scherm blijven dus gewoon getypeerd.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function scherm<M, K extends keyof M>(view: View, naam: M[K] extends ComponentType<any> ? K : never) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type C = M[K] extends ComponentType<any> ? M[K] : never;
+  return lazyWithRetry<C>(
+    () => VIEW_LOADERS[view]().then((m) => ({ default: (m as M)[naam] as C })),
+    () => { const m = geladenView(view) as M | null; return m ? (m[naam] as C) : null; },
+  );
+}
 
 // Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
 // géén beheer-code en vooral géén xlsx-bundel (~430 kB) bij het opstarten —
 // die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
-export const LazyActivityLogView = lazyWithRetry(() => import('../views/admin/ActivityLogView').then((module) => ({ default: module.ActivityLogView })));
-export const LazyOcpiDashboardView = lazyWithRetry(() => import('../views/admin/OcpiDashboardView').then((module) => ({ default: module.OcpiDashboardView })));
-export const LazyVervaldataView = lazyWithRetry(() => import('../views/admin/VervaldataView').then((module) => ({ default: module.VervaldataView })));
-export const LazyZiekteView = lazyWithRetry(() => import('../views/admin/ZiekteView').then((module) => ({ default: module.ZiekteView })));
-export const LazyManageSchedulesView = lazyWithRetry(() => import('../views/admin/ManageSchedulesView').then((module) => ({ default: module.ManageSchedulesView })));
-export const LazyPlanningMatrixView = lazyWithRetry(() => import('../views/admin/PlanningMatrixView').then((module) => ({ default: module.PlanningMatrixView })));
-export const LazyPlanningCodesView = lazyWithRetry(() => import('../views/admin/PlanningCodesView').then((module) => ({ default: module.PlanningCodesView })));
-export const LazyManageDiversionsView = lazyWithRetry(() => import('../views/admin/ManageDiversionsView').then((module) => ({ default: module.ManageDiversionsView })));
-export const LazyManageServicesView = lazyWithRetry(() => import('../views/admin/ManageServicesView').then((module) => ({ default: module.ManageServicesView })));
-export const LazyVerlofKalenderView = lazyWithRetry(() => import('../views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
-export const LazyCoverageView = lazyWithRetry(() => import('../views/CoverageView').then((module) => ({ default: module.CoverageView })));
-export const LazyDebugView = lazyWithRetry(() => import('../views/admin/DebugView').then((module) => ({ default: module.DebugView })));
+export const LazyActivityLogView = scherm<typeof import('../views/admin/ActivityLogView'), 'ActivityLogView'>('activiteit', 'ActivityLogView');
+export const LazyOcpiDashboardView = scherm<typeof import('../views/admin/OcpiDashboardView'), 'OcpiDashboardView'>('ocpi-monitoring', 'OcpiDashboardView');
+export const LazyVervaldataView = scherm<typeof import('../views/admin/VervaldataView'), 'VervaldataView'>('vervaldata', 'VervaldataView');
+export const LazyZiekteView = scherm<typeof import('../views/admin/ZiekteView'), 'ZiekteView'>('ziekte', 'ZiekteView');
+export const LazyManageSchedulesView = scherm<typeof import('../views/admin/ManageSchedulesView'), 'ManageSchedulesView'>('beheer-roosters', 'ManageSchedulesView');
+export const LazyPlanningMatrixView = scherm<typeof import('../views/admin/PlanningMatrixView'), 'PlanningMatrixView'>('planning-matrix', 'PlanningMatrixView');
+export const LazyPlanningCodesView = scherm<typeof import('../views/admin/PlanningCodesView'), 'PlanningCodesView'>('planning-codes', 'PlanningCodesView');
+export const LazyManageDiversionsView = scherm<typeof import('../views/admin/ManageDiversionsView'), 'ManageDiversionsView'>('beheer-omleidingen', 'ManageDiversionsView');
+export const LazyManageServicesView = scherm<typeof import('../views/admin/ManageServicesView'), 'ManageServicesView'>('beheer-dienstoverzicht', 'ManageServicesView');
+export const LazyVerlofKalenderView = scherm<typeof import('../views/admin/VerlofKalenderView'), 'VerlofKalenderView'>('verlof-kalender', 'VerlofKalenderView');
+export const LazyCoverageView = scherm<typeof import('../views/CoverageView'), 'CoverageView'>('dekking', 'CoverageView');
+export const LazyDebugView = scherm<typeof import('../views/admin/DebugView'), 'DebugView'>('beheer-debug', 'DebugView');
 // Techniek (fase A Access-migratie, 13-09): gele boek, werkprestaties, voertuigen.
-export const LazyGeleBoekView = lazyWithRetry(() => VIEW_LOADERS['defecten']().then((m) => ({ default: (m as typeof import('../views/techniek/GeleBoekView')).GeleBoekView })));
-export const LazyWerkprestatiesView = lazyWithRetry(() => VIEW_LOADERS['werkprestaties']().then((m) => ({ default: (m as typeof import('../views/techniek/WerkprestatiesView')).WerkprestatiesView })));
-export const LazyVoertuigWerkenView = lazyWithRetry(() => VIEW_LOADERS['voertuig-werken']().then((m) => ({ default: (m as typeof import('../views/techniek/VoertuigWerkenView')).VoertuigWerkenView })));
-export const LazyVoertuigenView = lazyWithRetry(() => VIEW_LOADERS['voertuigen']().then((m) => ({ default: (m as typeof import('../views/techniek/VoertuigenView')).VoertuigenView })));
+export const LazyGeleBoekView = scherm<typeof import('../views/techniek/GeleBoekView'), 'GeleBoekView'>('defecten', 'GeleBoekView');
+export const LazyWerkprestatiesView = scherm<typeof import('../views/techniek/WerkprestatiesView'), 'WerkprestatiesView'>('werkprestaties', 'WerkprestatiesView');
+export const LazyVoertuigWerkenView = scherm<typeof import('../views/techniek/VoertuigWerkenView'), 'VoertuigWerkenView'>('voertuig-werken', 'VoertuigWerkenView');
+export const LazyVoertuigenView = scherm<typeof import('../views/techniek/VoertuigenView'), 'VoertuigenView'>('voertuigen', 'VoertuigenView');
 // Loon (fase B Access-migratie, 13-09): dagafsluiting en looncontrole.
-export const LazyDagafsluitingView = lazyWithRetry(() => VIEW_LOADERS['dagafsluiting']().then((m) => ({ default: (m as typeof import('../views/admin/DagafsluitingView')).DagafsluitingView })));
-export const LazyDienstopbouwView = lazyWithRetry(() => VIEW_LOADERS['dienstopbouw']().then((m) => ({ default: (m as typeof import('../views/admin/DienstopbouwView')).DienstopbouwView })));
-export const LazyLooncontroleView = lazyWithRetry(() => VIEW_LOADERS['looncontrole']().then((m) => ({ default: (m as typeof import('../views/admin/LooncontroleView')).LooncontroleView })));
-export const LazyManageUpdatesView = lazyWithRetry(() => import('../views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
-export const LazyManageUsersView = lazyWithRetry(() => import('../views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
-export const LazyDevicesView = lazyWithRetry(() => import('../views/admin/DevicesView').then((module) => ({ default: module.DevicesView })));
-export const LazyRapportenView = lazyWithRetry(() => VIEW_LOADERS['rapporten']().then((m) => ({ default: (m as typeof import('../views/admin/RapportenView')).RapportenView })));
-export const LazyWerkvoorraadView = lazyWithRetry(() => VIEW_LOADERS['werkvoorraad']().then((m) => ({ default: (m as typeof import('../views/WerkvoorraadView')).WerkvoorraadView })));
-export const LazyLeaveManagementView = lazyWithRetry(() => import('../views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
+export const LazyDagafsluitingView = scherm<typeof import('../views/admin/DagafsluitingView'), 'DagafsluitingView'>('dagafsluiting', 'DagafsluitingView');
+export const LazyDienstopbouwView = scherm<typeof import('../views/admin/DienstopbouwView'), 'DienstopbouwView'>('dienstopbouw', 'DienstopbouwView');
+export const LazyLooncontroleView = scherm<typeof import('../views/admin/LooncontroleView'), 'LooncontroleView'>('looncontrole', 'LooncontroleView');
+export const LazyManageUpdatesView = scherm<typeof import('../views/admin/ManageUpdatesView'), 'ManageUpdatesView'>('beheer-updates', 'ManageUpdatesView');
+export const LazyManageUsersView = scherm<typeof import('../views/admin/ManageUsersView'), 'ManageUsersView'>('gebruikers', 'ManageUsersView');
+export const LazyDevicesView = scherm<typeof import('../views/admin/DevicesView'), 'DevicesView'>('toestellen', 'DevicesView');
+export const LazyRapportenView = scherm<typeof import('../views/admin/RapportenView'), 'RapportenView'>('rapporten', 'RapportenView');
+export const LazyWerkvoorraadView = scherm<typeof import('../views/WerkvoorraadView'), 'WerkvoorraadView'>('werkvoorraad', 'WerkvoorraadView');
+export const LazyLeaveManagementView = scherm<typeof import('../views/LeaveManagementView'), 'LeaveManagementView'>('verlof', 'LeaveManagementView');
 // Ook lazy (planner/admin-only, maar stond eager in de hoofdbundel): de
 // ops-cockpit sleept ops/coverage/monthPlanning mee die een chauffeur nooit
 // nodig heeft; het dienstoverzicht idem.
 // Chauffeursviews ook lazy (nr. 12, 03-09): de startbundel is alleen nog de
 // schil; SidebarNav/BottomNav prefetchen bij hover/aanraken (viewLoaders).
-export const LazyContactsView = lazyWithRetry(() => VIEW_LOADERS['contacten']().then((m) => ({ default: (m as typeof import('../views/ContactsView')).ContactsView })));
-export const LazyDashboardView = lazyWithRetry(() => VIEW_LOADERS['dashboard']().then((m) => ({ default: (m as typeof import('../views/DashboardView')).DashboardView })));
-export const LazyMijnDagView = lazyWithRetry(() => VIEW_LOADERS['mijn-dag']().then((m) => ({ default: (m as typeof import('../views/MijnDagView')).MijnDagView })));
-export const LazyDiversionsView = lazyWithRetry(() => VIEW_LOADERS['omleidingen']().then((m) => ({ default: (m as typeof import('../views/DiversionsView')).DiversionsView })));
-export const LazyScheduleView = lazyWithRetry(() => VIEW_LOADERS['rooster']().then((m) => ({ default: (m as typeof import('../views/ScheduleView')).ScheduleView })));
-export const LazyUpdatesView = lazyWithRetry(() => VIEW_LOADERS['updates']().then((m) => ({ default: (m as typeof import('../views/UpdatesView')).UpdatesView })));
-export const LazyMeldingenView = lazyWithRetry(() => VIEW_LOADERS['meldingen']().then((m) => ({ default: (m as typeof import('../views/MeldingenView')).MeldingenView })));
-export const LazySwapRequestsView = lazyWithRetry(() => VIEW_LOADERS['ruil-verzoeken']().then((m) => ({ default: (m as typeof import('../views/SwapRequestsView')).SwapRequestsView })));
-export const LazyRitblaadjesView = lazyWithRetry(() => VIEW_LOADERS['ritblaadjes']().then((m) => ({ default: (m as typeof import('../views/RitblaadjesView')).RitblaadjesView })));
-export const LazyDocumentsView = lazyWithRetry(() => VIEW_LOADERS['documenten']().then((m) => ({ default: (m as typeof import('../views/DocumentsView')).DocumentsView })));
-export const LazyCapacityView = lazyWithRetry(() => VIEW_LOADERS['bezetting']().then((m) => ({ default: (m as typeof import('../views/CapacityView')).CapacityView })));
-export const LazyDesignsysteemView = lazyWithRetry(() => VIEW_LOADERS['designsysteem']().then((m) => ({ default: (m as typeof import('../views/admin/DesignsysteemView')).DesignsysteemView })));
-export const LazyInstellingenView = lazyWithRetry(() => VIEW_LOADERS['instellingen']().then((m) => ({ default: (m as typeof import('../views/InstellingenView')).InstellingenView })));
+export const LazyContactsView = scherm<typeof import('../views/ContactsView'), 'ContactsView'>('contacten', 'ContactsView');
+export const LazyDashboardView = scherm<typeof import('../views/DashboardView'), 'DashboardView'>('dashboard', 'DashboardView');
+export const LazyMijnDagView = scherm<typeof import('../views/MijnDagView'), 'MijnDagView'>('mijn-dag', 'MijnDagView');
+export const LazyDiversionsView = scherm<typeof import('../views/DiversionsView'), 'DiversionsView'>('omleidingen', 'DiversionsView');
+export const LazyScheduleView = scherm<typeof import('../views/ScheduleView'), 'ScheduleView'>('rooster', 'ScheduleView');
+export const LazyUpdatesView = scherm<typeof import('../views/UpdatesView'), 'UpdatesView'>('updates', 'UpdatesView');
+export const LazyMeldingenView = scherm<typeof import('../views/MeldingenView'), 'MeldingenView'>('meldingen', 'MeldingenView');
+export const LazySwapRequestsView = scherm<typeof import('../views/SwapRequestsView'), 'SwapRequestsView'>('ruil-verzoeken', 'SwapRequestsView');
+export const LazyRitblaadjesView = scherm<typeof import('../views/RitblaadjesView'), 'RitblaadjesView'>('ritblaadjes', 'RitblaadjesView');
+export const LazyDocumentsView = scherm<typeof import('../views/DocumentsView'), 'DocumentsView'>('documenten', 'DocumentsView');
+export const LazyCapacityView = scherm<typeof import('../views/CapacityView'), 'CapacityView'>('bezetting', 'CapacityView');
+export const LazyDesignsysteemView = scherm<typeof import('../views/admin/DesignsysteemView'), 'DesignsysteemView'>('designsysteem', 'DesignsysteemView');
+export const LazyInstellingenView = scherm<typeof import('../views/InstellingenView'), 'InstellingenView'>('instellingen', 'InstellingenView');
 export const LazyPlannerDashboardWidgets = lazyWithRetry(() => import('../views/PlannerDashboardWidgets').then((module) => ({ default: module.PlannerDashboardWidgets })));
-export const LazyServicesView = lazyWithRetry(() => import('../views/ServicesView').then((module) => ({ default: module.ServicesView })));
+export const LazyServicesView = scherm<typeof import('../views/ServicesView'), 'ServicesView'>('dienstoverzicht', 'ServicesView');

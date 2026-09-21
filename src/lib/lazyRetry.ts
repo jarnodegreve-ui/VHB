@@ -1,4 +1,4 @@
-import { lazy, type ComponentType } from 'react';
+import { createElement, lazy, useState, type ComponentProps, type ComponentType, type ReactElement } from 'react';
 
 const RELOAD_FLAG = 'vhb-chunk-reload';
 
@@ -67,12 +67,13 @@ function meldVastgelopenVersie(): void {
   }
 }
 
-// `ComponentType<any>`, zoals React.lazy zelf: props zijn contravariant, dus
-// onder `strict` past geen enkele component met eigen props in
-// `ComponentType<unknown>` (dat gaf 89 van de 130 strict-fouten, 21-09).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function lazyWithRetry<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
-  return lazy(async () => {
+/**
+ * De factory met het vangnet eromheen: één stille retry, dan de verse shell,
+ * dan een melding. Los van React, zodat de tests hem rechtstreeks kunnen
+ * aanroepen (ze grepen vroeger in het privéveld `_payload` van React.lazy).
+ */
+export function metRetry<M>(factory: () => Promise<M>): () => Promise<M> {
+  return async () => {
     try {
       const mod = await factory();
       sessionStorage.removeItem(RELOAD_FLAG);
@@ -89,7 +90,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(factory: () => Promi
           await forceerVerseShell();
           window.location.reload();
           // Reload is onderweg — laat de Suspense-fallback staan i.p.v. te crashen.
-          return new Promise<{ default: T }>(() => {});
+          return new Promise<M>(() => {});
         }
         // Tweede keer mis: niet nog eens herladen (lus), wel uitleggen wat er
         // aan de hand is in plaats van een leeg scherm achter te laten.
@@ -97,5 +98,29 @@ export function lazyWithRetry<T extends ComponentType<any>>(factory: () => Promi
         throw err;
       }
     }
-  });
+  };
+}
+
+// `ComponentType<any>`, zoals React.lazy zelf: props zijn contravariant, dus
+// onder `strict` past geen enkele component met eigen props in
+// `ComponentType<unknown>` (dat gaf 89 van de 130 strict-fouten, 21-09).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyWithRetry<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+  /** Geeft de component terug als zijn module al geladen is (anders null).
+   *  Dan rendert hij meteen, zonder Suspense: een eenmaal getoonde fallback
+   *  houdt React ±300 ms vast, ook als de code er allang is (gemeten 21-09).
+   *  De schermen geven hier hun geladen module door, zie src/app/lazyViews.tsx. */
+  direct?: () => T | null,
+): (props: ComponentProps<T>) => ReactElement {
+  const Lui = lazy(metRetry(factory));
+  // De tak wordt één keer per mount gekozen (useState-initialisatie). Beide
+  // takken renderen dezelfde component, maar als elementtype zijn ze voor
+  // React verschillend: wisselt de tak bij een latere render (de module is
+  // intussen geladen), dan zou React het hele scherm unmounten en opnieuw
+  // mounten, met verlies van state en een flits.
+  return function Scherm(props: ComponentProps<T>) {
+    const [Gekozen] = useState<ComponentType<ComponentProps<T>>>(() => ((direct?.() ?? Lui) as ComponentType<ComponentProps<T>>));
+    return createElement(Gekozen, props);
+  };
 }
