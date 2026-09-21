@@ -12,6 +12,7 @@ import { DateInput, Field, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { RuilVerloop } from '../components/RuilVerloop';
+import { RuilRust } from '../components/RuilRust';
 import { RuilBekekenBaken } from '../components/RuilBekekenBaken';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
@@ -526,6 +527,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             in het verloop, dus geen losse "Aan:" en "In ruil:"
                             meer erboven. */}
                         <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} className="mt-3" />
+                        <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
                         {/* Intrekken zolang de ruil nog niet door de planner is
                             goedgekeurd — verlof kon dit al, dienstruil dwong
                             een belletje naar de planner af. */}
@@ -615,6 +617,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   {compactKaart
                     ? <RuilVerloop compact swap={voorVerloop(swap)} naamVan={naamVan} className="space-y-0.5" />
                     : <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />}
+                  {/* Ook in de compacte kaart: wie hier accepteert krijgt de dienst,
+                      en moet vóór zijn antwoord weten of zijn rust in het gedrang komt. */}
+                  <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} />
                   {canRespond ? (
                     <div className="flex gap-2 pt-1">
                       <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAccept(swap.id)}>
@@ -844,6 +849,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         </span>
                       </div>
                       <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
+                      <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
                       <div className="flex gap-2 pt-1">
                         {swap.status === 'accepted' && (
                           <>
@@ -960,6 +966,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {isTakeoverSwap(swap) && <div className="mb-2"><TakeoverBadge compact /></div>}
                       {/* Begrensd: op een breed scherm staat de status anders een halve meter van de naam. */}
                       <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} className="max-w-xl" />
+                      <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
                     </div>
                   </Uitklap>
                   </div>
@@ -1377,6 +1384,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               {/* Wie ruilt met wie, wat elk krijgt en wie al antwoordde: het
                   verloop per persoon vervangt de oude "A → B"-kaart. */}
               <RuilVerloop swap={voorVerloop(reviewSwap)} naamVan={naamVan} kijkerId={user.id} />
+              <RuilRust regels={reviewSwap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={reviewSwap.requesterId} targetDriverId={reviewSwap.targetDriverId} className="mt-3" />
 
               {reviewSwap.reason && (
                 <div>

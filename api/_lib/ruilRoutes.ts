@@ -17,7 +17,8 @@ import { uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from "./ru
 import { DAG_KORT, meldRuilTerValidatieTelegram } from "../telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { RUIL_BEKEKEN_ACTIE, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
-import { DAG_DMJ, toLookupToken, matrixCodesForDate, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur } from "../helpers.js";
+import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoorRust, type RustPlanningRij } from "../../shared/ruilRust.js";
+import { addDagenIso, DAG_DMJ, toLookupToken, matrixCodesForDate, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getPlanningMatrixRows, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData } from "../storage.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
@@ -55,6 +56,50 @@ const metRuilVerloop = async <T extends { id: string }>(
   }
 };
 
+/**
+ * Hangt aan elke ruil die nog beslist moet worden de rust van wie er een
+ * dienst door krijgt (`rust`, zie shared/ruilRust.ts): minstens 8 uur t.o.v.
+ * de dienst van de dag ervoor en erna, gerekend met de planning zoals ze NA
+ * de ruil zou zijn. Een waarschuwing, geen blokkade: de planner beslist.
+ *
+ * De server rekent, niet de client: een chauffeur ziet de planning van zijn
+ * collega niet. Privacy: staf krijgt beide regels, een chauffeur alleen de
+ * regel over zichzelf (de uren van de collega gaan hem niet aan).
+ *
+ * Alleen-lezen en nooit blokkerend, zoals het verloop: mislukt het lezen van
+ * de planning, dan komen de ruilen gewoon zonder `rust` terug.
+ */
+const metRuilRust = async <T extends { id: string }>(swaps: T[], staf: boolean, kijkerId: string): Promise<Array<T & { rust?: RuilRustRegel[] }>> => {
+  const open = (swaps as Array<T & RuilVoorRust>).filter((s) => RUST_TE_BEOORDELEN.has(String(s.status ?? "")) && s.targetDriverId && s.shiftDate);
+  if (open.length === 0) return swaps;
+  try {
+    // De maanden rond de betrokken dagen (dag ervoor en erna kunnen over een
+    // maandgrens vallen); per maand één query, voor alle open ruilen samen.
+    const maanden = new Set<string>();
+    for (const s of open) {
+      for (const dag of [s.shiftDate, s.returnDate]) {
+        if (!dag || !/^\d{4}-\d{2}-\d{2}$/.test(String(dag))) continue;
+        for (const n of [-1, 0, 1]) maanden.add(addDagenIso(String(dag), n).slice(0, 7));
+      }
+    }
+    const betrokken = new Set(open.flatMap((s) => [String(s.requesterId), String(s.targetDriverId)]));
+    const planning = (await Promise.all([...maanden].map((monthIso) => getPlanningData({ monthIso }))))
+      .flat()
+      .filter((r: any) => betrokken.has(String(r.driverId)))
+      .map((r: any): RustPlanningRij => ({ date: String(r.date), driverId: String(r.driverId), line: r.line, startTime: String(r.startTime ?? ""), endTime: String(r.endTime ?? "") }));
+    return swaps.map((s) => {
+      const ruil = s as T & RuilVoorRust;
+      if (!open.includes(ruil)) return s;
+      const alle = beoordeelRuilRust(ruil, planning);
+      const zichtbaar = staf ? alle : alle.filter((r) => String(r.wie === "aanvrager" ? ruil.requesterId : ruil.targetDriverId) === kijkerId);
+      return zichtbaar.length > 0 ? { ...s, rust: zichtbaar } : s;
+    });
+  } catch (err) {
+    console.error("Rusttijden bij de dienstruilen berekenen is mislukt.", err);
+    return swaps;
+  }
+};
+
 /** Verwijdert de snake_case-databasealiassen uit een client-swaprecord, zodat
  *  alleen de camelCase-API-velden overblijven (zie toPublicSwap in helpers). */
 const SWAP_DB_ALIASSEN = ["shiftid", "requesterid", "targetdriverid", "createdat", "decidedat", "return_date", "return_code", "swap_type", "shift_date", "shift_line", "target_seen_at"] as const;
@@ -66,6 +111,8 @@ const stripSwapAliassen = (record: any): any => {
   // `verloop` is door GET /api/swaps afgeleid uit het activiteitenlog en komt
   // met de array-save gewoon terug van de client: het is nooit invoer.
   delete schoon.verloop;
+  // Idem voor `rust`: door de server nagerekend, nooit invoer.
+  delete schoon.rust;
   return schoon;
 };
 
@@ -273,14 +320,14 @@ export function mountRuilRoutes(app: express.Express) {
         const scoped = data.filter(
           (s) => String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId,
         );
-        return res.json(await metRuilVerloop(scoped, false));
+        return res.json(await metRuilRust(await metRuilVerloop(scoped, false), false, selfId));
       }
       // Revisie enkel voor planner/admin (volledige weergave) — de POST-check
       // geldt ook alleen voor hen (chauffeur-payloads worden delta-gereconstrueerd).
       // Over de ruilen ZONDER verloop: de POST-check vergelijkt met
       // revisionOf(getSwapsData()), en het verloop is afgeleid, geen invoer.
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
-      res.json(await metRuilVerloop(data, true, alleRegels));
+      res.json(await metRuilRust(await metRuilVerloop(data, true, alleRegels), true, String(req.appUser!.id)));
     } catch (err) {
       res.status(500).json({ error: "Dienstruilen laden is mislukt." });
     }
@@ -993,7 +1040,8 @@ export function mountRuilRoutes(app: express.Express) {
       // De client voegt dit record lokaal in zonder de lijst opnieuw te halen:
       // het verloop moet dus mee, anders toont het blok per persoon de nieuwe
       // status zonder moment en zonder wie besliste.
-      const [metVerloop] = await metRuilVerloop([uit.swap], isStafRol(req.appUser!.role));
+      const stafKijker = isStafRol(req.appUser!.role);
+      const [metVerloop] = await metRuilRust(await metRuilVerloop([uit.swap], stafKijker), stafKijker, String(req.appUser!.id));
       res.json({ success: true, swap: metVerloop });
     } catch (err: any) {
       console.error("Beslissing opslaan is mislukt", err);

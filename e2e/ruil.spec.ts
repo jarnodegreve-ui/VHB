@@ -526,3 +526,86 @@ test('planner keurt een geaccepteerde ruil goed (PATCH met ifStatus accepted)', 
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
+
+test('de collega ziet vóór het accepteren dat hij te weinig rust overhoudt', async ({ page }) => {
+  // Rusttijd bij een dienstruil (22-09): de server rekent per ruil na hoeveel
+  // rust er overblijft en stuurt de collega alleen de regel over hemzelf.
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seedSession(page, CHAUFFEUR);
+
+  const dag = dayOffset(5);
+  const ruil = {
+    id: 'rust1', shiftId: 'r1', requesterId: COLLEGA.id, targetDriverId: CHAUFFEUR.id,
+    status: 'pending', createdAt: new Date().toISOString(),
+    shiftDate: dag, shiftLine: '2101', returnDate: dayOffset(9), returnCode: 'vrij',
+    rust: [{ wie: 'collega', datum: dag, dienst: '2101', rustVoor: 340, rustNa: null, teKort: true }],
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.endsWith('/api/me')) return json(CHAUFFEUR);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([CHAUFFEUR, COLLEGA]);
+    if (path.endsWith('/api/swaps') && route.request().method() === 'GET') return json([ruil]);
+    return json([]);
+  });
+
+  await page.goto('/');
+  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+
+  const rust = page.getByRole('region', { name: 'Rusttijd' });
+  await expect(rust.getByRole('listitem')).toHaveCount(1);
+  await expect(rust).toContainText('Te weinig rust: Jij, dienst 2101');
+  await expect(rust).toContainText('5u40 na de dienst van de dag ervoor');
+  await expect(rust).toContainText('(minimum 8u)');
+  // Een waarschuwing, geen blokkade: accepteren blijft mogelijk.
+  await expect(page.getByRole('button', { name: 'Accepteren' })).toBeEnabled();
+
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});
+
+test('de planner ziet de rust van beide chauffeurs bij een te beoordelen ruil', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seedSession(page, PLANNER);
+
+  const dag = dayOffset(4);
+  const terug = dayOffset(9);
+  const ruil = {
+    id: 'rust2', shiftId: 'p1', requesterId: CHAUFFEUR.id, targetDriverId: COLLEGA.id,
+    status: 'accepted', createdAt: new Date().toISOString(),
+    shiftDate: dag, shiftLine: '2101', returnDate: terug, returnCode: '2230',
+    rust: [
+      { wie: 'collega', datum: dag, dienst: '2101', rustVoor: 340, rustNa: null, teKort: true },
+      { wie: 'aanvrager', datum: terug, dienst: '2230', rustVoor: null, rustNa: 660, teKort: false },
+    ],
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.endsWith('/api/me')) return json(PLANNER);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([PLANNER, CHAUFFEUR, COLLEGA]);
+    if (path.endsWith('/api/swaps') && route.request().method() === 'GET') return json([ruil]);
+    return json([]);
+  });
+
+  await page.goto('/');
+  await expect(page.getByText('Beheer dienstruilen')).toBeVisible({ timeout: 15_000 });
+
+  const rust = page.getByRole('region', { name: 'Rusttijd' }).first();
+  await expect(rust.getByRole('listitem')).toHaveCount(2);
+  await expect(rust.getByRole('listitem').nth(0)).toContainText(`Te weinig rust: ${COLLEGA.name}, dienst 2101`);
+  await expect(rust.getByRole('listitem').nth(1)).toContainText(`${CHAUFFEUR.name}, dienst 2230`);
+  await expect(rust.getByRole('listitem').nth(1)).toContainText('11u tot de dienst van de dag erna');
+  await expect(rust.getByRole('listitem').nth(1)).not.toContainText('Te weinig rust');
+  // De planner beslist: goedkeuren blijft beschikbaar.
+  await expect(page.getByRole('button', { name: 'Goedkeuren' }).first()).toBeEnabled();
+
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});

@@ -6637,3 +6637,56 @@ describe('bijlagen bij een update', () => {
     expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(false);
   });
 });
+
+
+// --- Rusttijd bij een dienstruil (shared/ruilRust.ts, 22-09) ---
+describe('rusttijd bij een dienstruil (GET /api/swaps › rust)', () => {
+  // Chauffeur 3 geeft zijn vroege dienst van 07/10 aan chauffeur 4, die de
+  // avond ervoor laat rijdt: 23:50 → 05:30 = 5u40 rust.
+  const zaai = (status = 'pending') => {
+    mem.swaps = [{ id: 's-rust', shiftId: 'r-a', requesterId: '3', targetDriverId: '4', status, reason: '', createdAt: '2026-10-01T08:00:00Z', shiftDate: '2026-10-07', shiftLine: '2101', returnDate: '2026-10-09', returnCode: '2230' }];
+    mem.planning = [
+      { id: 'r-a', driverId: '3', date: '2026-10-07', line: '2101', startTime: '05:30', endTime: '13:45' },
+      { id: 'r-b', driverId: '4', date: '2026-10-06', line: '2240', startTime: '15:40', endTime: '23:50' },
+      { id: 'r-c', driverId: '4', date: '2026-10-09', line: '2230', startTime: '15:00', endTime: '23:00' },
+      { id: 'r-d', driverId: '3', date: '2026-10-10', line: '2105', startTime: '10:00', endTime: '18:00' },
+    ];
+  };
+
+  it('de planner ziet de rust van beide chauffeurs, met de waarschuwing waar ze te kort is', async () => {
+    zaai();
+    const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    const rust = res.json.find((s: any) => s.id === 's-rust').rust;
+    expect(rust).toEqual([
+      { wie: 'collega', datum: '2026-10-07', dienst: '2101', rustVoor: 340, rustNa: null, teKort: true },
+      // 23:00 → 10:00 = 11u
+      { wie: 'aanvrager', datum: '2026-10-09', dienst: '2230', rustVoor: null, rustNa: 660, teKort: false },
+    ]);
+  });
+
+  it('een chauffeur ziet alleen de regel over zichzelf, niet de uren van zijn collega', async () => {
+    zaai();
+    const vanB = (await api('GET', '/api/swaps', { token: 'tok-b' })).json.find((s: any) => s.id === 's-rust');
+    expect(vanB.rust.map((r: any) => r.wie)).toEqual(['collega']);
+    const vanA = (await api('GET', '/api/swaps', { token: 'tok-a' })).json.find((s: any) => s.id === 's-rust');
+    expect(vanA.rust.map((r: any) => r.wie)).toEqual(['aanvrager']);
+  });
+
+  it('een afgesloten ruil wordt niet meer nagerekend', async () => {
+    zaai('approved');
+    const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(res.json.find((s: any) => s.id === 's-rust').rust).toBeUndefined();
+  });
+
+  it('`rust` is nooit invoer: een client die het terugstuurt verandert er niets mee', async () => {
+    zaai();
+    const lijst = (await api('GET', '/api/swaps', { token: 'tok-planner' })).json;
+    const vervalst = lijst.map((s: any) => ({ ...s, rust: [{ wie: 'collega', datum: '2026-10-07', dienst: '2101', rustVoor: 999, rustNa: 999, teKort: false }] }));
+    const post = await api('POST', '/api/swaps', { token: 'tok-planner', body: vervalst });
+    expect(post.status).toBe(200);
+    expect(mem.swaps.find((s: any) => s.id === 's-rust').rust).toBeUndefined();
+    const opnieuw = (await api('GET', '/api/swaps', { token: 'tok-planner' })).json.find((s: any) => s.id === 's-rust');
+    expect(opnieuw.rust[0].rustVoor).toBe(340);
+  });
+});
