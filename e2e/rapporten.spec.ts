@@ -545,22 +545,27 @@ test('een tabel die nog leeg is zegt dat eerlijk, en waar je ze invult', async (
   await expect(page).toHaveURL(/\/techniek\/voertuigen$/);
 });
 
+// Eén test per pad en thema. Eerst liep één test alle paden na; met elf
+// rapporten haalde WebKit op de CI-runner daarmee de 30 s niet meer (21-09).
+// Zo krijgt elk rapport zijn eigen limiet en noemt een fout meteen het pad.
+const A11Y_PADEN = [
+  '/rapporten',
+  '/rapporten/verlof/verlofsaldo?jaar=2026',
+  '/rapporten/verlof/verlofbezetting?van=2026-08-01&tot=2026-08-31&bovenLimiet=1',
+  '/rapporten/ziekte/ziekte-kalenderdagen?van=2026-01-01&tot=2026-12-31',
+  '/rapporten/voertuigen/wagenpark-overzicht?status=alle',
+  '/rapporten/personeel/medische-schiftingen',
+  '/rapporten/ruilen/ruilaanvragen?van=2026-09-01&tot=2026-09-30',
+  '/rapporten/ruilen/uitgevoerde-wissels?van=2026-09-01&tot=2026-09-30',
+  '/rapporten/planning/diensten-per-dag?van=2026-09-21&tot=2026-09-27',
+  '/rapporten/planning/overzicht-per-chauffeur?van=2026-09-01&tot=2026-09-30',
+  '/rapporten/planning/openstaande-diensten?van=2026-09-21&tot=2026-10-18',
+] as const;
+
 for (const thema of ['light', 'dark'] as const) {
-  test(`a11y (WCAG 2.1 AA): catalogus en rapport, ${thema === 'dark' ? 'donker' : 'licht'}`, async ({ page }) => {
-    await seed(page, { user: ADMIN, view: 'rapporten', thema });
-    for (const pad of [
-      '/rapporten',
-      '/rapporten/verlof/verlofsaldo?jaar=2026',
-      '/rapporten/verlof/verlofbezetting?van=2026-08-01&tot=2026-08-31&bovenLimiet=1',
-      '/rapporten/ziekte/ziekte-kalenderdagen?van=2026-01-01&tot=2026-12-31',
-      '/rapporten/voertuigen/wagenpark-overzicht?status=alle',
-      '/rapporten/personeel/medische-schiftingen',
-      '/rapporten/ruilen/ruilaanvragen?van=2026-09-01&tot=2026-09-30',
-      '/rapporten/ruilen/uitgevoerde-wissels?van=2026-09-01&tot=2026-09-30',
-      '/rapporten/planning/diensten-per-dag?van=2026-09-21&tot=2026-09-27',
-      '/rapporten/planning/overzicht-per-chauffeur?van=2026-09-01&tot=2026-09-30',
-      '/rapporten/planning/openstaande-diensten?van=2026-09-21&tot=2026-10-18',
-    ]) {
+  for (const pad of A11Y_PADEN) {
+    test(`a11y (WCAG 2.1 AA), ${thema === 'dark' ? 'donker' : 'licht'}: ${pad.split('?')[0]}`, async ({ page }) => {
+      await seed(page, { user: ADMIN, view: 'rapporten', thema });
       await page.goto(pad);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
       await page.evaluate(() => document.fonts.ready);
@@ -569,6 +574,6 @@ for (const thema of ['light', 'dark'] as const) {
       const resultaat = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('nav[aria-label="Hoofdnavigatie"]').analyze();
       const blokkerend = resultaat.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
       expect(blokkerend.map((v) => `${v.id}: ${v.help} (${JSON.stringify(v.nodes[0]?.target)})`), `${pad} (${thema})`).toEqual([]);
-    }
-  });
+    });
+  }
 }
