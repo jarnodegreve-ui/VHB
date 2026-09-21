@@ -461,7 +461,7 @@ test('ruilrapport: ruilaanvragen met status, antwoord van de collega, peildatum 
   expect(pageErrors).toEqual([]);
 });
 
-test('planningsrapport: diensten per dag met delen en uren, hele maanden in het overzicht, en een bron die nog leeg is', async ({ page }) => {
+test('planningsrapport: diensten per dag met delen en uren, zonder bus, en hele maanden in het overzicht', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (err) => pageErrors.push(err.message));
   await seed(page, { user: ADMIN, view: 'rapporten' });
@@ -479,6 +479,10 @@ test('planningsrapport: diensten per dag met delen en uren, hele maanden in het 
       await page.setViewportSize({ width: breedte, height: 800 });
       expect((await randVanDeTabel(page)).koppenBinnen, `${breedte} px`).toEqual(['Datum', 'Dienst', 'Start', 'Einde']);
       await paginaScrolltNiet(page);
+      // Na één veeg: deel, duur en loop staan samen volledig in beeld naast de vaste datum (er is geen kolom Bus meer die ze wegduwt).
+      await page.evaluate(() => { const k = document.querySelector('table')!.parentElement!; k.scrollLeft = k.scrollWidth; });
+      expect((await randVanDeTabel(page)).koppenBinnen, `${breedte} px, gescrold`).toEqual(expect.arrayContaining(['Datum', 'Deel', 'Duur', 'Loop']));
+      await page.evaluate(() => { document.querySelector('table')!.parentElement!.scrollLeft = 0; });
     }
   } else {
     // Een gesplitste dienst staat er met elk deel in, in volgorde; tijden in 24 uur, de duur als u:mm.
@@ -489,8 +493,10 @@ test('planningsrapport: diensten per dag met delen en uren, hele maanden in het 
     await expect(rijen.nth(2)).toContainText('13:39');
     // Een busdag loopt voorbij middernacht door: 26:16 blijft 26:16.
     await expect(page.getByRole('cell', { name: '26:16', exact: true })).toBeVisible();
-    // Geen bus in de planning: een streepje, geen verzonnen nummer.
-    await expect(rijen.nth(1).getByRole('cell', { name: '—', exact: true })).toBeVisible();
+    // Geen bus: het portaal houdt er geen bij en toont bewust ook geen geplande bus. De loop staat er wel.
+    await expect(page.getByRole('columnheader', { name: 'Bus' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Loop' })).toBeVisible();
+    await expect(rijen.nth(1)).toContainText('4500');
   }
 
   // Filter op chauffeur, in de URL; de print-URL draagt dezelfde periode.
@@ -512,11 +518,12 @@ test('planningsrapport: diensten per dag met delen en uren, hele maanden in het 
   await expect(page).toHaveURL(/van=2026-07-01&tot=2026-09-30/);
   await paginaScrolltNiet(page);
 
-  // Inzet per voertuig staat bij Voertuigen, en zegt eerlijk dat de planning geen bus per dienst bijhoudt.
+  // Er is geen rapport per voertuig op de planning: de catalogus toont het niet en een oude link zegt dat eerlijk.
   await page.goto('/rapporten/voertuigen/inzet-per-voertuig');
-  await expect(page.getByRole('heading', { name: 'Nog niets geregistreerd' })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/De planning houdt vandaag geen bus per dienst bij/)).toBeVisible();
-  await expect(page.getByRole('table')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Dit rapport bestaat niet' })).toBeVisible({ timeout: 15_000 });
+  await page.goto('/rapporten');
+  await expect(page.getByRole('heading', { name: 'Voertuigen', level: 2 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('link', { name: /Inzet per voertuig/ })).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });
 

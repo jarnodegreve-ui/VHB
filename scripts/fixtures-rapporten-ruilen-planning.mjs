@@ -1,5 +1,5 @@
 // Rapporten stap 4 (21-09): vaste antwoorden van GET /api/rapporten/<id> voor
-// de domeinen ruilen en planning (en Inzet per voertuig). Vaste cijfers en een
+// de domeinen ruilen en planning. Vaste cijfers en een
 // vaste peildatum, zodat de e2e-spec en de screenshots stabiel blijven. De
 // rekenkern zelf is getest in src/rapportRuilen.test.ts en
 // src/rapportPlanning.test.ts; hier staat alleen wat het scherm nodig heeft,
@@ -118,11 +118,10 @@ const DELEN = [
 ];
 const dienstenPerDag = (q) => {
   const chauffeur = q.get('chauffeur') || '';
-  // Zoals productie vandaag: de planning houdt geen bus per dienst bij.
-  const rijen = q.get('voertuig') ? [] : DELEN
+  const rijen = DELEN
     .filter(([datum, , , , , , , , wie]) => binnen(datum, q) && (!chauffeur || wie === chauffeur))
     .map(([datum, dag, dienst, deel, start, einde, duur, loop, wie]) => ({
-      id: `${datum}|${dienst}|${deel}`, datum, dag, dienst, deel, start, einde, duur, loop, bus: null, chauffeur: NAAM[wie], volgorde: `${datum}|${dienst.padStart(8, '0')}|${deel}|${wie}`,
+      id: `${datum}|${dienst}|${deel}`, datum, dag, dienst, deel, start, einde, duur, loop, chauffeur: NAAM[wie], volgorde: `${datum}|${dienst.padStart(8, '0')}|${deel}|${wie}`,
     }));
   return { rijen, totalen: {}, bereik: { van: '2026-07-01', tot: '2026-11-08' }, gegenereerdOp: GEGENEREERD };
 };
@@ -154,8 +153,6 @@ export function rapportFixtureRuilenPlanning(id, query) {
     case 'ruilaanvragen': return ruilaanvragen(query);
     case 'overzicht-per-chauffeur': return overzichtPerChauffeur(query);
     case 'diensten-per-dag': return dienstenPerDag(query);
-    // Geen bus in de planning: een lege bron ("nog niets geregistreerd"), geen lege tabel.
-    case 'inzet-per-voertuig': return { rijen: [], totalen: { duur: 0 }, bereik: null, gegenereerdOp: GEGENEREERD };
     case 'openstaande-diensten': return openstaandeDiensten(query);
     default: return null;
   }

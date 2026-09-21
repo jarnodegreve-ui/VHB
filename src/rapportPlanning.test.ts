@@ -130,29 +130,29 @@ describe('Overzicht per chauffeur is het Maandoverzicht van de maandplanning', (
   });
 });
 
-// === Diensten per dag en Inzet per voertuig ===
+// === Diensten per dag ===
 
 const planning = [
   // Gesplitste dienst 2109 van Jan op 21/09: twee delen, bewust in omgekeerde volgorde aangeleverd.
   { id: 'p2', date: '2026-09-21', startTime: '13:10', endTime: '19:15', line: '2109', busNumber: '', loopnr: '4602', driverId: '1' },
-  { id: 'p1', date: '2026-09-21', startTime: '06:53', endTime: '08:23', line: '2109', busNumber: '013 023', loopnr: '4601', driverId: '1' },
-  { id: 'p3', date: '2026-09-21', startTime: '05:28', endTime: '12:13', line: '2102', busNumber: '23', loopnr: '4600', driverId: '2' },
+  { id: 'p1', date: '2026-09-21', startTime: '06:53', endTime: '08:23', line: '2109', busNumber: '', loopnr: '4601', driverId: '1' },
+  // Staat er ooit een busnummer in de tabel, dan komt het nog altijd niet in het rapport (zie de test hieronder).
+  { id: 'p3', date: '2026-09-21', startTime: '05:28', endTime: '12:13', line: '2102', busNumber: '013 023', loopnr: '4600', driverId: '2' },
   // Nachtdienst over middernacht.
   { id: 'p4', date: '2026-09-22', startTime: '22:00', endTime: '02:30', line: '2703', busNumber: '', loopnr: '', driverId: '2' },
-  { id: 'p5', date: '2026-10-01', startTime: '06:00', endTime: '14:00', line: '2101', busNumber: '613 026', loopnr: '', driverId: '9' },
+  { id: 'p5', date: '2026-10-01', startTime: '06:00', endTime: '14:00', line: '2101', busNumber: '', loopnr: '', driverId: '9' },
 ];
-const voertuigen = [{ id: 'v23', busnr: '013 023', kortNr: 23 }, { id: 'v26', busnr: '613 026', kortNr: 26 }];
-const dienstenBron: DienstenBron = { planning, users, voertuigen };
+const dienstenBron: DienstenBron = { planning, users };
 const WEEK = ['2026-09-21', '2026-09-27'] as const;
 
 describe('Diensten per dag', () => {
   it('één rij per dienst-deel, gesorteerd op datum, dienst en deel; de duur is die van het deel', () => {
     const uit = bouwDienstenPerDag(dienstenBron, filters(...WEEK));
-    expect(uit.rijen.map((r) => [r.datum, r.dag, r.dienst, r.deel, r.start, r.einde, r.duur, r.loop, r.bus, r.chauffeur])).toEqual([
-      ['2026-09-21', 'ma', '2102', 1, '05:28', '12:13', 405, '4600', '23', 'An Peeters'],
-      ['2026-09-21', 'ma', '2109', 1, '06:53', '08:23', 90, '4601', '013 023', 'Jan Janssen'],
-      ['2026-09-21', 'ma', '2109', 2, '13:10', '19:15', 365, '4602', null, 'Jan Janssen'],
-      ['2026-09-22', 'di', '2703', 1, '22:00', '02:30', 270, null, null, 'An Peeters'],
+    expect(uit.rijen.map((r) => [r.datum, r.dag, r.dienst, r.deel, r.start, r.einde, r.duur, r.loop, r.chauffeur])).toEqual([
+      ['2026-09-21', 'ma', '2102', 1, '05:28', '12:13', 405, '4600', 'An Peeters'],
+      ['2026-09-21', 'ma', '2109', 1, '06:53', '08:23', 90, '4601', 'Jan Janssen'],
+      ['2026-09-21', 'ma', '2109', 2, '13:10', '19:15', 365, '4602', 'Jan Janssen'],
+      ['2026-09-22', 'di', '2703', 1, '22:00', '02:30', 270, null, 'An Peeters'],
     ]);
   });
 
@@ -168,10 +168,13 @@ describe('Diensten per dag', () => {
     expect(bouwDienstenPerDag(dienstenBron, filters(...WEEK, { chauffeur: '1' })).rijen.map((r) => r.deel)).toEqual([1, 2]);
   });
 
-  it('voertuigfilter: op busnummer of kort nummer, zonder spaties; een onbekend voertuig geeft niets', () => {
-    expect(bouwDienstenPerDag(dienstenBron, filters(...WEEK, { voertuig: 'v23' })).rijen.map((r) => r.id)).toEqual(['p3', 'p1']);
-    expect(bouwDienstenPerDag(dienstenBron, filters(...WEEK, { voertuig: 'v26' })).rijen).toEqual([]);
-    expect(bouwDienstenPerDag(dienstenBron, filters(...WEEK, { voertuig: 'bestaat-niet' })).rijen).toEqual([]);
+  it('geen bus in het rapport: niet de geplande, en ook niet als de tabel er ooit één draagt (beslissing Jarno 21-09)', () => {
+    const def = rapportVan('diensten-per-dag')!;
+    expect(def.kolommen.map((k) => k.id)).not.toContain('bus');
+    expect(def.filters.map((f) => f.soort)).toEqual(['periode', 'chauffeur']);
+    for (const rij of bouwDienstenPerDag(dienstenBron, filters(...WEEK)).rijen) expect(Object.keys(rij)).not.toContain('bus');
+    // Een voertuig in de filters (een oude link) verandert niets aan de rijen.
+    expect(bouwDienstenPerDag(dienstenBron, filters(...WEEK, { voertuig: 'v23' })).rijen).toHaveLength(4);
   });
 
   it('een verwijderde chauffeur blijft staan als "Onbekend (<id>)"', () => {
@@ -185,30 +188,6 @@ describe('Diensten per dag', () => {
     const voor = bouwDienstenPerDag(dienstenBron, filters('2026-06-01', '2026-06-30'));
     expect(bereikToestand({ van: '2026-06-01', tot: '2026-06-30' }, voor.bereik)).toBe('buiten');
     expect(bouwDienstenPerDag({ ...dienstenBron, planning: [] }, filters(...WEEK)).bereik).toBeNull();
-  });
-});
-
-describe('Inzet per voertuig: dezelfde lader, alleen de delen met een bus', () => {
-  const def = rapportVan('inzet-per-voertuig')!;
-
-  it('delen zonder bus vallen weg, de totaalrij telt de duur op', () => {
-    const uit = bouwDienstenPerDag(dienstenBron, filters('2026-09-01', '2026-10-31'), { alleenMetBus: true });
-    expect(uit.rijen.map((r) => [r.datum, r.bus, r.dienst, r.deel, r.duur])).toEqual([
-      ['2026-09-21', '23', '2102', 1, 405],
-      // Deel 1 van de gesplitste dienst had een bus, deel 2 niet.
-      ['2026-09-21', '013 023', '2109', 1, 90],
-      ['2026-10-01', '613 026', '2101', 1, 480],
-    ]);
-    expect(totalenVoor(def, uit.rijen)).toEqual({ duur: 975 });
-    expect(uit.bereik).toEqual({ van: '2026-09-21', tot: '2026-10-01' });
-  });
-
-  it('zoals productie vandaag: nergens een bus ingevuld, dus een lege bron in plaats van een lege tabel', () => {
-    const zonderBus = { ...dienstenBron, planning: planning.map((p) => ({ ...p, busNumber: '' })) };
-    const uit = bouwDienstenPerDag(zonderBus, filters(...WEEK), { alleenMetBus: true });
-    expect(uit).toEqual({ rijen: [], bereik: null });
-    // Diensten per dag toont dezelfde planning wél, met een streepje in de kolom Bus.
-    expect(bouwDienstenPerDag(zonderBus, filters(...WEEK)).rijen).toHaveLength(4);
   });
 });
 

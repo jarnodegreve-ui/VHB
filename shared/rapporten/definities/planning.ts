@@ -1,4 +1,4 @@
-import type { KolomToon, RapportDefinitie, RapportKolom } from '../types.js';
+import type { KolomToon, RapportDefinitie } from '../types.js';
 
 /**
  * Domein planning. Twee bronnen, elk met hun eigen waarheid:
@@ -6,8 +6,10 @@ import type { KolomToon, RapportDefinitie, RapportKolom } from '../types.js';
  *    dezelfde kern als het Maandoverzicht in de maandplanning
  *    (`berekenCelWaarheid` + `berekenMaandoverzicht`): Overzicht per chauffeur
  *    en, via de dekking-kern, Openstaande diensten;
- *  - de tabel `planning` (één rij per dienst-DEEL, met uren): Diensten per dag
- *    en Inzet per voertuig, één lader met twee definities.
+ *  - de tabel `planning` (één rij per dienst-DEEL, met uren): Diensten per dag.
+ * Het portaal houdt geen bus per dienst bij en toont bewust ook geen geplande
+ * bus (beslissing Jarno 21-09): geen kolom Bus, geen voertuigfilter, geen
+ * rapport per voertuig op de planning.
  * Laders: api/_lib/rapporten/planning.ts.
  */
 
@@ -38,61 +40,31 @@ const OVERZICHT_PER_CHAUFFEUR: RapportDefinitie = {
   geenBron: { tekst: 'De planning komt uit de import van de maandplanning.', actie: { label: 'Naar Beheer roosters', view: 'beheer-roosters' } },
 };
 
-/** De kolommen van één dienst-deel; de twee definities hieronder zetten ze elk in hun eigen volgorde. */
-const DEEL = {
-  datum: { id: 'datum', titel: 'Datum', type: 'datum', sorteerOp: 'volgorde' },
-  dag: { id: 'dag', titel: 'Dag', type: 'tekst', sorteerOp: 'volgorde', smal: 'onderEerste' },
-  dienst: { id: 'dienst', titel: 'Dienst', type: 'tekst', code: true },
-  // Links: het deelnummer hoort bij de dienst ervoor, niet bij de starttijd erna.
-  deel: { id: 'deel', titel: 'Deel', type: 'getal', uitlijning: 'links', smal: 'achteraan' },
-  start: { id: 'start', titel: 'Start', type: 'tijd' },
-  einde: { id: 'einde', titel: 'Einde', type: 'tijd' },
-  duur: { id: 'duur', titel: 'Duur', type: 'duur', smal: 'achteraan' },
-  loop: { id: 'loop', titel: 'Loop', type: 'tekst', code: true, smal: 'achteraan' },
-  bus: { id: 'bus', titel: 'Bus', type: 'tekst', smal: 'achteraan' },
-  chauffeur: { id: 'chauffeur', titel: 'Chauffeur', type: 'tekst', smal: 'onderEerste' },
-} as const satisfies Record<string, RapportKolom>;
-
 const DIENSTEN_PER_DAG: RapportDefinitie = {
   id: 'diensten-per-dag',
   domein: 'planning',
   titel: 'Diensten per dag',
   omschrijving: 'De planning rij per rij: elk deel van elke dienst met start, einde, duur, loop en chauffeur. Een gesplitste dienst staat er met elk deel in.',
-  filters: [{ soort: 'periode', standaard: 'deze-week', snelkeuze: 'dagen' }, { soort: 'chauffeur' }, { soort: 'voertuig' }],
-  // Telefoon: dag en chauffeur onder de datum; dienst, start en einde in beeld.
-  kolommen: [DEEL.datum, DEEL.dag, DEEL.dienst, DEEL.deel, DEEL.start, DEEL.einde, DEEL.duur, DEEL.loop, DEEL.bus, DEEL.chauffeur],
+  filters: [{ soort: 'periode', standaard: 'deze-week', snelkeuze: 'dagen' }, { soort: 'chauffeur' }],
+  kolommen: [
+    { id: 'datum', titel: 'Datum', type: 'datum', sorteerOp: 'volgorde' },
+    // Telefoon: dag en chauffeur onder de datum; dienst, start en einde in beeld.
+    // Deel, duur en loop staan samen achter het scrollen: drie smalle kolommen
+    // die na één veeg naast de vaste datum volledig in beeld staan.
+    { id: 'dag', titel: 'Dag', type: 'tekst', sorteerOp: 'volgorde', smal: 'onderEerste' },
+    { id: 'dienst', titel: 'Dienst', type: 'tekst', code: true },
+    // Links: het deelnummer hoort bij de dienst ervoor, niet bij de starttijd erna.
+    { id: 'deel', titel: 'Deel', type: 'getal', uitlijning: 'links', smal: 'achteraan' },
+    { id: 'start', titel: 'Start', type: 'tijd' },
+    { id: 'einde', titel: 'Einde', type: 'tijd' },
+    { id: 'duur', titel: 'Duur', type: 'duur', smal: 'achteraan' },
+    { id: 'loop', titel: 'Loop', type: 'tekst', code: true, smal: 'achteraan' },
+    { id: 'chauffeur', titel: 'Chauffeur', type: 'tekst', smal: 'onderEerste' },
+  ],
   sortering: { kolom: 'datum', richting: 'asc' },
   print: 'liggend',
   bronNaam: 'planningsgegevens',
   geenBron: { tekst: 'De planning komt uit de import van de maandplanning.', actie: { label: 'Naar Beheer roosters', view: 'beheer-roosters' } },
-};
-
-/**
- * Staat in de catalogus onder Voertuigen: dezelfde rijen als Diensten per dag,
- * maar alleen de delen waaraan een bus gekoppeld is, met het voertuig als
- * eerste filter en de som van de duur. Zolang de planning geen bus per dienst
- * bijhoudt is de bron leeg, en dat zegt het rapport ook.
- */
-export const INZET_PER_VOERTUIG: RapportDefinitie = {
-  id: 'inzet-per-voertuig',
-  domein: 'voertuigen',
-  titel: 'Inzet per voertuig',
-  omschrijving: 'Welke bus wanneer welke dienst reed volgens de planning, met de som van de geplande duur.',
-  filters: [{ soort: 'voertuig' }, { soort: 'periode', snelkeuze: 'dagen' }],
-  // Telefoon: bus en dienst in beeld; de duur (telt in de totaalrij) staat als eerste achter het scrollen, dan de uren zelf.
-  kolommen: [
-    DEEL.datum, DEEL.dag,
-    { ...DEEL.bus, smal: undefined },
-    DEEL.dienst,
-    { ...DEEL.duur, totaal: true },
-    DEEL.deel,
-    { ...DEEL.start, smal: 'achteraan' }, { ...DEEL.einde, smal: 'achteraan' },
-    DEEL.chauffeur,
-  ],
-  sortering: { kolom: 'datum', richting: 'asc' },
-  print: 'liggend',
-  bronNaam: 'diensten met een bus',
-  geenBron: { tekst: 'De planning houdt vandaag geen bus per dienst bij: het busnummer van een dienst is nergens ingevuld. Zodra dat wel gebeurt, vult dit rapport zich vanzelf.' },
 };
 
 /** Wat er met een openstaande dienst aan de hand is. */

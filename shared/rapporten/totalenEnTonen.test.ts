@@ -202,16 +202,15 @@ describe('peildatum in de filterregel', () => {
 describe('de definities van voertuigen en personeel', () => {
   const NIEUW = [...rapportenVanDomein('voertuigen'), ...rapportenVanDomein('personeel')];
 
-  it('acht voertuigrapporten en vier personeelsrapporten, en het domein personeel staat in de catalogus', () => {
-    // Inzet per voertuig (stap 4) draait op de lader van Diensten per dag, maar staat in de catalogus bij Voertuigen.
+  it('zeven voertuigrapporten en vier personeelsrapporten, en het domein personeel staat in de catalogus', () => {
     expect(rapportenVanDomein('voertuigen').map((r) => r.id)).toEqual([
-      'wagenpark-overzicht', 'wagenpark-leeftijd', 'wagenpark-technisch', 'wagenpark-samenvatting', 'vervaldata-voertuigen', 'defecten', 'uitgevoerde-werken', 'inzet-per-voertuig',
+      'wagenpark-overzicht', 'wagenpark-leeftijd', 'wagenpark-technisch', 'wagenpark-samenvatting', 'vervaldata-voertuigen', 'defecten', 'uitgevoerde-werken',
     ]);
     expect(rapportenVanDomein('personeel').map((r) => r.id)).toEqual(['contactlijst', 'actieve-medewerkers', 'medische-schiftingen', 'vakbekwaamheden']);
     expect(DOMEINEN.map((d) => d.id)).toContain('personeel');
     expect(new Set(RAPPORTEN.map((r) => r.id)).size).toBe(RAPPORTEN.length);
-    // Na het samenvoegen met ziekte en verlof: 1 verlofsaldo + 6 + 11; stap 4 voegt 3 ruilrapporten, 3 planningsrapporten en Inzet per voertuig toe.
-    expect(RAPPORTEN).toHaveLength(25);
+    // Na het samenvoegen met ziekte en verlof: 1 verlofsaldo + 6 + 11; stap 4 voegt 3 ruilrapporten en 3 planningsrapporten toe.
+    expect(RAPPORTEN).toHaveLength(24);
     expect(rapportVan('verlofsaldo')!.domein).toBe('verlof');
   });
 

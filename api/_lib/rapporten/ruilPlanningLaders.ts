@@ -5,10 +5,9 @@ import {
   getSwapVerloopRegels, getSwapsData,
 } from "../../storage.js";
 import type { RapportLader } from "../../../shared/rapporten/types.js";
-import { getVehicles } from "../techniekStorage.js";
 import { vandaagInBelgie } from "./peildatumServer.js";
 import { getRapportMedewerkers } from "./personeelBron.js";
-import { bouwDienstenPerDag, bouwOpenstaandeDiensten, bouwOverzichtPerChauffeur, type DienstenBron, type OverzichtBron, type PlanningDeel } from "./planning.js";
+import { bouwDienstenPerDag, bouwOpenstaandeDiensten, bouwOverzichtPerChauffeur, type OverzichtBron, type PlanningDeel } from "./planning.js";
 import { bouwRuilaanvragen, bouwRuilenPerChauffeur, bouwUitgevoerdeWissels, type RuilBron, type RuilRij } from "./ruilen.js";
 
 /**
@@ -36,12 +35,6 @@ export const RUIL_LADERS: Record<string, RapportLader> = {
   ruilaanvragen: async (filters) => bouwRuilaanvragen(await ruilBron(), filters, vandaagInBelgie()),
 };
 
-/** De planning wordt volledig gelezen (pagina's parallel) en in de pure functie op periode gefilterd, voor het `bereik`. */
-const dienstenBron = async (): Promise<DienstenBron> => {
-  const [planning, users, voertuigen] = await Promise.all([getPlanningData(), getRapportMedewerkers(), getVehicles()]);
-  return { planning: planning as PlanningDeel[], users, voertuigen };
-};
-
 export const PLANNING_LADERS: Record<string, RapportLader> = {
   "overzicht-per-chauffeur": async (filters) => {
     // Zelfde bronnen als GET /api/month-planning, met de matrix en de afwezigheden begrensd op de periode.
@@ -57,9 +50,11 @@ export const PLANNING_LADERS: Record<string, RapportLader> = {
     ]);
     return bouwOverzichtPerChauffeur({ rows, users, services, codes, leave, swaps, grenzen } as OverzichtBron, filters);
   },
-  "diensten-per-dag": async (filters) => bouwDienstenPerDag(await dienstenBron(), filters),
-  // Eén lader, twee definities: dezelfde rijen, maar alleen de delen waaraan een bus gekoppeld is.
-  "inzet-per-voertuig": async (filters) => bouwDienstenPerDag(await dienstenBron(), filters, { alleenMetBus: true }),
+  // De planning wordt volledig gelezen (pagina's parallel) en in de pure functie op periode gefilterd, voor het `bereik`.
+  "diensten-per-dag": async (filters) => {
+    const [planning, users] = await Promise.all([getPlanningData(), getRapportMedewerkers()]);
+    return bouwDienstenPerDag({ planning: planning as PlanningDeel[], users }, filters);
+  },
   "openstaande-diensten": async (filters) => {
     const vandaag = vandaagInBelgie();
     // Voorbije dagen zijn geen gat meer: de dekking rekenen we pas vanaf vandaag (en niet als de hele periode voorbij is).

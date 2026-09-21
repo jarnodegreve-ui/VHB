@@ -7,8 +7,10 @@ import { berekenCelWaarheid, type CelWaarheidInvoer } from "../celWaarheid.js";
 import { persoonZoeker, weekdagKort, type RapportGebruiker } from "./gedeeld.js";
 
 /**
- * De rapporten van het domein planning (en Inzet per voertuig, dat op dezelfde
- * lader draait). Pure functies (bron + filters → rijen + bereik).
+ * De rapporten van het domein planning. Pure functies (bron + filters → rijen
+ * + bereik). Het portaal houdt geen bus per dienst bij en toont bewust ook geen
+ * geplande bus (beslissing Jarno 21-09): `planning.busNumber` wordt hier niet
+ * gelezen.
  */
 
 // === Overzicht per chauffeur ===
@@ -61,21 +63,17 @@ export function bouwOverzichtPerChauffeur(bron: OverzichtBron, filters: RapportF
   return { rijen, bereik: eerste && laatste ? { van: eerste, tot: laatste } : null };
 }
 
-// === Diensten per dag en Inzet per voertuig ===
+// === Diensten per dag ===
 
 /** Een rij uit `planning`: één dienst-DEEL. */
-export type PlanningDeel = { id: string | number; date: string; startTime?: string | null; endTime?: string | null; line?: string | number | null; busNumber?: string | null; loopnr?: string | number | null; driverId?: string | number | null };
+export type PlanningDeel = { id: string | number; date: string; startTime?: string | null; endTime?: string | null; line?: string | number | null; loopnr?: string | number | null; driverId?: string | number | null };
 
 export type DienstenBron = {
   planning: readonly PlanningDeel[];
   users: readonly RapportGebruiker[];
-  /** Het wagenpark, om het gekozen voertuig (id) naar een busnummer te vertalen. */
-  voertuigen: ReadonlyArray<{ id: string; busnr: string; kortNr?: number | null }>;
 };
 
 const tekst = (v: unknown): string => String(v ?? "").trim();
-/** Busnummers vergelijken zonder spaties of hoofdletters: "013 023" = "013023". */
-const busSleutel = (v: unknown): string => tekst(v).replace(/\s+/g, "").toLowerCase();
 /** 'UU:MM' → minuten, voor de volgorde van de delen (een busdag loopt tot 47:59). */
 const minutenVan = (tijd: string): number => {
   const m = /^(\d{1,2}):(\d{2})/.exec(tijd);
@@ -88,24 +86,19 @@ const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
  * volgt uit de starttijd binnen dezelfde chauffeur, dag en dienst: een
  * gesplitste dienst (2109 met 06:53-08:23 en 13:10-19:15) is deel 1 en deel 2.
  * De duur is die van dit deel (`dienstMinuten`: einde vóór start = over
- * middernacht). `alleenMetBus`: het rapport Inzet per voertuig, waar een deel
- * zonder bus niets te zoeken heeft en de bron dus "diensten met een bus" is.
+ * middernacht).
  */
-export function bouwDienstenPerDag(bron: DienstenBron, filters: RapportFilters, opties: { alleenMetBus?: boolean } = {}): RapportResultaat {
+export function bouwDienstenPerDag(bron: DienstenBron, filters: RapportFilters): RapportResultaat {
   const van = filters.van ?? "";
   const tot = filters.tot ?? "";
   const persoon = persoonZoeker(bron.users);
-  const geldig = bron.planning.filter((p) => ISO_DAG.test(tekst(p.date)) && (!opties.alleenMetBus || tekst(p.busNumber) !== ""));
+  const geldig = bron.planning.filter((p) => ISO_DAG.test(tekst(p.date)));
 
   let bereik: RapportBereik = null;
   for (const p of geldig) {
     const dag = tekst(p.date);
     bereik = bereik ? { van: dag < bereik.van ? dag : bereik.van, tot: dag > bereik.tot ? dag : bereik.tot } : { van: dag, tot: dag };
   }
-
-  // Het gekozen voertuig is een id uit het wagenpark; de planning kent alleen een busnummer.
-  const voertuig = filters.voertuig ? bron.voertuigen.find((v) => v.id === filters.voertuig) : undefined;
-  const busSleutels = voertuig ? new Set([busSleutel(voertuig.busnr), ...(voertuig.kortNr != null ? [String(voertuig.kortNr)] : [])]) : null;
 
   // Deelnummer per (chauffeur, dag, dienst), over de hele dag en vóór de filters: een filter mag van deel 2 geen deel 1 maken.
   const groepen = new Map<string, PlanningDeel[]>();
@@ -122,8 +115,6 @@ export function bouwDienstenPerDag(bron: DienstenBron, filters: RapportFilters, 
     delen.sort((a, b) => minutenVan(tekst(a.startTime)) - minutenVan(tekst(b.startTime)) || tekst(a.id).localeCompare(tekst(b.id)));
     delen.forEach((p, i) => {
       if (filters.chauffeur && tekst(p.driverId) !== filters.chauffeur) return;
-      // Een voertuig dat niet (meer) in het wagenpark staat kan niets rijden: geen rijen, geen stille "alle".
-      if (filters.voertuig && !(busSleutels?.has(busSleutel(p.busNumber)))) return;
       const dag = tekst(p.date);
       const dienst = tekst(p.line);
       rijen.push({
@@ -136,7 +127,6 @@ export function bouwDienstenPerDag(bron: DienstenBron, filters: RapportFilters, 
         einde: tekst(p.endTime) || null,
         duur: dienstMinuten({ startTime: tekst(p.startTime), endTime: tekst(p.endTime) }),
         loop: tekst(p.loopnr) || null,
-        bus: tekst(p.busNumber) || null,
         chauffeur: tekst(p.driverId) ? persoon(tekst(p.driverId)).naam : null,
         // Datum, dienst (numeriek waar het kan) en deel in één sorteersleutel.
         volgorde: `${dag}|${dienst.padStart(8, "0")}|${i + 1}|${tekst(p.driverId)}`,

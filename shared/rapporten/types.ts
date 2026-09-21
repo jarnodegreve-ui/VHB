@@ -161,8 +161,8 @@ export type RapportKolom = {
   /**
    * Korte code van een viertal tekens (dienstnummer, loopnummer): een
    * tekstkolom die op de telefoon zo smal is als een cijferkolom, zodat datum,
-   * dienst, start en einde samen voor het scrollen passen. Een busnummer
-   * ("013 023") is daar te lang voor en blijft een gewone tekstkolom.
+   * dienst, start en einde samen voor het scrollen passen. Langere nummers
+   * (een busnummer als "013 023") blijven een gewone tekstkolom.
    */
   code?: boolean;
   /**

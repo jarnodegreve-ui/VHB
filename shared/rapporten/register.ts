@@ -4,7 +4,7 @@ import { ZIEKTE_RAPPORTEN } from './definities/ziekte.js';
 import { VOERTUIG_RAPPORTEN } from './definities/voertuigen.js';
 import { PERSONEEL_RAPPORTEN } from './definities/personeel.js';
 import { RUIL_RAPPORTEN } from './definities/ruilen.js';
-import { INZET_PER_VOERTUIG, PLANNING_RAPPORTEN } from './definities/planning.js';
+import { PLANNING_RAPPORTEN } from './definities/planning.js';
 
 /**
  * Dé lijst van rapporten. Nieuw rapport:
@@ -43,9 +43,7 @@ export const DOMEINEN: readonly DomeinDef[] = [
  * Volgorde = volgorde binnen het domein in de catalogus.
  */
 export const RAPPORTEN: readonly RapportDefinitie[] = [
-  ...PLANNING_RAPPORTEN, ...VERLOF_RAPPORTEN, ...ZIEKTE_RAPPORTEN, ...RUIL_RAPPORTEN,
-  // Inzet per voertuig draait op de lader van Diensten per dag (definities/planning.ts) maar staat bij Voertuigen.
-  ...VOERTUIG_RAPPORTEN, INZET_PER_VOERTUIG, ...PERSONEEL_RAPPORTEN,
+  ...PLANNING_RAPPORTEN, ...VERLOF_RAPPORTEN, ...ZIEKTE_RAPPORTEN, ...RUIL_RAPPORTEN, ...VOERTUIG_RAPPORTEN, ...PERSONEEL_RAPPORTEN,
 ];
 
 const PER_ID = new Map(RAPPORTEN.map((r) => [r.id, r]));

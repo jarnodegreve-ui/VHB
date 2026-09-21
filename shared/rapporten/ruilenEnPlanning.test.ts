@@ -15,14 +15,15 @@ import {
  * maanden, de kolomtypes `tijd` en `code`, de melding bij veel rijen, en de
  * definities zelf.
  */
-const NIEUW = [...rapportenVanDomein('ruilen'), ...rapportenVanDomein('planning'), rapportVan('inzet-per-voertuig')!];
+const NIEUW = [...rapportenVanDomein('ruilen'), ...rapportenVanDomein('planning')];
 const query = (tekst: string) => new URLSearchParams(tekst);
 
 describe('de definities van ruilen en planning', () => {
-  it('drie ruilrapporten, drie planningsrapporten, en Inzet per voertuig staat bij Voertuigen', () => {
+  it('drie ruilrapporten en drie planningsrapporten; geen rapport per voertuig op de planning', () => {
     expect(rapportenVanDomein('ruilen').map((r) => r.id)).toEqual(['uitgevoerde-wissels', 'ruilen-per-chauffeur', 'ruilaanvragen']);
     expect(rapportenVanDomein('planning').map((r) => r.id)).toEqual(['overzicht-per-chauffeur', 'diensten-per-dag', 'openstaande-diensten']);
-    expect(rapportVan('inzet-per-voertuig')!.domein).toBe('voertuigen');
+    // Het portaal houdt geen bus per dienst bij en toont bewust ook geen geplande bus (beslissing Jarno 21-09).
+    expect(rapportVan('inzet-per-voertuig')).toBeUndefined();
     expect(DOMEINEN.filter((d) => !d.volgtLater).every((d) => rapportenVanDomein(d.id).length > 0)).toBe(true);
     expect(new Set(RAPPORTEN.map((r) => r.id)).size).toBe(RAPPORTEN.length);
   });
@@ -66,14 +67,13 @@ describe('de definities van ruilen en planning', () => {
     }
   });
 
-  it('wat tegenover vandaag rekent zegt dat; elke lege bron heeft een tekst, en een knop waar er een scherm voor is', () => {
+  it('wat tegenover vandaag rekent zegt dat; elke lege bron heeft een tekst en een knop naar het scherm waar ze gevuld wordt', () => {
     expect(NIEUW.filter((r) => r.peildatum).map((r) => r.id)).toEqual(['ruilaanvragen', 'openstaande-diensten']);
     for (const def of NIEUW) {
       expect(def.bronNaam.length, def.id).toBeGreaterThan(3);
       expect(def.geenBron?.tekst, def.id).toBeTruthy();
+      expect(def.geenBron?.actie?.view, def.id).toBeTruthy();
     }
-    // Een bus per dienst houdt het portaal nergens bij: daar is geen scherm voor, dus ook geen knop.
-    expect(rapportVan('inzet-per-voertuig')!.geenBron?.actie).toBeUndefined();
   });
 
   it('Openstaande diensten zegt eerlijk dat het de toestand van nu is', () => {
@@ -84,13 +84,22 @@ describe('de definities van ruilen en planning', () => {
     for (const def of NIEUW) expect(`${def.titel} ${def.omschrijving} ${def.geenBron?.tekst ?? ''}`, def.id).not.toMatch(/ — /);
   });
 
-  it('Diensten per dag en Inzet per voertuig: dezelfde kolommen, anders geschikt; alleen Inzet telt de duur op', () => {
-    const ids = (id: string) => rapportVan(id)!.kolommen.map((k) => k.id);
-    expect(ids('diensten-per-dag')).toEqual(['datum', 'dag', 'dienst', 'deel', 'start', 'einde', 'duur', 'loop', 'bus', 'chauffeur']);
-    expect(ids('inzet-per-voertuig')).toEqual(['datum', 'dag', 'bus', 'dienst', 'duur', 'deel', 'start', 'einde', 'chauffeur']);
-    expect(rapportVan('inzet-per-voertuig')!.filters[0]).toEqual({ soort: 'voertuig' });
-    expect(totaalSoort(rapportVan('inzet-per-voertuig')!.kolommen.find((k) => k.id === 'duur')!)).toBe('som');
-    expect(totaalSoort(rapportVan('diensten-per-dag')!.kolommen.find((k) => k.id === 'duur')!)).toBeNull();
+  it('Diensten per dag: geen kolom Bus en geen voertuigfilter, de kolom Loop blijft', () => {
+    const def = rapportVan('diensten-per-dag')!;
+    expect(def.kolommen.map((k) => k.id)).toEqual(['datum', 'dag', 'dienst', 'deel', 'start', 'einde', 'duur', 'loop', 'chauffeur']);
+    expect(def.filters.map((f) => f.soort)).toEqual(['periode', 'chauffeur']);
+    // De URL kent de parameter niet meer: de server valideert en gebruikt hem niet.
+    const gelezen = filterSchemaVoor(def).safeParse({ van: '2026-09-21', tot: '2026-09-27', voertuig: 'v23' });
+    expect(gelezen.success && gelezen.data).toEqual({ van: '2026-09-21', tot: '2026-09-27', keuzes: {} });
+    expect(filtersNaarQuery(def, { van: '2026-09-21', tot: '2026-09-27', voertuig: 'v23', keuzes: {} }).toString()).toBe('van=2026-09-21&tot=2026-09-27');
+  });
+
+  it('Diensten per dag op de telefoon: dienst, start en einde in beeld; deel, duur en loop passen na één veeg samen naast de vaste datum', () => {
+    const { kolommen, onderEerste } = kolomIndeling(rapportVan('diensten-per-dag')!, 'smal');
+    expect(kolommen.map((k) => k.id)).toEqual(['datum', 'dienst', 'start', 'einde', 'deel', 'duur', 'loop']);
+    expect(onderEerste.map((k) => k.id)).toEqual(['dag', 'chauffeur']);
+    const achteraan = kolommen.filter((k) => k.smal === 'achteraan');
+    expect(SMAL_BREEDTE.eerste + achteraan.reduce((n, k) => n + smalleBreedte(k, false), 0)).toBeLessThanOrEqual(SMAL_KADER_REM);
   });
 });
 
@@ -183,10 +192,10 @@ describe('kolomtypes tijd en code', () => {
     expect(formatWaarde(kolom('duur'), 405)).toBe('6:45');
   });
 
-  it('smal op de telefoon: een tijd en een dienstnummer zijn zo breed als een cijfer, een busnummer blijft gewone tekst', () => {
+  it('smal op de telefoon: een tijd en een dienst- of loopnummer zijn zo breed als een cijfer', () => {
     expect(smalleBreedte(kolom('start'), false)).toBe(SMAL_BREEDTE.tijd);
     expect(smalleBreedte(kolom('dienst'), false)).toBe(SMAL_BREEDTE.code);
-    expect(smalleBreedte(kolom('bus'), false)).toBe(SMAL_BREEDTE.tekst);
+    expect(smalleBreedte(kolom('loop'), false)).toBe(SMAL_BREEDTE.code);
   });
 
   it('de datum sorteert op datum, dienst en deel (de sleutel `volgorde`)', () => {

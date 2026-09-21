@@ -95,7 +95,7 @@ const haal = async (pad: string, rol?: string) => {
 };
 
 const SEPTEMBER = '?van=2026-09-01&tot=2026-09-30';
-const ALLE = ['uitgevoerde-wissels', 'ruilen-per-chauffeur', 'ruilaanvragen', 'overzicht-per-chauffeur', 'diensten-per-dag', 'inzet-per-voertuig', 'openstaande-diensten'];
+const ALLE = ['uitgevoerde-wissels', 'ruilen-per-chauffeur', 'ruilaanvragen', 'overzicht-per-chauffeur', 'diensten-per-dag', 'openstaande-diensten'];
 const leeg = () => { gelezen.swaps = 0; gelezen.planning = 0; gelezen.matrix = 0; gelezen.dekking = []; };
 
 describe('rolafscherming: alleen planner en admin', () => {
@@ -164,11 +164,13 @@ describe('antwoord', () => {
     expect(res.json.totalen).toMatchObject({ diensten: 1, minuten: 455, dagen: 2 });
   });
 
-  it('diensten per dag: twee delen; inzet per voertuig: geen bus in de planning = een lege bron', async () => {
+  it('diensten per dag: twee delen, zonder bus; een voertuig in de URL doet niets meer en het rapport per voertuig bestaat niet', async () => {
     const diensten = await haal('/api/rapporten/diensten-per-dag?van=2026-09-21&tot=2026-09-27', 'planner');
     expect(diensten.json.rijen.map((r: { dienst: string; deel: number; duur: number }) => [r.dienst, r.deel, r.duur])).toEqual([['2109', 1, 90], ['2109', 2, 365]]);
-    const inzet = await haal('/api/rapporten/inzet-per-voertuig?van=2026-09-21&tot=2026-09-27&voertuig=v1', 'planner');
-    expect(inzet.json).toMatchObject({ rijen: [], bereik: null, totalen: { duur: 0 } });
+    for (const rij of diensten.json.rijen) expect(Object.keys(rij)).not.toContain('bus');
+    const metVoertuig = await haal('/api/rapporten/diensten-per-dag?van=2026-09-21&tot=2026-09-27&voertuig=v1', 'planner');
+    expect(metVoertuig.json.rijen).toEqual(diensten.json.rijen);
+    expect((await haal('/api/rapporten/inzet-per-voertuig?van=2026-09-21&tot=2026-09-27', 'planner')).status).toBe(404);
   });
 
   it('openstaande diensten: de dekking wordt pas vanaf vandaag gerekend, en helemaal niet voor een voorbije periode', async () => {
