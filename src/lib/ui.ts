@@ -1,12 +1,10 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { deviceHeaders } from './device';
 import { supabase } from './supabase';
 import type { Toast, ToastOpties } from '../components/ToastStack';
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+// `cn` woont in ./cn (rol-bewuste tailwind-merge, zonder de zware imports van
+// dit bestand, zodat de test hem los kan laden); hier alleen doorgegeven.
+export { cn } from './cn';
 
 /** sessionStorage-sleutel waarmee een gedwongen uitlog zijn reden doorgeeft
  *  aan het inlogscherm. Een toast kon dat niet: LoginView vervangt de hele

@@ -798,7 +798,7 @@ export function CoverageView() {
                   {weekdayPeriods.map((p, i) => (
                     <Card key={i} tone="muted" padding="sm" className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <MicroLabel className="text-slate-500">Vanaf</MicroLabel>
+                        <MicroLabel className="text-slate-600">Vanaf</MicroLabel>
                         <DateInput
                           size="sm"
                           value={p.vanaf}

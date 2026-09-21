@@ -93,9 +93,7 @@ export function OpsStat({
       </div>
       {/* Telling = koprol (text-stat); dienstnummer of tijd = mono erbij,
           zelfde accent als overal elders (ronde 3, 19-09). */}
-      {/* Bewust geen cn(): tailwind-merge ziet `text-stat` en `text-slate-900`
-          als dezelfde text-groep en gooit de rol weg. */}
-      <p className={`kpi-getal mt-2.5 min-w-0 truncate text-stat text-slate-900${mono ? ' text-stat-mono' : ''}`}>
+      <p className={cn('kpi-getal mt-2.5 min-w-0 truncate text-stat text-slate-900', mono && 'text-stat-mono')}>
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
       </p>

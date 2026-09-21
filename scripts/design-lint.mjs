@@ -255,6 +255,34 @@ function loop(dir) {
   }
 }
 loop(ROOT);
+
+// Typografie-rollen: `cn()` (src/lib/cn.ts) kent elke `.text-<rol>` uit
+// src/index.css als eigen tailwind-merge-groep. Een rol die daar ontbreekt
+// ziet tailwind-merge als tekstKLEUR en gooit hij weg zodra er een
+// `text-<kleur>` naast staat (kopje rendert dan als gewone tekst). Rol + kleur
+// via cn() is dus toegestaan; een nieuwe rol zonder config-regel niet.
+// src/lib/cn.test.ts controleert daarbovenop de eigenschappen per rol.
+{
+  const css = zonderCommentaar(fs.readFileSync(path.join(ROOT, 'index.css'), 'utf8'));
+  const inCss = new Set([...css.matchAll(/\.text-([a-z0-9-]+)\s*\{/g)].map((m) => m[1]));
+  const blok = fs.readFileSync(path.join(ROOT, 'lib/cn.ts'), 'utf8').match(/TYPOGRAFIE_ROLLEN = \{([\s\S]*?)\} as const/);
+  const inConfig = new Set(blok ? [...blok[1].matchAll(/^\s*'([a-z0-9-]+)'\s*:/gm)].map((m) => m[1]) : []);
+  if (!blok || inCss.size === 0) {
+    console.log('src/lib/cn.ts:1  typografie-rollen: TYPOGRAFIE_ROLLEN of de .text-<rol>-klassen in src/index.css niet gevonden (vangnet kan niet vergelijken)');
+    fouten++;
+  }
+  for (const rol of inCss) {
+    if (inConfig.has(rol)) continue;
+    console.log(`src/index.css  typografie-rol .text-${rol} staat niet in TYPOGRAFIE_ROLLEN (src/lib/cn.ts): cn() gooit hem weg naast een text-<kleur>`);
+    fouten++;
+  }
+  for (const rol of inConfig) {
+    if (inCss.has(rol)) continue;
+    console.log(`src/lib/cn.ts  TYPOGRAFIE_ROLLEN kent '${rol}', maar src/index.css heeft geen .text-${rol} (meer)`);
+    fouten++;
+  }
+}
+
 if (fouten) { console.error(`\n✗ design-lint: ${fouten} bevinding(en).${waarschuwingen ? ` (+ ${waarschuwingen} waarschuwing(en))` : ''}`); process.exit(1); }
 if (waarschuwingen) console.log(`\n✓ design-lint: geen fouten; ${waarschuwingen} waarschuwing(en) (hard met VHB_LINT_STRIKT=1).`);
 else console.log('✓ design-lint: schoon.');
