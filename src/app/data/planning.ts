@@ -13,7 +13,7 @@ import { dienstoverzichtToast } from '../../lib/dienstoverzichtToast';
  * dienstnotities van de ingelogde chauffeur.
  */
 export function usePlanningData(ctx: DataCtx) {
-  const { session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog } = ctx;
+  const { session, currentUser, showToast, meldLaadfout, fetchActivityLog } = ctx;
   // Collecties via useCollectieState: een GET met ongewijzigde inhoud slaat
   // de setState (en dus de tree-render) over, zie kern.ts.
   const [shifts, setShifts, zetShiftsUitAntwoord] = useCollectieState<Shift[]>([]);
@@ -38,9 +38,10 @@ export function usePlanningData(ctx: DataCtx) {
   const [planningMatrixGeladen, setPlanningMatrixGeladen] = useState(false);
   const [planningCodesGeladen, setPlanningCodesGeladen] = useState(false);
 
+  // `opts.silent` bestaat nog voor de aanroepers, maar sinds fase 2 (22-09)
+  // is er geen schermvullende laadstaat meer om te onderdrukken.
   const fetchPlanning = async (accessToken = session?.access_token, filters?: { driverId?: string; month?: string }, opts?: { silent?: boolean }) => {
     try {
-      if (!opts?.silent) beginLoading();
       // Chauffeurs krijgen alleen hun eigen shifts — 50x minder data
       // dan het volledige rooster. Planner/admin krijgt alles.
       const params = new URLSearchParams();
@@ -66,15 +67,12 @@ export function usePlanningData(ctx: DataCtx) {
     } catch (error) {
       console.error('Error fetching planning:', error);
       meldLaadfout('de planning');
-    } finally {
-      if (!opts?.silent) endLoading();
     }
   };
 
   const savePlanning = async (newShifts: Shift[]): Promise<boolean> => {
     if (!ctx.guardCollectionLoaded('planning', 'De planning is')) return false;
     try {
-      beginLoading();
       const response = await apiFetch('/api/planning', {
         method: 'POST',
         headers: ctx.revisionHeader('planning'),
@@ -100,14 +98,11 @@ export function usePlanningData(ctx: DataCtx) {
       console.error('Error saving planning:', error);
       showToast('Opslaan van planning is mislukt.', 'error');
       return false;
-    } finally {
-      endLoading();
     }
   };
 
   const fetchServices = async (accessToken = session?.access_token) => {
     try {
-      beginLoading();
       const response = await apiFetch('/api/services', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
@@ -120,7 +115,6 @@ export function usePlanningData(ctx: DataCtx) {
       meldLaadfout('het dienstoverzicht');
     } finally {
       setServicesGeladen(true);
-      endLoading();
     }
   };
 
@@ -129,7 +123,6 @@ export function usePlanningData(ctx: DataCtx) {
   const saveServices = async (newServices: Service[], opts?: { bulkReplace?: boolean }): Promise<boolean> => {
     if (!ctx.guardCollectionLoaded('services', 'Het dienstoverzicht is')) return false;
     try {
-      beginLoading();
       const response = await apiFetch('/api/services', {
         method: 'POST',
         // Import vervangt legitiem de hele collectie; de header laat de
@@ -173,8 +166,6 @@ export function usePlanningData(ctx: DataCtx) {
       console.error('Error saving services:', error);
       showToast('Opslaan van diensten is mislukt.', 'error');
       return false;
-    } finally {
-      endLoading();
     }
   };
 
@@ -221,7 +212,6 @@ export function usePlanningData(ctx: DataCtx) {
   const savePlanningCodes = async (newCodes: PlanningCode[]) => {
     if (!ctx.guardCollectionLoaded('planningCodes', 'De planningscodes zijn')) return false;
     try {
-      beginLoading();
       const response = await apiFetch('/api/planning-codes', {
         method: 'POST',
         headers: ctx.revisionHeader('planningCodes'),
@@ -246,8 +236,6 @@ export function usePlanningData(ctx: DataCtx) {
       console.error('Error saving planning codes:', error);
       showToast(`Opslaan van planningscodes is mislukt: ${error.message}`, 'error');
       return false;
-    } finally {
-      endLoading();
     }
   };
 

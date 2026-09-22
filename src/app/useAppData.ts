@@ -40,16 +40,12 @@ export function useAppData({
   currentView,
   showToast,
   meldLaadfout,
-  beginLoading,
-  endLoading,
 }: {
   session: Session | null;
   currentUser: User | null;
   currentView: View;
   showToast: ShowToast;
   meldLaadfout: (bron: string) => void;
-  beginLoading: () => void;
-  endLoading: () => void;
 }) {
   // Start leeg (geen mock-data): tot de eerste fetch klaar is gate't
   // isInitialLoad de skeleton-staat. Geen risico meer dat mock-diensten/
@@ -61,7 +57,7 @@ export function useAppData({
   // verlof.reportSick → planning.refreshCoverageGaps, communicatie.
   // sendUrgentEmail → mensen.users.
   const activiteit = useActiviteitData({ session, currentUser, currentView });
-  const ctx = useDataKern({ session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog: activiteit.fetchActivityLog });
+  const ctx = useDataKern({ session, currentUser, showToast, meldLaadfout, fetchActivityLog: activiteit.fetchActivityLog });
   const planning = usePlanningData(ctx);
   const verlof = useVerlofData({ ...ctx, refreshCoverageGaps: planning.refreshCoverageGaps });
   const ruil = useRuilData(ctx);

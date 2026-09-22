@@ -137,7 +137,10 @@ export function ConfirmationModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  /** Mag een Promise teruggeven: de bevestigknop toont dan `bezig` tot de
+   *  server geantwoord heeft en de dialoog sluit pas daarna (fase 2, 22-09:
+   *  C-mutaties blijven server-confirmed, maar nooit zonder feedback). */
+  onConfirm: () => void | Promise<unknown>;
   title: string;
   message?: string;
   confirmText?: string;
@@ -146,6 +149,15 @@ export function ConfirmationModal({
   /** Extra invoer onder de boodschap, bv. een tekstvak voor een reden. */
   children?: React.ReactNode;
 }) {
+  const [bezig, setBezig] = useState(false);
+  const bevestig = async () => {
+    const r = onConfirm();
+    if (r && typeof (r as Promise<unknown>).then === 'function') {
+      setBezig(true);
+      try { await r; } finally { setBezig(false); }
+    }
+    onClose();
+  };
   // Op de gedeelde Modal gebouwd, met `boven` (hogere z-index + stapel-besef
   // voor ESC/focus-trap): als eigen portal op z-[100] rendert een bevestiging
   // die vanuit een open modal wordt geopend (bv. verwijderen in
@@ -153,7 +165,7 @@ export function ConfirmationModal({
   // Modal krijgt hij nu ook ESC, focus-trap en focus-herstel, die deze
   // variant miste.
   return (
-    <Modal open={open} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
+    <Modal open={open} onClose={bezig ? () => {} : onClose} dismissOnBackdrop={!bezig} maxWidth="md" ariaLabel={title} boven>
       <div className="flex max-h-overlay flex-col overflow-hidden">
         <div className="p-6 md:p-7 border-b border-hairline shrink-0">
           <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-700' : 'bg-amber-500/15 text-amber-700')}>
@@ -164,22 +176,15 @@ export function ConfirmationModal({
           {children && <div className="mt-4">{children}</div>}
         </div>
         <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
-          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-surface-row-hover hover:text-slate-900 border border-transparent hover:border-hairline transition-colors">
+          <Button variant="secondary" size="lg" className="flex-1" onClick={onClose} disabled={bezig}>
             {cancelText}
-          </button>
-          <button
-            onClick={() => {
-              onConfirm();
-              onClose();
-            }}
-            /* warning = de semantische amber-kleur, net als het icoon erboven —
-               niet het merk-oker (dat mengde twee talen in één dialoog).
-               Tekst op amber is altijd VHB Black (huisstijlregel; wit op
-               amber-600 haalde ≈3,6:1, onder AA — controle-ronde 27-08). */
-            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-colors ring-1 ring-inset ring-ink/10', variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-600/90' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-amber-500/20')}
-          >
+          </Button>
+          {/* warning = de semantische amber-kleur, net als het icoon erboven, niet
+              het merk-oker (dat mengde twee talen in één dialoog). Tekst op amber
+              is altijd VHB Black (huisstijlregel; wit op amber-600 haalde ≈3,6:1). */}
+          <Button variant={variant === 'danger' ? 'dangerSolid' : 'warning'} size="lg" className="flex-1" bezig={bezig} onClick={() => void bevestig()}>
             {confirmText}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

@@ -380,10 +380,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     if (onDecide) {
       // Succes-toast bij bevestiging: een beslissing zonder enige feedback
       // voelde als "is er iets gebeurd?" (controleronde 30/07).
-      void onDecide(requestId, newStatus, seenStatus, reden).then((ok) => {
+      return onDecide(requestId, newStatus, seenStatus, reden).then((ok) => {
         if (ok) notify(decisionToast(newStatus), 'success');
+        return ok;
       });
-      return;
     }
     const decidedAt = new Date().toISOString();
     onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus, decidedAt, ...(newStatus === 'rejected' && reden ? { beslisReden: reden } : {}) } : r)));
@@ -584,7 +584,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         today={today}
         isPlanner={isPlanner}
         onClose={() => setReviewLeave(null)}
-        onDecide={(id, status, seenStatus, reden) => { handleStatusUpdate(id, status, seenStatus, reden); setReviewLeave(null); }}
+        // Paneel sluit pas ná het antwoord (fase 2): de knop toont intussen `bezig`.
+        onDecide={async (id, status, seenStatus, reden) => { await handleStatusUpdate(id, status, seenStatus, reden); setReviewLeave(null); }}
         onCancel={handleCancel}
         onHistoriek={setHistoryLeave}
       />

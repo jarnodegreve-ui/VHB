@@ -391,7 +391,12 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   const toggleSelectAll = () => setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
   const clearSelection = () => setSelectedIds(new Set());
 
+  const [bulkBezig, setBulkBezig] = useState<'pauzeren' | 'activeren' | null>(null);
   const bulkSetActive = async (active: boolean) => {
+    setBulkBezig(active ? 'activeren' : 'pauzeren');
+    try { await bulkSetActiveInner(active); } finally { setBulkBezig(null); }
+  };
+  const bulkSetActiveInner = async (active: boolean) => {
     const targetIds = new Set([...selectedIds].filter((id) => { const u = users.find((x) => x.id === id); return !!u && (active || !isBulkProtected(u)); }));
     if (targetIds.size === 0) return notify('Geen gebruikers om te wijzigen.', 'error');
     const success = await onSave(users.map((u) => (targetIds.has(u.id) ? { ...u, isActive: active } : u)));
@@ -402,9 +407,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
     const gewijzigd = { ...u, isActive: u.isActive === false };
     await onSaveUser(gewijzigd);
   };
+  // De ConfirmationModal wacht op deze Promise (knop `bezig`) en sluit daarna
+  // zelf via onClose (fase 2).
   const handleBulkDelete = async () => {
     const targetIds = new Set([...selectedIds].filter((id) => { const u = users.find((x) => x.id === id); return !!u && !isBulkProtected(u); }));
-    setConfirmBulkDelete(false);
     if (targetIds.size === 0) return notify('Geen gebruikers om te verwijderen (beschermde accounts overgeslagen).', 'error');
     const success = await onSave(users.filter((u) => !targetIds.has(u.id)));
     if (success) { notify(`${targetIds.size} gebruiker(s) verwijderd.`, 'success'); clearSelection(); }
@@ -640,8 +646,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
     if (!pendingImportUsers) return;
     const success = await onSave(pendingImportUsers);
     if (success) notify('Import succesvol verwerkt.', 'success');
-    setPendingImportUsers(null);
-    setPendingImportMessage('');
+    // De dialoog ruimt pendingImportUsers zelf op via onClose (fase 2).
   };
 
   return (
@@ -740,8 +745,8 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
             )}
           />
           <BulkBar aantal={selectedIds.size} onWis={clearSelection}>
-            <Button variant="secondary" size="sm" icon={<Pause size={14} />} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
-            <Button variant="secondary" size="sm" icon={<Play size={14} />} onClick={() => bulkSetActive(true)}>Activeren</Button>
+            <Button variant="secondary" size="sm" icon={<Pause size={14} />} bezig={bulkBezig === 'pauzeren'} disabled={bulkBezig === 'activeren'} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
+            <Button variant="secondary" size="sm" icon={<Play size={14} />} bezig={bulkBezig === 'activeren'} disabled={bulkBezig === 'pauzeren'} onClick={() => bulkSetActive(true)}>Activeren</Button>
             <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
           </BulkBar>
         </div>

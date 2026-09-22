@@ -50,7 +50,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     message: string;
     confirmText: string;
     variant: 'danger' | 'warning';
-    run: () => void;
+    run: () => void | Promise<unknown>;
   } | null>(null);
   const [selectedShift, setSelectedShift] = useState<string>('');
   const [selectedTargetDriver, setSelectedTargetDriver] = useState<string>('');
@@ -315,6 +315,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
   // Gezien-bevestiging door de ontvanger van de dienst.
   const [isConfirmingSeen, setIsConfirmingSeen] = useState<string | null>(null);
+  // Welke ruil nu op een serverantwoord wacht: de knoppen van die ruil tonen
+  // `bezig` (fase 2); de rest blijft bedienbaar.
+  const [beslisBezig, setBeslisBezig] = useState<string | null>(null);
   const bevestigGezien = async (id: string) => {
     if (isConfirmingSeen || !onConfirmSeen) return;
     setIsConfirmingSeen(id);
@@ -380,10 +383,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         cancelled: 'Aanvraag ingetrokken.',
         completed: 'Afgehandeld, de wissel staat nu onder Afgehandeld.',
       };
-      void onDecide(swapId, newStatus, seenStatus ?? swaps.find((s) => s.id === swapId)?.status).then((ok) => {
-        if (ok && toastFor[newStatus]) notify(toastFor[newStatus]!, 'success');
-      });
-      return;
+      setBeslisBezig(swapId);
+      return onDecide(swapId, newStatus, seenStatus ?? swaps.find((s) => s.id === swapId)?.status)
+        .then((ok) => {
+          if (ok && toastFor[newStatus]) notify(toastFor[newStatus]!, 'success');
+          return ok;
+        })
+        .finally(() => setBeslisBezig((h) => (h === swapId ? null : h)));
     }
     // 'accepted' is een tussenstap (collega akkoord) — nog géén beslismoment;
     // decidedAt zetten we pas bij een definitieve beslissing.
@@ -668,7 +674,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       <ConfirmationModal
         open={!!confirmAction}
         onClose={() => setConfirmAction(null)}
-        onConfirm={() => { confirmAction?.run(); setConfirmAction(null); }}
+        onConfirm={() => confirmAction?.run()}
         title={confirmAction?.title ?? ''}
         message={confirmAction?.message ?? ''}
         confirmText={confirmAction?.confirmText ?? 'Bevestigen'}
@@ -786,19 +792,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <Button variant="ghost" size="sm" icon={<History size={16} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistorySwap(swap)} />
                               {swap.status === 'accepted' && (
                                 <>
-                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Goedkeuren" title="Goedkeuren (rij-/rusttijden ok)" onClick={() => handleStatusUpdate(swap.id, 'approved')} />
-                                  <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Goedkeuren" title="Goedkeuren (rij-/rusttijden ok)" onClick={() => handleStatusUpdate(swap.id, 'approved')} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
                                 </>
                               )}
                               {swap.status === 'pending' && (isAdmin ? (
                                 <>
                                   <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Direct goedkeuren" title="Direct goedkeuren, collega heeft nog niet bevestigd" onClick={() => handleAdminForceApprove(swap.id)} />
-                                  <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
                                 </>
                               ) : (
                                 <>
                                   <Badge tone="amber" stil className="whitespace-nowrap">Wacht op collega</Badge>
-                                  <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                  <Button bezig={beslisBezig === swap.id} variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
                                 </>
                               ))}
                               {swap.status === 'approved' && (
@@ -857,10 +863,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <div className="flex gap-2 pt-1">
                         {swap.status === 'accepted' && (
                           <>
-                            <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleStatusUpdate(swap.id, 'approved')}>
+                            <Button bezig={beslisBezig === swap.id} variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleStatusUpdate(swap.id, 'approved')}>
                               Goedkeuren
                             </Button>
-                            <Button variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                            <Button bezig={beslisBezig === swap.id} variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
                               Afwijzen
                             </Button>
                           </>
@@ -870,14 +876,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAdminForceApprove(swap.id)}>
                               Goedkeuren
                             </Button>
-                            <Button variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                            <Button bezig={beslisBezig === swap.id} variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
                               Afwijzen
                             </Button>
                           </>
                         ) : (
                           <div className="flex-1 flex items-center justify-between gap-2">
                             <Badge tone="amber" stil>Wacht op collega</Badge>
-                            <Button variant="danger" size="sm" onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                            <Button bezig={beslisBezig === swap.id} variant="danger" size="sm" onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
                               Afwijzen
                             </Button>
                           </div>

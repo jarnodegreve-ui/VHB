@@ -11,7 +11,7 @@ import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfou
  * 'Nieuw'-badge op Mijn documenten van de chauffeur.
  */
 export function useMensenData(ctx: DataCtx) {
-  const { session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog } = ctx;
+  const { session, currentUser, showToast, meldLaadfout, fetchActivityLog } = ctx;
   const [users, setUsers, zetUsersUitAntwoord] = useCollectieState<User[]>([]);
   const [unseenDocuments, setUnseenDocuments] = useState(0);
   // Chauffeur/technieker laden gebruikers en documenten ná de poort
@@ -85,7 +85,6 @@ export function useMensenData(ctx: DataCtx) {
   const saveUsers = async (newUsers: Array<User & { password?: string }>) => {
     if (!ctx.guardCollectionLoaded('users', 'De gebruikerslijst is')) return false;
     try {
-      beginLoading();
       const response = await apiFetch('/api/users', {
         method: 'POST',
         headers: ctx.revisionHeader('users'),
@@ -124,8 +123,6 @@ export function useMensenData(ctx: DataCtx) {
       console.error('Error saving users:', error);
       showToast('Fout bij het opslaan van gebruikers: ' + error.message, 'error');
       return false;
-    } finally {
-      endLoading();
     }
   };
 
