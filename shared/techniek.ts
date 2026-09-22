@@ -7,7 +7,7 @@
  * herkennen (werktype T/C/I/L, werkcode H/O/G/Kb/Kv/D/E/L/A).
  */
 
-import { VOERTUIG_STATUS } from './status.js';
+import { DEFECT_STATUS, VOERTUIG_STATUS } from './status.js';
 
 export const VOERTUIG_TYPES = ['lijnbus', 'schoolbus', 'sprinter', 'privevoertuig', 'ander'] as const;
 export type VoertuigType = (typeof VOERTUIG_TYPES)[number];
@@ -63,10 +63,11 @@ export const WERKTYPE_LABEL: Record<Werktype, string> = {
 
 export const DEFECT_STATUSSEN = ['open', 'uitgevoerd', 'geannuleerd'] as const;
 export type DefectStatus = (typeof DEFECT_STATUSSEN)[number];
+/** Label uit de gedeelde statuswoordenschat (shared/status.ts). */
 export const DEFECT_STATUS_LABEL: Record<DefectStatus, string> = {
-  open: 'Open',
-  uitgevoerd: 'Uitgevoerd',
-  geannuleerd: 'Geannuleerd',
+  open: DEFECT_STATUS.open.label,
+  uitgevoerd: DEFECT_STATUS.uitgevoerd.label,
+  geannuleerd: DEFECT_STATUS.geannuleerd.label,
 };
 
 /** Werkcodes van de dagprestaties (tblWerkcodes in Access). */

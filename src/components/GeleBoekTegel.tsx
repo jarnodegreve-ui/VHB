@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Wrench } from 'lucide-react';
 import { OpsStat } from './ops';
+import { TOON_NAAR_BADGE } from './primitives';
 import { laadOpenDefectenAantal } from '../lib/techniek';
+import { DEFECT_STATUS } from '../../shared/status';
 
 /**
  * Dashboardtegel voor de technieker: aantal open meldingen in het gele boek.
@@ -18,7 +20,7 @@ export function GeleBoekTegel({ className, onClick }: { className?: string; onCl
   return (
     <OpsStat
       icon={<Wrench size={16} />}
-      tone={open ? 'amber' : 'slate'}
+      tone={open ? TOON_NAAR_BADGE[DEFECT_STATUS.open.toon] : 'slate'}
       className={className}
       label="Gele boek"
       value={open ?? 0}
