@@ -8,6 +8,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '../../components/Table';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
 import { Avatar } from '../../components/Avatar';
+import { LijstKaart, RecordRij } from '../../components/RecordRij';
 import { BrandLogo } from '../../components/BrandLogo';
 import { BrandSpinner } from '../../components/BrandSpinner';
 import { LijnTegel } from '../../components/LijnTegel';
@@ -373,6 +374,16 @@ export function DesignsysteemView() {
             waarde={voertuig}
             onChange={setVoertuig}
           />
+        </div>
+      </Sectie>
+
+      <Sectie id="lijstrij" titel="Lijstrij" uitleg="Het rijrecept voor lijsten met records: één LijstKaart met hairlines in plaats van losse kaarten, en per RecordRij de titel alleen op regel 1, meta links en status rechts op regel 2, en één chevron (omlaag = klapt open, rechts = opent een detail). Een gouden streep = nieuw voor jou, een rode = dringend, nooit een getint vlak.">
+        <div className="max-w-md">
+          <LijstKaart aria-label="Voorbeeld van het rijrecept">
+            <RecordRij titel="01/09 – 05/09/2026" meta="Betaald verlof · 5 dagen" status={<><Badge tone="oker">Nieuw</Badge><StatusBadge status="approved" stil /></>} accent="nieuw" richting="omlaag" onClick={() => {}} />
+            <RecordRij titel="Onderhoud aan boordcomputers" meta="27 jul 2026" status={<Badge tone="red" dot>Dringend</Badge>} voorproef="Alle bussen krijgen dit weekend een software-update." accent="dringend" richting="rechts" onClick={() => {}} />
+            <RecordRij titel="Do 24 september" meta="Dienst 2101" status={<StatusBadge status="pending" stil />} richting="omlaag" onClick={() => {}} />
+          </LijstKaart>
         </div>
       </Sectie>
 

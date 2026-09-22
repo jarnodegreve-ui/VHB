@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, Check, ChevronRight, Clock } from 'lucide-react';
+import { Bell, Check } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
 import { fetchMijnUpdateReads, markUpdatesRead } from '../lib/updateReads';
@@ -8,9 +8,9 @@ import { kiesRecord } from '../lib/overgang';
 import { useRecordParam } from '../app/router';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button } from '../components/primitives';
-import { Card } from '../components/Card';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
 import { LegeLijst } from '../components/illustraties';
+import { LijstKaart, RecordRij } from '../components/RecordRij';
 import { UpdateBijlagenLezen } from '../components/UpdateBijlagenLezen';
 
 /**
@@ -98,45 +98,33 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
       ) : (
         <MasterDetail
           lijst={(
-            <ul className="space-y-2" aria-label="Berichten">
-              {updates.map((update) => {
-                const isCurrent = detail?.id === update.id;
-                return (
-                  <Card
-                    key={update.id}
-                    as="li"
-                    padding="none"
-                    interactive
-                    aria-current={isCurrent ? 'true' : undefined}
-                    className={cn('relative overflow-hidden', isCurrent && 'bg-surface-muted ring-1 ring-hairline-strong')}
-                  >
-                    <div className={cn('absolute top-0 left-0 w-1 h-full', update.isUrgent ? 'bg-red-500' : 'bg-slate-300')} />
-                    {/* rauw: lijstrij van het master-detail (kaart als knop: titel + datum + dringend-badge + eerste regel) */}
-                    <button
-                      type="button"
-                      onClick={() => kiesRecord(update.id, detail?.id ?? null, () => setSelectedId(update.id))}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-surface-soft-hover"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-md font-semibold text-slate-900" data-vt-record={update.id}>{update.title}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 tabular-nums">
-                            <Clock size={12} className="text-slate-300" />
-                            {formatUpdateDate(update.date)}
-                          </span>
-                          {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
-                          {update.isUrgent && telt && gelezen.has(update.id) && <Badge tone="emerald" stil>Bevestigd</Badge>}
-                        </div>
-                        {/* Eerste regel als voorproef — op mobiel scan je zo de
-                            lijst zonder elk bericht te openen. */}
-                        <p className="mt-1 truncate text-xs font-normal text-slate-500">{update.content}</p>
-                      </div>
-                      <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
-                    </button>
-                  </Card>
-                );
-              })}
-            </ul>
+            // Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines in
+            // plaats van een losse kaart per bericht met een dikke streep. De
+            // streep blijft alleen voor wat dringend is; een grijze streep bij
+            // elk gewoon bericht zei niets.
+            <LijstKaart aria-label="Berichten">
+              {updates.map((update) => (
+                <RecordRij
+                  key={update.id}
+                  titel={update.title}
+                  titelAttrs={{ 'data-vt-record': update.id }}
+                  meta={formatUpdateDate(update.date)}
+                  status={(
+                    <>
+                      {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
+                      {update.isUrgent && telt && gelezen.has(update.id) && <Badge tone="emerald" stil>Bevestigd</Badge>}
+                    </>
+                  )}
+                  accent={update.isUrgent ? 'dringend' : undefined}
+                  // Eerste regel als voorproef: op mobiel scan je zo de lijst
+                  // zonder elk bericht te openen.
+                  voorproef={update.content}
+                  richting="rechts"
+                  actief={detail?.id === update.id}
+                  onClick={() => kiesRecord(update.id, detail?.id ?? null, () => setSelectedId(update.id))}
+                />
+              ))}
+            </LijstKaart>
           )}
           paneel={(
             <DetailPaneel

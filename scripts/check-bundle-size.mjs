@@ -87,7 +87,8 @@ const DEELBUDGET_KB = {
 // gelijk in geest aan de ±10 % marge van de andere deelbudgetten.
 // 19-09: chauffeur 86 → 66. Zonder zod-vendor meet de set 59 kB; het oude
 // budget zou zod ongemerkt laten terugkomen. Zelfde ±10 % marge.
-const WARMUP_BUDGET_KB = { chauffeur: 66, staf: 124 };
+// 22-09: Vandaag (dagbriefing, dock-tab van de planner) in de staf-warmup: +2 kB → 128.
+const WARMUP_BUDGET_KB = { chauffeur: 66, staf: 128 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
