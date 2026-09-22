@@ -197,6 +197,21 @@ export interface RuilVoorVerloop {
   verloop?: RuilVerloopStap[];
 }
 
+/**
+ * Wie een afgewezen ruil (`rejected`) afwees, uit de laatste weigerstap van het
+ * verloop: 'collega' (een niet-stafrol, "Geweigerd") of 'planner' (staf,
+ * "Afgewezen"). null = geen afgewezen ruil, of niet af te leiden (geen log,
+ * of een logregel zonder rol vanuit 'pending'): dan geen gok.
+ */
+export function afwijzerVan(swap: Pick<RuilVoorVerloop, 'status' | 'verloop'>): 'collega' | 'planner' | null {
+  if (swap.status !== 'rejected' || !Array.isArray(swap.verloop)) return null;
+  for (let i = swap.verloop.length - 1; i >= 0; i--) {
+    const stap = swap.verloop[i];
+    if (stap.soort === 'geweigerd') return stap.door === 'collega' || stap.door === 'planner' ? stap.door : null;
+  }
+  return null;
+}
+
 export const isHandmatigeRuil = (swap: { reason?: unknown } | null | undefined): boolean =>
   String(swap?.reason ?? '').startsWith(HANDMATIGE_WISSEL_PREFIX);
 
@@ -348,13 +363,17 @@ export function persoonsVerloop(swap: RuilVoorVerloop, opties: { kijkerId?: stri
     };
   } else if (status === 'rejected') {
     if (geweigerd?.door === 'planner') {
-      planner = { ...plannerBasis, naam: geweigerd.naam, status: 'Geweigerd', toon: 'danger', aanZet: false, op: geweigerd.op };
+      // De planner wijst af, de collega weigert (Jarno 22-09): elk zijn woord.
+      planner = { ...plannerBasis, naam: geweigerd.naam, status: 'Afgewezen', toon: 'danger', aanZet: false, op: geweigerd.op };
     } else if (geweigerd?.door === 'collega') {
       planner = { ...plannerBasis, status: 'Niet meer nodig', toon: 'neutraal', aanZet: false };
     } else {
       planner = { ...plannerBasis, status: 'Geen beoordeling geregistreerd', toon: 'neutraal', aanZet: false };
+      // Niet geregistreerd wie het deed: "Geweigerd" zeggen we alleen als
+      // vaststaat dat de collega weigerde, dus hier het algemene woord van de
+      // status `rejected` (RUIL_STATUS), zonder iemand aan te wijzen.
       onbekend = {
-        rol: 'onbekend', rolLabel: 'Niet geregistreerd door wie', status: 'Geweigerd', toon: 'danger', aanZet: false,
+        rol: 'onbekend', rolLabel: 'Niet geregistreerd door wie', status: 'Afgewezen', toon: 'danger', aanZet: false,
         op: geweigerd?.op ?? swap.decidedAt,
       };
     }

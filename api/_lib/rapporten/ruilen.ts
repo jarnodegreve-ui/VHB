@@ -111,7 +111,7 @@ export function bouwUitgevoerdeWissels(bron: RuilBron, filters: RapportFilters):
 
 // === Ruilen per chauffeur ===
 
-const TELLERS = ["aangevraagd", "ontvangen", "goedgekeurd", "geweigerd", "ingetrokken", "teruggedraaid", "open", "doorPlanning"] as const;
+const TELLERS = ["aangevraagd", "ontvangen", "goedgekeurd", "geweigerd", "afgewezen", "ingetrokken", "teruggedraaid", "open", "doorPlanning"] as const;
 type Teller = (typeof TELLERS)[number];
 
 /** In welke afloopkolom een ruil telt (los van wie hem aanvroeg of ontving). */
@@ -122,6 +122,7 @@ const afloopVan = (swap: RuilVoorVerloop): Teller => {
     case "goedgekeurd":
     case "afgehandeld": return "goedgekeurd";
     case "geweigerd": return "geweigerd";
+    case "afgewezen": return "afgewezen";
     // Ingetrokken door de aanvrager of geannuleerd door de planning vóór de doorvoer: de aanvraag verviel.
     case "ingetrokken":
     case "geannuleerd": return "ingetrokken";
@@ -142,7 +143,7 @@ export function bouwRuilenPerChauffeur(bron: RuilBron, filters: RapportFilters):
   const van = filters.van ?? "";
   const tot = filters.tot ?? "";
   const persoon = persoonZoeker(bron.users);
-  const leeg = (): Record<Teller, number> => ({ aangevraagd: 0, ontvangen: 0, goedgekeurd: 0, geweigerd: 0, ingetrokken: 0, teruggedraaid: 0, open: 0, doorPlanning: 0 });
+  const leeg = (): Record<Teller, number> => ({ aangevraagd: 0, ontvangen: 0, goedgekeurd: 0, geweigerd: 0, afgewezen: 0, ingetrokken: 0, teruggedraaid: 0, open: 0, doorPlanning: 0 });
   const perPersoon = new Map<string, Record<Teller, number>>();
   const totalen = leeg();
   const tel = (id: string | null | undefined, teller: Teller) => {

@@ -6,7 +6,8 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { Modal } from '../components/Modal';
 import { Formulier } from '../components/Formulier';
 import { useVeldfouten, useVuil } from '../lib/formulier';
-import { Badge, Button, IconButton, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, IconButton, MicroLabel, TableShell, Td, Th } from '../components/primitives';
+import { RuilStatusBadge } from '../components/RuilStatusBadge';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { LijstKaart, RecordRij } from '../components/RecordRij';
 import { Card } from '../components/Card';
@@ -15,6 +16,8 @@ import { DateInput, Field, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { RuilVerloop } from '../components/RuilVerloop';
+import { ruilStatusMap } from '../../shared/ruilUitkomst';
+import { statusLabel } from '../../shared/status';
 import { RuilRust } from '../components/RuilRust';
 import { RuilBekekenBaken } from '../components/RuilBekekenBaken';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
@@ -195,7 +198,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     const naam = users.find((u) => u.id === swap.requesterId)?.name ?? 'de aanvrager';
     setConfirmAction({
       title: 'Wissel uit de geschiedenis wissen',
-      message: `Deze ${swap.status === 'rejected' ? 'afgewezen' : 'ingetrokken'} wissel van ${naam} definitief wissen? Dit kan niet ongedaan gemaakt worden; het activiteitenlog houdt wel bij dat hij verwijderd is.`,
+      message: `Deze ${swap.status === 'rejected' ? statusLabel(ruilStatusMap(swap), 'rejected', true) : 'ingetrokken'} wissel van ${naam} definitief wissen? Dit kan niet ongedaan gemaakt worden; het activiteitenlog houdt wel bij dat hij verwijderd is.`,
       confirmText: 'Wissen',
       variant: 'danger',
       run: () => { void onSave(swaps.filter((s) => s.id !== swap.id)); },
@@ -544,7 +547,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     key={swap.id}
                     titel={<span className="capitalize">{formatDateHuman(info.date)}</span>}
                     meta={`Dienst ${info.line}`}
-                    status={<StatusBadge status={swap.status} stil />}
+                    status={<RuilStatusBadge swap={swap} stil />}
                     richting="omlaag"
                     open={open}
                     onClick={() => toggleSwapExpanded(swap.id)}
@@ -648,7 +651,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </div>
                     <span className="shrink-0">
                       {/* "Jouw antwoord" vraagt actie en blijft amber; de status is stil. */}
-                      {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <StatusBadge status={swap.status} stil />}
+                      {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
                     </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
@@ -805,7 +808,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </Td>
                           <Td>
                             <span className="inline-flex flex-wrap items-center gap-1.5">
-                              <StatusBadge status={swap.status} stil />
+                              <RuilStatusBadge swap={swap} stil />
                               {/* Weet de nieuwe rijder het al? Bij approved is
                                   dát de vraag die telt (push bereikt weinigen). */}
                               {swap.status === 'approved' && swap.targetDriverId && (
@@ -879,7 +882,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           {isTakeoverSwap(swap) && <div className="mt-1"><TakeoverBadge compact /></div>}
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1">
-                          <StatusBadge status={swap.status} stil />
+                          <RuilStatusBadge swap={swap} stil />
                           {swap.status === 'approved' && swap.targetDriverId && (
                             swap.targetSeenAt
                               ? <Badge tone="emerald" stil icon={<Check size={12} />}>Gezien</Badge>
@@ -967,7 +970,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 return (
                   <div key={swap.id}>
                   <div className="flex items-center justify-between gap-2 px-4 py-2.5">
-                    {/* rauw: de rij is de uitklapknop (namen + dienst + status + chevron); "geweigerd" zegt pas in het verloop door wie */}
+                    {/* rauw: de rij is de uitklapknop (namen + dienst + status + chevron); de badge zegt geweigerd (collega) of afgewezen (planner), het verloop door wie */}
                     <button
                       type="button"
                       onClick={() => toggleSwapExpanded(sleutel)}
@@ -984,7 +987,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         </span>
                       </span>
                       <span className="flex shrink-0 items-center gap-2">
-                        <StatusBadge status={swap.status} stil />
+                        <RuilStatusBadge swap={swap} stil />
                         <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
                       </span>
                     </button>
@@ -1418,7 +1421,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           return (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={reviewSwap.status} stil />
+                <RuilStatusBadge swap={reviewSwap} stil />
                 <Badge tone="oker" className="tabular-nums">Dienst {info.line}</Badge>
 
                 {info.date && (

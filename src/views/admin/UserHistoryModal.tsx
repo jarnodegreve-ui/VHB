@@ -3,6 +3,7 @@ import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
 import { microLabelClass, StatusBadge } from '../../components/primitives';
+import { RuilStatusBadge } from '../../components/RuilStatusBadge';
 import { Stat } from '../../components/Stat';
 import { Card } from '../../components/Card';
 import { isoDate } from '../../lib/availability';
@@ -115,7 +116,7 @@ export function UserHistoryModal({
                         <span className="font-medium text-slate-500">{isRequester ? 'Aan' : 'Van'}</span>
                         <span className="font-semibold text-slate-800 truncate">{userName(counterpartId)}</span>
                       </div>
-                      <StatusBadge status={s.status} stil className="shrink-0" />
+                      <RuilStatusBadge swap={s} stil className="shrink-0" />
                     </div>
                     <p className="text-xs font-medium text-slate-500 tabular-nums">
                       {s.shiftLine ? `Dienst ${s.shiftLine}` : 'Dienst onbekend'}

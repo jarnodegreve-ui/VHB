@@ -191,7 +191,7 @@ describe('Ruilen per chauffeur', () => {
   it('de totaalrij telt ruilen, niet de som van de rijen: een ruil staat bij twee chauffeurs maar is er één', () => {
     const def = rapportVan('ruilen-per-chauffeur')!;
     const uit = bouwRuilenPerChauffeur(bron, filters(...SEPTEMBER));
-    expect(uit.totalen).toEqual({ aangevraagd: 4, ontvangen: 4, goedgekeurd: 1, geweigerd: 1, ingetrokken: 1, teruggedraaid: 1, open: 1, doorPlanning: 1 });
+    expect(uit.totalen).toEqual({ aangevraagd: 4, ontvangen: 4, goedgekeurd: 1, geweigerd: 1, afgewezen: 0, ingetrokken: 1, teruggedraaid: 1, open: 1, doorPlanning: 1 });
     // De som van de rijen zou 2 goedgekeurde ruilen geven; het totaal van de lader wint.
     expect(totalenVoor(def, uit.rijen, { vanLader: uit.totalen }).goedgekeurd).toBe(1);
   });
@@ -246,9 +246,34 @@ describe('Ruilaanvragen', () => {
     expect(met({}, '12')).toEqual(['s3']);
   });
 
-  it('zonder log (niets af te leiden) gokt het rapport niet wie weigerde', () => {
+  it('zonder log (niets af te leiden) gokt het rapport niet wie weigerde: "Afgewezen", niet "Geweigerd"', () => {
     const zonderLog = bouwRuilaanvragen({ ...bron, logPerRuil: {} }, filters(...SEPTEMBER), VANDAAG).rijen.find((r) => r.id === 's4')!;
-    expect(zonderLog).toMatchObject({ status: 'Geweigerd', door: 'Niet geregistreerd', beslistOp: '2026-09-16' });
+    expect(zonderLog).toMatchObject({ status: 'Afgewezen', antwoord: 'Geen antwoord', door: 'Niet geregistreerd', beslistOp: '2026-09-16' });
+  });
+
+  it('de collega weigert ("Geweigerd"), de planner wijst af ("Afgewezen"): elk een eigen stand en filter', () => {
+    // s4 met de afwijzing door de planner i.p.v. de collega, na zijn akkoord.
+    const doorPlanner: RuilBron = { ...bron, logPerRuil: { ...logPerRuil, s4: [
+      regel('2026-09-15T08:00:00.000Z', 'Dienstruil aangevraagd', 'chauffeur', 'Anna Aerts'),
+      regel('2026-09-15T12:00:00.000Z', 'Dienstruil geaccepteerd', 'chauffeur', 'Bert Bral', 'Anna Aerts, dienstruil (pending → accepted).'),
+      regel('2026-09-16T08:00:00.000Z', 'Dienstruil afgewezen', 'planner', 'Petra Planner', 'Anna Aerts, dienstruil (accepted → rejected).'),
+    ] } };
+    const s4 = bouwRuilaanvragen(doorPlanner, filters(...SEPTEMBER), VANDAAG).rijen.find((r) => r.id === 's4')!;
+    expect(s4).toMatchObject({ status: 'Afgewezen', antwoord: 'Geaccepteerd', door: 'Petra Planner', beslistOp: '2026-09-16' });
+    expect(rij('s4')).toMatchObject({ status: 'Geweigerd', antwoord: 'Geweigerd', door: 'Bert Bral' });
+
+    const met = (b: RuilBron, status: string) => bouwRuilaanvragen(b, { ...filters(...SEPTEMBER), keuzes: { status, soort: 'alle' } }, VANDAAG).rijen.map((r) => r.id);
+    expect(met(bron, 'geweigerd')).toEqual(['s4']);
+    expect(met(bron, 'afgewezen')).toEqual([]);
+    expect(met(doorPlanner, 'afgewezen')).toEqual(['s4']);
+    expect(met(doorPlanner, 'geweigerd')).toEqual([]);
+
+    // Ruilen per chauffeur: de afwijzing door de planner telt in "Afgewezen", niet in "Geweigerd".
+    expect(bouwRuilenPerChauffeur(doorPlanner, filters(...SEPTEMBER)).totalen).toMatchObject({ geweigerd: 0, afgewezen: 1 });
+    // De filteroptie en de toon bestaan voor beide.
+    const def = rapportVan('ruilaanvragen')!;
+    const statusKolom = def.kolommen.find((k) => k.id === 'status')!;
+    expect(statusKolom.tonen).toMatchObject({ Geweigerd: 'rust', Afgewezen: 'rust' });
   });
 
   it('het gemiddelde van de doorlooptijd slaat rijen zonder doorlooptijd over', () => {

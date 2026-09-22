@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { BEKEKEN_BIJGEHOUDEN_SINDS, RUIL_BEKEKEN_ACTIE, RUIL_LOG_ACTIES, persoonsVerloop, verloopUitLog, type RuilLogRegel, type RuilVoorVerloop, type VerloopRegel } from './ruilVerloop';
+import { BEKEKEN_BIJGEHOUDEN_SINDS, RUIL_BEKEKEN_ACTIE, RUIL_LOG_ACTIES, afwijzerVan, persoonsVerloop, verloopUitLog, type RuilLogRegel, type RuilVoorVerloop, type VerloopRegel } from './ruilVerloop';
 import { HANDMATIGE_WISSEL_PREFIX } from './schemas/constanten';
 
 // Zone-loze momenten: de afleiding geeft de strings door en sorteert ze als
@@ -170,24 +170,26 @@ describe('persoonsVerloop, 1-op-1 ruil', () => {
     expect(r.onbekend).toBeUndefined();
   });
 
-  it('geweigerd door de planner, na het akkoord van de collega', () => {
+  it('afgewezen door de planner, na het akkoord van de collega: de planner wijst af, hij weigert niet', () => {
     const r = per(persoonsVerloop(ruil({ status: 'rejected', decidedAt: T.beslist }, [aangevraagd, geaccepteerd, overgang('Dienstruil afgewezen', 'accepted', 'rejected', 'planner')])));
     expect(r.collega).toMatchObject({ status: 'Geaccepteerd', toon: 'succes', op: T.geaccepteerd });
-    expect(r.planner).toMatchObject({ status: 'Geweigerd', toon: 'danger', op: T.beslist, naam: 'Jarno Planner' });
+    expect(r.planner).toMatchObject({ status: 'Afgewezen', toon: 'danger', op: T.beslist, naam: 'Jarno Planner' });
   });
 
-  it('geweigerd door de planner terwijl de collega nog niet antwoordde', () => {
+  it('afgewezen door de planner terwijl de collega nog niet antwoordde', () => {
     const r = per(persoonsVerloop(ruil({ status: 'rejected', decidedAt: T.beslist }, [aangevraagd, overgang('Dienstruil afgewezen', 'pending', 'rejected', 'admin')])));
     expect(r.collega).toMatchObject({ status: 'Geen antwoord gegeven', toon: 'neutraal' });
-    expect(r.planner.status).toBe('Geweigerd');
+    expect(r.planner.status).toBe('Afgewezen');
+    // De collega weigerde niet: geen "Geweigerd" op zijn regel.
+    expect(r.collega.status).not.toBe('Geweigerd');
   });
 
-  it('geweigerd zonder logregel: "Geweigerd" zonder afzender, niemand krijgt de schuld', () => {
+  it('afgewezen zonder logregel: "Afgewezen" zonder afzender, de collega krijgt geen "Geweigerd"', () => {
     for (const log of [[], null] as Array<RuilLogRegel[] | null>) {
       const regels = persoonsVerloop(ruil({ status: 'rejected', decidedAt: T.beslist }, log));
       const r = per(regels);
       expect(regels).toHaveLength(4);
-      expect(r.onbekend).toMatchObject({ status: 'Geweigerd', toon: 'danger', op: T.beslist, rolLabel: 'Niet geregistreerd door wie' });
+      expect(r.onbekend).toMatchObject({ status: 'Afgewezen', toon: 'danger', op: T.beslist, rolLabel: 'Niet geregistreerd door wie' });
       expect(r.collega.toon).toBe('neutraal');
       expect(r.planner.toon).toBe('neutraal');
       expect(r.collega.status).toBe('Antwoord niet geregistreerd');
@@ -237,6 +239,24 @@ describe('persoonsVerloop, 1-op-1 ruil', () => {
   it('een ruil zonder aangezochte collega heeft geen collega-regel', () => {
     const regels = persoonsVerloop(ruil({ targetDriverId: undefined }));
     expect(regels.map((r) => r.rol)).toEqual(['aanvrager', 'planner']);
+  });
+});
+
+describe('afwijzerVan: wie wees de ruil af (collega weigert, planner wijst af)', () => {
+  const afgewezen = (rol: string | null, van = 'pending') => ruil({ status: 'rejected', decidedAt: T.beslist }, [aangevraagd, overgang('Dienstruil afgewezen', van, 'rejected', rol)]);
+  it('uit de rol van de actor: niet-staf = collega, staf = planner', () => {
+    expect(afwijzerVan(afgewezen('chauffeur'))).toBe('collega');
+    expect(afwijzerVan(afgewezen('planner', 'accepted'))).toBe('planner');
+    expect(afwijzerVan(afgewezen('admin'))).toBe('planner');
+  });
+  it('zonder rol: vanuit accepted kan alleen de planner, vanuit pending geen gok', () => {
+    expect(afwijzerVan(afgewezen(null, 'accepted'))).toBe('planner');
+    expect(afwijzerVan(afgewezen(null, 'pending'))).toBeNull();
+  });
+  it('geen log of geen afgewezen ruil: null', () => {
+    expect(afwijzerVan(ruil({ status: 'rejected' }, null))).toBeNull();
+    expect(afwijzerVan(ruil({ status: 'rejected' }, []))).toBeNull();
+    expect(afwijzerVan(ruil({ status: 'cancelled' }, [aangevraagd, overgang('Dienstruil afgewezen', 'pending', 'rejected', 'chauffeur')]))).toBeNull();
   });
 });
 
