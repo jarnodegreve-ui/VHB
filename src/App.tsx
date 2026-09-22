@@ -39,8 +39,7 @@ import { DashboardSkelet, ViewLoader } from './components/ui';
 import { SchermInhoud } from './app/SchermInhoud';
 import { printScherm } from './app/PrintModus';
 import { useThema } from './app/useThema';
-import { IconButton, MicroLabel } from './components/primitives';
-import { Card } from './components/Card';
+import { IconButton } from './components/primitives';
 import { Callout } from './components/Callout';
 import { Toast, ToastOpties, ToastStack } from './components/ToastStack';
 import { InstallPrompt } from './components/PwaChrome';
@@ -53,7 +52,6 @@ import { useOnderhoud } from './app/useOnderhoud';
 import { UserMenu } from './components/UserMenu';
 import { MeldingenBel } from './components/MeldingenBel';
 import { berekenWerkvoorraad } from './lib/werkvoorraad';
-import { BrandSpinner } from './components/BrandSpinner';
 import { LoginView } from './views/LoginView';
 import { useRealtimeSync } from './lib/realtime';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -117,7 +115,6 @@ export default function App() {
     markeerMeldingenGelezenVoorScherm(currentView, (doel) => routeUitUrl('/' + doel.replace(/^\/+/, ''))?.view ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentView, currentUser?.id]);
-  const [isLoading, setIsLoading] = useState(false);
   // Netwerkstatus uit de online-store (src/lib/useOnline.ts): dezelfde
   // waarheid als Mijn dag en de ritbladviewer, mét ping-fallback voor
   // "wifi zonder internet". Bij terug-online meteen stil bijverversen; via
@@ -148,9 +145,6 @@ export default function App() {
   const [viewFoutReset, setViewFoutReset] = useState(0);
   const { theme, toggleTheme } = useThema(currentUser);
   const isPasswordRecoveryRef = useRef(false);
-  // Overlay-logica: meerdere fetches kunnen parallel lopen — een boolean
-  // zette de overlay uit zodra de éérste klaar was. Teller fixt dat.
-  const loadingCountRef = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // Navigeren = bovenaan beginnen; terug = de oude positie terug. Dat zit
   // sinds 15-09 (punt 19) in de router zelf (scrollgeheugen per route,
@@ -181,14 +175,6 @@ export default function App() {
   // Ruil starten vanuit het rooster: de gekozen dienst wordt in de ruil-wizard
   // voorgeselecteerd.
   const [swapPreselectShiftId, setSwapPreselectShiftId] = useState<string | null>(null);
-  const beginLoading = () => {
-    loadingCountRef.current += 1;
-    setIsLoading(true);
-  };
-  const endLoading = () => {
-    loadingCountRef.current = Math.max(0, loadingCountRef.current - 1);
-    if (loadingCountRef.current === 0) setIsLoading(false);
-  };
   // Datalaag (src/app/useAppData.ts, per domein in src/app/data/*).
   // showToast/meldLaadfout staan verderop als const — de wrappers roepen ze
   // pas aan op het moment van gebruik. `appData` gaat ook als geheel de
@@ -200,8 +186,6 @@ export default function App() {
     currentView,
     showToast: (m, t, a, o) => showToast(m, t, a, o),
     meldLaadfout: (b) => meldLaadfout(b),
-    beginLoading,
-    endLoading,
   });
   const {
     shifts, users, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments,
@@ -1336,26 +1320,10 @@ export default function App() {
           <LazyRitbladViewer dienstnummer="" alles open onClose={() => setBundelOpen(false)} />
         </Suspense>
       )}
-      <AnimatePresence>
-        {isLoading && !isInitialLoad && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-dimmer flex items-center justify-center bg-ink/20"
-          >
-            <Card padding="sm" className="elev-2">
-              <div className="flex items-center gap-4">
-                <BrandSpinner size={24} />
-                <div>
-                  <MicroLabel>Bezig</MicroLabel>
-                  <p className="text-sm font-semibold text-slate-800">Gegevens verwerken…</p>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* De schermvullende dimmer "Gegevens verwerken…" is in fase 2 (22-09)
+          weggehaald: elke schrijfactie draagt zijn eigen bezig-staat op de knop
+          die haar startte (Button/IconButton `bezig`, ConfirmationModal wacht
+          op een Promise), en een save van 300 ms bevroor anders de hele app. */}
       {/* h-dvh i.p.v. h-screen (100vh): vóór installatie in een Safari-tab is
           100vh de hoogte mét uitgeklapte toolbar, waardoor de onderrand achter
           de balk viel. dvh volgt de zichtbare viewport. */}

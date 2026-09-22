@@ -268,10 +268,12 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     setConfirmDeleteId(id);
   };
 
+  // Geeft de Promise terug: de ConfirmationModal toont `bezig` en sluit pas
+  // ná het antwoord van de server (fase 2); de `onClose` van de dialoog ruimt
+  // de staat op.
   const handleConfirmDelete = () => {
     if (!confirmDeleteId) return;
-    void onSave(services.filter(s => s.id !== confirmDeleteId));
-    setConfirmDeleteId(null);
+    return Promise.resolve(onSave(services.filter(s => s.id !== confirmDeleteId)));
   };
 
   const handleConfirmImport = () => {
@@ -284,9 +286,8 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     if (!pendingImportedServices) return;
     // Bewuste volledige vervanging (al bevestigd in de dialoog hierboven) —
     // meld dat aan de server zodat de bulk-wipe-vangrail niet blokkeert.
-    void onSave(pendingImportedServices, { bulkReplace: true });
-    setPendingImportedServices(null);
-    setPendingImportCount(0);
+    // De dialoog wacht op deze Promise en sluit (onClose) daarna zelf.
+    return Promise.resolve(onSave(pendingImportedServices, { bulkReplace: true }));
   };
 
   // Kerncijfers voor het zijvak — over de hele lijst, niet het zoekresultaat.

@@ -198,10 +198,11 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
     if (!onDecide) return;
     // Zelfde delta-pad als Verlof: seenStatus = wat de beslisser zag, zodat
     // de server een tweede beoordelaar netjes met een conflict afwijst.
-    void onDecide(id, status, seenStatus, reden).then((ok) => {
+    // Paneel sluit pas ná het antwoord (fase 2): de knop toont intussen `bezig`.
+    return onDecide(id, status, seenStatus, reden).then((ok) => {
       if (ok) notify(status === 'approved' ? 'Verlof goedgekeurd.' : 'Verlof afgewezen.', 'success');
+      setBeoordeelId(null);
     });
-    setBeoordeelId(null);
   };
 
   const zoekTerm = zoek.trim().toLowerCase();

@@ -534,7 +534,12 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
   const myTestShifts = shifts.filter((s) => s.driverId === currentUser.id && s.id.startsWith(TEST_SHIFT_ID_PREFIX));
 
+  const [testBezig, setTestBezig] = useState<'add' | 'clear' | null>(null);
   const addTestShift = async () => {
+    setTestBezig('add');
+    try { await addTestShiftInner(); } finally { setTestBezig(null); }
+  };
+  const addTestShiftInner = async () => {
     if (services.length === 0) {
       notify('Geen diensten beschikbaar, voeg eerst een dienst toe via Beheer dienstoverzicht.', 'error');
       return;
@@ -558,6 +563,10 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   };
 
   const clearTestShifts = async () => {
+    setTestBezig('clear');
+    try { await clearTestShiftsInner(); } finally { setTestBezig(null); }
+  };
+  const clearTestShiftsInner = async () => {
     if (myTestShifts.length === 0) {
       notify('Geen fictieve diensten op je naam gevonden.', 'info');
       return;
@@ -794,10 +803,10 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           )}
         />
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button variant="secondary" icon={<Plus size={16} />} onClick={addTestShift}>
+          <Button variant="secondary" icon={<Plus size={16} />} onClick={addTestShift} bezig={testBezig === 'add'} disabled={testBezig === 'clear'}>
             Fictieve dienst aanmaken
           </Button>
-          <Button variant="secondary" icon={<Trash2 size={16} />} onClick={clearTestShifts} disabled={myTestShifts.length === 0}>
+          <Button variant="secondary" icon={<Trash2 size={16} />} onClick={clearTestShifts} bezig={testBezig === 'clear'} disabled={myTestShifts.length === 0 || testBezig === 'add'}>
             Fictieve diensten verwijderen ({myTestShifts.length})
           </Button>
         </div>

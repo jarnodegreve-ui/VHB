@@ -9,7 +9,7 @@ import { metOngedaan } from '../../lib/ongedaan';
  * `users` komt uit de mensen-module (de ontvangerslijst van de mail).
  */
 export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
-  const { session, currentUser, showToast, meldLaadfout, beginLoading, endLoading, fetchActivityLog, users } = ctx;
+  const { session, currentUser, showToast, meldLaadfout, fetchActivityLog, users } = ctx;
   const [updates, setUpdates, zetUpdatesUitAntwoord] = useCollectieState<Update[]>([]);
   const [diversions, setDiversions, zetDiversionsUitAntwoord] = useCollectieState<Diversion[]>([]);
 
@@ -83,7 +83,6 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
 
   const fetchDiversions = async (accessToken = session?.access_token, opts?: { silent?: boolean }) => {
     try {
-      if (!opts?.silent) beginLoading();
       const response = await apiFetch('/api/diversions', { accessToken });
       ctx.noteerAntwoord(response);
       const data = await response.json();
@@ -94,15 +93,12 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       }
     } catch (error) {
       console.error('Error fetching diversions:', error);
-    } finally {
-      if (!opts?.silent) endLoading();
     }
   };
 
   const saveDiversions = async (newDiversions: Diversion[]) => {
     if (!ctx.guardCollectionLoaded('diversions', 'De omleidingen zijn')) return;
     try {
-      beginLoading();
       const response = await apiFetch('/api/diversions', {
         method: 'POST',
         headers: ctx.revisionHeader('diversions'),
@@ -128,8 +124,6 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
     } catch (error) {
       console.error('Error saving diversions:', error);
       showToast('Opslaan van omleidingen is mislukt.', 'error');
-    } finally {
-      endLoading();
     }
   };
 

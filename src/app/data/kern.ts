@@ -25,8 +25,6 @@ export type DataBasis = {
   currentUser: User | null;
   showToast: ShowToast;
   meldLaadfout: (bron: string) => void;
-  beginLoading: () => void;
-  endLoading: () => void;
   fetchActivityLog: (accessToken?: string) => Promise<void>;
 };
 
