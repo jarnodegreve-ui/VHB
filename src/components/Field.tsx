@@ -81,7 +81,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
         aria-invalid={invalid || undefined}
         className={cn(inputClass, 'appearance-none pr-9', invalid && invalidClass, className)}
         style={{
-          backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239AA1A9' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+          // Tint per thema uit index.css (--select-pijl): de oude vaste
+          // slate-400-hex flipte niet mee in dark (ronde 5, B6).
+          backgroundImage: 'var(--select-pijl)',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'right 0.75rem center',
           backgroundSize: '16px 16px',

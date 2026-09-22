@@ -223,7 +223,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
           <table className="w-full">
             <thead>
               <tr>
-                <Th className="sticky left-0 z-10 bg-surface-white">Laadpunt</Th>
+                <Th className="sticky left-0 z-sticky bg-surface-white">Laadpunt</Th>
                 {matrixMaanden.map((m) => <Th key={m} num>{maandKort(m)}</Th>)}
                 <Th num>Totaal</Th>
               </tr>
@@ -234,7 +234,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                 const bus = busVoorLaadpunt(r.evseId);
                 return (
                   <tr key={r.evseUid} className={cn(r.totaal === 0 && 'text-slate-500')}>
-                    <Td className="sticky left-0 z-10 bg-surface-white"><span className="font-semibold font-mono text-slate-800">{naam}</span>{bus ? <span className="ml-1.5 text-xs text-slate-500">bus {bus}</span> : null}</Td>
+                    <Td className="sticky left-0 z-sticky bg-surface-white"><span className="font-semibold font-mono text-slate-800">{naam}</span>{bus ? <span className="ml-1.5 text-xs text-slate-500">bus {bus}</span> : null}</Td>
                     {matrixMaanden.map((m) => <Td key={m} num className={cn((r.perMaand[m] ?? 0) === 0 && 'text-slate-400')}>{(r.perMaand[m] ?? 0) > 0 ? fmtKwh(r.perMaand[m]) : '·'}</Td>)}
                     <Td num className="font-semibold text-slate-800">{fmtKwh(r.totaal)}</Td>
                   </tr>
@@ -243,7 +243,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
             </tbody>
             <tfoot>
               <tr className="border-t border-hairline font-semibold text-slate-800">
-                <Td className="sticky left-0 z-10 bg-surface-white">Totaal</Td>
+                <Td className="sticky left-0 z-sticky bg-surface-white">Totaal</Td>
                 {matrixMaanden.map((m) => <Td key={m} num>{fmtKwh(chrono.find((x) => x.maand === m)?.kwh ?? 0)}</Td>)}
                 <Td num>{fmtKwh(chrono.reduce((a, m) => a + m.kwh, 0))}</Td>
               </tr>

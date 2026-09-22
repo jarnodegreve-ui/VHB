@@ -87,7 +87,7 @@ export function BottomNav({
       className={cn(
         // left/right respecteren de safe-area (landscape/notch) — iOS negeert
         // de portrait-lock uit het manifest, dus landscape kán voorkomen.
-        'md:hidden fixed left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] z-40 rounded-2xl px-1.5 py-2 transition-[opacity,transform] duration-slow',
+        'md:hidden fixed left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] z-zwevend rounded-2xl px-1.5 py-2 transition-[opacity,transform] duration-slow',
         // Opaak oppervlak + schaduw in index.css (.bottom-dock): blur jankt op
         // een fixed balk, en doorschijnend-zonder-blur liet de content er
         // rommelig doorheen schemeren.

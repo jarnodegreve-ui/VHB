@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { ADMIN, CHAUFFEUR, seed, type Fixture } from './helpers';
 
 /**
- * Toegankelijkheidsscan (axe-core, WCAG 2.1 AA) op zes schermen — draait in
+ * Toegankelijkheidsscan (axe-core, WCAG 2.1 AA) op dertien schermen — draait in
  * beide projecten, dus op iPhone én desktop. `serious`/`critical` laten de
  * test falen; `moderate`/`minor` worden gerapporteerd (annotatie + console)
  * maar blokkeren niet.
@@ -25,20 +25,10 @@ const TIJDELIJK_UIT: string[] = [];
  * Verwijder de regel zodra de view/component gefixt is.
  */
 const UITGESLOTEN: string[] = [
-  // BottomNav-labels (text-2xs, 11 px): inactief text-slate-400 op wit =
-  // 2,61:1; actief oker-700 op oker-50 = 3,92:1; in dark slate-500 op carbon
-  // = 3,7:1. Nodig ≥ 4,5:1 → labelkleur/-gewicht in src/components/BottomNav.tsx.
-  'nav[aria-label="Hoofdnavigatie"]',
-  // Verlofkalender (LeaveManagementView ±632): dagnummers text-slate-400 op
-  // wit = 2,61:1. Zelfde plek als design-lint-regel (c) → text-slate-500+.
-  '.grid-cols-7 > .aspect-square',
-  // Chauffeur-dashboard, lege staat "Komende diensten" (DashboardView ±347):
-  // text-xs text-slate-500 op emerald-50 = 4,37:1 (net onder 4,5).
-  '.bg-emerald-50 .text-slate-500',
-  // Badge tone="oker" (primitives.tsx ±79, verlofstatus "wachtend"): oker-700
-  // op oker-50 bij text-2xs (11 px) = 4,3:1 — net onder 4,5. Primitief, dus
-  // een fix raakt álle oker-badges (donkerder tekst of 12 px+).
-  '.rounded-full.border-oker-200.text-oker-700',
+  // Leeg sinds ronde 5 (22-09): de vier uitsluitingen van 03-09 (dock-labels
+  // text-slate-400, verlofkalender-dagen, lege staat op emerald-50, oker-
+  // badge) matchten niets meer, de dock stond daardoor permanent buiten de
+  // scan. Nieuwe uitsluiting = selector + reden + het bestand dat het fixt.
 ];
 
 type Scherm = { naam: string; user?: Fixture; view?: string; klaar: (page: Page) => Promise<void> };
@@ -51,6 +41,14 @@ const SCHERMEN: Scherm[] = [
   { naam: 'admin-dashboard', user: ADMIN, view: 'dashboard', klaar: async (page) => { await expect(page.getByText('Open taken').first()).toBeVisible({ timeout: 15_000 }); } },
   { naam: 'admin-vandaag', user: ADMIN, view: 'vandaag', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Vandaag', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
   { naam: 'admin-gebruikers', user: ADMIN, view: 'gebruikers', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Gebruikers', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
+  // Ronde 5 (22-09): de schermen die chauffeurs het meest openen en de
+  // twee brede stafschermen stonden nog buiten de scan.
+  { naam: 'chauffeur-mijn-dag', user: CHAUFFEUR, view: 'mijn-dag', klaar: async (page) => { await expect(page.getByRole('button', { name: /Ritblad/ }).first()).toBeVisible({ timeout: 15_000 }); } },
+  { naam: 'chauffeur-omleidingen', user: CHAUFFEUR, view: 'omleidingen', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Omleidingen', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
+  { naam: 'chauffeur-dienstruil', user: CHAUFFEUR, view: 'ruil-verzoeken', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Dienstruil', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
+  { naam: 'chauffeur-meldingen', user: CHAUFFEUR, view: 'meldingen', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Meldingen', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
+  { naam: 'admin-maandplanning', user: ADMIN, view: 'bezetting', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Maandplanning', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
+  { naam: 'admin-instellingen', user: ADMIN, view: 'instellingen', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Instellingen', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
 ];
 
 const beschrijf = (v: { id: string; impact?: string | null; help: string; nodes: { target: unknown[] }[] }) =>

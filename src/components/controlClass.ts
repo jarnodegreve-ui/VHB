@@ -6,4 +6,6 @@
 export const inputClass =
   'control-input w-full rounded-xl px-3.5 py-2.5 sm:pointer-fine:py-2 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed disabled:opacity-60';
 
-export const invalidClass = '!border-red-300 focus:!border-red-400 focus:!shadow-[0_0_0_4px_rgba(239,68,68,0.14)]';
+// Fout-ring in het gedempte rood van de tokens (was rgba(239,68,68): fabrieks-
+// Tailwind, de enige felle kleur in de app; ronde 5, B6).
+export const invalidClass = '!border-red-300 focus:!border-red-400 focus:!shadow-[0_0_0_4px_color-mix(in_srgb,var(--color-red-500)_14%,transparent)]';

@@ -1341,7 +1341,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-ink/20"
+            className="fixed inset-0 z-dimmer flex items-center justify-center bg-ink/20"
           >
             <Card padding="sm" className="elev-2">
               <div className="flex items-center gap-4">
@@ -1362,7 +1362,7 @@ export default function App() {
       <a
         href="#hoofdinhoud"
         onClick={(e) => { e.preventDefault(); document.getElementById('hoofdinhoud')?.focus(); }}
-        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[130] focus:rounded-xl focus:bg-oker-500 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-slate-950"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-skiplink focus:rounded-xl focus:bg-oker-500 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-slate-950"
       >
         Naar de inhoud
       </a>
@@ -1375,7 +1375,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-zwevend lg:hidden"
           />
         )}
       </AnimatePresence>
@@ -1385,7 +1385,7 @@ export default function App() {
         aria-label="Zijbalk"
         inert={!isSidebarOpen && !isDesktopNav}
         className={cn(
-          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
+          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-zijbalk lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         // De schuif-transitie komt uit .panel-dark (transform op
@@ -1453,7 +1453,7 @@ export default function App() {
         {/* Statusbalkstrook vast bovenaan (buiten de scroll-root): bij
             rubber-band/pull-to-refresh schoof hij anders mee omlaag en flitste
             de lichte achtergrond onder de witte statusbalktekens (controle 05-09, nr. 39). */}
-        <div className="statusbalk-strook pointer-events-none absolute inset-x-0 top-0 z-40" aria-hidden="true" />
+        <div className="statusbalk-strook pointer-events-none absolute inset-x-0 top-0 z-zwevend" aria-hidden="true" />
         {/* Scroll container met sticky-header — header zit BINNEN de scroll
             zodat content er onderdoor schuift en de panel-blur natuurlijk
             werkt (echte iOS-vibe i.p.v. harde rand). */}
@@ -1462,7 +1462,7 @@ export default function App() {
             de refreshing-state. */}
         <div
           ref={ptrIndicatorRef}
-          className="pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-40 flex justify-center opacity-0"
+          className="pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-zwevend flex justify-center opacity-0"
         >
           <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-white elev-2 ring-1 ring-hairline">
             <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500', ptrRefreshing && 'animate-spin')} />
@@ -1491,7 +1491,7 @@ export default function App() {
               notch ~30px vóór de schermrand (de inset is dan ~47px). */}
           {/* Sticky topbar begint onder de statusbalkstrook (die staat buiten de
               scroll-root, zie <main>), zodat overscroll de strook niet meeneemt. */}
-          <div className="sticky top-[env(safe-area-inset-top,0px)] z-30 -mx-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:-mx-7 mb-5">
+          <div className="sticky top-[env(safe-area-inset-top,0px)] z-topbar -mx-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:-mx-7 mb-5">
             <header className={cn("topbar px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7", isScrolled && "topbar--scrolled")}>
               {/* Rijhoogte gepind op --topbar-h (index.css, min de haarlijn):
                   StickyThead en Zijvak rekenen daarmee, en het skelet

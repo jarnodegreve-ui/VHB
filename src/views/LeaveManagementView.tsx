@@ -620,7 +620,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 Verlof registreren
               </Button>
             )}
-            <Button variant="primary" icon={<Plus size={16} />} onClick={openAanvraag}>
+            {/* Planner: "…", Verlof registreren én de gouden knop passen niet
+                naast elkaar op 390 px; de gouden knop krijgt dan bewust de
+                hele tweede regel i.p.v. half af te breken (B4, ronde 5). */}
+            <Button variant="primary" icon={<Plus size={16} />} onClick={openAanvraag} className={isPlanner ? 'max-sm:w-full' : undefined}>
               Verlof aanvragen
             </Button>
           </>

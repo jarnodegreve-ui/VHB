@@ -59,7 +59,7 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
         style={{ transformOrigin: 'top right' }}
         /* Mobiel: fixed met inset-x zodat het paneel de viewport volgt, net
            als het paneel Open taken. */
-        className="absolute right-0 top-full z-50 mt-2 w-80 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2 max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto"
+        className="absolute right-0 top-full z-menu mt-2 w-80 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2 max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto"
       >
         <div className="mb-1 flex items-center justify-between gap-2 border-b fine-divider px-3 py-2">
           <span className="text-sm font-semibold text-slate-800">Meldingen</span>

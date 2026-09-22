@@ -689,7 +689,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                 aria-label="Categorie"
                 value={activeCategory}
                 onChange={(e) => setActiveCategory(e.target.value as typeof activeCategory)}
-                className="!h-9 !w-auto min-w-[11rem] !py-1 !text-xs font-semibold"
+                className="!h-9 !w-auto min-w-[11rem] !py-1 sm:!text-xs font-semibold"
               >
                 <option value="all">Alle categorieën</option>
                 {(Object.keys(CATEGORY_LABELS) as Categorie[]).map((c) => (
@@ -700,7 +700,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                 aria-label="Wie"
                 value={actor}
                 onChange={(e) => setActor(e.target.value)}
-                className="!h-9 !w-auto min-w-[10rem] !py-1 !text-xs font-semibold"
+                className="!h-9 !w-auto min-w-[10rem] !py-1 sm:!text-xs font-semibold"
               >
                 <option value="">Iedereen</option>
                 {actoren.map(([naam, n]) => <option key={naam} value={naam}>{naam} ({n})</option>)}

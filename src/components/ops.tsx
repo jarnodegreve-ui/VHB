@@ -121,7 +121,7 @@ export function OpsStat({
             >
               <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap', l.done && 'line-through decoration-slate-300')}>
                 {/* "Nu"-stip: het blok dat op dit moment loopt. */}
-                {l.active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500 vhb-nu" aria-label="nu bezig" />}
+                {l.active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500 vhb-nu" role="img" aria-label="nu bezig" />}
                 {l.left}
               </span>
               {l.right && (

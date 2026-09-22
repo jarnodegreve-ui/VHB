@@ -36,6 +36,10 @@ import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
 import { bouwKalenderUitzonderingen } from '../lib/schoolkalender';
 import { useRouteParam } from '../app/router';
 
+/** Lokale rijsleutel voor de bewerkbare lijsten (nooit opgeslagen). */
+let sleutelTeller = 0;
+const sleutel = () => ++sleutelTeller;
+
 /** Maand in de URL (`/openstaande-diensten/2026-10`) — spiegel van `viewMonth`;
  *  een ongeldige waarde wordt genegeerd. */
 const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -69,10 +73,14 @@ export function CoverageView() {
   });
   const [config, setConfig] = useState<CoverageConfig | null>(null);
   // Bewerkbare config-state.
-  const [dayTypes, setDayTypes] = useState<CoverageDayType[]>([]);
+  // Elke lokale rij draagt een sleutel `_k` (B5, ronde 5): met `key={i}`
+  // nam kaart 3 na het verwijderen van kaart 2 diens DOM (focus, open
+  // datumkiezer) over. De sleutel blijft lokaal; handleSave bouwt de
+  // payload veld voor veld op en stuurt hem nooit mee.
+  const [dayTypes, setDayTypes] = useState<(CoverageDayType & { _k: number })[]>([]);
   const [weekdays, setWeekdays] = useState<string[]>(['', '', '', '', '', '', '']);
-  const [weekdayPeriods, setWeekdayPeriods] = useState<CoverageWeekdayPeriod[]>([]);
-  const [overrides, setOverrides] = useState<CoverageOverride[]>([]);
+  const [weekdayPeriods, setWeekdayPeriods] = useState<(CoverageWeekdayPeriod & { _k: number })[]>([]);
+  const [overrides, setOverrides] = useState<(CoverageOverride & { _k: number })[]>([]);
   const [gaps, setGaps] = useState<DayGap[]>([]);
   // Verwachtingen-vs-praktijk voor de getoonde maand: structurele afwijkingen
   // tussen de dag-type-lijsten en wat er echt gereden wordt (fantoomgaten).
@@ -202,11 +210,11 @@ export function CoverageView() {
   const laadConfig = async () => {
     const c = await fetchCoverageConfig();
     setConfig(c);
-    setDayTypes((c.dayTypes || []).map((dt) => ({ name: dt.name, services: [...(dt.services || [])] })));
+    setDayTypes((c.dayTypes || []).map((dt) => ({ _k: sleutel(), name: dt.name, services: [...(dt.services || [])] })));
     const w = Array.isArray(c.weekdays) && c.weekdays.length === 7 ? c.weekdays : ['', '', '', '', '', '', ''];
     setWeekdays([...w]);
-    setWeekdayPeriods((c.weekdayPeriods || []).map((p) => ({ vanaf: p.vanaf, weekdays: [...(p.weekdays || [])] })));
-    setOverrides((c.overrides || []).map((o) => ({ ...o })));
+    setWeekdayPeriods((c.weekdayPeriods || []).map((p) => ({ _k: sleutel(), vanaf: p.vanaf, weekdays: [...(p.weekdays || [])] })));
+    setOverrides((c.overrides || []).map((o) => ({ ...o, _k: sleutel() })));
     configGeladen.current = true;
   };
 
@@ -322,7 +330,7 @@ export function CoverageView() {
     });
 
   const addDayType = () => {
-    setDayTypes((prev) => [{ name: '', services: [] }, ...prev]);
+    setDayTypes((prev) => [{ _k: sleutel(), name: '', services: [] }, ...prev]);
     // Nieuwe kaart komt vooraan: bestaande open indexen schuiven één op.
     setOpenDayTypes((prev) => new Set([0, ...Array.from(prev, (x) => x + 1)]));
     setFocusTick((t) => t + 1);
@@ -383,7 +391,7 @@ export function CoverageView() {
 
   // --- Weekdag-periodes (vanaf een datum geldt een andere toewijzing) ---
   const addWeekdayPeriod = () =>
-    setWeekdayPeriods((prev) => [...prev, { vanaf: '', weekdays: ['', '', '', '', '', '', ''] }]);
+    setWeekdayPeriods((prev) => [...prev, { _k: sleutel(), vanaf: '', weekdays: ['', '', '', '', '', '', ''] }]);
   const setPeriodVanaf = (i: number, vanaf: string) =>
     setWeekdayPeriods((prev) => prev.map((p, idx) => (idx === i ? { ...p, vanaf } : p)));
   const setPeriodWeekday = (i: number, dow: number, name: string) =>
@@ -431,12 +439,12 @@ export function CoverageView() {
       return;
     }
     setKalFout('');
-    setOverrides((prev) => [...prev, ...uitzonderingen]);
+    setOverrides((prev) => [...prev, ...uitzonderingen.map((u) => ({ ...u, _k: sleutel() }))]);
     notify(`${uitzonderingen.length} uitzondering${uitzonderingen.length === 1 ? '' : 'en'} voorgezet${overgeslagen > 0 ? ` (${overgeslagen} al gedekt)` : ''}, controleer de lijst en klik op Opslaan.`, 'success');
   };
 
   // --- Uitzonderingen ---
-  const addOverride = () => setOverrides((prev) => [...prev, { from: '', to: '', dayType: '' }]);
+  const addOverride = () => setOverrides((prev) => [...prev, { _k: sleutel(), from: '', to: '', dayType: '' }]);
   const updateOverride = (i: number, field: keyof CoverageOverride, value: string) =>
     setOverrides((prev) => prev.map((o, idx) => (idx === i ? { ...o, [field]: value } : o)));
   const removeOverride = (i: number) => setOverrides((prev) => prev.filter((_, idx) => idx !== i));
@@ -486,7 +494,7 @@ export function CoverageView() {
       const bestaat = prev.some((dt) => zelfdeNaam(dt.name));
       return bestaat
         ? prev.map((dt) => (zelfdeNaam(dt.name) ? { ...dt, services: codes } : dt))
-        : [...prev, { name: v.dayType, services: codes }];
+        : [...prev, { _k: sleutel(), name: v.dayType, services: codes }];
     });
     notify(`Lijst voor “${v.dayType}” klaargezet (${codes.length} diensten), controleer en klik op Opslaan.`, 'success');
   };
@@ -653,7 +661,7 @@ export function CoverageView() {
                     {dayTypes.map((dt, i) => {
                       const selected = new Set(dt.services);
                       return (
-                        <Card key={i} tone="muted" padding="sm">
+                        <Card key={dt._k} tone="muted" padding="sm">
                           <div className="flex items-center gap-2">
                             <IconButton
                               label={openDayTypes.has(i) ? `Dag-type ${dt.name || ''} inklappen` : `Dag-type ${dt.name || ''} uitklappen`}
@@ -796,7 +804,7 @@ export function CoverageView() {
                     </Button>
                   </div>
                   {weekdayPeriods.map((p, i) => (
-                    <Card key={i} tone="muted" padding="sm" className="space-y-3">
+                    <Card key={p._k} tone="muted" padding="sm" className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <MicroLabel className="text-slate-600">Vanaf</MicroLabel>
                         <DateInput
@@ -881,7 +889,7 @@ export function CoverageView() {
                       const rijFout = omgekeerd ? 'Tot en met ligt vóór Van.' : onvolledig ? 'Onvolledig, wordt niet opgeslagen.' : '';
                       const foutId = rijFout ? `uitzondering-${i}-fout` : undefined;
                       return (
-                        <div key={i} className="space-y-1">
+                        <div key={o._k} className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <DateInput size="sm" value={o.from} max={o.to || undefined} onChange={(v) => updateOverride(i, 'from', v)} aria-label="Van" aria-describedby={foutId} invalid={!o.from || omgekeerd} />
                             <span className="text-label">t/m</span>

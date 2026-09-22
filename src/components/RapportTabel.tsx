@@ -33,9 +33,9 @@ const BREED_VANAF = 768;
  * eronderdoor schuiven, op een opaak vlak: op de telefoon weet je anders na
  * één veeg niet meer van wie de rij is.
  */
-const VASTE_KOLOM = 'max-xl:sticky max-xl:left-0 max-xl:z-[1] max-xl:bg-paper';
+const VASTE_KOLOM = 'max-xl:sticky max-xl:left-0 max-xl:z-sticky max-xl:bg-paper';
 /** Dezelfde drie, zonder breekpunt: voor een tabel die ook vanaf xl niet in haar kader past (zie `overloopt`). */
-const VASTE_KOLOM_BREED = 'sticky left-0 z-[1] bg-paper';
+const VASTE_KOLOM_BREED = 'sticky left-0 z-sticky bg-paper';
 const VASTE_KOP_BREED = 'shadow-[0_1px_0_var(--color-slate-200)]';
 const VASTE_VOET_BREED = 'shadow-[0_-1px_0_var(--color-hairline-strong)]';
 /**

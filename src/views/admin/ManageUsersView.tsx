@@ -833,8 +833,8 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                         {menuUserId === u.id && (
                           <>
                             {/* rauw: onzichtbaar klik-buiten-vlak dat het menu sluit */}
-                            <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
-                            <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-hairline bg-surface-white p-1.5 elev-2 text-left">
+                            <button type="button" className="fixed inset-0 z-menu cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
+                            <div className="absolute right-0 top-full z-menu mt-1 w-64 rounded-2xl border border-hairline bg-surface-white p-1.5 elev-2 text-left">
                               <RowMenuItem icon={<Info size={16} />} label="Verlof- en dienstruilhistoriek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
                               <RowMenuItem icon={<FolderOpen size={16} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
                               <RowMenuItem icon={<History size={16} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />

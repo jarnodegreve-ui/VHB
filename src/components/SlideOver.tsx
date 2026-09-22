@@ -132,7 +132,7 @@ export function SlideOver({
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 z-[100] bg-ink/40 backdrop-blur-sm"
+            className="fixed inset-0 z-modal bg-ink/40 backdrop-blur-sm"
             aria-hidden="true"
           />
           <motion.div
@@ -151,7 +151,7 @@ export function SlideOver({
               // Bewust géén backdrop-filter op het geanimeerde paneel zelf
               // (blur + transform op één element geeft compositing-glitches);
               // near-opaque oppervlak heeft het ook niet nodig.
-              'fixed inset-y-0 right-0 z-[101] flex h-full w-full flex-col focus-stil sm:rounded-l-2xl',
+              'fixed inset-y-0 right-0 z-modal flex h-full w-full flex-col focus-stil sm:rounded-l-2xl',
               'bg-paper/95 border-l border-hairline elev-3',
               widthClass,
             )}

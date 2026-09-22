@@ -132,9 +132,12 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
       {/* Datumnavigatie */}
       <Card padding="sm" className="flex flex-wrap items-center gap-2">
         <IconButton label="Vorige dag" onClick={() => zetDatum(schuifDag(datum, -1))}><ChevronLeft size={18} /></IconButton>
-        <div className="w-44"><DateInput value={datum} onChange={(v) => v && zetDatum(v)} /></div>
+        {/* Telefoon: het datumveld vult de rij tussen de pijlen (was w-44:
+            "ma 21 sep 20…") en de lange dagnaam staat er al in, dus die
+            komt pas vanaf md. */}
+        <div className="min-w-0 flex-1 md:flex-none md:w-44"><DateInput value={datum} onChange={(v) => v && zetDatum(v)} /></div>
         <IconButton label="Volgende dag" onClick={() => zetDatum(schuifDag(datum, 1))}><ChevronRight size={18} /></IconButton>
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{formatDayLong(datum)}</p>
+        <p className="hidden md:block min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{formatDayLong(datum)}</p>
         {statusBadge}
         <Button variant="ghost" size="sm" icon={<Calendar size={14} />} onClick={() => zetDatum(schuifDag(vandaagIso(), -1))}>Gisteren</Button>
       </Card>
@@ -307,7 +310,7 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPat
             {actieveVlaggen.length ? `${actieveVlaggen.length} vlag${actieveVlaggen.length === 1 ? '' : 'gen'}` : 'Geen'}
           </Button>
           {vlaggenOpen && (
-            <div className="popover-in absolute left-0 top-full z-20 mt-1 w-64 rounded-2xl bg-paper p-2 elev-2 ring-1 ring-hairline">
+            <div className="popover-in absolute left-0 top-full z-zwevend mt-1 w-64 rounded-2xl bg-paper p-2 elev-2 ring-1 ring-hairline">
               {QUAL_VLAGGEN.map((k: QualVlag) => (
                 <label key={k} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm hover:bg-surface-soft-hover">
                   <input type="checkbox" className="h-4 w-4" checked={r[k]} disabled={afgesloten} onChange={(e) => onPatch({ [k]: e.target.checked })} />

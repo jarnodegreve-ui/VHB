@@ -91,7 +91,7 @@ export function Staafgrafiek({
                   <div
                     className={cn(
                       'w-full rounded-t-md',
-                      isGekozen ? 'bg-slate-900' : s.isPiek ? 'bg-oker-500' : s.gedempt ? 'bg-slate-400' : 'bg-slate-500',
+                      isGekozen ? 'bg-keuze' : s.isPiek ? 'bg-oker-500' : s.gedempt ? 'bg-slate-400' : 'bg-slate-500',
                     )}
                     style={{ height: s.waarde > 0 ? `${Math.max(3, Math.round((s.waarde / asTop) * 100))}%` : '2px' }}
                   />

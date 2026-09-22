@@ -225,7 +225,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                       <tr key={d.id} className="border-b border-hairline-subtle last:border-b-0 align-top transition-colors hover:bg-surface-soft-hover">
                         <Td>
                           {/* Volledig busnummer in de lijst, niet "Bus 38" (Jarno 17-09). */}
-                          <p className="font-semibold text-slate-800">{d.busnr}</p>
+                          <p className="font-semibold text-slate-800 whitespace-nowrap">{d.busnr}</p>
                         </Td>
                         <Td>{werktypeBadge(d.werktype)}</Td>
                         <Td className="max-w-md">

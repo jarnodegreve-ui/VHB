@@ -362,7 +362,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/60 border-b border-hairline-subtle">
-                <SortTh kolom="naam" sort={sort} className="sticky left-0 z-10 bg-surface-soft min-w-[180px]">
+                <SortTh kolom="naam" sort={sort} className="sticky left-0 z-sticky bg-surface-soft min-w-[180px]">
                   Chauffeur
                 </SortTh>
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
@@ -418,7 +418,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                 const userMap = leaveByUserDay.get(u.id);
                 return (
                   <tr key={u.id} className="border-b border-hairline-subtle hover:bg-surface-soft-hover transition-colors">
-                    <Td className="sticky left-0 z-10 bg-surface-white py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
+                    <Td className="sticky left-0 z-sticky bg-surface-white py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
                       {/* rauw: naam-als-link in een dichte tabelcel (tekst + printer-icoon,
                           geen knopvorm) — een Button zou de rijhoogte van het grid oprekken */}
                       <button

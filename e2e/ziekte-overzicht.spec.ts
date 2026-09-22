@@ -113,7 +113,9 @@ test('ziekte: actuele filters, zoeken en diensten op naam blijven bruikbaar', as
   await expect(rij(actueel, 3, VANDAAG)).toHaveCount(0);
   const kengetallen = page.getByRole('region', { name: 'Ziekte vandaag', exact: true });
   for (const [label, waarde] of [['Nu ziek', '2'], ['Diensten op naam', '3'], ['Loopt vandaag af', '1']]) {
-    await expect(kengetallen.getByLabel(label, { exact: true }).locator('.text-stat')).toHaveText(waarde);
+    // Kengetallen zijn sinds ronde 5 (B4) OpsStat-tegels in een kpi-raster:
+    // label in de kop, cijfer in .text-stat, geen aria-label op de tegel.
+    await expect(kengetallen.locator('.kpi-tegel', { hasText: label }).locator('.text-stat')).toHaveText(waarde);
   }
   await pastBinnenScherm(page);
 

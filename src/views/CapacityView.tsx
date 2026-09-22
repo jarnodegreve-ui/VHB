@@ -734,7 +734,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className={cn('mp-sticky sticky left-0 top-0 z-30 bg-surface-muted px-4 py-3 min-w-[180px] border-b-2 border-hairline-strong border-r-2 border-hairline-strong', microLabelClass)}>Chauffeur</th>
+                    <th className={cn('mp-sticky sticky left-0 top-0 z-sticky-hoek bg-surface-muted px-4 py-3 min-w-[180px] border-b-2 border-hairline-strong border-r-2 border-hairline-strong', microLabelClass)}>Chauffeur</th>
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
@@ -754,7 +754,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           key={iso}
                           title={feestdag ? td?.titel : undefined}
                           className={cn(
-                            'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-hairline-strong',
+                            'sticky top-0 z-sticky-kop px-1 py-2 text-center font-medium border-b-2 border-hairline-strong',
                             h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
                             today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
                           )}
@@ -786,7 +786,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               van de band behouden weekend-arcering en de
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
-                          <td className={cn('mp-sticky sticky left-0 z-10 p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
+                          <td className={cn('mp-sticky sticky left-0 z-sticky p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
                             <div className={cn('flex h-8 items-center px-4', SECTIE_KOP)}>
                               {SECTIE_STREEP}
                               {sectieLabel(section)}
@@ -810,7 +810,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         <td
                           className={cn(
                             isOwn ? 'mp-sticky-own' : 'mp-sticky',
-                            'sticky left-0 z-10 px-4 py-2 text-sm font-semibold min-w-[180px] truncate border-r-2 border-hairline-strong transition-colors',
+                            'sticky left-0 z-sticky px-4 py-2 text-sm font-semibold min-w-[180px] truncate border-r-2 border-hairline-strong transition-colors',
                             rowBg,
                             'group-hover:bg-oker-50',
                             isOwn ? 'text-oker-800' : 'text-slate-800',
@@ -1030,7 +1030,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           type="button"
                           onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
                           className={cn(
-                            'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0 active:bg-black/[0.04] transition-colors',
+                            'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0 active:bg-surface-soft-hover transition-colors',
                             isOwn && 'bg-oker-50',
                           )}
                         >
@@ -1065,7 +1065,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       type="button"
                       onClick={() => setToonRust((v) => !v)}
                       aria-expanded={toonRust}
-                      className={cn('w-full flex items-center justify-between gap-3 px-4 py-2.5 min-h-11 active:bg-black/[0.04] transition-colors', SECTIE_BAND, SECTIE_KOP)}
+                      className={cn('w-full flex items-center justify-between gap-3 px-4 py-2.5 min-h-11 active:bg-surface-soft-hover transition-colors', SECTIE_BAND, SECTIE_KOP)}
                     >
                       <span>Vrij / afwezig · {dagRijen.rust.length}</span>
                       <ChevronRight size={14} className={uitklapChevron(toonRust, 90)} />
@@ -1098,7 +1098,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           key={drv.id}
                           type="button"
                           onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
-                          className={cn(rijCls, 'active:bg-black/[0.04] transition-colors')}
+                          className={cn(rijCls, 'active:bg-surface-soft-hover transition-colors')}
                         >
                           {inhoud}
                         </button>
