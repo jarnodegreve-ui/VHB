@@ -1,9 +1,13 @@
 import React, { useRef, useState } from 'react';
 import { Send, Upload, Users } from 'lucide-react';
 import { notify } from '../../lib/ui';
-import { Button, MicroLabel } from '../../components/primitives';
-import { Modal } from '../../components/Modal';
+import { Button } from '../../components/primitives';
+import { Modal, SluitKnop } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
+import { Field, Input } from '../../components/Field';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
 import { apiFetch } from '../../lib/api';
 
 const MAX_MB = 15;
@@ -16,12 +20,16 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
   const [dataUrl, setDataUrl] = useState('');
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Tranche 3A: bestandsfouten bij het veld, niet als toast; met een
+  // categorie of een gekozen bestand vraagt sluiten eerst bevestiging.
+  const fouten = useVeldfouten();
+  const vuil = category.trim() !== '' || fileName !== '';
 
   const pickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (e.target) e.target.value = '';
     if (!file) return;
-    if (file.size > MAX_MB * 1024 * 1024) return notify(`Bestand is te groot (max ${MAX_MB} MB).`, 'error');
+    if (file.size > MAX_MB * 1024 * 1024) return fouten.zet({ bestand: `Bestand is te groot (max ${MAX_MB} MB).` });
     try {
       const url = await new Promise<string>((resolve, reject) => {
         const r = new FileReader();
@@ -31,13 +39,15 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
       });
       setFileName(file.name);
       setDataUrl(url);
+      fouten.wisVeld('bestand');
     } catch {
-      notify('Bestand kon niet gelezen worden.', 'error');
+      fouten.zet({ bestand: 'Bestand kon niet gelezen worden.' });
     }
   };
 
   const send = async () => {
-    if (!dataUrl || !fileName) return notify('Kies eerst een bestand.', 'error');
+    if (sending) return;
+    if (!dataUrl || !fileName) return fouten.zet({ bestand: 'Kies eerst een bestand.' });
     setSending(true);
     try {
       const res = await apiFetch('/api/documents/broadcast', {
@@ -45,12 +55,16 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
         body: JSON.stringify({ filename: fileName, category: category.trim() || undefined, dataUrl }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || 'versturen mislukt');
+      if (!res.ok) {
+        // Aanmaken (POST): geen "Opnieuw proberen", de knop staat er nog.
+        meldSchrijffout('Uploaden', { status: res.status, message: body?.error });
+        return;
+      }
       notify(`Document naar ${body.count} chauffeur(s) verstuurd.`, 'success');
       onDone?.(body.count);
       onClose();
-    } catch (err: any) {
-      notify(err?.message || 'Rondsturen is mislukt.', 'error');
+    } catch (err) {
+      meldSchrijffout('Uploaden', err);
     } finally {
       setSending(false);
     }
@@ -59,7 +73,7 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
   // Op de gedeelde Modal met `boven` (was een eigen portal op z-[120]) —
   // zo krijgt hij ook ESC, focus-trap en scroll-lock.
   return (
-    <Modal open onClose={onClose} maxWidth="md" ariaLabel="Document naar alle chauffeurs" boven>
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="md" ariaLabel="Document naar alle chauffeurs" boven>
       <div className="flex flex-col overflow-hidden">
           <ModalHeader
             leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center"><Users size={20} /></div>}
@@ -68,24 +82,34 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
             onClose={onClose}
           />
 
-          <div className="p-6 md:p-7 space-y-4">
-            <div className="space-y-1.5">
-              <MicroLabel>Categorie (optioneel)</MicroLabel>
-              <input
+          <Formulier onVerstuur={send} className="p-6 md:p-7 space-y-4">
+            <Field label="Categorie (optioneel)">
+              <Input
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="bv. reglement, mededeling"
-                className="control-input w-full px-4 py-2.5 rounded-2xl outline-none text-base sm:text-sm font-medium bg-surface-field"
               />
+            </Field>
+            <Field label="Bestand" error={fouten.fouten.bestand}>
+              {({ id, describedBy, invalid }) => (
+                <>
+                  {/* De knop vóór het verborgen file-input: focusEersteFout
+                      neemt het eerste control in het veld, en dat moet de
+                      zichtbare knop zijn. */}
+                  <Button id={id} aria-describedby={describedBy} aria-invalid={invalid || undefined} variant="secondary" icon={<Upload size={16} />} onClick={() => fileRef.current?.click()}>
+                    {fileName ? `Gekozen: ${fileName}` : `Bestand kiezen (PDF/afbeelding, max ${MAX_MB} MB)`}
+                  </Button>
+                  <input ref={fileRef} type="file" accept={ACCEPT} onChange={pickFile} className="hidden" tabIndex={-1} aria-hidden="true" />
+                </>
+              )}
+            </Field>
+            <div className="flex gap-3 pt-1">
+              <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={sending}>Annuleren</SluitKnop>
+              <Button type="submit" variant="primary" className="flex-1" icon={<Send size={16} />} bezig={sending}>
+                Naar alle chauffeurs versturen
+              </Button>
             </div>
-            <input ref={fileRef} type="file" accept={ACCEPT} onChange={pickFile} className="hidden" />
-            <Button variant="secondary" icon={<Upload size={16} />} onClick={() => fileRef.current?.click()}>
-              {fileName ? `Gekozen: ${fileName}` : `Bestand kiezen (PDF/afbeelding, max ${MAX_MB} MB)`}
-            </Button>
-            <Button variant="primary" icon={<Send size={16} />} disabled={!dataUrl || sending} onClick={send}>
-              {sending ? 'Versturen…' : 'Naar alle chauffeurs versturen'}
-            </Button>
-          </div>
+          </Formulier>
       </div>
     </Modal>
   );

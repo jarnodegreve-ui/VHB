@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { History, Plus, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
@@ -12,6 +12,8 @@ import { Checkbox } from '../../components/Table';
 import { InfoTip } from '../../components/InfoTip';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../../components/Zijvak';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
+import { focusEersteFout } from '../../components/Formulier';
+import { useVeldfouten, useVerlaatWaarschuwing } from '../../lib/formulier';
 
 // Draft-rijen krijgen een stabiele key, los van de (bewerkbare) code-tekst.
 // De oude key bevatte code.code: elke toetsaanslag = nieuwe key = remount =
@@ -23,6 +25,8 @@ const makeDraftKey = () =>
     : `k-${Math.random().toString(36).slice(2)}`;
 const withDraftKeys = (codes: PlanningCode[]): DraftCode[] =>
   codes.map((code) => ({ ...code, _key: makeDraftKey() }));
+
+const zonderSleutels = (draft: DraftCode[]): PlanningCode[] => draft.map(({ _key, ...code }) => code);
 
 const CATEGORIE_OPTIES: Array<{ value: PlanningCode['category']; label: string }> = [
   { value: 'service', label: 'Dienst' },
@@ -38,14 +42,33 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
   const [filter, setFilter] = useState<'all' | PlanningCode['category']>('all');
   const [historyCode, setHistoryCode] = useState<PlanningCode | null>(null);
 
+  // Onbewaarde wijzigingen (tranche 3A): het concept wijkt af van de codes
+  // waaruit het is opgebouwd (`basis`). Niet rechtstreeks tegen `codes`: een
+  // refetch mag die veranderen zonder dat de gebruiker iets deed.
+  const [basis, setBasis] = useState<PlanningCode[]>(codes);
+  const vuil = useMemo(() => JSON.stringify(zonderSleutels(draftCodes)) !== JSON.stringify(basis), [draftCodes, basis]);
+  useVerlaatWaarschuwing(vuil);
+  // Per-rij-fouten, sleutel `${index}.code` (index in draftCodes).
+  const fouten = useVeldfouten();
+  const lijstRef = useRef<HTMLDivElement>(null);
+  const kaartRef = useRef<HTMLDivElement>(null);
+
+  // Nieuwe codes van de server (refetch, realtime, eigen save) overschrijven
+  // het concept alleen als er niets onbewaards in staat; anders zou een
+  // refetch halverwege het bewerken alles wissen.
   useEffect(() => {
+    if (vuil) return;
     setDraftCodes(withDraftKeys(codes));
+    setBasis(codes);
+    // Bewust alleen op `codes`: vuil en basis zijn die van deze render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codes]);
 
   const updateCode = (index: number, patch: Partial<PlanningCode>) => {
     setDraftCodes((current) => current.map((code, currentIndex) => (
       currentIndex === index ? { ...code, ...patch } : code
     )));
+    if ('code' in patch) fouten.wisVeld(`${index}.code`);
   };
 
   const addCode = () => {
@@ -75,36 +98,67 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
     const index = draftCodes.findIndex((c) => c._key === code._key);
     void metOngedaan({
       boodschap: `${code.code ? `Code ${code.code.toUpperCase()}` : 'Lege rij'} verwijderd, definitief zodra je opslaat.`,
-      uitvoeren: () => { setDraftCodes((current) => current.filter((c) => c._key !== code._key)); },
+      // Indexen schuiven op: rij-fouten gelden dan niet meer.
+      uitvoeren: () => { setDraftCodes((current) => current.filter((c) => c._key !== code._key)); fouten.wis(); },
       herstellen: () => {
         setDraftCodes((current) => (
           current.some((c) => c._key === code._key)
             ? current
             : [...current.slice(0, index), code, ...current.slice(index)]
         ));
+        fouten.wis();
       },
       toast: (message, tone, action, opties) => notify(message, tone, { action, opties }),
     });
   };
 
   const handleSave = async () => {
-    const normalizedCodes = draftCodes
-      .map(({ _key, ...code }) => ({
-        ...code,
-        code: code.code.trim().toLowerCase(),
-        description: code.description.trim(),
-      }))
-      .filter((code) => code.code.length > 0);
+    if (isSaving) return;
+    const normalized = draftCodes.map(({ _key, ...code }) => ({
+      ...code,
+      code: code.code.trim().toLowerCase(),
+      description: code.description.trim(),
+    }));
+    const normalizedCodes = normalized.filter((code) => code.code.length > 0);
 
-    const duplicateCodes = normalizedCodes.filter((code, index) => normalizedCodes.findIndex((item) => item.code === code.code) !== index);
-    if (duplicateCodes.length > 0) {
-      notify(`Code ${duplicateCodes[0].code} komt meerdere keren voor.`, 'error');
+    // Dubbele code: fout bij de code-invoer van elke latere rij met dezelfde
+    // code (index in draftCodes), en de focus naar de eerste daarvan.
+    const dubbel: Record<string, string> = {};
+    normalized.forEach((code, index) => {
+      if (code.code && normalized.findIndex((item) => item.code === code.code) !== index) {
+        dubbel[`${index}.code`] = `Code ${code.code} komt meerdere keren voor.`;
+      }
+    });
+    if (Object.keys(dubbel).length > 0) {
+      fouten.zet(dubbel);
+      // Een weggefilterde rij kan zijn fout niet tonen: dan terug naar Alles.
+      const verborgen = Object.keys(dubbel).some((k) => {
+        const rij = draftCodes[Number(k.split('.')[0])];
+        return filter !== 'all' && rij?.category !== filter;
+      });
+      if (verborgen) setFilter('all');
+      // Na de render (fouten en filter staan dan in de DOM); de tabel en de
+      // kaartenlijst staan er allebei, alleen één is zichtbaar.
+      window.setTimeout(() => {
+        const zichtbaar = [lijstRef.current, kaartRef.current].find((el) => el && el.offsetParent !== null);
+        focusEersteFout(zichtbaar ?? lijstRef.current);
+      }, 0);
       return;
     }
+    fouten.wis();
 
     setIsSaving(true);
-    await onSave(normalizedCodes);
-    setIsSaving(false);
+    try {
+      const ok = await onSave(normalizedCodes);
+      if (ok) {
+        // Het bewaarde concept is de nieuwe basis; een latere refetch van
+        // de server overschrijft het dan weer gewoon.
+        setDraftCodes(withDraftKeys(normalizedCodes));
+        setBasis(normalizedCodes);
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const filteredCodes = draftCodes
@@ -138,8 +192,8 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             <Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>
               Code toevoegen
             </Button>
-            <Button variant="primary" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? 'Opslaan…' : 'Opslaan'}
+            <Button variant="primary" onClick={handleSave} bezig={isSaving}>
+              Opslaan
             </Button>
           </>
         )}
@@ -197,7 +251,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         <TableShell className="mt-5">
           {filteredCodes.length > 0 ? (
             <>
-              <div className="hidden xl:block">
+              <div ref={lijstRef} className="hidden xl:block">
                 <table className="w-full table-fixed text-left">
                   <thead className="bg-slate-50/60">
                     <tr>
@@ -221,11 +275,14 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                           <Td>
                             <Input
                               aria-label="Code"
+                              invalid={!!fouten.fouten[`${index}.code`]}
+                              aria-describedby={fouten.fouten[`${index}.code`] ? `code-fout-${code._key}` : undefined}
                               value={code.code}
                               onChange={(event) => updateCode(index, { code: event.target.value })}
                               className="min-w-0 px-2.5 font-semibold uppercase tracking-[0.08em]"
                               placeholder="bv"
                             />
+                            {fouten.fouten[`${index}.code`] ? <p id={`code-fout-${code._key}`} role="alert" className="mt-1 text-xs font-medium text-red-700">{fouten.fouten[`${index}.code`]}</p> : null}
                           </Td>
                           <Td>
                             <Select
@@ -276,19 +333,24 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                 </table>
               </div>
 
-              <div className="divide-y divide-hairline-subtle xl:hidden">
+              <div ref={kaartRef} className="divide-y divide-hairline-subtle xl:hidden">
                 {filteredCodes.map((code) => {
                   const index = draftCodes.findIndex((draft) => draft === code);
                   return (
                     <div key={code._key} className="space-y-4 p-5">
                       <div className="grid gap-4 md:grid-cols-2">
-                        <Input
-                          aria-label="Code"
-                          value={code.code}
-                          onChange={(event) => updateCode(index, { code: event.target.value })}
-                          className="font-semibold uppercase tracking-[0.08em]"
-                          placeholder="Code"
-                        />
+                        <div className="space-y-1.5">
+                          <Input
+                            aria-label="Code"
+                            invalid={!!fouten.fouten[`${index}.code`]}
+                            aria-describedby={fouten.fouten[`${index}.code`] ? `code-fout-kaart-${code._key}` : undefined}
+                            value={code.code}
+                            onChange={(event) => updateCode(index, { code: event.target.value })}
+                            className="font-semibold uppercase tracking-[0.08em]"
+                            placeholder="Code"
+                          />
+                          {fouten.fouten[`${index}.code`] ? <p id={`code-fout-kaart-${code._key}`} role="alert" className="text-xs font-medium text-red-700">{fouten.fouten[`${index}.code`]}</p> : null}
+                        </div>
                         <Select
                           aria-label="Categorie"
                           value={code.category}

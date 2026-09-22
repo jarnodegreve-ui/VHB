@@ -155,6 +155,13 @@ export function LoginView({
       setIsSubmitting(false);
       return;
     }
+    // Zelfde minimum als overal (WACHTWOORD_MIN), ook als de browser het
+    // native minLength niet afdwingt.
+    if (newPassword.length < WACHTWOORD_MIN) {
+      setError(`Nieuw wachtwoord moet minstens ${WACHTWOORD_MIN} tekens zijn.`);
+      setIsSubmitting(false);
+      return;
+    }
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
     if (updateError) {
       setError('Wachtwoord wijzigen is mislukt. Vraag een nieuwe reset-link aan.');

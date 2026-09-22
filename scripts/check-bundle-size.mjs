@@ -56,7 +56,12 @@ import zlib from 'node:zlib';
 // ±1,3 kB door Popover in het accountmenu, Callout in de offline-balk en
 // SearchField in de toolbar. 645 = 634 plus ±2 %, afgerond; de deelbudgetten
 // blijven de echte bewaker van de start.
-const BUDGET_KB = 645;
+// 23-09 (tranche 3A): 645 → 655. De gedeelde formulierlaag (Formulier,
+// veldfouten, sluitpoort met "Wijzigingen niet bewaren?", foutcopy met
+// vervolgstap, statuswoordenschat) en haar uitrol over ±45 formulieren: gemeten
+// 646 kB in CI na #611, met #610/#612/#613 nog te gaan. De entry blijft onder
+// 74 (73,2 kB), zod blijft uit de schermen zonder schema (valideerKern).
+const BUDGET_KB = 655;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -106,7 +111,10 @@ const DEELBUDGET_KB = {
 // zakte tegelijk 3,86 kB, dus per saldo laadt een ingelogde gebruiker
 // minder, en het loginscherm laadt dit helemaal niet meer. Zelfde ±3 kB marge
 // als op 17-09.
-const WARMUP_BUDGET_KB = { chauffeur: 70, staf: 132 };
+// 23-09 (tranche 3A): chauffeur 70 → 72, staf 132 → 135. Modal/DetailPaneel
+// dragen nu de sluitpoort en de ruilwizard/verlof het Formulier; gemeten 70 en
+// 132 kB. De warmup start pas na LCP + 2 s, de eerste weergave raakt dit niet.
+const WARMUP_BUDGET_KB = { chauffeur: 72, staf: 135 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];

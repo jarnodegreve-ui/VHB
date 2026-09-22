@@ -5,6 +5,7 @@ import { useMinWidth } from '../lib/useMinWidth';
 import { Card } from './Card';
 import { RichtingWissel } from './RichtingWissel';
 import { SlideOver } from './SlideOver';
+import { SluitContext, useSluitPoort, type SluitVia } from './Modal';
 import { EmptyState } from './ui';
 
 /**
@@ -31,6 +32,33 @@ const LG = 1024;
  */
 export function useInlinePaneel() {
   return useMinWidth(LG);
+}
+
+/**
+ * Dirty-bescherming voor het desktoppaneel (tranche 3A, 22-09). Op desktop
+ * staat het formulier als kaart náást de lijst: een andere rij kiezen,
+ * "Nieuw", Annuleren of een recordwissel via de URL gooide onbewaarde
+ * invoer zonder vraag weg. Met deze poort vragen die allemaal eerst
+ * "Wijzigingen niet bewaren?" (dezelfde OnbewaardDialoog als Modal en
+ * SlideOver): "Verder bewerken" houdt record en invoer, "Niet bewaren" voert
+ * de wissel uit.
+ *
+ *   const poort = useDetailPoort(vuil);
+ *   const kies = (item) => poort.via(() => open(item));
+ *   useStandaardKeuze({ …, vuil });
+ *   <DetailPaneel vuil={vuil} poort={poort} …>
+ *
+ * DetailPaneel toont de vraag en geeft de poort als SluitContext aan de
+ * inhoud, zodat een `SluitKnop` (Annuleren) er vanzelf door gaat. Onder `lg`
+ * laat de poort alles door: daar is het paneel een SlideOver met een eigen
+ * sluitpoort, en een tweede vraag zou dubbel zijn.
+ */
+export type DetailPoort = { via: SluitVia; dialoog: ReactNode; vuil: boolean };
+export function useDetailPoort(vuil: boolean): DetailPoort {
+  const inline = useMinWidth(LG);
+  const actief = inline && vuil;
+  const { sluitVia, dialoog } = useSluitPoort(true, actief);
+  return { via: sluitVia, dialoog, vuil: actief };
 }
 
 /**
@@ -61,7 +89,7 @@ export function useInlinePaneel() {
 /** Zolang mag een weggeschoven item terugkomen en de keuze heroveren:
  *  ruim boven de undo-toast (6 s) en een 409-refetch. */
 const TERUGKEER_MS = 15_000;
-export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, actief = true }: {
+export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, actief = true, vuil = false }: {
   items: T[];
   sleutelVan: (item: T) => string;
   /** Sleutel van de huidige keuze (null = niets gekozen). */
@@ -71,6 +99,11 @@ export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, ac
    *  schuift daar ineens een SlideOver open. */
   wis?: () => void;
   actief?: boolean;
+  /** Onbewaarde invoer in het paneel: dan kiest of wist deze hook níéts
+   *  (geen voorselectie, niet doorschuiven naar de buur bij een refetch,
+   *  niet wissen bij de wissel naar mobiel). Zodra het formulier weer schoon
+   *  is, haalt hij in wat er intussen veranderde. */
+  vuil?: boolean;
 }) {
   const inline = useMinWidth(LG);
   const vorige = useRef<string[]>([]);
@@ -83,6 +116,9 @@ export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, ac
   // Zonder deps: goedkoop (één map over de lijst) en zo mist hij nooit een
   // wissel — kiezen gebeurt alleen als er echt iets ontbreekt.
   useEffect(() => {
+    // Nooit automatisch wegwisselen van een vuil formulier; `vorige` blijft
+    // op de laatste schone stand, zodat de buur daarna nog klopt.
+    if (vuil) return;
     const sleutels = items.map(sleutelVan);
     const terug = weggeschoven.current;
     if (terug && (Date.now() > terug.tot || gekozen !== automatisch.current)) {
@@ -123,10 +159,10 @@ export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, ac
   });
 
   useEffect(() => {
-    if (inline || automatisch.current === null) return;
+    if (vuil || inline || automatisch.current === null) return;
     automatisch.current = null;
     wis?.();
-  }, [inline, wis]);
+  }, [inline, wis, vuil]);
 
   return inline;
 }
@@ -200,6 +236,8 @@ export function DetailPaneel({
   leegActie,
   verbergLeeg = false,
   plakkend = true,
+  vuil = false,
+  poort,
   className,
 }: {
   open: boolean;
@@ -238,6 +276,13 @@ export function DetailPaneel({
   verbergLeeg?: boolean;
   /** `lg:sticky` onder de topbar — uit voor een paneel in een gewone kolomflow. */
   plakkend?: boolean;
+  /** Onbewaarde invoer (tranche 3A): de mobiele SlideOver vraagt dan eerst
+   *  "Wijzigingen niet bewaren?" bij sluiten. */
+  vuil?: boolean;
+  /** Desktop-bewaking (useDetailPoort): toont de vraag en laat een
+   *  `SluitKnop` in de inhoud of footer door de poort gaan. Rijkeuze en
+   *  recordwissel in de view lopen via `poort.via`. */
+  poort?: DetailPoort;
   className?: string;
 }) {
   const inline = useMinWidth(LG);
@@ -287,7 +332,7 @@ export function DetailPaneel({
 
   if (!inline) {
     return (
-      <SlideOver open={open} onClose={onClose} title={title} subtitle={subtitle} titelTerugloop={titelTerugloop} icon={icon} width={breedte} footer={footer}>
+      <SlideOver open={open} onClose={onClose} vuil={vuil} title={title} subtitle={subtitle} titelTerugloop={titelTerugloop} icon={icon} width={breedte} footer={footer}>
         {/* Een andere rij kiezen terwijl het paneel open staat: zachte wissel
             i.p.v. een harde; het openen zelf is de veer van de SlideOver. */}
         <RichtingWissel sleutel={sleutel ?? ''} richting={wissel.richting} as="y" stil={wissel.stil}>
@@ -305,7 +350,7 @@ export function DetailPaneel({
 
   if (!open && verbergLeeg) return null;
 
-  return (
+  const kaart = (
     <div ref={wortel} className={cn(plakkend && 'lg:sticky lg:top-16', className)} aria-live="polite">
       {/* Lege staat ↔ kaart: cross-fade met 4 px i.p.v. een kale if. */}
       <RichtingWissel sleutel={open ? 'kaart' : 'leeg'} richting={1} as="y" stil={overgangLoopt()}>
@@ -354,5 +399,12 @@ export function DetailPaneel({
       )}
       </RichtingWissel>
     </div>
+  );
+  if (!poort) return kaart;
+  return (
+    <>
+      <SluitContext.Provider value={poort.via}>{kaart}</SluitContext.Provider>
+      {poort.dialoog}
+    </>
   );
 }

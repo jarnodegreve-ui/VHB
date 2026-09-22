@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
-import { valideer } from '../../lib/valideer';
-import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
+import { nieuweUserFormulierSchema, userFormulierSchema, wachtwoordResetSchema } from '../../../shared/schemas/user';
 import { CalendarOff, FolderOpen, History, Info, LogIn, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
 import type { Role, User } from '../../types';
@@ -19,7 +18,10 @@ import { ActieMenu } from '../../components/ActieMenu';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Input, Select } from '../../components/Field';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
 import { BroadcastDocumentModal } from './BroadcastDocumentModal';
@@ -254,10 +256,23 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   // Veldfouten per formulier: het gedeelde schema vóór submit én de
   // server-veldfouten van een 400 — bij het veld (Field error), niet als toast.
-  const [nieuwFouten, setNieuwFouten] = useState<Record<string, string>>({});
-  const [bewerkFouten, setBewerkFouten] = useState<Record<string, string>>({});
-  useEffect(() => { if (showAddModal) setNieuwFouten({}); }, [showAddModal]);
-  useEffect(() => { setBewerkFouten({}); }, [editingUser?.id]);
+  const nieuwF = useVeldfouten();
+  const bewerkF = useVeldfouten();
+  const nieuwFouten = nieuwF.fouten;
+  const bewerkFouten = bewerkF.fouten;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (showAddModal) nieuwF.wis(); }, [showAddModal]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { bewerkF.wis(); }, [editingUser?.id]);
+  // Onbewaarde invoer (tranche 3A): Annuleren, kruisje, Escape en backdrop
+  // vragen eerst "Wijzigingen niet bewaren?". Bij bewerken telt de
+  // vervaldata-draft mee; die vergelijken we met de bewaarde vervaldata
+  // i.p.v. met een momentopname, want de draft wordt pas ná het openen gevuld.
+  const { vuil: nieuwVuil } = useVuil(newUser, showAddModal);
+  const { vuil: bewerkUserVuil } = useVuil(editingUser, !!editingUser, editingUser?.id);
+  const vervalBestaand = editingUser ? userExpiries[editingUser.id] ?? {} : {};
+  const vervalVuil = !!editingUser && Object.keys(EXPIRY_SOORT_LABELS).some((soort) => (vervalDraft[soort] ?? '').trim() !== (vervalBestaand[soort] ?? ''));
+  const bewerkVuil = bewerkUserVuil || vervalVuil;
   // Naam-botsing-poort: de planning koppelt matrixcellen aan accounts op naam
   // (accent-/volgorde-ongevoelig), en bij twee accounts op dezelfde sleutel
   // weigert de server te kiezen — de chauffeur valt dan uit maandplanning,
@@ -270,8 +285,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     return `Er bestaat al een account met deze naam: ${wie}. Twee accounts met dezelfde naam kunnen niet aan de planning gekoppeld worden, de diensten op die naam verdwijnen dan uit de maandplanning en de dekking. Toch opslaan?`;
   };
 
-  const handleAddUser = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddUser = async () => {
     if (isSubmittingUser) return;
 
     const userToAdd: UserDraft = {
@@ -287,9 +301,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
 
     // Gedeeld contract (shared/schemas/user.ts): naam, e-mail (verplicht om
     // te kunnen inloggen), tijdelijk wachtwoord, GSM — fouten bij het veld.
-    const check = valideer(nieuweUserFormulierSchema, userToAdd);
-    if (check.ok === false) return setNieuwFouten(check.fouten);
-    setNieuwFouten({});
+    if (!nieuwF.controleer(nieuweUserFormulierSchema, userToAdd)) return;
 
     const botsingen = vindNaamBotsingen(userToAdd.name, users);
     if (botsingen.length > 0) {
@@ -301,7 +313,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
 
   const voerToevoegenUit = async (userToAdd: UserDraft) => {
     setIsSubmittingUser(true);
-    const success = await onCreateUser(userToAdd, setNieuwFouten).finally(() => setIsSubmittingUser(false));
+    const success = await onCreateUser(userToAdd, nieuwF.zet).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     setShowAddModal(false);
     setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
@@ -312,19 +324,21 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     });
   };
 
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdateUser = async () => {
     if (isSubmittingUser) return;
     if (!editingUser) return;
     // Gedeeld contract (shared/schemas/user.ts): fouten bij het veld.
-    const check = valideer(userFormulierSchema, editingUser);
-    if (check.ok === false) return setBewerkFouten(check.fouten);
-    setBewerkFouten({});
+    if (!bewerkF.controleer(userFormulierSchema, editingUser)) return;
 
     const originalUser = users.find((u) => u.id === editingUser.id);
     const isOnlyActiveAdmin = originalUser?.role === 'admin' && originalUser.isActive !== false && activeAdmins.length === 1;
     const adminWouldBeRemoved = editingUser.role !== 'admin' || editingUser.isActive === false;
-    if (isOnlyActiveAdmin && adminWouldBeRemoved) return notify('Je kunt de laatste actieve admin niet degraderen of deactiveren.', 'error');
+    if (isOnlyActiveAdmin && adminWouldBeRemoved) {
+      // Bij het veld dat het veroorzaakt (rol of Account actief), zodat de
+      // focus erheen gaat; de tekst is dezelfde als de vroegere toast.
+      bewerkF.zet({ [editingUser.role !== 'admin' ? 'role' : 'isActive']: 'Je kunt de laatste actieve admin niet degraderen of deactiveren.' });
+      return;
+    }
 
     // Alleen poorten als déze save de botsing introduceert (naam-sleutel
     // gewijzigd): een al bestaande dubbel mag het bewerken van andere velden
@@ -341,7 +355,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const voerBijwerkenUit = async () => {
     if (!editingUser) return;
     setIsSubmittingUser(true);
-    const success = await onSaveUser(editingUser, setBewerkFouten).finally(() => setIsSubmittingUser(false));
+    const success = await onSaveUser(editingUser, bewerkF.zet).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten.
     const bestaand = userExpiries[editingUser.id] ?? {};
@@ -437,29 +451,34 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     }
   };
 
+  const resetF = useVeldfouten();
+  const sluitReset = () => { setConfirmResetUser(null); setResetPasswordValue(''); resetF.wis(); };
   const handleResetPassword = async () => {
-    if (!confirmResetUser) return;
-    if (resetPasswordValue.length < 6) return notify('Gebruik minstens 6 tekens.', 'error');
+    if (!confirmResetUser || isResettingPassword) return;
+    // Zelfde schema als de server (WACHTWOORD_MIN uit shared): te kort = fout bij het veld.
+    const invoer = resetF.controleer(wachtwoordResetSchema, { userId: String(confirmResetUser.id), password: resetPasswordValue });
+    if (!invoer) return;
     try {
       setIsResettingPassword(true);
       const response = await apiFetch('/api/admin/users/reset-password', {
         method: 'POST',
-        body: JSON.stringify({ userId: confirmResetUser.id, password: resetPasswordValue }),
+        body: JSON.stringify(invoer),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) return notify(data.details || data.error || 'Reset mislukt.', 'error');
+      if (response.status === 400 && resetF.vanServer(data)) return;
+      // Geen "Opnieuw proberen": de server dedupliceert een reset niet.
+      if (!response.ok) return meldSchrijffout('Resetten', { status: response.status, message: data.details || data.error });
       notify(`Wachtwoord voor ${confirmResetUser.name} is bijgewerkt.`, 'success');
       setCredentialsModal({
         title: `Wachtwoord reset voor ${confirmResetUser.name}`,
         email: confirmResetUser.email || '',
         password: resetPasswordValue,
       });
-      setConfirmResetUser(null);
-      setResetPasswordValue('');
+      sluitReset();
     } catch (error: any) {
       // fetch kan ook gooien (offline) — zonder catch leek de reset gelukt
       // terwijl het wachtwoord nooit gezet was.
-      notify(`Reset mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
+      meldSchrijffout('Resetten', error);
     } finally {
       setIsResettingPassword(false);
     }
@@ -481,31 +500,49 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     })();
   };
   const sluitUitDienst = () => { setUitDienstUser(null); setUitDienstReden(''); };
-  const handleUitDienst = async () => {
-    if (!uitDienstUser) return;
+  const uitDienstVuil = !!uitDienstUser && uitDienstReden.trim() !== '';
+  // Uit dienst is idempotent op de server (POST /api/users/:id/uitdienst):
+  // nogmaals op een al gedeactiveerde gebruiker geeft 200 met nullen, zonder
+  // meldingen, alleen een extra auditregel "was al gedeactiveerd"
+  // (src/apiIntegration.test.ts). Daarom mag de fouttoast "Opnieuw proberen"
+  // tonen; de poging onthoudt gebruiker en reden, ook als de modal intussen dicht is.
+  const uitDienstBezig = useRef(false);
+  const openUitDienstId = useRef<string | null>(null);
+  useEffect(() => { openUitDienstId.current = uitDienstUser ? String(uitDienstUser.id) : null; }, [uitDienstUser]);
+  const voerUitDienstUit = async (doel: User, reden: string) => {
+    if (uitDienstBezig.current) return;
+    uitDienstBezig.current = true;
+    const opnieuw = () => { void voerUitDienstUit(doel, reden); };
     try {
       setIsUitDienstBezig(true);
-      const response = await apiFetch(`/api/users/${encodeURIComponent(uitDienstUser.id)}/uitdienst`, {
+      const response = await apiFetch(`/api/users/${encodeURIComponent(doel.id)}/uitdienst`, {
         method: 'POST',
-        body: JSON.stringify(uitDienstReden.trim() ? { reden: uitDienstReden.trim() } : {}),
+        body: JSON.stringify(reden ? { reden } : {}),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) return notify(data.details || data.error || 'Uit dienst zetten is mislukt.', 'error');
+      if (!response.ok) return meldSchrijffout('Uit dienst zetten', { status: response.status, message: data.details || data.error }, opnieuw);
       const { toestellen = 0, push = 0 } = data.samenvatting ?? {};
       const mislukt = Array.isArray(data.stappen) ? data.stappen.filter((s: { ok: boolean }) => !s.ok) : [];
       notify(
-        `${uitDienstUser.name} is uit dienst: account gedeactiveerd, ${toestellen} toestel${toestellen === 1 ? '' : 'len'} ingetrokken, ${push} push-abonnement${push === 1 ? '' : 'en'} gewist.`,
+        `${doel.name} is uit dienst: account gedeactiveerd, ${toestellen} toestel${toestellen === 1 ? '' : 'len'} ingetrokken, ${push} push-abonnement${push === 1 ? '' : 'en'} gewist.`,
         mislukt.length > 0 ? 'info' : 'success',
       );
       if (mislukt.length > 0) notify(`Niet gelukt: ${mislukt.map((s: { detail: string }) => s.detail).join(' ')}`, 'error');
-      setPushUserIds((prev) => { const n = new Set(prev); n.delete(String(uitDienstUser.id)); return n; });
-      sluitUitDienst();
+      setPushUserIds((prev) => { const n = new Set(prev); n.delete(String(doel.id)); return n; });
+      // Alleen de modal van déze gebruiker sluiten (een nieuwe poging kan
+      // slagen terwijl beheer intussen iemand anders open heeft).
+      if (String(openUitDienstId.current) === String(doel.id)) sluitUitDienst();
       await fetchUsers();
     } catch (error: any) {
-      notify(`Uit dienst zetten is mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
+      meldSchrijffout('Uit dienst zetten', error, opnieuw);
     } finally {
+      uitDienstBezig.current = false;
       setIsUitDienstBezig(false);
     }
+  };
+  const handleUitDienst = async () => {
+    if (!uitDienstUser || isUitDienstBezig) return;
+    await voerUitDienstUit(uitDienstUser, uitDienstReden.trim());
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -933,9 +970,9 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
       <ConfirmationModal open={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
       <ConfirmationModal open={!!confirmNaamBotsing} onClose={() => setConfirmNaamBotsing(null)} onConfirm={() => { const poort = confirmNaamBotsing; setConfirmNaamBotsing(null); poort?.doorgaan(); }} title="Naam bestaat al" message={confirmNaamBotsing?.melding ?? ''} confirmText="Toch opslaan" variant="warning" />
 
-      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} className="flex flex-col !p-0">
+      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} vuil={nieuwVuil} className="flex flex-col !p-0">
         <ModalHeader title="Nieuwe gebruiker" description="Voeg handmatig een medewerker toe." />
-        <form onSubmit={handleAddUser} className="p-6 md:p-7 space-y-4">
+        <Formulier onVerstuur={handleAddUser} className="p-6 md:p-7 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Volledige naam"
@@ -944,26 +981,26 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
               error={nieuwFouten.name}
               hint={vindNaamBotsingen(newUser.name, users).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een account met deze naam, een tweede maakt de naam onkoppelbaar in de planning.</span> : undefined}
             >
-              <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} placeholder="bv. Jan Janssen" />
+              <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => { setNewUser({ ...newUser, name: e.target.value }); nieuwF.wisVeld('name'); }} placeholder="bv. Jan Janssen" />
             </Field>
-            <Field label="Rol" htmlFor="nieuw-rol" error={nieuwFouten.role}><Select id="nieuw-rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}</Select></Field>
-            <Field label="Personeelsnummer" htmlFor="nieuw-personeelsnr" error={nieuwFouten.employeeId}><Input id="nieuw-personeelsnr" invalid={!!nieuwFouten.employeeId} type="text" autoComplete="off" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} placeholder="Optioneel" /></Field>
-            <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2" error={nieuwFouten.email}><Input id="nieuw-email" invalid={!!nieuwFouten.email} type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
-            <Field label="Tijdelijk wachtwoord" htmlFor="nieuw-wachtwoord" error={nieuwFouten.password}><Input id="nieuw-wachtwoord" invalid={!!nieuwFouten.password} type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} /></Field>
-            <Field label="GSM-nummer" htmlFor="nieuw-gsm" error={nieuwFouten.phone}><Input id="nieuw-gsm" invalid={!!nieuwFouten.phone} type="tel" autoComplete="tel" inputMode="tel" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
+            <Field label="Rol" htmlFor="nieuw-rol" error={nieuwFouten.role}><Select id="nieuw-rol" value={newUser.role} onChange={(e) => { setNewUser({ ...newUser, role: e.target.value }); nieuwF.wisVeld('role'); }}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}</Select></Field>
+            <Field label="Personeelsnummer" htmlFor="nieuw-personeelsnr" error={nieuwFouten.employeeId}><Input id="nieuw-personeelsnr" invalid={!!nieuwFouten.employeeId} type="text" autoComplete="off" value={newUser.employeeId} onChange={(e) => { setNewUser({ ...newUser, employeeId: e.target.value }); nieuwF.wisVeld('employeeId'); }} placeholder="Optioneel" /></Field>
+            <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2" error={nieuwFouten.email}><Input id="nieuw-email" invalid={!!nieuwFouten.email} type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => { setNewUser({ ...newUser, email: e.target.value }); nieuwF.wisVeld('email'); }} placeholder="bv. jan@voorbeeld.be" /></Field>
+            <Field label="Tijdelijk wachtwoord" htmlFor="nieuw-wachtwoord" error={nieuwFouten.password}><Input id="nieuw-wachtwoord" invalid={!!nieuwFouten.password} type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => { setNewUser({ ...newUser, password: e.target.value }); nieuwF.wisVeld('password'); }} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} /></Field>
+            <Field label="GSM-nummer" htmlFor="nieuw-gsm" error={nieuwFouten.phone}><Input id="nieuw-gsm" invalid={!!nieuwFouten.phone} type="tel" autoComplete="tel" inputMode="tel" value={newUser.phone} onChange={(e) => { setNewUser({ ...newUser, phone: e.target.value }); nieuwF.wisVeld('phone'); }} placeholder="Optioneel" /></Field>
           </div>
           <div className="flex gap-3 pt-2">
-            <Button variant="ghost" className="flex-1" onClick={() => setShowAddModal(false)}>Annuleren</Button>
-            <Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Toevoegen'}</Button>
+            <SluitKnop onClose={() => setShowAddModal(false)} variant="ghost" className="flex-1" disabled={isSubmittingUser}>Annuleren</SluitKnop>
+            <Button type="submit" variant="primary" className="flex-1" bezig={isSubmittingUser}>Toevoegen</Button>
           </div>
-        </form>
+        </Formulier>
       </Modal>
 
-      <Modal open={!!editingUser} onClose={() => setEditingUser(null)} maxWidth="lg" className="flex flex-col !p-0">
+      <Modal open={!!editingUser} onClose={() => setEditingUser(null)} vuil={bewerkVuil} maxWidth="lg" className="flex flex-col !p-0">
         {editingUser && (
           <>
             <ModalHeader title="Gebruiker bewerken" description={`Pas de gegevens van ${editingUser.name} aan.`} />
-            <form onSubmit={handleUpdateUser} className="p-6 md:p-7 space-y-4">
+            <Formulier onVerstuur={handleUpdateUser} className="p-6 md:p-7 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
                   label="Volledige naam"
@@ -972,17 +1009,17 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                   error={bewerkFouten.name}
                   hint={vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een ander account met deze naam, de naam is dan niet aan de planning te koppelen.</span> : undefined}
                 >
-                  <Input id="bewerk-naam" type="text" autoComplete="name" required value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} />
+                  <Input id="bewerk-naam" type="text" autoComplete="name" required value={editingUser.name} onChange={(e) => { setEditingUser({ ...editingUser, name: e.target.value }); bewerkF.wisVeld('name'); }} />
                 </Field>
-                <Field label="Rol" htmlFor="bewerk-rol" error={bewerkFouten.role}><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}</Select></Field>
-                <Field label="Personeelsnummer" htmlFor="bewerk-personeelsnr" error={bewerkFouten.employeeId}><Input id="bewerk-personeelsnr" invalid={!!bewerkFouten.employeeId} type="text" autoComplete="off" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} /></Field>
-                <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2" error={bewerkFouten.email}><Input id="bewerk-email" invalid={!!bewerkFouten.email} type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
-                <Field label="Nieuw wachtwoord" htmlFor="bewerk-wachtwoord" error={bewerkFouten.password}><Input id="bewerk-wachtwoord" invalid={!!bewerkFouten.password} type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} placeholder="Optioneel" /></Field>
-                <Field label="GSM-nummer" htmlFor="bewerk-gsm" error={bewerkFouten.phone}><Input id="bewerk-gsm" invalid={!!bewerkFouten.phone} type="tel" autoComplete="tel" inputMode="tel" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
+                <Field label="Rol" htmlFor="bewerk-rol" error={bewerkFouten.role}><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => { setEditingUser({ ...editingUser, role: e.target.value as any }); bewerkF.wisVeld('role'); }}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}</Select></Field>
+                <Field label="Personeelsnummer" htmlFor="bewerk-personeelsnr" error={bewerkFouten.employeeId}><Input id="bewerk-personeelsnr" invalid={!!bewerkFouten.employeeId} type="text" autoComplete="off" value={editingUser.employeeId} onChange={(e) => { setEditingUser({ ...editingUser, employeeId: e.target.value }); bewerkF.wisVeld('employeeId'); }} /></Field>
+                <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2" error={bewerkFouten.email}><Input id="bewerk-email" invalid={!!bewerkFouten.email} type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => { setEditingUser({ ...editingUser, email: e.target.value }); bewerkF.wisVeld('email'); }} placeholder="bv. jan@voorbeeld.be" /></Field>
+                <Field label="Nieuw wachtwoord" htmlFor="bewerk-wachtwoord" error={bewerkFouten.password}><Input id="bewerk-wachtwoord" invalid={!!bewerkFouten.password} type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => { setEditingUser({ ...editingUser, password: e.target.value }); bewerkF.wisVeld('password'); }} placeholder="Optioneel" /></Field>
+                <Field label="GSM-nummer" htmlFor="bewerk-gsm" error={bewerkFouten.phone}><Input id="bewerk-gsm" invalid={!!bewerkFouten.phone} type="tel" autoComplete="tel" inputMode="tel" value={editingUser.phone || ''} onChange={(e) => { setEditingUser({ ...editingUser, phone: e.target.value }); bewerkF.wisVeld('phone'); }} placeholder="Optioneel" /></Field>
                 {editingUser.role === 'chauffeur' && (
-                  <Field label="Sectie (maandplanning)" htmlFor="bewerk-sectie" error={bewerkFouten.section}><Select id="bewerk-sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })}><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></Select></Field>
+                  <Field label="Sectie (maandplanning)" htmlFor="bewerk-sectie" error={bewerkFouten.section}><Select id="bewerk-sectie" value={editingUser.section || ''} onChange={(e) => { setEditingUser({ ...editingUser, section: e.target.value || undefined }); bewerkF.wisVeld('section'); }}><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></Select></Field>
                 )}
-                <Field label="In dienst sinds" htmlFor="bewerk-startdatum" error={bewerkFouten.startDate} hint="Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning."><DateInput id="bewerk-startdatum" invalid={Boolean(bewerkFouten.startDate)} value={editingUser.startDate || ''} onChange={(v) => setEditingUser({ ...editingUser, startDate: v || undefined })} /></Field>
+                <Field label="In dienst sinds" htmlFor="bewerk-startdatum" error={bewerkFouten.startDate} hint="Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning."><DateInput id="bewerk-startdatum" invalid={Boolean(bewerkFouten.startDate)} value={editingUser.startDate || ''} onChange={(v) => { setEditingUser({ ...editingUser, startDate: v || undefined }); bewerkF.wisVeld('startDate'); }} /></Field>
                 <Field label="Verlofbudget (dagen)" htmlFor="bewerk-verlofbudget" className="sm:col-span-2" error={bewerkFouten.verlofBudget} hint="Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).">
                   <Input
                     id="bewerk-verlofbudget"
@@ -993,6 +1030,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                     onChange={(e) => {
                       const v = e.target.value;
                       setEditingUser({ ...editingUser, verlofBudget: v === '' ? undefined : Math.max(0, parseInt(v, 10) || 0) });
+                      bewerkF.wisVeld('verlofBudget');
                     }}
                     placeholder="Leeg = standaard (24 dagen)"
                   />
@@ -1015,10 +1053,15 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                   </fieldset>
                 )}
               </div>
-              <Card tone="muted" padding="sm" className="flex items-center justify-between">
-                <div><p className="text-sm font-semibold text-slate-700">Account actief</p><p className="text-xs text-slate-500">Inactieve gebruikers kunnen niet inloggen.</p></div>
-                <Switch checked={editingUser.isActive !== false} onChange={(aan) => setEditingUser({ ...editingUser, isActive: aan })} label="Account actief" />
-              </Card>
+              {/* data-fout: focusEersteFout vindt de schakelaar bij de
+                  laatste-admin-fout (tranche 3A). */}
+              <div className="space-y-1.5" data-fout={bewerkFouten.isActive ? '' : undefined}>
+                <Card tone="muted" padding="sm" className="flex items-center justify-between">
+                  <div><p className="text-sm font-semibold text-slate-700">Account actief</p><p className="text-xs text-slate-500">Inactieve gebruikers kunnen niet inloggen.</p></div>
+                  <Switch checked={editingUser.isActive !== false} onChange={(aan) => { setEditingUser({ ...editingUser, isActive: aan }); bewerkF.wisVeld('isActive'); }} label="Account actief" />
+                </Card>
+                {bewerkFouten.isActive ? <p role="alert" className="text-xs font-medium text-red-700">{bewerkFouten.isActive}</p> : null}
+              </div>
               <Card tone="muted" padding="sm" className="flex items-center justify-between">
                 <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-xs text-slate-500">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
                 <Switch checked={editingUser.showInContacts !== false} onChange={(aan) => setEditingUser({ ...editingUser, showInContacts: aan })} label="Tonen in contactlijst" />
@@ -1033,22 +1076,22 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
               {/* Verwijderknop stond in de kop; de gedeelde ModalHeader heeft
                   daar geen slot voor, dus links in de knoppenrij (zelfde
                   gedrag, zelfde bescherming; controle-ronde 27-08). */}
-              <div className="flex gap-3 pt-2"><IconButton label={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Gebruiker verwijderen'} variant="danger" onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)}><Trash2 size={16} /></IconButton><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
-            </form>
+              <div className="flex gap-3 pt-2"><IconButton label={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Gebruiker verwijderen'} variant="danger" onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)}><Trash2 size={16} /></IconButton><SluitKnop onClose={() => setEditingUser(null)} variant="ghost" className="flex-1" disabled={isSubmittingUser}>Annuleren</SluitKnop><Button type="submit" variant="primary" className="flex-1" bezig={isSubmittingUser}>Opslaan</Button></div>
+            </Formulier>
           </>
         )}
       </Modal>
 
-      <Modal open={!!confirmResetUser} onClose={() => { setConfirmResetUser(null); setResetPasswordValue(''); }} className="flex flex-col !p-0">
+      <Modal open={!!confirmResetUser} onClose={sluitReset} className="flex flex-col !p-0">
         {confirmResetUser && (
           <>
             <ModalHeader title="Wachtwoord resetten" description={`Stel een nieuw tijdelijk wachtwoord in voor ${confirmResetUser.name}.`} />
-            <div className="p-6 md:p-7 space-y-4">
-              <Field label="Tijdelijk wachtwoord" htmlFor="reset-wachtwoord" hint="De gebruiker logt daarna in met dit nieuwe wachtwoord.">
-                <Input id="reset-wachtwoord" type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} autoFocus />
+            <Formulier onVerstuur={handleResetPassword} className="p-6 md:p-7 space-y-4">
+              <Field label="Tijdelijk wachtwoord" htmlFor="reset-wachtwoord" hint="De gebruiker logt daarna in met dit nieuwe wachtwoord." error={resetF.fouten.password}>
+                <Input id="reset-wachtwoord" type="password" autoComplete="new-password" value={resetPasswordValue} onChange={(e) => { setResetPasswordValue(e.target.value); resetF.wisVeld('password'); }} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} autoFocus />
               </Field>
-              <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }}>Annuleren</Button><Button variant="primary" className="flex-1" onClick={handleResetPassword} disabled={isResettingPassword}>{isResettingPassword ? 'Bezig…' : 'Resetten'}</Button></div>
-            </div>
+              <div className="flex gap-3 pt-2"><SluitKnop onClose={sluitReset} variant="ghost" className="flex-1" disabled={isResettingPassword}>Annuleren</SluitKnop><Button type="submit" variant="primary" className="flex-1" bezig={isResettingPassword}>Resetten</Button></div>
+            </Formulier>
           </>
         )}
       </Modal>
@@ -1063,11 +1106,11 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
         message={`De authenticator-koppeling van ${mfaResetUser?.name ?? ''} wordt verwijderd. Bij de volgende aanmelding stelt ${mfaResetUser?.name ?? 'de collega'} twee-stapsverificatie opnieuw in. Doe dit alleen op vraag van de collega zelf.`}
       />
 
-      <Modal open={!!uitDienstUser} onClose={sluitUitDienst} className="flex flex-col !p-0" ariaLabel="Uit dienst">
+      <Modal open={!!uitDienstUser} onClose={sluitUitDienst} vuil={uitDienstVuil} className="flex flex-col !p-0" ariaLabel="Uit dienst">
         {uitDienstUser && (
           <>
             <ModalHeader title="Uit dienst" description={`${uitDienstUser.name} gaat uit dienst. Dit gebeurt in één keer:`} />
-            <div className="p-6 md:p-7 space-y-5">
+            <Formulier onVerstuur={handleUitDienst} className="p-6 md:p-7 space-y-5">
               <ul className="space-y-2 text-sm text-slate-700">
                 <li className="flex items-start gap-2.5"><Pause size={16} className="mt-0.5 shrink-0 text-slate-500" /><span>Account deactiveren, inloggen is niet meer mogelijk.</span></li>
                 <li className="flex items-start gap-2.5">
@@ -1088,10 +1131,10 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
               </Field>
               <p className="text-micro text-slate-500">Terugdraaien kan via “Gebruiker activeren”; toestellen keur je daarna opnieuw goed.</p>
               <div className="flex gap-3 pt-1">
-                <Button variant="ghost" className="flex-1" onClick={sluitUitDienst}>Annuleren</Button>
-                <Button variant="primary" className="flex-1" onClick={handleUitDienst} disabled={isUitDienstBezig}>{isUitDienstBezig ? 'Bezig…' : 'Uit dienst zetten'}</Button>
+                <SluitKnop onClose={sluitUitDienst} variant="ghost" className="flex-1" disabled={isUitDienstBezig}>Annuleren</SluitKnop>
+                <Button type="submit" variant="primary" className="flex-1" bezig={isUitDienstBezig}>Uit dienst zetten</Button>
               </div>
-            </div>
+            </Formulier>
           </>
         )}
       </Modal>

@@ -8,7 +8,9 @@ import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../
 import { apiFetch } from '../../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { useZelfLadend } from '../../lib/zelfLadend';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVuil } from '../../lib/formulier';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
@@ -156,6 +158,8 @@ export function VervaldataView({ users }: { users: User[] }) {
     setBewerkt(u);
     setDraft({ ...(perUser.get(String(u.id)) ?? {}) });
   };
+  // Onbewaarde datums (tranche 3A): momentopname bij het openen per chauffeur.
+  const { vuil } = useVuil(draft, !!bewerkt, bewerkt?.id);
   const openBewerken = (u: User) => { toonBewerken(u); zetUserParam(String(u.id)); };
   const sluitBewerken = () => { setBewerkt(null); zetUserParam(null); };
 
@@ -379,9 +383,9 @@ export function VervaldataView({ users }: { users: User[] }) {
         </div>
       )}
 
-      <Modal open={!!bewerkt} onClose={sluitBewerken} maxWidth="sm" ariaLabel={bewerkt ? `Vervaldata van ${bewerkt.name}` : 'Vervaldata'}>
+      <Modal open={!!bewerkt} onClose={sluitBewerken} vuil={vuil} maxWidth="sm" ariaLabel={bewerkt ? `Vervaldata van ${bewerkt.name}` : 'Vervaldata'}>
         {bewerkt && (
-          <div className="p-6">
+          <Formulier onVerstuur={opslaan} className="p-6">
             <CardHeader title={bewerkt.name} description="Leeg laten = niet bewaken voor dit document." />
             <div className="mt-4 space-y-3">
               {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
@@ -397,10 +401,10 @@ export function VervaldataView({ users }: { users: User[] }) {
               ))}
             </div>
             <div className="mt-5 flex gap-3">
-              <Button variant="ghost" className="flex-1" onClick={sluitBewerken}>Annuleren</Button>
-              <Button variant="primary" className="flex-1" onClick={() => void opslaan()} disabled={isSaving}>{isSaving ? 'Bezig…' : 'Opslaan'}</Button>
+              <SluitKnop onClose={sluitBewerken} variant="ghost" className="flex-1" disabled={isSaving}>Annuleren</SluitKnop>
+              <Button type="submit" variant="primary" className="flex-1" bezig={isSaving}>Opslaan</Button>
             </div>
-          </div>
+          </Formulier>
         )}
       </Modal>
     </PageShell>

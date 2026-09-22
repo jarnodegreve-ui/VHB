@@ -114,6 +114,9 @@ const mem = vi.hoisted(() => ({
   planningVersieTeller: 0,
   // true = replace_planning faalt (databasefout midden in de heropbouw).
   planningVervangenFaalt: false,
+  // Service-role-client voor de routes die Supabase Auth beheren; null =
+  // niet geconfigureerd (standaard). Een test zet hier een attrap.
+  supabaseAdmin: null as any,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -162,7 +165,8 @@ vi.mock('../api/db.js', () => {
         },
       },
     },
-    supabaseAdmin: null,
+    // Getter: een test kan mem.supabaseAdmin zetten (wachtwoord resetten).
+    get supabaseAdmin() { return mem.supabaseAdmin; },
     db: { from: loonFrom },
   };
 });
@@ -742,6 +746,7 @@ beforeEach(() => {
   resetAllRateLimiters();
   invalidateUsersCache();
   invalidateOnderhoudCache();
+  mem.supabaseAdmin = null;
   mem.appSettings = {};
   mem.opslag.clear();
   mem.users = [
@@ -3135,6 +3140,52 @@ describe('wachtwoordminimum server-side (controle-ronde 27-08, nr. 32)', () => {
     const nieuw = { id: '78', name: 'Nieuwe Chauffeur', email: 'nieuw2@vhb.be', role: 'chauffeur', isActive: true, password: 'lang-genoeg' };
     const res = await api('POST', '/api/users', { token: 'tok-admin', body: [...mem.users, nieuw] });
     expect(res.status).toBe(200);
+  });
+});
+
+describe('wachtwoord resetten door beheer (POST /api/admin/users/reset-password)', () => {
+  const authAttrap = () => {
+    const gezet: Array<{ id: string; password?: string }> = [];
+    mem.supabaseAdmin = {
+      auth: {
+        admin: {
+          listUsers: async () => ({ data: { users: [{ id: 'auth-a', email: 'a@vhb.be' }] }, error: null }),
+          updateUserById: async (id: string, velden: { password?: string }) => { gezet.push({ id, password: velden.password }); return { data: {}, error: null }; },
+        },
+      },
+    };
+    return gezet;
+  };
+
+  it('weigert 9 tekens met een 400 en de fout bij het veld, zonder iets te zetten', async () => {
+    const gezet = authAttrap();
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: '123456789' } });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('Ongeldige invoer');
+    expect(res.json.veldfouten).toEqual({ password: 'Gebruik een tijdelijk wachtwoord van minstens 10 tekens' });
+    expect(res.json.details).toContain('10 tekens');
+    expect(gezet).toEqual([]);
+    expect(mem.activity.some((a) => a.action === 'Wachtwoord gereset')).toBe(false);
+  });
+
+  it('weigert ook zonder service-role eerst op de invoer (400, niet 500)', async () => {
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: 'kort' } });
+    expect(res.status).toBe(400);
+    expect(res.json.veldfouten.password).toContain('10 tekens');
+  });
+
+  it('accepteert 10 tekens en zet het wachtwoord op het gekoppelde Auth-account', async () => {
+    const gezet = authAttrap();
+    const res = await api('POST', '/api/admin/users/reset-password', { token: 'tok-admin', body: { userId: '3', password: '1234567890' } });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true });
+    expect(gezet).toEqual([{ id: 'auth-a', password: '1234567890' }]);
+    expect(mem.activity.filter((a) => a.action === 'Wachtwoord gereset')).toHaveLength(1);
+  });
+
+  it('blijft alleen voor admin (403 voor een planner)', async () => {
+    authAttrap();
+    expect((await api('POST', '/api/admin/users/reset-password', { token: 'tok-planner', body: { userId: '3', password: '1234567890' } })).status).toBe(403);
   });
 });
 
@@ -6167,6 +6218,33 @@ describe('uit dienst in één handeling (POST /api/users/:id/uitdienst)', () => 
     expect(weer.json.samenvatting).toEqual({ toestellen: 0, push: 0, sessies: 'gebannen' });
     expect(weer.json.stappen.find((s: any) => s.stap === 'deactiveren')?.detail).toMatch(/al gedeactiveerd/);
     expect(mem.activity.filter((a) => a.action === 'Uit dienst')).toHaveLength(2);
+  });
+
+  it('een tweede poging (Opnieuw proberen na een verloren antwoord) verandert niets meer: zelfde eindtoestand, alleen een eerlijke auditregel', async () => {
+    mem.devices.push({ userId: '3', deviceToken: 'dev-3', name: 'iPhone', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null });
+    const eerste = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin', body: { reden: 'Einde contract' } });
+    expect(eerste.status).toBe(200);
+    const naEerste = {
+      user: JSON.stringify(mem.users.find((u: any) => u.id === '3')),
+      devices: JSON.stringify(mem.devices),
+      push: JSON.stringify(mem.pushSubscriptions),
+      andereActiviteit: mem.activity.filter((a) => a.action !== 'Uit dienst').length,
+      meldingen: mem.meldingen.length,
+    };
+    const tweede = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin', body: { reden: 'Einde contract' } });
+    expect(tweede.status).toBe(200);
+    expect(tweede.json.user.isActive).toBe(false);
+    expect(tweede.json.stappen.every((s: any) => s.ok)).toBe(true);
+    expect(tweede.json.samenvatting).toEqual({ toestellen: 0, push: 0, sessies: 'gebannen' });
+    // Gebruiker, toestellen en push-abonnementen ongewijzigd; geen andere logregels (geen tweede deactivering).
+    expect(JSON.stringify(mem.users.find((u: any) => u.id === '3'))).toBe(naEerste.user);
+    expect(JSON.stringify(mem.devices)).toBe(naEerste.devices);
+    expect(JSON.stringify(mem.pushSubscriptions)).toBe(naEerste.push);
+    expect(mem.activity.filter((a) => a.action !== 'Uit dienst')).toHaveLength(naEerste.andereActiviteit);
+    expect(mem.meldingen).toHaveLength(naEerste.meldingen);
+    const regels = mem.activity.filter((a) => a.action === 'Uit dienst');
+    expect(regels).toHaveLength(2);
+    expect(regels.map((r) => r.message).find((m) => m.includes('was al gedeactiveerd'))).toBe('Chauffeur A: account was al gedeactiveerd, 0 toestellen ingetrokken, 0 push-abonnementen gewist. Reden: Einde contract.');
   });
 
   it('weigert een planner (403), jezelf (400) en een onbekende (404)', async () => {

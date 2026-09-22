@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { dienstoverzichtCsv } from '../../lib/dienstoverzichtExport';
 import { Clock, Download, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
@@ -10,7 +10,9 @@ import { Button, MicroLabel, Td, Th } from '../../components/primitives';
 import { ActieMenu } from '../../components/ActieMenu';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { Field, Input } from '../../components/Field';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { Zijvak, ZijvakRij } from '../../components/Zijvak';
 import { InfoTip } from '../../components/InfoTip';
@@ -46,6 +48,12 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     loopnr3: ''
   });
   const [isImporting, setIsImporting] = useState(false);
+  // Tranche 3A: de busvak-tijdcheck zet een fout bij het veld; `vuil` vraagt
+  // eerst "Wijzigingen niet bewaren?" bij sluiten met onbewaarde invoer.
+  const fouten = useVeldfouten();
+  const { vuil } = useVuil(formData, showModal, editingId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (showModal) fouten.wis(); }, [showModal, editingId]);
   // Zoeken op dienst- of loopnummer; sorteren per kolom. Standaard blijft de
   // volgorde van de lijst zelf (zoals geïmporteerd/opgeslagen) — 'volgorde'
   // is die onzichtbare standaardsleutel.
@@ -225,8 +233,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     loopnr3: ''
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (isSaving) return;
     setIsSaving(true);
     try {
@@ -242,11 +249,12 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         const raw = String(cleaned[f] ?? '').trim();
         if (!raw) { cleaned[f] = ''; continue; }
         if (!isValidBusvakTime(raw)) {
-          notify(`Ongeldige tijd “${raw}”, gebruik UU:MM, na middernacht als 24:00+ (bv. 26:16).`, 'error');
+          fouten.zet({ [f]: `Ongeldige tijd “${raw}”, gebruik UU:MM, na middernacht als 24:00+ (bv. 26:16).` });
           return;
         }
         cleaned[f] = normalizeTimeString(raw);
       }
+      fouten.wis();
       const next = editingId
         ? services.map(s => s.id === editingId ? { ...s, ...cleaned } : s)
         : [...services, { id: Date.now().toString(), ...cleaned }];
@@ -494,9 +502,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       <aside className="min-w-0 self-start 2xl:sticky 2xl:top-[calc(var(--sticky-top)+1.25rem)]">{zijvak}</aside>
       </div>
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex flex-col !p-0">
+      <Modal open={showModal} onClose={() => setShowModal(false)} vuil={vuil} maxWidth="lg" className="flex flex-col !p-0">
         <ModalHeader title={editingId ? 'Dienst bewerken' : 'Nieuwe dienst'} onClose={() => setShowModal(false)} />
-        <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5">
+        <Formulier onVerstuur={handleSubmit} className="p-6 md:p-7 space-y-5">
           <Field label="Dienstnummer" htmlFor="dienst-nummer">
             <Input
               id="dienst-nummer"
@@ -506,19 +514,19 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             />
           </Field>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field label="Starttijd (deel 1)" htmlFor="dienst-start1">
+            <Field label="Starttijd (deel 1)" htmlFor="dienst-start1" error={fouten.fouten.startTime}>
               <Input
                 id="dienst-start1"
                 type="text" required inputMode="numeric" placeholder="04:36" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime}
-                onChange={(e) => setFormData({...formData, startTime: e.target.value})}
+                onChange={(e) => { setFormData({...formData, startTime: e.target.value}); fouten.wisVeld('startTime'); }}
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Eindtijd (deel 1)" htmlFor="dienst-eind1">
+            <Field label="Eindtijd (deel 1)" htmlFor="dienst-eind1" error={fouten.fouten.endTime}>
               <Input
                 id="dienst-eind1"
                 type="text" required inputMode="numeric" placeholder="26:16" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime}
-                onChange={(e) => setFormData({...formData, endTime: e.target.value})}
+                onChange={(e) => { setFormData({...formData, endTime: e.target.value}); fouten.wisVeld('endTime'); }}
                 className="tabular-nums"
               />
             </Field>
@@ -534,19 +542,19 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field label="Starttijd (deel 2)" htmlFor="dienst-start2">
+            <Field label="Starttijd (deel 2)" htmlFor="dienst-start2" error={fouten.fouten.startTime2}>
               <Input
                 id="dienst-start2"
                 type="text" inputMode="numeric" placeholder="—" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime2}
-                onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
+                onChange={(e) => { setFormData({...formData, startTime2: e.target.value}); fouten.wisVeld('startTime2'); }}
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Eindtijd (deel 2)" htmlFor="dienst-eind2">
+            <Field label="Eindtijd (deel 2)" htmlFor="dienst-eind2" error={fouten.fouten.endTime2}>
               <Input
                 id="dienst-eind2"
                 type="text" inputMode="numeric" placeholder="—" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime2}
-                onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
+                onChange={(e) => { setFormData({...formData, endTime2: e.target.value}); fouten.wisVeld('endTime2'); }}
                 className="tabular-nums"
               />
             </Field>
@@ -562,19 +570,19 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field label="Starttijd (deel 3)" htmlFor="dienst-start3">
+            <Field label="Starttijd (deel 3)" htmlFor="dienst-start3" error={fouten.fouten.startTime3}>
               <Input
                 id="dienst-start3"
                 type="text" inputMode="numeric" placeholder="—" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime3}
-                onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
+                onChange={(e) => { setFormData({...formData, startTime3: e.target.value}); fouten.wisVeld('startTime3'); }}
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Eindtijd (deel 3)" htmlFor="dienst-eind3">
+            <Field label="Eindtijd (deel 3)" htmlFor="dienst-eind3" error={fouten.fouten.endTime3}>
               <Input
                 id="dienst-eind3"
                 type="text" inputMode="numeric" placeholder="—" pattern="\d{1,2}:\d{2}" title="UU:MM, na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime3}
-                onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
+                onChange={(e) => { setFormData({...formData, endTime3: e.target.value}); fouten.wisVeld('endTime3'); }}
                 className="tabular-nums"
               />
             </Field>
@@ -590,10 +598,13 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
           {/* bezig i.p.v. disabled: na het opslaan werkt de server ook de
               planning bij, de knop toont dat er nog iets loopt. */}
-          <Button type="submit" variant="primary" size="lg" full className="mt-4" bezig={isSaving}>
-            {editingId ? 'Dienst bijwerken' : 'Dienst toevoegen'}
-          </Button>
-        </form>
+          <div className="mt-4 flex gap-3">
+            <SluitKnop onClose={() => setShowModal(false)} variant="ghost" size="lg" className="flex-1" disabled={isSaving}>Annuleren</SluitKnop>
+            <Button type="submit" variant="primary" size="lg" className="flex-1" bezig={isSaving}>
+              {editingId ? 'Dienst bijwerken' : 'Dienst toevoegen'}
+            </Button>
+          </div>
+        </Formulier>
       </Modal>
 
       <ConfirmationModal

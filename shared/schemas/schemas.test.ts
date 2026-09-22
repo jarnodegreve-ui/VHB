@@ -16,6 +16,8 @@ import {
   valideer,
   veldfoutenVan,
   WACHTWOORD_MIN,
+  wachtwoordResetSchema,
+  tijdelijkWachtwoordSchema,
   type GevalideerdeDiversion,
   type GevalideerdeUpdate,
   type GevalideerdeUser,
@@ -120,6 +122,21 @@ describe('userSchema', () => {
     expect(valideer(userBodySchema, { name: 'A', email: 'a@b.be' }).ok).toBe(true);
     const r = valideer(userBodySchema, { name: 'A', password: 'kort' });
     expect(r.ok === false && r.fouten.password).toContain(`${WACHTWOORD_MIN} tekens`);
+  });
+
+  it('één wachtwoordminimum (10) voor profiel, nieuwe gebruiker en reset door beheer', () => {
+    expect(WACHTWOORD_MIN).toBe(10);
+    const negen = '123456789';
+    const tien = '1234567890';
+    expect(valideer(userBodySchema, { name: 'A', password: negen }).ok).toBe(false);
+    expect(valideer(userBodySchema, { name: 'A', password: tien }).ok).toBe(true);
+    expect(valideer(tijdelijkWachtwoordSchema, negen).ok).toBe(false);
+    expect(valideer(tijdelijkWachtwoordSchema, tien).ok).toBe(true);
+    const kort = valideer(wachtwoordResetSchema, { userId: '3', password: negen });
+    expect(kort.ok === false && kort.fouten).toEqual({ password: `Gebruik een tijdelijk wachtwoord van minstens ${WACHTWOORD_MIN} tekens` });
+    const leeg = valideer(wachtwoordResetSchema, { userId: '', password: '' });
+    expect(leeg.ok === false && leeg.fouten).toEqual({ userId: 'Kies een gebruiker', password: 'Vul een tijdelijk wachtwoord in' });
+    expect(valideer(wachtwoordResetSchema, { userId: '3', password: tien }).ok).toBe(true);
   });
 
   it('userLijstSchema: sleutels per rij (index.veld)', () => {

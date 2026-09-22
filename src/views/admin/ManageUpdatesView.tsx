@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { Bell, ChevronRight, History, Plus, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
@@ -9,11 +9,14 @@ import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, Switch } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input, Textarea } from '../../components/Field';
-import { valideer } from '../../lib/valideer';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
+import { Formulier } from '../../components/Formulier';
+import { SluitKnop } from '../../components/Modal';
 import { updateSchema } from '../../../shared/schemas/update';
 import { InfoTip } from '../../components/InfoTip';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
-import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
+import { DetailPaneel, MasterDetail, useDetailPoort, useStandaardKeuze } from '../../components/DetailPaneel';
 import { UpdateBijlagen } from '../../components/UpdateBijlagen';
 import { ActieMenu } from '../../components/ActieMenu';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
@@ -48,12 +51,20 @@ export function ManageUpdatesView({
   const [updateForm, setUpdateForm] = useState(emptyUpdateForm);
   const [isPublishing, setIsPublishing] = useState(false);
   // Veldfouten: gedeeld schema vóór submit + server-veldfouten van een 400.
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  const veld = useVeldfouten();
+  const fouten = veld.fouten;
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   // Het bewerkformulier leeft in het DetailPaneel: desktop naast de lijst,
   // mobiel als SlideOver. "Nieuwe update" opent hetzelfde paneel leeg.
   const [paneelOpen, setPaneelOpen] = useState(false);
+  // Elke (her)vulling van het formulier is een verse momentopname voor
+  // useVuil, ook na een geslaagde save op desktop (zelfde editingId).
+  const [vulling, setVulling] = useState(0);
+  const { vuil, markeerSchoon } = useVuil(updateForm, paneelOpen, vulling);
+  // Desktop: rij kiezen, Nieuw, Annuleren en een recordwissel via de URL
+  // vragen eerst bevestiging zolang het formulier vuil is.
+  const poort = useDetailPoort(vuil);
   const [historyUpdate, setHistoryUpdate] = useState<Update | null>(null);
 
   // Leesbevestigingen: hoeveel chauffeurs elke urgente update gelezen hebben.
@@ -75,10 +86,22 @@ export function ManageUpdatesView({
     return () => { alive = false; };
   }, []);
 
-  const handlePublish = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  // Slot tegen dubbel indienen (twee keer Enter vóór de knop op bezig staat):
+  // de state komt pas na de volgende render binnen, de ref meteen.
+  const publiceertNu = useRef(false);
+  const handlePublish = async () => {
+    if (publiceertNu.current) return;
+    publiceertNu.current = true;
     setIsPublishing(true);
+    try {
+      await publiceer();
+    } finally {
+      publiceertNu.current = false;
+      setIsPublishing(false);
+    }
+  };
+
+  const publiceer = async () => {
     const updateToSave: Update = {
       id: editingId || Date.now().toString(),
       date: editingId
@@ -92,18 +115,12 @@ export function ManageUpdatesView({
     };
 
     // Gedeeld contract (shared/schemas/update.ts): fouten bij het veld.
-    const check = valideer(updateSchema, updateToSave);
-    if (check.ok === false) {
-      setFouten(check.fouten);
-      setIsPublishing(false);
-      return;
-    }
-    setFouten({});
+    if (!veld.controleer(updateSchema, updateToSave)) return;
 
     // Per record als App de savers doorgeeft; anders de hele lijst (terugval).
     const perRecord = editingId ? onSaveUpdate : onCreateUpdate;
     const success = perRecord
-      ? await perRecord(updateToSave, setFouten)
+      ? await perRecord(updateToSave, veld.zet)
       : await onSave(
         editingId
           ? updates.map((update) => update.id === editingId ? updateToSave : update)
@@ -124,9 +141,9 @@ export function ManageUpdatesView({
       }
     } else if (!perRecord) {
       // De per-record-saver meldt zelf wat er misging (409 → ververst).
-      notify('Update kon niet worden opgeslagen. Controleer de foutmelding hierboven en probeer opnieuw.', 'error');
+      // Terugval via de hele lijst: geen PUT op een id, dus geen "Opnieuw proberen".
+      meldSchrijffout('Opslaan');
     }
-    setIsPublishing(false);
   };
 
   // De expliciet gekozen update staat in de URL (/beheer/updates/<id>):
@@ -134,10 +151,12 @@ export function ManageUpdatesView({
   // desktop-voorselectie (useStandaardKeuze) schrijft níét, alleen een klik.
   const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-updates' });
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = () => poort.via(openNieuw);
+  const openNieuw = () => {
     setEditingId(null);
     setUpdateForm(emptyUpdateForm);
-    setFouten({});
+    veld.wis();
+    setVulling((n) => n + 1);
     setPaneelOpen(true);
     // Het lege formulier hoort bij geen record: anders zou een refetch de
     // URL-keuze hieronder opnieuw openen en het nieuwe formulier kapen.
@@ -153,7 +172,8 @@ export function ManageUpdatesView({
       isUrgent: Boolean(update.isUrgent),
       bijlagenTonen: Boolean(update.bijlagenTonen),
     });
-    setFouten({});
+    veld.wis();
+    setVulling((n) => n + 1);
     setPaneelOpen(true);
   };
 
@@ -161,12 +181,12 @@ export function ManageUpdatesView({
     setPaneelOpen(false);
     setEditingId(null);
     setUpdateForm(emptyUpdateForm);
-    setFouten({});
+    veld.wis();
     zetRecordParam(null);
   };
 
   // Klik in de lijst: formulier openen én de keuze in de URL zetten.
-  const kiesUpdate = (update: Update) => { handleEdit(update); zetRecordParam(update.id); };
+  const kiesUpdate = (update: Update) => { poort.via(() => { handleEdit(update); zetRecordParam(update.id); }); };
 
   // Desktop: de nieuwste update staat standaard open in het paneel; na
   // verwijderen schuift de keuze door naar de buur, of sluit het paneel als
@@ -179,6 +199,7 @@ export function ManageUpdatesView({
     actief: !(paneelOpen && editingId === null),
     kies: handleEdit,
     wis: handleCancelEdit,
+    vuil,
   });
   const bewerkte = editingId ? updates.find((u) => u.id === editingId) ?? null : null;
 
@@ -191,7 +212,9 @@ export function ManageUpdatesView({
   useEffect(() => {
     if (!recordParam || (paneelOpen && editingId === recordParam)) return;
     const update = updates.find((u) => u.id === recordParam);
-    if (update) handleEdit(update);
+    // Vuil formulier: eerst vragen; "Verder bewerken" zet de URL terug op
+    // wat er open staat.
+    if (update) poort.via(() => handleEdit(update), () => zetRecordParam(paneelOpen ? editingId : null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordParam, updates]);
 
@@ -206,6 +229,9 @@ export function ManageUpdatesView({
   // toont 6 s een toast met "Ongedaan maken" (idee 1 Jarno, 03-09). Alleen
   // de collectie-terugval (zonder onDeleteUpdate) meldt hier nog zelf.
   const handleDelete = async (id: string) => {
+    // Wie de open update verwijdert, gooit de invoer bewust weg: anders
+    // hield de dirty-bewaking de keuze op het verwijderde record vast.
+    if (paneelOpen && editingId === id) markeerSchoon();
     setDeletingId(id);
     const success = onDeleteUpdate ? await onDeleteUpdate(id) : await onSave(updates.filter((update) => update.id !== id));
     if (success) {
@@ -300,6 +326,8 @@ export function ManageUpdatesView({
       title={editingId ? 'Update bewerken' : 'Nieuwe update'}
       subtitle={bewerkte ? `Gepubliceerd ${formatUpdateDate(bewerkte.date)}` : 'Chauffeurs zien de update meteen op hun dashboard.'}
       sleutel={editingId ?? 'nieuw'}
+      vuil={vuil}
+      poort={poort}
       leegTekst="Kies een update om te bewerken, of maak een nieuwe."
       leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
       chip={bewerkte ? (
@@ -325,20 +353,22 @@ export function ManageUpdatesView({
       )}
       footer={(
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="lg" className="flex-1" onClick={annuleer}>
+          <SluitKnop onClose={annuleer} variant="secondary" size="lg" className="flex-1" disabled={isPublishing}>
             Annuleren
-          </Button>
-          <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" disabled={isPublishing || !updateForm.title || !updateForm.content}>
-            {isPublishing ? (editingId ? 'Bijwerken…' : 'Publiceren…') : (editingId ? 'Update bijwerken' : 'Update publiceren')}
+          </SluitKnop>
+          {/* Niet uitgeschakeld bij lege velden: indienen toont dan de
+              veldfouten van het schema en zet de focus op de eerste. */}
+          <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" bezig={isPublishing}>
+            {editingId ? 'Update bijwerken' : 'Update publiceren'}
           </Button>
         </div>
       )}
     >
       {/* De publiceer-knop staat in de footer (buiten het formulier) en
           koppelt via form={FORM_ID}. */}
-      <form id={FORM_ID} onSubmit={handlePublish} className="space-y-5">
+      <Formulier id={FORM_ID} onVerstuur={handlePublish} className="space-y-5">
         <Field label="Titel" htmlFor="update-titel" error={fouten.title}>
-          <Input id="update-titel" invalid={!!fouten.title} type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
+          <Input id="update-titel" invalid={!!fouten.title} type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => { setUpdateForm({ ...updateForm, title: e.target.value }); veld.wisVeld('title'); }} />
         </Field>
 
         <Field label="Inhoud" htmlFor="update-inhoud" error={fouten.content}>
@@ -349,7 +379,7 @@ export function ManageUpdatesView({
             className="min-h-[180px]"
             placeholder="Schrijf hier het bericht voor de chauffeurs…"
             value={updateForm.content}
-            onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
+            onChange={(e) => { setUpdateForm({ ...updateForm, content: e.target.value }); veld.wisVeld('content'); }}
           />
         </Field>
 
@@ -383,7 +413,7 @@ export function ManageUpdatesView({
           onTonenChange={(v) => setUpdateForm({ ...updateForm, bijlagenTonen: v })}
           onGewijzigd={onHerlaad}
         />
-      </form>
+      </Formulier>
     </DetailPaneel>
   );
 

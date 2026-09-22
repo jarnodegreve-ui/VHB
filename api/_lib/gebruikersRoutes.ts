@@ -13,7 +13,7 @@ import type { AppUser, AppUserIntern, AuthenticatedRequest, IncomingUser } from 
 import { supabaseAdmin } from "../db.js";
 import { isStafRol, authenticate, requireRole } from "../middleware.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { userBodySchema, userLijstSchema, WACHTWOORD_MIN } from "../../shared/schemas/user.js";
+import { userBodySchema, userLijstSchema, wachtwoordResetSchema } from "../../shared/schemas/user.js";
 import { valideerLijst, valideerRecord } from "./valideer.js";
 import { userRecordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkUsersOpslag, trekToegangIn, type ToegangIngetrokken } from "./recordWrites.js";
 import { DAG_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, EXPIRY_SOORT_LABEL } from "../helpers.js";
@@ -72,14 +72,17 @@ export function mountGebruikersRoutes(app: express.Express) {
 
   app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), async (req, res) => {
     try {
+      // Eerst de invoer (zelfde schema als het formulier): een te kort
+      // wachtwoord is een 400 met de fout bij het veld, ook zonder service-role.
+      const invoer = valideerRecord(res, wachtwoordResetSchema, {
+        userId: req.body?.userId == null ? "" : String(req.body.userId),
+        password: req.body?.password,
+      });
+      if (!invoer) return;
+      const { userId, password } = invoer;
+
       if (!supabaseAdmin) {
         return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
-      }
-
-      const userId = String(req.body?.userId || "");
-      const password = String(req.body?.password || "");
-      if (!userId || password.length < WACHTWOORD_MIN) {
-        return res.status(400).json({ error: `Geef een gebruiker en een wachtwoord van minstens ${WACHTWOORD_MIN} tekens.` });
       }
 
       const users = await getUsersData();
