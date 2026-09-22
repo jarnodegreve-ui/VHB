@@ -383,7 +383,13 @@ export function ZiekteView({
       </Modal>
 
       {/* Detail: hersteld melden, einddatum bijstellen of intrekken. */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        // Onbewaarde einddatum (tranche 3A): sluiten vraagt eerst bevestiging.
+        vuil={!!detail && detail.status !== 'cancelled' && !!nieuwEinde && nieuwEinde !== detail.endDate}
+        maxWidth="md"
+        className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         {detail && (
           <>
             <ModalHeader
@@ -398,28 +404,31 @@ export function ZiekteView({
                 <p className="rounded-2xl bg-surface-soft px-3.5 py-3 text-sm font-medium text-slate-500">Deze melding is ingetrokken.</p>
               ) : (
                 <>
-                  <Field
-                    label="Ziek tot en met"
-                    hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug."
-                    error={nieuwEinde && nieuwEinde < detail.startDate ? `De einddatum ligt vóór de startdatum (${formatShortDay(detail.startDate)}).` : undefined}
-                  >
-                    {({ id, describedBy, invalid }) => (
-                      <div className="flex gap-2">
-                        <DateInput
-                          id={id}
-                          aria-describedby={describedBy}
-                          invalid={invalid}
-                          value={nieuwEinde}
-                          min={detail.startDate}
-                          onChange={(v) => setNieuwEinde(v)}
-                          className="min-w-0 flex-1"
-                        />
-                        <Button variant="primary" size="md" disabled={isOpslaan || !nieuwEinde || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate} onClick={() => void bewaarEinde(nieuwEinde)}>
-                          Opslaan
-                        </Button>
-                      </div>
-                    )}
-                  </Field>
+                  {/* Formulier: Enter op het veld of de knop bewaart (tranche 3A). */}
+                  <Formulier onVerstuur={() => bewaarEinde(nieuwEinde)} noValidate>
+                    <Field
+                      label="Ziek tot en met"
+                      hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug."
+                      error={nieuwEinde && nieuwEinde < detail.startDate ? `De einddatum ligt vóór de startdatum (${formatShortDay(detail.startDate)}).` : undefined}
+                    >
+                      {({ id, describedBy, invalid }) => (
+                        <div className="flex gap-2">
+                          <DateInput
+                            id={id}
+                            aria-describedby={describedBy}
+                            invalid={invalid}
+                            value={nieuwEinde}
+                            min={detail.startDate}
+                            onChange={(v) => setNieuwEinde(v)}
+                            className="min-w-0 flex-1"
+                          />
+                          <Button type="submit" variant="primary" size="md" disabled={isOpslaan || !nieuwEinde || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate}>
+                            Opslaan
+                          </Button>
+                        </div>
+                      )}
+                    </Field>
+                  </Formulier>
                   {detail.endDate >= today && detail.startDate <= today && (
                     <Button variant="secondary" size="md" full icon={<Thermometer size={14} />} disabled={isOpslaan} onClick={() => void bewaarEinde(today)}>
                       Hersteld, vandaag was de laatste ziektedag
