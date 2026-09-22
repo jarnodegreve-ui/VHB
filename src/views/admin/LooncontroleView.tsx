@@ -14,7 +14,10 @@ import {
   type DagTelling, type ExportControle, type LoonCode, type LoonCodeBody, type LoonInstellingen, type LoonMedewerkerRij,
 } from '../../lib/loon';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
@@ -75,6 +78,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
   const [instellingen, setInstellingen] = useState<LoonInstellingen | null>(null);
   const [bezig, setBezig] = useState(false);
   const [lidnrDraft, setLidnrDraft] = useState('');
+  const lidnrFouten = useVeldfouten();
 
   const zl = useZelfLadend(async () => {
     const [m, c, i] = await Promise.all([laadMaand(maand), laadExportControle(maand), laadInstellingen()]);
@@ -108,9 +112,14 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
   };
   const bewaarLidnr = async () => {
     const n = Number(lidnrDraft);
-    if (!Number.isInteger(n) || n < 0) { notify('Vul een geheel getal in.', 'error'); return; }
+    if (!instellingen || lidnrDraft === String(instellingen.easypayLidnr || '')) return;
+    lidnrFouten.wis();
+    if (lidnrDraft.trim() === '' || !Number.isInteger(n) || n < 0) { lidnrFouten.zet({ easypayLidnr: 'Vul een geheel getal in.' }); return; }
     try { setInstellingen(await bewaarInstellingen({ easypayLidnr: n })); notify('Lidnummer bewaard.', 'success'); await load(); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error'); }
+    catch (err) {
+      if (err instanceof LoonFout && err.veldfouten) lidnrFouten.zet(err.veldfouten);
+      else meldSchrijffout('Bewaren', err, () => void bewaarLidnr());
+    }
   };
   const dagTone = (iso: string): 'emerald' | 'amber' | 'slate' | 'red' => {
     const d = perDag.get(iso);
@@ -219,10 +228,12 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
           </ul>
         )}
         {isAdmin && (
-          <div className="flex flex-wrap items-end gap-2 border-t border-hairline pt-3">
-            <Field label="Easypay-lidnummer (alphal2)" className="w-48">{({ id }) => <Input id={id} inputMode="numeric" value={lidnrDraft} onChange={(e) => setLidnrDraft(e.target.value)} />}</Field>
-            <Button variant="secondary" size="sm" onClick={() => void bewaarLidnr()} disabled={!instellingen || lidnrDraft === String(instellingen.easypayLidnr || '')}>Bewaren</Button>
-          </div>
+          <Formulier onVerstuur={bewaarLidnr} noValidate className="flex flex-wrap items-end gap-2 border-t border-hairline pt-3">
+            <Field label="Easypay-lidnummer (alphal2)" className="w-48" error={lidnrFouten.fouten.easypayLidnr}>
+              <Input inputMode="numeric" value={lidnrDraft} onChange={(e) => { setLidnrDraft(e.target.value); lidnrFouten.wisVeld('easypayLidnr'); }} />
+            </Field>
+            <Button type="submit" variant="secondary" size="sm" disabled={!instellingen || lidnrDraft === String(instellingen.easypayLidnr || '')}>Bewaren</Button>
+          </Formulier>
         )}
       </Card>
       </>)}
@@ -304,45 +315,53 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
 
 function CodeModal({ init, onClose, onKlaar }: { init: LoonCodeBody & { code: string; nieuw?: boolean }; onClose: () => void; onKlaar: (c: LoonCode) => void }) {
   const [form, setForm] = useState(init);
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  const fouten = useVeldfouten();
   const [bezig, setBezig] = useState(false);
-  const zet = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const { vuil } = useVuil(form);
+  const zet = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => { setForm((f) => ({ ...f, [k]: v })); fouten.wisVeld(k); };
   const getal = (s: string): number | null => (s.trim() === '' ? null : Number(s));
   const opslaan = async () => {
-    setBezig(true); setFouten({});
+    if (bezig) return;
+    fouten.wis();
     const code = loonCodeSleutel(form.code);
-    if (!code) { setFouten({ code: 'Vul een code in' }); setBezig(false); return; }
+    if (!code) { fouten.zet({ code: 'Vul een code in.' }); return; }
     const { code: _c, nieuw: _n, ...body } = form;
+    setBezig(true);
     try { onKlaar(await bewaarLoonCode(code, { ...body, codeWeergave: body.codeWeergave.trim() || form.code.trim() })); notify('Looncode bewaard.', 'success'); }
-    catch (err) { if (err instanceof LoonFout && err.veldfouten) setFouten(err.veldfouten); notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error'); }
+    catch (err) {
+      // Veldfouten bij het veld; de rest één toast met vervolgstap. Opnieuw
+      // alleen bij een bestaande code (PUT op code), niet bij toevoegen.
+      if (err instanceof LoonFout && err.veldfouten) fouten.zet(err.veldfouten);
+      else meldSchrijffout('Opslaan', err, init.nieuw ? undefined : () => void opslaan());
+    }
     finally { setBezig(false); }
   };
   const tijd = (k: 'tik1' | 'tik2' | 'tik3' | 'tik4' | 'tik5' | 'tik6', label: string) => (
-    <Field label={label} error={fouten[k]}>{({ id, invalid }) => <Input id={id} invalid={invalid} placeholder="uu:mm" value={form[k] ?? ''} onChange={(e) => zet(k, e.target.value)} />}</Field>
+    <Field label={label} error={fouten.fouten[k]}><Input placeholder="uu:mm" value={form[k] ?? ''} onChange={(e) => zet(k, e.target.value)} /></Field>
   );
   const minuten = (k: 'lbRijtijd' | 'lbStat100At' | 'lbStat100Nat' | 'lbStat50Nat' | 'lbOnd' | 'lbAndWrk' | 'lbNacht', label: string) => (
-    <Field label={label} error={fouten[k]}>{({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="numeric" value={form[k] ?? ''} onChange={(e) => zet(k, getal(e.target.value))} />}</Field>
+    <Field label={label} error={fouten.fouten[k]}><Input inputMode="numeric" value={form[k] ?? ''} onChange={(e) => zet(k, getal(e.target.value))} /></Field>
   );
   return (
-    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={init.nieuw ? 'Looncode toevoegen' : `Looncode ${init.codeWeergave} bewerken`}>
-      <div className="p-6">
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="lg" ariaLabel={init.nieuw ? 'Looncode toevoegen' : `Looncode ${init.codeWeergave} bewerken`}>
+      <Formulier onVerstuur={opslaan} noValidate className="p-6">
         <CardHeader title={init.nieuw ? 'Looncode toevoegen' : `Looncode ${init.codeWeergave}`} description="Dienstnummer of afwezigheidscode zoals in de planning, met de Easypay-parameters." />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Code" required hint="Zoals in de planning: 2102, bv, ziek" error={fouten.code}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.code} disabled={!init.nieuw} onChange={(e) => zet('code', e.target.value)} />}</Field>
-          <Field label="Weergave" error={fouten.codeWeergave}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.codeWeergave} onChange={(e) => zet('codeWeergave', e.target.value)} />}</Field>
-          <Field label="Omschrijving" className="sm:col-span-2" error={fouten.omschrijving}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.omschrijving ?? ''} onChange={(e) => zet('omschrijving', e.target.value)} />}</Field>
-          <Field label="Type" error={fouten.dienstType}>{({ id }) => <Select id={id} value={form.dienstType} onChange={(e) => zet('dienstType', e.target.value as LoonCodeBody['dienstType'])}>{DIENST_TYPES.map((t) => <option key={t} value={t}>{DIENST_TYPE_LABEL[t]}</option>)}</Select>}</Field>
+          <Field label="Code" required hint="Zoals in de planning: 2102, bv, ziek" error={fouten.fouten.code}><Input value={form.code} disabled={!init.nieuw} onChange={(e) => zet('code', e.target.value)} /></Field>
+          <Field label="Weergave" error={fouten.fouten.codeWeergave}><Input value={form.codeWeergave} onChange={(e) => zet('codeWeergave', e.target.value)} /></Field>
+          <Field label="Omschrijving" className="sm:col-span-2" error={fouten.fouten.omschrijving}><Input value={form.omschrijving ?? ''} onChange={(e) => zet('omschrijving', e.target.value)} /></Field>
+          <Field label="Type" error={fouten.fouten.dienstType}><Select value={form.dienstType} onChange={(e) => zet('dienstType', e.target.value as LoonCodeBody['dienstType'])}>{DIENST_TYPES.map((t) => <option key={t} value={t}>{DIENST_TYPE_LABEL[t]}</option>)}</Select></Field>
           <div className="flex items-end justify-between gap-3 rounded-2xl bg-surface-muted px-3.5 py-2.5"><span className="text-sm font-medium text-slate-700">In de Easypay-export</span><Switch checked={form.inExport} onChange={(v) => zet('inExport', v)} label="In de Easypay-export" /></div>
-          <Field label="Easypay-activiteit" required error={fouten.easypayActiviteit}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.easypayActiviteit} onChange={(e) => zet('easypayActiviteit', e.target.value)} />}</Field>
-          <Field label="Easypay-typeprestatie" required error={fouten.easypayTypePrest}>{({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="numeric" value={form.easypayTypePrest} onChange={(e) => zet('easypayTypePrest', Number(e.target.value || 0))} />}</Field>
+          <Field label="Easypay-activiteit" required error={fouten.fouten.easypayActiviteit}><Input value={form.easypayActiviteit} onChange={(e) => zet('easypayActiviteit', e.target.value)} /></Field>
+          <Field label="Easypay-typeprestatie" required error={fouten.fouten.easypayTypePrest}><Input inputMode="numeric" value={form.easypayTypePrest} onChange={(e) => zet('easypayTypePrest', Number(e.target.value || 0))} /></Field>
           <div className="sm:col-span-2 grid grid-cols-3 gap-3">{tijd('tik1', 'Tiktijd 1 (begin)')}{tijd('tik2', 'Tiktijd 2')}{tijd('tik3', 'Tiktijd 3')}{tijd('tik4', 'Tiktijd 4')}{tijd('tik5', 'Tiktijd 5')}{tijd('tik6', 'Tiktijd 6 (einde)')}</div>
           <div className="sm:col-span-2 grid grid-cols-2 gap-3 md:grid-cols-4">{minuten('lbRijtijd', 'Rijtijd (min)')}{minuten('lbStat100At', 'Stat. 100% AT')}{minuten('lbStat100Nat', 'Stat. 100% NAT')}{minuten('lbStat50Nat', 'Stat. 50% NAT')}{minuten('lbOnd', 'Onderbrekingen')}{minuten('lbAndWrk', 'Ander werk')}{minuten('lbNacht', 'Nacht (min)')}</div>
         </div>
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" onClick={() => void opslaan()} disabled={bezig}>{bezig ? 'Bezig…' : 'Opslaan'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" bezig={bezig}>Opslaan</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }
@@ -353,6 +372,7 @@ function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
   const [importOpen, setImportOpen] = useState(false);
   const [importTekst, setImportTekst] = useState('');
   const [bezig, setBezig] = useState(false);
+  const { vuil: importVuil } = useVuil(importTekst, importOpen);
   const zl = useZelfLadend(async () => { setRijen(await laadMedewerkers()); }, { boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de medewerkers niet laden.') });
   useVersheidOmhoog(zl.versheid, onVersheid);
   const load = () => zl.ververs();
@@ -364,9 +384,10 @@ function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
     catch (err) { notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error'); }
   };
   const importeer = async () => {
+    if (bezig || !importTekst.trim()) return;
     setBezig(true);
     try { const r = await importeerMedewerkers(importTekst); notify(`${r.gekoppeld} matricules gekoppeld${r.onbekend.length ? `, niet gevonden: ${r.onbekend.join(', ')}` : ''}.`, r.onbekend.length ? 'info' : 'success'); setImportOpen(false); setImportTekst(''); await load(); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Importeren is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Importeren', err); }
     finally { setBezig(false); }
   };
   return (
@@ -393,15 +414,15 @@ function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
           </table>
         )}
       </div>
-      <Modal open={importOpen} onClose={() => setImportOpen(false)} maxWidth="md" ariaLabel="Matricules plakken">
-        <div className="p-6">
+      <Modal open={importOpen} onClose={() => setImportOpen(false)} vuil={importVuil} maxWidth="md" ariaLabel="Matricules plakken">
+        <Formulier onVerstuur={importeer} noValidate className="p-6">
           <CardHeader title="Matricules plakken" description="Eén regel per persoon: naam;matricule (uit Access of Excel). Namen worden zoals bij de planning-import gematcht, in beide volgordes." />
-          <div className="mt-4"><Field label="Lijst">{({ id }) => <Textarea id={id} rows={8} value={importTekst} onChange={(e) => setImportTekst(e.target.value)} placeholder={'Janssen Jan;42\nPeeters An;43'} />}</Field></div>
+          <div className="mt-4"><Field label="Lijst"><Textarea rows={8} value={importTekst} onChange={(e) => setImportTekst(e.target.value)} placeholder={'Janssen Jan;42\nPeeters An;43'} /></Field></div>
           <div className="mt-5 flex gap-3">
-            <Button variant="ghost" className="flex-1" onClick={() => setImportOpen(false)}>Annuleren</Button>
-            <Button variant="primary" className="flex-1" onClick={() => void importeer()} disabled={bezig || !importTekst.trim()}>{bezig ? 'Bezig…' : 'Importeren'}</Button>
+            <SluitKnop onClose={() => setImportOpen(false)} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+            <Button type="submit" variant="primary" className="flex-1" bezig={bezig} disabled={!importTekst.trim()}>Importeren</Button>
           </div>
-        </div>
+        </Formulier>
       </Modal>
     </div>
   );
