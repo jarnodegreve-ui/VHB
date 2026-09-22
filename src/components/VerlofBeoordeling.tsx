@@ -14,6 +14,7 @@ import { Avatar } from './Avatar';
 import { Card } from './Card';
 import { Badge, Button, IconButton, MicroLabel, StatusBadge } from './primitives';
 import { Field, Textarea } from './Field';
+import { Formulier } from './Formulier';
 
 /**
  * Beoordeling van één verlofaanvraag: volledige context (saldo, dekking,
@@ -287,35 +288,34 @@ export function VerlofBeoordelingKnoppen({ aanvraag, onDecide, onCancel, onHisto
   const annuleerbaar = !!onCancel && aanvraag.status === 'approved' && aanvraag.endDate >= today && isPlanner;
   if (pending && weigeren) {
     return (
-      <div className="space-y-3">
+      // Een echte form (tranche 3A): Afwijzen is de submit. Enter in het
+      // tekstvak blijft een nieuwe regel, dus niemand wijst per ongeluk af.
+      <Formulier onVerstuur={() => beslis('rejected', reden.trim() || undefined)} className="space-y-3">
         <Field label="Reden van afwijzing" hint="Optioneel. De chauffeur ziet dit bij zijn aanvraag en in de mail.">
-          {({ id }) => (
-            <Textarea
-              id={id}
-              autoFocus
-              value={reden}
-              maxLength={BESLISREDEN_MAX}
-              onChange={(e) => setReden(e.target.value)}
-              className="h-24"
-              placeholder="Bv. die week zijn er al te veel collega's vrij…"
-            />
-          )}
+          <Textarea
+            autoFocus
+            value={reden}
+            maxLength={BESLISREDEN_MAX}
+            onChange={(e) => setReden(e.target.value)}
+            className="h-24"
+            placeholder="Bv. die week zijn er al te veel collega's vrij…"
+          />
         </Field>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="lg" className="flex-1" onClick={() => setWeigeren(false)} disabled={!!bezig}>
             Terug
           </Button>
           <Button
+            type="submit"
             variant="danger"
             size="lg"
             className="flex-1"
             bezig={bezig === 'rejected'}
-            onClick={() => void beslis('rejected', reden.trim() || undefined)}
           >
             Afwijzen
           </Button>
         </div>
-      </div>
+      </Formulier>
     );
   }
   return (
