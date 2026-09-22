@@ -11,7 +11,12 @@ import {
   type DagDetail, type DagPrestatie, type DagVoorstel, type LoonCode,
 } from '../../lib/loon';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
+import { useAutosaveCel } from '../../lib/autosave';
+import { AutosaveFout, AutosaveTeken } from '../../components/AutosaveStatus';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
@@ -72,14 +77,12 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
 
   const vervang = (p: DagPrestatie) => setDetail((d) => (d ? { ...d, rijen: d.rijen.map((r) => (r.id === p.id ? p : r)) } : d));
 
-  const patch = async (r: DagPrestatie, body: Parameters<typeof bewaarRij>[2]) => {
-    try {
-      vervang(await bewaarRij(datum, r.id, body));
-    } catch (err) {
-      notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error');
-      await load();
-    }
-  };
+  // Autosave per cel (tranche 3A): elke cel bewaart zelf en toont zijn
+  // stand (src/lib/autosave.ts). Een mislukte cel houdt de getypte waarde
+  // met de reden en "Opnieuw"; er wordt niets stil teruggezet of herladen.
+  // `datum` zit in de closure: een save die loopt terwijl je naar een
+  // andere dag gaat, schrijft nog altijd naar zijn eigen dag.
+  const bewaarVoor = (r: DagPrestatie) => (body: RijBody) => bewaarRij(datum, r.id, body);
 
   const doeOpen = async () => {
     setBezig(true);
@@ -216,7 +219,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
                   </StickyThead>
                   <tbody>
                     {zichtbareRijen.map((r) => (
-                      <Rij key={r.id} r={r} afgesloten={Boolean(afgesloten)} afwijkend={afwijkend(r)} dienstCodes={dienstCodes} variaCodes={variaCodes} codeMap={codeMap} onPatch={(body) => void patch(r, body)} onVerwijder={() => void doeVerwijderen(r)} />
+                      <Rij key={r.id} r={r} afgesloten={Boolean(afgesloten)} afwijkend={afwijkend(r)} dienstCodes={dienstCodes} variaCodes={variaCodes} codeMap={codeMap} bewaar={bewaarVoor(r)} onBewaard={vervang} onVerwijder={() => void doeVerwijderen(r)} />
                     ))}
                   </tbody>
                 </table>
@@ -258,26 +261,69 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   );
 }
 
-function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPatch, onVerwijder }: {
+type RijBody = Parameters<typeof bewaarRij>[2];
+
+/** Eén minutencel: heel getal of leeg (= 0), anders een fout bij de cel. */
+function MinutenCel({ r, veld, afgesloten, bewaar, onBewaard }: {
+  r: DagPrestatie; veld: 'overmin' | 'overminNacht' | 'overminExtra'; afgesloten: boolean;
+  bewaar: (body: RijBody) => Promise<DagPrestatie>; onBewaard: (p: DagPrestatie) => void;
+}) {
+  const label = veld === 'overmin' ? 'Overminuten' : veld === 'overminNacht' ? 'Overminuten nacht' : 'Overminuten extra opdracht';
+  const cel = useAutosaveCel<string, DagPrestatie>({
+    actie: `${label} van ${r.naam ?? 'deze chauffeur'} bewaren`,
+    bewaar: (tekst) => bewaar({ [veld]: tekst === '' ? 0 : Number(tekst) }),
+    opGelukt: onBewaard,
+  });
+  const foutId = `${r.id}-${veld}-fout`;
+  return (
+    <div className="inline-flex flex-col items-end">
+      <div className="inline-flex items-center gap-1">
+        <AutosaveTeken staat={cel.staat} />
+        <Input
+          aria-label={label}
+          inputMode="numeric"
+          defaultValue={r[veld] || ''}
+          disabled={afgesloten}
+          invalid={cel.staat.status === 'fout'}
+          aria-describedby={cel.staat.status === 'fout' ? foutId : undefined}
+          className="w-16 px-2 py-1 text-right text-sm"
+          onBlur={(e) => {
+            const tekst = e.target.value.trim();
+            const n = tekst === '' ? 0 : Number(tekst);
+            if (!Number.isInteger(n)) { cel.ongeldig(tekst, 'Vul een heel aantal minuten in.'); return; }
+            cel.verander(tekst, String(r[veld]), (a, b) => Number(a || 0) === Number(b || 0));
+          }}
+        />
+      </div>
+      <AutosaveFout staat={cel.staat} id={foutId} />
+    </div>
+  );
+}
+
+function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaar, onBewaard, onVerwijder }: {
   r: DagPrestatie; afgesloten: boolean; afwijkend: boolean; dienstCodes: LoonCode[]; variaCodes: LoonCode[]; codeMap: Map<string, LoonCode>;
-  onPatch: (body: Parameters<typeof bewaarRij>[2]) => void; onVerwijder: () => void;
+  bewaar: (body: RijBody) => Promise<DagPrestatie>; onBewaard: (p: DagPrestatie) => void; onVerwijder: () => void;
 }) {
   const [opmerking, setOpmerking] = useState(r.opmerking ?? '');
   const { open: vlaggenOpen, setOpen: setVlaggenOpen, wortel: vlaggenWortel } = useDropdown();
   useEffect(() => { setOpmerking(r.opmerking ?? ''); }, [r.opmerking]);
+  const naam = r.naam ?? 'deze chauffeur';
+  const codeCel = useAutosaveCel<string, DagPrestatie>({ actie: `Gereden code van ${naam} bewaren`, bewaar: (v) => bewaar({ geredenCode: v || null }), opGelukt: onBewaard });
+  const premieCel = useAutosaveCel<boolean, DagPrestatie>({ actie: `Premie van ${naam} bewaren`, bewaar: (v) => bewaar({ onvPremie: v }), opGelukt: onBewaard });
+  // De vlaggen als één set: twee snelle vinkjes na elkaar sturen elk de
+  // volledige set zoals je ze ziet, zodat de tweede de eerste niet wist.
+  const vlagCel = useAutosaveCel<Record<QualVlag, boolean>, DagPrestatie>({ actie: `Kwaliteitsvlaggen van ${naam} bewaren`, bewaar: (v) => bewaar(v), opGelukt: onBewaard });
+  const opmerkingCel = useAutosaveCel<string | null, DagPrestatie>({ actie: `Opmerking van ${naam} bewaren`, bewaar: (v) => bewaar({ opmerking: v }), opGelukt: onBewaard });
   const sleutel = loonCodeSleutel(r.geredenCode);
+  // Tijdens het bewaren en na een mislukte save toont de cel wat je koos.
+  const gekozenCode = codeCel.toon(sleutel);
   const onbekend = Boolean(sleutel) && !codeMap.has(sleutel);
-  const actieveVlaggen = QUAL_VLAGGEN.filter((k) => r[k]);
-  const minutenVeld = (veld: 'overmin' | 'overminNacht' | 'overminExtra') => (
-    <Input
-      aria-label={veld === 'overmin' ? 'Overminuten' : veld === 'overminNacht' ? 'Overminuten nacht' : 'Overminuten extra opdracht'}
-      inputMode="numeric"
-      defaultValue={r[veld] || ''}
-      disabled={afgesloten}
-      className="w-16 px-2 py-1 text-right text-sm"
-      onBlur={(e) => { const n = Number(e.target.value || 0); if (Number.isInteger(n) && n !== r[veld]) onPatch({ [veld]: n }); }}
-    />
-  );
+  const serverVlaggen = Object.fromEntries(QUAL_VLAGGEN.map((k) => [k, r[k]])) as Record<QualVlag, boolean>;
+  const vlaggen = vlagCel.toon(serverVlaggen);
+  const zelfdeVlaggen = (a: Record<QualVlag, boolean>, b: Record<QualVlag, boolean>) => QUAL_VLAGGEN.every((k) => a[k] === b[k]);
+  const actieveVlaggen = QUAL_VLAGGEN.filter((k) => vlaggen[k]);
+  const cellen = { geredenCode: `${r.id}-code-fout`, premie: `${r.id}-premie-fout`, vlaggen: `${r.id}-vlaggen-fout`, opmerking: `${r.id}-opmerking-fout` };
+  const celProps = { r, afgesloten, bewaar, onBewaard };
   return (
     <tr className={cn('border-b border-hairline-subtle last:border-b-0 align-top', afwijkend && 'bg-oker-50/40')}>
       <Td>
@@ -288,50 +334,69 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPat
         <div className="flex items-center gap-1.5">
           <Select
             aria-label={`Gereden code van ${r.naam}`}
-            value={sleutel}
+            value={gekozenCode}
             disabled={afgesloten}
-            invalid={onbekend}
+            invalid={onbekend || codeCel.staat.status === 'fout'}
+            aria-describedby={codeCel.staat.status === 'fout' ? cellen.geredenCode : undefined}
             className={cn('min-w-0 px-2 py-1 text-sm', afwijkend && 'font-semibold')}
-            onChange={(e) => onPatch({ geredenCode: e.target.value || null })}
+            onChange={(e) => codeCel.verander(e.target.value, sleutel)}
           >
             <option value="">— geen —</option>
             {onbekend && <option value={sleutel}>{r.geredenCode} (onbekend)</option>}
             <optgroup label="Diensten">{dienstCodes.map((c) => <option key={c.code} value={c.code}>{c.codeWeergave}</option>)}</optgroup>
             <optgroup label="Afwezig / ander">{variaCodes.map((c) => <option key={c.code} value={c.code}>{c.codeWeergave}{c.omschrijving ? ` · ${c.omschrijving}` : ''}</option>)}</optgroup>
           </Select>
+          <AutosaveTeken staat={codeCel.staat} />
           {afwijkend && <Badge tone="oker" stil dot className="whitespace-nowrap">afwijkt</Badge>}
         </div>
+        <AutosaveFout staat={codeCel.staat} id={cellen.geredenCode} />
       </Td>
-      <Td num>{minutenVeld('overmin')}</Td>
-      <Td num>{minutenVeld('overminNacht')}</Td>
-      <Td num>{minutenVeld('overminExtra')}</Td>
-      <Td><Switch checked={r.onvPremie} disabled={afgesloten} label={`Premie voor ${r.naam}`} onChange={(v) => onPatch({ onvPremie: v })} /></Td>
+      <Td num><MinutenCel veld="overmin" {...celProps} /></Td>
+      <Td num><MinutenCel veld="overminNacht" {...celProps} /></Td>
+      <Td num><MinutenCel veld="overminExtra" {...celProps} /></Td>
       <Td>
-        <div className="relative" ref={vlaggenWortel}>
-          <Button variant={actieveVlaggen.length ? 'warning' : 'ghost'} size="sm" onClick={() => setVlaggenOpen((v) => !v)} aria-expanded={vlaggenOpen} disabled={afgesloten && actieveVlaggen.length === 0}>
+        <div className="inline-flex items-center gap-1">
+          <Switch checked={premieCel.toon(r.onvPremie)} disabled={afgesloten} label={`Premie voor ${r.naam}`} onChange={(v) => premieCel.verander(v, r.onvPremie)} />
+          <AutosaveTeken staat={premieCel.staat} />
+        </div>
+        <AutosaveFout staat={premieCel.staat} id={cellen.premie} />
+      </Td>
+      <Td>
+        <div className="relative inline-flex items-center gap-1" ref={vlaggenWortel}>
+          <Button variant={actieveVlaggen.length ? 'warning' : 'ghost'} size="sm" onClick={() => setVlaggenOpen((v) => !v)} aria-expanded={vlaggenOpen} aria-describedby={vlagCel.staat.status === 'fout' ? cellen.vlaggen : undefined} disabled={afgesloten && actieveVlaggen.length === 0}>
             {actieveVlaggen.length ? `${actieveVlaggen.length} vlag${actieveVlaggen.length === 1 ? '' : 'gen'}` : 'Geen'}
           </Button>
+          <AutosaveTeken staat={vlagCel.staat} />
           <Popover open={vlaggenOpen} label="Kwaliteitsvlaggen" align="left" breedte="md">
               {QUAL_VLAGGEN.map((k: QualVlag) => (
                 <label key={k} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm hover:bg-surface-soft-hover">
-                  <input type="checkbox" className="h-4 w-4" checked={r[k]} disabled={afgesloten} onChange={(e) => onPatch({ [k]: e.target.checked })} />
+                  <input type="checkbox" className="h-4 w-4" checked={vlaggen[k]} disabled={afgesloten} onChange={(e) => vlagCel.verander({ ...vlaggen, [k]: e.target.checked }, serverVlaggen, zelfdeVlaggen)} />
                   {QUAL_VLAG_LABEL[k]}
                 </label>
               ))}
             <div className="mt-1 flex justify-end"><Button variant="ghost" size="sm" onClick={() => setVlaggenOpen(false)}>Sluiten</Button></div>
           </Popover>
         </div>
+        <AutosaveFout staat={vlagCel.staat} id={cellen.vlaggen} />
       </Td>
       <Td>
-        <Input
-          aria-label={`Opmerking voor ${r.naam}`}
-          value={opmerking}
-          disabled={afgesloten}
-          maxLength={OPMERKING_MAX}
-          className="w-44 px-2 py-1 text-sm"
-          onChange={(e) => setOpmerking(e.target.value)}
-          onBlur={() => { if ((opmerking.trim() || null) !== (r.opmerking ?? null)) onPatch({ opmerking: opmerking.trim() || null }); }}
-        />
+        <div className="inline-flex items-center gap-1">
+          <Input
+            aria-label={`Opmerking voor ${r.naam}`}
+            value={opmerking}
+            disabled={afgesloten}
+            maxLength={OPMERKING_MAX}
+            invalid={opmerkingCel.staat.status === 'fout'}
+            aria-describedby={opmerkingCel.staat.status === 'fout' ? cellen.opmerking : undefined}
+            className="w-44 px-2 py-1 text-sm"
+            onChange={(e) => setOpmerking(e.target.value)}
+            onBlur={() => {
+              opmerkingCel.verander(opmerking.trim() || null, r.opmerking ?? null);
+            }}
+          />
+          <AutosaveTeken staat={opmerkingCel.staat} />
+        </div>
+        <AutosaveFout staat={opmerkingCel.staat} id={cellen.opmerking} />
       </Td>
       {!afgesloten && (
         <Td className="text-right">
@@ -344,24 +409,31 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPat
 
 function HeropenModal({ datum, onClose, onKlaar }: { datum: string; onClose: () => void; onKlaar: (dag: Awaited<ReturnType<typeof heropenDag>>) => void }) {
   const [reden, setReden] = useState('');
-  const [fout, setFout] = useState<string | null>(null);
+  const fouten = useVeldfouten();
   const [bezig, setBezig] = useState(false);
+  const { vuil } = useVuil(reden);
   const doe = async () => {
-    setBezig(true); setFout(null);
+    if (bezig) return;
+    fouten.wis();
+    setBezig(true);
     try { onKlaar(await heropenDag(datum, reden.trim())); notify('Dag heropend.', 'success'); }
-    catch (err) { if (err instanceof LoonFout && err.veldfouten?.reden) setFout(err.veldfouten.reden); else notify(err instanceof Error ? err.message : 'Heropenen is mislukt.', 'error'); }
+    catch (err) {
+      // De reden-fout bij het veld; de rest één toast met vervolgstap.
+      if (err instanceof LoonFout && err.veldfouten?.reden) fouten.zet({ reden: err.veldfouten.reden });
+      else meldSchrijffout('Heropenen', err);
+    }
     finally { setBezig(false); }
   };
   return (
-    <Modal open onClose={onClose} maxWidth="sm" ariaLabel="Dag heropenen">
-      <div className="p-6">
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="sm" ariaLabel="Dag heropenen">
+      <Formulier onVerstuur={doe} noValidate className="p-6">
         <CardHeader title={`${formatDayLong(datum)} heropenen`} description="Geef een reden; die komt in het activiteitenlog." />
-        <div className="mt-4"><Field label="Reden" required error={fout}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} value={reden} rows={3} onChange={(e) => setReden(e.target.value)} />}</Field></div>
+        <div className="mt-4"><Field label="Reden" required error={fouten.fouten.reden}><Textarea value={reden} rows={3} onChange={(e) => { setReden(e.target.value); fouten.wisVeld('reden'); }} /></Field></div>
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" icon={<RotateCcw size={16} />} onClick={() => void doe()} disabled={bezig}>{bezig ? 'Bezig…' : 'Heropenen'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" icon={<RotateCcw size={16} />} bezig={bezig}>Heropenen</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }
@@ -369,25 +441,27 @@ function HeropenModal({ datum, onClose, onKlaar }: { datum: string; onClose: () 
 function RijToevoegenModal({ datum, users, onClose, onKlaar }: { datum: string; users: User[]; onClose: () => void; onKlaar: (p: DagPrestatie) => void }) {
   const [userId, setUserId] = useState('');
   const [bezig, setBezig] = useState(false);
+  const { vuil } = useVuil(userId);
   const doe = async () => {
-    if (!userId) return;
+    if (!userId || bezig) return;
     setBezig(true);
+    // Geen "Opnieuw proberen": een rij toevoegen maakt iets aan.
     try { onKlaar(await voegRijToe(datum, userId, null)); notify('Rij toegevoegd.', 'success'); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Toevoegen is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Toevoegen', err); }
     finally { setBezig(false); }
   };
   return (
-    <Modal open onClose={onClose} maxWidth="sm" ariaLabel="Rij toevoegen">
-      <div className="p-6">
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="sm" ariaLabel="Rij toevoegen">
+      <Formulier onVerstuur={doe} noValidate className="p-6">
         <CardHeader title="Rij toevoegen" description="Een tweede rij voor iemand die twee codes op één dag heeft, of een chauffeur die niet in de planning stond." />
         <div className="mt-4">
-          <Field label="Chauffeur" required>{({ id }) => <Select id={id} value={userId} onChange={(e) => setUserId(e.target.value)}><option value="">Kies een chauffeur</option>{[...users].sort((a, b) => a.name.localeCompare(b.name, 'nl')).map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}</Select>}</Field>
+          <Field label="Chauffeur" required><Select value={userId} onChange={(e) => setUserId(e.target.value)}><option value="">Kies een chauffeur</option>{[...users].sort((a, b) => a.name.localeCompare(b.name, 'nl')).map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}</Select></Field>
         </div>
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" onClick={() => void doe()} disabled={bezig || !userId}>{bezig ? 'Bezig…' : 'Toevoegen'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" bezig={bezig} disabled={!userId}>Toevoegen</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }

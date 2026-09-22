@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { WACHTWOORD_HINT, WACHTWOORD_MIN } from '../lib/wachtwoord';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
@@ -397,6 +397,8 @@ function FieldInput({
   rightSlot?: React.ReactNode;
 }) {
   const [focused, setFocused] = useState(false);
+  // Label en veld gekoppeld (tranche 3A): het label noemde het veld niet.
+  const id = useId();
   const isPassword = type === 'password';
   const [revealed, setRevealed] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
@@ -411,7 +413,7 @@ function FieldInput({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between px-1 min-h-[14px]">
-        <label className="block text-xs font-medium text-slate-300">{label}</label>
+        <label htmlFor={id} className="block text-xs font-medium text-slate-300">{label}</label>
         <div className="flex items-center gap-3">
           <AnimatePresence>
             {showCapsWarning && (
@@ -443,6 +445,7 @@ function FieldInput({
           {icon}
         </div>
         <input
+          id={id}
           type={effectiveType}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -485,6 +488,7 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
+          role="alert"
           className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-500/25"
         >
           <AlertTriangle size={14} className="text-red-300 shrink-0" />

@@ -11,7 +11,10 @@ import { formatDateHuman, formatRelatief } from '../../lib/format';
 import { dagenTot, laadDefecten, maakWerkprestatie, TechniekFout, vandaagIso, wijzigDefect, urenTekst, type Defect } from '../../lib/techniek';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel, ViewLoader } from '../../components/ui';
 import { AllesGedaan } from '../../components/illustraties';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
@@ -294,14 +297,15 @@ function AfhandelModal({ defect, currentUser, onClose, onKlaar }: { defect: Defe
   const [manuren, setManuren] = useState('');
   const [alsPrestatie, setAlsPrestatie] = useState(!isStaf(currentUser.role));
   const [bezig, setBezig] = useState(false);
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  const fouten = useVeldfouten();
+  const { vuil } = useVuil({ datum, werk, manuren, alsPrestatie });
 
   const opslaan = async () => {
     if (bezig) return;
-    setBezig(true);
-    setFouten({});
+    fouten.wis();
     const uren = manuren.trim() === '' ? null : Number(manuren.replace(',', '.'));
-    if (uren !== null && (!Number.isFinite(uren) || uren < 0)) { setFouten({ manuren: 'Vul een getal in' }); setBezig(false); return; }
+    if (uren !== null && (!Number.isFinite(uren) || uren < 0)) { fouten.zet({ manuren: 'Vul een getal in.' }); return; }
+    setBezig(true);
     try {
       const d = await wijzigDefect(defect.id, { status: 'uitgevoerd', uitgevoerdOp: datum, uitgevoerdWerk: werk.trim() || null, manuren: uren });
       if (alsPrestatie && uren && uren > 0) {
@@ -314,24 +318,28 @@ function AfhandelModal({ defect, currentUser, onClose, onKlaar }: { defect: Defe
       notify(`${voertuigNaam(defect)}: melding afgehandeld.`, 'success');
       onKlaar(d);
     } catch (err) {
-      if (err instanceof TechniekFout && err.veldfouten) setFouten(err.veldfouten);
-      notify(err instanceof Error ? err.message : 'Afhandelen is mislukt.', 'error');
+      // Veldfouten bij het veld, de rest één toast met vervolgstap. Geen
+      // "Opnieuw proberen": afhandelen maakt mogelijk ook een werkprestatie aan.
+      if (err instanceof TechniekFout && err.veldfouten) fouten.zet(err.veldfouten);
+      else meldSchrijffout('Afhandelen', err);
     } finally {
       setBezig(false);
     }
   };
 
   return (
-    <Modal open onClose={onClose} maxWidth="md" ariaLabel={`Melding afhandelen, ${voertuigNaam(defect)}`}>
-      <div className="p-6">
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="md" ariaLabel={`Melding afhandelen, ${voertuigNaam(defect)}`}>
+      <Formulier onVerstuur={opslaan} noValidate className="p-6">
         <CardHeader title={`${voertuigNaam(defect)}: uitgevoerd`} description={defect.omschrijving} />
         <div className="mt-4 space-y-3">
-          <Field label="Uitgevoerd op" required error={fouten.uitgevoerdOp}>{({ id }) => <DateInput id={id} value={datum} onChange={setDatum} />}</Field>
-          <Field label="Wat is er gedaan?" error={fouten.uitgevoerdWerk}>
-            {({ id, invalid }) => <Textarea id={id} invalid={invalid} value={werk} rows={3} maxLength={WERK_OMSCHRIJVING_MAX} onChange={(e) => setWerk(e.target.value)} placeholder="Bijvoorbeeld: bel vervangen, kabel hersteld" />}
+          <Field label="Uitgevoerd op" required error={fouten.fouten.uitgevoerdOp}>
+            <DateInput value={datum} onChange={(v) => { setDatum(v); fouten.wisVeld('uitgevoerdOp'); }} />
           </Field>
-          <Field label="Manuren" hint="Bijvoorbeeld 1,5" error={fouten.manuren}>
-            {({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="decimal" value={manuren} onChange={(e) => setManuren(e.target.value)} className="max-w-[8rem]" />}
+          <Field label="Wat is er gedaan?" error={fouten.fouten.uitgevoerdWerk}>
+            <Textarea value={werk} rows={3} maxLength={WERK_OMSCHRIJVING_MAX} onChange={(e) => { setWerk(e.target.value); fouten.wisVeld('uitgevoerdWerk'); }} placeholder="Bijvoorbeeld: bel vervangen, kabel hersteld" />
+          </Field>
+          <Field label="Manuren" hint="Bijvoorbeeld 1,5" error={fouten.fouten.manuren}>
+            <Input inputMode="decimal" value={manuren} onChange={(e) => { setManuren(e.target.value); fouten.wisVeld('manuren'); }} className="max-w-[8rem]" />
           </Field>
           <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-muted px-3.5 py-2.5">
             <span className="text-sm font-medium text-slate-700">Ook als werkprestatie registreren</span>
@@ -339,10 +347,10 @@ function AfhandelModal({ defect, currentUser, onClose, onKlaar }: { defect: Defe
           </div>
         </div>
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" onClick={() => void opslaan()} disabled={bezig}>{bezig ? 'Bezig…' : 'Afhandelen'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" bezig={bezig}>Afhandelen</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }
@@ -352,43 +360,45 @@ function BewerkModal({ defect, onClose, onKlaar }: { defect: Defect; onClose: ()
   const [omschrijving, setOmschrijving] = useState(defect.omschrijving);
   const [opmerking, setOpmerking] = useState(defect.opmerking ?? '');
   const [bezig, setBezig] = useState(false);
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  const fouten = useVeldfouten();
+  const { vuil } = useVuil({ werktype, omschrijving, opmerking });
   const opslaan = async () => {
     if (bezig) return;
+    fouten.wis();
     setBezig(true);
     try {
       const d = await wijzigDefect(defect.id, { werktype, omschrijving: omschrijving.trim(), opmerking: opmerking.trim() || null });
       notify('Melding bijgewerkt.', 'success');
       onKlaar(d);
     } catch (err) {
-      if (err instanceof TechniekFout && err.veldfouten) setFouten(err.veldfouten);
-      notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error');
+      if (err instanceof TechniekFout && err.veldfouten) fouten.zet(err.veldfouten);
+      else meldSchrijffout('Opslaan', err, () => void opslaan());
     } finally {
       setBezig(false);
     }
   };
   return (
-    <Modal open onClose={onClose} maxWidth="md" ariaLabel={`Melding bewerken, ${voertuigNaam(defect)}`}>
-      <div className="p-6">
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="md" ariaLabel={`Melding bewerken, ${voertuigNaam(defect)}`}>
+      <Formulier onVerstuur={opslaan} noValidate className="p-6">
         <CardHeader title={`${voertuigNaam(defect)}: melding bewerken`} />
         <div className="mt-4 space-y-3">
-          <Field label="Soort">
+          <Field label="Soort" error={fouten.fouten.werktype}>
             <div className="flex flex-wrap gap-2" role="group" aria-label="Soort">
               {WERKTYPES.map((t) => <FilterChip key={t} active={werktype === t} onClick={() => setWerktype(t)}>{WERKTYPE_LABEL[t]}</FilterChip>)}
             </div>
           </Field>
-          <Field label="Melding" required error={fouten.omschrijving}>
-            {({ id, invalid }) => <Textarea id={id} invalid={invalid} value={omschrijving} rows={4} onChange={(e) => setOmschrijving(e.target.value)} />}
+          <Field label="Melding" required error={fouten.fouten.omschrijving}>
+            <Textarea value={omschrijving} rows={4} onChange={(e) => { setOmschrijving(e.target.value); fouten.wisVeld('omschrijving'); }} />
           </Field>
-          <Field label="Opmerking garage" error={fouten.opmerking}>
-            {({ id, invalid }) => <Input id={id} invalid={invalid} value={opmerking} maxLength={300} onChange={(e) => setOpmerking(e.target.value)} placeholder="Bijvoorbeeld: stuk besteld, wacht op levering" />}
+          <Field label="Opmerking garage" error={fouten.fouten.opmerking}>
+            <Input value={opmerking} maxLength={300} onChange={(e) => { setOpmerking(e.target.value); fouten.wisVeld('opmerking'); }} placeholder="Bijvoorbeeld: stuk besteld, wacht op levering" />
           </Field>
         </div>
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" onClick={() => void opslaan()} disabled={bezig}>{bezig ? 'Bezig…' : 'Opslaan'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" bezig={bezig}>Opslaan</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }

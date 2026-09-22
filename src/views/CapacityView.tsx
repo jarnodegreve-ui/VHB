@@ -14,6 +14,7 @@ import { Card } from '../components/Card';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Field, Input, Select, Textarea } from '../components/Field';
 import { Modal } from '../components/Modal';
+import { meldSchrijffout } from '../lib/fouten';
 import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
@@ -133,7 +134,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         body: JSON.stringify({ driverId: selected.driverId, date: selected.iso, note: noteDraft }),
       });
       const body = await res.json().catch(() => ({} as any));
-      if (!res.ok) { notify(body.error || 'Notitie opslaan is mislukt.', 'error'); return; }
+      // PUT per chauffeur en dag: opnieuw proberen is veilig.
+      if (!res.ok) { meldSchrijffout('Notitie opslaan', { status: res.status, message: body.error }, () => void saveNote()); return; }
       setNotes((cur) => {
         const next = new Map(cur);
         const trimmed = noteDraft.trim();
@@ -143,6 +145,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       });
       notify(noteDraft.trim() ? 'Notitie opgeslagen, de chauffeur krijgt een melding.' : 'Notitie verwijderd.', 'success');
       setSelected(null);
+    } catch (err) {
+      meldSchrijffout('Notitie opslaan', err, () => void saveNote());
     } finally {
       setIsSavingNote(false);
     }
@@ -228,6 +232,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     ? wisselToelichting.trim()
     : (wisselToelichting.trim() ? `${wisselReden}, ${wisselToelichting.trim()}` : wisselReden);
   const wisselKlaar = !!wisselNaar && !!wisselRedenTekst;
+  // Onbewaarde invoer in de celdetail: een gewijzigde notitie of een
+  // begonnen dienstwissel. Sluiten vraagt dan eerst bevestiging.
+  const celVuil = !!selected && (
+    (canEditNotes && noteDraft !== (notes.get(noteKey(selected.driverId, selected.iso)) ?? ''))
+    || wisselNaar !== '' || wisselToelichting !== '' || wisselReden !== WISSEL_REDENEN[0]
+  );
 
   // Welke dienst is hier over te zetten? Een dienst-cel spreekt voor zich;
   // op een afwezigheidscel (ziek/bv/kv) is dat de dienst die eronder ligt —
@@ -1175,7 +1185,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         </>
       )}
 
-      <Modal open={!!selected} onClose={() => setSelected(null)} maxWidth="sm" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={!!selected} onClose={() => setSelected(null)} vuil={celVuil} maxWidth="sm" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         {selected && (
           <>
           <ModalHeader

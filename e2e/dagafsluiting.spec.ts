@@ -70,3 +70,60 @@ test('looncontrole toont de maandstand en de exportcontrole', async ({ page }) =
   await expect(page.getByText(/zonder Easypay-matricule/)).toBeVisible();
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
+
+test('autosave: ongeldige minuten en een mislukte save blijven bij de cel', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  const gisteren = dayOffset(-1);
+  const puts: Array<Record<string, unknown>> = [];
+  await seed(page, {
+    user: ADMIN,
+    view: 'dagafsluiting',
+    extra: (pad, request) => {
+      if (pad.includes('/rijen/') && request.method() === 'PUT') {
+        const body = JSON.parse(request.postData() ?? '{}');
+        return { id: 'p1', datum: gisteren, userId: '42', naam: 'Test Chauffeur', volgnr: 1, planningCode: '2101', geredenCode: '2101', overmin: body.overmin ?? 0, overminNacht: 0, overminExtra: 0, onvPremie: false, qualOngeval: false, qualPanne: false, qualVerkeersovertreding: false, qualKlantklacht: false, qualAdmfout: false, qualInterneklacht: false, qualVertragingDrSchuld: false, qualRitNtGeredenDrSchuld: false, opmerking: null, bewerktOp: new Date().toISOString(), bewerktDoor: '1' };
+      }
+      return undefined;
+    },
+  });
+  // De eerste PUT faalt (server), de volgende gaan door naar de mock hierboven.
+  let eersteGefaald = false;
+  await page.route('**/api/dagafsluiting/**/rijen/**', async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    puts.push(JSON.parse(route.request().postData() ?? '{}'));
+    if (!eersteGefaald) {
+      eersteGefaald = true;
+      return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Kon de rij niet bewaren.' }) });
+    }
+    return route.fallback();
+  });
+  await page.goto(`/beheer/dagadministratie/${gisteren}`);
+  await expect(page.getByRole('heading', { name: 'Dagadministratie', level: 1 })).toBeVisible({ timeout: 15_000 });
+
+  const rij = page.getByRole('row').filter({ hasText: 'Test Chauffeur' });
+  const over = rij.getByRole('textbox', { name: 'Overminuten', exact: true });
+  const opmerking = rij.getByRole('textbox', { name: 'Opmerking voor Test Chauffeur' });
+
+  // Ongeldig: fout bij de cel, geen request.
+  await over.fill('1,5');
+  await opmerking.focus();
+  await expect(rij.getByText('Vul een heel aantal minuten in.')).toBeVisible();
+  await expect(over).toHaveAttribute('aria-invalid', 'true');
+  expect(puts).toHaveLength(0);
+
+  // Mislukte save: reden + Opnieuw, de getypte waarde blijft staan.
+  await over.fill('20');
+  await opmerking.focus();
+  await expect(rij.getByText(/^Niet bewaard\./)).toBeVisible();
+  await expect(over).toHaveValue('20');
+  expect(puts).toEqual([{ overmin: 20 }]);
+
+  // Opnieuw stuurt precies dezelfde waarde; daarna is de fout weg.
+  await rij.getByRole('button', { name: 'Opnieuw' }).click();
+  await expect.poll(() => puts.length).toBe(2);
+  expect(puts[1]).toEqual({ overmin: 20 });
+  await expect(rij.getByText(/^Niet bewaard\./)).toHaveCount(0);
+  await expect(over).not.toHaveAttribute('aria-invalid', 'true');
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});
