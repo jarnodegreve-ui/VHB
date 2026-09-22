@@ -115,7 +115,7 @@ export function prefetchView(view: View, opts: { ookZwaar?: boolean } = {}) {
  */
 export const WARMUP_VIEWS: Record<'chauffeur' | 'staf', readonly View[]> = {
   chauffeur: ['dashboard', 'mijn-dag', 'rooster', 'omleidingen', 'ruil-verzoeken'],
-  staf: ['dashboard', 'mijn-dag', 'rooster', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'],
+  staf: ['dashboard', 'mijn-dag', 'rooster', 'vandaag', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'],
 };
 
 /** Chunk-kaart uit de build (vite.config.ts, plugin vhb-view-chunks); in dev

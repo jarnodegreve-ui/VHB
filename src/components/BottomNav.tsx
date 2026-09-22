@@ -67,7 +67,10 @@ export function BottomNav({
     return { view, label: r.kort ?? r.label, icon: <Icoon size={18} />, badge };
   };
   const slots: NavSlot[] = isPlanner
-    ? [tab('dashboard'), tab('dekking'), tab('verlof', pendingLeaveCount), tab('ruil-verzoeken', pendingSwapsCount), tab('vervaldata')]
+    // Vandaag i.p.v. Open diensten (Jarno 22-09): de dagbriefing bevat de open
+    // diensten van de dag én afwezigen, ruilen en omleidingen; het volledige
+    // scherm Openstaande diensten blijft via "Meer".
+    ? [tab('dashboard'), tab('vandaag'), tab('verlof', pendingLeaveCount), tab('ruil-verzoeken', pendingSwapsCount), tab('vervaldata')]
     : role === 'technieker'
       // Technieker heeft geen diensten: geen Mijn dag, Rooster of Omleidingen,
       // die schermen staan ook niet in zijn menu (Jarno 09-09).
