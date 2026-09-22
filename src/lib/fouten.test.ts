@@ -27,6 +27,15 @@ describe('schrijffout', () => {
     expect(schrijffout('Bewaren', err)).toBe('Bewaren is mislukt. Busnummer 12 bestaat al. Iemand anders heeft dit intussen gewijzigd. Vernieuw de lijst en probeer het opnieuw.');
   });
 
+  it('een fout uit apiJson draagt de status, dus de serverreden komt mee', async () => {
+    online(true);
+    const { apiJson } = await import('./api');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ error: 'Periode overlapt met een andere' }), { status: 400, headers: { 'content-type': 'application/json' } }));
+    const err = (await apiJson('/api/x', { method: 'PUT', body: '{}' }).catch((e: unknown) => e)) as { status?: number };
+    expect(err.status).toBe(400);
+    expect(schrijffout('Opslaan', err)).toBe('Opslaan is mislukt. Periode overlapt met een andere. Pas de invoer aan en probeer het opnieuw.');
+  });
+
   it('generieke of 5xx-teksten komen niet in de zin', () => {
     online(true);
     const generiek = Object.assign(new Error('Er ging iets mis (code 500). Probeer het opnieuw.'), { status: 500 });
