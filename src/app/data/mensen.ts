@@ -4,6 +4,7 @@ import { apiFetch, apiJson } from '../../lib/api';
 import type { VervaldataRij, PendingDevice } from '../../lib/werkvoorraad';
 import { startRustigePoll } from '../../lib/rustigePoll';
 import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
+import { laatSchrijffout } from '../../lib/foutenLui';
 
 /**
  * Mensen: de gebruikerslijst (collectie- én per-record-savers), de
@@ -105,23 +106,20 @@ export function useMensenData(ctx: DataCtx) {
         const text = await response.text();
         console.error('Server error saving users. Status:', response.status, 'Body:', text);
 
-        let errorMsg = `Server fout (${response.status})`;
+        // Alleen een JSON-reden van de server is gebruikerstekst; een
+        // HTML-foutpagina (Vercel) blijft in de console hierboven.
+        let reden = '';
         try {
           const errorData = JSON.parse(text);
-          errorMsg = errorData.details || errorData.error || errorMsg;
-        } catch (e) {
-          // If not JSON, maybe it's a Vercel error page
-          if (text.includes('500') || text.includes('Internal Server Error')) {
-            errorMsg = "Interne Server Fout (500). Controleer de Vercel logs of de tabelstructuur in Supabase.";
-          } else if (text.length > 0) {
-            errorMsg = `Server fout: ${text.slice(0, 100)}`;
-          }
+          reden = errorData.details || errorData.error || '';
+        } catch {
+          // geen JSON: de status volstaat voor de vervolgstap
         }
-        throw new Error(errorMsg);
+        throw Object.assign(new Error(reden), { status: response.status });
       }
     } catch (error: any) {
       console.error('Error saving users:', error);
-      showToast('Fout bij het opslaan van gebruikers: ' + error.message, 'error');
+      laatSchrijffout('Opslaan van gebruikers', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };

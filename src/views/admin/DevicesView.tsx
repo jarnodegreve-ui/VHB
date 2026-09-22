@@ -16,6 +16,7 @@ import { Field, Input } from '../../components/Field';
 import { Formulier } from '../../components/Formulier';
 import { SkeletonRow } from '../../components/Skeleton';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
+import { meldSchrijffout } from '../../lib/fouten';
 
 type Device = {
   userId: string;
@@ -51,7 +52,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     try {
       setDevices(await apiJson<Device[]>('/api/devices'));
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Toestellen laden is mislukt.', 'error');
+      meldSchrijffout('Toestellen laden', err, () => void load());
       setDevices([]);
     }
   };
@@ -82,7 +83,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         ? 'Toestel-goedkeuring staat weer aan: nieuwe toestellen wachten op jouw akkoord.'
         : 'Toestel-goedkeuring staat uit: elk toestel wordt bij aanmelden automatisch goedgekeurd.', 'success');
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Instelling opslaan is mislukt.', 'error');
+      meldSchrijffout('Instelling opslaan', err, () => void toggleGate());
     } finally {
       setIsTogglingGate(false);
     }
@@ -101,7 +102,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       );
       await load();
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Actie is mislukt.', 'error');
+      meldSchrijffout(action === 'approve' ? 'Goedkeuren' : action === 'revoke' ? 'Blokkeren' : 'Schrappen', err, () => void act(device, action));
     } finally {
       setBusyKey(null);
     }
@@ -124,7 +125,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       await load();
       notify('Toestel hernoemd.', 'success');
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Hernoemen is mislukt.', 'error');
+      meldSchrijffout('Hernoemen', err, () => void submitRename(device));
     } finally {
       setIsRenaming(false);
     }

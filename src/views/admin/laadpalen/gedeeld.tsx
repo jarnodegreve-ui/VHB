@@ -1,11 +1,12 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
-import { cn, downloadBlob, notify } from '../../../lib/ui';
+import { cn, downloadBlob } from '../../../lib/ui';
 import { csvTekst } from '../../../lib/csv';
 import { apiFetch } from '../../../lib/api';
 import { isoDate } from '../../../lib/datum';
 import { MONTH_NAMES, formatGetal, metEenheid } from '../../../lib/format';
 import { Segmented, type BadgeTone } from '../../../components/primitives';
+import { meldSchrijffout } from '../../../lib/fouten';
 
 /**
  * Gedeelde bouwstenen van de laadpalenpagina (herwerking 08-09-2026):
@@ -358,13 +359,13 @@ export const exporteerCsv = (naam: string, regels: unknown[][]) => {
 export const downloadXlsx = async (url: string, naam: string): Promise<void> => {
   try {
     const res = await apiFetch(url);
-    if (!res.ok) throw new Error(String(res.status));
+    if (!res.ok) throw Object.assign(new Error(''), { status: res.status });
     // downloadBlob meldt zelf wat er gebeurde (deelblad, download, of een
     // Bewaren-knop als de gesture verlopen was); een eigen succes-toast zou
     // in standalone succes claimen dat er niet was.
     await downloadBlob(naam, await res.blob());
-  } catch {
-    notify('Exporteren is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+  } catch (err) {
+    meldSchrijffout('Exporteren', err, () => void downloadXlsx(url, naam));
   }
 };
 

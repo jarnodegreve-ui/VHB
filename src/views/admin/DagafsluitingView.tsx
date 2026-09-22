@@ -88,24 +88,24 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   const doeOpen = async () => {
     setBezig(true);
     try { setDetail(await openDag(datum)); setVoorstel(null); notify('Dag geopend met de planning van vandaag.', 'success'); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Openen is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Dag openen', err); }
     finally { setBezig(false); }
   };
   const doeSluiten = async () => {
     setBezig(true);
     try { const dag = await sluitDag(datum); setDetail((d) => (d ? { ...d, dag } : d)); setBevestigSluiten(false); notify(`${formatDayLong(datum)} afgesloten.`, 'success'); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Afsluiten is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Afsluiten', err); }
     finally { setBezig(false); }
   };
   const doeOvernemen = async (rijId?: string) => {
     setBezig(true);
     try { const r = await neemPlanningOver(datum, rijId); notify(`${r.aangepast} rijen aangepast, ${r.toegevoegd} toegevoegd.`, 'success'); await load(); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Overnemen is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Overnemen', err); }
     finally { setBezig(false); }
   };
   const doeVerwijderen = async (r: DagPrestatie) => {
     try { await verwijderRij(datum, r.id); setDetail((d) => (d ? { ...d, rijen: d.rijen.filter((x) => x.id !== r.id) } : d)); notify('Rij verwijderd.', 'success'); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Verwijderen is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Verwijderen', err, () => void doeVerwijderen(r)); }
   };
 
   const codeLabel = (code: string | null | undefined) => {

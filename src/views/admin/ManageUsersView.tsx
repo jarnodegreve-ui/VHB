@@ -369,14 +369,14 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
           method: 'PUT',
           body: JSON.stringify({ userId: editingUser.id, soort, validUntil: nieuw || null }),
         });
-        if (!res.ok) throw new Error(String(res.status));
+        if (!res.ok) throw Object.assign(new Error(''), { status: res.status });
         setUserExpiries((prev) => {
           const per = { ...(prev[editingUser.id] ?? {}) };
           if (nieuw) per[soort] = nieuw; else delete per[soort];
           return { ...prev, [editingUser.id]: per };
         });
-      } catch {
-        notify(`${EXPIRY_SOORT_LABELS[soort]} kon niet opgeslagen worden, probeer opnieuw.`, 'error');
+      } catch (err) {
+        meldSchrijffout(`${EXPIRY_SOORT_LABELS[soort]} opslaan`, err);
       }
     }
     setEditingUser(null);
@@ -443,12 +443,12 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     try {
       const response = await apiFetch(`/api/admin/users/${doel.id}/mfa-reset`, { method: 'POST' });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) return notify(data.error || 'Resetten is mislukt.', 'error');
+      if (!response.ok) return meldSchrijffout('Twee-stapsverificatie resetten', { status: response.status, message: data.error });
       notify(data.verwijderd > 0
         ? `Twee-stapsverificatie van ${doel.name} is gereset. Bij de volgende aanmelding stelt ${doel.name} hem opnieuw in.`
         : `${doel.name} had geen twee-stapsverificatie ingesteld.`, 'success');
-    } catch (error: any) {
-      notify(`Resetten is mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
+    } catch (error) {
+      meldSchrijffout('Twee-stapsverificatie resetten', error);
     }
   };
 
@@ -674,7 +674,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
       }
     };
     reader.onerror = () => {
-      notify('Fout bij het lezen van het bestand.', 'error');
+      notify('Het bestand kon niet gelezen worden. Kies het opnieuw, of sla het eerst op je toestel op.', 'error');
       setIsImporting(false);
     };
     reader.readAsArrayBuffer(file);

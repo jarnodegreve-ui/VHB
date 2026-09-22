@@ -25,6 +25,7 @@ import { ZiekteInzicht } from '../../components/ZiekteInzicht';
 import { ZiekteMeldingen } from '../../components/ZiekteMeldingen';
 import { openZiekteDiensten } from '../../lib/ziekteInzicht';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
+import { meldSchrijffout } from '../../lib/fouten';
 
 /**
  * Ziekte — eigen blad, bewust gescheiden van het verlofbeheer (keuze Jarno
@@ -104,13 +105,13 @@ export function ZiekteView({
         }),
       });
       const body = await res.json().catch(() => ({} as any));
-      if (!res.ok) { notify(body.error || 'Overzetten is mislukt.', 'error'); return; }
+      if (!res.ok) { meldSchrijffout('Overzetten', { status: res.status, message: body.error }); return; }
       // Bevestiging als toast: de refetch hieronder haalt de dienst uit de
       // open lijst, dus een rij-status zou nooit zichtbaar zijn (controle 16-09, nr. 19).
       notify(`Dienst ${serviceNumberOf(dienst)} overgezet naar ${naamVan(naarId)}.`, 'success');
       await onShiftSwapped?.();
-    } catch {
-      notify('Overzetten is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Overzetten', err);
     } finally {
       setWisselBezig(null);
     }
@@ -146,7 +147,7 @@ export function ZiekteView({
         huidig: cur,
       }));
     } catch (e) {
-      notify(e instanceof Error ? e.message : 'Kandidaten voorstellen is mislukt.', 'error');
+      meldSchrijffout('Kandidaten voorstellen', e, () => void haalKandidatenVoorstel(r));
     } finally {
       setBatchLaden(false);
     }

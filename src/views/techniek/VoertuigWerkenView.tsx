@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Clock, Wrench } from 'lucide-react';
 import { WERKCODE_LABEL, voertuigNaam, VOERTUIG_CATEGORIE_LABEL, VOERTUIG_TYPE_LABEL } from '../../../shared/techniek';
 import { VOERTUIG_STATUS } from '../../../shared/status';
-import { notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { useRouteParam } from '../../app/router';
 import { formatShortDay } from '../../lib/format';
@@ -15,6 +14,7 @@ import { Card } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { Select } from '../../components/Field';
 import { Badge, Chip, FilterChip, StatusBadge } from '../../components/primitives';
+import { meldSchrijffout } from '../../lib/fouten';
 
 type Periode = 'jaar' | 'alles';
 
@@ -69,7 +69,7 @@ export function VoertuigWerkenView() {
     let actueel = true;
     void laadVoertuigWerken(vehicleId, { van, limit: 1000 })
       .then((w) => { if (actueel) setWerken(w); })
-      .catch(() => { if (actueel) { setWerken([]); notify('Kon de werken van deze bus niet laden.', 'error'); } });
+      .catch((err) => { if (actueel) { setWerken([]); meldSchrijffout('Werken van deze bus laden', err); } });
     return () => { actueel = false; };
   }, [vehicleId, van]);
 

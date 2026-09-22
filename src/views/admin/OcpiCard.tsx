@@ -4,6 +4,7 @@ import { notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, Chip, MicroLabel } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
+import { meldSchrijffout } from '../../lib/fouten';
 
 type OcpiStatus = {
   registered: boolean;
@@ -52,7 +53,7 @@ export function OcpiCard() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        notify(data.details || data.error || `Registratie mislukt (${response.status}).`, 'error');
+        meldSchrijffout('Registratie', { status: response.status, message: data.details || data.error });
       } else {
         notify(`Geregistreerd bij ChargEye (OCPI ${data.version ?? '2.2.1'}, ${data.endpoints ?? 0} endpoints).`, 'success');
       }
@@ -72,15 +73,15 @@ export function OcpiCard() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        notify(data.details || data.error || `Sync mislukt (${response.status}).`, 'error');
+        meldSchrijffout('Synchroniseren', { status: response.status, message: data.details || data.error });
       } else {
         const s = `${data.locations ?? 0} locaties · ${data.evses ?? 0} palen · ${data.sessions ?? 0} sessies`;
         setLastSync(s);
         if (data.errors?.length) notify(`Sync deels gelukt (${data.errors.length} fout(en)): ${s}`, 'error');
         else notify(`Sync klaar: ${s}`, 'success');
       }
-    } catch {
-      notify('Sync mislukt, probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Synchroniseren', err);
     } finally {
       setIsSyncing(false);
     }

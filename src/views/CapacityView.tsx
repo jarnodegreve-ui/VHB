@@ -167,15 +167,15 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       const res = await apiFetch(`/api/month-planning?month=${monthParam}&format=xlsx`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({} as any));
-        notify(body.error || 'Exporteren is mislukt.', 'error');
+        meldSchrijffout('Exporteren', { status: res.status, message: body.error }, () => void exporteerExcel());
         return;
       }
       // Alleen een eigen toast als het bestand ook echt lokaal geland is;
       // downloadBlob handelt het deelblad en de verlopen-gesture-tik zelf af.
       const uitkomst = await downloadBlob(`planning-${monthParam}.xlsx`, await res.blob());
       if (uitkomst === 'gedownload') notify('Dit is de actuele stand, direct her-importeerbaar.', 'success');
-    } catch {
-      notify('Exporteren is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Exporteren', err, () => void exporteerExcel());
     } finally {
       setIsExporteren(false);
     }
@@ -198,13 +198,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       const res = await apiFetch(`/api/month-planning?month=${monthParam}&format=summary`);
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) {
-        notify(body.error || 'Overzicht laden is mislukt.', 'error');
+        meldSchrijffout('Overzicht laden', { status: res.status, message: body.error }, () => void openOverzicht());
         setOverzichtOpen(false);
         return;
       }
       setOverzicht(body);
-    } catch {
-      notify('Overzicht laden is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Overzicht laden', err, () => void openOverzicht());
       setOverzichtOpen(false);
     } finally {
       setOverzichtLaden(false);
@@ -264,14 +264,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         }),
       });
       const body = await res.json().catch(() => ({} as any));
-      if (!res.ok) { notify(body.error || 'Dienstwissel is mislukt.', 'error'); return; }
+      if (!res.ok) { meldSchrijffout('Dienstwissel', { status: res.status, message: body.error }); return; }
       notify(wisselTerug
         ? `Diensten ${wisselDienst} en ${wisselTerug} gewisseld, beide chauffeurs krijgen een melding.`
         : `Dienst ${wisselDienst} overgezet, beide chauffeurs krijgen een melding.`, 'success');
       setSelected(null);
       setReloadTick((t) => t + 1);
-    } catch {
-      notify('Dienstwissel is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Dienstwissel', err);
     } finally {
       setIsWisselen(false);
     }
@@ -291,12 +291,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         body: JSON.stringify({ status: 'cancelled', ifStatus: 'approved' }),
       });
       const body = await res.json().catch(() => ({} as any));
-      if (!res.ok) { notify(body.error || 'Terugdraaien is mislukt.', 'error'); return; }
+      if (!res.ok) { meldSchrijffout('Terugdraaien', { status: res.status, message: body.error }, () => void uitvoerenTerugdraai()); return; }
       notify('Wissel teruggedraaid, de dienst staat weer op de oorspronkelijke chauffeur.', 'success');
       setSelected(null);
       setReloadTick((t) => t + 1);
-    } catch {
-      notify('Terugdraaien is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Terugdraaien', err, () => void uitvoerenTerugdraai());
     } finally {
       setIsTerugdraaien(false);
     }

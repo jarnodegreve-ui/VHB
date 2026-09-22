@@ -3,6 +3,7 @@ import type { SwapRequest } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { notify } from '../../lib/ui';
 import { useCollectieState, type DataCtx } from './kern';
+import { laatSchrijffout } from '../../lib/foutenLui';
 
 /**
  * Dienstruil: de verzoeken, beslissen (PATCH met seenStatus-guard) en de
@@ -62,11 +63,11 @@ export function useRuilData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      showToast(err.error || 'Opslaan van dienstruilen is mislukt.', 'error');
+      laatSchrijffout('Opslaan van dienstruilen', { status: response.status, message: err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
       console.error('Error saving swaps:', error);
-      showToast('Opslaan van dienstruilen is mislukt.', 'error');
+      laatSchrijffout('Opslaan van dienstruilen', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };
@@ -87,7 +88,7 @@ export function useRuilData(ctx: DataCtx) {
       const response = await apiFetch(`/api/swaps/${id}/gezien`, { method: 'POST' });
       if (!response.ok) {
         const data = await response.json().catch(() => null);
-        notify(data?.error || 'Bevestigen mislukt. Probeer het opnieuw.', 'error');
+        laatSchrijffout('Bevestigen', { status: response.status, message: data?.error }, (tekst) => notify(tekst, 'error'));
         void fetchSwaps();
         return false;
       }
@@ -97,8 +98,8 @@ export function useRuilData(ctx: DataCtx) {
       void fetchSwaps();
       notify('Bevestigd, de planner ziet dat je de wissel gezien hebt.', 'success');
       return true;
-    } catch {
-      notify('Bevestigen mislukt. Controleer je verbinding.', 'error');
+    } catch (error) {
+      laatSchrijffout('Bevestigen', error, (tekst) => notify(tekst, 'error'));
       return false;
     }
   };

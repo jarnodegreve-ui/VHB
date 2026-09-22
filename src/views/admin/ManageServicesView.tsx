@@ -187,7 +187,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         }
       } catch (error) {
         console.error('Error parsing Excel:', error);
-        notify('Fout bij het verwerken van het Excel-bestand.', 'error');
+        notify('Het Excel-bestand kon niet verwerkt worden. Controleer of het een geldig Excel-bestand is.', 'error');
       } finally {
         setIsImporting(false);
         if (e.target) e.target.value = '';

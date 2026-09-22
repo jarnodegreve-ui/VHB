@@ -22,6 +22,7 @@ import { leesTweeStapsStatus, schakelUit, type TweeStapsStatus } from '../lib/tw
 import { notify } from '../lib/ui';
 import { ROL_LABEL, type User, type View } from '../types';
 import { OnderhoudBeheer } from './instellingen/OnderhoudBeheer';
+import { meldSchrijffout } from '../lib/fouten';
 
 // --- Toestellen en sessies (GET /api/me/toestellen) ---
 type EigenToestel = {
@@ -61,7 +62,7 @@ function ToestellenSectie() {
       notify(`${t.naam} is uitgelogd.`, 'success');
       await laad();
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Uitloggen is mislukt.', 'error');
+      meldSchrijffout(`${t.naam} uitloggen`, err);
     } finally {
       setBezig(null);
     }
@@ -79,7 +80,7 @@ function ToestellenSectie() {
       notify(res.aantal > 0 ? `Uitgelogd op ${res.aantal} ${res.aantal === 1 ? 'ander toestel' : 'andere toestellen'}.` : 'Alle andere sessies zijn beëindigd.', 'success');
       await laad();
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Uitloggen op andere toestellen is mislukt.', 'error');
+      meldSchrijffout('Uitloggen op andere toestellen', err);
     } finally {
       setBezig(null);
     }
@@ -200,7 +201,7 @@ function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePas
       setModal(null);
       await laad();
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Uitschakelen is mislukt.', 'error');
+      meldSchrijffout('Twee-stapsverificatie uitschakelen', err, () => void uitschakelen());
     } finally {
       setBezig(false);
     }
@@ -335,7 +336,7 @@ function StartschermRij({ user }: { user: User }) {
     } catch (err) {
       setKeuze(vorige);
       onthoudStartschermLokaal(vorige || null);
-      notify(err instanceof Error ? err.message : 'Startscherm opslaan is mislukt.', 'error');
+      meldSchrijffout('Startscherm opslaan', err, () => void kies(naar));
     } finally {
       setBezig(false);
     }
@@ -388,7 +389,7 @@ function MeldingssoortenRijen({ user }: { user: User }) {
       await bewaarVoorkeurDeel({ meldingssoortenUit: volgende.size ? [...volgende] : null });
     } catch (err) {
       setUit(vorige);
-      notify(err instanceof Error ? err.message : 'Meldingsvoorkeur opslaan is mislukt.', 'error');
+      meldSchrijffout('Meldingsvoorkeur opslaan', err, () => void zet(soort, aan));
     } finally {
       setBezig(false);
     }

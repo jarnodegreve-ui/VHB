@@ -1,6 +1,7 @@
 import type { Diversion, Update, User } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
+import { laatSchrijffout } from '../../lib/foutenLui';
 import { metOngedaan } from '../../lib/ongedaan';
 
 /**
@@ -44,7 +45,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       }
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data?.details || data?.error || 'Opslaan mislukt.');
+        throw Object.assign(new Error(data?.details || data?.error || 'Opslaan mislukt.'), { status: response.status });
       }
       setUpdates(newUpdates);
       ctx.captureRevision('updates', response);
@@ -55,7 +56,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       return true;
     } catch (error) {
       console.error('Error saving updates:', error);
-      showToast(`Opslaan van updates is mislukt: ${error instanceof Error ? error.message : 'Onbekende fout'}`, 'error');
+      laatSchrijffout('Opslaan van updates', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };
@@ -73,11 +74,11 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       if (response.ok && data.success) {
         showToast(data.mocked ? `E-mail gelogd: ${data.message}` : 'E-mails verzonden naar alle chauffeurs.', 'success');
       } else {
-        showToast(data.details || data.error || 'Verzenden van de e-mailupdate is mislukt.', 'error');
+        laatSchrijffout('Verzenden van de e-mailupdate', { status: response.status, message: data.details || data.error }, (tekst) => showToast(tekst, 'error'));
       }
     } catch (error) {
       console.error('Error sending urgent email:', error);
-      showToast('Verzenden van de e-mailupdate is mislukt.', 'error');
+      laatSchrijffout('Verzenden van de e-mailupdate', error, (tekst) => showToast(tekst, 'error'));
     }
   };
 
@@ -119,11 +120,11 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
         showToast('Omleidingen succesvol opgeslagen.', 'success');
       } else {
         const err = await response.json().catch(() => ({} as any));
-        showToast(err.details || err.error || 'Opslaan van omleidingen is mislukt.', 'error');
+        laatSchrijffout('Opslaan van omleidingen', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       }
     } catch (error) {
       console.error('Error saving diversions:', error);
-      showToast('Opslaan van omleidingen is mislukt.', 'error');
+      laatSchrijffout('Opslaan van omleidingen', error, (tekst) => showToast(tekst, 'error'));
     }
   };
 

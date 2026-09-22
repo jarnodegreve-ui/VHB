@@ -24,22 +24,18 @@ export const adviesSleutel = (date: string, code: string) => `${date}|${String(c
 export const MAX_BATCH = 40;
 
 /**
- * Batch-advies ophalen. Werpt een Error met een toonbare melding (server-
- * tekst, of de verbindingsmelding bij een netwerkfout) zodat de view alleen
- * nog `notify(e.message)` hoeft te doen.
+ * Batch-advies ophalen. Een netwerkfout gaat ongewijzigd door; een fout-
+ * antwoord wordt een Error met de servertekst én de HTTP-status, zodat de
+ * view `meldSchrijffout('Kandidaten voorstellen', e)` de juiste vervolgstap
+ * laat kiezen (src/lib/fouten.ts).
  */
 export async function haalBatchAdvies(items: BatchItem[]): Promise<Record<string, BatchAdvies>> {
-  let res: Response;
-  try {
-    res = await apiFetch('/api/coverage-advisor/batch', {
-      method: 'POST',
-      body: JSON.stringify({ items: items.slice(0, MAX_BATCH).map((i) => ({ date: i.date, code: i.code })) }),
-    });
-  } catch {
-    throw new Error('Kandidaten voorstellen is mislukt, controleer je verbinding en probeer opnieuw.');
-  }
+  const res = await apiFetch('/api/coverage-advisor/batch', {
+    method: 'POST',
+    body: JSON.stringify({ items: items.slice(0, MAX_BATCH).map((i) => ({ date: i.date, code: i.code })) }),
+  });
   const body = await res.json().catch(() => ({} as { error?: string; items?: BatchAdvies[] }));
-  if (!res.ok) throw new Error(body.error || 'Kandidaten voorstellen is mislukt.');
+  if (!res.ok) throw Object.assign(new Error(body.error || ''), { status: res.status });
   const per: Record<string, BatchAdvies> = {};
   for (const item of body.items ?? []) {
     per[adviesSleutel(item.date, item.code)] = { ...item, passend: Array.isArray(item.passend) ? item.passend : [] };

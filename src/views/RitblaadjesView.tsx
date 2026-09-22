@@ -14,6 +14,7 @@ import { Field, Input } from '../components/Field';
 import { RitbladViewer } from '../components/RitbladViewer';
 import { Skeleton } from '../components/Skeleton';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
+import { meldSchrijffout } from '../lib/fouten';
 
 type RitblaadjeMeta = {
   filename: string;
@@ -139,7 +140,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       // Ook onder een nog actieve oudere service worker direct vers laden:
       // de signed URL uit diens metadata-cache kan al verlopen zijn.
       const response = await apiFetch('/api/ritblaadje', { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Server antwoordde ${response.status}`);
+      if (!response.ok) throw Object.assign(new Error(''), { status: response.status });
       const data = await response.json();
       if (!mountedRef.current) return;
       setCurrent(data);
@@ -171,7 +172,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         // ongeldige cache — negeer
       }
       if (!recovered) {
-        notify('Kon ritblad niet laden: ' + error.message, 'error');
+        meldSchrijffout('Ritblad laden', error, () => void fetchCurrent());
         setCurrent(null);
       }
     } finally {
@@ -213,9 +214,9 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       });
       const text = await response.text();
       if (!response.ok) {
-        let detail = text;
-        try { detail = JSON.parse(text).error || detail; } catch {}
-        throw new Error(detail);
+        let detail = '';
+        try { detail = JSON.parse(text).error || ''; } catch { /* geen JSON: de status volstaat */ }
+        throw Object.assign(new Error(detail), { status: response.status });
       }
       const updated = JSON.parse(text);
       setCurrent(updated);
@@ -227,8 +228,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         localStorage.setItem(META_CACHE_KEY, JSON.stringify(cacheSafeMeta(updated)));
       } catch { /* localStorage geblokkeerd */ }
       notify('Ritblad succesvol bijgewerkt.', 'success');
-    } catch (error: any) {
-      notify('Upload mislukt: ' + error.message, 'error');
+    } catch (error) {
+      meldSchrijffout('Uploaden', error);
     } finally {
       setIsUploading(false);
     }
@@ -240,8 +241,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         method: 'DELETE',
       });
       if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text);
+        const data = await response.json().catch(() => ({} as { error?: string }));
+        throw Object.assign(new Error(data?.error || ''), { status: response.status });
       }
       setCurrent(null);
       try {
@@ -249,8 +250,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         localStorage.removeItem(SYNCED_AT_KEY);
       } catch { /* localStorage geblokkeerd */ }
       notify('Ritblad verwijderd.', 'success');
-    } catch (error: any) {
-      notify('Verwijderen mislukt: ' + error.message, 'error');
+    } catch (error) {
+      meldSchrijffout('Verwijderen', error, () => void handleDelete());
     }
   };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { metOngedaan, ONGEDAAN_FOUT, ONGEDAAN_LABEL, type OngedaanToast } from './ongedaan';
+import { metOngedaan, ONGEDAAN_LABEL, type OngedaanToast } from './ongedaan';
 
 const laatsteActie = (toast: ReturnType<typeof vi.fn>) => {
   const [, , action] = toast.mock.calls[0] as Parameters<OngedaanToast>;
@@ -56,7 +56,7 @@ describe('metOngedaan', () => {
 
     laatsteActie(toast).run();
     await vi.waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
-    expect(toast).toHaveBeenLastCalledWith(ONGEDAAN_FOUT, 'error');
+    expect(toast).toHaveBeenLastCalledWith(expect.stringMatching(/^Ongedaan maken is mislukt\. \S/), 'error');
   });
 
   it('herstellen gooit → fout-toast met eigen tekst, geen unhandled rejection', async () => {

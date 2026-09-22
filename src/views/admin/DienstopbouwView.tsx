@@ -17,6 +17,7 @@ import { Card, CardHeader } from '../../components/Card';
 import { Field, Select } from '../../components/Field';
 import { Badge, Button, Chip, FilterChip, IconButton, Segmented, Td, Th } from '../../components/primitives';
 import { StickyThead, TableToolbar } from '../../components/Table';
+import { meldSchrijffout } from '../../lib/fouten';
 
 type Tab = 'imports' | 'diensten' | 'dagtypes';
 const PORTAAL_DAGTYPES = ['schooldag', 'vakantie', 'zaterdag', 'zondag'] as const;
@@ -35,7 +36,7 @@ export function DienstopbouwView({ currentUser }: { currentUser: User }) {
   const [isLoading, setIsLoading] = useState(true);
   const load = useCallback(async () => {
     setIsLoading(true);
-    try { setImports(await laadImports()); } catch (err) { notify(err instanceof Error ? err.message : 'Kon de imports niet laden.', 'error'); } finally { setIsLoading(false); }
+    try { setImports(await laadImports()); } catch (err) { meldSchrijffout('Imports laden', err, () => void load()); } finally { setIsLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
   const actief = imports.find((i) => i.actief) ?? null;
@@ -75,33 +76,33 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
       notify(`${imp.rijen} ritdelen voor ${imp.diensten} diensten ingelezen${fouten ? `, ${fouten} fouten` : ''}.`, fouten ? 'info' : 'success');
       await onChanged();
       setDetail(imp);
-    } catch (err) { notify(err instanceof Error ? err.message : 'Import mislukt.', 'error'); }
+    } catch (err) { meldSchrijffout('Importeren', err); }
     finally { setBezig(false); if (fileRef.current) fileRef.current.value = ''; }
   };
   const activeer = async (imp: SegmentImport, forceer = false) => {
     setBezig(true);
     try { await activeerImport(imp.id, forceer); notify('Dienstopbouw geactiveerd.', 'success'); await onChanged(); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Activeren is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Activeren', err); }
     finally { setBezig(false); }
   };
   const verwijder = async (imp: SegmentImport) => {
     try { await verwijderImport(imp.id); notify('Import verwijderd.', 'success'); await onChanged(); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Verwijderen is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Verwijderen', err, () => void verwijder(imp)); }
   };
   const afleiden = async (imp: SegmentImport) => {
     setBezig(true);
     try {
       const r = await leidLooncodesAf(imp.id);
       notify(`Looncodes: ${r.bijgewerkt} bijgewerkt, ${r.nieuw} nieuw${r.overgeslagen.length ? `, ${r.overgeslagen.length} handmatig bewerkte overgeslagen` : ''}${r.teVeelDelen.length ? `; meer dan drie dienstdelen: ${r.teVeelDelen.join(', ')}` : ''}.`, 'success');
-    } catch (err) { notify(err instanceof Error ? err.message : 'Afleiden is mislukt.', 'error'); }
+    } catch (err) { meldSchrijffout('Looncodes afleiden', err); }
     finally { setBezig(false); }
   };
   const downloadCsv = async (imp: SegmentImport) => {
     try {
       const res = await apiFetch(`/api/dienstopbouw/imports/${encodeURIComponent(imp.id)}/looncomponenten?format=csv`);
-      if (!res.ok) throw new Error(`Export mislukt (${res.status}).`);
+      if (!res.ok) throw Object.assign(new Error(''), { status: res.status });
       await downloadBlob(`loondiensten-easypay-${imp.createdAt.slice(0, 10)}.csv`, await res.blob());
-    } catch (err) { notify(err instanceof Error ? err.message : 'Export mislukt.', 'error'); }
+    } catch (err) { meldSchrijffout('Exporteren', err, () => void downloadCsv(imp)); }
   };
   const fouten = (i: SegmentImport) => i.bevindingen.filter((b) => b.ernst === 'fout').length;
   const waarsch = (i: SegmentImport) => i.bevindingen.filter((b) => b.ernst === 'waarschuwing').length + i.waarschuwingen.length;
@@ -221,7 +222,7 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
     setIsLoading(true);
     void Promise.all([laadSegmenten({ importId: actief.id }), laadLoonparameters(actief.id)])
       .then(([s, p]) => { setSegmenten(s.segmenten); setParams(new Map(p.diensten.map((d) => [`${d.serviceNumber}|${d.dagtypeCode}`, d.parameters]))); })
-      .catch((err) => notify(err instanceof Error ? err.message : 'Kon de diensten niet laden.', 'error'))
+      .catch((err) => meldSchrijffout('Diensten laden', err))
       .finally(() => setIsLoading(false));
   }, [actief]);
 
@@ -335,10 +336,10 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
 function DagtypesTab() {
   const [rijen, setRijen] = useState<DagtypeCode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  useEffect(() => { void laadDagtypes().then(setRijen).catch((err) => notify(err instanceof Error ? err.message : 'Kon de dagtypes niet laden.', 'error')).finally(() => setIsLoading(false)); }, []);
+  useEffect(() => { void laadDagtypes().then(setRijen).catch((err) => meldSchrijffout('Dagtypes laden', err)).finally(() => setIsLoading(false)); }, []);
   const zet = async (r: DagtypeCode, v: string) => {
     try { const n = await bewaarDagtype(r.code, v || null); setRijen((l) => l.map((x) => (x.code === r.code ? n : x))); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Bewaren', err, () => void zet(r, v)); }
   };
   return (
     <div className="surface-table rounded-3xl overflow-clip">

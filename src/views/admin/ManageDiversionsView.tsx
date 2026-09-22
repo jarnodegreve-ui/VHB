@@ -237,7 +237,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       setIsUploading(true);
       try {
         uploadedPdfUrl = await uploadPdf(targetId, pdfFile);
-      } catch (error: any) {
+      } catch (error) {
         // fetch/FileReader kan ook gooien (offline, leesfout) — zonder deze
         // catch bleef de knop eeuwig op 'PDF uploaden…' hangen.
         meldSchrijffout('Uploaden', error);
