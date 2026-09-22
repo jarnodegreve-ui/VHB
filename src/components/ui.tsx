@@ -125,7 +125,7 @@ export function ModalHeader({
 }
 
 export function ConfirmationModal({
-  isOpen,
+  open,
   onClose,
   onConfirm,
   title,
@@ -135,7 +135,7 @@ export function ConfirmationModal({
   variant = 'danger',
   children,
 }: {
-  isOpen: boolean;
+  open: boolean;
   onClose: () => void;
   onConfirm: () => void;
   title: string;
@@ -153,7 +153,7 @@ export function ConfirmationModal({
   // Modal krijgt hij nu ook ESC, focus-trap en focus-herstel, die deze
   // variant miste.
   return (
-    <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
+    <Modal open={open} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
       <div className="flex max-h-overlay flex-col overflow-hidden">
         <div className="p-6 md:p-7 border-b border-hairline shrink-0">
           <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-700' : 'bg-amber-500/15 text-amber-700')}>
@@ -449,13 +449,13 @@ export function DashboardSkelet() {
 }
 
 export function CredentialsModal({
-  isOpen,
+  open,
   onClose,
   title,
   email,
   password,
 }: {
-  isOpen: boolean;
+  open: boolean;
   onClose: () => void;
   title: string;
   email: string;
@@ -473,7 +473,7 @@ export function CredentialsModal({
   // zodat hij ook bóven een open formulier-modal (Gebruikersbeheer) rendert
   // en ESC/focus-trap meekrijgt.
   return (
-    <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
+    <Modal open={open} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
       <div className="flex max-h-overlay flex-col overflow-hidden">
         <div className="p-6 md:p-7 border-b border-hairline flex items-center justify-between shrink-0">
           <div>

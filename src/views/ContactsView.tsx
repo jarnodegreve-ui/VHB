@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Check, Copy, Phone, Search, X } from 'lucide-react';
+import { Check, Copy, Phone, X } from 'lucide-react';
 import { ROL_LABELS } from '../../shared/schemas/constanten';
 import type { User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Avatar } from '../components/Avatar';
 import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
-import { Input } from '../components/Field';
+import { SearchField } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { notify, telHref } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
@@ -54,19 +54,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   const zoekveld = (
-    <div className="relative w-full md:w-72 group">
-      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-        <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
-      </div>
-      <Input
-        type="text"
-        placeholder="Zoek op naam of nummer…"
-        aria-label="Zoek op naam of nummer"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        className="pl-9"
-      />
-    </div>
+    <SearchField value={searchQuery} onChange={setSearchQuery} placeholder="Zoek op naam of nummer…" className="w-full md:w-72" />
   );
 
   const kaart = (u: User) => (

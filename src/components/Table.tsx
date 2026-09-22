@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
@@ -6,6 +6,8 @@ import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { tik } from '../lib/tik';
 import { Button, IconButton, MicroLabel, Segmented, Td, Th } from './primitives';
 import { useDropdown } from './useDropdown';
+import { Popover } from './Popover';
+import { SearchField } from './Field';
 
 /**
  * Tabel-bouwstenen voor de beheerkant (fase C11):
@@ -131,17 +133,7 @@ function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
       >
         <Columns3 size={16} />
       </IconButton>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            role="dialog"
-            aria-label="Kolommen"
-            initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
-            exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: DUR.fast, ease: EASE } }}
-            style={{ transformOrigin: 'top right' }}
-            className="absolute right-0 top-full z-menu mt-2 w-56 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2"
-          >
+      <Popover open={open} label="Kolommen" laag="menu" breedte="sm">
             <MicroLabel className="px-2.5 pb-1 pt-1.5">Kolommen</MicroLabel>
             {keuzes.map((k) => {
               const inputId = `${id}-${k.key}`;
@@ -155,9 +147,7 @@ function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
             {onAlles && aantalVerborgen > 0 && (
               <Button variant="ghost" size="sm" full className="mt-1" onClick={onAlles}>Alle kolommen tonen</Button>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </Popover>
     </div>
   );
 }
@@ -184,22 +174,7 @@ export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling,
     <div className={cn('flex flex-col gap-2.5', className)}>
       <div className="flex flex-col gap-2.5 md:flex-row md:items-center">
         {onZoek && (
-          <div className="relative w-full md:max-w-xs">
-            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              value={zoek ?? ''}
-              onChange={(e) => onZoek(e.target.value)}
-              placeholder={placeholder}
-              aria-label={placeholder}
-              className="control-input w-full rounded-xl py-2 pl-9 pr-9 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none"
-            />
-            {zoek ? (
-              <IconButton label="Zoekopdracht wissen" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => onZoek('')}>
-                <X size={14} />
-              </IconButton>
-            ) : null}
-          </div>
+          <SearchField value={zoek ?? ''} onChange={onZoek} placeholder={placeholder} size="sm" className="w-full md:max-w-xs" />
         )}
         <div className="flex items-center gap-2.5 md:ml-auto">
           {telling ? <span className="shrink-0 whitespace-nowrap text-xs font-medium tabular-nums text-slate-500">{telling}</span> : null}

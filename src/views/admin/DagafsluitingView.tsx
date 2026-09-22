@@ -18,6 +18,8 @@ import { Avatar } from '../../components/Avatar';
 import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
 import { Badge, Button, FilterChip, IconButton, Switch, Td, Th } from '../../components/primitives';
+import { Popover } from '../../components/Popover';
+import { useDropdown } from '../../components/useDropdown';
 import { StickyThead } from '../../components/Table';
 
 /**
@@ -261,7 +263,7 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPat
   onPatch: (body: Parameters<typeof bewaarRij>[2]) => void; onVerwijder: () => void;
 }) {
   const [opmerking, setOpmerking] = useState(r.opmerking ?? '');
-  const [vlaggenOpen, setVlaggenOpen] = useState(false);
+  const { open: vlaggenOpen, setOpen: setVlaggenOpen, wortel: vlaggenWortel } = useDropdown();
   useEffect(() => { setOpmerking(r.opmerking ?? ''); }, [r.opmerking]);
   const sleutel = loonCodeSleutel(r.geredenCode);
   const onbekend = Boolean(sleutel) && !codeMap.has(sleutel);
@@ -305,21 +307,19 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPat
       <Td num>{minutenVeld('overminExtra')}</Td>
       <Td><Switch checked={r.onvPremie} disabled={afgesloten} label={`Premie voor ${r.naam}`} onChange={(v) => onPatch({ onvPremie: v })} /></Td>
       <Td>
-        <div className="relative">
+        <div className="relative" ref={vlaggenWortel}>
           <Button variant={actieveVlaggen.length ? 'warning' : 'ghost'} size="sm" onClick={() => setVlaggenOpen((v) => !v)} aria-expanded={vlaggenOpen} disabled={afgesloten && actieveVlaggen.length === 0}>
             {actieveVlaggen.length ? `${actieveVlaggen.length} vlag${actieveVlaggen.length === 1 ? '' : 'gen'}` : 'Geen'}
           </Button>
-          {vlaggenOpen && (
-            <div className="popover-in absolute left-0 top-full z-zwevend mt-1 w-64 rounded-2xl bg-paper p-2 elev-2 ring-1 ring-hairline">
+          <Popover open={vlaggenOpen} label="Kwaliteitsvlaggen" align="left" breedte="md">
               {QUAL_VLAGGEN.map((k: QualVlag) => (
                 <label key={k} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm hover:bg-surface-soft-hover">
                   <input type="checkbox" className="h-4 w-4" checked={r[k]} disabled={afgesloten} onChange={(e) => onPatch({ [k]: e.target.checked })} />
                   {QUAL_VLAG_LABEL[k]}
                 </label>
               ))}
-              <div className="mt-1 flex justify-end"><Button variant="ghost" size="sm" onClick={() => setVlaggenOpen(false)}>Sluiten</Button></div>
-            </div>
-          )}
+            <div className="mt-1 flex justify-end"><Button variant="ghost" size="sm" onClick={() => setVlaggenOpen(false)}>Sluiten</Button></div>
+          </Popover>
         </div>
       </Td>
       <Td>

@@ -1462,7 +1462,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       </Modal>
 
       <ConfirmationModal
-        isOpen={wisselBevestigen}
+        open={wisselBevestigen}
         onClose={() => setWisselBevestigen(false)}
         onConfirm={() => void uitvoerenWissel()}
         title="Dienstwissel doorvoeren?"
@@ -1477,7 +1477,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       />
 
       <ConfirmationModal
-        isOpen={terugdraaien}
+        open={terugdraaien}
         onClose={() => setTerugdraaien(false)}
         onConfirm={() => void uitvoerenTerugdraai()}
         title="Wissel terugdraaien?"

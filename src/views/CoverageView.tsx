@@ -1258,7 +1258,7 @@ export function CoverageView() {
       </Modal>
 
       <ConfirmationModal
-        isOpen={!!assignConfirm}
+        open={!!assignConfirm}
         onClose={() => setAssignConfirm(null)}
         onConfirm={() => { const k = assignConfirm; setAssignConfirm(null); if (k) void wijsToe(k); }}
         title="Dienst toewijzen?"
@@ -1330,7 +1330,7 @@ export function CoverageView() {
         )}
       </Modal>
       <ConfirmationModal
-        isOpen={batchConfirm}
+        open={batchConfirm}
         onClose={() => setBatchConfirm(false)}
         onConfirm={() => { setBatchConfirm(false); void voerBatchUit(); }}
         title="Alle gaten van deze dag toewijzen?"

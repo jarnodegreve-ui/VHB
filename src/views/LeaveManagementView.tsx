@@ -1157,7 +1157,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       />
 
       <ConfirmationModal
-        isOpen={!!confirmAction}
+        open={!!confirmAction}
         onClose={() => setConfirmAction(null)}
         onConfirm={() => { confirmAction?.run(bulkReden.trim() || undefined); setConfirmAction(null); }}
         title={confirmAction?.title ?? ''}

@@ -1,7 +1,9 @@
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { Search, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DatePicker, type DatePickerProps } from './DatePicker';
 import { inputClass, invalidClass } from './controlClass';
+import { IconButton } from './primitives';
 
 /**
  * Formulierveld-primitieven: één dialect voor label + control + hint + fout.
@@ -63,6 +65,41 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     return <input ref={ref} aria-invalid={invalid || undefined} className={cn(inputClass, invalid && invalidClass, className)} {...rest} />;
   },
 );
+
+/**
+ * Zoekveld (ronde 5, F2): loep links, wis-knop zodra er iets staat,
+ * `type="search"` zonder het browser-kruisje. `onChange` geeft de waarde
+ * (zoals DateInput en Switch). Vervangt de 21 handgeschreven zoekvelden
+ * ("Zoek…" met een losse Search-icon in een relative div).
+ */
+export const SearchField = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value' | 'type' | 'size'> & {
+  value: string;
+  onChange: (waarde: string) => void;
+  /** Toegankelijke naam; standaard de placeholder. */
+  label?: string;
+  size?: 'md' | 'sm';
+}>(function SearchField({ value, onChange, label, placeholder = 'Zoeken…', size = 'md', className, ...rest }, ref) {
+  return (
+    <div className={cn('relative min-w-0', className)}>
+      <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+      <input
+        ref={ref}
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={label ?? placeholder}
+        className={cn(inputClass, 'pl-9 pr-10 [&::-webkit-search-cancel-button]:appearance-none', size === 'sm' && '!py-2')}
+        {...rest}
+      />
+      {value ? (
+        <IconButton label="Zoekopdracht wissen" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => onChange('')}>
+          <X size={14} />
+        </IconButton>
+      ) : null}
+    </div>
+  );
+});
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(
   function Textarea({ invalid, className, rows = 3, ...rest }, ref) {

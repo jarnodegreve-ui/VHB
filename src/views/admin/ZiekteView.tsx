@@ -526,7 +526,7 @@ export function ZiekteView({
         )}
       </Modal>
       <ConfirmationModal
-        isOpen={verdeelConfirm}
+        open={verdeelConfirm}
         onClose={() => setVerdeelConfirm(false)}
         onConfirm={() => {
           setVerdeelConfirm(false);

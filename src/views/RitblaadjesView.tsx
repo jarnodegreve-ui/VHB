@@ -415,7 +415,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       )}
 
       <ConfirmationModal
-        isOpen={confirmDeleteOpen}
+        open={confirmDeleteOpen}
         onClose={() => setConfirmDeleteOpen(false)}
         onConfirm={handleDelete}
         title="Ritblad verwijderen"

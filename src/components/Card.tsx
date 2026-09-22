@@ -11,7 +11,7 @@ import { cn } from '../lib/ui';
  * ingezonken vlak binnen een kaart (`.surface-muted`, 2xl), `tone="dashed"`
  * de lege-staat-kaart. `as` voor <section>/<article>/<button>.
  */
-type CardPadding = 'none' | 'sm' | 'md' | 'lg';
+type CardPadding = 'none' | 'sm' | 'md' | 'lg' | 'row' | 'tile';
 type CardTone = 'default' | 'muted' | 'dashed' | 'accent' | 'warning' | 'danger' | 'success' | 'info';
 
 const CARD_PADDING: Record<CardPadding, string> = {
@@ -19,6 +19,11 @@ const CARD_PADDING: Record<CardPadding, string> = {
   sm: 'p-4',
   md: 'p-5 md:p-6',
   lg: 'p-6 md:p-8',
+  // De twee rij-recepten (ronde 5, F2): `row` = rij in een lijst (het
+  // rijrecept, px-4 py-3), `tile` = tegel/paneelrij (px-5 py-4). Vijf
+  // losse padding-combinaties op rijen zijn hiermee twee.
+  row: 'px-4 py-3',
+  tile: 'px-5 py-4',
 };
 
 const CARD_TONE: Record<CardTone, string> = {

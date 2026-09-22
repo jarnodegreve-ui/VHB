@@ -596,7 +596,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       </Modal>
 
       <ConfirmationModal
-        isOpen={!!pendingImportedServices}
+        open={!!pendingImportedServices}
         onClose={() => {
           setPendingImportedServices(null);
           setPendingImportCount(0);
@@ -609,7 +609,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       />
 
       <ConfirmationModal
-        isOpen={!!confirmDeleteId}
+        open={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}
         onConfirm={handleConfirmDelete}
         title="Dienst verwijderen"

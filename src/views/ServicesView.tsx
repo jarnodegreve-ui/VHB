@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Clock, Download, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, Download } from 'lucide-react';
 import type { Service } from '../types';
 import { downloadBlob } from '../lib/ui';
 import { dienstoverzichtCsv } from '../lib/dienstoverzichtExport';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, Chip, MicroLabel, Segmented, TableShell, Td, Th } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
-import { Input } from '../components/Field';
+import { SearchField } from '../components/Field';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import { dienstStatistiek, formatDienstDuur } from '../lib/dienstStatistiek';
 import { LegeLijst, NietGevonden } from '../components/illustraties';
@@ -81,19 +81,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               ]}
               onChange={toggleSort}
             />
-            <div className="relative min-w-0 basis-full md:basis-auto md:flex-1 md:w-64 group">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
-              </div>
-              <Input
-                type="text"
-                placeholder="Zoek op dienst- of loopnummer…"
-                aria-label="Zoek op dienst- of loopnummer"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+            <SearchField value={searchQuery} onChange={setSearchQuery} placeholder="Zoek op dienst- of loopnummer…" className="basis-full md:basis-auto md:flex-1 md:w-64" />
           </div>
         )}
       />

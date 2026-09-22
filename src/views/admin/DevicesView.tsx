@@ -407,7 +407,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       <MasterDetail className="lg:grid-cols-[minmax(0,46%)_minmax(0,1fr)]" lijst={lijst} paneel={devices !== null && devices.length === 0 ? undefined : paneel} />
 
       <ConfirmationModal
-        isOpen={!!confirmDelete}
+        open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
         onConfirm={() => {
           if (confirmDelete) void act(confirmDelete, 'delete');

@@ -149,7 +149,7 @@ function ToestellenSectie() {
         </div>
       </div>
       <ConfirmationModal
-        isOpen={bevestigAnderen}
+        open={bevestigAnderen}
         onClose={() => setBevestigAnderen(false)}
         onConfirm={() => { void uitloggenAnderen(); }}
         title="Uitloggen op alle andere toestellen?"
