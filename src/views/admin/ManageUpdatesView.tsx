@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { Bell, ChevronRight, History, Plus, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
@@ -83,12 +83,17 @@ export function ManageUpdatesView({
     return () => { alive = false; };
   }, []);
 
+  // Slot tegen dubbel indienen (twee keer Enter vóór de knop op bezig staat):
+  // de state komt pas na de volgende render binnen, de ref meteen.
+  const publiceertNu = useRef(false);
   const handlePublish = async () => {
-    if (isPublishing) return;
+    if (publiceertNu.current) return;
+    publiceertNu.current = true;
     setIsPublishing(true);
     try {
       await publiceer();
     } finally {
+      publiceertNu.current = false;
       setIsPublishing(false);
     }
   };
@@ -340,7 +345,9 @@ export function ManageUpdatesView({
           <SluitKnop onClose={annuleer} variant="secondary" size="lg" className="flex-1" disabled={isPublishing}>
             Annuleren
           </SluitKnop>
-          <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" bezig={isPublishing} disabled={!updateForm.title || !updateForm.content}>
+          {/* Niet uitgeschakeld bij lege velden: indienen toont dan de
+              veldfouten van het schema en zet de focus op de eerste. */}
+          <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" bezig={isPublishing}>
             {editingId ? 'Update bijwerken' : 'Update publiceren'}
           </Button>
         </div>
