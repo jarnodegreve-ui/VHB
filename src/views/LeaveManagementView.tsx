@@ -4,7 +4,9 @@ import { AlertTriangle, CalendarOff, Check, ChevronDown, ChevronRight as Chevron
 import { isRijdend, teltInVerlofbezetting } from '../types';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
-import { Modal } from '../components/Modal';
+import { Modal, SluitKnop } from '../components/Modal';
+import { Formulier } from '../components/Formulier';
+import { useVeldfouten, useVuil } from '../lib/formulier';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
@@ -57,7 +59,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // datums in het verleden toegestaan, meteen goedgekeurd, geen mail, en het
   // venster blijft open zodat je de volgende periode meteen kan invoeren.
   const [modus, setModus] = useState<'aanvraag' | 'registratie'>('aanvraag');
-  const [voorWieFout, setVoorWieFout] = useState('');
+  // Veldfouten van het aanvraagformulier (tranche 3A): 'voorWie' staat bij
+  // het chauffeursveld, 'periode' bij de gekozen periode. Beide wissen zodra
+  // de gebruiker het veld corrigeert.
+  const fouten = useVeldfouten();
   const [showLimietenModal, setShowLimietenModal] = useState(false);
   const [showFeestdagenModal, setShowFeestdagenModal] = useState(false);
   const [showSaldoModal, setShowSaldoModal] = useState(false);
@@ -75,8 +80,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     })();
     return () => { weg = true; };
   }, []);
-  const openAanvraag = () => { setModus('aanvraag'); setPeriodeFout(''); setVoorWieFout(''); setShowRequestModal(true); };
-  const openRegistratie = () => { setModus('registratie'); setPeriodeFout(''); setVoorWieFout(''); setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' }); setShowRequestModal(true); };
+  const openAanvraag = () => { setModus('aanvraag'); fouten.wis(); setShowRequestModal(true); };
+  const openRegistratie = () => { setModus('registratie'); fouten.wis(); setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' }); setShowRequestModal(true); };
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
   // (browser-popup met "vhb-five.vercel.app meldt…" schrikt chauffeurs af).
@@ -95,12 +100,27 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // Historiek standaard gecapt op 5 — de volledige lijst groeide onbegrensd.
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
   // Validatiefout bij de periode (fase C15): staat bij het veld, niet in een
-  // toast. Verdwijnt zodra de periode opnieuw gekozen of gewist wordt.
-  const [periodeFout, setPeriodeFout] = useState('');
+  // toast (fouten.fouten.periode). Verdwijnt zodra de periode opnieuw gekozen
+  // of gewist wordt.
+  const periodeFout = fouten.fouten.periode ?? '';
   // Voor wie vraag je aan? Alleen zichtbaar voor planner/admin: in de
   // testfase belt of zegt een deel van de chauffeurs zijn verlof gewoon door,
   // en dan kon de planning dat nergens kwijt. Leeg = voor jezelf.
   const [voorWie, setVoorWie] = useState<string>('');
+  // Onbewaarde invoer (tranche 3A): sluiten vraagt eerst bevestiging. Na een
+  // geslaagde registratie blijft het venster open; de teller neemt dan een
+  // nieuwe momentopname zodat "vastgelegd" niet als vuil telt.
+  const [bewaardTeller, setBewaardTeller] = useState(0);
+  const { vuil: aanvraagVuil } = useVuil({ formData, voorWie }, showRequestModal, bewaardTeller);
+  // Het aanvraagvenster houdt zijn invoer als concept over sluiten heen (de
+  // state blijft staan en komt terug bij heropenen). Kiest de gebruiker bij
+  // "Wijzigingen niet bewaren?" voor "Niet bewaren", dan gaat dat concept
+  // echt weg (beslissing Jarno 22-09); gewoon sluiten laat het staan.
+  const verwerpConcept = () => {
+    setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
+    setVoorWie('');
+    fouten.wis();
+  };
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -238,26 +258,24 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       .filter((d) => d.afwezig > d.limiet);
   };
 
-  const handleRequestLeave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRequestLeave = async () => {
     if (isSubmitting) return;
     if (registratie && !voorWie) {
-      setVoorWieFout('Kies eerst de chauffeur voor wie je het verlof vastlegt.');
+      fouten.zet({ voorWie: 'Kies eerst de chauffeur voor wie je het verlof vastlegt.' });
       return;
     }
-    setVoorWieFout('');
     if (!formData.startDate || !formData.endDate) {
-      setPeriodeFout('Kies eerst een start- en einddatum in de kalender.');
+      fouten.zet({ periode: 'Kies eerst een start- en einddatum in de kalender.' });
       return;
     }
     // Een planner die verlof achteraf registreert mag wél in het verleden
     // boeken (de chauffeur belde het vorige week door); een eigen aanvraag
     // niet.
     if (formData.startDate < today && !namensIemandAnders) {
-      setPeriodeFout('Je kan geen verlof aanvragen in het verleden.');
+      fouten.zet({ periode: 'Je kan geen verlof aanvragen in het verleden.' });
       return;
     }
-    setPeriodeFout('');
+    fouten.wis();
     // Pas sluiten/wissen ná een geslaagde save — bij een fout blijft de
     // aanvraag ingevuld staan zodat de chauffeur niet opnieuw moet beginnen.
     setIsSubmitting(true);
@@ -281,6 +299,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       // meestal meerdere periodes, en de lijst "al vastgelegd" hieronder
       // groeit mee zodat je ziet wat er al in staat.
       setFormData((cur) => ({ ...cur, startDate: '', endDate: '', comment: '' }));
+      // Wat vastligt is bewaard: nieuwe momentopname voor de vuil-vraag.
+      setBewaardTeller((n) => n + 1);
       notify(`${naam}: ${formatLeaveType(formData.type).toLowerCase()} ${formData.startDate === formData.endDate ? formatShortDay(formData.startDate) : `${formatShortDay(formData.startDate)} tot ${formatShortDay(formData.endDate)}`} vastgelegd.`, 'success');
       return;
     }
@@ -342,7 +362,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       return;
     }
 
-    setPeriodeFout('');
+    fouten.wisVeld('periode');
     setFormData((current) => {
       // Geen actief bereik (nog niets, of allebei al gevuld) → start een nieuw bereik.
       if (!current.startDate || current.endDate) {
@@ -886,27 +906,28 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing (verbeterronde 29/07 #3). */}
-      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} vuil={aanvraagVuil} onNietBewaren={verwerpConcept} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               <ModalHeader
                 title={registratie ? 'Verlof registreren' : 'Verlof aanvragen'}
                 description={registratie ? 'Voor verlof dat al goedgekeurd is, bijvoorbeeld op papier. Wordt meteen als goedgekeurd vastgelegd, zonder mail naar de chauffeur.' : undefined}
                 onClose={() => setShowRequestModal(false)}
               />
-              <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
+              <Formulier onVerstuur={handleRequestLeave} noValidate className="p-8 space-y-5 overflow-y-auto flex-1">
                 {/* Alleen planner/admin: verlof registreren dat een chauffeur
                     mondeling of telefonisch doorgaf. Kiest de planner een
                     collega, dan is het meteen goedgekeurd (hij ís de
                     beoordelaar) en rekenen saldo én dienstconflicten hieronder
                     op díe chauffeur. */}
                 {isPlanner && (
-                  <Field label={registratie ? 'Chauffeur' : 'Voor wie'} error={voorWieFout || undefined}>
-                    {({ id, invalid }) => (
+                  <Field label={registratie ? 'Chauffeur' : 'Voor wie'} required={registratie} error={fouten.fouten.voorWie}>
+                    {({ id, describedBy, invalid }) => (
                       <>
                         <Select
                           id={id}
                           value={voorWie}
                           invalid={invalid}
-                          onChange={(e) => { setVoorWie(e.target.value); setVoorWieFout(''); }}
+                          aria-describedby={describedBy}
+                          onChange={(e) => { setVoorWie(e.target.value); fouten.wisVeld('voorWie'); }}
                         >
                           {registratie
                             ? <option value="">Kies een chauffeur…</option>
@@ -981,7 +1002,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     de datums komen uit de kalender hierboven. De aria-labels
                     "Startdatum"/"Einddatum" + data-datum zijn contract met
                     e2e/verlof.spec.ts. Fout bij het veld (fase C15). */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-fout={periodeFout ? '' : undefined}>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-label">Gekozen periode</span>
                     {(formData.startDate || formData.endDate) && (
@@ -989,18 +1010,18 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         variant="ghost"
                         size="sm"
                         icon={<X size={14} />}
-                        onClick={() => { setPeriodeFout(''); setFormData((current) => ({ ...current, startDate: '', endDate: '' })); }}
+                        onClick={() => { fouten.wisVeld('periode'); setFormData((current) => ({ ...current, startDate: '', endDate: '' })); }}
                       >
                         Periode wissen
                       </Button>
                     )}
                   </div>
-                  <div role="group" aria-label="Gekozen periode" className="grid grid-cols-2 gap-3">
+                  <div role="group" aria-label="Gekozen periode" aria-describedby={periodeFout ? 'verlof-periode-fout' : undefined} className="grid grid-cols-2 gap-3">
                     <PeriodeVak label="Van" naam="Startdatum" iso={formData.startDate} actief={!formData.startDate} fout={!!periodeFout} />
                     <PeriodeVak label="Tot" naam="Einddatum" iso={formData.endDate} actief={!!formData.startDate && !formData.endDate} fout={!!periodeFout} />
                   </div>
                   {periodeFout ? (
-                    <p role="alert" className="text-xs font-medium text-red-700">{periodeFout}</p>
+                    <p id="verlof-periode-fout" role="alert" className="text-xs font-medium text-red-700">{periodeFout}</p>
                   ) : (
                     <p className="text-xs text-slate-500">Kies de dagen in de kalender, dezelfde dag twee keer voor één dag verlof.</p>
                   )}
@@ -1123,11 +1144,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 })()}
 
                 <div className="space-y-2">
-                  <Button type="submit" variant="primary" size="lg" full disabled={!formData.startDate || !formData.endDate || isSubmitting}>
-                    {isSubmitting ? (registratie ? 'Vastleggen…' : 'Versturen…') : registratie ? 'Vastleggen' : 'Aanvraag indienen'}
+                  <Button type="submit" variant="primary" size="lg" full bezig={isSubmitting} disabled={!formData.startDate || !formData.endDate}>
+                    {registratie ? 'Vastleggen' : 'Aanvraag indienen'}
                   </Button>
                   {registratie && (
-                    <Button variant="secondary" size="lg" full onClick={() => { setShowRequestModal(false); setVoorWie(''); }}>Klaar</Button>
+                    <SluitKnop onClose={() => { setShowRequestModal(false); setVoorWie(''); }} variant="secondary" size="lg" full disabled={isSubmitting}>Klaar</SluitKnop>
                   )}
                   {/* Reden waarom de knop nog uit staat — anders lijkt hij kapot. */}
                   {(!formData.startDate || !formData.endDate) && !periodeFout && (
@@ -1136,7 +1157,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     </p>
                   )}
                 </div>
-              </form>
+              </Formulier>
       </Modal>
 
       {isPlanner && (

@@ -143,4 +143,46 @@ describe('Modal met onbewaarde invoer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Niet bewaren' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  function DemoConcept({ onClose, onNietBewaren, begin = 'A' }: { onClose: () => void; onNietBewaren: () => void; begin?: string }) {
+    const [naam, setNaam] = useState(begin);
+    const { vuil } = useVuil({ naam }, true);
+    return (
+      <Modal open onClose={onClose} vuil={vuil} onNietBewaren={onNietBewaren} ariaLabel="Demo">
+        <input aria-label="Naam" value={naam} onChange={(e) => setNaam(e.target.value)} />
+      </Modal>
+    );
+  }
+
+  it('onNietBewaren loopt alleen bij "Niet bewaren", vóór onClose; niet bij "Verder bewerken" of schoon sluiten', async () => {
+    const volgorde: string[] = [];
+    const onClose = vi.fn(() => volgorde.push('close'));
+    const onNietBewaren = vi.fn(() => volgorde.push('nietBewaren'));
+
+    // Schoon: Escape sluit meteen, zonder concept weg te gooien.
+    const { unmount } = render(<DemoConcept onClose={onClose} onNietBewaren={onNietBewaren} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onNietBewaren).not.toHaveBeenCalled();
+    unmount();
+    onClose.mockClear();
+    volgorde.length = 0;
+
+    render(<DemoConcept onClose={onClose} onNietBewaren={onNietBewaren} />);
+    fireEvent.change(screen.getByLabelText('Naam'), { target: { value: 'B' } });
+    const vraag = () => screen.queryByRole('heading', { name: 'Wijzigingen niet bewaren?' });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(vraag()).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Verder bewerken' }));
+    await waitFor(() => expect(vraag()).toBeNull());
+    expect(onNietBewaren).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Niet bewaren' }));
+    expect(onNietBewaren).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(volgorde).toEqual(['nietBewaren', 'close']);
+  });
 });

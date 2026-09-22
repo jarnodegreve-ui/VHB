@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
+import { Formulier } from '../components/Formulier';
+import { useVeldfouten, useVuil } from '../lib/formulier';
 import { Badge, Button, IconButton, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { LijstKaart, RecordRij } from '../components/RecordRij';
@@ -104,6 +106,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [wizardStep]);
   // 1-op-1 ruil: wat neemt de aanvrager in ruil van de collega?
   const [returnPick, setReturnPick] = useState<string>(''); // "date|code"
+  // Tranche 3A: de knop blijft uit zolang een stap ontbreekt (met de uitleg
+  // eronder); komt er tóch een submit door, dan staat de fout bij die stap.
+  // Sleutels: 'dienst' (stap 1), 'collega' (stap 2), 'tegenprestatie' (stap 3).
+  const wizardFouten = useVeldfouten();
+  // Drie stappen kwijt door een tik naast de modal is het ergste geval van de
+  // app: met invoer vraagt sluiten eerst bevestiging.
+  const { vuil: wizardVuil } = useVuil({ selectedShift, selectedTargetDriver, returnPick, swapType, reason }, showOfferModal);
   const [returnOptions, setReturnOptions] = useState<ReturnOption[] | null>(null);
   const [returnLoading, setReturnLoading] = useState(false);
 
@@ -252,6 +261,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       setReturnPick('');
       setSwapType('ruil');
       setWizardStep(2);
+      wizardFouten.wis();
       setShowOfferModal(true);
     }
     onPreselectConsumed?.();
@@ -328,15 +338,30 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     }
   };
 
-  const handleOfferShift = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOfferShift = async () => {
     if (isSubmitting) return;
     const isTakeover = swapType === 'overname';
-    if (!selectedShift || !selectedTargetDriver) return;
-    if (!isTakeover && !returnPick) return;
+    if (!selectedShift) {
+      wizardFouten.zet({ dienst: 'Kies eerst de dienst die je wilt afgeven.' });
+      setWizardStep(1);
+      return;
+    }
+    if (!selectedTargetDriver) {
+      wizardFouten.zet({ collega: 'Kies eerst de collega met wie je ruilt.' });
+      setWizardStep(2);
+      return;
+    }
+    if (!isTakeover && !returnPick) {
+      wizardFouten.zet({ tegenprestatie: 'Kies eerst wat je van je collega overneemt.' });
+      return;
+    }
     // Dubbele bodem naast de servercheck: nooit een overname indienen op een
     // collega die die dag niet vrij/bv/tk/ta staat.
-    if (isTakeover && !takeoverCodeFor(selectedTargetDriver)) return;
+    if (isTakeover && !takeoverCodeFor(selectedTargetDriver)) {
+      wizardFouten.zet({ tegenprestatie: 'Deze collega kan je dienst die dag niet overnemen. Kies Ruilen (1-op-1).' });
+      return;
+    }
+    wizardFouten.wis();
 
     const sep = returnPick.indexOf('|');
     const returnDate = returnPick.slice(0, sep);
@@ -488,6 +513,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               setReason('');
               setShowAllReturns(false);
               setShowAllShifts(false);
+              wizardFouten.wis();
               setShowOfferModal(true);
             }}
           >
@@ -989,7 +1015,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing komen daar vandaan (verbeterronde 29/07 #3). */}
-      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} vuil={wizardVuil} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               {/* 44x44 op de terugknop (het kruisje van ModalHeader is dat op
                   touch ook): dit zijn de enige twee uitwegen uit een
                   driestapswizard op een telefoon. Ze stonden op 36 resp. 38px
@@ -1005,7 +1031,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 title={wizardStep === 1 ? 'Welke dienst wil je ruilen?' : wizardStep === 2 ? 'Met welke collega?' : 'Hoe wil je ruilen?'}
                 onClose={() => setShowOfferModal(false)}
               />
-              <form ref={wizardScrollRef} onSubmit={handleOfferShift} className="p-6 md:p-7 space-y-4 overflow-y-auto flex-1">
+              <Formulier ref={wizardScrollRef} onVerstuur={handleOfferShift} noValidate className="p-6 md:p-7 space-y-4 overflow-y-auto flex-1">
                 {/* ── Stap 1: kies je eigen (komende) dienst ── */}
                 {wizardStep === 1 && (
                   myShifts.length === 0 ? (
@@ -1013,7 +1039,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       Je hebt geen komende diensten om te ruilen. {isPlanner ? 'Via Systeemstatus kan je een fictieve testdienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}
                     </Card>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2" data-fout={wizardFouten.fouten.dienst ? '' : undefined}>
+                      {wizardFouten.fouten.dienst && <p role="alert" className="text-xs font-medium text-red-700">{wizardFouten.fouten.dienst}</p>}
                       {(showAllShifts ? myShifts : myShifts.slice(0, 8)).map((s) => {
                         const bezet = heeftLopendeRuil(s);
                         return (
@@ -1022,7 +1049,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           key={s.id}
                           type="button"
                           disabled={bezet}
-                          onClick={() => { setSelectedShift(s.id); setSelectedTargetDriver(''); setReturnPick(''); setWizardStep(2); }}
+                          onClick={() => { setSelectedShift(s.id); setSelectedTargetDriver(''); setReturnPick(''); wizardFouten.wis(); setWizardStep(2); }}
                           className={`${cnCard(selectedShift === s.id)} disabled:cursor-not-allowed disabled:opacity-60`}
                         >
                           <span className="min-w-0">
@@ -1057,7 +1084,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <p className="text-sm font-medium text-slate-500 py-6 text-center">Beschikbaarheid laden…</p>
                     ) : (
                       <>
-                        <div className="space-y-2">
+                        <div className="space-y-2" data-fout={wizardFouten.fouten.collega ? '' : undefined}>
+                          {wizardFouten.fouten.collega && <p role="alert" className="text-xs font-medium text-red-700">{wizardFouten.fouten.collega}</p>}
                           {eligibleTargetDrivers
                             .map((u) => {
                               const free = freeForDate?.has(u.id);
@@ -1075,6 +1103,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   onClick={() => {
                                     setSelectedTargetDriver(u.id);
                                     setReturnPick('');
+                                    wizardFouten.wis();
                                     setShowAllReturns(false);
                                     // Terug naar de standaardvorm als deze collega
                                     // geen overname toelaat.
@@ -1145,12 +1174,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {selectedShiftDate && <span> ({fmtShort(selectedShiftDate)})</span>} aan <span className="font-bold text-slate-800">{target?.name ?? '—'}</span>.
                       </p>
 
-                      {/* Vorm van de aanvraag: 1-op-1 of zonder tegenprestatie. */}
-                      <div className="space-y-2">
+                      {/* Vorm van de aanvraag: 1-op-1 of zonder tegenprestatie.
+                          Bij een fout springt de focus naar deze keuze. */}
+                      <div className="space-y-2" data-fout={wizardFouten.fouten.tegenprestatie ? '' : undefined}>
                         {/* rauw: keuzekaart ruilvorm (icoon + titel + uitleg + radio-vinkje), eigen layout via cnCard */}
                         <button
                           type="button"
-                          onClick={() => setSwapType('ruil')}
+                          onClick={() => { setSwapType('ruil'); wizardFouten.wisVeld('tegenprestatie'); }}
                           className={cnCard(!isTakeover)}
                         >
                           <span className="min-w-0 flex items-start gap-2.5">
@@ -1166,7 +1196,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         <button
                           type="button"
                           disabled={!takeoverCode}
-                          onClick={() => { setSwapType('overname'); setReturnPick(''); }}
+                          onClick={() => { setSwapType('overname'); setReturnPick(''); wizardFouten.wisVeld('tegenprestatie'); }}
                           className={`${cnCard(isTakeover)} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface-row-hover`}
                         >
                           <span className="min-w-0 flex items-start gap-2.5">
@@ -1202,7 +1232,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                 <button
                                   key={val}
                                   type="button"
-                                  onClick={() => setReturnPick(selected ? '' : val)}
+                                  onClick={() => { setReturnPick(selected ? '' : val); wizardFouten.wisVeld('tegenprestatie'); }}
                                   className={cnCard(selected)}
                                 >
                                   <span className="min-w-0">
@@ -1264,13 +1294,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           variant="primary"
                           size="lg"
                           full
-                          disabled={!selectedShift || !selectedTargetDriver || (isTakeover ? !takeoverCode : !returnPick) || isSubmitting}
+                          bezig={isSubmitting}
+                          disabled={!selectedShift || !selectedTargetDriver || (isTakeover ? !takeoverCode : !returnPick)}
                         >
-                          {isSubmitting ? 'Versturen…' : isTakeover ? 'Vraag om over te nemen' : 'Ruilverzoek versturen'}
+                          {isTakeover ? 'Vraag om over te nemen' : 'Ruilverzoek versturen'}
                         </Button>
                         {/* Reden waarom de knop nog uit staat, bij de knop —
                             niet als toast na een klik die niets doet. */}
-                        {!isTakeover && !returnPick && !returnLoading ? (
+                        {wizardFouten.fouten.tegenprestatie ? (
+                          <p role="alert" className="text-center text-xs font-medium text-red-700">{wizardFouten.fouten.tegenprestatie}</p>
+                        ) : !isTakeover && !returnPick && !returnLoading ? (
                           <p className="text-center text-xs text-slate-500">Kies eerst wat je van {voornaam} overneemt.</p>
                         ) : (
                           <p className="text-xs font-medium text-slate-500 text-center">{voornaam} moet eerst accepteren; daarna keurt de planner goed.</p>
@@ -1279,7 +1312,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </>
                   );
                 })()}
-              </form>
+              </Formulier>
       </Modal>
 
       {/* Beoordeling in een side panel: volledige ruil-context + dezelfde

@@ -1,15 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { Modal } from './Modal';
+import { Modal, SluitKnop } from './Modal';
+import { Formulier } from './Formulier';
 import { ModalHeader } from './ui';
 import { Button, IconButton, MicroLabel, Badge } from './primitives';
 import { Card } from './Card';
 import { DateInput, Field, Input } from './Field';
-import { apiJson } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { notify } from '../lib/ui';
+import { useVeldfouten, useVuil } from '../lib/formulier';
+import { meldSchrijffout } from '../lib/fouten';
 import { formatShortDay } from '../lib/format';
 import { feestdagenVanJaar } from '../lib/typedag';
-import { valideer } from '../../shared/schemas/basis';
 import { sorteerExtraFeestdagen, verlofFeestdagenSchema } from '../../shared/schemas/verlofFeestdagen';
 import type { ExtraFeestdag } from '../../shared/feestdagen';
 
@@ -29,59 +31,75 @@ export function VerlofFeestdagenModal({ open, onClose, extra, onSaved }: {
   const [lijst, setLijst] = useState<ExtraFeestdag[]>(extra);
   const [nieuwDatum, setNieuwDatum] = useState('');
   const [nieuwNaam, setNieuwNaam] = useState('');
-  const [fout, setFout] = useState('');
+  const fouten = useVeldfouten();
   const [bezig, setBezig] = useState(false);
+  // Onbewaarde invoer (tranche 3A). De waarden worden pas ná het openen
+  // gezet; `geladen` telt dan op zodat de momentopname die waarden neemt.
+  const [geladen, setGeladen] = useState(0);
+  const { vuil } = useVuil({ lijst, nieuwDatum, nieuwNaam }, open, geladen);
 
   useEffect(() => {
     if (!open) return;
-    setLijst(extra); setNieuwDatum(''); setNieuwNaam(''); setFout('');
+    setLijst(extra); setNieuwDatum(''); setNieuwNaam(''); fouten.wis();
+    setGeladen((n) => n + 1);
   }, [open, extra]);
 
   const wettelijk = useMemo(() => Object.entries(feestdagenVanJaar(jaar)).sort(([a], [b]) => a.localeCompare(b)), [jaar]);
   const extraDitJaar = lijst.filter((d) => d.datum.startsWith(`${jaar}-`)).sort((a, b) => a.datum.localeCompare(b.datum));
   const nieuweId = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 
+  // Toevoegen is geen submit (Enter in Naam voegt toe, Opslaan bewaart de
+  // lijst); de fouten staan wel bij het veld waar ze over gaan.
   const voegToe = () => {
-    if (!nieuwDatum || !nieuwNaam.trim()) { setFout('Kies een datum en geef de dag een naam.'); return; }
-    if (feestdagenVanJaar(Number(nieuwDatum.slice(0, 4)))[nieuwDatum]) { setFout('Die dag is al een wettelijke feestdag.'); return; }
-    if (lijst.some((d) => d.datum === nieuwDatum)) { setFout('Die dag staat al in de lijst.'); return; }
+    const f: Record<string, string> = {};
+    if (!nieuwDatum) f.nieuwDatum = 'Kies een datum.';
+    if (!nieuwNaam.trim()) f.nieuwNaam = 'Geef de dag een naam.';
+    if (nieuwDatum && feestdagenVanJaar(Number(nieuwDatum.slice(0, 4)))[nieuwDatum]) f.nieuwDatum = 'Die dag is al een wettelijke feestdag.';
+    else if (nieuwDatum && lijst.some((d) => d.datum === nieuwDatum)) f.nieuwDatum = 'Die dag staat al in de lijst.';
+    if (Object.keys(f).length > 0) { fouten.zet(f); return; }
     setLijst((cur) => sorteerExtraFeestdagen([...cur, { id: nieuweId(), datum: nieuwDatum, naam: nieuwNaam.trim() }]));
-    setNieuwDatum(''); setNieuwNaam(''); setFout('');
+    setNieuwDatum(''); setNieuwNaam(''); fouten.wis();
   };
-  const verwijder = (id: string) => setLijst((cur) => cur.filter((d) => d.id !== id));
+  const verwijder = (id: string) => { setLijst((cur) => cur.filter((d) => d.id !== id)); fouten.wis(); };
+  // De lijst zelf heeft geen invoervelden: fouten daarover (van zod of de
+  // server, bv. "extra.2.naam") zijn één melding boven de knoppen.
+  const overig = Object.entries(fouten.fouten).filter(([k]) => k !== 'nieuwDatum' && k !== 'nieuwNaam').map(([, t]) => t);
 
-  const opslaan = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const opslaan = async () => {
     if (bezig) return;
-    const uitkomst = valideer(verlofFeestdagenSchema, { extra: lijst });
-    if (uitkomst.ok === false) {
-      const [, tekst] = Object.entries(uitkomst.fouten)[0] ?? ['', 'Controleer de invoer.'];
-      setFout(tekst); return;
-    }
+    const data = fouten.controleer(verlofFeestdagenSchema, { extra: lijst });
+    if (!data) return;
     setBezig(true);
     try {
-      const bewaard = await apiJson<{ extra: ExtraFeestdag[] }>('/api/verlof/feestdagen', {
+      const res = await apiFetch('/api/verlof/feestdagen', {
         method: 'PUT',
-        body: JSON.stringify({ extra: sorteerExtraFeestdagen(uitkomst.data.extra) }),
+        body: JSON.stringify({ extra: sorteerExtraFeestdagen(data.extra) }),
       });
-      onSaved(bewaard.extra);
+      const antwoord: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (res.status === 400 && fouten.vanServer(antwoord)) return;
+        // Hele instelling in één PUT = idempotent: opnieuw proberen mag.
+        meldSchrijffout('Opslaan', { status: res.status, message: (antwoord as { error?: string } | null)?.error }, () => void opslaan());
+        return;
+      }
+      onSaved((antwoord as { extra: ExtraFeestdag[] }).extra);
       notify('Extra vrije dagen opgeslagen, de verloftelling rekent er meteen mee.', 'success');
       onClose();
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Opslaan is mislukt.');
+      meldSchrijffout('Opslaan', err, () => void opslaan());
     } finally {
       setBezig(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="lg" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+    <Modal open={open} onClose={onClose} vuil={vuil} maxWidth="lg" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
       <ModalHeader
         title="Feestdagen"
         description="Valt een feestdag in een verlofperiode, dan telt die dag niet als betaald verlof. De wettelijke feestdagen staan er al; voeg hieronder extra vrije dagen toe, zoals een brugdag."
         onClose={onClose}
       />
-      <form onSubmit={opslaan} className="flex-1 space-y-6 overflow-y-auto p-8">
+      <Formulier onVerstuur={opslaan} noValidate className="flex-1 space-y-6 overflow-y-auto p-8">
         <div className="flex items-center justify-between gap-3">
           <MicroLabel>Jaar</MicroLabel>
           <div className="flex items-center gap-1">
@@ -126,23 +144,28 @@ export function VerlofFeestdagenModal({ open, onClose, extra, onSaved }: {
             </Card>
           )}
           <Card padding="sm" className="grid grid-cols-1 gap-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-end">
-            <Field label="Datum">
-              {({ id }) => <DateInput id={id} value={nieuwDatum} onChange={setNieuwDatum} />}
+            <Field label="Datum" error={fouten.fouten.nieuwDatum}>
+              <DateInput value={nieuwDatum} onChange={(v) => { setNieuwDatum(v); fouten.wisVeld('nieuwDatum'); }} />
             </Field>
-            <Field label="Naam">
-              {({ id }) => <Input id={id} value={nieuwNaam} placeholder="Brugdag" onChange={(e) => setNieuwNaam(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); voegToe(); } }} />}
+            <Field label="Naam" error={fouten.fouten.nieuwNaam}>
+              <Input value={nieuwNaam} placeholder="Brugdag" onChange={(e) => { setNieuwNaam(e.target.value); fouten.wisVeld('nieuwNaam'); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); voegToe(); } }} />
             </Field>
             <Button variant="secondary" icon={<Plus size={14} />} onClick={voegToe}>Toevoegen</Button>
           </Card>
         </div>
 
-        {fout && <p role="alert" className="text-xs font-medium text-red-700">{fout}</p>}
+        {overig.length > 0 && (
+          // tabIndex 0: zo vindt focusEersteFout de melding, er is geen veld om naar te springen.
+          <div data-fout="" role="alert" className="text-xs font-medium text-red-700">
+            <div tabIndex={0} className="rounded-md outline-offset-2">{overig.map((t) => <p key={t}>{t}</p>)}</div>
+          </div>
+        )}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="secondary" size="lg" onClick={onClose}>Annuleren</Button>
-          <Button type="submit" variant="primary" size="lg" disabled={bezig}>{bezig ? 'Opslaan…' : 'Opslaan'}</Button>
+          <SluitKnop onClose={onClose} variant="secondary" size="lg" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" size="lg" bezig={bezig}>Opslaan</Button>
         </div>
-      </form>
+      </Formulier>
     </Modal>
   );
 }
