@@ -7,8 +7,9 @@ import type { Diversion } from '../../types';
 import { cn } from '../../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, IconButton } from '../../components/primitives';
+import { Badge, Button, IconButton, TOON_NAAR_BADGE } from '../../components/primitives';
 import { SluitKnop } from '../../components/Modal';
+import { OMLEIDING_FASE } from '../../../shared/status';
 import { Card } from '../../components/Card';
 import { DateInput, Field, Input, Textarea } from '../../components/Field';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
@@ -368,7 +369,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       poort={poort}
       leegTekst="Kies een omleiding om te bewerken, of maak een nieuwe."
       leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
-      chip={bewerkte ? ({ verlopen: <Badge tone="slate">Verlopen</Badge>, komend: <Badge tone="blue" stil>Komend</Badge>, lopend: <Badge tone="emerald" stil>Actief</Badge> }[omleidingsFase(bewerkte)]) : undefined}
+      chip={bewerkte ? <FaseChip fase={omleidingsFase(bewerkte)} /> : undefined}
       acties={bewerkte ? (
         <ActieMenu
           size="sm"
@@ -549,4 +550,11 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
 
     </PageShell>
   );
+}
+
+/** Fase-chip in het paneel, uit OMLEIDING_FASE. Verlopen is een volle
+ *  (grijze) chip, lopend en komend een stille. */
+function FaseChip({ fase }: { fase: keyof typeof OMLEIDING_FASE }) {
+  const f = OMLEIDING_FASE[fase];
+  return <Badge tone={TOON_NAAR_BADGE[f.toon]} stil={fase !== 'verlopen'}>{f.label}</Badge>;
 }
