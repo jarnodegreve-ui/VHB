@@ -133,6 +133,7 @@ export function ConfirmationModal({
   confirmText = 'Verwijderen',
   cancelText = 'Annuleren',
   variant = 'danger',
+  children,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -142,6 +143,8 @@ export function ConfirmationModal({
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'warning';
+  /** Extra invoer onder de boodschap, bv. een tekstvak voor een reden. */
+  children?: React.ReactNode;
 }) {
   // Op de gedeelde Modal gebouwd, met `boven` (hogere z-index + stapel-besef
   // voor ESC/focus-trap): als eigen portal op z-[100] rendert een bevestiging
@@ -158,6 +161,7 @@ export function ConfirmationModal({
           </div>
           <h2 className="text-section-title">{title}</h2>
           <p className="text-body text-slate-500 font-normal mt-1.5">{message}</p>
+          {children && <div className="mt-4">{children}</div>}
         </div>
         <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
           <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-surface-row-hover hover:text-slate-900 border border-transparent hover:border-hairline transition-all">
