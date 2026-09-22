@@ -318,7 +318,7 @@ export function ZiekteView({
       )}
 
       {/* Ziek melden — zelfde velden en flow als het dashboard. */}
-      <Modal open={meldOpen} onClose={sluitMelden} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+      <Modal open={meldOpen} onClose={sluitMelden} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         <ModalHeader title="Ziekmelding registreren" description="De dag(en) staan meteen als onbeschikbaar in de planning; de andere planners krijgen een melding." onClose={sluitMelden} />
         <form onSubmit={verstuurMelding} className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
           <Field label="Chauffeur" required error={meldFouten.userId}>
@@ -380,7 +380,7 @@ export function ZiekteView({
       </Modal>
 
       {/* Detail: hersteld melden, einddatum bijstellen of intrekken. */}
-      <Modal open={!!detail} onClose={() => setDetail(null)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+      <Modal open={!!detail} onClose={() => setDetail(null)} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         {detail && (
           <>
             <ModalHeader

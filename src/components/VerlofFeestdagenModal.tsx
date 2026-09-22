@@ -75,7 +75,7 @@ export function VerlofFeestdagenModal({ open, onClose, extra, onSaved }: {
   };
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="lg" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+    <Modal open={open} onClose={onClose} maxWidth="lg" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
       <ModalHeader
         title="Feestdagen"
         description="Valt een feestdag in een verlofperiode, dan telt die dag niet als betaald verlof. De wettelijke feestdagen staan er al; voeg hieronder extra vrije dagen toe, zoals een brugdag."

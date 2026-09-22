@@ -73,7 +73,7 @@ export function VerlofLimietenModal({ open, onClose, limieten, onSaved }: {
   };
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="lg" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+    <Modal open={open} onClose={onClose} maxWidth="lg" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
       <ModalHeader
         title="Verloflimieten"
         description="Hoeveel chauffeurs mogen tegelijk vrij zijn? De kalender toont een dag als volzet zodra dat aantal bereikt is. Flexi-jobs en techniekers tellen niet mee."

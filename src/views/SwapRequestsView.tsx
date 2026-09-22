@@ -596,7 +596,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <MicroLabel className="tabular-nums">Dienst {info.line}</MicroLabel>
-                      <p className="font-bold tracking-tight text-slate-800 mt-1 capitalize">{formatDateHuman(info.date)}</p>
+                      <p className="font-bold text-slate-800 mt-1 capitalize">{formatDateHuman(info.date)}</p>
                       {info.startTime && info.endTime && (
                         <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
                       )}
@@ -833,7 +833,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             className="group flex items-center gap-1.5 text-left"
                           >
                             <Avatar naam={requester?.name ?? 'Onbekend'} size="sm" className="mr-0.5" />
-                            <span className="font-bold tracking-tight text-slate-800">
+                            <span className="font-bold text-slate-800">
                               {requester?.name}
                               {swap.targetDriverId && <span className="font-medium text-slate-500"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
                             </span>
@@ -983,7 +983,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing komen daar vandaan (verbeterronde 29/07 #3). */}
-      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               {/* 44x44 op de terugknop (het kruisje van ModalHeader is dat op
                   touch ook): dit zijn de enige twee uitwegen uit een
                   driestapswizard op een telefoon. Ze stonden op 36 resp. 38px

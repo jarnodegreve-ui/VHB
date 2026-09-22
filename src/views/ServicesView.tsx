@@ -168,7 +168,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                   aria-expanded={isExpanded}
                   className="w-full p-5 flex items-center justify-between gap-3 text-left"
                 >
-                  <span className="text-lg font-semibold text-slate-800 tracking-tight">{s.serviceNumber}</span>
+                  <span className="text-lg font-semibold text-slate-800">{s.serviceNumber}</span>
                   <div className="flex items-center gap-3 shrink-0">
                     <Badge tone="oker">Dienst</Badge>
                     <ChevronDown

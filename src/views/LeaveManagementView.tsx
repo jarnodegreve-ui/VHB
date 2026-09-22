@@ -649,7 +649,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           {renderBeoordelingPaneel()}
           <Card padding="lg" {...swipeHandlers}>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-              <MaandNavigatie label={monthName} labelClassName="text-lg font-bold tracking-tight min-w-[160px]" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
+              <MaandNavigatie label={monthName} labelClassName="text-lg font-bold min-w-[160px]" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
                 {!isCurrentMonth && (
                   <Button variant="secondary" size="sm" className="ml-1" onClick={goToCurrentMonth}>
                     Vandaag
@@ -688,7 +688,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     onClick={() => handleCalendarDateClick(dateStr)}
                     aria-label={`${day}: ${BEZETTING_LABEL[bezetting]}${occupancyCount > 0 ? `, ${occupancyCount} van ${limiet} afwezig` : ''}`}
                     className={cn(
-                      'aspect-square rounded-2xl border transition-all flex flex-col items-center justify-center relative group',
+                      'aspect-square rounded-2xl border transition-colors flex flex-col items-center justify-center relative group',
                       // Gekozen dag en getekend bereik = neutraal (punt 4): gedempt vlak, hairline-ladder, carbon cijfer.
                       isSelected && 'border-hairline-strong bg-surface-muted',
                       !isSelected && !isInDraftRange && 'border-hairline-subtle hover:border-hairline bg-surface-white',
@@ -808,7 +808,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       <div
                         key={req.id}
                         className={cn(
-                          'group flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1',
+                          'group flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 transition-[background-color,box-shadow] hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1',
                           isSelected && 'bg-slate-100/60 ring-hairline-strong',
                         )}
                       >
@@ -885,7 +885,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing (verbeterronde 29/07 #3). */}
-      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               <ModalHeader
                 title={registratie ? 'Verlof registreren' : 'Verlof aanvragen'}
                 description={registratie ? 'Voor verlof dat al goedgekeurd is, bijvoorbeeld op papier. Wordt meteen als goedgekeurd vastgelegd, zonder mail naar de chauffeur.' : undefined}

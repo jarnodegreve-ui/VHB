@@ -46,7 +46,12 @@ const REGELS = [
   // modal), elev-accent (goud), of de oppervlakklasse zelf (surface-card,
   // glass-modal, bottom-dock, surface-table). Primitieven (knopvarianten met
   // kleurschaduw) blijven buiten schot.
-  { naam: 'shadow-sm/md/lg/xl (gebruik elev-1/2/3, elev-accent of een oppervlakklasse)', re: /(?<![\w-])(?:[\w-]+:)*shadow-(?:sm|md|lg|xl|2xl)\b/g, zonderCommentaar: true, skip: /components\/(?:primitives|ui)\.tsx$/ },
+  // Sinds ronde 5 (F1) ook in primitives en ui: de bron van waarheid droeg
+  // de enige gekleurde gloed en fabrieksschaduwen van de app.
+  { naam: 'shadow-sm/md/lg/xl (gebruik elev-1/2/3, elev-pil, elev-accent of een oppervlakklasse)', re: /(?<![\w-])(?:[\w-]+:)*shadow-(?:sm|md|lg|xl|2xl)\b/g, zonderCommentaar: true },
+  { naam: 'transition-all (gebruik transition-colors, of niets: ios-pressable regelt de transities)', re: /\btransition-all\b/g, zonderCommentaar: true },
+  { naam: 'losse tracking-tight (de ladder zet 0 op ≤16 px, de koprollen dragen hun eigen spatiëring)', re: /\btracking-(?:tighter|tight)\b/g, zonderCommentaar: true, skip: new RegExp(`components\\/primitives\\.tsx$|${PRINT.source}`) },
+  { naam: 'kop zonder typografie-rol (text-page/section/card/subsection/row-title, text-greeting, text-micro of text-label)', re: /<h[1-6]\b[^>]*className="(?![^"]*\btext-(?:page|section|card|subsection|row)-title\b|[^"]*\btext-greeting\b|[^"]*\btext-micro\b|[^"]*\btext-label\b)[^"]*"/g, zonderCommentaar: true, skip: new RegExp(`(?:main|PreAppScreens|TweeStapsScherm|LoginView|PrintBlad)\\.tsx$|${PRINT.source}`) },
   // Hairline-ladder: border-hairline-subtle / border-hairline /
   // border-hairline-strong (en ring-hairline[-strong]) i.p.v. rauwe slate-
   // randen; flipt in dark via de tokens. Primitieven, Table en print blijven

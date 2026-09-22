@@ -63,7 +63,7 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
   };
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="3xl" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+    <Modal open={open} onClose={onClose} maxWidth="3xl" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
       <ModalHeader
         title={`Verlofsaldo ${jaar}`}
         description="Betaald verlof per medewerker: opgenomen en aangevraagd tegenover het budget. Vrij is wat nog aan te vragen valt, dus na aftrek van aangevraagde dagen. Zondagen en feestdagen tellen niet mee."

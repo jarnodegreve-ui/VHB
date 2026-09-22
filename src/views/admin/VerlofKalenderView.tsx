@@ -239,7 +239,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
               aria-label="Vorige maand"
               icon={<ChevronLeft size={16} />}
             />
-            <span className="px-3 text-base font-semibold tracking-tight capitalize min-w-[150px] text-center text-slate-800 tabular-nums">{monthName} {year}</span>
+            <span className="px-3 text-base font-semibold capitalize min-w-[150px] text-center text-slate-800 tabular-nums">{monthName} {year}</span>
             <Button
               variant="ghost"
               size="sm" className="min-h-11 min-w-11 justify-center"

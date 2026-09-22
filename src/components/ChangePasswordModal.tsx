@@ -100,7 +100,7 @@ export function ChangePasswordModal({
   // ESC of scroll-lock — de enige dialoog die dat allemaal miste).
   return (
     <Modal open={isOpen} onClose={handleClose} maxWidth="md" ariaLabel="Wachtwoord wijzigen">
-      <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+      <div className="flex max-h-overlay flex-col overflow-hidden">
         <ModalHeader title="Wachtwoord wijzigen" description={`Kies een nieuw wachtwoord voor ${email}.`} onClose={handleClose} />
 
         <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5 overflow-y-auto flex-1">

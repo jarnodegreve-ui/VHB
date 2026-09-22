@@ -53,7 +53,7 @@ export function CalendarSubscribeModal({
 
   return (
     <Modal open={open} onClose={onClose} maxWidth="md" ariaLabel="Aan agenda toevoegen">
-      <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+      <div className="flex max-h-overlay flex-col overflow-hidden">
         {/* Zelfde kop-dialect als de andere modals (ModalHeader met icoontegel
             als `leading`), i.p.v. een eigen h3 + losse sluitknop. */}
         <ModalHeader

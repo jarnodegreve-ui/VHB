@@ -370,7 +370,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           <ShieldCheck size={20} className="hidden shrink-0 text-slate-500 sm:block" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-800">Goedkeuring nieuwe toestellen</h2>
+              <h2 className="text-subsection-title">Goedkeuring nieuwe toestellen</h2>
               <InfoTip label="Uitleg over toestelgoedkeuring">
                 <p>Het eerste toestel van een chauffeur wordt automatisch goedgekeurd. Elk volgend toestel wacht op jouw akkoord.</p>
                 <p className="mt-2">Zet je dit uit, dan worden nieuwe toestellen automatisch goedgekeurd. Geblokkeerde toestellen blijven geblokkeerd.</p>

@@ -31,7 +31,7 @@ export function AppSkeleton() {
   const sectie = sectieLabel(view);
   return (
     <div className="flex h-dvh w-full overflow-hidden" aria-busy="true" aria-label="Portaal wordt geladen">
-      <aside className="hidden lg:flex w-[17.5rem] shrink-0 flex-col panel-dark" aria-hidden="true">
+      <aside className="hidden lg:flex w-zijbalk shrink-0 flex-col panel-dark" aria-hidden="true">
         <div className="px-5 pt-4 pb-3 flex justify-center">
           <BrandLogo tone="licht" laden className="w-40 lg:w-44 h-auto select-none block dark:hidden" />
           <BrandLogo tone="donker" laden className="w-40 lg:w-44 h-auto select-none hidden dark:block" />
@@ -47,7 +47,7 @@ export function AppSkeleton() {
       </aside>
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <div className="statusbalk-strook" aria-hidden="true" />
-        <header className="topbar px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7">
+        <header className="topbar px-gutter md:px-7">
           {/* Zelfde rij als App.tsx: py-2.5 + min-h op --topbar-h (min de haarlijn). */}
           <div className={cn('mx-auto flex w-full items-center justify-between gap-3 py-2.5 min-h-[calc(var(--topbar-h)-1px)]', kolomClass)}>
             <div className="flex items-center gap-2 min-w-0">
@@ -69,7 +69,7 @@ export function AppSkeleton() {
             </div>
           </div>
         </header>
-        <div className="flex-1 overflow-hidden px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7 pt-5">
+        <div className="flex-1 overflow-hidden px-gutter md:px-7 pt-5">
           <div className={cn('mx-auto w-full', kolomClass)}>
             {view === 'dashboard' ? <DashboardSkelet /> : <ViewLoader />}
             {lang && (

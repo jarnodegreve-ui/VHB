@@ -196,7 +196,7 @@ export function Modal({
         className={cn(
           // focus-stil: het paneel krijgt bij openen programmatisch focus
           // (focus-trap); een ring om het hele venster zegt niets.
-          'glass-modal focus-stil rounded-3xl md:rounded-3xl w-full overflow-y-auto overscroll-contain max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-max(0.5rem,env(safe-area-inset-bottom)))] md:max-h-[88dvh]',
+          'glass-modal focus-stil rounded-3xl md:rounded-3xl w-full overflow-y-auto overscroll-contain max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-max(0.5rem,env(safe-area-inset-bottom)))] md:max-h-overlay',
           widthClass,
           className,
         )}

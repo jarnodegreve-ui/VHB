@@ -602,7 +602,7 @@ export function CoverageView() {
           <VersheidRegel {...zl.versheid} />
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} />} aria-label="Vorige maand" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} />
-            <span className="px-3 text-sm font-bold tracking-tight capitalize min-w-[130px] text-center tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
+            <span className="px-3 text-sm font-bold capitalize min-w-[130px] text-center tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
             <Button variant="ghost" size="sm" icon={<ChevronRight size={18} />} aria-label="Volgende maand" onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))} />
             <Button
               variant="secondary"
@@ -1129,7 +1129,7 @@ export function CoverageView() {
       </ZijvakLayout>
 
       {/* Advies voor het gekozen gat: wie is vrij én bij wie past de dienst? */}
-      <Modal open={!!pick} onClose={() => setPick(null)} maxWidth="sm" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+      <Modal open={!!pick} onClose={() => setPick(null)} maxWidth="sm" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         {pick && (
           <>
           <ModalHeader
@@ -1271,7 +1271,7 @@ export function CoverageView() {
       />
 
       {/* Alle gaten van één dag: batch-advies vooringevuld, per rij te corrigeren. */}
-      <Modal open={!!batch} onClose={() => setBatch(null)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0" ariaLabel="Alle gaten van deze dag voorinvullen">
+      <Modal open={!!batch} onClose={() => setBatch(null)} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0" ariaLabel="Alle gaten van deze dag voorinvullen">
         {batch && (
           <>
             <ModalHeader

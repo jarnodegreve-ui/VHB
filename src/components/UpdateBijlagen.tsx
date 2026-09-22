@@ -166,6 +166,6 @@ export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
 
 const cnLabel = (bezig: boolean) =>
   [
-    'ios-pressable control-button-soft inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900',
+    'ios-pressable control-button-soft inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:text-slate-900',
     bezig ? 'pointer-events-none opacity-60' : 'cursor-pointer',
   ].join(' ');
