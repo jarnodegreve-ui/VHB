@@ -56,7 +56,10 @@ export const DienstBalk = memo(function DienstBalk({
     // Vaste zones van boven naar onder: tijdlabel (top-1.5, 16 px) · lucht ·
     // uurstreepjes (top-[26px], 8 px) · lucht · balk (pt-10). Zo raakt het
     // label nooit de kaartlijn erboven of de streepjes (Jarno 04-09).
-    <div className={cn('relative overflow-x-clip', compact ? 'pt-7 pb-4' : 'pt-10 pb-5', className)} role="img" aria-label={omschrijving}>
+    // Compact (dashboardtegel, dichtheidsronde 22-09): de bovenruimte is er voor
+    // het label van de wijzer. Buiten de diensturen is er geen wijzer, en dan
+    // stond er 28 px lucht boven en 16 px onder een balk van 4 px.
+    <div className={cn('relative overflow-x-clip', compact ? (wijzer !== null ? 'pt-7 pb-1' : 'pt-2 pb-1') : 'pt-10 pb-5', className)} role="img" aria-label={omschrijving}>
       {wijzer !== null && (
         <span
           aria-hidden="true"

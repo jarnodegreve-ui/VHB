@@ -284,7 +284,11 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
           onChange={setWeergave}
         />
         {lastSyncedAt && (
-          <p className="text-xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)}{/* De sleep-hint alleen waar je kán slepen: met een muis stond hier een instructie die niet werkt. */}<span className="pointer-fine:hidden"> · sleep naar beneden om te vernieuwen</span></p>
+          // Eén regel met de schakelaar ernaast (dichtheidsronde 22-09): met de
+          // sleep-hint erbij brak dit op een telefoon naar een eigen regel en
+          // stonden er vier lagen kop boven de eerste dienst. Omlaag slepen
+          // blijft werken; de hint staat nog op de schermen zonder schakelaar.
+          <p className="text-xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)}</p>
         )}
       </div>
 

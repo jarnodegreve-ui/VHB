@@ -283,8 +283,13 @@ export function MijnDagView({
           garage (13-09) en staat er ook op een dag zonder dienst. === */}
       <div className={cn('grid gap-2', delen.length > 0 && 'grid-cols-2')}>
         {delen.length > 0 && (
-          <Button variant="primary" size="lg" full icon={<FileText size={18} />} onClick={() => setRitbladOpen(true)}>
-            Ritblad van {dagWoord}
+          // Op een telefoon brak "Ritblad van vandaag" over twee regels en
+          // trok zo beide knoppen naar 64 px hoog (dichtheidsronde 22-09). De
+          // dag staat al in de kop; het volledige label blijft voor wie meer
+          // breedte heeft en voor schermlezers.
+          <Button variant="primary" size="lg" full icon={<FileText size={18} />} aria-label={`Ritblad van ${dagWoord}`} onClick={() => setRitbladOpen(true)}>
+            <span className="sm:hidden">Ritblad</span>
+            <span className="hidden sm:inline">Ritblad van {dagWoord}</span>
           </Button>
         )}
         <Button variant="secondary" size="lg" full icon={<Wrench size={18} />} onClick={() => setDefectMelden(true)}>
