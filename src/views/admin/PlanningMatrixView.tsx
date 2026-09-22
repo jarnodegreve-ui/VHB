@@ -1,4 +1,4 @@
-import { Fragment, useDeferredValue, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Clock, Download, Plus, UserSearch, Users } from 'lucide-react';
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
@@ -9,7 +9,9 @@ import { Badge, Button, Chip, FilterChip, IconButton, MicroLabel, TableShell, Td
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
 import { OpsStat } from '../../components/ops';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
 import { Field, Input, Select } from '../../components/Field';
 import { useOptioneleAppData } from '../../app/AppDataContext';
 import { navigeer } from '../../app/router';
@@ -60,22 +62,27 @@ export function PlanningMatrixView({
   const savePlanningCodes = useOptioneleAppData()?.savePlanningCodes;
   const [nieuweCode, setNieuweCode] = useState<{ code: string; description: string; category: PlanningCode['category'] } | null>(null);
   const [codeBezig, setCodeBezig] = useState(false);
-  const [codeFout, setCodeFout] = useState('');
-  const openNieuweCode = (code: string) => { setCodeFout(''); setNieuweCode({ code: normalizePlanningToken(code), description: '', category: 'unknown' }); };
-  const bewaarNieuweCode = async (e: FormEvent) => {
-    e.preventDefault();
+  const codeFouten = useVeldfouten();
+  const { vuil: codeVuil } = useVuil(nieuweCode, !!nieuweCode);
+  const openNieuweCode = (code: string) => { codeFouten.wis(); setNieuweCode({ code: normalizePlanningToken(code), description: '', category: 'unknown' }); };
+  const bewaarNieuweCode = async () => {
     if (!nieuweCode || !savePlanningCodes || codeBezig) return;
     const code = nieuweCode.code.trim().toLowerCase();
-    if (!code) { setCodeFout('De code mag niet leeg zijn.'); return; }
+    if (!code) { codeFouten.zet({ code: 'De code mag niet leeg zijn.' }); return; }
     if (planningCodes.some((c) => normalizePlanningToken(c.code) === normalizePlanningToken(code))) {
-      setCodeFout('Deze code staat al bij de planningscodes.');
+      codeFouten.zet({ code: 'Deze code staat al bij de planningscodes.' });
       return;
     }
+    codeFouten.wis();
     setCodeBezig(true);
     // Vinkjes (telt als dienst, betaald, vrije dag) blijven uit, zoals een
     // nieuwe rij in Planningscodes; daar stel je ze bij.
-    const ok = await savePlanningCodes([...planningCodes, { code, category: nieuweCode.category, description: nieuweCode.description.trim(), countsAsShift: false, isPaidAbsence: false, isDayOff: false }]);
-    setCodeBezig(false);
+    let ok: boolean;
+    try {
+      ok = await savePlanningCodes([...planningCodes, { code, category: nieuweCode.category, description: nieuweCode.description.trim(), countsAsShift: false, isPaidAbsence: false, isDayOff: false }]);
+    } finally {
+      setCodeBezig(false);
+    }
     if (!ok) return; // de datalaag meldt de fout of het conflict zelf
     notify(`Code ${code.toUpperCase()} toegevoegd als planningscode.`, 'success');
     setNieuweCode(null);
@@ -635,16 +642,16 @@ export function PlanningMatrixView({
       </div>
 
       {/* Onbekende code als planningscode vastleggen zonder schermwissel. */}
-      <Modal open={!!nieuweCode} onClose={() => setNieuweCode(null)} maxWidth="sm" className="!p-0" ariaLabel="Planningscode toevoegen">
+      <Modal open={!!nieuweCode} onClose={() => setNieuweCode(null)} vuil={codeVuil} maxWidth="sm" className="!p-0" ariaLabel="Planningscode toevoegen">
         {nieuweCode && (
-          <form onSubmit={(e) => void bewaarNieuweCode(e)}>
+          <Formulier onVerstuur={bewaarNieuweCode}>
             <ModalHeader
               title={`Code ${nieuweCode.code.toUpperCase()} toevoegen`}
               description="Komt in dezelfde lijst als Planningscodes en is meteen herkend in elke geüploade dag."
               onClose={() => setNieuweCode(null)}
             />
             <div className="space-y-4 p-6">
-              <Field label="Code" error={codeFout || undefined}>
+              <Field label="Code" error={codeFouten.fouten.code}>
                 {({ id, describedBy, invalid }) => (
                   <Input id={id} aria-describedby={describedBy} invalid={invalid} value={nieuweCode.code} readOnly className="font-mono uppercase" />
                 )}
@@ -662,11 +669,11 @@ export function PlanningMatrixView({
                 )}
               </Field>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="secondary" onClick={() => setNieuweCode(null)}>Annuleren</Button>
+                <SluitKnop onClose={() => setNieuweCode(null)} variant="secondary" disabled={codeBezig}>Annuleren</SluitKnop>
                 <Button type="submit" variant="primary" bezig={codeBezig} icon={<Plus size={16} />}>Toevoegen</Button>
               </div>
             </div>
-          </form>
+          </Formulier>
         )}
       </Modal>
     </PageShell>
