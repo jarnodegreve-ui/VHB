@@ -4,6 +4,7 @@ import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { overgangActief } from '../lib/overgang';
 import { BrandSpinner } from './BrandSpinner';
+import { AANVRAAG_STATUS, statusVan, type StatusDef, type StatusToon } from '../../shared/status';
 
 /**
  * Primitieven van het VHB design-systeem.
@@ -196,25 +197,39 @@ export function Badge({
   );
 }
 
-/** Toon + label per aanvraagstatus (verlof/ruil). Eén bron: de gebruikers-
- *  historiek had een eigen kopie ('Voltooid') en de verlof-historiek een
- *  losse accentkleur-map (controle-ronde 27-08, bevinding 22). 'completed'
- *  heet 'Goedgekeurd', net als 'approved' (Jarno 18-09): het is dezelfde
- *  beslissing, alleen administratief weggezet. Waar de wissel staat blijft
- *  zichtbaar aan de sectie Afgehandeld, niet aan de badge. */
-const STATUS_TONES: Record<string, { tone: BadgeTone; label: string }> = {
-  pending: { tone: 'amber', label: 'In behandeling' },
-  accepted: { tone: 'blue', label: 'Wacht op planner' },
-  approved: { tone: 'emerald', label: 'Goedgekeurd' },
-  rejected: { tone: 'red', label: 'Afgewezen' },
-  cancelled: { tone: 'slate', label: 'Geannuleerd' },
-  completed: { tone: 'emerald', label: 'Goedgekeurd' },
+/** Semantische toon (shared/status.ts) naar Badge-tint: de enige plek waar
+ *  "waarschuwing" amber wordt en "aandacht" oker. */
+export const TOON_NAAR_BADGE: Record<StatusToon, BadgeTone> = {
+  neutraal: 'slate',
+  info: 'blue',
+  aandacht: 'oker',
+  waarschuwing: 'amber',
+  gevaar: 'red',
+  goed: 'emerald',
 };
-const statusTone = (status: string) => STATUS_TONES[status] ?? { tone: 'slate' as BadgeTone, label: status };
 
-/** Status van een aanvraag (verlof/ruil) als consistente badge. */
-export function StatusBadge({ status, className, stil }: { status: string; className?: string; /** Neutrale chip + gekleurd puntje (zie Badge). */ stil?: boolean }) {
-  const m = statusTone(status);
+/** Toon + label per aanvraagstatus (verlof/ruil), uit de gedeelde
+ *  statuswoordenschat (shared/status.ts, tranche 3A). Eén bron: de
+ *  gebruikershistoriek had een eigen kopie ('Voltooid') en de verlof-
+ *  historiek een losse accentkleur-map (controle-ronde 27-08, bevinding 22).
+ *  'completed' heet 'Goedgekeurd', net als 'approved' (Jarno 18-09): het is
+ *  dezelfde beslissing, alleen administratief weggezet. Waar de wissel staat
+ *  blijft zichtbaar aan de sectie Afgehandeld, niet aan de badge. */
+const statusTone = (status: string, map: Record<string, StatusDef> = AANVRAAG_STATUS) => {
+  const m = statusVan(map, status);
+  return { tone: TOON_NAAR_BADGE[m.toon], label: m.label };
+};
+
+/** Status als consistente badge. Standaard de aanvraagstatussen (verlof);
+ *  geef `map` mee voor een ander domein (RUIL_STATUS, TOESTEL_STATUS, …). */
+export function StatusBadge({ status, map, className, stil }: {
+  status: string;
+  map?: Record<string, StatusDef>;
+  className?: string;
+  /** Neutrale chip + gekleurd puntje (zie Badge). */
+  stil?: boolean;
+}) {
+  const m = statusTone(status, map);
   // Afgewezen/dringend blijft gekleurd: dat is een signaal, geen status.
   const kleur = stil && m.tone !== 'red' ? { stil: true } : { dot: true };
   return <Badge tone={m.tone} {...kleur} className={className}>{m.label}</Badge>;

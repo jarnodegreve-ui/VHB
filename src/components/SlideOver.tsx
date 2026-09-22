@@ -6,6 +6,7 @@ import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
+import { SluitContext, useSluitPoort } from './Modal';
 
 /**
  * Premium slide-over side panel (rechts) — het standaard detailvenster van
@@ -27,6 +28,7 @@ export function SlideOver({
   width = 'md',
   children,
   footer,
+  vuil = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -38,21 +40,27 @@ export function SlideOver({
   width?: 'md' | 'lg';
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Onbewaarde invoer: Escape, backdrop, terugknop en kruisje vragen eerst
+   *  "Wijzigingen niet bewaren?" (zie Modal, tranche 3A). */
+  vuil?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion();
+  const { sluitVia, dialoog } = useSluitPoort(open, vuil);
+  const sluit = () => sluitVia(onClose);
   // Terugknop/swipe-back sluit het paneel i.p.v. de app te verlaten.
-  useHistoryDismiss(open, onClose);
+  useHistoryDismiss(open, sluit);
 
   // Escape sluit — listener alleen actief terwijl het paneel open is.
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') sluit();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    // `sluit` wisselt per render; open, onClose en vuil zijn de echte inputs.
+  }, [open, onClose, vuil]);
 
   // Scroll-lock — zelfde reden als in Modal.tsx: de app scrolt niet op <body>
   // maar in [data-scroll-root] (App.tsx), dus alleen body locken was een no-op
@@ -131,7 +139,7 @@ export function SlideOver({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.2 }}
-            onClick={onClose}
+            onClick={() => sluit()}
             className="fixed inset-0 z-modal bg-ink/40 backdrop-blur-sm"
             aria-hidden="true"
           />
@@ -183,7 +191,7 @@ export function SlideOver({
               </div>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => sluit()}
                 aria-label="Sluiten"
                 className={cn(
                   '-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-400 transition-colors hover:bg-surface-soft-hover hover:text-slate-700',
@@ -200,7 +208,7 @@ export function SlideOver({
               className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5"
               style={{ paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
             >
-              {children}
+              <SluitContext.Provider value={sluitVia}>{children}</SluitContext.Provider>
             </div>
 
             {footer && (
@@ -211,9 +219,10 @@ export function SlideOver({
                   paddingRight: 'max(1rem, env(safe-area-inset-right))',
                 }}
               >
-                {footer}
+                <SluitContext.Provider value={sluitVia}>{footer}</SluitContext.Provider>
               </div>
             )}
+            {dialoog}
           </motion.div>
         </React.Fragment>
       )}

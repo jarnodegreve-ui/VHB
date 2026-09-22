@@ -18,7 +18,9 @@ import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card } from '../../components/Card';
 import { OpsStat } from '../../components/ops';
 import { DateInput, Field, Select, Textarea } from '../../components/Field';
+import { Formulier } from '../../components/Formulier';
 import { Modal } from '../../components/Modal';
+import { useVuil } from '../../lib/formulier';
 import { ZiekteInzicht } from '../../components/ZiekteInzicht';
 import { ZiekteMeldingen } from '../../components/ZiekteMeldingen';
 import { openZiekteDiensten } from '../../lib/ziekteInzicht';
@@ -194,9 +196,10 @@ export function ZiekteView({
   // een toast. Server-/netwerkfouten blijven via onSickReport → notify.
   const [meldFouten, setMeldFouten] = useState<{ userId?: string; endDate?: string }>({});
   const [isMelden, setIsMelden] = useState(false);
+  // Onbewaarde invoer: sluiten vraagt eerst bevestiging (tranche 3A).
+  const { vuil: meldVuil } = useVuil(meldForm, meldOpen);
   const sluitMelden = () => { setMeldOpen(false); setMeldForm({ userId: '', startDate: '', endDate: '', comment: '' }); setMeldFouten({}); };
-  const verstuurMelding = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const verstuurMelding = async () => {
     if (isMelden) return;
     const startDate = meldForm.startDate || today;
     const endDate = meldForm.endDate || startDate;
@@ -318,9 +321,9 @@ export function ZiekteView({
       )}
 
       {/* Ziek melden — zelfde velden en flow als het dashboard. */}
-      <Modal open={meldOpen} onClose={sluitMelden} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={meldOpen} onClose={sluitMelden} vuil={meldVuil} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         <ModalHeader title="Ziekmelding registreren" description="De dag(en) staan meteen als onbeschikbaar in de planning; de andere planners krijgen een melding." onClose={sluitMelden} />
-        <form onSubmit={verstuurMelding} className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
+        <Formulier onVerstuur={verstuurMelding} noValidate className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
           <Field label="Chauffeur" required error={meldFouten.userId}>
             {({ id, describedBy, invalid }) => (
               <Select
@@ -373,10 +376,10 @@ export function ZiekteView({
               />
             )}
           </Field>
-          <Button type="submit" variant="primary" size="lg" full disabled={isMelden}>
-            {isMelden ? 'Registreren…' : 'Ziekmelding registreren'}
+          <Button type="submit" variant="primary" size="lg" full bezig={isMelden}>
+            Ziekmelding registreren
           </Button>
-        </form>
+        </Formulier>
       </Modal>
 
       {/* Detail: hersteld melden, einddatum bijstellen of intrekken. */}
