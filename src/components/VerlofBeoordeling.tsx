@@ -13,6 +13,7 @@ import { DetailPaneel } from './DetailPaneel';
 import { Avatar } from './Avatar';
 import { Card } from './Card';
 import { Badge, Button, IconButton, MicroLabel, StatusBadge } from './primitives';
+import { Field, Textarea } from './Field';
 
 /**
  * Beoordeling van één verlofaanvraag: volledige context (saldo, dekking,
@@ -229,14 +230,27 @@ export function VerlofBeoordelingInhoud({ aanvraag, users, shifts, leaveRequests
           </p>
         </div>
       )}
+
+      {/* Reden van de beslisser bij een afwijzing (wens Jarno 22-09). */}
+      {reviewLeave.status === 'rejected' && reviewLeave.beslisReden && (
+        <div>
+          <MicroLabel className="text-red-700">Reden van afwijzing</MicroLabel>
+          <p className="mt-2 whitespace-pre-wrap rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-body font-normal text-slate-700">
+            {reviewLeave.beslisReden}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
 
+/** Bovengrens van de weigerreden, spiegel van BESLISREDEN_MAX op de server. */
+export const BESLISREDEN_MAX = 500;
+
 export type VerlofBeoordelingActies = {
   /** Beslissen; `seenStatus` = de status die de beslisser op het scherm zag
-   *  (conflictcheck op de server). */
-  onDecide: (id: string, status: VerlofBeslissing, seenStatus: LeaveRequest['status']) => void;
+   *  (conflictcheck op de server). `reden` = vrije tekst bij een afwijzing. */
+  onDecide: (id: string, status: VerlofBeslissing, seenStatus: LeaveRequest['status'], reden?: string) => void;
   /** Lopend goedgekeurd verlof annuleren (planner/admin); zonder deze prop
    *  toont het paneel alleen "Sluiten". */
   onCancel?: (id: string) => void;
@@ -250,13 +264,52 @@ export type VerlofBeoordelingActies = {
 };
 
 /** Footer: historiek + Afwijzen/Goedkeuren (pending), Verlof annuleren
- *  (lopend goedgekeurd, planner) of Sluiten. */
+ *  (lopend goedgekeurd, planner) of Sluiten. Afwijzen gaat in twee stappen:
+ *  eerst een vrij tekstvak voor de reden (optioneel, wens Jarno 22-09),
+ *  dan pas de beslissing. */
 export function VerlofBeoordelingKnoppen({ aanvraag, onDecide, onCancel, onHistoriek, onClose, today, isPlanner, links }: VerlofBeoordelingActies & { aanvraag: LeaveRequest; /** Extra knop links (bv. "Terug"). */ links?: ReactNode }) {
   const pending = aanvraag.status === 'pending';
+  const [weigeren, setWeigeren] = useState(false);
+  const [reden, setReden] = useState('');
+  // Andere aanvraag gekozen: de weigerstap en de getypte reden horen bij de
+  // vorige en gaan niet stilzwijgend mee.
+  useEffect(() => { setWeigeren(false); setReden(''); }, [aanvraag.id]);
   // Goedgekeurd verlof dat nog loopt kan de planner hier annuleren (zelfde
   // bevestiging als in de datumkaart); afgesloten aanvragen tonen alleen
   // de historiek.
   const annuleerbaar = !!onCancel && aanvraag.status === 'approved' && aanvraag.endDate >= today && isPlanner;
+  if (pending && weigeren) {
+    return (
+      <div className="space-y-3">
+        <Field label="Reden van afwijzing" hint="Optioneel. De chauffeur ziet dit bij zijn aanvraag en in de mail.">
+          {({ id }) => (
+            <Textarea
+              id={id}
+              autoFocus
+              value={reden}
+              maxLength={BESLISREDEN_MAX}
+              onChange={(e) => setReden(e.target.value)}
+              className="h-24"
+              placeholder="Bv. die week zijn er al te veel collega's vrij…"
+            />
+          )}
+        </Field>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="lg" className="flex-1" onClick={() => setWeigeren(false)}>
+            Terug
+          </Button>
+          <Button
+            variant="danger"
+            size="lg"
+            className="flex-1"
+            onClick={() => onDecide(aanvraag.id, 'rejected', aanvraag.status, reden.trim() || undefined)}
+          >
+            Afwijzen
+          </Button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center gap-2">
       {links}
@@ -275,7 +328,7 @@ export function VerlofBeoordelingKnoppen({ aanvraag, onDecide, onCancel, onHisto
             variant="danger"
             size="lg"
             className="flex-1"
-            onClick={() => onDecide(aanvraag.id, 'rejected', aanvraag.status)}
+            onClick={() => setWeigeren(true)}
           >
             Afwijzen
           </Button>

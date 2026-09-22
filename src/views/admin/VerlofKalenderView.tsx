@@ -50,7 +50,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
   users: User[];
   leaveRequests: LeaveRequest[];
   shifts?: Shift[];
-  onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>;
+  onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string, reden?: string) => Promise<boolean>;
 }) {
   const [maandParam, zetMaandParam] = useRouteParam(0);
   const [viewMonth, setViewMonth] = useState(() => {
@@ -194,11 +194,11 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
   // Verdwijnt de aanvraag (ingetrokken, andere maand geladen), dan terug naar de dag.
   useEffect(() => { if (beoordeelId && !beoordeel) setBeoordeelId(null); }, [beoordeelId, beoordeel]);
 
-  const beslis = (id: string, status: 'approved' | 'rejected', seenStatus: LeaveRequest['status']) => {
+  const beslis = (id: string, status: 'approved' | 'rejected', seenStatus: LeaveRequest['status'], reden?: string) => {
     if (!onDecide) return;
     // Zelfde delta-pad als Verlof: seenStatus = wat de beslisser zag, zodat
     // de server een tweede beoordelaar netjes met een conflict afwijst.
-    void onDecide(id, status, seenStatus).then((ok) => {
+    void onDecide(id, status, seenStatus, reden).then((ok) => {
       if (ok) notify(status === 'approved' ? 'Verlof goedgekeurd.' : 'Verlof afgewezen.', 'success');
     });
     setBeoordeelId(null);

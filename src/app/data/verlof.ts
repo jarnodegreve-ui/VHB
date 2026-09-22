@@ -95,7 +95,9 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     }
   };
 
-  const decideLeave = (id: string, status: LeaveRequest['status'], seenStatus?: string): Promise<boolean> => {
+  /** `reden` = vrije tekst van de planner bij een afwijzing (wens Jarno
+   *  22-09); de server negeert hem bij elke andere status. */
+  const decideLeave = (id: string, status: LeaveRequest['status'], seenStatus?: string, reden?: string): Promise<boolean> => {
     const current = leaveRequests.find((r) => r.id === id);
     // Record niet (meer) lokaal → onze lijst is stale; ifStatus is server-
     // side verplicht, dus eerst verversen i.p.v. een kansloze PATCH.
@@ -106,7 +108,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     // altijd goed en is de guard feitelijk uitgeschakeld (controleronde 30/07).
     return ctx.decideViaPatch('leave', id, status, seenStatus ?? current.status, fetchLeave, (updated) => {
       setLeaveRequests((curr) => curr.map((r) => (r.id === id ? { ...r, ...updated } : r)));
-    }).then((ok) => {
+    }, reden ? { reden } : {}).then((ok) => {
       // Een goedkeuring maakt een dienst tot dekkingsgat: dashboard en
       // topbar-badge meteen laten meebewegen.
       if (ok) void refreshCoverageGaps();

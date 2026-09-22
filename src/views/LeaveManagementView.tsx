@@ -49,7 +49,7 @@ type Bezetting = 'vrij' | 'deels' | 'volzet';
 const bezettingVanDag = (afwezig: number, limiet: number): Bezetting => (afwezig <= 0 ? 'vrij' : afwezig < limiet ? 'deels' : 'volzet');
 const BEZETTING_LABEL: Record<Bezetting, string> = { vrij: 'vrij', deels: 'deels vrij', volzet: 'volzet' };
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [], feestdagenExtra = [], onFeestdagenSaved }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[]; feestdagenExtra?: ExtraFeestdag[]; onFeestdagenSaved?: (extra: ExtraFeestdag[]) => void }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [], feestdagenExtra = [], onFeestdagenSaved }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string, reden?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[]; feestdagenExtra?: ExtraFeestdag[]; onFeestdagenSaved?: (extra: ExtraFeestdag[]) => void }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   // 'registratie' (verzoek Jarno 09-09): een planner/admin legt verlof vast
   // dat al op papier goedgekeurd was, zodat de papieren en de digitale versie
@@ -367,7 +367,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const decisionToast = (status: LeaveRequest['status']) =>
     status === 'approved' ? 'Verlof goedgekeurd.' : status === 'rejected' ? 'Verlof afgewezen.' : 'Verlof geannuleerd.';
 
-  const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status'], seenStatus?: string) => {
+  const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status'], seenStatus?: string, reden?: string) => {
     // Delta-pad (PATCH per record): conflictveilig bij twee gelijktijdige
     // beoordelaars — de tweede krijgt een melding i.p.v. een stille overschrijf.
     // seenStatus = de status die de beslisser op het scherm zag; zonder die
@@ -376,13 +376,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     if (onDecide) {
       // Succes-toast bij bevestiging: een beslissing zonder enige feedback
       // voelde als "is er iets gebeurd?" (controleronde 30/07).
-      void onDecide(requestId, newStatus, seenStatus).then((ok) => {
+      void onDecide(requestId, newStatus, seenStatus, reden).then((ok) => {
         if (ok) notify(decisionToast(newStatus), 'success');
       });
       return;
     }
     const decidedAt = new Date().toISOString();
-    onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus, decidedAt } : r)));
+    onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus, decidedAt, ...(newStatus === 'rejected' && reden ? { beslisReden: reden } : {}) } : r)));
   };
 
   // Bulk-selectie voor planner-goedkeuring van meerdere pending aanvragen.
@@ -574,7 +574,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         today={today}
         isPlanner={isPlanner}
         onClose={() => setReviewLeave(null)}
-        onDecide={(id, status, seenStatus) => { handleStatusUpdate(id, status, seenStatus); setReviewLeave(null); }}
+        onDecide={(id, status, seenStatus, reden) => { handleStatusUpdate(id, status, seenStatus, reden); setReviewLeave(null); }}
         onCancel={handleCancel}
         onHistoriek={setHistoryLeave}
       />
@@ -1211,6 +1211,13 @@ function MyLeaveRow({ req, fresh, open, toonStatus, onToggle, onCancel, onWithdr
         <div className="px-4 pb-4 pt-0.5">
           <p className="text-xs font-medium text-slate-500">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
           {req.comment && <p className="mt-2 text-xs italic text-slate-500">“{req.comment}”</p>}
+          {/* Waarom afgewezen: de reden van de planner (wens Jarno 22-09). */}
+          {req.status === 'rejected' && req.beslisReden && (
+            <p className="mt-2 text-xs text-slate-600">
+              <span className="font-semibold text-red-700">Reden van afwijzing: </span>
+              <span className="whitespace-pre-wrap">{req.beslisReden}</span>
+            </p>
+          )}
           {onCancel && req.status === 'approved' && (
             <Button variant="danger" size="sm" full className="mt-3" onClick={() => onCancel(req.id)}>
               Verlof annuleren

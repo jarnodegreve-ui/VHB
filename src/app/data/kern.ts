@@ -183,6 +183,8 @@ export type DataCtx = DataBasis & {
     ifStatus: string | undefined,
     refetch: () => Promise<void> | void,
     applyLocal: (updated: any) => void,
+    /** Extra body-velden naast status/ifStatus (bv. de weigerreden). */
+    extra?: Record<string, unknown>,
   ) => Promise<boolean>;
   /** Alle laadvangrails wissen (uitloggen). */
   clearLoadedCollections: () => void;
@@ -355,11 +357,12 @@ export function useDataKern(basis: DataBasis): DataCtx {
     ifStatus: string | undefined,
     refetch: () => Promise<void> | void,
     applyLocal: (updated: any) => void,
+    extra: Record<string, unknown> = {},
   ): Promise<boolean> => {
     try {
       const response = await apiFetch(`/api/${kind}/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, ifStatus }),
+        body: JSON.stringify({ ...extra, status, ifStatus }),
       });
       const data = await response.json().catch(() => ({} as any));
       if (response.ok) {

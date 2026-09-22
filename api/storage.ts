@@ -3061,7 +3061,12 @@ export const saveLeaveData = async (data: any, idsToDelete: string[] = [], optie
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicLeave) : [];
   if (normalizedData.length > 0) {
-    const { error } = await client.from('leave').upsert(normalizedData.map(toDatabaseLeave));
+    // PostgREST eist in één upsert dezelfde sleutels per rij. `beslisreden`
+    // zit alleen in rijen mét een reden (zie toDatabaseLeave); heeft één rij
+    // hem, dan krijgen de andere expliciet null, anders faalt de hele batch.
+    const rijen = normalizedData.map(toDatabaseLeave) as Array<Record<string, unknown>>;
+    const metReden = rijen.some((r) => 'beslisreden' in r);
+    const { error } = await client.from('leave').upsert(metReden ? rijen.map((r) => ({ beslisreden: null, ...r })) : rijen);
     if (error) throw error;
   }
   // Intrekkingen: de handler valideert scope + status; hier alleen uitvoeren.

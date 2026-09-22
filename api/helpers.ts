@@ -695,6 +695,7 @@ export const toPublicLeave = (leave: any): LeaveRecord => ({
   comment: leave.comment ?? undefined,
   createdAt: String(leave.createdAt ?? leave.createdat),
   decidedAt: leave.decidedAt ?? leave.decidedat ?? undefined,
+  beslisReden: leave.beslisReden ?? leave.beslisreden ?? undefined,
 });
 
 export const toDatabaseLeave = (leave: LeaveRecord) => ({
@@ -707,6 +708,10 @@ export const toDatabaseLeave = (leave: LeaveRecord) => ({
   comment: leave.comment || null,
   createdat: String(leave.createdAt),
   decidedat: leave.decidedAt || null,
+  // Alleen meegeven als er een reden is: zo blijft elke andere verlof-save
+  // werken zolang de migratie van 22-09 (kolom beslisreden) nog niet is
+  // gedraaid. saveLeaveData lijnt de sleutels per batch uit.
+  ...(leave.beslisReden ? { beslisreden: String(leave.beslisReden) } : {}),
 });
 
 export const toPublicPlanningCode = (code: any): PlanningCodeRecord => ({
