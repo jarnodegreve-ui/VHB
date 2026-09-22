@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useVerlaatWaarschuwing, useVuil } from '../lib/formulier';
+import { useVeldfouten, useVerlaatWaarschuwing, useVuil } from '../lib/formulier';
+import { focusEersteFout } from '../components/Formulier';
+import { onvolledigeRijen, rijSleutel } from '../lib/dekkingRijen';
 import { meldSchrijffout } from '../lib/fouten';
 import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus, ListChecks } from 'lucide-react';
 import { useOptioneleAppData } from '../app/AppDataContext';
@@ -88,6 +90,11 @@ export function CoverageView() {
   // tussen de dag-type-lijsten en wat er echt gereden wordt (fantoomgaten).
   const [expCheck, setExpCheck] = useState<VerwachtingAfwijking[]>([]);
   const [saving, setSaving] = useState(false);
+  // Onvolledige rijen blokkeren Opslaan (tranche 3A): één fout per rij,
+  // sleutel = rijSleutel.<soort>(_k), zie src/lib/dekkingRijen.ts.
+  const rijFouten = useVeldfouten();
+  const instellingenRef = useRef<HTMLElement | null>(null);
+  const [focusFout, setFocusFout] = useState(0);
   const [showConfig, setShowConfig] = useState(false);
   const [onlyGaps, setOnlyGaps] = useState(true);
   // Klik op een ontbrekende dienst → advies: wie is vrij én bij wie past dit?
@@ -354,7 +361,9 @@ export function CoverageView() {
     setWeekdays((prev) => prev.map((x) => (x === old ? neu : x)));
     setOverrides((prev) => prev.map((x) => (x.dayType === old ? { ...x, dayType: neu } : x)));
   };
+  const wisDagtypeFout = (i: number) => { const k = dayTypes[i]?._k; if (k !== undefined) rijFouten.wisVeld(rijSleutel.dagtype(k)); };
   const updateDayTypeName = (i: number, name: string) => {
+    wisDagtypeFout(i);
     const old = (dayTypes[i]?.name ?? '').trim();
     const neu = name.trim();
     setDayTypes((prev) => prev.map((dt, idx) => (idx === i ? { ...dt, name } : dt)));
@@ -370,6 +379,7 @@ export function CoverageView() {
   };
 
   const toggleService = (i: number, svc: string) => {
+    wisDagtypeFout(i);
     setDayTypes((prev) => prev.map((dt, idx) => {
       if (idx !== i) return dt;
       const set = new Set(dt.services);
@@ -394,10 +404,15 @@ export function CoverageView() {
   // --- Weekdag-periodes (vanaf een datum geldt een andere toewijzing) ---
   const addWeekdayPeriod = () =>
     setWeekdayPeriods((prev) => [...prev, { _k: sleutel(), vanaf: '', weekdays: ['', '', '', '', '', '', ''] }]);
-  const setPeriodVanaf = (i: number, vanaf: string) =>
+  const wisPeriodeFout = (i: number) => { const k = weekdayPeriods[i]?._k; if (k !== undefined) rijFouten.wisVeld(rijSleutel.periode(k)); };
+  const setPeriodVanaf = (i: number, vanaf: string) => {
+    wisPeriodeFout(i);
     setWeekdayPeriods((prev) => prev.map((p, idx) => (idx === i ? { ...p, vanaf } : p)));
-  const setPeriodWeekday = (i: number, dow: number, name: string) =>
+  };
+  const setPeriodWeekday = (i: number, dow: number, name: string) => {
+    wisPeriodeFout(i);
     setWeekdayPeriods((prev) => prev.map((p, idx) => (idx === i ? { ...p, weekdays: p.weekdays.map((x, d) => (d === dow ? name : x)) } : p)));
+  };
   const removeWeekdayPeriod = (i: number) =>
     setWeekdayPeriods((prev) => prev.filter((_, idx) => idx !== i));
 
@@ -447,8 +462,11 @@ export function CoverageView() {
 
   // --- Uitzonderingen ---
   const addOverride = () => setOverrides((prev) => [...prev, { _k: sleutel(), from: '', to: '', dayType: '' }]);
-  const updateOverride = (i: number, field: keyof CoverageOverride, value: string) =>
+  const updateOverride = (i: number, field: keyof CoverageOverride, value: string) => {
+    const k = overrides[i]?._k;
+    if (k !== undefined) rijFouten.wisVeld(rijSleutel.uitzondering(k));
     setOverrides((prev) => prev.map((o, idx) => (idx === i ? { ...o, [field]: value } : o)));
+  };
   const removeOverride = (i: number) => setOverrides((prev) => prev.filter((_, idx) => idx !== i));
 
   // Gesorteerd + verlopen gemarkeerd (nr. 5): de kalender-voorzet kan er
@@ -513,11 +531,35 @@ export function CoverageView() {
   const { vuil: instellingenVuil, markeerSchoon: instellingenSchoon } = useVuil(instellingenWaarden, config !== null);
   useVerlaatWaarschuwing(instellingenVuil);
 
+  // Na een geblokkeerde save: focus op het eerste ontbrekende veld (de
+  // velden die ontbreken dragen aria-invalid; geen data-fout op de rij, dan
+  // zou de uitklapknop vooraan de focus krijgen). De knop staat buiten elk
+  // formulier, dus hier zelf; een tik later, zodat een net opengeklapte
+  // sectie niet meer inert is.
+  useEffect(() => {
+    if (focusFout === 0) return;
+    const t = window.setTimeout(() => focusEersteFout(instellingenRef.current), 0);
+    return () => window.clearTimeout(t);
+  }, [focusFout]);
+
   const handleSave = async () => {
     if (saving) return;
+    // Een half ingevulde rij blokkeert (tranche 3A): vroeger viel ze stil
+    // weg. Een volledig lege rij valt nog altijd weg, hieronder.
+    const onvolledig = onvolledigeRijen({ dayTypes, weekdayPeriods, overrides });
+    if (Object.keys(onvolledig).length > 0) {
+      rijFouten.zet(onvolledig);
+      const sleutels = Object.keys(onvolledig);
+      if (sleutels.some((k) => k.startsWith('periode-'))) setWeekdagenOpen(true);
+      if (sleutels.some((k) => k.startsWith('uitzondering-'))) setUitzonderingenOpen(true);
+      setFocusFout((t) => t + 1);
+      return;
+    }
+    rijFouten.wis();
     setSaving(true);
     try {
-      // Dag-types: lege namen weg, dedupe (eerste wint).
+      // Dag-types: lege rijen weg (deels ingevuld is hierboven al
+      // tegengehouden), dedupe (eerste wint).
       const seen = new Set<string>();
       const cleanDayTypes: CoverageDayType[] = [];
       for (const dt of dayTypes) {
@@ -642,7 +684,7 @@ export function CoverageView() {
 
       {/* === Instellingen === */}
       {showConfig && (
-        <Card padding="md" className="space-y-6">
+        <Card ref={instellingenRef} padding="md" className="space-y-6">
           <CardHeader
             title="Dekkingsinstellingen"
             description="Beheer je dag-types, de verwachte diensten per type, welk type elke weekdag is, en uitzonderingen."
@@ -677,6 +719,8 @@ export function CoverageView() {
                   <div className="space-y-3">
                     {dayTypes.map((dt, i) => {
                       const selected = new Set(dt.services);
+                      const fout = rijFouten.fouten[rijSleutel.dagtype(dt._k)];
+                      const foutId = fout ? `${rijSleutel.dagtype(dt._k)}-fout` : undefined;
                       return (
                         <Card key={dt._k} tone="muted" padding="sm">
                           <div className="flex items-center gap-2">
@@ -697,11 +741,14 @@ export function CoverageView() {
                               onBlur={() => finishDayTypeNameEdit(i)}
                               placeholder="Naam dag-type"
                               aria-label="Naam dag-type"
+                              aria-describedby={foutId}
+                              invalid={Boolean(fout)}
                               className="flex-1 font-semibold"
                             />
                             <Badge tone="slate" className="shrink-0 tabular-nums">{dt.services.length} {dt.services.length === 1 ? 'dienst' : 'diensten'}</Badge>
                             <IconButton label="Dag-type verwijderen" variant="danger" size="sm" onClick={() => removeDayType(i)}><X size={16} /></IconButton>
                           </div>
+                          {fout && <p id={foutId} className="mt-2 text-xs font-medium text-red-700">{fout}</p>}
                           <Uitklap open={openDayTypes.has(i)}>
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {config.services.map((svc) => {
@@ -820,7 +867,10 @@ export function CoverageView() {
                       Periode
                     </Button>
                   </div>
-                  {weekdayPeriods.map((p, i) => (
+                  {weekdayPeriods.map((p, i) => {
+                    const fout = rijFouten.fouten[rijSleutel.periode(p._k)];
+                    const foutId = fout ? `${rijSleutel.periode(p._k)}-fout` : undefined;
+                    return (
                     <Card key={p._k} tone="muted" padding="sm" className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <MicroLabel className="text-slate-600">Vanaf</MicroLabel>
@@ -829,14 +879,10 @@ export function CoverageView() {
                           value={p.vanaf}
                           onChange={(v) => setPeriodVanaf(i, v)}
                           aria-label="Ingangsdatum van deze weekdag-toewijzing"
-                          aria-describedby={!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf) ? `periode-${i}-fout` : undefined}
-                          invalid={!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf)}
+                          aria-describedby={foutId}
+                          invalid={Boolean(fout)}
                         />
-                        {/* Zonder ingangsdatum wordt de periode bij Opslaan
-                            stil weggelaten — zeg dat bij het veld. */}
-                        {!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf) && (
-                          <span id={`periode-${i}-fout`} className="text-xs font-medium text-red-700">Kies een ingangsdatum, anders wordt de periode niet opgeslagen.</span>
-                        )}
+                        {fout && <span id={foutId} className="text-xs font-medium text-red-700">{fout}</span>}
                         <IconButton label="Periode verwijderen" variant="danger" size="sm" className="ml-auto" onClick={() => removeWeekdayPeriod(i)}><X size={16} /></IconButton>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -856,7 +902,8 @@ export function CoverageView() {
                         ))}
                       </div>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
                 </div>
                 </Uitklap>
@@ -899,20 +946,20 @@ export function CoverageView() {
                 ) : (
                   <div className="space-y-2">
                     {gesorteerdeOverrides.map(({ o, i, verlopen }) => {
-                      // Onvolledige rijen worden bij Opslaan stil weggelaten —
-                      // zeg dat bij de rij zelf (fase C15), niet pas achteraf.
-                      const onvolledig = !o.from || !o.to || !o.dayType;
+                      // Onvolledig blokkeert Opslaan en staat dan hier (tranche
+                      // 3A); omgekeerde datums zegt de rij meteen.
+                      const onvolledig = rijFouten.fouten[rijSleutel.uitzondering(o._k)];
                       const omgekeerd = !!o.from && !!o.to && o.to < o.from;
-                      const rijFout = omgekeerd ? 'Tot en met ligt vóór Van.' : onvolledig ? 'Onvolledig, wordt niet opgeslagen.' : '';
-                      const foutId = rijFout ? `uitzondering-${i}-fout` : undefined;
+                      const rijFout = omgekeerd ? 'Tot en met ligt vóór Van.' : onvolledig ?? '';
+                      const foutId = rijFout ? `${rijSleutel.uitzondering(o._k)}-fout` : undefined;
                       return (
                         <div key={o._k} className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <DateInput size="sm" value={o.from} max={o.to || undefined} onChange={(v) => updateOverride(i, 'from', v)} aria-label="Van" aria-describedby={foutId} invalid={!o.from || omgekeerd} />
+                            <DateInput size="sm" value={o.from} max={o.to || undefined} onChange={(v) => updateOverride(i, 'from', v)} aria-label="Van" aria-describedby={foutId} invalid={(Boolean(onvolledig) && !o.from) || omgekeerd} />
                             <span className="text-label">t/m</span>
-                            <DateInput size="sm" value={o.to} min={o.from || undefined} onChange={(v) => updateOverride(i, 'to', v)} aria-label="Tot en met" aria-describedby={foutId} invalid={!o.to || omgekeerd} />
+                            <DateInput size="sm" value={o.to} min={o.from || undefined} onChange={(v) => updateOverride(i, 'to', v)} aria-label="Tot en met" aria-describedby={foutId} invalid={(Boolean(onvolledig) && !o.to) || omgekeerd} />
                             <span className="text-slate-400 font-semibold">→</span>
-                            <Select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" aria-describedby={foutId} invalid={!o.dayType} className="w-auto">
+                            <Select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" aria-describedby={foutId} invalid={Boolean(onvolledig) && !dayTypeNames.includes(o.dayType)} className="w-auto">
                               <option value="">kies type</option>
                               {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                             </Select>
