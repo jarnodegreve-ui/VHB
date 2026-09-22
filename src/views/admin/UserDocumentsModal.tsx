@@ -98,9 +98,11 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             onClose={onClose}
           />
 
-          {/* Enter in de categorie opent de bestandskiezer (de upload start
-              zodra er een bestand gekozen is). */}
-          <Formulier onVerstuur={() => fileRef.current?.click()} className="p-6 md:p-7 border-b border-hairline shrink-0 space-y-3">
+          {/* Uploaden is een expliciete actie: alleen de knop opent de
+              bestandskiezer (de upload start zodra er een bestand gekozen is).
+              Enter in de categorie dient dit formulier in en doet verder
+              niets (Jarno 22-09); de categorie blijft staan. */}
+          <Formulier onVerstuur={() => undefined} className="p-6 md:p-7 border-b border-hairline shrink-0 space-y-3">
             <Field label="Categorie (optioneel)" htmlFor="document-categorie">
               <Input
                 id="document-categorie"
@@ -114,7 +116,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                 <>
                   {/* Knop vóór het verborgen file-input: focusEersteFout
                       neemt het eerste control in het veld. */}
-                  <Button type="submit" id={id} aria-describedby={describedBy} aria-invalid={invalid || undefined} variant="primary" icon={<Upload size={16} />} bezig={uploading}>
+                  <Button type="button" onClick={() => fileRef.current?.click()} id={id} aria-describedby={describedBy} aria-invalid={invalid || undefined} variant="primary" icon={<Upload size={16} />} bezig={uploading}>
                     {`Document toevoegen (PDF/afbeelding, max ${MAX_MB} MB)`}
                   </Button>
                   <input ref={fileRef} type="file" accept={ACCEPT} onChange={handleUpload} className="hidden" tabIndex={-1} aria-hidden="true" />
