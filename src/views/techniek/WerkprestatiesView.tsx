@@ -13,7 +13,10 @@ import {
 } from '../../lib/techniek';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { LegeLijst } from '../../components/illustraties';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
@@ -412,23 +415,27 @@ function PrestatieModal({ prestatie, standaardDatum, voertuigen, techniekers = [
   const [eindeTijd, setEindeTijd] = useState(prestatie?.eindeTijd ?? '');
   const [werkuren, setWerkuren] = useState(prestatie ? urenTekst(prestatie.werkuren) : '');
   const [mecanicienId, setMecanicienId] = useState(prestatie?.mecanicienId ?? String(currentUser.id));
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  const fouten = useVeldfouten();
   const [bezig, setBezig] = useState(false);
 
   // Begin en einde ingevuld → uren automatisch (kwartieren), maar handmatig
   // overschrijven blijft mogelijk (Access had alleen de duur).
   const afgeleid = beginTijd && eindeTijd ? urenTussen(beginTijd, eindeTijd) : null;
   useEffect(() => { if (afgeleid !== null) setWerkuren(urenTekst(afgeleid)); }, [afgeleid]);
+  // Afgeleide uren tellen niet als eigen wijziging (begin en einde wel).
+  const { vuil } = useVuil({ datum, vehicleId, werkcode, omschrijving, beginTijd, eindeTijd, mecanicienId, werkuren: afgeleid !== null && werkuren === urenTekst(afgeleid) ? 'afgeleid' : werkuren });
 
   const keuzes = useMemo(() => [...voertuigen].filter((v) => v.status !== 'uit_dienst' || v.id === vehicleId).sort((a, b) => (a.kortNr ?? 99999) - (b.kortNr ?? 99999)), [voertuigen, vehicleId]);
 
   const opslaan = async () => {
     if (bezig) return;
-    setBezig(true); setFouten({});
+    fouten.wis();
     const uren = Number(werkuren.replace(',', '.'));
+    if (!Number.isFinite(uren)) { fouten.zet({ werkuren: 'Vul een getal in.' }); return; }
+    setBezig(true);
     const body: WerkprestatieBody = {
       datum, vehicleId: vehicleId || null, werkcode, omschrijving: omschrijving.trim(),
-      beginTijd: beginTijd || null, eindeTijd: eindeTijd || null, werkuren: Number.isFinite(uren) ? uren : -1,
+      beginTijd: beginTijd || null, eindeTijd: eindeTijd || null, werkuren: uren,
       // Kilometerstand staat niet meer in het formulier (Jarno 18-09, overbodig);
       // wat er bij een oude prestatie in staat, blijft staan.
       kmstand: prestatie?.kmstand ?? null, defectId: prestatie?.defectId ?? null,
@@ -439,8 +446,10 @@ function PrestatieModal({ prestatie, standaardDatum, voertuigen, techniekers = [
       notify(prestatie ? 'Taak bijgewerkt.' : 'Taak geregistreerd.', 'success');
       onKlaar(w);
     } catch (err) {
-      if (err instanceof TechniekFout && err.veldfouten) setFouten(err.veldfouten);
-      notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error');
+      // Veldfouten bij het veld; de rest één toast met vervolgstap. Opnieuw
+      // alleen bij bewerken (PUT op id), nooit bij registreren.
+      if (err instanceof TechniekFout && err.veldfouten) fouten.zet(err.veldfouten);
+      else meldSchrijffout('Opslaan', err, prestatie ? () => void opslaan() : undefined);
     } finally { setBezig(false); }
   };
 
@@ -449,35 +458,33 @@ function PrestatieModal({ prestatie, standaardDatum, voertuigen, techniekers = [
     : (prestatie ? 'Taak aanpassen' : 'Taak toevoegen');
 
   return (
-    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={titel}>
-      <div className="p-6">
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="lg" ariaLabel={titel}>
+      <Formulier onVerstuur={opslaan} noValidate className="p-6">
         <CardHeader title={titel} description="Wat heb je aan welke bus gedaan en hoelang duurde het?" />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Datum" required error={fouten.datum}>{({ id }) => <DateInput id={id} value={datum} max={staf ? undefined : vandaagIso()} onChange={setDatum} />}</Field>
+          <Field label="Datum" required error={fouten.fouten.datum}><DateInput value={datum} max={staf ? undefined : vandaagIso()} onChange={(v) => { setDatum(v); fouten.wisVeld('datum'); }} /></Field>
           {staf && (
-            <Field label="Technieker" error={fouten.mecanicienId}>{({ id }) => <Select id={id} value={mecanicienId} onChange={(e) => setMecanicienId(e.target.value)}>{techniekers.map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}{!techniekers.some((u) => String(u.id) === mecanicienId) && <option value={mecanicienId}>{currentUser.name}</option>}</Select>}</Field>
+            <Field label="Technieker" error={fouten.fouten.mecanicienId}><Select value={mecanicienId} onChange={(e) => { setMecanicienId(e.target.value); fouten.wisVeld('mecanicienId'); }}>{techniekers.map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}{!techniekers.some((u) => String(u.id) === mecanicienId) && <option value={mecanicienId}>{currentUser.name}</option>}</Select></Field>
           )}
-          <Field label="Bus" error={fouten.vehicleId}>
-            {({ id, invalid }) => (
-              <Select id={id} invalid={invalid} value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+          <Field label="Bus" error={fouten.fouten.vehicleId}>
+            <Select value={vehicleId} onChange={(e) => { setVehicleId(e.target.value); fouten.wisVeld('vehicleId'); }}>
                 <option value="">Garage / algemeen</option>
                 {keuzes.map((v) => <option key={v.id} value={v.id}>{voertuigNaam(v)}{v.kortNr !== null && v.kortNr !== undefined ? ` (${v.busnr})` : ''}</option>)}
-              </Select>
-            )}
+            </Select>
           </Field>
-          <Field label="Soort werk" required error={fouten.werkcode}>{({ id }) => <Select id={id} value={werkcode} onChange={(e) => setWerkcode(e.target.value as Werkcode)}>{WERKCODES.map((c) => <option key={c} value={c}>{c} · {WERKCODE_LABEL[c]}</option>)}</Select>}</Field>
-          <Field label="Wat is er gedaan?" required className="sm:col-span-2" error={fouten.omschrijving}>
-            {({ id, invalid }) => <Textarea id={id} invalid={invalid} value={omschrijving} rows={3} maxLength={WERK_OMSCHRIJVING_MAX} onChange={(e) => setOmschrijving(e.target.value)} placeholder="Bijvoorbeeld: remblokken vooraan vervangen, olie ververst" />}
+          <Field label="Soort werk" required error={fouten.fouten.werkcode}><Select value={werkcode} onChange={(e) => { setWerkcode(e.target.value as Werkcode); fouten.wisVeld('werkcode'); }}>{WERKCODES.map((c) => <option key={c} value={c}>{c} · {WERKCODE_LABEL[c]}</option>)}</Select></Field>
+          <Field label="Wat is er gedaan?" required className="sm:col-span-2" error={fouten.fouten.omschrijving}>
+            <Textarea value={omschrijving} rows={3} maxLength={WERK_OMSCHRIJVING_MAX} onChange={(e) => { setOmschrijving(e.target.value); fouten.wisVeld('omschrijving'); }} placeholder="Bijvoorbeeld: remblokken vooraan vervangen, olie ververst" />
           </Field>
-          <Field label="Begin" error={fouten.beginTijd}>{({ id, invalid }) => <Input id={id} invalid={invalid} type="time" value={beginTijd} onChange={(e) => setBeginTijd(e.target.value)} />}</Field>
-          <Field label="Einde" error={fouten.eindeTijd}>{({ id, invalid }) => <Input id={id} invalid={invalid} type="time" value={eindeTijd} onChange={(e) => setEindeTijd(e.target.value)} />}</Field>
-          <Field label="Uren" required hint="Bijvoorbeeld 1,5" error={fouten.werkuren}>{({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="decimal" value={werkuren} onChange={(e) => setWerkuren(e.target.value)} />}</Field>
+          <Field label="Begin" error={fouten.fouten.beginTijd}><Input type="time" value={beginTijd} onChange={(e) => { setBeginTijd(e.target.value); fouten.wisVeld('beginTijd'); }} /></Field>
+          <Field label="Einde" error={fouten.fouten.eindeTijd}><Input type="time" value={eindeTijd} onChange={(e) => { setEindeTijd(e.target.value); fouten.wisVeld('eindeTijd'); }} /></Field>
+          <Field label="Uren" required hint="Bijvoorbeeld 1,5" error={fouten.fouten.werkuren}><Input inputMode="decimal" value={werkuren} onChange={(e) => { setWerkuren(e.target.value); fouten.wisVeld('werkuren'); }} /></Field>
         </div>
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" onClick={() => void opslaan()} disabled={bezig}>{bezig ? 'Bezig…' : 'Opslaan'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" bezig={bezig}>Opslaan</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }
