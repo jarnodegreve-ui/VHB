@@ -65,7 +65,7 @@ const formatShiftDate = (date: string) =>
 
 /** Badge-tekst voor een dienst waarvoor een eigen ruilaanvraag loopt. */
 const openSwapLabel = (swap: SwapRequest) => {
-  if (swap.status === 'accepted') return 'Collega akkoord, wacht op planner';
+  if (swap.status === 'accepted') return 'Collega akkoord, wacht op de planner';
   return swap.swapType === 'overname' ? 'Overname aangevraagd' : 'Ruil aangevraagd';
 };
 

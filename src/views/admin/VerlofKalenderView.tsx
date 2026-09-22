@@ -17,6 +17,7 @@ import { aanvragerNaam, useVerlofLimieten, VerlofBeoordelingInhoud, VerlofBeoord
 import { formatDateHuman, formatDayLong, formatPeriodeDMJ, MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import { limietVoorDag } from '../../../shared/schemas/verlofLimieten';
+import { AANVRAAG_STATUS, statusLabel } from '../../../shared/status';
 
 /** Maand in de URL (`/beheer/verlofkalender/2026-10`) — spiegel van `viewMonth`;
  *  een ongeldige waarde wordt genegeerd. */
@@ -26,10 +27,6 @@ const maandUitParam = (p: string | null): Date | null =>
 const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 /** Statuswoord in de cel-tooltip — Nederlands, zoals StatusBadge. */
-const STATUS_TEKST: Record<LeaveRequest['status'], string> = {
-  approved: 'goedgekeurd', pending: 'in behandeling', cancelled: 'geannuleerd', rejected: 'afgewezen',
-};
-
 /** Volgorde in het dagpaneel: eerst wat een beslissing vraagt, dan wie echt weg is. */
 const DAG_VOLGORDE: Record<LeaveRequest['status'], number> = { pending: 0, approved: 1, cancelled: 2, rejected: 3 };
 
@@ -436,7 +433,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                       const leave = userMap?.get(day);
                       const iso = dateIso(day);
                       const title = leave
-                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type}, ${STATUS_TEKST[leave.status] ?? leave.status} (${formatPeriodeDMJ(leave.startDate, leave.endDate)})`
+                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type}, ${statusLabel(AANVRAAG_STATUS, leave.status, true)} (${formatPeriodeDMJ(leave.startDate, leave.endDate)})`
                         : undefined;
                       return (
                         <td

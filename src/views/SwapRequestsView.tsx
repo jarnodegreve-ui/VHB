@@ -393,7 +393,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     setSwapType('ruil');
   };
 
-  const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status'], seenStatus?: string) => {
+  const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status'], seenStatus?: string, toastTekst?: string) => {
     // Delta-pad (PATCH per record, met conflictdetectie): twee mensen die
     // tegelijk beoordelen overschrijven elkaar niet meer — de tweede krijgt
     // een nette melding en een verse lijst. seenStatus = wat de beslisser
@@ -403,7 +403,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     if (onDecide) {
       const toastFor: Partial<Record<SwapRequest['status'], string>> = {
         approved: 'Dienstruil goedgekeurd.',
-        rejected: 'Dienstruil geweigerd.',
+        // Planner wijst af; de collega die weigert geeft zijn eigen tekst mee
+        // (handleDecline), zie de woordkeuze in shared/status.ts.
+        rejected: 'Dienstruil afgewezen.',
         accepted: 'Geaccepteerd, de planner beoordeelt de ruil nu.',
         cancelled: 'Aanvraag ingetrokken.',
         completed: 'Afgehandeld, de wissel staat nu onder Afgehandeld.',
@@ -411,7 +413,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       setBeslisBezig(swapId);
       return onDecide(swapId, newStatus, seenStatus ?? swaps.find((s) => s.id === swapId)?.status)
         .then((ok) => {
-          if (ok && toastFor[newStatus]) notify(toastFor[newStatus]!, 'success');
+          const tekst = toastTekst ?? toastFor[newStatus];
+          if (ok && tekst) notify(tekst, 'success');
           return ok;
         })
         .finally(() => setBeslisBezig((h) => (h === swapId ? null : h)));
@@ -463,7 +466,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       message: 'Deze dienstruil weigeren? Je collega ziet dat je niet kan.',
       confirmText: 'Weigeren',
       variant: 'danger',
-      run: () => handleStatusUpdate(swapId, 'rejected', seen),
+      run: () => handleStatusUpdate(swapId, 'rejected', seen, 'Dienstruil geweigerd.'),
     });
   };
 

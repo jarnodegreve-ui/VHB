@@ -179,7 +179,7 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
                       primary={ruilTekst(r)}
                       secondary={[
                         `Dienst ${r.dienst}`,
-                        r.swap.status === 'accepted' ? 'collega akkoord, te valideren' : 'wacht op de collega',
+                        r.swap.status === 'accepted' ? 'collega akkoord, wacht op validatie' : 'wacht op de collega',
                         teKort ? 'te weinig rust' : null,
                       ].filter(Boolean).join(' · ')}
                       onClick={() => onNavigate('ruil-verzoeken')}
