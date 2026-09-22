@@ -129,7 +129,7 @@ export function BottomNav({
                   // Hover alleen op een echte muis (pointer-fine): op touch
                   // blijft :hover na een tik plakken, waardoor een inactieve
                   // tab er permanent "half actief" uitzag.
-                  'relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg transition-colors',
+                  'tikbaar relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg',
                   // Actieve tab = neutrale pil in carbon (goud rantsoeneren, punt 4):
                   // navigatie is geen actie; de badge blijft goud (live-signaal).
                   isActive ? 'text-slate-900' : 'text-slate-500 pointer-fine:hover:text-slate-700',
@@ -164,7 +164,7 @@ export function BottomNav({
             <button
               onClick={onMore}
               aria-label="Meer"
-              className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg transition-colors text-slate-500 pointer-fine:hover:text-slate-700"
+              className="tikbaar relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg text-slate-500 pointer-fine:hover:text-slate-700"
             >
               <span className="relative z-10">
                 <Menu size={18} />

@@ -148,7 +148,7 @@ export function OpsStat({
       // hoogte). Zonder dit hingen icoon en kop van een kortere tegel lager
       // dan die van de buurtegel.
       // rauw: KPI-tegel-als-knop met eigen layout (kaart-als-knop).
-      <button type="button" onClick={onClick} aria-pressed={actief || undefined} className={cn('kpi-tegel group surface-card surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', actief && 'bg-surface-muted ring-1 ring-hairline-strong', className)}>
+      <button type="button" onClick={onClick} aria-pressed={actief || undefined} className={cn('ios-pressable kpi-tegel group surface-card surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', actief && 'bg-surface-muted ring-1 ring-hairline-strong', className)}>
         {inner}
       </button>
     );
@@ -229,7 +229,7 @@ export function OpsRow({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 sm:pointer-fine:py-2 text-left transition-[background-color,box-shadow] hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1"
+      className="tikbaar group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 sm:pointer-fine:py-2 text-left transition-[background-color,box-shadow] hover:bg-surface-row-hover hover:ring-hairline-strong hover:elev-1"
     >
       {leading ?? (badges ? null : (
         <span className={cn('inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
@@ -268,7 +268,7 @@ export function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="group surface-card surface-card-hover flex items-center gap-2.5 rounded-3xl p-3.5 text-left"
+      className="ios-pressable group surface-card surface-card-hover flex items-center gap-2.5 rounded-3xl p-3.5 text-left"
     >
       {/* Carbon vierkant met licht icoon; de omgekeerde schalen keren dat in
           donker vanzelf om (geen aparte dark-look meer, controle-ronde 05-09, 40). */}

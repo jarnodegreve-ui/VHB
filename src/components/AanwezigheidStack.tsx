@@ -30,7 +30,7 @@ export function AanwezigheidStack({ className }: { className?: string }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={label}
-        className={cn('flex items-center rounded-full py-1 pl-1 pr-1.5 transition-colors hover:bg-surface-soft-hover', open && 'bg-slate-100/80')}
+        className={cn('tikbaar flex items-center rounded-full py-1 pl-1 pr-1.5 hover:bg-surface-soft-hover', open && 'bg-slate-100/80')}
       >
         <span className="flex -space-x-1.5">
           {zichtbaar.map((a) => (

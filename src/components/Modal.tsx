@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
-import { DUR, EASE_SPRING } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 
 // Stapel van open modals (module-scope): bij een dialoog bóven een dialoog
@@ -16,11 +16,16 @@ const modalStack: symbol[] = [];
  * Portal-rendered modal with backdrop, click-outside-to-close and ESC support.
  *
  * Renders into document.body to escape ancestor transform/filter contexts
- * that would otherwise trap `position: fixed`. We deliberately do NOT use
- * AnimatePresence here — the exit animation kept the backdrop mounted for
- * a few frames after close and occasionally swallowed scroll events. With
- * an instant unmount we keep the elegant enter animation but the page is
- * always immediately interactive again after the modal closes.
+ * that would otherwise trap `position: fixed`.
+ *
+ * Uitgang (fase 2, 22-09): scrim en paneel faden uit op DUR.fast/EASE, zoals
+ * SlideOver, ActieMenu en de menu's. Tot dan verdween elke Modal in één
+ * frame, omdat een eerdere exit-animatie de scrim enkele frames liet staan
+ * en scrollgebaren opslokte. Dat is opgelost door de scrim tijdens de
+ * uitgang `pointer-events: none` te geven (niet-animeerbare waarde, geldt
+ * meteen bij het begin van de exit) en door scroll-lock, focus-herstel en
+ * de modal-stapel aan `open` te hangen, niet aan de mount: de pagina is dus
+ * direct weer bedienbaar terwijl het paneel nog wegfadet.
  */
 export function Modal({
   open,
@@ -143,7 +148,7 @@ export function Modal({
   // opslaan-knop), want de layout-viewport krimpt niet mee.
   const keyboardInset = useKeyboardInset(open);
 
-  if (typeof document === 'undefined' || !open) return null;
+  if (typeof document === 'undefined') return null;
 
   const widthClass = {
     sm: 'max-w-sm',
@@ -155,10 +160,13 @@ export function Modal({
   }[maxWidth];
 
   return createPortal(
+    <AnimatePresence>
+      {open && (
     <motion.div
+      key="modal"
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: reduceMotion ? 0 : 0.16 }}
+      animate={{ opacity: 1, transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
+      exit={{ opacity: 0, pointerEvents: 'none', transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
       onClick={dismissOnBackdrop ? onClose : undefined}
       // Op mobile: minimale padding zodat de modal bijna full-screen kan,
       // en respecteer safe-area (notch + home-indicator).
@@ -183,10 +191,10 @@ export function Modal({
         // Zelfde reduced-motion-respect als SlideOver (Modal miste het:
         // de CSS-regel raakt alleen CSS-animaties, niet deze JS-animaties).
         initial={reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        // Binnenkomend met de veer (EASE_SPRING); de Modal heeft geen exit-
-        // animatie (zie boven), dus de standaard-ease komt hier niet voor.
-        transition={reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE_SPRING }}
+        // Binnenkomend met de veer (EASE_SPRING), uitgaand korter op de
+        // standaard-ease, zoals elk paneel in de app.
+        animate={{ opacity: 1, scale: 1, y: 0, transition: reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE_SPRING } }}
+        exit={reduceMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.98, y: 8, transition: { duration: DUR.fast, ease: EASE } }}
         onClick={(e) => e.stopPropagation()}
         // Op mobile: max-h = viewport minus de safe-area-padding van de
         // backdrop hierboven (dezelfde max(0.5rem, env(…))-termen), zodat een
@@ -211,7 +219,9 @@ export function Modal({
       >
         {children}
       </motion.div>
-    </motion.div>,
+    </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   );
 }
