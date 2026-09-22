@@ -37,6 +37,8 @@ import { apiFetch } from '../lib/api';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Verwissel } from '../components/Verwissel';
 import { Modal } from '../components/Modal';
+import { Formulier } from '../components/Formulier';
+import { useVeldfouten, useVuil } from '../lib/formulier';
 import { EmptyState, ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
@@ -174,7 +176,7 @@ export function PlannerDashboardWidgets({
   const [isSubmittingSick, setIsSubmittingSick] = useState(false);
   // Validatiefouten per veld (fase C15): bij het veld, niet onderaan of in
   // een toast. Server-/netwerkfouten blijven via onSickReport → notify.
-  const [sickFouten, setSickFouten] = useState<{ userId?: string; endDate?: string }>({});
+  const sickFouten = useVeldfouten();
   // Stap 2 van de ziekmelding: de diensten die door de melding onbemand
   // achterblijven, meteen kunnen overzetten. Dít is de volgorde waarin het
   // echt gebeurt (chauffeur belt → registreren → wie rijdt het dan?), en het
@@ -185,6 +187,9 @@ export function PlannerDashboardWidgets({
   const [wisselBezig, setWisselBezig] = useState<string | null>(null);
   const [afgehandeld, setAfgehandeld] = useState<Record<string, string>>({});
   const closeSickModal = () => { setShowSickModal(false); setZiekVervolg(null); setVervangerPerDienst({}); setAfgehandeld({}); };
+  // Onbewaarde invoer (tranche 3A): alleen in stap 1 (het formulier); in stap
+  // 2 is de melding al geregistreerd en valt er niets te verliezen.
+  const { vuil: sickVuil } = useVuil(sickForm, showSickModal && !ziekVervolg);
 
   // --- Gememoïseerd rekenwerk (ronde 3, 19-09) ---------------------------------
   // De cockpit rendert bij elke modal, select en minuuttik opnieuw, en deed
@@ -933,7 +938,7 @@ export function PlannerDashboardWidgets({
           aria-haspopup="dialog"
           onClick={() => {
             setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
-            setSickFouten({});
+            sickFouten.wis();
             setShowSickModal(true);
           }}
         >
@@ -1112,6 +1117,7 @@ export function PlannerDashboardWidgets({
       <Modal
         open={showSickModal}
         onClose={closeSickModal}
+        vuil={sickVuil}
         maxWidth="sm"
         className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0"
       >
@@ -1232,17 +1238,17 @@ export function PlannerDashboardWidgets({
             </Button>
           </div>
         ) : (
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
+        <Formulier
+          noValidate
+          onVerstuur={async () => {
             if (isSubmittingSick) return;
             const startDate = sickForm.startDate || todayKey;
             const endDate = sickForm.endDate || startDate;
             const fouten: { userId?: string; endDate?: string } = {};
             if (!sickForm.userId) fouten.userId = 'Kies de chauffeur die ziek is.';
             if (endDate < startDate) fouten.endDate = 'De einddatum ligt vóór de startdatum.';
-            setSickFouten(fouten);
-            if (fouten.userId || fouten.endDate) return;
+            if (fouten.userId || fouten.endDate) { sickFouten.zet(fouten as Record<string, string>); return; }
+            sickFouten.wis();
             setIsSubmittingSick(true);
             const ok = await onSickReport({ userId: sickForm.userId, startDate, endDate, comment: sickForm.comment })
               .finally(() => setIsSubmittingSick(false));
@@ -1262,64 +1268,48 @@ export function PlannerDashboardWidgets({
           }}
           className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
-          <Field label="Chauffeur" required error={sickFouten.userId}>
-            {({ id, describedBy, invalid }) => (
-              <Select
-                id={id}
-                aria-describedby={describedBy}
-                invalid={invalid}
-                value={sickForm.userId}
-                onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickFouten((f) => ({ ...f, userId: undefined })); }}
-              >
-                <option value="">Kies een chauffeur…</option>
-                {users
-                  .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </Select>
-            )}
+          <Field label="Chauffeur" required error={sickFouten.fouten.userId}>
+            <Select
+              value={sickForm.userId}
+              onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); sickFouten.wisVeld('userId'); }}
+            >
+              <option value="">Kies een chauffeur…</option>
+              {users
+                .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Van">
-              {({ id }) => (
-                <DateInput
-                  id={id}
-                  value={sickForm.startDate}
-                  onChange={(v) => { setSickForm({ ...sickForm, startDate: v, endDate: sickForm.endDate < v ? v : sickForm.endDate }); setSickFouten((f) => ({ ...f, endDate: undefined })); }}
-                />
-              )}
+              <DateInput
+                value={sickForm.startDate}
+                onChange={(v) => { setSickForm({ ...sickForm, startDate: v, endDate: sickForm.endDate < v ? v : sickForm.endDate }); sickFouten.wisVeld('endDate'); }}
+              />
             </Field>
-            <Field label="Tot en met" error={sickFouten.endDate}>
-              {({ id, describedBy, invalid }) => (
-                <DateInput
-                  id={id}
-                  aria-describedby={describedBy}
-                  invalid={invalid}
-                  value={sickForm.endDate}
-                  min={sickForm.startDate}
-                  onChange={(v) => { setSickForm({ ...sickForm, endDate: v }); setSickFouten((f) => ({ ...f, endDate: undefined })); }}
-                />
-              )}
+            <Field label="Tot en met" error={sickFouten.fouten.endDate}>
+              <DateInput
+                value={sickForm.endDate}
+                min={sickForm.startDate}
+                onChange={(v) => { setSickForm({ ...sickForm, endDate: v }); sickFouten.wisVeld('endDate'); }}
+              />
             </Field>
           </div>
           <Field label="Opmerking (optioneel)">
-            {({ id }) => (
-              <Textarea
-                id={id}
-                value={sickForm.comment}
-                onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })}
-                className="h-20"
-                placeholder="bv. gemeld via telefoon om 6u"
-              />
-            )}
+            <Textarea
+              value={sickForm.comment}
+              onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })}
+              className="h-20"
+              placeholder="bv. gemeld via telefoon om 6u"
+            />
           </Field>
           <p className="text-xs font-medium text-slate-500">
             De dag(en) komen meteen als onbeschikbaar in de planning; de andere planners krijgen een melding.
           </p>
-          <Button type="submit" variant="primary" size="lg" full disabled={isSubmittingSick}>
-            {isSubmittingSick ? 'Registreren…' : 'Ziekmelding registreren'}
+          <Button type="submit" variant="primary" size="lg" full bezig={isSubmittingSick}>
+            Ziekmelding registreren
           </Button>
-        </form>
+        </Formulier>
         )}
       </Modal>
 
