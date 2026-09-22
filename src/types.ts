@@ -116,6 +116,8 @@ export interface LeaveRequest {
   comment?: string;
   createdAt: string;
   decidedAt?: string;
+  /** Reden van de planner bij een afwijzing; alleen bij status 'rejected'. */
+  beslisReden?: string;
 }
 
 export interface Shift {

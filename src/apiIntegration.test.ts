@@ -2234,6 +2234,32 @@ describe('delta-endpoints (PATCH per record, anti-race)', () => {
     expect(mem.pushesSent.find((p) => p.payload.title === 'Verlof goedgekeurd')?.userIds).toEqual(['3']);
   });
 
+  it('bewaart de reden bij een afwijzing via PATCH: op het record, in het log, in de mail en de push', async () => {
+    const { sendLeaveDecisionEmail } = await import('../api/email.js');
+    vi.mocked(sendLeaveDecisionEmail).mockClear();
+    const res = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'pending', reden: "  Die week zijn er al te veel collega's vrij.  " } });
+    expect(res.status).toBe(200);
+    const reden = "Die week zijn er al te veel collega's vrij.";
+    expect(res.json.leave.beslisReden).toBe(reden);
+    expect(mem.leave.find((l) => l.id === 'l-a1')?.beslisReden).toBe(reden);
+    expect(mem.activity.find((a: any) => a.action === 'Verlof afgewezen' && a.entityId === 'l-a1')?.message).toContain(`Reden: ${reden}`);
+    expect(vi.mocked(sendLeaveDecisionEmail).mock.calls[0]?.[0]).toMatchObject({ action: 'rejected', reden });
+    expect(mem.pushesSent.find((p) => p.payload.title === 'Verlof afgewezen')?.payload.body).toContain(`Reden: ${reden}`);
+  });
+
+  it('negeert de reden bij een goedkeuring en weigert een te lange of niet-tekstuele reden (400)', async () => {
+    const goed = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending', reden: 'hoort er niet bij' } });
+    expect(goed.status).toBe(200);
+    expect(goed.json.leave.beslisReden).toBeUndefined();
+    expect(mem.activity.find((a: any) => a.action === 'Verlof goedgekeurd' && a.entityId === 'l-a1')?.message).not.toContain('Reden');
+
+    const teLang = await api('PATCH', '/api/leave/l-b1', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'pending', reden: 'x'.repeat(501) } });
+    expect(teLang.status).toBe(400);
+    const geenTekst = await api('PATCH', '/api/leave/l-b1', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'pending', reden: { tekst: 'nee' } } });
+    expect(geenTekst.status).toBe(400);
+    expect(mem.leave.find((l) => l.id === 'l-b1')?.status).toBe('pending');
+  });
+
   it('detecteert een race: tweede beslisser krijgt 409 en de eerste beslissing blijft staan', async () => {
     const eerste = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending' } });
     expect(eerste.status).toBe(200);

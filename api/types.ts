@@ -94,6 +94,9 @@ export interface LeaveRecord {
   comment?: string;
   createdAt: string;
   decidedAt?: string;
+  /** Vrije tekst van de beslisser bij een afwijzing (wens Jarno 22-09);
+   *  alleen gevuld als status 'rejected' is. */
+  beslisReden?: string;
 }
 
 export interface PlanningMatrixRow {

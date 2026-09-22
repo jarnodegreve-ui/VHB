@@ -119,6 +119,8 @@ interface LeaveDecisionEmailContext {
   startDate: string;
   endDate: string;
   action: LeaveDecisionAction;
+  /** Reden van de planner (alleen bij een afwijzing, vrije tekst). */
+  reden?: string;
 }
 
 const ACTION_CONFIG: Record<LeaveDecisionAction, { subject: string; bannerLabel: string; bannerColor: string; sentence: string }> = {
@@ -152,6 +154,15 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
   const cancelledNote = ctx.action === "cancelled"
     ? "<p style=\"color: #475569; line-height: 1.6;\">Neem contact op met de planning als hier vragen over zijn.</p>"
     : "";
+  // Reden bij een afwijzing (wens Jarno 22-09): als blokje onder de zin,
+  // met behoud van regeleinden; de tekst is plannerinvoer, dus escapen.
+  const reden = ctx.action === "rejected" ? String(ctx.reden ?? "").trim() : "";
+  const redenBlok = reden
+    ? `<div style="margin-top: 16px; padding: 14px 18px; background-color: #f8fafc; border-left: 3px solid #cbd5e1; border-radius: 8px;">
+        <p style="margin: 0 0 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #64748b;">REDEN</p>
+        <p style="margin: 0; color: #1e293b; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(reden)}</p>
+      </div>`
+    : "";
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
@@ -165,6 +176,7 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
           Je verlofaanvraag voor <strong>${escapeHtml(period)}</strong> (${escapeHtml(ctx.typeLabel)}) ${config.sentence} door ${escapeHtml(ctx.decidedByName)}.
         </p>
         ${cancelledNote}
+        ${redenBlok}
         <div style="margin-top: 30px; text-align: center;">
           <a href="${url}/verlof" style="background-color: #E2A323; color: #0D0D0F; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Bekijk in portaal</a>
         </div>
@@ -180,6 +192,7 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
     "",
     `Je verlofaanvraag voor ${period} (${ctx.typeLabel}) ${config.sentence} door ${ctx.decidedByName}.`,
     ctx.action === "cancelled" ? "Neem contact op met de planning als hier vragen over zijn." : "",
+    reden ? `Reden: ${reden}` : "",
     "",
     `Bekijk in portaal: ${url}/verlof`,
   ].filter(Boolean).join("\n");

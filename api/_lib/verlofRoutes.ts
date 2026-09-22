@@ -14,7 +14,7 @@ import { sendLeaveDecisionEmail, sendEmail, escapeHtml, type LeaveDecisionAction
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { isStafRol, authenticate, requireRole } from "../middleware.js";
-import { isMissingTableError } from "../deviceGate.js";
+import { isMissingColumnError, isMissingTableError } from "../deviceGate.js";
 import { stuurTelegram, telegramGeconfigureerd, meldVerlofAanvraagTelegram } from "../telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../../shared/schemas/verlofLimieten.js";
@@ -208,9 +208,25 @@ export async function registreerZiekmeldingIntern(
     };
 }
 
+/** Bovengrens voor de weigerreden: een vrij tekstvak, geen opstel; de reden
+ *  gaat ook mee in de mail en de pushmelding. */
+export const BESLISREDEN_MAX = 500;
+
+/** Reden uit de request-body: vrije tekst, getrimd; leeg = geen reden. Geeft
+ *  een foutmelding terug als het geen tekst is of te lang. */
+export const parseBeslisReden = (raw: unknown): { reden?: string } | { error: string } => {
+  if (raw === undefined || raw === null) return {};
+  if (typeof raw !== "string") return { error: "Reden hoort tekst te zijn." };
+  const reden = raw.trim();
+  if (reden.length > BESLISREDEN_MAX) return { error: `De reden is te lang (maximaal ${BESLISREDEN_MAX} tekens).` };
+  return reden ? { reden } : {};
+};
+
 /** De verlof-beslissing zelf (concurrency-guard, state-machine, opslag, log,
- *  mail + push) — gedeeld door PATCH /api/leave/:id en de Telegram-knoppen. */
-export async function beslisVerlofIntern(opts: { id: string; status: string; ifStatus: string; actor: BeslisActor }): Promise<
+ *  mail + push) — gedeeld door PATCH /api/leave/:id en de Telegram-knoppen.
+ *  `reden` (wens Jarno 22-09) is vrije tekst bij een afwijzing en wordt bij
+ *  een andere status genegeerd. */
+export async function beslisVerlofIntern(opts: { id: string; status: string; ifStatus: string; actor: BeslisActor; reden?: unknown }): Promise<
   { fout: { status: number; error: string; currentStatus?: string } } | { leave: any; melding: string }
 > {
     const { id, status, ifStatus, actor } = opts;
@@ -218,6 +234,9 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
     if (!allowed.includes(status)) {
       return { fout: { status: 400, error: "Ongeldige status." } };
     }
+    const geparsed = parseBeslisReden(opts.reden);
+    if ("error" in geparsed) return { fout: { status: 400, error: geparsed.error } };
+    const reden = status === "rejected" ? geparsed.reden : undefined;
 
     const all = await getLeaveData();
     const current = all.find((l) => String(l.id) === id);
@@ -235,8 +254,18 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
     }
 
     const decidedAt = new Date().toISOString();
-    const updated = { ...current, status, decidedAt };
-    await saveLeaveData([updated], []);
+    const updated = { ...current, status, decidedAt, ...(reden ? { beslisReden: reden } : {}) };
+    try {
+      await saveLeaveData([updated], []);
+    } catch (err) {
+      // Kolom beslisreden ontbreekt nog (migratie 2026-09-22 niet gedraaid):
+      // de beslissing is dan NIET opgeslagen. Duidelijk melden i.p.v. een
+      // kale 500, zodat de planner desnoods zonder reden kan weigeren.
+      if (reden && isMissingColumnError(err)) {
+        return { fout: { status: 503, error: "De reden kan nog niet bewaard worden: de databasemigratie van 22-09 (kolom beslisreden) is nog niet gedraaid. Weiger voorlopig zonder reden." } };
+      }
+      throw err;
+    }
 
     const users = await getUsersData();
     const requester = users.find((u) => String(u.id) === String(current.userId));
@@ -249,7 +278,9 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
       cancelled: "Verlof geannuleerd",
     };
     const action = actionLabels[status]!;
-    await logActivity(actorReq(actor), "leave", action, `${requesterName}, ${typeLabel} (${period}).`, { type: "leave", id });
+    // De reden mee in het log: zo staat hij ook in de wijzigingsgeschiedenis
+    // van de aanvraag, niet alleen op het record zelf.
+    await logActivity(actorReq(actor), "leave", action, `${requesterName}, ${typeLabel} (${period}).${reden ? ` Reden: ${reden}` : ""}`, { type: "leave", id });
 
     // E-mail + push naar de aanvrager — niet de actor zelf.
     if (String(actor.id) !== String(current.userId)) {
@@ -262,16 +293,17 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
           startDate: current.startDate,
           endDate: current.endDate,
           action: status as LeaveDecisionAction,
+          reden,
         });
       }
       await sendPushToUsers([String(current.userId)], {
         title: action,
         soort: "verlof",
-        body: `${typeLabel} (${period}), beslist door ${actor.name || "Planning"}.`,
+        body: `${typeLabel} (${period}), beslist door ${actor.name || "Planning"}.${reden ? ` Reden: ${reden}` : ""}`,
         url: viewUrl("verlof"),
       });
     }
-    return { leave: updated, melding: `${action}: ${requesterName}, ${typeLabel} (${period}).` };
+    return { leave: updated, melding: `${action}: ${requesterName}, ${typeLabel} (${period}).${reden ? ` Reden: ${reden}` : ""}` };
 }
 
 export function mountVerlofRoutes(app: express.Express) {
@@ -507,7 +539,8 @@ export function mountVerlofRoutes(app: express.Express) {
           if (next.decidedAt) {
             return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
           }
-          chauffeurWrites.push(next);
+          // De weigerreden is van de beslisser, nooit van de aanvrager.
+          chauffeurWrites.push({ ...next, beslisReden: undefined });
         }
         recordsToWrite = chauffeurWrites;
       } else {
@@ -559,6 +592,13 @@ export function mountVerlofRoutes(app: express.Express) {
         }
       }
 
+      // Een reden hoort alleen bij een afwijzing (zelfde regel als de PATCH-
+      // route); bij elke andere status valt hij weg, ook bij een stale echo.
+      recordsToWrite = recordsToWrite.map((r) => {
+        if (String(r.status) !== "rejected") return { ...r, beslisReden: undefined };
+        const geparsed = parseBeslisReden(r.beslisReden);
+        return { ...r, beslisReden: "error" in geparsed ? undefined : geparsed.reden };
+      });
       await saveLeaveData(recordsToWrite, leaveIdsToDelete, { alleenPending: !isStafRol(req.appUser!.role) });
 
       if (leaveIdsToDelete.length > 0) {
@@ -613,11 +653,12 @@ export function mountVerlofRoutes(app: express.Express) {
           else if (next.status === "rejected") { action = "Verlof afgewezen"; emailAction = "rejected"; }
           else if (next.status === "cancelled") { action = "Verlof geannuleerd"; emailAction = "cancelled"; }
           if (!action) continue;
+          const reden = next.status === "rejected" && next.beslisReden ? String(next.beslisReden) : undefined;
           await logActivity(
             req,
             "leave",
             action,
-            `${userName(next.userId)}, ${typeLabel} (${period}).`,
+            `${userName(next.userId)}, ${typeLabel} (${period}).${reden ? ` Reden: ${reden}` : ""}`,
             { type: "leave", id: next.id },
           );
 
@@ -634,12 +675,13 @@ export function mountVerlofRoutes(app: express.Express) {
                 startDate: next.startDate,
                 endDate: next.endDate,
                 action: emailAction,
+                reden,
               });
             }
             await sendPushToUsers([String(next.userId)], {
               title: action,
               soort: "verlof",
-              body: `${typeLabel} (${period}), beslist door ${req.appUser.name || "Planning"}.`,
+              body: `${typeLabel} (${period}), beslist door ${req.appUser.name || "Planning"}.${reden ? ` Reden: ${reden}` : ""}`,
               url: viewUrl("verlof"),
             });
           }
@@ -670,6 +712,8 @@ export function mountVerlofRoutes(app: express.Express) {
         id,
         status,
         ifStatus,
+        // Vrije tekst bij een afwijzing (wens Jarno 22-09); de kern valideert.
+        reden: req.body?.reden,
         actor: { id: String(req.appUser!.id), name: req.appUser!.name || "Planning", role: req.appUser!.role as "planner" | "admin" },
       });
       if ("fout" in uit) {

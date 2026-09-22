@@ -37,7 +37,7 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // shift_date/shift_line: planning-doorvoer (2026-08-01_swaps_shift_info.sql).
   // target_seen_at: gezien-bevestiging door de ontvanger (2026-08-16_swaps_target_seen.sql).
   { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code,swap_type,shift_date,shift_line,target_seen_at" },
-  { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat" },
+  { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat,beslisreden" },
   // entity_type/entity_id: koppeling naar het gelogde record
   // (supabase/activity_log_entity_columns.sql). Ontbraken hier, terwijl
   // api/storage.ts ze bij élke logregel schrijft — de health-check meldde dus
