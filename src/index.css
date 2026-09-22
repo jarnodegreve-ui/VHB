@@ -104,6 +104,8 @@
      op de kaart en 14 px op de doos erin oogde het scherm zacht en
      consumentachtig. Nu xl 8 · 2xl 10 · 3xl 12.
      Alle kaarten/inputs verwijzen naar deze tokens. */
+  --radius-md: 0.3125rem;
+  --radius-lg: 0.375rem;
   --radius-xl: 0.5rem;
   --radius-2xl: 0.625rem;
   --radius-3xl: 0.75rem;
@@ -270,9 +272,8 @@
      md 5 (chips, kbd) · lg 6 (icoontegels, kleine knoppen) · xl 8 (knoppen,
      inputs) · 2xl 10 (tegels, rijen in een kaart) · 3xl 12 (kaarten, modals)
      · full. Een doos in een kaart zit altijd één trede lager dan die kaart.
-     `rounded-sm` en `rounded-[Npx]` niet gebruiken. */
-  --radius-md: 0.3125rem;
-  --radius-lg: 0.375rem;
+     `rounded-sm` en `rounded-[Npx]` niet gebruiken. De waarden staan
+     bovenaan in dit blok, bij de rest van de ladder. */
 }
 
 /* === Schil-tokens (next-level 2, punt 7) ===
@@ -290,6 +291,14 @@
   --sticky-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
   --content-max: 1200px;
   --content-max-breed: 1520px;
+  /* Schil-maten (ronde 5, F1): stonden als losse arbitrary values in
+     App.tsx, AppSkeleton, ToastStack en PwaChrome. Utilities: w-zijbalk,
+     w-zijbalk-lade, px-gutter, mx-gutter-neg, max-h-overlay, bottom-boven-dock. */
+  --zijbalk-w: 17.5rem;
+  --zijbalk-w-lade: 17rem;
+  --dock-h: 4.75rem;
+  --gutter: max(1rem, env(safe-area-inset-left), env(safe-area-inset-right));
+  --overlay-max-h: 88dvh;
 }
 @media (min-width: 640px) and (pointer: fine) {
   :root {
@@ -326,6 +335,38 @@
   --laag-kaart: #FFFFFF;
   --laag-dock: #FFFFFF;
   --laag-sticky: #FFFFFF;
+
+  /* === Schil- en bedieningsoppervlakken (ronde 5, F1) ===
+     Zijbalk, topbar, invoerveld, zachte knop, segmented en gedempt vlak
+     stonden als rauwe rgba in @layer utilities én nog eens in html.dark
+     (twaalf paren). Nu één token per rol dat in html.dark van waarde
+     wisselt; de klassen lezen alleen nog tokens. Waarden 1-op-1 de oude. */
+  --laag-zijbalk: rgba(252, 253, 254, 0.97);
+  --laag-topbar: rgba(250, 251, 252, 0.97);
+  --laag-topbar-scrolled: rgba(255, 255, 255, 0.92);
+  --rand-schil: rgba(228, 230, 232, 0.8);
+  --rand-topbar: rgba(228, 230, 232, 0.7);
+  --rand-topbar-scrolled: rgba(228, 230, 232, 0.95);
+  --schaduw-topbar-scrolled: 0 4px 16px rgba(13, 13, 15, 0.04);
+  --laag-veld: rgba(255, 255, 255, 0.92);
+  --laag-veld-focus: #FFFFFF;
+  --rand-veld: rgba(205, 209, 213, 0.7);
+  --schaduw-veld: 0 1px 2px rgba(13, 13, 15, 0.03);
+  --laag-knop-zacht: rgba(255, 255, 255, 0.9);
+  --laag-knop-zacht-hover: #FFFFFF;
+  --rand-knop-zacht: rgba(228, 230, 232, 0.9);
+  --rand-knop-zacht-hover: rgba(205, 209, 213, 0.95);
+  --schaduw-knop-zacht: 0 1px 2px rgba(13, 13, 15, 0.04);
+  --schaduw-knop-zacht-hover: 0 2px 8px rgba(13, 13, 15, 0.06);
+  --laag-segmented: rgba(242, 243, 244, 0.75);
+  --rand-segmented: rgba(228, 230, 232, 0.8);
+  --schaduw-segmented: inset 0 1px 2px rgba(13, 13, 15, 0.03);
+  --laag-gedempt: rgba(247, 248, 248, 0.8);
+  --rand-gedempt: rgba(228, 230, 232, 0.7);
+  --rand-fijn: rgba(154, 161, 169, 0.18);
+  /* Kleine optilling van een pil (Segmented) en een gekozen chip: bewust
+     lichter dan --elev-1 (kaart). */
+  --elev-pil: 0 1px 2px rgba(13, 13, 15, 0.08);
 
   /* === Elevation-ladder (golf 2, punt 2: één oppervlaksysteem) ===
      Vijf treden, per trede één schaduw en één randkleur (--elev-N-rim):
@@ -397,6 +438,31 @@ html.dark {
   --laag-dock: #1B1C1F;
   --laag-sticky: #1E1F22;
 
+  --laag-zijbalk: rgba(16, 17, 19, 0.97);
+  --laag-topbar: rgba(16, 17, 19, 0.95);
+  --laag-topbar-scrolled: rgba(16, 17, 19, 0.92);
+  --rand-schil: rgba(255, 255, 255, 0.07);
+  --rand-topbar: rgba(255, 255, 255, 0.06);
+  --rand-topbar-scrolled: rgba(255, 255, 255, 0.08);
+  --schaduw-topbar-scrolled: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --laag-veld: rgba(23, 24, 26, 0.8);
+  --laag-veld-focus: rgba(29, 31, 34, 0.95);
+  --rand-veld: rgba(255, 255, 255, 0.1);
+  --schaduw-veld: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --laag-knop-zacht: rgba(23, 24, 26, 0.85);
+  --laag-knop-zacht-hover: rgba(38, 40, 43, 0.9);
+  --rand-knop-zacht: rgba(255, 255, 255, 0.09);
+  --rand-knop-zacht-hover: rgba(255, 255, 255, 0.14);
+  --schaduw-knop-zacht: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --schaduw-knop-zacht-hover: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --laag-segmented: rgba(17, 18, 20, 0.7);
+  --rand-segmented: rgba(255, 255, 255, 0.07);
+  --schaduw-segmented: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  --laag-gedempt: rgba(23, 24, 26, 0.6);
+  --rand-gedempt: rgba(255, 255, 255, 0.06);
+  --rand-fijn: rgba(154, 161, 169, 0.12);
+  --elev-pil: 0 1px 2px rgba(0, 0, 0, 0.35);
+
   /* --tile-bg/--tile-border/--tile-shadow volgen de ladder (zie :root);
      alleen de zachte skeleton-variant heeft hier nog een eigen alpha. */
   --tile-bg-soft: color-mix(in srgb, var(--laag-kaart) 75%, transparent);
@@ -429,7 +495,6 @@ html.dark {
      rim 0,10 (tile had 0,09: dat scheelt minder dan één 8-bit-stap).
      Trede 2 = bottom-dock zónder de inzet-highlight (die zet .bottom-dock
      er zelf bij); trede 4 = glass-modal; trede 3 = de tussenstap. */
-  --focus-ring: #E2A323;
   --focus-ring-contrast: #F2F3F4;
   --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
   --elev-1-rim: rgba(255, 255, 255, 0.10);
@@ -656,6 +721,8 @@ html.dark {
        text-page-title    h1 van een scherm (PageHeader), 24/30 px
        text-section-title h2 van een grote (beheer)sectie, 18/20 px
        text-card-title    h2/h3 in een kaart of paneel, 17 px
+       text-subsection-title  h3/h4 kopje in een kaart of sectie, 13 px Manrope 700
+       text-row-title     titel van een lijstrij, 15 px Inter 600
        text-body          lopende tekst (kaartbeschrijving, lege staat,
                           uitleg, detailtekst), 15/1.55
        text-body-sm       lopende tekst in een compacte context (hint onder
@@ -718,6 +785,29 @@ html.dark {
     font-size: 1.0625rem;
     line-height: 1.3;
     letter-spacing: -0.01em;
+    color: var(--color-slate-900);
+  }
+  /* Kopje binnen een kaart of sectie (h3/h4 boven een groep rijen, een
+     dagkop in het activiteitenlog): Manrope 700 op de UI-maat. Tot ronde 5
+     stond dit als `text-sm font-semibold text-slate-800` in 37 varianten
+     (12/13 px, 700/800, drie grijstinten). */
+  .text-subsection-title {
+    text-wrap: balance;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    letter-spacing: 0;
+    color: var(--color-slate-800);
+  }
+  /* Titel van een lijstrij (RecordRij regel 1, contactkaart, omleiding in
+     de beheerlijst): Inter 600 op de leesmaat, dezelfde maat als
+     `text-md font-semibold` uit het rijrecept, nu als rol. */
+  .text-row-title {
+    text-wrap: pretty;
+    font-size: 0.9375rem;
+    line-height: 1.35;
+    font-weight: 600;
     color: var(--color-slate-900);
   }
   /* Lopende tekst: ruimere regelafstand dan de UI-laag (1.55 i.p.v. ±1.5)
@@ -789,8 +879,8 @@ html.dark {
      backdrop-filter: blur + transform (mobile slide-in) op hetzelfde
      element geeft compositing-glitches; near-opaque heeft 't niet nodig. */
   .panel-dark {
-    background: rgba(252, 253, 254, 0.97);
-    border-right: 1px solid rgba(228, 230, 232, 0.8);
+    background: var(--laag-zijbalk);
+    border-right: 1px solid var(--rand-schil);
     transition:
       transform var(--duration-slow) var(--ease-standard),
       background-color var(--duration-slow) var(--ease-standard);
@@ -811,17 +901,17 @@ html.dark {
     /* Near-opaque i.p.v. backdrop-blur: een sticky bar met backdrop-filter
        hertekent bij élke scroll-frame (zware jank op Windows/Chrome). Zelfde
        keuze als de sidebar hierboven — near-opaque heeft de blur niet nodig. */
-    background: rgba(250, 251, 252, 0.97);
-    border-bottom: 1px solid rgba(228, 230, 232, 0.7);
+    background: var(--laag-topbar);
+    border-bottom: 1px solid var(--rand-topbar);
     transition:
       background var(--duration-slow) var(--ease-standard),
       box-shadow var(--duration-slow) var(--ease-standard),
       border-color var(--duration-slow) var(--ease-standard);
   }
   .topbar--scrolled {
-    background: rgba(255, 255, 255, 0.92);
-    border-bottom-color: rgba(228, 230, 232, 0.95);
-    box-shadow: 0 4px 16px rgba(13, 13, 15, 0.04);
+    background: var(--laag-topbar-scrolled);
+    border-bottom-color: var(--rand-topbar-scrolled);
+    box-shadow: var(--schaduw-topbar-scrolled);
   }
 
   /* Trede 1 van de ladder (tokens in :root / html.dark). */
@@ -885,8 +975,8 @@ html.dark {
   }
 
   .surface-muted {
-    background: rgba(247, 248, 248, 0.8);
-    border: 1px solid rgba(228, 230, 232, 0.7);
+    background: var(--laag-gedempt);
+    border: 1px solid var(--rand-gedempt);
   }
 
   /* --- Depth utilities --- */
@@ -942,13 +1032,14 @@ html.dark {
   }
 
   .control-input {
-    background: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(205, 209, 213, 0.7);
-    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.03);
+    background: var(--laag-veld);
+    border: 1px solid var(--rand-veld);
+    box-shadow: var(--schaduw-veld);
+    /* Op de ladder (was `ease`, de enige curve buiten --ease-standard). */
     transition:
-      border-color var(--duration-base) ease,
-      box-shadow var(--duration-base) ease,
-      background-color var(--duration-base) ease;
+      border-color var(--duration-base) var(--ease-standard),
+      box-shadow var(--duration-base) var(--ease-standard),
+      background-color var(--duration-base) var(--ease-standard);
   }
 
   /* iOS Safari zoomt naar input-velden in als de font-size < 16px.
@@ -967,13 +1058,13 @@ html.dark {
      vroeger (Jarno 30/07: zichtbaarder) is daarmee overbodig én de solide
      ring is zichtbaarder dan de gloed was. */
   .control-input:focus {
-    background: #ffffff;
+    background: var(--laag-veld-focus);
   }
 
   .control-button-soft {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(228, 230, 232, 0.9);
-    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.04);
+    background: var(--laag-knop-zacht);
+    border: 1px solid var(--rand-knop-zacht);
+    box-shadow: var(--schaduw-knop-zacht);
   }
 
   /* Achter de pointer-fine-guard: zonder guard bleef de hover-staat op iOS
@@ -981,9 +1072,9 @@ html.dark {
      hieronder; controle-ronde 20-08). */
   @media (hover: hover) and (pointer: fine) {
     .control-button-soft:hover {
-      background: #ffffff;
-      border-color: rgba(205, 209, 213, 0.95);
-      box-shadow: 0 2px 8px rgba(13, 13, 15, 0.06);
+      background: var(--laag-knop-zacht-hover);
+      border-color: var(--rand-knop-zacht-hover);
+      box-shadow: var(--schaduw-knop-zacht-hover);
     }
   }
 
@@ -993,7 +1084,12 @@ html.dark {
       box-shadow var(--duration-base) var(--ease-standard),
       background-color var(--duration-base) var(--ease-standard),
       border-color var(--duration-base) var(--ease-standard),
+      color var(--duration-base) var(--ease-standard),
       opacity var(--duration-base) var(--ease-standard);
+    /* `color` hoort erbij (ronde 5, F1): deze lijst wint van de
+       transition-colors-utility ernaast (zelfde laag, later in de bron),
+       dus zonder `color` sprong de tekst van elke knop in één frame terwijl
+       de achtergrond vloeide. */
     /* Geen will-change/translateZ(0): dit promootte ELKE pressable knop/rij
        permanent naar een eigen GPU-laag → veel compositing-overhead en trage
        muis/hover op Windows. De hover-transform hieronder werkt gewoon zonder. */
@@ -1015,7 +1111,7 @@ html.dark {
 
   .ios-pressable:active {
     transform: scale(0.985);
-    transition-duration: 140ms;
+    transition-duration: var(--duration-fast);
   }
 
   /* KPI-raster op mobiel (ronde 3, 19-09): de tegels worden één kaart met
@@ -1125,13 +1221,13 @@ html.dark {
   }
 
   .glass-segmented {
-    background: rgba(242, 243, 244, 0.75);
-    border: 1px solid rgba(228, 230, 232, 0.8);
-    box-shadow: inset 0 1px 2px rgba(13, 13, 15, 0.03);
+    background: var(--laag-segmented);
+    border: 1px solid var(--rand-segmented);
+    box-shadow: var(--schaduw-segmented);
   }
 
   .fine-divider {
-    border-color: rgba(154, 161, 169, 0.18);
+    border-color: var(--rand-fijn);
   }
 
 }
@@ -1187,6 +1283,15 @@ html.dark {
 @utility z-toast { z-index: 130; }        /* toasts en de installatiehint: boven elke modal */
 @utility z-kiezer { z-index: 140; }       /* DatePicker: ook vanuit een modal-boven */
 @utility z-skiplink { z-index: 150; }
+
+/* Schil-maten (tokens in :root hierboven). */
+@utility w-zijbalk { width: var(--zijbalk-w); }
+@utility w-zijbalk-lade { width: var(--zijbalk-w-lade); }
+@utility px-gutter { padding-inline: var(--gutter); }
+@utility mx-gutter-neg { margin-inline: calc(-1 * var(--gutter)); }
+@utility max-h-overlay { max-height: var(--overlay-max-h); }
+@utility bottom-boven-dock { bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--dock-h)); }
+@utility elev-pil { box-shadow: var(--elev-pil); }
 
 /* Dezelfde focus-ring als het globale systeem, handmatig te zetten. */
 @utility focus-ring {
@@ -1250,20 +1355,9 @@ html.dark {
 
 /* --- Oppervlakklassen (dark) --- */
 
-:where(.dark) .panel-dark {
-  background: rgba(16, 17, 19, 0.97);
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-:where(.dark) .topbar {
-  background: rgba(16, 17, 19, 0.95);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-:where(.dark) .topbar--scrolled {
-  background: rgba(16, 17, 19, 0.92);
-  border-bottom-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-}
+/* Zijbalk, topbar, velden, zachte knop, segmented en gedempt vlak: hun
+   donkere waarden staan sinds ronde 5 (F1) als tokens in html.dark
+   hierboven; de klassen zelf hebben hier geen override meer nodig. */
 
 /* Kaart, tabel, hover en modal: rand en schaduw komen uit de ladder-tokens
    (html.dark verlegt die), dus hier alleen nog de achtergrond-alfa op de
@@ -1291,48 +1385,17 @@ html.dark {
   background: color-mix(in srgb, var(--laag-kaart) 96%, transparent);
 }
 
-:where(.dark) .surface-muted {
-  background: rgba(23, 24, 26, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
 :where(.dark) .control-input {
-  background: rgba(23, 24, 26, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #E4E6E8;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 :where(.dark) .control-input::placeholder {
   color: rgba(154, 161, 169, 0.55);
 }
 
-:where(.dark) .control-input:focus {
-  background: rgba(29, 31, 34, 0.95);
-}
-
 :where(.dark) .control-button-soft {
-  background: rgba(23, 24, 26, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.09);
   color: #E4E6E8;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
-
-/* Zelfde pointer-fine-guard als de lichte hover (sticky hover op iOS). */
-@media (hover: hover) and (pointer: fine) {
-  :where(.dark) .control-button-soft:hover {
-    background: rgba(38, 40, 43, 0.9);
-    border-color: rgba(255, 255, 255, 0.14);
-  }
-}
-
-:where(.dark) .glass-segmented {
-  background: rgba(17, 18, 20, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-:where(.dark) .fine-divider { border-color: rgba(154, 161, 169, 0.12); }
 
 /* De blanket-override-tabel op utility-klassen is 03-09-2026 vervangen door
    de omgekeerde kleurenschalen in html.dark (zie boven). Nieuwe utilities

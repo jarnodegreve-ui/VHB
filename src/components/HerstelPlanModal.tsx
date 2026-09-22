@@ -29,7 +29,7 @@ export function HerstelPlanModal({ open, plan, labels, bezig, onClose, onBevesti
 
   return (
     <Modal open={open} onClose={onClose} maxWidth="lg" ariaLabel="Back-up terugzetten" boven>
-      <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+      <div className="flex max-h-overlay flex-col overflow-hidden">
         <div className="shrink-0 border-b border-hairline p-6 md:p-7">
           <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/12 text-red-700">
             <AlertTriangle size={20} />

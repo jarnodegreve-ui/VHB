@@ -80,7 +80,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
       >
         <Avatar naam={u.name} size="lg" />
         <div className="min-w-0">
-          <h4 className="font-bold text-slate-800 tracking-tight truncate">{u.name}</h4>
+          <h4 className="text-row-title truncate">{u.name}</h4>
           {/* Mobiel: rol als micro-label onder de naam; lg+: als badge. */}
           {lg ? (
             <Badge tone={u.role === 'chauffeur' ? 'slate' : 'oker'} className="mt-1">{roleLabel(u.role)}</Badge>
@@ -169,7 +169,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
               <>
                 <div className="mt-5 rounded-2xl bg-slate-50/80 px-4 py-3.5">
                   <MicroLabel>Telefoonnummer</MicroLabel>
-                  <p className="mt-1 text-xl font-mono font-bold tracking-tight text-slate-900 tabular-nums select-all">{selected.phone}</p>
+                  <p className="mt-1 text-xl font-mono font-bold text-slate-900 tabular-nums select-all">{selected.phone}</p>
                 </div>
                 <div className="mt-4 flex flex-col sm:flex-row gap-2">
                   <a

@@ -35,6 +35,8 @@ export const TYPOGRAFIE_ROLLEN = {
   'greeting': KOP,
   'section-title': KOP,
   'card-title': KOP,
+  'subsection-title': KOP,
+  'row-title': ['font-size', 'leading', 'font-weight', 'text-wrap'],
   'body': LEES,
   'body-sm': LEES,
   'label': ['font-size', 'leading', 'font-weight'],

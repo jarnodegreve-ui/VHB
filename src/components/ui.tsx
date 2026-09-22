@@ -154,7 +154,7 @@ export function ConfirmationModal({
   // variant miste.
   return (
     <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
-      <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+      <div className="flex max-h-overlay flex-col overflow-hidden">
         <div className="p-6 md:p-7 border-b border-hairline shrink-0">
           <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-700' : 'bg-amber-500/15 text-amber-700')}>
             <AlertTriangle size={20} />
@@ -164,7 +164,7 @@ export function ConfirmationModal({
           {children && <div className="mt-4">{children}</div>}
         </div>
         <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
-          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-surface-row-hover hover:text-slate-900 border border-transparent hover:border-hairline transition-all">
+          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-surface-row-hover hover:text-slate-900 border border-transparent hover:border-hairline transition-colors">
             {cancelText}
           </button>
           <button
@@ -176,7 +176,7 @@ export function ConfirmationModal({
                niet het merk-oker (dat mengde twee talen in één dialoog).
                Tekst op amber is altijd VHB Black (huisstijlregel; wit op
                amber-600 haalde ≈3,6:1, onder AA — controle-ronde 27-08). */
-            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-600/90 shadow-red-600/20' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-amber-500/20')}
+            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-colors ring-1 ring-inset ring-ink/10', variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-600/90' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-amber-500/20')}
           >
             {confirmText}
           </button>
@@ -474,7 +474,7 @@ export function CredentialsModal({
   // en ESC/focus-trap meekrijgt.
   return (
     <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
-      <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+      <div className="flex max-h-overlay flex-col overflow-hidden">
         <div className="p-6 md:p-7 border-b border-hairline flex items-center justify-between shrink-0">
           <div>
             <h2 className="text-section-title">{title}</h2>

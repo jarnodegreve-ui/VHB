@@ -440,7 +440,7 @@ export function PlanningMatrixView({
                   key={row.id}
                   onClick={() => setSelectedDate(row.source_date)}
                   className={cn(
-                    'ios-pressable w-full rounded-2xl border px-4 py-3 text-left transition-all',
+                    'ios-pressable w-full rounded-2xl border px-4 py-3 text-left',
                     isActive ? 'border-hairline-strong bg-surface-muted' : 'border-hairline-subtle bg-surface-field hover:bg-surface-soft-hover'
                   )}
                 >

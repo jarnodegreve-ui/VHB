@@ -448,7 +448,7 @@ function FieldInput({
           minLength={minLength}
           autoComplete={autoComplete}
           autoFocus={autoFocus}
-          className={`control-input-dark w-full pl-11 py-3.5 rounded-2xl font-medium text-white transition-all ${
+          className={`control-input-dark w-full pl-11 py-3.5 rounded-2xl font-medium text-white transition-colors ${
             isPassword ? 'pr-12' : 'pr-4'
           }`}
         />

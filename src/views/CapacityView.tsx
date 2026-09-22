@@ -670,7 +670,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               >
                 <ChevronLeft size={18} />
               </IconButton>
-              <span className="px-3 text-sm font-semibold tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
+              <span className="px-3 text-sm font-semibold capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
               <IconButton
                 label="Volgende 2 weken"
                 title={kanVooruit ? 'Volgende 2 weken' : `De planning is geïmporteerd tot ${formatDatumDMJ(laatsteDag)}`}
@@ -902,7 +902,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 >
                   <ChevronLeft size={16} />
                 </IconButton>
-                <span className="text-sm font-semibold tracking-tight text-slate-800 tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
+                <span className="text-sm font-semibold text-slate-800 tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
                 <div className="flex items-center">
                   {/* Spring naar de eerstvolgende dag met een nog niet
                       herverdeelde dienst — scheelt dag voor dag vegen. */}
@@ -1175,7 +1175,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         </>
       )}
 
-      <Modal open={!!selected} onClose={() => setSelected(null)} maxWidth="sm" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+      <Modal open={!!selected} onClose={() => setSelected(null)} maxWidth="sm" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         {selected && (
           <>
           <ModalHeader
@@ -1366,7 +1366,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       {/* Maandoverzicht per chauffeur — zelfde telling als de Excel-export.
           Op de huisprimitieven (ModalHeader, Th/Td) zodat dit venster niet
           zijn eigen dialect ontwikkelt (controle-ronde 22-08). */}
-      <Modal open={overzichtOpen} onClose={() => setOverzichtOpen(false)} maxWidth="2xl" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+      <Modal open={overzichtOpen} onClose={() => setOverzichtOpen(false)} maxWidth="2xl" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         <ModalHeader
           eyebrow="Maandoverzicht"
           title={`${MONTH_NAMES[monthIndex]} ${year}`}

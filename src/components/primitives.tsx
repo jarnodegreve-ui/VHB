@@ -28,13 +28,15 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   // Solide statusknoppen op 600 (gedempte juweeltinten, index.css @theme):
   // wit op emerald-600 haalt 5,0:1, op red-600 5,7:1; op 500 zou het
   // 3,3 resp. 4,4:1 zijn, onder AA voor 13-14px tekst ("Verwijderen").
-  success: 'bg-emerald-600 text-white hover:bg-emerald-600/90 shadow-lg shadow-emerald-600/20',
+  // Effen, met een binnenrand zoals btn-primary; de gekleurde gloed
+  // (shadow-lg shadow-emerald-600/20) was de enige in de app (ronde 5, F1).
+  success: 'bg-emerald-600 text-white hover:bg-emerald-600/90 ring-1 ring-inset ring-ink/10',
   danger: 'bg-paper/90 border border-red-200 text-red-700 hover:bg-red-50',
-  dangerSolid: 'bg-red-600 text-white hover:bg-red-600/90 shadow-lg shadow-red-600/20',
+  dangerSolid: 'bg-red-600 text-white hover:bg-red-600/90 ring-1 ring-inset ring-ink/10',
   // warning = semantisch amber (callout-knoppen), altijd carbon-tekst op amber.
-  warning: 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-sm shadow-amber-500/20',
+  warning: 'bg-amber-500 text-slate-950 hover:bg-amber-400 ring-1 ring-inset ring-ink/10',
   // ink = altijd-donkere solide knop (print, agenda-koppeling) — flipt niet.
-  ink: 'bg-ink text-white hover:bg-ink-soft shadow-sm',
+  ink: 'bg-ink text-white hover:bg-ink-soft ring-1 ring-inset ring-paper/10',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
@@ -110,7 +112,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
       disabled={disabled || bezig}
       aria-busy={bezig || undefined}
       className={cn(
-        'ios-pressable inline-flex items-center justify-center font-semibold transition-all',
+        'ios-pressable inline-flex items-center justify-center font-semibold',
         'disabled:cursor-not-allowed disabled:opacity-50',
         BUTTON_VARIANTS[variant],
         BUTTON_SIZES[size],
@@ -252,7 +254,7 @@ const SEG_ITEM = 'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold';
 // Actief = neutrale 'papieren' chip (iOS/Linear-patroon) i.p.v. vol goud:
 // een schakelaar is geen actie, en naast een gouden knop (Ziek melden)
 // gaf dat twee gouden vlakken in één kop (controle 05-09, nr. 19).
-const SEG_PIL = 'bg-paper shadow-sm ring-1 ring-hairline';
+const SEG_PIL = 'bg-paper elev-pil ring-1 ring-hairline';
 
 /**
  * Segmented control met schuivende pil: de papieren chip is één `motion.span` (layoutId) die
@@ -356,7 +358,7 @@ const FILTER_CHIP_TONES: Record<FilterChipTone, { on: string; off: string }> = {
   // Foutfilter (onbekende codes in de planningsmatrix): rood blijft rood,
   // maar in dezelfde vorm als de gewone chip.
   red: {
-    on: 'bg-red-600 text-white shadow-sm shadow-red-600/20',
+    on: 'bg-red-600 text-white',
     off: 'border border-red-200 bg-paper/90 text-red-700 hover:bg-red-50',
   },
   // Waarschuwingsfilter (aanmeldingen van buiten België): uit trekt hij met een
@@ -387,7 +389,7 @@ export function FilterChip({ active, tone = 'oker', icon, className, children, t
       type={type}
       aria-pressed={active}
       className={cn(
-        'ios-pressable inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all sm:pointer-fine:min-h-8',
+        'ios-pressable inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold sm:pointer-fine:min-h-8',
         active ? t.on : t.off,
         className,
       )}
@@ -409,7 +411,7 @@ const ICON_BUTTON_VARIANTS: Record<IconButtonVariant, string> = {
   secondary: 'control-button-soft text-slate-600 hover:text-slate-900',
   danger: 'text-slate-400 hover:bg-red-50 hover:text-red-700',
   success: 'text-slate-400 hover:bg-emerald-50 hover:text-emerald-700',
-  primary: 'bg-oker-500 text-slate-950 hover:bg-oker-400 shadow-sm shadow-oker-500/30',
+  primary: 'bg-oker-500 text-slate-950 hover:bg-oker-400 ring-1 ring-inset ring-ink/10',
 };
 
 const ICON_BUTTON_SIZES: Record<IconButtonSize, string> = {

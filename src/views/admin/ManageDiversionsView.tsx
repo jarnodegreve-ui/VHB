@@ -302,7 +302,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                   <LijnTegel line={div.line} size="sm" layout="rij" tone={expired ? 'muted' : 'accent'} />
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     {/* data-vt-record: DetailPaneel leest er de richting van een wissel uit. */}
-                    <h3 className="text-md font-semibold leading-snug text-slate-900" data-vt-record={div.id}>{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
+                    <h3 className="text-row-title" data-vt-record={div.id}>{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
                     <Badge tone="slate">{lijnLabel(div.line)}</Badge>
                     {expired && <Badge tone="slate">Verlopen</Badge>}
                     {div.pdfUrl && <Badge tone="slate" icon={<FileText size={12} />}>PDF</Badge>}
@@ -476,7 +476,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                 bestandskiezer opent via het label, niet via een knop. */}
             <label
               htmlFor="pdf-upload"
-              className="ios-pressable control-button-soft inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900"
+              className="ios-pressable control-button-soft inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:text-slate-900"
             >
               <Upload size={16} />
               <span className="truncate">

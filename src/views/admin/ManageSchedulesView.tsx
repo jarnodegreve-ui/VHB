@@ -510,7 +510,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-sm font-semibold text-slate-800">
+                        <h3 className="text-subsection-title">
                           {hasChanges ? 'Wijzigingen sinds vorige import' : 'Geen wijzigingen sinds vorige import'}
                         </h3>
                         <Badge tone={hasChanges ? 'amber' : 'emerald'} dot stil={!hasChanges} className="tabular-nums">
@@ -605,7 +605,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <label
               className={cn(
-                'ios-pressable inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all sm:w-auto',
+                'ios-pressable inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold sm:w-auto',
                 isMatrixImporting ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'btn-primary'
               )}
             >
@@ -880,7 +880,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       {/* Gedeelde Modal: ESC, backdrop-tap, safe-area en dvh (verbeterronde 29/07 #3).
           dismissOnBackdrop uit: een half gecontroleerde import-preview mag niet
           per ongeluk wegklikken. */}
-      <Modal open={Boolean(matrixPreviewOpen && matrixPreview)} onClose={() => setMatrixPreviewOpen(false)} maxWidth="2xl" dismissOnBackdrop={false} className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+      <Modal open={Boolean(matrixPreviewOpen && matrixPreview)} onClose={() => setMatrixPreviewOpen(false)} maxWidth="2xl" dismissOnBackdrop={false} className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         {matrixPreview && (
         <>
               <ModalHeader

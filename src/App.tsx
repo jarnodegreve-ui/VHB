@@ -1385,7 +1385,7 @@ export default function App() {
         aria-label="Zijbalk"
         inert={!isSidebarOpen && !isDesktopNav}
         className={cn(
-          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-zijbalk lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
+          "fixed inset-y-0 left-0 w-zijbalk-lade max-w-[80vw] panel-dark flex flex-col z-zijbalk lg:w-zijbalk lg:max-w-none lg:relative lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         // De schuif-transitie komt uit .panel-dark (transform op
@@ -1475,7 +1475,7 @@ export default function App() {
         <div
           ref={scrollContainerRef}
           data-scroll-root
-          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7 pb-[calc(9.5rem+env(safe-area-inset-bottom))] md:pb-8"
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] px-gutter md:px-7 pb-[calc(9.5rem+env(safe-area-inset-bottom))] md:pb-8"
           onScroll={(e) => {
             const top = e.currentTarget.scrollTop ?? 0;
             const next = top > 8;
@@ -1491,8 +1491,8 @@ export default function App() {
               notch ~30px vóór de schermrand (de inset is dan ~47px). */}
           {/* Sticky topbar begint onder de statusbalkstrook (die staat buiten de
               scroll-root, zie <main>), zodat overscroll de strook niet meeneemt. */}
-          <div className="sticky top-[env(safe-area-inset-top,0px)] z-topbar -mx-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:-mx-7 mb-5">
-            <header className={cn("topbar px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7", isScrolled && "topbar--scrolled")}>
+          <div className="sticky top-[env(safe-area-inset-top,0px)] z-topbar mx-gutter-neg md:-mx-7 mb-5">
+            <header className={cn("topbar px-gutter md:px-7", isScrolled && "topbar--scrolled")}>
               {/* Rijhoogte gepind op --topbar-h (index.css, min de haarlijn):
                   StickyThead en Zijvak rekenen daarmee, en het skelet
                   (AppSkeleton) heeft dezelfde rij, dus geen sprong bij het
@@ -1534,7 +1534,7 @@ export default function App() {
                     aria-hidden={!isScrolled || undefined}
                     // Naast het sectiewoord krijgt de titel een haarlijn links; die
                     // zit óp de h2 en vervaagt dus mee (geen lege streep in rust).
-                    className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-base', sectie && 'lg:border-l lg:border-hairline-strong lg:pl-2.5', isScrolled ? 'opacity-100' : 'opacity-0')}
+                    className={cn('text-sm font-semibold text-slate-900 leading-tight truncate transition-opacity duration-base', sectie && 'lg:border-l lg:border-hairline-strong lg:pl-2.5', isScrolled ? 'opacity-100' : 'opacity-0')}
                   >
                     {currentMeta.title}
                   </h2>
