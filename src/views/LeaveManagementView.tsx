@@ -112,6 +112,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // nieuwe momentopname zodat "vastgelegd" niet als vuil telt.
   const [bewaardTeller, setBewaardTeller] = useState(0);
   const { vuil: aanvraagVuil } = useVuil({ formData, voorWie }, showRequestModal, bewaardTeller);
+  // Het aanvraagvenster houdt zijn invoer als concept over sluiten heen (de
+  // state blijft staan en komt terug bij heropenen). Kiest de gebruiker bij
+  // "Wijzigingen niet bewaren?" voor "Niet bewaren", dan gaat dat concept
+  // echt weg (beslissing Jarno 22-09); gewoon sluiten laat het staan.
+  const verwerpConcept = () => {
+    setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
+    setVoorWie('');
+    fouten.wis();
+  };
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -897,7 +906,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing (verbeterronde 29/07 #3). */}
-      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} vuil={aanvraagVuil} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} vuil={aanvraagVuil} onNietBewaren={verwerpConcept} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               <ModalHeader
                 title={registratie ? 'Verlof registreren' : 'Verlof aanvragen'}
                 description={registratie ? 'Voor verlof dat al goedgekeurd is, bijvoorbeeld op papier. Wordt meteen als goedgekeurd vastgelegd, zonder mail naar de chauffeur.' : undefined}

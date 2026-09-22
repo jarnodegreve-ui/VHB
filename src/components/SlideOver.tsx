@@ -29,6 +29,7 @@ export function SlideOver({
   children,
   footer,
   vuil = false,
+  onNietBewaren,
 }: {
   open: boolean;
   onClose: () => void;
@@ -43,10 +44,13 @@ export function SlideOver({
   /** Onbewaarde invoer: Escape, backdrop, terugknop en kruisje vragen eerst
    *  "Wijzigingen niet bewaren?" (zie Modal, tranche 3A). */
   vuil?: boolean;
+  /** Loopt alleen bij "Niet bewaren" in die vraag, vóór onClose: gooi hier
+   *  een bewaard concept weg (zie useSluitPoort). */
+  onNietBewaren?: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion();
-  const { sluitVia, dialoog } = useSluitPoort(open, vuil);
+  const { sluitVia, dialoog } = useSluitPoort(open, vuil, onNietBewaren);
   const sluit = () => sluitVia(onClose);
   // Terugknop/swipe-back sluit het paneel i.p.v. de app te verlaten.
   useHistoryDismiss(open, sluit);

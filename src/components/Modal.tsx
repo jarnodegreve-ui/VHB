@@ -61,8 +61,16 @@ export function OnbewaardDialoog({ open, onVerder, onNietBewaren }: { open: bool
   );
 }
 
-/** Gedeelde sluitpoort van Modal en SlideOver: vuil → vraag eerst. */
-export function useSluitPoort(open: boolean, vuil: boolean) {
+/**
+ * Gedeelde sluitpoort van Modal en SlideOver: vuil → vraag eerst.
+ *
+ * `onNietBewaren` (optioneel) loopt alleen wanneer de gebruiker in de vraag
+ * "Wijzigingen niet bewaren?" voor "Niet bewaren" kiest, vlak vóór het
+ * wachtende sluiten. Zo kan een scherm dat zijn invoer over sluiten heen
+ * bewaart (een concept) die invoer echt weggooien. "Verder bewerken" en een
+ * gewoon sluiten zonder vraag roepen hem niet aan.
+ */
+export function useSluitPoort(open: boolean, vuil: boolean, onNietBewaren?: () => void) {
   const [vraag, setVraag] = useState(false);
   const wachtend = useRef<(() => void) | null>(null);
   useEffect(() => {
@@ -88,6 +96,7 @@ export function useSluitPoort(open: boolean, vuil: boolean) {
     const fn = wachtend.current;
     wachtend.current = null;
     setVraag(false);
+    onNietBewaren?.();
     fn?.();
   };
   return { sluitVia, dialoog: <OnbewaardDialoog open={vraag} onVerder={verder} onNietBewaren={nietBewaren} /> };
@@ -124,6 +133,7 @@ export function Modal({
   ariaLabel,
   boven = false,
   vuil = false,
+  onNietBewaren,
 }: {
   open: boolean;
   onClose: () => void;
@@ -131,6 +141,9 @@ export function Modal({
   /** Onbewaarde invoer: Escape, backdrop, terugknop, kruisje en Annuleren
    *  (via useModalSluiten) vragen eerst "Wijzigingen niet bewaren?". */
   vuil?: boolean;
+  /** Loopt alleen bij "Niet bewaren" in die vraag, vóór onClose: gooi hier
+   *  een bewaard concept weg (zie useSluitPoort). */
+  onNietBewaren?: () => void;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
   className?: string;
   dismissOnBackdrop?: boolean;
@@ -149,7 +162,7 @@ export function Modal({
   const isBovenste = () => modalStack[modalStack.length - 1] === idRef.current;
   // Terugknop/swipe-back sluit de dialoog i.p.v. de app (PWA op Android);
   // met onbewaarde invoer weigert `sluit` (false) en blijft de entry staan.
-  const { sluitVia, dialoog } = useSluitPoort(open, vuil);
+  const { sluitVia, dialoog } = useSluitPoort(open, vuil, onNietBewaren);
   const sluit = () => sluitVia(onClose);
   useHistoryDismiss(open, sluit);
 
