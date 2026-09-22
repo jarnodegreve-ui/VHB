@@ -15,6 +15,7 @@ import { OcpiCard } from './OcpiCard';
 import { HerstelPlanModal } from '../../components/HerstelPlanModal';
 import type { HerstelPlan } from '../../../shared/herstelPlan';
 import { FOUTGROEP_STATUS } from '../../../shared/status';
+import { meldSchrijffout, schrijffout } from '../../lib/fouten';
 
 const COLLECTION_LABELS: Record<string, string> = {
   users: 'Gebruikers',
@@ -209,7 +210,7 @@ function FoutenSectie() {
       notify(status === 'opgelost' ? 'Gemarkeerd als opgelost, komt hij in een nieuwere release terug, dan heropent hij vanzelf.' : status === 'genegeerd' ? 'Genegeerd, blijft ook uit de weekmail.' : 'Heropend.', 'success');
       await laad();
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Status opslaan is mislukt.', 'error');
+      meldSchrijffout('Status opslaan', err, () => void zetStatus(groep, status));
     } finally {
       setBezig(null);
     }
@@ -401,7 +402,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       }
       const antwoord = await droog.json().catch(() => ({} as any));
       if (!droog.ok || !antwoord?.plan) {
-        notify(antwoord?.error || 'De droge herstelrun is mislukt, er is niets gewijzigd.', 'error');
+        notify(`${schrijffout('De droge herstelrun', { status: droog.status, message: antwoord?.error })} Er is niets gewijzigd.`, 'error');
         return;
       }
       setHerstelPlan(antwoord.plan as HerstelPlan);
@@ -432,15 +433,15 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         const partial = data.appliedSoFar && Object.keys(data.appliedSoFar).length
           ? ` Al teruggezet: ${Object.entries(data.appliedSoFar).map(([k, v]) => `${k} (${v})`).join(', ')}.`
           : '';
-        notify((data.details || data.error || `Herstellen mislukt (${response.status}).`) + partial, 'error');
+        notify(schrijffout('Herstellen', { status: response.status, message: data.details || data.error }) + partial, 'error');
         return;
       }
       notify('Back-up hersteld. De pagina wordt herladen…', 'success');
       // Alle collecties zijn vervangen — een harde reload is de eenvoudigste,
       // betrouwbaarste manier om de hele app-state opnieuw op te bouwen.
       setTimeout(() => window.location.reload(), 1200);
-    } catch {
-      notify('Herstellen is mislukt.', 'error');
+    } catch (err) {
+      meldSchrijffout('Herstellen', err);
     } finally {
       setIsRestoring(false);
       setPendingRestore(null);
@@ -455,14 +456,14 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       const response = await apiFetch('/api/backup');
       if (!response.ok) {
         const err = await response.json().catch(() => ({} as any));
-        notify(err.details || err.error || `Back-up mislukt (${response.status}).`, 'error');
+        meldSchrijffout('Back-up downloaden', { status: response.status, message: err.details || err.error }, () => void downloadBackup());
         return;
       }
       // downloadBlob i.p.v. een handmatige <a download>: dezelfde iOS-share-
       // route, revokeObjectURL en bevestigings-toast als de andere exports.
       await downloadBlob(`vhb-backup-${new Date().toISOString().slice(0, 10)}.json`, await response.blob());
-    } catch {
-      notify('Back-up downloaden is mislukt.', 'error');
+    } catch (err) {
+      meldSchrijffout('Back-up downloaden', err, () => void downloadBackup());
     } finally {
       setIsExporting(false);
     }

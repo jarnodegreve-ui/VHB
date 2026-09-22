@@ -70,7 +70,8 @@ export const bevestigCode = async (factorId: string, code: string): Promise<void
 export const schakelUit = async (factorId: string): Promise<void> => {
   if (!supabase) throw new Error('Supabase is niet geconfigureerd.');
   const { error } = await supabase.auth.mfa.unenroll({ factorId });
-  if (error) throw new Error(vertaal(error.message, 'Uitschakelen is mislukt.'));
+  // Status mee, zodat meldSchrijffout (src/lib/fouten.ts) de vervolgstap kiest.
+  if (error) throw Object.assign(new Error(vertaal(error.message, 'Uitschakelen is mislukt.')), { status: error.status });
 };
 
 const vertaal = (bericht: string | undefined, standaard: string): string => {

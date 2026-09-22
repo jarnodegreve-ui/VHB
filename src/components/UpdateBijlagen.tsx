@@ -8,6 +8,7 @@ import { notify, openPdfInNewTab } from '../lib/ui';
 import { Button, IconButton, Switch } from './primitives';
 import { Card } from './Card';
 import { InfoTip } from './InfoTip';
+import { meldSchrijffout } from '../lib/fouten';
 
 /**
  * PDF's bij een update (puntje Jarno 8, 21-09): hoogstens twee per bericht,
@@ -64,12 +65,12 @@ export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
       });
       if (!response.ok) {
         const detail = await response.json().catch(() => null);
-        return notify(detail?.error || 'Uploaden is mislukt.', 'error');
+        return meldSchrijffout('Uploaden', { status: response.status, message: detail?.error });
       }
       notify('PDF toegevoegd.', 'success');
       onGewijzigd();
-    } catch {
-      notify('Uploaden is mislukt.', 'error');
+    } catch (err) {
+      meldSchrijffout('Uploaden', err);
     } finally {
       setBezig(false);
       if (bestandRef.current) bestandRef.current.value = '';
@@ -83,12 +84,12 @@ export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
       const response = await apiFetch(`/api/updates/${encodeURIComponent(update.id)}/bijlage/${slot}`, { method: 'DELETE' });
       if (!response.ok) {
         const detail = await response.json().catch(() => null);
-        return notify(detail?.error || 'Verwijderen is mislukt.', 'error');
+        return meldSchrijffout('Verwijderen', { status: response.status, message: detail?.error }, () => void verwijder(slot));
       }
       notify('PDF verwijderd.', 'success');
       onGewijzigd();
-    } catch {
-      notify('Verwijderen is mislukt.', 'error');
+    } catch (err) {
+      meldSchrijffout('Verwijderen', err, () => void verwijder(slot));
     } finally {
       setBezig(false);
     }

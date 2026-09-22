@@ -105,7 +105,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       notify(status === 'open' ? 'Melding staat weer open.' : `Melding ${DEFECT_STATUS_LABEL[status].toLowerCase()}.`, 'success');
       if (filter === 'open' && status !== 'open') setRijen((lijst) => lijst.filter((r) => r.id !== d.id));
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Bijwerken is mislukt.', 'error');
+      meldSchrijffout('Bijwerken', err, () => void zetStatus(d, status));
     }
   };
 
@@ -319,7 +319,7 @@ function AfhandelModal({ defect, currentUser, onClose, onKlaar }: { defect: Defe
         try {
           await maakWerkprestatie({ datum, vehicleId: defect.vehicleId, werkcode: 'H', omschrijving: werk.trim() || defect.omschrijving, werkuren: uren, defectId: defect.id, beginTijd: null, eindeTijd: null, kmstand: null });
         } catch {
-          notify('Melding afgehandeld, maar de werkprestatie kon niet aangemaakt worden.', 'error');
+          notify('Melding afgehandeld, maar de werkprestatie kon niet aangemaakt worden. Voeg ze toe via Werkprestaties.', 'error');
         }
       }
       notify(`${voertuigNaam(defect)}: melding afgehandeld.`, 'success');

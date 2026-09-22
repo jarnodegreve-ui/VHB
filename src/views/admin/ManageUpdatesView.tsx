@@ -244,7 +244,7 @@ export function ManageUpdatesView({
       // staan. Komt de update terug via "Ongedaan maken", dan staat ze op
       // desktop meteen weer open.
     } else if (!onDeleteUpdate) {
-      notify('Update kon niet worden verwijderd.', 'error');
+      notify('Update kon niet worden verwijderd. Controleer de foutmelding hierboven en probeer opnieuw.', 'error');
     }
     setDeletingId(null);
   };

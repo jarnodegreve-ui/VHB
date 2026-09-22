@@ -6,6 +6,7 @@ import { apiJson } from '../../lib/api';
 import { notify } from '../../lib/ui';
 import { valideer } from '../../lib/valideer';
 import { GEEN_ONDERHOUD, ONDERHOUD_STANDAARD_TEKST, ONDERHOUD_TEKST_MAX, onderhoudBodySchema, parseOnderhoud, type Onderhoud } from '../../../shared/schemas/onderhoud';
+import { meldSchrijffout } from '../../lib/fouten';
 
 /**
  * Instellingen › Beheer › Onderhoudsmodus (admin). Eén rij in de stijl van
@@ -41,7 +42,7 @@ export function OnderhoudBeheer() {
     } catch (err) {
       // Zelfde schema als de server, dus een 400 met veldfouten komt hier
       // in de praktijk niet; wat overblijft (tabel ontbreekt, netwerk) is een toast.
-      notify(err instanceof Error ? err.message : 'Instelling opslaan is mislukt.', 'error');
+      meldSchrijffout('Instelling opslaan', err, () => void bewaar(volgende, melding));
     } finally {
       setBezig(false);
     }

@@ -18,6 +18,7 @@ import { DateInput, Field, Input, Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import type { VerwachtingAfwijking } from '../../../shared/coverageGaps';
 import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
+import { meldSchrijffout } from '../../lib/fouten';
 
 /** Inklapbare preview-sectie: de import-preview groeide naar acht blokken —
  *  met een kop + teller per blok blijft het scanbaar en klap je alleen open
@@ -209,7 +210,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.details || data.error || 'Import mislukt.');
+      throw Object.assign(new Error(data.details || data.error || ''), { status: response.status });
     }
     return data;
   };
@@ -264,13 +265,13 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       });
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) {
-        notify(body.error || 'Ziekte registreren is mislukt.', 'error');
+        meldSchrijffout('Ziekte registreren', { status: res.status, message: body.error });
         return;
       }
       notify(`Ziekte geregistreerd voor ${reeks.naam} (${reeks.van}${reeks.tot !== reeks.van ? ` t/m ${reeks.tot}` : ''}).`, 'success');
       setZiekteGeregistreerd((cur) => new Set(cur).add(sleutel));
-    } catch {
-      notify('Ziekte registreren is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Ziekte registreren', err);
     } finally {
       setZiekteRegBusy(null);
     }
@@ -292,8 +293,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       setPeriodeVan(data.startDate || '');
       setPeriodeTot(data.endDate || '');
       setMatrixPreviewOpen(true);
-    } catch (error: any) {
-      notify(`Excel-preview mislukt: ${error.message}`, 'error');
+    } catch (error) {
+      meldSchrijffout('Excel-voorbeeld maken', error);
     } finally {
       setIsMatrixImporting(false);
       if (event.target) event.target.value = '';
@@ -312,9 +313,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       const data = await fetchMatrixPreview(pendingMatrixXlsxBase64, { van, tot });
       if (volgnummer !== previewVolgnummerRef.current) return;
       setMatrixPreview(previewToState(data));
-    } catch (error: any) {
+    } catch (error) {
       if (volgnummer === previewVolgnummerRef.current) {
-        notify(`Voorbeeld bijwerken mislukt: ${error.message}`, 'error');
+        meldSchrijffout('Voorbeeld bijwerken', error, () => void handlePeriodeChange(van, tot));
       }
     } finally {
       if (volgnummer === previewVolgnummerRef.current) setIsPreviewVerversen(false);
@@ -330,12 +331,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         body: JSON.stringify({ historyId: restoreEntry.id }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Terugzetten is mislukt.');
+      if (!response.ok) throw Object.assign(new Error(data.error || ''), { status: response.status });
       notify(`Planning teruggezet naar de stand van vóór de import van ${new Date(restoreEntry.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.`, 'success');
       setRestoreEntry(null);
       await onMatrixImported();
-    } catch (error: any) {
-      notify(error.message || 'Terugzetten is mislukt.', 'error');
+    } catch (error) {
+      meldSchrijffout('Terugzetten', error);
     } finally {
       setIsRestoring(false);
     }
@@ -364,7 +365,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.details || data.error || 'Import mislukt.');
+        throw Object.assign(new Error(data.details || data.error || ''), { status: response.status });
       }
 
       const syncNotes: string[] = [];
@@ -391,8 +392,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       setZiekteGeregistreerd(new Set());
       await onMatrixImported();
       await fetchChangesSince();
-    } catch (error: any) {
-      notify(`Excel-import mislukt: ${error.message}`, 'error');
+    } catch (error) {
+      meldSchrijffout('Excel-import', error);
     } finally {
       setIsMatrixImporting(false);
     }
@@ -411,7 +412,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       const text = await response.text();
       
       if (!response.ok && !text.startsWith('{')) {
-        throw new Error(`Server fout (${response.status}): ${text.slice(0, 200) || 'Lege response'}`);
+        console.error('Sync: geen JSON-antwoord. Status:', response.status, text.slice(0, 200));
+        throw Object.assign(new Error(''), { status: response.status });
       }
 
       let data;
@@ -419,7 +421,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         data = JSON.parse(text);
       } catch (e) {
         console.error('Failed to parse JSON. Response text:', text);
-        throw new Error('Server gaf geen geldig JSON-antwoord terug. Controleer de console voor details.');
+        throw Object.assign(new Error(''), { status: response.status });
       }
 
       if (data.success) {
@@ -433,11 +435,11 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         notify(`Planning opnieuw opgebouwd: ${data.generatedShifts || 0} roosterregels${syncNotes.length ? `, ${syncNotes.join(', ')}` : ''}.`, 'success');
         await onMatrixImported();
       } else {
-        notify('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'), 'error');
+        meldSchrijffout('Synchronisatie', { status: response.status, message: data.error });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Sync error:', error);
-      notify('Er is een fout opgetreden bij het synchroniseren: ' + error.message, 'error');
+      meldSchrijffout('Synchronisatie', error);
     } finally {
       setIsSyncing(false);
     }
@@ -454,8 +456,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       // wanneer de server de wipe weigert.
       const ok = await Promise.resolve(onSave([]));
       if (ok !== false) setConfirmClearOpen(false);
-    } catch (error: any) {
-      notify(`Planning wissen mislukt: ${error.message || 'Onbekende fout'}`, 'error');
+    } catch (error) {
+      meldSchrijffout('Planning wissen', error);
     } finally {
       setIsClearingPlanning(false);
     }

@@ -14,6 +14,7 @@ import { AllesGedaan } from '../components/illustraties';
 import { OpsRow, OpsStat } from '../components/ops';
 import { Badge, Button, Td, Th, FilterChip, type BadgeTone } from '../components/primitives';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../components/Table';
+import { meldSchrijffout } from '../lib/fouten';
 
 /**
  * Werkvoorraad, het volledige overzicht (punt 14, 15-09). Het dashboardpaneel
@@ -143,7 +144,7 @@ export function WerkvoorraadView({
       if (mislukt === 0) notify(gelukt === 1 ? 'Toestel goedgekeurd.' : `${gelukt} toestellen goedgekeurd.`, 'success');
       else notify(`${gelukt} goedgekeurd, ${mislukt} mislukt. Probeer het opnieuw of open Toestellen.`, 'error');
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Kon de toestellen niet ophalen.', 'error');
+      meldSchrijffout('Toestellen ophalen', err);
     } finally {
       setBezig(null);
     }

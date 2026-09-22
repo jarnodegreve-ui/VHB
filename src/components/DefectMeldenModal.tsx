@@ -54,7 +54,7 @@ export function DefectMeldenModal({
     setLaden(true);
     void Promise.all([laadVoertuigenKort(), laadDefecten({ mijn: true, status: 'alles', limit: 5 })])
       .then(([v, d]) => { setBussen(v); setEigen(d); })
-      .catch(() => notify('Kon de bussen niet laden.', 'error'))
+      .catch((err) => meldSchrijffout('Bussen laden', err))
       .finally(() => setLaden(false));
   }, [open]);
 

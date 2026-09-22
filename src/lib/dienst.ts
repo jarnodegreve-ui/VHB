@@ -19,7 +19,8 @@ async function vraag<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let d: { error?: string; details?: string } | null = null;
     try { d = await res.json(); } catch { /* geen json */ }
-    throw new Error(d?.details || d?.error || `Er ging iets mis (code ${res.status}).`);
+    // Status mee, zodat meldSchrijffout (src/lib/fouten.ts) de vervolgstap kiest.
+    throw Object.assign(new Error(d?.details || d?.error || `Er ging iets mis (code ${res.status}).`), { status: res.status });
   }
   return (await res.json()) as T;
 }

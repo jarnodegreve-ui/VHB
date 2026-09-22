@@ -8,6 +8,7 @@ import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/pri
 import { Card } from '../components/Card';
 import { SkeletonRow } from '../components/Skeleton';
 import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format';
+import { meldSchrijffout } from '../lib/fouten';
 
 export type UserDocument = {
   id: string;
@@ -51,11 +52,11 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
     (async () => {
       try {
         const res = await apiFetch('/api/documents');
-        if (!res.ok) throw new Error('laden mislukt');
+        if (!res.ok) throw Object.assign(new Error(''), { status: res.status });
         const data = (await res.json()) as UserDocument[];
         if (!cancelled) setDocs(data);
-      } catch {
-        if (!cancelled) notify('Documenten laden is mislukt.', 'error');
+      } catch (err) {
+        if (!cancelled) meldSchrijffout('Documenten laden', err);
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -31,10 +31,10 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
   const load = async () => {
     try {
       const res = await apiFetch(`/api/documents?userId=${encodeURIComponent(user.id)}`);
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw Object.assign(new Error(''), { status: res.status });
       setDocs(await res.json());
-    } catch {
-      notify('Documenten laden is mislukt.', 'error');
+    } catch (err) {
+      meldSchrijffout('Documenten laden', err, () => void load());
     } finally {
       setLoading(false);
     }

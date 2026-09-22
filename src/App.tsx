@@ -54,6 +54,7 @@ import type { Werkvoorraad } from './lib/werkvoorraad';
 import { LoginView } from './views/LoginView';
 import { useRealtimeSync } from './lib/realtime';
 import { SpeedInsights } from '@vercel/speed-insights/react';
+import { schrijffout } from './lib/fouten';
 // Overlays lazy (punt 18, 14-09): wachtwoord wijzigen, agenda-abonnement, de
 // werkvoorraad-knop en het twee-stapsscherm zaten statisch in de schil, samen
 // met de DatePicker die de eerste twee via Field meeslepen: ±30 kB in
@@ -531,7 +532,7 @@ export default function App() {
     } else if (result === 'denied') {
       showToast('Meldingen geweigerd, sta notificaties toe in je browserinstellingen en probeer opnieuw.', 'info');
     } else {
-      showToast('Meldingen inschakelen is mislukt.', 'error');
+      showToast(schrijffout('Meldingen inschakelen'), 'error', { label: 'Opnieuw proberen', run: () => void togglePush() });
     }
   };
 

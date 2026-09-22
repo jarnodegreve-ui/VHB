@@ -224,7 +224,7 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
   useEffect(() => {
     if (tab !== 'rapport') return;
     setRapportLaden(true);
-    void laadWerkRapport(rapportJaar).then(setRapport).catch(() => notify('Kon het rapport niet laden.', 'error')).finally(() => setRapportLaden(false));
+    void laadWerkRapport(rapportJaar).then(setRapport).catch((err) => meldSchrijffout('Rapport laden', err)).finally(() => setRapportLaden(false));
   }, [tab, rapportJaar]);
 
   const totaalUren = rijen.reduce((s, w) => s + w.werkuren, 0);

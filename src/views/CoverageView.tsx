@@ -148,7 +148,7 @@ export function CoverageView() {
         huidig: cur,
       }));
     } catch (e) {
-      notify(e instanceof Error ? e.message : 'Kandidaten voorstellen is mislukt.', 'error');
+      meldSchrijffout('Kandidaten voorstellen', e, () => void openBatch(d));
     } finally {
       setBatchLaden(false);
     }
@@ -290,12 +290,12 @@ export function CoverageView() {
         body: JSON.stringify({ date: pick.date, serviceNumber: pick.code, driverId: kandidaat.id }),
       });
       const body = await res.json().catch(() => ({} as any));
-      if (!res.ok) { notify(body.error || 'Toewijzen is mislukt.', 'error'); return; }
+      if (!res.ok) { meldSchrijffout('Toewijzen', { status: res.status, message: body.error }); return; }
       notify(`Dienst ${pick.code} toegewezen aan ${kandidaat.name}, de chauffeur krijgt een melding.`, 'success');
       setPick(null);
       await refetchGaps();
-    } catch {
-      notify('Toewijzen is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Toewijzen', err);
     } finally {
       setAssignBusy(null);
     }
@@ -498,8 +498,8 @@ export function CoverageView() {
     try {
       const res = await fetchExpectationVoorstel(from, to);
       setVoorstellen(Array.isArray(res?.voorstellen) ? res.voorstellen : []);
-    } catch (e: any) {
-      notify(e?.message || 'Kon het voorstel niet berekenen.', 'error');
+    } catch (e) {
+      meldSchrijffout('Voorstel berekenen', e, () => void haalVoorstelOp());
     } finally {
       setVoorstelLaden(false);
     }

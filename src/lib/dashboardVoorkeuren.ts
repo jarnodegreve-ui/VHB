@@ -167,7 +167,7 @@ export async function bewaarVoorkeurDeel(patch: DashboardVoorkeurenPatch): Promi
   const res = await apiFetch('/api/me/voorkeuren', { method: 'PATCH', body: JSON.stringify({ dashboard: patch }) });
   if (!res.ok) {
     const data = await res.json().catch(() => ({} as { error?: string }));
-    throw new Error(data?.error || `Opslaan mislukt (${res.status})`);
+    throw Object.assign(new Error(data?.error || ''), { status: res.status });
   }
   const data = await res.json().catch(() => null) as { dashboardVoorkeuren?: unknown } | null;
   return parseDashboardVoorkeurenLos(data?.dashboardVoorkeuren);
@@ -206,7 +206,7 @@ export function useDashboardVoorkeuren(user: User) {
       const res = await apiFetch('/api/me/voorkeuren', { method: 'PATCH', body: JSON.stringify({ dashboard: tegelPatch(v) }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({} as { error?: string }));
-        throw new Error(data?.error || `Opslaan mislukt (${res.status})`);
+        throw Object.assign(new Error(data?.error || ''), { status: res.status });
       }
       // Alleen opruimen als er intussen niets nieuws gekozen is.
       if (laatste.current === v) bewaarLokaleVoorkeuren(user.id, null);

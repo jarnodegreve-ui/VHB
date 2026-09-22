@@ -48,9 +48,10 @@ import { DashboardAanpassen } from '../components/DashboardAanpassen';
 import { PLANNER_TEGELS, pasVoorkeurenToe, stripSpans, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
 import { Card } from '../components/Card';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
-import { cn, notify, telHref } from '../lib/ui';
+import { cn, telHref } from '../lib/ui';
 import { navigeer } from '../app/router';
 import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../lib/uitweg';
+import { meldSchrijffout } from '../lib/fouten';
 
 /**
  * Operations Center — het planner/admin-dashboard als operationele cockpit.
@@ -343,11 +344,11 @@ export function PlannerDashboardWidgets({
         }),
       });
       const body = await res.json().catch(() => ({} as any));
-      if (!res.ok) { notify(body.error || 'Overzetten is mislukt.', 'error'); return; }
+      if (!res.ok) { meldSchrijffout('Overzetten', { status: res.status, message: body.error }); return; }
       setAfgehandeld((cur) => ({ ...cur, [d.id]: userNameById(naarId) }));
       await onShiftSwapped();
-    } catch {
-      notify('Overzetten is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
+    } catch (err) {
+      meldSchrijffout('Overzetten', err);
     } finally {
       setWisselBezig(null);
     }

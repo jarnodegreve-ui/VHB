@@ -108,9 +108,9 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
     setBezig(true);
     try {
       const res = await apiFetch(`/api/loon/export?maand=${maand}&format=csv${isAdmin && controle?.blokkerend ? '&forceer=1' : ''}`);
-      if (!res.ok) { const d = await res.json().catch(() => null); throw new Error(d?.error || `Export mislukt (${res.status}).`); }
+      if (!res.ok) { const d = await res.json().catch(() => null); throw Object.assign(new Error(d?.error || ''), { status: res.status }); }
       await downloadBlob(`easypay-${maand}.csv`, await res.blob());
-    } catch (err) { notify(err instanceof Error ? err.message : 'Export mislukt.', 'error'); }
+    } catch (err) { meldSchrijffout('Exporteren', err, () => void download()); }
     finally { setBezig(false); }
   };
   const bewaarLidnr = async () => {
@@ -268,7 +268,7 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
   );
   const verwijder = async (c: LoonCode) => {
     try { await verwijderLoonCode(c.code); setCodes((l) => l.filter((x) => x.code !== c.code)); notify(`Looncode ${c.codeWeergave} verwijderd.`, 'success'); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Verwijderen is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Verwijderen', err, () => void verwijder(c)); }
   };
   return (
     <div className="space-y-3">
@@ -426,7 +426,7 @@ function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
   const zonder = rijen.filter((r) => r.inExport && !r.easypayNr).length;
   const bewaar = async (r: LoonMedewerkerRij, body: { easypayNr: number | null; inExport: boolean }) => {
     try { const m = await bewaarMedewerker(r.userId, body); setRijen((l) => l.map((x) => (x.userId === r.userId ? { ...x, easypayNr: m.easypayNr ?? null, inExport: m.inExport } : x))); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Bewaren', err, () => void bewaar(r, body)); }
   };
   const importeer = async () => {
     if (bezig || !importTekst.trim()) return;
