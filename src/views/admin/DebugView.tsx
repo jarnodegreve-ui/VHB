@@ -4,7 +4,7 @@ import type { Service, Shift, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
 import { apiFetch, apiJson } from '../../lib/api';
-import { Badge, Button, Chip, IconButton, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, Chip, IconButton, StatusBadge, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
 import { ActieMenu } from '../../components/ActieMenu';
@@ -14,6 +14,7 @@ import { formatDateTimeHuman, formatDatumDMJ, formatRelatief } from '../../lib/f
 import { OcpiCard } from './OcpiCard';
 import { HerstelPlanModal } from '../../components/HerstelPlanModal';
 import type { HerstelPlan } from '../../../shared/herstelPlan';
+import { FOUTGROEP_STATUS } from '../../../shared/status';
 
 const COLLECTION_LABELS: Record<string, string> = {
   users: 'Gebruikers',
@@ -62,11 +63,10 @@ const BRON_LABEL: Record<string, string> = {
   csp: 'CSP',
 };
 
-function StatusBadge({ groep }: { groep: FoutGroep }) {
-  if (groep.regressie) return <Badge tone="red" dot>Opnieuw</Badge>;
-  if (groep.status === 'opgelost') return <Badge tone="emerald" stil>Opgelost</Badge>;
-  if (groep.status === 'genegeerd') return <Badge tone="slate" stil>Genegeerd</Badge>;
-  return <Badge tone="amber" stil>Open</Badge>;
+/** Status van een foutgroep uit FOUTGROEP_STATUS; een regressie ("Opnieuw")
+ *  wint van de opgeslagen status en blijft een gekleurde chip. */
+function FoutgroepBadge({ groep }: { groep: FoutGroep }) {
+  return <StatusBadge status={groep.regressie ? 'regressie' : groep.status} map={FOUTGROEP_STATUS} stil />;
 }
 
 /** Uitklapvak onder een groep: stack + broodkruimels + context van het laatste voorval. */
@@ -331,7 +331,7 @@ function FoutRijen({ groep: g, uit, onToggle, bezig, statusBeschikbaar, onStatus
             {g.releases.length > 3 && <Chip mono={false}>+{g.releases.length - 3}</Chip>}
           </span>
         </Td>
-        <Td><StatusBadge groep={g} /></Td>
+        <Td><FoutgroepBadge groep={g} /></Td>
         <Td className="text-right">
           {statusBeschikbaar && items.length > 0 && <ActieMenu label="Status wijzigen" size="sm" items={items} />}
         </Td>
