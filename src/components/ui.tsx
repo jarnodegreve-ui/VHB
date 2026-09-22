@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
-import { sectieLabel } from '../app/routes';
+import { routeVan, sectieLabel } from '../app/routes';
 import { versheidTekst, type Versheid } from '../lib/zelfLadend';
 import { Button } from './primitives';
 import { Modal } from './Modal';
@@ -324,23 +324,77 @@ export function VersheidRegel({ className, ...versheid }: Versheid & { className
   );
 }
 
-export function ViewLoader() {
+export function ViewLoader({ view, soort = 'lijst', kpis = 0, beschrijving = false }: {
+  /** Het scherm uit de routetabel: dan is de kop echt (eyebrow + titel) en
+   *  even hoog als straks, zodat de inhoud niet springt (fase 2, 22-09). */
+  view?: View;
+  soort?: 'lijst' | 'tabel';
+  /** Aantal KPI-tegels boven de lijst of tabel (0 = geen). */
+  kpis?: number;
+  /** Het scherm zet een beschrijving onder de titel. */
+  beschrijving?: boolean;
+} = {}) {
   // Skeleton i.p.v. spinner: de pagina-opbouw (kop + lijst) staat er al
   // tijdens het laden — dat oogt op 4G rustiger dan een draaiend wiel in
   // een verder leeg scherm. Zelfde shimmer-DNA als de dashboard-skeletons.
+  const eyebrow = view ? sectieLabel(view) : null;
+  const titel = view ? routeVan(view).label : null;
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Scherm wordt geladen">
-      <div className="px-1 pt-1 space-y-2">
-        <Skeleton className="h-7 w-64" />
-        <Skeleton className="h-3 w-44" />
-      </div>
-      <div className="surface-card rounded-3xl overflow-hidden">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i}>
-            <SkeletonRow className="border-b border-hairline-subtle last:border-0" />
+    <div className="space-y-6" aria-busy="true" aria-label="Scherm wordt geladen">
+      {/* Zelfde opbouw en maten als PageHeader: text-micro (16 px) + mt-1.5 +
+          text-page-title (1,1 × 24/30 px) + mt-2 + text-body (1,55 × 15 px). */}
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:items-end">
+        <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl">
+          {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
+          {titel ? (
+            <h1 className={cn('text-page-title', eyebrow && 'mt-1.5')}>{titel}</h1>
+          ) : (
+            <div className={cn('flex h-[1.65rem] items-center md:h-[2.0625rem]', eyebrow && 'mt-1.5')}><Skeleton className="h-5 w-56 md:h-6" /></div>
+          )}
+          {beschrijving && <div className="mt-2 flex h-[1.45rem] items-center"><Skeleton className="h-3 w-72 max-w-full" /></div>}
+        </div>
+      </header>
+      {kpis > 0 && (
+        <div className="kpi-raster grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: kpis }).map((_, i) => (
+            <div key={i} className="kpi-tegel surface-card rounded-3xl p-4">
+              <div className="kpi-kop flex items-center gap-2"><Skeleton rounded="lg" className="h-7 w-7 shrink-0" /><Skeleton className="h-3 w-24" /></div>
+              <div className="kpi-getal mt-2.5 flex h-8 items-center"><Skeleton className="h-6 w-10" /></div>
+              <div className="kpi-sub mt-0.5 flex h-4 items-center"><Skeleton className="h-2.5 w-28" /></div>
+            </div>
+          ))}
+        </div>
+      )}
+      {soort === 'tabel' ? (
+        <div className="surface-table rounded-3xl overflow-hidden">
+          {/* Toolbar (zoekveld + telling), kolomkop, rijen: de maten van TableToolbar, Th en Td. */}
+          <div className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
+            <Skeleton rounded="xl" className="h-10 w-full max-w-xs" />
+            <Skeleton className="h-3 w-16" />
           </div>
-        ))}
-      </div>
+          <div className="flex items-center gap-6 border-b border-hairline px-4 py-3">
+            {[32, 20, 16, 24, 16].map((w, i) => <Skeleton key={i} className="h-3" style={{ width: `${w * 4}px` }} />)}
+          </div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-6 border-b border-hairline-subtle px-4 py-3 last:border-0">
+              <Skeleton className="h-3.5 w-40" /><Skeleton className="h-3 w-20" /><Skeleton className="h-3 w-16" /><Skeleton rounded="full" className="h-5 w-20" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="surface-card rounded-3xl overflow-hidden">
+          {/* RecordRij-maat: px-4 py-3, titel 15 px + meta 13 px. */}
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-start justify-between gap-3 border-b border-hairline-subtle px-4 py-3 last:border-0">
+              <div className="min-w-0 flex-1 space-y-2 py-0.5">
+                <Skeleton className="h-3.5 w-3/5" />
+                <Skeleton className="h-3 w-2/5" />
+              </div>
+              <Skeleton rounded="full" className="mt-1 h-5 w-16 shrink-0" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

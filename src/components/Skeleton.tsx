@@ -1,3 +1,4 @@
+import type React from 'react';
 import { cn } from '../lib/ui';
 
 /**
@@ -8,10 +9,12 @@ import { cn } from '../lib/ui';
 export function Skeleton({
   className,
   rounded = 'md',
+  style,
 }: {
   className?: string;
   /** Radius uit de ladder (md = 6 px is de ondergrens). */
   rounded?: 'md' | 'lg' | 'xl' | '2xl' | 'full';
+  style?: React.CSSProperties;
 }) {
   const radius = {
     md: 'rounded-md',
@@ -20,7 +23,7 @@ export function Skeleton({
     '2xl': 'rounded-2xl',
     full: 'rounded-full',
   }[rounded];
-  return <div className={cn('skeleton', radius, className)} aria-hidden="true" />;
+  return <div className={cn('skeleton', radius, className)} style={style} aria-hidden="true" />;
 }
 
 /**

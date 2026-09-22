@@ -35,7 +35,8 @@ import { AanwezigheidStack } from './components/AanwezigheidStack';
 import { fetchPushPublicKey, getExistingSubscription, hersyncPushSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
-import { DashboardSkelet, ViewLoader } from './components/ui';
+import { DashboardSkelet } from './components/ui';
+import { skeletVoor } from './app/skeletten';
 import { SchermInhoud } from './app/SchermInhoud';
 import { printScherm } from './app/PrintModus';
 import { useThema } from './app/useThema';
@@ -1606,7 +1607,7 @@ export default function App() {
                 Verwissel-wrappers cross-faden het skelet naar de inhoud. */}
             {/* Dashboard = tegelraster, dus daar het rastergetrouwe skelet
                 (zelfde als in AppSkeleton) i.p.v. de kop-plus-lijst. */}
-            <Suspense fallback={resolvedCurrentView === 'dashboard' ? <DashboardSkelet /> : <ViewLoader />}>
+            <Suspense fallback={resolvedCurrentView === 'dashboard' ? <DashboardSkelet /> : skeletVoor(resolvedCurrentView)}>
               <SchermInhoud
                 resolvedCurrentView={resolvedCurrentView}
                 setCurrentView={setCurrentView}
