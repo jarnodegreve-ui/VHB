@@ -16,7 +16,7 @@ import {
   bewaarVoertuig, dagenTot, laadDefecten, laadVoertuigVervaldata, laadVoertuigWerken, laadVoertuigen, maakVoertuig, TechniekFout,
   urenTekst, verwijderVoertuig, zetVoertuigVervaldatum, type Defect, type Vehicle, type VehicleBody, type VehicleExpiry, type Werkprestatie,
 } from '../../lib/techniek';
-import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel, ViewLoader } from '../../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel, ViewLoader } from '../../components/ui';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
@@ -439,7 +439,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
   );
 }
 
-function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: Vehicle | null; onClose: () => void; onKlaar: (v: Vehicle) => void; onVerwijderd: (id: string) => void }) {
+export function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: Vehicle | null; onClose: () => void; onKlaar: (v: Vehicle) => void; onVerwijderd: (id: string) => void }) {
   const [form, setForm] = useState<VehicleBody>(() => voertuig ? { busnr: voertuig.busnr, kortNr: voertuig.kortNr ?? null, nummerplaat: voertuig.nummerplaat ?? '', chassisnr: voertuig.chassisnr ?? '', merk: voertuig.merk ?? '', type: voertuig.type, categorie: voertuig.categorie ?? 'bus', aandrijving: voertuig.aandrijving ?? null, status: voertuig.status, inDienst: voertuig.inDienst ?? '', uitDienst: voertuig.uitDienst ?? '', zitplaatsen: voertuig.zitplaatsen ?? null, opmerking: voertuig.opmerking ?? '' } : LEEG_FORM);
   const fouten = useVeldfouten();
   const [bezig, setBezig] = useState(false);
@@ -462,15 +462,20 @@ function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: V
       else meldSchrijffout('Opslaan', err, voertuig ? () => void opslaan() : undefined);
     } finally { setBezig(false); }
   };
+  const [bevestigVerwijderen, setBevestigVerwijderen] = useState(false);
+  // Pas na de bevestiging, server-confirmed: de dialoog toont `bezig` tot de
+  // server antwoordt. Geen optimistische verwijdering en geen ongedaan maken:
+  // de API kent geen zachte verwijdering (DELETE wist de rij, vervaldata gaan
+  // mee via on delete cascade). Opnieuw is veilig: DELETE op een id.
   const verwijderen = async () => {
-    if (!voertuig || bezig) return;
+    if (!voertuig) return;
     setBezig(true);
     try {
       await verwijderVoertuig(voertuig.id);
       notify('Voertuig verwijderd.', 'success');
       onVerwijderd(voertuig.id);
     } catch (err) {
-      meldSchrijffout('Verwijderen', err);
+      meldSchrijffout('Verwijderen', err, () => void verwijderen());
     } finally { setBezig(false); }
   };
 
@@ -496,7 +501,7 @@ function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: V
         {voertuig && (
           <Card tone="muted" padding="sm" className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-600">
             <span className="inline-flex items-center gap-1.5"><AlertTriangle size={14} /> Verwijderen kan alleen zonder meldingen of prestaties; anders zet je de status op “Uit dienst”.</span>
-            <Button variant="danger" size="sm" onClick={() => void verwijderen()} disabled={bezig}>Verwijderen</Button>
+            <Button variant="danger" size="sm" onClick={() => setBevestigVerwijderen(true)} disabled={bezig}>Verwijderen</Button>
           </Card>
         )}
         <div className="mt-5 flex gap-3">
@@ -504,6 +509,16 @@ function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: V
           <Button type="submit" variant="primary" className="flex-1" bezig={bezig}>Opslaan</Button>
         </div>
       </Formulier>
+      {voertuig && (
+        <ConfirmationModal
+          open={bevestigVerwijderen}
+          onClose={() => setBevestigVerwijderen(false)}
+          onConfirm={verwijderen}
+          title="Voertuig verwijderen?"
+          message={`Bus ${voertuig.busnr} verdwijnt uit het voertuigregister, samen met zijn vervaldata. Dit kan niet ongedaan worden gemaakt.`}
+          confirmText="Verwijderen"
+        />
+      )}
     </Modal>
   );
 }
