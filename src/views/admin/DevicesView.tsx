@@ -199,7 +199,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         <span className="text-xs text-slate-500">{devices === null ? 'Laden…' : `${groepen.length} ${groepen.length === 1 ? 'gebruiker' : 'gebruikers'}`}</span>
       </div>
       {devices === null ? (
-        <div className="divide-y divide-hairline-subtle" aria-busy="true" aria-label="Toestellen worden geladen">
+        <div className="divide-y divide-hairline-subtle" role="status" aria-busy="true" aria-label="Toestellen worden geladen">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />

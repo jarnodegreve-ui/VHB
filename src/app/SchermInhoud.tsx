@@ -11,7 +11,8 @@
 import { Suspense } from 'react';
 import { isStaf, type User, type View } from '../types';
 import { isPushSupported } from '../lib/push';
-import { DashboardSkelet, ViewLoader } from '../components/ui';
+import { DashboardSkelet } from '../components/ui';
+import { skeletVoor } from './skeletten';
 import { SchermInloop, Verwissel } from '../components/Verwissel';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { useAppDataContext } from './AppDataContext';
@@ -50,6 +51,8 @@ export function SchermInhoud(props: SchermInhoudProps) {
   const {
     aanwezigheid, aanwezigheidLocatieMigratie, aanwezigheidMigratie, activityLog, activityLogGeladen, confirmSwapSeen, createDiversion, createUpdate, decideLeave, decideSwap, deleteDiversion, deleteUpdate, diversions, feestdagenExtra, fetchActivityLog, fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, fetchSwaps, fetchUpdates, isInitialLoad, lastSeenLeaveDecisionAt, lastSyncedAt, leaveRequests, loginActivity, markDocumentsSeen, markLeaveDecisionsSeen, myNotes, planningCodes, planningCodesGeladen, planningMatrixGeladen, planningMatrixHistory, planningMatrixRows, planningTot, refreshCoverageGaps, reportSick, saveDiversion, saveDiversions, saveLeave, savePlanning, savePlanningCodes, saveServices, saveSwaps, saveUpdate, saveUpdates, sendUrgentEmail, services, servicesGeladen, shifts, swaps, updates, users, usersGeladen, zetFeestdagenExtra,
   } = useAppDataContext();
+  // Eén skelet per scherm, met de echte kop (src/app/skeletten.tsx).
+  const skelet = skeletVoor(resolvedCurrentView);
   return (
     <>
   <SchermInloop key={resolvedCurrentView}>
@@ -71,16 +74,16 @@ export function SchermInhoud(props: SchermInhoudProps) {
       )
     )}
     {resolvedCurrentView === 'mijn-dag' && <LazyMijnDagView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />}
-    {resolvedCurrentView === 'omleidingen' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} /></Verwissel>}
+    {resolvedCurrentView === 'omleidingen' && <Verwissel laden={isInitialLoad} skelet={skelet}><LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} /></Verwissel>}
     {resolvedCurrentView === 'rooster' && <LazyScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad || !ruilDataKlaar} lastSyncedAt={lastSyncedAt} planningTot={planningTot} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
-    {resolvedCurrentView === 'dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyServicesView services={services} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyServicesView services={services} /></Suspense></Verwissel>}
     {resolvedCurrentView === 'ritblaadjes' && <LazyRitblaadjesView currentUser={currentUser!} />}
     {resolvedCurrentView === 'documenten' && <LazyDocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
-    {resolvedCurrentView === 'updates' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><LazyUpdatesView updates={updates} /></Verwissel>}
+    {resolvedCurrentView === 'updates' && <Verwissel laden={isInitialLoad} skelet={skelet}><LazyUpdatesView updates={updates} /></Verwissel>}
     {resolvedCurrentView === 'meldingen' && <LazyMeldingenView onNavigate={setCurrentView} />}
-    {resolvedCurrentView === 'contacten' && <Verwissel laden={isInitialLoad || !usersGeladen} skelet={<ViewLoader />}><LazyContactsView users={users} currentUser={currentUser!} /></Verwissel>}
-    {resolvedCurrentView === 'beheer-roosters' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
-      <Suspense fallback={<ViewLoader />}>
+    {resolvedCurrentView === 'contacten' && <Verwissel laden={isInitialLoad || !usersGeladen} skelet={skelet}><LazyContactsView users={users} currentUser={currentUser!} /></Verwissel>}
+    {resolvedCurrentView === 'beheer-roosters' && <Verwissel laden={isInitialLoad} skelet={skelet}>
+      <Suspense fallback={skelet}>
         <LazyManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
           // Logboek stil op de achtergrond: de import wacht er niet op.
           if (currentUser?.role === 'admin') void fetchActivityLog();
@@ -93,8 +96,8 @@ export function SchermInhoud(props: SchermInhoudProps) {
         }} />
       </Suspense>
     </Verwissel>}
-    {resolvedCurrentView === 'planning-matrix' && <Verwissel laden={isInitialLoad || !servicesGeladen || !planningCodesGeladen || !planningMatrixGeladen} skelet={<ViewLoader />}>
-      <Suspense fallback={<ViewLoader />}>
+    {resolvedCurrentView === 'planning-matrix' && <Verwissel laden={isInitialLoad || !servicesGeladen || !planningCodesGeladen || !planningMatrixGeladen} skelet={skelet}>
+      <Suspense fallback={skelet}>
         <LazyPlanningMatrixView
           rows={planningMatrixRows}
           services={services}
@@ -107,43 +110,43 @@ export function SchermInhoud(props: SchermInhoudProps) {
         />
       </Suspense>
     </Verwissel>}
-    {resolvedCurrentView === 'planning-codes' && <Verwissel laden={isInitialLoad || !planningCodesGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'beheer-updates' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
-      <Suspense fallback={<ViewLoader />}>
+    {resolvedCurrentView === 'planning-codes' && <Verwissel laden={isInitialLoad || !planningCodesGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'beheer-updates' && <Verwissel laden={isInitialLoad} skelet={skelet}>
+      <Suspense fallback={skelet}>
         <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSaveUpdate={saveUpdate} onCreateUpdate={createUpdate} onDeleteUpdate={deleteUpdate} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} onHerlaad={() => void fetchUpdates()} />
       </Suspense>
     </Verwissel>}
-    {resolvedCurrentView === 'gebruikers' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
-      <Suspense fallback={<ViewLoader />}>
+    {resolvedCurrentView === 'gebruikers' && <Verwissel laden={isInitialLoad} skelet={skelet}>
+      <Suspense fallback={skelet}>
         <LazyManageUsersView currentUser={currentUser!} />
       </Suspense>
     </Verwissel>}
     {resolvedCurrentView === 'toestellen' && (
-      <Suspense fallback={<ViewLoader />}>
+      <Suspense fallback={skelet}>
         <LazyDevicesView users={users} currentUserId={currentUser!.id} />
       </Suspense>
     )}
-    {resolvedCurrentView === 'activiteit' && <Verwissel laden={isInitialLoad || !activityLogGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} aanwezigheid={aanwezigheid} aanwezigheidMigratie={aanwezigheidMigratie} locatieMigratie={aanwezigheidLocatieMigratie} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
-    {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
-    {resolvedCurrentView === 'vandaag' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyVandaagView onNavigate={(view, params) => navigeer(view, { params })} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'werkvoorraad' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyWerkvoorraadView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'defecten' && <Suspense fallback={<ViewLoader />}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
-    {resolvedCurrentView === 'werkprestaties' && <Verwissel laden={!usersGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'voertuig-werken' && <Suspense fallback={<ViewLoader />}><LazyVoertuigWerkenView /></Suspense>}
-    {resolvedCurrentView === 'voertuigen' && <Suspense fallback={<ViewLoader />}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}
-    {resolvedCurrentView === 'dienstopbouw' && <Suspense fallback={<ViewLoader />}><LazyDienstopbouwView currentUser={currentUser!} /></Suspense>}
-    {resolvedCurrentView === 'dagafsluiting' && <Suspense fallback={<ViewLoader />}><LazyDagafsluitingView currentUser={currentUser!} users={users} /></Suspense>}
-    {resolvedCurrentView === 'rapporten' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyRapportenView currentUser={currentUser!} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'looncontrole' && <Suspense fallback={<ViewLoader />}><LazyLooncontroleView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense>}
-    {resolvedCurrentView === 'beheer-omleidingen' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'beheer-dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'ruil-verzoeken' && <Verwissel laden={isInitialLoad || !ruilDataKlaar} skelet={<ViewLoader />}><LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} /></Verwissel>}
+    {resolvedCurrentView === 'activiteit' && <Verwissel laden={isInitialLoad || !activityLogGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyActivityLogView entries={activityLog} logins={loginActivity} aanwezigheid={aanwezigheid} aanwezigheidMigratie={aanwezigheidMigratie} locatieMigratie={aanwezigheidLocatieMigratie} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={skelet}><LazyOcpiDashboardView /></Suspense>}
+    {resolvedCurrentView === 'vervaldata' && <Suspense fallback={skelet}><LazyVervaldataView users={users} /></Suspense>}
+    {resolvedCurrentView === 'vandaag' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyVandaagView onNavigate={(view, params) => navigeer(view, { params })} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'werkvoorraad' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyWerkvoorraadView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'defecten' && <Suspense fallback={skelet}><LazyGeleBoekView currentUser={currentUser!} /></Suspense>}
+    {resolvedCurrentView === 'werkprestaties' && <Verwissel laden={!usersGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyWerkprestatiesView currentUser={currentUser!} users={users} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'voertuig-werken' && <Suspense fallback={skelet}><LazyVoertuigWerkenView /></Suspense>}
+    {resolvedCurrentView === 'voertuigen' && <Suspense fallback={skelet}><LazyVoertuigenView currentUser={currentUser!} /></Suspense>}
+    {resolvedCurrentView === 'dienstopbouw' && <Suspense fallback={skelet}><LazyDienstopbouwView currentUser={currentUser!} /></Suspense>}
+    {resolvedCurrentView === 'dagafsluiting' && <Suspense fallback={skelet}><LazyDagafsluitingView currentUser={currentUser!} users={users} /></Suspense>}
+    {resolvedCurrentView === 'rapporten' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyRapportenView currentUser={currentUser!} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'looncontrole' && <Suspense fallback={skelet}><LazyLooncontroleView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense>}
+    {resolvedCurrentView === 'beheer-omleidingen' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'beheer-dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'ruil-verzoeken' && <Verwissel laden={isInitialLoad || !ruilDataKlaar} skelet={skelet}><LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} /></Verwissel>}
     {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
-    {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
-    {resolvedCurrentView === 'verlof-kalender' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}><Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} shifts={shifts} onDecide={isStaf(currentUser.role) ? decideLeave : undefined} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'verlof' && <Verwissel laden={isInitialLoad || !usersGeladen} skelet={<ViewLoader />}>
-      <Suspense fallback={<ViewLoader />}>
+    {resolvedCurrentView === 'dekking' && <Suspense fallback={skelet}><LazyCoverageView /></Suspense>}
+    {resolvedCurrentView === 'verlof-kalender' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} shifts={shifts} onDecide={isStaf(currentUser.role) ? decideLeave : undefined} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'verlof' && <Verwissel laden={isInitialLoad || !usersGeladen} skelet={skelet}>
+      <Suspense fallback={skelet}>
         <LazyLeaveManagementView
           user={currentUser}
           leaveRequests={leaveRequests}
@@ -158,8 +161,8 @@ export function SchermInhoud(props: SchermInhoudProps) {
         />
       </Suspense>
     </Verwissel>}
-    {resolvedCurrentView === 'ziekte' && <Verwissel laden={isInitialLoad} skelet={<ViewLoader />}>
-      <Suspense fallback={<ViewLoader />}>
+    {resolvedCurrentView === 'ziekte' && <Verwissel laden={isInitialLoad} skelet={skelet}>
+      <Suspense fallback={skelet}>
         <LazyZiekteView
           user={currentUser}
           users={users}
@@ -193,8 +196,8 @@ export function SchermInhoud(props: SchermInhoudProps) {
         onNavigate={setCurrentView}
       />
     )}
-    {resolvedCurrentView === 'beheer-debug' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={<ViewLoader />}>
-      <Suspense fallback={<ViewLoader />}>
+    {resolvedCurrentView === 'beheer-debug' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={skelet}>
+      <Suspense fallback={skelet}>
         <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
       </Suspense>
     </Verwissel>}

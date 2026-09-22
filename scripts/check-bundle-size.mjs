@@ -73,7 +73,12 @@ const DEELBUDGET_KB = {
   // paneel zelf (motion, acht iconen) is een eigen chunk, zoals bij
   // WerkvoorraadMenu. Lokaal 73,97 kB, wat op 74 geen marge meer is maar een
   // struikeldraad: de CI-runner mat dezelfde bron eerder ±0,3 kB hoger.
-  index: 76,
+  // 22-09 (fase 2, skeletten): 76 → 77. De ViewLoader tekent nu de echte
+  // kop en een lijst- of tabelvorm en woont in de schil (hij moet er staan
+  // vóór de chunk): 75,75 → 76,33 kB. Fase 2 haalt daarna met de
+  // startbundel-trim (werkvoorraad, ICS, aanwezigheid lui) ±4 kB uit de
+  // entry en zet het budget op 74.
+  index: 77,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB

@@ -204,7 +204,7 @@ export function MijnDagView({
   // Skelet met dezelfde kop-/kaartopbouw als de inhoud; Verwissel cross-fadet
   // ernaar zodra de data binnen is (minstens 180 ms skelet, geen flikker).
   const skelet = (
-    <div className="mx-auto max-w-2xl space-y-5" aria-busy="true" aria-label="Mijn dag wordt geladen">
+    <div className="mx-auto max-w-2xl space-y-5" role="status" aria-busy="true" aria-label="Mijn dag wordt geladen">
       <div className="space-y-2 px-1 pt-1">
         <Skeleton className="h-3 w-16" />
         <Skeleton className="h-8 w-64" />

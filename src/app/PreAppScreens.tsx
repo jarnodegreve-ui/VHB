@@ -69,7 +69,7 @@ function CarbonLink({ onClick, children }: { onClick: () => void; children: Reac
 export function LaadScherm({ tekst = 'Even je gegevens ophalen…' }: { tekst?: string }) {
   const fase = useLaadFases();
   return (
-    <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6" aria-busy="true" aria-label="Portaal wordt geladen">
+    <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6" role="status" aria-busy="true" aria-label="Portaal wordt geladen">
       <CarbonAchtergrond />
       <BrandLogo tone="donker" laden className="w-44 sm:w-56 h-auto select-none" />
       <div className="flex min-h-10 flex-col items-center gap-3">
@@ -92,7 +92,7 @@ export function ProfielLaden() {
 
 export function PrintLaden() {
   return (
-    <div className="min-h-screen bg-surface-white flex flex-col items-center justify-center gap-5" aria-busy="true" aria-label="Print-weergave wordt geladen">
+    <div className="min-h-screen bg-surface-white flex flex-col items-center justify-center gap-5" role="status" aria-busy="true" aria-label="Print-weergave wordt geladen">
       <BrandLogo tone="licht" laden className="w-44 h-auto select-none" />
     </div>
   );
