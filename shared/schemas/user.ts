@@ -72,11 +72,23 @@ export const userBodySchema = z.object({ ...userVelden, id: optioneel(z.string()
 
 const verplichteEmail = verplichteTekst('Vul een e-mailadres in').pipe(emailSchema);
 export const userFormulierSchema = z.object({ ...userVelden, email: verplichteEmail });
+/** Tijdelijk wachtwoord dat beheer instelt (nieuwe gebruiker én reset):
+ *  zelfde minimum als overal (WACHTWOORD_MIN), met de beheertekst. */
+export const tijdelijkWachtwoordSchema = z
+  .string({ error: 'Vul een tijdelijk wachtwoord in' })
+  .min(1, 'Vul een tijdelijk wachtwoord in')
+  .min(WACHTWOORD_MIN, `Gebruik een tijdelijk wachtwoord van minstens ${WACHTWOORD_MIN} tekens`);
+
 export const nieuweUserFormulierSchema = z.object({
   ...userVelden,
   email: verplichteEmail,
-  password: z
-    .string({ error: 'Vul een tijdelijk wachtwoord in' })
-    .min(1, 'Vul een tijdelijk wachtwoord in')
-    .min(WACHTWOORD_MIN, `Gebruik een tijdelijk wachtwoord van minstens ${WACHTWOORD_MIN} tekens`),
+  password: tijdelijkWachtwoordSchema,
+});
+
+/** Wachtwoord resetten door beheer: het formulier én
+ *  POST /api/admin/users/reset-password (tranche 3A, 22-09: de client
+ *  controleerde eerst 6 tekens, de server 10). */
+export const wachtwoordResetSchema = z.object({
+  userId: verplichteTekst('Kies een gebruiker'),
+  password: tijdelijkWachtwoordSchema,
 });

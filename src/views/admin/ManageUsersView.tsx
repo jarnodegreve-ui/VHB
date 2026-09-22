@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
-import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
+import { nieuweUserFormulierSchema, userFormulierSchema, wachtwoordResetSchema } from '../../../shared/schemas/user';
 import { CalendarOff, FolderOpen, History, Info, LogIn, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
 import type { Role, User } from '../../types';
@@ -455,14 +455,18 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const sluitReset = () => { setConfirmResetUser(null); setResetPasswordValue(''); resetF.wis(); };
   const handleResetPassword = async () => {
     if (!confirmResetUser || isResettingPassword) return;
-    if (resetPasswordValue.length < 6) return resetF.zet({ password: 'Gebruik minstens 6 tekens.' });
+    // Zelfde schema als de server (WACHTWOORD_MIN uit shared): te kort = fout bij het veld.
+    const invoer = resetF.controleer(wachtwoordResetSchema, { userId: String(confirmResetUser.id), password: resetPasswordValue });
+    if (!invoer) return;
     try {
       setIsResettingPassword(true);
       const response = await apiFetch('/api/admin/users/reset-password', {
         method: 'POST',
-        body: JSON.stringify({ userId: confirmResetUser.id, password: resetPasswordValue }),
+        body: JSON.stringify(invoer),
       });
       const data = await response.json().catch(() => ({}));
+      if (response.status === 400 && resetF.vanServer(data)) return;
+      // Geen "Opnieuw proberen": de server dedupliceert een reset niet.
       if (!response.ok) return meldSchrijffout('Resetten', { status: response.status, message: data.details || data.error });
       notify(`Wachtwoord voor ${confirmResetUser.name} is bijgewerkt.`, 'success');
       setCredentialsModal({
