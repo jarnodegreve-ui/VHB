@@ -18,6 +18,8 @@ import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
 import { meldSchrijffout } from '../../lib/fouten';
+import { useAutosaveCel } from '../../lib/autosave';
+import { AutosaveFout, AutosaveTeken } from '../../components/AutosaveStatus';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
@@ -366,6 +368,41 @@ function CodeModal({ init, onClose, onKlaar }: { init: LoonCodeBody & { code: st
   );
 }
 
+/**
+ * Matricule met autosave (tranche 3A): bewaart bij het verlaten, toont
+ * bezig/bewaard, en een mislukte of ongeldige waarde blijft staan met de
+ * reden erbij (src/lib/autosave.ts). Leeg = geen matricule.
+ */
+function MatriculeCel({ r, onBewaard }: { r: LoonMedewerkerRij; onBewaard: (m: { easypayNr: number | null; inExport: boolean }) => void }) {
+  const cel = useAutosaveCel<string, Awaited<ReturnType<typeof bewaarMedewerker>>>({
+    actie: `Matricule van ${r.naam} bewaren`,
+    bewaar: (tekst) => bewaarMedewerker(r.userId, { easypayNr: tekst === '' ? null : Number(tekst), inExport: r.inExport }),
+    opGelukt: onBewaard,
+  });
+  const foutId = `${r.userId}-matricule-fout`;
+  return (
+    <div className="inline-flex flex-col items-end">
+      <div className="inline-flex items-center gap-1">
+        <AutosaveTeken staat={cel.staat} />
+        <Input
+          aria-label={`Matricule van ${r.naam}`}
+          inputMode="numeric"
+          defaultValue={r.easypayNr ?? ''}
+          invalid={cel.staat.status === 'fout'}
+          aria-describedby={cel.staat.status === 'fout' ? foutId : undefined}
+          className="w-24 px-2 py-1 text-right text-sm"
+          onBlur={(e) => {
+            const tekst = e.target.value.trim();
+            if (tekst !== '' && !Number.isInteger(Number(tekst))) { cel.ongeldig(tekst, 'Een matricule bestaat alleen uit cijfers.'); return; }
+            cel.verander(tekst, r.easypayNr == null ? '' : String(r.easypayNr), (a, b) => (a === '' ? null : Number(a)) === (b === '' ? null : Number(b)));
+          }}
+        />
+      </div>
+      <AutosaveFout staat={cel.staat} id={foutId} />
+    </div>
+  );
+}
+
 function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
   const [rijen, setRijen] = useState<LoonMedewerkerRij[]>([]);
   const [zoek, setZoek] = useState('');
@@ -405,7 +442,7 @@ function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
                 <tr key={r.userId} className="border-b border-hairline-subtle last:border-b-0">
                   <Td><span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam} size="sm" />{r.naam}</span>{r.employeeId && <p className="text-xs text-slate-500">{r.employeeId}</p>}</Td>
                   <Td num>
-                    <Input aria-label={`Matricule van ${r.naam}`} inputMode="numeric" defaultValue={r.easypayNr ?? ''} className="w-24 px-2 py-1 text-right text-sm" onBlur={(e) => { const n = e.target.value.trim() === '' ? null : Number(e.target.value); if (n !== (r.easypayNr ?? null) && (n === null || Number.isInteger(n))) void bewaar(r, { easypayNr: n, inExport: r.inExport }); }} />
+                    <MatriculeCel r={r} onBewaard={(m) => setRijen((l) => l.map((x) => (x.userId === r.userId ? { ...x, easypayNr: m.easypayNr ?? null, inExport: m.inExport } : x)))} />
                   </Td>
                   <Td><Switch checked={r.inExport} label={`${r.naam} in de export`} onChange={(v) => void bewaar(r, { easypayNr: r.easypayNr, inExport: v })} /></Td>
                 </tr>
