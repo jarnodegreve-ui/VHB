@@ -1,9 +1,19 @@
-import { useState, type ReactNode } from 'react';
-import { Bell, Bus, Check, Download, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { PageHeader, PageShell, EmptyState, Foutkaart, VersheidRegel } from '../../components/ui';
+import { useId, useState, type ReactNode } from 'react';
+import { ArrowUpRight, Bell, Bus, Check, ChevronDown, Download, Info, LogOut, Pencil, Plus, Search, Settings, Trash2, X } from 'lucide-react';
+import { ConfirmationModal, ModalHeader, PageHeader, PageShell, EmptyState, Foutkaart, VersheidRegel } from '../../components/ui';
 import { Card, CardHeader } from '../../components/Card';
-import { Badge, Button, Chip, FilterChip, IconButton, Meter, MeterVulling, MicroLabel, Segmented, StatusBadge, Switch, TableShell, Td, Th } from '../../components/primitives';
-import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
+import { Badge, Button, Chip, FilterChip, IconButton, Kbd, Meter, MeterVulling, MicroLabel, Pressable, Segmented, StatusBadge, Switch, TableShell, Td, Th } from '../../components/primitives';
+import { DateInput, Field, Input, SearchField, Select, Textarea } from '../../components/Field';
+import { MenuItem, Popover, PopoverKop, PopoverVoet } from '../../components/Popover';
+import { useDropdown } from '../../components/useDropdown';
+import { Tooltip } from '../../components/Tooltip';
+import { Tabs, TabPaneel } from '../../components/Tabs';
+import { Sheet } from '../../components/Sheet';
+import { Modal } from '../../components/Modal';
+import { Callout } from '../../components/Callout';
+import { Stat } from '../../components/Stat';
+import { OpsStat } from '../../components/ops';
+import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { InfoTip } from '../../components/InfoTip';
 import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '../../components/Table';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
@@ -78,8 +88,16 @@ function Rij({ label, children }: { label: string; children: ReactNode }) {
 const INHOUD = [
   ['merk', 'Merk'], ['kleur', 'Kleur'], ['typografie', 'Typografie'], ['maat', 'Maat en beweging'], ['knoppen', 'Knoppen'], ['labels', 'Badges en chips'],
   ['kaarten', 'Kaarten'], ['zijvak', 'Zijvak en menu'], ['personen', 'Personen'], ['formulier', 'Formulier'], ['tabel', 'Tabel'], ['feedback', 'Feedback'],
-  ['illustraties', 'Lege schermen en meldingen'],
+  ['illustraties', 'Lege schermen en meldingen'], ['overlays', 'Overlays'], ['tabs', 'Tabs'], ['meldingsvlak', 'Callout'], ['cijfers', 'Cijfers'], ['lagen', 'Lagen'],
 ] as const;
+
+const Z_LADDER = [
+  ['z-sticky', 10, 'plakkende koppen, vaste kolom'], ['z-sticky-kop', 20, 'plakkende thead'], ['z-sticky-hoek', 25, 'hoekcel'], ['z-laag', 20, 'zwevend in de inhoud'],
+  ['z-topbar', 30, 'topbar'], ['z-zwevend', 40, 'popover, dock, scrim zijbalk'], ['z-zijbalk', 50, 'zijbalk'], ['z-menu', 60, 'topbar- en rijmenu'],
+  ['z-modal', 100, 'Modal, SlideOver, Sheet'], ['z-dimmer', 110, 'dimmer'], ['z-modal-boven', 120, 'bevestiging boven een modal'], ['z-actiemenu', 125, 'ActieMenu'],
+  ['z-toast', 130, 'toast, installatiehint'], ['z-kiezer', 140, 'DatePicker'], ['z-skiplink', 150, 'skip-link'],
+] as const;
+const ELEVATIE = [['elev-0', 'vlak, alleen haarlijn'], ['elev-pil', 'pil in Segmented'], ['elev-1', 'kaart, tegel, tabel'], ['elev-2', 'popover, menu, dock, toast'], ['elev-3', 'slide-over, sheet'], ['elev-4', 'modal']] as const;
 
 const ILLUSTRATIES = [
   { naam: 'Lege lijst', El: LegeLijst },
@@ -103,6 +121,15 @@ export function DesignsysteemView() {
   const [pagina, setPagina] = useState(1);
   const sort = useSort<'naam' | 'dienst'>('naam');
   const [fout, setFout] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [bevestigOpen, setBevestigOpen] = useState(false);
+  const [tab, setTab] = useState<'maand' | 'codes' | 'mensen'>('maand');
+  const [uitklap, setUitklap] = useState(false);
+  const [zoek2, setZoek2] = useState('');
+  const tabsId = useId();
+  const menu = useDropdown();
+  const dialoog = useDropdown();
   const [datum, setDatum] = useState('');
   const [periode, setPeriode] = useState({ van: '2026-09-01', tot: '2026-09-30' });
   const [jaar, setJaar] = useState(2026);
@@ -442,6 +469,111 @@ export function DesignsysteemView() {
           <Button variant="secondary" size="sm" onClick={() => notify('Even geduld, de import loopt.', 'info')}>Info</Button>
           <Button variant="secondary" size="sm" onClick={() => notify('Omleiding ‘Lijn 12 · Werken Stationsstraat’ verwijderd.', 'info', { action: { label: 'Ongedaan maken', run: () => notify('Omleiding hersteld.', 'success') }, opties: { ongedaan: true } })}>Ongedaan maken</Button>
         </Rij>
+      </Sectie>
+
+      <Sectie id="overlays" titel="Overlays" uitleg="Eén vlak per situatie. Popover: klein vlak onder een knop (menu of uitleg). Tooltip: hover-uitleg bij een aanwijzer. Sheet: keuze of kort formulier onder de duim, veeg omlaag sluit. Modal: beslissing of formulier midden in beeld. ConfirmationModal: één vraag bovenop een modal. Allemaal veer in, ease uit, focus terug naar de knop.">
+        <Rij label="Popover · menu">
+          <div ref={menu.wortel} className="relative inline-flex">
+            <Button variant="secondary" size="sm" aria-haspopup="menu" aria-expanded={menu.open} onClick={() => menu.setOpen((v) => !v)}>Account</Button>
+            <Popover open={menu.open} rol="menu" label="Account" align="left" breedte="md">
+              <PopoverKop titel="Jarno De Greve" aside={<Badge tone="slate">Admin</Badge>} />
+              <MenuItem icon={<Settings size={16} />} onClick={() => menu.setOpen(false)}>Instellingen</MenuItem>
+              <MenuItem icon={<Bell size={16} />} sub="3 ongelezen" onClick={() => menu.setOpen(false)}>Meldingen</MenuItem>
+              <MenuItem icon={<LogOut size={16} />} gevaarlijk onClick={() => menu.setOpen(false)}>Uitloggen</MenuItem>
+              <PopoverVoet><MenuItem icon={<ArrowUpRight size={16} />} onClick={() => menu.setOpen(false)}>Volledig overzicht</MenuItem></PopoverVoet>
+            </Popover>
+          </div>
+          <div ref={dialoog.wortel} className="relative inline-flex">
+            <IconButton label="Uitleg" variant="secondary" size="sm" aria-haspopup="dialog" aria-expanded={dialoog.open} onClick={() => dialoog.setOpen((v) => !v)}><Info size={16} /></IconButton>
+            <Popover open={dialoog.open} label="Uitleg" align="left" breedte="lg" padding="tekst" className="text-body-sm text-slate-600">
+              Een popover met lopende tekst: <Kbd>Esc</Kbd> sluit, buiten klikken ook.
+            </Popover>
+          </div>
+        </Rij>
+        <Rij label="Tooltip">
+          <Tooltip label="Bewerken"><IconButton label="Bewerken" variant="secondary" size="sm"><Pencil size={16} /></IconButton></Tooltip>
+          <Tooltip label="Verwijderen" kant="onder"><IconButton label="Verwijderen" variant="danger" size="sm"><Trash2 size={16} /></IconButton></Tooltip>
+          <span className="text-body-sm text-slate-500">alleen bij een aanwijzer of toetsenbordfocus; op touch draagt het aria-label</span>
+        </Rij>
+        <Rij label="Sheet · Modal">
+          <Button variant="secondary" size="sm" onClick={() => setSheetOpen(true)}>Sheet openen</Button>
+          <Button variant="secondary" size="sm" onClick={() => setModalOpen(true)}>Modal openen</Button>
+          <Button variant="danger" size="sm" onClick={() => setBevestigOpen(true)}>Bevestiging</Button>
+        </Rij>
+        <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Dienst 2101" subtitle="di 22 september" footer={<Button variant="primary" full onClick={() => setSheetOpen(false)}>Ritblad openen</Button>}>
+          <p className="text-body text-slate-600">Een sheet komt van onder, past onder de duim en sluit met een veeg omlaag, het kruisje, Escape of de terugknop.</p>
+        </Sheet>
+        <Modal open={modalOpen} onClose={() => setModalOpen(false)} maxWidth="sm" ariaLabel="Voorbeeldmodal">
+          <ModalHeader title="Voorbeeldmodal" description="Beslissing of formulier midden in beeld." onClose={() => setModalOpen(false)} />
+          <div className="p-6"><Button variant="primary" onClick={() => setModalOpen(false)}>Sluiten</Button></div>
+        </Modal>
+        <ConfirmationModal open={bevestigOpen} onClose={() => setBevestigOpen(false)} onConfirm={() => notify('Voorbeeld verwijderd.', 'info')} title="Voorbeeld verwijderen?" message="Dit is een voorbeeld, er verdwijnt niets." />
+      </Sectie>
+
+      <Sectie id="tabs" titel="Tabs en uitklappen" uitleg="Tabs wisselen de inhoud eronder (tablist/tab/tabpanel, pijltjes, neutrale onderstreep); Segmented kiest één waarde in een filter of formulier. Uitklap opent inhoud onder een rij zonder sprong.">
+        <div className="w-full max-w-lg space-y-3">
+          <Tabs id={tabsId} waarde={tab} opties={[{ waarde: 'maand', label: 'Maand' }, { waarde: 'codes', label: 'Looncodes', teller: 4 }, { waarde: 'mensen', label: 'Medewerkers' }]} onChange={setTab} label="Onderdeel" />
+          <TabPaneel tabsId={tabsId} waarde="maand" actief={tab === 'maand'}><p className="text-body-sm text-slate-600">Inhoud van het tabblad Maand.</p></TabPaneel>
+          <TabPaneel tabsId={tabsId} waarde="codes" actief={tab === 'codes'}><p className="text-body-sm text-slate-600">Vier looncodes.</p></TabPaneel>
+          <TabPaneel tabsId={tabsId} waarde="mensen" actief={tab === 'mensen'}><p className="text-body-sm text-slate-600">Medewerkers.</p></TabPaneel>
+        </div>
+        <div className="w-full max-w-lg">
+          <Card padding="none">
+            <Pressable className="flex w-full items-center justify-between px-4 py-3" aria-expanded={uitklap} onClick={() => setUitklap((v) => !v)}>
+              <span className="text-row-title">Uitklapbare rij (Pressable)</span>
+              <ChevronDown size={16} className={uitklapChevron(uitklap, 180, 'text-slate-500')} />
+            </Pressable>
+            <Uitklap open={uitklap} innerClassName="px-4 pb-4 text-body-sm text-slate-600">Pressable is de basis voor elke rij of tegel die zelf zijn opmaak draagt: pressed-staat en focusring zonder knop-look.</Uitklap>
+          </Card>
+        </div>
+        <Rij label="SearchField">
+          <SearchField value={zoek2} onChange={setZoek2} placeholder="Zoek chauffeur…" className="w-72" />
+          <SearchField value="2101" onChange={() => {}} placeholder="Met waarde" size="sm" className="w-56" />
+        </Rij>
+        <Rij label="Kbd"><Kbd>Esc</Kbd><Kbd>↑</Kbd><Kbd>Enter</Kbd></Rij>
+      </Sectie>
+
+      <Sectie id="meldingsvlak" titel="Callout" uitleg="Eén meldingsvlak in de inhoud: icoon, titel, tekst en één actie, in de vijf tinten van Card. Compact = één regel. Geen live-rol tenzij het vlak verschijnt door een actie.">
+        <div className="w-full space-y-3">
+          <Callout tone="warning" compact action={<Button variant="secondary" size="sm">Opnieuw</Button>}>Offline, wijzigingen komen niet door.</Callout>
+          <Callout tone="danger" title="Gevarenzone" action={<Button variant="danger" size="sm" icon={<Trash2 size={14} />}>Planning wissen</Button>}>Wis alle actieve roosterregels uit het portaal.</Callout>
+          <Callout tone="info" title="Nieuw in deze versie">Rapporten hebben nu een peildatum.</Callout>
+          <Callout tone="success" compact>Import geslaagd, 1 349 diensten.</Callout>
+          <Callout tone="accent" compact>Welkom terug, je volgende dienst is morgen om 05:12.</Callout>
+        </div>
+      </Sectie>
+
+      <Sectie id="cijfers" titel="Cijfers" uitleg="Stat: het neutrale cijferblok (label, cijfer in text-stat, toelichting) voor een samenvatting of historiek. OpsStat: de cockpit-tegel met icoon en tint, in kpi-raster op de telefoon één kaart met rijen.">
+        <div className="grid w-full gap-3 sm:grid-cols-4">
+          <Stat label="Dagen" value={56} />
+          <Stat label="Diensten" value="1 349" sub="in 56 dagen" />
+          <Stat label="Langste dienst" value="10:35" mono sub="dienst 2607" />
+          <Stat label="Verlopen" value={3} aandacht sub="nog in te vullen" />
+        </div>
+        <div className="kpi-raster grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
+          <OpsStat icon={<Bus size={16} />} tone="slate" label="Chauffeurs actief" value={7} sub="nu aan het rijden" />
+          <OpsStat icon={<Bell size={16} />} tone="oker" label="Verlof" value={1} sub="wacht op een beslissing" />
+          <OpsStat icon={<Check size={16} />} tone="blue" label="Beschikbaar" value={2} sub="vrij en inzetbaar" />
+        </div>
+      </Sectie>
+
+      <Sectie id="lagen" titel="Lagen" uitleg="Twee ladders: elevation (schaduw en rand per oppervlak, tokens --elev-0…4) en z (welke laag boven welke ligt, utilities z-sticky … z-skiplink). Nieuwe overlay = een trede uit deze tabel, geen eigen getal.">
+        <Rij label="Elevation">
+          {ELEVATIE.map(([klasse, uitleg]) => (
+            <div key={klasse} className={`flex h-16 w-36 flex-col justify-center rounded-2xl bg-paper px-3 ring-1 ring-hairline ${klasse}`}>
+              <span className="text-xs font-semibold text-slate-800">{klasse}</span>
+              <span className="text-xs text-slate-500">{uitleg}</span>
+            </div>
+          ))}
+        </Rij>
+        <TableShell>
+          <thead><tr><Th>Utility</Th><Th num>z</Th><Th>Voor</Th></tr></thead>
+          <tbody>
+            {Z_LADDER.map(([klasse, z, uitleg]) => (
+              <tr key={klasse} className="border-t border-hairline-subtle"><Td><Chip>{klasse}</Chip></Td><Td num>{z}</Td><Td className="text-sm text-slate-600">{uitleg}</Td></tr>
+            ))}
+          </tbody>
+        </TableShell>
       </Sectie>
 
       <Sectie id="illustraties" titel="Lege schermen & meldingen" uitleg="Duidelijke status. Een logische volgende stap.">

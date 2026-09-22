@@ -41,6 +41,7 @@ import { printScherm } from './app/PrintModus';
 import { useThema } from './app/useThema';
 import { IconButton, MicroLabel } from './components/primitives';
 import { Card } from './components/Card';
+import { Callout } from './components/Callout';
 import { Toast, ToastOpties, ToastStack } from './components/ToastStack';
 import { InstallPrompt } from './components/PwaChrome';
 import { abonneerOnline, isOnlineNu, useOnline } from './lib/useOnline';
@@ -1314,7 +1315,7 @@ export default function App() {
       {showChangePassword && (
         <Suspense fallback={null}>
           <LazyChangePasswordModal
-            isOpen
+            open
             onClose={() => setShowChangePassword(false)}
             email={currentUser?.email || session?.user?.email || ''}
           />
@@ -1616,13 +1617,10 @@ export default function App() {
           )}
           {!isOnline && resolvedCurrentView !== 'mijn-dag' && (
             <div className={cn('mx-auto w-full', kolomClass)}>
-              <Card tone="warning" padding="none" className="mb-4 flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-amber-800">
-                <WifiOff size={14} className="shrink-0" />
-                <span>
-                  Offline, wijzigingen komen niet door
-                  {lastSyncedAt ? ` · laatst bijgewerkt ${formatSyncedTime(lastSyncedAt)}` : ''}
-                </span>
-              </Card>
+              <Callout tone="warning" compact icon={<WifiOff size={14} />} className="mb-4">
+                Offline, wijzigingen komen niet door
+                {lastSyncedAt ? ` · laatst bijgewerkt ${formatSyncedTime(lastSyncedAt)}` : ''}
+              </Callout>
             </div>
           )}
           {/* Directe view-wissel — geen AnimatePresence/motion. Een in/uit-

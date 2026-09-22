@@ -429,13 +429,17 @@ export const IconButton = forwardRef<HTMLButtonElement, Omit<ButtonHTMLAttribute
   label: string;
   variant?: IconButtonVariant;
   size?: IconButtonSize;
+  /** Bezig: uitgeschakeld + aria-busy, het icoon maakt plaats voor de spinner (zoals Button). */
+  bezig?: boolean;
   children: ReactNode;
-}>(function IconButton({ label, variant = 'ghost', size = 'md', className, children, type = 'button', ...rest }, ref) {
+}>(function IconButton({ label, variant = 'ghost', size = 'md', bezig = false, className, children, type = 'button', disabled, ...rest }, ref) {
   return (
     <button
       ref={ref}
       type={type}
       aria-label={label}
+      aria-busy={bezig || undefined}
+      disabled={disabled || bezig}
       title={rest.title ?? label}
       className={cn(
         'ios-pressable inline-flex shrink-0 items-center justify-center transition-colors',
@@ -446,10 +450,35 @@ export const IconButton = forwardRef<HTMLButtonElement, Omit<ButtonHTMLAttribute
       )}
       {...rest}
     >
-      {children}
+      {bezig ? <BrandSpinner size={14} tone={variant === 'primary' ? 'licht' : 'licht'} /> : children}
     </button>
   );
 });
+
+// === Pressable ===
+
+/**
+ * Ongestileerde knop als basis voor een rij, tegel, kalenderdag of cel die
+ * zelf zijn opmaak draagt (ronde 5, F2). Geeft wat élke aanraakbare plek
+ * moet hebben: `type="button"`, de pressed-staat van `.ios-pressable` en de
+ * globale focus-ring; niets van de knop-look. Gebruik dit i.p.v. een rauwe
+ * `<button>` met een `rauw:`-excuus.
+ */
+export const Pressable = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement>>(function Pressable({ className, type = 'button', ...rest }, ref) {
+  // rauw: dit ís de basis voor rauwe knoppen (rij, tegel, cel); zie de doc erboven.
+  return <button ref={ref} type={type} className={cn('ios-pressable text-left disabled:cursor-not-allowed disabled:opacity-50', className)} {...rest} />;
+});
+
+// === Kbd ===
+
+/** Toetscombinatie in uitleg of een tooltip ("Esc", "⌘ K"). */
+export function Kbd({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <kbd className={cn('inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-hairline bg-surface-muted px-1.5 font-mono text-2xs font-semibold text-slate-600', className)}>
+      {children}
+    </kbd>
+  );
+}
 
 // === Chip (code) ===
 

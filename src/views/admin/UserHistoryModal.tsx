@@ -2,7 +2,8 @@ import { Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
-import { MicroLabel, microLabelClass, StatusBadge } from '../../components/primitives';
+import { microLabelClass, StatusBadge } from '../../components/primitives';
+import { Stat } from '../../components/Stat';
 import { Card } from '../../components/Card';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
@@ -65,21 +66,9 @@ export function UserHistoryModal({
 
         {/* Stats overview */}
         <div className="grid grid-cols-3 gap-3">
-          <Card tone="muted" padding="sm">
-            <MicroLabel>Diensten</MicroLabel>
-            <p className="mt-1 text-stat text-slate-900">{allShifts.length}</p>
-            <p className="text-xs font-medium text-slate-500 mt-1">{upcomingShifts.length} komende</p>
-          </Card>
-          <Card tone="muted" padding="sm">
-            <MicroLabel>Verlof</MicroLabel>
-            <p className="mt-1 text-stat text-slate-900">{approvedLeaveCount}</p>
-            <p className="text-xs font-medium text-slate-500 mt-1">goedgekeurd</p>
-          </Card>
-          <Card tone="muted" padding="sm">
-            <MicroLabel>Dienstruilen</MicroLabel>
-            <p className="mt-1 text-stat text-slate-900">{userSwaps.length}</p>
-            <p className="text-xs font-medium text-slate-500 mt-1">totaal</p>
-          </Card>
+          <Stat label="Diensten" value={allShifts.length} sub={`${upcomingShifts.length} komende`} />
+          <Stat label="Verlof" value={approvedLeaveCount} sub="goedgekeurd" />
+          <Stat label="Dienstruilen" value={userSwaps.length} sub="totaal" />
         </div>
 
         {/* Verlof */}

@@ -1,12 +1,11 @@
 import { AlertTriangle, ArrowUpRight, CalendarClock, CalendarDays, CheckCircle2, IdCard, ListChecks, Repeat, Smartphone, UserX } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
 import type { Werkvoorraad } from '../lib/werkvoorraad';
 import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
 import { useDropdown } from './useDropdown';
 import { IconButton } from './primitives';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { MenuItem, Popover, PopoverKop, PopoverVoet } from './Popover';
 
 /**
  * Werkvoorraad-knop in de topbar (idee Jarno 31-08): één plek die vanuit élk
@@ -182,28 +181,13 @@ export function WerkvoorraadMenu({
         )}
       </IconButton>
 
-      <AnimatePresence>
-      {open && (
-        <motion.div
-          role="menu"
-          aria-label="Open taken"
-          initial={{ opacity: 0, scale: 0.97, y: -4 }}
-          animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
-          exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: DUR.fast, ease: EASE } }}
-          style={{ transformOrigin: 'top right' }}
-          /* Mobiel: fixed met inset-x zodat het paneel de viewport volgt —
-             absoluut verankerd aan de knop viel het links buiten beeld
-             (melding Jarno 01-09); top-auto = de plek onder de knop. */
-          className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-paper ring-1 ring-hairline elev-2 p-1.5 z-menu max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto"
-        >
-          <div className="flex items-center justify-between px-3 py-2 mb-1 border-b fine-divider">
-            <span className="text-sm font-semibold text-slate-800">Open taken</span>
-            {wv.attentionCount > 0 && (
-              <span className="text-xs font-semibold text-slate-500">
-                {enkelvoud(wv.attentionCount, 'item', 'items')}
-              </span>
-            )}
-          </div>
+      {/* Mobiel: losgekoppeld van de knop en over de volle breedte (mobielVol),
+          anders viel het paneel links buiten beeld (melding Jarno 01-09). */}
+      <Popover open={open} rol="menu" label="Open taken" laag="menu" breedte="xl" mobielVol>
+          <PopoverKop
+            titel="Open taken"
+            aside={wv.attentionCount > 0 ? <span className="text-xs font-semibold text-slate-500">{enkelvoud(wv.attentionCount, 'item', 'items')}</span> : undefined}
+          />
           {rijen.length === 0 ? (
             <div className="flex items-center gap-3 px-3 py-3">
               <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
@@ -216,42 +200,20 @@ export function WerkvoorraadMenu({
             </div>
           ) : (
             rijen.map((r) => (
-              // rauw: dropdown-menurij (role=menuitem) met tweeregelige eigen layout
-              // (icoon + label + subregel, links uitgelijnd) — geen knop-uiterlijk.
-              <button
-                key={r.key}
-                role="menuitem"
-                onClick={ga(r.view)}
-                className="flex items-start gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-surface-soft-hover rounded-xl transition-colors duration-fast font-medium text-sm text-left"
-              >
-                <span className={cn('shrink-0 mt-0.5', toonKleur[r.tone])}>{r.icon}</span>
-                <span className="flex-1 min-w-0">
-                  <span className="block truncate">{r.label}</span>
-                  {r.sub && (
-                    <span className="block truncate text-xs font-normal text-slate-500">{r.sub}</span>
-                  )}
-                </span>
-              </button>
+              <MenuItem key={r.key} icon={r.icon} iconClassName={toonKleur[r.tone]} sub={r.sub} onClick={ga(r.view)}>
+                {r.label}
+              </MenuItem>
             ))
           )}
           {/* Voet: het volledige scherm (15-09). Het menu blijft een samenvatting
               per soort; wie álles wil zien (of sorteren, filteren, zoeken) gaat
               naar /werkvoorraad. */}
-          <div className="mt-1 border-t fine-divider pt-1">
-            {/* rauw: dropdown-menurij (role=menuitem), zelfde uiterlijk als de rijen erboven. */}
-            <button
-              role="menuitem"
-              onClick={ga('werkvoorraad')}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-600 transition-colors duration-fast hover:bg-surface-soft-hover hover:text-slate-900"
-            >
-              <span className="shrink-0 text-slate-500"><ListChecks size={16} /></span>
-              <span className="flex-1">Volledig overzicht</span>
-              <ArrowUpRight size={14} className="shrink-0 text-slate-400" />
-            </button>
-          </div>
-        </motion.div>
-      )}
-      </AnimatePresence>
+          <PopoverVoet>
+            <MenuItem icon={<ListChecks size={16} />} iconClassName="text-slate-500" trailing={<ArrowUpRight size={14} />} onClick={ga('werkvoorraad')}>
+              Volledig overzicht
+            </MenuItem>
+          </PopoverVoet>
+      </Popover>
     </div>
   );
 }

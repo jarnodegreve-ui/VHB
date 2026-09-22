@@ -49,7 +49,14 @@ import zlib from 'node:zlib';
 // 630 = de eerste meting van stap 4 (617,1) plus ±2 % (629,4), afgerond. De
 // entry staat op 73,45 kB (budget 74, ongewijzigd) en de warmup-sets op 63 en
 // 121 kB (66 en 124): de rapportcode zit niet in de entry en niet in de warmup.
-const BUDGET_KB = 630;
+// 22-09 (ronde 5, F2): 630 → 645. Gemeten in CI 634 kB: de nieuwe primitieven
+// (Popover, Tooltip, Tabs, Sheet, Callout, Stat) en vijf nieuwe secties in
+// het designsysteem-scherm, dat lui laadt. De entry staat op 75,75 kB (budget
+// 76) en de warmup-sets op 65 en 127 (66 en 128): het kritieke pad groeide
+// ±1,3 kB door Popover in het accountmenu, Callout in de offline-balk en
+// SearchField in de toolbar. 645 = 634 plus ±2 %, afgerond; de deelbudgetten
+// blijven de echte bewaker van de start.
+const BUDGET_KB = 645;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

@@ -11,6 +11,8 @@ import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
+import { Callout } from '../../components/Callout';
+import { Stat } from '../../components/Stat';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field, Input, Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
@@ -652,19 +654,17 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             </Button>
 
             {/* Gevarenzone: compact, één regel + knop. */}
-            <Card tone="danger" padding="sm" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-medium text-red-700">Wis alle actieve roosterregels uit het portaal.</p>
-              <Button
-                variant="danger"
-                size="sm"
-                className="shrink-0"
-                onClick={() => setConfirmClearOpen(true)}
-                disabled={isClearingPlanning}
-                icon={<Trash2 size={14} />}
-              >
-                {isClearingPlanning ? 'Wissen…' : 'Planning wissen'}
-              </Button>
-            </Card>
+            <Callout
+              tone="danger"
+              compact
+              action={(
+                <Button variant="danger" size="sm" onClick={() => setConfirmClearOpen(true)} disabled={isClearingPlanning} icon={<Trash2 size={14} />}>
+                  {isClearingPlanning ? 'Wissen…' : 'Planning wissen'}
+                </Button>
+              )}
+            >
+              Wis alle actieve roosterregels uit het portaal.
+            </Callout>
           </div>
         </Card>
         ) : null}
@@ -736,7 +736,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       </Card>
 
       <ConfirmationModal
-        isOpen={restoreEntry !== null}
+        open={restoreEntry !== null}
         onClose={() => { if (!isRestoring) setRestoreEntry(null); }}
         onConfirm={() => { if (!isRestoring) void restoreImportSnapshot(); }}
         title="Planning terugzetten?"
@@ -855,7 +855,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
       {canAdminOverride ? (
         <ConfirmationModal
-          isOpen={confirmSyncOpen}
+          open={confirmSyncOpen}
           onClose={() => setConfirmSyncOpen(false)}
           onConfirm={handleSync}
           title="Planning opnieuw opbouwen"
@@ -867,7 +867,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
       {canAdminOverride ? (
         <ConfirmationModal
-          isOpen={confirmClearOpen}
+          open={confirmClearOpen}
           onClose={() => setConfirmClearOpen(false)}
           onConfirm={handleClearPlanning}
           title="Planning wissen"
@@ -1054,22 +1054,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 )}
 
                 <div className="grid gap-4 md:grid-cols-4">
-                  <Card tone="muted" padding="sm">
-                    <MicroLabel>Dagen</MicroLabel>
-                    <p className="mt-2 text-stat text-slate-900">{matrixPreview.importedDays}</p>
-                  </Card>
-                  <Card tone="muted" padding="sm">
-                    <MicroLabel>Chauffeurs</MicroLabel>
-                    <p className="mt-2 text-stat text-slate-900">{matrixPreview.detectedDrivers}</p>
-                  </Card>
-                  <Card tone="muted" padding="sm">
-                    <MicroLabel>Diensten</MicroLabel>
-                    <p className="mt-2 text-stat text-slate-900">{matrixPreview.generatedShifts}</p>
-                  </Card>
-                  <Card tone="muted" padding="sm">
-                    <MicroLabel>Afwezigheden</MicroLabel>
-                    <p className="mt-2 text-stat text-slate-900">{matrixPreview.skippedAbsences}</p>
-                  </Card>
+                  <Stat label="Dagen" value={matrixPreview.importedDays} />
+                  <Stat label="Chauffeurs" value={matrixPreview.detectedDrivers} />
+                  <Stat label="Diensten" value={matrixPreview.generatedShifts} />
+                  <Stat label="Afwezigheden" value={matrixPreview.skippedAbsences} />
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">

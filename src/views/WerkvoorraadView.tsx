@@ -309,7 +309,7 @@ export function WerkvoorraadView({
       )}
 
       <ConfirmationModal
-        isOpen={bevestigAlle}
+        open={bevestigAlle}
         onClose={() => setBevestigAlle(false)}
         onConfirm={() => { setBevestigAlle(false); void keurGoed(toestelItems, 'alle'); }}
         title={`${toestelItems.length} toestellen goedkeuren?`}

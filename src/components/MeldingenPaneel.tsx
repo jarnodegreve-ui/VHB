@@ -1,13 +1,12 @@
-import { AnimatePresence, motion } from 'motion/react';
 import { ArrowUpRight, Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw, Wrench, X } from 'lucide-react';
 import { useAppDataContext } from '../app/AppDataContext';
 import { routeUitUrl } from '../app/router';
 import { datumsLeesbaar, tijdVan } from '../lib/meldingen';
 import { verwijderMeldingMetOngedaan } from '../lib/meldingVerwijderen';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { cn } from '../lib/ui';
 import type { Melding, MeldingSoort, View } from '../types';
 import { IconButton } from './primitives';
+import { MenuItem, Popover, PopoverKop, PopoverVoet } from './Popover';
 
 /**
  * Het uitklappaneel onder de bel (puntje Jarno 21-09): de laatste meldingen,
@@ -49,21 +48,12 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
   };
 
   return (
-    <AnimatePresence>
-      <motion.div
-        role="menu"
-        aria-label="Meldingen"
-        initial={{ opacity: 0, scale: 0.97, y: -4 }}
-        animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
-        exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: DUR.fast, ease: EASE } }}
-        style={{ transformOrigin: 'top right' }}
-        /* Mobiel: fixed met inset-x zodat het paneel de viewport volgt, net
-           als het paneel Open taken. */
-        className="absolute right-0 top-full z-menu mt-2 w-80 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2 max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto"
-      >
-        <div className="mb-1 flex items-center justify-between gap-2 border-b fine-divider px-3 py-2">
-          <span className="text-sm font-semibold text-slate-800">Meldingen</span>
-          {ongelezenMeldingen > 0 && (
+    // Alleen gemount terwijl het paneel open is (lazy vanuit MeldingenBel),
+    // dus `open` staat vast; mobielVol = losgekoppeld van de bel op de telefoon.
+    <Popover open rol="menu" label="Meldingen" laag="menu" breedte="xl" mobielVol>
+        <PopoverKop
+          titel="Meldingen"
+          aside={ongelezenMeldingen > 0 && (
             /* rauw: kopactie in een popover, moet dezelfde maat en tint houden
                als de titel ernaast — een Button vult de kop. */
             <button
@@ -75,7 +65,7 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
               Alles gelezen
             </button>
           )}
-        </div>
+        />
 
         {zichtbaar.length === 0 ? (
           <div className="px-3 py-3">
@@ -133,20 +123,11 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
           })
         )}
 
-        <div className="mt-1 border-t fine-divider pt-1">
-          {/* rauw: dropdown-menurij (role=menuitem), zelfde uiterlijk als de rijen erboven. */}
-          <button
-            role="menuitem"
-            type="button"
-            onClick={() => ga('meldingen')}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-600 transition-colors duration-fast hover:bg-surface-soft-hover hover:text-slate-900"
-          >
-            <span className="shrink-0 text-slate-500"><Bell size={16} /></span>
-            <span className="flex-1">Alle meldingen</span>
-            <ArrowUpRight size={14} className="shrink-0 text-slate-400" />
-          </button>
-        </div>
-      </motion.div>
-    </AnimatePresence>
+        <PopoverVoet>
+          <MenuItem icon={<Bell size={16} />} iconClassName="text-slate-500" trailing={<ArrowUpRight size={14} />} onClick={() => ga('meldingen')}>
+            Alle meldingen
+          </MenuItem>
+        </PopoverVoet>
+    </Popover>
   );
 }

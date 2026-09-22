@@ -1,9 +1,8 @@
 import { Info } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { cn } from '../lib/ui';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useDropdown } from './useDropdown';
+import { Popover } from './Popover';
 
 /**
  * Hulp-popover: een klein (i) naast een titel of label dat uitleg toont
@@ -31,20 +30,9 @@ export function InfoTip({ children, label = 'Uitleg', className, align = 'left' 
       >
         <Info size={14} />
       </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            role="dialog"
-            aria-label={label}
-            initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
-            exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: DUR.fast, ease: EASE } }}
-            className={cn('absolute top-full z-zwevend mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl bg-paper p-3.5 text-body-sm font-normal text-slate-600 ring-1 ring-hairline elev-2', align === 'right' ? 'right-0' : 'left-0')}
-          >
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Popover open={open} label={label} align={align} breedte="lg" padding="tekst" className="max-w-[calc(100vw-2rem)] text-body-sm font-normal text-slate-600">
+        {children}
+      </Popover>
     </span>
   );
 }

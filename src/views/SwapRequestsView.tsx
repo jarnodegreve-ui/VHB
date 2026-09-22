@@ -666,7 +666,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       </div>
 
       <ConfirmationModal
-        isOpen={!!confirmAction}
+        open={!!confirmAction}
         onClose={() => setConfirmAction(null)}
         onConfirm={() => { confirmAction?.run(); setConfirmAction(null); }}
         title={confirmAction?.title ?? ''}

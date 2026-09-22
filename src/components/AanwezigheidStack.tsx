@@ -1,10 +1,9 @@
-import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/ui';
-import { DUR, EASE } from '../lib/motion';
 import { useAanwezigen } from '../lib/presence';
 import { routeVan } from '../app/routes';
 import { Avatar } from './Avatar';
 import { useDropdown } from './useDropdown';
+import { Popover } from './Popover';
 
 const MAX_ZICHTBAAR = 3;
 
@@ -41,17 +40,7 @@ export function AanwezigheidStack({ className }: { className?: string }) {
         {/* 2xs: teller naast de avatarstapel */}
         {rest > 0 && <span className="ml-1.5 text-2xs font-semibold tabular-nums text-slate-500">+{rest}</span>}
       </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            role="dialog"
-            aria-label="Nu in het portaal"
-            initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98 }}
-            transition={{ duration: DUR.fast, ease: EASE }}
-            className="absolute right-0 top-full z-zwevend mt-1.5 w-64 rounded-xl bg-paper p-2 ring-1 ring-hairline elev-2"
-          >
+      <Popover open={open} label="Nu in het portaal" breedte="md">
             <p className="text-micro px-2 pb-1.5 pt-1">Nu in het portaal</p>
             <ul className="space-y-0.5">
               {anderen.map((a) => (
@@ -63,9 +52,7 @@ export function AanwezigheidStack({ className }: { className?: string }) {
                 </li>
               ))}
             </ul>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </Popover>
     </div>
   );
 }

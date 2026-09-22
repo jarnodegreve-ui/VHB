@@ -1,11 +1,9 @@
 import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Settings, Sun } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../lib/ui';
 import { ROL_LABELS } from '../../shared/schemas/constanten';
 import type { User } from '../types';
 import { useDropdown } from './useDropdown';
-import { DUR, EASE, EASE_SPRING } from '../lib/motion';
+import { MenuItem, Popover } from './Popover';
 
 /**
  * Avatar-menu in de topbar (mock Jarno 30-08): goud cirkeltje met initialen
@@ -13,31 +11,10 @@ import { DUR, EASE, EASE_SPRING } from '../lib/motion';
  * stonden (thema, pushmeldingen, wachtwoord, probleem melden, uitloggen).
  * De sidebar-voet met het gebruikerskaartje is daarmee vervallen.
  *
- * Eigen lichtgewicht dropdown (geen lib): sluit op buiten-klik en Escape;
- * items zijn gewone buttons met role="menuitem".
+ * Popover + MenuItem uit Popover.tsx (ronde 5, F2): sluit op buiten-klik en
+ * Escape (useDropdown), pijltjes tussen de items.
  */
 
-/** Menurij: icoon-slot links, label, links uitgelijnd. Eén rauwe knop voor
- *  alle vijf de items i.p.v. vijf kopieën van het recept. */
-function MenuItem({ icon, danger, className, children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: ReactNode; danger?: boolean }) {
-  return (
-    // rauw: dropdown-menurij (role=menuitem) met eigen rij-layout — links uitgelijnd,
-    // font-medium, 40 px hoog; Button centreert en dwingt min-h-11/semibold af.
-    <button
-      type="button"
-      role="menuitem"
-      className={cn(
-        'flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 rounded-xl transition-colors duration-fast font-medium text-sm',
-        danger ? 'hover:text-red-700 hover:bg-red-50/70' : 'hover:text-slate-900 hover:bg-surface-soft-hover',
-        className,
-      )}
-      {...rest}
-    >
-      <span className="text-slate-400 shrink-0">{icon}</span>
-      <span>{children}</span>
-    </button>
-  );
-}
 export function UserMenu({
   user,
   initials,
@@ -86,17 +63,7 @@ export function UserMenu({
         <ChevronDown size={14} className={cn('text-slate-400 transition-transform duration-base', open && 'rotate-180')} />
       </button>
 
-      <AnimatePresence>
-      {open && (
-        <motion.div
-          role="menu"
-          aria-label="Account"
-          initial={{ opacity: 0, scale: 0.97, y: -4 }}
-          animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
-          exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: DUR.fast, ease: EASE } }}
-          style={{ transformOrigin: 'top right' }}
-          className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-paper ring-1 ring-hairline elev-2 p-1.5 z-menu"
-        >
+      <Popover open={open} rol="menu" label="Account" laag="menu" breedte="md">
           {/* Identiteit bovenaan — het kaartje dat eerst in de sidebar-voet stond. */}
           <div className="flex items-center gap-2.5 px-3 py-2.5 mb-1 border-b fine-divider">
             <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-xs font-bold shrink-0">
@@ -126,12 +93,10 @@ export function UserMenu({
           <MenuItem icon={<LifeBuoy size={16} />} onClick={sluitEn(onProbleem)} aria-haspopup="dialog">
             Meld een probleem
           </MenuItem>
-          <MenuItem icon={<LogOut size={16} />} onClick={sluitEn(onLogout)} danger>
+          <MenuItem icon={<LogOut size={16} />} onClick={sluitEn(onLogout)} gevaarlijk>
             Uitloggen
           </MenuItem>
-        </motion.div>
-      )}
-      </AnimatePresence>
+      </Popover>
     </div>
   );
 }

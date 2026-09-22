@@ -3,7 +3,7 @@ import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { valideer } from '../../lib/valideer';
 import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
-import { CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
+import { CalendarOff, FolderOpen, History, Info, LogIn, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
 import type { Role, User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
@@ -187,7 +187,6 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   // ⋯-overflowmenu per rij: zes losse knoppen naast elkaar was te druk
   // (design-review); Bewerken blijft direct, de rest zit in het menu.
-  const [menuUserId, setMenuUserId] = useState<string | null>(null);
   // Uit dienst in één handeling (verbeterronde 07-09, nr. 1): deactiveren,
   // toestellen intrekken en push stoppen via één endpoint. Het aantal
   // toestellen wordt vooraf geteld zodat de bevestiging concreet is;
@@ -821,52 +820,29 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
                         <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
-                        <IconButton
+                        <ActieMenu
                           label="Meer acties"
-                          variant="ghost"
                           size="sm"
-                          onClick={() => setMenuUserId(menuUserId === u.id ? null : u.id)}
-                          aria-expanded={menuUserId === u.id}
-                        >
-                          <MoreHorizontal size={16} />
-                        </IconButton>
-                        {menuUserId === u.id && (
-                          <>
-                            {/* rauw: onzichtbaar klik-buiten-vlak dat het menu sluit */}
-                            <button type="button" className="fixed inset-0 z-menu cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
-                            <div className="absolute right-0 top-full z-menu mt-1 w-64 rounded-2xl border border-hairline bg-surface-white p-1.5 elev-2 text-left">
-                              <RowMenuItem icon={<Info size={16} />} label="Verlof- en dienstruilhistoriek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
-                              <RowMenuItem icon={<FolderOpen size={16} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
-                              <RowMenuItem icon={<History size={16} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
-                              <RowMenuItem icon={<RotateCcw size={16} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
-                              {(u.role === 'planner' || u.role === 'admin') && (
-                                <RowMenuItem icon={<ShieldOff size={16} />} label="Twee-stapsverificatie resetten" onClick={() => { setMenuUserId(null); setMfaResetUser(u); }} />
-                              )}
-                              <RowMenuItem
-                                icon={u.isActive !== false ? <Pause size={16} /> : <Play size={16} />}
-                                label={u.isActive !== false ? 'Gebruiker pauzeren' : 'Gebruiker activeren'}
-                                disabled={u.isActive !== false && isProtectedAdmin(u)}
-                                onClick={() => { setMenuUserId(null); void quickToggleActive(u); }}
-                              />
-                              {u.isActive !== false && (
-                                <RowMenuItem
-                                  icon={<UserX size={16} />}
-                                  label="Uit dienst"
-                                  disabled={u.id === currentUser.id || isProtectedAdmin(u)}
-                                  onClick={() => { setMenuUserId(null); openUitDienst(u); }}
-                                />
-                              )}
-                              <div className="my-1 border-t border-hairline-subtle" />
-                              <RowMenuItem
-                                icon={<Trash2 size={16} />}
-                                label="Gebruiker verwijderen"
-                                tone="danger"
-                                disabled={isProtectedAdmin(u)}
-                                onClick={() => { setMenuUserId(null); setConfirmDeleteId(u.id); }}
-                              />
-                            </div>
-                          </>
-                        )}
+                          items={[
+                            { label: 'Verlof- en dienstruilhistoriek', icon: <Info size={16} />, onClick: () => setViewingHistoryUser(u) },
+                            { label: 'Documenten beheren', icon: <FolderOpen size={16} />, onClick: () => setDocumentsUser(u) },
+                            { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setViewingChangeLogUser(u) },
+                            { label: 'Nieuw tijdelijk wachtwoord', icon: <RotateCcw size={16} />, onClick: () => setConfirmResetUser(u) },
+                            ...(u.role === 'planner' || u.role === 'admin'
+                              ? [{ label: 'Twee-stapsverificatie resetten', icon: <ShieldOff size={16} />, onClick: () => setMfaResetUser(u) }]
+                              : []),
+                            {
+                              label: u.isActive !== false ? 'Gebruiker pauzeren' : 'Gebruiker activeren',
+                              icon: u.isActive !== false ? <Pause size={16} /> : <Play size={16} />,
+                              disabled: u.isActive !== false && isProtectedAdmin(u),
+                              onClick: () => { void quickToggleActive(u); },
+                            },
+                            ...(u.isActive !== false
+                              ? [{ label: 'Uit dienst', icon: <UserX size={16} />, disabled: u.id === currentUser.id || isProtectedAdmin(u), onClick: () => openUitDienst(u) }]
+                              : []),
+                            { label: 'Gebruiker verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, disabled: isProtectedAdmin(u), onClick: () => setConfirmDeleteId(u.id) },
+                          ]}
+                        />
                       </div>
                     </Td>
                   </LijstRij>
@@ -947,10 +923,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
         )}
       </div>
 
-      <ConfirmationModal isOpen={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
-      <ConfirmationModal isOpen={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)} onConfirm={handleBulkDelete} title="Gebruikers verwijderen" message={`Weet je zeker dat je ${selectedIds.size} geselecteerde gebruiker(s) wilt verwijderen? Beschermde accounts (jezelf, de laatste actieve admin) worden overgeslagen. Dit kan niet ongedaan worden gemaakt.`} confirmText="Verwijderen" variant="warning" />
-      <ConfirmationModal isOpen={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
-      <ConfirmationModal isOpen={!!confirmNaamBotsing} onClose={() => setConfirmNaamBotsing(null)} onConfirm={() => { const poort = confirmNaamBotsing; setConfirmNaamBotsing(null); poort?.doorgaan(); }} title="Naam bestaat al" message={confirmNaamBotsing?.melding ?? ''} confirmText="Toch opslaan" variant="warning" />
+      <ConfirmationModal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
+      <ConfirmationModal open={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)} onConfirm={handleBulkDelete} title="Gebruikers verwijderen" message={`Weet je zeker dat je ${selectedIds.size} geselecteerde gebruiker(s) wilt verwijderen? Beschermde accounts (jezelf, de laatste actieve admin) worden overgeslagen. Dit kan niet ongedaan worden gemaakt.`} confirmText="Verwijderen" variant="warning" />
+      <ConfirmationModal open={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
+      <ConfirmationModal open={!!confirmNaamBotsing} onClose={() => setConfirmNaamBotsing(null)} onConfirm={() => { const poort = confirmNaamBotsing; setConfirmNaamBotsing(null); poort?.doorgaan(); }} title="Naam bestaat al" message={confirmNaamBotsing?.melding ?? ''} confirmText="Toch opslaan" variant="warning" />
 
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)} className="flex flex-col !p-0">
         <ModalHeader title="Nieuwe gebruiker" description="Voeg handmatig een medewerker toe." />
@@ -1073,7 +1049,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
       </Modal>
 
       <ConfirmationModal
-        isOpen={!!mfaResetUser}
+        open={!!mfaResetUser}
         onClose={() => setMfaResetUser(null)}
         onConfirm={() => { void handleMfaReset(); }}
         title="Twee-stapsverificatie resetten?"
@@ -1116,7 +1092,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
       </Modal>
 
       <CredentialsModal
-        isOpen={!!credentialsModal}
+        open={!!credentialsModal}
         onClose={() => setCredentialsModal(null)}
         title={credentialsModal?.title || 'Toegangsgegevens'}
         email={credentialsModal?.email || ''}
@@ -1147,29 +1123,3 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
 }
 
 /** Menu-item voor het ⋯-overflowmenu per gebruikersrij. */
-function RowMenuItem({ icon, label, onClick, disabled = false, tone = 'default' }: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  tone?: 'default' | 'danger';
-}) {
-  return (
-    // rauw: menu-item in het ⋯-overflowmenu (icoon + label op volle breedte, geen knop-uiterlijk)
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors min-h-11',
-        tone === 'danger'
-          ? 'text-red-700 hover:bg-red-50'
-          : 'text-slate-700 hover:bg-surface-soft-hover',
-        disabled && 'opacity-40 cursor-not-allowed hover:bg-transparent',
-      )}
-    >
-      <span className="shrink-0">{icon}</span>
-      <span className="truncate">{label}</span>
-    </button>
-  );
-}

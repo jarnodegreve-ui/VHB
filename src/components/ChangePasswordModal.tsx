@@ -9,11 +9,11 @@ import { Button } from './primitives';
 import { Field, Input } from './Field';
 
 export function ChangePasswordModal({
-  isOpen,
+  open,
   onClose,
   email,
 }: {
-  isOpen: boolean;
+  open: boolean;
   onClose: () => void;
   email: string;
 }) {
@@ -99,7 +99,7 @@ export function ChangePasswordModal({
   // Op de gedeelde Modal gebouwd (was een eigen portal zonder focus-trap,
   // ESC of scroll-lock — de enige dialoog die dat allemaal miste).
   return (
-    <Modal open={isOpen} onClose={handleClose} maxWidth="md" ariaLabel="Wachtwoord wijzigen">
+    <Modal open={open} onClose={handleClose} maxWidth="md" ariaLabel="Wachtwoord wijzigen">
       <div className="flex max-h-overlay flex-col overflow-hidden">
         <ModalHeader title="Wachtwoord wijzigen" description={`Kies een nieuw wachtwoord voor ${email}.`} onClose={handleClose} />
 
