@@ -446,7 +446,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         const resultaat = await bulkUitvoeren(ids, (id) => onDecide(id, status, 'pending', weigerReden));
         meldBulkResultaat(notify, resultaat, {
           item: ['aanvraag', 'aanvragen'],
-          gedaan: status === 'approved' ? 'goedgekeurd' : 'geweigerd',
+          gedaan: status === 'approved' ? 'goedgekeurd' : 'afgewezen',
           rest: () => ', de rest was intussen al behandeld',
           misluktToon: 'info',
         });
@@ -482,9 +482,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     const n = selectedPendingIds.size;
     setBulkReden('');
     setConfirmAction({
-      title: n === 1 ? 'Aanvraag weigeren' : 'Aanvragen weigeren',
-      message: `${n === 1 ? 'Deze aanvraag' : `${n} aanvragen`} weigeren? Dit kan niet ongedaan gemaakt worden.`,
-      confirmText: 'Weigeren',
+      title: n === 1 ? 'Aanvraag afwijzen' : 'Aanvragen afwijzen',
+      message: `${n === 1 ? 'Deze aanvraag' : `${n} aanvragen`} afwijzen? Dit kan niet ongedaan gemaakt worden.`,
+      confirmText: 'Afwijzen',
       variant: 'danger',
       redenVeld: true,
       run: (reden) => { bulkDecide('rejected', reden); setSelectedPendingIds(new Set()); },
@@ -815,7 +815,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       {selectedPendingIds.size} {selectedPendingIds.size === 1 ? 'aanvraag' : 'aanvragen'} geselecteerd
                     </span>
                     <div className="flex items-center gap-2">
-                      <Button variant="danger" size="sm" onClick={handleBulkReject}>Weigeren ({selectedPendingIds.size})</Button>
+                      <Button variant="danger" size="sm" onClick={handleBulkReject}>Afwijzen ({selectedPendingIds.size})</Button>
                       <Button variant="success" size="sm" icon={<Check size={14} />} onClick={handleBulkApprove}>Goedkeuren ({selectedPendingIds.size})</Button>
                     </div>
                   </Card>

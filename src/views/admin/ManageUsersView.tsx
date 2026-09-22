@@ -4,6 +4,7 @@ import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { nieuweUserFormulierSchema, userFormulierSchema, wachtwoordResetSchema } from '../../../shared/schemas/user';
 import { CalendarOff, FolderOpen, History, Info, LogIn, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
+import { ACCOUNT_STATUS } from '../../../shared/status';
 import type { Role, User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
@@ -11,7 +12,7 @@ import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, FilterChip, IconButton, MicroLabel, Segmented, Td, Th, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, MicroLabel, Segmented, TOON_NAAR_BADGE, Td, Th, Switch } from '../../components/primitives';
 import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
 import { ActieMenu } from '../../components/ActieMenu';
@@ -848,7 +849,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                         </div>
                       </div>
                     </Td>
-                    {voorkeur.zichtbaar('status') && <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} kaal>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>}
+                    {voorkeur.zichtbaar('status') && <Td><AccountBadge actief={u.isActive !== false} kaal /></Td>}
                     {/* Zonder abonnement komt géén enkele melding aan. */}
                     {voorkeur.zichtbaar('meldingen') && (
                       <Td>
@@ -919,7 +920,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} stil>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge>
+                  <AccountBadge actief={u.isActive !== false} />
                   {pushUserIds.has(String(u.id))
                     ? <Badge tone="emerald" stil>Meldingen aan</Badge>
                     : <Badge tone="slate" stil>Meldingen uit</Badge>}
@@ -1171,3 +1172,9 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
 }
 
 /** Menu-item voor het ⋯-overflowmenu per gebruikersrij. */
+
+/** Accountstatus uit ACCOUNT_STATUS: kaal in de tabelcel, stil op de kaart. */
+function AccountBadge({ actief, kaal = false }: { actief: boolean; kaal?: boolean }) {
+  const s = ACCOUNT_STATUS[actief ? 'actief' : 'gepauzeerd'];
+  return <Badge tone={TOON_NAAR_BADGE[s.toon]} kaal={kaal} stil={!kaal}>{s.label}</Badge>;
+}

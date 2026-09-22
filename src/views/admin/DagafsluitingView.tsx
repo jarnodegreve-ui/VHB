@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Lock, Plus, RotateCcw, Trash2, Unlock } from 'lucide-react';
 import type { User } from '../../types';
 import { QUAL_VLAGGEN, QUAL_VLAG_LABEL, OPMERKING_MAX, loonCodeSleutel, type QualVlag } from '../../../shared/loon';
+import { DAG_STATUS, dagOpenStatus, statusVan } from '../../../shared/status';
 import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { formatDayLong } from '../../lib/format';
@@ -22,7 +23,7 @@ import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, Switch, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, Switch, TOON_NAAR_BADGE, Td, Th } from '../../components/primitives';
 import { Popover } from '../../components/Popover';
 import { useDropdown } from '../../components/useDropdown';
 import { StickyThead } from '../../components/Table';
@@ -114,9 +115,12 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   };
   const zichtbareRijen = alleenAfwijkend ? rijen.filter((r) => afwijkend(r) || r.overmin + r.overminNacht + r.overminExtra !== 0 || r.onvPremie) : rijen;
 
-  const statusBadge = detail ? (
-    <Badge tone={afgesloten ? 'emerald' : 'amber'} dot stil={afgesloten} className="whitespace-nowrap">{afgesloten ? 'Afgesloten' : 'Open'}</Badge>
-  ) : <Badge tone="slate" stil className="whitespace-nowrap">Nog niet geopend</Badge>;
+  // Label en toon uit DAG_STATUS; een open dag blijft een gekleurde chip. Een
+  // dag na vandaag zonder detail is "Nog niet geopend", anders "Niet geopend".
+  const dagStatus = statusVan(DAG_STATUS, dagOpenStatus(datum, vandaagIso(), !!detail, afgesloten));
+  const statusBadge = (
+    <Badge tone={TOON_NAAR_BADGE[dagStatus.toon]} dot stil={!detail || afgesloten} className="whitespace-nowrap">{dagStatus.label}</Badge>
+  );
 
   return (
     <PageShell>

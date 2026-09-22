@@ -18,9 +18,11 @@ export const RUIL_SOORT_LABEL: Record<RuilSoort, string> = { ruil: 'Ruil', overn
  * Waar een ruil vandaag staat, in de woorden van het rapport. Rijker dan de
  * kolom `status`: "geannuleerd" valt uiteen in ingetrokken (door de aanvrager),
  * geannuleerd (door de planning, vóór de doorvoer) en teruggedraaid (ná de
- * doorvoer). Korte labels: het filterveld is op de telefoon een halve regel breed.
+ * doorvoer), en "afgewezen" in geweigerd (de collega weigerde) en afgewezen
+ * (de planning wees af, of niet geregistreerd door wie: zie `ruilStand` in
+ * shared/ruilUitkomst.ts). Korte labels: het filterveld is op de telefoon een halve regel breed.
  */
-export const RUIL_STANDEN = ['bij-collega', 'bij-planning', 'goedgekeurd', 'afgehandeld', 'geweigerd', 'ingetrokken', 'geannuleerd', 'teruggedraaid'] as const;
+export const RUIL_STANDEN = ['bij-collega', 'bij-planning', 'goedgekeurd', 'afgehandeld', 'geweigerd', 'afgewezen', 'ingetrokken', 'geannuleerd', 'teruggedraaid'] as const;
 export type RuilStand = (typeof RUIL_STANDEN)[number];
 export const RUIL_STAND_LABEL: Record<RuilStand, string> = {
   'bij-collega': 'Bij collega',
@@ -28,6 +30,7 @@ export const RUIL_STAND_LABEL: Record<RuilStand, string> = {
   goedgekeurd: 'Goedgekeurd',
   afgehandeld: 'Afgehandeld',
   geweigerd: 'Geweigerd',
+  afgewezen: 'Afgewezen',
   ingetrokken: 'Ingetrokken',
   geannuleerd: 'Geannuleerd',
   teruggedraaid: 'Teruggedraaid',
@@ -44,6 +47,7 @@ const STAND_TONEN: Record<string, KolomToon> = {
   [RUIL_STAND_LABEL.goedgekeurd]: 'goed',
   [RUIL_STAND_LABEL.afgehandeld]: 'rust',
   [RUIL_STAND_LABEL.geweigerd]: 'rust',
+  [RUIL_STAND_LABEL.afgewezen]: 'rust',
   [RUIL_STAND_LABEL.ingetrokken]: 'rust',
   [RUIL_STAND_LABEL.geannuleerd]: 'rust',
   [RUIL_STAND_LABEL.teruggedraaid]: 'aandacht',
@@ -91,7 +95,7 @@ const RUILEN_PER_CHAUFFEUR: RapportDefinitie = {
   id: 'ruilen-per-chauffeur',
   domein: 'ruilen',
   titel: 'Ruilen per chauffeur',
-  omschrijving: 'Per chauffeur: hoeveel ruilen hij aanvroeg en ontving in de periode, en hoe ze afliepen. Wat de planning zelf wisselde staat apart.',
+  omschrijving: 'Per chauffeur: hoeveel ruilen hij aanvroeg en ontving in de periode, en hoe ze afliepen (geweigerd door de collega, afgewezen door de planning). Wat de planning zelf wisselde staat apart.',
   filters: [{ soort: 'periode', standaard: 'dit-jaar' }],
   kolommen: [
     { id: 'naam', titel: 'Chauffeur', type: 'tekst' },
@@ -99,7 +103,9 @@ const RUILEN_PER_CHAUFFEUR: RapportDefinitie = {
     { id: 'aangevraagd', titel: 'Aangevraagd', kort: 'Aangevr.', type: 'getal', totaal: true },
     { id: 'ontvangen', titel: 'Ontvangen', kort: 'Ontv.', type: 'getal', totaal: true },
     { id: 'goedgekeurd', titel: 'Goedgekeurd', kort: 'Goedg.', type: 'getal', totaal: true },
+    // Geweigerd = de collega weigerde; Afgewezen = de planning wees af (of niet geregistreerd door wie).
     { id: 'geweigerd', titel: 'Geweigerd', kort: 'Geweig.', type: 'getal', totaal: true, smal: 'achteraan' },
+    { id: 'afgewezen', titel: 'Afgewezen', kort: 'Afgew.', type: 'getal', totaal: true, smal: 'achteraan' },
     { id: 'ingetrokken', titel: 'Ingetrokken', kort: 'Ingetr.', type: 'getal', totaal: true, smal: 'achteraan' },
     { id: 'teruggedraaid', titel: 'Teruggedraaid', kort: 'Terug', type: 'getal', totaal: true, smal: 'achteraan' },
     { id: 'open', titel: 'Nog open', kort: 'Open', type: 'getal', totaal: true, smal: 'achteraan' },

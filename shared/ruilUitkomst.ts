@@ -5,7 +5,8 @@
  * activiteitenlog en niet uit `decidedAt` alleen: die kolom wordt door een
  * latere terugdraai overschreven en zegt niet WIE weigerde. Puur, zonder zod.
  */
-import { isHandmatigeRuil, persoonsVerloop, type RuilVoorVerloop, type VerloopRegel } from './ruilVerloop.js';
+import { afwijzerVan, isHandmatigeRuil, persoonsVerloop, type RuilVoorVerloop, type VerloopRegel } from './ruilVerloop.js';
+import { AANVRAAG_STATUS, COLLEGA_ANTWOORD, type StatusDef } from './status.js';
 import type { RuilStand } from './rapporten/definities/ruilen.js';
 
 export type { RuilStand };
@@ -24,6 +25,12 @@ export const isOoitDoorgevoerd = (swap: RuilVoorVerloop): boolean => {
  * Waar de ruil vandaag staat. Een afgewezen of geannuleerde ruil die eerst
  * doorgevoerd was, is teruggedraaid; een annulering door de aanvrager zelf is
  * ingetrokken; de rest van de annuleringen deed de planning.
+ *
+ * Een afgewezen ruil (Jarno 22-09): "Geweigerd" alleen als het log zegt dat de
+ * collega weigerde (`afwijzerVan`, uit de rol van de actor). De planner wijst
+ * af, en een afwijzing zonder geregistreerde actor (oude ruilen zonder log)
+ * heet ook "Afgewezen": dat is het algemene woord van de status `rejected`,
+ * zonder de collega iets toe te schrijven wat niet vaststaat.
  */
 export const ruilStand = (swap: RuilVoorVerloop): RuilStand => {
   switch (String(swap.status)) {
@@ -34,7 +41,7 @@ export const ruilStand = (swap: RuilVoorVerloop): RuilStand => {
     default: break;
   }
   if (isOoitDoorgevoerd(swap)) return 'teruggedraaid';
-  if (swap.status === 'rejected') return 'geweigerd';
+  if (swap.status === 'rejected') return afwijzerVan(swap) === 'collega' ? 'geweigerd' : 'afgewezen';
   const stappen = Array.isArray(swap.verloop) ? swap.verloop : [];
   const annulering = [...stappen].reverse().find((s) => s.soort === 'geannuleerd');
   return annulering?.door === 'aanvrager' ? 'ingetrokken' : 'geannuleerd';
@@ -73,7 +80,7 @@ export type RuilBeslissing = {
   naam?: string;
 };
 
-const PLANNER_BESLISTE = new Set(['Goedgekeurd', 'Geweigerd', 'Geannuleerd', 'Teruggedraaid', 'Ingevoerd door de planner']);
+const PLANNER_BESLISTE = new Set(['Goedgekeurd', 'Afgewezen', 'Geannuleerd', 'Teruggedraaid', 'Ingevoerd door de planner']);
 
 /**
  * De laatste beslissing over de ruil, of null zolang hij open staat. Voor een
@@ -92,3 +99,16 @@ export const ruilBeslissing = (swap: RuilVoorVerloop): RuilBeslissing | null => 
   if (aanvrager?.status === 'Ingetrokken') return { op: aanvrager.op ?? null, door: 'aanvrager', userId: aanvrager.userId };
   return { op: van('onbekend')?.op ?? swap.decidedAt ?? null, door: 'onbekend' };
 };
+
+/**
+ * De statusmap voor de badge van één ruil: `rejected` heet "Geweigerd" als de
+ * collega weigerde (uit het verloop), anders blijft het "Afgewezen" (de
+ * planner, of niet geregistreerd door wie). `basis` = de map die het scherm
+ * al gebruikte (standaard AANVRAAG_STATUS, zoals StatusBadge).
+ */
+export function ruilStatusMap(
+  swap: Pick<RuilVoorVerloop, 'status' | 'verloop'>,
+  basis: Record<string, StatusDef> = AANVRAAG_STATUS,
+): Record<string, StatusDef> {
+  return afwijzerVan(swap) === 'collega' ? { ...basis, rejected: COLLEGA_ANTWOORD.geweigerd } : basis;
+}

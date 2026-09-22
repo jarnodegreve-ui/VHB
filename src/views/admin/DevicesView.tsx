@@ -6,7 +6,8 @@ import { getDeviceToken } from '../../lib/device';
 import { cn, notify } from '../../lib/ui';
 import { formatDateHuman } from '../../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, FilterChip, IconButton, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, StatusBadge, Switch, statusAccentClass } from '../../components/primitives';
+import { TOESTEL_STATUS, statusLabel } from '../../../shared/status';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
@@ -23,12 +24,6 @@ type Device = {
   status: 'approved' | 'pending' | 'revoked';
   createdAt: string;
   lastSeenAt: string;
-};
-
-const STATUS_BADGE: Record<Device['status'], { tone: 'emerald' | 'amber' | 'red'; label: string }> = {
-  approved: { tone: 'emerald', label: 'Goedgekeurd' },
-  pending: { tone: 'amber', label: 'Wacht op goedkeuring' },
-  revoked: { tone: 'red', label: 'Geblokkeerd' },
 };
 
 type StatusFilter = 'all' | Device['status'];
@@ -257,8 +252,8 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-semibold text-slate-800 [overflow-wrap:anywhere]">{device.name}</span>
                               <span className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-                                <span aria-hidden="true" className={cn('h-1.5 w-1.5 shrink-0 rounded-full', device.status === 'approved' ? 'bg-emerald-500' : device.status === 'pending' ? 'bg-amber-500' : 'bg-red-500')} />
-                                {device.status === 'pending' ? 'Wacht op akkoord' : STATUS_BADGE[device.status].label}
+                                <span aria-hidden="true" className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusAccentClass(device.status, TOESTEL_STATUS))} />
+                                {statusLabel(TOESTEL_STATUS, device.status)}
                                 {isOwnCurrent(device) && <span>· Dit toestel</span>}
                               </span>
                             </span>
@@ -323,7 +318,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       {gekozen && (
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={STATUS_BADGE[gekozen.status].tone} dot stil>{STATUS_BADGE[gekozen.status].label}</Badge>
+            <StatusBadge status={gekozen.status} map={TOESTEL_STATUS} stil />
             {isOwnCurrent(gekozen) && <Badge tone="blue" stil>Dit toestel</Badge>}
           </div>
           <dl className="divide-y divide-hairline-subtle text-sm">
@@ -400,7 +395,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         </div>
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter op toestelstatus">
           <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>Alle toestellen</FilterChip>
-          <FilterChip active={statusFilter === 'pending'} onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}>Wacht op akkoord ({pending.length})</FilterChip>
+          <FilterChip active={statusFilter === 'pending'} onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}>{statusLabel(TOESTEL_STATUS, 'pending')} ({pending.length})</FilterChip>
           <FilterChip active={statusFilter === 'revoked'} onClick={() => setStatusFilter(statusFilter === 'revoked' ? 'all' : 'revoked')}>Geblokkeerd ({telPerStatus('revoked')})</FilterChip>
         </div>
       </div>

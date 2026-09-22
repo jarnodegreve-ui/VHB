@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { persoonsVerloop, type RuilVerloopStap, type RuilVoorVerloop } from './ruilVerloop';
-import { COLLEGA_STATUS_NAAR_ANTWOORD, collegaAntwoord, isOoitDoorgevoerd, ruilBeslissing, ruilStand } from './ruilUitkomst';
+import { COLLEGA_STATUS_NAAR_ANTWOORD, collegaAntwoord, isOoitDoorgevoerd, ruilBeslissing, ruilStand, ruilStatusMap } from './ruilUitkomst';
+import { AANVRAAG_STATUS, RUIL_STATUS, statusVan } from './status';
 
 const basis: RuilVoorVerloop = { status: 'pending', requesterId: '10', targetDriverId: '11', createdAt: '2026-09-10T08:00:00.000Z', swapType: 'ruil', shiftDate: '2026-09-20', shiftLine: '2109' };
 const stap = (soort: RuilVerloopStap['soort'], op: string, door: RuilVerloopStap['door'], extra: Partial<RuilVerloopStap> = {}): RuilVerloopStap => ({ soort, op, door, ...extra });
@@ -19,6 +20,12 @@ describe('waar een ruil vandaag staat', () => {
     expect(ruilStand({ ...basis, status: 'cancelled', verloop: [stap('geannuleerd', '2026-09-11T08:00:00Z', 'planner')] })).toBe('geannuleerd');
     // Zonder log weten we niet wie annuleerde: dan geen gok richting de aanvrager.
     expect(ruilStand({ ...basis, status: 'cancelled' })).toBe('geannuleerd');
+  });
+
+  it('afgewezen: "geweigerd" alleen als de collega weigerde, de planner (of niet geregistreerd wie) wijst af', () => {
+    expect(ruilStand({ ...basis, status: 'rejected', verloop: [stap('geweigerd', '2026-09-11T08:00:00Z', 'planner', { van: 'accepted' })] })).toBe('afgewezen');
+    expect(ruilStand({ ...basis, status: 'rejected', verloop: [stap('geweigerd', '2026-09-11T08:00:00Z', null, { van: 'pending' })] })).toBe('afgewezen');
+    expect(ruilStand({ ...basis, status: 'rejected' })).toBe('afgewezen');
   });
 
   it('teruggedraaid = ooit doorgevoerd en daarna afgewezen of geannuleerd', () => {
@@ -98,5 +105,19 @@ describe('wie besliste, en wanneer', () => {
 
   it('zonder log: het moment uit decidedAt, en niemand aangewezen', () => {
     expect(ruilBeslissing({ ...basis, status: 'rejected', decidedAt: '2026-09-11T08:00:00Z' })).toEqual({ op: '2026-09-11T08:00:00Z', door: 'onbekend' });
+  });
+});
+
+describe('statusbadge van een afgewezen ruil', () => {
+  const weigering = (door: RuilVerloopStap['door']) => ({ ...basis, status: 'rejected', verloop: [stap('geweigerd', '2026-09-11T08:00:00Z', door)] });
+  it('de collega weigerde: "Geweigerd", in dezelfde toon als "Afgewezen"', () => {
+    expect(statusVan(ruilStatusMap(weigering('collega')), 'rejected')).toEqual({ label: 'Geweigerd', toon: AANVRAAG_STATUS.rejected.toon });
+    expect(statusVan(ruilStatusMap(weigering('collega'), RUIL_STATUS), 'pending').label).toBe('Wacht op collega');
+  });
+  it('de planner, of niet geregistreerd wie: de map blijft ongemoeid ("Afgewezen")', () => {
+    expect(ruilStatusMap(weigering('planner'))).toBe(AANVRAAG_STATUS);
+    expect(ruilStatusMap(weigering(null))).toBe(AANVRAAG_STATUS);
+    expect(ruilStatusMap({ ...basis, status: 'rejected' }, RUIL_STATUS)).toBe(RUIL_STATUS);
+    expect(ruilStatusMap({ ...basis, status: 'approved' })).toBe(AANVRAAG_STATUS);
   });
 });

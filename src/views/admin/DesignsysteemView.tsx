@@ -9,6 +9,7 @@ import { useModalSluiten } from '../../components/Modal';
 import { useVeldfouten } from '../../lib/formulier';
 import { meldSchrijffout } from '../../lib/fouten';
 import { z } from 'zod';
+import { ACCOUNT_STATUS } from '../../../shared/status';
 import { MenuItem, Popover, PopoverKop, PopoverVoet } from '../../components/Popover';
 import { useDropdown } from '../../components/useDropdown';
 import { Tooltip } from '../../components/Tooltip';
@@ -75,7 +76,8 @@ const BUTTON_VARIANTS = ['primary', 'secondary', 'ghost', 'success', 'warning', 
 const BADGE_TONES = ['slate', 'oker', 'emerald', 'red', 'amber', 'blue'] as const;
 const CHIP_TONES = ['slate', 'oker', 'emerald', 'red', 'amber', 'blue', 'rose'] as const;
 const CARD_TONES = ['default', 'muted', 'dashed', 'accent', 'warning', 'danger', 'success', 'info'] as const;
-const STATUSSEN = ['pending', 'approved', 'rejected', 'cancelled', 'active', 'inactive'];
+const STATUSSEN = ['pending', 'accepted', 'approved', 'rejected', 'cancelled'];
+const ACCOUNT_STATUSSEN = ['actief', 'gepauzeerd'];
 const RADII = [['md', 'rounded-md'], ['lg', 'rounded-lg'], ['xl', 'rounded-xl'], ['2xl', 'rounded-2xl'], ['3xl', 'rounded-3xl']] as const;
 const ICOON_LADDER = [12, 14, 16, 18, 20, 24] as const;
 
@@ -329,6 +331,7 @@ export function DesignsysteemView() {
         <Rij label="Badge · dot">{BADGE_TONES.map((t) => <Badge key={t} tone={t} dot>{t}</Badge>)}</Rij>
         <Rij label="Chip">{CHIP_TONES.map((t) => <Chip key={t} tone={t}>2601</Chip>)}</Rij>
         <Rij label="StatusBadge">{STATUSSEN.map((s) => <StatusBadge key={s} status={s} />)}</Rij>
+        <Rij label="StatusBadge map">{ACCOUNT_STATUSSEN.map((s) => <StatusBadge key={s} status={s} map={ACCOUNT_STATUS} />)}</Rij>
         <Rij label="De Lijn · klein"><LijnTegel line="50, 801, 858, 871, 872, 883, 884" size="sm" layout="rij" /></Rij>
         <Rij label="De Lijn · groot"><LijnTegel line="50, 801, 858, 871, 872, 883, 884" layout="rij" /></Rij>
         <Rij label="Overige lijnen"><LijnTegel line="58, X20" size="sm" layout="rij" tone="muted" /><LijnTegel line="Alle" size="sm" /></Rij>

@@ -1,4 +1,5 @@
 import type { RapportDefinitie, RapportKolom } from '../types.js';
+import { AANVRAAG_STATUS } from '../../status.js';
 
 /**
  * Domein verlof. Bron: `leave` zonder de ziekmeldingen (die staan in dezelfde
@@ -26,12 +27,13 @@ const VERLOF_TYPE_KORT: Readonly<Record<string, string>> = {
 /** Label van een type; een type dat het portaal niet (meer) kent houdt zijn ruwe naam, zodat de rij niet verdwijnt. */
 export const verlofTypeLabel = (type: string): string => VERLOF_TYPE_LABEL[type] ?? type;
 
-/** Zelfde woorden als de statuspil in Verlof (src/components/primitives.tsx). */
+/** Zelfde woorden als de statuspil in Verlof: de labels komen uit de gedeelde
+ *  statuswoordenschat (shared/status.ts); de volgorde is die van de keuzelijst. */
 export const VERLOF_STATUS_LABEL: Readonly<Record<string, string>> = {
-  approved: 'Goedgekeurd',
-  pending: 'In behandeling',
-  rejected: 'Afgewezen',
-  cancelled: 'Geannuleerd',
+  approved: AANVRAAG_STATUS.approved.label,
+  pending: AANVRAAG_STATUS.pending.label,
+  rejected: AANVRAAG_STATUS.rejected.label,
+  cancelled: AANVRAAG_STATUS.cancelled.label,
 };
 
 export const verlofStatusLabel = (status: string): string => VERLOF_STATUS_LABEL[status] ?? status;

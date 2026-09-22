@@ -21,7 +21,8 @@ import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, FilterChip, Switch, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, Switch, TOON_NAAR_BADGE, Td, Th } from '../../components/primitives';
+import { DEFECT_STATUS, statusVan } from '../../../shared/status';
 import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
 import type { ActieMenuItem } from '../../components/ActieMenu';
 
@@ -109,11 +110,17 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
   };
 
   const werktypeBadge = (t: Werktype) => <Badge tone={WERKTYPE_TONE[t]} stil className="whitespace-nowrap">{WERKTYPE_LABEL[t]}</Badge>;
-  const statusBadge = (d: Defect) => (
-    <Badge tone={d.status === 'open' ? (ouderdom(d) > 14 ? 'red' : 'amber') : d.status === 'uitgevoerd' ? 'emerald' : 'slate'} stil={d.status !== 'open'} dot className="whitespace-nowrap">
-      {d.status === 'open' ? `Open, ${ouderdom(d)} d` : DEFECT_STATUS_LABEL[d.status]}
-    </Badge>
-  );
+  // Label en toon uit DEFECT_STATUS; de ouderdom (rood na 14 dagen, aantal
+  // dagen achter "Open") is een signaal bóven op de status.
+  const statusBadge = (d: Defect) => {
+    const s = statusVan(DEFECT_STATUS, d.status);
+    const open = d.status === 'open';
+    return (
+      <Badge tone={open && ouderdom(d) > 14 ? 'red' : TOON_NAAR_BADGE[s.toon]} stil={!open} dot className="whitespace-nowrap">
+        {open ? `${s.label}, ${ouderdom(d)} d` : s.label}
+      </Badge>
+    );
+  };
   const acties = (d: Defect): ActieMenuItem[] => {
     const items: ActieMenuItem[] = [];
     if (d.status === 'open') {

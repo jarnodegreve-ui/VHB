@@ -7,6 +7,7 @@ import { maandagVan } from '../lib/roosterUren';
 import { isoWeekOf } from '../lib/week';
 import { addDagen, isoDate } from '../lib/datum';
 import { kaleReden } from '../lib/ruilBadge';
+import { RUIL_STATUS } from '../../shared/status';
 
 /**
  * Weekoverzicht van de dienstwissels als bewijsstuk voor het klassement
@@ -21,11 +22,14 @@ import { kaleReden } from '../lib/ruilBadge';
  * Opmaak volgt de gele boek-print.
  */
 
+/** Labels uit RUIL_STATUS, behalve afgewezen/geannuleerd: dit blad toont
+ *  alleen wissels die doorgevoerd zijn geweest, dus zo'n status betekent hier
+ *  altijd dat de wissel later is teruggedraaid (api/_lib/ruilRoutes.ts). */
 const STATUS_LABEL: Record<SwapRequest['status'], string> = {
-  pending: 'Wacht op collega',
-  accepted: 'Wacht op planning',
-  approved: 'Goedgekeurd',
-  completed: 'Goedgekeurd',
+  pending: RUIL_STATUS.pending.label,
+  accepted: RUIL_STATUS.accepted.label,
+  approved: RUIL_STATUS.approved.label,
+  completed: RUIL_STATUS.completed.label,
   rejected: 'Teruggedraaid',
   cancelled: 'Teruggedraaid',
 };

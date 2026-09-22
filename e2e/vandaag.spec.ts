@@ -48,7 +48,7 @@ test('Vandaag brengt afwezigen, open diensten, ruilen en omleidingen van de dag 
   const open = page.getByRole('list', { name: 'Diensten zonder chauffeur' });
   await expect(open.getByRole('listitem')).toHaveCount(1);
   await expect(open).toContainText('4407');
-  await expect(page.getByRole('button', { name: /Dienst 2230/ })).toContainText('collega akkoord, te valideren');
+  await expect(page.getByRole('button', { name: /Dienst 2230/ })).toContainText('collega akkoord, wacht op validatie');
 
   // De rij brengt je naar het scherm waar je beslist.
   await page.getByRole('button', { name: /Dienst 2230/ }).click();

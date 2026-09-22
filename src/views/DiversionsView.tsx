@@ -9,7 +9,8 @@ import { cn } from '../lib/ui';
 import { kiesRecord } from '../lib/overgang';
 import { useRecordParam } from '../app/router';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
+import { Badge, Button, IconButton, MicroLabel, TOON_NAAR_BADGE } from '../components/primitives';
+import { OMLEIDING_FASE } from '../../shared/status';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { OmleidingDetail } from '../components/OmleidingDetail';
@@ -244,10 +245,10 @@ function SectieKop({ id, titel, aantal, inline = false }: { id: string; titel: s
  *  van "Komend" plus een losse hint die op mobiel naar een eigen regel brak. */
 function FaseBadge({ fase, hint }: { fase: OmleidingsFase; hint?: string }) {
   if (fase === 'komend') {
-    const label = hint ? hint.charAt(0).toUpperCase() + hint.slice(1) : 'Komend';
-    return <Badge tone="slate" icon={<Calendar size={12} />}>{label}</Badge>;
+    const label = hint ? hint.charAt(0).toUpperCase() + hint.slice(1) : OMLEIDING_FASE.komend.label;
+    return <Badge tone={TOON_NAAR_BADGE[OMLEIDING_FASE.komend.toon]} icon={<Calendar size={12} />}>{label}</Badge>;
   }
-  if (fase === 'verlopen') return <Badge tone="slate">Verlopen</Badge>;
+  if (fase === 'verlopen') return <Badge tone={TOON_NAAR_BADGE[OMLEIDING_FASE.verlopen.toon]}>{OMLEIDING_FASE.verlopen.label}</Badge>;
   return null;
 }
 

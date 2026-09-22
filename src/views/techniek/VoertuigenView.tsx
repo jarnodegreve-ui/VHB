@@ -25,7 +25,8 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field, Input, Select } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, Td, Th, type BadgeTone } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, StatusBadge, Td, Th, type BadgeTone } from '../../components/primitives';
+import { VOERTUIG_STATUS } from '../../../shared/status';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 
 const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
@@ -133,7 +134,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
       </Badge>
     );
   };
-  const statusBadge = (v: Vehicle) => <Badge tone={v.status === 'actief' ? 'emerald' : v.status === 'reserve' ? 'oker' : 'slate'} stil dot className="whitespace-nowrap">{VOERTUIG_STATUS_LABEL[v.status]}</Badge>;
+  const statusBadge = (v: Vehicle) => <StatusBadge status={v.status} map={VOERTUIG_STATUS} stil className="whitespace-nowrap" />;
 
   const naOpslaan = (v: Vehicle) => {
     setVoertuigen((lijst) => (lijst.some((x) => x.id === v.id) ? lijst.map((x) => (x.id === v.id ? v : x)) : [...lijst, v]));

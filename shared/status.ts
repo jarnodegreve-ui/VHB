@@ -76,12 +76,28 @@ export const DEFECT_STATUS = {
   geannuleerd: def('Geannuleerd', 'neutraal'),
 } as const satisfies Record<string, StatusDef>;
 
-/** Dagadministratie en looncontrole. */
+/** Dagadministratie en looncontrole. Een dag zonder detail is "Nog niet
+ *  geopend" zolang hij na vandaag valt (openen kan nog niet aan de orde zijn)
+ *  en "Niet geopend" vanaf vandaag; zie `dagOpenStatus`. */
 export const DAG_STATUS = {
   afgesloten: def('Afgesloten', 'goed'),
   open: def('Open', 'waarschuwing'),
   niet_geopend: def('Niet geopend', 'neutraal'),
+  nog_niet_geopend: def('Nog niet geopend', 'neutraal'),
 } as const satisfies Record<string, StatusDef>;
+export type DagOpenStatus = keyof typeof DAG_STATUS;
+
+/**
+ * Status van één dag in de dagadministratie. `datum` en `vandaag` zijn
+ * ISO-dagen (JJJJ-MM-DD) op de Belgische kalender; een dag met detail is open
+ * of afgesloten, een dag zonder detail na vandaag "nog niet geopend", vandaag
+ * of eerder "niet geopend". Of een niet-geopende dag een rood signaal verdient
+ * (er was planning) beslist het scherm, niet deze status.
+ */
+export function dagOpenStatus(datum: string, vandaag: string, heeftDetail: boolean, afgesloten: boolean): DagOpenStatus {
+  if (heeftDetail) return afgesloten ? 'afgesloten' : 'open';
+  return datum > vandaag ? 'nog_niet_geopend' : 'niet_geopend';
+}
 
 /** Omleidingen, afgeleid uit de periode (src/lib/diversions.ts). */
 export const OMLEIDING_FASE = {

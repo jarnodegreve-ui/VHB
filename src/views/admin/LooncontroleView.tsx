@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Coins, Download, FileSpreadsheet, Hash, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import type { User } from '../../types';
 import { DIENST_TYPES, DIENST_TYPE_LABEL, loonCodeSleutel } from '../../../shared/loon';
+import { DAG_STATUS, dagOpenStatus } from '../../../shared/status';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
 import { useZelfLadend, type Versheid } from '../../lib/zelfLadend';
@@ -25,7 +26,7 @@ import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, Segmented, Switch, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, Segmented, Switch, TOON_NAAR_BADGE, Td, Th } from '../../components/primitives';
 import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
 
 type Tab = 'maand' | 'codes' | 'medewerkers';
@@ -125,6 +126,9 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
   };
   const dagTone = (iso: string): 'emerald' | 'amber' | 'slate' | 'red' => {
     const d = perDag.get(iso);
+    // Zelfde tinten als DAG_STATUS (afgesloten goed, open waarschuwing); een
+    // dag met planning die nooit geopend is, is een rood signaal bovenop de
+    // status "Niet geopend" (die op zich neutraal is).
     if (d?.status === 'afgesloten') return 'emerald';
     if (d?.status === 'open') return 'amber';
     if (iso <= vandaag && planningSet.has(iso)) return 'red';
@@ -174,7 +178,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
                 key={iso}
                 type="button"
                 onClick={() => onNavigate?.('dagafsluiting', [iso])}
-                title={`${formatShortDay(iso)}${d ? `, ${d.rijen} rijen, ${d.overmin} overminuten` : ''}`}
+                title={`${formatShortDay(iso)}, ${DAG_STATUS[dagOpenStatus(iso, vandaag, !!d, d?.status === 'afgesloten')].label.toLowerCase()}${d ? `, ${d.rijen} rijen, ${d.overmin} overminuten` : ''}`}
                 className={cn(
                   'ios-pressable flex min-h-11 flex-col items-center justify-center rounded-xl text-xs font-semibold ring-1 ring-hairline transition-colors',
                   tone === 'emerald' && 'bg-emerald-50 text-emerald-800',
@@ -191,9 +195,13 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
           })}
         </div>
         <p className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-          <span><Badge tone="emerald" dot stil>afgesloten</Badge></span>
-          <span><Badge tone="amber" dot stil>open</Badge></span>
-          <span><Badge tone="red" dot stil>niet geopend (planning aanwezig)</Badge></span>
+          <span><Badge tone={TOON_NAAR_BADGE[DAG_STATUS.afgesloten.toon]} dot stil>{DAG_STATUS.afgesloten.label}</Badge></span>
+          <span><Badge tone={TOON_NAAR_BADGE[DAG_STATUS.open.toon]} dot stil>{DAG_STATUS.open.label}</Badge></span>
+          <span><Badge tone="red" dot stil>{DAG_STATUS.niet_geopend.label} (planning aanwezig)</Badge></span>
+          {/* Alleen als de maand dagen na vandaag heeft: dan zijn de grijze tegels (ook) nog niet aan de beurt. */}
+          {alle.some((iso) => iso > vandaag) && (
+            <span><Badge tone={TOON_NAAR_BADGE[DAG_STATUS.nog_niet_geopend.toon]} dot stil>{DAG_STATUS.nog_niet_geopend.label}</Badge></span>
+          )}
         </p>
       </Card>
 
