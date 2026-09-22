@@ -1,16 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, Upload, X } from 'lucide-react';
 import { LijnTegel } from '../../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenNaarTekst, lijnenVan } from '../../../shared/lijnen';
 import type { Diversion } from '../../types';
-import { cn, notify } from '../../lib/ui';
+import { cn } from '../../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, IconButton } from '../../components/primitives';
+import { SluitKnop } from '../../components/Modal';
 import { Card } from '../../components/Card';
 import { DateInput, Field, Input, Textarea } from '../../components/Field';
-import { valideer } from '../../lib/valideer';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
+import { Formulier } from '../../components/Formulier';
 import { diversionSchema } from '../../../shared/schemas/diversion';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
@@ -57,16 +60,23 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [bezig, setBezig] = useState(false);
   // Veldfouten: gedeeld schema vóór submit + server-veldfouten van een 400.
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  const veld = useVeldfouten();
+  const fouten = veld.fouten;
+  // Elke keer dat het formulier (opnieuw) gevuld wordt, telt als vers: ook
+  // na een geslaagde save op desktop, waar het paneel op hetzelfde record
+  // blijft staan (zelfde editingId). Zo neemt useVuil een nieuwe momentopname.
+  const [vulling, setVulling] = useState(0);
+  const { vuil } = useVuil({ formData, pdf: pdfFile?.name ?? null }, paneelOpen, vulling);
 
   const uploadPdf = async (id: string, file: File): Promise<string | null> => {
     if (file.size > 20 * 1024 * 1024) {
-      notify('PDF is te groot (max 20 MB).', 'error');
+      veld.zet({ pdf: 'PDF is te groot (max 20 MB).' });
       return null;
     }
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      notify('Alleen PDF-bestanden zijn toegestaan.', 'error');
+      veld.zet({ pdf: 'Alleen PDF-bestanden zijn toegestaan.' });
       return null;
     }
     const dataUrl: string = await new Promise((resolve, reject) => {
@@ -83,14 +93,14 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     if (!response.ok) {
       let detail = text;
       try { detail = JSON.parse(text).error || detail; } catch {}
-      notify(`Upload mislukt: ${detail}`, 'error');
+      meldSchrijffout('Uploaden', { status: response.status, message: detail });
       return null;
     }
     try {
       const result = JSON.parse(text);
       return result.publicUrl as string;
     } catch {
-      notify('Onverwachte respons van server na upload.', 'error');
+      meldSchrijffout('Uploaden');
       return null;
     }
   };
@@ -110,7 +120,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       startDate: isoDate(new Date()),
     });
     setPdfFile(null);
-    setFouten({});
+    veld.wis();
+    setVulling((n) => n + 1);
     setPaneelOpen(true);
     // Het lege formulier hoort bij geen record: anders zou een refetch de
     // URL-keuze hieronder opnieuw openen en het nieuwe formulier kapen.
@@ -128,7 +139,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       endDate: div.endDate,
     });
     setPdfFile(null);
-    setFouten({});
+    veld.wis();
+    setVulling((n) => n + 1);
     setPaneelOpen(true);
   };
 
@@ -151,7 +163,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     setLijnDraft('');
     // De sleutel weghalen, niet op undefined zetten: `fouten` is een
     // Record<string, string> en een lege waarde is geen fouttekst.
-    setFouten(({ line: _opgelost, ...rest }) => rest);
+    veld.wisVeld('line');
   };
   const verwijderLijn = (l: string) => {
     setFormData((f) => ({ ...f, line: lijnenNaarTekst(lijnen.filter((x) => x !== l)) }));
@@ -188,10 +200,17 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     else sluitPaneel();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isUploading) return;
+  const handleSubmit = async () => {
+    if (bezig || isUploading) return;
+    setBezig(true);
+    try {
+      await verstuur();
+    } finally {
+      setBezig(false);
+    }
+  };
 
+  const verstuur = async () => {
     // UUID i.p.v. Date.now() zodat de Storage-path (${id}.pdf) niet te
     // raden is voor wie het URL-patroon kent.
     const generateId = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
@@ -202,9 +221,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     // Gedeeld contract (shared/schemas/diversion.ts) vóór de upload: fouten
     // bij het veld, en geen PDF naar Storage voor een omleiding die afketst.
     const huidige = editingId ? diversions.find((d) => d.id === editingId) : undefined;
-    const check = valideer(diversionSchema, { ...huidige, ...formData, id: targetId });
-    if (check.ok === false) return setFouten(check.fouten);
-    setFouten({});
+    if (!veld.controleer(diversionSchema, { ...huidige, ...formData, id: targetId })) return;
 
     let uploadedPdfUrl: string | null = null;
 
@@ -215,12 +232,12 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       } catch (error: any) {
         // fetch/FileReader kan ook gooien (offline, leesfout) — zonder deze
         // catch bleef de knop eeuwig op 'PDF uploaden…' hangen.
-        notify(`Upload mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
+        meldSchrijffout('Uploaden', error);
         return;
       } finally {
         setIsUploading(false);
       }
-      if (!uploadedPdfUrl) return; // notify reeds getoond
+      if (!uploadedPdfUrl) return; // fout staat al bij het veld of in een toast
     }
 
     if (editingId) {
@@ -229,7 +246,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       if (onSaveDiversion) {
         // Per record: het paneel blijft open als het misging (409 → de lijst
         // is ververst; de gebruiker ziet de nieuwe staat en kan opnieuw).
-        if (!(await onSaveDiversion(bijgewerkt, setFouten))) return;
+        if (!(await onSaveDiversion(bijgewerkt, veld.zet))) return;
       } else {
         onSave(diversions.map((d) => (d.id === editingId ? bijgewerkt : d)));
       }
@@ -247,7 +264,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         pdfUrl: uploadedPdfUrl || undefined,
       };
       if (onCreateDiversion) {
-        if (!(await onCreateDiversion(diversionToAdd, setFouten))) return;
+        if (!(await onCreateDiversion(diversionToAdd, veld.zet))) return;
       } else {
         onSave([...diversions, diversionToAdd]);
       }
@@ -337,6 +354,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       title={editingId ? 'Omleiding bewerken' : 'Nieuwe omleiding'}
       subtitle={bewerkte ? `${bewerkte.title}, ${lijnLabel(bewerkte.line).toLowerCase()}` : 'Vul de details in en voeg eventueel een PDF toe.'}
       sleutel={editingId ?? 'nieuw'}
+      vuil={vuil}
       leegTekst="Kies een omleiding om te bewerken, of maak een nieuwe."
       leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
       chip={bewerkte ? ({ verlopen: <Badge tone="slate">Verlopen</Badge>, komend: <Badge tone="blue" stil>Komend</Badge>, lopend: <Badge tone="emerald" stil>Actief</Badge> }[omleidingsFase(bewerkte)]) : undefined}
@@ -352,10 +370,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       ) : undefined}
       footer={(
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="lg" className="flex-1" onClick={annuleer}>
+          <SluitKnop onClose={annuleer} variant="secondary" size="lg" className="flex-1" disabled={bezig}>
             Annuleren
-          </Button>
-          <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" disabled={isUploading}>
+          </SluitKnop>
+          <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" bezig={bezig}>
             {isUploading ? 'PDF uploaden…' : editingId ? 'Opslaan' : 'Toevoegen'}
           </Button>
         </div>
@@ -363,7 +381,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     >
       {/* De opslaan-knop staat in de footer (buiten het formulier) en koppelt
           via form={FORM_ID}; Enter in een veld dient dus ook gewoon in. */}
-      <form id={FORM_ID} onSubmit={handleSubmit} className="space-y-5">
+      <Formulier id={FORM_ID} onVerstuur={handleSubmit} className="space-y-5">
         {/* Lijnen als chips: één per keer toevoegen met Enter of een komma,
             verwijderen met het kruisje. Opgeslagen als "883, 884" (zie
             shared/lijnen.ts), dus bestaande omleidingen blijven werken.
@@ -412,7 +430,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             type="text"
             maxLength={80}
             value={formData.location ?? ''}
-            onChange={(e) => setFormData({...formData, location: e.target.value})}
+            onChange={(e) => { setFormData({...formData, location: e.target.value}); veld.wisVeld('location'); }}
             placeholder="bv. Eeklo"
           />
         </Field>
@@ -424,7 +442,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             type="text"
             required
             value={formData.title}
-            onChange={(e) => setFormData({...formData, title: e.target.value})}
+            onChange={(e) => { setFormData({...formData, title: e.target.value}); veld.wisVeld('title'); }}
             placeholder="bv. Wegwerkzaamheden N70"
           />
         </Field>
@@ -436,7 +454,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             required
             rows={3}
             value={formData.description}
-            onChange={(e) => setFormData({...formData, description: e.target.value})}
+            onChange={(e) => { setFormData({...formData, description: e.target.value}); veld.wisVeld('description'); }}
             placeholder="Beschrijf de omleiding…"
           />
         </Field>
@@ -449,7 +467,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               required
               value={formData.startDate ?? ''}
               max={formData.endDate || undefined}
-              onChange={(v) => setFormData({...formData, startDate: v})}
+              onChange={(v) => { setFormData({...formData, startDate: v}); veld.wisVeld('startDate'); }}
             />
           </Field>
           <Field label="Einddatum" hint="Leeg = tot hij verwijderd wordt." htmlFor="omleiding-eind" error={fouten.endDate}>
@@ -458,17 +476,17 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               id="omleiding-eind"
               value={formData.endDate || ''}
               min={formData.startDate || undefined}
-              onChange={(v) => setFormData({...formData, endDate: v})}
+              onChange={(v) => { setFormData({...formData, endDate: v}); veld.wisVeld('endDate'); }}
             />
           </Field>
         </div>
 
-        <Field label={editingId ? 'PDF-bestand (optioneel)' : 'PDF-bestand'} htmlFor="pdf-upload">
+        <Field label={editingId ? 'PDF-bestand (optioneel)' : 'PDF-bestand'} htmlFor="pdf-upload" error={fouten.pdf}>
           <div className="relative">
             <input
               type="file"
               accept=".pdf"
-              onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+              onChange={(e) => { setPdfFile(e.target.files?.[0] || null); veld.wisVeld('pdf'); }}
               className="hidden"
               id="pdf-upload"
             />
@@ -485,7 +503,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
             </label>
           </div>
         </Field>
-      </form>
+      </Formulier>
     </DetailPaneel>
   );
 

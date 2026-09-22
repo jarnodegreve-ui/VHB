@@ -200,6 +200,7 @@ export function DetailPaneel({
   leegActie,
   verbergLeeg = false,
   plakkend = true,
+  vuil = false,
   className,
 }: {
   open: boolean;
@@ -238,6 +239,10 @@ export function DetailPaneel({
   verbergLeeg?: boolean;
   /** `lg:sticky` onder de topbar — uit voor een paneel in een gewone kolomflow. */
   plakkend?: boolean;
+  /** Onbewaarde invoer (tranche 3A): alleen de mobiele SlideOver vraagt dan
+   *  eerst "Wijzigingen niet bewaren?" bij sluiten. De desktopkaart heeft
+   *  geen sluitactie; een andere rij kiezen is (nog) niet bewaakt. */
+  vuil?: boolean;
   className?: string;
 }) {
   const inline = useMinWidth(LG);
@@ -287,7 +292,7 @@ export function DetailPaneel({
 
   if (!inline) {
     return (
-      <SlideOver open={open} onClose={onClose} title={title} subtitle={subtitle} titelTerugloop={titelTerugloop} icon={icon} width={breedte} footer={footer}>
+      <SlideOver open={open} onClose={onClose} vuil={vuil} title={title} subtitle={subtitle} titelTerugloop={titelTerugloop} icon={icon} width={breedte} footer={footer}>
         {/* Een andere rij kiezen terwijl het paneel open staat: zachte wissel
             i.p.v. een harde; het openen zelf is de veer van de SlideOver. */}
         <RichtingWissel sleutel={sleutel ?? ''} richting={wissel.richting} as="y" stil={wissel.stil}>
