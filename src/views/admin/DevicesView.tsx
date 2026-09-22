@@ -12,6 +12,7 @@ import { Card } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { InfoTip } from '../../components/InfoTip';
 import { Field, Input } from '../../components/Field';
+import { Formulier } from '../../components/Formulier';
 import { SkeletonRow } from '../../components/Skeleton';
 import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
 
@@ -339,7 +340,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
               <dd className="font-medium text-slate-800">{formatDateHuman(gekozen.lastSeenAt)}</dd>
             </div>
           </dl>
-          <form onSubmit={(e) => { e.preventDefault(); void submitRename(gekozen); }}>
+          <Formulier onVerstuur={() => submitRename(gekozen)}>
             <Field label="Toestelnaam" hint="Kies een herkenbare naam, bijvoorbeeld “iPhone van Jan”.">
               {({ id, describedBy }) => (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -348,7 +349,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                 </div>
               )}
             </Field>
-          </form>
+          </Formulier>
 
           {gekozen.status === 'revoked' && (
             <p className="text-xs text-slate-500">Geblokkeerd: dit toestel komt niet meer in de app, ook niet na opnieuw aanmelden. Keur het goed om de toegang te herstellen.</p>
