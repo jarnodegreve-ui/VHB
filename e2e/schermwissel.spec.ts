@@ -20,9 +20,9 @@ test('een scherm komt één keer op: eens zichtbaar, nooit meer doorzichtig', as
   // Eerst één keer heen en terug, zodat de chunk van Rooster binnen is en de
   // gemeten wissel alleen nog over de overgang zelf gaat.
   await dock.getByRole('button', { name: 'Rooster', exact: true }).last().click();
-  await expect(page.getByRole('heading', { name: 'Mijn rooster', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Rooster', level: 1 })).toBeVisible();
   await dock.getByRole('button', { name: 'Dashboard', exact: true }).last().click();
-  await expect(page.getByRole('heading', { name: 'Mijn rooster', level: 1 })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Rooster', level: 1 })).toHaveCount(0);
   await page.waitForTimeout(600);
 
   // Sampler: per animatieframe de laagste dekking tussen de kop van het
@@ -32,7 +32,7 @@ test('een scherm komt één keer op: eens zichtbaar, nooit meer doorzichtig', as
     w.__dekking = [];
     const t0 = performance.now();
     const meet = () => {
-      const h1 = [...document.querySelectorAll('h1')].find((h) => h.textContent?.includes('Mijn rooster'));
+      const h1 = [...document.querySelectorAll('h1')].find((h) => h.textContent?.includes('Rooster'));
       if (h1) {
         let laagste = 1;
         for (let n: Element | null = h1; n && n !== document.body; n = n.parentElement) {
