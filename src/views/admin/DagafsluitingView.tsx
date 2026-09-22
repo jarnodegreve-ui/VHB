@@ -11,7 +11,10 @@ import {
   type DagDetail, type DagPrestatie, type DagVoorstel, type LoonCode,
 } from '../../lib/loon';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
@@ -344,24 +347,31 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, onPat
 
 function HeropenModal({ datum, onClose, onKlaar }: { datum: string; onClose: () => void; onKlaar: (dag: Awaited<ReturnType<typeof heropenDag>>) => void }) {
   const [reden, setReden] = useState('');
-  const [fout, setFout] = useState<string | null>(null);
+  const fouten = useVeldfouten();
   const [bezig, setBezig] = useState(false);
+  const { vuil } = useVuil(reden);
   const doe = async () => {
-    setBezig(true); setFout(null);
+    if (bezig) return;
+    fouten.wis();
+    setBezig(true);
     try { onKlaar(await heropenDag(datum, reden.trim())); notify('Dag heropend.', 'success'); }
-    catch (err) { if (err instanceof LoonFout && err.veldfouten?.reden) setFout(err.veldfouten.reden); else notify(err instanceof Error ? err.message : 'Heropenen is mislukt.', 'error'); }
+    catch (err) {
+      // De reden-fout bij het veld; de rest één toast met vervolgstap.
+      if (err instanceof LoonFout && err.veldfouten?.reden) fouten.zet({ reden: err.veldfouten.reden });
+      else meldSchrijffout('Heropenen', err);
+    }
     finally { setBezig(false); }
   };
   return (
-    <Modal open onClose={onClose} maxWidth="sm" ariaLabel="Dag heropenen">
-      <div className="p-6">
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="sm" ariaLabel="Dag heropenen">
+      <Formulier onVerstuur={doe} noValidate className="p-6">
         <CardHeader title={`${formatDayLong(datum)} heropenen`} description="Geef een reden; die komt in het activiteitenlog." />
-        <div className="mt-4"><Field label="Reden" required error={fout}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} value={reden} rows={3} onChange={(e) => setReden(e.target.value)} />}</Field></div>
+        <div className="mt-4"><Field label="Reden" required error={fouten.fouten.reden}><Textarea value={reden} rows={3} onChange={(e) => { setReden(e.target.value); fouten.wisVeld('reden'); }} /></Field></div>
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" icon={<RotateCcw size={16} />} onClick={() => void doe()} disabled={bezig}>{bezig ? 'Bezig…' : 'Heropenen'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" icon={<RotateCcw size={16} />} bezig={bezig}>Heropenen</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }
@@ -369,25 +379,27 @@ function HeropenModal({ datum, onClose, onKlaar }: { datum: string; onClose: () 
 function RijToevoegenModal({ datum, users, onClose, onKlaar }: { datum: string; users: User[]; onClose: () => void; onKlaar: (p: DagPrestatie) => void }) {
   const [userId, setUserId] = useState('');
   const [bezig, setBezig] = useState(false);
+  const { vuil } = useVuil(userId);
   const doe = async () => {
-    if (!userId) return;
+    if (!userId || bezig) return;
     setBezig(true);
+    // Geen "Opnieuw proberen": een rij toevoegen maakt iets aan.
     try { onKlaar(await voegRijToe(datum, userId, null)); notify('Rij toegevoegd.', 'success'); }
-    catch (err) { notify(err instanceof Error ? err.message : 'Toevoegen is mislukt.', 'error'); }
+    catch (err) { meldSchrijffout('Toevoegen', err); }
     finally { setBezig(false); }
   };
   return (
-    <Modal open onClose={onClose} maxWidth="sm" ariaLabel="Rij toevoegen">
-      <div className="p-6">
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="sm" ariaLabel="Rij toevoegen">
+      <Formulier onVerstuur={doe} noValidate className="p-6">
         <CardHeader title="Rij toevoegen" description="Een tweede rij voor iemand die twee codes op één dag heeft, of een chauffeur die niet in de planning stond." />
         <div className="mt-4">
-          <Field label="Chauffeur" required>{({ id }) => <Select id={id} value={userId} onChange={(e) => setUserId(e.target.value)}><option value="">Kies een chauffeur</option>{[...users].sort((a, b) => a.name.localeCompare(b.name, 'nl')).map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}</Select>}</Field>
+          <Field label="Chauffeur" required><Select value={userId} onChange={(e) => setUserId(e.target.value)}><option value="">Kies een chauffeur</option>{[...users].sort((a, b) => a.name.localeCompare(b.name, 'nl')).map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}</Select></Field>
         </div>
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" onClick={() => void doe()} disabled={bezig || !userId}>{bezig ? 'Bezig…' : 'Toevoegen'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" bezig={bezig} disabled={!userId}>Toevoegen</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }
