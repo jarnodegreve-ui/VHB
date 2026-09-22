@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Coins, Download, FileSpreadsheet, Hash, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import type { User } from '../../types';
 import { DIENST_TYPES, DIENST_TYPE_LABEL, loonCodeSleutel } from '../../../shared/loon';
-import { DAG_STATUS } from '../../../shared/status';
+import { DAG_STATUS, dagOpenStatus } from '../../../shared/status';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
 import { useZelfLadend, type Versheid } from '../../lib/zelfLadend';
@@ -178,7 +178,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
                 key={iso}
                 type="button"
                 onClick={() => onNavigate?.('dagafsluiting', [iso])}
-                title={`${formatShortDay(iso)}${d ? `, ${d.rijen} rijen, ${d.overmin} overminuten` : ''}`}
+                title={`${formatShortDay(iso)}, ${DAG_STATUS[dagOpenStatus(iso, vandaag, !!d, d?.status === 'afgesloten')].label.toLowerCase()}${d ? `, ${d.rijen} rijen, ${d.overmin} overminuten` : ''}`}
                 className={cn(
                   'ios-pressable flex min-h-11 flex-col items-center justify-center rounded-xl text-xs font-semibold ring-1 ring-hairline transition-colors',
                   tone === 'emerald' && 'bg-emerald-50 text-emerald-800',
@@ -198,6 +198,10 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
           <span><Badge tone={TOON_NAAR_BADGE[DAG_STATUS.afgesloten.toon]} dot stil>{DAG_STATUS.afgesloten.label}</Badge></span>
           <span><Badge tone={TOON_NAAR_BADGE[DAG_STATUS.open.toon]} dot stil>{DAG_STATUS.open.label}</Badge></span>
           <span><Badge tone="red" dot stil>{DAG_STATUS.niet_geopend.label} (planning aanwezig)</Badge></span>
+          {/* Alleen als de maand dagen na vandaag heeft: dan zijn de grijze tegels (ook) nog niet aan de beurt. */}
+          {alle.some((iso) => iso > vandaag) && (
+            <span><Badge tone={TOON_NAAR_BADGE[DAG_STATUS.nog_niet_geopend.toon]} dot stil>{DAG_STATUS.nog_niet_geopend.label}</Badge></span>
+          )}
         </p>
       </Card>
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AANVRAAG_STATUS, ACCOUNT_STATUS, COLLEGA_ANTWOORD, DAG_STATUS, DEFECT_STATUS, FOUTGROEP_STATUS,
   OMLEIDING_FASE, RUIL_STATUS, TOESTEL_STATUS, VERVAL_STATUS, VOERTUIG_STATUS,
-  statusLabel, statusVan, type StatusDef,
+  dagOpenStatus, statusLabel, statusVan, type StatusDef,
 } from './status';
 
 const ALLE: Record<string, Record<string, StatusDef>> = {
@@ -54,5 +54,19 @@ describe('statuswoordenschat', () => {
     expect(TOESTEL_STATUS.revoked.toon).toBe('gevaar');
     expect(VOERTUIG_STATUS.reserve.toon).toBe('aandacht');
     expect(VOERTUIG_STATUS.uit_dienst.toon).toBe('neutraal');
+  });
+
+  it('dagadministratie: "Nog niet geopend" na vandaag, "Niet geopend" vanaf vandaag', () => {
+    const VANDAAG = '2026-09-22';
+    expect(dagOpenStatus('2026-09-23', VANDAAG, false, false)).toBe('nog_niet_geopend');
+    expect(dagOpenStatus('2026-10-01', VANDAAG, false, false)).toBe('nog_niet_geopend');
+    expect(dagOpenStatus('2026-09-22', VANDAAG, false, false)).toBe('niet_geopend');
+    expect(dagOpenStatus('2026-09-21', VANDAAG, false, false)).toBe('niet_geopend');
+    // Met detail telt de datum niet: open of afgesloten.
+    expect(dagOpenStatus('2026-09-23', VANDAAG, true, false)).toBe('open');
+    expect(dagOpenStatus('2026-09-21', VANDAAG, true, true)).toBe('afgesloten');
+    expect(DAG_STATUS.nog_niet_geopend.label).toBe('Nog niet geopend');
+    expect(DAG_STATUS.niet_geopend.label).toBe('Niet geopend');
+    expect(DAG_STATUS.nog_niet_geopend.toon).toBe('neutraal');
   });
 });

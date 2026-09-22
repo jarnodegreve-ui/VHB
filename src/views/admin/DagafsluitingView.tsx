@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Lock, Plus, RotateCcw, Trash2, Unlock } from 'lucide-react';
 import type { User } from '../../types';
 import { QUAL_VLAGGEN, QUAL_VLAG_LABEL, OPMERKING_MAX, loonCodeSleutel, type QualVlag } from '../../../shared/loon';
-import { DAG_STATUS, statusVan } from '../../../shared/status';
+import { DAG_STATUS, dagOpenStatus, statusVan } from '../../../shared/status';
 import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { formatDayLong } from '../../lib/format';
@@ -115,8 +115,9 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   };
   const zichtbareRijen = alleenAfwijkend ? rijen.filter((r) => afwijkend(r) || r.overmin + r.overminNacht + r.overminExtra !== 0 || r.onvPremie) : rijen;
 
-  // Label en toon uit DAG_STATUS; een open dag blijft een gekleurde chip.
-  const dagStatus = statusVan(DAG_STATUS, detail ? (afgesloten ? 'afgesloten' : 'open') : 'niet_geopend');
+  // Label en toon uit DAG_STATUS; een open dag blijft een gekleurde chip. Een
+  // dag na vandaag zonder detail is "Nog niet geopend", anders "Niet geopend".
+  const dagStatus = statusVan(DAG_STATUS, dagOpenStatus(datum, vandaagIso(), !!detail, afgesloten));
   const statusBadge = (
     <Badge tone={TOON_NAAR_BADGE[dagStatus.toon]} dot stil={!detail || afgesloten} className="whitespace-nowrap">{dagStatus.label}</Badge>
   );
