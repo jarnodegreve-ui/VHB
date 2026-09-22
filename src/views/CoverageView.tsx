@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useVerlaatWaarschuwing, useVuil } from '../lib/formulier';
+import { meldSchrijffout } from '../lib/fouten';
 import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus, ListChecks } from 'lucide-react';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
@@ -499,7 +501,20 @@ export function CoverageView() {
     notify(`Lijst voor “${v.dayType}” klaargezet (${codes.length} diensten), controleer en klik op Opslaan.`, 'success');
   };
 
+  // Onbewaarde instellingen (tranche 3A): vergeleken met wat er geladen of
+  // laatst bewaard is, zonder de lokale rijsleutels. De momentopname valt
+  // zodra de config binnen is; tabblad sluiten of herladen waarschuwt dan.
+  const instellingenWaarden = {
+    dayTypes: dayTypes.map(({ name, services }) => ({ name, services })),
+    weekdays,
+    weekdayPeriods: weekdayPeriods.map(({ vanaf, weekdays: w }) => ({ vanaf, weekdays: w })),
+    overrides: overrides.map(({ from: van, to: tot, dayType }) => ({ from: van, to: tot, dayType })),
+  };
+  const { vuil: instellingenVuil, markeerSchoon: instellingenSchoon } = useVuil(instellingenWaarden, config !== null);
+  useVerlaatWaarschuwing(instellingenVuil);
+
   const handleSave = async () => {
+    if (saving) return;
     setSaving(true);
     try {
       // Dag-types: lege namen weg, dedupe (eerste wint).
@@ -520,13 +535,15 @@ export function CoverageView() {
         .filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.vanaf))
         .map((p) => ({ vanaf: p.vanaf, weekdays: p.weekdays.map((w) => (validNames.has(w) ? w : '')) }));
       await saveCoverageConfig({ dayTypes: cleanDayTypes, weekdays: cleanWeekdays, weekdayPeriods: cleanPeriods, overrides: cleanOverrides });
+      instellingenSchoon();
       await refetchGaps();
       // Ook de app-brede dekking (dashboard, topbar-badge) volgt de nieuwe
       // verwachtingen, niet alleen dit scherm.
       void appData?.refreshCoverageGaps();
-    } catch (e: any) {
-      // Schrijffout = toast; de kaart is voor laadfouten.
-      notify(e?.message || 'Opslaan is mislukt.', 'error');
+    } catch (e: unknown) {
+      // Schrijffout = toast met vervolgstap; de kaart is voor laadfouten.
+      // Opnieuw is veilig: de hele config gaat met één PUT.
+      meldSchrijffout('Opslaan', e, () => void handleSave());
     } finally {
       setSaving(false);
     }
