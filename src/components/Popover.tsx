@@ -162,7 +162,7 @@ export function MenuItem({
       type={type}
       role="menuitem"
       className={cn(
-        'flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors duration-fast',
+        'tikbaar flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium',
         'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent',
         gevaarlijk ? 'text-red-700 hover:bg-red-500/10' : 'text-slate-600 hover:bg-surface-soft-hover hover:text-slate-900',
         className,

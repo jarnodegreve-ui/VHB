@@ -238,7 +238,7 @@ export function SortTh<K extends string>({ kolom, sort, children, className, tit
   return (
     <Th className={cn('p-0', className)} title={title} sort={actief ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
       {/* rauw: kolomkop-knop (tekst + sorteerpijl) in een tabelkop. */}
-      <button type="button" aria-label={naam} onClick={() => sort.toggle(kolom)} className={cn('group inline-flex min-h-11 sm:pointer-fine:min-h-9 w-full items-center text-xs font-medium transition-colors hover:text-slate-800', dicht ? 'gap-0.5 px-2' : 'gap-1 px-4', align === 'right' ? 'justify-end text-right' : 'text-left', actief ? 'text-slate-800' : 'text-slate-500')}>
+      <button type="button" aria-label={naam} onClick={() => sort.toggle(kolom)} className={cn('tikbaar group inline-flex min-h-11 sm:pointer-fine:min-h-9 w-full items-center text-xs font-medium transition-colors hover:text-slate-800', dicht ? 'gap-0.5 px-2' : 'gap-1 px-4', align === 'right' ? 'justify-end text-right' : 'text-left', actief ? 'text-slate-800' : 'text-slate-500')}>
         <span>{children}</span>
         {dicht && !actief ? null : <Pijl size={12} className={cn('shrink-0 transition-opacity', actief ? 'opacity-100' : 'opacity-0 group-hover:opacity-60')} />}
       </button>

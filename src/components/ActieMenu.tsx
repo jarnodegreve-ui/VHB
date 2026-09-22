@@ -203,7 +203,7 @@ export function ActieMenu({
                 className={cn(
                   // min-h-11 = 44 px aanraakminimum; op een fijne pointer (muis)
                   // compacter, zoals Button (primitives.tsx).
-                  'flex w-full min-h-11 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors sm:pointer-fine:min-h-9',
+                  'tikbaar flex w-full min-h-11 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium sm:pointer-fine:min-h-9',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                   item.gevaarlijk ? 'text-red-700 hover:bg-red-500/10' : 'text-slate-700 hover:bg-surface-soft-hover',
                 )}

@@ -27,7 +27,7 @@ export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
       onTouchStart={onPrefetch}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-fast",
+        "tikbaar group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm",
         active
           // Goud rantsoeneren (next-level 2, punt 4): een actief nav-item is een
           // plaats, geen actie. Neutrale chip met hairline; het enige merkmoment

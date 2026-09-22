@@ -54,7 +54,7 @@ export function UserMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Accountmenu"
-        className="flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 hover:bg-surface-soft-hover transition-colors"
+        className="tikbaar flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 hover:bg-surface-soft-hover"
       >
         {/* Huisstijl-pairing: op goud altijd carbon-tekst, geen wit. */}
         <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-xs font-bold select-none">

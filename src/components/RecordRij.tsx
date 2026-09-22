@@ -58,7 +58,7 @@ export function RecordRij({ titel, titelAttrs, meta, status, voorproef, leading,
         type="button"
         onClick={onClick}
         aria-expanded={richting === 'omlaag' ? !!open : undefined}
-        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors duration-fast hover:bg-surface-soft-hover"
+        className="tikbaar flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-surface-soft-hover"
       >
         {leading && <span className="shrink-0">{leading}</span>}
         <span className="min-w-0 flex-1">

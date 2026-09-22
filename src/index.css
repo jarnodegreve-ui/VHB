@@ -927,11 +927,14 @@ html.dark {
   }
 
   .surface-card-hover {
+    /* base i.p.v. slow (fase 2): een hover hoort direct te reageren, 320 ms
+       las als traag; de kaart zelf (.surface-card) houdt slow voor thema- en
+       laagwissels. */
     transition:
-      transform var(--duration-slow) var(--ease-standard),
-      box-shadow var(--duration-slow) var(--ease-standard),
-      background-color var(--duration-slow) var(--ease-standard),
-      border-color var(--duration-slow) var(--ease-standard);
+      transform var(--duration-base) var(--ease-standard),
+      box-shadow var(--duration-base) var(--ease-standard),
+      background-color var(--duration-base) var(--ease-standard),
+      border-color var(--duration-base) var(--ease-standard);
   }
 
   /* Zelfde reden als bij .ios-pressable:hover: op een touchscreen bleef de
@@ -1076,6 +1079,23 @@ html.dark {
       border-color: var(--rand-knop-zacht-hover);
       box-shadow: var(--schaduw-knop-zacht-hover);
     }
+  }
+
+  /* Pressed-staat voor rijen, nav-items, dock-tabs, tabelkoppen en menu-items
+     (fase 2, 22-09): een vlak dat meteen verschijnt bij de aanraking en op de
+     ladder wegtrekt bij het loslaten. Geen schaal (scale op een tekstrij
+     rastert en leest als speels); knoppen en chips houden .ios-pressable.
+     Tot fase 2 gaf een tik op een nav-item of rij op iOS letterlijk niets
+     terug (Tailwind zet -webkit-tap-highlight-color op transparant) tot het
+     nieuwe scherm er stond. */
+  .tikbaar {
+    transition:
+      background-color var(--duration-fast) var(--ease-standard),
+      color var(--duration-fast) var(--ease-standard);
+  }
+  .tikbaar:active {
+    background-color: var(--color-surface-muted);
+    transition-duration: 0ms;
   }
 
   .ios-pressable {

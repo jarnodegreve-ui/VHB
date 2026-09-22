@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MotionConfig } from 'motion/react';
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -29,8 +30,15 @@ function CrashFallback() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary fallback={<CrashFallback />}>
-      <App />
-    </ErrorBoundary>
+    {/* reducedMotion="user" (fase 2): de CSS-regel in index.css zet alleen
+        CSS-animaties op 0, niet de motion-animaties; tien componenten
+        (login, topbar-menu's, InfoTip, installatiehint, …) luisterden dus
+        niet naar prefers-reduced-motion. MotionConfig doet dat centraal:
+        transform- en layout-animaties vallen weg, opacity blijft. */}
+    <MotionConfig reducedMotion="user">
+      <ErrorBoundary fallback={<CrashFallback />}>
+        <App />
+      </ErrorBoundary>
+    </MotionConfig>
   </StrictMode>,
 );
