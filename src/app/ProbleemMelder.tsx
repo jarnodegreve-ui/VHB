@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Modal } from '../components/Modal';
+import { Modal, SluitKnop } from '../components/Modal';
+import { Formulier } from '../components/Formulier';
 import { CardHeader } from '../components/Card';
 import { Field, Textarea } from '../components/Field';
 import { Button } from '../components/primitives';
@@ -23,9 +24,11 @@ export function ProbleemMelder({ open, onClose, view }: { open: boolean; onClose
   useEffect(() => {
     if (open) { setTekst(''); setVerstuurd(false); setFout(false); }
   }, [open]);
+  // De tekst begint bij elk openen leeg, dus elke ingetypte tekst is onbewaard.
+  const vuil = open && !verstuurd && tekst.trim() !== '';
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="sm" ariaLabel="Meld een probleem">
+    <Modal open={open} onClose={onClose} vuil={vuil} maxWidth="sm" ariaLabel="Meld een probleem">
       <div className="p-6">
         {verstuurd ? (
           <div className="text-center py-4">
@@ -34,31 +37,27 @@ export function ProbleemMelder({ open, onClose, view }: { open: boolean; onClose
             <Button variant="primary" className="mt-5" onClick={onClose}>Sluiten</Button>
           </div>
         ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
+          <Formulier
+            onVerstuur={async () => {
               const t = tekst.trim();
               if (!t || bezig) return;
               // Pas "verstuurd" tonen als de server de melding écht heeft.
               setBezig(true);
               setFout(false);
-              void reportUserFeedback(referentie ? `${t} (referentie ${referentie})` : t, { view }).then((ok) => {
-                setBezig(false);
-                if (ok) setVerstuurd(true); else setFout(true);
-              });
+              const ok = await reportUserFeedback(referentie ? `${t} (referentie ${referentie})` : t, { view });
+              setBezig(false);
+              if (ok) setVerstuurd(true); else setFout(true);
             }}
           >
             <CardHeader title="Meld een probleem" description="Beschrijf kort wat er misging of niet klopte. Het scherm waar je nu bent sturen we automatisch mee." />
             <Field label="Wat ging er mis?" htmlFor="probleem-tekst" className="mt-4" error={fout ? 'Versturen lukte niet, controleer je verbinding en probeer opnieuw.' : undefined}>
-              {({ id, describedBy, invalid }) => (
-                <Textarea id={id} aria-describedby={describedBy} invalid={invalid} value={tekst} onChange={(e) => setTekst(e.target.value)} maxLength={900} rows={4} placeholder="Bv. de aftelling bij Chris klopt niet, hij is al klaar…" />
-              )}
+              <Textarea id="probleem-tekst" value={tekst} onChange={(e) => setTekst(e.target.value)} maxLength={900} rows={4} placeholder="Bv. de aftelling bij Chris klopt niet, hij is al klaar…" />
             </Field>
             <div className="mt-4 flex justify-end gap-2.5">
-              <Button variant="ghost" onClick={onClose}>Annuleren</Button>
-              <Button type="submit" variant="primary" disabled={!tekst.trim() || bezig}>{bezig ? 'Versturen…' : 'Versturen'}</Button>
+              <SluitKnop onClose={onClose} variant="ghost" disabled={bezig}>Annuleren</SluitKnop>
+              <Button type="submit" variant="primary" bezig={bezig} disabled={!tekst.trim()}>Versturen</Button>
             </div>
-          </form>
+          </Formulier>
         )}
       </div>
     </Modal>
