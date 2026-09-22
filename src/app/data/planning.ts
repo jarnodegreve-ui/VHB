@@ -4,6 +4,7 @@ import { apiFetch } from '../../lib/api';
 import { fetchCoverageGaps, type DayGap } from '../../lib/coverage';
 import { addDays, isoDate } from '../../lib/availability';
 import { useCollectieState, type DataCtx } from './kern';
+import { schrijffout } from '../../lib/fouten';
 import { navigeer } from '../router';
 import { dienstoverzichtToast } from '../../lib/dienstoverzichtToast';
 
@@ -92,11 +93,11 @@ export function usePlanningData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      showToast(err.details || err.error || 'Opslaan van planning is mislukt.', 'error');
+      showToast(schrijffout('Opslaan van planning', { status: response.status, message: err.details || err.error }), 'error');
       return false;
     } catch (error) {
       console.error('Error saving planning:', error);
-      showToast('Opslaan van planning is mislukt.', 'error');
+      showToast(schrijffout('Opslaan van planning', error), 'error');
       return false;
     }
   };
@@ -160,11 +161,11 @@ export function usePlanningData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      showToast(err.details || err.error || 'Opslaan van diensten is mislukt.', 'error');
+      showToast(schrijffout('Opslaan van diensten', { status: response.status, message: err.details || err.error }), 'error');
       return false;
     } catch (error) {
       console.error('Error saving services:', error);
-      showToast('Opslaan van diensten is mislukt.', 'error');
+      showToast(schrijffout('Opslaan van diensten', error), 'error');
       return false;
     }
   };
@@ -224,7 +225,7 @@ export function usePlanningData(ctx: DataCtx) {
       }
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.details || data?.error || 'Opslaan mislukt.');
+        throw Object.assign(new Error(data?.details || data?.error || 'Opslaan mislukt.'), { status: response.status });
       }
       setPlanningCodes(newCodes);
       ctx.captureRevision('planningCodes', response);
@@ -234,7 +235,7 @@ export function usePlanningData(ctx: DataCtx) {
       return true;
     } catch (error: any) {
       console.error('Error saving planning codes:', error);
-      showToast(`Opslaan van planningscodes is mislukt: ${error.message}`, 'error');
+      showToast(schrijffout('Opslaan van planningscodes', error), 'error');
       return false;
     }
   };

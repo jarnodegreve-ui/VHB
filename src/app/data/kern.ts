@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import type { User } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { veldfoutenUitAntwoord } from '../../lib/valideer';
+import { schrijffout } from '../../lib/fouten';
 import type { Toast, ToastOpties } from '../../components/ToastStack';
 
 /**
@@ -292,6 +293,8 @@ export function useDataKern(basis: DataBasis): DataCtx {
       return false;
     }
     opts.setList(opts.optimistic);
+    // "Opslaan van deze omleiding is mislukt. <vervolgstap>"
+    const actie = `${opts.method === 'DELETE' ? 'Verwijderen' : 'Opslaan'} van ${opts.label.charAt(0).toLowerCase()}${opts.label.slice(1)}`;
     try {
       const response = await apiFetch(opts.url, {
         method: opts.method,
@@ -334,12 +337,12 @@ export function useDataKern(basis: DataBasis): DataCtx {
         await opts.refetch();
         return false;
       }
-      showToast(data?.details || data?.error || `${opts.label} kon niet opgeslagen worden (${response.status}).`, 'error');
+      showToast(schrijffout(actie, { status: response.status, message: data?.details || data?.error }), 'error');
       await opts.refetch();
       return false;
     } catch (error) {
       console.error(`Error saving ${opts.key} record:`, error);
-      showToast(`${opts.label} kon niet opgeslagen worden: ${error instanceof Error ? error.message : 'onbekende fout'}.`, 'error');
+      showToast(schrijffout(actie, error), 'error');
       await opts.refetch();
       return false;
     }
@@ -374,11 +377,11 @@ export function useDataKern(basis: DataBasis): DataCtx {
         void refetch();
         return false;
       }
-      showToast(data.details || data.error || 'Beslissing opslaan is mislukt.', 'error');
+      showToast(schrijffout('Beslissing opslaan', { status: response.status, message: data?.details || data?.error }), 'error');
       return false;
     } catch (error) {
       console.error(`Error deciding ${kind}:`, error);
-      showToast('Beslissing opslaan is mislukt.', 'error');
+      showToast(schrijffout('Beslissing opslaan', error), 'error');
       return false;
     }
   };
