@@ -4,7 +4,7 @@ import { apiFetch } from '../../lib/api';
 import { fetchCoverageGaps, type DayGap } from '../../lib/coverage';
 import { addDays, isoDate } from '../../lib/availability';
 import { useCollectieState, type DataCtx } from './kern';
-import { schrijffout } from '../../lib/fouten';
+import { laatSchrijffout } from '../../lib/foutenLui';
 import { navigeer } from '../router';
 import { dienstoverzichtToast } from '../../lib/dienstoverzichtToast';
 
@@ -93,11 +93,11 @@ export function usePlanningData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      showToast(schrijffout('Opslaan van planning', { status: response.status, message: err.details || err.error }), 'error');
+      laatSchrijffout('Opslaan van planning', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
       console.error('Error saving planning:', error);
-      showToast(schrijffout('Opslaan van planning', error), 'error');
+      laatSchrijffout('Opslaan van planning', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };
@@ -161,11 +161,11 @@ export function usePlanningData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      showToast(schrijffout('Opslaan van diensten', { status: response.status, message: err.details || err.error }), 'error');
+      laatSchrijffout('Opslaan van diensten', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
       console.error('Error saving services:', error);
-      showToast(schrijffout('Opslaan van diensten', error), 'error');
+      laatSchrijffout('Opslaan van diensten', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };
@@ -235,7 +235,7 @@ export function usePlanningData(ctx: DataCtx) {
       return true;
     } catch (error: any) {
       console.error('Error saving planning codes:', error);
-      showToast(schrijffout('Opslaan van planningscodes', error), 'error');
+      laatSchrijffout('Opslaan van planningscodes', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };

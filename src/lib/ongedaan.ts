@@ -1,6 +1,6 @@
 import type { Toast, ToastOpties } from '../components/ToastStack';
 import { tik } from './tik';
-import { schrijffout } from './fouten';
+import { laatSchrijffout } from './foutenLui';
 
 /** Toast-functie zoals App.showToast / notify die ook een actie en opties aankan. */
 export type OngedaanToast = (
@@ -47,10 +47,14 @@ export async function metOngedaan({
     try {
       const hersteld = await herstellen();
       // Zonder eigen tekst: "Ongedaan maken is mislukt. <vervolgstap>".
-      if (hersteld === false) toast(herstelFout ?? schrijffout('Ongedaan maken'), 'error');
+      if (hersteld === false) {
+        if (herstelFout) toast(herstelFout, 'error');
+        else laatSchrijffout('Ongedaan maken', undefined, (tekst) => toast(tekst, 'error'));
+      }
     } catch (error) {
       console.error('Ongedaan maken is mislukt:', error);
-      toast(herstelFout ?? schrijffout('Ongedaan maken', error), 'error');
+      if (herstelFout) toast(herstelFout, 'error');
+      else laatSchrijffout('Ongedaan maken', error, (tekst) => toast(tekst, 'error'));
     }
   };
 

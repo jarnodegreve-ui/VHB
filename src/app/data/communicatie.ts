@@ -1,7 +1,7 @@
 import type { Diversion, Update, User } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
-import { schrijffout } from '../../lib/fouten';
+import { laatSchrijffout } from '../../lib/foutenLui';
 import { metOngedaan } from '../../lib/ongedaan';
 
 /**
@@ -56,7 +56,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       return true;
     } catch (error) {
       console.error('Error saving updates:', error);
-      showToast(schrijffout('Opslaan van updates', error), 'error');
+      laatSchrijffout('Opslaan van updates', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };
@@ -74,11 +74,11 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       if (response.ok && data.success) {
         showToast(data.mocked ? `E-mail gelogd: ${data.message}` : 'E-mails verzonden naar alle chauffeurs.', 'success');
       } else {
-        showToast(schrijffout('Verzenden van de e-mailupdate', { status: response.status, message: data.details || data.error }), 'error');
+        laatSchrijffout('Verzenden van de e-mailupdate', { status: response.status, message: data.details || data.error }, (tekst) => showToast(tekst, 'error'));
       }
     } catch (error) {
       console.error('Error sending urgent email:', error);
-      showToast(schrijffout('Verzenden van de e-mailupdate', error), 'error');
+      laatSchrijffout('Verzenden van de e-mailupdate', error, (tekst) => showToast(tekst, 'error'));
     }
   };
 
@@ -120,11 +120,11 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
         showToast('Omleidingen succesvol opgeslagen.', 'success');
       } else {
         const err = await response.json().catch(() => ({} as any));
-        showToast(schrijffout('Opslaan van omleidingen', { status: response.status, message: err.details || err.error }), 'error');
+        laatSchrijffout('Opslaan van omleidingen', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       }
     } catch (error) {
       console.error('Error saving diversions:', error);
-      showToast(schrijffout('Opslaan van omleidingen', error), 'error');
+      laatSchrijffout('Opslaan van omleidingen', error, (tekst) => showToast(tekst, 'error'));
     }
   };
 

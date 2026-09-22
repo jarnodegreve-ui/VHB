@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import type { User } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { veldfoutenUitAntwoord } from '../../lib/valideer';
-import { schrijffout } from '../../lib/fouten';
+import { laatSchrijffout } from '../../lib/foutenLui';
 import type { Toast, ToastOpties } from '../../components/ToastStack';
 
 /**
@@ -337,12 +337,12 @@ export function useDataKern(basis: DataBasis): DataCtx {
         await opts.refetch();
         return false;
       }
-      showToast(schrijffout(actie, { status: response.status, message: data?.details || data?.error }), 'error');
+      laatSchrijffout(actie, { status: response.status, message: data?.details || data?.error }, (tekst) => showToast(tekst, 'error'));
       await opts.refetch();
       return false;
     } catch (error) {
       console.error(`Error saving ${opts.key} record:`, error);
-      showToast(schrijffout(actie, error), 'error');
+      laatSchrijffout(actie, error, (tekst) => showToast(tekst, 'error'));
       await opts.refetch();
       return false;
     }
@@ -377,11 +377,11 @@ export function useDataKern(basis: DataBasis): DataCtx {
         void refetch();
         return false;
       }
-      showToast(schrijffout('Beslissing opslaan', { status: response.status, message: data?.details || data?.error }), 'error');
+      laatSchrijffout('Beslissing opslaan', { status: response.status, message: data?.details || data?.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
       console.error(`Error deciding ${kind}:`, error);
-      showToast(schrijffout('Beslissing opslaan', error), 'error');
+      laatSchrijffout('Beslissing opslaan', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };

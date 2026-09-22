@@ -5,7 +5,7 @@ import { stelExtraFeestdagenIn } from '../../lib/leaveBalance';
 // Zod-vrij (shared/feestdagen.ts): deze hook zit in de startbundel.
 import { parseExtraFeestdagenLos, type ExtraFeestdag } from '../../../shared/feestdagen';
 import { useCollectieState, type DataCtx } from './kern';
-import { schrijffout } from '../../lib/fouten';
+import { laatSchrijffout } from '../../lib/foutenLui';
 
 /**
  * Verlof: de aanvragen, beslissen (PATCH met seenStatus-guard), de
@@ -60,11 +60,11 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      showToast(schrijffout('Opslaan van verlofaanvragen', { status: response.status, message: err.details || err.error }), 'error');
+      laatSchrijffout('Opslaan van verlofaanvragen', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
       console.error('Error saving leave:', error);
-      showToast(schrijffout('Opslaan van verlofaanvragen', error), 'error');
+      laatSchrijffout('Opslaan van verlofaanvragen', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };
@@ -87,11 +87,11 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      showToast(schrijffout('Ziekmelding', { status: response.status, message: err.error }), 'error');
+      laatSchrijffout('Ziekmelding', { status: response.status, message: err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
       console.error('Error reporting sick:', error);
-      showToast(schrijffout('Ziekmelding', error), 'error');
+      laatSchrijffout('Ziekmelding', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };

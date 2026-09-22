@@ -4,7 +4,7 @@ import { apiFetch, apiJson } from '../../lib/api';
 import type { VervaldataRij, PendingDevice } from '../../lib/werkvoorraad';
 import { startRustigePoll } from '../../lib/rustigePoll';
 import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
-import { schrijffout } from '../../lib/fouten';
+import { laatSchrijffout } from '../../lib/foutenLui';
 
 /**
  * Mensen: de gebruikerslijst (collectie- én per-record-savers), de
@@ -119,7 +119,7 @@ export function useMensenData(ctx: DataCtx) {
       }
     } catch (error: any) {
       console.error('Error saving users:', error);
-      showToast(schrijffout('Opslaan van gebruikers', error), 'error');
+      laatSchrijffout('Opslaan van gebruikers', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };
