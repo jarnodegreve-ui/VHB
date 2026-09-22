@@ -77,3 +77,33 @@ describe('Beheer updates: lege velden', () => {
     await act(async () => { klaar(true); });
   });
 });
+
+describe('Beheer updates op desktop: onbewaarde invoer', () => {
+  const UPDATES = [
+    { id: 'u1', date: '1/9/2026', title: 'Eerste', content: 'Tekst een', category: 'algemeen' as const },
+    { id: 'u2', date: '2/9/2026', title: 'Tweede', content: 'Tekst twee', category: 'algemeen' as const },
+  ];
+
+  it('een andere update kiezen of Annuleren vraagt eerst; Verder bewerken houdt de invoer', async () => {
+    desktop = true;
+    render(<ManageUpdatesView {...props()} updates={UPDATES} />);
+    const titel = await screen.findByLabelText('Titel') as HTMLInputElement;
+    expect(titel.value).toBe('Eerste');
+    fireEvent.change(titel, { target: { value: 'Eerste, aangepast' } });
+
+    await act(async () => { fireEvent.click(screen.getByText('Tweede').closest('button')!); });
+    expect(screen.getByRole('dialog', { name: 'Wijzigingen niet bewaren?' })).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Verder bewerken' })); });
+    expect((screen.getByLabelText('Titel') as HTMLInputElement).value).toBe('Eerste, aangepast');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Annuleren' })); });
+    expect(screen.getByRole('dialog', { name: 'Wijzigingen niet bewaren?' })).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Niet bewaren' })); });
+    expect((screen.getByLabelText('Titel') as HTMLInputElement).value).toBe('Eerste');
+
+    // Schoon formulier: de wissel gaat zonder vraag (de inhoud wisselt met
+    // een korte overgang, vandaar waitFor).
+    await act(async () => { fireEvent.click(screen.getByText('Tweede').closest('button')!); });
+    await waitFor(() => expect((screen.getByLabelText('Titel') as HTMLInputElement).value).toBe('Tweede'));
+  });
+});

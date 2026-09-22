@@ -16,7 +16,7 @@ import { meldSchrijffout } from '../../lib/fouten';
 import { Formulier } from '../../components/Formulier';
 import { diversionSchema } from '../../../shared/schemas/diversion';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
-import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
+import { DetailPaneel, MasterDetail, useDetailPoort, useStandaardKeuze } from '../../components/DetailPaneel';
 import { ActieMenu } from '../../components/ActieMenu';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 import { useRecordParam } from '../../app/router';
@@ -68,7 +68,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   // na een geslaagde save op desktop, waar het paneel op hetzelfde record
   // blijft staan (zelfde editingId). Zo neemt useVuil een nieuwe momentopname.
   const [vulling, setVulling] = useState(0);
-  const { vuil } = useVuil({ formData, pdf: pdfFile?.name ?? null }, paneelOpen, vulling);
+  const { vuil, markeerSchoon } = useVuil({ formData, pdf: pdfFile?.name ?? null }, paneelOpen, vulling);
+  // Desktop: rij kiezen, Nieuw, Annuleren en een recordwissel via de URL
+  // vragen eerst bevestiging zolang het formulier vuil is.
+  const poort = useDetailPoort(vuil);
 
   const uploadPdf = async (id: string, file: File): Promise<string | null> => {
     if (file.size > 20 * 1024 * 1024) {
@@ -110,7 +113,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   // desktop-voorselectie (useStandaardKeuze) schrijft níét, alleen een klik.
   const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-omleidingen' });
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = () => poort.via(openNieuw);
+  const openNieuw = () => {
     setEditingId(null);
     setFormData({
       line: '',
@@ -147,7 +151,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   const sluitPaneel = () => { setPaneelOpen(false); zetRecordParam(null); };
 
   // Klik in de lijst: formulier openen én de keuze in de URL zetten.
-  const kiesOmleiding = (div: Diversion) => { handleOpenEdit(div); zetRecordParam(div.id); };
+  const kiesOmleiding = (div: Diversion) => { poort.via(() => { handleOpenEdit(div); zetRecordParam(div.id); }); };
 
   // Desktop: de eerste omleiding staat standaard open in het paneel; na
   // verwijderen schuift de keuze door naar de buur, of sluit het paneel als
@@ -176,6 +180,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     actief: !(paneelOpen && editingId === null),
     kies: handleOpenEdit,
     wis: sluitPaneel,
+    vuil,
   });
 
   const bewerkte = editingId ? diversions.find((d) => d.id === editingId) ?? null : null;
@@ -189,7 +194,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   useEffect(() => {
     if (!recordParam || (paneelOpen && editingId === recordParam)) return;
     const div = diversions.find((d) => d.id === recordParam);
-    if (div) handleOpenEdit(div);
+    // Vuil formulier: eerst vragen; "Verder bewerken" zet de URL terug op
+    // wat er open staat.
+    if (div) poort.via(() => handleOpenEdit(div), () => zetRecordParam(paneelOpen ? editingId : null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordParam, diversions]);
 
@@ -278,6 +285,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   // Geen bevestigingsmodal: meteen verwijderen, de datalaag toont 6 s een
   // toast met "Ongedaan maken" (idee 1 Jarno, 03-09).
   const handleDelete = async (id: string) => {
+    // Wie de open omleiding verwijdert, gooit de invoer bewust weg: anders
+    // hield de dirty-bewaking de keuze op het verwijderde record vast.
+    if (paneelOpen && editingId === id) markeerSchoon();
     if (onDeleteDiversion) {
       if (!(await onDeleteDiversion(id))) return;
     } else {
@@ -355,6 +365,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       subtitle={bewerkte ? `${bewerkte.title}, ${lijnLabel(bewerkte.line).toLowerCase()}` : 'Vul de details in en voeg eventueel een PDF toe.'}
       sleutel={editingId ?? 'nieuw'}
       vuil={vuil}
+      poort={poort}
       leegTekst="Kies een omleiding om te bewerken, of maak een nieuwe."
       leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
       chip={bewerkte ? ({ verlopen: <Badge tone="slate">Verlopen</Badge>, komend: <Badge tone="blue" stil>Komend</Badge>, lopend: <Badge tone="emerald" stil>Actief</Badge> }[omleidingsFase(bewerkte)]) : undefined}

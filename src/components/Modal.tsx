@@ -19,7 +19,9 @@ import { Button } from './primitives';
  * Buiten een overlay roept `sluitVia` de functie gewoon aan. Een geslaagde
  * save sluit via de eigen `onClose` en passeert de vraag dus nooit.
  */
-export type SluitVia = (fn: () => void) => boolean;
+/** `bijVerder`: wat er moet gebeuren als de gebruiker kiest voor "Verder
+ *  bewerken" (bv. de URL terugzetten op het record dat open blijft). */
+export type SluitVia = (fn: () => void, bijVerder?: () => void) => boolean;
 export const SluitContext = createContext<SluitVia | null>(null);
 const DIRECT: SluitVia = (fn) => { fn(); return true; };
 export function useModalSluiten(): SluitVia {
@@ -62,7 +64,8 @@ export function OnbewaardDialoog({ open, onVerder, onNietBewaren }: { open: bool
 }
 
 /**
- * Gedeelde sluitpoort van Modal en SlideOver: vuil → vraag eerst.
+ * Gedeelde sluitpoort van Modal, SlideOver en het desktop-DetailPaneel
+ * (useDetailPoort): vuil → vraag eerst.
  *
  * `onNietBewaren` (optioneel) loopt alleen wanneer de gebruiker in de vraag
  * "Wijzigingen niet bewaren?" voor "Niet bewaren" kiest, vlak vóór het
@@ -72,16 +75,18 @@ export function OnbewaardDialoog({ open, onVerder, onNietBewaren }: { open: bool
  */
 export function useSluitPoort(open: boolean, vuil: boolean, onNietBewaren?: () => void) {
   const [vraag, setVraag] = useState(false);
-  const wachtend = useRef<(() => void) | null>(null);
+  const wachtend = useRef<{ fn: () => void; bijVerder?: () => void } | null>(null);
   useEffect(() => {
     if (!open) {
       setVraag(false);
       wachtend.current = null;
     }
   }, [open]);
-  const sluitVia: SluitVia = (fn) => {
+  const sluitVia: SluitVia = (fn, bijVerder) => {
     if (vuil) {
-      wachtend.current = fn;
+      // Een tweede verzoek terwijl de vraag openstaat (bv. een refetch die
+      // dezelfde URL-wissel opnieuw aanbiedt) vervangt de wachtende actie.
+      wachtend.current = { fn, bijVerder };
       setVraag(true);
       return false;
     }
@@ -89,15 +94,17 @@ export function useSluitPoort(open: boolean, vuil: boolean, onNietBewaren?: () =
     return true;
   };
   const verder = () => {
-    setVraag(false);
+    const w = wachtend.current;
     wachtend.current = null;
+    setVraag(false);
+    w?.bijVerder?.();
   };
   const nietBewaren = () => {
-    const fn = wachtend.current;
+    const w = wachtend.current;
     wachtend.current = null;
     setVraag(false);
     onNietBewaren?.();
-    fn?.();
+    w?.fn();
   };
   return { sluitVia, dialoog: <OnbewaardDialoog open={vraag} onVerder={verder} onNietBewaren={nietBewaren} /> };
 }
