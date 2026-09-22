@@ -39,12 +39,12 @@ export const dienstoverzichtToast = (planning: PlanningNaDienstoverzicht): Diens
     return { tekst: `${OPGESLAGEN} De planning hoefde niet te wijzigen.`, toon: 'success', naarRoosters: false };
   }
   // Geen matrix: er bestaat nog geen planning om bij te werken, dus ook geen
-  // omweg via Beheer roosters.
+  // omweg via Beheer planning.
   if (status === 'overgeslagen' && planning?.reden === 'geen-matrix') {
     return { tekst: OPGESLAGEN, toon: 'success', naarRoosters: false };
   }
   if (status === 'geblokkeerd' || status === 'overgeslagen' || status === 'bezet' || status === 'mislukt') {
-    const reden = String(planning?.melding ?? '').trim() || 'de reden is onbekend. Bouw de planning zelf opnieuw op in Beheer roosters.';
+    const reden = String(planning?.melding ?? '').trim() || 'de reden is onbekend. Bouw de planning zelf opnieuw op in Beheer planning.';
     return {
       tekst: `${OPGESLAGEN} Planning niet automatisch bijgewerkt: ${reden}`,
       // Alleen een technische fout is een fout van de app; een vangrail die

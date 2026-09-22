@@ -37,7 +37,7 @@ const OVERZICHT_PER_CHAUFFEUR: RapportDefinitie = {
   sortering: { kolom: 'naam', richting: 'asc' },
   print: 'liggend',
   bronNaam: 'planningsgegevens',
-  geenBron: { tekst: 'De planning komt uit de import van de maandplanning.', actie: { label: 'Naar Beheer roosters', view: 'beheer-roosters' } },
+  geenBron: { tekst: 'De planning komt uit de import van de maandplanning.', actie: { label: 'Naar Beheer planning', view: 'beheer-roosters' } },
 };
 
 const DIENSTEN_PER_DAG: RapportDefinitie = {
@@ -64,7 +64,7 @@ const DIENSTEN_PER_DAG: RapportDefinitie = {
   sortering: { kolom: 'datum', richting: 'asc' },
   print: 'liggend',
   bronNaam: 'planningsgegevens',
-  geenBron: { tekst: 'De planning komt uit de import van de maandplanning.', actie: { label: 'Naar Beheer roosters', view: 'beheer-roosters' } },
+  geenBron: { tekst: 'De planning komt uit de import van de maandplanning.', actie: { label: 'Naar Beheer planning', view: 'beheer-roosters' } },
 };
 
 /** Wat er met een openstaande dienst aan de hand is. */
@@ -92,7 +92,7 @@ const OPENSTAANDE_DIENSTEN: RapportDefinitie = {
   sortering: { kolom: 'datum', richting: 'asc' },
   print: 'staand',
   bronNaam: 'openstaande diensten',
-  geenBron: { tekst: 'Ze volgen uit de planning, en die komt uit de import van de maandplanning.', actie: { label: 'Naar Beheer roosters', view: 'beheer-roosters' } },
+  geenBron: { tekst: 'Ze volgen uit de planning, en die komt uit de import van de maandplanning.', actie: { label: 'Naar Beheer planning', view: 'beheer-roosters' } },
 };
 
 export const PLANNING_RAPPORTEN: readonly RapportDefinitie[] = [OVERZICHT_PER_CHAUFFEUR, DIENSTEN_PER_DAG, OPENSTAANDE_DIENSTEN];

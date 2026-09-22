@@ -53,7 +53,7 @@ export function SidebarNav({
         <NavSection title="Beheer" count={beheer.length} active={beheer.some((r) => r.view === currentView)}>
           <NavSubLabel>Planning</NavSubLabel>
           {planning.map(item)}
-          <NavSubLabel>Mensen</NavSubLabel>
+          <NavSubLabel>Personeel</NavSubLabel>
           {mensen.map(item)}
           <NavSubLabel>Communicatie</NavSubLabel>
           {communicatie.map(item)}

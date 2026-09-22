@@ -246,7 +246,7 @@ export function CoverageView() {
   const refetchGaps = () => zl.ververs();
 
   // Laatste matrix-import (voor het zijvak) — best-effort, zelfde bron als
-  // Beheer roosters; zonder antwoord gewoon een streepje.
+  // Beheer planning; zonder antwoord gewoon een streepje.
   const [laatsteImport, setLaatsteImport] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;

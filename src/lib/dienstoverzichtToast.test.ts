@@ -15,10 +15,10 @@ describe('dienstoverzichtToast', () => {
   });
 
   it('een geblokkeerde heropbouw is geen succesmelding en geen fout van het opslaan', () => {
-    const t = dienstoverzichtToast({ status: 'geblokkeerd', melding: 'er zijn onbekende codes. Bouw opnieuw op in Beheer roosters.' });
+    const t = dienstoverzichtToast({ status: 'geblokkeerd', melding: 'er zijn onbekende codes. Bouw opnieuw op in Beheer planning.' });
     expect(t.toon).toBe('info');
     expect(t.naarRoosters).toBe(true);
-    expect(t.tekst).toBe('Dienstoverzicht opgeslagen. Planning niet automatisch bijgewerkt: er zijn onbekende codes. Bouw opnieuw op in Beheer roosters.');
+    expect(t.tekst).toBe('Dienstoverzicht opgeslagen. Planning niet automatisch bijgewerkt: er zijn onbekende codes. Bouw opnieuw op in Beheer planning.');
   });
 
   it('een technische fout is rood, maar zegt nog altijd dat het dienstoverzicht opgeslagen is', () => {
@@ -28,7 +28,7 @@ describe('dienstoverzichtToast', () => {
     expect(t.tekst.startsWith('Dienstoverzicht opgeslagen. Planning niet automatisch bijgewerkt:')).toBe(true);
   });
 
-  it('een gewiste planning stuurt naar Beheer roosters, een ontbrekende matrix niet', () => {
+  it('een gewiste planning stuurt naar Beheer planning, een ontbrekende matrix niet', () => {
     expect(dienstoverzichtToast({ status: 'overgeslagen', reden: 'lege-planning', melding: 'de actieve planning is leeg.' }).naarRoosters).toBe(true);
     expect(dienstoverzichtToast({ status: 'overgeslagen', reden: 'geen-matrix', melding: 'x' })).toEqual({ tekst: 'Dienstoverzicht opgeslagen.', toon: 'success', naarRoosters: false });
   });

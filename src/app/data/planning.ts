@@ -156,7 +156,7 @@ export function usePlanningData(ctx: DataCtx) {
         showToast(
           melding.tekst,
           melding.toon,
-          melding.naarRoosters ? { label: 'Naar Beheer roosters', run: () => navigeer('beheer-roosters') } : undefined,
+          melding.naarRoosters ? { label: 'Naar Beheer planning', run: () => navigeer('beheer-roosters') } : undefined,
           // Lang genoeg om te lezen: de reden van een overgeslagen heropbouw
           // is een instructie, de gewone bevestiging mag snel weg.
           melding.naarRoosters ? { duurMs: 15000 } : melding.tekst.length > 60 ? { duurMs: 8000 } : undefined,
