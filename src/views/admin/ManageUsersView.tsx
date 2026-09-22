@@ -43,7 +43,7 @@ const KOLOMMEN = [
   { key: 'sessies', label: 'Toestellen' },
 ] as const;
 
-export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
+export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   title?: string;
   currentUser: User;
 }) {

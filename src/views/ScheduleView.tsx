@@ -234,7 +234,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
   return (
     <PageShell>
       <PageHeader
-        title="Mijn rooster"
+        title="Rooster"
         description={
           /* Tot wanneer de planning loopt erbij (puntje Jarno 21-09): zonder
              die regel ziet "nog geen diensten in december" er hetzelfde uit
