@@ -340,7 +340,7 @@ export function ViewLoader({ view, soort = 'lijst', kpis = 0, beschrijving = fal
   const eyebrow = view ? sectieLabel(view) : null;
   const titel = view ? routeVan(view).label : null;
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Scherm wordt geladen">
+    <div className="space-y-6" role="status" aria-busy="true" aria-label="Scherm wordt geladen">
       {/* Zelfde opbouw en maten als PageHeader: text-micro (16 px) + mt-1.5 +
           text-page-title (1,1 × 24/30 px) + mt-2 + text-body (1,55 × 15 px). */}
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:items-end">
@@ -469,7 +469,7 @@ function PaneelSkelet({ className }: { className?: string }) {
  */
 export function DashboardSkelet() {
   return (
-    <div className="space-y-5" aria-busy="true" aria-label="Scherm wordt geladen">
+    <div className="space-y-5" role="status" aria-busy="true" aria-label="Scherm wordt geladen">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-1 pt-1 md:items-end">
         <div className="min-w-0 flex-1 basis-[14rem]">
           {/* text-greeting: 1,25 rem × 1,15 (md 1,5 rem); subregel text-md. */}

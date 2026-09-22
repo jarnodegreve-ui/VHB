@@ -404,7 +404,7 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
           />
         </div>
         {toestand === 'laden' && (
-          <div className="divide-y divide-hairline-subtle" aria-busy="true" aria-label="Rapport wordt geladen">
+          <div className="divide-y divide-hairline-subtle" role="status" aria-busy="true" aria-label="Rapport wordt geladen">
             {Array.from({ length: 6 }, (_, i) => <SkeletonRow key={i} className="px-5 py-4" />)}
           </div>
         )}

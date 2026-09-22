@@ -30,7 +30,7 @@ export function AppSkeleton() {
   const kolomClass = isBreed(view) ? 'max-w-[var(--content-max-breed)]' : 'max-w-[var(--content-max)]';
   const sectie = sectieLabel(view);
   return (
-    <div className="flex h-dvh w-full overflow-hidden" aria-busy="true" aria-label="Portaal wordt geladen">
+    <div className="flex h-dvh w-full overflow-hidden" role="status" aria-busy="true" aria-label="Portaal wordt geladen">
       <aside className="hidden lg:flex w-zijbalk shrink-0 flex-col panel-dark" aria-hidden="true">
         <div className="px-5 pt-4 pb-3 flex justify-center">
           <BrandLogo tone="licht" laden className="w-40 lg:w-44 h-auto select-none block dark:hidden" />

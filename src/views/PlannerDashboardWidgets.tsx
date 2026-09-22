@@ -800,7 +800,7 @@ export function PlannerDashboardWidgets({
       <Verwissel
         laden={!activityLogGeladen}
         skelet={(
-          <div className="space-y-1.5" aria-busy="true" aria-label="Activiteit wordt geladen">
+          <div className="space-y-1.5" role="status" aria-busy="true" aria-label="Activiteit wordt geladen">
             <SkeletonRow /><SkeletonRow /><SkeletonRow />
           </div>
         )}
@@ -848,7 +848,7 @@ export function PlannerDashboardWidgets({
       seeAllLabel="Openstaande diensten"
     >
       {coverageDays === null ? (
-        <div className="space-y-1.5" aria-busy="true" aria-label="Dekking wordt geladen">
+        <div className="space-y-1.5" role="status" aria-busy="true" aria-label="Dekking wordt geladen">
           <SkeletonRow /><SkeletonRow /><SkeletonRow />
         </div>
       ) : geenVerwachtingen ? (

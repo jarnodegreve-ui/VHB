@@ -169,7 +169,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
       {zl.fout && rijen.length === 0 ? (
         <Foutkaart titel="De gele boek kon niet laden" boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && rijen.length === 0 ? (
-        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Gele boek wordt geladen">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" role="status" aria-busy="true" aria-label="Gele boek wordt geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
         </Card>
       ) : (

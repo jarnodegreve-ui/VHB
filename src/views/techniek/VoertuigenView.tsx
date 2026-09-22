@@ -165,7 +165,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
       {zl.fout && voertuigen.length === 0 ? (
         <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : zl.laden && voertuigen.length === 0 ? (
-        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Voertuigen worden geladen">
+        <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" role="status" aria-busy="true" aria-label="Voertuigen worden geladen">
           <SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" />
         </Card>
       ) : voertuigen.length === 0 ? (

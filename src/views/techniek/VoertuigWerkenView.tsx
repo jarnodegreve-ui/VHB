@@ -122,7 +122,7 @@ export function VoertuigWerkenView() {
           </div>
 
           {zlVoertuigen.laden && keuzes.length === 0 ? (
-            <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true" aria-label="Werken worden geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
+            <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" role="status" aria-busy="true" aria-label="Werken worden geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>
           ) : werken.length === 0 ? (
             <EmptyState
               illustratie={<LegeLijst />}
