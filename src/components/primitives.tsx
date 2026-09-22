@@ -236,8 +236,8 @@ export function StatusBadge({ status, map, className, stil }: {
 }
 
 /** Accentkleur (bg-klasse) van een status — voor een statusstreep langs een
- *  kaart; dezelfde tint als de dot van StatusBadge. */
-export const statusAccentClass = (status: string): string => BADGE_TONES[statusTone(status).tone].dot;
+ *  kaart of een los puntje; dezelfde tint als de dot van StatusBadge. */
+export const statusAccentClass = (status: string, map?: Record<string, StatusDef>): string => BADGE_TONES[statusTone(status, map).tone].dot;
 
 // === MicroLabel ===
 

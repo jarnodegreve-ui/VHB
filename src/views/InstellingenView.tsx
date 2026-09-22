@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Bell, BellRing, CalendarPlus, Clock, HeartPulse, Home, Info, KeyRound, LifeBuoy, LogOut, Monitor, Moon, ShieldCheck, Smartphone, Tablet, Users } from 'lucide-react';
 import { MELDING_SOORT_LABEL, type MeldingSoort } from '../../shared/meldingSoorten';
 import { UITZETBARE_MELDING_SOORTEN } from '../../shared/dashboardVoorkeuren';
+import { TOESTEL_STATUS } from '../../shared/status';
 import { Card, CardHeader } from '../components/Card';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
-import { Badge, Button, Chip, Switch } from '../components/primitives';
+import { Badge, Button, Chip, StatusBadge, Switch } from '../components/primitives';
 import { Select } from '../components/Field';
 import { ActieMenu } from '../components/ActieMenu';
 import { TweeStapsCode, TweeStapsInschrijving } from '../components/TweeStapsInschrijving';
@@ -118,8 +119,7 @@ function ToestellenSectie() {
                   <span className="flex flex-wrap items-center gap-2">
                     <span className={ingetrokken ? 'text-slate-500 line-through decoration-slate-300' : undefined}>{t.naam}</span>
                     {t.ditToestel && <Badge tone="oker" stil>Dit toestel</Badge>}
-                    {ingetrokken && <Badge tone="slate" stil>Geblokkeerd</Badge>}
-                    {t.status === 'pending' && <Badge tone="amber" stil>Wacht op goedkeuring</Badge>}
+                    {t.status !== 'approved' && <StatusBadge status={t.status} map={TOESTEL_STATUS} stil />}
                   </span>
                 )}
                 uitleg={`${t.platform}${t.kanaal ? ` · ${t.kanaal === 'app' ? 'app op beginscherm' : 'browser'}` : ''} · laatst gezien ${formatRelatief(t.laatstGezien)}`}
