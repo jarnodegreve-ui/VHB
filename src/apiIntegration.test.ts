@@ -1848,9 +1848,30 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
 
 describe('bulk-wipe-vangrail (PR #71)', () => {
   it('weigert een save die >50% van de diensten zou verwijderen (409)', async () => {
-    const res = await api('POST', '/api/services', { token: 'tok-planner', body: mem.services.slice(0, 2) });
+    // Als admin: een planner strandt eerder al op de verwijder-grens (403, zie hieronder).
+    const res = await api('POST', '/api/services', { token: 'tok-admin', body: mem.services.slice(0, 2) });
     expect(res.status).toBe(409);
     expect(mem.services).toHaveLength(6);
+  });
+
+  it('laat een planner geen dienst verwijderen, ook niet via een handgemaakte POST (403); een admin wel', async () => {
+    // UI-recht en serverrecht moeten overeenkomen (Jarno 22-09): het rijmenu
+    // toont "Verwijderen" alleen voor admins, dus de server weigert een
+    // planner-save waarin een dienst ontbreekt, ongeacht hoe die tot stand kwam.
+    const zonderLaatste = mem.services.slice(0, -1);
+    const planner = await api('POST', '/api/services', { token: 'tok-planner', body: zonderLaatste });
+    expect(planner.status).toBe(403);
+    expect(planner.json.error).toMatch(/alleen beschikbaar voor admins/);
+    expect(mem.services).toHaveLength(6); // niks gewijzigd
+
+    // Wijzigen en toevoegen blijft voor een planner gewoon kunnen.
+    const gewijzigd = await api('POST', '/api/services', { token: 'tok-planner', body: mem.services.map((s: any, i: number) => (i === 0 ? { ...s, startTime: '06:15' } : { ...s })) });
+    expect(gewijzigd.status).toBe(200);
+    expect(mem.services).toHaveLength(6);
+
+    const admin = await api('POST', '/api/services', { token: 'tok-admin', body: mem.services.slice(0, -1) });
+    expect(admin.status).toBe(200);
+    expect(mem.services).toHaveLength(5);
   });
 
   it('staat de x-bulk-replace alleen toe voor admin (planner krijgt 403)', async () => {

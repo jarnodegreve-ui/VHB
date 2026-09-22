@@ -324,10 +324,21 @@ export function mountCommunicatieRoutes(app: express.Express) {
         if (isBulkReplace && req.appUser?.role !== "admin") {
           return res.status(403).json({ error: "Bulk-import van het dienstoverzicht is alleen voor admins." });
         }
+        // Eén diff, vóór de opslag: voor de autorisatie hieronder én voor de
+        // per-dienst logregels erna.
+        const diff = diffServiceChanges(previousServices, newData);
         if (!isBulkReplace) {
           // Bulk-import vervangt bewust de hele collectie → revisie-/wipe-checks
           // alleen voor gewone bewerkingen.
           { const rp = revisionCheck(req, previousServices); if (rp) return revisionProbleemResponse(res, "Het dienstoverzicht", rp); }
+          // Diensten verwijderen is in de UI admin-only (ManageServicesView:
+          // geen "Verwijderen" in het rijmenu voor een planner). De server
+          // hield dat tot 22-09 niet tegen: een planner kon met een
+          // handgemaakte POST zonder die dienst toch verwijderen. Nu geldt
+          // dezelfde grens hier (beslissing Jarno, ronde 5, Dienstoverzicht §6).
+          if (diff.removed.length > 0 && req.appUser?.role !== "admin") {
+            return res.status(403).json({ error: "Diensten verwijderen is alleen beschikbaar voor admins." });
+          }
           const servicesRemoved = detectMassDelete(previousServices, newData);
           if (servicesRemoved !== null) return massDeleteResponse(res, servicesRemoved, previousServices.length, "diensten");
         }
@@ -345,7 +356,6 @@ export function mountCommunicatieRoutes(app: express.Express) {
         );
 
         // Per-service entries voor per-entity wijzigingsgeschiedenis
-        const diff = diffServiceChanges(previousServices, newData);
         const formatService = (s: typeof newData[number]) =>
           `Dienst ${s.serviceNumber} (${s.startTime}–${s.endTime}${s.startTime2 ? `, ${s.startTime2}–${s.endTime2}` : ''}${s.startTime3 ? `, ${s.startTime3}–${s.endTime3}` : ''}).`;
         for (const s of diff.added) {
