@@ -501,31 +501,48 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   };
   const sluitUitDienst = () => { setUitDienstUser(null); setUitDienstReden(''); };
   const uitDienstVuil = !!uitDienstUser && uitDienstReden.trim() !== '';
-  const handleUitDienst = async () => {
-    if (!uitDienstUser || isUitDienstBezig) return;
+  // Uit dienst is idempotent op de server (POST /api/users/:id/uitdienst):
+  // nogmaals op een al gedeactiveerde gebruiker geeft 200 met nullen, zonder
+  // meldingen, alleen een extra auditregel "was al gedeactiveerd"
+  // (src/apiIntegration.test.ts). Daarom mag de fouttoast "Opnieuw proberen"
+  // tonen; de poging onthoudt gebruiker en reden, ook als de modal intussen dicht is.
+  const uitDienstBezig = useRef(false);
+  const openUitDienstId = useRef<string | null>(null);
+  useEffect(() => { openUitDienstId.current = uitDienstUser ? String(uitDienstUser.id) : null; }, [uitDienstUser]);
+  const voerUitDienstUit = async (doel: User, reden: string) => {
+    if (uitDienstBezig.current) return;
+    uitDienstBezig.current = true;
+    const opnieuw = () => { void voerUitDienstUit(doel, reden); };
     try {
       setIsUitDienstBezig(true);
-      const response = await apiFetch(`/api/users/${encodeURIComponent(uitDienstUser.id)}/uitdienst`, {
+      const response = await apiFetch(`/api/users/${encodeURIComponent(doel.id)}/uitdienst`, {
         method: 'POST',
-        body: JSON.stringify(uitDienstReden.trim() ? { reden: uitDienstReden.trim() } : {}),
+        body: JSON.stringify(reden ? { reden } : {}),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) return meldSchrijffout('Uit dienst zetten', { status: response.status, message: data.details || data.error });
+      if (!response.ok) return meldSchrijffout('Uit dienst zetten', { status: response.status, message: data.details || data.error }, opnieuw);
       const { toestellen = 0, push = 0 } = data.samenvatting ?? {};
       const mislukt = Array.isArray(data.stappen) ? data.stappen.filter((s: { ok: boolean }) => !s.ok) : [];
       notify(
-        `${uitDienstUser.name} is uit dienst: account gedeactiveerd, ${toestellen} toestel${toestellen === 1 ? '' : 'len'} ingetrokken, ${push} push-abonnement${push === 1 ? '' : 'en'} gewist.`,
+        `${doel.name} is uit dienst: account gedeactiveerd, ${toestellen} toestel${toestellen === 1 ? '' : 'len'} ingetrokken, ${push} push-abonnement${push === 1 ? '' : 'en'} gewist.`,
         mislukt.length > 0 ? 'info' : 'success',
       );
       if (mislukt.length > 0) notify(`Niet gelukt: ${mislukt.map((s: { detail: string }) => s.detail).join(' ')}`, 'error');
-      setPushUserIds((prev) => { const n = new Set(prev); n.delete(String(uitDienstUser.id)); return n; });
-      sluitUitDienst();
+      setPushUserIds((prev) => { const n = new Set(prev); n.delete(String(doel.id)); return n; });
+      // Alleen de modal van déze gebruiker sluiten (een nieuwe poging kan
+      // slagen terwijl beheer intussen iemand anders open heeft).
+      if (String(openUitDienstId.current) === String(doel.id)) sluitUitDienst();
       await fetchUsers();
     } catch (error: any) {
-      meldSchrijffout('Uit dienst zetten', error);
+      meldSchrijffout('Uit dienst zetten', error, opnieuw);
     } finally {
+      uitDienstBezig.current = false;
       setIsUitDienstBezig(false);
     }
+  };
+  const handleUitDienst = async () => {
+    if (!uitDienstUser || isUitDienstBezig) return;
+    await voerUitDienstUit(uitDienstUser, uitDienstReden.trim());
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

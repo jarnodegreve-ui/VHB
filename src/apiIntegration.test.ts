@@ -6220,6 +6220,33 @@ describe('uit dienst in één handeling (POST /api/users/:id/uitdienst)', () => 
     expect(mem.activity.filter((a) => a.action === 'Uit dienst')).toHaveLength(2);
   });
 
+  it('een tweede poging (Opnieuw proberen na een verloren antwoord) verandert niets meer: zelfde eindtoestand, alleen een eerlijke auditregel', async () => {
+    mem.devices.push({ userId: '3', deviceToken: 'dev-3', name: 'iPhone', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null });
+    const eerste = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin', body: { reden: 'Einde contract' } });
+    expect(eerste.status).toBe(200);
+    const naEerste = {
+      user: JSON.stringify(mem.users.find((u: any) => u.id === '3')),
+      devices: JSON.stringify(mem.devices),
+      push: JSON.stringify(mem.pushSubscriptions),
+      andereActiviteit: mem.activity.filter((a) => a.action !== 'Uit dienst').length,
+      meldingen: mem.meldingen.length,
+    };
+    const tweede = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin', body: { reden: 'Einde contract' } });
+    expect(tweede.status).toBe(200);
+    expect(tweede.json.user.isActive).toBe(false);
+    expect(tweede.json.stappen.every((s: any) => s.ok)).toBe(true);
+    expect(tweede.json.samenvatting).toEqual({ toestellen: 0, push: 0, sessies: 'gebannen' });
+    // Gebruiker, toestellen en push-abonnementen ongewijzigd; geen andere logregels (geen tweede deactivering).
+    expect(JSON.stringify(mem.users.find((u: any) => u.id === '3'))).toBe(naEerste.user);
+    expect(JSON.stringify(mem.devices)).toBe(naEerste.devices);
+    expect(JSON.stringify(mem.pushSubscriptions)).toBe(naEerste.push);
+    expect(mem.activity.filter((a) => a.action !== 'Uit dienst')).toHaveLength(naEerste.andereActiviteit);
+    expect(mem.meldingen).toHaveLength(naEerste.meldingen);
+    const regels = mem.activity.filter((a) => a.action === 'Uit dienst');
+    expect(regels).toHaveLength(2);
+    expect(regels.map((r) => r.message).find((m) => m.includes('was al gedeactiveerd'))).toBe('Chauffeur A: account was al gedeactiveerd, 0 toestellen ingetrokken, 0 push-abonnementen gewist. Reden: Einde contract.');
+  });
+
   it('weigert een planner (403), jezelf (400) en een onbekende (404)', async () => {
     expect((await api('POST', '/api/users/3/uitdienst', { token: 'tok-planner' })).status).toBe(403);
     expect((await api('POST', '/api/users/1/uitdienst', { token: 'tok-admin' })).status).toBe(400);
