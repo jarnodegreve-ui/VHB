@@ -73,12 +73,11 @@ const DEELBUDGET_KB = {
   // paneel zelf (motion, acht iconen) is een eigen chunk, zoals bij
   // WerkvoorraadMenu. Lokaal 73,97 kB, wat op 74 geen marge meer is maar een
   // struikeldraad: de CI-runner mat dezelfde bron eerder ±0,3 kB hoger.
-  // 22-09 (fase 2, skeletten): 76 → 77. De ViewLoader tekent nu de echte
-  // kop en een lijst- of tabelvorm en woont in de schil (hij moet er staan
-  // vóór de chunk): 75,75 → 76,33 kB. Fase 2 haalt daarna met de
-  // startbundel-trim (werkvoorraad, ICS, aanwezigheid lui) ±4 kB uit de
-  // entry en zet het budget op 74.
-  index: 77,
+  // 22-09 (fase 2, startbundel-trim): 77 → 74 (na de skeletten-stap 76 → 77). De entry zakte 75,55 → 71,69 kB
+  // doordat de werkvoorraad-berekening, de agenda-export (roosterIcs +
+  // shared/ics) en de avatar-stapel lui laden (zie App.tsx); budget mee omlaag
+  // zodat die winst niet stil wegsijpelt, met dezelfde ±2 kB marge.
+  index: 74,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
@@ -100,7 +99,14 @@ const DEELBUDGET_KB = {
 // 19-09: chauffeur 86 → 66. Zonder zod-vendor meet de set 59 kB; het oude
 // budget zou zod ongemerkt laten terugkomen. Zelfde ±10 % marge.
 // 22-09: Vandaag (dagbriefing, dock-tab van de planner) in de staf-warmup: +2 kB → 128.
-const WARMUP_BUDGET_KB = { chauffeur: 66, staf: 128 };
+// 22-09 (fase 2, startbundel-trim): chauffeur 66 → 70, staf 128 → 132. Geen
+// nieuwe code: roosterIcs (1,25 kB, via het rooster), Avatar (0,64) en
+// availability (0,52) zaten in index-*.js en tellen nu als eigen chunks mee
+// in de warmup-set (gemeten 64,99 → 67,43 en 126,63 → 129,14). De entry
+// zakte tegelijk 3,86 kB, dus per saldo laadt een ingelogde gebruiker
+// minder, en het loginscherm laadt dit helemaal niet meer. Zelfde ±3 kB marge
+// als op 17-09.
+const WARMUP_BUDGET_KB = { chauffeur: 70, staf: 132 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];

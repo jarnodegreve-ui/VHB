@@ -13,7 +13,6 @@ import { GEDEELD_TOESTEL_EVENT, isGedeeldToestel, useInactiviteitsUitlog } from 
 import { AppSkeleton, heeftOpgeslagenSessie } from './app/AppSkeleton';
 import { useAppData } from './app/useAppData';
 import { AppDataProvider } from './app/AppDataContext';
-import { downloadRoosterIcs } from './lib/roosterIcs';
 import { ViewFout } from './app/ViewFout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useHistoryDismiss } from './lib/useHistoryDismiss';
@@ -26,12 +25,11 @@ import { View, User, isStaf } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, LOGIN_MELDING_KEY, vergeetEffectiefThema, wisOfflineCaches, type ToastEventDetail } from './lib/ui';
 import { apiFetch, vernieuwSessie } from './lib/api';
-import { lazyWithRetry } from './lib/lazyRetry';
+import { lazyWithRetry, metRetry } from './lib/lazyRetry';
 import { WARMUP_VIEWS, prefetchView, warmViews } from './app/viewLoaders';
 import { addBreadcrumb, reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { useAanwezigheid } from './lib/presence';
 import { meldLive } from './lib/liveSignaal';
-import { AanwezigheidStack } from './components/AanwezigheidStack';
 import { fetchPushPublicKey, getExistingSubscription, hersyncPushSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
@@ -52,7 +50,7 @@ import { OnderhoudBanner } from './components/OnderhoudBanner';
 import { useOnderhoud } from './app/useOnderhoud';
 import { UserMenu } from './components/UserMenu';
 import { MeldingenBel } from './components/MeldingenBel';
-import { berekenWerkvoorraad } from './lib/werkvoorraad';
+import type { Werkvoorraad } from './lib/werkvoorraad';
 import { LoginView } from './views/LoginView';
 import { useRealtimeSync } from './lib/realtime';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -78,11 +76,28 @@ const LazyWerkvoorraadMenu = lazyWithRetry(() => laadWerkvoorraadMenu().then((m)
 // lazy, net als bij de viewer op Mijn dag.
 const LazyRitbladViewer = lazyWithRetry(() => laadRitbladViewer().then((m) => ({ default: m.RitbladViewer })));
 const LazyTweeStapsScherm = lazyWithRetry(() => import('./app/TweeStapsScherm').then((m) => ({ default: m.TweeStapsScherm })));
+// Startbundel-trim (fase 2, 22-09): drie stukken die alleen staf of één
+// klik nodig heeft, uit index-*.js.
+// - De avatar-stapel (staf, desktop) rendert zelf null zolang er niemand
+//   anders is, dus een lege Suspense-fallback geeft geen sprong.
+const LazyAanwezigheidStack = lazyWithRetry(() => import('./components/AanwezigheidStack').then((m) => ({ default: m.AanwezigheidStack })));
+// - De agenda-download (roosterIcs + shared/ics) pas bij de klik op de knop;
+//   het avatar-menu haalt de module bij hover alvast op (laadAccountOverlays).
+const laadRoosterIcs = metRetry(() => import('./lib/roosterIcs'));
+// - De werkvoorraad-berekening (lib/werkvoorraad) laadt zodra de rol staf is
+//   (effect hieronder in App); chauffeurs halen haar nooit op. Dezelfde
+//   module zit in de chunks van WerkvoorraadMenu, het plannerdashboard en
+//   het werkvoorraadscherm, dus ze wordt één gedeelde chunk.
+type WerkvoorraadModule = typeof import('./lib/werkvoorraad');
+const laadWerkvoorraad = metRetry(() => import('./lib/werkvoorraad'));
+/** Plekje van de werkvoorraad-knop in de topbar (maat van IconButton sm). */
+const WERKVOORRAAD_PLEK = <span aria-hidden="true" className="inline-block h-11 w-11 shrink-0 sm:pointer-fine:h-8 sm:pointer-fine:w-8" />;
 /** Voorladen van de account-overlays: bij hover/focus op het avatar-menu en
  *  zodra Instellingen open staat (daar zitten dezelfde knoppen). */
 const laadAccountOverlays = () => {
   void laadChangePasswordModal();
   void laadCalendarSubscribeModal();
+  void laadRoosterIcs().catch(() => {});
   void laadProbleemMelder();
 };
 
@@ -1054,16 +1069,27 @@ export default function App() {
   // houdt de tijdsafhankelijke delen (vandaag, dagen sinds import) eerlijk
   // zonder een eigen klok: hooguit één herberekening per minuut.
   const minuutSleutel = Math.floor(Date.now() / 60_000);
-  const werkvoorraad = useMemo(
-    () => (isStafRol
-      ? berekenWerkvoorraad({
+  // De berekening zelf staat niet in de startbundel (fase 2, 22-09): de module
+  // laadt zodra de rol staf is en blijft daarna in state; tot ze er is, is de
+  // werkvoorraad null (de topbar houdt het plekje vrij, de app-badge telt 0,
+  // net als vroeger vóór de data binnen was). Voor chauffeurs laadt ze nooit.
+  const [werkvoorraadModule, setWerkvoorraadModule] = useState<WerkvoorraadModule | null>(null);
+  useEffect(() => {
+    if (!isStafRol || werkvoorraadModule) return;
+    let actief = true;
+    laadWerkvoorraad().then((m) => { if (actief) setWerkvoorraadModule(() => m); }).catch(() => {});
+    return () => { actief = false; };
+  }, [isStafRol, werkvoorraadModule]);
+  const werkvoorraad = useMemo<Werkvoorraad | null>(
+    () => (isStafRol && werkvoorraadModule
+      ? werkvoorraadModule.berekenWerkvoorraad({
           users, shifts, leaveRequests, swaps,
           matrixHistory: planningMatrixHistory, coverageDays,
           vervaldata, pendingDevices, now: new Date(),
         })
       : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isStafRol, users, shifts, leaveRequests, swaps, planningMatrixHistory, coverageDays, vervaldata, pendingDevices, minuutSleutel],
+    [isStafRol, werkvoorraadModule, users, shifts, leaveRequests, swaps, planningMatrixHistory, coverageDays, vervaldata, pendingDevices, minuutSleutel],
   );
 
   // Badge op het app-icoon (iOS 16.4+ PWA, Chromium-desktop): wat op jou
@@ -1313,7 +1339,7 @@ export default function App() {
       )}
       {showAgenda && (
         <Suspense fallback={null}>
-          <LazyCalendarSubscribeModal open onClose={() => setShowAgenda(false)} onDownload={() => downloadRoosterIcs(currentUser.name, shifts.filter((s) => String(s.driverId) === String(currentUser.id)))} />
+          <LazyCalendarSubscribeModal open onClose={() => setShowAgenda(false)} onDownload={() => { void laadRoosterIcs().then((m) => m.downloadRoosterIcs(currentUser.name, shifts.filter((s) => String(s.driverId) === String(currentUser.id)))).catch(() => {}); }} />
         </Suspense>
       )}
       {bundelOpen && (
@@ -1536,23 +1562,27 @@ export default function App() {
                   {/* Werkvoorraad — tussen de preview-toggle en de bel (idee
                       Jarno 31-08): open taken vanuit elk scherm zichtbaar;
                       verving de statuspil op het planner-dashboard. */}
-                  {isPlanner && werkvoorraad && (
+                  {isPlanner && (werkvoorraad ? (
                     // Lazy (punt 18); de fallback heeft de maat van de
                     // IconButton sm zodat de topbar niet verspringt in de
                     // oogwenk voordat de chunk (al bij het inloggen gestart) er is.
-                    <Suspense fallback={<span aria-hidden="true" className="inline-block h-11 w-11 shrink-0 sm:pointer-fine:h-8 sm:pointer-fine:w-8" />}>
+                    <Suspense fallback={WERKVOORRAAD_PLEK}>
                       <LazyWerkvoorraadMenu
                         werkvoorraad={werkvoorraad}
                         userNaam={(id) => users.find((u) => String(u.id) === String(id))?.name || 'Onbekend'}
                         onNavigate={setCurrentView}
                       />
                     </Suspense>
-                  )}
+                  ) : (
+                    // Zelfde plekje zolang de berekening (lazy module) nog
+                    // onderweg is, zodat bel en avatar niet opschuiven.
+                    WERKVOORRAAD_PLEK
+                  ))}
                   {/* Bel = meldingencentrum (06-09): eigen meldingen met
                       ongelezen-teller; de werkvoorraad-knop hiernaast blijft
                       de open taken van staf tellen. */}
                   <MeldingenBel onNavigate={setCurrentView} actief={resolvedCurrentView === 'meldingen'} />
-                  {isPlanner && <AanwezigheidStack />}
+                  {isPlanner && <Suspense fallback={null}><LazyAanwezigheidStack /></Suspense>}
                   {/* Wikkel zonder eigen doos (contents): bij hover/focus op
                       het avatar-menu de lazy account-overlays alvast ophalen. */}
                   <span className="contents" onPointerEnter={laadAccountOverlays} onFocus={laadAccountOverlays}>
