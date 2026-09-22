@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock, Wrench } from 'lucide-react';
-import { WERKCODE_LABEL, voertuigNaam, VOERTUIG_CATEGORIE_LABEL, VOERTUIG_STATUS_LABEL, VOERTUIG_TYPE_LABEL } from '../../../shared/techniek';
+import { WERKCODE_LABEL, voertuigNaam, VOERTUIG_CATEGORIE_LABEL, VOERTUIG_TYPE_LABEL } from '../../../shared/techniek';
+import { VOERTUIG_STATUS } from '../../../shared/status';
 import { notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { useRouteParam } from '../../app/router';
@@ -13,7 +14,7 @@ import { SkeletonRow } from '../../components/Skeleton';
 import { Card } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { Select } from '../../components/Field';
-import { Badge, Chip, FilterChip } from '../../components/primitives';
+import { Badge, Chip, FilterChip, StatusBadge } from '../../components/primitives';
 
 type Periode = 'jaar' | 'alles';
 
@@ -112,7 +113,7 @@ export function VoertuigWerkenView() {
               {bus.nummerplaat && <Chip mono>{bus.nummerplaat}</Chip>}
               <span className="text-slate-500">{VOERTUIG_CATEGORIE_LABEL[bus.categorie]} · {VOERTUIG_TYPE_LABEL[bus.type]}</span>
               {bus.merk && <span className="text-slate-500">{bus.merk}</span>}
-              <Badge tone={bus.status === 'actief' ? 'emerald' : bus.status === 'reserve' ? 'slate' : 'amber'} stil className="whitespace-nowrap">{VOERTUIG_STATUS_LABEL[bus.status]}</Badge>
+              <StatusBadge status={bus.status} map={VOERTUIG_STATUS} stil className="whitespace-nowrap" />
             </Card>
           )}
 

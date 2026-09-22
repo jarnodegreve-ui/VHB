@@ -7,6 +7,8 @@
  * herkennen (werktype T/C/I/L, werkcode H/O/G/Kb/Kv/D/E/L/A).
  */
 
+import { VOERTUIG_STATUS } from './status.js';
+
 export const VOERTUIG_TYPES = ['lijnbus', 'schoolbus', 'sprinter', 'privevoertuig', 'ander'] as const;
 export type VoertuigType = (typeof VOERTUIG_TYPES)[number];
 export const VOERTUIG_TYPE_LABEL: Record<VoertuigType, string> = {
@@ -42,10 +44,11 @@ export const AANDRIJVING_LABEL: Record<Aandrijving, string> = {
 
 export const VOERTUIG_STATUSSEN = ['actief', 'reserve', 'uit_dienst'] as const;
 export type VoertuigStatus = (typeof VOERTUIG_STATUSSEN)[number];
+/** Label uit de gedeelde statuswoordenschat (shared/status.ts). */
 export const VOERTUIG_STATUS_LABEL: Record<VoertuigStatus, string> = {
-  actief: 'Actief',
-  reserve: 'Reserve',
-  uit_dienst: 'Uit dienst',
+  actief: VOERTUIG_STATUS.actief.label,
+  reserve: VOERTUIG_STATUS.reserve.label,
+  uit_dienst: VOERTUIG_STATUS.uit_dienst.label,
 };
 
 /** Soort melding in het gele boek (tblWerktype in Access); volgorde en namen van Jarno 17-09. */
