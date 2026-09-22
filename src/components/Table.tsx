@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, Search, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useId, useMemo, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { tik } from '../lib/tik';
@@ -140,7 +140,7 @@ function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
             animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
             exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: DUR.fast, ease: EASE } }}
             style={{ transformOrigin: 'top right' }}
-            className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2"
+            className="absolute right-0 top-full z-menu mt-2 w-56 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2"
           >
             <MicroLabel className="px-2.5 pb-1 pt-1.5">Kolommen</MicroLabel>
             {keuzes.map((k) => {
@@ -345,12 +345,53 @@ export function BulkBar({ aantal, onWis, children, className }: { aantal: number
   );
 }
 
+/** Waar of een element binnen `#hoofdinhoud` een scrollcontainer als
+ *  voorouder heeft (overflow auto/scroll/hidden; `clip` telt niet). */
+function inScrollcontainer(el: HTMLElement): boolean {
+  for (let p = el.parentElement; p && p.id !== 'hoofdinhoud' && p !== document.body; p = p.parentElement) {
+    const s = getComputedStyle(p);
+    if (/(auto|scroll|hidden)/.test(`${s.overflowX} ${s.overflowY}`)) return true;
+  }
+  return false;
+}
+
 /** thead die onder de sticky topbar blijft hangen tijdens het scrollen. */
 export function StickyThead({ children, className }: { children: ReactNode; className?: string }) {
   // top = --sticky-top (topbar-hoogte + iOS-statusbalk-inset, index.css):
   // de scroll-root is de pagina en de topbar plakt daar bovenaan. Vroeger
   // een geraden 3,25 rem, die de safe-area en de touch-hoogte negeerde.
-  return <thead className={cn('sticky top-[var(--sticky-top)] z-10 bg-surface-white/95 backdrop-blur-[2px] [&_th]:border-b [&_th]:border-slate-200', className)}>{children}</thead>;
+  //
+  // Ronde 5 (B1): `position: sticky` rekent tegen de dichtstbijzijnde
+  // scrollcontainer. Staat de tabel in een `overflow-x-auto`-wrapper (nodig
+  // voor brede tabellen op smalle schermen), dan is dát de scrollport en
+  // duwt `top: --sticky-top` de kop meteen ±56 px omlaag, over de eerste
+  // rij heen (Dagadministratie, Dienstopbouw, Looncontrole, Werkprestaties).
+  // De kop plakt dus alleen als er géén scrollcontainer tussen zit
+  // (`TableShell sticky` gebruikt `xl:overflow-clip` precies daarvoor);
+  // anders is hij gewoon statisch. Gemeten bij mount en bij resize, want
+  // de wrapper wisselt per breakpoint.
+  const ref = useRef<HTMLTableSectionElement>(null);
+  const [statisch, setStatisch] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const meet = () => setStatisch(inScrollcontainer(el));
+    meet();
+    window.addEventListener('resize', meet);
+    return () => window.removeEventListener('resize', meet);
+  }, []);
+  return (
+    <thead
+      ref={ref}
+      className={cn(
+        statisch ? 'static' : 'sticky top-[var(--sticky-top)] z-sticky-kop backdrop-blur-[2px]',
+        'bg-surface-white/95 [&_th]:border-b [&_th]:border-slate-200',
+        className,
+      )}
+    >
+      {children}
+    </thead>
+  );
 }
 
 /** Simpele paginering: "1–25 van 240" met vorige/volgende. */

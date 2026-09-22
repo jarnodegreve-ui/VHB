@@ -85,7 +85,7 @@ export function AppSkeleton() {
             max(0.75rem, safe-area), px-1.5 py-2, tabs van min-h-11). */}
         <div
           aria-hidden="true"
-          className="md:hidden fixed left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] z-40 rounded-2xl px-1.5 py-2 bottom-dock"
+          className="md:hidden fixed left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] z-zwevend rounded-2xl px-1.5 py-2 bottom-dock"
           style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
         >
           <ul className="flex items-center justify-around">

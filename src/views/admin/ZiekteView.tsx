@@ -16,6 +16,7 @@ import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } f
 import { Button, MicroLabel, microLabelClass } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card } from '../../components/Card';
+import { OpsStat } from '../../components/ops';
 import { DateInput, Field, Select, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { ZiekteInzicht } from '../../components/ZiekteInzicht';
@@ -272,10 +273,13 @@ export function ZiekteView({
 
       <section aria-label="Ziekte vandaag" className="space-y-3">
         <p className="text-body-sm text-slate-500">Stand van {formatDayLong(today)}</p>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          <ZiekteKengetal label="Nu ziek" waarde={personenNuZiek} uitleg="unieke chauffeurs vandaag" />
-          <ZiekteKengetal label="Diensten op naam" waarde={dienstenOpNaam} uitleg="binnen geregistreerde ziekteperiodes" aandacht={dienstenOpNaam > 0} />
-          <ZiekteKengetal label="Loopt vandaag af" waarde={looptVandaagAf} uitleg="meldingen waarvan de einddatum vandaag is" aandacht={looptVandaagAf > 0} />
+        {/* kpi-raster (B4, ronde 5): op de telefoon één kaart met rijen zoals
+            Vervaldata en Overzicht; drie losse tegels lieten een gat in het
+            2-koloms raster. Vanaf sm drie tegels naast elkaar. */}
+        <div className="kpi-raster grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <OpsStat icon={<Thermometer size={16} />} tone="slate" label="Nu ziek" value={personenNuZiek} sub="unieke chauffeurs vandaag" />
+          <OpsStat icon={<CalendarDays size={16} />} tone={dienstenOpNaam > 0 ? 'oker' : 'slate'} label="Diensten op naam" value={dienstenOpNaam} sub="binnen geregistreerde ziekteperiodes" />
+          <OpsStat icon={<AlertTriangle size={16} />} tone={looptVandaagAf > 0 ? 'oker' : 'slate'} label="Loopt vandaag af" value={looptVandaagAf} sub="meldingen waarvan de einddatum vandaag is" />
         </div>
       </section>
 
@@ -541,12 +545,3 @@ export function ZiekteView({
   );
 }
 
-function ZiekteKengetal({ label, waarde, uitleg, aandacht = false }: { label: string; waarde: number; uitleg: string; aandacht?: boolean }) {
-  return (
-    <Card padding="sm" className="min-w-0" aria-label={label}>
-      <p className="text-label text-slate-600 [overflow-wrap:anywhere]">{label}</p>
-      <p className={`mt-2 text-stat ${aandacht ? 'text-amber-800' : 'text-slate-900'}`}>{waarde}</p>
-      <p className="mt-1 text-xs text-slate-500 [overflow-wrap:anywhere]">{uitleg}</p>
-    </Card>
-  );
-}

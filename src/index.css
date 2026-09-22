@@ -201,6 +201,9 @@
   --color-slate-200: #E4E6E8;
   --color-slate-300: #CDD1D5;
   --color-slate-400: #9AA1A9;
+  /* Chevron van <select> (Field.tsx): data-URI kan geen token lezen, dus
+     hier per thema, in de tint van slate-400. */
+  --select-pijl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239AA1A9' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --color-slate-500: #6E767F;
   --color-slate-600: #4F575F;
   --color-slate-700: #2C3137;
@@ -466,6 +469,7 @@ html.dark {
   --color-slate-200: #2E3237;
   --color-slate-300: #3B4045;
   --color-slate-400: #6E767F;
+  --select-pijl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236E767F' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --color-slate-500: #9AA1A9;
   --color-slate-600: #B0B6BC;
   --color-slate-700: #CDD1D5;
@@ -1159,6 +1163,30 @@ html.dark {
 @utility elev-3 { box-shadow: var(--elev-3); }
 @utility elev-4 { box-shadow: var(--elev-4); }
 @utility elev-accent { box-shadow: var(--elev-accent); }
+
+/* Z-ladder (ronde 5, 22-09). Vóór deze ladder stonden er zeventien losse
+   waarden in de code en botsten toast (120) en Modal `boven` (120),
+   DatePicker (130) en skip-link (130), InfoTip en de klikvanger van een
+   rijmenu (40). Eén laag per soort, van laag naar hoog; twee elementen op
+   dezelfde laag horen bij elkaar (scrim vóór paneel in de DOM). Lokale
+   stapeling binnen een positioned ouder (label boven de pil, nu-lijn in de
+   dienstbalk) blijft `relative z-10`, dat is geen laag van de app.
+   design-lint weigert z-[N] en z-20…50 buiten dit bestand. */
+@utility z-sticky { z-index: 10; }        /* plakkende rij- en kolomkoppen, vaste eerste kolom */
+@utility z-sticky-kop { z-index: 20; }    /* plakkende thead boven een vaste kolom */
+@utility z-sticky-hoek { z-index: 25; }   /* de hoekcel waar beide plakken (maandplanning) */
+@utility z-laag { z-index: 20; }          /* zwevend ín de inhoud: plakkende zoekbalk */
+@utility z-topbar { z-index: 30; }
+@utility z-zwevend { z-index: 40; }       /* popovers in de inhoud, dock, statusbalkstrook, PTR, zijbalk-scrim */
+@utility z-zijbalk { z-index: 50; }
+@utility z-menu { z-index: 60; }          /* topbar- en rijmenu's (incl. hun klikvanger, die vóór het menu in de DOM staat) */
+@utility z-modal { z-index: 100; }        /* Modal, SlideOver (scrim en paneel) */
+@utility z-dimmer { z-index: 110; }
+@utility z-modal-boven { z-index: 120; }  /* bevestiging bovenop een modal */
+@utility z-actiemenu { z-index: 125; }    /* ActieMenu: ook vanuit een modal */
+@utility z-toast { z-index: 130; }        /* toasts en de installatiehint: boven elke modal */
+@utility z-kiezer { z-index: 140; }       /* DatePicker: ook vanuit een modal-boven */
+@utility z-skiplink { z-index: 150; }
 
 /* Dezelfde focus-ring als het globale systeem, handmatig te zetten. */
 @utility focus-ring {

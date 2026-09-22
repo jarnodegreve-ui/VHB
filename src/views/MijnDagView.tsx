@@ -256,7 +256,7 @@ export function MijnDagView({
             {/* Tint i.p.v. vol goud (Jarno 04-09: te fel/druk): groot en mono
                 blijft de nadruk, het goud is voor de balk en "nog …". */}
             <span className="inline-flex items-center gap-2 rounded-xl border border-oker-500/30 bg-oker-500/12 px-3 py-1.5 font-mono text-xl font-bold tabular-nums tracking-[-0.01em] text-oker-800 lg:text-lg">
-              {blokken.some((b) => b.bezig) && <span className="h-2 w-2 shrink-0 rounded-full bg-oker-500 vhb-nu" aria-label="dienst bezig" />}
+              {blokken.some((b) => b.bezig) && <span className="h-2 w-2 shrink-0 rounded-full bg-oker-500 vhb-nu" role="img" aria-label="dienst bezig" />}
               {dienstnummers.length > 1 ? dienstnummers.join(' / ') : dienstnummers[0] ?? '--'}
             </span>
             <p className="text-base font-semibold text-slate-800 tabular-nums">

@@ -124,7 +124,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
         <>
           {/* Plakkende werkbalk: zoekveld + telling. top = hoogte van de
               topbar (zelfde waarde als StickyThead). */}
-          <Card padding="none" className="sticky top-[3.25rem] z-20 flex flex-wrap items-center gap-3 px-3 py-2.5">
+          <Card padding="none" className="sticky top-[var(--sticky-top)] z-laag flex flex-wrap items-center gap-3 px-3 py-2.5">
             {zoekveld}
             <span className="ml-auto text-xs font-medium tabular-nums text-slate-500">
               {filteredUsers.length} {filteredUsers.length === 1 ? 'contact' : 'contacten'}

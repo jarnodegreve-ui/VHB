@@ -81,7 +81,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               ]}
               onChange={toggleSort}
             />
-            <div className="relative min-w-0 flex-1 md:w-64 group">
+            <div className="relative min-w-0 basis-full md:basis-auto md:flex-1 md:w-64 group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
               </div>
@@ -248,7 +248,7 @@ function LoopCell({ loopnr }: { loopnr?: string }) {
 /** Uren van één dienstdeel. */
 function TimeCell({ start, end }: { start: string; end: string }) {
   return (
-    <span className="inline-flex items-center gap-2 font-medium tabular-nums text-slate-700">
+    <span className="inline-flex items-center gap-2 font-medium tabular-nums text-slate-700 whitespace-nowrap">
       <Clock size={14} className="text-oker-500" />
       {start} - {end}
     </span>

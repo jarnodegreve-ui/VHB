@@ -22,7 +22,7 @@ import { IconButton } from './primitives';
  * volledig afgeknipt (Jarno 15-09, dienst 4512). Onder de trigger als daar
  * plaats is, anders erboven. Bij scrollen volgt het menu de trigger en sluit
  * pas als die uit beeld schuift (een loutere scroll-event, bv. van het
- * scrollherstel na een navigatie, sluit hem dus niet). z-[125]: boven Modal (100/120) en SlideOver (101),
+ * scrollherstel na een navigatie, sluit hem dus niet). z-actiemenu (125): boven Modal (100/120) en SlideOver (100),
  * want DetailPaneel gebruikt dit menu binnen een SlideOver.
  */
 export type ActieMenuItem = {
@@ -184,7 +184,7 @@ export function ActieMenu({
           animate={{ opacity: 1, scale: 1, y: 0, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING } }}
           exit={{ opacity: 0, scale: 0.97, y: boven ? 4 : -4, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
           style={menuStijl}
-          className="fixed z-[125] min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2"
+          className="fixed z-actiemenu min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline elev-2"
         >
           {items.map((item, i) => (
             <div key={item.label} className={cn(item.scheiding && i > 0 && 'mt-1 border-t border-hairline-subtle pt-1')}>

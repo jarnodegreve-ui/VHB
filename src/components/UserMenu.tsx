@@ -95,7 +95,7 @@ export function UserMenu({
           animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
           exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: DUR.fast, ease: EASE } }}
           style={{ transformOrigin: 'top right' }}
-          className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-paper ring-1 ring-hairline elev-2 p-1.5 z-50"
+          className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-paper ring-1 ring-hairline elev-2 p-1.5 z-menu"
         >
           {/* Identiteit bovenaan — het kaartje dat eerst in de sidebar-voet stond. */}
           <div className="flex items-center gap-2.5 px-3 py-2.5 mb-1 border-b fine-divider">

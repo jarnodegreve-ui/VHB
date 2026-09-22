@@ -198,7 +198,11 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
             <div className="p-6"><EmptyState title={zoekTerm ? `Geen voertuigen voor “${zoek.trim()}”` : 'Geen voertuigen voor dit filter'} message="Pas de zoekterm of het filter aan." action={<Button variant="secondary" onClick={() => { setZoek(''); setFilter('alles'); }}>Zoekterm en filter wissen</Button>} /></div>
           ) : (
             <>
-              <div className="hidden md:block">
+              {/* overflow-x-auto (B2, ronde 5): met alle vervalkolommen aan
+                  is de tabel breder dan de kaart; zonder scroll viel de
+                  laatste kolom buiten beeld en brak de eerste kolom over
+                  zes regels. De kop plakt dan niet (zie StickyThead). */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
                   <StickyThead>
                     <tr>
@@ -216,8 +220,8 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                     {gesorteerd.map((r) => (
                       <tr key={r.v.id} onClick={() => setDetail(r.v)} className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
                         <Td>
-                          <p className="font-semibold text-slate-800">{voertuigNaam(r.v)}</p>
-                          <p className="text-xs font-medium text-slate-500">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</p>
+                          <p className="font-semibold text-slate-800 whitespace-nowrap">{voertuigNaam(r.v)}</p>
+                          <p className="text-xs font-medium text-slate-500 whitespace-nowrap">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</p>
                         </Td>
                         {voorkeur.zichtbaar('nummerplaat') && <Td className="font-mono text-xs">{r.v.nummerplaat ?? '—'}</Td>}
                         {voorkeur.zichtbaar('type') && <Td className="text-sm">{VOERTUIG_TYPE_LABEL[r.v.type]}</Td>}

@@ -72,7 +72,7 @@ export const DienstBalk = memo(function DienstBalk({
         >
           <span
             className={cn(
-              'absolute left-0 top-0 whitespace-nowrap font-mono font-bold tabular-nums leading-4 text-oker-700',
+              'absolute left-0 top-0 whitespace-nowrap font-mono font-bold tabular-nums leading-4 text-oker-800',
               // 2xs: compacte dienstbalk in de Vandaag-tegel, tijdlabels raken elkaar op 12 px
               compact ? 'text-2xs' : 'text-xs',
               wijzer < 8 ? 'translate-x-0' : wijzer > 92 ? '-translate-x-full' : '-translate-x-1/2',

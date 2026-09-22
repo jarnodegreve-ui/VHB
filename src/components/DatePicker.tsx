@@ -242,7 +242,7 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
       exit={{ ...(reduceMotion ? { opacity: 0 } : mobiel ? { opacity: 0, y: 24 } : { opacity: 0, scale: 0.96 }), transition: reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
       style={stijlDialoog}
       className={cn(
-        'fixed z-[130] bg-paper ring-1 ring-hairline elev-2 outline-none',
+        'fixed z-kiezer bg-paper ring-1 ring-hairline elev-2 outline-none',
         mobiel
           ? 'inset-x-0 bottom-0 rounded-t-2xl border-t border-rim p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
           // Op touch (tablet/landscape ≥640) zijn de cellen 44 px: 7 × 44 + p-3 past niet in 19.5rem.
@@ -374,7 +374,7 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: reduceMotion ? 0 : DUR.fast }}
-                  className="fixed inset-0 z-[129] bg-ink/30"
+                  className="fixed inset-0 z-kiezer bg-ink/30"
                 />
               )}
               {dialoog}

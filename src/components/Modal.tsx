@@ -165,7 +165,7 @@ export function Modal({
       // Op md+: 1rem padding rondom de modal.
       className={cn(
         'fixed inset-0 flex items-center justify-center p-2 md:p-4 bg-ink/40 backdrop-blur-sm',
-        boven ? 'z-[120]' : 'z-[100]',
+        boven ? 'z-modal-boven' : 'z-modal',
       )}
       style={{
         paddingTop: 'max(0.5rem, env(safe-area-inset-top))',

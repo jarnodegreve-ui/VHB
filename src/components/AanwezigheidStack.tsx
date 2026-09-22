@@ -50,7 +50,7 @@ export function AanwezigheidStack({ className }: { className?: string }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: DUR.fast, ease: EASE }}
-            className="absolute right-0 top-full z-40 mt-1.5 w-64 rounded-xl bg-paper p-2 ring-1 ring-hairline elev-2"
+            className="absolute right-0 top-full z-zwevend mt-1.5 w-64 rounded-xl bg-paper p-2 ring-1 ring-hairline elev-2"
           >
             <p className="text-micro px-2 pb-1.5 pt-1">Nu in het portaal</p>
             <ul className="space-y-0.5">

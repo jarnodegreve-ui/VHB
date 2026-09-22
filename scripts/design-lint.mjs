@@ -71,6 +71,10 @@ const REGELS = [
   // formatDateHuman / formatShortDay / formatDayLong ("do 17 september").
   // Deze regel kijkt naar JSX-uitvoer ({req.startDate}), niet naar sleutels
   // of URL's in template-literals.
+  // Z-ladder (ronde 5): lagen heten z-sticky, z-topbar, z-zwevend, z-menu,
+  // z-modal, z-toast… (index.css). `relative z-10` voor lokale stapeling in
+  // een positioned ouder mag; z-20…50 en z-[N] niet.
+  { naam: 'z-index buiten de ladder (gebruik z-sticky/z-topbar/z-zwevend/z-menu/z-modal/z-toast… uit index.css)', re: /(?<![\w-])(?:[\w-]+:)*z-(?:\[\d+\]|20|30|40|50)\b/g, zonderCommentaar: true },
   { naam: 'datumveld rechtstreeks in beeld (gebruik formatDatumDMJ/formatPeriodeDMJ/formatDateHuman uit lib/format)', re: /(?<![=$\w])\{[A-Za-z_$][\w$.?]*\.(?:startDate|endDate|shiftDate|returnDate|leaveStart|leaveEnd|validUntil|date|datum)\}/g, zonderCommentaar: true },
 ];
 
