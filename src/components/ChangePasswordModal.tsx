@@ -1,12 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WACHTWOORD_MIN, WACHTWOORD_HINT } from '../lib/wachtwoord';
 import { motion } from 'motion/react';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Modal } from './Modal';
+import { useVeldfouten, useVuil } from '../lib/formulier';
+import { meldSchrijffout } from '../lib/fouten';
+import { notify } from '../lib/ui';
+import { Modal, SluitKnop } from './Modal';
 import { ModalHeader } from './ui';
 import { Button } from './primitives';
 import { Field, Input } from './Field';
+import { Formulier } from './Formulier';
 
 export function ChangePasswordModal({
   open,
@@ -20,7 +24,7 @@ export function ChangePasswordModal({
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const fouten = useVeldfouten();
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Succes-timer opruimen: zonder cleanup sloot een heropende modal na
@@ -34,38 +38,42 @@ export function ChangePasswordModal({
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    setError('');
+    fouten.wis();
     setSuccess(false);
     setIsSubmitting(false);
   };
+
+  const { vuil } = useVuil({ currentPassword, newPassword, confirmPassword }, open);
 
   const handleClose = () => {
     reset();
     onClose();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  // Elke controle staat bij het veld waar ze over gaat (tranche 3A); vroeger
+  // kwamen ze allemaal in één rood blok onder het formulier.
+  const handleSubmit = async () => {
+    if (isSubmitting || success) return;
+    fouten.wis();
     setSuccess(false);
 
     if (!supabase) {
-      setError('Supabase is niet geconfigureerd.');
+      notify('Supabase is niet geconfigureerd.', 'error');
       return;
     }
 
     if (newPassword.length < WACHTWOORD_MIN) {
-      setError(`Nieuw wachtwoord moet minstens ${WACHTWOORD_MIN} tekens zijn.`);
+      fouten.zet({ nieuw: `Nieuw wachtwoord moet minstens ${WACHTWOORD_MIN} tekens zijn.` });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Wachtwoorden komen niet overeen.');
+      fouten.zet({ bevestig: 'Wachtwoorden komen niet overeen.' });
       return;
     }
 
     if (newPassword === currentPassword) {
-      setError('Nieuw wachtwoord moet verschillen van het huidige.');
+      fouten.zet({ nieuw: 'Nieuw wachtwoord moet verschillen van het huidige.' });
       return;
     }
 
@@ -78,7 +86,7 @@ export function ChangePasswordModal({
     });
 
     if (signInError) {
-      setError('Huidig wachtwoord is niet correct.');
+      fouten.zet({ huidig: 'Huidig wachtwoord is niet correct.' });
       setIsSubmitting(false);
       return;
     }
@@ -86,7 +94,8 @@ export function ChangePasswordModal({
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
 
     if (updateError) {
-      setError('Wachtwoord wijzigen is mislukt. Probeer later opnieuw.');
+      // Alleen de status: de Supabase-melding zelf is Engels.
+      meldSchrijffout('Wachtwoord wijzigen', { status: updateError.status });
       setIsSubmitting(false);
       return;
     }
@@ -99,72 +108,65 @@ export function ChangePasswordModal({
   // Op de gedeelde Modal gebouwd (was een eigen portal zonder focus-trap,
   // ESC of scroll-lock — de enige dialoog die dat allemaal miste).
   return (
-    <Modal open={open} onClose={handleClose} maxWidth="md" ariaLabel="Wachtwoord wijzigen">
+    <Modal open={open} onClose={handleClose} vuil={vuil && !success} maxWidth="md" ariaLabel="Wachtwoord wijzigen">
       <div className="flex max-h-overlay flex-col overflow-hidden">
         <ModalHeader title="Wachtwoord wijzigen" description={`Kies een nieuw wachtwoord voor ${email}.`} onClose={handleClose} />
 
-        <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5 overflow-y-auto flex-1">
-          <Field label="Huidig wachtwoord" htmlFor="cpm-current-password">
+        <Formulier onVerstuur={handleSubmit} className="p-6 md:p-7 space-y-5 overflow-y-auto flex-1">
+          <Field label="Huidig wachtwoord" htmlFor="cpm-current-password" error={fouten.fouten.huidig}>
             <Input
               id="cpm-current-password"
               type="password"
               autoComplete="current-password"
               value={currentPassword}
-              onChange={(e) => { setCurrentPassword(e.target.value); setError(''); }}
+              onChange={(e) => { setCurrentPassword(e.target.value); fouten.wisVeld('huidig'); }}
               required
               placeholder="••••••••"
             />
           </Field>
 
-          <Field label="Nieuw wachtwoord" htmlFor="cpm-new-password">
+          <Field label="Nieuw wachtwoord" htmlFor="cpm-new-password" error={fouten.fouten.nieuw}>
             <Input
               id="cpm-new-password"
               type="password"
               autoComplete="new-password"
               value={newPassword}
-              onChange={(e) => { setNewPassword(e.target.value); setError(''); }}
+              onChange={(e) => { setNewPassword(e.target.value); fouten.wisVeld('nieuw'); fouten.wisVeld('bevestig'); }}
               required
               minLength={WACHTWOORD_MIN}
               placeholder={WACHTWOORD_HINT}
             />
           </Field>
 
-          <Field label="Bevestig nieuw wachtwoord" htmlFor="cpm-confirm-password">
+          <Field label="Bevestig nieuw wachtwoord" htmlFor="cpm-confirm-password" error={fouten.fouten.bevestig}>
             <Input
               id="cpm-confirm-password"
               type="password"
               autoComplete="new-password"
               value={confirmPassword}
-              onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
+              onChange={(e) => { setConfirmPassword(e.target.value); fouten.wisVeld('bevestig'); }}
               required
               minLength={WACHTWOORD_MIN}
               placeholder="Herhaal nieuw wachtwoord"
             />
           </Field>
 
-          {error && (
-            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl">
-              <AlertTriangle size={14} className="text-red-700 shrink-0" />
-              <p className="text-red-700 text-sm font-medium">{error}</p>
-            </motion.div>
-          )}
-
           {success && (
-            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-2xl">
+            <motion.div role="status" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-2xl">
               <CheckCircle size={14} className="text-emerald-700 shrink-0" />
               <p className="text-emerald-700 text-sm font-medium">Wachtwoord succesvol gewijzigd.</p>
             </motion.div>
           )}
 
           <div className="flex gap-3 pt-2">
-            <Button variant="ghost" className="flex-1" onClick={handleClose}>
+            <SluitKnop onClose={handleClose} variant="ghost" className="flex-1" disabled={isSubmitting}>
               Annuleren
-            </Button>
-            <Button type="submit" variant="primary" className="flex-1" disabled={isSubmitting || success}>
-              {isSubmitting ? 'Opslaan…' : 'Opslaan'}
+            </SluitKnop>
+            <Button type="submit" variant="primary" className="flex-1" bezig={isSubmitting} disabled={success}>
+              Opslaan
             </Button>
           </div>
-        </form>
+        </Formulier>
       </div>
     </Modal>
   );
