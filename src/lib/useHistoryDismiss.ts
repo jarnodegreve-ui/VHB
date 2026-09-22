@@ -32,7 +32,7 @@ export function herstelOverlayUrl() {
  * De router (src/app/router.ts) negeert deze entries omdat het pad niet
  * verandert.
  */
-export function useHistoryDismiss(open: boolean, onClose: () => void) {
+export function useHistoryDismiss(open: boolean, onClose: () => void | boolean) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const idRef = useRef<string>('');
@@ -59,8 +59,14 @@ export function useHistoryDismiss(open: boolean, onClose: () => void) {
     const onPop = () => {
       // Eigen entry nog bovenaan? Dan is er iets bóven ons gesloten — blijven.
       if (window.history.state?.vhbOverlay === id) return;
+      // Een overlay met onbewaarde invoer mag weigeren (geeft false terug,
+      // tranche 3A): dan zetten we onze entry terug en blijft hij open, met
+      // dezelfde id, zodat de volgende terugknop opnieuw bij ons uitkomt.
+      if (onCloseRef.current() === false) {
+        window.history.pushState(staat, '');
+        return;
+      }
       doorTerugknop = true;
-      onCloseRef.current();
     };
     window.addEventListener('popstate', onPop);
     return () => {

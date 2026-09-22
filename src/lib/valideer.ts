@@ -9,7 +9,7 @@
  * server-veldfouten van een 400 komen via `veldfoutenUitAntwoord` in
  * hetzelfde formaat terug.
  */
-export { valideer, type Validatie } from '../../shared/schemas/basis';
+export { valideer, type Validatie } from '../../shared/schemas/valideerKern';
 
 /** Veldfouten uit een 400-antwoord `{ error: 'Ongeldige invoer', veldfouten }`;
  *  null als het antwoord geen veldfouten draagt (andere fout → toast zoals altijd). */

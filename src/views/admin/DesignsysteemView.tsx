@@ -4,6 +4,11 @@ import { ConfirmationModal, ModalHeader, PageHeader, PageShell, EmptyState, Fout
 import { Card, CardHeader } from '../../components/Card';
 import { Badge, Button, Chip, FilterChip, IconButton, Kbd, Meter, MeterVulling, MicroLabel, Pressable, Segmented, StatusBadge, Switch, TableShell, Td, Th } from '../../components/primitives';
 import { DateInput, Field, Input, SearchField, Select, Textarea } from '../../components/Field';
+import { Formulier } from '../../components/Formulier';
+import { useModalSluiten } from '../../components/Modal';
+import { useVeldfouten } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
+import { z } from 'zod';
 import { MenuItem, Popover, PopoverKop, PopoverVoet } from '../../components/Popover';
 import { useDropdown } from '../../components/useDropdown';
 import { Tooltip } from '../../components/Tooltip';
@@ -28,6 +33,19 @@ import { DUR } from '../../lib/motion';
 import { notify } from '../../lib/ui';
 import { AllesGedaan, Fout, GeenBereik, LegeLijst, NietGevonden } from '../../components/illustraties';
 import { JaarKiezer, Periodekiezer } from '../../components/Periodekiezer';
+
+/** Demo-schema voor de formuliersectie: dezelfde bouwstenen als de echte
+ *  schema's in shared/schemas, met NL-foutteksten per veld. */
+const DEMO_SCHEMA = z.object({
+  naam: z.string().trim().min(1, 'Vul een naam in.'),
+  email: z.string().trim().min(1, 'Vul een e-mailadres in.').email('Vul een geldig e-mailadres in.'),
+});
+
+/** Annuleren-knop die door de sluitpoort van de Modal gaat (useModalSluiten). */
+function VuilAnnuleren({ onClose }: { onClose: () => void }) {
+  const sluitVia = useModalSluiten();
+  return <Button variant="secondary" full onClick={() => sluitVia(onClose)}>Annuleren</Button>;
+}
 import { Chauffeurkiezer } from '../../components/Chauffeurkiezer';
 import { Voertuigkiezer } from '../../components/Voertuigkiezer';
 
@@ -120,13 +138,22 @@ export function DesignsysteemView() {
   const [segment, setSegment] = useState<'vandaag' | 'morgen' | 'week'>('vandaag');
   const [pagina, setPagina] = useState(1);
   const sort = useSort<'naam' | 'dienst'>('naam');
-  const [fout, setFout] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [bevestigOpen, setBevestigOpen] = useState(false);
   const [tab, setTab] = useState<'maand' | 'codes' | 'mensen'>('maand');
   const [uitklap, setUitklap] = useState(false);
   const [zoek2, setZoek2] = useState('');
+  // Formulier-demo (tranche 3A): zod-schema + useVeldfouten + Formulier.
+  const [demoNaam, setDemoNaam] = useState('');
+  const [demoEmail, setDemoEmail] = useState('');
+  const demoFouten = useVeldfouten();
+  const demoVerstuur = () => {
+    const data = demoFouten.controleer(DEMO_SCHEMA, { naam: demoNaam, email: demoEmail });
+    if (data) notify(`Opgeslagen: ${data.naam}.`, 'success');
+  };
+  const [vuilOpen, setVuilOpen] = useState(false);
+  const [vuilTekst, setVuilTekst] = useState('');
   const tabsId = useId();
   const menu = useDropdown();
   const dialoog = useDropdown();
@@ -357,34 +384,57 @@ export function DesignsysteemView() {
         </Rij>
       </Sectie>
 
-      <Sectie id="formulier" titel="Formulier" uitleg="Field zorgt voor label, hint en fout (aria-describedby); fouten staan bij het veld, nooit in een toast.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Naam" required hint="Voornaam en achternaam.">
-            {({ id, describedBy, invalid }) => <Input id={id} aria-describedby={describedBy} invalid={invalid} placeholder="Bart Peeters" />}
-          </Field>
-          <Field label="E-mailadres" error={fout ? 'Vul een geldig e-mailadres in.' : undefined}>
-            {({ id, describedBy, invalid }) => <Input id={id} type="email" aria-describedby={describedBy} invalid={invalid} defaultValue="bart@vhb" onBlur={() => setFout(true)} />}
-          </Field>
-          <Field label="Rol">
-            {({ id }) => (
-              <Select id={id} defaultValue="chauffeur">
+      <Sectie id="formulier" titel="Formulier" uitleg="Formulier is een echte <form>: Enter dient in en de focus gaat naar het eerste ongeldige veld. Field zorgt voor label, hint en fout; Input, Select, Textarea en DateInput erven id, aria-describedby en invalid vanzelf. Validatie via useVeldfouten met het gedeelde zod-schema; fouten staan bij het veld, nooit in een toast.">
+        <Formulier onVerstuur={demoVerstuur} noValidate>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Naam" required hint="Voornaam en achternaam." error={demoFouten.fouten.naam}>
+              <Input value={demoNaam} onChange={(e) => { setDemoNaam(e.target.value); demoFouten.wisVeld('naam'); }} placeholder="Bart Peeters" />
+            </Field>
+            <Field label="E-mailadres" required error={demoFouten.fouten.email}>
+              <Input type="email" value={demoEmail} onChange={(e) => { setDemoEmail(e.target.value); demoFouten.wisVeld('email'); }} placeholder="bart@vhb.be" />
+            </Field>
+            <Field label="Rol">
+              <Select defaultValue="chauffeur">
                 <option value="chauffeur">Chauffeur</option>
                 <option value="planner">Planner</option>
                 <option value="admin">Beheerder</option>
               </Select>
-            )}
-          </Field>
-          <Field label="Startdatum" hint="Eén datumkiezer voor alle velden; op mobiel een sheet onderaan.">
-            {({ id, describedBy, invalid }) => <DateInput id={id} aria-describedby={describedBy} invalid={invalid} value={datum} onChange={setDatum} min="2026-01-01" />}
-          </Field>
-          <Field label="Opmerking" hint="Optioneel.">
-            {({ id }) => <Textarea id={id} rows={2} placeholder="Korte toelichting…" />}
-          </Field>
-        </div>
+            </Field>
+            <Field label="Startdatum" hint="Eén datumkiezer voor alle velden; op mobiel een sheet onderaan.">
+              <DateInput value={datum} onChange={setDatum} min="2026-01-01" />
+            </Field>
+            <Field label="Opmerking" hint="Optioneel.">
+              <Textarea rows={2} placeholder="Korte toelichting…" />
+            </Field>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button type="submit" variant="primary">Opslaan (of Enter)</Button>
+            <Button variant="secondary" onClick={() => { setDemoNaam(''); setDemoEmail(''); demoFouten.wis(); }}>Leegmaken</Button>
+            <span className="text-body-sm text-slate-500">Leeg laten en indienen: de focus springt naar het eerste veld met een fout.</span>
+          </div>
+        </Formulier>
         <Rij label="Checkbox">
           <Checkbox checked={aan} onChange={setAan} label="Ik ga akkoord" />
           <Checkbox checked={false} indeterminate onChange={() => {}} label="Gedeeltelijk" />
         </Rij>
+        <Rij label="Onbewaarde invoer">
+          <Button variant="secondary" onClick={() => setVuilOpen(true)}>Modal met dirty-bescherming</Button>
+          <span className="text-body-sm text-slate-500">Typ iets en sluit met Escape, de backdrop of het kruisje: eerst “Wijzigingen niet bewaren?”.</span>
+        </Rij>
+        <Rij label="Foutcopy met vervolgstap">
+          <Button variant="secondary" onClick={() => meldSchrijffout('Opslaan', new TypeError('Failed to fetch'), () => notify('Opnieuw geprobeerd.', 'info'))}>Netwerkfout</Button>
+          <Button variant="secondary" onClick={() => meldSchrijffout('Verwijderen', Object.assign(new Error('Je bent geen beheerder van deze lijst'), { status: 403 }))}>Geen rechten (403)</Button>
+          <Button variant="secondary" onClick={() => meldSchrijffout('Bewaren')}>Onbekende oorzaak</Button>
+        </Rij>
+        <Modal open={vuilOpen} onClose={() => { setVuilOpen(false); setVuilTekst(''); }} vuil={vuilTekst !== ''} maxWidth="sm" ariaLabel="Notitie">
+          <ModalHeader title="Notitie" description="Sluiten met tekst in het veld vraagt eerst bevestiging." onClose={() => { setVuilOpen(false); setVuilTekst(''); }} />
+          <div className="space-y-4 p-6">
+            <Field label="Tekst">
+              <Textarea rows={3} value={vuilTekst} onChange={(e) => setVuilTekst(e.target.value)} placeholder="Typ iets…" />
+            </Field>
+            <VuilAnnuleren onClose={() => { setVuilOpen(false); setVuilTekst(''); }} />
+          </div>
+        </Modal>
       </Sectie>
 
       <Sectie id="rapportfilters" titel="Rapportfilters" uitleg="De filterbouwstenen van de pagina Rapporten, ook los bruikbaar: Periodekiezer (snelkeuze plus de twee datums, zone-loze ISO), JaarKiezer, Chauffeurkiezer en Voertuigkiezer (Select met Alle, gesorteerd, wie uit dienst is in een eigen groep). De tabel en het blad erbij zijn RapportTabel en PrintBlad.">

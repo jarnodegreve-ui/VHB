@@ -5,7 +5,7 @@ import type { View } from '../types';
 import { routeVan, sectieLabel } from '../app/routes';
 import { versheidTekst, type Versheid } from '../lib/zelfLadend';
 import { Button } from './primitives';
-import { Modal } from './Modal';
+import { Modal, useModalSluiten } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
 import { AllesGedaan, Fout, GeenBereik, LegeLijst } from './illustraties';
 
@@ -100,6 +100,9 @@ export function ModalHeader({
   onClose?: () => void;
   leading?: React.ReactNode;
 }) {
+  // Het kruisje gaat door de sluitpoort van de Modal: met onbewaarde invoer
+  // komt eerst "Wijzigingen niet bewaren?" (tranche 3A).
+  const sluitVia = useModalSluiten();
   return (
     <div className="flex items-start justify-between gap-3 p-6 md:p-7 border-b border-hairline shrink-0">
       <div className="flex min-w-0 items-center gap-3">
@@ -114,7 +117,7 @@ export function ModalHeader({
         <button
           type="button"
           aria-label="Sluiten"
-          onClick={onClose}
+          onClick={() => sluitVia(onClose)}
           className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-surface-soft-hover hover:text-slate-700 rounded-xl transition-colors"
         >
           <X size={18} />

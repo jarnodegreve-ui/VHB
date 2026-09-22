@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Wrench } from 'lucide-react';
 import { isStaf, type User } from '../types';
-import { WERKTYPES, WERKTYPE_LABEL, DEFECT_OMSCHRIJVING_MAX, DEFECT_STATUS_LABEL, VOERTUIG_CATEGORIEEN, VOERTUIG_CATEGORIE_MEERVOUD, voertuigNaam, type Werktype } from '../../shared/techniek';
+import { WERKTYPES, WERKTYPE_LABEL, DEFECT_OMSCHRIJVING_MAX, VOERTUIG_CATEGORIEEN, VOERTUIG_CATEGORIE_MEERVOUD, voertuigNaam, type Werktype } from '../../shared/techniek';
+import { DEFECT_STATUS } from '../../shared/status';
 import { defectMeldingBodySchema } from '../../shared/schemas/techniek';
-import { valideer } from '../lib/valideer';
+import { useVeldfouten, useVuil } from '../lib/formulier';
+import { meldSchrijffout } from '../lib/fouten';
 import { notify } from '../lib/ui';
 import { formatDateHuman } from '../lib/format';
 import { laadDefecten, laadVoertuigenKort, meldDefect, TechniekFout, type Defect, type VehicleKort } from '../lib/techniek';
-import { Modal } from './Modal';
+import { Modal, SluitKnop } from './Modal';
 import { ModalHeader } from './ui';
 import { Field, Select, Textarea } from './Field';
-import { Badge, Button, FilterChip } from './primitives';
+import { Formulier } from './Formulier';
+import { Button, FilterChip, StatusBadge } from './primitives';
 
 /**
  * "Defect melden": de chauffeur (of technieker) meldt een probleem aan een
@@ -42,11 +45,12 @@ export function DefectMeldenModal({
   const [vehicleId, setVehicleId] = useState(vasteBusId ?? '');
   const [werktype, setWerktype] = useState<Werktype>('T');
   const [omschrijving, setOmschrijving] = useState('');
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  const fouten = useVeldfouten();
+  const { vuil } = useVuil({ vehicleId, werktype, omschrijving }, open);
 
   useEffect(() => {
     if (!open) return;
-    setFouten({});
+    fouten.wis();
     setLaden(true);
     void Promise.all([laadVoertuigenKort(), laadDefecten({ mijn: true, status: 'alles', limit: 5 })])
       .then(([v, d]) => { setBussen(v); setEigen(d); })
@@ -74,68 +78,63 @@ export function DefectMeldenModal({
 
   const verstuur = async () => {
     if (bezig) return;
-    const r = valideer(defectMeldingBodySchema, { vehicleId, werktype, omschrijving });
-    if (r.ok === false) { setFouten(r.fouten); return; }
+    const data = fouten.controleer(defectMeldingBodySchema, { vehicleId, werktype, omschrijving });
+    if (!data) return;
     setBezig(true);
     try {
-      const d = await meldDefect(r.data);
+      const d = await meldDefect(data);
       notify('Gemeld, de garage ziet het in de gele boek.', 'success');
       setOmschrijving('');
-      setFouten({});
+      fouten.wis();
       onGemeld?.(d);
       onClose();
     } catch (err) {
-      if (err instanceof TechniekFout && err.veldfouten) setFouten(err.veldfouten);
-      notify(err instanceof Error ? err.message : 'Melden is mislukt.', 'error');
+      // Veldfouten horen bij het veld; alles daarbuiten is één toast met een
+      // vervolgstap. Geen "Opnieuw proberen"-knop: een melding aanmaken is
+      // niet idempotent, de knop Melden staat er nog.
+      if (err instanceof TechniekFout && err.veldfouten) fouten.zet(err.veldfouten);
+      else meldSchrijffout('Melden', err);
     } finally {
       setBezig(false);
     }
   };
 
-  const statusTone = (s: Defect['status']) => (s === 'open' ? 'amber' : s === 'uitgevoerd' ? 'emerald' : 'slate');
-
   return (
-    <Modal open={open} onClose={onClose} maxWidth="md" ariaLabel="Defect melden" className="!p-0 flex flex-col">
+    <Modal open={open} onClose={onClose} vuil={vuil} maxWidth="md" ariaLabel="Defect melden" className="!p-0 flex flex-col">
       <ModalHeader
         title="Defect melden"
         description="Wat is er mis met de bus? De garage ziet je melding meteen."
         leading={<span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-oker-100 text-oker-800"><Wrench size={18} /></span>}
         onClose={onClose}
       />
-      <div className="space-y-4 p-6 md:p-7">
-        <Field label="Bus" required error={fouten.vehicleId}>
-          {({ id, invalid }) => (
-            <Select id={id} value={vehicleId} invalid={invalid} disabled={laden || Boolean(vasteBusId)} onChange={(e) => setVehicleId(e.target.value)}>
-              <option value="">{laden ? 'Bussen laden…' : 'Kies een bus'}</option>
-              {groepen.length === 1
-                ? groepen[0].items.map((v) => <option key={v.id} value={v.id}>{v.busnr}</option>)
-                : groepen.map((g) => (
-                  <optgroup key={g.categorie} label={g.label}>
-                    {g.items.map((v) => <option key={v.id} value={v.id}>{v.busnr}</option>)}
-                  </optgroup>
-                ))}
-            </Select>
-          )}
+      <Formulier onVerstuur={verstuur} noValidate className="space-y-4 p-6 md:p-7">
+        <Field label="Bus" required error={fouten.fouten.vehicleId}>
+          <Select value={vehicleId} disabled={laden || Boolean(vasteBusId)} onChange={(e) => { setVehicleId(e.target.value); fouten.wisVeld('vehicleId'); }}>
+            <option value="">{laden ? 'Bussen laden…' : 'Kies een bus'}</option>
+            {groepen.length === 1
+              ? groepen[0].items.map((v) => <option key={v.id} value={v.id}>{v.busnr}</option>)
+              : groepen.map((g) => (
+                <optgroup key={g.categorie} label={g.label}>
+                  {g.items.map((v) => <option key={v.id} value={v.id}>{v.busnr}</option>)}
+                </optgroup>
+              ))}
+          </Select>
         </Field>
-        <Field label="Soort" error={fouten.werktype}>
+        <Field label="Soort" error={fouten.fouten.werktype}>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Soort">
             {WERKTYPES.map((t) => (
               <FilterChip key={t} active={werktype === t} onClick={() => setWerktype(t)}>{WERKTYPE_LABEL[t]}</FilterChip>
             ))}
           </div>
         </Field>
-        <Field label="Wat is er mis?" required error={fouten.omschrijving} hint={`${omschrijving.length} / ${DEFECT_OMSCHRIJVING_MAX}`}>
-          {({ id, invalid }) => (
-            <Textarea
-              id={id}
-              value={omschrijving}
-              invalid={invalid}
-              rows={4}
-              maxLength={DEFECT_OMSCHRIJVING_MAX}
-              placeholder="Bijvoorbeeld: bel doet het niet, deur 2 sluit traag, schade rechts achter…"
-              onChange={(e) => setOmschrijving(e.target.value)}
-            />
-          )}
+        <Field label="Wat is er mis?" required error={fouten.fouten.omschrijving} hint={`${omschrijving.length} / ${DEFECT_OMSCHRIJVING_MAX}`}>
+          <Textarea
+            value={omschrijving}
+            rows={4}
+            maxLength={DEFECT_OMSCHRIJVING_MAX}
+            placeholder="Bijvoorbeeld: bel doet het niet, deur 2 sluit traag, schade rechts achter…"
+            onChange={(e) => { setOmschrijving(e.target.value); fouten.wisVeld('omschrijving'); }}
+          />
         </Field>
         {eigen.length > 0 && (
           <div>
@@ -148,17 +147,17 @@ export function DefectMeldenModal({
                     <p className="truncate text-xs text-slate-500">{d.omschrijving}</p>
                     <p className="text-xs text-slate-500">{formatDateHuman(d.gemeldOp.slice(0, 10))}</p>
                   </div>
-                  <Badge tone={statusTone(d.status)} stil={d.status !== 'open'} dot className="shrink-0">{DEFECT_STATUS_LABEL[d.status]}</Badge>
+                  <StatusBadge status={d.status} map={DEFECT_STATUS} stil={d.status !== 'open'} className="shrink-0" />
                 </li>
               ))}
             </ul>
           </div>
         )}
         <div className="flex gap-3 pt-1">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" onClick={() => void verstuur()} disabled={bezig || laden}>{bezig ? 'Bezig…' : 'Melden'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" bezig={bezig} disabled={laden}>Melden</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }

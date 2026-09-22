@@ -1,10 +1,97 @@
-import React, { useEffect, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { Button } from './primitives';
+
+/**
+ * Sluiten met dirty-bescherming (tranche 3A, 22-09). Een overlay met
+ * `vuil` (onbewaarde invoer) sluit niet zomaar op Escape, backdrop, de
+ * terugknop, het kruisje of Annuleren: eerst de vraag "Wijzigingen niet
+ * bewaren?". `useModalSluiten()` geeft de formulierknoppen dezelfde poort:
+ *
+ *   const sluitVia = useModalSluiten();
+ *   <Button onClick={() => sluitVia(onClose)}>Annuleren</Button>
+ *
+ * Buiten een overlay roept `sluitVia` de functie gewoon aan. Een geslaagde
+ * save sluit via de eigen `onClose` en passeert de vraag dus nooit.
+ */
+export type SluitVia = (fn: () => void) => boolean;
+export const SluitContext = createContext<SluitVia | null>(null);
+const DIRECT: SluitVia = (fn) => { fn(); return true; };
+export function useModalSluiten(): SluitVia {
+  return useContext(SluitContext) ?? DIRECT;
+}
+
+/** Annuleren/Sluiten-knop in een formulier-overlay: gaat door de sluitpoort
+ *  (de aanroeper rendert de Modal zelf en staat dus búiten de context). */
+export function SluitKnop({ onClose, onClick, ...rest }: React.ComponentProps<typeof Button> & { onClose: () => void }) {
+  const sluitVia = useModalSluiten();
+  return (
+    <Button
+      {...rest}
+      onClick={(e) => {
+        onClick?.(e);
+        sluitVia(onClose);
+      }}
+    />
+  );
+}
+
+/** De vraag zelf, bóven de overlay. Gedeeld door Modal en SlideOver. */
+export function OnbewaardDialoog({ open, onVerder, onNietBewaren }: { open: boolean; onVerder: () => void; onNietBewaren: () => void }) {
+  return (
+    <Modal open={open} onClose={onVerder} maxWidth="sm" ariaLabel="Wijzigingen niet bewaren?" boven>
+      <div className="p-6 md:p-7">
+        <h2 className="text-section-title">Wijzigingen niet bewaren?</h2>
+        <p className="mt-1.5 text-body font-normal text-slate-500">Je hebt iets gewijzigd dat nog niet is opgeslagen.</p>
+      </div>
+      <div className="flex gap-2.5 bg-slate-50/80 p-5 md:p-6">
+        <Button variant="secondary" size="lg" className="flex-1" onClick={onVerder} autoFocus>
+          Verder bewerken
+        </Button>
+        <Button variant="dangerSolid" size="lg" className="flex-1" onClick={onNietBewaren}>
+          Niet bewaren
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Gedeelde sluitpoort van Modal en SlideOver: vuil → vraag eerst. */
+export function useSluitPoort(open: boolean, vuil: boolean) {
+  const [vraag, setVraag] = useState(false);
+  const wachtend = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setVraag(false);
+      wachtend.current = null;
+    }
+  }, [open]);
+  const sluitVia: SluitVia = (fn) => {
+    if (vuil) {
+      wachtend.current = fn;
+      setVraag(true);
+      return false;
+    }
+    fn();
+    return true;
+  };
+  const verder = () => {
+    setVraag(false);
+    wachtend.current = null;
+  };
+  const nietBewaren = () => {
+    const fn = wachtend.current;
+    wachtend.current = null;
+    setVraag(false);
+    fn?.();
+  };
+  return { sluitVia, dialoog: <OnbewaardDialoog open={vraag} onVerder={verder} onNietBewaren={nietBewaren} /> };
+}
 
 // Stapel van open modals (module-scope): bij een dialoog bóven een dialoog
 // (bv. verwijder-bevestiging boven Gebruikersbeheer-modal) mogen ESC en de
@@ -36,10 +123,14 @@ export function Modal({
   dismissOnBackdrop = true,
   ariaLabel,
   boven = false,
+  vuil = false,
 }: {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  /** Onbewaarde invoer: Escape, backdrop, terugknop, kruisje en Annuleren
+   *  (via useModalSluiten) vragen eerst "Wijzigingen niet bewaren?". */
+  vuil?: boolean;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
   className?: string;
   dismissOnBackdrop?: boolean;
@@ -56,8 +147,11 @@ export function Modal({
   // "rendered more hooks" — de e2e-smoke ving dat (PR #403).
   const reduceMotion = useReducedMotion();
   const isBovenste = () => modalStack[modalStack.length - 1] === idRef.current;
-  // Terugknop/swipe-back sluit de dialoog i.p.v. de app (PWA op Android).
-  useHistoryDismiss(open, onClose);
+  // Terugknop/swipe-back sluit de dialoog i.p.v. de app (PWA op Android);
+  // met onbewaarde invoer weigert `sluit` (false) en blijft de entry staan.
+  const { sluitVia, dialoog } = useSluitPoort(open, vuil);
+  const sluit = () => sluitVia(onClose);
+  useHistoryDismiss(open, sluit);
 
   useEffect(() => {
     if (!open) return;
@@ -74,11 +168,12 @@ export function Modal({
     const onKey = (event: KeyboardEvent) => {
       // Alleen de bovenste dialoog sluit op ESC — anders klapte een
       // bevestiging én zijn onderliggende formulier in één toets dicht.
-      if (event.key === 'Escape' && isBovenste()) onClose();
+      if (event.key === 'Escape' && isBovenste()) sluit();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    // `sluit` wisselt per render; open, onClose en vuil zijn de echte inputs.
+  }, [open, onClose, vuil]);
 
   // Dialoog-semantiek + focus-beheer (zelfde patroon als SlideOver): focus
   // het paneel bij openen, houd Tab binnen de dialoog (aria-modal), en zet
@@ -167,7 +262,7 @@ export function Modal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
       exit={{ opacity: 0, pointerEvents: 'none', transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
-      onClick={dismissOnBackdrop ? onClose : undefined}
+      onClick={dismissOnBackdrop ? () => sluit() : undefined}
       // Op mobile: minimale padding zodat de modal bijna full-screen kan,
       // en respecteer safe-area (notch + home-indicator).
       // Op md+: 1rem padding rondom de modal.
@@ -217,7 +312,8 @@ export function Modal({
         // max-h die de aanroeper via className meegeeft.
         style={keyboardInset ? { maxHeight: `calc(100dvh - ${keyboardInset}px - 1rem)` } : undefined}
       >
-        {children}
+        <SluitContext.Provider value={sluitVia}>{children}</SluitContext.Provider>
+        {dialoog}
       </motion.div>
     </motion.div>
       )}

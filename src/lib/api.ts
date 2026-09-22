@@ -63,7 +63,9 @@ export async function apiJson<T = unknown>(url: string, init: ApiFetchInit = {})
     } catch {
       // negeer parse-fouten — gebruik standaard message
     }
-    throw new Error(detail || `Er ging iets mis (code ${response.status}). Probeer het opnieuw.`);
+    // De status gaat mee op de fout, zodat meldSchrijffout (src/lib/fouten.ts)
+    // de reden van de server en de juiste vervolgstap kan kiezen.
+    throw Object.assign(new Error(detail || `Er ging iets mis (code ${response.status}). Probeer het opnieuw.`), { status: response.status });
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

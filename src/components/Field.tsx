@@ -1,4 +1,4 @@
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { createContext, forwardRef, useContext, useEffect, useId, useRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Search, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DatePicker, type DatePickerProps } from './DatePicker';
@@ -20,6 +20,34 @@ import { IconButton } from './primitives';
  */
 export { inputClass };
 
+/**
+ * Wat een control van zijn Field erft (tranche 3A, 22-09): `describedBy` en
+ * `invalid` gelden voor elk control in het veld; het `id` (voor het label)
+ * mag maar één control claimen, anders staan er twee elementen met dezelfde
+ * id in de pagina. De claim loopt via een stabiel token per control, zodat
+ * StrictMode's dubbele render en een her-render dezelfde uitkomst geven.
+ */
+type FieldCtx = {
+  id: string;
+  describedBy?: string;
+  invalid: boolean;
+  required: boolean;
+  claim: (token: string) => string | undefined;
+  laatLos: (token: string) => void;
+};
+const FieldContext = createContext<FieldCtx | null>(null);
+
+/** Voor eigen controls (DatePicker, chipgroepen): erf id, describedBy en
+ *  invalid van het omringende Field. `id` alleen als nog geen control het
+ *  label heeft geclaimd en de aanroeper zelf geen id meegeeft. */
+export function useVeldContext(eigenId?: string) {
+  const ctx = useContext(FieldContext);
+  const token = useId();
+  const geclaimd = ctx && !eigenId ? ctx.claim(token) : undefined;
+  useEffect(() => () => ctx?.laatLos(token), [ctx, token]);
+  return { id: eigenId ?? geclaimd, describedBy: ctx?.describedBy, invalid: ctx?.invalid ?? false, required: ctx?.required ?? false };
+}
+
 export function Field({
   label,
   hint,
@@ -36,7 +64,9 @@ export function Field({
   /** id van het control; wordt gegenereerd als je `render` gebruikt. */
   htmlFor?: string;
   className?: string;
-  /** Het control. Als functie: krijgt `{ id, describedBy, invalid }` om zelf door te geven. */
+  /** Het control. Als functie: krijgt `{ id, describedBy, invalid }` om zelf
+   *  door te geven. Als gewone children erven Input/Select/Textarea/DateInput
+   *  id, aria-describedby en invalid vanzelf (useVeldContext). */
   children: ReactNode | ((ctx: { id: string; describedBy?: string; invalid: boolean }) => ReactNode);
 }) {
   const auto = useId();
@@ -44,13 +74,39 @@ export function Field({
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-fout` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
+  const invalid = Boolean(error);
+  // Eén control claimt het id; de claim overleeft her-renders van het
+  // control (zelfde token) en komt vrij als dat control unmount.
+  const eigenaar = useRef<string | null>(null);
+  const ctxRef = useRef<FieldCtx | null>(null);
+  const claim = (token: string) => {
+    if (htmlFor) return undefined; // de aanroeper koppelt zelf
+    if (eigenaar.current === null || eigenaar.current === token) {
+      eigenaar.current = token;
+      return id;
+    }
+    return undefined;
+  };
+  const laatLos = (token: string) => {
+    if (eigenaar.current === token) eigenaar.current = null;
+  };
+  const vorige = ctxRef.current;
+  const ctx: FieldCtx =
+    vorige && vorige.id === id && vorige.describedBy === describedBy && vorige.invalid === invalid && vorige.required === Boolean(required)
+      ? vorige
+      : { id, describedBy, invalid, required: Boolean(required), claim, laatLos };
+  ctxRef.current = ctx;
   return (
-    <div className={cn('space-y-1.5', className)}>
+    <div className={cn('space-y-1.5', className)} data-fout={error ? '' : undefined}>
       <label htmlFor={id} className="block text-label">
         {label}
         {required ? <span aria-hidden="true" className="ml-0.5 text-red-700">*</span> : null}
       </label>
-      {typeof children === 'function' ? children({ id, describedBy, invalid: Boolean(error) }) : children}
+      {typeof children === 'function' ? (
+        children({ id, describedBy, invalid })
+      ) : (
+        <FieldContext.Provider value={ctx}>{children}</FieldContext.Provider>
+      )}
       {error ? (
         <p id={errorId} role="alert" className="text-xs font-medium text-red-700">{error}</p>
       ) : hint ? (
@@ -61,8 +117,20 @@ export function Field({
 }
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(
-  function Input({ invalid, className, ...rest }, ref) {
-    return <input ref={ref} aria-invalid={invalid || undefined} className={cn(inputClass, invalid && invalidClass, className)} {...rest} />;
+  function Input({ invalid, className, id, ...rest }, ref) {
+    const veld = useVeldContext(id);
+    const ongeldig = invalid ?? veld.invalid;
+    return (
+      <input
+        ref={ref}
+        id={veld.id}
+        aria-invalid={ongeldig || undefined}
+        aria-describedby={rest['aria-describedby'] ?? veld.describedBy}
+        aria-required={rest.required || veld.required || undefined}
+        className={cn(inputClass, ongeldig && invalidClass, className)}
+        {...rest}
+      />
+    );
   },
 );
 
@@ -102,21 +170,39 @@ export const SearchField = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(
-  function Textarea({ invalid, className, rows = 3, ...rest }, ref) {
-    return <textarea ref={ref} rows={rows} aria-invalid={invalid || undefined} className={cn(inputClass, 'resize-none leading-relaxed', invalid && invalidClass, className)} {...rest} />;
+  function Textarea({ invalid, className, rows = 3, id, ...rest }, ref) {
+    const veld = useVeldContext(id);
+    const ongeldig = invalid ?? veld.invalid;
+    return (
+      <textarea
+        ref={ref}
+        id={veld.id}
+        rows={rows}
+        aria-invalid={ongeldig || undefined}
+        aria-describedby={rest['aria-describedby'] ?? veld.describedBy}
+        aria-required={rest.required || veld.required || undefined}
+        className={cn(inputClass, 'resize-none leading-relaxed', ongeldig && invalidClass, className)}
+        {...rest}
+      />
+    );
   },
 );
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(
-  function Select({ invalid, className, children, ...rest }, ref) {
+  function Select({ invalid, className, children, id, ...rest }, ref) {
+    const veld = useVeldContext(id);
+    const ongeldig = invalid ?? veld.invalid;
     return (
       // Chevron als inline style (niet als bg-*-utilities): .control-input zet
       // `background:` als shorthand en reset daarmee repeat/position — de
       // pijl werd dan als patroon herhaald over het hele veld.
       <select
         ref={ref}
-        aria-invalid={invalid || undefined}
-        className={cn(inputClass, 'appearance-none pr-9', invalid && invalidClass, className)}
+        id={veld.id}
+        aria-invalid={ongeldig || undefined}
+        aria-describedby={rest['aria-describedby'] ?? veld.describedBy}
+        aria-required={rest.required || veld.required || undefined}
+        className={cn(inputClass, 'appearance-none pr-9', ongeldig && invalidClass, className)}
         style={{
           // Tint per thema uit index.css (--select-pijl): de oude vaste
           // slate-400-hex flipte niet mee in dark (ronde 5, B6).
@@ -141,5 +227,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
  * `size="sm"` voor inline-navigatievelden (dekking, laadplein).
  */
 export const DateInput = forwardRef<HTMLButtonElement, DatePickerProps>(function DateInput(props, ref) {
-  return <DatePicker ref={ref} {...props} />;
+  const veld = useVeldContext(props.id);
+  return (
+    <DatePicker
+      ref={ref}
+      {...props}
+      id={veld.id}
+      invalid={props.invalid ?? veld.invalid}
+      aria-describedby={props['aria-describedby'] ?? veld.describedBy}
+      required={props.required ?? veld.required}
+    />
+  );
 });

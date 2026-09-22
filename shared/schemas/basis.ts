@@ -1,5 +1,7 @@
 import { z } from './zod.js';
 
+export { nlFoutmap, veldSleutel, veldfoutenVan, valideer, type Validatie } from './valideerKern.js';
+
 /**
  * Bouwstenen voor de gedeelde API-contracten (shared/schemas/*).
  *
@@ -27,12 +29,6 @@ export const verplichteTekst = (fout: string) => z.string({ error: fout }).trim(
 
 /** Kalenderdag als 'JJJJ-MM-DD' (echte datum: 2026-02-30 valt af). */
 export const isoDatum = (fout: string) => z.iso.date(fout);
-
-/** Nederlandse terugvaltekst voor checks zonder eigen tekst. */
-export const nlFoutmap = (issue: { code: string; input?: unknown }): string => {
-  if (issue.code === 'invalid_type') return issue.input === undefined ? 'Dit veld is verplicht' : 'Ongeldige waarde';
-  return 'Ongeldige invoer';
-};
 
 /** Leesbare veldnamen voor samengestelde meldingen (bv. de details van een 400). */
 export const VELD_LABELS: Record<string, string> = {
@@ -63,32 +59,6 @@ export const VELD_LABELS: Record<string, string> = {
   datum: 'datum',
   validUntil: 'vervaldatum',
 };
-
-/** Sleutel van een issue-pad: 'email', 'endDate', bij lijsten '3.email'; wortelfouten '_'. */
-export const veldSleutel = (pad: ReadonlyArray<PropertyKey>): string =>
-  pad.length === 0 ? '_' : pad.map(String).join('.');
-
-/** Eén tekst per veld (de eerste issue wint — de checks staan in leesvolgorde). */
-export const veldfoutenVan = (error: z.ZodError): Record<string, string> => {
-  const fouten: Record<string, string> = {};
-  for (const issue of error.issues) {
-    const sleutel = veldSleutel(issue.path);
-    if (!(sleutel in fouten)) fouten[sleutel] = issue.message;
-  }
-  return fouten;
-};
-
-export type Validatie<T> =
-  | { ok: true; data: T }
-  | { ok: false; fouten: Record<string, string> };
-
-/** Valideert `waarden` tegen `schema`; bij fouten één NL-tekst per veld. */
-export function valideer<S extends z.ZodType>(schema: S, waarden: unknown): Validatie<z.output<S>> {
-  const resultaat = schema.safeParse(waarden, { error: nlFoutmap });
-  return resultaat.success
-    ? { ok: true, data: resultaat.data }
-    : { ok: false, fouten: veldfoutenVan(resultaat.error) };
-}
 
 /** 'e-mailadres: Vul een geldig e-mailadres in' — voor toasts en logregels. */
 export const leesbareVeldfout = (veld: string, tekst: string): string => {
