@@ -7,6 +7,9 @@ import { notify, openPdfInNewTab } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
 import { Button, IconButton, MicroLabel } from '../../components/primitives';
 import { Field, Input } from '../../components/Field';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
 import { formatDateHuman, prettySize } from '../../lib/format';
 import type { UserDocument } from '../DocumentsView';
 
@@ -20,6 +23,10 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  // Tranche 3A: bestandsfout bij het veld; een ingevulde categorie die nog
+  // niet met een upload is meegegaan, vraagt bij sluiten eerst bevestiging.
+  const fouten = useVeldfouten();
+  const vuil = category.trim() !== '';
 
   const load = async () => {
     try {
@@ -39,7 +46,8 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
     const file = e.target.files?.[0];
     if (e.target) e.target.value = '';
     if (!file) return;
-    if (file.size > MAX_MB * 1024 * 1024) return notify(`Bestand is te groot (max ${MAX_MB} MB).`, 'error');
+    if (file.size > MAX_MB * 1024 * 1024) return fouten.zet({ bestand: `Bestand is te groot (max ${MAX_MB} MB).` });
+    fouten.wisVeld('bestand');
     setUploading(true);
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -52,12 +60,16 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
         method: 'POST',
         body: JSON.stringify({ userId: user.id, filename: file.name, category: category.trim() || undefined, dataUrl }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'upload mislukt');
+      if (!res.ok) {
+        // Aanmaken (POST): geen "Opnieuw proberen", de knop staat er nog.
+        meldSchrijffout('Uploaden', { status: res.status, message: (await res.json().catch(() => ({})))?.error });
+        return;
+      }
       notify('Document toegevoegd.', 'success');
       setCategory('');
       await load();
-    } catch (err: any) {
-      notify(err?.message || 'Uploaden is mislukt.', 'error');
+    } catch (err) {
+      meldSchrijffout('Uploaden', err);
     } finally {
       setUploading(false);
     }
@@ -66,17 +78,18 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
   const handleDelete = async (doc: UserDocument) => {
     try {
       const res = await apiFetch(`/api/documents/${doc.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw res;
       setDocs((cur) => cur.filter((d) => d.id !== doc.id));
-    } catch {
-      notify('Verwijderen is mislukt.', 'error');
+    } catch (err) {
+      // DELETE op een id: veilig te herhalen.
+      meldSchrijffout('Verwijderen', err, () => void handleDelete(doc));
     }
   };
 
   // Op de gedeelde Modal met `boven` (was een eigen portal op z-[120]) —
   // zo krijgt hij ook ESC, focus-trap en scroll-lock.
   return (
-    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={`Documenten, ${user.name}`} boven>
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="lg" ariaLabel={`Documenten, ${user.name}`} boven>
       <div className="flex max-h-[85dvh] flex-col overflow-hidden">
           <ModalHeader
             leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0"><FileText size={20} /></div>}
@@ -85,7 +98,9 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             onClose={onClose}
           />
 
-          <div className="p-6 md:p-7 border-b border-hairline shrink-0 space-y-3">
+          {/* Enter in de categorie opent de bestandskiezer (de upload start
+              zodra er een bestand gekozen is). */}
+          <Formulier onVerstuur={() => fileRef.current?.click()} className="p-6 md:p-7 border-b border-hairline shrink-0 space-y-3">
             <Field label="Categorie (optioneel)" htmlFor="document-categorie">
               <Input
                 id="document-categorie"
@@ -94,11 +109,19 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                 placeholder="bv. attest, loonbrief, reglement"
               />
             </Field>
-            <input ref={fileRef} type="file" accept={ACCEPT} onChange={handleUpload} className="hidden" />
-            <Button variant="primary" icon={<Upload size={16} />} disabled={uploading} onClick={() => fileRef.current?.click()}>
-              {uploading ? 'Uploaden…' : `Document toevoegen (PDF/afbeelding, max ${MAX_MB} MB)`}
-            </Button>
-          </div>
+            <Field label="Bestand" error={fouten.fouten.bestand}>
+              {({ id, describedBy, invalid }) => (
+                <>
+                  {/* Knop vóór het verborgen file-input: focusEersteFout
+                      neemt het eerste control in het veld. */}
+                  <Button type="submit" id={id} aria-describedby={describedBy} aria-invalid={invalid || undefined} variant="primary" icon={<Upload size={16} />} bezig={uploading}>
+                    {`Document toevoegen (PDF/afbeelding, max ${MAX_MB} MB)`}
+                  </Button>
+                  <input ref={fileRef} type="file" accept={ACCEPT} onChange={handleUpload} className="hidden" tabIndex={-1} aria-hidden="true" />
+                </>
+              )}
+            </Field>
+          </Formulier>
 
           <div className="flex-1 overflow-y-auto p-4">
             {loading ? (
