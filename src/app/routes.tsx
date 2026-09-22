@@ -63,16 +63,16 @@ export const ROUTES: readonly RouteDef[] = [
   // — Beheer › Planning —
   { view: 'vandaag', pad: 'vandaag', label: 'Vandaag', omschrijving: 'Afwezigen, open diensten, ruilen en omleidingen van één dag, met de weg naar de beslissing.', icoon: Sun, sectie: 'planning', rollen: STAF },
   { view: 'werkvoorraad', pad: 'overzicht', label: 'Overzicht', omschrijving: 'Alles wat op een beslissing van de planning wacht, op één scherm.', icoon: ListChecks, sectie: 'planning', rollen: STAF },
-  { view: 'beheer-roosters', pad: 'beheer/roosters', label: 'Beheer roosters', omschrijving: 'Importeer en herbouw de planning.', icoon: CalendarCog, sectie: 'planning', rollen: STAF },
+  { view: 'beheer-roosters', pad: 'beheer/planning', label: 'Beheer planning', omschrijving: 'Importeer en herbouw de planning.', icoon: CalendarCog, sectie: 'planning', rollen: STAF },
   { view: 'planning-matrix', pad: 'beheer/planningsoverzicht', label: 'Planningsoverzicht', omschrijving: 'Controleer de geïmporteerde matrix per dag en chauffeur.', icoon: FileText, sectie: 'planning', breed: true, rollen: STAF },
   { view: 'planning-codes', pad: 'beheer/planningscodes', label: 'Planningscodes', omschrijving: 'Betekenis van matrixcodes.', icoon: Hash, sectie: 'planning', rollen: STAF },
   { view: 'dienstoverzicht', pad: 'dienstoverzicht', label: 'Dienstoverzicht', omschrijving: 'Alle diensten, uren en blokken.', icoon: Bus, sectie: 'planning', rollen: STAF },
   { view: 'beheer-dienstoverzicht', pad: 'beheer/dienstoverzicht', label: 'Beheer dienstoverzicht', omschrijving: 'Onderhoud het dienstschema.', icoon: ClipboardList, sectie: 'planning', rollen: STAF },
   { view: 'dienstopbouw', pad: 'beheer/dienstopbouw', label: 'Dienstopbouw', omschrijving: 'Ritdelen per dienst uit de ET-export: controles, ritbladen en looncomponenten.', icoon: Route, sectie: 'planning', rollen: STAF },
-  { view: 'dagafsluiting', pad: 'beheer/dagafsluiting', label: 'Dagafsluiting', omschrijving: 'Bevestig per dag wie wat werkelijk reed, met overminuten en premies.', icoon: CalendarCheck2, sectie: 'planning', rollen: STAF },
+  { view: 'dagafsluiting', pad: 'beheer/dagadministratie', label: 'Dagadministratie', omschrijving: 'Bevestig per dag wie wat werkelijk reed, met overminuten en premies.', icoon: CalendarCheck2, sectie: 'planning', rollen: STAF },
   { view: 'looncontrole', pad: 'beheer/looncontrole', label: 'Looncontrole', omschrijving: 'Maandstand, looncodes, matricules en de Easypay-export.', icoon: Coins, sectie: 'planning', breed: true, rollen: STAF },
   { view: 'dekking', pad: 'openstaande-diensten', label: 'Openstaande diensten', kort: 'Open diensten', omschrijving: 'Niet-ingevulde diensten per dag t.o.v. het dag-type.', icoon: AlertTriangle, sectie: 'planning', breed: true, rollen: STAF },
-  // — Beheer › Mensen —
+  // — Beheer › Personeel (sectiesleutel blijft 'mensen') —
   { view: 'verlof-kalender', pad: 'beheer/verlofkalender', label: 'Verlofkalender', omschrijving: 'Maandoverzicht van alle afwezigheden.', icoon: Calendar, sectie: 'mensen', rollen: STAF },
   { view: 'ziekte', pad: 'beheer/ziekte', label: 'Ziekte', omschrijving: 'Ziekmeldingen en de diensten die daardoor open staan.', icoon: Thermometer, sectie: 'mensen', rollen: STAF },
   { view: 'vervaldata', pad: 'beheer/vervaldata', label: 'Vervaldata', omschrijving: 'Rijbewijzen, attesten en andere vervaldata.', icoon: IdCard, sectie: 'mensen', rollen: STAF },
@@ -108,6 +108,9 @@ const PER_PAD = new Map<string, RouteDef>(ROUTES.map((r) => [r.pad, r]));
 const OUDE_PADEN = new Map<string, string>([
   // 21-09: het scherm heet in de app al "Overzicht"; het pad zei nog werkvoorraad.
   ['werkvoorraad', 'overzicht'],
+  // 22-09: Beheer roosters heet Beheer planning, Dagafsluiting heet Dagadministratie.
+  ['beheer/roosters', 'beheer/planning'],
+  ['beheer/dagafsluiting', 'beheer/dagadministratie'],
 ]);
 
 export const routeVan = (view: View): RouteDef => PER_VIEW.get(view) ?? ROUTES[0];
@@ -127,13 +130,13 @@ export const magView = (rol: Role, view: View): boolean => routeVan(view).rollen
 export const isBreed = (view: View): boolean => routeVan(view).breed === true;
 
 /** Sectiewoord voor de desktop-topbar: hetzelfde woord als de zijbalk
- *  (Beheer › Planning/Mensen/Communicatie, Techniek, Systeem). 'algemeen'
+ *  (Beheer › Planning/Personeel/Communicatie, Techniek, Systeem). 'algemeen'
  *  heeft er geen: die schermen staan los bovenaan het menu en "Algemeen"
  *  boven een dashboard zegt niets (de scroll-titel doet daar het werk). */
 const SECTIE_LABEL: Record<Sectie, string | null> = {
   algemeen: null,
   planning: 'Beheer · Planning',
-  mensen: 'Beheer · Mensen',
+  mensen: 'Beheer · Personeel',
   communicatie: 'Beheer · Communicatie',
   // Eén scherm in deze sectie en het heet zelf Rapporten: een sectiewoord zou
   // "Rapporten" boven "Rapporten" zetten. Een geopend rapport zet zelf

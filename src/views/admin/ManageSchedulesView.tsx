@@ -463,7 +463,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     <PageShell>
       <PageHeader
         view="beheer-roosters"
-        title="Beheer roosters"
+        title="Beheer planning"
         actions={<AanwezigOpScherm />}
       />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">

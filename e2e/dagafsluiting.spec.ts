@@ -31,9 +31,9 @@ test('planner past een rij aan en sluit de dag af', async ({ page }) => {
       return undefined;
     },
   });
-  await page.goto(`/beheer/dagafsluiting/${gisteren}`);
+  await page.goto(`/beheer/dagadministratie/${gisteren}`);
 
-  await expect(page.getByRole('heading', { name: 'Dagafsluiting', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Dagadministratie', level: 1 })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('3 rijen')).toBeVisible();
 
   // Gereden code van Test Chauffeur naar 2607, overminuten 30.

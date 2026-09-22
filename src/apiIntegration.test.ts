@@ -1693,7 +1693,7 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     // …de planning niet, en het antwoord zegt waarom en waarheen.
     expect(res.json.planning).toMatchObject({ status: 'geblokkeerd', reden: 'onbekende-codes', unknownCodes: ['XYZ'] });
     expect(res.json.planning.melding).toContain('XYZ');
-    expect(res.json.planning.melding).toContain('Beheer roosters');
+    expect(res.json.planning.melding).toContain('Beheer planning');
     expect(mem.planning).toBe(voor);
     expect(automatischLog().map((a: any) => a.action)).toEqual(['Planning niet automatisch bijgewerkt']);
     expect(roosterPushes()).toHaveLength(0);
@@ -1737,7 +1737,7 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(res.json.success).toBe(true);
     expect(mem.services.find((s: any) => s.serviceNumber === '12').startTime).toBe('08:30');
     expect(res.json.planning.status).toBe('mislukt');
-    expect(res.json.planning.melding).toContain('Beheer roosters');
+    expect(res.json.planning.melding).toContain('Beheer planning');
     expect(mem.planning).toBe(voor);
     expect(automatischLog().map((a: any) => a.action)).toEqual(['Planning niet automatisch bijgewerkt']);
   });
@@ -1837,7 +1837,7 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(res.status).toBe(200);
     expect(res.json.success).toBe(true);
     expect(res.json.planning.status).toBe('bezet');
-    expect(res.json.planning.melding).toContain('Beheer roosters');
+    expect(res.json.planning.melding).toContain('Beheer planning');
     expect(mem.planning).toBe(voor);
     // Dezelfde toestand op de knop: 409, niets geschreven.
     const knop = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });

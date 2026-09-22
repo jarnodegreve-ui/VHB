@@ -29,7 +29,7 @@ import { apiJson } from '../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
 import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
-import { bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
+import { BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
 
 
 // Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
@@ -85,8 +85,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     message: string;
     confirmText: string;
     variant: 'danger' | 'warning';
-    run: () => void;
+    /** Tekstvak voor de weigerreden tonen (bulk-weigeren, wens Jarno 22-09). */
+    redenVeld?: boolean;
+    run: (reden?: string) => void;
   } | null>(null);
+  // Reden bij bulk-weigeren: één tekst voor alle geselecteerde aanvragen.
+  const [bulkReden, setBulkReden] = useState('');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   // Historiek standaard gecapt op 5 — de volledige lijst groeide onbegrensd.
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
@@ -407,16 +411,19 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       return next;
     });
   };
-  const bulkDecide = (status: 'approved' | 'rejected') => {
+  const bulkDecide = (status: 'approved' | 'rejected', reden?: string) => {
     const ids = leaveRequests
       .filter((r) => selectedPendingIds.has(r.id) && r.status === 'pending')
       .map((r) => r.id);
+    // Een reden hoort alleen bij weigeren; de server negeert hem toch bij
+    // goedkeuren, maar zo staat het hier ook zwart op wit.
+    const weigerReden = status === 'rejected' ? reden : undefined;
     if (onDecide) {
       // Sequentieel per record: elk met eigen conflictdetectie — een aanvraag
       // die intussen al behandeld is, geeft een melding en slaat over. Eén
       // samenvattende toast na afloop i.p.v. n stiltes.
       void (async () => {
-        const resultaat = await bulkUitvoeren(ids, (id) => onDecide(id, status, 'pending'));
+        const resultaat = await bulkUitvoeren(ids, (id) => onDecide(id, status, 'pending', weigerReden));
         meldBulkResultaat(notify, resultaat, {
           item: ['aanvraag', 'aanvragen'],
           gedaan: status === 'approved' ? 'goedgekeurd' : 'geweigerd',
@@ -427,7 +434,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       return;
     }
     const decidedAt = new Date().toISOString();
-    onSave(leaveRequests.map((r) => (ids.includes(r.id) ? { ...r, status, decidedAt } : r)));
+    onSave(leaveRequests.map((r) => (ids.includes(r.id) ? { ...r, status, decidedAt, ...(weigerReden ? { beslisReden: weigerReden } : {}) } : r)));
   };
 
   const handleBulkApprove = () => {
@@ -452,12 +459,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
   const handleBulkReject = () => {
     if (selectedPendingIds.size === 0) return;
+    const n = selectedPendingIds.size;
+    setBulkReden('');
     setConfirmAction({
-      title: 'Aanvragen weigeren',
-      message: `${selectedPendingIds.size} aanvragen weigeren? Dit kan niet ongedaan gemaakt worden.`,
+      title: n === 1 ? 'Aanvraag weigeren' : 'Aanvragen weigeren',
+      message: `${n === 1 ? 'Deze aanvraag' : `${n} aanvragen`} weigeren? Dit kan niet ongedaan gemaakt worden.`,
       confirmText: 'Weigeren',
       variant: 'danger',
-      run: () => { bulkDecide('rejected'); setSelectedPendingIds(new Set()); },
+      redenVeld: true,
+      run: (reden) => { bulkDecide('rejected', reden); setSelectedPendingIds(new Set()); },
     });
   };
 
@@ -1146,12 +1156,30 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       <ConfirmationModal
         isOpen={!!confirmAction}
         onClose={() => setConfirmAction(null)}
-        onConfirm={() => { confirmAction?.run(); setConfirmAction(null); }}
+        onConfirm={() => { confirmAction?.run(bulkReden.trim() || undefined); setConfirmAction(null); }}
         title={confirmAction?.title ?? ''}
         message={confirmAction?.message ?? ''}
         confirmText={confirmAction?.confirmText ?? 'Bevestigen'}
         variant={confirmAction?.variant ?? 'warning'}
-      />
+      >
+        {/* Weigerreden bij bulk-weigeren (wens Jarno 22-09): zelfde vak als in
+            het beoordelingspaneel; één reden voor alle geselecteerde aanvragen. */}
+        {confirmAction?.redenVeld && (
+          <Field label="Reden van afwijzing" hint="Optioneel. De chauffeur ziet dit bij zijn aanvraag en in de mail.">
+            {({ id }) => (
+              <Textarea
+                id={id}
+                autoFocus
+                value={bulkReden}
+                maxLength={BESLISREDEN_MAX}
+                onChange={(e) => setBulkReden(e.target.value)}
+                className="h-24"
+                placeholder="Bv. die week zijn er al te veel collega's vrij…"
+              />
+            )}
+          </Field>
+        )}
+      </ConfirmationModal>
     </PageShell>
   );
 

@@ -473,7 +473,7 @@ export function PlanningMatrixView({
               <EmptyState
                 variant={showOnlyIssues ? 'klaar' : 'leeg'}
                 title={showOnlyIssues ? "Geen probleemdagen gevonden" : "Nog geen matrixplanning"}
-                message={showOnlyIssues ? 'Alle geüploade dagen zijn volledig herkend.' : 'Upload eerst een Excel-matrix via Beheer roosters om hier een overzicht te zien.'}
+                message={showOnlyIssues ? 'Alle geüploade dagen zijn volledig herkend.' : 'Upload eerst een Excel-matrix via Beheer planning om hier een overzicht te zien.'}
               />
             )}
             {visibleRows.length > visibleDayRows.length ? (

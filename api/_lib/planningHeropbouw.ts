@@ -269,7 +269,7 @@ const replayTekst = (reapplied: ReplayTelling) =>
 
 const dienstLabel = (r: PlanningRij) => `${DAG_DMJ(tekst(r.date))} dienst ${tekst(r.line)}`;
 
-const NAAR_DE_KNOP = "Controleer dit en bouw de planning zelf opnieuw op in Beheer roosters.";
+const NAAR_DE_KNOP = "Controleer dit en bouw de planning zelf opnieuw op in Beheer planning.";
 
 /**
  * Bouwt de planning opnieuw op uit de opgeslagen matrix en het huidige
@@ -302,7 +302,7 @@ export const heropbouwPlanning = async (req: AuthenticatedRequest, bron: Heropbo
         status: "geblokkeerd",
         reden: "onbekende-codes",
         melding: automatisch
-          ? `er zijn onbekende codes of niet-gematchte chauffeurs (codes: ${summarizeTokens(summary.unknownCodes)}; chauffeurs: ${summarizeTokens(summary.unmatchedDrivers)}). Los dit op (planningscodes, dienstnummers of gebruikersnamen) en bouw de planning daarna opnieuw op in Beheer roosters.`
+          ? `er zijn onbekende codes of niet-gematchte chauffeurs (codes: ${summarizeTokens(summary.unknownCodes)}; chauffeurs: ${summarizeTokens(summary.unmatchedDrivers)}). Los dit op (planningscodes, dienstnummers of gebruikersnamen) en bouw de planning daarna opnieuw op in Beheer planning.`
           : "Opnieuw opbouwen geblokkeerd: er zijn onbekende codes of niet-gematchte chauffeurs. Los deze eerst op (planningscodes/gebruikersnamen) en probeer opnieuw.",
         unknownCodes: summary.unknownCodes,
         unmatchedDrivers: summary.unmatchedDrivers,
@@ -408,7 +408,7 @@ export const heropbouwPlanning = async (req: AuthenticatedRequest, bron: Heropbo
   }
 
   const melding = automatisch
-    ? "de planning werd op hetzelfde moment door iemand anders gewijzigd (import of dienstruil). Bouw de planning zo meteen zelf opnieuw op in Beheer roosters."
+    ? "de planning werd op hetzelfde moment door iemand anders gewijzigd (import of dienstruil). Bouw de planning zo meteen zelf opnieuw op in Beheer planning."
     : "De planning werd op hetzelfde moment door iemand anders gewijzigd (import of dienstruil). Probeer het zo meteen opnieuw.";
   if (automatisch) await logNietBijgewerkt(req, melding);
   return { status: "bezet", melding };
@@ -428,7 +428,7 @@ export const heropbouwNaDienstoverzicht = async (req: AuthenticatedRequest): Pro
     return await heropbouwPlanning(req, "dienstoverzicht");
   } catch (err) {
     console.error("Automatisch bijwerken van de planning na het dienstoverzicht is mislukt.", err);
-    const melding = "er ging iets mis bij het opbouwen, de planning is niet gewijzigd. Bouw ze zelf opnieuw op in Beheer roosters.";
+    const melding = "er ging iets mis bij het opbouwen, de planning is niet gewijzigd. Bouw ze zelf opnieuw op in Beheer planning.";
     try { await logNietBijgewerkt(req, melding); } catch { /* het antwoord meldt het al */ }
     return { status: "mislukt", melding };
   }

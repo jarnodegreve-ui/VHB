@@ -303,7 +303,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         <InfoTip label="Wat gebeurt er na het opslaan?" align="right">
           <p>Wijzig je tijden, delen of loopnummers, dan werkt het portaal de planning van de chauffeurs meteen zelf bij. Goedgekeurde dienstruilen blijven staan.</p>
           <p className="mt-2">Chauffeurs van wie het rooster wijzigt krijgen één melding, zodra je {ROOSTER_MELDING_RUST_MINUTEN} minuten niets meer wijzigt. Meerdere diensten na elkaar aanpassen geeft dus geen reeks meldingen.</p>
-          <p className="mt-2">Lukt het bijwerken niet, dan lees je de reden in de melding na het opslaan en bouw je de planning zelf opnieuw op in Beheer roosters. Het dienstoverzicht is dan wel gewoon opgeslagen.</p>
+          <p className="mt-2">Lukt het bijwerken niet, dan lees je de reden in de melding na het opslaan en bouw je de planning zelf opnieuw op in Beheer planning. Het dienstoverzicht is dan wel gewoon opgeslagen.</p>
         </InfoTip>
       )}
       voet={canAdminOverride ? undefined : 'Excel-import is alleen voor admins; CSV downloaden kan via het menu (…) in de kop.'}

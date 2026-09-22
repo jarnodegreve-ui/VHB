@@ -117,7 +117,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
     <PageShell>
       <PageHeader
         view="dagafsluiting"
-        title="Dagafsluiting"
+        title="Dagadministratie"
         actions={(
           <>
             <VersheidRegel {...zl.versheid} />
@@ -148,7 +148,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
       ) : voorstel ? (
         <Card className="space-y-4">
           <CardHeader title="Dag openen" description={voorstel.inPlanning ? `De planning kent ${voorstel.voorstel.filter((v) => v.planningCode).length} van de ${voorstel.voorstel.length} chauffeurs een code toe. Bij het openen wordt die gekopieerd als startpunt; daarna pas je aan wat anders liep.` : 'Deze dag staat niet in de geïmporteerde planning. Je kunt hem toch openen en alles handmatig invullen.'} />
-          {!voorstel.inPlanning && <Card tone="warning" padding="sm" className="text-xs text-amber-800">Geen planning voor deze dag: importeer eerst de periode in Beheer roosters, of open de dag leeg.</Card>}
+          {!voorstel.inPlanning && <Card tone="warning" padding="sm" className="text-xs text-amber-800">Geen planning voor deze dag: importeer eerst de periode in Beheer planning, of open de dag leeg.</Card>}
           <div className="flex flex-wrap gap-1.5">
             {voorstel.voorstel.slice(0, 60).map((v) => (
               <Badge key={v.userId} tone={v.planningCode ? 'slate' : 'amber'} stil className="whitespace-nowrap">{v.naam}: {v.planningCode ?? 'geen'}</Badge>
