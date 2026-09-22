@@ -17,7 +17,10 @@ import {
   urenTekst, verwijderVoertuig, zetVoertuigVervaldatum, type Defect, type Vehicle, type VehicleBody, type VehicleExpiry, type Werkprestatie,
 } from '../../lib/techniek';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel, ViewLoader } from '../../components/ui';
-import { Modal } from '../../components/Modal';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
+import { meldSchrijffout } from '../../lib/fouten';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
@@ -307,20 +310,44 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
   // beperkt een technieker tot zijn eigen rijen en toonde hem dus een halve fiche.
   useEffect(() => { void laadVoertuigWerken(voertuig.id, { limit: 8 }).then(setPrestaties).catch(() => setPrestaties([])); }, [voertuig.id]);
 
+  const vervalFouten = useVeldfouten();
+  // Alleen de gewijzigde soorten; vergeleken met wat de server nu heeft, zodat
+  // een soort die bewaard is meteen weer "schoon" is en een mislukte blijft staan.
+  const gewijzigd = VOERTUIG_VERVAL_SOORTEN.filter((s) => {
+    const d = draft[s]; const oud = vervaldata[s];
+    return (d.datum || '') !== (oud?.validUntil ?? '') || (d.opmerking || '') !== (oud?.opmerking ?? '');
+  });
+  const vuil = gewijzigd.length > 0;
+
   const opslaan = async () => {
     if (bezig) return;
+    vervalFouten.wis();
     setBezig(true);
-    // Alleen de gewijzigde soorten; fouten per soort, één toast (src/lib/bulk.ts).
-    const gewijzigd = VOERTUIG_VERVAL_SOORTEN.filter((s) => {
-      const d = draft[s]; const oud = vervaldata[s];
-      return (d.datum || '') !== (oud?.validUntil ?? '') || (d.opmerking || '') !== (oud?.opmerking ?? '');
+    // Fouten per soort (src/lib/bulk.ts); een veldfout van de server staat bij
+    // die soort en komt niet nog eens in de toast.
+    const veldfouten: Record<string, string> = {};
+    const errs = new Map<VoertuigVervalSoort, unknown>();
+    const resultaat = await bulkUitvoeren(gewijzigd, async (s) => {
+      try {
+        await onVervaldatum(s, draft[s].datum, draft[s].opmerking);
+      } catch (err) {
+        if (err instanceof TechniekFout && err.veldfouten) veldfouten[s] = Object.values(err.veldfouten)[0] ?? err.message;
+        errs.set(s, err);
+        throw err;
+      }
     });
-    const resultaat = await bulkUitvoeren(gewijzigd, (s) => onVervaldatum(s, draft[s].datum, draft[s].opmerking));
     setBezig(false);
-    meldBulkResultaat(notify, resultaat, {
+    if (Object.keys(veldfouten).length > 0) vervalFouten.zet(veldfouten);
+    const overig = resultaat.mislukt.filter((f) => !(f.item in veldfouten));
+    if (resultaat.gelukt.length === 0 && overig.length > 0) {
+      // Niets bewaard: één fout met vervolgstap. Opnieuw is veilig (PUT per soort).
+      meldSchrijffout('Vervaldata opslaan', errs.get(overig[0].item), () => void opslaan());
+      return;
+    }
+    meldBulkResultaat(notify, { gelukt: resultaat.gelukt, mislukt: overig, totaal: resultaat.gelukt.length + overig.length }, {
       item: ['vervaldatum', 'vervaldata'],
       gedaan: 'opgeslagen',
-      allesGelukt: 'Vervaldata opgeslagen.',
+      allesGelukt: Object.keys(veldfouten).length === 0 ? 'Vervaldata opgeslagen.' : undefined,
       rest: (f) => `, niet gelukt: ${f.map((x) => VOERTUIG_VERVAL_LABEL[x.item]).join(', ')}`,
     });
   };
@@ -329,7 +356,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
   );
 
   return (
-    <Modal open onClose={onClose} maxWidth="2xl" ariaLabel={`Voertuig ${voertuigNaam(voertuig)}`}>
+    <Modal open onClose={onClose} vuil={vuil} maxWidth="2xl" ariaLabel={`Voertuig ${voertuigNaam(voertuig)}`}>
       <div className="space-y-5 p-6">
         <CardHeader
           size="lg"
@@ -352,18 +379,20 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
           {voertuig.opmerking && <div className="col-span-2 min-w-0"><dt className="text-micro">Opmerking</dt><dd className="text-sm text-slate-700">{voertuig.opmerking}</dd></div>}
         </dl>
 
-        <section className="space-y-3">
+        <Formulier onVerstuur={opslaan} noValidate className="space-y-3">
           <CardHeader title="Vervaldata" description="Leeg laten = niet bewaken." />
           <div className="grid gap-3 sm:grid-cols-3">
             {VOERTUIG_VERVAL_SOORTEN.map((s) => (
               <div key={s} className="space-y-2 rounded-2xl bg-surface-muted p-3">
-                <Field label={VOERTUIG_VERVAL_LABEL[s]}>{({ id }) => <DateInput id={id} value={draft[s].datum} onChange={(v) => setDraft((d) => ({ ...d, [s]: { ...d[s], datum: v } }))} />}</Field>
-                <Input aria-label={`Opmerking ${VOERTUIG_VERVAL_LABEL[s]}`} value={draft[s].opmerking} maxLength={120} placeholder="Opmerking (bv. 2 stuks)" onChange={(e) => setDraft((d) => ({ ...d, [s]: { ...d[s], opmerking: e.target.value } }))} />
+                <Field label={VOERTUIG_VERVAL_LABEL[s]} error={vervalFouten.fouten[s]}>
+                  <DateInput value={draft[s].datum} onChange={(v) => { setDraft((d) => ({ ...d, [s]: { ...d[s], datum: v } })); vervalFouten.wisVeld(s); }} />
+                </Field>
+                <Input aria-label={`Opmerking ${VOERTUIG_VERVAL_LABEL[s]}`} value={draft[s].opmerking} maxLength={120} placeholder="Opmerking (bv. 2 stuks)" onChange={(e) => { setDraft((d) => ({ ...d, [s]: { ...d[s], opmerking: e.target.value } })); vervalFouten.wisVeld(s); }} />
               </div>
             ))}
           </div>
-          <div className="flex justify-end"><Button variant="primary" size="sm" onClick={() => void opslaan()} disabled={bezig}>{bezig ? 'Bezig…' : 'Vervaldata opslaan'}</Button></div>
-        </section>
+          <div className="flex justify-end"><Button type="submit" variant="primary" size="sm" bezig={bezig}>Vervaldata opslaan</Button></div>
+        </Formulier>
 
         <section className="space-y-2">
           <CardHeader title="Open defecten" aside={<span className="text-xs font-medium text-slate-500">{defecten.length}</span>} />
@@ -399,7 +428,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
             </ul>
           )}
         </section>
-        <div className="flex justify-end"><Button variant="ghost" onClick={onClose}>Sluiten</Button></div>
+        <div className="flex justify-end"><SluitKnop onClose={onClose} variant="ghost">Sluiten</SluitKnop></div>
       </div>
       {melden && (
         <Suspense fallback={<ViewLoader />}>
@@ -412,21 +441,25 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
 
 function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: Vehicle | null; onClose: () => void; onKlaar: (v: Vehicle) => void; onVerwijderd: (id: string) => void }) {
   const [form, setForm] = useState<VehicleBody>(() => voertuig ? { busnr: voertuig.busnr, kortNr: voertuig.kortNr ?? null, nummerplaat: voertuig.nummerplaat ?? '', chassisnr: voertuig.chassisnr ?? '', merk: voertuig.merk ?? '', type: voertuig.type, categorie: voertuig.categorie ?? 'bus', aandrijving: voertuig.aandrijving ?? null, status: voertuig.status, inDienst: voertuig.inDienst ?? '', uitDienst: voertuig.uitDienst ?? '', zitplaatsen: voertuig.zitplaatsen ?? null, opmerking: voertuig.opmerking ?? '' } : LEEG_FORM);
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  const fouten = useVeldfouten();
   const [bezig, setBezig] = useState(false);
-  const zet = <K extends keyof VehicleBody>(k: K, v: VehicleBody[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const { vuil } = useVuil(form);
+  const zet = <K extends keyof VehicleBody>(k: K, v: VehicleBody[K]) => { setForm((f) => ({ ...f, [k]: v })); fouten.wisVeld(k); };
   const getal = (s: string): number | null => (s.trim() === '' ? null : Number(s));
 
   const opslaan = async () => {
     if (bezig) return;
-    setBezig(true); setFouten({});
+    fouten.wis();
+    setBezig(true);
     try {
       const v = voertuig ? await bewaarVoertuig(voertuig.id, form) : await maakVoertuig(form);
       notify(voertuig ? 'Voertuig bijgewerkt.' : 'Voertuig toegevoegd.', 'success');
       onKlaar(v);
     } catch (err) {
-      if (err instanceof TechniekFout && err.veldfouten) setFouten(err.veldfouten);
-      notify(err instanceof Error ? err.message : 'Bewaren is mislukt.', 'error');
+      // Veldfouten bij het veld; de rest één toast met vervolgstap. Opnieuw
+      // alleen bij bijwerken (PUT op id), nooit bij toevoegen.
+      if (err instanceof TechniekFout && err.veldfouten) fouten.zet(err.veldfouten);
+      else meldSchrijffout('Opslaan', err, voertuig ? () => void opslaan() : undefined);
     } finally { setBezig(false); }
   };
   const verwijderen = async () => {
@@ -437,28 +470,28 @@ function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: V
       notify('Voertuig verwijderd.', 'success');
       onVerwijderd(voertuig.id);
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Verwijderen is mislukt.', 'error');
+      meldSchrijffout('Verwijderen', err);
     } finally { setBezig(false); }
   };
 
   return (
-    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={voertuig ? `Fiche van ${voertuigNaam(voertuig)} bewerken` : 'Voertuig toevoegen'} boven>
-      <div className="p-6">
+    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={voertuig ? `Fiche van ${voertuigNaam(voertuig)} bewerken` : 'Voertuig toevoegen'} boven vuil={vuil}>
+      <Formulier onVerstuur={opslaan} noValidate className="p-6">
         <CardHeader title={voertuig ? `${voertuigNaam(voertuig)}: fiche` : 'Nieuw voertuig'} />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Busnummer" required hint="Zoals op de bus, bv. 613 026" error={fouten.busnr}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.busnr} onChange={(e) => zet('busnr', e.target.value)} />}</Field>
-          <Field label="Kort nummer" hint="Zoals chauffeurs het zeggen, bv. 26" error={fouten.kortNr}>{({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="numeric" value={form.kortNr ?? ''} onChange={(e) => zet('kortNr', getal(e.target.value))} />}</Field>
-          <Field label="Nummerplaat" error={fouten.nummerplaat}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.nummerplaat ?? ''} onChange={(e) => zet('nummerplaat', e.target.value)} />}</Field>
-          <Field label="Chassisnummer" error={fouten.chassisnr}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.chassisnr ?? ''} onChange={(e) => zet('chassisnr', e.target.value)} />}</Field>
-          <Field label="Merk en model" error={fouten.merk}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.merk ?? ''} onChange={(e) => zet('merk', e.target.value)} />}</Field>
-          <Field label="Zitplaatsen" error={fouten.zitplaatsen}>{({ id, invalid }) => <Input id={id} invalid={invalid} inputMode="numeric" value={form.zitplaatsen ?? ''} onChange={(e) => zet('zitplaatsen', getal(e.target.value))} />}</Field>
-          <Field label="Categorie" error={fouten.categorie}>{({ id }) => <Select id={id} value={form.categorie} onChange={(e) => zet('categorie', e.target.value as VehicleBody['categorie'])}>{VOERTUIG_CATEGORIEEN.map((c) => <option key={c} value={c}>{VOERTUIG_CATEGORIE_LABEL[c]}</option>)}</Select>}</Field>
-          <Field label="Type" error={fouten.type}>{({ id }) => <Select id={id} value={form.type} onChange={(e) => zet('type', e.target.value as VehicleBody['type'])}>{VOERTUIG_TYPES.map((t) => <option key={t} value={t}>{VOERTUIG_TYPE_LABEL[t]}</option>)}</Select>}</Field>
-          <Field label="Aandrijving" error={fouten.aandrijving}>{({ id }) => <Select id={id} value={form.aandrijving ?? ''} onChange={(e) => zet('aandrijving', (e.target.value || null) as VehicleBody['aandrijving'])}><option value="">Onbekend</option>{AANDRIJVINGEN.map((a) => <option key={a} value={a}>{AANDRIJVING_LABEL[a]}</option>)}</Select>}</Field>
-          <Field label="Status" error={fouten.status}>{({ id }) => <Select id={id} value={form.status} onChange={(e) => zet('status', e.target.value as VehicleBody['status'])}>{VOERTUIG_STATUSSEN.map((s) => <option key={s} value={s}>{VOERTUIG_STATUS_LABEL[s]}</option>)}</Select>}</Field>
-          <Field label="In dienst sinds" error={fouten.inDienst}>{({ id }) => <DateInput id={id} value={form.inDienst ?? ''} onChange={(v) => zet('inDienst', v)} />}</Field>
-          <Field label="Uit dienst op" error={fouten.uitDienst}>{({ id }) => <DateInput id={id} value={form.uitDienst ?? ''} onChange={(v) => zet('uitDienst', v)} />}</Field>
-          <Field label="Opmerking" className="sm:col-span-2" error={fouten.opmerking}>{({ id, invalid }) => <Input id={id} invalid={invalid} value={form.opmerking ?? ''} maxLength={300} onChange={(e) => zet('opmerking', e.target.value)} />}</Field>
+          <Field label="Busnummer" required hint="Zoals op de bus, bv. 613 026" error={fouten.fouten.busnr}><Input value={form.busnr} onChange={(e) => zet('busnr', e.target.value)} /></Field>
+          <Field label="Kort nummer" hint="Zoals chauffeurs het zeggen, bv. 26" error={fouten.fouten.kortNr}><Input inputMode="numeric" value={form.kortNr ?? ''} onChange={(e) => zet('kortNr', getal(e.target.value))} /></Field>
+          <Field label="Nummerplaat" error={fouten.fouten.nummerplaat}><Input value={form.nummerplaat ?? ''} onChange={(e) => zet('nummerplaat', e.target.value)} /></Field>
+          <Field label="Chassisnummer" error={fouten.fouten.chassisnr}><Input value={form.chassisnr ?? ''} onChange={(e) => zet('chassisnr', e.target.value)} /></Field>
+          <Field label="Merk en model" error={fouten.fouten.merk}><Input value={form.merk ?? ''} onChange={(e) => zet('merk', e.target.value)} /></Field>
+          <Field label="Zitplaatsen" error={fouten.fouten.zitplaatsen}><Input inputMode="numeric" value={form.zitplaatsen ?? ''} onChange={(e) => zet('zitplaatsen', getal(e.target.value))} /></Field>
+          <Field label="Categorie" error={fouten.fouten.categorie}><Select value={form.categorie} onChange={(e) => zet('categorie', e.target.value as VehicleBody['categorie'])}>{VOERTUIG_CATEGORIEEN.map((c) => <option key={c} value={c}>{VOERTUIG_CATEGORIE_LABEL[c]}</option>)}</Select></Field>
+          <Field label="Type" error={fouten.fouten.type}><Select value={form.type} onChange={(e) => zet('type', e.target.value as VehicleBody['type'])}>{VOERTUIG_TYPES.map((t) => <option key={t} value={t}>{VOERTUIG_TYPE_LABEL[t]}</option>)}</Select></Field>
+          <Field label="Aandrijving" error={fouten.fouten.aandrijving}><Select value={form.aandrijving ?? ''} onChange={(e) => zet('aandrijving', (e.target.value || null) as VehicleBody['aandrijving'])}><option value="">Onbekend</option>{AANDRIJVINGEN.map((a) => <option key={a} value={a}>{AANDRIJVING_LABEL[a]}</option>)}</Select></Field>
+          <Field label="Status" error={fouten.fouten.status}><Select value={form.status} onChange={(e) => zet('status', e.target.value as VehicleBody['status'])}>{VOERTUIG_STATUSSEN.map((s) => <option key={s} value={s}>{VOERTUIG_STATUS_LABEL[s]}</option>)}</Select></Field>
+          <Field label="In dienst sinds" error={fouten.fouten.inDienst}><DateInput value={form.inDienst ?? ''} onChange={(v) => zet('inDienst', v)} /></Field>
+          <Field label="Uit dienst op" error={fouten.fouten.uitDienst}><DateInput value={form.uitDienst ?? ''} onChange={(v) => zet('uitDienst', v)} /></Field>
+          <Field label="Opmerking" className="sm:col-span-2" error={fouten.fouten.opmerking}><Input value={form.opmerking ?? ''} maxLength={300} onChange={(e) => zet('opmerking', e.target.value)} /></Field>
         </div>
         {voertuig && (
           <Card tone="muted" padding="sm" className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-600">
@@ -467,10 +500,10 @@ function BewerkModal({ voertuig, onClose, onKlaar, onVerwijderd }: { voertuig: V
           </Card>
         )}
         <div className="mt-5 flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={onClose}>Annuleren</Button>
-          <Button variant="primary" className="flex-1" onClick={() => void opslaan()} disabled={bezig}>{bezig ? 'Bezig…' : 'Opslaan'}</Button>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" className="flex-1" bezig={bezig}>Opslaan</Button>
         </div>
-      </div>
+      </Formulier>
     </Modal>
   );
 }
