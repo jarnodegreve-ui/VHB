@@ -54,6 +54,13 @@ export type DatePickerProps = {
   placeholder?: string;
   /** Naam van de dialoog; valt terug op aria-label of 'Datum kiezen'. */
   dialogLabel?: string;
+  /**
+   * `false` = het veld heeft altijd een datum (dagnavigatie, een periode die
+   * een scherm stuurt): geen Wissen in de kalender, en een leeggemaakt veld
+   * krijgt bij het bevestigen de huidige datum terug i.p.v. '' door te geven
+   * (datumtranche PR 3; vroeger negeerde de aanroeper '' stil met `v && …`).
+   */
+  wisbaar?: boolean;
   'aria-label'?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
@@ -80,6 +87,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   invalid,
   placeholder = 'dd/mm/jjjj',
   dialogLabel,
+  wisbaar = true,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
   'aria-describedby': ariaDescribedby,
@@ -132,6 +140,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     const r = leesDmj(tekst);
     if (r.staat === 'leeg') {
       zetFout(null);
+      if (!wisbaar) { setTekst(isoNaarDmj(value)); return true; }
       if (value) onChange('');
       return true;
     }
@@ -370,7 +379,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       </div>
       <div className="mt-2 flex items-center justify-between border-t fine-divider pt-2">
         <Button variant="ghost" size="sm" disabled={!binnenBereik(vandaag, min, max)} onClick={() => kies(vandaag)}>Vandaag</Button>
-        <Button variant="ghost" size="sm" disabled={!value && !tekst} onClick={() => { setTekst(''); zetFout(null); if (value) onChange(''); sluit(true); }}>Wissen</Button>
+        {wisbaar && (
+          <Button variant="ghost" size="sm" disabled={!value && !tekst} onClick={() => { setTekst(''); zetFout(null); if (value) onChange(''); sluit(true); }}>Wissen</Button>
+        )}
       </div>
     </motion.div>
   );

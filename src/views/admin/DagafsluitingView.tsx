@@ -145,7 +145,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
         {/* Telefoon: het datumveld vult de rij tussen de pijlen (was w-44:
             "ma 21 sep 20…") en de lange dagnaam staat er al in, dus die
             komt pas vanaf md. */}
-        <div className="min-w-0 flex-1 md:flex-none md:w-44"><DateInput value={datum} onChange={(v) => v && zetDatum(v)} /></div>
+        <div className="min-w-0 flex-1 md:flex-none md:w-44"><DateInput value={datum} wisbaar={false} onChange={zetDatum} aria-label="Dag" /></div>
         <IconButton label="Volgende dag" onClick={() => zetDatum(schuifDag(datum, 1))}><ChevronRight size={18} /></IconButton>
         <p className="hidden md:block min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{formatDayLong(datum)}</p>
         {statusBadge}

@@ -136,9 +136,9 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
           onKies={(id) => { const p = presets.find((x) => x.id === id); if (p) setPeriode(p.periode); }}
         />
         <div className="flex items-center gap-2" role="group" aria-label="Periodekeuze">
-          <DateInput size="sm" value={periode.van} max={periode.tot} onChange={(v) => { if (v) setPeriode({ van: v, tot: v > periode.tot ? v : periode.tot }); }} aria-label="Van" />
+          <DateInput size="sm" value={periode.van} max={periode.tot} wisbaar={false} onChange={(v) => setPeriode({ van: v, tot: v > periode.tot ? v : periode.tot })} aria-label="Van" />
           <span className="text-xs font-medium text-slate-500">t/m</span>
-          <DateInput size="sm" value={periode.tot} min={periode.van} max={vandaag} onChange={(t) => { if (t) setPeriode({ van: t < periode.van ? t : periode.van, tot: t }); }} aria-label="Tot en met" />
+          <DateInput size="sm" value={periode.tot} min={periode.van} max={vandaag} wisbaar={false} onChange={(t) => setPeriode({ van: t < periode.van ? t : periode.van, tot: t })} aria-label="Tot en met" />
         </div>
       </div>
 

@@ -275,6 +275,39 @@ describe('DatePicker, kalender', () => {
   });
 });
 
+describe('DatePicker wisbaar={false} (navigatievelden, PR 3)', () => {
+  it('leegmaken zet de huidige datum terug en geeft niets door; geen Wissen in de kalender', async () => {
+    const onChange = vi.fn();
+    function Nav() {
+      const [v, setV] = useState('2026-09-08');
+      return <DatePicker id="d" value={v} wisbaar={false} onChange={(n) => { setV(n); onChange(n); }} aria-label="Dag" />;
+    }
+    const { root, container } = await monteer(<Nav />);
+    const el = veld(container);
+    el.focus();
+    await act(async () => { typ(el, ''); });
+    await act(async () => { el.blur(); });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(el.value).toBe('08/09/2026');
+    expect(fout(container)).toBeNull();
+    await act(async () => { klik(kalenderKnop(container)); });
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Wissen')).toBe(false);
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Vandaag')).toBe(true);
+    await act(async () => { root.unmount(); });
+  });
+
+  it('een geldige datum gaat gewoon door', async () => {
+    const onChange = vi.fn();
+    const { root, container } = await monteer(<DatePicker id="d" value="2026-09-08" wisbaar={false} onChange={onChange} aria-label="Dag" />);
+    const el = veld(container);
+    el.focus();
+    await act(async () => { typ(el, '10/09/2026'); });
+    await act(async () => { el.blur(); });
+    expect(onChange).toHaveBeenCalledWith('2026-09-10');
+    await act(async () => { root.unmount(); });
+  });
+});
+
 describe('DatePicker in formulieren', () => {
   it('required: een leeg veld blokkeert de native validatie; FormData draagt de ISO-waarde', async () => {
     const leeg = await monteer(<form><DatePicker id="d" name="datum" required value="" onChange={() => {}} aria-label="Datum" /></form>);

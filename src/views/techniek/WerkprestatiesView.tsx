@@ -124,7 +124,7 @@ function Dagboek({ currentUser }: { currentUser: User }) {
       {/* Datumnavigatie: vooruit stopt bij vandaag, een dagboek loopt niet voor. */}
       <Card padding="sm" className="flex flex-wrap items-center gap-2">
         <IconButton label="Vorige dag" onClick={() => setDatum(schuifDag(datum, -1))}><ChevronLeft size={18} /></IconButton>
-        <div className="min-w-0 flex-1 sm:w-44 sm:flex-none"><DateInput value={datum} max={vandaag} onChange={(v) => v && setDatum(v)} aria-label="Dag" /></div>
+        <div className="min-w-0 flex-1 sm:w-44 sm:flex-none"><DateInput value={datum} max={vandaag} wisbaar={false} onChange={setDatum} aria-label="Dag" /></div>
         <IconButton label="Volgende dag" disabled={isVandaag} onClick={() => setDatum(schuifDag(datum, 1))}><ChevronRight size={18} /></IconButton>
         {/* De dagnaam staat al in het datumveld; op een telefoon zou hij alleen
             afkappen, daar dragen de knop en het veld het. */}

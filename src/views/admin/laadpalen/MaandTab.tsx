@@ -95,8 +95,8 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
       ? { modus: 'periode', van: periodeGekozen.van, tot: periodeGekozen.tot > vandaag ? vandaag : periodeGekozen.tot }
       : { modus: 'maand', maand: periodeGekozen.van.slice(0, 7) });
   };
-  const zetVan = (v: string) => { if (v) zetKeuze({ modus: 'periode', van: v, tot: v > periodeGekozen.tot ? v : periodeGekozen.tot }); };
-  const zetTot = (t: string) => { if (t) zetKeuze({ modus: 'periode', van: t < periodeGekozen.van ? t : periodeGekozen.van, tot: t }); };
+  const zetVan = (v: string) => zetKeuze({ modus: 'periode', van: v, tot: v > periodeGekozen.tot ? v : periodeGekozen.tot });
+  const zetTot = (t: string) => zetKeuze({ modus: 'periode', van: t < periodeGekozen.van ? t : periodeGekozen.van, tot: t });
 
   const label = data ? periodeLabel(data) : maandLabel(maandGekozen);
   const vorigeLabel = data ? periodeLabel({ van: data.vorige.van, tot: data.vorige.tot, maand: data.vorige.maand }) : '';
@@ -169,9 +169,9 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
           </MaandNavigatie>
         ) : (
           <div className="flex items-center gap-2" role="group" aria-label="Periodekeuze">
-            <DateInput size="sm" value={periodeGekozen.van} min={data?.eersteDag ?? undefined} max={periodeGekozen.tot || vandaag} onChange={zetVan} aria-label="Van" />
+            <DateInput size="sm" value={periodeGekozen.van} min={data?.eersteDag ?? undefined} max={periodeGekozen.tot || vandaag} wisbaar={false} onChange={zetVan} aria-label="Van" />
             <span className="text-xs font-medium text-slate-500">t/m</span>
-            <DateInput size="sm" value={periodeGekozen.tot} min={periodeGekozen.van || data?.eersteDag || undefined} max={vandaag} onChange={zetTot} aria-label="Tot en met" />
+            <DateInput size="sm" value={periodeGekozen.tot} min={periodeGekozen.van || data?.eersteDag || undefined} max={vandaag} wisbaar={false} onChange={zetTot} aria-label="Tot en met" />
           </div>
         )}
         {lopend && <Badge tone="oker" stil dot className="shrink-0">lopend, t/m vandaag</Badge>}
