@@ -1260,6 +1260,26 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
       const res = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, nieuw] });
       expect(res.status).toBe(200);
       expect(mem.leave.find((l) => l.id === 'l-registratie')).toBeTruthy();
+      // Actor en chauffeur blijven onderscheiden in het activiteitenlog.
+      const log = mem.activity.find((a: any) => a.entityId === 'l-registratie');
+      expect(log?.action).toBe('Verlof geregistreerd');
+      expect(log?.actorName).toBe('Pieter Planner');
+      expect(log?.message).toMatch(/vastgelegd door Pieter Planner/);
+      expect(log?.message).not.toMatch(/^Pieter Planner/);
+    });
+
+    it('een chauffeur kan die registratie niet nabootsen met een handmatige request (403, niets bewaard)', async () => {
+      const own = mem.leave.filter((l) => l.userId === '3');
+      // Voor een collega, meteen goedgekeurd, in het verleden: zoals een registratie door staf.
+      const nagebootst = { id: 'l-nagebootst', userId: '4', startDate: gisteren(), endDate: gisteren(), type: 'betaald_verlof', status: 'approved', comment: '', createdAt: new Date().toISOString(), decidedAt: new Date().toISOString() };
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, nagebootst] });
+      expect(res.status).toBe(403);
+      expect(mem.leave.find((l) => l.id === 'l-nagebootst')).toBeFalsy();
+      // Ook voor zichzelf goedgekeurd in het verleden: geweigerd.
+      const zelf = { ...nagebootst, id: 'l-nagebootst-zelf', userId: '3' };
+      const res2 = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, zelf] });
+      expect(res2.status).toBe(403);
+      expect(mem.leave.find((l) => l.id === 'l-nagebootst-zelf')).toBeFalsy();
     });
   });
 
