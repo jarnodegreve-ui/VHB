@@ -48,7 +48,7 @@ export function MijnWeek({ dagen, vandaag, gekozen, onRooster, className }: {
               >
                 <span aria-hidden="true" className="text-micro">{WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}</span>
                 {/* Vandaag = goud dagcijfer, hetzelfde stille signaal als in de dagstrip. */}
-                <span aria-hidden="true" className={cn('mt-0.5 text-sm font-bold leading-tight', isVandaag ? 'text-oker-800' : 'text-slate-800')}>
+                <span aria-hidden="true" className={cn('mt-0.5 text-sm font-bold tabular-nums leading-tight', isVandaag ? 'text-oker-800' : 'text-slate-800')}>
                   {d.getDate()}
                 </span>
                 <span

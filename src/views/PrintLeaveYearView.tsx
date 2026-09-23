@@ -235,7 +235,7 @@ export function PrintLeaveYearView({
         </section>
 
         <footer className="mt-10 pt-4 border-t border-slate-200 text-[10px] font-medium text-slate-400 text-center">
-          Stand van {MONTH_NAMES[new Date().getMonth()]} {new Date().getFullYear()} · gegenereerd op{' '}
+          Stand van {MONTH_NAMES[new Date().getMonth()].toLowerCase()} {new Date().getFullYear()} · gegenereerd op{' '}
           {new Date().toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })} via VHB Portaal
         </footer>
       </div>

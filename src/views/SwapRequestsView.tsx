@@ -24,7 +24,7 @@ import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
 import { maandagVan } from '../lib/roosterUren';
 import { isoWeekOf } from '../lib/week';
-import { formatDateHuman, formatPeriodeDMJ, formatShortDay, serviceNumberOf } from '../lib/format';
+import { formatDateHuman, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { canRespondToSwap } from '../lib/authorization';
 import { notify, openPdfInNewTab } from '../lib/ui';
@@ -528,7 +528,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 <Badge tone="oker" className="tabular-nums">Dienst {info.line}</Badge>
 
                 {info.date && (
-                  <Badge tone="slate" className="tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</Badge>
+                  <Badge tone="slate" className="tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${tijdvak(info.startTime, info.endTime)}` : ''}</Badge>
                 )}
                 {isTakeoverSwap(swap) && <TakeoverBadge compact />}
               </div>
@@ -610,7 +610,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 return (
                   <RecordRij
                     key={swap.id}
-                    titel={<span className="capitalize">{formatDateHuman(info.date)}</span>}
+                    titel={hoofdletter(formatDateHuman(info.date))}
                     titelAttrs={{ 'data-record': swap.id }}
                     meta={`Dienst ${info.line}`}
                     status={<RuilStatusBadge swap={swap} stil />}
@@ -621,7 +621,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     <Uitklap open={open}>
                       <div className="px-4 pb-4 pt-0.5">
                         {info.startTime && info.endTime && (
-                          <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
+                          <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{tijdvak(info.startTime, info.endTime)}</p>
                         )}
                         {isTakeoverSwap(swap) && <div className="mt-1.5"><TakeoverBadge /></div>}
                         {/* Wie staat waar: de collega en wat elk krijgt staan
@@ -672,7 +672,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               compact
               illustratie={<LegeLijst />}
               title="Nog geen ruilverzoeken"
-              message="Klik op “Dienstruil aanvragen”, je collega en de planner keuren daarna goed."
+              message="Kies “Dienstruil aanvragen”, je collega en de planner keuren daarna goed."
             />
           )}
         </div>
@@ -702,9 +702,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <MicroLabel className="tabular-nums">Dienst {info.line}</MicroLabel>
-                      <p className="font-bold text-slate-800 mt-1 capitalize">{formatDateHuman(info.date)}</p>
+                      <p className="font-bold text-slate-800 mt-1">{hoofdletter(formatDateHuman(info.date))}</p>
                       {info.startTime && info.endTime && (
-                        <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
+                        <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{tijdvak(info.startTime, info.endTime)}</p>
                       )}
                       {compactKaart && (
                         <p className="text-xs font-medium text-slate-500">
@@ -868,7 +868,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </Td>
                           <Td>
                             <span className="font-semibold text-oker-700 tabular-nums">Dienst {info.line}</span>
-                            <span className="text-slate-500 tabular-nums">, {formatDateHuman(info.date)}{info.startTime && info.endTime ? ` (${info.startTime} – ${info.endTime})` : ''}</span>
+                            <span className="text-slate-500 tabular-nums">, {formatDateHuman(info.date)}{info.startTime && info.endTime ? ` (${tijdvak(info.startTime, info.endTime)})` : ''}</span>
                             {isTakeoverSwap(swap) ? (
                               <span className="mt-1 block"><TakeoverBadge compact /></span>
                             ) : returnLabel(swap) && (
@@ -947,7 +947,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                           </button>
                           <MicroLabel className="!text-oker-700 mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
-                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</p>
+                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${tijdvak(info.startTime, info.endTime)}` : ''}</p>
                           {isTakeoverSwap(swap) && <div className="mt-1"><TakeoverBadge compact /></div>}
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1">
@@ -1128,8 +1128,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           className={`${cnCard(selectedShift === s.id)} disabled:cursor-not-allowed disabled:opacity-60`}
                         >
                           <span className="min-w-0">
-                            <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(s.date)}</span>
-                            <span className="block text-xs font-medium text-slate-500 tabular-nums">Dienst {serviceNumberOf(s)} · {s.startTime} – {s.endTime}{s.delen > 1 ? ` · in ${s.delen} delen` : ''}</span>
+                            <span className="block text-sm font-bold text-slate-800">{hoofdletter(formatDateHuman(s.date))}</span>
+                            <span className="block text-xs font-medium text-slate-500 tabular-nums">Dienst {serviceNumberOf(s)} · {tijdvak(s.startTime, s.endTime)}{s.delen > 1 ? ` · in ${s.delen} delen` : ''}</span>
                           </span>
                           {bezet ? (
                             <Badge tone="blue" stil className="shrink-0 whitespace-nowrap">Ruil loopt al</Badge>
@@ -1153,7 +1153,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   <>
                     <p className="text-xs font-medium text-slate-500">
                       Jouw dienst: <span className="font-bold text-slate-800">Dienst {serviceNumberOf(shifts.find((s) => s.id === selectedShift))}</span>
-                      {selectedShiftDate && <span className="capitalize"> · {formatDateHuman(selectedShiftDate)}</span>}
+                      {selectedShiftDate && <span> · {formatDateHuman(selectedShiftDate)}</span>}
                     </p>
                     {matchLoading ? (
                       <p className="text-sm font-medium text-slate-500 py-6 text-center">Beschikbaarheid laden…</p>
@@ -1312,7 +1312,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   className={cnCard(selected)}
                                 >
                                   <span className="min-w-0">
-                                    <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(o.date)}</span>
+                                    <span className="block text-sm font-bold text-slate-800">{hoofdletter(formatDateHuman(o.date))}</span>
                                     <span className="block text-xs font-medium text-slate-500">{o.isFree ? 'Vrije dag van de collega' : `Dienst ${o.code}`}</span>
                                   </span>
                                   {selected ? <Check size={16} className="shrink-0 text-slate-900" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
@@ -1331,7 +1331,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               {conflicted.map((o) => (
                                 <Card key={`${o.date}|${o.code}`} tone="muted" padding="none" className="flex items-center justify-between gap-3 px-4 py-3 opacity-60">
                                   <span className="min-w-0">
-                                    <span className="block text-sm font-semibold text-slate-500 capitalize">{formatDateHuman(o.date)}</span>
+                                    <span className="block text-sm font-semibold text-slate-500">{hoofdletter(formatDateHuman(o.date))}</span>
                                     <span className="block text-xs font-medium text-slate-500">{o.isFree ? "Vrije dag van de collega" : `Dienst ${o.code}`}, {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
                                   </span>
                                 </Card>

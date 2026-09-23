@@ -150,7 +150,7 @@ test.describe('smoke: ingelogde chauffeur', () => {
 
     // Roosterweergave: op een iPhone-viewport rendert de kaartweergave (de
     // tabel is daar verborgen), dus check op de zichtbare variant.
-    await expect(page.getByText('06:12 – 09:30').locator('visible=true').first()).toBeVisible();
+    await expect(page.getByText('06:12–09:30').locator('visible=true').first()).toBeVisible();
   });
 });
 

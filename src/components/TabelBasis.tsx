@@ -128,7 +128,9 @@ export function Td({ className, children, num = false, nowrap = false }: {
   nowrap?: boolean;
 }) {
   // Compacter op desktop-met-muis (dispatch-dichtheid); op touch blijft de
-  // rij hoog genoeg als raakvlak. tabular-nums staat al op <body>; `num`
-  // herhaalt het expliciet en lijnt rechts uit.
-  return <td className={cn('px-4 py-3 text-sm text-slate-700', num && 'text-right tabular-nums whitespace-nowrap', nowrap && 'whitespace-nowrap', className)}>{children}</td>;
+  // rij hoog genoeg als raakvlak. Tabulaire cijfers alleen in `num` en
+  // `nowrap` (getallen, datums, tijden, codes): op <body> maakten ze ook het
+  // koppelteken breed ("E - mailadres"), dus gewone tekstcellen blijven
+  // proportioneel.
+  return <td className={cn('px-4 py-3 text-sm text-slate-700', num && 'text-right tabular-nums whitespace-nowrap', nowrap && 'whitespace-nowrap tabular-nums', className)}>{children}</td>;
 }

@@ -22,7 +22,7 @@ import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind }
 import { KIND_CLS, KIND_LABEL, celChipClass, celTextClass } from '../lib/planningKind';
 import { isStaf } from '../types';
 import type { User } from '../types';
-import { formatDatumDMJ, formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
+import { formatDatumDMJ, formatDayLong, hoofdletter, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 import { DUR, EASE_SPRING } from '../lib/motion';
 import { useRecordParam, useRouteParam } from '../app/router';
@@ -709,7 +709,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               >
                 <ChevronLeft size={18} />
               </IconButton>
-              <span className="px-3 text-sm font-semibold capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
+              <span className="px-3 text-sm font-semibold min-w-[150px] text-center tabular-nums">{hoofdletter(windowLabel)}</span>
               <IconButton
                 label="Volgende 2 weken"
                 title={kanVooruit ? 'Volgende 2 weken' : `De planning is geïmporteerd tot ${formatDatumDMJ(laatsteDag)}`}
@@ -1056,7 +1056,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               >
                 <Card padding="none" className="overflow-hidden">
                 <div className="flex items-baseline justify-between gap-3 border-b border-hairline px-4 py-3">
-                  <span className="text-sm font-semibold capitalize text-slate-800">{formatDateLong(mobielDag)}</span>
+                  <span className="text-sm font-semibold text-slate-800">{hoofdletter(formatDateLong(mobielDag))}</span>
                   <MicroLabel className="tabular-nums">
                     {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0)} {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0) === 1 ? 'dienst' : 'diensten'}
                   </MicroLabel>

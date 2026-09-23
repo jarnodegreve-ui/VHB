@@ -4,7 +4,7 @@ import { isStaf, type LeaveRequest, type Shift, type SwapRequest, type User } fr
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
 import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
-import { formatLeaveType, serviceNumberOf } from '../lib/format';
+import { formatLeaveType, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '../lib/ruilBadge';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, Chip, MicroLabel, microLabelClass, Segmented } from '../components/primitives';
@@ -561,7 +561,7 @@ function MonthCalendar({
         <MicroLabel className={cn('tabular-nums', selected === today && 'text-oker-700')}>
           {selected === today ? 'Vandaag' : `Wk ${isoWeekOf(selected)}`}
         </MicroLabel>
-        <p className="mt-0.5 text-md font-semibold capitalize text-slate-900">{formatShiftDate(selected)}</p>
+        <p className="mt-0.5 text-md font-semibold text-slate-900">{hoofdletter(formatShiftDate(selected))}</p>
         {selectedTypedag && (
           <p className={cn('mt-0.5 text-xs font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-700' : 'text-slate-500')}>
             {selectedTypedag.titel}
@@ -602,7 +602,7 @@ function MonthCalendar({
                   <div key={s.id} className="flex items-center gap-2 text-sm">
                     <Clock size={12} className="shrink-0 text-slate-400" />
                     <span className="font-mono font-medium tabular-nums text-slate-700">
-                      {s.startTime} – {s.endTime}
+                      {tijdvak(s.startTime, s.endTime)}
                     </span>
                     {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
                   </div>
@@ -712,7 +712,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                         <div key={s.id} className="flex items-center gap-3 font-medium text-slate-700">
                           <Clock size={14} className="text-slate-500 shrink-0" />
                           <span className="font-mono tabular-nums">
-                            {s.startTime} – {s.endTime}
+                            {tijdvak(s.startTime, s.endTime)}
                           </span>
                           {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
                         </div>
@@ -791,7 +791,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                   <div key={s.id} className="flex items-center gap-2 text-sm">
                     <Clock size={12} className="text-slate-400 shrink-0" />
                     <span className="font-mono font-medium text-slate-700 tabular-nums">
-                      {s.startTime} – {s.endTime}
+                      {tijdvak(s.startTime, s.endTime)}
                     </span>
                     {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
                   </div>

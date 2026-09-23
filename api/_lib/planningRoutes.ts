@@ -17,7 +17,7 @@ import { berekenCelWaarheid } from "./celWaarheid.js";
 import { heropbouwPlanning, reapplyApprovedSwaps } from "./planningHeropbouw.js";
 import { berekenVerwachtingsCheck } from "../coverageRoutes.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { addDagenIso, brusselsDay, DAG_DMJ, toLookupToken, sortedNameToken, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "../helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./matrixXlsx.js";
 import { buildPlanningFromMatrix, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
@@ -701,7 +701,7 @@ export function mountPlanningRoutes(app: express.Express) {
         req,
         "planning",
         "Matrix import bevestigd",
-        `${rows.length} dagen verwerkt (periode ${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"} vervangen; planning daarbuiten onaangetast${fileStartDate !== startDate || fileEndDate !== endDate ? `; selectie uit bestand ${fileStartDate} t/m ${fileEndDate}` : ""}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
+        `${rows.length} dagen verwerkt (periode ${rows.length ? PERIODE_DMJ(String(rows[0].source_date), String(rows[rows.length - 1].source_date)) : "?"} vervangen; planning daarbuiten onaangetast${fileStartDate !== startDate || fileEndDate !== endDate ? `; selectie uit bestand ${PERIODE_DMJ(fileStartDate, fileEndDate)}` : ""}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
       );
 
       // Chauffeurs met diensten in deze import krijgen een seintje.

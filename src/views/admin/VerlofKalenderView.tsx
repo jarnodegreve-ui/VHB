@@ -396,7 +396,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                             className="ios-pressable flex w-full flex-col items-center gap-0.5 px-1 py-2 transition-colors hover:bg-surface-soft-hover"
                           >
                             <div className={cn(microLabelClass, 'h-3.5 leading-3.5')}>{weekdayLetter(day)}</div>
-                            <div className={cn('h-4 text-xs font-semibold leading-4', isToday(day) || feest ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
+                            <div className={cn('h-4 text-xs font-semibold tabular-nums leading-4', isToday(day) || feest ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
                             <div className="flex h-4 items-center justify-center">
                               {afwezig > 0 ? (
                                 <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500/15 px-1 text-2xs font-semibold leading-none text-emerald-700">{afwezig}</span>

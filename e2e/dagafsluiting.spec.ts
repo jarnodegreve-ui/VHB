@@ -63,7 +63,7 @@ test('looncontrole toont de maandstand en de exportcontrole', async ({ page }) =
   await page.goto('/beheer/looncontrole');
   await expect(page.getByRole('heading', { name: 'Looncontrole', level: 1 })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Easypay-export')).toBeVisible();
-  await expect(page.getByText(/dagen nog open/)).toBeVisible();
+  await expect(page.getByText(/(dag|dagen) nog open/)).toBeVisible();
   await page.getByRole('button', { name: 'Looncodes' }).click();
   await expect(page.getByText('Betaald verlof').filter({ visible: true })).toBeVisible();
   await page.getByRole('button', { name: 'Medewerkers' }).click();

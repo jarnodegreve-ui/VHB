@@ -36,12 +36,12 @@ test('tabel: lijstvolgorde, Dienst en Deel 1 sorteren en keren om, zoeken op loo
   await expect(tabel.getByRole('columnheader', { name: /Deel 1/ })).toHaveAttribute('aria-sort', 'descending');
   await expect.poll(eersteKolom).toEqual(['2607', '2515', '2101']);
 
-  await page.getByRole('searchbox', { name: 'Zoek op dienst- of loopnummer…' }).fill('4515');
+  await page.getByRole('searchbox', { name: 'Zoek dienst of loopnummer…' }).fill('4515');
   await expect.poll(eersteKolom).toEqual(['2515']);
   await expect(page.getByText('1 van 3')).toBeVisible();
   await expect(tabel.getByRole('columnheader', { name: /Deel 1/ })).toHaveAttribute('aria-sort', 'descending');
 
-  await page.getByRole('searchbox', { name: 'Zoek op dienst- of loopnummer…' }).fill('9999');
+  await page.getByRole('searchbox', { name: 'Zoek dienst of loopnummer…' }).fill('9999');
   await expect(page.getByText('Geen resultaten voor “9999”')).toBeVisible();
   await page.getByRole('button', { name: 'Zoekterm wissen' }).click();
   await expect.poll(eersteKolom).toEqual(['2607', '2515', '2101']);

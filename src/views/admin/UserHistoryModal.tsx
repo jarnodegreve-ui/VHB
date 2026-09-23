@@ -9,7 +9,7 @@ import { Card } from '../../components/Card';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
-import { formatDatumDMJ, formatLeaveType, formatPeriodeDMJ, formatShortDay, serviceNumberOf } from '../../lib/format';
+import { formatDatumDMJ, formatLeaveType, formatPeriodeDMJ, formatShortDay, serviceNumberOf, tijdvak } from '../../lib/format';
 
 
 export function UserHistoryModal({
@@ -150,7 +150,7 @@ export function UserHistoryModal({
                   </div>
                   <span className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0">
                     <Clock size={12} />
-                    {s.startTime} - {s.endTime}
+                    {tijdvak(s.startTime, s.endTime)}
                   </span>
                 </Card>
               ))}
@@ -175,7 +175,7 @@ export function UserHistoryModal({
                   </div>
                   <span className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0">
                     <Clock size={12} />
-                    {s.startTime} - {s.endTime}
+                    {tijdvak(s.startTime, s.endTime)}
                   </span>
                 </Card>
               ))}

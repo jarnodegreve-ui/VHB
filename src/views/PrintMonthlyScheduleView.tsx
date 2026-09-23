@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { telDiensten } from '../lib/dienstTelling';
 import type { Shift, User } from '../types';
 import { isoWeekNumber } from '../lib/week';
-import { MONTH_NAMES, serviceNumberOf } from '../lib/format';
+import { MONTH_NAMES, serviceNumberOf, tijdvak } from '../lib/format';
 import { apiFetch } from '../lib/api';
 import { Button } from '../components/primitives';
 
@@ -366,7 +366,7 @@ function DriverMonthSheet({
                                 </span>
                               </div>
                               <span className="text-sm font-mono font-bold text-slate-700 tabular-nums whitespace-nowrap">
-                                {s.startTime} – {s.endTime}
+                                {tijdvak(s.startTime, s.endTime)}
                               </span>
                             </div>
                           );

@@ -11,8 +11,8 @@ import type { Service } from '../../types';
 export const hasValidTime = (start?: string, end?: string) =>
   !!start && !!end && /^\d{1,2}:\d{2}$/.test(start) && /^\d{1,2}:\d{2}$/.test(end);
 
-/** "04:36–07:52": en-dash zonder spaties. */
-export const tijdvak = (van: string, tot: string) => `${van}–${tot}`;
+/** "04:36–07:52": en-dash zonder spaties (de gedeelde vorm uit lib/format). */
+export { tijdvak } from '../../lib/format';
 
 export type DienstDeel = { nr: 1 | 2 | 3; loop: string; start: string; eind: string };
 

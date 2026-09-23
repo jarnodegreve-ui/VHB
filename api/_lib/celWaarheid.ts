@@ -84,9 +84,9 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
     return loop ? `${times} (loop ${loop})` : times;
   };
   const segmentsOf = (s: CelWaarheidService): string[] => [
-    s.startTime && s.endTime ? withLoop(`${s.startTime} - ${s.endTime}`, s.loopnr) : "",
-    s.startTime2 && s.endTime2 ? withLoop(`${s.startTime2} - ${s.endTime2}`, s.loopnr2) : "",
-    s.startTime3 && s.endTime3 ? withLoop(`${s.startTime3} - ${s.endTime3}`, s.loopnr3) : "",
+    s.startTime && s.endTime ? withLoop(`${s.startTime}–${s.endTime}`, s.loopnr) : "",
+    s.startTime2 && s.endTime2 ? withLoop(`${s.startTime2}–${s.endTime2}`, s.loopnr2) : "",
+    s.startTime3 && s.endTime3 ? withLoop(`${s.startTime3}–${s.endTime3}`, s.loopnr3) : "",
   ].filter(Boolean);
   const resolve = (code: string): { kind: string; label: string; segments: string[] } | null => {
     const n = toLookupToken(code);

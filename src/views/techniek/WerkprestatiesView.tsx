@@ -8,7 +8,7 @@ import { useZelfLadend } from '../../lib/zelfLadend';
 import { formatDayLong, formatShortDay } from '../../lib/format';
 import { metOngedaan } from '../../lib/ongedaan';
 import {
-  bewaarWerkprestatie, laadVoertuigen, laadWerkRapport, laadWerkprestaties, maakWerkprestatie, TechniekFout, urenTekst, urenTussen,
+  bewaarWerkprestatie, laadVoertuigen, laadWerkRapport, laadWerkprestaties, maakWerkprestatie, TechniekFout, urenMetEenheid, urenTekst, urenTussen,
   vandaagIso, verwijderWerkprestatie, type Vehicle, type WerkRapport, type Werkprestatie, type WerkprestatieBody,
 } from '../../lib/techniek';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
@@ -147,7 +147,7 @@ function Dagboek({ currentUser }: { currentUser: User }) {
         <Card padding="none" className="overflow-clip">
           <div className="flex items-baseline justify-between border-b border-hairline px-5 py-3">
             <h2 className="text-card-title">{rijen.length} {rijen.length === 1 ? 'taak' : 'taken'}</h2>
-            <span className="text-xs font-medium text-slate-500">{urenTekst(totaalUren)} u samen</span>
+            <span className="text-xs font-medium text-slate-500">{urenMetEenheid(totaalUren)} samen</span>
           </div>
           <ul className="divide-y divide-hairline-subtle">
             {rijen.map((w) => (
@@ -198,7 +198,7 @@ function PrestatieRegel({ w, mecanicien, acties }: { w: Werkprestatie; mecanicie
           {w.beginTijd && w.eindeTijd && <span>{w.beginTijd} tot {w.eindeTijd}</span>}
         </p>
       </div>
-      <span className="shrink-0 text-sm font-semibold text-slate-800">{urenTekst(w.werkuren)} u</span>
+      <span className="shrink-0 text-sm font-semibold text-slate-800">{urenMetEenheid(w.werkuren)}</span>
       {acties && <div className="flex shrink-0 items-center gap-0.5">{acties}</div>}
     </li>
   );
@@ -310,7 +310,7 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
                 <Card key={datum} padding="none" className="overflow-clip">
                   <div className="flex items-baseline justify-between border-b border-hairline px-5 py-3">
                     <h2 className="text-card-title">{datum === vandaag ? 'Vandaag' : formatShortDay(datum)}</h2>
-                    <span className="text-xs font-medium text-slate-500">{urenTekst(lijst.reduce((s, w) => s + w.werkuren, 0))} u</span>
+                    <span className="text-xs font-medium text-slate-500">{urenMetEenheid(lijst.reduce((s, w) => s + w.werkuren, 0))}</span>
                   </div>
                   <ul className="divide-y divide-hairline-subtle">
                     {lijst.map((w) => (

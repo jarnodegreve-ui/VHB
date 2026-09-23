@@ -277,7 +277,7 @@ export function DashboardView({ notes = [],
         className={kleinKlassen('deze-maand')}
         label="Deze maand"
         value={thisMonthShiftCount}
-        sub="dagen met dienst"
+        sub={thisMonthShiftCount === 1 ? 'dag met dienst' : 'dagen met dienst'}
         onClick={onNavigate ? () => onNavigate('rooster') : undefined}
       />
     ),

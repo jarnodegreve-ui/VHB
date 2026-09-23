@@ -14,7 +14,7 @@ import { useRouteParam } from '../../app/router';
 import { formatDateHuman, formatRelatief } from '../../lib/format';
 import {
   bewaarVoertuig, dagenTot, laadDefecten, laadVoertuigVervaldata, laadVoertuigWerken, laadVoertuigen, maakVoertuig, TechniekFout,
-  urenTekst, verwijderVoertuig, zetVoertuigVervaldatum, type Defect, type Vehicle, type VehicleBody, type VehicleExpiry, type Werkprestatie,
+  urenMetEenheid, verwijderVoertuig, zetVoertuigVervaldatum, type Defect, type Vehicle, type VehicleBody, type VehicleExpiry, type Werkprestatie,
 } from '../../lib/techniek';
 import { ConfirmationModal, EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel, ViewLoader } from '../../components/ui';
 import { Modal, SluitKnop } from '../../components/Modal';
@@ -156,7 +156,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
       <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat icon={<Bus size={16} />} tone="slate" label="Actief" value={tellers.actief} sub="in dienst" onClick={() => setFilter('actief')} actief={filter === 'actief'} />
         <OpsStat icon={<Zap size={16} />} tone="slate" label="Elektrisch" value={tellers.elektrisch} sub="e-bussen" />
-        <OpsStat icon={<ShieldCheck size={16} />} tone={tellers.verloopt > 0 ? 'amber' : 'slate'} label="Verloopt binnen 30 d" value={tellers.verloopt} sub={tellers.verloopt > 0 ? 'keuring of controle plannen' : 'alles in orde'} onClick={() => setFilter('verloopt')} actief={filter === 'verloopt'} />
+        <OpsStat icon={<ShieldCheck size={16} />} tone={tellers.verloopt > 0 ? 'amber' : 'slate'} label="Binnen 30 dagen" value={tellers.verloopt} sub={tellers.verloopt > 0 ? 'keuring of controle plannen' : 'alles in orde'} onClick={() => setFilter('verloopt')} actief={filter === 'verloopt'} />
         <OpsStat icon={<Wrench size={16} />} tone={tellers.metDefect > 0 ? 'amber' : 'slate'} label="Met open defect" value={tellers.metDefect} sub="in de gele boek" />
       </div>
 
@@ -188,7 +188,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                   <FilterChip active={filter === 'actief'} onClick={() => setFilter('actief')}>Actief</FilterChip>
                   <FilterChip active={filter === 'reserve'} onClick={() => setFilter('reserve')}>Reserve</FilterChip>
                   <FilterChip active={filter === 'uit_dienst'} onClick={() => setFilter('uit_dienst')}>Uit dienst</FilterChip>
-                  <FilterChip active={filter === 'verloopt'} onClick={() => setFilter('verloopt')}>Verloopt binnen 30 d</FilterChip>
+                  <FilterChip active={filter === 'verloopt'} onClick={() => setFilter('verloopt')}>Binnen 30 dagen</FilterChip>
                   <FilterChip active={filter === 'alles'} onClick={() => setFilter('alles')}>Alles</FilterChip>
                   <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:inline-block" aria-hidden="true" />
                   <FilterChip active={categorie === 'alle'} onClick={() => setCategorie('alle')}>Alle categorieën</FilterChip>
@@ -419,7 +419,7 @@ function DetailModal({ voertuig, staf, currentUser, vervaldata, defecten, onClos
                     <p className="text-sm text-slate-800"><span className="font-semibold">{w.werkcode}</span> · {w.omschrijving}</p>
                     <p className="text-xs text-slate-500">{formatDateHuman(w.datum)}{w.mecanicienNaam ? ` · ${w.mecanicienNaam}` : ''}</p>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold text-slate-700">{urenTekst(w.werkuren)} u</span>
+                  <span className="shrink-0 text-sm font-semibold text-slate-700">{urenMetEenheid(w.werkuren)}</span>
                 </li>
               ))}
             </ul>

@@ -668,7 +668,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
           size="lg"
           eyebrow="Auditspoor"
           title="Wat er gebeurde"
-          description="Beheeracties en belangrijke wijzigingen, per dag. Herhaalde acties van dezelfde persoon staan samengevouwen; klik op een regel voor de details."
+          description="Beheeracties en belangrijke wijzigingen, per dag. Herhaalde acties van dezelfde persoon staan samengevouwen; open een regel voor de details."
         />
 
         <TableToolbar

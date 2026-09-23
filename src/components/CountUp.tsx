@@ -84,7 +84,7 @@ export function CountUp({
 
   const n = Number.isFinite(shown) ? Math.round(shown) : shown;
   return (
-    <span ref={scope} className={cn('inline-block', className)}>
+    <span ref={scope} className={cn('inline-block tabular-nums', className)}>
       {format && Number.isFinite(n) ? format(n) : n}
     </span>
   );

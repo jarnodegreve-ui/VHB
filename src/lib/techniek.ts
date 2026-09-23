@@ -1,6 +1,7 @@
 import type { Defect, DefectPatch, DefectMeldingBody, Vehicle, VehicleBody, VehicleExpiry, VehicleExpiryBody, VehicleKort, Werkprestatie, WerkprestatieBody } from '../../shared/schemas/techniek';
 import { apiFetch } from './api';
 import { veldfoutenUitAntwoord } from './valideer';
+import { metEenheid } from './format';
 
 /**
  * Datalaag van de techniekmodule (voertuigen, gele boek, werkprestaties,
@@ -122,3 +123,6 @@ export const urenTussen = (begin: string, einde: string): number | null => {
 
 /** Getal → tekst met komma en hooguit 2 decimalen ("1,5"). */
 export const urenTekst = (n: number): string => n.toLocaleString('nl-BE', { maximumFractionDigits: 2 });
+
+/** Uren met eenheid ("1,5 u", smalle vaste spatie via metEenheid). */
+export const urenMetEenheid = (n: number): string => metEenheid(urenTekst(n), 'u');

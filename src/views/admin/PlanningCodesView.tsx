@@ -212,11 +212,11 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
               ? `${summary.unknown} ${summary.unknown === 1 ? 'code staat' : 'codes staan'} nog op Onbekend, kies een categorie zodat het portaal er iets mee kan.`
               : 'Wijzigingen gelden pas na Opslaan.'}
           >
-            <ZijvakRij label="Diensten" waarde={summary.service} mono />
-            <ZijvakRij label="Verlof" waarde={summary.leave} mono />
-            <ZijvakRij label="Afwezigheid" waarde={summary.absence} mono />
-            <ZijvakRij label="Onbekend" waarde={summary.unknown} mono />
-            <ZijvakRij label="Totaal" waarde={draftCodes.length} mono />
+            <ZijvakRij label="Diensten" waarde={summary.service} />
+            <ZijvakRij label="Verlof" waarde={summary.leave} />
+            <ZijvakRij label="Afwezigheid" waarde={summary.absence} />
+            <ZijvakRij label="Onbekend" waarde={summary.unknown} />
+            <ZijvakRij label="Totaal" waarde={draftCodes.length} />
           </Zijvak>
         )}
       >

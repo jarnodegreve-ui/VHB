@@ -7,7 +7,7 @@ import { celBadgeTone } from '../../lib/planningKind';
 import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, Chip, FilterChip, IconButton, MicroLabel } from '../../components/primitives';
 import { StickyThead } from '../../components/Table';
-import { formatDatumDMJ, formatDayLong, WEEKDAY_SHORT_SUN } from '../../lib/format';
+import { aantal, formatDatumDMJ, formatDayLong, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
 import { OpsStat } from '../../components/ops';
@@ -326,7 +326,7 @@ export function PlanningMatrixView({
       <Card as="section">
         <CardHeader
           title="Controlepunten"
-          description="Klik een onbekende code om enkel die toewijzingen te bekijken."
+          description="Kies een onbekende code om enkel die toewijzingen te bekijken."
           aside={(
             <>
               <FilterChip active={showOnlyIssues} onClick={() => setShowOnlyIssues((current) => !current)}>
@@ -470,10 +470,10 @@ export function PlanningMatrixView({
                         <span className="block text-sm font-semibold text-slate-800">{dagKort(row.source_date)}</span>
                         <span className="mt-1.5 flex items-center justify-between text-xs font-medium text-slate-500">
                           <span>Dagtype {row.day_type || '—'}</span>
-                          <span>{assignmentCount} codes</span>
+                          <span>{aantal(assignmentCount, 'code', 'codes')}</span>
                         </span>
                         <span className="mt-0.5 flex items-center justify-between text-xs font-medium text-slate-500">
-                          <span>{generatedServices} diensten</span>
+                          <span>{aantal(generatedServices, 'dienst', 'diensten')}</span>
                           {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
                             ? <span className="font-semibold text-amber-700">controle nodig</span>
                             : null}

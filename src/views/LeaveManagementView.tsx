@@ -29,7 +29,7 @@ import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { groepeerPerJaar } from '../lib/verlofGroepen';
 import { isoDate } from '../lib/availability';
-import { formatDateHuman, formatPeriodeDMJ, formatPeriodeKort, formatShortDay } from '../lib/format';
+import { aantal, formatDateHuman, formatPeriodeDMJ, formatPeriodeKort, formatShortDay } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 import { apiJson } from '../lib/api';
@@ -479,8 +479,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     setConfirmAction({
       title: 'Aanvragen goedkeuren',
       message: withConflicts > 0
-        ? `${selected.length} aanvragen goedkeuren? Let op: ${withConflicts} ervan ${withConflicts === 1 ? 'heeft' : 'hebben'} al ingeplande diensten in die periode.`
-        : `${selected.length} aanvragen goedkeuren?`,
+        ? `${aantal(selected.length, 'aanvraag', 'aanvragen')} goedkeuren? Let op: ${withConflicts} ervan ${withConflicts === 1 ? 'heeft' : 'hebben'} al ingeplande diensten in die periode.`
+        : `${aantal(selected.length, 'aanvraag', 'aanvragen')} goedkeuren?`,
       confirmText: 'Goedkeuren',
       variant: 'warning',
       run: () => { bulkDecide('approved'); setSelectedPendingIds(new Set()); },
@@ -728,7 +728,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       isDraftEdge && 'border-hairline-strong bg-surface-muted ring-1 ring-hairline-strong'
                     )}
                   >
-                    <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-slate-900' : 'text-slate-500 group-hover:text-slate-600')}>{day}</span>
+                    <span className={cn('text-sm font-semibold tabular-nums transition-colors', (isSelected || isInDraftRange) ? 'text-slate-900' : 'text-slate-500 group-hover:text-slate-600')}>{day}</span>
                     <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} aria-hidden="true" />
                   </button>
                 );
@@ -966,10 +966,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <MicroLabel className="text-oker-700">Periode kiezen</MicroLabel>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
-                      ? 'Klik op de startdatum.'
+                      ? 'Kies de startdatum.'
                       : !formData.endDate
                         ? 'Klik nu op de einddatum (of dezelfde dag voor één dag verlof).'
-                        : 'Periode geselecteerd. Pas aan via “Periode wissen” of klik een nieuwe startdatum aan.'}
+                        : 'Periode geselecteerd. Pas aan via “Periode wissen” of kies een nieuwe startdatum.'}
                   </p>
                 </Card>
 

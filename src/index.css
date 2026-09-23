@@ -621,14 +621,29 @@ html.dark {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    /* Planningstool: tijden en aantallen lijnen overal netjes uit. */
-    font-variant-numeric: tabular-nums;
+    /* Géén tabular-nums op body (P1b, 23-09): in Inter maakt `tnum` ook het
+       koppelteken breed (15 px: 6,9 → 9,7 px), waardoor "E-mailadres" en
+       "VHB-000043" als "E - mailadres" lazen. Tabulaire cijfers staan alleen
+       waar cijfers onder elkaar moeten staan: `Td num`/`Td nowrap`, cijfer-
+       invoer (hieronder), `.text-stat`, CountUp, tellers en tijdkolommen. */
     /* Inter-varianten (cv05 = l met voetje, cv08 = I met schreefjes): body is
        Inter, dus dit hoort hier. Koppen erven het mee maar Manrope kent deze
        features niet en negeert ze stil; verhuizen naar één body-rol zou de
        Inter-tekst buiten die rol (labels, tabellen, chips) stiekem anders
        laten renderen. Bewust op body gelaten. */
     font-feature-settings: "cv05", "cv08";
+  }
+
+  /* Cijferinvoer (tijd, getal, datum dd/mm/jjjj, maand mm/jjjj) lijnt uit
+     zoals de tabelcel ernaast; gewone tekstvelden blijven proportioneel. */
+  input[type="time"],
+  input[type="number"],
+  input[inputmode="numeric"],
+  input[inputmode="decimal"],
+  /* Kalenderrasters (DatePicker, MaandInput, VerlofBereikRaster): dagcijfers
+     in kolommen. */
+  [role="grid"] {
+    font-variant-numeric: tabular-nums;
   }
 
   /* Focus: zie het unlayered blok "Focus" onder deze laag. Hier bewust

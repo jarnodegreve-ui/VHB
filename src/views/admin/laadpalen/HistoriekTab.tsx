@@ -141,7 +141,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
       </div>
 
       <div>
-        <CardHeader size="lg" title="Per maand" description="Nieuwste bovenaan. Klik op een maand voor het volledige maandoverzicht." aside={<Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={exporteerMaanden}>CSV</Button>} />
+        <CardHeader size="lg" title="Per maand" description="Nieuwste bovenaan. Kies een maand voor het volledige maandoverzicht." aside={<Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={exporteerMaanden}>CSV</Button>} />
         <TableShell className="mt-3">
           <table className="w-full">
             <thead>
