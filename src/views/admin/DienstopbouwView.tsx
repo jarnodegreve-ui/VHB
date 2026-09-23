@@ -17,7 +17,7 @@ import { Card, CardHeader } from '../../components/Card';
 import { Field, Select } from '../../components/Field';
 import { Badge, Button, Chip, FilterChip, IconButton, Segmented } from '../../components/primitives';
 import { StickyThead, TableToolbar } from '../../components/Table';
-import { Td, Th } from '../../components/TabelBasis';
+import { Td, Th, Tabel, TableShell } from '../../components/TabelBasis';
 import { meldSchrijffout } from '../../lib/fouten';
 
 type Tab = 'imports' | 'diensten' | 'dagtypes';
@@ -122,7 +122,7 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
       {isLoading && imports.length === 0 ? <Card padding="none" className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card> : imports.length === 0 ? (
         <EmptyState title="Nog geen import" message="Importeer de ET-export om de ritdelen, controles en looncomponenten te krijgen." />
       ) : (
-        <div className="surface-table rounded-3xl overflow-clip">
+        <TableShell label="Imports">
           {/* Mobiel: kaartlijst (de brede tabel hieronder is desktop-only, zoals de andere beheerschermen). */}
           <ul className="md:hidden divide-y divide-hairline-subtle">
             {imports.map((i) => (
@@ -145,13 +145,15 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
               </li>
             ))}
           </ul>
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[48rem] text-left border-collapse">
+          {/* Vanaf md schuift de tabel in haar kader (TableShell standaard): met
+              de knoppen erbij is ze breder dan de kaart op 768 px. */}
+          <div className="hidden md:block">
+            <Tabel className="min-w-[48rem]">
               <StickyThead><tr><Th>Import</Th><Th num>Ritdelen</Th><Th num>Diensten</Th><Th>Dagtypes</Th><Th>Controle</Th><Th>Status</Th><Th className="text-right">Acties</Th></tr></StickyThead>
               <tbody>
                 {imports.map((i) => (
                   <tr key={i.id} className="border-b border-hairline-subtle last:border-b-0 align-top">
-                    <Td><p className="font-semibold text-slate-800">{i.filename ?? 'import'}</p><p className="text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)}</p></Td>
+                    <Td><p className="font-semibold text-slate-800">{i.filename ?? 'import'}</p><p className="whitespace-nowrap text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)}</p></Td>
                     <Td num>{i.rijen}</Td>
                     <Td num>{i.diensten}</Td>
                     <Td className="text-xs">{i.dagtypes.join(', ')}</Td>
@@ -161,7 +163,7 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
                         {waarsch(i) > 0 && <Badge tone="amber" stil dot>{waarsch(i)} waarschuwingen</Badge>}
                       </div>
                     </Td>
-                    <Td>{i.actief ? <Badge tone="emerald" dot>actief</Badge> : <Badge tone="slate" stil>niet actief</Badge>}</Td>
+                    <Td nowrap>{i.actief ? <Badge tone="emerald" dot>actief</Badge> : <Badge tone="slate" stil>niet actief</Badge>}</Td>
                     <Td className="text-right">
                       <div className="inline-flex flex-wrap justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => setDetail(i)}>Bevindingen</Button>
@@ -174,9 +176,9 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Tabel>
           </div>
-        </div>
+        </TableShell>
       )}
       {detail && <BevindingenModal imp={detail} onClose={() => setDetail(null)} />}
     </div>
@@ -208,6 +210,9 @@ function BevindingenModal({ imp, onClose }: { imp: SegmentImport; onClose: () =>
     </Modal>
   );
 }
+
+/** "5 / 123 (a)": lijn, rit en variant van een ritdeel, of een streepje. */
+const lijnRit = (s: Segment) => (s.lijn ? `${s.lijn}${s.rit ? ` / ${s.rit}` : ''}${s.variant ? ` (${s.variant})` : ''}` : '—');
 
 function DienstenTab({ actief }: { actief: SegmentImport | null }) {
   const [segmenten, setSegmenten] = useState<Array<Segment & { id: string }>>([]);
@@ -253,79 +258,127 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
         <OpsStat icon={<AlertTriangle size={16} />} tone={actief.bevindingen.some((b) => b.ernst === 'fout') ? 'red' : 'slate'} label="Bevindingen" value={actief.bevindingen.length} sub="in de actieve import" />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="surface-table rounded-3xl overflow-clip lg:col-span-1">
-          <div className="border-b border-hairline px-5 py-4">
-            <TableToolbar zoek={zoek} onZoek={setZoek} placeholder="Dienstnummer…" telling={`${lijst.length} van ${diensten.length}`} filters={<Select aria-label="Dagtype" value={dagtype} onChange={(e) => setDagtype(e.target.value)} className="min-w-0 px-2.5 py-1.5 text-xs"><option value="">Alle dagtypes</option>{dagtypes.map((d) => <option key={d} value={d}>{d}</option>)}</Select>} />
-          </div>
-          {isLoading ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
-            <ul className="max-h-[70vh] divide-y divide-hairline-subtle overflow-y-auto">
+        {/* Een lijst, geen tabel: het kader is wel TableShell (toolbar als kop),
+            `past` want er is niets om horizontaal te schuiven. */}
+        <TableShell
+          className="lg:col-span-1"
+          past
+          kop={<TableToolbar zoek={zoek} onZoek={setZoek} placeholder="Dienstnummer…" telling={`${lijst.length} van ${diensten.length}`} filters={<Select aria-label="Dagtype" value={dagtype} onChange={(e) => setDagtype(e.target.value)} className="min-w-0 px-2.5 py-1.5 text-xs"><option value="">Alle dagtypes</option>{dagtypes.map((d) => <option key={d} value={d}>{d}</option>)}</Select>} />}
+        >
+          {isLoading ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : lijst.length === 0 ? (
+            <div className="p-5"><EmptyState compact title={zoekTerm ? `Geen dienst “${zoek.trim()}”` : 'Geen diensten voor dit dagtype'} message="Pas het dienstnummer of het dagtype aan." /></div>
+          ) : (
+            <ul aria-label="Diensten" className="max-h-[70vh] divide-y divide-hairline-subtle overflow-y-auto">
               {lijst.map((d) => {
                 const k = `${d.serviceNumber}|${d.dagtypeCode}`;
                 const pp = params.get(k);
                 return (
                   <li key={k}>
                     {/* rauw: lijstrij als knop die het detail rechts opent */}
-                    <button type="button" onClick={() => setGekozen(k)} className={cn('ios-pressable flex min-h-11 w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-surface-soft-hover', gekozen === k && 'bg-oker-50')}>
-                      <span className="min-w-0 flex-1"><span className="text-sm font-semibold text-slate-800">{d.serviceNumber}</span> <span className="text-xs text-slate-500">{d.dagtypeCode} · {d.segmenten.length} delen</span></span>
-                      {pp && <span className="text-xs text-slate-600">{minNaarHHMM(pp.lbRijtijd)} rij</span>}
+                    {/* Selectie is neutraal (bg-slate-100/60), niet goud: goud is actie, focus en nu (huisstijl). */}
+                    <button type="button" onClick={() => setGekozen(k)} aria-current={gekozen === k ? 'true' : undefined} className={cn('ios-pressable flex min-h-11 w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-surface-soft-hover', gekozen === k && 'bg-slate-100/60')}>
+                      <span className="min-w-0 flex-1"><span className="whitespace-nowrap text-sm font-semibold text-slate-800">{d.serviceNumber}</span> <span className="text-xs text-slate-500">{d.dagtypeCode} · {d.segmenten.length} delen</span></span>
+                      {pp && <span className="whitespace-nowrap text-xs text-slate-600">{minNaarHHMM(pp.lbRijtijd)} rij</span>}
                     </button>
                   </li>
                 );
               })}
             </ul>
           )}
-        </div>
+        </TableShell>
         <div className="space-y-4 lg:col-span-2">
           {!detail ? <EmptyState compact title="Kies een dienst" message="Links een dienst kiezen voor de ritdelen, het ritblad en de loonparameters." /> : (
             <>
-              <Card padding="none" className="overflow-clip">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-5 py-3">
-                  <h2 className="text-card-title">Dienst {detail.serviceNumber} <span className="font-normal text-slate-500">· dagtype {detail.dagtypeCode}</span></h2>
-                  {p && <div className="flex flex-wrap gap-1.5 text-xs">
-                    <Chip mono={false}>rijtijd {minNaarHHMM(p.lbRijtijd)}</Chip><Chip mono={false}>stat. {p.lbStat100At}/{p.lbStat100Nat}/{p.lbStat50Nat}</Chip><Chip mono={false}>onderbr. {p.lbOnd}</Chip><Chip mono={false}>admin {p.lbAdmT}</Chip><Chip mono={false}>nacht {p.lbNacht}</Chip>
-                    <Chip mono={false}>tik {p.tiktijden.map((t) => `${t.begin}-${t.einde}`).join(' · ')}</Chip>
-                  </div>}
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[40rem] text-left border-collapse">
+              {/* Ritdelen en ritblad: vanaf md een tabel die in haar kader
+                  schuift (tien en acht kolommen naast de dienstenlijst), onder
+                  md een lijst met dezelfde rijen: tijdvak en soort bovenaan,
+                  loop, lijn en plaatsen eronder. De lijst staat eerst in de
+                  DOM, zoals bij Imports. */}
+              <TableShell
+                label={`Ritdelen van dienst ${detail.serviceNumber}`}
+                kop={(
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-card-title">Dienst {detail.serviceNumber} <span className="font-normal text-slate-500">· dagtype {detail.dagtypeCode}</span></h2>
+                    {p && <div className="flex flex-wrap gap-1.5 text-xs">
+                      <Chip mono={false}>rijtijd {minNaarHHMM(p.lbRijtijd)}</Chip><Chip mono={false}>stat. {p.lbStat100At}/{p.lbStat100Nat}/{p.lbStat50Nat}</Chip><Chip mono={false}>onderbr. {p.lbOnd}</Chip><Chip mono={false}>admin {p.lbAdmT}</Chip><Chip mono={false}>nacht {p.lbNacht}</Chip>
+                      <Chip mono={false}>tik {p.tiktijden.map((t) => `${t.begin}–${t.einde}`).join(' · ')}</Chip>
+                    </div>}
+                  </div>
+                )}
+              >
+                <ul className="divide-y divide-hairline-subtle md:hidden">
+                  {detail.segmenten.map((s) => (
+                    <li key={s.id} className={cn('space-y-1 px-4 py-3', (s.type === 'ONE' || s.type === 'ONV') && 'bg-surface-muted')}>
+                      <p className="flex items-baseline gap-2 text-sm">
+                        <span className="w-5 shrink-0 text-right text-xs text-slate-500">{s.volgorde}</span>
+                        <span title={SEGMENT_TYPE_LABEL[s.type]}><Chip>{s.type}</Chip></span>
+                        <span className="whitespace-nowrap font-semibold text-slate-800">{minNaarHHMM(s.startMin)}–{minNaarHHMM(s.eindeMin)}</span>
+                        <span className="ml-auto whitespace-nowrap text-xs text-slate-500">{s.duurMin} min{s.afstandKm != null ? ` · ${s.afstandKm} km` : ''}</span>
+                      </p>
+                      {(s.loop || s.lijn || s.vertrek || s.aankomst) && (
+                        <p className="pl-7 text-xs text-slate-600">
+                          {s.loop && <span className="whitespace-nowrap">loop {s.loop}</span>}
+                          {s.loop && s.lijn && ' · '}
+                          {s.lijn && <span className="whitespace-nowrap">lijn {lijnRit(s)}</span>}
+                          {(s.vertrek || s.aankomst) && <span className="block">{s.vertrek ?? '—'} → {s.aankomst ?? '—'}</span>}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <div className="hidden md:block">
+                  <Tabel className="min-w-[40rem]">
                     <StickyThead><tr><Th num>#</Th><Th>Soort</Th><Th>Van</Th><Th>Tot</Th><Th num>Min</Th><Th>Loop</Th><Th>Lijn / rit</Th><Th>Vertrek</Th><Th>Aankomst</Th><Th num>Km</Th></tr></StickyThead>
                     <tbody>
                       {detail.segmenten.map((s) => (
                         <tr key={s.id} className={cn('border-b border-hairline-subtle last:border-b-0', (s.type === 'ONE' || s.type === 'ONV') && 'bg-surface-muted')}>
                           <Td num className="text-slate-500">{s.volgorde}</Td>
-                          <Td><span title={SEGMENT_TYPE_LABEL[s.type]}><Chip>{s.type}</Chip></span></Td>
-                          <Td className="font-mono text-xs">{minNaarHHMM(s.startMin)}</Td>
-                          <Td className="font-mono text-xs">{minNaarHHMM(s.eindeMin)}</Td>
+                          <Td nowrap><span title={SEGMENT_TYPE_LABEL[s.type]}><Chip>{s.type}</Chip></span></Td>
+                          <Td nowrap>{minNaarHHMM(s.startMin)}</Td>
+                          <Td nowrap>{minNaarHHMM(s.eindeMin)}</Td>
                           <Td num>{s.duurMin}</Td>
-                          <Td className="text-xs">{s.loop ?? '—'}</Td>
-                          <Td className="text-xs">{s.lijn ? `${s.lijn}${s.rit ? ` / ${s.rit}` : ''}${s.variant ? ` (${s.variant})` : ''}` : '—'}</Td>
-                          <Td className="text-xs">{s.vertrek ?? '—'}</Td>
-                          <Td className="text-xs">{s.aankomst ?? '—'}</Td>
-                          <Td num className="text-xs">{s.afstandKm ?? '—'}</Td>
+                          <Td nowrap>{s.loop ?? '—'}</Td>
+                          <Td nowrap>{lijnRit(s)}</Td>
+                          <Td>{s.vertrek ?? '—'}</Td>
+                          <Td>{s.aankomst ?? '—'}</Td>
+                          <Td num>{s.afstandKm ?? '—'}</Td>
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </Tabel>
                 </div>
-              </Card>
-              <Card padding="none" className="overflow-clip">
-                <div className="border-b border-hairline px-5 py-3"><h2 className="text-card-title">Ritblad uit data</h2></div>
+              </TableShell>
+              <TableShell label={`Ritblad van dienst ${detail.serviceNumber}`} kop={<h2 className="text-card-title">Ritblad uit data</h2>}>
                 {ritblad === null ? <div className="p-4"><SkeletonRow /></div> : ritblad.length === 0 ? <div className="p-4"><EmptyState compact title="Geen ritblad" message="Geen ritdelen voor deze dienst." /></div> : ritblad.filter((r) => r.dagtypeCode === detail.dagtypeCode).map((r) => (
-                  <div key={r.dagtypeCode} className="overflow-x-auto">
-                    <table className="w-full min-w-[36rem] text-left border-collapse">
-                      <StickyThead><tr><Th>Lijn</Th><Th>Rit</Th><Th>Loop</Th><Th>Vertrek</Th><Th>Start</Th><Th>Aankomst</Th><Th>Einde</Th><Th>Via</Th></tr></StickyThead>
-                      <tbody>
-                        {r.rijen.map((rij, i) => (
-                          <tr key={i} className="border-b border-hairline-subtle last:border-b-0">
-                            <Td className="text-sm font-semibold">{rij.lijn || '—'}</Td><Td className="text-sm">{rij.rit || '—'}</Td><Td className="text-xs">{rij.loop || '—'}</Td>
-                            <Td className="text-xs">{rij.vertrek || '—'}</Td><Td className="font-mono text-xs">{rij.start}</Td><Td className="text-xs">{rij.aankomst || '—'}</Td><Td className="font-mono text-xs">{rij.einde}</Td><Td className="text-xs">{rij.via || ''}</Td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div key={r.dagtypeCode}>
+                    <ul className="divide-y divide-hairline-subtle md:hidden">
+                      {r.rijen.map((rij, i) => (
+                        <li key={i} className="space-y-1 px-4 py-3">
+                          <p className="flex items-baseline gap-2 text-sm">
+                            <span className="whitespace-nowrap font-semibold text-slate-800">{rij.start}–{rij.einde}</span>
+                            <span className="whitespace-nowrap text-slate-700">lijn {rij.lijn || '—'}{rij.rit ? ` / ${rij.rit}` : ''}</span>
+                            {rij.loop && <span className="ml-auto whitespace-nowrap text-xs text-slate-500">loop {rij.loop}</span>}
+                          </p>
+                          <p className="text-xs text-slate-600">{rij.vertrek || '—'} → {rij.aankomst || '—'}{rij.via ? `, via ${rij.via}` : ''}</p>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="hidden md:block">
+                      <Tabel className="min-w-[36rem]">
+                        <StickyThead><tr><Th>Lijn</Th><Th>Rit</Th><Th>Loop</Th><Th>Vertrek</Th><Th>Start</Th><Th>Aankomst</Th><Th>Einde</Th><Th>Via</Th></tr></StickyThead>
+                        <tbody>
+                          {r.rijen.map((rij, i) => (
+                            <tr key={i} className="border-b border-hairline-subtle last:border-b-0">
+                              <Td nowrap className="font-semibold">{rij.lijn || '—'}</Td><Td nowrap>{rij.rit || '—'}</Td><Td nowrap>{rij.loop || '—'}</Td>
+                              <Td>{rij.vertrek || '—'}</Td><Td nowrap>{rij.start}</Td><Td>{rij.aankomst || '—'}</Td><Td nowrap>{rij.einde}</Td><Td>{rij.via || ''}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Tabel>
+                    </div>
                   </div>
                 ))}
-              </Card>
+              </TableShell>
             </>
           )}
         </div>
@@ -343,18 +396,27 @@ function DagtypesTab() {
     catch (err) { meldSchrijffout('Bewaren', err, () => void zet(r, v)); }
   };
   return (
-    <div className="surface-table rounded-3xl overflow-clip">
-      <div className="border-b border-hairline px-5 py-4 text-sm text-slate-600">De dagtypecodes van De Lijn (21 = maandag schooldag, 26 = zaterdag, 31 = maandag schoolvakantie, …) gekoppeld aan de dagtypes van het portaal, zodat de dekking en Mijn dag de juiste ritdelen kiezen.</div>
+    // Vier kolommen, op de telefoon drie: "Per jaar" schuift onder de
+    // omschrijving, dan past de tabel op 375 px en blijft het één set
+    // keuzelijsten (`past`, de kolomkop plakt).
+    <TableShell
+      label="Dagtypes"
+      past
+      kop={<p className="text-body-sm text-slate-600">De dagtypecodes van De Lijn (21 = maandag schooldag, 26 = zaterdag, 31 = maandag schoolvakantie, …) gekoppeld aan de dagtypes van het portaal, zodat de dekking en Mijn dag de juiste ritdelen kiezen.</p>}
+    >
       {isLoading ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
-        <table className="w-full text-left border-collapse">
-          <StickyThead><tr><Th>Code</Th><Th>Omschrijving</Th><Th num>Per jaar</Th><Th>Portaal-dagtype</Th></tr></StickyThead>
+        <Tabel>
+          <StickyThead><tr><Th className="px-3 md:px-4">Code</Th><Th className="px-3 md:px-4">Omschrijving</Th><Th num className="hidden md:table-cell">Per jaar</Th><Th className="px-3 md:px-4">Portaal-dagtype</Th></tr></StickyThead>
           <tbody>
             {rijen.map((r) => (
               <tr key={r.code} className="border-b border-hairline-subtle last:border-b-0">
-                <Td className="font-mono text-sm font-semibold">{r.code}</Td>
-                <Td className="text-sm">{r.omschrijving}</Td>
-                <Td num className="text-slate-500">{r.aantalPerJaar ?? '—'}</Td>
-                <Td>
+                <Td nowrap className="px-3 font-semibold text-slate-800 md:px-4">{r.code}</Td>
+                <Td className="px-3 md:px-4">
+                  {r.omschrijving}
+                  <span className="block text-xs text-slate-500 md:hidden">{r.aantalPerJaar ?? '—'} per jaar</span>
+                </Td>
+                <Td num className="hidden text-slate-500 md:table-cell">{r.aantalPerJaar ?? '—'}</Td>
+                <Td className="px-3 md:px-4">
                   <Field label="" htmlFor={`dt-${r.code}`} className="!space-y-0 [&>label]:sr-only">
                     <Select id={`dt-${r.code}`} aria-label={`Portaal-dagtype voor ${r.omschrijving}`} value={r.portaalDagtype ?? ''} onChange={(e) => void zet(r, e.target.value)} className="min-w-0 px-2 py-1 text-sm">
                       <option value="">niet gekoppeld</option>
@@ -365,8 +427,8 @@ function DagtypesTab() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </Tabel>
       )}
-    </div>
+    </TableShell>
   );
 }
