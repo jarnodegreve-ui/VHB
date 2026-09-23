@@ -7,7 +7,7 @@ import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType, serviceNumberOf } from '../lib/format';
 import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '../lib/ruilBadge';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, Chip, MicroLabel, microLabelClass, Segmented, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, Chip, MicroLabel, microLabelClass, Segmented } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { MaandNavigatie, MaandWissel } from '../components/MaandNavigatie';
@@ -27,6 +27,7 @@ import { openHuidigRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
 import { navigeer, useRouteParam } from '../app/router';
 import { LegeLijst } from '../components/illustraties';
+import { TableShell, Td, Th } from '../components/TabelBasis';
 
 /** Maand in de URL (`/rooster/2026-10`, maandweergave) — spiegel van de
  *  kalendermaand; een ongeldige waarde wordt genegeerd. */

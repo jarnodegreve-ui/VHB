@@ -26,8 +26,9 @@ import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, Segmented, Switch, TOON_NAAR_BADGE, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, Segmented, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
 import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
+import { Td, Th } from '../../components/TabelBasis';
 
 type Tab = 'maand' | 'codes' | 'medewerkers';
 

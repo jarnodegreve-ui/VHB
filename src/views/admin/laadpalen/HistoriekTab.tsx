@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Download } from 'lucide-react';
 import { Card, CardHeader } from '../../../components/Card';
 import { InfoTip } from '../../../components/InfoTip';
-import { Button, MicroLabel, TableShell, Td, Th } from '../../../components/primitives';
+import { Button, MicroLabel } from '../../../components/primitives';
 import { SkeletonTile } from '../../../components/Skeleton';
 import { EmptyState } from '../../../components/ui';
 import { LegeLijst } from '../../../components/illustraties';
@@ -12,6 +12,7 @@ import { busVoorLaadpunt } from '../../../lib/laadplein';
 import { cn } from '../../../lib/ui';
 import { Delta, dagKort, duurLabel, exporteerCsv, fmtKwh, maandKort, maandLabel, periodeLabel, tekstKw, tekstKwhHeel, uurLabel, type MaandRij } from './gedeeld';
 import { Staafgrafiek, useKeuze } from './grafieken';
+import { TableShell, Td, Th } from '../../../components/TabelBasis';
 
 /**
  * Tabblad Historiek: alle maanden sinds de eerste sessie naast elkaar,

@@ -1,13 +1,18 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { tik } from '../lib/tik';
-import { Button, IconButton, MicroLabel, Segmented, Td, Th } from './primitives';
+import { Button, IconButton, MicroLabel, Segmented } from './primitives';
 import { useDropdown } from './useDropdown';
 import { Popover } from './Popover';
 import { SearchField } from './Field';
+
+import { Tabel, TableShell, Td, Th } from './TabelBasis';
+
+export { Tabel, TableShell, Td, Th };
+
 
 /**
  * Tabel-bouwstenen voor de beheerkant (fase C11):
@@ -19,6 +24,9 @@ import { SearchField } from './Field';
  * - `Paginering`: eenvoudige "vorige/volgende + N per pagina".
  * - `useTabelVoorkeur`: rijdichtheid + kolomkeuze, per tabel onthouden in
  *   localStorage; de toolbar toont er de schakelaar en het kolommenmenu voor.
+ * - `CelKnop` + `rijKlik`: een rij die iets opent (tranche 3B).
+ * Het kader zelf is `TableShell` (label, kop, overloop) met `Tabel` erin
+ * (TabelBasis.tsx, hier doorgegeven).
  */
 
 // === Tabelvoorkeur: dichtheid + kolomkeuze ===
@@ -387,4 +395,37 @@ export function Paginering({ totaal, perPagina, pagina, onPagina, className }: {
   );
 }
 
-export { Td, Th };
+/**
+ * Een rij die een record opent (bewerken, detail): de hoofdcel draagt een
+ * echte knop, zodat Tab + Enter/Spatie hetzelfde doen als klikken, en er is
+ * geen apart potlood meer nodig. Zet op de `<tr>` `onClick={rijKlik(open)}`
+ * als muisgemak: een klik ergens in de rij opent dan ook, behalve op een
+ * eigen knop, link of invoer in die rij (tranche 3B, 23-09).
+ */
+export function CelKnop({ onClick, label, className, children }: {
+  onClick: () => void;
+  /** Toegankelijke naam als de zichtbare tekst niet zegt wat er gebeurt ("Vervaldata van X bewerken"). */
+  label?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    // rauw: tekstknop in een tabelcel (naam + metaregel), Button centreert en dwingt min-h en semibold af
+    <button type="button" onClick={onClick} aria-label={label} className={cn('tikbaar -mx-1.5 -my-1 block max-w-full rounded-lg px-1.5 py-1 text-left', className)}>
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Klikhandler voor een `<tr>` die ook via een `CelKnop` opent: klikken op een
+ * interactief element in de rij tellen niet, en ook niets uit een portal (een
+ * menu of dialoog bubbelt in React door naar de rij, maar staat er niet in).
+ */
+export const rijKlik = (open: () => void) => (e: MouseEvent<HTMLElement>) => {
+  const doel = e.target as HTMLElement;
+  if (!e.currentTarget.contains(doel)) return;
+  if (doel.closest('button, a, input, select, textarea, label, [role="menuitem"]')) return;
+  open();
+};
+

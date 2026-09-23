@@ -9,7 +9,7 @@ import { isoDate } from '../../lib/availability';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
-import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
+import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Callout } from '../../components/Callout';
 import { Stat } from '../../components/Stat';
@@ -19,6 +19,7 @@ import { InfoTip } from '../../components/InfoTip';
 import type { VerwachtingAfwijking } from '../../../shared/coverageGaps';
 import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 import { meldSchrijffout } from '../../lib/fouten';
+import { Td, Th } from '../../components/TabelBasis';
 
 /** Inklapbare preview-sectie: de import-preview groeide naar acht blokken —
  *  met een kop + teller per blok blijft het scanbaar en klap je alleen open

@@ -6,7 +6,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { Modal } from '../components/Modal';
 import { Formulier } from '../components/Formulier';
 import { useVeldfouten, useVuil } from '../lib/formulier';
-import { Badge, Button, IconButton, MicroLabel, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
 import { RuilStatusBadge } from '../components/RuilStatusBadge';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { LijstKaart, RecordRij } from '../components/RecordRij';
@@ -29,6 +29,7 @@ import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWiza
 import { canRespondToSwap } from '../lib/authorization';
 import { notify, openPdfInNewTab } from '../lib/ui';
 import { AllesGedaan, LegeLijst } from '../components/illustraties';
+import { TableShell, Td, Th } from '../components/TabelBasis';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 

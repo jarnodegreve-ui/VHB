@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, IdCard, Pencil, UserX } from 'lucide-react';
+import { AlertTriangle, IdCard, UserX } from 'lucide-react';
 import type { User } from '../../types';
 import { useRecordParam } from '../../app/router';
 import { cn, notify } from '../../lib/ui';
-import { EXPIRY_SOORT_LABELS, formatDateHuman } from '../../lib/format';
+import { EXPIRY_SOORT_LABELS } from '../../lib/format';
+import { dagenTotVerval, vandaagLokaal } from '../../lib/verval';
+import { VervalPil } from '../../components/VervalPil';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
@@ -15,11 +17,17 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, Td, Th, type BadgeTone } from '../../components/primitives';
-import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
+import { Badge, Button, FilterChip, TOON_NAAR_BADGE } from '../../components/primitives';
+import { VERVAL_STATUS } from '../../../shared/status';
+import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../../components/Table';
+import { Tabel, TableShell, Td } from '../../components/TabelBasis';
 
-/** Uitschakelbare kolommen: één per bewaakt document (Chauffeur, Eerst vervallend en Acties blijven altijd). */
+/** Uitschakelbare kolommen: één per bewaakt document (Chauffeur en Eerst vervallend blijven altijd). */
 const KOLOMMEN = Object.entries(EXPIRY_SOORT_LABELS).map(([key, label]) => ({ key, label }));
+
+/** "Nog in te vullen" is een aandachtspunt: de gedeelde waarschuwingstoon
+ *  (VERVAL_STATUS.geen_datum, amber), nooit het merkgoud en niet grijs. */
+const GEEN_DATUM_TOON = TOON_NAAR_BADGE[VERVAL_STATUS.geen_datum.toon];
 
 type ExpiryRow = { userId: string; soort: string; validUntil: string };
 type Filter = 'all' | 'verlopen' | 'binnen30' | 'binnen90' | 'zonder';
@@ -52,11 +60,8 @@ export function VervaldataView({ users }: { users: User[] }) {
     setExpiries(Array.isArray(rows) ? rows : []);
   }, { boodschap: 'Kon de vervaldata niet laden.' });
 
-  const vandaagIso = useMemo(() => {
-    const nu = new Date();
-    return `${nu.getFullYear()}-${String(nu.getMonth() + 1).padStart(2, '0')}-${String(nu.getDate()).padStart(2, '0')}`;
-  }, []);
-  const dagenTot = (d: string) => Math.round((Date.parse(d) - Date.parse(vandaagIso)) / 86400000);
+  const vandaagIso = useMemo(() => vandaagLokaal(), []);
+  const dagenTot = (d: string) => dagenTotVerval(d, vandaagIso);
 
   const perUser = useMemo(() => {
     const map = new Map<string, Record<string, string>>();
@@ -131,16 +136,6 @@ export function VervaldataView({ users }: { users: User[] }) {
   const wisFilters = () => { setZoek(''); setFilter('all'); };
   const kiesFilter = (f: Filter) => setFilter((cur) => (cur === f ? 'all' : f));
 
-  const chipTone = (dagen: number): BadgeTone => (dagen < 0 ? 'red' : dagen <= 30 ? 'amber' : dagen <= 90 ? 'oker' : 'emerald');
-  /** Compacte datum ("27 nov 2027") — de lange variant met weekdag maakte de
-   *  pillen zó breed dat ze op desktop niet meer in één kolom pasten en per
-   *  rij op een andere x begonnen. De volledige datum staat in de tooltip. */
-  const kortDatum = (iso: string) => {
-    const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
-  };
-  const dagenTekst = (dagen: number) => (dagen < 0 ? 'verlopen' : dagen === 0 ? 'vandaag' : `${dagen} d`);
   const eersteTekst = (eerste: number | null) => {
     if (eerste === null) return 'nog geen datums ingevuld';
     if (eerste < 0) return `al ${Math.abs(eerste)} ${Math.abs(eerste) === 1 ? 'dag' : 'dagen'} verlopen`;
@@ -199,27 +194,10 @@ export function VervaldataView({ users }: { users: User[] }) {
     await zl.ververs();
   };
 
-  /** Datumpil per soort; `metLabel` voor de mobiele kaart (daar is geen kolomkop). */
-  const datumPil = (rij: Rij, soort: string, label: string, metLabel: boolean) => {
-    const datum = rij.datums[soort];
-    if (!datum) {
-      return (
-        <Badge key={soort} tone="slate" className="whitespace-nowrap opacity-70">
-          {metLabel ? `${label}: ` : ''}—
-        </Badge>
-      );
-    }
-    const dagen = rij.dagen[soort] ?? dagenTot(datum);
-    return (
-      // Stil (neutraal vlak + gekleurd puntje) zolang er niets dringend is;
-      // binnen 30 dagen of verlopen blijft het vlak gekleurd.
-      <Badge key={soort} tone={chipTone(dagen)} dot stil={dagen > 30} className="whitespace-nowrap tabular-nums">
-        {metLabel ? `${label}: ` : ''}
-        <span title={formatDateHuman(datum)}>{kortDatum(datum)}</span>
-        <span className="text-slate-500">· {dagenTekst(dagen)}</span>
-      </Badge>
-    );
-  };
+  /** Datumpil per soort (VervalPil); `metLabel` voor de mobiele kaart (daar is geen kolomkop). */
+  const datumPil = (rij: Rij, soort: string, label: string, metLabel: boolean) => (
+    <VervalPil key={soort} datum={rij.datums[soort]} dagen={rij.dagen[soort]} label={metLabel ? label : undefined} />
+  );
 
   return (
     <PageShell>
@@ -284,11 +262,13 @@ export function VervaldataView({ users }: { users: User[] }) {
       ) : rijen.length === 0 ? (
         <EmptyState title="Geen actieve chauffeurs" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." />
       ) : (
-        // `overflow-clip` i.p.v. TableShell: die maakt een scrollcontainer en
-        // dan plakt de kolomkop niet meer onder de topbar. De tabel is
-        // desktop-only; mobiel krijgt een kaartlijst met dezelfde rijen.
-        <div className="surface-table rounded-3xl overflow-clip">
-          <div className="border-b border-hairline px-5 py-4 md:px-6">
+        // TableShell `past`: de tabel staat alleen vanaf md en past daar in
+        // haar kader, dus geen scrollcontainer en de kolomkop plakt onder de
+        // topbar. Mobiel krijgt een kaartlijst met dezelfde rijen.
+        <TableShell
+          label="Vervaldata per chauffeur"
+          past
+          kop={(
             <TableToolbar
               zoek={zoek}
               onZoek={setZoek}
@@ -306,8 +286,8 @@ export function VervaldataView({ users }: { users: User[] }) {
                 </>
               )}
             />
-          </div>
-
+          )}
+        >
           {gesorteerd.length === 0 ? (
             <div className="p-6">
               <EmptyState
@@ -319,41 +299,39 @@ export function VervaldataView({ users }: { users: User[] }) {
           ) : (
             <>
               <div className="hidden md:block">
-                <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
+                <Tabel className={voorkeur.tabelClass}>
                   <StickyThead>
                     <tr>
                       <SortTh kolom="naam" sort={sort}>Chauffeur</SortTh>
                       {soorten.filter(([soort]) => voorkeur.zichtbaar(soort)).map(([soort, label]) => <SortTh key={soort} kolom={soort} sort={sort}>{label}</SortTh>)}
                       <SortTh kolom="eerste" sort={sort}>Eerst vervallend</SortTh>
-                      <Th className="text-right">Acties</Th>
                     </tr>
                   </StickyThead>
                   <tbody>
                     {gesorteerd.map((rij) => (
+                      // De naam is de knop (Tab + Enter opent het bewerkvenster);
+                      // een klik ergens in de rij doet hetzelfde voor de muis.
                       <tr
                         key={rij.user.id}
-                        onClick={() => openBewerken(rij.user)}
+                        onClick={rijKlik(() => openBewerken(rij.user))}
                         className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover"
                       >
                         <Td>
-                          <p className={cn('font-semibold', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{rij.user.name}</p>
-                          {rij.user.employeeId ? <p className="text-xs font-medium tabular-nums text-slate-500">{rij.user.employeeId}</p> : null}
+                          <CelKnop onClick={() => openBewerken(rij.user)} label={`Vervaldata van ${rij.user.name} bewerken`}>
+                            <span className={cn('block font-semibold', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{rij.user.name}</span>
+                            {rij.user.employeeId ? <span className="block text-xs font-medium text-slate-500">{rij.user.employeeId}</span> : null}
+                          </CelKnop>
                         </Td>
                         {soorten.filter(([soort]) => voorkeur.zichtbaar(soort)).map(([soort, label]) => (
-                          <Td key={soort}>{datumPil(rij, soort, label, false)}</Td>
+                          <Td key={soort} nowrap>{datumPil(rij, soort, label, false)}</Td>
                         ))}
-                        <Td className={cn('text-xs font-medium tabular-nums', rij.eerste === null ? 'text-oker-700' : rij.eerste < 0 ? 'text-red-700' : 'text-slate-600')}>
-                          {rij.eerste === null ? 'Nog in te vullen' : eersteTekst(rij.eerste)}
-                        </Td>
-                        <Td className="text-right">
-                          <IconButton label={`Vervaldata van ${rij.user.name} bewerken`} title="Bewerken" variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openBewerken(rij.user); }}>
-                            <Pencil size={16} />
-                          </IconButton>
+                        <Td className={cn('text-xs font-medium', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-600')}>
+                          {rij.eerste === null ? <Badge tone={GEEN_DATUM_TOON} dot className="whitespace-nowrap">Nog in te vullen</Badge> : eersteTekst(rij.eerste)}
                         </Td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </Tabel>
               </div>
 
               <div className="md:hidden divide-y divide-hairline-subtle">
@@ -367,9 +345,9 @@ export function VervaldataView({ users }: { users: User[] }) {
                   >
                     <div className="flex items-baseline justify-between gap-3">
                       <p className={cn('min-w-0 truncate text-sm font-semibold', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{rij.user.name}</p>
-                      {rij.eerste === null ? <span className="shrink-0 text-xs font-semibold text-oker-700">Invullen</span> : null}
+                      {rij.eerste === null ? <Badge tone={GEEN_DATUM_TOON} dot className="shrink-0 whitespace-nowrap">Nog in te vullen</Badge> : null}
                     </div>
-                    <p className="text-xs font-medium tabular-nums text-slate-500">{eersteTekst(rij.eerste)}</p>
+                    <p className="text-xs font-medium text-slate-500">{eersteTekst(rij.eerste)}</p>
                     {rij.eerste !== null && (
                       <div className="flex flex-wrap gap-1.5">
                         {soorten.map(([soort, label]) => datumPil(rij, soort, label, true))}
@@ -380,7 +358,7 @@ export function VervaldataView({ users }: { users: User[] }) {
               </div>
             </>
           )}
-        </div>
+        </TableShell>
       )}
 
       <Modal open={!!bewerkt} onClose={sluitBewerken} vuil={vuil} maxWidth="sm" ariaLabel={bewerkt ? `Vervaldata van ${bewerkt.name}` : 'Vervaldata'}>

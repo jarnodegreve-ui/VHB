@@ -6852,3 +6852,120 @@ describe('rusttijd bij een dienstruil (GET /api/swaps › rust)', () => {
     expect(opnieuw.rust[0].rustVoor).toBe(340);
   });
 });
+
+// Tranche 3B, eis B (Jarno 23-09): pauzeren/activeren en de 2FA-reset staan
+// sinds 3B.1 ook in het rijmenu op de telefoon. De server beslist: exact de
+// requests die de UI stuurt (snelle knop = PUT /api/users/:id met het hele
+// record en isActive omgedraaid + X-Record-Revision; bulkbalk = POST
+// /api/users met de hele lijst + X-Collection-Revision; 2FA = POST
+// /api/admin/users/:id/mfa-reset) weigeren een planner en een chauffeur
+// (403) en een anonieme aanroep (401), zonder iets te wijzigen.
+describe('gebruikers pauzeren/activeren en 2FA-reset: alleen admin (tranche 3B)', () => {
+  const REC = 'x-record-revision';
+  const COLL = 'x-collection-revision';
+  const recRev = async (id: string) => (await api('GET', '/api/users', { token: 'tok-admin' })).json.find((u: any) => String(u.id) === id)._rev as string;
+  const collRev = async () => (await api('GET', '/api/users', { token: 'tok-admin' })).headers.get(COLL)!;
+  const actief = (id: string) => mem.users.find((u: any) => String(u.id) === id)?.isActive;
+
+  describe('snelle knop (PUT /api/users/:id)', () => {
+    it.each([['planner', 'tok-planner'], ['chauffeur', 'tok-a']])('een %s kan niet pauzeren: 403, gebruiker blijft actief', async (_rol, token) => {
+      const rev = await recRev('4');
+      const res = await api('PUT', '/api/users/4', { token, body: { ...mem.users[3], isActive: false }, headers: { [REC]: rev } });
+      expect(res.status).toBe(403);
+      expect(actief('4')).toBe(true);
+      expect(mem.activity.some((a) => a.entityId === '4')).toBe(false);
+    });
+
+    it.each([['planner', 'tok-planner'], ['chauffeur', 'tok-a']])('een %s kan niet activeren: 403, gebruiker blijft gepauzeerd', async (_rol, token) => {
+      mem.users = mem.users.map((u: any) => (u.id === '4' ? { ...u, isActive: false } : u));
+      const rev = await recRev('4');
+      const res = await api('PUT', '/api/users/4', { token, body: { ...mem.users[3], isActive: true }, headers: { [REC]: rev } });
+      expect(res.status).toBe(403);
+      expect(actief('4')).toBe(false);
+    });
+
+    it('zonder aanmelding: 401, niets gewijzigd', async () => {
+      const rev = await recRev('4');
+      const res = await api('PUT', '/api/users/4', { body: { ...mem.users[3], isActive: false }, headers: { [REC]: rev } });
+      expect(res.status).toBe(401);
+      expect(actief('4')).toBe(true);
+    });
+
+    it('een admin pauzeert en activeert weer', async () => {
+      const pauze = await api('PUT', '/api/users/4', { token: 'tok-admin', body: { ...mem.users[3], isActive: false }, headers: { [REC]: await recRev('4') } });
+      expect(pauze.status).toBe(200);
+      expect(actief('4')).toBe(false);
+      const terug = await api('PUT', '/api/users/4', { token: 'tok-admin', body: { ...mem.users[3], isActive: true }, headers: { [REC]: await recRev('4') } });
+      expect(terug.status).toBe(200);
+      expect(actief('4')).toBe(true);
+    });
+  });
+
+  describe('bulkbalk (POST /api/users met de hele lijst)', () => {
+    it.each([['planner', 'tok-planner'], ['chauffeur', 'tok-a']])('een %s kan niet in bulk pauzeren: 403, iedereen blijft actief', async (_rol, token) => {
+      const rev = await collRev();
+      const res = await api('POST', '/api/users', { token, body: mem.users.map((u: any) => (u.role === 'chauffeur' ? { ...u, isActive: false } : u)), headers: { [COLL]: rev } });
+      expect(res.status).toBe(403);
+      // (De aanmelding zelf koppelt wel de authId van de chauffeur; dat is geen wijziging door de aanvraag.)
+      expect(mem.users.map((u: any) => u.isActive)).toEqual([true, true, true, true]);
+      expect(mem.users).toHaveLength(4);
+    });
+
+    it('zonder aanmelding: 401', async () => {
+      const res = await api('POST', '/api/users', { body: mem.users.map((u: any) => ({ ...u, isActive: false })), headers: { [COLL]: await collRev() } });
+      expect(res.status).toBe(401);
+      expect(mem.users.every((u: any) => u.isActive)).toBe(true);
+    });
+
+    it('een admin pauzeert in bulk', async () => {
+      const res = await api('POST', '/api/users', { token: 'tok-admin', body: mem.users.map((u: any) => (u.role === 'chauffeur' ? { ...u, isActive: false } : u)), headers: { [COLL]: await collRev() } });
+      expect(res.status).toBe(200);
+      expect([actief('3'), actief('4')]).toEqual([false, false]);
+    });
+  });
+
+  describe('twee-stapsverificatie resetten (POST /api/admin/users/:id/mfa-reset)', () => {
+    const mfaAttrap = () => {
+      const gewist: string[] = [];
+      const gelezen: string[] = [];
+      mem.supabaseAdmin = {
+        auth: {
+          admin: {
+            mfa: {
+              listFactors: async ({ userId }: { userId: string }) => { gelezen.push(userId); return { data: { factors: [{ id: 'f-1' }] }, error: null }; },
+              deleteFactor: async ({ id }: { id: string }) => { gewist.push(id); return { data: {}, error: null }; },
+            },
+          },
+        },
+      };
+      mem.users = mem.users.map((u: any) => (u.id === '2' ? { ...u, authId: 'auth-tok-planner' } : u));
+      return { gewist, gelezen };
+    };
+
+    it.each([['planner', 'tok-planner'], ['chauffeur', 'tok-a']])('een %s krijgt 403 en er wordt geen factor gelezen of gewist', async (_rol, token) => {
+      const { gewist, gelezen } = mfaAttrap();
+      for (const doel of ['1', '2']) {
+        expect((await api('POST', `/api/admin/users/${doel}/mfa-reset`, { token })).status).toBe(403);
+      }
+      expect(gelezen).toEqual([]);
+      expect(gewist).toEqual([]);
+      expect(mem.activity.some((a) => a.action === 'Twee-stapsverificatie gereset')).toBe(false);
+    });
+
+    it('zonder aanmelding: 401, niets gewist', async () => {
+      const { gewist } = mfaAttrap();
+      expect((await api('POST', '/api/admin/users/2/mfa-reset', {})).status).toBe(401);
+      expect(gewist).toEqual([]);
+    });
+
+    it('een admin reset de factoren van een planner en het wordt gelogd', async () => {
+      const { gewist, gelezen } = mfaAttrap();
+      const res = await api('POST', '/api/admin/users/2/mfa-reset', { token: 'tok-admin' });
+      expect(res.status).toBe(200);
+      expect(res.json).toEqual({ success: true, verwijderd: 1 });
+      expect(gelezen).toEqual(['auth-tok-planner']);
+      expect(gewist).toEqual(['f-1']);
+      expect(mem.activity.filter((a) => a.action === 'Twee-stapsverificatie gereset')).toHaveLength(1);
+    });
+  });
+});

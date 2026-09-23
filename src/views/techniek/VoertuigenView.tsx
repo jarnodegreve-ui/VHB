@@ -25,9 +25,10 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field, Input, Select } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, StatusBadge, Td, Th, type BadgeTone } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, StatusBadge, type BadgeTone } from '../../components/primitives';
 import { VOERTUIG_STATUS } from '../../../shared/status';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
+import { Td, Th } from '../../components/TabelBasis';
 
 const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
 

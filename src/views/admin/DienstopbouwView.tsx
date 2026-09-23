@@ -15,8 +15,9 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Select } from '../../components/Field';
-import { Badge, Button, Chip, FilterChip, IconButton, Segmented, Td, Th } from '../../components/primitives';
+import { Badge, Button, Chip, FilterChip, IconButton, Segmented } from '../../components/primitives';
 import { StickyThead, TableToolbar } from '../../components/Table';
+import { Td, Th } from '../../components/TabelBasis';
 import { meldSchrijffout } from '../../lib/fouten';
 
 type Tab = 'imports' | 'diensten' | 'dagtypes';

@@ -529,34 +529,6 @@ export function Chip({ tone = 'slate', mono = true, className, title, children }
   );
 }
 
-// === Tabel-primitieven ===
-
-/** Wrapper: kaart-oppervlak + horizontale scroll op smal scherm. */
-export function TableShell({ className, sticky = false, children }: { className?: string; /** Kolomkop mag plakken (StickyThead): op md+ géén scrollcontainer, anders steelt die de sticky-context van de pagina. */ sticky?: boolean; children: ReactNode }) {
-  return (
-    <div className={cn('surface-table rounded-3xl', sticky ? 'overflow-x-auto xl:overflow-clip' : 'overflow-hidden', className)}>
-      <div className={sticky ? undefined : 'overflow-x-auto'}>{children}</div>
-    </div>
-  );
-}
-
-export function Th({ className, children, title, sort, num = false }: { className?: string; children?: ReactNode; title?: string; sort?: 'ascending' | 'descending'; /** Kolom met getallen/tijden: rechts uitgelijnd (Td num doet de rest). */ num?: boolean }) {
-  // Sentence-case, geen caps: tabelkoppen zijn leestekst, geen eyebrow.
-  // `sort` zet aria-sort voor sorteerbare kolommen (maandoverzicht).
-  return (
-    <th title={title} aria-sort={sort} className={cn('px-4 py-3 text-xs font-medium text-slate-500 whitespace-nowrap', num ? 'text-right' : 'text-left', className)}>
-      {children}
-    </th>
-  );
-}
-
-export function Td({ className, children, num = false }: { className?: string; children?: ReactNode; /** Cel met getal/tijd/grootte: rechts uitgelijnd, tabular-nums, niet afbrekend — zodat kolommen cijfer onder cijfer staan. */ num?: boolean }) {
-  // Compacter op desktop-met-muis (dispatch-dichtheid); op touch blijft de
-  // rij hoog genoeg als raakvlak. tabular-nums staat al op <body>; `num`
-  // herhaalt het expliciet en lijnt rechts uit.
-  return <td className={cn('px-4 py-3 text-sm text-slate-700', num && 'text-right tabular-nums whitespace-nowrap', className)}>{children}</td>;
-}
-
 // === Switch ===
 
 /**

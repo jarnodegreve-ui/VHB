@@ -22,8 +22,9 @@ import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, Chip, FilterChip, IconButton, Segmented, Td, Th } from '../../components/primitives';
+import { Badge, Button, Chip, FilterChip, IconButton, Segmented } from '../../components/primitives';
 import { StickyThead } from '../../components/Table';
+import { Td, Th } from '../../components/TabelBasis';
 
 type Tab = 'lijst' | 'rapport';
 type Periode = 'week' | 'maand' | 'kwartaal';

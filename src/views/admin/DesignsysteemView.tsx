@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { ArrowUpRight, Bell, Bus, Check, ChevronDown, Download, Info, LogOut, Pencil, Plus, Search, Settings, Trash2, X } from 'lucide-react';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell, EmptyState, Foutkaart, VersheidRegel } from '../../components/ui';
 import { Card, CardHeader } from '../../components/Card';
-import { Badge, Button, Chip, FilterChip, IconButton, Kbd, Meter, MeterVulling, MicroLabel, Pressable, Segmented, StatusBadge, Switch, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, Chip, FilterChip, IconButton, Kbd, Meter, MeterVulling, MicroLabel, Pressable, Segmented, StatusBadge, Switch } from '../../components/primitives';
 import { DateInput, Field, Input, SearchField, Select, Textarea } from '../../components/Field';
 import { Formulier } from '../../components/Formulier';
 import { useModalSluiten } from '../../components/Modal';
@@ -21,7 +21,9 @@ import { Stat } from '../../components/Stat';
 import { OpsStat } from '../../components/ops';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { InfoTip } from '../../components/InfoTip';
-import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '../../components/Table';
+import { BulkBar, CelKnop, Checkbox, Paginering, SortTh, StickyThead, TableToolbar, rijKlik, useSort } from '../../components/Table';
+import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
+import { VervalPil } from '../../components/VervalPil';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
 import { Avatar } from '../../components/Avatar';
 import { LijstKaart, RecordRij } from '../../components/RecordRij';
@@ -82,9 +84,9 @@ const RADII = [['md', 'rounded-md'], ['lg', 'rounded-lg'], ['xl', 'rounded-xl'],
 const ICOON_LADDER = [12, 14, 16, 18, 20, 24] as const;
 
 const RIJEN = [
-  { id: '1', naam: 'Bart Peeters', dienst: '2601', status: 'approved' },
-  { id: '2', naam: 'An Claes', dienst: '2614', status: 'pending' },
-  { id: '3', naam: 'Tom Wouters', dienst: '2632', status: 'rejected' },
+  { id: '1', naam: 'Bart Peeters', dienst: '2601', status: 'approved', geldig: '2025-12-01', dagen: -12 },
+  { id: '2', naam: 'An Claes', dienst: '2614', status: 'pending', geldig: '2026-10-10', dagen: 17 },
+  { id: '3', naam: 'Tom Wouters', dienst: '2632', status: 'rejected', geldig: '2027-11-27', dagen: 430 },
 ];
 
 function Sectie({ id, titel, uitleg, children }: { id: string; titel: string; uitleg?: string; children: ReactNode }) {
@@ -467,42 +469,58 @@ export function DesignsysteemView() {
         </div>
       </Sectie>
 
-      <Sectie id="tabel" titel="Tabel" uitleg="TableToolbar (zoek, telling, filters, acties), sorteerbare koppen, selectie met BulkBar en paginering, hetzelfde recept in elke beheertabel.">
-        <TableToolbar
-          zoek={zoek}
-          onZoek={setZoek}
-          placeholder="Zoek op naam…"
-          telling={`${rijen.length} van ${RIJEN.length}`}
-          filters={<><FilterChip active={filter === 'alle'} onClick={() => setFilter('alle')}>Alle</FilterChip><FilterChip active={filter === 'open'} onClick={() => setFilter('open')}>Open</FilterChip></>}
-          acties={<Button variant="primary" size="sm"><Plus size={16} />Nieuw</Button>}
-        />
-        {gekozen.size > 0 && (
-          <BulkBar aantal={gekozen.size} onWis={() => setGekozen(new Set())}>
-            <Button variant="secondary" size="sm">Exporteren</Button>
-            <Button variant="danger" size="sm">Verwijderen</Button>
-          </BulkBar>
-        )}
-        <TableShell>
-          <thead>
-            <tr>
-              <Th className="w-10"><Checkbox checked={gekozen.size === rijen.length && rijen.length > 0} indeterminate={gekozen.size > 0 && gekozen.size < rijen.length} onChange={(v) => setGekozen(v ? new Set(rijen.map((r) => r.id)) : new Set())} label="Alles selecteren" /></Th>
-              <SortTh kolom="naam" sort={sort}>Naam</SortTh>
-              <SortTh kolom="dienst" sort={sort} align="right">Dienst</SortTh>
-              <Th>Status</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rijen.map((r) => (
-              <tr key={r.id}>
-                <Td><Checkbox checked={gekozen.has(r.id)} onChange={(v) => setGekozen((s) => { const n = new Set(s); if (v) n.add(r.id); else n.delete(r.id); return n; })} label={`Selecteer ${r.naam}`} /></Td>
-                <Td>{r.naam}</Td>
-                <Td num><Chip>{r.dienst}</Chip></Td>
-                <Td><StatusBadge status={r.status} /></Td>
+      <Sectie id="tabel" titel="Tabel" uitleg="TableShell is het kader: label (toegankelijke naam), kop (toolbar, filters, bulkbalk) en de overloop (standaard schuiven, sticky vanaf xl, past = de kop plakt altijd). Tabel is de table erin, Th is standaard een kolomkop (scope col). Een rij die iets opent draagt een CelKnop in de hoofdcel (Tab en Enter werken) en rijKlik op de rij als muisgemak, geen apart potlood. Td num = cijfer rechts, Td nowrap = datum, tijd of code op één regel. Op de telefoon (onder md) een kaartlijst, geen verkleinde tabel.">
+        <TableShell
+          label="Voorbeeldtabel"
+          past
+          kop={(
+            <div className="space-y-2.5">
+              <TableToolbar
+                zoek={zoek}
+                onZoek={setZoek}
+                placeholder="Zoek op naam…"
+                telling={`${rijen.length} van ${RIJEN.length}`}
+                filters={<><FilterChip active={filter === 'alle'} onClick={() => setFilter('alle')}>Alle</FilterChip><FilterChip active={filter === 'open'} onClick={() => setFilter('open')}>Open</FilterChip></>}
+                acties={<Button variant="primary" size="sm"><Plus size={16} />Nieuw</Button>}
+              />
+              <BulkBar aantal={gekozen.size} onWis={() => setGekozen(new Set())}>
+                <Button variant="secondary" size="sm">Exporteren</Button>
+                <Button variant="danger" size="sm">Verwijderen</Button>
+              </BulkBar>
+            </div>
+          )}
+        >
+          <Tabel>
+            <StickyThead>
+              <tr>
+                <Th className="w-10"><Checkbox checked={gekozen.size === rijen.length && rijen.length > 0} indeterminate={gekozen.size > 0 && gekozen.size < rijen.length} onChange={(v) => setGekozen(v ? new Set(rijen.map((r) => r.id)) : new Set())} label="Alles selecteren" /></Th>
+                <SortTh kolom="naam" sort={sort}>Naam</SortTh>
+                <SortTh kolom="dienst" sort={sort} align="right">Dienst</SortTh>
+                <Th>Geldig tot</Th>
+                <Th>Status</Th>
               </tr>
-            ))}
-          </tbody>
+            </StickyThead>
+            <tbody>
+              {rijen.map((r) => (
+                <tr key={r.id} onClick={rijKlik(() => notify(`${r.naam} geopend.`, 'success'))} className="cursor-pointer border-t border-hairline-subtle transition-colors hover:bg-surface-soft-hover">
+                  <Td><Checkbox checked={gekozen.has(r.id)} onChange={(v) => setGekozen((s) => { const n = new Set(s); if (v) n.add(r.id); else n.delete(r.id); return n; })} label={`Selecteer ${r.naam}`} /></Td>
+                  <Td><CelKnop onClick={() => notify(`${r.naam} geopend.`, 'success')} label={`${r.naam} openen`} className="font-semibold text-slate-800">{r.naam}</CelKnop></Td>
+                  <Td num><Chip>{r.dienst}</Chip></Td>
+                  <Td nowrap><VervalPil datum={r.geldig} dagen={r.dagen} /></Td>
+                  <Td><StatusBadge status={r.status} /></Td>
+                </tr>
+              ))}
+            </tbody>
+          </Tabel>
         </TableShell>
         <Paginering totaal={48} perPagina={20} pagina={pagina} onPagina={setPagina} />
+        <Rij label="VervalPil">
+          <VervalPil datum="2025-12-01" dagen={-12} />
+          <VervalPil datum="2026-10-10" dagen={17} />
+          <VervalPil datum="2026-12-01" dagen={69} />
+          <VervalPil datum="2027-11-27" dagen={430} />
+          <VervalPil datum={null} label="Code 95" />
+        </Rij>
       </Sectie>
 
       <Sectie id="feedback" titel="Feedback" uitleg="Laadindicatoren, de laatste ververstijd en korte bevestigingen bij een actie.">
@@ -619,13 +637,15 @@ export function DesignsysteemView() {
             </div>
           ))}
         </Rij>
-        <TableShell>
-          <thead><tr><Th>Utility</Th><Th num>z</Th><Th>Voor</Th></tr></thead>
-          <tbody>
-            {Z_LADDER.map(([klasse, z, uitleg]) => (
-              <tr key={klasse} className="border-t border-hairline-subtle"><Td><Chip>{klasse}</Chip></Td><Td num>{z}</Td><Td className="text-sm text-slate-600">{uitleg}</Td></tr>
-            ))}
-          </tbody>
+        <TableShell label="Z-ladder">
+          <Tabel>
+            <thead><tr><Th>Utility</Th><Th num>z</Th><Th>Voor</Th></tr></thead>
+            <tbody>
+              {Z_LADDER.map(([klasse, z, uitleg]) => (
+                <tr key={klasse} className="border-t border-hairline-subtle"><Td><Chip>{klasse}</Chip></Td><Td num>{z}</Td><Td className="text-sm text-slate-600">{uitleg}</Td></tr>
+              ))}
+            </tbody>
+          </Tabel>
         </TableShell>
       </Sectie>
 

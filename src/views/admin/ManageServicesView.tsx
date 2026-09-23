@@ -4,11 +4,12 @@ import { dienstoverzichtCsv } from '../../lib/dienstoverzichtExport';
 import { Clock, Download, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { Service } from '../../types';
 import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
-import { cn, notify, downloadBlob } from '../../lib/ui';
+import { notify, downloadBlob } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Button, MicroLabel, Td, Th } from '../../components/primitives';
+import { Button, MicroLabel } from '../../components/primitives';
 import { ActieMenu } from '../../components/ActieMenu';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
+import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
 import { Field, Input } from '../../components/Field';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
@@ -379,11 +380,18 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           De tabel/kaart-keuze volgt de echte kolombreedte, inclusief de
           ruimte die de navigatie en het zijvak innemen. */}
       <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:items-start">
+      {/* Container query i.p.v. md (bewust, tranche 3B): deze kolom staat
+          naast de zijbalk en vanaf 2xl ook naast het zijvak, dus de
+          schermbreedte zegt niet hoeveel plaats de acht kolommen krijgen.
+          Onder 42rem echte kolombreedte neemt de kaartlijst het over; de
+          layout-e2e bewaakt 390 tot 1536 px. */}
       <div className="@container min-w-0">
-      {/* Clip houdt de afgeronde rand én de plakkende kolomkop. Bij minder
-          dan 42rem beschikbare ruimte neemt de kaartlijst de tabel over. */}
-      <div className="surface-table rounded-3xl overflow-clip">
-        <div className="border-b border-hairline px-5 py-4 md:px-6">
+      {/* `past`: de tabel verschijnt pas vanaf 42rem en past daar in haar
+          kader, dus geen scrollcontainer en de kolomkop plakt. */}
+      <TableShell
+        label="Diensten"
+        past
+        kop={(
           <TableToolbar
             zoek={zoek}
             onZoek={setZoek}
@@ -392,11 +400,11 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             dichtheid={voorkeur.dichtheid}
             className="md:flex-wrap"
           />
-        </div>
-
+        )}
+      >
         {gesorteerd.length > 0 && (
           <div className="hidden @[42rem]:block">
-            <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
+            <Tabel className={voorkeur.tabelClass}>
               <StickyThead>
                 <tr>
                   {/* Zelfde indeling als het totaaloverzicht van de planning
@@ -414,26 +422,28 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               <tbody>
                 {gesorteerd.map(s => (
                   <tr key={s.id} className="border-b border-hairline-subtle last:border-b-0 hover:bg-surface-soft-hover transition-colors">
-                    <Td className="px-3 font-semibold text-slate-800 tabular-nums">{s.serviceNumber}</Td>
-                    <Td className="px-3 tabular-nums font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
-                    <Td className="px-3 tabular-nums whitespace-nowrap">{tijdvak(s.startTime, s.endTime)}</Td>
-                    <Td className="px-3 tabular-nums font-semibold text-slate-700">
+                    {/* px-3 i.p.v. px-4: acht kolommen moeten vanaf 42rem naast
+                        elkaar passen. Nummers en tijdvakken breken nooit af. */}
+                    <Td nowrap className="px-3 font-semibold text-slate-800">{s.serviceNumber}</Td>
+                    <Td nowrap className="px-3 font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
+                    <Td nowrap className="px-3">{tijdvak(s.startTime, s.endTime)}</Td>
+                    <Td nowrap className="px-3 font-semibold text-slate-700">
                       {hasValidTime(s.startTime2, s.endTime2) && s.loopnr2 ? s.loopnr2 : <span className="font-normal text-slate-300">—</span>}
                     </Td>
-                    <Td className="px-3 tabular-nums whitespace-nowrap">
+                    <Td nowrap className="px-3">
                       {hasValidTime(s.startTime2, s.endTime2) ? tijdvak(s.startTime2!, s.endTime2!) : ''}
                     </Td>
-                    <Td className="px-3 tabular-nums font-semibold text-slate-700">
+                    <Td nowrap className="px-3 font-semibold text-slate-700">
                       {hasValidTime(s.startTime3, s.endTime3) && s.loopnr3 ? s.loopnr3 : <span className="font-normal text-slate-300">—</span>}
                     </Td>
-                    <Td className="px-3 tabular-nums whitespace-nowrap">
+                    <Td nowrap className="px-3">
                       {hasValidTime(s.startTime3, s.endTime3) ? tijdvak(s.startTime3!, s.endTime3!) : ''}
                     </Td>
                     <Td className="w-14 px-3 text-right">{rijActies(s)}</Td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Tabel>
           </div>
         )}
 
@@ -443,15 +453,15 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           {gesorteerd.map(s => (
             <div key={s.id} className="p-5 space-y-4 hover:bg-surface-soft-hover transition-colors">
               <div className="flex justify-between items-center">
-                <span className="text-card-title tabular-nums">{s.serviceNumber}</span>
+                <span className="text-card-title">{s.serviceNumber}</span>
                 {rijActies(s)}
               </div>
 
               <div className="grid grid-cols-1 gap-3 @[30rem]:grid-cols-3">
                 <div className="flex flex-col gap-1">
                   <MicroLabel>Deel 1{s.loopnr ? ` · loop ${s.loopnr}` : ''}</MicroLabel>
-                  <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
-                    <Clock size={14} className="text-oker-500" />
+                  <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
+                    <Clock size={14} className="text-slate-500" />
                     {tijdvak(s.startTime, s.endTime)}
                   </div>
                 </div>
@@ -459,8 +469,8 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 {hasValidTime(s.startTime2, s.endTime2) && (
                   <div className="flex flex-col gap-1">
                     <MicroLabel>Deel 2{s.loopnr2 ? ` · loop ${s.loopnr2}` : ''}</MicroLabel>
-                    <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
-                      <Clock size={14} className="text-oker-500" />
+                    <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
+                      <Clock size={14} className="text-slate-500" />
                       {tijdvak(s.startTime2!, s.endTime2!)}
                     </div>
                   </div>
@@ -469,8 +479,8 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 {hasValidTime(s.startTime3, s.endTime3) && (
                   <div className="flex flex-col gap-1">
                     <MicroLabel>Deel 3{s.loopnr3 ? ` · loop ${s.loopnr3}` : ''}</MicroLabel>
-                    <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
-                      <Clock size={14} className="text-oker-500" />
+                    <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
+                      <Clock size={14} className="text-slate-500" />
                       {tijdvak(s.startTime3!, s.endTime3!)}
                     </div>
                   </div>
@@ -497,7 +507,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             )}
           </div>
         )}
-      </div>
+      </TableShell>
       </div>
       <aside className="min-w-0 self-start 2xl:sticky 2xl:top-[calc(var(--sticky-top)+1.25rem)]">{zijvak}</aside>
       </div>
