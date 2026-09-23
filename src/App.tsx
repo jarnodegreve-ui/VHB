@@ -4,10 +4,10 @@
  */
 
 import { useCallback, Suspense, useState, useEffect, useMemo, useRef } from 'react';
-import { useRoute, routeUitUrl } from './app/router';
+import { useRoute, routeUitUrl, neemStartDoel } from './app/router';
 import { isBreed, magView, routeVan, sectieLabel } from './app/routes';
 import { SidebarNav } from './app/SidebarNav';
-import { SessieLaden, ProfielLaden, ConfigOntbreekt, ToestelGeblokkeerd } from './app/PreAppScreens';
+import { SessieLaden, ProfielLaden, ConfigOntbreekt } from './app/PreAppScreens';
 import { bepaalTweeStapsStap, leesTweeStapsStatus } from './lib/tweeStaps';
 import { GEDEELD_TOESTEL_EVENT, isGedeeldToestel, useInactiviteitsUitlog } from './lib/inactiviteit';
 import { AppSkeleton, heeftOpgeslagenSessie } from './app/AppSkeleton';
@@ -72,6 +72,7 @@ const LazyCalendarSubscribeModal = lazyWithRetry(() => laadCalendarSubscribeModa
 // ProbleemMelder was de laatste schil-importeur van Field, en Field sleept de
 // DatePicker (±17 kB bron) mee; lazy = Field + DatePicker uit de startbundel.
 const LazyProbleemMelder = lazyWithRetry(() => laadProbleemMelder().then((m) => ({ default: m.ProbleemMelder })));
+const LazyToestelGeblokkeerd = lazyWithRetry(() => import('./app/ToestelGeblokkeerd').then((m) => ({ default: m.ToestelGeblokkeerd })));
 const LazyWerkvoorraadMenu = lazyWithRetry(() => laadWerkvoorraadMenu().then((m) => ({ default: m.WerkvoorraadMenu })));
 // Volledige ritblad-bundel in de app (controle 16-09, nr. 10): pdfjs blijft
 // lazy, net als bij de viewer op Mijn dag.
@@ -685,6 +686,9 @@ export default function App() {
         return;
       }
       if (nextSession) {
+        // Al ingelogd bij het openen: de link is gewoon geopend, er valt na
+        // een latere login niets meer naar terug te keren (tranche 3C).
+        if (event === 'INITIAL_SESSION') neemStartDoel();
         // Verse sessie: de onderdrukking van fout-toasts en de eenmalige
         // uitlog-guard weer vrijgeven, anders blijft de app na opnieuw
         // inloggen stil bij échte fouten.
@@ -707,7 +711,11 @@ export default function App() {
         initializedUserIdRef.current = null;
         initializingUserIdRef.current = null;
         resetAll();
-        setCurrentView('dashboard');
+        // Koude start zonder sessie: de URL blijft staan (een link naar
+        // /verlof/<id> blijft dus ook na een herlaad van het inlogscherm
+        // bewaard) en handleLogin gaat er na het inloggen heen. Alleen een
+        // echte afmelding gaat terug naar het dashboard (tranche 3C, 23-09).
+        if (event !== 'INITIAL_SESSION') setCurrentView('dashboard');
       }
       setAuthReady(true);
     });
@@ -1161,9 +1169,14 @@ export default function App() {
     if (!response.ok || !user?.id || !user?.role) {
       throw new Error(user?.error || 'Sessie kon niet gestart worden. Probeer opnieuw.');
     }
+    // Terug naar de oorspronkelijke bestemming (src/app/terugNaLogin.ts, lui
+    // geladen), vóór setCurrentUser: zo beslist de rol-guard één keer over
+    // het echte doel. Geen (geldig) doel = het dashboard zoals vroeger.
+    const ruwDoel = neemStartDoel();
+    const terug = ruwDoel ? await import('./app/terugNaLogin').then((m) => m.naarStartDoel(ruwDoel), () => false) : false;
     setCurrentUser(user);
     await fetchUsers(token);
-    setCurrentView('dashboard');
+    if (!terug) setCurrentView('dashboard');
   };
 
   const handleLogout = async () => {
@@ -1255,7 +1268,8 @@ export default function App() {
   // Toestel-whitelist: ingelogd, maar dit toestel is (nog) niet goedgekeurd.
   if (deviceBlocked && session) {
     return (
-      <ToestelGeblokkeerd
+      <Suspense fallback={<SessieLaden />}>
+      <LazyToestelGeblokkeerd
         revoked={deviceBlocked === 'revoked'}
         onLogout={handleLogout}
         onRetry={async () => {
@@ -1272,6 +1286,7 @@ export default function App() {
           }
         }}
       />
+      </Suspense>
     );
   }
 

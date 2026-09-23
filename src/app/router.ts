@@ -25,7 +25,7 @@ export const ROUTE_EVENT = 'vhb-route';
 export type Route = { view: View; params: string[] };
 
 /** Zet een pad om naar view + parameters; onbekend pad → null. */
-function routeUitPad(pathname: string): Route | null {
+export function routeUitPad(pathname: string): Route | null {
   const segmenten = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean).map((s) => {
     try { return decodeURIComponent(s); } catch { return s; }
   });
@@ -55,6 +55,16 @@ const onthoud = (view: View) => {
   try { window.localStorage.setItem(OPGESLAGEN_VIEW, view); } catch { /* privémodus */ }
 };
 
+/**
+ * Het pad waarmee de app koud opstartte, als dat een ander scherm dan het
+ * dashboard was (tranche 3C). Hier nog ruw: `veiligInternPad`
+ * (src/app/terugNaLogin.ts) keurt het pas bij het inloggen, zodat die
+ * validatie niet in de startbundel zit.
+ */
+let startDoel: string | null = null;
+/** Geeft het startdoel één keer terug (daarna null): na het inloggen, of weggegooid bij een bestaande sessie. */
+export const neemStartDoel = (): string | null => { const d = startDoel; startDoel = null; return d; };
+
 /** Eénmalige normalisatie bij het opstarten (vóór de eerste render). */
 let genormaliseerd = false;
 function normaliseerStartUrl() {
@@ -68,6 +78,7 @@ function normaliseerStartUrl() {
     params.delete('view');
     const rest = params.toString();
     window.history.replaceState(null, '', padVan(oudeView as View) + (rest ? `?${rest}` : '') + hash);
+    startDoel = window.location.pathname + window.location.search;
     return;
   }
   if (pathname === '/' || pathname === '') {
@@ -85,10 +96,15 @@ function normaliseerStartUrl() {
     }
     return;
   }
-  if (!routeUitPad(pathname)) {
-    // Onbekend pad (typefout, oude link): naar het dashboard zonder entry.
+  // Onbekend pad (typefout, oude link, iets als /%2F%2Fhost): naar het
+  // dashboard zonder entry. Het dashboard heeft pad '' en dus zou elk onbekend
+  // pad er als "dashboard met parameters" onder vallen; het heeft er geen.
+  const start = routeUitPad(pathname);
+  if (!start || (start.view === 'dashboard' && start.params.length > 0)) {
     window.history.replaceState(null, '', '/' + search + hash);
+    return;
   }
+  startDoel = pathname + search;
 }
 
 // --- Scrollpositie per route (punt 19, 15-09; src/lib/scrollGeheugen.ts) ---
