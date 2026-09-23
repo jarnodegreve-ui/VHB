@@ -5,7 +5,7 @@ import {
   getAppSetting, getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, setAppSetting,
 } from "../storage.js";
 import type { AuthenticatedRequest } from "../types.js";
-import { DAG_DMJ, nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
+import { DAG_DMJ, brusselsDay, nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
 import { loonCodeSleutel } from "../../shared/loon.js";
 import {
   LOON_INSTELLINGEN_KEY, dagPrestatieBodySchema, dagPrestatieNieuwSchema, heropenBodySchema, loonCodeBodySchema, loonInstellingenSchema,
@@ -169,6 +169,14 @@ export function mountLoonRoutes(app: express.Express) {
   });
 
   // --- Dagafsluiting ---
+
+  // Bovengrens (Jarno 23-09): Dagadministratie kan tot en met vandaag
+  // (Brusselse kalenderdag) worden aangepast, nooit in de toekomst. Het
+  // verleden blijft open voor correcties; er is geen ondergrens. Geldt voor
+  // elke schrijfactie (openen, rijen, planning overnemen, afsluiten,
+  // heropenen); lezen blijft kunnen.
+  const TOEKOMST_FOUT = "Dagadministratie kan enkel tot en met vandaag worden aangepast.";
+  const inToekomst = (datum: string) => datum > brusselsDay(new Date().toISOString());
   app.get("/api/dagafsluiting", ...staf, async (req: AuthenticatedRequest, res) => {
     try {
       const maand = String(req.query.maand ?? "");
@@ -229,6 +237,7 @@ export function mountLoonRoutes(app: express.Express) {
   app.post("/api/dagafsluiting/:datum/openen", ...staf, async (req: AuthenticatedRequest, res) => {
     const datum = String(req.params.datum);
     if (!ISO_DAG.test(datum)) return res.status(400).json({ error: "Geef een geldige datum (YYYY-MM-DD)." });
+    if (inToekomst(datum)) return res.status(400).json({ error: TOEKOMST_FOUT });
     try {
       if (await getDagAfsluiting(datum)) return res.status(409).json({ error: "Deze dag is al geopend." });
       const planning = await planningVanDag(datum);
@@ -243,6 +252,7 @@ export function mountLoonRoutes(app: express.Express) {
   });
 
   const openDagOfFout = async (datum: string, res: express.Response) => {
+    if (inToekomst(datum)) { res.status(400).json({ error: TOEKOMST_FOUT }); return null; }
     const dag = await getDagAfsluiting(datum);
     if (!dag) { res.status(404).json({ error: "Deze dag is nog niet geopend." }); return null; }
     if (dag.status === "afgesloten") { res.status(409).json({ error: "Deze dag is afgesloten. Heropen hem eerst." }); return null; }
@@ -335,6 +345,7 @@ export function mountLoonRoutes(app: express.Express) {
 
   app.post("/api/dagafsluiting/:datum/heropenen", ...staf, async (req: AuthenticatedRequest, res) => {
     const datum = String(req.params.datum);
+    if (inToekomst(datum)) return res.status(400).json({ error: TOEKOMST_FOUT });
     const body = valideerRecord(res, heropenBodySchema, req.body ?? {});
     if (!body) return;
     try {

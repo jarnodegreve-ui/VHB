@@ -63,6 +63,8 @@ export type DatePickerProps = {
    * actief was).
    */
   wisbaar?: boolean;
+  /** Eigen tekst als een datum na `max` valt (i.p.v. "Uiterlijk dd/mm/jjjj."), bv. de regel van het scherm. */
+  maxMelding?: string;
   'aria-label'?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
@@ -90,6 +92,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   placeholder = 'dd/mm/jjjj',
   dialogLabel,
   wisbaar = true,
+  maxMelding,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
   'aria-describedby': ariaDescribedby,
@@ -166,7 +169,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       zetFout(r.reden);
       return false;
     }
-    const buiten = bereikFout(r.iso, min, max);
+    const buiten = maxMelding && max && r.iso > max ? maxMelding : bereikFout(r.iso, min, max);
     if (buiten) {
       if (!wisbaar) { herstel(buiten); return false; }
       zetFout(buiten);

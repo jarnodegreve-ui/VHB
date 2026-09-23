@@ -7,8 +7,9 @@ import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { formatDatumDMJ, formatDayLong, formatMomentKort } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
+import { vandaagBrussel } from '../../lib/brussel';
 import {
-  bewaarRij, heropenDag, laadDag, laadLoonCodes, LoonFout, neemPlanningOver, openDag, schuifDag, sluitDag, vandaagIso, verwijderRij, voegRijToe,
+  bewaarRij, heropenDag, laadDag, laadLoonCodes, LoonFout, neemPlanningOver, openDag, schuifDag, sluitDag, verwijderRij, voegRijToe,
   type DagDetail, type DagPrestatie, type DagVoorstel, type LoonCode,
 } from '../../lib/loon';
 import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
@@ -38,10 +39,24 @@ import { Checkbox, StickyThead } from '../../components/Table';
  * opmerking in, en sluit de dag af. Een afgesloten dag verandert alleen nog
  * via heropenen met reden. Vervangt het dagelijks intikken in Access.
  */
+/** Dezelfde regel als de server (api/_lib/loonRoutes.ts). */
+const TOEKOMST_MELDING = 'Dagadministratie kan enkel tot en met vandaag worden aangepast.';
+
 export function DagafsluitingView({ currentUser, users }: { currentUser: User; users: User[] }) {
   const [datumParam, zetDatumParam] = useRouteParam(0);
-  const datum = datumParam && /^\d{4}-\d{2}-\d{2}$/.test(datumParam) ? datumParam : schuifDag(vandaagIso(), -1);
-  const zetDatum = (d: string) => zetDatumParam(d);
+  // Bovengrens = vandaag in Brussel (Jarno 23-09): het verleden blijft
+  // bewerkbaar voor correcties, de toekomst niet. De server weigert het ook.
+  const vandaag = vandaagBrussel();
+  const gevraagd = datumParam && /^\d{4}-\d{2}-\d{2}$/.test(datumParam) ? datumParam : schuifDag(vandaag, -1);
+  const datum = gevraagd > vandaag ? vandaag : gevraagd;
+  const zetDatum = (d: string) => zetDatumParam(d > vandaag ? vandaag : d);
+  // Een link naar een dag in de toekomst: melden en naar vandaag.
+  useEffect(() => {
+    if (gevraagd <= vandaag) return;
+    notify(TOEKOMST_MELDING, 'info');
+    zetDatumParam(vandaag);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gevraagd, vandaag]);
   const [detail, setDetail] = useState<DagDetail | null>(null);
   const [voorstel, setVoorstel] = useState<DagVoorstel | null>(null);
   const [codes, setCodes] = useState<LoonCode[]>([]);
@@ -118,7 +133,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
 
   // Label en toon uit DAG_STATUS; een open dag blijft een gekleurde chip. Een
   // dag na vandaag zonder detail is "Nog niet geopend", anders "Niet geopend".
-  const dagStatus = statusVan(DAG_STATUS, dagOpenStatus(datum, vandaagIso(), !!detail, afgesloten));
+  const dagStatus = statusVan(DAG_STATUS, dagOpenStatus(datum, vandaag, !!detail, afgesloten));
   const statusBadge = (
     <Badge tone={TOON_NAAR_BADGE[dagStatus.toon]} dot stil={!detail || afgesloten} className="whitespace-nowrap">{dagStatus.label}</Badge>
   );
@@ -145,11 +160,11 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
         {/* Telefoon: het datumveld vult de rij tussen de pijlen (was w-44:
             "ma 21 sep 20…") en de lange dagnaam staat er al in, dus die
             komt pas vanaf md. */}
-        <div className="min-w-0 flex-1 md:flex-none md:w-44"><DateInput value={datum} wisbaar={false} onChange={zetDatum} aria-label="Dag" /></div>
-        <IconButton label="Volgende dag" onClick={() => zetDatum(schuifDag(datum, 1))}><ChevronRight size={18} /></IconButton>
+        <div className="min-w-0 flex-1 md:flex-none md:w-44"><DateInput value={datum} max={vandaag} maxMelding={TOEKOMST_MELDING} wisbaar={false} onChange={zetDatum} aria-label="Dag" /></div>
+        <IconButton label="Volgende dag" disabled={datum >= vandaag} title={datum >= vandaag ? TOEKOMST_MELDING : undefined} onClick={() => zetDatum(schuifDag(datum, 1))}><ChevronRight size={18} /></IconButton>
         <p className="hidden md:block min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{formatDayLong(datum)}</p>
         {statusBadge}
-        <Button variant="ghost" size="sm" icon={<Calendar size={14} />} onClick={() => zetDatum(schuifDag(vandaagIso(), -1))}>Gisteren</Button>
+        <Button variant="ghost" size="sm" icon={<Calendar size={14} />} onClick={() => zetDatum(schuifDag(vandaag, -1))}>Gisteren</Button>
       </Card>
 
       {zl.fout && (detail || voorstel) && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
