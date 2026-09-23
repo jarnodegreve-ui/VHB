@@ -12,8 +12,9 @@ import { cn, notify } from '../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { AllesGedaan } from '../components/illustraties';
 import { OpsRow, OpsStat } from '../components/ops';
-import { Badge, Button, Td, Th, FilterChip, type BadgeTone } from '../components/primitives';
+import { Badge, Button, FilterChip, type BadgeTone } from '../components/primitives';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../components/Table';
+import { Td, Th } from '../components/TabelBasis';
 import { meldSchrijffout } from '../lib/fouten';
 
 /**

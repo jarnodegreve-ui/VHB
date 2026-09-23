@@ -4,10 +4,15 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { tik } from '../lib/tik';
-import { Button, IconButton, MicroLabel, Segmented, Tabel, TableShell, Td, Th } from './primitives';
+import { Button, IconButton, MicroLabel, Segmented } from './primitives';
 import { useDropdown } from './useDropdown';
 import { Popover } from './Popover';
 import { SearchField } from './Field';
+
+import { Tabel, TableShell, Td, Th } from './TabelBasis';
+
+export { Tabel, TableShell, Td, Th };
+
 
 /**
  * Tabel-bouwstenen voor de beheerkant (fase C11):
@@ -21,7 +26,7 @@ import { SearchField } from './Field';
  *   localStorage; de toolbar toont er de schakelaar en het kolommenmenu voor.
  * - `CelKnop` + `rijKlik`: een rij die iets opent (tranche 3B).
  * Het kader zelf is `TableShell` (label, kop, overloop) met `Tabel` erin
- * (primitives.tsx, hier doorgegeven).
+ * (TabelBasis.tsx, hier doorgegeven).
  */
 
 // === Tabelvoorkeur: dichtheid + kolomkeuze ===
@@ -424,4 +429,3 @@ export const rijKlik = (open: () => void) => (e: MouseEvent<HTMLElement>) => {
   open();
 };
 
-export { Tabel, TableShell, Td, Th };

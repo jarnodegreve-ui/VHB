@@ -4,13 +4,14 @@ import type { Service } from '../types';
 import { downloadBlob } from '../lib/ui';
 import { dienstoverzichtCsv } from '../lib/dienstoverzichtExport';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Button, Chip, MicroLabel, Segmented, Tabel, TableShell, Td, Th } from '../components/primitives';
+import { Button, Chip, MicroLabel, Segmented } from '../components/primitives';
 import { Uitklap } from '../components/Uitklap';
 import { RecordRij } from '../components/RecordRij';
 import { SearchField } from '../components/Field';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import { dienstStatistiek, formatDienstDuur } from '../lib/dienstStatistiek';
 import { LegeLijst, NietGevonden } from '../components/illustraties';
+import { Tabel, TableShell, Td, Th } from '../components/TabelBasis';
 
 export function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');

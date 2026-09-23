@@ -4,7 +4,8 @@ import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRech
 import { cn } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Badge, type BadgeTone } from './primitives';
-import { Paginering, SortTh, StickyThead, Td, Th, useSort } from './Table';
+import { Paginering, SortTh, StickyThead, useSort } from './Table';
+import { Td, Th } from './TabelBasis';
 
 /**
  * De tabel van een rapport, volledig uit de definitie: kolomkoppen,

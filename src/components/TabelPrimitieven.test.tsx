@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { Tabel, TableShell, Td, Th } from './primitives';
 import { CelKnop, rijKlik } from './Table';
+import { Tabel, TableShell, Td, Th } from './TabelBasis';
 import { VervalPil } from './VervalPil';
 
 afterEach(cleanup);

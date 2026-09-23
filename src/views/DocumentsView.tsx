@@ -4,11 +4,12 @@ import type { User } from '../types';
 import { notify, openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
-import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
 import { SkeletonRow } from '../components/Skeleton';
 import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format';
 import { meldSchrijffout } from '../lib/fouten';
+import { TableShell, Td, Th } from '../components/TabelBasis';
 
 export type UserDocument = {
   id: string;

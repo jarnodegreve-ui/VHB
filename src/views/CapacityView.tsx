@@ -9,7 +9,7 @@ import { useZelfLadend } from '../lib/zelfLadend';
 import { ActieMenu } from '../components/ActieMenu';
 import { apiFetch } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
-import { Button, Chip, IconButton, MicroLabel, microLabelClass, Td, Th } from '../components/primitives';
+import { Button, Chip, IconButton, MicroLabel, microLabelClass } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Field, Input, Select, Textarea } from '../components/Field';
@@ -25,6 +25,7 @@ import { formatDatumDMJ, formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 import { DUR, EASE_SPRING } from '../lib/motion';
 import { useRecordParam, useRouteParam } from '../app/router';
+import { Td, Th } from '../components/TabelBasis';
 
 
 /** Sectiekop in het grid en de daglijst ("Chauffeurs", "Flexi/invallers",

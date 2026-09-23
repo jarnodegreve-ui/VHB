@@ -17,8 +17,9 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field } from '../../components/Field';
-import { Button, FilterChip, Tabel, TableShell, Td } from '../../components/primitives';
+import { Button, FilterChip } from '../../components/primitives';
 import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../../components/Table';
+import { Tabel, TableShell, Td } from '../../components/TabelBasis';
 
 /** Uitschakelbare kolommen: één per bewaakt document (Chauffeur en Eerst vervallend blijven altijd). */
 const KOLOMMEN = Object.entries(EXPIRY_SOORT_LABELS).map(([key, label]) => ({ key, label }));

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
 import { Modal } from '../../../components/Modal';
-import { Badge, Button, IconButton, MicroLabel, TableShell, Td, Th } from '../../../components/primitives';
+import { Badge, Button, IconButton, MicroLabel } from '../../../components/primitives';
 import { SkeletonTile } from '../../../components/Skeleton';
 import { EmptyState } from '../../../components/ui';
 import { apiFetch } from '../../../lib/api';
@@ -12,6 +12,7 @@ import {
   dagKort, dagLang, dagVanTs, duurLabel, exporteerCsv, klasseLabel, puntNaam, tekstKw, tekstKwh, tijdstipKort, uurLabel, type Laadpunt, type SessieDetail,
 } from './gedeeld';
 import { StapCurve, useKeuze } from './grafieken';
+import { TableShell, Td, Th } from '../../../components/TabelBasis';
 
 /**
  * Dagdetail: de kwartiercurve van één dag (zolang de snapshots bewaard zijn,

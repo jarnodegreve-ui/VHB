@@ -5,7 +5,7 @@ import { cn, downloadBlob, notify } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { celBadgeTone } from '../../lib/planningKind';
 import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, Chip, FilterChip, IconButton, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, Chip, FilterChip, IconButton, MicroLabel } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
 import { OpsStat } from '../../components/ops';
@@ -16,6 +16,7 @@ import { Field, Input, Select } from '../../components/Field';
 import { useOptioneleAppData } from '../../app/AppDataContext';
 import { navigeer } from '../../app/router';
 import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken, suggestClosestName } from '../../lib/planning';
+import { TableShell, Td, Th } from '../../components/TabelBasis';
 
 /** Zelfde categorieën als Planningscodes (die view is een eigen chunk, dus niet importeren). */
 const CATEGORIE_OPTIES: Array<{ value: PlanningCode['category']; label: string }> = [

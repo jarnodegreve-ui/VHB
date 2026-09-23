@@ -4,7 +4,7 @@ import type { Service, Shift, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
 import { apiFetch, apiJson } from '../../lib/api';
-import { Badge, Button, Chip, IconButton, StatusBadge, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, Chip, IconButton, StatusBadge } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
 import { ActieMenu } from '../../components/ActieMenu';
@@ -16,6 +16,7 @@ import { HerstelPlanModal } from '../../components/HerstelPlanModal';
 import type { HerstelPlan } from '../../../shared/herstelPlan';
 import { FOUTGROEP_STATUS } from '../../../shared/status';
 import { meldSchrijffout, schrijffout } from '../../lib/fouten';
+import { TableShell, Td, Th } from '../../components/TabelBasis';
 
 const COLLECTION_LABELS: Record<string, string> = {
   users: 'Gebruikers',

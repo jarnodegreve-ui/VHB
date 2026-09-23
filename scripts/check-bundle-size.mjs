@@ -114,7 +114,12 @@ const DEELBUDGET_KB = {
 // 23-09 (tranche 3A): chauffeur 70 → 72, staf 132 → 135. Modal/DetailPaneel
 // dragen nu de sluitpoort en de ruilwizard/verlof het Formulier; gemeten 70 en
 // 132 kB. De warmup start pas na LCP + 2 s, de eerste weergave raakt dit niet.
-const WARMUP_BUDGET_KB = { chauffeur: 72, staf: 135 };
+// 23-09 (tranche 3B): chauffeur 72 → 74, staf 135 → 137. De tabel-basis
+// (TableShell, Tabel, Th, Td) verhuisde uit primitives.tsx (startbundel) naar
+// TabelBasis.tsx: index daalde 74,24 → 73,6 kB, de warmup-sets droegen ±1 kB
+// meer (rooster, dienstruil en de stafschermen gebruiken het kader). Dat is
+// de bedoeling: na LCP + 2 s i.p.v. vóór de eerste weergave.
+const WARMUP_BUDGET_KB = { chauffeur: 74, staf: 137 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];

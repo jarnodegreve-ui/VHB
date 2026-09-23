@@ -23,10 +23,11 @@ import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, Switch, TOON_NAAR_BADGE, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
 import { Popover } from '../../components/Popover';
 import { useDropdown } from '../../components/useDropdown';
 import { StickyThead } from '../../components/Table';
+import { Td, Th } from '../../components/TabelBasis';
 
 /**
  * Dagafsluiting (fase B Access-migratie, 13-09): de planner bevestigt per

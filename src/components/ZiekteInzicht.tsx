@@ -6,8 +6,8 @@ import { Avatar } from './Avatar';
 import { Card, CardHeader } from './Card';
 import { Field, Input, Select } from './Field';
 import { InfoTip } from './InfoTip';
-import { TableShell, Td, Th } from './primitives';
 import { Paginering } from './Table';
+import { TableShell, Td, Th } from './TabelBasis';
 import { EmptyState } from './ui';
 
 const naamVolgorde = new Intl.Collator('nl-BE', { sensitivity: 'base', numeric: true });

@@ -2,7 +2,8 @@ import { AlertTriangle, ShieldAlert } from 'lucide-react';
 import type { HerstelPlan } from '../../shared/herstelPlan';
 import { formatDateTimeHuman } from '../lib/format';
 import { Modal } from './Modal';
-import { Button, MicroLabel, Td, Th } from './primitives';
+import { Button, MicroLabel } from './primitives';
+import { Td, Th } from './TabelBasis';
 
 /**
  * Bevestiging van een herstel, met de droge run erbij (verbeterronde 4, punt

@@ -21,9 +21,10 @@ import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
-import { Badge, Button, FilterChip, Switch, TOON_NAAR_BADGE, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
 import { DEFECT_STATUS, statusVan } from '../../../shared/status';
 import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
+import { Td, Th } from '../../components/TabelBasis';
 import type { ActieMenuItem } from '../../components/ActieMenu';
 
 const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
