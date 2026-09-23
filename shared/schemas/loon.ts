@@ -1,5 +1,5 @@
 import { z } from './zod.js';
-import { optioneel } from './basis.js';
+import { kalenderdag, optioneel } from './basis.js';
 import { DIENST_TYPES, LOON_CODE_BRONNEN, OPMERKING_MAX, OVERMIN_MAX, OVERMIN_MIN, QUAL_VLAGGEN } from '../loon.js';
 
 /**
@@ -8,7 +8,8 @@ import { DIENST_TYPES, LOON_CODE_BRONNEN, OPMERKING_MAX, OVERMIN_MAX, OVERMIN_MI
  */
 export { DIENST_TYPES, LOON_CODE_BRONNEN, QUAL_VLAGGEN };
 
-const isoDatum = z.string({ error: 'Vul een datum in' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'Ongeldige datum');
+// Echte kalenderdag (was alleen het patroon: 30/02 kwam erdoor).
+const isoDatum = kalenderdag;
 const klokTijd = z.string().trim().regex(/^([0-4]\d):[0-5]\d$/, 'Ongeldige tijd, verwacht uu:mm (tot 47:59 voor na middernacht)');
 const leegNaarNull = (s: z.ZodType<string>) => z.preprocess((v) => (v === '' ? null : v), s.nullable().optional());
 const minutenVeld = z.number({ error: 'Vul een getal in' }).int('Geheel aantal minuten').min(OVERMIN_MIN, `Minstens ${OVERMIN_MIN}`).max(OVERMIN_MAX, `Hooguit ${OVERMIN_MAX}`);

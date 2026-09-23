@@ -4464,6 +4464,11 @@ describe('vervaldata (Code 95 / medische schifting)', () => {
     expect(fouteSoort.status).toBe(400);
     const fouteDatum = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'code95', validUntil: '01/03/2027' } });
     expect(fouteDatum.status).toBe(400);
+    // Datumtranche PR 2: een dag die niet bestaat valt ook af, niets bewaard.
+    const onbestaand = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'code95', validUntil: '2027-02-30' } });
+    expect(onbestaand.status).toBe(400);
+    expect(onbestaand.json.error).toBe('Ongeldige datum.');
+    expect(mem.userExpiries).toHaveLength(0);
     const onbekendeUser = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: 'geest', soort: 'code95', validUntil: '2027-01-01' } });
     expect(onbekendeUser.status).toBe(404);
   });
@@ -5908,7 +5913,7 @@ describe('gedeelde zod-contracten (shared/schemas): 400 met veldfouten', () => {
       role: 'Kies een rol',
       phone: 'Vul een geldig telefoonnummer in',
       password: 'Gebruik een wachtwoord van minstens 10 tekens',
-      startDate: 'Vul een datum in als JJJJ-MM-DD',
+      startDate: 'Vul een geldige datum in (dd/mm/jjjj)',
     });
   });
 
@@ -5948,7 +5953,7 @@ describe('gedeelde zod-contracten (shared/schemas): 400 met veldfouten', () => {
     const rev = await revVan('/api/diversions', 'tok-planner', 'o-1');
     const res = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...mem.diversions[0], startDate: '2026-02-30' }, headers: { [REV]: rev } });
     expect(res.status).toBe(400);
-    expect(res.json.veldfouten).toEqual({ startDate: 'Vul een startdatum in als JJJJ-MM-DD' });
+    expect(res.json.veldfouten).toEqual({ startDate: 'Vul een geldige startdatum in (dd/mm/jjjj)' });
     expect(mem.diversions[0].startDate).toBe('2026-07-01');
   });
 

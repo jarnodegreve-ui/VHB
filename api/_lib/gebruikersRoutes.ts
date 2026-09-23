@@ -18,6 +18,7 @@ import { valideerLijst, valideerRecord } from "./valideer.js";
 import { userRecordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkUsersOpslag, trekToegangIn, type ToegangIngetrokken } from "./recordWrites.js";
 import { DAG_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, EXPIRY_SOORT_LABEL } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
+import { isIsoDag } from "../../shared/rapporten/periode.js";
 import { getUsersData, EmailInGebruikError, logActivity, getUserExpiries, saveUserExpiry, deleteUserExpiry } from "../storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse } from "./collectie.js";
 
@@ -149,8 +150,9 @@ export function mountGebruikersRoutes(app: express.Express) {
       if (!EXPIRY_SOORT_LABEL[soort]) {
         return res.status(400).json({ error: "Onbekende soort vervaldatum." });
       }
-      if (validUntil !== null && !/^\d{4}-\d{2}-\d{2}$/.test(validUntil)) {
-        return res.status(400).json({ error: "Ongeldige datum: verwacht JJJJ-MM-DD." });
+      // Echte kalenderdag, niet alleen het patroon (2026-02-30 kwam erdoor).
+      if (validUntil !== null && !isIsoDag(validUntil)) {
+        return res.status(400).json({ error: "Ongeldige datum." });
       }
       const users = await getUsersData();
       const user = users.find((u: any) => String(u.id) === userId);

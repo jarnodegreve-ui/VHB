@@ -14,8 +14,8 @@ const diversionVelden = {
   location: optioneel(z.string().trim().max(80, 'Plaats is te lang (max 80 tekens)')),
   title: verplichteTekst('Vul een titel in'),
   description: verplichteTekst('Vul een omschrijving in'),
-  startDate: isoDatum('Vul een startdatum in als JJJJ-MM-DD'),
-  endDate: optioneel(isoDatum('Vul een einddatum in als JJJJ-MM-DD')),
+  startDate: isoDatum('Vul een geldige startdatum in (dd/mm/jjjj)'),
+  endDate: optioneel(isoDatum('Vul een geldige einddatum in (dd/mm/jjjj)')),
   // Alleen geaccepteerd omdat het formulier het record heen en terug stuurt;
   // de server negeert de waarde en leidt pdfUrl af uit Storage (`${id}.pdf`,
   // zie metServerPdfUrl in api/_lib/communicatieRoutes.ts) — een vrije externe link kan zo

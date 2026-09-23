@@ -97,7 +97,7 @@ describe('userSchema', () => {
       phone: 'Vul een geldig telefoonnummer in',
       password: `Gebruik een wachtwoord van minstens ${WACHTWOORD_MIN} tekens`,
       verlofBudget: 'Verlofbudget kan niet negatief zijn',
-      startDate: 'Vul een datum in als JJJJ-MM-DD',
+      startDate: 'Vul een geldige datum in (dd/mm/jjjj)',
     });
   });
 
@@ -170,14 +170,14 @@ describe('diversionSchema', () => {
     expect(valideer(diversionSchema, { ...geldig, endDate: '2026-07-01' }).ok).toBe(true);
   });
 
-  it('datums moeten JJJJ-MM-DD zijn; titel, lijn en omschrijving verplicht', () => {
+  it('datums moeten geldige ISO-dagen zijn (in beeld dd/mm/jjjj); titel, lijn en omschrijving verplicht', () => {
     const r = valideer(diversionSchema, { id: 'o', line: '', title: ' ', description: '', startDate: '10/09/2026', endDate: '2026-13-01' });
     expect(r.ok === false && r.fouten).toEqual({
       line: 'Vul een lijn in',
       title: 'Vul een titel in',
       description: 'Vul een omschrijving in',
-      startDate: 'Vul een startdatum in als JJJJ-MM-DD',
-      endDate: 'Vul een einddatum in als JJJJ-MM-DD',
+      startDate: 'Vul een geldige startdatum in (dd/mm/jjjj)',
+      endDate: 'Vul een geldige einddatum in (dd/mm/jjjj)',
     });
   });
 
@@ -249,6 +249,10 @@ describe('techniek (voertuigen, gele boek, werkprestaties)', () => {
     expect(r.ok && r.data).toEqual({ status: 'uitgevoerd', uitgevoerdOp: '2026-09-13', uitgevoerdWerk: null, manuren: 1.5 });
     const fout = valideer(defectPatchSchema, { manuren: -1, uitgevoerdOp: '13/09/2026' });
     expect(fout.ok === false && fout.fouten).toEqual({ manuren: 'Niet negatief', uitgevoerdOp: 'Ongeldige datum' });
+    // Datumtranche PR 2: een dag die niet bestaat valt ook af (was alleen het patroon).
+    const onbestaand = valideer(defectPatchSchema, { uitgevoerdOp: '2026-02-30' });
+    expect(onbestaand.ok === false && onbestaand.fouten).toEqual({ uitgevoerdOp: 'Ongeldige datum' });
+    expect(valideer(defectPatchSchema, { uitgevoerdOp: '2028-02-29' }).ok).toBe(true);
   });
 
   it('werkprestatieBodySchema: garage/algemeen = lege bus, tijden uu:mm, uren 0 tot 24', () => {
