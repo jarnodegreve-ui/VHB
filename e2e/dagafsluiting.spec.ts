@@ -65,7 +65,7 @@ test('looncontrole toont de maandstand en de exportcontrole', async ({ page }) =
   await expect(page.getByText('Easypay-export')).toBeVisible();
   await expect(page.getByText(/dagen nog open/)).toBeVisible();
   await page.getByRole('button', { name: 'Looncodes' }).click();
-  await expect(page.getByText('Betaald verlof')).toBeVisible();
+  await expect(page.getByText('Betaald verlof').filter({ visible: true })).toBeVisible();
   await page.getByRole('button', { name: 'Medewerkers' }).click();
   await expect(page.getByText(/zonder Easypay-matricule/)).toBeVisible();
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
