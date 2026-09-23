@@ -29,6 +29,17 @@ export type FoutInfo = {
 
 const GENERIEK = /^Er ging iets mis|^Opslaan mislukt|mislukt\.?$/i;
 
+/**
+ * Alleen een servertekst die er als gebruikerszin uitziet komt in beeld
+ * (3D.2, Jarno 23-09: geen interne fouttekst, database-informatie,
+ * stackdetails of autorisatie-implementatie tonen). De server schrijft zijn
+ * 4xx-redenen als vaste Nederlandse zinnen (voor 403 bewaakt door
+ * src/fout403Contract.test.ts); iets dat naar techniek ruikt valt terug op de
+ * algemene vervolgstap.
+ */
+const TECHNISCH = /[{}<>`]|\bat\s+\S+\s*\(|\b(error|exception|stack|undefined|null|sql|select|insert|delete from|relation|column|constraint|violates|pgrst|postgres|supabase|jwt|token|rls|policy|requirerole|middleware)\b|\w+\.\w+\(/i;
+export const isVeiligeFouttekst = (tekst: string): boolean => tekst.length <= 240 && !TECHNISCH.test(tekst);
+
 /** Leest status, servertekst en netwerkaard uit wat een save-pad gooit. */
 export function leesFout(err: unknown): FoutInfo {
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -39,7 +50,7 @@ export function leesFout(err: unknown): FoutInfo {
   const bericht = typeof o.message === 'string' ? o.message.trim() : '';
   const netwerk = status === undefined && (o.name === 'TypeError' || /failed to fetch|networkerror|load failed|network request failed/i.test(bericht));
   // Alleen een 4xx-reden is een gebruikerstekst; 5xx- en fallbackteksten zijn generiek.
-  const tekst = status !== undefined && status >= 400 && status < 500 && bericht && !GENERIEK.test(bericht) ? bericht : undefined;
+  const tekst = status !== undefined && status >= 400 && status < 500 && bericht && !GENERIEK.test(bericht) && isVeiligeFouttekst(bericht) ? bericht : undefined;
   return { status, tekst, netwerk, offline };
 }
 

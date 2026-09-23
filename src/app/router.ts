@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { View } from '../types';
-import { ALLE_VIEWS, padVan, routeVanPad } from './routes';
+import { bekendeView, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
 import { leesStartschermLokaal } from '../lib/startscherm';
 import { annuleerHerstel, bewaarScroll, leesScroll, planHerstel, scrollSleutel } from '../lib/scrollGeheugen';
@@ -41,8 +41,8 @@ export function routeUitPad(pathname: string): Route | null {
 export function routeUitUrl(url: string): Route | null {
   let u: URL;
   try { u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost'); } catch { return null; }
-  const v = u.searchParams.get('view');
-  if (v && (ALLE_VIEWS as readonly string[]).includes(v)) return { view: v as View, params: [] };
+  const v = bekendeView(u.searchParams.get('view'));
+  if (v) return { view: v, params: [] };
   return routeUitPad(u.pathname);
 }
 
@@ -73,11 +73,11 @@ function normaliseerStartUrl() {
   const { pathname, search, hash } = window.location;
   const params = new URLSearchParams(search);
   // Print-modus (?print-driver=…) en andere query's laten we staan.
-  const oudeView = params.get('view');
-  if (oudeView && (ALLE_VIEWS as readonly string[]).includes(oudeView)) {
+  const oudeView = bekendeView(params.get('view'));
+  if (oudeView) {
     params.delete('view');
     const rest = params.toString();
-    window.history.replaceState(null, '', padVan(oudeView as View) + (rest ? `?${rest}` : '') + hash);
+    window.history.replaceState(null, '', padVan(oudeView) + (rest ? `?${rest}` : '') + hash);
     startDoel = window.location.pathname + window.location.search;
     return;
   }
@@ -89,10 +89,10 @@ function normaliseerStartUrl() {
       if (startscherm !== 'dashboard') window.history.replaceState(null, '', padVan(startscherm) + search + hash);
       return;
     }
-    let opgeslagen: string | null = null;
-    try { opgeslagen = window.localStorage.getItem(OPGESLAGEN_VIEW); } catch { /* privémodus */ }
-    if (opgeslagen && opgeslagen !== 'dashboard' && (ALLE_VIEWS as readonly string[]).includes(opgeslagen)) {
-      window.history.replaceState(null, '', padVan(opgeslagen as View) + search + hash);
+    let opgeslagen: View | null = null;
+    try { opgeslagen = bekendeView(window.localStorage.getItem(OPGESLAGEN_VIEW)); } catch { /* privémodus */ }
+    if (opgeslagen && opgeslagen !== 'dashboard') {
+      window.history.replaceState(null, '', padVan(opgeslagen) + search + hash);
     }
     return;
   }
@@ -104,7 +104,12 @@ function normaliseerStartUrl() {
     window.history.replaceState(null, '', '/' + search + hash);
     return;
   }
-  startDoel = pathname + search;
+  // Oud pad (hernoemd scherm, OUDE_PADEN): de adresbalk krijgt het huidige
+  // pad, met record-id, query en hash erbij, zodat een bladwijzer of gedeelde
+  // link niet op het oude adres blijft hangen (3D, 23-09).
+  const canoniek = padVan(start.view, start.params);
+  if (canoniek !== pathname.replace(/\/+$/, '')) window.history.replaceState(null, '', canoniek + search + hash);
+  startDoel = canoniek + search;
 }
 
 // --- Scrollpositie per route (punt 19, 15-09; src/lib/scrollGeheugen.ts) ---

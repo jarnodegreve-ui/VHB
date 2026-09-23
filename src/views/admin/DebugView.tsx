@@ -544,7 +544,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   };
   const addTestShiftInner = async () => {
     if (services.length === 0) {
-      notify('Geen diensten beschikbaar, voeg eerst een dienst toe via Beheer dienstoverzicht.', 'error');
+      notify('Geen diensten beschikbaar, voeg eerst een dienst toe via Dienstoverzicht.', 'error');
       return;
     }
     const sample = services[0];

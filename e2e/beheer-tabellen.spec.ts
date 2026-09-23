@@ -5,7 +5,7 @@ import { ADMIN, seed } from './helpers';
 /**
  * Tranche 3B.1 (23-09): de vijf beheerschermen op het gedeelde tabelkader
  * (Gebruikers, Toestellen, Vervaldata, Planningscodes, Beheer
- * dienstoverzicht) plus de leesweergave Dienstoverzicht.
+ * dienstoverzicht; sinds 3D één scherm Dienstoverzicht).
  *
  * - geen horizontale paginaoverloop (document én scroll-root) op de
  *   projectbreedte (iPhone 390 / desktop 1440) en, in het desktopproject,
@@ -33,8 +33,8 @@ const SCHERMEN: Scherm[] = [
   { view: 'toestellen', pad: '/beheer/toestellen', titel: 'Toestellen' },
   { view: 'vervaldata', pad: '/beheer/vervaldata', titel: 'Vervaldata' },
   { view: 'planning-codes', pad: '/beheer/planningscodes', titel: 'Planningscodes' },
-  { view: 'beheer-dienstoverzicht', pad: '/beheer/dienstoverzicht', titel: 'Beheer dienstoverzicht' },
-  { view: 'dienstoverzicht', pad: '/dienstoverzicht', titel: 'Dienstoverzicht' },
+  // 3D (23-09): Dienstoverzicht en Beheer dienstoverzicht zijn één scherm.
+  { view: 'dienstoverzicht', pad: '/beheer/dienstoverzicht', titel: 'Dienstoverzicht' },
 ];
 
 const extra = (pad: string) => {
@@ -96,7 +96,7 @@ for (const scherm of SCHERMEN) {
 
 test.describe('breedtes', () => {
   for (const breedte of [375, 768, 1024, 1280]) {
-    test(`alle zes schermen op ${breedte}px: geen overloop, tabel in haar kader`, async ({ browser, baseURL }, info) => {
+    test(`alle vijf schermen op ${breedte}px: geen overloop, tabel in haar kader`, async ({ browser, baseURL }, info) => {
       test.skip(info.project.name !== 'Desktop (chromium)', 'eenmaal per run, in het desktopproject');
       const context = await browser.newContext({
         baseURL, viewport: { width: breedte, height: 900 },

@@ -41,7 +41,6 @@ export const LazyManageSchedulesView = scherm<typeof import('../views/admin/Mana
 export const LazyPlanningMatrixView = scherm<typeof import('../views/admin/PlanningMatrixView'), 'PlanningMatrixView'>('planning-matrix', 'PlanningMatrixView');
 export const LazyPlanningCodesView = scherm<typeof import('../views/admin/PlanningCodesView'), 'PlanningCodesView'>('planning-codes', 'PlanningCodesView');
 export const LazyManageDiversionsView = scherm<typeof import('../views/admin/ManageDiversionsView'), 'ManageDiversionsView'>('beheer-omleidingen', 'ManageDiversionsView');
-export const LazyManageServicesView = scherm<typeof import('../views/admin/ManageServicesView'), 'ManageServicesView'>('beheer-dienstoverzicht', 'ManageServicesView');
 export const LazyVerlofKalenderView = scherm<typeof import('../views/admin/VerlofKalenderView'), 'VerlofKalenderView'>('verlof-kalender', 'VerlofKalenderView');
 export const LazyCoverageView = scherm<typeof import('../views/CoverageView'), 'CoverageView'>('dekking', 'CoverageView');
 export const LazyDebugView = scherm<typeof import('../views/admin/DebugView'), 'DebugView'>('beheer-debug', 'DebugView');

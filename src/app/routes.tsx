@@ -66,8 +66,9 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'beheer-roosters', pad: 'beheer/planning', label: 'Beheer planning', omschrijving: 'Importeer en herbouw de planning.', icoon: CalendarCog, sectie: 'planning', rollen: STAF },
   { view: 'planning-matrix', pad: 'beheer/planningsoverzicht', label: 'Planningsoverzicht', omschrijving: 'Controleer de geïmporteerde matrix per dag en chauffeur.', icoon: FileText, sectie: 'planning', breed: true, rollen: STAF },
   { view: 'planning-codes', pad: 'beheer/planningscodes', label: 'Planningscodes', omschrijving: 'Betekenis van matrixcodes.', icoon: Hash, sectie: 'planning', rollen: STAF },
-  { view: 'dienstoverzicht', pad: 'dienstoverzicht', label: 'Dienstoverzicht', omschrijving: 'Alle diensten, uren en blokken.', icoon: Bus, sectie: 'planning', rollen: STAF },
-  { view: 'beheer-dienstoverzicht', pad: 'beheer/dienstoverzicht', label: 'Beheer dienstoverzicht', omschrijving: 'Onderhoud het dienstschema.', icoon: ClipboardList, sectie: 'planning', rollen: STAF },
+  // 3D (23-09): Dienstoverzicht en Beheer dienstoverzicht zijn één scherm,
+  // alleen voor planner en admin; het oude pad /dienstoverzicht is een alias.
+  { view: 'dienstoverzicht', pad: 'beheer/dienstoverzicht', label: 'Dienstoverzicht', omschrijving: 'Alle diensten, uren en loopnummers; hier onderhoud je ze.', icoon: Bus, sectie: 'planning', rollen: STAF },
   { view: 'dienstopbouw', pad: 'beheer/dienstopbouw', label: 'Dienstopbouw', omschrijving: 'Ritdelen per dienst uit de ET-export: controles, ritbladen en looncomponenten.', icoon: Route, sectie: 'planning', rollen: STAF },
   { view: 'dagafsluiting', pad: 'beheer/dagadministratie', label: 'Dagadministratie', omschrijving: 'Bevestig per dag wie wat werkelijk reed, met overminuten en premies.', icoon: CalendarCheck2, sectie: 'planning', rollen: STAF },
   { view: 'looncontrole', pad: 'beheer/looncontrole', label: 'Looncontrole', omschrijving: 'Maandstand, looncodes, matricules en de Easypay-export.', icoon: Coins, sectie: 'planning', breed: true, rollen: STAF },
@@ -111,6 +112,14 @@ const OUDE_PADEN = new Map<string, string>([
   // 22-09: Beheer roosters heet Beheer planning, Dagafsluiting heet Dagadministratie.
   ['beheer/roosters', 'beheer/planning'],
   ['beheer/dagafsluiting', 'beheer/dagadministratie'],
+  // 23-09 (3D): Dienstoverzicht en Beheer dienstoverzicht samengevoegd.
+  ['dienstoverzicht', 'beheer/dienstoverzicht'],
+]);
+
+/** Verdwenen view-sleutels (in `?view=` van oude pushberichten of het
+ *  onthouden laatste scherm) en de view die hun plaats nam. */
+const OUDE_VIEWS = new Map<string, View>([
+  ['beheer-dienstoverzicht', 'dienstoverzicht'],
 ]);
 
 export const routeVan = (view: View): RouteDef => PER_VIEW.get(view) ?? ROUTES[0];
@@ -123,6 +132,14 @@ export const routeVanPad = (pad: string): RouteDef | undefined => {
 
 /** Alle views die voor minstens één rol bestaan (whitelist voor deeplinks). */
 export const ALLE_VIEWS: readonly View[] = ROUTES.map((r) => r.view);
+
+/** Een view-sleutel van buiten (URL, localStorage) naar een bestaande view:
+ *  bekend = zichzelf, verdwenen = zijn opvolger, anders null. */
+export const bekendeView = (sleutel: string | null | undefined): View | null => {
+  if (!sleutel) return null;
+  if ((ALLE_VIEWS as readonly string[]).includes(sleutel)) return sleutel as View;
+  return OUDE_VIEWS.get(sleutel) ?? null;
+};
 
 export const magView = (rol: Role, view: View): boolean => routeVan(view).rollen.includes(rol);
 
