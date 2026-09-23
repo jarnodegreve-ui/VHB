@@ -67,7 +67,7 @@ export function usePlanningData(ctx: DataCtx) {
       }
     } catch (error) {
       console.error('Error fetching planning:', error);
-      meldLaadfout('de planning');
+      meldLaadfout('de planning', error);
     }
   };
 
@@ -113,7 +113,7 @@ export function usePlanningData(ctx: DataCtx) {
       }
     } catch (error) {
       console.error('Error fetching services:', error);
-      meldLaadfout('het dienstoverzicht');
+      meldLaadfout('het dienstoverzicht', error);
     } finally {
       setServicesGeladen(true);
     }

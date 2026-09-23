@@ -24,7 +24,8 @@ import type { Session } from '@supabase/supabase-js';
 import { View, User, isStaf } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, LOGIN_MELDING_KEY, vergeetEffectiefThema, wisOfflineCaches, type ToastEventDetail } from './lib/ui';
-import { apiFetch, vernieuwSessie } from './lib/api';
+import { apiFetch, isToestelGeblokkeerd, vernieuwSessie } from './lib/api';
+import { laadfoutOnderdrukt } from './app/laadfout';
 import { lazyWithRetry, metRetry } from './lib/lazyRetry';
 import { WARMUP_VIEWS, prefetchView, warmViews } from './app/viewLoaders';
 import { addBreadcrumb, reportHandledError, setMonitoringUser } from './lib/monitoring';
@@ -205,7 +206,7 @@ export default function App() {
     currentUser,
     currentView,
     showToast: (m, t, a, o) => showToast(m, t, a, o),
-    meldLaadfout: (b) => meldLaadfout(b),
+    meldLaadfout: (b, f) => meldLaadfout(b, f),
   });
   const {
     shifts, users, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments,
@@ -225,11 +226,32 @@ export default function App() {
   // Staat de sessie op uitloggen? Dan zijn alle lopende calls gedoemd en
   // onderdrukken we hun individuele fout-toasts (zie showToast/forceSignOut).
   const sessieBeeindigdRef = useRef(false);
+  // Staat het toestel-wachtscherm (device_pending/revoked)? Dan faalt elke
+  // call met een toestel-403 en is dat scherm de melding: geen laadfout- of
+  // fout-toasts die zich opstapelen en na de goedkeuring verschijnen.
+  const toestelGeblokkeerdRef = useRef(false);
   // Laadfouten van gelijktijdige calls verzamelen: bij een hik (netwerk,
   // uitrol) faalt de hele reeks tegelijk en kreeg je vier losse rode
   // meldingen. We bundelen ze tot één melding mét "Opnieuw proberen".
   const laadfoutenRef = useRef<Set<string>>(new Set());
   const laadfoutTimerRef = useRef<number | null>(null);
+  // Toestel-whitelist: 'pending'/'revoked' → geblokkeerd-scherm i.p.v. de app.
+  const [deviceBlocked, zetDeviceBlockedState] = useState<'pending' | 'revoked' | null>(null);
+  // Eén setter voor state én ref (de ref lezen showToast/meldLaadfout
+  // synchroon, ook in listeners van de eerste render). Blokkeren wist wat er
+  // al aan laadfouten klaarstond.
+  const setDeviceBlocked = (status: 'pending' | 'revoked' | null) => {
+    toestelGeblokkeerdRef.current = status !== null;
+    if (status !== null) {
+      laadfoutenRef.current.clear();
+      if (laadfoutTimerRef.current !== null) {
+        window.clearTimeout(laadfoutTimerRef.current);
+        laadfoutTimerRef.current = null;
+      }
+      setToasts((current) => current.filter((t) => t.tone !== 'error'));
+    }
+    zetDeviceBlockedState(status);
+  };
   // Reden van een gedwongen uitlog, door te geven aan het inlogscherm.
   const [uitlogMelding, setUitlogMelding] = useState<'sessie' | 'account' | 'inactief' | ''>('');
   // Dubbele-init-guard: bootstrap én het INITIAL_SESSION/SIGNED_IN-event
@@ -298,7 +320,9 @@ export default function App() {
   // Supabase Realtime: live sync van leave/swaps/diversions/updates/planning.
   // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
   // gebeurt er niets.
-  useRealtimeSync(!!session && !!currentUser, {
+  // Niet zolang het toestel-wachtscherm staat: elke refetch zou alleen een
+  // toestel-403 opleveren.
+  useRealtimeSync(!!session && !!currentUser && !deviceBlocked, {
     // meldLive: stille "… bijgewerkt"-toast (max één per 10 s per collectie,
     // niet na een eigen schrijfactie) — src/lib/liveSignaal.ts.
     refetchLeave: () => {
@@ -388,7 +412,7 @@ export default function App() {
   // gemiste events zijn definitief weg — en daarna de sync-tijd verversen,
   // zodat "gegevens van HH:MM" bij een volgende uitval klopt.
   onlineCatchUpRef.current = () => {
-    if (!currentUser) return;
+    if (!currentUser || toestelGeblokkeerdRef.current) return;
     const planningFilter = isStaf(currentUser.role) ? undefined : { driverId: String(currentUser.id) };
     void Promise.allSettled([
       fetchMyNotes(),
@@ -474,8 +498,6 @@ export default function App() {
   // (feature uit) — de knop verschijnt dan niet.
   const [pushPublicKey, setPushPublicKey] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
-  // Toestel-whitelist: 'pending'/'revoked' → geblokkeerd-scherm i.p.v. de app.
-  const [deviceBlocked, setDeviceBlocked] = useState<'pending' | 'revoked' | null>(null);
   // Twee-stapsverificatie (staf): tussenscherm vóór de app, zie initializeAuthenticatedApp.
   const [tweeStaps, setTweeStaps] = useState<{ stap: 'code' | 'inschrijven'; factorId: string | null } | null>(null);
   // Gedeeld toestel (Instellingen › Beveiliging): automatisch afmelden na een half uur stilte.
@@ -557,7 +579,7 @@ export default function App() {
     // niet laden", …). Dat waren vijf rode toasts én vijf regels in de
     // foutenlog voor één oorzaak — 142 meldingen in twee weken, waarvan het
     // leeuwendeel afgeleid. De sessie zelf is al gemeld op het inlogscherm.
-    if (tone === 'error' && sessieBeeindigdRef.current) return;
+    if (tone === 'error' && (sessieBeeindigdRef.current || toestelGeblokkeerdRef.current)) return;
     // Schrijfblok van de onderhoudsmodus: de info-toast uit useOnderhoud is
     // de melding; de rode toast die de aanroeper vlak daarna toont (en het
     // foutrapport dat daaraan hangt) is geen fout van de app.
@@ -593,15 +615,16 @@ export default function App() {
    * alles opnieuw ophaalt, i.p.v. de gebruiker naar 'vernieuw de pagina' te
    * sturen.
    */
-  const meldLaadfout = (bron: string) => {
-    if (sessieBeeindigdRef.current) return;
+  const laadfoutStaat = () => ({ sessieBeeindigd: sessieBeeindigdRef.current, toestelGeblokkeerd: toestelGeblokkeerdRef.current });
+  const meldLaadfout = (bron: string, fout?: unknown) => {
+    if (laadfoutOnderdrukt(laadfoutStaat(), fout)) return;
     laadfoutenRef.current.add(bron);
     if (laadfoutTimerRef.current !== null) return;
     laadfoutTimerRef.current = window.setTimeout(() => {
       laadfoutTimerRef.current = null;
       const bronnen = [...laadfoutenRef.current];
       laadfoutenRef.current.clear();
-      if (bronnen.length === 0 || sessieBeeindigdRef.current) return;
+      if (bronnen.length === 0 || laadfoutOnderdrukt(laadfoutStaat())) return;
       const opsomming = bronnen.length === 1
         ? bronnen[0]
         : `${bronnen.slice(0, -1).join(', ')} en ${bronnen[bronnen.length - 1]}`;
@@ -962,7 +985,7 @@ export default function App() {
         const deviceStatus = await registratie;
         // De toestel-403 van apiFetch draagt de servermelding ("Dit toestel
         // is niet geregistreerd…", "…wacht op goedkeuring…", "…geblokkeerd…").
-        const toestelFout = eersteFout instanceof Error && /toestel/i.test(eersteFout.message);
+        const toestelFout = isToestelGeblokkeerd(eersteFout) || (eersteFout instanceof Error && /toestel/i.test(eersteFout.message));
         if (deviceStatus === 'pending' || deviceStatus === 'revoked' || (deviceStatus === null && toestelFout)) {
           // Registratie mislukt (null) terwijl /api/me een toestelreden gaf:
           // dezelfde uitkomst als vroeger, het wachtscherm met "Opnieuw controleren".

@@ -4,12 +4,13 @@ import { Card, CardHeader } from '../../../components/Card';
 import { InfoTip } from '../../../components/InfoTip';
 import { Button, MicroLabel } from '../../../components/primitives';
 import { SkeletonTile } from '../../../components/Skeleton';
-import { EmptyState } from '../../../components/ui';
+import { EmptyState, Foutkaart } from '../../../components/ui';
 import { LegeLijst } from '../../../components/illustraties';
 import { apiFetch } from '../../../lib/api';
 import { formatGetal } from '../../../lib/format';
 import { busVoorLaadpunt } from '../../../lib/laadplein';
 import { cn } from '../../../lib/ui';
+import { useZelfLadend, type Versheid } from '../../../lib/zelfLadend';
 import { Delta, dagKort, duurLabel, exporteerCsv, fmtKwh, maandKort, maandLabel, periodeLabel, tekstKw, tekstKwhHeel, uurLabel, type MaandRij } from './gedeeld';
 import { Staafgrafiek, useKeuze } from './grafieken';
 import { TableShell, Td, Th } from '../../../components/TabelBasis';
@@ -31,24 +32,18 @@ export type Historiek = {
   vergelijkLopend?: { van: string; tot: string; maand: string | null; kwh: number } | null;
 };
 
-export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand: string) => void; herlaad: number; onGeladen?: (h: Historiek) => void }) {
+export function HistoriekTab({ onMaand, onGeladen, onVersheid }: { onMaand: (maand: string) => void; onGeladen?: (h: Historiek) => void; onVersheid?: (v: Versheid) => void }) {
   const [data, setData] = useState<Historiek | null>(null);
-  const [fout, setFout] = useState<string | null>(null);
-  useEffect(() => {
-    let actueel = true;
-    (async () => {
-      try {
-        const res = await apiFetch('/api/ocpi/historiek');
-        if (!res.ok) throw new Error(String(res.status));
-        const json = (await res.json()) as Historiek;
-        if (actueel) { setData(json); setFout(null); onGeladen?.(json); }
-      } catch {
-        if (actueel) setFout('Kon de historiek niet laden.');
-      }
-    })();
-    return () => { actueel = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [herlaad]);
+  // Zelf-ladend (golf 3): focus-verversing en versheid in de kop, geen Ververs-knop.
+  const zl = useZelfLadend(async () => {
+    const res = await apiFetch('/api/ocpi/historiek');
+    if (!res.ok) throw new Error(String(res.status));
+    const json = (await res.json()) as Historiek;
+    setData(json);
+    onGeladen?.(json);
+  }, { boodschap: 'Kon de historiek niet laden.' });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { onVersheid?.(zl.versheid); }, [zl.versheid]);
 
   const maanden = useMemo(() => [...(data?.maanden ?? [])].reverse(), [data?.maanden]); // nieuwste bovenaan
   const chrono = data?.maanden ?? [];
@@ -88,7 +83,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
     ]);
   };
 
-  if (fout) return <EmptyState variant="fout" title={fout} message="Probeer het opnieuw met Ververs." />;
+  if (zl.fout) return <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />;
   if (!data) return <div className="grid grid-cols-1 gap-4 lg:grid-cols-2"><SkeletonTile /><SkeletonTile /></div>;
   if (chrono.length === 0) return <EmptyState illustratie={<LegeLijst />} title="Nog geen historiek" message="Zodra de eerste laadsessies gesynchroniseerd zijn, verschijnt hier één rij per maand." />;
 

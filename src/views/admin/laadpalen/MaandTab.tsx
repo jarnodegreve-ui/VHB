@@ -9,12 +9,13 @@ import { Badge, Button, MicroLabel } from '../../../components/primitives';
 import { SkeletonTile } from '../../../components/Skeleton';
 import { SortTh, useSort } from '../../../components/Table';
 import { TableShell, Td, Th } from '../../../components/TabelBasis';
-import { EmptyState } from '../../../components/ui';
+import { Foutkaart } from '../../../components/ui';
 import { apiFetch } from '../../../lib/api';
 import { isoDate, maandPlus } from '../../../lib/datum';
 import { WEEKDAY_SHORT_SUN, formatGetal, metEenheid } from '../../../lib/format';
 import { busVoorLaadpunt } from '../../../lib/laadplein';
 import { cn } from '../../../lib/ui';
+import { useZelfLadend, type Versheid } from '../../../lib/zelfLadend';
 import {
   Delta, TermijnKeuze, dagKort, duurLabel, exporteerCsv, fmtKwh, klasseLabel, maandLabel, periodeLabel, tekstKw, tekstKwh, tekstKwhHeel, uurLabel,
   type DagRij, type PuntRij, type Totalen,
@@ -55,35 +56,26 @@ export const queryUitPeriode = (k: PeriodeKeuze | null): string => (!k ? '' : k.
 type PuntKolom = 'punt' | 'kwh' | 'aandeel' | 'delta' | 'laadbeurten' | 'mislukt' | 'laadMin' | 'gemKw' | 'maxKw';
 type DagKolom = 'dag' | 'kwh' | 'laadbeurten' | 'mislukt' | 'piekKw' | 'piekTs';
 
-export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
+export function MaandTab({ keuze, zetKeuze, onDag, onGeladen, onVersheid }: {
   keuze: PeriodeKeuze | null;
   zetKeuze: (k: PeriodeKeuze) => void;
   onDag: (dag: string) => void;
-  herlaad: number;
   onGeladen?: (d: MaandData) => void;
+  onVersheid?: (v: Versheid) => void;
 }) {
   const [data, setData] = useState<MaandData | null>(null);
-  const [laadt, setLaadt] = useState(true);
-  const [fout, setFout] = useState<string | null>(null);
-  useEffect(() => {
-    let actueel = true;
-    setLaadt(true);
-    (async () => {
-      try {
-        const q = queryUitPeriode(keuze);
-        const res = await apiFetch(`/api/ocpi/maand${q ? `?${q}` : ''}`);
-        if (!res.ok) throw new Error(String(res.status));
-        const json = (await res.json()) as MaandData;
-        if (actueel) { setData(json); setFout(null); onGeladen?.(json); }
-      } catch {
-        if (actueel) setFout('Kon het maandoverzicht niet laden.');
-      } finally {
-        if (actueel) setLaadt(false);
-      }
-    })();
-    return () => { actueel = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keuze, herlaad]);
+  // Zelf-ladend (golf 3): opnieuw bij een andere periode, stil bij focus.
+  const zl = useZelfLadend(async () => {
+    const q = queryUitPeriode(keuze);
+    const res = await apiFetch(`/api/ocpi/maand${q ? `?${q}` : ''}`);
+    if (!res.ok) throw new Error(String(res.status));
+    const json = (await res.json()) as MaandData;
+    setData(json);
+    onGeladen?.(json);
+  }, { deps: [keuze], boodschap: 'Kon het maandoverzicht niet laden.' });
+  const laadt = zl.laden;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { onVersheid?.(zl.versheid); }, [zl.versheid]);
 
   const vandaag = isoDate(new Date());
   const modus = keuze?.modus ?? 'maand';
@@ -177,8 +169,8 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
         {lopend && <Badge tone="oker" stil dot className="shrink-0">lopend, t/m vandaag</Badge>}
       </div>
 
-      {fout ? (
-        <EmptyState variant="fout" title={fout} message="Probeer het opnieuw met Ververs." />
+      {zl.fout ? (
+        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : !data || !t ? (
         <div className="kpi-raster grid grid-cols-2 gap-3 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <SkeletonTile key={i} />)}</div>
       ) : (

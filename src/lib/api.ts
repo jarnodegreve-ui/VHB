@@ -37,6 +37,14 @@ import { supabase } from './supabase';
  * zijn losse gebeurtenissen. Met één vlag sloeg een GET die eerst 5xx kreeg en
  * daarna 401 de token-refresh over en logde de gebruiker onnodig uit.
  */
+/** Code op de Error die apiFetch gooit bij een toestel-403 (device_pending/unknown/revoked). */
+export const TOESTEL_GEBLOKKEERD = 'toestel_geblokkeerd';
+
+/** Faalde deze call omdat dit toestel (nog) geen toegang heeft? Dan is het
+ *  toestel-wachtscherm de melding en hoort er geen laadfout-toast bij. */
+export const isToestelGeblokkeerd = (err: unknown): boolean =>
+  !!err && typeof err === 'object' && (err as { code?: unknown }).code === TOESTEL_GEBLOKKEERD;
+
 export type ApiFetchInit = RequestInit & {
   /** Expliciet token i.p.v. de huidige sessie (bv. direct na inloggen). */
   accessToken?: string;
@@ -167,7 +175,9 @@ async function verstuur(
       meld('vhb-mfa-required', { code: body.code });
     } else if (body?.code === 'device_pending' || body?.code === 'device_unknown' || body?.code === 'device_revoked') {
       meld('vhb-device-blocked', { code: body.code });
-      throw new Error(detail || 'Dit toestel heeft geen toegang.');
+      // Met een code: laadpaden herkennen hem (isToestelGeblokkeerd) en tonen
+      // geen "Kon … niet laden"-toast, het wachtscherm is de melding.
+      throw Object.assign(new Error(detail || 'Dit toestel heeft geen toegang.'), { code: TOESTEL_GEBLOKKEERD });
     }
     // Met de status erbij, zodat meldSchrijffout de reden van de server en
     // de vervolgstap voor een 403 toont i.p.v. de algemene tekst (3D.2).

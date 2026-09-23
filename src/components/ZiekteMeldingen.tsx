@@ -91,9 +91,9 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
         </div>
 
         {zichtbaar.length === 0 ? (
-          <div className="p-4">
+          <div className="px-4 py-3">
             <EmptyState
-              compact
+              kaal
               title={historiek ? 'Geen meldingen gevonden' : 'Geen meldingen in deze selectie'}
               message={historiek ? 'Pas de zoekopdracht of het statusfilter aan.' : 'Kies een ander filter om de overige registraties te bekijken.'}
               action={meldingen.length > 0 ? <Button size="sm" onClick={wisFilters}>Toon alle meldingen</Button> : undefined}

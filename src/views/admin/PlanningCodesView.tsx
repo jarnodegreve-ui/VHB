@@ -220,6 +220,15 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           </Zijvak>
         )}
       >
+      {/* Nog geen enkele code: de hoofdleegte van het scherm staat zelf,
+          niet als doos in de tabel in de kaart (P3). */}
+      {draftCodes.length === 0 ? (
+        <EmptyState
+          title="Nog geen planningscodes"
+          message="Voeg de eerste matrixcodes toe zodat planners en admins hun betekenis centraal beheren."
+          action={<Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>Code toevoegen</Button>}
+        />
+      ) : (
       <Card as="section">
         <CardHeader
           title="Codes"
@@ -406,27 +415,21 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                 })}
               </div>
             </>
-          ) : draftCodes.length > 0 ? (
-            // Er zijn codes, alleen niet in deze categorie: dat is geen lege
-            // lijst ("Nog geen planningscodes"), maar een leeg filter.
-            <div className="p-6">
-              <EmptyState
-                title={`Geen codes in de categorie ${CATEGORIE_OPTIES.find((o) => o.value === filter)?.label ?? filter}`}
-                message="Kies een andere categorie of toon alle codes."
-                action={<Button variant="secondary" onClick={() => setFilter('all')}>Alle codes tonen</Button>}
-              />
-            </div>
           ) : (
-            <div className="p-6">
+            // Er zijn codes, alleen niet in deze categorie: dat is geen lege
+            // lijst ("Nog geen planningscodes"), maar een leeg filter: één
+            // stille regel in het kader, geen doos erin (P3).
+            <div className="px-5 py-4">
               <EmptyState
-                title="Nog geen planningscodes"
-                message="Voeg de eerste matrixcodes toe zodat planners en admins hun betekenis centraal beheren."
-                action={<Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>Code toevoegen</Button>}
+                kaal
+                title={`Geen codes in de categorie ${CATEGORIE_OPTIES.find((o) => o.value === filter)?.label ?? filter}`}
+                action={<Button variant="secondary" size="sm" onClick={() => setFilter('all')}>Alle codes tonen</Button>}
               />
             </div>
           )}
         </TableShell>
       </Card>
+      )}
       </ZijvakLayout>
 
       <EntityHistoryModal

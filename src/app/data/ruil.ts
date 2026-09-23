@@ -28,7 +28,7 @@ export function useRuilData(ctx: DataCtx) {
       }
     } catch (error) {
       console.error('Error fetching swaps:', error);
-      meldLaadfout('de dienstruilen');
+      meldLaadfout('de dienstruilen', error);
     } finally {
       setSwapsGeladen(true);
     }

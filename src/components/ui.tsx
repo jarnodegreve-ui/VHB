@@ -209,9 +209,14 @@ export function EmptyState({
   message,
   action,
   compact = false,
+  kaal = false,
   className,
 }: {
   compact?: boolean;
+  /** Eén stille regel zonder vlak of illustratie: de lege sectie binnen een
+   *  kaart ("Een lege sectie is één stille regel, geen lege kaart"). De
+   *  illustratie blijft voor de hoofdleegte van een scherm. */
+  kaal?: boolean;
   className?: string;
   icon?: React.ReactNode;
   illustratie?: React.ReactNode;
@@ -220,6 +225,18 @@ export function EmptyState({
   message?: string;
   action?: React.ReactNode;
 }) {
+  if (kaal) {
+    // Titel en uitleg lopen als één zin door: "Nog geen historiek. Na je …".
+    const titel = message && !/[.!?…:]$/.test(title) ? `${title}.` : title;
+    return (
+      <div className={cn('flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2', className)}>
+        <p className="min-w-0 text-body-sm text-slate-500 [overflow-wrap:anywhere]">
+          <span className="font-medium text-slate-700">{titel}</span>{message ? <> {message}</> : null}
+        </p>
+        {action ? <div className="flex min-w-0 flex-wrap gap-2">{action}</div> : null}
+      </div>
+    );
+  }
   const StandaardIllustratie = variant === 'klaar' ? AllesGedaan : variant === 'fout' ? Fout : LegeLijst;
   const beeld = illustratie ?? icon ?? <StandaardIllustratie compact={compact} />;
 
@@ -309,8 +326,10 @@ export function Foutkaart({
 }
 
 /**
- * Stille versheidsregel "Bijgewerkt om 14:32" (text-micro) op één vaste
- * plek: rechts in de PageHeader-acties, vóór de knoppen. Tijdens een stille
+ * Stille versheidsregel "Bijgewerkt om 14:32" op één vaste plek: rechts in
+ * de PageHeader-acties, vóór de knoppen. Meta-maat (12 px, gedempt), geen
+ * microlabel in kapitalen: het is een voetnoot bij de kop, geen kopje (P3,
+ * 23-09; het enige versheidsrecept, ook voor Ziekte en Laadpalen). Tijdens een stille
  * verversing "Bijwerken…", zonder bereik "Offline · …". Vóór de eerste laad
  * rendert hij niets, zodat de kop niet verspringt.
  */
@@ -321,7 +340,7 @@ export function VersheidRegel({ className, ...versheid }: Versheid & { className
     // Mobiel: eigen regel onder de knoppen (basis-full + order-last), zodat de
     // ene gouden knop niet door een tijdstip van zijn plek geduwd wordt;
     // vanaf md gewoon links van de knoppen op dezelfde rij.
-    <p className={cn('text-micro order-last basis-full self-center whitespace-nowrap text-right max-sm:text-left md:order-none md:basis-auto md:text-left', className)} aria-live="polite">
+    <p className={cn('text-xs text-slate-500 order-last basis-full self-center whitespace-nowrap text-right max-sm:text-left md:order-none md:basis-auto md:text-left', className)} aria-live="polite">
       {tekst}
     </p>
   );

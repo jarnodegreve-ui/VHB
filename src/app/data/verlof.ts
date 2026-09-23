@@ -30,7 +30,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
       }
     } catch (error) {
       console.error('Error fetching leave:', error);
-      meldLaadfout('de verlofaanvragen');
+      meldLaadfout('de verlofaanvragen', error);
     }
   };
 

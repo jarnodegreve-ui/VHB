@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Bug, CheckCircle2, Gauge, ChevronDown, ChevronRight, DownloadCloud, EyeOff, FlaskConical, Mail, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
+import { Bug, CheckCircle2, Gauge, ChevronDown, ChevronRight, DownloadCloud, EyeOff, FlaskConical, Mail, Plus, RotateCcw, Trash2, UploadCloud } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
-import { PageHeader, PageShell } from '../../components/ui';
+import { Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
+import { useZelfLadend } from '../../lib/zelfLadend';
 import { apiFetch, apiJson } from '../../lib/api';
 import { Badge, Button, Chip, IconButton, StatusBadge } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
@@ -366,7 +367,6 @@ function StatusRij({ label, children }: { label: string; children: ReactNode }) 
 // eindelijk meededen. Zelfde vorm als onSave elders in de app.
 export function DebugView({ currentUser, shifts, services, onSaveShifts }: { currentUser: User; shifts: Shift[]; services: Service[]; onSaveShifts: (s: Shift[]) => void | boolean | Promise<void | boolean> }) {
   const [healthData, setHealthData] = useState<any>(null);
-  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -491,21 +491,18 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     }
   };
 
-  const checkHealth = async () => {
-    try {
-      setIsCheckingHealth(true);
-      // Het publieke /api/health is bewust kaal (alleen status+tijd, geen
-      // info-disclosure); de config-/tabelstatussen zitten in het admin-only
-      // details-endpoint.
-      const response = await apiFetch('/api/health/details');
-      const data = await response.json();
-      setHealthData(data);
-    } catch (error) {
-      console.error('Health check error:', error);
-    } finally {
-      setIsCheckingHealth(false);
-    }
-  };
+  // Zelf-ladend (golf 3): de status laadt bij het openen en stil bij
+  // terugkeer naar het tabblad; versheid in de kop, een laadfout is een
+  // Foutkaart (vroeger bleef de sectie dan stil weg). Geen eigen
+  // "Status verversen"-knop meer: het is een lezing, geen actie.
+  const zlHealth = useZelfLadend(async () => {
+    // Het publieke /api/health is bewust kaal (alleen status+tijd, geen
+    // info-disclosure); de config-/tabelstatussen zitten in het admin-only
+    // details-endpoint.
+    const response = await apiFetch('/api/health/details');
+    if (!response.ok) throw new Error(String(response.status));
+    setHealthData(await response.json());
+  }, { boodschap: 'Kon de systeemstatus niet laden.' });
 
   const testWrite = async () => {
     try {
@@ -580,7 +577,6 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   };
 
   useEffect(() => {
-    checkHealth();
     getServiceWorkerVersion().then(setSwVersion);
   }, []);
 
@@ -593,8 +589,8 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         title="Systeemstatus"
         actions={(
           <>
-            {/* Eén knop in de kop; de schrijftest zit in het "…"-menu ernaast
-                (afwerking 04-09, nr. 7). */}
+            <VersheidRegel {...zlHealth.versheid} />
+            {/* De schrijftest zit in het "…"-menu (afwerking 04-09, nr. 7). */}
             <ActieMenu
               label="Meer acties"
               align="left"
@@ -602,9 +598,6 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                 { label: isTesting ? 'Testen…' : 'Test schrijven', icon: <FlaskConical size={16} />, disabled: isTesting, onClick: () => { void testWrite(); } },
               ]}
             />
-            <Button variant="primary" icon={<RefreshCw size={16} className={isCheckingHealth ? 'animate-spin' : ''} />} onClick={checkHealth} disabled={isCheckingHealth}>
-              {isCheckingHealth ? 'Controleren…' : 'Status verversen'}
-            </Button>
           </>
         )}
       />
@@ -648,6 +641,9 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         </div>
       </Card>
 
+      {zlHealth.fout && (
+        <Foutkaart compact={!!healthData} boodschap={zlHealth.fout} offline={!zlHealth.online} onOpnieuw={zlHealth.opnieuw} bezig={zlHealth.laden} />
+      )}
       {healthData && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

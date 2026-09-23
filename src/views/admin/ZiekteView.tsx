@@ -9,7 +9,8 @@ import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../../lib/u
 import { kandidaatLabel, nietBeschikbaarUitMatrix, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDatumDMJ, formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
-import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
+import { useOnline } from '../../lib/useOnline';
 import { apiFetch } from '../../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } from '../../lib/herverdeel';
@@ -61,6 +62,10 @@ export function ZiekteView({
   const planningMatrixRows = useOptioneleAppData()?.planningMatrixRows ?? [];
   // De matrix laadt ná de poort (useAppData); zonder context (tests) = klaar.
   const planningMatrixGeladen = useOptioneleAppData()?.planningMatrixGeladen ?? true;
+  // Versheid: één recept (VersheidRegel in de kop), hier op de laatste
+  // synchronisatie van de app-data waaruit dit scherm rekent.
+  const lastSyncedAt = useOptioneleAppData()?.lastSyncedAt ?? null;
+  const online = useOnline();
   const today = isoDate(new Date());
   const naamVan = (id: string) => users.find((u) => String(u.id) === String(id))?.name ?? 'Onbekend';
   const isAdmin = user.role === 'admin';
@@ -269,14 +274,16 @@ export function ZiekteView({
         title="Ziekte"
         description="Actuele meldingen, opvolging en inzicht in geregistreerde ziektedagen."
         actions={(
-          <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setMeldOpen(true)}>
-            Ziek melden
-          </Button>
+          <>
+            <VersheidRegel laatstGeladen={lastSyncedAt} verversen={false} online={online} />
+            <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setMeldOpen(true)}>
+              Ziek melden
+            </Button>
+          </>
         )}
       />
 
       <section aria-label="Ziekte vandaag" className="space-y-3">
-        <p className="text-body-sm text-slate-500">Stand van {formatDayLong(today)}</p>
         {/* kpi-raster (B4, ronde 5): op de telefoon één kaart met rijen zoals
             Vervaldata en Overzicht; drie losse tegels lieten een gat in het
             2-koloms raster. Vanaf sm drie tegels naast elkaar. */}

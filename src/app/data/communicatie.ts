@@ -26,7 +26,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       }
     } catch (error) {
       console.error('Error fetching updates:', error);
-      meldLaadfout('de updates');
+      meldLaadfout('de updates', error);
     }
   };
 

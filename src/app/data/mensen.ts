@@ -77,7 +77,7 @@ export function useMensenData(ctx: DataCtx) {
       }
     } catch (error) {
       console.error('Error fetching users:', error);
-      meldLaadfout('de gebruikerslijst');
+      meldLaadfout('de gebruikerslijst', error);
     } finally {
       setUsersGeladen(true);
     }

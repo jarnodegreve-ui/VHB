@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { FileSpreadsheet } from 'lucide-react';
 import { useRoute } from '../../app/router';
-import { PageHeader, PageShell, EmptyState } from '../../components/ui';
+import { Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { isoDate } from '../../lib/datum';
+import { useZelfLadend, type Versheid } from '../../lib/zelfLadend';
 import { SkeletonTile } from '../../components/Skeleton';
 import { Button } from '../../components/primitives';
-import { Fout } from '../../components/illustraties';
 import { TermijnKeuze, downloadXlsx } from './laadpalen/gedeeld';
 import { LiveTab, type Dashboard } from './laadpalen/LiveTab';
 import { MaandTab, paramUitPeriode, periodeUitParam, type MaandData, type PeriodeKeuze } from './laadpalen/MaandTab';
@@ -50,25 +50,16 @@ export function OcpiDashboardView() {
   const zetPeriode = useCallback((k: PeriodeKeuze) => gaNaar('maand', [paramUitPeriode(k)], true), [gaNaar]);
 
   // Live-data wordt hier geladen (de KPI's boven het Live-tabblad); de andere
-  // tabbladen halen hun eigen data op en delen de Ververs-teller.
+  // tabbladen halen hun eigen data op (zelf-ladend, golf 3) en melden hun
+  // versheid, zodat de kop altijd die van het open tabblad toont.
   const [data, setData] = useState<Dashboard | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [herlaad, setHerlaad] = useState(0);
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await apiFetch('/api/ocpi/dashboard');
-      if (!response.ok) throw new Error(String(response.status));
-      setData(await response.json());
-      setError(null);
-    } catch {
-      setError('Kon de laadpaalgegevens niet laden.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-  useEffect(() => { load(); }, [load]);
+  const zl = useZelfLadend(async () => {
+    const response = await apiFetch('/api/ocpi/dashboard');
+    if (!response.ok) throw new Error(String(response.status));
+    setData(await response.json());
+  }, { boodschap: 'Kon de laadpaalgegevens niet laden.' });
+  const [tabVersheid, setTabVersheid] = useState<Versheid | null>(null);
+  const versheid = tab === 'live' ? zl.versheid : tabVersheid;
 
   const [dag, setDag] = useState<string | null>(null);
   const [maandData, setMaandData] = useState<MaandData | null>(null);
@@ -99,9 +90,7 @@ export function OcpiDashboardView() {
                 Excel
               </Button>
             )}
-            <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => { load(); setHerlaad((n) => n + 1); }} disabled={isLoading}>
-              Ververs
-            </Button>
+            {versheid && <VersheidRegel {...versheid} />}
           </>
         )}
       />
@@ -109,8 +98,8 @@ export function OcpiDashboardView() {
       <TermijnKeuze label="Onderdeel" waarde={tab} opties={TABS} onKies={(t) => gaNaar(t, t === 'maand' && periodeKeuze ? [paramUitPeriode(periodeKeuze)] : [])} />
 
       {tab === 'live' && (
-        error ? (
-          <EmptyState variant="fout" illustratie={<Fout />} title={error} message="Controleer de OCPI-koppeling in Systeemstatus of probeer het opnieuw." action={<Button variant="secondary" onClick={load}>Opnieuw</Button>} />
+        zl.fout && !data ? (
+          <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
         ) : !data ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <SkeletonTile key={i} />)}
@@ -119,9 +108,9 @@ export function OcpiDashboardView() {
           <LiveTab data={data} onDag={setDag} />
         )
       )}
-      {tab === 'maand' && <MaandTab keuze={periodeKeuze} zetKeuze={zetPeriode} onDag={setDag} herlaad={herlaad} onGeladen={setMaandData} />}
-      {tab === 'historiek' && <HistoriekTab herlaad={herlaad} onMaand={(m) => gaNaar('maand', [m])} />}
-      {tab === 'sessies' && <SessiesTab herlaad={herlaad} />}
+      {tab === 'maand' && <MaandTab keuze={periodeKeuze} zetKeuze={zetPeriode} onDag={setDag} onGeladen={setMaandData} onVersheid={setTabVersheid} />}
+      {tab === 'historiek' && <HistoriekTab onMaand={(m) => gaNaar('maand', [m])} onVersheid={setTabVersheid} />}
+      {tab === 'sessies' && <SessiesTab onVersheid={setTabVersheid} />}
 
       <DagDetail dag={dag} onSluit={() => setDag(null)} onDag={setDag} eersteDag={maandData?.eersteDag ?? null} />
     </PageShell>
