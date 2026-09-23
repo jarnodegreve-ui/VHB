@@ -9,7 +9,7 @@ import {
   activeerImport, bestandNaarBase64, bewaarDagtype, importeerBestand, laadDagtypes, laadImports, laadLoonparameters, laadRitblad, laadSegmenten, leidLooncodesAf,
   minNaarHHMM, verwijderImport, type Bevinding, type DagtypeCode, type LoonParameters, type RitbladRij, type Segment, type SegmentImport,
 } from '../../lib/dienst';
-import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
@@ -63,7 +63,7 @@ export function DienstopbouwView({ currentUser }: { currentUser: User }) {
   );
 }
 
-function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: SegmentImport[]; isLoading: boolean; isAdmin: boolean; onChanged: () => Promise<void> }) {
+export function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: SegmentImport[]; isLoading: boolean; isAdmin: boolean; onChanged: () => Promise<void> }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [bezig, setBezig] = useState(false);
   const [detail, setDetail] = useState<SegmentImport | null>(null);
@@ -86,6 +86,11 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
     catch (err) { meldSchrijffout('Activeren', err); }
     finally { setBezig(false); }
   };
+  // Een import heeft geen veilige herstelweg (harde delete, de ritdelen gaan
+  // mee via on delete cascade; terug = het bestand opnieuw importeren):
+  // expliciete, server-confirmed bevestiging en géén undo (CLAUDE.md,
+  // Verwijderen, uitzondering 23-09).
+  const [teVerwijderen, setTeVerwijderen] = useState<SegmentImport | null>(null);
   const verwijder = async (imp: SegmentImport) => {
     try { await verwijderImport(imp.id); notify('Import verwijderd.', 'success'); await onChanged(); }
     catch (err) { meldSchrijffout('Verwijderen', err, () => void verwijder(imp)); }
@@ -170,7 +175,7 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
                         {!i.actief && <Button variant="secondary" size="sm" icon={<Play size={14} />} onClick={() => void activeer(i, fouten(i) > 0 && isAdmin)} disabled={bezig || (fouten(i) > 0 && !isAdmin)}>{fouten(i) > 0 && isAdmin ? 'Toch activeren' : 'Activeren'}</Button>}
                         <IconButton label="Looncomponenten-CSV (Easypay)" size="sm" onClick={() => void downloadCsv(i)}><Download size={16} /></IconButton>
                         {i.actief && <IconButton label="Looncodes afleiden uit deze import" size="sm" onClick={() => void afleiden(i)} disabled={bezig}><Wand2 size={16} /></IconButton>}
-                        {!i.actief && <IconButton label="Import verwijderen" size="sm" onClick={() => void verwijder(i)}><Trash2 size={16} /></IconButton>}
+                        {!i.actief && <IconButton label="Import verwijderen" size="sm" onClick={() => setTeVerwijderen(i)}><Trash2 size={16} /></IconButton>}
                       </div>
                     </Td>
                   </tr>
@@ -181,6 +186,16 @@ function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports: Segme
         </TableShell>
       )}
       {detail && <BevindingenModal imp={detail} onClose={() => setDetail(null)} />}
+      {teVerwijderen && (
+        <ConfirmationModal
+          open
+          onClose={() => setTeVerwijderen(null)}
+          onConfirm={() => verwijder(teVerwijderen)}
+          title="Import verwijderen?"
+          message={`${teVerwijderen.filename ?? 'De import'} van ${formatDateTimeHuman(teVerwijderen.createdAt)} verdwijnt, samen met al zijn ${teVerwijderen.rijen} ritdelen van ${teVerwijderen.diensten} diensten en de bevindingen van de controle. De actieve dienstopbouw en de looncodes blijven ongewijzigd. Dit kan niet ongedaan worden gemaakt: om hem terug te krijgen importeer je het bestand opnieuw.`}
+          confirmText="Verwijderen"
+        />
+      )}
     </div>
   );
 }

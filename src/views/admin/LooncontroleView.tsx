@@ -14,7 +14,7 @@ import {
   laadMaand, laadMedewerkers, LoonFout, schuifMaand, vandaagIso, verwijderLoonCode,
   type DagTelling, type ExportControle, type LoonCode, type LoonCodeBody, type LoonInstellingen, type LoonMedewerkerRij,
 } from '../../lib/loon';
-import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
@@ -266,7 +266,7 @@ function Tiktijden({ c }: { c: LoonCode }) {
 
 const LEEG_CODE: LoonCodeBody & { code: string } = { code: '', codeWeergave: '', omschrijving: '', dienstType: 'lijn', inExport: true, easypayActiviteit: 'LIJN', easypayTypePrest: 40140, tik1: '', tik2: '', tik3: '', tik4: '', tik5: '', tik6: '', lbRijtijd: null, lbStat100At: null, lbStat100Nat: null, lbStat50Nat: null, lbOnd: null, lbAndWrk: null, lbNacht: null };
 
-function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
+export function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
   const [codes, setCodes] = useState<LoonCode[]>([]);
   const [zoek, setZoek] = useState('');
   const [filter, setFilter] = useState<'alles' | 'lijn' | 'varia' | 'ander'>('alles');
@@ -280,6 +280,10 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
     (c, k) => (k === 'code' ? c.code : k === 'type' ? c.dienstType : k === 'prest' ? c.easypayTypePrest : k === 'hd' ? (c.tik1 ?? c.tik3 ?? '') : c.code),
   );
   const bewerkCode = (c: LoonCode) => setBewerk({ ...c, omschrijving: c.omschrijving ?? '', tik1: c.tik1 ?? '', tik2: c.tik2 ?? '', tik3: c.tik3 ?? '', tik4: c.tik4 ?? '', tik5: c.tik5 ?? '', tik6: c.tik6 ?? '' });
+  // Een looncode heeft geen veilige herstelweg (harde delete, geen
+  // soft-delete; de parameters zijn daarna weg): expliciete, server-confirmed
+  // bevestiging en géén undo (CLAUDE.md, Verwijderen, uitzondering 23-09).
+  const [teVerwijderen, setTeVerwijderen] = useState<LoonCode | null>(null);
   const verwijder = async (c: LoonCode) => {
     try { await verwijderLoonCode(c.code); setCodes((l) => l.filter((x) => x.code !== c.code)); notify(`Looncode ${c.codeWeergave} verwijderd.`, 'success'); }
     catch (err) { meldSchrijffout('Verwijderen', err, () => void verwijder(c)); }
@@ -334,7 +338,7 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
                       <Td num className="text-slate-600">{c.lbRijtijd ?? '—'}</Td>
                       <Td nowrap><Badge tone={c.inExport ? 'emerald' : 'slate'} kaal>{c.inExport ? 'ja' : 'nee'}</Badge></Td>
                       <Td className="text-right">
-                        <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => void verwijder(c)}><Trash2 size={16} /></IconButton>
+                        <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => setTeVerwijderen(c)}><Trash2 size={16} /></IconButton>
                       </Td>
                     </tr>
                   ))}
@@ -358,13 +362,23 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
                     </span>
                     <span className="block text-xs text-slate-600"><Tiktijden c={c} /></span>
                   </CelKnop>
-                  <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => void verwijder(c)}><Trash2 size={16} /></IconButton>
+                  <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => setTeVerwijderen(c)}><Trash2 size={16} /></IconButton>
                 </li>
               ))}
             </ul>
           </>
         )}
       </TableShell>
+      {teVerwijderen && (
+        <ConfirmationModal
+          open
+          onClose={() => setTeVerwijderen(null)}
+          onConfirm={() => verwijder(teVerwijderen)}
+          title="Looncode verwijderen?"
+          message={`Looncode ${teVerwijderen.codeWeergave} en haar Easypay-parameters (activiteit, typeprestatie, tiktijden) verdwijnen. Dagrijen die deze code al hebben houden haar, maar Dagafsluiting en de Easypay-export melden haar dan als onbekende code, en de export blokkeert tot de code weer bestaat. Dit kan niet ongedaan worden gemaakt.`}
+          confirmText="Verwijderen"
+        />
+      )}
       {bewerk && <CodeModal init={bewerk} onClose={() => setBewerk(null)} onKlaar={(c) => { setCodes((l) => (l.some((x) => x.code === c.code) ? l.map((x) => (x.code === c.code ? c : x)) : [...l, c])); setBewerk(null); }} />}
     </div>
   );
