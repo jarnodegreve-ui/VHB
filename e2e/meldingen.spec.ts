@@ -11,8 +11,13 @@ import { CHAUFFEUR, seed } from './helpers';
  */
 const nu = Date.now();
 const iso = (msTerug: number) => new Date(nu - msTerug).toISOString();
+// "Vandaag" moet vandaag blijven, ook net na middernacht (24-09: om 00:10
+// viel "een uur geleden" op gisteren en ontbrak de kop Vandaag). Node rekent
+// in dezelfde zone als de browser (playwright.config.ts).
+const middernacht = new Date(nu).setHours(0, 0, 0, 0);
+const vandaagGeleden = (msTerug: number) => new Date(Math.max(nu - msTerug, middernacht + 60e3)).toISOString();
 const MELDINGEN = [
-  { id: 'm1', titel: 'Verlof goedgekeurd', tekst: 'Betaald verlof (10 – 12 aug), beslist door Planning.', soort: 'verlof', doel: 'verlof', createdAt: iso(3600e3) },
+  { id: 'm1', titel: 'Verlof goedgekeurd', tekst: 'Betaald verlof (10 – 12 aug), beslist door Planning.', soort: 'verlof', doel: 'verlof', createdAt: vandaagGeleden(3600e3) },
   { id: 'm2', titel: 'Rooster bijgewerkt', tekst: 'Je rooster is gewijzigd, bekijk je diensten.', soort: 'planning', doel: 'rooster', createdAt: iso(5 * 3600e3) },
   { id: 'm3', titel: 'Nieuwe update', tekst: 'Nieuwe zomeruniformen beschikbaar', soort: 'update', doel: 'updates', createdAt: iso(3 * 864e5), gelezenOp: iso(2 * 864e5) },
 ];
