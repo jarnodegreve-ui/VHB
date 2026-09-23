@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { ADMIN, CHAUFFEUR, seed } from './helpers';
+import { ADMIN, CHAUFFEUR, seed, type Fixture } from './helpers';
 
 /**
  * Datumtranche PR 5: de verlofaanvraag met typbare Van/Tot naast het
@@ -14,7 +14,7 @@ const dag = (plus: number) => {
 };
 const dmj = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
-async function openAanvraag(page: Page, user = CHAUFFEUR, knop: RegExp = /Verlof aanvragen/) {
+async function openAanvraag(page: Page, user: Fixture = CHAUFFEUR, knop: RegExp = /Verlof aanvragen/) {
   const posts: any[] = [];
   await seed(page, { user, extra: (p, req) => { if (p.endsWith('/api/leave') && req.method() === 'POST') { posts.push(JSON.parse(req.postData() ?? 'null')); return {}; } return undefined; } });
   await page.goto('/verlof');
