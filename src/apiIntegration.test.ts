@@ -1201,7 +1201,7 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
 
   it('laat een chauffeur een eigen pending-aanvraag toevoegen', async () => {
     const own = mem.leave.filter((l) => l.userId === '3');
-    const nieuw = { id: 'l-a3', userId: '3', startDate: '2026-09-01', endDate: '2026-09-02', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-06-12T08:00:00Z' };
+    const nieuw = { id: 'l-a3', userId: '3', startDate: '2027-09-01', endDate: '2027-09-02', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-06-12T08:00:00Z' };
     const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, nieuw] });
     expect(res.status).toBe(200);
     expect(mem.leave.find((l) => l.id === 'l-a3')).toBeTruthy();
@@ -1210,7 +1210,7 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
   it('meldt een nieuwe aanvraag alleen aan actieve planners/admins, niet aan een gepauzeerd staf-account (controle-ronde 27-08)', async () => {
     mem.users = [...mem.users, { id: '9', name: 'Paula Gepauzeerd', email: 'paula@vhb.be', role: 'planner', isActive: false }];
     const own = mem.leave.filter((l) => l.userId === '3');
-    const nieuw = { id: 'l-a4', userId: '3', startDate: '2026-09-08', endDate: '2026-09-09', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-08-28T08:00:00Z' };
+    const nieuw = { id: 'l-a4', userId: '3', startDate: '2027-09-08', endDate: '2027-09-09', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-08-28T08:00:00Z' };
     const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, nieuw] });
     expect(res.status).toBe(200);
     const naarStaf = mem.pushesSent.filter((p) => p.userIds.includes('2'));
@@ -1224,6 +1224,43 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
     const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, gevormd] });
     expect(res.status).toBe(400);
     expect(mem.leave.find((l) => l.id === 'l-echt|approved')).toBeFalsy();
+  });
+
+  describe('verlof in het verleden (Jarno 23-09: ook op de server)', () => {
+    const gisteren = () => { const d = new Date(Date.now() - 864e5); return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' }); };
+    const vandaag = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+
+    it('een chauffeur kan geen eigen verlof in het verleden aanvragen (400, niets bewaard)', async () => {
+      const own = mem.leave.filter((l) => l.userId === '3');
+      const nieuw = { id: 'l-verleden', userId: '3', startDate: gisteren(), endDate: vandaag(), type: 'betaald_verlof', status: 'pending', comment: '', createdAt: new Date().toISOString() };
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, nieuw] });
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Je kan geen verlof aanvragen in het verleden.');
+      expect(mem.leave.find((l) => l.id === 'l-verleden')).toBeFalsy();
+    });
+
+    it('vandaag mag wel', async () => {
+      const own = mem.leave.filter((l) => l.userId === '3');
+      const nieuw = { id: 'l-vandaag', userId: '3', startDate: vandaag(), endDate: vandaag(), type: 'betaald_verlof', status: 'pending', comment: '', createdAt: new Date().toISOString() };
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, nieuw] });
+      expect(res.status).toBe(200);
+    });
+
+    it('ook een admin of planner kan geen eigen verlof in het verleden aanvragen (geen uitzondering)', async () => {
+      for (const [token, id] of [['tok-admin', '1'], ['tok-planner', '2']] as const) {
+        const nieuw = { id: `l-eigen-${id}`, userId: id, startDate: gisteren(), endDate: gisteren(), type: 'betaald_verlof', status: 'pending', comment: '', createdAt: new Date().toISOString() };
+        const res = await api('POST', '/api/leave', { token, body: [...mem.leave, nieuw] });
+        expect(res.status).toBe(400);
+        expect(mem.leave.find((l) => l.id === `l-eigen-${id}`)).toBeFalsy();
+      }
+    });
+
+    it('de bestaande registratie door staf namens een chauffeur blijft kunnen (hij belde het door)', async () => {
+      const nieuw = { id: 'l-registratie', userId: '3', startDate: gisteren(), endDate: gisteren(), type: 'betaald_verlof', status: 'approved', comment: '', createdAt: new Date().toISOString(), decidedAt: new Date().toISOString() };
+      const res = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, nieuw] });
+      expect(res.status).toBe(200);
+      expect(mem.leave.find((l) => l.id === 'l-registratie')).toBeTruthy();
+    });
   });
 
   it('weigert verlof aanvragen voor een ander (403)', async () => {
