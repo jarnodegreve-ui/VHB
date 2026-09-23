@@ -48,16 +48,16 @@ test('chauffeur: Contacten toont het skelet en nooit "Geen contacten gevonden" t
   await expect(page.getByText('Geen contacten gevonden')).toHaveCount(0);
 });
 
-test('staf: Dienstoverzicht toont het skelet en nooit "Geen diensten gevonden" terwijl de diensten laden', async ({ page }) => {
+test('staf: Dienstoverzicht toont het skelet en nooit "Nog geen diensten" terwijl de diensten laden', async ({ page }) => {
   await seed(page, { user: ADMIN, view: 'dienstoverzicht' });
   const services = await houdTegen(page, '/api/services');
   await page.goto('/dienstoverzicht');
   await services.aangevraagd;
   await expect(page.locator('[aria-label="Scherm wordt geladen"]')).toBeVisible();
-  await expect(page.getByText('Geen diensten gevonden')).toHaveCount(0);
+  await expect(page.getByText('Nog geen diensten')).toHaveCount(0);
   services.laatLos();
   await expect(page.locator('[aria-label="Scherm wordt geladen"]')).toHaveCount(0);
-  await expect(page.getByText('Geen diensten gevonden')).toHaveCount(0);
+  await expect(page.getByText('Nog geen diensten')).toHaveCount(0);
 });
 
 test('admin: de cockpit staat er vóór matrix en activiteitenlog; het activiteitspaneel toont een skelet', async ({ page }) => {

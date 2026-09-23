@@ -1,31 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { dienstoverzichtCsv } from '../../lib/dienstoverzichtExport';
-import { Clock, Download, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { Download, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { Service } from '../../types';
 import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
 import { notify, downloadBlob } from '../../lib/ui';
-import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Button, MicroLabel } from '../../components/primitives';
+import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { Button } from '../../components/primitives';
 import { ActieMenu } from '../../components/ActieMenu';
-import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
-import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
 import { Field, Input } from '../../components/Field';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
-import { Zijvak, ZijvakRij } from '../../components/Zijvak';
 import { InfoTip } from '../../components/InfoTip';
 import { ROOSTER_MELDING_RUST_MINUTEN } from '../../../shared/roosterMelding';
-import { dienstStatistiek, formatDienstDuur } from '../../lib/dienstStatistiek';
 import { vandaagBrussel } from '../../lib/brussel';
-
-// Een deel telt alleen als het een geldige begin- én eindtijd (HH:MM) heeft.
-// Zo tonen we voor 1- of 2-delige diensten geen '--'-placeholder in de lege
-// deel-kolommen (zelfde logica als de leesweergave ServicesView).
-const hasValidTime = (start?: string, end?: string) =>
-  !!start && !!end && /^\d{1,2}:\d{2}$/.test(start) && /^\d{1,2}:\d{2}$/.test(end);
+import { DienstTabel, DienstZijvak, useDienstLijst } from '../../components/dienstoverzicht/DienstTabel';
 
 export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[], opts?: { bulkReplace?: boolean }) => Promise<boolean> | boolean | void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
@@ -56,28 +47,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   const { vuil } = useVuil(formData, showModal, editingId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (showModal) fouten.wis(); }, [showModal, editingId]);
-  // Zoeken op dienst- of loopnummer; sorteren per kolom. Standaard blijft de
-  // volgorde van de lijst zelf (zoals geïmporteerd/opgeslagen) — 'volgorde'
-  // is die onzichtbare standaardsleutel.
-  const [zoek, setZoek] = useState('');
-  const sort = useSort<'volgorde' | 'dienst' | 'loop1' | 'start'>('volgorde');
-  // Rijdichtheid, onthouden per toestel.
-  const voorkeur = useTabelVoorkeur('dienstoverzicht');
-  const zoekTerm = zoek.trim().toLowerCase();
-  const gefilterd = zoekTerm
-    ? services.filter((s) => [s.serviceNumber, s.loopnr, s.loopnr2, s.loopnr3].filter(Boolean).join(' ').toLowerCase().includes(zoekTerm))
-    : services;
-  const volgorde = new Map(services.map((s, i) => [s.id, i]));
-  const gesorteerd = sort.sorteer(gefilterd, (s, k) => {
-    switch (k) {
-      case 'volgorde': return volgorde.get(s.id) ?? 0;
-      case 'dienst': return s.serviceNumber;
-      case 'loop1': return s.loopnr || null;
-      case 'start': return s.startTime || null;
-    }
-  });
-  /** "04:36–07:52" — en-dash, zoals de chauffeursweergave. */
-  const tijdvak = (van: string, tot: string) => `${van}–${tot}`;
+  // Zoeken en sorteren per kolom in de gedeelde kern (3D.1); standaard de
+  // volgorde van de lijst zelf (zoals geïmporteerd/opgeslagen).
+  const lijst = useDienstLijst(services);
   // Rij-acties in één "…"-menu (ActieMenu): drie losse iconknoppen maakten de
   // Acties-kolom te breed om naast het zijvak te passen op 1440 px.
   const rijActies = (s: Service) => (
@@ -300,16 +272,11 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     return Promise.resolve(onSave(pendingImportedServices, { bulkReplace: true }));
   };
 
-  // Kerncijfers voor het zijvak — over de hele lijst, niet het zoekresultaat.
-  const stat = dienstStatistiek(services);
-  const uiterste = (u: { serviceNumber: string; minuten: number } | null) =>
-    u ? `${u.serviceNumber} · ${formatDienstDuur(u.minuten)}` : '—';
-
   // Excel importeren + CSV downloaden zitten in het "…"-menu van de paginakop
   // (afwerking 04-09, nr. 7); het zijvak toont alleen nog de kerncijfers.
   const zijvak = (
-    <Zijvak
-      titel="Overzicht"
+    <DienstZijvak
+      services={services}
       aside={(
         <InfoTip label="Wat gebeurt er na het opslaan?" align="right">
           <p>Wijzig je tijden, delen of loopnummers, dan werkt het portaal de planning van de chauffeurs meteen zelf bij. Goedgekeurde dienstruilen blijven staan.</p>
@@ -318,12 +285,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         </InfoTip>
       )}
       voet={canAdminOverride ? undefined : 'Excel-import is alleen voor admins; CSV downloaden kan via het menu (…) in de kop.'}
-    >
-      <ZijvakRij label="Diensten" waarde={stat.diensten} mono />
-      <ZijvakRij label="Loops" waarde={stat.loops} mono />
-      <ZijvakRij label="Langste dienst" waarde={uiterste(stat.langste)} mono />
-      <ZijvakRij label="Kortste dienst" waarde={uiterste(stat.kortste)} mono />
-    </Zijvak>
+    />
   );
 
   return (
@@ -376,142 +338,14 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         )}
       />
 
-      {/* Acht kolommen hebben voorrang op het zijvak: op een laptop staat
-          het overzicht eronder. Pas op een breed scherm kan het ernaast.
-          De tabel/kaart-keuze volgt de echte kolombreedte, inclusief de
-          ruimte die de navigatie en het zijvak innemen. */}
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:items-start">
-      {/* Container query i.p.v. md (bewust, tranche 3B): deze kolom staat
-          naast de zijbalk en vanaf 2xl ook naast het zijvak, dus de
-          schermbreedte zegt niet hoeveel plaats de acht kolommen krijgen.
-          Onder 42rem echte kolombreedte neemt de kaartlijst het over; de
-          layout-e2e bewaakt 390 tot 1536 px. */}
-      <div className="@container min-w-0">
-      {/* `past`: de tabel verschijnt pas vanaf 42rem en past daar in haar
-          kader, dus geen scrollcontainer en de kolomkop plakt. */}
-      <TableShell
-        label="Diensten"
-        past
-        kop={(
-          <TableToolbar
-            zoek={zoek}
-            onZoek={setZoek}
-            placeholder="Zoek op dienst- of loopnummer…"
-            telling={`${gesorteerd.length} van ${services.length}`}
-            dichtheid={voorkeur.dichtheid}
-            className="md:flex-wrap"
-          />
-        )}
-      >
-        {gesorteerd.length > 0 && (
-          <div className="hidden @[42rem]:block">
-            <Tabel className={voorkeur.tabelClass}>
-              <StickyThead>
-                <tr>
-                  {/* Zelfde indeling als het totaaloverzicht van de planning
-                      en als de chauffeurs-weergave: loop vóór de uren. */}
-                  <SortTh kolom="dienst" sort={sort} className="[&_button]:px-3">Dienst</SortTh>
-                  <SortTh kolom="loop1" sort={sort} className="[&_button]:px-3">Loop 1</SortTh>
-                  <SortTh kolom="start" sort={sort} className="[&_button]:px-3">Deel 1</SortTh>
-                  <Th className="px-3">Loop 2</Th>
-                  <Th className="px-3">Deel 2</Th>
-                  <Th className="px-3">Loop 3</Th>
-                  <Th className="px-3">Deel 3</Th>
-                  <Th className="px-3 text-right">Acties</Th>
-                </tr>
-              </StickyThead>
-              <tbody>
-                {gesorteerd.map(s => (
-                  <tr key={s.id} className="border-b border-hairline-subtle last:border-b-0 hover:bg-surface-soft-hover transition-colors">
-                    {/* px-3 i.p.v. px-4: acht kolommen moeten vanaf 42rem naast
-                        elkaar passen. Nummers en tijdvakken breken nooit af. */}
-                    <Td nowrap className="px-3 font-semibold text-slate-800">{s.serviceNumber}</Td>
-                    <Td nowrap className="px-3 font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
-                    <Td nowrap className="px-3">{tijdvak(s.startTime, s.endTime)}</Td>
-                    <Td nowrap className="px-3 font-semibold text-slate-700">
-                      {hasValidTime(s.startTime2, s.endTime2) && s.loopnr2 ? s.loopnr2 : <span className="font-normal text-slate-300">—</span>}
-                    </Td>
-                    <Td nowrap className="px-3">
-                      {hasValidTime(s.startTime2, s.endTime2) ? tijdvak(s.startTime2!, s.endTime2!) : ''}
-                    </Td>
-                    <Td nowrap className="px-3 font-semibold text-slate-700">
-                      {hasValidTime(s.startTime3, s.endTime3) && s.loopnr3 ? s.loopnr3 : <span className="font-normal text-slate-300">—</span>}
-                    </Td>
-                    <Td nowrap className="px-3">
-                      {hasValidTime(s.startTime3, s.endTime3) ? tijdvak(s.startTime3!, s.endTime3!) : ''}
-                    </Td>
-                    <Td className="w-14 px-3 text-right">{rijActies(s)}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Tabel>
-          </div>
-        )}
-
-        {/* Smalle kolom: kaart per dienst; op tablet passen de drie delen
-            naast elkaar zonder dienst- of loopgegevens te verbergen. */}
-        <div className="@[42rem]:hidden divide-y divide-hairline-subtle">
-          {gesorteerd.map(s => (
-            <div key={s.id} className="p-5 space-y-4 hover:bg-surface-soft-hover transition-colors">
-              <div className="flex justify-between items-center">
-                <span className="text-card-title">{s.serviceNumber}</span>
-                {rijActies(s)}
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 @[30rem]:grid-cols-3">
-                <div className="flex flex-col gap-1">
-                  <MicroLabel>Deel 1{s.loopnr ? ` · loop ${s.loopnr}` : ''}</MicroLabel>
-                  <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
-                    <Clock size={14} className="text-slate-500" />
-                    {tijdvak(s.startTime, s.endTime)}
-                  </div>
-                </div>
-
-                {hasValidTime(s.startTime2, s.endTime2) && (
-                  <div className="flex flex-col gap-1">
-                    <MicroLabel>Deel 2{s.loopnr2 ? ` · loop ${s.loopnr2}` : ''}</MicroLabel>
-                    <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
-                      <Clock size={14} className="text-slate-500" />
-                      {tijdvak(s.startTime2!, s.endTime2!)}
-                    </div>
-                  </div>
-                )}
-
-                {hasValidTime(s.startTime3, s.endTime3) && (
-                  <div className="flex flex-col gap-1">
-                    <MicroLabel>Deel 3{s.loopnr3 ? ` · loop ${s.loopnr3}` : ''}</MicroLabel>
-                    <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
-                      <Clock size={14} className="text-slate-500" />
-                      {tijdvak(s.startTime3!, s.endTime3!)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {gesorteerd.length === 0 && (
-          <div className="p-6">
-            {zoekTerm ? (
-              <EmptyState
-                title={`Geen resultaten voor “${zoek.trim()}”`}
-                message="Zoek op dienstnummer of loopnummer."
-                action={<Button variant="secondary" onClick={() => setZoek('')}>Zoekterm wissen</Button>}
-              />
-            ) : (
-              <EmptyState
-                title="Nog geen diensten"
-                message="Voeg handmatig een dienst toe of importeer een Excel-bestand."
-                action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => { setEditingId(null); setFormData(emptyForm); setShowModal(true); }}>Nieuwe dienst</Button>}
-              />
-            )}
-          </div>
-        )}
-      </TableShell>
-      </div>
-      <aside className="min-w-0 self-start 2xl:sticky 2xl:top-[calc(var(--sticky-top)+1.25rem)]">{zijvak}</aside>
-      </div>
+      <DienstTabel
+        services={services}
+        lijst={lijst}
+        rijActies={rijActies}
+        leegTekst="Voeg handmatig een dienst toe of importeer een Excel-bestand."
+        leegActie={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => { setEditingId(null); setFormData(emptyForm); setShowModal(true); }}>Nieuwe dienst</Button>}
+        zijvak={zijvak}
+      />
 
       <Modal open={showModal} onClose={() => setShowModal(false)} vuil={vuil} maxWidth="lg" className="flex flex-col !p-0">
         <ModalHeader title={editingId ? 'Dienst bewerken' : 'Nieuwe dienst'} onClose={() => setShowModal(false)} />
