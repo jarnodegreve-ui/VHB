@@ -5,17 +5,17 @@ import { nieuweUserFormulierSchema, userFormulierSchema, wachtwoordResetSchema }
 import { CalendarOff, FolderOpen, History, Info, LogIn, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
 import { ACCOUNT_STATUS } from '../../../shared/status';
-import type { Role, User } from '../../types';
+import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, FilterChip, IconButton, MicroLabel, Segmented, TOON_NAAR_BADGE, Td, Th, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, MicroLabel, Segmented, TOON_NAAR_BADGE, Tabel, TableShell, Td, Th, Switch } from '../../components/primitives';
 import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
-import { ActieMenu } from '../../components/ActieMenu';
+import { ActieMenu, type ActieMenuItem } from '../../components/ActieMenu';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Input, Select } from '../../components/Field';
@@ -31,12 +31,6 @@ import { LegeLijst, NietGevonden } from '../../components/illustraties';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 
 type UserDraft = User & { password?: string };
-
-/** Rol → badge-tint (presentatie, geen logica). */
-// `Record<Role, …>`: de technieker ontbrak hier en kreeg dus `tone={undefined}`
-// (gevonden door `strict`, 21-09). Neutraal zoals de chauffeur: het label
-// onderscheidt, niet de kleur.
-const ROLE_BADGE_TONE: Record<Role, 'oker' | 'blue' | 'slate'> = { admin: 'oker', planner: 'blue', chauffeur: 'slate', technieker: 'slate' };
 
 /** Uitschakelbare kolommen van de gebruikerstabel (Medewerker en Acties blijven altijd). */
 const KOLOMMEN = [
@@ -687,6 +681,28 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     // De dialoog ruimt pendingImportUsers zelf op via onClose (fase 2).
   };
 
+  // Rijmenu van één medewerker: dezelfde lijst op desktop (tabelrij) en op
+  // de telefoon (kaart), zodat daar geen actie ontbreekt.
+  const rijMenu = (u: User): ActieMenuItem[] => [
+    { label: 'Verlof- en dienstruilhistoriek', icon: <Info size={16} />, onClick: () => setViewingHistoryUser(u) },
+    { label: 'Documenten beheren', icon: <FolderOpen size={16} />, onClick: () => setDocumentsUser(u) },
+    { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setViewingChangeLogUser(u) },
+    { label: 'Nieuw tijdelijk wachtwoord', icon: <RotateCcw size={16} />, onClick: () => setConfirmResetUser(u) },
+    ...(u.role === 'planner' || u.role === 'admin'
+      ? [{ label: 'Twee-stapsverificatie resetten', icon: <ShieldOff size={16} />, onClick: () => setMfaResetUser(u) }]
+      : []),
+    {
+      label: u.isActive !== false ? 'Gebruiker pauzeren' : 'Gebruiker activeren',
+      icon: u.isActive !== false ? <Pause size={16} /> : <Play size={16} />,
+      disabled: u.isActive !== false && isProtectedAdmin(u),
+      onClick: () => { void quickToggleActive(u); },
+    },
+    ...(u.isActive !== false
+      ? [{ label: 'Uit dienst', icon: <UserX size={16} />, disabled: u.id === currentUser.id || isProtectedAdmin(u), onClick: () => openUitDienst(u) }]
+      : []),
+    { label: 'Gebruiker verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, disabled: isProtectedAdmin(u), onClick: () => setConfirmDeleteId(u.id) },
+  ];
+
   return (
     <PageShell>
       <PageHeader
@@ -714,83 +730,86 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
         )}
       />
 
-      {/* Eén tabelkaart: kop met uitrol-tellers, toolbar (zoeken/filters/
-          telling), bulk-balk en de tabel zelf. De aparte "Werkset"- en
-          Excel-kaarten erboven zijn weg — de uitleg zit in de (i) naast de
-          importknop, de filters horen bij de tabel. `overflow-clip` i.p.v.
-          TableShell: die maakt een scrollcontainer en dan plakt de kolomkop
-          niet meer onder de topbar (de tabel is desktop-only, past dus). */}
-      <div className="surface-table rounded-3xl overflow-clip">
-        <div className="space-y-4 border-b border-hairline px-5 py-4 md:px-6">
-          <CardHeader
-            size="lg"
-            title="Gebruikerslijst"
-            description="Status, meldingen en sessies per medewerker."
-            aside={(
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Uitrol-teller: hoeveel actieve medewerkers kunnen de
-                    meldingen die de app verstuurt écht ontvangen? */}
-                <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">
-                  {pushMetAan} van {pushTotaal} met meldingen
-                </Badge>
-                {/* Adoptie: hoeveel chauffeurs logden ooit in? Rood zolang er
-                    nog een groep is die je persoonlijk moet meekrijgen;
-                    daarna een stille chip. */}
-                <Badge tone={nooitIngelogd > 0 ? 'red' : 'emerald'} stil={nooitIngelogd === 0} className="tabular-nums">
-                  {chauffeursOoitIn} van {actieveChauffeurs.length} chauffeurs ooit ingelogd
-                </Badge>
-                {/* Accounts zonder één cel in de geïmporteerde planning:
-                    nieuwe collega, vertrokken, of weggevallen Excel-kolom. */}
-                {aantalNietInPlanning > 0 && (
-                  <Badge tone="amber" icon={<CalendarOff size={12} />}>
-                    {aantalNietInPlanning} niet in de planning
+      {/* Eén tabelkaart (TableShell): kop met uitrol-tellers, toolbar
+          (zoeken/filters/telling) en bulkbalk, daaronder de tabel. `past`:
+          de tabel staat alleen vanaf md en past daar in haar kader, dus geen
+          scrollcontainer en de kolomkop plakt onder de topbar. */}
+      <TableShell
+        label="Gebruikers"
+        past
+        kop={(
+          <div className="space-y-4">
+            <CardHeader
+              size="lg"
+              title="Gebruikerslijst"
+              description="Status, meldingen en sessies per medewerker."
+              aside={(
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Uitrol-teller: hoeveel actieve medewerkers kunnen de
+                      meldingen die de app verstuurt écht ontvangen? */}
+                  <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">
+                    {pushMetAan} van {pushTotaal} met meldingen
                   </Badge>
-                )}
-              </div>
-            )}
-          />
-          <TableToolbar
-            zoek={userSearch}
-            onZoek={setUserSearch}
-            placeholder="Zoek op naam, personeelsnr of e-mail…"
-            telling={`${sortedUsers.length} van ${zichtbareUsers.length}`}
-            dichtheid={voorkeur.dichtheid}
-            kolommen={voorkeur.kolommen}
-            filters={(
-              <>
-                <Segmented<typeof roleFilter>
-                  label="Rol"
-                  itemClassName="capitalize"
-                  waarde={roleFilter}
-                  opties={(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => ({ waarde: role, label: role === 'all' ? 'Alles' : role }))}
-                  onChange={setRoleFilter}
-                />
-                {/* Snelfilters voor de uitrol. Blijven renderen zolang het
-                    filter aanstaat — anders kon een actieve filter zijn eigen
-                    knop laten verdwijnen en bleef een lege tabel zonder uitweg
-                    achter (controle-ronde 20-08). */}
-                {(nooitIngelogd > 0 || alleenNooitIn) && (
-                  <FilterChip active={alleenNooitIn} onClick={() => setAlleenNooitIn((v) => !v)} icon={<LogIn size={14} />}>
-                    Nog nooit ingelogd ({nooitIngelogd})
-                  </FilterChip>
-                )}
-                {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
-                  <FilterChip active={alleenNietInPlanning} onClick={() => setAlleenNietInPlanning((v) => !v)} icon={<CalendarOff size={14} />}>
-                    Niet in de planning ({aantalNietInPlanning})
-                  </FilterChip>
-                )}
-              </>
-            )}
-          />
-          <BulkBar aantal={selectedIds.size} onWis={clearSelection}>
-            <Button variant="secondary" size="sm" icon={<Pause size={14} />} bezig={bulkBezig === 'pauzeren'} disabled={bulkBezig === 'activeren'} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
-            <Button variant="secondary" size="sm" icon={<Play size={14} />} bezig={bulkBezig === 'activeren'} disabled={bulkBezig === 'pauzeren'} onClick={() => bulkSetActive(true)}>Activeren</Button>
-            <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
-          </BulkBar>
-        </div>
+                  {/* Adoptie: hoeveel chauffeurs logden ooit in? Rood zolang er
+                      nog een groep is die je persoonlijk moet meekrijgen;
+                      daarna een stille chip. */}
+                  <Badge tone={nooitIngelogd > 0 ? 'red' : 'emerald'} stil={nooitIngelogd === 0} className="tabular-nums">
+                    {chauffeursOoitIn} van {actieveChauffeurs.length} chauffeurs ooit ingelogd
+                  </Badge>
+                  {/* Accounts zonder één cel in de geïmporteerde planning:
+                      nieuwe collega, vertrokken, of weggevallen Excel-kolom. */}
+                  {aantalNietInPlanning > 0 && (
+                    <Badge tone="amber" icon={<CalendarOff size={12} />}>
+                      {aantalNietInPlanning} niet in de planning
+                    </Badge>
+                  )}
+                </div>
+              )}
+            />
+            <TableToolbar
+              zoek={userSearch}
+              onZoek={setUserSearch}
+              placeholder="Zoek op naam, personeelsnr of e-mail…"
+              telling={`${sortedUsers.length} van ${zichtbareUsers.length}`}
+              dichtheid={voorkeur.dichtheid}
+              kolommen={voorkeur.kolommen}
+              filters={(
+                <>
+                  <Segmented<typeof roleFilter>
+                    label="Rol"
+                    itemClassName="capitalize"
+                    waarde={roleFilter}
+                    opties={(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => ({ waarde: role, label: role === 'all' ? 'Alles' : role }))}
+                    onChange={setRoleFilter}
+                  />
+                  {/* Snelfilters voor de uitrol. Blijven renderen zolang het
+                      filter aanstaat — anders kon een actieve filter zijn eigen
+                      knop laten verdwijnen en bleef een lege tabel zonder uitweg
+                      achter (controle-ronde 20-08). */}
+                  {(nooitIngelogd > 0 || alleenNooitIn) && (
+                    <FilterChip active={alleenNooitIn} onClick={() => setAlleenNooitIn((v) => !v)} icon={<LogIn size={14} />}>
+                      Nog nooit ingelogd ({nooitIngelogd})
+                    </FilterChip>
+                  )}
+                  {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
+                    <FilterChip active={alleenNietInPlanning} onClick={() => setAlleenNietInPlanning((v) => !v)} icon={<CalendarOff size={14} />}>
+                      Niet in de planning ({aantalNietInPlanning})
+                    </FilterChip>
+                  )}
+                </>
+              )}
+            />
+            <BulkBar aantal={selectedIds.size} onWis={clearSelection}>
+              <Button variant="secondary" size="sm" icon={<Pause size={14} />} bezig={bulkBezig === 'pauzeren'} disabled={bulkBezig === 'activeren'} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
+              <Button variant="secondary" size="sm" icon={<Play size={14} />} bezig={bulkBezig === 'activeren'} disabled={bulkBezig === 'pauzeren'} onClick={() => bulkSetActive(true)}>Activeren</Button>
+              <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
+            </BulkBar>
+          </div>
+        )}
+      >
         {sortedUsers.length > 0 && (
           <div className="hidden md:block">
-            <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
+            <Tabel className={voorkeur.tabelClass}>
               <StickyThead>
                 <tr>
                   <Th className="w-12 !py-1">
@@ -805,7 +824,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                   {voorkeur.zichtbaar('status') && <SortTh kolom="status" sort={sort}>Status</SortTh>}
                   {voorkeur.zichtbaar('meldingen') && <SortTh kolom="meldingen" sort={sort} title="Heeft deze medewerker meldingen aan staan op minstens één toestel?">Meldingen</SortTh>}
                   {voorkeur.zichtbaar('laatst') && <SortTh kolom="laatst" sort={sort}>Laatst actief</SortTh>}
-                  {voorkeur.zichtbaar('sessies') && <SortTh kolom="sessies" sort={sort} title="Aantal goedgekeurde toestellen van deze medewerker.">Toestellen</SortTh>}
+                  {voorkeur.zichtbaar('sessies') && <SortTh kolom="sessies" sort={sort} align="right" className="w-32" title="Aantal goedgekeurde toestellen van deze medewerker.">Toestellen</SortTh>}
                   <Th className="text-right">Acties</Th>
                 </tr>
               </StickyThead>
@@ -858,41 +877,19 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                           : <Badge tone="slate" kaal>Uit</Badge>}
                       </Td>
                     )}
-                    {voorkeur.zichtbaar('laatst') && <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-500">Nooit</span>}</Td>}
-                    {voorkeur.zichtbaar('sessies') && <Td className={(toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'text-slate-800' : 'text-slate-400'}>{toestellenPerUser.get(String(u.id)) ?? 0}</Td>}
+                    {voorkeur.zichtbaar('laatst') && <Td nowrap>{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-500">Nooit</span>}</Td>}
+                    {voorkeur.zichtbaar('sessies') && <Td num className={(toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'text-slate-800' : 'text-slate-500'}>{toestellenPerUser.get(String(u.id)) ?? 0}</Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
                         <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
-                        <ActieMenu
-                          label="Meer acties"
-                          size="sm"
-                          items={[
-                            { label: 'Verlof- en dienstruilhistoriek', icon: <Info size={16} />, onClick: () => setViewingHistoryUser(u) },
-                            { label: 'Documenten beheren', icon: <FolderOpen size={16} />, onClick: () => setDocumentsUser(u) },
-                            { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setViewingChangeLogUser(u) },
-                            { label: 'Nieuw tijdelijk wachtwoord', icon: <RotateCcw size={16} />, onClick: () => setConfirmResetUser(u) },
-                            ...(u.role === 'planner' || u.role === 'admin'
-                              ? [{ label: 'Twee-stapsverificatie resetten', icon: <ShieldOff size={16} />, onClick: () => setMfaResetUser(u) }]
-                              : []),
-                            {
-                              label: u.isActive !== false ? 'Gebruiker pauzeren' : 'Gebruiker activeren',
-                              icon: u.isActive !== false ? <Pause size={16} /> : <Play size={16} />,
-                              disabled: u.isActive !== false && isProtectedAdmin(u),
-                              onClick: () => { void quickToggleActive(u); },
-                            },
-                            ...(u.isActive !== false
-                              ? [{ label: 'Uit dienst', icon: <UserX size={16} />, disabled: u.id === currentUser.id || isProtectedAdmin(u), onClick: () => openUitDienst(u) }]
-                              : []),
-                            { label: 'Gebruiker verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, disabled: isProtectedAdmin(u), onClick: () => setConfirmDeleteId(u.id) },
-                          ]}
-                        />
+                        <ActieMenu label={`Meer acties voor ${u.name}`} size="sm" items={rijMenu(u)} />
                       </div>
                     </Td>
                   </LijstRij>
                 ))}
                 </LijstAnimatie>
               </tbody>
-            </table>
+            </Tabel>
           </div>
         )}
         <div className="md:hidden divide-y divide-hairline-subtle">
@@ -911,8 +908,9 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                   <Avatar naam={u.name} size="md" />
                   <div>
                     <div className="font-semibold text-slate-800 leading-tight">{u.name}</div>
+                    {/* Rol zoals op desktop: een stille metaregel, geen pil. */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
+                      <span className={cn('text-xs capitalize', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{u.role}</span>
                       {nietInPlanning(u) && (
                         <Badge tone="amber" icon={<CalendarOff size={12} />}>Niet in planning</Badge>
                       )}
@@ -927,19 +925,14 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></Card>
-                <Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{toestellenPerUser.get(String(u.id)) ?? 0}</p></Card>
+                <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 whitespace-nowrap text-sm font-semibold text-slate-700">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></Card>
+                <Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700">{toestellenPerUser.get(String(u.id)) ?? 0}</p></Card>
               </div>
+              {/* Zelfde acties als de tabelrij: Bewerken + het rijmenu. De
+                  losse iconknoppen misten pauzeren/activeren en de 2FA-reset. */}
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => setEditingUser(u)}>Bewerken</Button>
-                <IconButton label="Verlof- en dienstruilhistoriek" variant="ghost" onClick={() => setViewingHistoryUser(u)}><Info size={18} /></IconButton>
-                <IconButton label="Documenten beheren" variant="ghost" onClick={() => setDocumentsUser(u)}><FolderOpen size={18} /></IconButton>
-                <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setViewingChangeLogUser(u)}><History size={18} /></IconButton>
-                <IconButton label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Gebruiker verwijderen'} variant="danger" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)}><Trash2 size={18} /></IconButton>
-                <IconButton label="Nieuw tijdelijk wachtwoord instellen" variant="ghost" onClick={() => setConfirmResetUser(u)}><RotateCcw size={18} /></IconButton>
-                {u.isActive !== false && (
-                  <IconButton label="Uit dienst" variant="ghost" onClick={() => openUitDienst(u)} disabled={u.id === currentUser.id || isProtectedAdmin(u)}><UserX size={18} /></IconButton>
-                )}
+                <ActieMenu label={`Meer acties voor ${u.name}`} items={rijMenu(u)} />
               </div>
             </LijstRij>
           ))}
@@ -964,7 +957,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
             )}
           </div>
         )}
-      </div>
+      </TableShell>
 
       <ConfirmationModal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
       <ConfirmationModal open={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)} onConfirm={handleBulkDelete} title="Gebruikers verwijderen" message={`Weet je zeker dat je ${selectedIds.size} geselecteerde gebruiker(s) wilt verwijderen? Beschermde accounts (jezelf, de laatste actieve admin) worden overgeslagen. Dit kan niet ongedaan worden gemaakt.`} confirmText="Verwijderen" variant="warning" />
