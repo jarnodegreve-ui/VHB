@@ -23,7 +23,7 @@ import { Card, CardHeader } from '../components/Card';
 import { DateInput, Input, Select } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { fetchCoverageAdvies, kandidaatMeta, segmentenLabel, type CoverageAdvies } from '../lib/advisor';
-import { formatDateHuman, formatShortDay, MONTH_NAMES } from '../lib/format';
+import { aantal, formatDateHuman, formatShortDay, hoofdletter, MONTH_NAMES } from '../lib/format';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import {
   fetchCoverageConfig,
@@ -459,7 +459,7 @@ export function CoverageView() {
     }
     setKalFout('');
     setOverrides((prev) => [...prev, ...uitzonderingen.map((u) => ({ ...u, _k: sleutel() }))]);
-    notify(`${uitzonderingen.length} uitzondering${uitzonderingen.length === 1 ? '' : 'en'} voorgezet${overgeslagen > 0 ? ` (${overgeslagen} al gedekt)` : ''}, controleer de lijst en klik op Opslaan.`, 'success');
+    notify(`${uitzonderingen.length} uitzondering${uitzonderingen.length === 1 ? '' : 'en'} voorgezet${overgeslagen > 0 ? ` (${overgeslagen} al gedekt)` : ''}, controleer de lijst en sla op.`, 'success');
   };
 
   // --- Uitzonderingen ---
@@ -518,7 +518,7 @@ export function CoverageView() {
         ? prev.map((dt) => (zelfdeNaam(dt.name) ? { ...dt, services: codes } : dt))
         : [...prev, { _k: sleutel(), name: v.dayType, services: codes }];
     });
-    notify(`Lijst voor “${v.dayType}” klaargezet (${codes.length} diensten), controleer en klik op Opslaan.`, 'success');
+    notify(`Lijst voor “${v.dayType}” klaargezet (${aantal(codes.length, 'dienst', 'diensten')}), controleer en sla op.`, 'success');
   };
 
   // Onbewaarde instellingen (tranche 3A): vergeleken met wat er geladen of
@@ -630,14 +630,14 @@ export function CoverageView() {
         </Button>
       ) : undefined}
     >
-      <ZijvakRij label="Dagen met gaten" waarde={zl.laden ? '…' : dagenMetGaten} mono />
-      <ZijvakRij label="Open diensten" waarde={zl.laden ? '…' : totalMissing} mono />
+      <ZijvakRij label="Dagen met gaten" waarde={zl.laden ? '…' : dagenMetGaten} />
+      <ZijvakRij label="Open diensten" waarde={zl.laden ? '…' : totalMissing} />
       <ZijvakRij
         label="Dag-types"
         waarde={!config ? '…' : dayTypeNames.length === 0 ? 'nog niet ingesteld' : dayTypeNames.length}
         mono={!!config && dayTypeNames.length > 0}
       />
-      <ZijvakRij label="Laatste import" waarde={laatsteImport ? formatDateHuman(laatsteImport) : '—'} mono={!!laatsteImport} />
+      <ZijvakRij label="Laatste import" waarde={laatsteImport ? formatDateHuman(laatsteImport) : '—'} />
     </Zijvak>
   );
 
@@ -723,7 +723,7 @@ export function CoverageView() {
               key={svc}
               type="button"
               onClick={() => setPick({ date: d.date, code: svc })}
-              title="Klik om te zien wie vrij is"
+              title="Bekijk wie vrij is"
               className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
             >
               <span className="font-mono">{svc}</span>
@@ -814,7 +814,7 @@ export function CoverageView() {
                   </Button>
                 </div>
                 {dayTypes.length === 0 ? (
-                  <p className="text-sm text-slate-500">Nog geen dag-types. Klik op "Dag-type" om er een toe te voegen (bv. schooldag, vakantie, zaterdag, zondag).</p>
+                  <p className="text-sm text-slate-500">Nog geen dag-types. Kies “Dag-type” om er een toe te voegen (bv. schooldag, vakantie, zaterdag, zondag).</p>
                 ) : (
                   <div className="space-y-3">
                     {dayTypes.map((dt, i) => {
@@ -901,7 +901,7 @@ export function CoverageView() {
                         <Card key={v.dayType} tone="muted" padding="sm">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-bold text-slate-700 capitalize">{v.dayType}</span>
-                            <Badge tone="slate" className="tabular-nums">{v.codes.length} diensten · {v.dagen} dagen</Badge>
+                            <Badge tone="slate" className="tabular-nums">{aantal(v.codes.length, 'dienst', 'diensten')} · {aantal(v.dagen, 'dag', 'dagen')}</Badge>
                             {lijstKloptAl ? (
                               <Badge tone="emerald" stil className="ml-auto shrink-0">Lijst klopt al</Badge>
                             ) : (
@@ -1183,7 +1183,7 @@ export function CoverageView() {
       ) : !anyExpectations ? (
         <EmptyState
           title="Nog geen verwachte diensten ingesteld"
-          message='Klik op “Instellen” en kies per dag-type welke diensten horen te draaien, daarna ziet dit scherm elke onbemande dienst.'
+          message='Open “Instellen” en kies per dag-type welke diensten horen te draaien, daarna ziet dit scherm elke onbemande dienst.'
         />
       ) : visibleDays.length === 0 ? (
         <EmptyState variant="klaar" title={`Geen openstaande diensten in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message="Alle verwachte diensten zijn ingevuld." />
@@ -1210,7 +1210,7 @@ export function CoverageView() {
                 {visibleDays.map((d) => (
                   <tr key={d.date} className="border-b border-hairline-subtle align-top last:border-b-0">
                     <Th scope="row" className="whitespace-normal py-3 text-sm font-semibold text-slate-800">
-                      <span className="block whitespace-nowrap capitalize">{dayLabel(d.date)}</span>
+                      <span className="block whitespace-nowrap">{hoofdletter(dayLabel(d.date))}</span>
                       <span className="mt-1 block font-normal">{dagTypeVan(d)}</span>
                     </Th>
                     <Td nowrap>{dekkingVan(d)}</Td>
@@ -1225,7 +1225,7 @@ export function CoverageView() {
               <li key={d.date} className="space-y-2 px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-md font-semibold capitalize text-slate-800">{dayLabel(d.date)}</p>
+                    <p className="text-md font-semibold text-slate-800">{hoofdletter(dayLabel(d.date))}</p>
                     <div className="mt-1">{dagTypeVan(d)}</div>
                   </div>
                   <div className="shrink-0">{dekkingVan(d)}</div>

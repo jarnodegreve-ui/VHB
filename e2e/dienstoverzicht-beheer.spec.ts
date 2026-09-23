@@ -22,7 +22,7 @@ const PLANNER = { id: '7', name: 'Pieter Planner', role: 'planner', employeeId: 
 const pad = (page: Page) => new URL(page.url()).pathname;
 const kop = (page: Page) => page.getByRole('heading', { name: 'Dienstoverzicht', level: 1 });
 const paneel = (page: Page, nummer: string) => page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: `Dienst ${nummer}`, exact: true }) });
-const zoekveld = (page: Page) => page.getByRole('searchbox', { name: 'Zoek op dienst- of loopnummer…' });
+const zoekveld = (page: Page) => page.getByRole('searchbox', { name: 'Zoek dienst of loopnummer…' });
 const zichtbaar = (page: Page, tekst: string) => page.getByText(tekst, { exact: true }).filter({ visible: true });
 const desktop = (naam: string) => naam === 'Desktop (chromium)';
 

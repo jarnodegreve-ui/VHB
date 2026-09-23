@@ -1,4 +1,5 @@
 import type { Service, PlanningCode } from '../types';
+import { tijdvak } from './format';
 
 export type ResolvedPlanningAssignment = {
   driver: string;
@@ -92,15 +93,15 @@ export const vindNaamBotsingen = <T extends { id: string; name: string }>(
   return users.filter((u) => u.id !== negeerId && sortedNameToken(u.name) === token);
 };
 
-// Let op: client-variant die 'HH:MM - HH:MM'-labels teruggeeft. De server heeft
+// Let op: client-variant die 'HH:MM–HH:MM'-labels teruggeeft. De server heeft
 // een gelijknamige-maar-andere getServiceSegments (api/storage.ts) die HH:MM
 // valideert en {startTime,endTime,segment}-objecten geeft — bewust los, dus
 // hier een eigen naam om de divergente duplicaat niet te verwarren.
 const getServiceSegmentLabels = (service: Service) => (
   [
-    service.startTime && service.endTime ? `${service.startTime} - ${service.endTime}` : '',
-    service.startTime2 && service.endTime2 ? `${service.startTime2} - ${service.endTime2}` : '',
-    service.startTime3 && service.endTime3 ? `${service.startTime3} - ${service.endTime3}` : '',
+    service.startTime && service.endTime ? tijdvak(service.startTime, service.endTime) : '',
+    service.startTime2 && service.endTime2 ? tijdvak(service.startTime2, service.endTime2) : '',
+    service.startTime3 && service.endTime3 ? tijdvak(service.startTime3, service.endTime3) : '',
   ].filter(Boolean)
 );
 

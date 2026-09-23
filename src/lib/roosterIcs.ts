@@ -1,5 +1,5 @@
 import { buildCalendar, type IcsEvent } from '../../shared/ics';
-import { serviceNumberOf } from './format';
+import { serviceNumberOf, tijdvak } from './format';
 import { downloadBlob } from './ui';
 import type { Shift } from '../types';
 
@@ -19,7 +19,7 @@ export function downloadRoosterIcs(userName: string, shifts: Shift[]) {
       startTime: shift.startTime,
       endTime: shift.endTime,
       summary: `Dienst ${serviceNumberOf(shift)}`,
-      description: `VHB · ${shift.startTime} - ${shift.endTime}`,
+      description: `VHB · ${tijdvak(shift.startTime, shift.endTime)}`,
     }));
   const fullCalendar = buildCalendar(events, { calName: `VHB Rooster ${userName}`, dtstamp });
   const blob = new Blob([fullCalendar], { type: 'text/calendar;charset=utf-8' });

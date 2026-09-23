@@ -64,7 +64,9 @@ export function Zijvak({
   );
 }
 
-/** Eén rij: label links gedempt, waarde rechts (mono voor getallen/tijden). */
+/** Eén rij: label links gedempt, waarde rechts. Een waarde met cijfers staat
+ *  in tabulaire cijfers (Inter, rijen lijnen uit); `mono` alleen voor een kaal
+ *  instrumentgetal (dienstnummer, tijd), nooit voor een datum, duur of telling. */
 export function ZijvakRij({
   label,
   waarde,
@@ -79,7 +81,7 @@ export function ZijvakRij({
   return (
     <div className={cn('flex items-baseline justify-between gap-3 py-2', className)}>
       <span className="text-label shrink-0">{label}</span>
-      <span className={cn('min-w-0 truncate text-right text-sm font-semibold text-slate-800', mono && 'font-mono tabular-nums')}>{waarde}</span>
+      <span className={cn('min-w-0 truncate text-right text-sm font-semibold text-slate-800', (mono || typeof waarde === 'number' || (typeof waarde === 'string' && /\d/.test(waarde))) && 'tabular-nums', mono && 'font-mono')}>{waarde}</span>
     </div>
   );
 }

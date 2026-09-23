@@ -73,7 +73,7 @@ export function DienstTabel({ services, lijst, rijActies, onKies, gekozenId, lee
             <TableToolbar
               zoek={zoek}
               onZoek={setZoek}
-              placeholder="Zoek op dienst- of loopnummer…"
+              placeholder="Zoek dienst of loopnummer…"
               telling={`${gesorteerd.length} van ${services.length}`}
               dichtheid={voorkeur.dichtheid}
               className="md:flex-wrap"
@@ -183,10 +183,10 @@ export function DienstZijvak({ services, aside, voet }: { services: Service[]; a
     u ? `${u.serviceNumber} · ${formatDienstDuur(u.minuten)}` : '—';
   return (
     <Zijvak titel="Overzicht" aside={aside} voet={voet}>
-      <ZijvakRij label="Diensten" waarde={stat.diensten} mono />
-      <ZijvakRij label="Loops" waarde={stat.loops} mono />
-      <ZijvakRij label="Langste dienst" waarde={uiterste(stat.langste)} mono />
-      <ZijvakRij label="Kortste dienst" waarde={uiterste(stat.kortste)} mono />
+      <ZijvakRij label="Diensten" waarde={stat.diensten} />
+      <ZijvakRij label="Loops" waarde={stat.loops} />
+      <ZijvakRij label="Langste dienst" waarde={uiterste(stat.langste)} />
+      <ZijvakRij label="Kortste dienst" waarde={uiterste(stat.kortste)} />
     </Zijvak>
   );
 }

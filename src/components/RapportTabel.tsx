@@ -94,6 +94,8 @@ const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerst
   !isPilKolom(kolom) && TOON_TEKST[celToon(kolom, waarde) ?? 'rust'],
   // "Geen datum" in een datumkolom blijft op één regel (ze mag een paar pixels in de lucht van de buurcel steken).
   kolom.leeg && (waarde === null || waarde === undefined || waarde === '') && 'whitespace-nowrap',
+  // Datums, tijden en codes staan cijfer onder cijfer (getallen doet `Td num` al).
+  (kolom.type === 'datum' || kolom.type === 'tijd' || kolom.code) && 'tabular-nums',
 );
 
 export function RapportTabel({ def, rijen, totalen, sortering, onSorteer, className }: {

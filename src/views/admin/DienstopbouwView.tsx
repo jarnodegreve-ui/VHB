@@ -4,7 +4,7 @@ import type { User } from '../../types';
 import { BEVINDING_LABEL, SEGMENT_TYPE_LABEL } from '../../../shared/dienst';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
-import { formatDateTimeHuman } from '../../lib/format';
+import { aantal, formatDateTimeHuman } from '../../lib/format';
 import {
   activeerImport, bestandNaarBase64, bewaarDagtype, importeerBestand, laadDagtypes, laadImports, laadLoonparameters, laadRitblad, laadSegmenten, leidLooncodesAf,
   minNaarHHMM, verwijderImport, type Bevinding, type DagtypeCode, type LoonParameters, type RitbladRij, type Segment, type SegmentImport,
@@ -74,7 +74,7 @@ export function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports
     try {
       const imp = await importeerBestand(await bestandNaarBase64(file), file.name);
       const fouten = imp.bevindingen.filter((b) => b.ernst === 'fout').length;
-      notify(`${imp.rijen} ritdelen voor ${imp.diensten} diensten ingelezen${fouten ? `, ${fouten} fouten` : ''}.`, fouten ? 'info' : 'success');
+      notify(`${aantal(imp.rijen, 'ritdeel', 'ritdelen')} voor ${aantal(imp.diensten, 'dienst', 'diensten')} ingelezen${fouten ? `, ${fouten} fouten` : ''}.`, fouten ? 'info' : 'success');
       await onChanged();
       setDetail(imp);
     } catch (err) { meldSchrijffout('Importeren', err); }
@@ -120,7 +120,7 @@ export function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" aria-label="ET-export kiezen" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} />
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" icon={<Upload size={16} />} onClick={() => fileRef.current?.click()} disabled={bezig}>{bezig ? 'Bezig…' : 'Bestand kiezen'}</Button>
-          {actief && <span className="text-xs text-slate-500">Actief: {actief.filename ?? 'import'} van {formatDateTimeHuman(actief.createdAt)}, {actief.rijen} ritdelen, {actief.diensten} diensten.</span>}
+          {actief && <span className="text-xs text-slate-500">Actief: {actief.filename ?? 'import'} van {formatDateTimeHuman(actief.createdAt)}, {aantal(actief.rijen, 'ritdeel', 'ritdelen')}, {aantal(actief.diensten, 'dienst', 'diensten')}.</span>}
         </div>
       </Card>
 
@@ -136,7 +136,7 @@ export function ImportsTab({ imports, isLoading, isAdmin, onChanged }: { imports
                   <p className="min-w-0 truncate text-sm font-semibold text-slate-800">{i.filename ?? 'import'}</p>
                   {i.actief ? <Badge tone="emerald" dot>actief</Badge> : <Badge tone="slate" kaal>niet actief</Badge>}
                 </div>
-                <p className="text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)} · {i.rijen} ritdelen · {i.diensten} diensten · {i.dagtypes.join(', ')}</p>
+                <p className="text-xs text-slate-500">{formatDateTimeHuman(i.createdAt)} · {aantal(i.rijen, 'ritdeel', 'ritdelen')} · {aantal(i.diensten, 'dienst', 'diensten')} · {i.dagtypes.join(', ')}</p>
                 <div className="flex flex-wrap gap-1">
                   {fouten(i) > 0 ? <Badge tone="red" dot>{fouten(i)} fouten</Badge> : <Badge tone="emerald" stil dot>geen fouten</Badge>}
                   {waarsch(i) > 0 && <Badge tone="amber" stil dot>{waarsch(i)} waarschuwingen</Badge>}
@@ -206,9 +206,9 @@ function BevindingenModal({ imp, onClose }: { imp: SegmentImport; onClose: () =>
   return (
     <Modal open onClose={onClose} maxWidth="2xl" ariaLabel={`Bevindingen van ${imp.filename ?? 'import'}`}>
       <div className="p-6">
-        <CardHeader title={`Bevindingen: ${imp.filename ?? 'import'}`} description={`${imp.rijen} ritdelen, ${imp.diensten} diensten. Fouten (gat, overlap, einde vóór start) blokkeren het activeren; waarschuwingen niet.`} aside={<div className="flex gap-1.5"><FilterChip active={filter === 'alles'} onClick={() => setFilter('alles')}>Alles</FilterChip><FilterChip active={filter === 'fout'} onClick={() => setFilter('fout')}>Fouten</FilterChip><FilterChip active={filter === 'waarschuwing'} onClick={() => setFilter('waarschuwing')}>Waarschuwingen</FilterChip></div>} />
+        <CardHeader title={`Bevindingen: ${imp.filename ?? 'import'}`} description={`${aantal(imp.rijen, 'ritdeel', 'ritdelen')}, ${aantal(imp.diensten, 'dienst', 'diensten')}. Fouten (gat, overlap, einde vóór start) blokkeren het activeren; waarschuwingen niet.`} aside={<div className="flex gap-1.5"><FilterChip active={filter === 'alles'} onClick={() => setFilter('alles')}>Alles</FilterChip><FilterChip active={filter === 'fout'} onClick={() => setFilter('fout')}>Fouten</FilterChip><FilterChip active={filter === 'waarschuwing'} onClick={() => setFilter('waarschuwing')}>Waarschuwingen</FilterChip></div>} />
         {imp.waarschuwingen.length > 0 && (
-          <Card tone="warning" padding="sm" className="mt-3 text-xs text-amber-800">{imp.waarschuwingen.length} rijen overgeslagen bij het inlezen: {imp.waarschuwingen.slice(0, 5).map((w) => `rij ${w.rij}: ${w.tekst}`).join(' · ')}{imp.waarschuwingen.length > 5 ? ' …' : ''}</Card>
+          <Card tone="warning" padding="sm" className="mt-3 text-xs text-amber-800">{aantal(imp.waarschuwingen.length, 'rij', 'rijen')} overgeslagen bij het inlezen: {imp.waarschuwingen.slice(0, 5).map((w) => `rij ${w.rij}: ${w.tekst}`).join(' · ')}{imp.waarschuwingen.length > 5 ? ' …' : ''}</Card>
         )}
         {lijst.length === 0 ? <div className="mt-4"><EmptyState compact variant="klaar" title="Niets gevonden" message="Geen bevindingen voor dit filter." /></div> : (
           <ul className="mt-4 max-h-[60vh] divide-y divide-hairline-subtle overflow-y-auto rounded-2xl border border-hairline">

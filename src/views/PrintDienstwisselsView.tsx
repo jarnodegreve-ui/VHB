@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ActivityLogEntry, Shift, SwapRequest } from '../types';
 import { apiJson } from '../lib/api';
 import { Button } from '../components/primitives';
-import { formatDatumDMJ, formatDayLong, formatShortDay } from '../lib/format';
+import { formatDatumDMJ, formatDayLong, formatShortDay, tijdvak } from '../lib/format';
 import { maandagVan } from '../lib/roosterUren';
 import { isoWeekOf } from '../lib/week';
 import { addDagen, isoDate } from '../lib/datum';
@@ -163,7 +163,7 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
                           Dienst {lijnVan(s)}
                           <span className="ml-2 font-normal">
                             {formatShortDay(s.shiftDate || dienst?.date)}
-                            {dienst?.startTime && dienst?.endTime ? `, ${dienst.startTime} – ${dienst.endTime}` : ''}
+                            {dienst?.startTime && dienst?.endTime ? `, ${tijdvak(dienst.startTime, dienst.endTime)}` : ''}
                           </span>
                         </p>
                         <p className="text-[12px] font-bold">{STATUS_LABEL[s.status]}</p>

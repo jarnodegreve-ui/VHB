@@ -71,7 +71,7 @@ for (const breedte of [390, 768, 1024, 1280, 1440, 1536]) {
       await dialoog.getByRole('button', { name: 'Sluiten', exact: true }).click();
       await expect(dialoog).toHaveCount(0);
 
-      await page.getByRole('searchbox', { name: 'Zoek op dienst- of loopnummer…' }).fill('4515');
+      await page.getByRole('searchbox', { name: 'Zoek dienst of loopnummer…' }).fill('4515');
       await expect(acties).toBeVisible();
       await expect(page.getByRole('button', { name: 'Acties voor dienst 2101', exact: true })).toHaveCount(0);
     } finally {

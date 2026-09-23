@@ -10,7 +10,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { ActieMenu } from '../../components/ActieMenu';
 import { BUILD_INFO, RELEASE, getServiceWorkerVersion } from '../../lib/appVersion';
 import { isoDate } from '../../lib/availability';
-import { formatDateTimeHuman, formatDatumDMJ, formatRelatief } from '../../lib/format';
+import { formatDateTimeHuman, formatDatumDMJ, formatMomentDMJ, formatRelatief } from '../../lib/format';
 import { OcpiCard } from './OcpiCard';
 import { HerstelPlanModal } from '../../components/HerstelPlanModal';
 import type { HerstelPlan } from '../../../shared/herstelPlan';
@@ -249,7 +249,7 @@ function FoutenSectie() {
                 <Card key={e.id} tone="muted" padding="sm" className="rounded-xl">
                   <div className="flex items-center justify-between gap-3">
                     <Badge tone="red" dot>{e.source || 'onbekend'}</Badge>
-                    <span className="shrink-0 font-mono text-xs text-slate-500 tabular-nums">{new Date(e.createdAt).toLocaleString('nl-BE')}</span>
+                    <span className="shrink-0 text-xs text-slate-500 tabular-nums">{formatMomentDMJ(e.createdAt)}</span>
                   </div>
                   <p className="mt-1.5 break-words text-xs font-medium text-slate-700">{e.message}</p>
                 </Card>
@@ -632,17 +632,17 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                 {BUILD_INFO.sha}
               </a>
             ) : (
-              <span className="text-xs font-mono text-slate-500">lokaal</span>
+              <span className="text-xs text-slate-500">lokaal</span>
             )}
           </StatusRij>
           <StatusRij label="Gebouwd op">
-            <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(BUILD_INFO.builtAt).toLocaleString('nl-BE')}</span>
+            <span className="text-xs text-slate-500 tabular-nums">{formatMomentDMJ(BUILD_INFO.builtAt)}</span>
           </StatusRij>
           <StatusRij label="Service worker">
             {swVersion ? (
               <Badge tone="emerald" stil>{swVersion}</Badge>
             ) : (
-              <span className="text-xs font-mono text-slate-500">niet actief</span>
+              <span className="text-xs text-slate-500">niet actief</span>
             )}
           </StatusRij>
         </div>
@@ -656,14 +656,14 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
               <div className="mt-4 space-y-3">
                 <StatusRij label="Configuratie">
                   <Badge tone={healthData.supabase === 'configured' ? 'emerald' : 'red'} dot stil={healthData.supabase === 'configured'}>
-                    {healthData.supabase}
+                    {healthData.supabase === 'configured' ? 'geconfigureerd' : 'niet geconfigureerd'}
                   </Badge>
                 </StatusRij>
                 <StatusRij label="Omgeving">
                   <span className="text-sm font-semibold text-slate-800">{healthData.env}</span>
                 </StatusRij>
                 <StatusRij label="Servertijd">
-                  <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(healthData.time).toLocaleString('nl-BE')}</span>
+                  <span className="text-xs text-slate-500 tabular-nums">{formatMomentDMJ(healthData.time)}</span>
                 </StatusRij>
               </div>
             </Card>

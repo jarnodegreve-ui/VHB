@@ -1,6 +1,6 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { telDiensten } from '../../lib/dienstTelling';
-import { formatDatumDMJ, formatPeriodeDMJ } from '../../lib/format';
+import { aantal, formatDatumDMJ, formatPeriodeDMJ } from '../../lib/format';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
@@ -713,8 +713,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="slate" className="tabular-nums">{entry.importedDays} dagen</Badge>
-                    <Badge tone="slate" className="tabular-nums">{entry.generatedShifts} diensten</Badge>
+                    <Badge tone="slate" className="tabular-nums">{aantal(entry.importedDays, 'dag', 'dagen')}</Badge>
+                    <Badge tone="slate" className="tabular-nums">{aantal(entry.generatedShifts, 'dienst', 'diensten')}</Badge>
                     <Badge tone={entry.unknownCodes.length > 0 ? 'red' : 'emerald'} stil={entry.unknownCodes.length === 0} className="tabular-nums">
                       {entry.unknownCodes.length} onbekend
                     </Badge>
@@ -822,9 +822,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           return (
             <>
               <div className="flex flex-wrap gap-2 mb-4">
-                <Badge tone="oker" stil className="tabular-nums">{telDiensten(upcoming)} diensten vanaf vandaag</Badge>
-                <Badge tone="slate" stil className="tabular-nums">{byDate.size} dagen</Badge>
-                <Badge tone="slate" stil className="tabular-nums">{driverCount} chauffeurs</Badge>
+                <Badge tone="oker" stil className="tabular-nums">{aantal(telDiensten(upcoming), 'dienst', 'diensten')} vanaf vandaag</Badge>
+                <Badge tone="slate" stil className="tabular-nums">{aantal(byDate.size, 'dag', 'dagen')}</Badge>
+                <Badge tone="slate" stil className="tabular-nums">{aantal(driverCount, 'chauffeur', 'chauffeurs')}</Badge>
               </div>
               <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
                 {[...byDate.entries()].map(([date, daysShifts]) => (

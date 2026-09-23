@@ -5,7 +5,7 @@ import { QUAL_VLAGGEN, QUAL_VLAG_LABEL, OPMERKING_MAX, loonCodeSleutel, type Qua
 import { DAG_STATUS, dagOpenStatus, statusVan } from '../../../shared/status';
 import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
-import { formatDatumDMJ, formatDayLong, formatMomentKort } from '../../lib/format';
+import { aantal, formatDatumDMJ, formatDayLong, formatMomentKort } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import { vandaagBrussel } from '../../lib/brussel';
 import {
@@ -115,7 +115,7 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
   };
   const doeOvernemen = async (rijId?: string) => {
     setBezig(true);
-    try { const r = await neemPlanningOver(datum, rijId); notify(`${r.aangepast} rijen aangepast, ${r.toegevoegd} toegevoegd.`, 'success'); await load(); }
+    try { const r = await neemPlanningOver(datum, rijId); notify(`${aantal(r.aangepast, 'rij', 'rijen')} aangepast, ${r.toegevoegd} toegevoegd.`, 'success'); await load(); }
     catch (err) { meldSchrijffout('Overnemen', err); }
     finally { setBezig(false); }
   };
@@ -207,11 +207,12 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
           )}
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-            <span className="font-semibold text-slate-800">{tellers.rijen} rijen</span>
-            <span>· {tellers.afwijkend} afwijkend van de planning</span>
-            <span>· {tellers.overmin} overminuten</span>
-            <span>· {tellers.premies} premies</span>
-            {tellers.zonderCode > 0 && <span className="text-amber-700">· {tellers.zonderCode} zonder code</span>}
+            {/* Elk stuk blijft heel op één regel, het puntje hoort bij zijn stuk. */}
+            <span className="whitespace-nowrap font-semibold text-slate-800">{aantal(tellers.rijen, 'rij', 'rijen')}</span>
+            <span className="whitespace-nowrap">· {tellers.afwijkend} afwijkend van de planning</span>
+            <span className="whitespace-nowrap">· {aantal(tellers.overmin, 'overminuut', 'overminuten')}</span>
+            <span className="whitespace-nowrap">· {aantal(tellers.premies, 'premie', 'premies')}</span>
+            {tellers.zonderCode > 0 && <span className="whitespace-nowrap text-amber-700">· {tellers.zonderCode} zonder code</span>}
             <span className="ml-auto" />
             <FilterChip active={alleenAfwijkend} onClick={() => setAlleenAfwijkend((v) => !v)}>Alleen afwijkingen</FilterChip>
             {!afgesloten && <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => setRijToevoegen(true)}>Rij toevoegen</Button>}
@@ -265,8 +266,8 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
         <div className="p-6">
           <CardHeader title={`${formatDayLong(datum)} afsluiten?`} description="Daarna kan de dag alleen nog via heropenen (met reden) veranderen." />
           <ul className="mt-3 space-y-1 text-sm text-slate-700">
-            <li>{tellers.rijen} chauffeurs, {tellers.afwijkend} afwijkend van de planning</li>
-            <li>{tellers.overmin} overminuten in totaal, {tellers.premies} premies</li>
+            <li>{aantal(tellers.rijen, 'chauffeur', 'chauffeurs')}, {tellers.afwijkend} afwijkend van de planning</li>
+            <li>{aantal(tellers.overmin, 'overminuut', 'overminuten')} in totaal, {aantal(tellers.premies, 'premie', 'premies')}</li>
             {tellers.zonderCode > 0 && <li className="font-semibold text-amber-700">{tellers.zonderCode} zonder code (die vallen uit de export)</li>}
             {tellers.onbekend > 0 && <li className="font-semibold text-red-700">{tellers.onbekend} met een onbekende looncode</li>}
           </ul>

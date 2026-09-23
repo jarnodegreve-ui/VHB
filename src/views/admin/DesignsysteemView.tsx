@@ -371,8 +371,8 @@ export function DesignsysteemView() {
             </span>
           </Card>
           <Zijvak titel="Deze maand" voet={<ZijvakTekst>Cijfers volgen de geladen planning.</ZijvakTekst>}>
-            <ZijvakRij label="Dagen met gaten" waarde="3" mono />
-            <ZijvakRij label="Open diensten" waarde="4" mono />
+            <ZijvakRij label="Dagen met gaten" waarde="3" />
+            <ZijvakRij label="Open diensten" waarde="4" />
             <ZijvakRij label="Laatste import" waarde="zo 30 aug" />
           </Zijvak>
         </div>

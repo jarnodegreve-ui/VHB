@@ -276,7 +276,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
             <CardHeader
               size="lg"
               title="Per laadpunt"
-              description={`Geleverde energie per laadpunt (en dus per bus) in ${label}. Klik op een kolomkop om te sorteren.`}
+              description={`Geleverde energie per laadpunt (en dus per bus) in ${label}. Sorteer via de kolomkoppen.`}
               aside={<Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={exporteerPunten} disabled={data.totalen.sessies === 0}>CSV</Button>}
             />
             <TableShell className="mt-3">
@@ -344,7 +344,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
             <CardHeader
               size="lg"
               title="Per dag"
-              description="Verbruik, laadsessies en de kwartierpiek per kalenderdag. Klik op een dag voor de curve en de sessies van die dag."
+              description="Verbruik, laadsessies en de kwartierpiek per kalenderdag. Kies een dag voor de curve en de sessies van die dag."
               aside={<Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={exporteerDagen}>CSV</Button>}
             />
             <TableShell className="mt-3">

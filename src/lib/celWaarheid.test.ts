@@ -28,7 +28,7 @@ describe('berekenCelWaarheid', () => {
     const uit = berekenCelWaarheid('2026-09', { rows, users, services, codes, leave: [], swaps: [] });
     expect(uit.dates).toEqual(['2026-09-01', '2026-09-02']);
     expect(uit.chauffeurs.map((c) => c.name)).toEqual(['Jan Janssen', 'Piet Nieuw', 'Peeters An']);
-    expect(uit.cells['1']['2026-09-01']).toEqual({ code: '2102', kind: 'service', label: 'Dienst 2102', segments: ['05:28 - 12:13 (loop 4600)', '15:28 - 17:27'] });
+    expect(uit.cells['1']['2026-09-01']).toEqual({ code: '2102', kind: 'service', label: 'Dienst 2102', segments: ['05:28–12:13 (loop 4600)', '15:28–17:27'] });
     expect(uit.cells['2']['2026-09-01']).toEqual({ code: 'vrij', kind: 'absence', label: 'Vrij', segments: [] });
     expect(uit.cells['3']['2026-09-02']).toEqual({ code: 'xx', kind: 'unknown', label: 'Onbekende code', segments: [] });
     expect(uit.cells['4']).toBeUndefined();

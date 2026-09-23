@@ -288,12 +288,12 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       {toonBestandsinfo && (
         <>
           <ZijvakRij label="Bestand" waarde={<span title={current.filename}>{current.filename}</span>} />
-          <ZijvakRij label="Geüpload op" waarde={formatUploadedAt(current.uploadedAt)} mono />
+          <ZijvakRij label="Geüpload op" waarde={formatUploadedAt(current.uploadedAt)} />
           {current.uploadedBy ? <ZijvakRij label="Door" waarde={current.uploadedBy} /> : null}
-          <ZijvakRij label="Grootte" waarde={current.sizeBytes ? prettySize(current.sizeBytes) : '—'} mono={!!current.sizeBytes} />
+          <ZijvakRij label="Grootte" waarde={current.sizeBytes ? prettySize(current.sizeBytes) : '—'} />
         </>
       )}
-      {formatSyncedAt(syncedAt) ? <ZijvakRij label="Laatst bijgewerkt" waarde={formatSyncedAt(syncedAt)} mono /> : null}
+      {formatSyncedAt(syncedAt) ? <ZijvakRij label="Laatst bijgewerkt" waarde={formatSyncedAt(syncedAt)} /> : null}
     </Zijvak>
   ) : undefined;
 

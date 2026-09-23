@@ -36,23 +36,49 @@ export function formatDateTimeHuman(value: string | undefined | null): string {
  * zone-loze waarde is al wandkloktijd en blijft staan. Alleen een datum → dd/mm.
  */
 export function formatMomentKort(value: string | undefined | null, nu: Date = new Date()): string {
-  if (!value) return '';
+  const d = momentDelen(value);
+  if (!d) return '';
+  const datum = `${d.dag}/${d.maand}${Number(d.jaar) === nu.getFullYear() ? '' : `/${d.jaar}`}`;
+  return d.uur === undefined ? datum : `${datum} ${d.uur}:${d.minuut}`;
+}
+
+/** Volledig moment voor logs en systeemschermen: "19/09/2026 14:02" (altijd
+ *  met jaar), in Belgische tijd; alleen een datum → "19/09/2026". */
+export function formatMomentDMJ(value: string | undefined | null): string {
+  const d = momentDelen(value);
+  if (!d) return '';
+  const datum = `${d.dag}/${d.maand}/${d.jaar}`;
+  return d.uur === undefined ? datum : `${datum} ${d.uur}:${d.minuut}`;
+}
+
+function momentDelen(value: string | undefined | null): { jaar: string; maand: string; dag: string; uur?: string; minuut?: string } | null {
+  if (!value) return null;
   const s = String(value);
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(s);
-  if (!m) return '';
+  if (!m) return null;
   let [, jaar, maand, dag, uur, minuut] = m;
   if (uur !== undefined && /(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
     const d = new Date(s);
-    if (Number.isNaN(d.getTime())) return '';
+    if (Number.isNaN(d.getTime())) return null;
     const delen = new Intl.DateTimeFormat('nl-BE', {
       timeZone: 'Europe/Brussels', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(d);
     const deel = (type: string) => delen.find((p) => p.type === type)?.value ?? '';
     jaar = deel('year'); maand = deel('month'); dag = deel('day'); uur = deel('hour'); minuut = deel('minute');
   }
-  const datum = `${dag}/${maand}${Number(jaar) === nu.getFullYear() ? '' : `/${jaar}`}`;
-  return uur === undefined ? datum : `${datum} ${uur}:${minuut}`;
+  return { jaar, maand, dag, uur, minuut };
 }
+
+/** Aantal met enkelvoud of meervoud: aantal(1, 'dag', 'dagen') = "1 dag". */
+export const aantal = (n: number, enkel: string, meer: string): string => `${n} ${n === 1 ? enkel : meer}`;
+
+/** Tijdvak "04:36–07:52": één vorm overal, en-dash zonder spaties. */
+export const tijdvak = (van: string, tot: string): string => `${van}–${tot}`;
+
+/** Eerste letter hoofdletter, de rest ongemoeid: "do 24 september" →
+ *  "Do 24 september". Nooit CSS `capitalize` op een datum, dat maakt er
+ *  "Do 24 September" van (maandnamen zijn in het Nederlands kleine letters). */
+export const hoofdletter = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 export function formatDateHuman(iso: string | undefined | null): string {
   if (!iso) return '';

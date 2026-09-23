@@ -7,7 +7,7 @@ import { cn, downloadBlob, notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
 import { useZelfLadend, type Versheid } from '../../lib/zelfLadend';
 import { MaandNavigatie } from '../../components/MaandNavigatie';
-import { formatShortDay, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../../lib/format';
+import { aantal, formatShortDay, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import {
   bewaarInstellingen, bewaarLoonCode, bewaarMedewerker, dagenInMaand, importeerMedewerkers, laadExportControle, laadInstellingen, laadLoonCodes,
@@ -176,7 +176,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
             // De status staat ook in de naam: in de tegel zelf is ze alleen
             // kleur (met de legende eronder), dat hoort een schermlezer niet.
             const statusTekst = tone === 'red' ? `${DAG_STATUS.niet_geopend.label.toLowerCase()}, planning aanwezig` : DAG_STATUS[dagOpenStatus(iso, vandaag, !!d, d?.status === 'afgesloten')].label.toLowerCase();
-            const omschrijving = `${formatShortDay(iso)}, ${statusTekst}${d ? `, ${d.rijen} rijen, ${d.overmin} overminuten` : ''}`;
+            const omschrijving = `${formatShortDay(iso)}, ${statusTekst}${d ? `, ${aantal(d.rijen, 'rij', 'rijen')}, ${aantal(d.overmin, 'overminuut', 'overminuten')}` : ''}`;
             return (
               // rauw: dagtegel in het maandraster, opent de dagafsluiting
               <button
@@ -193,7 +193,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
                   tone === 'slate' && 'bg-surface-muted text-slate-500',
                 )}
               >
-                <span>{dagNr}</span>
+                <span className="tabular-nums">{dagNr}</span>
                 {/* 2xs: afwijking in minuten in een dichte matrixcel */}
                 {d && d.overmin !== 0 && <span className="text-2xs font-medium">{d.overmin > 0 ? '+' : ''}{d.overmin}</span>}
               </button>
@@ -216,7 +216,7 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
         <CardHeader
           icon={<FileSpreadsheet size={16} />}
           title="Easypay-export"
-          description={controle ? `${controle.samenvatting.rijen} rijen voor ${controle.samenvatting.personen} personen, ${controle.samenvatting.overminRijen} overminuten-rijen, ${controle.samenvatting.premies} premies.` : undefined}
+          description={controle ? `${aantal(controle.samenvatting.rijen, 'rij', 'rijen')} voor ${aantal(controle.samenvatting.personen, 'persoon', 'personen')}, ${aantal(controle.samenvatting.overminRijen, 'overminuten-rij', 'overminuten-rijen')}, ${aantal(controle.samenvatting.premies, 'premie', 'premies')}.` : undefined}
           aside={(
             <Button variant={controle?.blokkerend ? 'secondary' : 'primary'} icon={<Download size={16} />} onClick={() => void download()} disabled={bezig || !controle || (controle.blokkerend && !isAdmin)}>
               {controle?.blokkerend ? (isAdmin ? 'Toch downloaden' : 'Nog niet klaar') : 'CSV downloaden'}
@@ -227,14 +227,14 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
           <ul className="space-y-1 text-sm">
             <li className={cn('inline-flex items-center gap-1.5', controle.openDagen.length ? 'text-amber-700' : 'text-emerald-700')}>
               {controle.openDagen.length ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
-              {controle.openDagen.length ? `${controle.openDagen.length} dagen nog open: ${controle.openDagen.map((d) => d.slice(8)).join(', ')}` : 'Alle geopende dagen zijn afgesloten'}
+              {controle.openDagen.length ? `${aantal(controle.openDagen.length, 'dag', 'dagen')} nog open: ${controle.openDagen.map((d) => d.slice(8)).join(', ')}` : 'Alle geopende dagen zijn afgesloten'}
             </li>
             {/* Oude server of e2e-mock zonder dit veld: niets tonen i.p.v. crashen. */}
             <li className={cn('inline-flex items-center gap-1.5', (controle.nietGeopendeDagen ?? []).length ? 'text-red-700' : 'text-emerald-700')}>
               {(controle.nietGeopendeDagen ?? []).length ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
               {(controle.nietGeopendeDagen ?? []).length ? `${(controle.nietGeopendeDagen ?? []).length} dagen met planning nooit geopend: ${(controle.nietGeopendeDagen ?? []).map((d) => d.slice(8)).join(', ')}` : 'Alle dagen met planning zijn geopend'}
             </li>
-            <li className={cn('inline-flex items-center gap-1.5', controle.dagenGeopend === 0 ? 'text-amber-700' : 'text-slate-700')}>{controle.dagenGeopend === 0 ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}{controle.dagenGeopend} dagen geopend</li>
+            <li className={cn('inline-flex items-center gap-1.5', controle.dagenGeopend === 0 ? 'text-amber-700' : 'text-slate-700')}>{controle.dagenGeopend === 0 ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}{aantal(controle.dagenGeopend, 'dag', 'dagen')} geopend</li>
             <li className={cn('inline-flex items-center gap-1.5', controle.lidnr ? 'text-slate-700' : 'text-red-700')}>{controle.lidnr ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}Easypay-lidnummer {controle.lidnr || 'ontbreekt'}</li>
             {controle.issues.map((i, n) => (
               <li key={n} className="inline-flex items-center gap-1.5 text-red-700"><AlertTriangle size={14} />
