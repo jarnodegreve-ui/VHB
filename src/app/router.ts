@@ -55,6 +55,28 @@ const onthoud = (view: View) => {
   try { window.localStorage.setItem(OPGESLAGEN_VIEW, view); } catch { /* privémodus */ }
 };
 
+/**
+ * Terug naar de oorspronkelijke bestemming na het inloggen (tranche 3C, 23-09).
+ * Alleen een pad op deze origin dat naar een bekend scherm wijst mag een
+ * terugkeerdoel zijn: geen volledige URL, geen `//host` of `/\\host`, geen
+ * stuurtekens; de hash valt weg. Wat niet voldoet geeft null, en dan gaat het
+ * zoals vroeger naar het dashboard. De rol-guard en de server beslissen daarna
+ * nog altijd of je het scherm en het record mag zien.
+ */
+export function veiligInternPad(invoer: unknown): string | null {
+  if (typeof invoer !== 'string' || invoer.length > 2048 || !/^\/(?![/\\])/.test(invoer) || /[\u0000-\u001f\\]/.test(invoer)) return null;
+  let u: URL;
+  try { u = new URL(invoer, 'https://vhb.invalid'); } catch { return null; }
+  if (u.origin !== 'https://vhb.invalid') return null;
+  const route = routeUitPad(u.pathname);
+  return route && route.view !== 'dashboard' ? u.pathname + u.search : null;
+}
+
+/** Het pad waarmee de app koud opstartte, als dat een ander scherm dan het dashboard was. */
+let startDoel: string | null = null;
+/** Geeft het startdoel één keer terug (daarna null): na het inloggen, of weggegooid bij een bestaande sessie. */
+export const neemStartDoel = (): string | null => { const d = startDoel; startDoel = null; return d; };
+
 /** Eénmalige normalisatie bij het opstarten (vóór de eerste render). */
 let genormaliseerd = false;
 function normaliseerStartUrl() {
@@ -68,6 +90,7 @@ function normaliseerStartUrl() {
     params.delete('view');
     const rest = params.toString();
     window.history.replaceState(null, '', padVan(oudeView as View) + (rest ? `?${rest}` : '') + hash);
+    startDoel = veiligInternPad(window.location.pathname + window.location.search);
     return;
   }
   if (pathname === '/' || pathname === '') {
@@ -85,10 +108,15 @@ function normaliseerStartUrl() {
     }
     return;
   }
-  if (!routeUitPad(pathname)) {
-    // Onbekend pad (typefout, oude link): naar het dashboard zonder entry.
+  // Onbekend pad (typefout, oude link, iets als /%2F%2Fhost): naar het
+  // dashboard zonder entry. Het dashboard heeft pad '' en dus zou elk onbekend
+  // pad er als "dashboard met parameters" onder vallen; het heeft er geen.
+  const start = routeUitPad(pathname);
+  if (!start || (start.view === 'dashboard' && start.params.length > 0)) {
     window.history.replaceState(null, '', '/' + search + hash);
+    return;
   }
+  startDoel = veiligInternPad(pathname + search);
 }
 
 // --- Scrollpositie per route (punt 19, 15-09; src/lib/scrollGeheugen.ts) ---
