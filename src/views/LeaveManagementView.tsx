@@ -17,7 +17,8 @@ import { brengRecordInBeeld } from '../lib/recordLink';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { ActieMenu } from '../components/ActieMenu';
-import { Field, Select, Textarea } from '../components/Field';
+import { DateInput, Field, Select, Textarea } from '../components/Field';
+import { VerlofBereikRaster } from '../components/VerlofBereikRaster';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { verlofBalans, verlofDagen } from '../lib/leaveBalance';
 import { VerlofFeestdagenModal } from '../components/VerlofFeestdagenModal';
@@ -53,6 +54,8 @@ import { BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, Verlo
 type Bezetting = 'vrij' | 'deels' | 'volzet';
 const bezettingVanDag = (afwezig: number, limiet: number): Bezetting => (afwezig <= 0 ? 'vrij' : afwezig < limiet ? 'deels' : 'volzet');
 const BEZETTING_LABEL: Record<Bezetting, string> = { vrij: 'vrij', deels: 'deels vrij', volzet: 'volzet' };
+
+const VERLEDEN_MELDING = 'Je kan geen verlof aanvragen in het verleden.';
 
 export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [], feestdagenExtra = [], onFeestdagenSaved }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string, reden?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[]; feestdagenExtra?: ExtraFeestdag[]; onFeestdagenSaved?: (extra: ExtraFeestdag[]) => void }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -131,6 +134,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
   const goToPrevMonth = () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const goToNextMonth = () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  /** Naar een maand ('YYYY-MM'): het raster bladert mee met typen en met de pijltjes. */
+  const naarMaand = (maand: string) => {
+    const [j, m] = maand.split('-').map(Number);
+    setViewMonth((d) => (d.getFullYear() === j && d.getMonth() === m - 1 ? d : new Date(j, m - 1, 1)));
+  };
+  const toonMaand = `${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, '0')}`;
   // Maand-swipe op touch (verbeterronde 01-09, nr. 3): veeg links/rechts over
   // de kalender i.p.v. de kleine pijltjes te raken. Duidelijk horizontaal
   // (>56 px en ~2× de verticale beweging) zodat gewoon scrollen niet bladert.
@@ -966,41 +975,19 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
                 <Card padding="sm" className="space-y-3" {...swipeHandlers}>
                   <MaandNavigatie className="justify-between" label={monthName} onVorige={goToPrevMonth} onVolgende={goToNextMonth} />
-                  <div className="grid grid-cols-7 gap-1">
-                    {WEEKDAY_SHORT_MON.map((d) => (
-                      <div key={d} className={cn(microLabelClass, 'text-center py-1')}>{d}</div>
-                    ))}
-                    {calendarDays.map((day, i) => {
-                      if (day === null) return <div key={`m-empty-${i}`} />;
-                      const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-                      const inRange = isDateWithinDraftRange(dateStr);
-                      const edge = isDraftBoundary(dateStr);
-                      const isToday = dateStr === today;
-                      // Verleden alleen dicht voor een eigen aanvraag; wie
-                      // namens een chauffeur registreert boekt ook achteraf.
-                      const isPast = dateStr < today && !magVerleden;
-                      return (
-                        // rauw: kalender-dagcel in de datumkiezer (eigen bereik-/randstijl)
-                        <button
-                          key={day}
-                          type="button"
-                          disabled={isPast}
-                          title={isPast ? 'Je kan geen verlof aanvragen in het verleden.' : undefined}
-                          onClick={() => handleCalendarDateClick(dateStr)}
-                          className={cn(
-                            'aspect-square rounded-xl text-xs font-semibold transition-colors flex items-center justify-center',
-                            isPast && 'text-slate-300 cursor-not-allowed',
-                            !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
-                            !isPast && inRange && !edge && 'bg-oker-100 text-oker-700',
-                            !isPast && edge && 'bg-oker-500 text-slate-950 elev-accent',
-                            !isPast && isToday && !inRange && !edge && 'ring-1 ring-oker-300',
-                          )}
-                        >
-                          {day}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {/* Echt raster met één tab-stop, pijltjes en volledige labels
+                      (datumtranche PR 5); een keuze volgt dezelfde regels als
+                      typen in Van/Tot hieronder (handleCalendarDateClick). */}
+                  <VerlofBereikRaster
+                    maand={toonMaand}
+                    start={formData.startDate}
+                    eind={formData.endDate}
+                    min={magVerleden ? undefined : today}
+                    vandaag={today}
+                    onKies={handleCalendarDateClick}
+                    onNaarMaand={naarMaand}
+                    verledenTitel={VERLEDEN_MELDING}
+                  />
                 </Card>
                 {/* Gekozen periode als selectieweergave, geen (nep-)invoervelden:
                     de datums komen uit de kalender hierboven. De aria-labels
@@ -1020,14 +1007,50 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       </Button>
                     )}
                   </div>
+                  {/* Typbaar (datumtranche PR 5): dezelfde parser en validatie als
+                      elk datumveld; de namen "Startdatum"/"Einddatum" +
+                      data-datum blijven het contract met e2e/verlof.spec.ts. Een
+                      eigen aanvraag start niet in het verleden (ook de server
+                      weigert dat, #623), het einde niet vóór de start. */}
                   <div role="group" aria-label="Gekozen periode" aria-describedby={periodeFout ? 'verlof-periode-fout' : undefined} className="grid grid-cols-2 gap-3">
-                    <PeriodeVak label="Van" naam="Startdatum" iso={formData.startDate} actief={!formData.startDate} fout={!!periodeFout} />
-                    <PeriodeVak label="Tot" naam="Einddatum" iso={formData.endDate} actief={!!formData.startDate && !formData.endDate} fout={!!periodeFout} />
+                    <Field label="Van" htmlFor="verlof-van">
+                      <DateInput
+                        id="verlof-van"
+                        aria-label="Startdatum"
+                        zonderKalender
+                        invalid={!!periodeFout}
+                        value={formData.startDate}
+                        min={magVerleden ? undefined : today}
+                        minMelding={magVerleden ? undefined : VERLEDEN_MELDING}
+                        max={formData.endDate || undefined}
+                        onChange={(v) => {
+                          fouten.wisVeld('periode');
+                          setFormData((current) => ({ ...current, startDate: v }));
+                          if (v) naarMaand(v.slice(0, 7));
+                        }}
+                      />
+                    </Field>
+                    <Field label="Tot en met" htmlFor="verlof-tot">
+                      <DateInput
+                        id="verlof-tot"
+                        aria-label="Einddatum"
+                        zonderKalender
+                        invalid={!!periodeFout}
+                        value={formData.endDate}
+                        min={formData.startDate || (magVerleden ? undefined : today)}
+                        minMelding={!formData.startDate && !magVerleden ? VERLEDEN_MELDING : undefined}
+                        onChange={(v) => {
+                          fouten.wisVeld('periode');
+                          setFormData((current) => ({ ...current, endDate: v }));
+                          if (v) naarMaand(v.slice(0, 7));
+                        }}
+                      />
+                    </Field>
                   </div>
                   {periodeFout ? (
                     <p id="verlof-periode-fout" role="alert" className="text-xs font-medium text-red-700">{periodeFout}</p>
                   ) : (
-                    <p className="text-xs text-slate-500">Kies de dagen in de kalender, dezelfde dag twee keer voor één dag verlof.</p>
+                    <p className="text-xs text-slate-500">Typ dd/mm/jjjj of kies in de kalender, dezelfde dag twee keer voor één dag verlof.</p>
                   )}
                 </div>
                 <Field label="Type verlof">
@@ -1212,27 +1235,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     </PageShell>
   );
 
-}
-
-/** Eén helft van de "Van — Tot"-selectieweergave in de aanvraag-modal.
- *  Geen input: de waarde komt uit de kalender. `naam` is de toegankelijke
- *  naam (aria-label), `data-datum` de ISO-datum voor tests. */
-function PeriodeVak({ label, naam, iso, actief, fout }: { label: string; naam: string; iso: string; actief: boolean; fout: boolean }) {
-  return (
-    <div
-      aria-label={naam}
-      data-datum={iso || undefined}
-      className={cn(
-        'min-h-11 rounded-xl border px-3.5 py-2',
-        fout ? 'border-red-300 bg-red-50' : iso ? 'border-oker-200 bg-oker-50' : actief ? 'border-dashed border-oker-300 bg-surface-white' : 'border-dashed border-hairline bg-surface-soft',
-      )}
-    >
-      <span className="text-micro">{label}</span>
-      <span className={cn('mt-0.5 block text-sm font-semibold tabular-nums', iso ? 'text-slate-900' : 'text-slate-500')}>
-        {iso ? formatShortDay(iso) : actief ? 'Kies in de kalender' : '—'}
-      </span>
-    </div>
-  );
 }
 
 /** Eén verlofrij: dicht = periode, dagen, type en status; open = de details

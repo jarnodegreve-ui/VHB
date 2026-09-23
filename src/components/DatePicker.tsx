@@ -65,6 +65,14 @@ export type DatePickerProps = {
   wisbaar?: boolean;
   /** Eigen tekst als een datum na `max` valt (i.p.v. "Uiterlijk dd/mm/jjjj."), bv. de regel van het scherm. */
   maxMelding?: string;
+  /** Eigen tekst als een datum vóór `min` valt (i.p.v. "Vroegst dd/mm/jjjj."). */
+  minMelding?: string;
+  /**
+   * Geen eigen kalenderknop: voor een veld naast een kalender die het scherm
+   * zelf toont (het bereikraster van de verlofaanvraag). Typen, lezen en
+   * valideren blijven gelijk.
+   */
+  zonderKalender?: boolean;
   'aria-label'?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
@@ -93,6 +101,8 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   dialogLabel,
   wisbaar = true,
   maxMelding,
+  minMelding,
+  zonderKalender = false,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
   'aria-describedby': ariaDescribedby,
@@ -169,7 +179,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       zetFout(r.reden);
       return false;
     }
-    const buiten = maxMelding && max && r.iso > max ? maxMelding : bereikFout(r.iso, min, max);
+    const buiten = maxMelding && max && r.iso > max ? maxMelding
+      : minMelding && min && r.iso < min ? minMelding
+        : bereikFout(r.iso, min, max);
     if (buiten) {
       if (!wisbaar) { herstel(buiten); return false; }
       zetFout(buiten);
@@ -305,7 +317,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
 
   const onVeldKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (open && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); sluit(true); return; }
-    if (!open && e.key === 'ArrowDown') { e.preventDefault(); openKiezer(); return; }
+    if (!open && !zonderKalender && e.key === 'ArrowDown') { e.preventDefault(); openKiezer(); return; }
     // Enter = bevestigen. Ongeldig: niet indienen (de fout staat bij het veld).
     if (e.key === 'Enter' && !bevestig()) e.preventDefault();
   };
@@ -445,12 +457,12 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
           onKeyDown={onVeldKey}
           className={cn(
             inputClass,
-            'pr-12 sm:pointer-fine:pr-10',
+            !zonderKalender && 'pr-12 sm:pointer-fine:pr-10',
             size === 'sm' && 'w-[9.5rem] rounded-lg px-3 py-2 text-xs sm:text-xs',
             ongeldig && invalidClass,
           )}
         />
-        <IconButton
+        {!zonderKalender && <IconButton
           ref={knopRef}
           label="Kalender openen"
           variant="ghost"
@@ -463,7 +475,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
           className="absolute right-0.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
         >
           <CalendarDays size={16} aria-hidden="true" />
-        </IconButton>
+        </IconButton>}
       </div>
       {/* De ISO-waarde in FormData, niet de getypte tekst. */}
       {name && <input type="hidden" name={name} value={geldig} />}
