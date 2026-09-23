@@ -1,5 +1,5 @@
-import type { RapportDefinitie, RapportRij } from './types';
-import { sorteerRijen } from './opmaak';
+import type { RapportDefinitie, RapportRij } from './types.js';
+import { sorteerRijen } from './opmaak.js';
 
 /**
  * De actieve sortering van een rapport in de URL (23-09), zodat een gedeelde
