@@ -248,23 +248,25 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           onChange={setFilter}
         />
 
-        {/* `past`: het raster staat pas vanaf xl en heeft daar vaste kolommen,
-            dus geen scrollcontainer en de kolomkop plakt onder de topbar.
-            Breekpunt xl i.p.v. md (bewust): elke rij is een bewerkbaar
-            formulier (code, categorie, beschrijving, drie vinkjes, acties);
-            tussen md en xl neemt de zijbalk de ruimte die de invoervelden
-            nodig hebben, daar is de kaart per code leesbaarder. */}
-        <TableShell className="mt-5" label="Planningscodes" past>
+        {/* Tabel of kaart per code volgt de breedte van dit kader (container
+            query, bewust geen md of xl): elke rij is een bewerkbaar formulier
+            met vaste kolommen van samen 30,5 rem, en de beschrijving heeft er
+            minstens 5,5 rem naast nodig (rem schaalt mee met de wortelmaat). Welke schermbreedte dat is hangt af van de
+            zijbalk en het zijvak ernaast: op 1280 px bleef er met xl nog geen
+            pixel voor de beschrijving over (tranche 3B, gemeten). `past`: het
+            raster verschijnt pas als het past, dus geen scrollcontainer en de
+            kolomkop plakt onder de topbar. */}
+        <TableShell className="mt-5 @container" label="Planningscodes" past>
           {filteredCodes.length > 0 ? (
             <>
-              <div ref={lijstRef} className="hidden xl:block">
+              <div ref={lijstRef} className="hidden @[36rem]:block">
                 <Tabel className="table-fixed">
                   <StickyThead>
                     <tr>
                       {/* Checkbox-kolommen: header gecentreerd boven de
                           (gecentreerde) checkbox; Acties rechts uitgelijnd
                           zoals de knoppen eronder. */}
-                      <Th className="w-24">Code</Th>
+                      <Th className="w-20">Code</Th>
                       <Th className="w-36">Categorie</Th>
                       <Th>Beschrijving</Th>
                       <Th className="w-16 text-center">Dienst</Th>
@@ -339,7 +341,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                 </Tabel>
               </div>
 
-              <div ref={kaartRef} className="divide-y divide-hairline-subtle xl:hidden">
+              <div ref={kaartRef} className="divide-y divide-hairline-subtle @[36rem]:hidden">
                 {filteredCodes.map((code) => {
                   const index = draftCodes.findIndex((draft) => draft === code);
                   return (
