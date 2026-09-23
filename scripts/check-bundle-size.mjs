@@ -73,7 +73,11 @@ import zlib from 'node:zlib';
 // chunks voor terugNaLogin en ToestelGeblokkeerd) brachten het totaal op
 // 661 kB in CI; de rest van de datumtranche (MaandInput, verlofkalender) komt
 // er nog bij. De entry (74) en de warmup-sets blijven de echte bewakers.
-const BUDGET_KB = 665;
+// 23-09 (datumtranche PR 5): 665 → 670. De verlofkalender kreeg typbare
+// Van/Tot en een eigen toegankelijk bereikraster (VerlofBereikRaster), en
+// MaandInput (PR 4) kwam erbij: CI mat 666 kB. Entry (74) en warmup-sets
+// (chauffeur 74, staf 138) blijven ongewijzigd en de echte bewakers.
+const BUDGET_KB = 670;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
