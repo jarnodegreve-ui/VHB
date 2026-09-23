@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Request } from '@playwright/test';
 import { type Extra, type Fixture } from './helpers';
 import { apiFixtures } from '../scripts/audit-fixtures.mjs';
 
@@ -19,7 +19,7 @@ export async function zonderSessie(page: Page, user: Fixture, extra?: Extra) {
       }),
     });
   });
-  await page.route('**/api/**', apiFixtures(user, (p: string, r) => (p.endsWith('/api/auth/session') ? user : extra?.(p, r))));
+  await page.route('**/api/**', apiFixtures(user, (p: string, r: Request) => (p.endsWith('/api/auth/session') ? user : extra?.(p, r))));
 }
 
 export async function logIn(page: Page) {
