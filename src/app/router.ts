@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { View } from '../types';
 import { ALLE_VIEWS, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
@@ -20,7 +20,7 @@ import { herstelOverlayUrl } from '../lib/useHistoryDismiss';
  *   pagina uit localStorage — zoals de app dat altijd deed.
  */
 const OPGESLAGEN_VIEW = 'vhb-current-view';
-const ROUTE_EVENT = 'vhb-route';
+export const ROUTE_EVENT = 'vhb-route';
 
 export type Route = { view: View; params: string[] };
 
@@ -299,33 +299,5 @@ export function useQueryParam(naam: string): [string, (waarde: string) => void] 
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
   }, [naam]);
-  return [huidig, zet];
-}
-
-/**
- * De hele querystring lezen en in één keer bijwerken (replace-only), voor
- * schermen met meerdere parameters die samen horen: de filters van een
- * rapport (`?van=&tot=&chauffeur=`). Twee losse `useQueryParam`-zetters na
- * elkaar werken ook, maar geven twee history-vervangingen en twee renders met
- * een halve periode ertussen. `null` of '' wist een parameter.
- */
-export function useQueryParams(): [URLSearchParams, (wijziging: Record<string, string | null>) => void] {
-  const [, force] = useState(0);
-  useEffect(() => {
-    const sync = () => force((n) => n + 1);
-    window.addEventListener('popstate', sync);
-    window.addEventListener(ROUTE_EVENT, sync);
-    return () => { window.removeEventListener('popstate', sync); window.removeEventListener(ROUTE_EVENT, sync); };
-  }, []);
-  const zoekdeel = typeof window === 'undefined' ? '' : window.location.search;
-  const huidig = useMemo(() => new URLSearchParams(zoekdeel), [zoekdeel]);
-  const zet = useCallback((wijziging: Record<string, string | null>) => {
-    const url = new URL(window.location.href);
-    for (const [naam, waarde] of Object.entries(wijziging)) {
-      if (waarde) url.searchParams.set(naam, waarde); else url.searchParams.delete(naam);
-    }
-    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
-    window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
-  }, []);
   return [huidig, zet];
 }

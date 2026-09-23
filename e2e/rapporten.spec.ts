@@ -69,7 +69,7 @@ test('catalogus, rapport, filter, leeg en de print-URL', async ({ page }) => {
   await expect(page).toHaveURL(/jaar=2026/);
   await expect(page.getByRole('cell', { name: 'Alex Du Priez' })).toBeVisible();
   await expect(page.getByText('12 rijen')).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Totaal (12)' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Totaal (12)' })).toBeVisible();
   // De tabel schuift binnen haar kader, nooit de pagina.
   await paginaScrolltNiet(page);
 
@@ -152,6 +152,93 @@ test('telefoon: naam met sectie eronder en Budget, Opgenomen en Vrij zonder scro
   await page.getByRole('button', { name: 'Vrij' }).click();
   await expect(koppen.nth(3)).toHaveAttribute('aria-sort', 'descending');
   await expect(page.getByRole('row').nth(1)).toContainText('Greet Lambrecht');
+});
+
+/** Namen in de eerste kolom en de waarden van één kolom, in de volgorde van het scherm. */
+const schermKolom = (page: Page, kop: string) => page.evaluate((kop) => {
+  const koppen = [...document.querySelectorAll('thead th')].map((th) => (th.textContent ?? '').trim());
+  const i = koppen.indexOf(kop);
+  return [...document.querySelectorAll('tbody tr')].map((tr) => {
+    const cellen = tr.querySelectorAll('td');
+    return { naam: ((cellen[0].querySelector('span') ?? cellen[0]).textContent ?? '').trim(), waarde: Number((cellen[i]?.textContent ?? '').trim()) };
+  });
+}, kop);
+const namen = (rijen: { naam: string }[]) => rijen.map((r) => r.naam);
+const oplopend = (w: number[]) => w.every((x, i) => i === 0 || w[i - 1] <= x);
+
+test('sortering in de URL: link, herladen, terug, blad en CSV in dezelfde volgorde', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seed(page, { user: ADMIN, view: 'rapporten' });
+  await vangNieuwTabblad(page);
+  await page.goto('/rapporten/verlof/verlofsaldo?jaar=2026');
+  await expect(page.getByRole('cell', { name: /Alex Du Priez/ })).toBeVisible({ timeout: 15_000 });
+  // Standaardsortering (naam oplopend): geen parameter.
+  expect(new URL(page.url()).searchParams.has('sorteer')).toBe(false);
+  const standaard = namen(await schermKolom(page, 'Naam'));
+  expect(standaard).toHaveLength(12);
+
+  // Klik op een kop: de sortering komt in de URL.
+  const budget = page.getByRole('button', { name: 'Budget', exact: true });
+  await budget.click();
+  await expect(page).toHaveURL(/[?&]sorteer=budget(&|$)/);
+  expect(oplopend((await schermKolom(page, 'Budget')).map((r) => r.waarde))).toBe(true);
+  await budget.click();
+  await expect(page).toHaveURL(/[?&]sorteer=-budget(&|$)/);
+  const aflopend = await schermKolom(page, 'Budget');
+  expect(oplopend(aflopend.map((r) => r.waarde).reverse())).toBe(true);
+  expect(namen(aflopend)).not.toEqual(standaard);
+
+  // Herladen (= de gedeelde link openen) houdt dezelfde volgorde.
+  await page.reload();
+  await expect(page.getByRole('cell', { name: /Alex Du Priez/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('columnheader', { name: 'Budget' })).toHaveAttribute('aria-sort', 'descending');
+  expect(namen(await schermKolom(page, 'Naam'))).toEqual(namen(aflopend));
+
+  // Het blad: de print-URL draagt de sortering en toont de rijen in die volgorde.
+  await page.getByRole('button', { name: 'Afdrukken' }).click();
+  const printUrl = new URL((await geopend(page)).at(-1)!);
+  expect(printUrl.searchParams.get('sorteer')).toBe('-budget');
+
+  // De CSV: dezelfde volgorde als het scherm (kopregel eerst, totaalrij laatst).
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'CSV' }).click()]);
+  const pad = await download.path();
+  const { readFileSync } = await import('node:fs');
+  const csvNamen = readFileSync(pad!, 'utf8').replace(/^\uFEFF/, '').split('\r\n').slice(1, -1).map((r) => r.split(';')[0].replace(/^"|"$/g, ''));
+  expect(csvNamen).toEqual(namen(aflopend));
+
+  // Filters wissen laat de sortering staan (ze is geen filter).
+  await page.getByLabel('Medewerker').selectOption({ label: 'Alex Du Priez' });
+  await expect(page).toHaveURL(/chauffeur=43/);
+  await page.getByRole('button', { name: 'Meer acties' }).click();
+  await page.getByRole('menuitem', { name: 'Filters wissen' }).click();
+  await expect(page).not.toHaveURL(/chauffeur=/);
+  await expect(page).toHaveURL(/[?&]sorteer=-budget(&|$)/);
+  // Het menu ruimt zijn eigen terugstap uitgesteld op; pas daarna is "terug" de onze.
+  await page.waitForFunction(() => !(history.state as { vhbOverlay?: string } | null)?.vhbOverlay);
+
+  // Terug: de volgorde van vóór de eerste sorteerklik, zonder parameter; één stap, niet één per klik.
+  await page.goBack();
+  await expect(page).not.toHaveURL(/sorteer=/);
+  await expect(page).toHaveURL(/\/rapporten\/verlof\/verlofsaldo/);
+  await expect(page.getByRole('columnheader', { name: 'Naam' })).toHaveAttribute('aria-sort', 'ascending');
+  expect(namen(await schermKolom(page, 'Naam'))).toEqual(standaard);
+  // Vooruit: weer de gekozen sortering.
+  await page.goForward();
+  await expect(page).toHaveURL(/[?&]sorteer=-budget(&|$)/);
+  await expect(page.getByRole('columnheader', { name: 'Budget' })).toHaveAttribute('aria-sort', 'descending');
+
+  // Een onbekende kolom: gewoon de standaard, geen fout.
+  await page.goto('/rapporten/verlof/verlofsaldo?jaar=2026&sorteer=-bestaatniet');
+  await expect(page.getByRole('cell', { name: /Alex Du Priez/ })).toBeVisible({ timeout: 15_000 });
+  expect(namen(await schermKolom(page, 'Naam'))).toEqual(standaard);
+
+  // Het blad zelf, in dezelfde volgorde.
+  await page.goto(printUrl.pathname + printUrl.search);
+  await expect(page.getByRole('heading', { name: 'Verlofsaldo', level: 1 })).toBeVisible({ timeout: 15_000 });
+  const blad = await page.evaluate(() => [...document.querySelectorAll('.printblad-tabel tbody tr:not(.totaal)')].map((tr) => (tr.querySelector('td')?.textContent ?? '').trim()));
+  expect(blad).toEqual(namen(aflopend));
+  expect(pageErrors).toEqual([]);
 });
 
 test('periode zonder gegevens zegt vanaf wanneer, een laadfout is een foutkaart', async ({ page }) => {
@@ -316,7 +403,7 @@ test('voertuigrapport: wagenpark met keuzelijsten, peildatum, totaalrij en het b
   await expect(page.getByText('7 rijen')).toBeVisible();
   await expect(page.getByText('21/09/2026')).toBeVisible();
   await expect(page.getByRole('cell', { name: /Oud 01/ })).toHaveCount(0);
-  await expect(page.getByRole('columnheader', { name: 'Totaal (7)' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Totaal (7)' })).toBeVisible();
   await paginaScrolltNiet(page);
 
   if ((page.viewportSize()?.width ?? 0) < 768) {
@@ -431,7 +518,7 @@ test('ruilrapport: ruilaanvragen met status, antwoord van de collega, peildatum 
     await expect(eerste).toContainText('Geaccepteerd');
     // Rechtstreeks goedgekeurd: het antwoord van de collega is niet afgewacht.
     await expect(page.getByRole('row', { name: /Bart Claeys.*Niet afgewacht.*18\/09\/2026.*Jarno De Greve/ })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: /Totaal \(8\)/ })).toBeVisible();
+    await expect(page.getByRole('rowheader', { name: /Totaal \(8\)/ })).toBeVisible();
     // Elf kolommen passen niet altijd in het kader: dan schuift de tabel erin (ook vanaf xl), niets valt afgesneden buiten beeld.
     const kader = await page.evaluate(() => {
       const k = document.querySelector('table')!.parentElement!;
@@ -513,7 +600,7 @@ test('planningsrapport: diensten per dag met delen en uren, zonder bus, en hele 
   await expect(page.getByLabel('Van maand')).toHaveValue('2026-09');
   await expect(page.getByLabel('Tot en met maand')).toHaveValue('2026-09');
   await expect(page.getByText('6 rijen')).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Totaal (6)' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Totaal (6)' })).toBeVisible();
   await page.getByLabel('Van maand').selectOption('2026-07');
   await expect(page).toHaveURL(/van=2026-07-01&tot=2026-09-30/);
   await paginaScrolltNiet(page);

@@ -470,11 +470,9 @@ html.dark {
   --border-default: rgba(255, 255, 255, 0.10);
   /* Opake sticky-oppervlakken (maandplanning-grid): de generieke dark-
      overrides zijn alpha-kleuren, waardoor scrollende cellen door de vaste
-     naamkolom/koprij heen schemerden. Kop iets lichter dan de cel; "own"
-     = de eigen rij met een warme oker-zweem. */
+     naamkolom/koprij heen schemerden. Kop iets lichter dan de cel. */
   --surface-sticky-head: var(--laag-sticky);
   --surface-sticky-cell: var(--laag-kaart);
-  --surface-sticky-own: rgb(41, 35, 25);
   /* Donkere kant van de semantische oppervlak-tokens (zelfde waarden als
      de blanket-overrides voor hun oude utility-tegenhangers). */
   --color-surface-row: rgba(23, 24, 26, 0.74);
@@ -1432,7 +1430,7 @@ html.dark {
    een duidelijke lijn erboven en een hairline eronder; de tekst zelf doet
    het werk (vet, iets groter, carbon). Unlayered en met !important zodat
    de sticky cel niet in de gewone sticky-kleur terugvalt. */
-.mp-sectie, td.mp-sectie.mp-sticky { background-color: var(--color-surface-white) !important; border-top: 2px solid var(--color-slate-400) !important; border-bottom: 1px solid var(--color-slate-200) !important; }
+.mp-sectie, .mp-sectie.mp-sticky { background-color: var(--color-surface-white) !important; border-top: 2px solid var(--color-slate-400) !important; border-bottom: 1px solid var(--color-slate-200) !important; }
 .mp-sectie:not(.mp-sticky) { border-left-color: transparent !important; }
 .mp-sectie.mp-sectie-ma { border-left: 2px solid var(--color-slate-300) !important; }
 /* Lege cel (geen dienst, geen code): fijn stippenpatroon, bewust anders
@@ -1442,10 +1440,12 @@ html.dark {
 .dark .mp-leeg { background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1.3px); background-size: 6px 6px; background-position: 3px 3px; }
 .mp-weekend.mp-leeg { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100, 116, 139, 0.09) 3px, rgba(100, 116, 139, 0.09) 4px), radial-gradient(rgba(100, 116, 139, 0.32) 1px, transparent 1.3px); background-size: auto, 6px 6px; }
 .dark .mp-weekend.mp-leeg { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255, 255, 255, 0.05) 3px, rgba(255, 255, 255, 0.05) 4px), radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1.3px); background-size: auto, 6px 6px; }
-/* Sticky cellen moeten OPAAK zijn (tokens in html.dark hierboven). */
-.dark th.mp-sticky { background-color: var(--surface-sticky-head) !important; }
-.dark td.mp-sticky { background-color: var(--surface-sticky-cell) !important; }
-.dark td.mp-sticky-own { background-color: var(--surface-sticky-own) !important; }
+/* Sticky cellen moeten OPAAK zijn (tokens in html.dark hierboven). De naam
+   in de body is sinds tranche 3B een rijkop (th scope="row"), dus kop en
+   body worden op thead/tbody onderscheiden, niet op th/td. De eigen rij heeft
+   geen oker-zweem meer: goud is geen markering van "jij". */
+.dark thead .mp-sticky { background-color: var(--surface-sticky-head) !important; }
+.dark tbody .mp-sticky { background-color: var(--surface-sticky-cell) !important; }
 
 /* De login is bewust ALTIJD carbon-donker (login-bg-dark / panel-login-dark,
    wit logo, witte koppen), los van de app-thema-toggle — zie LoginView.tsx.

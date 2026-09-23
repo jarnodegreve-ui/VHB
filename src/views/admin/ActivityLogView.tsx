@@ -4,7 +4,7 @@ import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { isoDate, addDagen } from '../../lib/datum';
-import { formatDayLong, formatRelatief, WEEKDAY_SHORT_SUN } from '../../lib/format';
+import { formatDatumDMJ, formatDayLong, formatRelatief, formatShortDay, formatSyncedTime, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { EmptyState, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, FilterChip, Segmented, Switch } from '../../components/primitives';
@@ -46,7 +46,8 @@ import { useMinWidth } from '../../lib/useMinWidth';
 type Categorie = ActivityLogEntry['category'];
 
 const CATEGORY_TONES: Record<Categorie, ComponentProps<typeof Badge>['tone']> = {
-  users: 'oker',
+  // Een categorie is informatie, geen status of "nu": geen goud (tranche 3B, 23-09).
+  users: 'slate',
   planning: 'blue',
   planning_codes: 'blue',
   services: 'emerald',
@@ -78,7 +79,9 @@ const BUNDEL_VENSTER_MS = 10 * 60 * 1000;
 /** Automatische hartslagen (crons) zijn geen menselijke actie: standaard verborgen. */
 const isRuis = (e: ActivityLogEntry) => e.category === 'system' && /^Cron /i.test(e.action);
 
-const uur = (iso: string) => new Date(iso).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
+/** 'UU:MM' en 'dd/mm/jjjj UU:MM' in lokale tijd, via de gedeelde datumhelpers. */
+const uur = (iso: string) => formatSyncedTime(new Date(iso).getTime());
+const moment = (iso: string) => `${formatDatumDMJ(isoDate(new Date(iso)))} ${uur(iso)}`;
 const dagKop = (dag: string, vandaag: string): string => {
   if (dag === vandaag) return 'Vandaag';
   if (dag === addDagen(vandaag, -1)) return 'Gisteren';
@@ -87,7 +90,7 @@ const dagKop = (dag: string, vandaag: string): string => {
 const dagKort = (dag: string, vandaag: string): string => {
   if (dag === vandaag) return 'vandaag';
   if (dag === addDagen(vandaag, -1)) return 'gisteren';
-  return new Date(`${dag}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' });
+  return formatShortDay(dag);
 };
 
 /**
@@ -267,7 +270,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                 stip als op de tegel en in de dagstrip, zodat je weet wie je moet
                 openklappen. Amber is hier waarschuwing, nooit goud. */}
             {buitenland && <span data-buitenland role="img" aria-label="Aanmelding van buiten België" title="Aanmelding van buiten België" className="size-2 shrink-0 rounded-full bg-amber-600" />}
-            <span className="text-xs font-medium font-mono whitespace-nowrap text-slate-600" title={aantal}>{duurKort(b.totaalMin)}</span>
+            <span className="text-xs font-medium whitespace-nowrap text-slate-600" title={aantal}>{duurKort(b.totaalMin)}</span>
           </span>
           <ChevronDown size={16} className={uitklapChevron(isOpen, 180, TIJDBALK_CHEVRON)} aria-hidden="true" />
         </button>
@@ -281,11 +284,11 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
               return (
                 <li key={regel.sleutel} className="contents">
                   {/* Goud alleen voor de periode die nu nog loopt. */}
-                  <span className={cn('font-mono whitespace-nowrap', lopend ? 'font-medium text-oker-700' : 'text-slate-700')}>
+                  <span className={cn('whitespace-nowrap', lopend ? 'font-medium text-oker-700' : 'text-slate-700')}>
                     {uurMin(regel.vanMin)}–{uurMin(regel.totMin)}
                     {lopend && <span className="sr-only">, loopt nog</span>}
                   </span>
-                  <span className="font-mono whitespace-nowrap text-slate-500">{duurKort(regel.duurMin)}</span>
+                  <span className="whitespace-nowrap text-slate-500">{duurKort(regel.duurMin)}</span>
                   {/* Buiten België: dezelfde amber stip als in de dichte rij, en het
                       land voluit. Geen pil: die paste op een telefoon niet naast de
                       plaats en viel dan los op een eigen regel. */}
@@ -523,11 +526,12 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                         className="group flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-end gap-1 rounded-lg"
                       >
                         {/* 2xs: teller boven de dagstrip van de mini-grafiek */}
-                        <span className={cn('text-2xs font-semibold font-mono', d.day === gekozenDag ? 'text-slate-900' : 'text-slate-700')}>{d.count || ''}</span>
+                        <span className={cn('text-2xs font-semibold', d.day === gekozenDag ? 'text-slate-900' : 'text-slate-700')}>{d.count || ''}</span>
                         <span
                           className={cn(
                             'w-full rounded-t-md transition-colors',
-                            d.day === gekozenDag ? 'bg-oker-500' : d.count > 0 ? 'bg-slate-500 group-hover:bg-slate-700' : 'bg-surface-muted',
+                            // Gekozen dag = selectie: de keuzekleur (carbon, in donker lichtgrijs), geen goud.
+                            d.day === gekozenDag ? 'bg-keuze' : d.count > 0 ? 'bg-slate-500 group-hover:bg-slate-700' : 'bg-surface-muted',
                           )}
                           style={{ height: d.count > 0 ? `${Math.max(6, Math.round((d.count / maxDaily) * 80))}%` : '3px' }}
                           aria-hidden="true"
@@ -539,7 +543,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                     {veertienDagen.map((d) => (
                       /* 2xs: daglabels van de mini-grafiek, 14 kolommen naast elkaar */
                       <span key={d.day} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-                        <span className={cn('w-full truncate text-center text-2xs font-medium font-mono', d.day === gekozenDag ? 'text-oker-700' : 'text-slate-500')}>
+                        <span className={cn('w-full truncate text-center text-2xs font-medium', d.day === gekozenDag ? 'font-semibold text-slate-900' : 'text-slate-500')}>
                           {d.day === vandaag ? 'nu' : WEEKDAY_SHORT_SUN[d.dow]}
                         </span>
                         {/* Amber stip: die dag kwam er iemand van buiten België. Elke
@@ -552,7 +556,8 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                 <div className="min-w-0 border-t border-hairline pt-5 lg:col-span-2 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
                   <h3 className="mb-1 text-card-title">Recente aanmeldingen</h3>
                   <p className="mb-3 text-xs text-slate-500">Alleen wie zich écht opnieuw moest aanmelden. Wie ingelogd blijft, telt mee in de aanwezigheid.</p>
-                  <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
+                  {/* Eigen scrollstrook: focusbaar en benoemd, zodat ze ook met het toetsenbord scrolt (axe). */}
+                  <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1" role="region" aria-label="Recente aanmeldingen" tabIndex={0}>
                     {recentLogins.length === 0 ? (
                       <p className="text-sm text-slate-500">Nog geen aanmeldingen in de laatste 30 dagen.</p>
                     ) : recentLogins.map((e) => (
@@ -560,7 +565,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                         <Avatar naam={e.actorName} size="sm" />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold break-words text-slate-800">{e.actorName}</p>
-                          <p className="mt-0.5 text-xs font-medium text-slate-500" title={new Date(e.createdAt).toLocaleString('nl-BE')}>{formatRelatief(e.createdAt)}</p>
+                          <p className="mt-0.5 text-xs font-medium text-slate-500"><time dateTime={e.createdAt} title={moment(e.createdAt)}>{formatRelatief(e.createdAt)}</time></p>
                         </div>
                       </div>
                     ))}
@@ -585,10 +590,10 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                       <span className="inline-flex items-center gap-0.5">
                         {buitenlandVandaagGekozen > 0 ? (
                           <FilterChip tone="amber" active={filterAan} onClick={() => { setAlleenBuitenland((v) => !v); setAlleBalken(false); setOmgezet(new Set()); }}>
-                            Buiten België: <span className="font-mono">{buitenlandVandaagGekozen}</span>
+                            Buiten België: {buitenlandVandaagGekozen}
                           </FilterChip>
                         ) : (
-                          <span className="text-xs font-medium text-slate-500">Buiten België: <span className="font-mono">0</span></span>
+                          <span className="text-xs font-medium text-slate-500">Buiten België: 0</span>
                         )}
                         <InfoTip label="Uitleg plaats van aanmelden" align="right">
                           <p>De plaats wordt afgeleid van het IP-adres waarmee iemand verbinding maakt. Op mobiel internet is dat vaak de stad van de provider (Brussel, Antwerpen) en niet de plek waar iemand staat: lees het als een streek, niet als een adres. Het land klopt vrijwel altijd.</p>
@@ -596,7 +601,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                         </InfoTip>
                       </span>
                     )}
-                    <span className="text-xs font-medium font-mono text-slate-500">
+                    <span className="text-xs font-medium text-slate-500">
                       {filterAan ? `${getoondeBalken.length} van ${balken.length}` : balken.length} {balken.length === 1 ? 'persoon' : 'personen'}
                     </span>
                   </div>
@@ -619,7 +624,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                           /* 2xs: uurlabel op de tijdas van de aanwezigheidsbalken */
                           <span
                             key={m.uur}
-                            className={cn('absolute top-0 text-2xs font-medium font-mono text-slate-500', m.lijn === 'midden' && '-translate-x-1/2')}
+                            className={cn('absolute top-0 text-2xs font-medium text-slate-500', m.lijn === 'midden' && '-translate-x-1/2')}
                             style={m.lijn === 'eind' ? { right: 0 } : { left: `${m.pct}%` }}
                           >
                             {m.label}
@@ -711,7 +716,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
             <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
               <Switch checked={toonRuis} onChange={setToonRuis} label="Systeemhartslagen tonen" />
               <span className="inline-flex items-center gap-1">
-                Hartslagen{ruisAantal > 0 ? <span className="font-mono text-slate-500">({ruisAantal})</span> : null}
+                Hartslagen{ruisAantal > 0 ? <span className="text-slate-500">({ruisAantal})</span> : null}
                 <InfoTip label="Uitleg hartslagen"><p>Automatische meldingen van de nachtelijke taken (back-up, synchronisatie van de laadpalen, weekrapport). Ze bewijzen dat de taken draaien, maar zeggen niets over wat iemand deed; daarom staan ze standaard uit.</p></InfoTip>
               </span>
             </label>
@@ -720,14 +725,17 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
 
         <div className="mt-5">
           {bundels.length > 0 ? (
-            <div className="surface-table overflow-hidden rounded-3xl">
+            // Een lijst, geen tabel: per dag een kop en een ul met regels die
+            // openklappen (rijrecept: px-4 py-3, titel 15 px, meta 13 px). De
+            // regels zelf houden hun raster (tijd, categorie, actie, wie).
+            <Card padding="none" className="overflow-hidden">
               {perDag.map(({ dag, bundels: rijen }) => (
                 <section key={dag} aria-label={dagKop(dag, vandaag)}>
                   <div className="flex items-baseline justify-between gap-3 border-b border-hairline-subtle bg-surface-muted/60 px-4 py-1.5">
                     <h3 className="text-subsection-title text-slate-700">{dagKop(dag, vandaag)}{dag === vandaag || dag === addDagen(vandaag, -1) ? <span className="ml-2 font-normal text-slate-500">{formatDayLong(dag)}</span> : null}</h3>
-                    <span className="text-xs font-medium font-mono text-slate-500">{rijen.reduce((a, b) => a + b.items.length, 0)} {rijen.reduce((a, b) => a + b.items.length, 0) === 1 ? 'actie' : 'acties'}</span>
+                    <span className="text-xs font-medium text-slate-500">{rijen.reduce((a, b) => a + b.items.length, 0)} {rijen.reduce((a, b) => a + b.items.length, 0) === 1 ? 'actie' : 'acties'}</span>
                   </div>
-                  <div className="divide-y divide-hairline-subtle">
+                  <ul className="divide-y divide-hairline-subtle">
                     {rijen.map((b) => {
                       const e = b.eerste;
                       const n = b.items.length;
@@ -735,26 +743,29 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                       const laatste = b.items[n - 1];
                       const detailsUniek = [...new Set(b.items.map((x) => x.details).filter(Boolean))];
                       return (
-                        <div key={b.key}>
+                        <li key={b.key}>
                           {/* rauw: hele regel is de knop die de details open- en dichtklapt (eigen layout) */}
                           <button
                             type="button"
                             onClick={() => toggleOpen(b.key)}
                             aria-expanded={isOpen}
-                            className="ios-pressable grid w-full grid-cols-[3.25rem_minmax(0,1fr)_1rem] items-center gap-x-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-soft-hover sm:grid-cols-[4.5rem_8rem_minmax(0,1fr)_11rem_1rem]"
+                            className="ios-pressable grid w-full grid-cols-[3.25rem_minmax(0,1fr)_1rem] items-center gap-x-3 px-4 py-3 text-left transition-colors hover:bg-surface-soft-hover sm:grid-cols-[4.5rem_8rem_minmax(0,1fr)_11rem_1rem]"
                           >
-                            <span className="whitespace-nowrap text-xs font-medium font-mono text-slate-500">
-                              {n > 1 ? `${uur(laatste.createdAt)}–${uur(e.createdAt)}` : uur(e.createdAt)}
+                            <span className="whitespace-nowrap text-xs font-medium text-slate-500">
+                              {n > 1
+                                ? <><time dateTime={laatste.createdAt}>{uur(laatste.createdAt)}</time>–<time dateTime={e.createdAt}>{uur(e.createdAt)}</time></>
+                                : <time dateTime={e.createdAt}>{uur(e.createdAt)}</time>}
                             </span>
                             <Badge tone={CATEGORY_TONES[e.category]} dot stil className="hidden w-full justify-center sm:inline-flex">{CATEGORY_LABELS[e.category]}</Badge>
                             <span className="min-w-0">
                               <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                <span className="text-sm font-semibold text-slate-800">{e.action}</span>
-                                {n > 1 && <Badge tone="oker" stil className="font-mono">{n}×</Badge>}
+                                <span className="text-md font-semibold text-slate-800">{e.action}</span>
+                                {/* Teller van een bundel: neutraal, goud is geen telkleur voor een lijst (tranche 3B). */}
+                                {n > 1 && <Badge tone="slate" stil>{n}×</Badge>}
                                 <Badge tone={CATEGORY_TONES[e.category]} dot stil className="sm:hidden">{CATEGORY_LABELS[e.category]}</Badge>
                               </span>
                               {!isOpen && (
-                                <span className="mt-0.5 block truncate text-xs font-normal text-slate-500">
+                                <span className="mt-0.5 block truncate text-body-sm font-normal text-slate-500">
                                   {n > 1 && detailsUniek.length > 1 ? `${detailsUniek[0]} en ${detailsUniek.length - 1} andere` : e.details}
                                 </span>
                               )}
@@ -774,23 +785,23 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                                 <ul className="mt-1 space-y-1">
                                   {b.items.map((x) => (
                                     <li key={x.id} className="flex gap-3 text-sm text-slate-700">
-                                      <span className="w-12 shrink-0 font-mono text-xs text-slate-500">{uur(x.createdAt)}</span>
+                                      <time dateTime={x.createdAt} className="w-12 shrink-0 text-xs text-slate-500">{uur(x.createdAt)}</time>
                                       <span className="min-w-0">{x.details || x.action}</span>
                                     </li>
                                   ))}
                                 </ul>
                               )}
-                              <p className="mt-2 text-xs text-slate-500">{new Date(e.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {e.actorName} ({e.actorRole}){e.entityType ? ` · ${e.entityType}${e.entityId ? ` ${e.entityId}` : ''}` : ''}</p>
+                              <p className="mt-2 text-xs text-slate-500"><time dateTime={e.createdAt}>{moment(e.createdAt)}</time> · {e.actorName} ({e.actorRole}){e.entityType ? ` · ${e.entityType}${e.entityId ? ` ${e.entityId}` : ''}` : ''}</p>
                             </div>
                           </Uitklap>
-                        </div>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 </section>
               ))}
               <Paginering className="border-t border-hairline-subtle" totaal={bundels.length} perPagina={PER_PAGINA} pagina={huidigePagina} onPagina={setPagina} />
-            </div>
+            </Card>
           ) : filterActief ? (
             <EmptyState
               illustratie={<NietGevonden />}

@@ -1,11 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { KolomToon, RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from '../../shared/rapporten/types';
-import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRechts, kolomIndeling, onderEersteTekst, RAPPORT_PER_PAGINA, smalleBreedte, sorteerRijen } from '../../shared/rapporten/opmaak';
+import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRechts, kolomIndeling, onderEersteTekst, RAPPORT_PER_PAGINA, smalleBreedte } from '../../shared/rapporten/opmaak';
+import { sorteerVolgens, type RapportSortering } from '../../shared/rapporten/sortering';
 import { cn } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Badge, type BadgeTone } from './primitives';
-import { Paginering, SortTh, StickyThead, useSort } from './Table';
-import { Td, Th } from './TabelBasis';
+import { Tabel, Td, Th } from './TabelBasis';
+import { Paginering, SortTh, StickyThead } from './Table';
 
 /**
  * De tabel van een rapport, volledig uit de definitie: kolomkoppen,
@@ -23,7 +24,9 @@ import { Td, Th } from './TabelBasis';
  * gratis; het printblad en de CSV tonen altijd alles.
  *
  * `rijen` = wat er te zien is (na de zoekterm); `totalen` hoort bij precies
- * die rijen. Het printblad heeft zijn eigen tabel (PrintBlad) en toont alles.
+ * die rijen. De sortering is van de ouder (`sortering` + `onSorteer`): ze
+ * staat in de URL (`?sorteer=`, shared/rapporten/sortering.ts), zodat link,
+ * printblad en CSV dezelfde volgorde hebben. Het printblad heeft zijn eigen tabel (PrintBlad) en toont alles.
  */
 const PER_PAGINA = RAPPORT_PER_PAGINA;
 /** Vanaf hier passen de kolommen naast elkaar (md); eronder geldt de smalle indeling. */
@@ -93,19 +96,22 @@ const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerst
   kolom.leeg && (waarde === null || waarde === undefined || waarde === '') && 'whitespace-nowrap',
 );
 
-export function RapportTabel({ def, rijen, totalen, className }: {
+export function RapportTabel({ def, rijen, totalen, sortering, onSorteer, className }: {
   def: RapportDefinitie;
   rijen: readonly RapportRij[];
   /** Som per optelbare kolom over `rijen`; zonder opgave geen totaalrij. */
   totalen?: Record<string, number> | null;
+  /** De actieve sortering (uit de URL); een klik op een kop geeft de kolom door. */
+  sortering: RapportSortering;
+  onSorteer: (kolom: string) => void;
   className?: string;
 }) {
   const breed = useMinWidth(BREED_VANAF);
   const smal = !breed;
   const { kolommen, onderEerste } = useMemo(() => kolomIndeling(def, smal ? 'smal' : 'breed'), [def, smal]);
-  const sort = useSort<string>(def.sortering.kolom, def.sortering.richting);
+  const sort = useMemo(() => ({ key: sortering.kolom, dir: sortering.richting, toggle: onSorteer }), [sortering.kolom, sortering.richting, onSorteer]);
   const [pagina, setPagina] = useState(1);
-  const gesorteerd = useMemo(() => sorteerRijen(def, rijen, sort.key, sort.dir), [def, rijen, sort.key, sort.dir]);
+  const gesorteerd = useMemo(() => sorteerVolgens(def, rijen, sortering), [def, rijen, sortering]);
   const paginas = Math.max(1, Math.ceil(gesorteerd.length / PER_PAGINA));
   // Andere rijen of een andere sortering: terug naar de eerste pagina; en
   // nooit op een pagina blijven staan die niet meer bestaat.
@@ -121,14 +127,21 @@ export function RapportTabel({ def, rijen, totalen, className }: {
   // altijd: wat buiten het kader viel was dan afgesneden en onbereikbaar. Past
   // de tabel niet, dan blijft ze ook vanaf xl in haar kader schuiven, met de
   // vaste eerste kolom en een gewone kop, precies zoals onder xl.
+  //
+  // Schuift de strook echt (telefoon, of een brede tabel), dan wordt ze een
+  // focusbare regio met de naam van het rapport, zoals TableShell dat doet:
+  // zo is ze ook zonder muis te verschuiven (tranche 3B).
   const kaderRef = useRef<HTMLDivElement>(null);
-  const tabelRef = useRef<HTMLTableElement>(null);
   const [overloopt, setOverloopt] = useState(false);
+  const [schuift, setSchuift] = useState(false);
   useLayoutEffect(() => {
     const kader = kaderRef.current;
-    const tabel = tabelRef.current;
+    const tabel = kader?.querySelector('table');
     if (!kader || !tabel) return;
-    const meet = () => setOverloopt(tabel.offsetWidth > kader.clientWidth + 1);
+    const meet = () => {
+      setOverloopt(tabel.offsetWidth > kader.clientWidth + 1);
+      setSchuift(kader.scrollWidth > kader.clientWidth + 1);
+    };
     meet();
     if (typeof ResizeObserver === 'undefined') return;
     const waarnemer = new ResizeObserver(meet);
@@ -139,13 +152,14 @@ export function RapportTabel({ def, rijen, totalen, className }: {
 
   return (
     <div className={className}>
-      <div ref={kaderRef} className={cn('overflow-x-auto', !overloopt && 'xl:overflow-visible')}>
-        <table
-          ref={tabelRef}
-          className={cn('w-full border-collapse text-left', smal && 'table-fixed')}
-          // Smal: de som van de vaste kolommen, maar nooit smaller dan het kader.
-          style={smal ? { width: `max(100%, ${smalleTabelBreedte}rem)` } : undefined}
-        >
+      <div
+        ref={kaderRef}
+        className={cn('overflow-x-auto', !overloopt && 'xl:overflow-visible')}
+        // Smal: de tabel is de som van de vaste kolommen, maar nooit smaller dan het kader.
+        style={smal ? ({ '--rapport-breedte': `${smalleTabelBreedte}rem` } as CSSProperties) : undefined}
+        {...(schuift ? { role: 'region', 'aria-label': def.titel, tabIndex: 0 } : {})}
+      >
+        <Tabel label={def.titel} className={cn(smal && 'table-fixed w-[max(100%,var(--rapport-breedte))]')}>
           {smal && (
             <colgroup>
               {kolommen.map((k, i) => <col key={k.id} style={{ width: `${smalleBreedte(k, i === 0)}rem` }} />)}
@@ -196,16 +210,19 @@ export function RapportTabel({ def, rijen, totalen, className }: {
             <tfoot>
               {/* Geen getint vlak: de sterke lijn en het gewicht dragen de totaalrij,
                   ook in zwart-wit, en de vaste eerste kolom blijft één kleur. */}
+              {/* De eerste cel is de kop van de rij ("Totaal (n)", scope="row"); de totalen zelf zijn gewone cellen. */}
               <tr className="border-t border-hairline-strong">
-                {kolommen.map((k, i) => (
-                  <Th key={k.id} num={isRechts(k)} className={cn('py-3.5 text-sm font-semibold text-slate-900', i === 0 && cn(VASTE_KOLOM, VASTE_VOET, overloopt && cn(VASTE_KOLOM_BREED, VASTE_VOET_BREED)), smal && (i === 0 ? 'pl-4 pr-2' : 'px-2'), dicht && i > 0 && 'px-2')}>
-                    {k.id in totalen ? formatWaarde(k, totalen[k.id]) : i === 0 ? `Totaal (${rijen.length})` : ''}
-                  </Th>
-                ))}
+                {kolommen.map((k, i) => {
+                  const klasse = cn('py-3.5 text-sm font-semibold text-slate-900', i === 0 && cn(VASTE_KOLOM, VASTE_VOET, overloopt && cn(VASTE_KOLOM_BREED, VASTE_VOET_BREED)), smal && (i === 0 ? 'pl-4 pr-2' : 'px-2'), dicht && i > 0 && 'px-2');
+                  const inhoud = k.id in totalen ? formatWaarde(k, totalen[k.id]) : i === 0 ? `Totaal (${rijen.length})` : '';
+                  return i === 0
+                    ? <Th key={k.id} scope="row" num={isRechts(k)} className={klasse}>{inhoud}</Th>
+                    : <Td key={k.id} num={isRechts(k)} className={klasse}>{inhoud}</Td>;
+                })}
               </tr>
             </tfoot>
           )}
-        </table>
+        </Tabel>
       </div>
       <Paginering totaal={gesorteerd.length} perPagina={PER_PAGINA} pagina={huidig} onPagina={setPagina} className="border-t border-hairline" />
     </div>

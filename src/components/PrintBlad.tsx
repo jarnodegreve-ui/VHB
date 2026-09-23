@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { Printer } from 'lucide-react';
 import type { RapportDefinitie, RapportRij } from '../../shared/rapporten/types';
-import { formatWaarde, heeftTotaalrij, isRechts, sorteerRijen, toonOpBlad } from '../../shared/rapporten/opmaak';
+import { formatWaarde, heeftTotaalrij, isRechts, toonOpBlad } from '../../shared/rapporten/opmaak';
+import { sorteerVolgens, standaardSortering, type RapportSortering } from '../../shared/rapporten/sortering';
 import { BrandLogo } from './BrandLogo';
 import { Button } from './primitives';
 
@@ -140,16 +141,18 @@ export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTi
 
 /**
  * Een rapport uit het register op het blad: alle rijen (geen paginering), in
- * de standaardsortering van de definitie, met de totaalrij als laatste rij
+ * de sortering van het scherm (`sortering`, uit `?sorteer=`; zonder opgave de
+ * standaard van de definitie), met de totaalrij als laatste rij
  * van de tabel (bewust geen `<tfoot>`: die herhaalt de browser op elke pagina).
  */
-export function PrintTabel({ def, rijen, totalen, leegTekst = 'Geen gegevens voor deze periode.' }: {
+export function PrintTabel({ def, rijen, totalen, sortering, leegTekst = 'Geen gegevens voor deze periode.' }: {
   def: RapportDefinitie;
   rijen: readonly RapportRij[];
   totalen?: Record<string, number> | null;
+  sortering?: RapportSortering;
   leegTekst?: string;
 }) {
-  const gesorteerd = useMemo(() => sorteerRijen(def, rijen, def.sortering.kolom, def.sortering.richting), [def, rijen]);
+  const gesorteerd = useMemo(() => sorteerVolgens(def, rijen, sortering ?? standaardSortering(def)), [def, rijen, sortering]);
   if (gesorteerd.length === 0) return <p className="printblad-leeg">{leegTekst}</p>;
   return (
     // Het kader schuift alleen op een smal scherm (voorbeeld op de telefoon); op papier staat het uit.

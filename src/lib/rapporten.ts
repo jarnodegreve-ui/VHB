@@ -1,6 +1,7 @@
 import type { RapportAntwoord, RapportDefinitie, RapportFilters, RapportRij } from '../../shared/rapporten/types';
 import { bestandsPeriode, filtersNaarQuery } from '../../shared/rapporten/filters';
 import { csvRijen, isGetalKolom } from '../../shared/rapporten/opmaak';
+import { SORTEER_PARAM, sorteerVolgens, sorteringNaarParam, type RapportSortering } from '../../shared/rapporten/sortering';
 import { apiFetch } from './api';
 import { csvCel } from './csv';
 
@@ -38,14 +39,27 @@ export const PRINT_PARAM = 'print-rapport';
 export const ZOEK_PARAM = 'zoek';
 
 /**
- * URL van het printblad: `?print-rapport=<id>` plus dezelfde filterparameters
- * als het scherm, voluit, en de zoekterm als die er is. `basis` = origin + pad
- * van het huidige venster.
+ * De querystring van dit rapport zoals je hem deelt: de filters voluit, de
+ * zoekterm als die er is, en de sortering als die niet de standaard is
+ * (`?sorteer=`, shared/rapporten/sortering.ts). Voor "Link kopiëren" en het blad.
  */
-export const printUrlVoor = (def: RapportDefinitie, filters: RapportFilters, basis: string, zoek = ''): string => {
-  const uit = new URLSearchParams({ [PRINT_PARAM]: def.id });
-  filtersNaarQuery(def, filters).forEach((waarde, naam) => uit.set(naam, waarde));
+export const rapportQuery = (def: RapportDefinitie, filters: RapportFilters, zoek = '', sortering?: RapportSortering): URLSearchParams => {
+  const uit = filtersNaarQuery(def, filters);
   if (zoek.trim()) uit.set(ZOEK_PARAM, zoek.trim());
+  const sorteer = sortering ? sorteringNaarParam(def, sortering) : null;
+  if (sorteer) uit.set(SORTEER_PARAM, sorteer);
+  return uit;
+};
+
+/**
+ * URL van het printblad: `?print-rapport=<id>` plus dezelfde filterparameters
+ * als het scherm, voluit, de zoekterm als die er is en de sortering van het
+ * scherm (behalve de standaard): het blad staat in dezelfde volgorde. `basis`
+ * = origin + pad van het huidige venster.
+ */
+export const printUrlVoor = (def: RapportDefinitie, filters: RapportFilters, basis: string, zoek = '', sortering?: RapportSortering): string => {
+  const uit = new URLSearchParams({ [PRINT_PARAM]: def.id });
+  rapportQuery(def, filters, zoek, sortering).forEach((waarde, naam) => uit.set(naam, waarde));
   return `${basis}?${uit.toString()}`;
 };
 
@@ -64,9 +78,11 @@ const IS_GETAL = /^-?\d+(,\d+)?$|^-?\d+:\d{2}$/;
  * er ongemoeid door, anders zou de guard van elke negatieve waarde ('-30')
  * tekst maken ("'-30") en kan Excel er niet meer mee rekenen.
  */
-export const rapportCsv = (def: RapportDefinitie, rijen: readonly RapportRij[], totalen?: Record<string, number> | null): string => {
+export const rapportCsv = (def: RapportDefinitie, rijen: readonly RapportRij[], totalen?: Record<string, number> | null, sortering?: RapportSortering): string => {
   const getalKolom = def.kolommen.map(isGetalKolom);
-  const regels = csvRijen(def, rijen, totalen).map((rij) =>
+  // Met `sortering` in de volgorde van het scherm (dezelfde vergelijker); zonder: zoals aangeleverd.
+  const volgorde = sortering ? sorteerVolgens(def, rijen, sortering) : rijen;
+  const regels = csvRijen(def, volgorde, totalen).map((rij) =>
     rij.map((cel, i) => (getalKolom[i] && IS_GETAL.test(cel) ? `"${cel}"` : csvCel(cel))).join(';'));
   return '\uFEFF' + regels.join('\r\n');
 };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RapportDefinitie, RapportRij } from '../../shared/rapporten/types';
 import { rapportVan } from '../../shared/rapporten/register';
 import { berekenTotalen } from '../../shared/rapporten/opmaak';
-import { csvBestandsnaam, printUrlVoor, rapportCsv } from './rapporten';
+import { csvBestandsnaam, printUrlVoor, rapportCsv, rapportQuery } from './rapporten';
 import { bereikUitleg } from './rapportBereik';
 
 const verlofsaldo = rapportVan('verlofsaldo')!;
@@ -80,6 +80,33 @@ describe('bestandsnaam en print-URL', () => {
       .toBe('https://vhbportaal.com/rapporten/verlof/verlofsaldo?print-rapport=verlofsaldo&jaar=2026');
     expect(printUrlVoor(verlofsaldo, { jaar: 2025, chauffeur: '43', keuzes: {} }, 'http://x/', ' du priez '))
       .toBe('http://x/?print-rapport=verlofsaldo&jaar=2025&chauffeur=43&zoek=du+priez');
+  });
+
+  it('print-URL en gedeelde link dragen de sortering van het scherm, behalve de standaard', () => {
+    expect(printUrlVoor(verlofsaldo, { jaar: 2026, keuzes: {} }, 'http://x/', '', { kolom: 'vrij', richting: 'desc' }))
+      .toBe('http://x/?print-rapport=verlofsaldo&jaar=2026&sorteer=-vrij');
+    expect(printUrlVoor(verlofsaldo, { jaar: 2026, keuzes: {} }, 'http://x/', '', { kolom: 'naam', richting: 'asc' }))
+      .toBe('http://x/?print-rapport=verlofsaldo&jaar=2026');
+    expect(rapportQuery(verlofsaldo, { jaar: 2026, keuzes: {} }, ' bert ', { kolom: 'budget', richting: 'asc' }).toString())
+      .toBe('jaar=2026&zoek=bert&sorteer=budget');
+  });
+});
+
+describe('CSV in de volgorde van het scherm', () => {
+  const rijen: RapportRij[] = [
+    { id: '1', naam: 'Anna', sectie: null, budget: 20, opgenomen: 4, aangevraagd: 0, vrij: 16, kleinVerlet: 0 },
+    { id: '2', naam: 'Bert', sectie: null, budget: 24, opgenomen: 12, aangevraagd: 2, vrij: null, kleinVerlet: 1 },
+    { id: '3', naam: 'Chris', sectie: null, budget: 22, opgenomen: 2, aangevraagd: 0, vrij: 20, kleinVerlet: 0 },
+  ];
+  const namen = (csv: string) => csv.slice(1).split('\r\n').slice(1).map((r) => r.split(';')[0]);
+
+  it('dezelfde vergelijker als de tabel: aflopend op Vrij, leeg achteraan, totaalrij blijft laatst', () => {
+    const csv = rapportCsv(verlofsaldo, rijen, berekenTotalen(verlofsaldo, rijen), { kolom: 'vrij', richting: 'desc' });
+    expect(namen(csv)).toEqual(['"Chris"', '"Anna"', '"Bert"', '"Totaal"']);
+  });
+
+  it('zonder sortering zoals aangeleverd', () => {
+    expect(namen(rapportCsv(verlofsaldo, [rijen[2], rijen[0]]))).toEqual(['"Chris"', '"Anna"']);
   });
 });
 

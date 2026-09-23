@@ -16,6 +16,8 @@ import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, Page
 import { useZelfLadend } from '../lib/zelfLadend';
 import { apiFetch } from '../lib/api';
 import { Badge, Button, FilterChip, IconButton, MicroLabel } from '../components/primitives';
+import { Tabel, TableShell, Td, Th } from '../components/TabelBasis';
+import { StickyThead } from '../components/Table';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card, CardHeader } from '../components/Card';
 import { DateInput, Input, Select } from '../components/Field';
@@ -651,6 +653,101 @@ export function CoverageView() {
     }
   };
 
+  // Bouwstenen van één dag, gedeeld door de tabel (desktop) en de lijst
+  // (telefoon), zodat beide precies hetzelfde tonen en doen.
+
+  /** Dag-type als badge; met een bekende herkomst klapt een tik de uitleg open. */
+  const dagTypeVan = (d: DayGap) => (bronUitleg(d.bron) ? (
+    <>
+      {/* Herkomst van het dag-type ("waarom is dit di/vrij?"):
+          tik/klik op de badge klapt de uitleg inline uit — een
+          title alleen zou op touch onzichtbaar zijn. -m-2/p-2 =
+          hit-slop zodat het doel raakbaar blijft zonder de rij
+          te laten groeien. */}
+      {/* rauw: badge-als-knop met hit-slop (-m-2/p-2), geen knopvorm */}
+      <button
+        type="button"
+        onClick={() => setBronOpenDate((cur) => (cur === d.date ? null : d.date))}
+        aria-expanded={bronOpenDate === d.date}
+        aria-label={`Waarom is ${dayLabel(d.date)} een ${d.dayType || 'dag zonder type'}?`}
+        title={bronUitleg(d.bron)}
+        className="ios-pressable -m-2 rounded-xl p-2 text-left"
+      >
+        {/* Typedag = informatie, geen status: neutrale chip, geen goud (tranche 3B, 23-09). */}
+        <Badge tone="slate" className={cn('capitalize', d.dayType && 'text-slate-800')}>{d.dayType || '—'}</Badge>
+      </button>
+      {bronOpenDate === d.date && (
+        <p className="mt-1.5 max-w-[15rem] text-xs font-medium leading-snug text-slate-500">{bronUitleg(d.bron)}</p>
+      )}
+    </>
+  ) : (
+    <Badge tone="slate" className={cn('capitalize', d.dayType && 'text-slate-800')}>{d.dayType || '—'}</Badge>
+  ));
+
+  /** Gedekt = stille chip; een gat blijft rood (afwerking 04-09, nr. 6). */
+  const dekkingVan = (d: DayGap) => {
+    const ok = d.missing.length === 0;
+    return <Badge tone={ok ? 'emerald' : 'red'} stil={ok} dot={!ok}>{d.covered}/{d.expected} gedekt</Badge>;
+  };
+
+  /** De open diensten als klikbare chips (kandidaten), plus de batchknop bij meer dan één gat. */
+  const gatenVan = (d: DayGap) => (d.missing.length === 0 ? (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500"><Check size={14} className="text-emerald-700" /> volledig gedekt</span>
+  ) : (
+    <>
+      <div className="flex flex-wrap gap-2">
+        {d.missing.map((svc) => {
+          // Gat door een gemelde afwezigheid: toon wie uitviel en
+          // waarom ("4407 · Pascal Duysburgh · ziek"). Een dienst
+          // die nooit toegewezen was, blijft een kale chip.
+          // Vorm: min-h 36px + gap-2 — de oude 20px-chips met
+          // 6px ertussen waren op een telefoon niet raakbaar.
+          // De NAAM truncate't, de REDEN nooit (shrink-0): de
+          // reden was juist de toevoeging. Redenkleur volgt de
+          // statuskleurtaal app-breed: ziek rose, verlof
+          // emerald, klein verlet blue (zelfde als dashboard-
+          // aftelling) — rood blijft van het gat zelf, niet
+          // van de persoon.
+          const info = d.uitval?.[normalizeCode(svc)];
+          const redenKleur = info?.reason === 'ziek'
+            ? 'text-rose-700'
+            : info?.reason === 'verlof'
+              ? 'text-emerald-700'
+              : info?.reason === 'klein verlet'
+                ? 'text-blue-700'
+                : 'text-slate-600';
+          return (
+            // rauw: dienst-chip met samengestelde inhoud (code · naam · reden) in de
+            // rode gat-toon — Chip is niet klikbaar en FilterChip kent geen inhoud-slots
+            <button
+              key={svc}
+              type="button"
+              onClick={() => setPick({ date: d.date, code: svc })}
+              title="Klik om te zien wie vrij is"
+              className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
+            >
+              <span className="font-mono">{svc}</span>
+              {info && (
+                <span className="flex min-w-0 items-baseline gap-1 font-medium">
+                  <span className="min-w-0 truncate text-red-700/90">· {info.name}</span>
+                  <span className={cn('shrink-0', redenKleur)}>· {info.reason}</span>
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {/* Meerdere gaten op één dag: in één keer voorinvullen en toewijzen. */}
+      {d.missing.length > 1 && (
+        <div className="mt-2">
+          <Button variant="secondary" size="sm" icon={<ListChecks size={14} />} onClick={() => void openBatch(d)}>
+            Vul alle gaten van deze dag voor
+          </Button>
+        </div>
+      )}
+    </>
+  ));
+
   return (
     <PageShell breed>
       <PageHeader
@@ -667,7 +764,10 @@ export function CoverageView() {
               variant="secondary"
               size="sm"
               icon={<Settings2 size={14} />}
-              className={cn('ml-1', showConfig && 'bg-oker-50 text-oker-700 hover:text-oker-700')}
+              // Aan = neutrale keuzetoestand (zoals het actieve nav-item), geen goud:
+              // goud is voor de primaire actie, focus en "nu" (tranche 3B, 23-09).
+              className={cn('ml-1', showConfig && 'bg-surface-muted text-slate-900 ring-1 ring-hairline-strong')}
+              aria-pressed={showConfig}
               onClick={() => setShowConfig((v) => !v)}
             >
               Instellen
@@ -1088,107 +1188,53 @@ export function CoverageView() {
       ) : visibleDays.length === 0 ? (
         <EmptyState variant="klaar" title={`Geen openstaande diensten in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message="Alle verwachte diensten zijn ingevuld." />
       ) : (
-        <Card padding="none" className="overflow-hidden divide-y divide-hairline-subtle">
-          {visibleDays.map((d) => {
-            const ok = d.missing.length === 0;
-            return (
-              <div key={d.date} className={cn('p-4 flex flex-col sm:flex-row sm:items-center gap-3', !ok && 'bg-red-50/40')}>
-                <div className="sm:w-44 shrink-0">
-                  <div className="text-sm font-semibold text-slate-800 capitalize tabular-nums">{dayLabel(d.date)}</div>
-                  <div className="mt-1">
-                    {/* Herkomst van het dag-type ("waarom is dit di/vrij?"):
-                        tik/klik op de badge klapt de uitleg inline uit — een
-                        title alleen zou op touch onzichtbaar zijn. -m-2/p-2 =
-                        hit-slop zodat het doel raakbaar blijft zonder de rij
-                        te laten groeien. */}
-                    {bronUitleg(d.bron) ? (
-                      <>
-                        {/* rauw: badge-als-knop met hit-slop (-m-2/p-2), geen knopvorm */}
-                        <button
-                          type="button"
-                          onClick={() => setBronOpenDate((cur) => (cur === d.date ? null : d.date))}
-                          aria-expanded={bronOpenDate === d.date}
-                          aria-label={`Waarom is ${dayLabel(d.date)} een ${d.dayType || 'dag zonder type'}?`}
-                          title={bronUitleg(d.bron)}
-                          className="ios-pressable -m-2 rounded-xl p-2 text-left"
-                        >
-                          <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
-                        </button>
-                        {bronOpenDate === d.date && (
-                          <p className="mt-1.5 max-w-[15rem] text-xs font-medium leading-snug text-slate-500">{bronUitleg(d.bron)}</p>
-                        )}
-                      </>
-                    ) : (
-                      <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
-                    )}
+        // Breed: een echte tabel, Dag · Dekking · Openstaande diensten, met
+        // de dag als rijkop. Past in haar kader (de laatste kolom breekt af),
+        // dus `past` en een plakkende kop over een maand van dertig rijen.
+        // Smal: dezelfde dagen als lijst, zelfde chips en knoppen.
+        // Wissel via een container query i.p.v. md: naast zijbalk en zijvak
+        // is deze kolom op 1024 px maar ±340 px breed, de tabel vraagt er
+        // ±520 (e2e planning-tabellen). Een dag met een gat heeft geen getint
+        // vlak meer: de rode dekkingspil en de rode chips zijn het signaal.
+        <TableShell past className="@container" label={`Openstaande diensten ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}`}>
+          <div className="hidden @[36rem]:block">
+            <Tabel>
+              <StickyThead>
+                <tr>
+                  <Th className="w-44">Dag</Th>
+                  <Th className="w-32">Dekking</Th>
+                  <Th>Openstaande diensten</Th>
+                </tr>
+              </StickyThead>
+              <tbody>
+                {visibleDays.map((d) => (
+                  <tr key={d.date} className="border-b border-hairline-subtle align-top last:border-b-0">
+                    <Th scope="row" className="whitespace-normal py-3 text-sm font-semibold text-slate-800">
+                      <span className="block whitespace-nowrap capitalize">{dayLabel(d.date)}</span>
+                      <span className="mt-1 block font-normal">{dagTypeVan(d)}</span>
+                    </Th>
+                    <Td nowrap>{dekkingVan(d)}</Td>
+                    <Td>{gatenVan(d)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Tabel>
+          </div>
+          <ul className="divide-y divide-hairline-subtle @[36rem]:hidden" aria-label={`Openstaande diensten ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}`}>
+            {visibleDays.map((d) => (
+              <li key={d.date} className="space-y-2 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-md font-semibold capitalize text-slate-800">{dayLabel(d.date)}</p>
+                    <div className="mt-1">{dagTypeVan(d)}</div>
                   </div>
+                  <div className="shrink-0">{dekkingVan(d)}</div>
                 </div>
-                <div className="shrink-0 sm:w-28">
-                  {/* Gedekt = stille chip; een gat blijft rood (afwerking 04-09, nr. 6). */}
-                  <Badge tone={ok ? 'emerald' : 'red'} stil={ok} dot={!ok} className="tabular-nums">{d.covered}/{d.expected} gedekt</Badge>
-                </div>
-                <div className="min-w-0 flex-1">
-                  {ok ? (
-                    <span className="text-xs font-medium text-slate-500 inline-flex items-center gap-1"><Check size={14} className="text-emerald-700" /> volledig gedekt</span>
-                  ) : (
-                    <>
-                    <div className="flex flex-wrap gap-2">
-                      {d.missing.map((svc) => {
-                        // Gat door een gemelde afwezigheid: toon wie uitviel en
-                        // waarom ("4407 · Pascal Duysburgh · ziek"). Een dienst
-                        // die nooit toegewezen was, blijft een kale chip.
-                        // Vorm: min-h 36px + gap-2 — de oude 20px-chips met
-                        // 6px ertussen waren op een telefoon niet raakbaar.
-                        // De NAAM truncate't, de REDEN nooit (shrink-0): de
-                        // reden was juist de toevoeging. Redenkleur volgt de
-                        // statuskleurtaal app-breed: ziek rose, verlof
-                        // emerald, klein verlet blue (zelfde als dashboard-
-                        // aftelling) — rood blijft van het gat zelf, niet
-                        // van de persoon.
-                        const info = d.uitval?.[normalizeCode(svc)];
-                        const redenKleur = info?.reason === 'ziek'
-                          ? 'text-rose-700'
-                          : info?.reason === 'verlof'
-                            ? 'text-emerald-700'
-                            : info?.reason === 'klein verlet'
-                              ? 'text-blue-700'
-                              : 'text-slate-600';
-                        return (
-                          // rauw: dienst-chip met samengestelde inhoud (code · naam · reden) in de
-                          // rode gat-toon — Chip is niet klikbaar en FilterChip kent geen inhoud-slots
-                          <button
-                            key={svc}
-                            type="button"
-                            onClick={() => setPick({ date: d.date, code: svc })}
-                            title="Klik om te zien wie vrij is"
-                            className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
-                          >
-                            <span className="font-mono tabular-nums">{svc}</span>
-                            {info && (
-                              <span className="flex min-w-0 items-baseline gap-1 font-medium">
-                                <span className="min-w-0 truncate text-red-700/90">· {info.name}</span>
-                                <span className={cn('shrink-0', redenKleur)}>· {info.reason}</span>
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/* Meerdere gaten op één dag: in één keer voorinvullen en toewijzen. */}
-                    {d.missing.length > 1 && (
-                      <div className="mt-2">
-                        <Button variant="secondary" size="sm" icon={<ListChecks size={14} />} onClick={() => void openBatch(d)}>
-                          Vul alle gaten van deze dag voor
-                        </Button>
-                      </div>
-                    )}
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </Card>
+                {gatenVan(d)}
+              </li>
+            ))}
+          </ul>
+        </TableShell>
       )}
       </ZijvakLayout>
 
