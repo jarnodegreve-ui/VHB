@@ -76,3 +76,49 @@ export const formatDatumKiezer = (iso: string): string => {
   const d = vanIso(iso);
   return `${WEEKDAY_SHORT_SUN[d.getUTCDay()]} ${d.getUTCDate()} ${MAAND_KORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 };
+
+// === Typbare datum: dd/mm/jjjj ↔ ISO (datumtranche PR 1, 23-09) ===
+
+/**
+ * Wat de gebruiker in een datumveld typte, gelezen zonder Date.parse of
+ * browserparsing. Intern blijft alles ISO ('YYYY-MM-DD'); de gebruiker ziet
+ * en typt dag/maand/jaar.
+ *
+ * Aanvaard: `23/09/2026`, ook met `-` of `.` als scheiding, een dag of maand
+ * van één cijfer (`3/9/2026`), en acht cijfers zonder scheiding
+ * (`23092026`, het cijferklavier van een iPhone heeft geen `/`). Altijd in de
+ * volgorde dag, maand, jaar en met een jaar van vier cijfers: niets wordt
+ * geraden of verbeterd. Een dag die niet bestaat (30/02, 31/04, 29/02 buiten
+ * een schrikkeljaar) is een fout.
+ */
+export type DatumInvoer =
+  | { staat: 'leeg' }
+  | { staat: 'geldig'; iso: string }
+  | { staat: 'fout'; reden: string };
+
+const DMJ_MET_SCHEIDING = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
+const DMJ_ACHT_CIJFERS = /^(\d{2})(\d{2})(\d{4})$/;
+export const DMJ_VORM = 'Gebruik dd/mm/jjjj, bijvoorbeeld 23/09/2026.';
+
+export function leesDmj(tekst: string): DatumInvoer {
+  const t = tekst.trim();
+  if (!t) return { staat: 'leeg' };
+  const m = DMJ_MET_SCHEIDING.exec(t) ?? DMJ_ACHT_CIJFERS.exec(t);
+  if (!m) return { staat: 'fout', reden: DMJ_VORM };
+  const dag = Number(m[1]);
+  const maand = Number(m[2]);
+  const jaar = Number(m[3]);
+  if (jaar < 1900 || jaar > 2100) return { staat: 'fout', reden: 'Controleer het jaar.' };
+  if (maand < 1 || maand > 12) return { staat: 'fout', reden: 'Die maand bestaat niet.' };
+  const iso = `${m[3]}-${String(maand).padStart(2, '0')}-${String(dag).padStart(2, '0')}`;
+  if (!isIsoDag(iso)) return { staat: 'fout', reden: 'Die dag bestaat niet.' };
+  return { staat: 'geldig', iso };
+}
+
+/** ISO → 'dd/mm/jjjj' voor in het veld; '' als het geen geldige dag is. */
+export const isoNaarDmj = (iso: string | null | undefined): string =>
+  isIsoDag(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '';
+
+/** Fouttekst als een dag buiten [min, max] valt, anders null. */
+export const bereikFout = (iso: string, min?: string, max?: string): string | null =>
+  min && iso < min ? `Vroegst ${isoNaarDmj(min)}.` : max && iso > max ? `Uiterlijk ${isoNaarDmj(max)}.` : null;

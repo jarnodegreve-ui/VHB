@@ -5,6 +5,8 @@ import { isStaf } from '../../types';
 import { DEFECT_STATUS_LABEL, WERKTYPES, WERKTYPE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werktype } from '../../../shared/techniek';
 import { notify, openPdfInNewTab, telHref } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
+import { addDagen } from '../../lib/datum';
+import { vandaagBrussel } from '../../lib/brussel';
 import { navigeer } from '../../app/router';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { formatDateHuman, formatRelatief } from '../../lib/format';
@@ -61,7 +63,9 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
   const sort = useSort<string>('gemeld', 'desc');
 
   const zl = useZelfLadend(async () => {
-    const sinds = filter === 'recent' ? new Date(Date.now() - RECENT_DAGEN * 864e5).toISOString().slice(0, 10) : undefined;
+    // Grens op de Brusselse kalenderdag, niet de UTC-dag (die liep tussen 00:00
+    // en 02:00 een dag achter).
+    const sinds = filter === 'recent' ? addDagen(vandaagBrussel(), -RECENT_DAGEN) : undefined;
     setRijen(await laadDefecten({ status: filter === 'open' ? 'open' : 'alles', sinds, limit: filter === 'alles' ? 2000 : 1000 }));
   }, { deps: [filter], boodschap: 'Probeer het over enkele ogenblikken opnieuw.' });
 

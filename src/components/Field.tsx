@@ -220,13 +220,13 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
 );
 
 /**
- * Datumveld in de stijl van `Input`, voor in een `Field`:
+ * Datumveld in de stijl van `Input` (typbaar dd/mm/jjjj + kalenderknop), voor in een `Field`:
  * `<Field label="Van">{({ id, describedBy, invalid }) => <DateInput id={id} aria-describedby={describedBy} invalid={invalid} value onChange />}</Field>`.
  * Waarde-API zoals het native veld: `value` = '' of 'YYYY-MM-DD',
  * `onChange(value)` met de string (geen event), `min`/`max`/`disabled`/`required`.
  * `size="sm"` voor inline-navigatievelden (dekking, laadplein).
  */
-export const DateInput = forwardRef<HTMLButtonElement, DatePickerProps>(function DateInput(props, ref) {
+export const DateInput = forwardRef<HTMLInputElement, DatePickerProps>(function DateInput(props, ref) {
   const veld = useVeldContext(props.id);
   return (
     <DatePicker

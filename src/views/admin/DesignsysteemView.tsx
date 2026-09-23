@@ -405,7 +405,7 @@ export function DesignsysteemView() {
                 <option value="admin">Beheerder</option>
               </Select>
             </Field>
-            <Field label="Startdatum" hint="Eén datumkiezer voor alle velden; op mobiel een sheet onderaan.">
+            <Field label="Startdatum" hint="Typ dd/mm/jjjj of kies in de kalender; op mobiel opent de kalender onderaan.">
               <DateInput value={datum} onChange={setDatum} min="2026-01-01" />
             </Field>
             <Field label="Opmerking" hint="Optioneel.">

@@ -12,6 +12,7 @@ import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import { dienstStatistiek, formatDienstDuur } from '../lib/dienstStatistiek';
 import { LegeLijst, NietGevonden } from '../components/illustraties';
 import { Tabel, TableShell, Td, Th } from '../components/TabelBasis';
+import { vandaagBrussel } from '../lib/brussel';
 
 export function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,7 +62,7 @@ export function ServicesView({ services }: { services: Service[] }) {
 
   const downloadCSV = () => {
     const blob = new Blob([dienstoverzichtCsv(filteredServices)], { type: 'text/csv;charset=utf-8;' });
-    void downloadBlob(`dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`, blob);
+    void downloadBlob(`dienstoverzicht_${vandaagBrussel()}.csv`, blob);
   };
 
   // Kerncijfers voor het zijvak — over álle diensten, niet het zoekresultaat.

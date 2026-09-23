@@ -23,7 +23,7 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = Number(process.env.E2E_PORT) > 0 ? Number(process.env.E2E_PORT) : 4173;
 
 /** Specs die alleen op het desktop-project horen (én a11y, dat op beide draait). */
-const DESKTOP_SPECS = /(desktop|a11y|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|beheer-tabellen|techniek-loon-tabellen|planning-tabellen|deeplinks[\w-]*)\.spec\.ts$/;
+const DESKTOP_SPECS = /(desktop|a11y|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|beheer-tabellen|techniek-loon-tabellen|planning-tabellen|deeplinks[\w-]*|datumveld)\.spec\.ts$/;
 /** Specs die NIET op het mobiele standaardproject horen: desktop-only en de pwa-spec. */
 const NIET_MOBIEL = /(desktop|pwa)\.spec\.ts$/;
 const PWA_SPEC = /pwa\.spec\.ts$/;
@@ -44,6 +44,8 @@ export default defineConfig({
     // het sw-gedrag zelf zit in het project `pwa` hieronder (context.route
     // i.p.v. page.route, want Playwright routeert SW-fetches op contextniveau).
     serviceWorkers: 'block',
+    // De tijdzone van het portaal, los van de machine van de runner (datumtranche PR 1).
+    timezoneId: 'Europe/Brussels',
   },
 
   projects: [
@@ -51,7 +53,7 @@ export default defineConfig({
       // De mobiele regressies ook in Safari's engine: focus, History API en
       // view-transition-lagen gedragen zich daar anders dan in Chromium.
       name: 'iPhone 13 (webkit)',
-      testMatch: /(mobiele-navigatie|dock-transitie|activiteit-layout|beheer-dienstoverzicht-layout|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|warmup-verlaten|deeplinks[\w-]*)\.spec\.ts$/,
+      testMatch: /(mobiele-navigatie|dock-transitie|activiteit-layout|beheer-dienstoverzicht-layout|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|warmup-verlaten|deeplinks[\w-]*|datumveld)\.spec\.ts$/,
       use: { ...devices['iPhone 13'], browserName: 'webkit' },
     },
     {

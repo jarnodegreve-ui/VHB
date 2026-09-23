@@ -194,11 +194,13 @@ test('ziekte: planner kan einddatum opslaan en ziet geen dienstwisselacties', as
   await expect(modal.getByRole('button', { name: /Zet over|Verdeel alles|Stel kandidaten voor|Maandplanning/ })).toHaveCount(0);
   await expect(modal.getByRole('combobox', { name: /^Vervanger voor dienst/ })).toHaveCount(0);
 
-  await modal.getByLabel('Ziek tot en met', { exact: true }).click();
+  // Datumveld = typbaar tekstveld + kalenderknop ernaast (datumtranche PR 1).
+  const kalenderKnop = modal.getByLabel('Ziek tot en met', { exact: true }).locator('xpath=following-sibling::button[1]');
+  await kalenderKnop.click();
   const kalender = page.getByRole('dialog', { name: 'Datum kiezen', exact: true });
   await kalender.getByRole('button', { name: 'Wissen', exact: true }).click();
   await expect(modal.getByRole('button', { name: 'Opslaan', exact: true })).toBeDisabled();
-  await modal.getByLabel('Ziek tot en met', { exact: true }).click();
+  await kalenderKnop.click();
   await kalender.getByRole('gridcell', { name: /17 sep 2026/ }).click();
   await expect(kalender).toHaveCount(0);
   await modal.getByRole('button', { name: 'Opslaan', exact: true }).click();

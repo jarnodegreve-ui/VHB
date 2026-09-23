@@ -17,6 +17,7 @@ import type { HerstelPlan } from '../../../shared/herstelPlan';
 import { FOUTGROEP_STATUS } from '../../../shared/status';
 import { meldSchrijffout, schrijffout } from '../../lib/fouten';
 import { TableShell, Td, Th } from '../../components/TabelBasis';
+import { vandaagBrussel } from '../../lib/brussel';
 
 const COLLECTION_LABELS: Record<string, string> = {
   users: 'Gebruikers',
@@ -462,7 +463,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       }
       // downloadBlob i.p.v. een handmatige <a download>: dezelfde iOS-share-
       // route, revokeObjectURL en bevestigings-toast als de andere exports.
-      await downloadBlob(`vhb-backup-${new Date().toISOString().slice(0, 10)}.json`, await response.blob());
+      await downloadBlob(`vhb-backup-${vandaagBrussel()}.json`, await response.blob());
     } catch (err) {
       meldSchrijffout('Back-up downloaden', err, () => void downloadBackup());
     } finally {
