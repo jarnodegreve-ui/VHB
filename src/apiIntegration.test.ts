@@ -871,9 +871,22 @@ describe('authenticatie & rollen', () => {
     expect(res.status).toBe(401);
   });
 
-  it('laat een chauffeur het dienstoverzicht lezen maar niet schrijven', async () => {
-    const read = await api('GET', '/api/services', { token: 'tok-a' });
-    expect(read.status).toBe(200);
+  // 23-09: het dienstoverzicht lezen is alleen voor planner en admin (het
+  // leesrecht voor elke rol was een overblijfsel, zie communicatieRoutes).
+  it('dienstoverzicht lezen: niet ingelogd 401, chauffeur 403, planner en admin 200', async () => {
+    const zonder = await api('GET', '/api/services', {});
+    expect(zonder.status).toBe(401);
+    const chauffeur = await api('GET', '/api/services', { token: 'tok-a' });
+    expect(chauffeur.status).toBe(403);
+    expect(chauffeur.json).not.toEqual(mem.services);
+    for (const token of ['tok-planner', 'tok-admin']) {
+      const staf = await api('GET', '/api/services', { token });
+      expect(staf.status).toBe(200);
+      expect(staf.json).toEqual(mem.services.map((s: any) => expect.objectContaining({ id: s.id, serviceNumber: s.serviceNumber })));
+    }
+  });
+
+  it('laat een chauffeur het dienstoverzicht niet schrijven', async () => {
     const write = await api('POST', '/api/services', { token: 'tok-a', body: mem.services });
     expect(write.status).toBe(403);
   });
@@ -889,11 +902,13 @@ describe('authenticatie & rollen', () => {
     expect(mem.services.length).toBeGreaterThan(0);
   });
 
-  it('dienstoverzicht: technieker mag niet schrijven, niet importeren en ziet geen geschiedenis', async () => {
+  it('dienstoverzicht: technieker mag niet lezen, niet schrijven, niet importeren en ziet geen geschiedenis', async () => {
     mem.users.push({ id: '5', name: 'Toon Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
     mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
     invalidateUsersCache();
     const voor = JSON.stringify(mem.services);
+    const lezen = await api('GET', '/api/services', { token: 'tok-tech' });
+    expect(lezen.status).toBe(403);
     const write = await api('POST', '/api/services', { token: 'tok-tech', body: mem.services });
     expect(write.status).toBe(403);
     const bulk = await api('POST', '/api/services', { token: 'tok-tech', body: [], headers: { 'x-bulk-replace': '1' } });
