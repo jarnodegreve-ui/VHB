@@ -21,6 +21,7 @@ import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoo
 import { addDagenIso, DAG_DMJ, toLookupToken, matrixCodesForDate, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getPlanningMatrixRows, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData } from "../storage.js";
+import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
 
@@ -276,7 +277,7 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       body: status === "accepted"
         ? `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil, wacht op goedkeuring van de planner.`
         : `Dienstruil van ${userName(String(current.requesterId))}: ${current.status} → ${status}.`,
-      url: viewUrl("ruil-verzoeken"),
+      url: recordUrl("ruil-verzoeken", current.id),
     });
     // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route)
     // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
@@ -288,7 +289,7 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
         title: "Dienstruil wacht op validatie",
         soort: "ruil",
         body: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))}, rij- en rusttijden checken.`,
-        url: viewUrl("ruil-verzoeken"),
+        url: recordUrl("ruil-verzoeken", current.id),
       });
       await meldRuilTerValidatieTelegram({
         id: String(current.id),
@@ -953,7 +954,7 @@ export function mountRuilRoutes(app: express.Express) {
               body: isTakeover
                 ? `${userName(next.requesterId)} vraagt of je een dienst wil overnemen, zonder tegenprestatie.`
                 : `${userName(next.requesterId)} wil een dienst met je ruilen.`,
-              url: viewUrl("ruil-verzoeken"),
+              url: recordUrl("ruil-verzoeken", next.id),
             });
           }
           continue;
@@ -980,7 +981,7 @@ export function mountRuilRoutes(app: express.Express) {
               body: next.status === "accepted"
                 ? `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil, wacht op goedkeuring van de planner.`
                 : `Dienstruil van ${userName(next.requesterId)}: ${prev.status} → ${next.status}.`,
-              url: viewUrl("ruil-verzoeken"),
+              url: recordUrl("ruil-verzoeken", next.id),
             });
             // Geaccepteerd = er wacht een validatie op de planner — die kreeg
             // hier tot nu toe geen seintje van. Beslissers pushen (behalve de
@@ -993,7 +994,7 @@ export function mountRuilRoutes(app: express.Express) {
                 title: "Dienstruil wacht op validatie",
                 soort: "ruil",
                 body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}, rij- en rusttijden checken.`,
-                url: viewUrl("ruil-verzoeken"),
+                url: recordUrl("ruil-verzoeken", next.id),
               });
               await meldRuilTerValidatieTelegram({
                 id: String(next.id),

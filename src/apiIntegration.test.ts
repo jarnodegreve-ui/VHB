@@ -6040,13 +6040,14 @@ describe('meldingencentrum (public.meldingen)', () => {
     expect(vanA[0].titel).toMatch(/goedgekeurd/i);
   });
 
-  it('een ruilverzoek landt als melding bij de aangezochte collega (soort ruil, doel dienstruil)', async () => {
+  it('een ruilverzoek landt als melding bij de aangezochte collega (soort ruil, doel = die ruil)', async () => {
     const nieuw = { id: 's-nieuw', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-13T08:00:00Z', returnDate: '2026-07-09', returnCode: 'VRIJ' };
     const own = mem.swaps.filter((s: any) => s.requesterId === '3' || s.targetDriverId === '3');
     const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, nieuw] });
     expect(res.status).toBe(200);
     const vanB = mem.meldingen.filter((m: any) => m.userId === '4');
-    expect(vanB.map((m: any) => [m.soort, m.doel])).toEqual([['ruil', 'dienstruil']]);
+    // Tranche 3C: de melding wijst naar de ruil zelf (`/dienstruil/<id>`).
+    expect(vanB.map((m: any) => [m.soort, m.doel])).toEqual([['ruil', 'dienstruil/s-nieuw']]);
   });
 });
 

@@ -30,6 +30,9 @@ import { canRespondToSwap } from '../lib/authorization';
 import { notify, openPdfInNewTab } from '../lib/ui';
 import { AllesGedaan, LegeLijst } from '../components/illustraties';
 import { TableShell, Td, Th } from '../components/TabelBasis';
+import { RecordOnbekend } from '../components/RecordOnbekend';
+import { useRecordLink } from '../app/useRecordLink';
+import { brengRecordInBeeld } from '../lib/recordLink';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
@@ -79,16 +82,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   };
   // Beoordeling in een side panel: alle ruil-context + beslis-acties
   // zonder paginawissel (zelfde patroon als LeaveManagementView).
-  const [reviewSwap, setReviewSwap] = useState<SwapRequest | null>(null);
-  useEffect(() => {
-    if (!reviewSwap) return;
-    const fresh = swaps.find((s) => s.id === reviewSwap.id);
-    if (!fresh) { setReviewSwap(null); return; }
-    if (fresh.status !== reviewSwap.status || fresh.decidedAt !== reviewSwap.decidedAt) {
-      setReviewSwap(fresh);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [swaps]);
+  // Eén ruil staat in de URL (`/dienstruil/<id>`, tranche 3C): de link uit
+  // een melding, het dashboard, Vandaag of een klik in de beheertabel. Staf
+  // krijgt het beoordelingspaneel; een chauffeur de ruil in zijn eigen lijst
+  // (open en in beeld), of een alleen-lezen kaart als ze daar niet (meer)
+  // staat. Wat niet in zijn gegevens staat geeft één nette melding.
+  const link = useRecordLink('ruil-verzoeken', swaps);
+  const reviewSwap = isStaf(user.role) && link.staat === 'gevonden' ? link.record : null;
+  const setReviewSwap = (swap: SwapRequest | null) => (swap ? link.open(swap.id) : link.sluit());
+  const eigenDoel = !isStaf(user.role) && link.staat === 'gevonden' ? link.record : null;
   // Dienstruil-matching: wie is vrij op de dag van de gekozen dienst?
   const [freeForDate, setFreeForDate] = useState<Set<string> | null>(null);
   // Dienstcode per collega die die dag rijdt, zodat een bezette collega
@@ -327,6 +329,20 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     return true;
   });
 
+  // Deeplink van een chauffeur: staat de ruil in een van zijn lijsten, dan daar
+  // open (eigen verzoek) en in beeld met de focus erop, één keer per id.
+  const doelInLijst = !!eigenDoel && (mySwaps.some((s) => s.id === eigenDoel.id) || availableSwaps.some((s) => s.id === eigenDoel.id));
+  const gebrachtRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!eigenDoel || gebrachtRef.current === eigenDoel.id) return;
+    gebrachtRef.current = eigenDoel.id;
+    if (mySwaps.some((s) => s.id === eigenDoel.id)) {
+      setExpandedSwapIds((cur) => (cur.includes(eigenDoel.id) ? cur : [...cur, eigenDoel.id]));
+    }
+    requestAnimationFrame(() => { brengRecordInBeeld(eigenDoel.id); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eigenDoel?.id]);
+
   // Gezien-bevestiging door de ontvanger van de dienst.
   const [isConfirmingSeen, setIsConfirmingSeen] = useState<string | null>(null);
   // Welke ruil nu op een serverantwoord wacht: de knoppen van die ruil tonen
@@ -501,6 +517,39 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     });
   };
 
+  /** Inhoud van één ruil (status, dienst, verloop, rust, toelichting): het
+   *  beoordelingspaneel van de staf en de alleen-lezen kaart van een chauffeur. */
+  const ruilDetail = (swap: SwapRequest) => {
+    const info = shiftInfoFor(swap);
+    return (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <RuilStatusBadge swap={swap} stil />
+                <Badge tone="oker" className="tabular-nums">Dienst {info.line}</Badge>
+
+                {info.date && (
+                  <Badge tone="slate" className="tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</Badge>
+                )}
+                {isTakeoverSwap(swap) && <TakeoverBadge compact />}
+              </div>
+
+              {/* Wie ruilt met wie, wat elk krijgt en wie al antwoordde: het
+                  verloop per persoon vervangt de oude "A → B"-kaart. */}
+              <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
+              <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
+
+              {swap.reason && (
+                <div>
+                  <MicroLabel>Toelichting van de aanvrager</MicroLabel>
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-body font-normal text-slate-700">
+                    {swap.reason}
+                  </p>
+                </div>
+              )}
+            </div>
+    );
+  };
+
   return (
     <PageShell>
       <PageHeader
@@ -529,6 +578,21 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         )}
       />
 
+      {link.staat === 'onbekend' && <RecordOnbekend soort="dienstruil" onSluit={link.sluit} />}
+      {eigenDoel && !doelInLijst && (
+        // Een ruil die je mag zien maar die in geen van je lijsten (meer)
+        // staat, bv. een afgehandelde ruil uit een oude melding: alleen lezen.
+        <div data-record={eigenDoel.id} tabIndex={-1} className="focus-stil mb-6">
+          <Card className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-card-title">Dienstruil</h2>
+              <Button variant="secondary" size="sm" onClick={link.sluit}>Sluiten</Button>
+            </div>
+            {ruilDetail(eigenDoel)}
+          </Card>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
           <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
@@ -547,6 +611,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   <RecordRij
                     key={swap.id}
                     titel={<span className="capitalize">{formatDateHuman(info.date)}</span>}
+                    titelAttrs={{ 'data-record': swap.id }}
                     meta={`Dienst ${info.line}`}
                     status={<RuilStatusBadge swap={swap} stil />}
                     richting="omlaag"
@@ -631,6 +696,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               const nogTeMelden = canRespond && !swap.verloop?.some((st) => st.soort === 'bekeken');
               return (
                 <RuilBekekenBaken key={swap.id} swapId={swap.id} actief={nogTeMelden}>
+                {/* data-record + tabIndex: een link naar deze ruil (`/dienstruil/<id>`) brengt de kaart in beeld met de focus erop. */}
+                <div data-record={swap.id} tabIndex={-1} className="focus-stil">
                 <Card className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -689,6 +756,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </Button>
                   ) : null}
                 </Card>
+                </div>
                 </RuilBekekenBaken>
               );
             })
@@ -1417,36 +1485,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           </div>
         ) : undefined}
       >
-        {reviewSwap && (() => {
-          const info = shiftInfoFor(reviewSwap);
-          return (
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <RuilStatusBadge swap={reviewSwap} stil />
-                <Badge tone="oker" className="tabular-nums">Dienst {info.line}</Badge>
-
-                {info.date && (
-                  <Badge tone="slate" className="tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</Badge>
-                )}
-                {isTakeoverSwap(reviewSwap) && <TakeoverBadge compact />}
-              </div>
-
-              {/* Wie ruilt met wie, wat elk krijgt en wie al antwoordde: het
-                  verloop per persoon vervangt de oude "A → B"-kaart. */}
-              <RuilVerloop swap={voorVerloop(reviewSwap)} naamVan={naamVan} kijkerId={user.id} />
-              <RuilRust regels={reviewSwap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={reviewSwap.requesterId} targetDriverId={reviewSwap.targetDriverId} className="mt-3" />
-
-              {reviewSwap.reason && (
-                <div>
-                  <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-body font-normal text-slate-700">
-                    {reviewSwap.reason}
-                  </p>
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {reviewSwap && ruilDetail(reviewSwap)}
       </SlideOver>
 
       <EntityHistoryModal

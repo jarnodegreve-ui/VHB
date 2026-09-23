@@ -767,7 +767,7 @@ export function PlannerDashboardWidgets({
               : userNameById(swap.requesterId)}`}
             secondary={swap.status === 'accepted' ? 'Collega akkoord, wacht op validatie' : swap.reason || 'Wacht op een collega'}
             meta={relTime(swap.createdAt)}
-            onClick={() => onNavigate('ruil-verzoeken')}
+            onClick={() => onNavigate('ruil-verzoeken', [swap.id])}
           />
           </Fragment>
         ))}

@@ -311,7 +311,7 @@ export function werkvoorraadItems(
       detail: swap.status === 'accepted' ? 'Collega akkoord, wacht op validatie' : swap.reason || 'Wacht op een collega',
       wanneer: epochVanTijd(swap.createdAt), wanneerTekst: sindsTekst(swap.createdAt, now),
       naam: [aanvrager, collega].filter(Boolean).join(' '),
-      doel: 'ruil-verzoeken',
+      doel: 'ruil-verzoeken', doelParams: [swap.id],
     });
   }
   for (const dev of wv.pendingDevices) {
