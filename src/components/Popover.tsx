@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useRef, type ButtonHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 
@@ -25,11 +26,65 @@ import { DUR, EASE, EASE_SPRING } from '../lib/motion';
  * `laag`: `zwevend` in de inhoud (z-zwevend), `menu` in de topbar (z-menu).
  * `mobielVol`: op een telefoon losgekoppeld van de trigger en over de volle
  * breedte (de panelen in de topbar, die anders links buiten beeld vielen).
+ *
+ * `anker` (3B.2, 23-09): voor een popover in een kader dat knipt (een tabel
+ * die in haar TableShell-strook schuift, de onderste rijen van
+ * Dagadministratie). Het vlak staat dan, net als ActieMenu, in een portal op
+ * <body> met `position: fixed`, gemeten vanaf het anker (de trigger): onder
+ * het anker als het daar past, anders erboven, anders tegen de onderrand
+ * van de viewport (over het anker) en pas als het hoger is dan de viewport
+ * met een eigen scroll; horizontaal altijd binnen de viewport. Bij scrollen en resizen volgt het vlak het anker; schuift het
+ * anker uit beeld, dan roept het `onSluit`. Geef `vlakRef={vlak}` van
+ * useDropdown mee, zodat een klik in het vlak geen buiten-klik is. Bij
+ * openen krijgt het eerste bedieningselement de focus (het vlak staat
+ * achteraan in de DOM, Tab vanaf de trigger zou het anders overslaan);
+ * Tab voorbij het eerste of laatste element, Escape en een buiten-klik
+ * zetten de focus terug op het anker.
  */
 export type PopoverBreedte = 'sm' | 'md' | 'lg' | 'xl';
 const BREEDTE: Record<PopoverBreedte, string> = { sm: 'w-56', md: 'w-64', lg: 'w-72', xl: 'w-80' };
 
 const MENU_ITEMS = '[role="menuitem"]:not(:disabled)';
+const FOCUSBAAR = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
+/** Waar een buiten-klik de focus mag houden (zie het sluit-effect). */
+const BEDIENING = 'input, select, textarea, button, a[href], [contenteditable=""], [contenteditable="true"]';
+/** Afstand tot het anker en tot de rand van de viewport (zoals ActieMenu). */
+const MARGE = 8;
+
+type AnkerPositie = { stijl: CSSProperties; boven: boolean };
+
+/** Rekenkern van de ankerpositie; los getest in Popover.test.ts. */
+export function ankerPositie(
+  t: { top: number; bottom: number; left: number; right: number },
+  vlak: { breedte: number; hoogte: number },
+  viewport: { breedte: number; hoogte: number },
+  align: 'left' | 'right',
+  mobielVol = false,
+): AnkerPositie {
+  const { breedte: vw, hoogte: vh } = viewport;
+  const onder = vh - t.bottom - 2 * MARGE;
+  const erboven = t.top - 2 * MARGE;
+  let stijl: CSSProperties;
+  let boven = false;
+  if (vlak.hoogte <= onder) stijl = { top: t.bottom + MARGE };
+  else if (vlak.hoogte <= erboven) { stijl = { bottom: vh - t.top + MARGE }; boven = true; }
+  // Past aan geen van beide kanten (telefoon, anker midden in beeld): tegen de
+  // onderrand van de viewport, over het anker heen, liever dan een eigen scroll.
+  else if (vlak.hoogte <= vh - 2 * MARGE) stijl = { top: vh - MARGE - vlak.hoogte };
+  // Hoger dan de viewport: volle hoogte met een eigen scroll.
+  else stijl = { top: MARGE, maxHeight: vh - 2 * MARGE, overflowY: 'auto' };
+  const maxBreedte = vw - 2 * MARGE;
+  if (mobielVol && vw < 640) {
+    stijl.left = MARGE; stijl.right = MARGE; stijl.width = 'auto';
+    return { stijl, boven };
+  }
+  const breedte = Math.min(vlak.breedte, maxBreedte);
+  if (vlak.breedte > maxBreedte) stijl.width = maxBreedte;
+  // Voorkeurskant volgens `align`, binnen de viewport geschoven.
+  const links = align === 'left' ? t.left : t.right - breedte;
+  stijl.left = Math.min(Math.max(MARGE, links), vw - MARGE - breedte);
+  return { stijl, boven };
+}
 
 export function Popover({
   open,
@@ -40,7 +95,10 @@ export function Popover({
   padding = 'menu',
   laag = 'zwevend',
   mobielVol = false,
-  focusEerste = rol === 'menu',
+  focusEerste,
+  anker,
+  vlakRef,
+  onSluit,
   id,
   className,
   children,
@@ -55,21 +113,100 @@ export function Popover({
   padding?: 'menu' | 'tekst';
   laag?: 'zwevend' | 'menu';
   mobielVol?: boolean;
-  /** Focus op het eerste menu-item bij openen (standaard bij `rol="menu"`). */
+  /** Focus op het eerste menu-item bij openen (standaard bij `rol="menu"`
+   *  en bij een `anker`, daar op het eerste bedieningselement). */
   focusEerste?: boolean;
+  /** De trigger: het vlak zweeft dan in een portal, vast aan dit element
+   *  (ontsnapt aan elk kader dat knipt; zie de uitleg bovenaan). */
+  anker?: RefObject<HTMLElement | null>;
+  /** Ref van useDropdown (`vlak`), zodat een klik in het vlak niet sluit. */
+  vlakRef?: RefObject<HTMLDivElement | null>;
+  /** Met `anker`: het anker schoof uit beeld of Tab verliet het vlak. */
+  onSluit?: () => void;
   id?: string;
   className?: string;
   children: ReactNode;
 }) {
   const reduced = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
+  const zetRef = useCallback((el: HTMLDivElement | null) => {
+    ref.current = el;
+    if (vlakRef) vlakRef.current = el;
+  }, [vlakRef]);
+  const focusOpEerste = focusEerste ?? (rol === 'menu' || Boolean(anker));
+
+  // --- Ankermodus: portal + fixed, gemeten vanaf de trigger ---
+  const [positie, setPositie] = useState<AnkerPositie | null>(null);
+  // Een geankerd vlak krijgt pas na de eerste meting focus (anders scrolt de
+  // browser naar de voorlopige plek).
+  const zichtbaar = !anker || positie !== null;
 
   useEffect(() => {
-    if (!open || !focusEerste) return;
-    ref.current?.querySelector<HTMLElement>(MENU_ITEMS)?.focus();
-  }, [open, focusEerste]);
+    if (!open || !focusOpEerste || !zichtbaar) return;
+    const doel = ref.current?.querySelector<HTMLElement>(rol === 'menu' ? MENU_ITEMS : FOCUSBAAR);
+    doel?.focus();
+  }, [open, focusOpEerste, rol, zichtbaar]);
+
+  const onSluitRef = useRef(onSluit);
+  onSluitRef.current = onSluit;
+  /** Meet en zet de positie; false als het anker uit beeld is. */
+  const plaats = useCallback((): boolean => {
+    const a = anker?.current;
+    const el = ref.current;
+    if (!a || !el) return true;
+    const t = a.getBoundingClientRect();
+    if (t.bottom < 0 || t.top > window.innerHeight || t.width === 0) return false;
+    // offset-/scrollmaten: de in-animatie schaalt het vlak (transform), dat
+    // mag de meting niet verkleinen; scrollHeight negeert een eerdere maxHeight.
+    setPositie(ankerPositie(t, { breedte: el.offsetWidth, hoogte: el.scrollHeight }, { breedte: window.innerWidth, hoogte: window.innerHeight }, align, mobielVol));
+    return true;
+  }, [anker, align, mobielVol]);
+  useLayoutEffect(() => {
+    if (!anker) return;
+    if (!open) { setPositie(null); return; }
+    plaats();
+  }, [open, anker, plaats]);
+  useEffect(() => {
+    if (!anker || !open) return;
+    const volg = (e: Event) => {
+      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return;
+      if (!plaats()) onSluitRef.current?.();
+    };
+    window.addEventListener('scroll', volg, true);
+    window.addEventListener('resize', volg);
+    return () => {
+      window.removeEventListener('scroll', volg, true);
+      window.removeEventListener('resize', volg);
+    };
+  }, [anker, open, plaats]);
+  // Sluiten (Escape, buiten-klik, Sluiten-knop): de focus terug op het anker,
+  // tenzij de gebruiker bewust in een ander bedieningselement klikte (een
+  // invoerveld, knop of link); een klik op tekst of op de schuifstrook van de
+  // tabel (focusbare region) telt niet.
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    const was = wasOpen.current;
+    wasOpen.current = open;
+    if (!anker || open || !was) return;
+    const id = requestAnimationFrame(() => {
+      const actief = document.activeElement;
+      if (!actief || actief === document.body || ref.current?.contains(actief) || !actief.matches(BEDIENING)) anker.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [open, anker]);
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (anker && e.key === 'Tab') {
+      const items = Array.from(ref.current?.querySelectorAll<HTMLElement>(FOCUSBAAR) ?? []);
+      const eerste = items[0];
+      const laatste = items[items.length - 1];
+      if ((e.shiftKey && document.activeElement === eerste) || (!e.shiftKey && document.activeElement === laatste)) {
+        e.preventDefault();
+        anker.current?.focus();
+        onSluitRef.current?.();
+      }
+      return;
+    }
     if (rol !== 'menu') return;
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
     const items = Array.from(ref.current?.querySelectorAll<HTMLElement>(MENU_ITEMS) ?? []);
@@ -84,26 +221,41 @@ export function Popover({
     items[volgende].focus();
   };
 
-  return (
+  const boven = Boolean(anker && positie?.boven);
+  const y = boven ? 4 : -4;
+  // Vóór de eerste meting staat een geankerd vlak op (0,0); de meting loopt in
+  // een layout-effect, dus vóór de eerste paint (en de in-animatie begint op
+  // opacity 0). Geen `visibility: hidden` zoals ActieMenu: motion zet stijl
+  // pas in zijn eigen frame, en een verborgen vlak weigert de focus.
+  const stijl: CSSProperties = anker
+    ? (positie ? { ...positie.stijl, transformOrigin: `${boven ? 'bottom' : 'top'} ${align}` } : { top: 0, left: 0 })
+    : { transformOrigin: `top ${align}` };
+  const vlak = (
     <AnimatePresence>
       {open && (
         <motion.div
-          ref={ref}
+          ref={zetRef}
           id={id}
           role={rol}
           aria-label={label}
           onKeyDown={onKeyDown}
-          initial={{ opacity: 0, scale: 0.97, y: -4 }}
+          initial={{ opacity: 0, scale: 0.97, y }}
           animate={{ opacity: 1, scale: 1, y: 0, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING } }}
-          exit={{ opacity: 0, scale: 0.97, y: -4, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
-          style={{ transformOrigin: `top ${align}` }}
+          exit={{ opacity: 0, scale: 0.97, y, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
+          style={stijl}
           className={cn(
-            'absolute top-full mt-2 rounded-2xl bg-paper ring-1 ring-hairline elev-2 outline-none',
-            align === 'right' ? 'right-0' : 'left-0',
+            'rounded-2xl bg-paper ring-1 ring-hairline elev-2 outline-none',
+            anker
+              // In een portal: boven de topbar en het dock, zoals de rijmenu's.
+              ? 'fixed z-menu'
+              : cn(
+                'absolute top-full mt-2',
+                align === 'right' ? 'right-0' : 'left-0',
+                laag === 'menu' ? 'z-menu' : 'z-zwevend',
+                mobielVol && 'max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto',
+              ),
             BREEDTE[breedte],
             padding === 'menu' ? 'p-1.5' : 'p-3.5',
-            laag === 'menu' ? 'z-menu' : 'z-zwevend',
-            mobielVol && 'max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto',
             className,
           )}
         >
@@ -112,6 +264,8 @@ export function Popover({
       )}
     </AnimatePresence>
   );
+  if (anker && typeof document !== 'undefined') return createPortal(vlak, document.body);
+  return vlak;
 }
 
 /**

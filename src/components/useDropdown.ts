@@ -8,11 +8,16 @@ import { useEffect, useRef, useState } from 'react';
 export function useDropdown() {
   const [open, setOpen] = useState(false);
   const wortel = useRef<HTMLDivElement>(null);
+  /** Het zwevende vlak als het in een portal buiten de wortel staat
+   *  (`<Popover anker vlakRef={vlak}>`): een klik daarin is geen buiten-klik. */
+  const vlak = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const buiten = (e: PointerEvent) => {
-      if (wortel.current && !wortel.current.contains(e.target as Node)) setOpen(false);
+      const doel = e.target as Node;
+      if (vlak.current?.contains(doel)) return;
+      if (wortel.current && !wortel.current.contains(doel)) setOpen(false);
     };
     const toets = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
@@ -25,5 +30,5 @@ export function useDropdown() {
     };
   }, [open]);
 
-  return { open, setOpen, wortel };
+  return { open, setOpen, wortel, vlak };
 }
