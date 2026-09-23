@@ -1170,8 +1170,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               // Bezette collega: toon zijn dienst — bij een 1-op-1
                               // ruil op dezelfde dag is dát de collega die je zoekt.
                               const rijdt = linesForDate[u.id];
+                              // Eén korte contextcode onder de naam (Jarno 23-09): BV/TK/TA,
+                              // Vrij, of het dienstnummer; geen badge of kleur, de naam
+                              // is waaraan je kiest.
+                              const context = !freeForDate ? null
+                                : code && code !== 'vrij' ? code.toUpperCase()
+                                  : free || code ? 'Vrij'
+                                    : rijdt ? `Dienst ${rijdt}` : 'Bezet';
                               return (
-                                /* rauw: wizard-keuzekaart (naam + beschikbaarheidsbadge + chevron), eigen layout via cnCard */
+                                /* rauw: wizard-keuzekaart (naam + korte contextcode + chevron), eigen layout via cnCard */
                                 <button
                                   key={u.id}
                                   type="button"
@@ -1187,17 +1194,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   }}
                                   className={cnCard(selectedTargetDriver === u.id)}
                                 >
-                                  <span className="text-sm font-bold text-slate-800 truncate">{u.name}</span>
-                                  <span className="shrink-0 inline-flex items-center gap-2">
-                                    {freeForDate && (
-                                      code && code !== 'vrij'
-                                        ? <Badge tone="emerald" stil>{code}</Badge>
-                                        : free || code
-                                          ? <Badge tone="emerald" stil>vrij</Badge>
-                                          : <Badge tone="slate">{rijdt ? `dienst ${rijdt}` : 'bezet'}</Badge>
-                                    )}
-                                    <ChevronRight size={16} className="text-slate-300" />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-md font-semibold text-slate-900">{u.name}</span>
+                                    {context && <span className="mt-0.5 block text-xs font-medium text-slate-500">{context}</span>}
                                   </span>
+                                  <ChevronRight size={16} className="shrink-0 text-slate-300" aria-hidden="true" />
                                 </button>
                               );
                             })}

@@ -140,6 +140,46 @@ test('chauffeur stelt een ruil voor via de 3-staps wizard', async ({ page }) => 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
 
+test('stap 2: naam eerst, daaronder één korte code; vrij eerst, binnen elke groep alfabetisch', async ({ page }) => {
+  await seedSession(page, CHAUFFEUR);
+  const collega = (id: string, name: string) => ({ ...COLLEGA, id, name, email: `${id}@vhb.be`, employeeId: `VHB-0000${id}` });
+  const ZOE = collega('81', 'Zoë Verhaeghe');
+  const ANNA = collega('82', 'Anna Baert');
+  const BERT = collega('83', 'Bert Claeys');
+  const CARL = collega('84', 'Carl Dhondt');
+  const eigenDienst = { id: 's1', date: dayOffset(3), startTime: '08:00', endTime: '16:00', line: '2101', busNumber: '', driverId: CHAUFFEUR.id };
+  const availability = {
+    days: [{
+      date: dayOffset(3), working: [CHAUFFEUR.id, BERT.id], leave: [ANNA.id, CARL.id], free: [ZOE.id],
+      lines: { [CHAUFFEUR.id]: '2101', [BERT.id]: '2303' }, takeover: { [ANNA.id]: 'bv' },
+    }],
+  };
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.endsWith('/api/me')) return json(CHAUFFEUR);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([CHAUFFEUR, ZOE, CARL, BERT, ANNA]);
+    if (path.endsWith('/api/planning')) return json([eigenDienst]);
+    if (path.endsWith('/api/availability')) return json(availability);
+    return json([]);
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Dienstruil aanvragen' }).click();
+  await page.getByRole('button', { name: /Dienst 2101/ }).click();
+  await expect(page.getByText('Stap 2 van 3')).toBeVisible();
+
+  const opties = page.getByRole('dialog').getByRole('button', { name: /Verhaeghe|Baert|Claeys|Dhondt/ });
+  // Vrij (en BV/TK/TA) eerst, dan wie die dag een dienst heeft of bezet is; telkens alfabetisch.
+  await expect(opties).toHaveText([
+    /^Anna Baert\s*BV$/,
+    /^Zoë Verhaeghe\s*Vrij$/,
+    /^Bert Claeys\s*Dienst 2303$/,
+    /^Carl Dhondt\s*Bezet$/,
+  ]);
+});
+
 test('een dienst met een lopende ruil is niet opnieuw aanvraagbaar', async ({ page }) => {
   // De server weigert een tweede verzoek op dezelfde dienst met een 409, en
   // sinds 18-09 geldt dat voor de héle dienst (ook het andere deel van een
