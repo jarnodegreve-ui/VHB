@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { KolomToon, RapportDefinitie, RapportKolom, RapportRij, RapportWaarde } from '../../shared/rapporten/types';
-import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRechts, kolomIndeling, onderEersteTekst, RAPPORT_PER_PAGINA, smalleBreedte, sorteerRijen } from '../../shared/rapporten/opmaak';
+import { celToon, formatWaarde, heeftTotaalrij, isGetalKolom, isPilKolom, isRechts, kolomIndeling, onderEersteTekst, RAPPORT_PER_PAGINA, smalleBreedte } from '../../shared/rapporten/opmaak';
+import { sorteerVolgens, type RapportSortering } from '../../shared/rapporten/sortering';
 import { cn } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Badge, type BadgeTone } from './primitives';
 import { Tabel, Td, Th } from './TabelBasis';
-import { Paginering, SortTh, StickyThead, useSort } from './Table';
+import { Paginering, SortTh, StickyThead } from './Table';
 
 /**
  * De tabel van een rapport, volledig uit de definitie: kolomkoppen,
@@ -23,7 +24,9 @@ import { Paginering, SortTh, StickyThead, useSort } from './Table';
  * gratis; het printblad en de CSV tonen altijd alles.
  *
  * `rijen` = wat er te zien is (na de zoekterm); `totalen` hoort bij precies
- * die rijen. Het printblad heeft zijn eigen tabel (PrintBlad) en toont alles.
+ * die rijen. De sortering is van de ouder (`sortering` + `onSorteer`): ze
+ * staat in de URL (`?sorteer=`, shared/rapporten/sortering.ts), zodat link,
+ * printblad en CSV dezelfde volgorde hebben. Het printblad heeft zijn eigen tabel (PrintBlad) en toont alles.
  */
 const PER_PAGINA = RAPPORT_PER_PAGINA;
 /** Vanaf hier passen de kolommen naast elkaar (md); eronder geldt de smalle indeling. */
@@ -93,19 +96,22 @@ const celKlasse = (kolom: RapportKolom, waarde: RapportWaarde | undefined, eerst
   kolom.leeg && (waarde === null || waarde === undefined || waarde === '') && 'whitespace-nowrap',
 );
 
-export function RapportTabel({ def, rijen, totalen, className }: {
+export function RapportTabel({ def, rijen, totalen, sortering, onSorteer, className }: {
   def: RapportDefinitie;
   rijen: readonly RapportRij[];
   /** Som per optelbare kolom over `rijen`; zonder opgave geen totaalrij. */
   totalen?: Record<string, number> | null;
+  /** De actieve sortering (uit de URL); een klik op een kop geeft de kolom door. */
+  sortering: RapportSortering;
+  onSorteer: (kolom: string) => void;
   className?: string;
 }) {
   const breed = useMinWidth(BREED_VANAF);
   const smal = !breed;
   const { kolommen, onderEerste } = useMemo(() => kolomIndeling(def, smal ? 'smal' : 'breed'), [def, smal]);
-  const sort = useSort<string>(def.sortering.kolom, def.sortering.richting);
+  const sort = useMemo(() => ({ key: sortering.kolom, dir: sortering.richting, toggle: onSorteer }), [sortering.kolom, sortering.richting, onSorteer]);
   const [pagina, setPagina] = useState(1);
-  const gesorteerd = useMemo(() => sorteerRijen(def, rijen, sort.key, sort.dir), [def, rijen, sort.key, sort.dir]);
+  const gesorteerd = useMemo(() => sorteerVolgens(def, rijen, sortering), [def, rijen, sortering]);
   const paginas = Math.max(1, Math.ceil(gesorteerd.length / PER_PAGINA));
   // Andere rijen of een andere sortering: terug naar de eerste pagina; en
   // nooit op een pagina blijven staan die niet meer bestaat.

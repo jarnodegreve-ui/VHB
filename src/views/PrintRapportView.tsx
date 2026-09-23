@@ -3,6 +3,7 @@ import type { User } from '../types';
 import { rapportVan } from '../../shared/rapporten/register';
 import { filtersInWoorden, leesFilters, periodeVanFilters } from '../../shared/rapporten/filters';
 import { berekenTotalen, metKolommen, rijBevat } from '../../shared/rapporten/opmaak';
+import { leesSortering } from '../../shared/rapporten/sortering';
 import { ZOEK_PARAM, laadRapport, type RapportAntwoord } from '../lib/rapporten';
 import { bereikUitleg } from '../lib/rapportBereik';
 import { isoDate } from '../lib/datum';
@@ -11,7 +12,7 @@ import { useVoertuigen, voertuigLabel } from '../components/Voertuigkiezer';
 
 /**
  * Printblad van een rapport uit het register: nieuw tabblad via
- * `?print-rapport=<id>` plus dezelfde filterparameters als het scherm
+ * `?print-rapport=<id>` plus dezelfde filterparameters en sortering als het scherm
  * (App.tsx vangt de parameter af vóór de app-schil, zoals de andere
  * printbladen). Haalt zijn cijfers zelf op bij dezelfde API als het scherm,
  * dus blad en scherm tonen hetzelfde. De opmaak is volledig `PrintBlad`.
@@ -59,6 +60,8 @@ export function PrintRapportView({ rapportId, users, door }: { rapportId: string
   const tabelDef = metKolommen(def, data.kolommen);
   const rijen = zoek ? data.rijen.filter((r) => rijBevat(tabelDef, r, zoek)) : data.rijen;
   const totalen = zoek ? berekenTotalen(tabelDef, rijen) : data.totalen;
+  // Dezelfde volgorde als het scherm: `?sorteer=` gelezen tegen de effectieve kolommen.
+  const sortering = leesSortering(tabelDef, new URLSearchParams(window.location.search));
 
   return (
     <PrintBlad
@@ -75,6 +78,7 @@ export function PrintRapportView({ rapportId, users, door }: { rapportId: string
         def={tabelDef}
         rijen={buiten ? [] : rijen}
         totalen={buiten ? null : totalen}
+        sortering={sortering}
         leegTekst={toestand === 'geen-bron' && regel ? regel : buiten && regel ? `Geen gegevens voor deze periode. ${regel}` : periodeVanFilters(def, filters) ? 'Geen gegevens voor deze periode.' : 'Geen gegevens voor deze filters.'}
       />
     </PrintBlad>

@@ -1,4 +1,4 @@
-import { Children, useMemo, useState, type ReactNode } from 'react';
+import { Children, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowUpRight, ChevronRight, Download, Info, Link2, Printer, RotateCcw } from 'lucide-react';
 import type { User, View } from '../../types';
 import { isStaf } from '../../types';
@@ -10,7 +10,8 @@ import type { RapportDefinitie, RapportFilter, RapportFilters } from '../../../s
 import { filterParams, filtersNaarQuery, heeftEigenFilters, leesFilters, periodeVanFilters } from '../../../shared/rapporten/filters';
 import { periodeFout } from '../../../shared/rapporten/periode';
 import { berekenTotalen, metKolommen, rijBevat, veelRijenUitleg } from '../../../shared/rapporten/opmaak';
-import { ZOEK_PARAM, csvBestandsnaam, laadRapport, printUrlVoor, rapportCsv, type RapportAntwoord } from '../../lib/rapporten';
+import { SORTEER_PARAM, leesSortering, sorteringNaarParam, volgendeSortering } from '../../../shared/rapporten/sortering';
+import { ZOEK_PARAM, csvBestandsnaam, laadRapport, printUrlVoor, rapportCsv, rapportQuery, type RapportAntwoord } from '../../lib/rapporten';
 import { printbladKlaar, printbladUrl, printbladenVanDomein, type PrintbladDef, type PrintbladWaarden } from '../../lib/rapportPrintbladen';
 import { bereikUitleg } from '../../lib/rapportBereik';
 import { useZelfLadend } from '../../lib/zelfLadend';
@@ -329,16 +330,29 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
   const zichtbaar = useMemo(() => (zoek.trim() ? alle.filter((r) => rijBevat(tabelDef, r, zoek)) : alle), [alle, tabelDef, zoek]);
   const totalen = useMemo(() => (zoek.trim() || !data ? berekenTotalen(tabelDef, zichtbaar) : data.totalen), [data, tabelDef, zichtbaar, zoek]);
 
+  // Sortering in de URL (`?sorteer=kolom` of `-kolom`, weg bij de standaard;
+  // shared/rapporten/sortering.ts). Geen filter: "Filters wissen" laat haar
+  // staan. Historiek: de filters vervangen de entry; de eerste sorteerklik
+  // krijgt één eigen terugstap (`stap`), elke volgende klik vervangt die, dus
+  // "terug" = de volgorde waarmee het rapport openging, zonder een entry per klik.
+  // Gelezen tegen `tabelDef`: een kolom uit het antwoord is geldig zodra ze er is.
+  const sorteerTekst = query.get(SORTEER_PARAM) ?? '';
+  const sortering = useMemo(() => leesSortering(tabelDef, new URLSearchParams({ [SORTEER_PARAM]: sorteerTekst })), [tabelDef, sorteerTekst]);
+  const sorteer = useCallback(
+    (kolom: string) => zetQuery({ [SORTEER_PARAM]: sorteringNaarParam(def, volgendeSortering(sortering, kolom)) }, { stap: 'rapport-sortering' }),
+    [def, sortering, zetQuery],
+  );
+
   const veelRijen = veelRijenUitleg(zichtbaar.length);
 
   const basis = `${window.location.origin}${window.location.pathname}`;
-  const drukAf = () => openPdfInNewTab(printUrlVoor(def, filters, basis, zoek));
+  // Blad, CSV en link volgen de sortering van het scherm (dezelfde vergelijker, `sorteerRijen`).
+  const drukAf = () => openPdfInNewTab(printUrlVoor(def, filters, basis, zoek, sortering));
   const exporteer = () => {
-    void downloadBlob(csvBestandsnaam(def, filters), new Blob([rapportCsv(tabelDef, zichtbaar, totalen)], { type: 'text/csv;charset=utf-8' }));
+    void downloadBlob(csvBestandsnaam(def, filters), new Blob([rapportCsv(tabelDef, zichtbaar, totalen, sortering)], { type: 'text/csv;charset=utf-8' }));
   };
   const kopieerLink = async () => {
-    const q = filtersNaarQuery(def, filters);
-    if (zoek.trim()) q.set(ZOEK_PARAM, zoek.trim());
+    const q = rapportQuery(def, filters, zoek, sortering);
     try {
       await navigator.clipboard.writeText(`${basis}?${q.toString()}`);
       notify('Link naar dit rapport gekopieerd.', 'success');
@@ -429,7 +443,7 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
                 {veelRijen}
               </p>
             ) : null}
-            <RapportTabel def={tabelDef} rijen={zichtbaar} totalen={totalen} />
+            <RapportTabel def={tabelDef} rijen={zichtbaar} totalen={totalen} sortering={sortering} onSorteer={sorteer} />
           </>
         )}
       </TableShell>

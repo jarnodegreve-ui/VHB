@@ -303,13 +303,13 @@ export function useQueryParam(naam: string): [string, (waarde: string) => void] 
 }
 
 /**
- * De hele querystring lezen en in één keer bijwerken (replace-only), voor
+ * De hele querystring lezen en in één keer bijwerken (replace, behalve met `stap`), voor
  * schermen met meerdere parameters die samen horen: de filters van een
  * rapport (`?van=&tot=&chauffeur=`). Twee losse `useQueryParam`-zetters na
  * elkaar werken ook, maar geven twee history-vervangingen en twee renders met
  * een halve periode ertussen. `null` of '' wist een parameter.
  */
-export function useQueryParams(): [URLSearchParams, (wijziging: Record<string, string | null>) => void] {
+export function useQueryParams(): [URLSearchParams, (wijziging: Record<string, string | null>, opties?: { stap?: string }) => void] {
   const [, force] = useState(0);
   useEffect(() => {
     const sync = () => force((n) => n + 1);
@@ -319,12 +319,21 @@ export function useQueryParams(): [URLSearchParams, (wijziging: Record<string, s
   }, []);
   const zoekdeel = typeof window === 'undefined' ? '' : window.location.search;
   const huidig = useMemo(() => new URLSearchParams(zoekdeel), [zoekdeel]);
-  const zet = useCallback((wijziging: Record<string, string | null>) => {
+  const zet = useCallback((wijziging: Record<string, string | null>, opties: { stap?: string } = {}) => {
     const url = new URL(window.location.href);
     for (const [naam, waarde] of Object.entries(wijziging)) {
       if (waarde) url.searchParams.set(naam, waarde); else url.searchParams.delete(naam);
     }
-    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    const doel = url.pathname + url.search + url.hash;
+    // Een stap zonder verschil pusht niets (een klik op dezelfde toestand is geen terugstap waard).
+    if (opties.stap !== undefined && doel === window.location.pathname + window.location.search + window.location.hash) return;
+    // `stap`: de eerste wijziging van dit soort krijgt één eigen terugstap
+    // (pushState, gemerkt), elke volgende vervangt die entry zolang je erop
+    // staat. Zo brengt "terug" de toestand van vóór de eerste wijziging terug
+    // zonder dat elke klik een entry wordt (rapport: de sortering).
+    const opStap = opties.stap !== undefined && (window.history.state as { vhbQueryStap?: unknown } | null)?.vhbQueryStap === opties.stap;
+    if (opties.stap !== undefined && !opStap) window.history.pushState({ vhbQueryStap: opties.stap }, '', doel);
+    else window.history.replaceState(window.history.state, '', doel);
     window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
   }, []);
   return [huidig, zet];
