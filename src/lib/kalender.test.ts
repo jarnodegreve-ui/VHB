@@ -5,6 +5,7 @@ import {
   maandBuitenBereik, maandGrid, maandLabel, vandaagIso, weekdagMa,
 } from './kalender';
 import { vandaagBrussel } from './brussel';
+import { leesMj, maandBereikFout, maandNaarMj } from './maand';
 
 describe('kalender-helpers (datumkiezer)', () => {
   it('maandGrid begint op maandag en telt 42 dagen', () => {
@@ -142,5 +143,39 @@ describe('typbare datum: leesDmj / isoNaarDmj (datumtranche PR 1)', () => {
     expect(kortNaMiddernacht.toISOString().slice(0, 10)).toBe('2026-09-22');
     process.env.TZ = 'America/Los_Angeles';
     expect(vandaagBrussel(kortNaMiddernacht)).toBe('2026-09-23');
+  });
+});
+
+describe('typbare maand: leesMj / maandNaarMj (datumtranche PR 4)', () => {
+  it.each([
+    ['09/2026', '2026-09'],
+    ['9/2026', '2026-09'],
+    ['9-2026', '2026-09'],
+    ['09.2026', '2026-09'],
+    ['092026', '2026-09'],
+    [' 12/2027 ', '2027-12'],
+  ])('%j → %s', (tekst, maand) => {
+    expect(leesMj(tekst)).toEqual({ staat: 'geldig', maand });
+  });
+
+  it.each([
+    ['13/2026', 'Die maand bestaat niet.'],
+    ['00/2026', 'Die maand bestaat niet.'],
+    ['09/26', 'Gebruik mm/jjjj, bijvoorbeeld 09/2026.'],
+    ['2026-09', 'Gebruik mm/jjjj, bijvoorbeeld 09/2026.'],
+    ['sep 2026', 'Gebruik mm/jjjj, bijvoorbeeld 09/2026.'],
+    ['09/0226', 'Controleer het jaar.'],
+  ])('%j wordt geweigerd', (tekst, reden) => {
+    expect(leesMj(tekst)).toEqual({ staat: 'fout', reden });
+  });
+
+  it('leeg, heen en terug, bereik', () => {
+    expect(leesMj('')).toEqual({ staat: 'leeg' });
+    expect(maandNaarMj('2026-09')).toBe('09/2026');
+    expect(maandNaarMj('2026-13')).toBe('');
+    expect(leesMj(maandNaarMj('2027-01'))).toEqual({ staat: 'geldig', maand: '2027-01' });
+    expect(maandBereikFout('2026-08', '2026-09')).toBe('Vroegst 09/2026.');
+    expect(maandBereikFout('2026-10', undefined, '2026-09')).toBe('Uiterlijk 09/2026.');
+    expect(maandBereikFout('2026-09', '2026-01', '2026-12')).toBeNull();
   });
 });

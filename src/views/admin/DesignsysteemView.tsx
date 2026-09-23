@@ -51,6 +51,7 @@ function VuilAnnuleren({ onClose }: { onClose: () => void }) {
 }
 import { Chauffeurkiezer } from '../../components/Chauffeurkiezer';
 import { Voertuigkiezer } from '../../components/Voertuigkiezer';
+import { MaandInput } from '../../components/MaandInput';
 
 /**
  * Designsysteem — alle bouwstenen, tokens en toestanden op één pagina
@@ -162,6 +163,7 @@ export function DesignsysteemView() {
   const menu = useDropdown();
   const dialoog = useDropdown();
   const [datum, setDatum] = useState('');
+  const [maand, setMaand] = useState('2026-09');
   const [periode, setPeriode] = useState({ van: '2026-09-01', tot: '2026-09-30' });
   const [jaar, setJaar] = useState(2026);
   const [chauffeur, setChauffeur] = useState('');
@@ -407,6 +409,9 @@ export function DesignsysteemView() {
             </Field>
             <Field label="Startdatum" hint="Typ dd/mm/jjjj of kies in de kalender; op mobiel opent de kalender onderaan.">
               <DateInput value={datum} onChange={setDatum} min="2026-01-01" />
+            </Field>
+            <Field label="Maand" htmlFor="ds-maand" hint="Typ mm/jjjj of kies in het maandraster.">
+              <MaandInput id="ds-maand" value={maand} onChange={setMaand} />
             </Field>
             <Field label="Opmerking" hint="Optioneel.">
               <Textarea rows={2} placeholder="Korte toelichting…" />
