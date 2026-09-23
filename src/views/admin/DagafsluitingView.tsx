@@ -206,15 +206,17 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
             <EmptyState variant="klaar" title={alleenAfwijkend ? 'Geen afwijkingen' : 'Geen chauffeurs'} message={alleenAfwijkend ? 'Iedereen reed zoals gepland, zonder overminuten of premie.' : 'Er staan geen chauffeurs op deze dag.'} />
           ) : (
             // Eén set cellen, twee opmaken (tranche 3B.2). Vanaf md een tabel
-            // (TableShell `sticky`: onder xl schuift ze in haar kader met de
-            // chauffeur als vaste kolom, vanaf xl plakt de kolomkop). Onder md
+            // die in haar kader schuift, met de chauffeur als vaste kolom
+            // (TableShell standaard: met de keuzelijsten en het opmerkingveld
+            // is ze ±1280 px breed, gemeten, dus ook op 1440 px breder dan de
+            // kaart; `sticky` zou haar vanaf xl afknippen). Onder md
             // wordt elke rij met CSS een kaart per chauffeur (grid op de `tr`,
             // kopje per cel). Bewust CSS en geen tweede lijst: de cellen zijn
             // autosave-velden (defaultValue, eigen stand per cel); een aparte
             // kaartlijst zou elke cel twee keer mounten en bij het draaien van
             // de telefoon over het breekpunt een getypte, nog niet bewaarde
             // waarde weggooien.
-            <TableShell label={`Dagadministratie ${formatDatumDMJ(datum)}`} sticky>
+            <TableShell label={`Dagadministratie ${formatDatumDMJ(datum)}`}>
                 <Tabel className="md:min-w-[56rem] max-md:block">
                   <StickyThead className="max-md:hidden">
                     <tr>
@@ -313,11 +315,11 @@ function MinutenCel({ r, veld, afgesloten, bewaar, onBewaard }: {
 }
 
 /**
- * De chauffeur blijft links staan terwijl de rest onder xl eronderdoor
- * schuift (zelfde opaak vlak als RapportTabel); op de telefoon is het de
- * kop van de kaart.
+ * De chauffeur blijft links staan terwijl de rest eronderdoor schuift
+ * (zelfde opaak vlak als RapportTabel); op de telefoon is het de kop van
+ * de kaart.
  */
-const VASTE_KOLOM = 'md:max-xl:sticky md:max-xl:left-0 md:max-xl:z-sticky md:max-xl:bg-paper';
+const VASTE_KOLOM = 'md:sticky md:left-0 md:z-sticky md:bg-paper';
 
 /**
  * Opmaak van één rij als kaart onder md: de `tr` wordt een raster van zes
