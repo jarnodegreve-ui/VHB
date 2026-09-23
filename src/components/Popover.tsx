@@ -25,11 +25,19 @@ import { DUR, EASE, EASE_SPRING } from '../lib/motion';
  * `laag`: `zwevend` in de inhoud (z-zwevend), `menu` in de topbar (z-menu).
  * `mobielVol`: op een telefoon losgekoppeld van de trigger en over de volle
  * breedte (de panelen in de topbar, die anders links buiten beeld vielen).
+ *
+ * Een popover in een kader dat knipt (een menu in een schuivende tabel) is
+ * een `AnkerPopover` (src/components/AnkerPopover.tsx): zelfde vlak, maar in
+ * een portal met `position: fixed` aan de knop. Die staat bewust in een
+ * eigen module, zodat de ankercode niet in de startbundel belandt (Popover
+ * zit via UserMenu en Meldingen in de schil).
  */
 export type PopoverBreedte = 'sm' | 'md' | 'lg' | 'xl';
-const BREEDTE: Record<PopoverBreedte, string> = { sm: 'w-56', md: 'w-64', lg: 'w-72', xl: 'w-80' };
+/** Gedeeld met AnkerPopover: breedtes en het vlak zelf. */
+export const BREEDTE: Record<PopoverBreedte, string> = { sm: 'w-56', md: 'w-64', lg: 'w-72', xl: 'w-80' };
+export const POPOVER_VLAK = 'rounded-2xl bg-paper ring-1 ring-hairline elev-2 outline-none';
 
-const MENU_ITEMS = '[role="menuitem"]:not(:disabled)';
+export const MENU_ITEMS = '[role="menuitem"]:not(:disabled)';
 
 export function Popover({
   open,
@@ -98,7 +106,8 @@ export function Popover({
           exit={{ opacity: 0, scale: 0.97, y: -4, transition: reduced ? { duration: 0 } : { duration: DUR.fast, ease: EASE } }}
           style={{ transformOrigin: `top ${align}` }}
           className={cn(
-            'absolute top-full mt-2 rounded-2xl bg-paper ring-1 ring-hairline elev-2 outline-none',
+            'absolute top-full mt-2',
+            POPOVER_VLAK,
             align === 'right' ? 'right-0' : 'left-0',
             BREEDTE[breedte],
             padding === 'menu' ? 'p-1.5' : 'p-3.5',

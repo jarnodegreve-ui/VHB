@@ -7,7 +7,7 @@ import {
   type VoertuigCategorie,
   VOERTUIG_VERVAL_LABEL, VOERTUIG_VERVAL_SOORTEN, WERKTYPE_LABEL, voertuigNaam, type VoertuigVervalSoort,
 } from '../../../shared/techniek';
-import { cn, notify } from '../../lib/ui';
+import { notify } from '../../lib/ui';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { useRouteParam } from '../../app/router';
@@ -25,10 +25,11 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field, Input, Select } from '../../components/Field';
-import { Badge, Button, FilterChip, IconButton, StatusBadge, type BadgeTone } from '../../components/primitives';
+import { Badge, Button, FilterChip, StatusBadge } from '../../components/primitives';
+import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
+import { VervalPil } from '../../components/VervalPil';
 import { VOERTUIG_STATUS } from '../../../shared/status';
-import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
-import { Td, Th } from '../../components/TabelBasis';
+import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../../components/Table';
 
 const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
 
@@ -122,18 +123,10 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
     return r.dagen[k as VoertuigVervalSoort] ?? null;
   });
 
-  const chipTone = (dagen: number): BadgeTone => (dagen < 0 ? 'red' : dagen <= 30 ? 'amber' : dagen <= 90 ? 'oker' : 'emerald');
-  const kortDatum = (iso: string) => { const d = new Date(`${iso.slice(0, 10)}T00:00:00`); return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' }); };
-  const dagenTekst = (n: number) => (n < 0 ? 'verlopen' : n === 0 ? 'vandaag' : `${n} d`);
+  /** Vervaldatum per soort (VervalPil); `metLabel` voor de kaart op de telefoon (daar is geen kolomkop). */
   const datumPil = (r: Rij, soort: VoertuigVervalSoort, metLabel: boolean) => {
     const e = perVoertuig.get(r.v.id)?.[soort];
-    if (!e) return <Badge key={soort} tone="slate" className="whitespace-nowrap opacity-70">{metLabel ? `${VOERTUIG_VERVAL_LABEL[soort]}: ` : ''}—</Badge>;
-    const n = r.dagen[soort] ?? dagenTot(e.validUntil);
-    return (
-      <Badge key={soort} tone={chipTone(n)} dot stil={n > 30} className="whitespace-nowrap">
-        {metLabel ? `${VOERTUIG_VERVAL_LABEL[soort]}: ` : ''}<span title={formatDateHuman(e.validUntil)}>{kortDatum(e.validUntil)}</span><span className="text-slate-500">· {dagenTekst(n)}</span>
-      </Badge>
-    );
+    return <VervalPil key={soort} datum={e?.validUntil} dagen={e ? r.dagen[soort] : undefined} label={metLabel ? VOERTUIG_VERVAL_LABEL[soort] : undefined} />;
   };
   const statusBadge = (v: Vehicle) => <StatusBadge status={v.status} map={VOERTUIG_STATUS} stil className="whitespace-nowrap" />;
 
@@ -176,8 +169,13 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
       ) : voertuigen.length === 0 ? (
         <EmptyState title="Nog geen voertuigen" message={staf ? 'Voeg het eerste voertuig toe of draai de migratie met de seed.' : 'De planning voegt de voertuigen toe.'} action={staf ? <Button variant="primary" onClick={() => setBewerk({ voertuig: null })}>Voertuig toevoegen</Button> : undefined} />
       ) : (
-        <div className="surface-table rounded-3xl overflow-clip">
-          <div className="border-b border-hairline px-5 py-4 md:px-6">
+        // TableShell standaard (schuiven in het kader): met alle vervalkolommen
+        // aan is de tabel breder dan de kaart, ook op 1280 px naast de
+        // zijbalk (B2, ronde 5). De kolomkop plakt dan niet (zie StickyThead).
+        // Onder md een kaartlijst met dezelfde rijen.
+        <TableShell
+          label="Voertuigen"
+          kop={(
             <TableToolbar
               zoek={zoek}
               onZoek={setZoek}
@@ -198,17 +196,14 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                 </>
               )}
             />
-          </div>
+          )}
+        >
           {gesorteerd.length === 0 ? (
             <div className="p-6"><EmptyState title={zoekTerm ? `Geen voertuigen voor “${zoek.trim()}”` : 'Geen voertuigen voor dit filter'} message="Pas de zoekterm of het filter aan." action={<Button variant="secondary" onClick={() => { setZoek(''); setFilter('alles'); }}>Zoekterm en filter wissen</Button>} /></div>
           ) : (
             <>
-              {/* overflow-x-auto (B2, ronde 5): met alle vervalkolommen aan
-                  is de tabel breder dan de kaart; zonder scroll viel de
-                  laatste kolom buiten beeld en brak de eerste kolom over
-                  zes regels. De kop plakt dan niet (zie StickyThead). */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
+              <div className="hidden md:block">
+                <Tabel className={voorkeur.tabelClass}>
                   <StickyThead>
                     <tr>
                       <SortTh kolom="kort" sort={sort}>Bus</SortTh>
@@ -218,29 +213,29 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                       <Th>Status</Th>
                       {VOERTUIG_VERVAL_SOORTEN.filter((s) => voorkeur.zichtbaar(s)).map((s) => <SortTh key={s} kolom={s} sort={sort}>{VOERTUIG_VERVAL_LABEL[s]}</SortTh>)}
                       {voorkeur.zichtbaar('defecten') && <SortTh kolom="defecten" sort={sort} align="right">Open defecten</SortTh>}
-                      <Th className="text-right">Acties</Th>
                     </tr>
                   </StickyThead>
                   <tbody>
                     {gesorteerd.map((r) => (
-                      <tr key={r.v.id} onClick={() => setDetail(r.v)} className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
-                        <Td>
-                          <p className="font-semibold text-slate-800 whitespace-nowrap">{voertuigNaam(r.v)}</p>
-                          <p className="text-xs font-medium text-slate-500 whitespace-nowrap">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</p>
+                      // De bus is de knop (Tab + Enter opent de fiche); een klik
+                      // ergens in de rij doet hetzelfde voor de muis.
+                      <tr key={r.v.id} onClick={rijKlik(() => setDetail(r.v))} className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
+                        <Td nowrap>
+                          <CelKnop onClick={() => setDetail(r.v)} label={`${voertuigNaam(r.v)} openen`}>
+                            <span className="block font-semibold text-slate-800">{voertuigNaam(r.v)}</span>
+                            <span className="block text-xs font-medium text-slate-500">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</span>
+                          </CelKnop>
                         </Td>
-                        {voorkeur.zichtbaar('nummerplaat') && <Td className="font-mono text-xs">{r.v.nummerplaat ?? '—'}</Td>}
-                        {voorkeur.zichtbaar('type') && <Td className="text-sm">{VOERTUIG_TYPE_LABEL[r.v.type]}</Td>}
-                        {voorkeur.zichtbaar('aandrijving') && <Td className="text-sm">{r.v.aandrijving ? AANDRIJVING_LABEL[r.v.aandrijving] : '—'}</Td>}
-                        <Td>{statusBadge(r.v)}</Td>
-                        {VOERTUIG_VERVAL_SOORTEN.filter((s) => voorkeur.zichtbaar(s)).map((s) => <Td key={s}>{datumPil(r, s, false)}</Td>)}
+                        {voorkeur.zichtbaar('nummerplaat') && <Td nowrap className="font-mono text-xs">{r.v.nummerplaat ?? '—'}</Td>}
+                        {voorkeur.zichtbaar('type') && <Td nowrap>{VOERTUIG_TYPE_LABEL[r.v.type]}</Td>}
+                        {voorkeur.zichtbaar('aandrijving') && <Td nowrap>{r.v.aandrijving ? AANDRIJVING_LABEL[r.v.aandrijving] : '—'}</Td>}
+                        <Td nowrap>{statusBadge(r.v)}</Td>
+                        {VOERTUIG_VERVAL_SOORTEN.filter((s) => voorkeur.zichtbaar(s)).map((s) => <Td key={s} nowrap>{datumPil(r, s, false)}</Td>)}
                         {voorkeur.zichtbaar('defecten') && <Td num className={r.defecten > 0 ? 'font-semibold text-amber-700' : 'text-slate-500'}>{r.defecten || '—'}</Td>}
-                        <Td className="text-right">
-                          <IconButton label={`${voertuigNaam(r.v)} openen`} title="Openen" variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setDetail(r.v); }}><Pencil size={16} /></IconButton>
-                        </Td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </Tabel>
               </div>
               <div className="md:hidden divide-y divide-hairline-subtle">
                 {gesorteerd.map((r) => (
@@ -259,7 +254,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
               </div>
             </>
           )}
-        </div>
+        </TableShell>
       )}
 
       {detail && (

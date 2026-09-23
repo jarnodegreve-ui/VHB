@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Lock, Plus, RotateCcw, Trash2, Unlock } from 'lucide-react';
 import type { User } from '../../types';
 import { QUAL_VLAGGEN, QUAL_VLAG_LABEL, OPMERKING_MAX, loonCodeSleutel, type QualVlag } from '../../../shared/loon';
 import { DAG_STATUS, dagOpenStatus, statusVan } from '../../../shared/status';
 import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
-import { formatDayLong } from '../../lib/format';
+import { formatDatumDMJ, formatDayLong, formatMomentKort } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import {
   bewaarRij, heropenDag, laadDag, laadLoonCodes, LoonFout, neemPlanningOver, openDag, schuifDag, sluitDag, vandaagIso, verwijderRij, voegRijToe,
@@ -24,10 +24,10 @@ import { Avatar } from '../../components/Avatar';
 import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
 import { Badge, Button, FilterChip, IconButton, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
-import { Popover } from '../../components/Popover';
+import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
+import { AnkerPopover } from '../../components/AnkerPopover';
 import { useDropdown } from '../../components/useDropdown';
-import { StickyThead } from '../../components/Table';
-import { Td, Th } from '../../components/TabelBasis';
+import { Checkbox, StickyThead } from '../../components/Table';
 
 /**
  * Dagafsluiting (fase B Access-migratie, 13-09): de planner bevestigt per
@@ -205,12 +205,22 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
           {zichtbareRijen.length === 0 ? (
             <EmptyState variant="klaar" title={alleenAfwijkend ? 'Geen afwijkingen' : 'Geen chauffeurs'} message={alleenAfwijkend ? 'Iedereen reed zoals gepland, zonder overminuten of premie.' : 'Er staan geen chauffeurs op deze dag.'} />
           ) : (
-            <div className="surface-table rounded-3xl overflow-clip">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[56rem] text-left border-collapse">
-                  <StickyThead>
+            // Eén set cellen, twee opmaken (tranche 3B.2). Vanaf md een tabel
+            // die in haar kader schuift, met de chauffeur als vaste kolom
+            // (TableShell standaard: met de keuzelijsten en het opmerkingveld
+            // is ze ±1280 px breed, gemeten, dus ook op 1440 px breder dan de
+            // kaart; `sticky` zou haar vanaf xl afknippen). Onder md
+            // wordt elke rij met CSS een kaart per chauffeur (grid op de `tr`,
+            // kopje per cel). Bewust CSS en geen tweede lijst: de cellen zijn
+            // autosave-velden (defaultValue, eigen stand per cel); een aparte
+            // kaartlijst zou elke cel twee keer mounten en bij het draaien van
+            // de telefoon over het breekpunt een getypte, nog niet bewaarde
+            // waarde weggooien.
+            <TableShell label={`Dagadministratie ${formatDatumDMJ(datum)}`}>
+                <Tabel className="md:min-w-[56rem] max-md:block">
+                  <StickyThead className="max-md:hidden">
                     <tr>
-                      <Th>Chauffeur</Th>
+                      <Th className={VASTE_KOLOM}>Chauffeur</Th>
                       <Th>Planning</Th>
                       <Th>Gereden</Th>
                       <Th num title="Overminuten gewoon">Over</Th>
@@ -222,17 +232,16 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
                       {!afgesloten && <Th className="text-right">Acties</Th>}
                     </tr>
                   </StickyThead>
-                  <tbody>
+                  <tbody className="max-md:block max-md:divide-y max-md:divide-hairline-subtle">
                     {zichtbareRijen.map((r) => (
                       <Rij key={r.id} r={r} afgesloten={Boolean(afgesloten)} afwijkend={afwijkend(r)} dienstCodes={dienstCodes} variaCodes={variaCodes} codeMap={codeMap} bewaar={bewaarVoor(r)} onBewaard={vervang} onVerwijder={() => void doeVerwijderen(r)} />
                     ))}
                   </tbody>
-                </table>
-              </div>
-            </div>
+                </Tabel>
+            </TableShell>
           )}
           {detail.dag.status === 'afgesloten' && (
-            <p className="text-xs text-slate-500">Afgesloten op {detail.dag.afgeslotenOp ? new Date(detail.dag.afgeslotenOp).toLocaleString('nl-BE', { dateStyle: 'medium', timeStyle: 'short' }) : '?'}{detail.dag.heropendReden ? ` · eerder heropend: ${detail.dag.heropendReden}` : ''}</p>
+            <p className="text-xs text-slate-500">Afgesloten op {detail.dag.afgeslotenOp ? formatMomentKort(detail.dag.afgeslotenOp) : '?'}{detail.dag.heropendReden ? ` · eerder heropend: ${detail.dag.heropendReden}` : ''}</p>
           )}
         </>
       ) : null}
@@ -305,12 +314,37 @@ function MinutenCel({ r, veld, afgesloten, bewaar, onBewaard }: {
   );
 }
 
+/**
+ * De chauffeur blijft links staan terwijl de rest eronderdoor schuift
+ * (zelfde opaak vlak als RapportTabel); op de telefoon is het de kop van
+ * de kaart.
+ */
+const VASTE_KOLOM = 'md:sticky md:left-0 md:z-sticky md:bg-paper';
+
+/**
+ * Opmaak van één rij als kaart onder md: de `tr` wordt een raster van zes
+ * kolommen, elke cel een blok met een kopje (KaartKop); vanaf md blijft het
+ * een gewone tabelrij. Zelfde elementen, zelfde cellen, alleen CSS.
+ */
+const KAART = {
+  rij: 'max-md:grid max-md:grid-cols-6 max-md:gap-x-3 max-md:gap-y-3 max-md:border-b-0 max-md:px-4 max-md:py-4',
+  cel: 'max-md:block max-md:px-0 max-md:py-0',
+  getal: 'max-md:col-span-2 max-md:text-left',
+};
+
+/** Kopje boven een cel in de kaart op de telefoon; vanaf md staat de kolomkop er al boven. */
+function KaartKop({ children }: { children: string }) {
+  return <span className="mb-1 block text-label text-slate-500 md:hidden">{children}</span>;
+}
+
 function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaar, onBewaard, onVerwijder }: {
   r: DagPrestatie; afgesloten: boolean; afwijkend: boolean; dienstCodes: LoonCode[]; variaCodes: LoonCode[]; codeMap: Map<string, LoonCode>;
   bewaar: (body: RijBody) => Promise<DagPrestatie>; onBewaard: (p: DagPrestatie) => void; onVerwijder: () => void;
 }) {
   const [opmerking, setOpmerking] = useState(r.opmerking ?? '');
-  const { open: vlaggenOpen, setOpen: setVlaggenOpen, wortel: vlaggenWortel } = useDropdown();
+  const { open: vlaggenOpen, setOpen: setVlaggenOpen, wortel: vlaggenWortel, vlak: vlaggenVlak } = useDropdown();
+  const vlaggenKnop = useRef<HTMLButtonElement>(null);
+  const vlaggenId = `${r.id}-vlaggen`;
   useEffect(() => { setOpmerking(r.opmerking ?? ''); }, [r.opmerking]);
   const naam = r.naam ?? 'deze chauffeur';
   const codeCel = useAutosaveCel<string, DagPrestatie>({ actie: `Gereden code van ${naam} bewaren`, bewaar: (v) => bewaar({ geredenCode: v || null }), opGelukt: onBewaard });
@@ -330,12 +364,13 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
   const cellen = { geredenCode: `${r.id}-code-fout`, premie: `${r.id}-premie-fout`, vlaggen: `${r.id}-vlaggen-fout`, opmerking: `${r.id}-opmerking-fout` };
   const celProps = { r, afgesloten, bewaar, onBewaard };
   return (
-    <tr className={cn('border-b border-hairline-subtle last:border-b-0 align-top', afwijkend && 'bg-oker-50/40')}>
-      <Td>
-        <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam ?? '?'} size="sm" />{r.naam}{r.volgnr > 1 && <Badge tone="slate" stil>rij {r.volgnr}</Badge>}</span>
+    <tr className={cn('border-b border-hairline-subtle last:border-b-0 align-top', KAART.rij)}>
+      <Td className={cn(VASTE_KOLOM, KAART.cel, 'max-md:col-span-5 max-md:-order-2')}>
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam ?? '?'} size="sm" />{r.naam}{r.volgnr > 1 && <Badge tone="slate" stil className="whitespace-nowrap">rij {r.volgnr}</Badge>}</span>
       </Td>
-      <Td className="text-sm text-slate-500">{r.planningCode ? (codeMap.get(loonCodeSleutel(r.planningCode))?.codeWeergave ?? r.planningCode) : '—'}</Td>
-      <Td>
+      <Td nowrap className={cn('text-slate-500', KAART.cel, 'max-md:col-span-2')}><KaartKop>Planning</KaartKop>{r.planningCode ? (codeMap.get(loonCodeSleutel(r.planningCode))?.codeWeergave ?? r.planningCode) : '—'}</Td>
+      <Td className={cn(KAART.cel, 'max-md:col-span-4')}>
+        <KaartKop>Gereden</KaartKop>
         <div className="flex items-center gap-1.5">
           <Select
             aria-label={`Gereden code van ${r.naam}`}
@@ -352,40 +387,52 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
             <optgroup label="Afwezig / ander">{variaCodes.map((c) => <option key={c.code} value={c.code}>{c.codeWeergave}{c.omschrijving ? ` · ${c.omschrijving}` : ''}</option>)}</optgroup>
           </Select>
           <AutosaveTeken staat={codeCel.staat} />
-          {afwijkend && <Badge tone="oker" stil dot className="whitespace-nowrap">afwijkt</Badge>}
+          {/* Afwijken van de planning is informatie, geen fout: info-toon, geen goud (tranche 3B.2). */}
+          {afwijkend && <Badge tone="blue" stil dot className="whitespace-nowrap">afwijkt</Badge>}
         </div>
         <AutosaveFout staat={codeCel.staat} id={cellen.geredenCode} />
       </Td>
-      <Td num><MinutenCel veld="overmin" {...celProps} /></Td>
-      <Td num><MinutenCel veld="overminNacht" {...celProps} /></Td>
-      <Td num><MinutenCel veld="overminExtra" {...celProps} /></Td>
-      <Td>
+      <Td num className={cn(KAART.cel, KAART.getal)}><KaartKop>Over</KaartKop><MinutenCel veld="overmin" {...celProps} /></Td>
+      <Td num className={cn(KAART.cel, KAART.getal)}><KaartKop>Nacht</KaartKop><MinutenCel veld="overminNacht" {...celProps} /></Td>
+      <Td num className={cn(KAART.cel, KAART.getal)}><KaartKop>Extra</KaartKop><MinutenCel veld="overminExtra" {...celProps} /></Td>
+      <Td className={cn(KAART.cel, 'max-md:col-span-2')}>
+        <KaartKop>Premie</KaartKop>
         <div className="inline-flex items-center gap-1">
           <Switch checked={premieCel.toon(r.onvPremie)} disabled={afgesloten} label={`Premie voor ${r.naam}`} onChange={(v) => premieCel.verander(v, r.onvPremie)} />
           <AutosaveTeken staat={premieCel.staat} />
         </div>
         <AutosaveFout staat={premieCel.staat} id={cellen.premie} />
       </Td>
-      <Td>
+      <Td className={cn(KAART.cel, 'max-md:col-span-4')}>
+        <KaartKop>Kwaliteit</KaartKop>
         <div className="relative inline-flex items-center gap-1" ref={vlaggenWortel}>
-          <Button variant={actieveVlaggen.length ? 'warning' : 'ghost'} size="sm" onClick={() => setVlaggenOpen((v) => !v)} aria-expanded={vlaggenOpen} aria-describedby={vlagCel.staat.status === 'fout' ? cellen.vlaggen : undefined} disabled={afgesloten && actieveVlaggen.length === 0}>
+          <Button ref={vlaggenKnop} variant={actieveVlaggen.length ? 'warning' : 'ghost'} size="sm" onClick={() => setVlaggenOpen((v) => !v)} aria-haspopup="dialog" aria-expanded={vlaggenOpen} aria-controls={vlaggenOpen ? vlaggenId : undefined} aria-label={`Kwaliteitsvlaggen van ${naam}: ${actieveVlaggen.length ? `${actieveVlaggen.length} vlag${actieveVlaggen.length === 1 ? '' : 'gen'}` : 'geen'}`} aria-describedby={vlagCel.staat.status === 'fout' ? cellen.vlaggen : undefined} disabled={afgesloten && actieveVlaggen.length === 0}>
             {actieveVlaggen.length ? `${actieveVlaggen.length} vlag${actieveVlaggen.length === 1 ? '' : 'gen'}` : 'Geen'}
           </Button>
           <AutosaveTeken staat={vlagCel.staat} />
-          <Popover open={vlaggenOpen} label="Kwaliteitsvlaggen" align="left" breedte="md">
+          {/* Geankerd (portal + fixed): de tabel schuift in haar kader, een
+              absoluut vlak werd op de onderste rijen afgeknipt. */}
+          <AnkerPopover open={vlaggenOpen} id={vlaggenId} label={`Kwaliteitsvlaggen van ${naam}`} align="left" breedte="md" anker={vlaggenKnop} vlakRef={vlaggenVlak} onSluit={() => setVlaggenOpen(false)}>
               {QUAL_VLAGGEN.map((k: QualVlag) => (
-                <label key={k} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm hover:bg-surface-soft-hover">
-                  <input type="checkbox" className="h-4 w-4" checked={vlaggen[k]} disabled={afgesloten} onChange={(e) => vlagCel.verander({ ...vlaggen, [k]: e.target.checked }, serverVlaggen, zelfdeVlaggen)} />
-                  {QUAL_VLAG_LABEL[k]}
-                </label>
+                <div key={k} className="flex min-h-9 items-center gap-1 rounded-lg pr-2 text-sm hover:bg-surface-soft-hover">
+                  <Checkbox
+                    id={`${r.id}-vlag-${k}`}
+                    label={QUAL_VLAG_LABEL[k]}
+                    checked={vlaggen[k]}
+                    disabled={afgesloten}
+                    onChange={(aan) => vlagCel.verander({ ...vlaggen, [k]: aan }, serverVlaggen, zelfdeVlaggen)}
+                  />
+                  <label htmlFor={`${r.id}-vlag-${k}`} className={cn('flex-1 py-1', afgesloten ? 'cursor-default' : 'cursor-pointer')}>{QUAL_VLAG_LABEL[k]}</label>
+                </div>
               ))}
             <div className="mt-1 flex justify-end"><Button variant="ghost" size="sm" onClick={() => setVlaggenOpen(false)}>Sluiten</Button></div>
-          </Popover>
+          </AnkerPopover>
         </div>
         <AutosaveFout staat={vlagCel.staat} id={cellen.vlaggen} />
       </Td>
-      <Td>
-        <div className="inline-flex items-center gap-1">
+      <Td className={cn(KAART.cel, 'max-md:col-span-6')}>
+        <KaartKop>Opmerking</KaartKop>
+        <div className="inline-flex items-center gap-1 max-md:flex">
           <Input
             aria-label={`Opmerking voor ${r.naam}`}
             value={opmerking}
@@ -393,7 +440,7 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
             maxLength={OPMERKING_MAX}
             invalid={opmerkingCel.staat.status === 'fout'}
             aria-describedby={opmerkingCel.staat.status === 'fout' ? cellen.opmerking : undefined}
-            className="w-44 px-2 py-1 text-sm"
+            className="w-44 px-2 py-1 text-sm max-md:w-full max-md:flex-1"
             onChange={(e) => setOpmerking(e.target.value)}
             onBlur={() => {
               opmerkingCel.verander(opmerking.trim() || null, r.opmerking ?? null);
@@ -404,7 +451,7 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
         <AutosaveFout staat={opmerkingCel.staat} id={cellen.opmerking} />
       </Td>
       {!afgesloten && (
-        <Td className="text-right">
+        <Td className={cn('text-right', KAART.cel, 'max-md:col-span-1 max-md:-order-1 max-md:empty:hidden')}>
           {r.volgnr > 1 && <IconButton label="Rij verwijderen" size="sm" onClick={onVerwijder}><Trash2 size={16} /></IconButton>}
         </Td>
       )}

@@ -24,7 +24,7 @@ import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
 import { Badge, Button, Chip, FilterChip, IconButton, Segmented } from '../../components/primitives';
 import { StickyThead } from '../../components/Table';
-import { Td, Th } from '../../components/TabelBasis';
+import { Td, Th, Tabel, TableShell } from '../../components/TabelBasis';
 
 type Tab = 'lijst' | 'rapport';
 type Periode = 'week' | 'maand' | 'kwartaal';
@@ -189,7 +189,8 @@ function PrestatieRegel({ w, mecanicien, acties }: { w: Werkprestatie; mecanicie
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="text-sm font-semibold text-slate-800">{busLabel(w)}</p>
           <Chip mono={false} title={WERKCODE_LABEL[w.werkcode]}>{w.werkcode} · {WERKCODE_LABEL[w.werkcode]}</Chip>
-          {w.defectId && <Badge tone="oker" stil className="whitespace-nowrap">uit gele boek</Badge>}
+          {/* Herkomst, geen status en geen actie: neutraal, niet goud (tranche 3B.2). */}
+          {w.defectId && <Badge tone="slate" stil className="whitespace-nowrap">uit gele boek</Badge>}
         </div>
         <p className="whitespace-pre-wrap text-sm text-slate-700">{w.omschrijving}</p>
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
@@ -351,30 +352,73 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
   );
 }
 
+/** Een rij van een Access-kruistabel: uren per kwartaal, totaal en aantal prestaties. */
+type KruisRij = { label: string; uren: number; aantal: number; perKwartaal: number[] };
+
+/**
+ * Een kruistabel (per bus, per technieker). Tabel of lijst volgt de breedte
+ * van het kader (container query, bewust geen md): op lg staan twee kaarten
+ * naast elkaar en is elke kaart op 1280 px smaller dan de zeven kolommen
+ * (label + K1-K4 + Uren + Aantal, samen ±30 rem). Onder 32 rem wordt het een
+ * lijst: label met uren en aantal op regel 1, de vier kwartalen eronder. Zo
+ * schuift er op de telefoon niets horizontaal (tranche 3B.2). `past`: de
+ * tabel verschijnt pas als ze past, dus geen scrollcontainer.
+ */
+function KruisTabel({ titel, rijen }: { titel: string; rijen: KruisRij[] }) {
+  const kolom = titel.replace('Per ', '');
+  return (
+    <TableShell className="@container" label={titel} past kop={<h2 className="text-card-title">{titel}</h2>}>
+      {rijen.length === 0 ? <div className="p-5"><EmptyState compact title="Geen prestaties" message="Niets geregistreerd in dit jaar." /></div> : (
+        <>
+          <div className="hidden @[32rem]:block">
+            <Tabel>
+              <StickyThead>
+                <tr>
+                  <Th>{kolom}</Th>
+                  {['K1', 'K2', 'K3', 'K4'].map((k) => <Th key={k} num className="px-3">{k}</Th>)}
+                  <Th num className="px-3">Uren</Th>
+                  <Th num className="px-3">Aantal</Th>
+                </tr>
+              </StickyThead>
+              <tbody>
+                {rijen.map((r) => (
+                  <tr key={r.label} className="border-b border-hairline-subtle last:border-b-0">
+                    <Td className="font-semibold text-slate-800">{r.label}</Td>
+                    {r.perKwartaal.map((k, i) => <Td key={i} num className="px-3 text-slate-600">{k ? urenTekst(k) : '—'}</Td>)}
+                    <Td num className="px-3 font-semibold">{urenTekst(r.uren)}</Td>
+                    <Td num className="px-3 text-slate-600">{r.aantal}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Tabel>
+          </div>
+          <ul className="divide-y divide-hairline-subtle @[32rem]:hidden">
+            {rijen.map((r) => (
+              <li key={r.label} className="px-4 py-3">
+                <div className="flex items-baseline gap-3">
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{r.label}</p>
+                  <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-slate-800">{urenTekst(r.uren)} u</span>
+                  <span className="w-10 shrink-0 whitespace-nowrap text-right text-xs text-slate-500">{r.aantal}×</span>
+                </div>
+                <dl className="mt-1.5 grid grid-cols-4 gap-2 text-xs">
+                  {r.perKwartaal.map((k, i) => (
+                    <div key={i} className="flex items-baseline gap-1.5">
+                      <dt className="text-slate-500">K{i + 1}</dt>
+                      <dd className="font-medium text-slate-700">{k ? urenTekst(k) : '—'}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </TableShell>
+  );
+}
+
 function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | null; laden: boolean; jaar: number; onJaar: (j: number) => void }) {
   const jaren = [0, 1, 2].map((n) => new Date().getFullYear() - n);
-  const tabel = (titel: string, rijen: Array<{ label: string; uren: number; aantal: number; perKwartaal: number[] }>) => (
-    <Card padding="none" className="overflow-clip">
-      <div className="border-b border-hairline px-5 py-3"><h2 className="text-card-title">{titel}</h2></div>
-      {rijen.length === 0 ? <div className="p-5"><EmptyState compact title="Geen prestaties" message="Niets geregistreerd in dit jaar." /></div> : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[32rem] text-left border-collapse">
-            <StickyThead><tr><Th>{titel.replace('Per ', '')}</Th><Th num>K1</Th><Th num>K2</Th><Th num>K3</Th><Th num>K4</Th><Th num>Uren</Th><Th num>Aantal</Th></tr></StickyThead>
-            <tbody>
-              {rijen.map((r) => (
-                <tr key={r.label} className="border-b border-hairline-subtle last:border-b-0">
-                  <Td className="font-semibold text-slate-800">{r.label}</Td>
-                  {r.perKwartaal.map((k, i) => <Td key={i} num className="text-slate-600">{k ? urenTekst(k) : '—'}</Td>)}
-                  <Td num className="font-semibold">{urenTekst(r.uren)}</Td>
-                  <Td num className="text-slate-600">{r.aantal}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  );
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -383,22 +427,37 @@ function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | n
       </div>
       {laden || !rapport ? <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card> : (
         <div className={cn('grid gap-4', 'lg:grid-cols-2')}>
-          {tabel('Per bus', rapport.perBus)}
-          {tabel('Per technieker', rapport.perMecanicien)}
-          <Card padding="none" className="overflow-clip lg:col-span-2">
-            <div className="border-b border-hairline px-5 py-3"><h2 className="text-card-title">Per werkcode</h2></div>
-            <ul className="divide-y divide-hairline-subtle">
-              {rapport.perWerkcode.map((r) => (
-                <li key={r.werkcode} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-                  <Chip mono={false}>{r.werkcode}</Chip>
-                  <span className="min-w-0 flex-1 truncate text-slate-700">{WERKCODE_LABEL[r.werkcode as Werkcode] ?? r.werkcode}</span>
-                  <span className="text-slate-500">{r.aantal}×</span>
-                  <span className="w-16 text-right font-semibold text-slate-800">{urenTekst(r.uren)} u</span>
-                </li>
-              ))}
-              {rapport.perWerkcode.length === 0 && <li className="p-5"><EmptyState compact title="Geen prestaties" message="Niets geregistreerd in dit jaar." /></li>}
-            </ul>
-          </Card>
+          <KruisTabel titel="Per bus" rijen={rapport.perBus} />
+          <KruisTabel titel="Per technieker" rijen={rapport.perMecanicien} />
+          {/* Drie kolommen passen ook op 375 px (de omschrijving mag afbreken),
+              dus een echte tabel: aantal en uren staan cijfer onder cijfer. */}
+          <TableShell className="lg:col-span-2" label="Per werkcode" past kop={<h2 className="text-card-title">Per werkcode</h2>}>
+            {rapport.perWerkcode.length === 0 ? <div className="p-5"><EmptyState compact title="Geen prestaties" message="Niets geregistreerd in dit jaar." /></div> : (
+              <Tabel>
+                <StickyThead>
+                  <tr>
+                    <Th>Werkcode</Th>
+                    <Th num className="px-3">Aantal</Th>
+                    <Th num className="px-3">Uren</Th>
+                  </tr>
+                </StickyThead>
+                <tbody>
+                  {rapport.perWerkcode.map((r) => (
+                    <tr key={r.werkcode} className="border-b border-hairline-subtle last:border-b-0">
+                      <Td>
+                        <span className="flex min-w-0 items-center gap-3">
+                          <Chip mono={false}>{r.werkcode}</Chip>
+                          <span className="min-w-0 text-slate-700">{WERKCODE_LABEL[r.werkcode as Werkcode] ?? r.werkcode}</span>
+                        </span>
+                      </Td>
+                      <Td num className="px-3 text-slate-600">{r.aantal}</Td>
+                      <Td num className="px-3 font-semibold text-slate-800">{urenTekst(r.uren)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Tabel>
+            )}
+          </TableShell>
         </div>
       )}
     </div>

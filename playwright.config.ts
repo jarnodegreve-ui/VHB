@@ -23,7 +23,7 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = Number(process.env.E2E_PORT) > 0 ? Number(process.env.E2E_PORT) : 4173;
 
 /** Specs die alleen op het desktop-project horen (én a11y, dat op beide draait). */
-const DESKTOP_SPECS = /(desktop|a11y|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|beheer-tabellen)\.spec\.ts$/;
+const DESKTOP_SPECS = /(desktop|a11y|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|beheer-tabellen|techniek-loon-tabellen)\.spec\.ts$/;
 /** Specs die NIET op het mobiele standaardproject horen: desktop-only en de pwa-spec. */
 const NIET_MOBIEL = /(desktop|pwa)\.spec\.ts$/;
 const PWA_SPEC = /pwa\.spec\.ts$/;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Coins, Download, FileSpreadsheet, Hash, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Coins, Download, FileSpreadsheet, Hash, Plus, Trash2, Users } from 'lucide-react';
 import type { User } from '../../types';
 import { DIENST_TYPES, DIENST_TYPE_LABEL, loonCodeSleutel } from '../../../shared/loon';
 import { DAG_STATUS, dagOpenStatus } from '../../../shared/status';
@@ -14,7 +14,7 @@ import {
   laadMaand, laadMedewerkers, LoonFout, schuifMaand, vandaagIso, verwijderLoonCode,
   type DagTelling, type ExportControle, type LoonCode, type LoonCodeBody, type LoonInstellingen, type LoonMedewerkerRij,
 } from '../../lib/loon';
-import { EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
@@ -27,8 +27,8 @@ import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { Field, Input, Select, Textarea } from '../../components/Field';
 import { Badge, Button, FilterChip, IconButton, Segmented, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
-import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
-import { Td, Th } from '../../components/TabelBasis';
+import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
+import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort } from '../../components/Table';
 
 type Tab = 'maand' | 'codes' | 'medewerkers';
 
@@ -173,13 +173,18 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
             const d = perDag.get(iso);
             const tone = dagTone(iso);
             const dagNr = Number(iso.slice(8, 10));
+            // De status staat ook in de naam: in de tegel zelf is ze alleen
+            // kleur (met de legende eronder), dat hoort een schermlezer niet.
+            const statusTekst = tone === 'red' ? `${DAG_STATUS.niet_geopend.label.toLowerCase()}, planning aanwezig` : DAG_STATUS[dagOpenStatus(iso, vandaag, !!d, d?.status === 'afgesloten')].label.toLowerCase();
+            const omschrijving = `${formatShortDay(iso)}, ${statusTekst}${d ? `, ${d.rijen} rijen, ${d.overmin} overminuten` : ''}`;
             return (
               // rauw: dagtegel in het maandraster, opent de dagafsluiting
               <button
                 key={iso}
                 type="button"
                 onClick={() => onNavigate?.('dagafsluiting', [iso])}
-                title={`${formatShortDay(iso)}, ${DAG_STATUS[dagOpenStatus(iso, vandaag, !!d, d?.status === 'afgesloten')].label.toLowerCase()}${d ? `, ${d.rijen} rijen, ${d.overmin} overminuten` : ''}`}
+                title={omschrijving}
+                aria-label={omschrijving}
                 className={cn(
                   'ios-pressable flex min-h-11 flex-col items-center justify-center rounded-xl text-xs font-semibold ring-1 ring-hairline transition-colors',
                   tone === 'emerald' && 'bg-emerald-50 text-emerald-800',
@@ -252,9 +257,16 @@ function MaandTab({ maand, zetMaand, isAdmin, onNavigate, onVersheid }: { maand:
   );
 }
 
+/** De tiktijden van een code: elke tijd op één regel, de reeks mag tussen twee tijden afbreken. */
+function Tiktijden({ c }: { c: LoonCode }) {
+  const tijden = [c.tik1, c.tik2, c.tik3, c.tik4, c.tik5, c.tik6].filter(Boolean);
+  if (tijden.length === 0) return <>—</>;
+  return <>{tijden.map((t, i) => <span key={i}>{i > 0 ? ' · ' : ''}<span className="whitespace-nowrap">{t}</span></span>)}</>;
+}
+
 const LEEG_CODE: LoonCodeBody & { code: string } = { code: '', codeWeergave: '', omschrijving: '', dienstType: 'lijn', inExport: true, easypayActiviteit: 'LIJN', easypayTypePrest: 40140, tik1: '', tik2: '', tik3: '', tik4: '', tik5: '', tik6: '', lbRijtijd: null, lbStat100At: null, lbStat100Nat: null, lbStat50Nat: null, lbOnd: null, lbAndWrk: null, lbNacht: null };
 
-function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
+export function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
   const [codes, setCodes] = useState<LoonCode[]>([]);
   const [zoek, setZoek] = useState('');
   const [filter, setFilter] = useState<'alles' | 'lijn' | 'varia' | 'ander'>('alles');
@@ -267,58 +279,106 @@ function CodesTab({ onVersheid }: { onVersheid: OnVersheid }) {
     codes.filter((c) => filter === 'alles' || c.dienstType === filter).filter((c) => !zoekTerm || `${c.code} ${c.omschrijving ?? ''} ${c.easypayTypePrest}`.toLowerCase().includes(zoekTerm)),
     (c, k) => (k === 'code' ? c.code : k === 'type' ? c.dienstType : k === 'prest' ? c.easypayTypePrest : k === 'hd' ? (c.tik1 ?? c.tik3 ?? '') : c.code),
   );
+  const bewerkCode = (c: LoonCode) => setBewerk({ ...c, omschrijving: c.omschrijving ?? '', tik1: c.tik1 ?? '', tik2: c.tik2 ?? '', tik3: c.tik3 ?? '', tik4: c.tik4 ?? '', tik5: c.tik5 ?? '', tik6: c.tik6 ?? '' });
+  // Een looncode heeft geen veilige herstelweg (harde delete, geen
+  // soft-delete; de parameters zijn daarna weg): expliciete, server-confirmed
+  // bevestiging en géén undo (CLAUDE.md, Verwijderen, uitzondering 23-09).
+  const [teVerwijderen, setTeVerwijderen] = useState<LoonCode | null>(null);
   const verwijder = async (c: LoonCode) => {
     try { await verwijderLoonCode(c.code); setCodes((l) => l.filter((x) => x.code !== c.code)); notify(`Looncode ${c.codeWeergave} verwijderd.`, 'success'); }
     catch (err) { meldSchrijffout('Verwijderen', err, () => void verwijder(c)); }
   };
   return (
     <div className="space-y-3">
-      <div className="surface-table rounded-3xl overflow-clip">
-        <div className="border-b border-hairline px-5 py-4 md:px-6">
+      {/* Vanaf md een tabel die in haar kader schuift (acht kolommen, de
+          tiktijden zijn lang); onder md een lijst met dezelfde rijen. */}
+      <TableShell
+        label="Looncodes"
+        kop={(
           <TableToolbar
             zoek={zoek} onZoek={setZoek} placeholder="Zoek code of typenummer…" telling={`${lijst.length} van ${codes.length}`}
             filters={(<>{(['alles', 'lijn', 'varia', 'ander'] as const).map((f) => <FilterChip key={f} active={filter === f} onClick={() => setFilter(f)}>{f === 'alles' ? 'Alles' : DIENST_TYPE_LABEL[f]}</FilterChip>)}</>)}
             acties={<Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setBewerk({ ...LEEG_CODE, nieuw: true })}>Code toevoegen</Button>}
           />
-        </div>
+        )}
+      >
         {zl.fout && codes.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && codes.length === 0 ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : lijst.length === 0 ? (
           <div className="p-6"><EmptyState title="Geen looncodes" message={codes.length ? 'Pas de zoekterm of het filter aan.' : 'Draai de migratie met de seed of voeg codes toe.'} /></div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[48rem] text-left border-collapse">
-              <StickyThead>
-                <tr>
-                  <SortTh kolom="code" sort={sort}>Code</SortTh>
-                  <SortTh kolom="type" sort={sort}>Type</SortTh>
-                  <Th>Activiteit</Th>
-                  <SortTh kolom="prest" sort={sort} align="right">Typeprest.</SortTh>
-                  <SortTh kolom="hd" sort={sort}>Tiktijden</SortTh>
-                  <Th num>Rijtijd</Th>
-                  <Th>Export</Th>
-                  <Th className="text-right">Acties</Th>
-                </tr>
-              </StickyThead>
-              <tbody>
-                {lijst.map((c) => (
-                  <tr key={c.code} className="border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
-                    <Td><p className="font-semibold text-slate-800">{c.codeWeergave}</p>{c.omschrijving && <p className="text-xs text-slate-500">{c.omschrijving}</p>}</Td>
-                    <Td className="text-sm">{DIENST_TYPE_LABEL[c.dienstType]}</Td>
-                    <Td className="font-mono text-xs">{c.easypayActiviteit}</Td>
-                    <Td num>{c.easypayTypePrest}</Td>
-                    <Td className="font-mono text-xs">{[c.tik1, c.tik2, c.tik3, c.tik4, c.tik5, c.tik6].filter(Boolean).join(' · ') || '—'}</Td>
-                    <Td num className="text-slate-600">{c.lbRijtijd ?? '—'}</Td>
-                    <Td><Badge tone={c.inExport ? 'emerald' : 'slate'} kaal>{c.inExport ? 'ja' : 'nee'}</Badge></Td>
-                    <Td className="text-right">
-                      <IconButton label={`${c.codeWeergave} bewerken`} size="sm" onClick={() => setBewerk({ ...c, omschrijving: c.omschrijving ?? '', tik1: c.tik1 ?? '', tik2: c.tik2 ?? '', tik3: c.tik3 ?? '', tik4: c.tik4 ?? '', tik5: c.tik5 ?? '', tik6: c.tik6 ?? '' })}><Pencil size={16} /></IconButton>
-                      <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => void verwijder(c)}><Trash2 size={16} /></IconButton>
-                    </Td>
+          <>
+            <div className="hidden md:block">
+              <Tabel>
+                <StickyThead>
+                  <tr>
+                    <SortTh kolom="code" sort={sort}>Code</SortTh>
+                    <SortTh kolom="type" sort={sort}>Type</SortTh>
+                    <Th>Activiteit</Th>
+                    <SortTh kolom="prest" sort={sort} align="right">Typeprest.</SortTh>
+                    <SortTh kolom="hd" sort={sort}>Tiktijden</SortTh>
+                    <Th num>Rijtijd</Th>
+                    <Th>Export</Th>
+                    <Th className="text-right">Acties</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </StickyThead>
+                <tbody>
+                  {lijst.map((c) => (
+                    // De code is de knop (Tab + Enter opent het bewerkvenster);
+                    // een klik ergens in de rij doet hetzelfde voor de muis.
+                    <tr key={c.code} onClick={rijKlik(() => bewerkCode(c))} className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
+                      <Td>
+                        <CelKnop onClick={() => bewerkCode(c)} label={`${c.codeWeergave} bewerken`}>
+                          <span className="block whitespace-nowrap font-semibold text-slate-800">{c.codeWeergave}</span>
+                          {c.omschrijving && <span className="block text-xs text-slate-500">{c.omschrijving}</span>}
+                        </CelKnop>
+                      </Td>
+                      <Td nowrap>{DIENST_TYPE_LABEL[c.dienstType]}</Td>
+                      <Td nowrap>{c.easypayActiviteit}</Td>
+                      <Td num>{c.easypayTypePrest}</Td>
+                      <Td><Tiktijden c={c} /></Td>
+                      <Td num className="text-slate-600">{c.lbRijtijd ?? '—'}</Td>
+                      <Td nowrap><Badge tone={c.inExport ? 'emerald' : 'slate'} kaal>{c.inExport ? 'ja' : 'nee'}</Badge></Td>
+                      <Td className="text-right">
+                        <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => setTeVerwijderen(c)}><Trash2 size={16} /></IconButton>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Tabel>
+            </div>
+            <ul className="divide-y divide-hairline-subtle md:hidden">
+              {lijst.map((c) => (
+                <li key={c.code} className="flex items-start gap-2 px-4 py-3">
+                  <CelKnop onClick={() => bewerkCode(c)} label={`${c.codeWeergave} bewerken`} className="min-w-0 flex-1 mx-0 my-0 space-y-1">
+                    <span className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{c.codeWeergave}</span>
+                      <Badge tone={c.inExport ? 'emerald' : 'slate'} kaal className="shrink-0">{c.inExport ? 'in export' : 'niet in export'}</Badge>
+                    </span>
+                    {c.omschrijving && <span className="block text-xs text-slate-500">{c.omschrijving}</span>}
+                    <span className="block text-xs text-slate-600">
+                      <span className="whitespace-nowrap">{DIENST_TYPE_LABEL[c.dienstType]}</span>
+                      {' · '}<span className="whitespace-nowrap">{c.easypayActiviteit}</span>
+                      {' · '}<span className="whitespace-nowrap">typeprest. {c.easypayTypePrest}</span>
+                      {c.lbRijtijd != null && <>{' · '}<span className="whitespace-nowrap">rijtijd {c.lbRijtijd}</span></>}
+                    </span>
+                    <span className="block text-xs text-slate-600"><Tiktijden c={c} /></span>
+                  </CelKnop>
+                  <IconButton label={`${c.codeWeergave} verwijderen`} size="sm" onClick={() => setTeVerwijderen(c)}><Trash2 size={16} /></IconButton>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
-      </div>
+      </TableShell>
+      {teVerwijderen && (
+        <ConfirmationModal
+          open
+          onClose={() => setTeVerwijderen(null)}
+          onConfirm={() => verwijder(teVerwijderen)}
+          title="Looncode verwijderen?"
+          message={`Looncode ${teVerwijderen.codeWeergave} en haar Easypay-parameters (activiteit, typeprestatie, tiktijden) verdwijnen. Dagrijen die deze code al hebben houden haar, maar Dagafsluiting en de Easypay-export melden haar dan als onbekende code, en de export blokkeert tot de code weer bestaat. Dit kan niet ongedaan worden gemaakt.`}
+          confirmText="Verwijderen"
+        />
+      )}
       {bewerk && <CodeModal init={bewerk} onClose={() => setBewerk(null)} onKlaar={(c) => { setCodes((l) => (l.some((x) => x.code === c.code) ? l.map((x) => (x.code === c.code ? c : x)) : [...l, c])); setBewerk(null); }} />}
     </div>
   );
@@ -439,27 +499,36 @@ function MedewerkersTab({ onVersheid }: { onVersheid: OnVersheid }) {
   return (
     <div className="space-y-3">
       {zonder > 0 && <Card tone="warning" padding="sm" className="text-xs text-amber-800">{zonder} {zonder === 1 ? 'chauffeur' : 'chauffeurs'} in de export zonder Easypay-matricule.</Card>}
-      <div className="surface-table rounded-3xl overflow-clip">
-        <div className="border-b border-hairline px-5 py-4 md:px-6">
-          <TableToolbar zoek={zoek} onZoek={setZoek} placeholder="Zoek chauffeur…" telling={`${lijst.length} van ${rijen.length}`} acties={<Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>Lijst plakken</Button>} />
-        </div>
-        {zl.fout && rijen.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && rijen.length === 0 ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : (
-          <table className="w-full text-left border-collapse">
-            <StickyThead><tr><Th>Chauffeur</Th><Th num>Matricule</Th><Th>In export</Th></tr></StickyThead>
+      {/* Drie kolommen passen ook op 375 px (de naam mag afbreken), dus één
+          tabel op elke breedte: `past`, de kolomkop plakt. Eén rij per
+          medewerker, sleutel = userId: de matricule is een autosave-cel en
+          mag nooit geremount worden terwijl ze bewaart (tranche 3A). */}
+      <TableShell
+        label="Medewerkers"
+        past
+        kop={<TableToolbar zoek={zoek} onZoek={setZoek} placeholder="Zoek chauffeur…" telling={`${lijst.length} van ${rijen.length}`} acties={<Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>Lijst plakken</Button>} />}
+      >
+        {zl.fout && rijen.length === 0 ? <div className="p-6"><Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} /></div> : zl.laden && rijen.length === 0 ? <div className="divide-y divide-hairline-subtle"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></div> : rijen.length === 0 ? (
+          <div className="p-6"><EmptyState title="Nog geen medewerkers" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." /></div>
+        ) : lijst.length === 0 ? (
+          <div className="p-6"><EmptyState title={`Geen chauffeurs voor “${zoek.trim()}”`} message="Pas de zoekterm aan." action={<Button variant="secondary" onClick={() => setZoek('')}>Zoekterm wissen</Button>} /></div>
+        ) : (
+          <Tabel>
+            <StickyThead><tr><Th className="px-3 md:px-4">Chauffeur</Th><Th num className="px-3 md:px-4">Matricule</Th><Th className="px-3 md:px-4">In export</Th></tr></StickyThead>
             <tbody>
               {lijst.map((r) => (
                 <tr key={r.userId} className="border-b border-hairline-subtle last:border-b-0">
-                  <Td><span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam} size="sm" />{r.naam}</span>{r.employeeId && <p className="text-xs text-slate-500">{r.employeeId}</p>}</Td>
-                  <Td num>
+                  <Td className="px-3 md:px-4"><span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam} size="sm" />{r.naam}</span>{r.employeeId && <p className="text-xs text-slate-500">{r.employeeId}</p>}</Td>
+                  <Td num className="px-3 md:px-4">
                     <MatriculeCel r={r} onBewaard={(m) => setRijen((l) => l.map((x) => (x.userId === r.userId ? { ...x, easypayNr: m.easypayNr ?? null, inExport: m.inExport } : x)))} />
                   </Td>
-                  <Td><Switch checked={r.inExport} label={`${r.naam} in de export`} onChange={(v) => void bewaar(r, { easypayNr: r.easypayNr, inExport: v })} /></Td>
+                  <Td className="px-3 md:px-4"><Switch checked={r.inExport} label={`${r.naam} in de export`} onChange={(v) => void bewaar(r, { easypayNr: r.easypayNr, inExport: v })} /></Td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Tabel>
         )}
-      </div>
+      </TableShell>
       <Modal open={importOpen} onClose={() => setImportOpen(false)} vuil={importVuil} maxWidth="md" ariaLabel="Matricules plakken">
         <Formulier onVerstuur={importeer} noValidate className="p-6">
           <CardHeader title="Matricules plakken" description="Eén regel per persoon: naam;matricule (uit Access of Excel). Namen worden zoals bij de planning-import gematcht, in beide volgordes." />
