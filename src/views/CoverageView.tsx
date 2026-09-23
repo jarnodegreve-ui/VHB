@@ -673,14 +673,15 @@ export function CoverageView() {
         title={bronUitleg(d.bron)}
         className="ios-pressable -m-2 rounded-xl p-2 text-left"
       >
-        <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+        {/* Typedag = informatie, geen status: neutrale chip, geen goud (tranche 3B, 23-09). */}
+        <Badge tone="slate" className={cn('capitalize', d.dayType && 'text-slate-800')}>{d.dayType || '—'}</Badge>
       </button>
       {bronOpenDate === d.date && (
         <p className="mt-1.5 max-w-[15rem] text-xs font-medium leading-snug text-slate-500">{bronUitleg(d.bron)}</p>
       )}
     </>
   ) : (
-    <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+    <Badge tone="slate" className={cn('capitalize', d.dayType && 'text-slate-800')}>{d.dayType || '—'}</Badge>
   ));
 
   /** Gedekt = stille chip; een gat blijft rood (afwerking 04-09, nr. 6). */
@@ -763,7 +764,10 @@ export function CoverageView() {
               variant="secondary"
               size="sm"
               icon={<Settings2 size={14} />}
-              className={cn('ml-1', showConfig && 'bg-oker-50 text-oker-700 hover:text-oker-700')}
+              // Aan = neutrale keuzetoestand (zoals het actieve nav-item), geen goud:
+              // goud is voor de primaire actie, focus en "nu" (tranche 3B, 23-09).
+              className={cn('ml-1', showConfig && 'bg-surface-muted text-slate-900 ring-1 ring-hairline-strong')}
+              aria-pressed={showConfig}
               onClick={() => setShowConfig((v) => !v)}
             >
               Instellen

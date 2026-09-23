@@ -526,7 +526,7 @@ export function PlanningMatrixView({
               <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-3">
                 <OpsStat
                   icon={<Users size={16} />}
-                  tone="oker"
+                  tone="slate"
                   label="Chauffeurs"
                   value={assignments.length}
                   sub="met een ingevulde code"

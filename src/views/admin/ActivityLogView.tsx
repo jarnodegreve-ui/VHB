@@ -46,7 +46,8 @@ import { useMinWidth } from '../../lib/useMinWidth';
 type Categorie = ActivityLogEntry['category'];
 
 const CATEGORY_TONES: Record<Categorie, ComponentProps<typeof Badge>['tone']> = {
-  users: 'oker',
+  // Een categorie is informatie, geen status of "nu": geen goud (tranche 3B, 23-09).
+  users: 'slate',
   planning: 'blue',
   planning_codes: 'blue',
   services: 'emerald',
@@ -529,7 +530,8 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                         <span
                           className={cn(
                             'w-full rounded-t-md transition-colors',
-                            d.day === gekozenDag ? 'bg-oker-500' : d.count > 0 ? 'bg-slate-500 group-hover:bg-slate-700' : 'bg-surface-muted',
+                            // Gekozen dag = selectie: de keuzekleur (carbon, in donker lichtgrijs), geen goud.
+                            d.day === gekozenDag ? 'bg-keuze' : d.count > 0 ? 'bg-slate-500 group-hover:bg-slate-700' : 'bg-surface-muted',
                           )}
                           style={{ height: d.count > 0 ? `${Math.max(6, Math.round((d.count / maxDaily) * 80))}%` : '3px' }}
                           aria-hidden="true"
@@ -541,7 +543,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                     {veertienDagen.map((d) => (
                       /* 2xs: daglabels van de mini-grafiek, 14 kolommen naast elkaar */
                       <span key={d.day} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-                        <span className={cn('w-full truncate text-center text-2xs font-medium', d.day === gekozenDag ? 'text-oker-700' : 'text-slate-500')}>
+                        <span className={cn('w-full truncate text-center text-2xs font-medium', d.day === gekozenDag ? 'font-semibold text-slate-900' : 'text-slate-500')}>
                           {d.day === vandaag ? 'nu' : WEEKDAY_SHORT_SUN[d.dow]}
                         </span>
                         {/* Amber stip: die dag kwam er iemand van buiten België. Elke

@@ -784,8 +784,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   {visibleDates.map((iso) => {
                     const h = dayHeader(iso);
                     const today = iso === todayIso;
-                    // De Lijn-typedag, alleen nog de feestdag (F, oker):
-                    // die bepaalt welke dienstregeling rijdt. De V van
+                    // De Lijn-typedag, alleen nog de feestdag (F, carbon vet):
+                    // die bepaalt welke dienstregeling rijdt. Een typedag is
+                    // informatie, geen status en geen "nu": neutraal, geen
+                    // goud (tranche 3B, 23-09). Goud blijft hier alleen voor
+                    // vandaag (= "nu") en de sectiestreep (Jarno 08-09). De V van
                     // schoolvakantie is eruit op vraag van Jarno (17-09),
                     // die zegt niets over wie er rijdt.
                     const td = typedagLabel(iso);
@@ -813,7 +816,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           {/* 2xs: matrixcel van 3 px-hoog label onder de dag, dichte planningsmatrix */}
                           <span className="mt-0.5 block h-3 text-2xs font-bold leading-3">
                             <span className={microLabelClass}>{maandKort}</span>
-                            {feestdag && <span className="ml-1 text-oker-700">F</span>}
+                            {feestdag && <span className="ml-1 text-slate-900">F</span>}
                           </span>
                         </span>
                       </Th>
@@ -910,7 +913,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                     <TriangleAlert size={12} className="absolute left-0.5 top-0.5 text-amber-700" aria-label="dienst nog niet herverdeeld" />
                                   )}
                                   {notes.has(noteKey(String(drv.id), iso)) && (
-                                    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-oker-500" aria-label="notitie aanwezig" />
+                                    // Notitie = informatie, geen "nu": neutrale stip (slate-600 spiegelt mee in donker), geen goud.
+                                    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-slate-600" aria-label="notitie aanwezig" />
                                   )}
                                 </button>
                               ) : (
@@ -991,12 +995,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       aria-selected={gekozen}
                       onClick={() => kiesDag(iso)}
                       className={cn(
-                        // Kleuren via transition-colors; de amber pil zelf is
+                        // Kleuren via transition-colors; de keuzepil zelf is
                         // een motion-span met layoutId die tussen de dagen
                         // schúíft (zelfde patroon als de dock-tabs) i.p.v. per
                         // knop hard aan/uit te wippen.
                         'ios-pressable relative flex min-h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 transition-colors',
-                        gekozen ? 'text-slate-950' : 'text-slate-500',
+                        gekozen ? 'text-slate-900' : 'text-slate-500',
                         // Vandaag: zachte oker hairline (inset, 35%) + het oker
                         // cijfer. De eerdere 60%-ring las als een lege tweede
                         // pil; op verzoek Jarno tóch een omlijsting, maar
@@ -1010,17 +1014,20 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           // Zelfde veer als sidebar-rail, dock-tab en Segmented-pil
                           // (EASE_SPRING op DUR.fast, golf 2 punt 9).
                           transition={reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING }}
-                          className="absolute inset-0 rounded-xl bg-oker-500 elev-accent"
+                          // Selectie = neutraal, zoals het actieve dock-item (tranche 3B, 23-09):
+                          // goud is voor actie, focus en "nu"; vandaag houdt zijn oker cijfer.
+                          className="absolute inset-0 rounded-xl bg-surface-muted ring-1 ring-hairline"
                         />
                       )}
-                      <span className={cn(microLabelClass, 'relative z-10 transition-colors', gekozen ? 'text-slate-950/70' : 'text-slate-500')}>
+                      <span className={cn(microLabelClass, 'relative z-10 transition-colors', gekozen ? 'text-slate-700' : 'text-slate-500')}>
                         {WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}
                       </span>
                       {/* Vandaag (niet gekozen) = oker dagcijfer — hetzelfde
                           stille signaal als de oude daglabels en het desktop-
                           grid. Een ring om de hele knop las als een tweede,
                           lege pil naast de gevulde selectie (melding Jarno). */}
-                      <span className={cn('relative z-10 text-sm font-bold tabular-nums leading-tight transition-colors', !gekozen && vandaag && 'text-oker-700')}>
+                      {/* Het oker cijfer blijft ook als vandaag gekozen is: de keuzepil is neutraal, het "nu"-signaal niet. */}
+                      <span className={cn('relative z-10 text-sm font-bold tabular-nums leading-tight transition-colors', vandaag && 'text-oker-700')}>
                         {d.getDate()}
                       </span>
                       {/* Feestdag (F) — zelfde signaal als de desktop-dagkop.
@@ -1028,7 +1035,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           maand staat hier niet onder elke dag: de strip loopt
                           binnen één maand en die staat in de kop erboven. */}
                       {/* 2xs: matrixcel, typedagletter in een vaste 3 px-hoge strook */}
-                      <span className={cn('relative z-10 h-3 text-2xs font-bold leading-3 transition-colors', !gekozen ? 'text-oker-700' : 'text-slate-950/60')}>
+                      <span className="relative z-10 h-3 text-2xs font-bold leading-3 text-slate-900">
                         {td?.kort === 'F' ? 'F' : ''}
                       </span>
                     </button>
@@ -1093,7 +1100,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             <TriangleAlert size={14} className="shrink-0 text-amber-700" aria-label="dienst nog niet herverdeeld" />
                           )}
                           {notes.has(noteKey(String(drv.id), mobielDag)) && (
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500" aria-label="notitie aanwezig" />
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-600" aria-label="notitie aanwezig" />
                           )}
                         </button>
                       );
@@ -1201,7 +1208,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     <span className="font-medium text-slate-700">Dienst nog niet herverdeeld</span>
                   </span>
                   <span className="inline-flex items-center gap-2">
-                    <span className="inline-flex h-6 w-11 items-center justify-center rounded-lg bg-surface-muted"><span className="h-1.5 w-1.5 rounded-full bg-oker-500" /></span>
+                    <span className="inline-flex h-6 w-11 items-center justify-center rounded-lg bg-surface-muted"><span className="h-1.5 w-1.5 rounded-full bg-slate-600" /></span>
                     <span className="font-medium text-slate-700">Notitie bij de dag</span>
                   </span>
                   <span className="inline-flex items-center gap-2">
@@ -1289,7 +1296,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 ) : (
                   <>
                     <MicroLabel>Notitie voor de chauffeur</MicroLabel>
-                    <Card tone="accent" padding="none" className="px-3.5 py-2.5 text-sm font-medium text-slate-700">
+                    {/* Een notitie is informatie: neutraal vlak, geen goud (tranche 3B, 23-09). */}
+                    <Card tone="muted" padding="none" className="px-3.5 py-2.5 text-sm font-medium text-slate-700">
                       {notes.get(noteKey(selected.driverId, selected.iso))}
                     </Card>
                   </>
@@ -1303,7 +1311,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   <MicroLabel>Uren</MicroLabel>
                   {selected.cell.segments.map((seg, idx) => (
                     <div key={idx} className="flex items-center gap-2 text-base font-semibold text-slate-800 tabular-nums">
-                      <Clock size={16} className="text-oker-500 shrink-0" /> {seg}
+                      <Clock size={16} className="text-slate-500 shrink-0" /> {seg}
                     </div>
                   ))}
                 </div>
@@ -1324,8 +1332,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             {isAdmin && wisselDienst && (
               <div className="mt-6 border-t border-hairline pt-5 space-y-3">
                 <MicroLabel>Dienstwissel (admin)</MicroLabel>
+                {/* Een dienst die nog open staat onder een afwezigheid: dezelfde amber
+                    betekenis als het driehoekje in de cel, geen goud. */}
                 {wisselNaAfwezigheid && (
-                  <Card tone="accent" padding="none" className="px-3.5 py-2.5 text-body-sm font-medium text-slate-700">
+                  <Card tone="warning" padding="none" className="px-3.5 py-2.5 text-body-sm font-medium text-slate-700">
                     {selected.driverName} staat op {selected.cell.label.toLowerCase()}, maar dienst{' '}
                     <span className="font-semibold tabular-nums">{wisselDienst}</span> staat nog op naam, zet hem hieronder over.
                   </Card>
