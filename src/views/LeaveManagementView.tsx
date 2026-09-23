@@ -11,6 +11,9 @@ import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../compon
 import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { RecordRij } from '../components/RecordRij';
+import { RecordOnbekend } from '../components/RecordOnbekend';
+import { useRecordLink } from '../app/useRecordLink';
+import { brengRecordInBeeld } from '../lib/recordLink';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { ActieMenu } from '../components/ActieMenu';
@@ -412,18 +415,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   // Bulk-selectie voor planner-goedkeuring van meerdere pending aanvragen.
   const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set());
   const [historyLeave, setHistoryLeave] = useState<LeaveRequest | null>(null);
-  // Beoordeling in een side panel: alle context (saldo, conflicten,
-  // toelichting) + beslis-acties zonder paginawissel.
-  const [reviewLeave, setReviewLeave] = useState<LeaveRequest | null>(null);
-  useEffect(() => {
-    if (!reviewLeave) return;
-    const fresh = leaveRequests.find((r) => r.id === reviewLeave.id);
-    if (!fresh) { setReviewLeave(null); return; }
-    if (fresh.status !== reviewLeave.status || fresh.decidedAt !== reviewLeave.decidedAt) {
-      setReviewLeave(fresh);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leaveRequests]);
+  // Eén aanvraag staat in de URL (`/verlof/<id>`, tranche 3C): de link uit
+  // een melding, het dashboard of Vandaag, en ook een klik in de lijst hier.
+  // Staf krijgt het beoordelingspaneel, een chauffeur zijn eigen rij open en
+  // in beeld; wat niet in zijn gegevens staat (weg, of van een collega) geeft
+  // één nette melding. Het paneel leest het record altijd vers uit de lijst.
+  const link = useRecordLink('verlof', leaveRequests);
+  const reviewLeave = isPlanner && link.staat === 'gevonden' ? link.record : null;
+  const setReviewLeave = (req: LeaveRequest | null) => (req ? link.open(req.id) : link.sluit());
+  const eigenDoelId = !isPlanner && link.staat === 'gevonden' ? link.id : null;
   const togglePendingSelection = (id: string) => {
     setSelectedPendingIds((prev) => {
       const next = new Set(prev);
@@ -667,6 +667,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               openen), op mobiel een SlideOver. Alleen zichtbaar terwijl er
               een aanvraag open staat — een lege-staat-kaart boven de
               kalender zou ruis zijn. */}
+          {link.staat === 'onbekend' && <RecordOnbekend soort="verlofaanvraag" onSluit={link.sluit} />}
           {renderBeoordelingPaneel()}
           <Card padding="lg" {...swipeHandlers}>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -882,6 +883,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
             requests={myPending}
             isNew={isNewlyDecided}
             onWithdraw={handleWithdraw}
+            doelId={eigenDoelId}
           />
 
           <MyLeaveSection
@@ -891,6 +893,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
             requests={myUpcoming}
             isNew={isNewlyDecided}
             onCancel={isPlanner ? handleCancel : undefined}
+            doelId={eigenDoelId}
           />
 
           <MyLeaveSection
@@ -900,6 +903,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
             requests={myHistory}
             isNew={isNewlyDecided}
             perJaar
+            doelId={eigenDoelId}
           />
         </div>
       </div>
@@ -1253,6 +1257,7 @@ function MyLeaveRow({ req, fresh, open, toonStatus, onToggle, onCancel, onWithdr
     // af. Net beslist = een gouden streep, geen getint vlak.
     <RecordRij
       titel={formatPeriodeKort(req.startDate, req.endDate)}
+      titelAttrs={{ 'data-record': req.id }}
       meta={`${formatLeaveType(req.type)} · ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}`}
       status={<>{fresh && <Badge tone="oker">Nieuw</Badge>}{toonStatus && <StatusBadge status={req.status} stil />}</>}
       accent={fresh ? 'nieuw' : undefined}
@@ -1287,7 +1292,7 @@ function MyLeaveRow({ req, fresh, open, toonStatus, onToggle, onCancel, onWithdr
   );
 }
 
-function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, onWithdraw, perJaar = false }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void; onWithdraw?: (id: string) => void; /** Historiek: groepeer per jaar (alleen het jongste open) en toon de status, die daar wisselt. */ perJaar?: boolean }) {
+function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, onWithdraw, perJaar = false, doelId = null }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void; onWithdraw?: (id: string) => void; /** Historiek: groepeer per jaar (alleen het jongste open) en toon de status, die daar wisselt. */ perJaar?: boolean; /** Aanvraag uit de URL (`/verlof/<id>`): openklappen en in beeld brengen als ze in deze sectie staat. */ doelId?: string | null }) {
   // Eén lijstkaart met hairlines in plaats van een stapel losse kaarten in een
   // scrollvak: die kaarten kostten veel hoogte en de periode had geen jaar,
   // dus een oude aanvraag was niet te plaatsen (wens Jarno 21-09). De
@@ -1302,6 +1307,20 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
   const [omgeklapt, setOmgeklapt] = useState<string[]>([]);
   const jaarOpen = (jaar: string, index: number) => (index === 0) !== omgeklapt.includes(jaar);
   const klapJaar = (jaar: string) => setOmgeklapt((cur) => (cur.includes(jaar) ? cur.filter((j) => j !== jaar) : [...cur, jaar]));
+  // Deeplink naar een eigen aanvraag: de rij (en haar jaar) open, dan in beeld
+  // met de focus erop. Eén keer per id; daarna klapt de gebruiker zelf.
+  const gebrachtRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!doelId || gebrachtRef.current === doelId || !requests.some((r) => r.id === doelId)) return;
+    gebrachtRef.current = doelId;
+    setOpenIds((cur) => (cur.includes(doelId) ? cur : [...cur, doelId]));
+    if (perJaar) {
+      const i = groepen.findIndex((g) => g.items.some((r) => r.id === doelId));
+      if (i >= 0 && !jaarOpen(groepen[i].jaar, i)) klapJaar(groepen[i].jaar);
+    }
+    requestAnimationFrame(() => { brengRecordInBeeld(doelId); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doelId, requests, groepen]);
 
   const rij = (req: LeaveRequest) => (
     <MyLeaveRow

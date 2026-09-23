@@ -66,7 +66,7 @@ export function SchermInhoud(props: SchermInhoudProps) {
             cockpit zelf uit de AppDataContext. */}
         <LazyPlannerDashboardWidgets
           currentUser={currentUser!}
-          onNavigate={(view) => setCurrentView(view)}
+          onNavigate={(view, params) => navigeer(view, { params })}
         />
         </Suspense>
       ) : (

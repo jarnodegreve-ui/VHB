@@ -24,6 +24,7 @@ import { valideerRecord } from "./valideer.js";
 import { brusselsDay, PERIODE_DMJ, LEAVE_TYPE_LABEL, isActieveStaf } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { getLeaveData, getPlanningData, getUsersData, logActivity, saveLeaveData, getAppSetting, setAppSetting } from "../storage.js";
+import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 
 // Ziekmelding: aparte, directe flow (géén goedkeuring — de chauffeur ís al
@@ -300,7 +301,7 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
         title: action,
         soort: "verlof",
         body: `${typeLabel} (${period}), beslist door ${actor.name || "Planning"}.${reden ? ` Reden: ${reden}` : ""}`,
-        url: viewUrl("verlof"),
+        url: recordUrl("verlof", String(current.id)),
       });
     }
     return { leave: updated, melding: `${action}: ${requesterName}, ${typeLabel} (${period}).${reden ? ` Reden: ${reden}` : ""}` };
@@ -639,7 +640,7 @@ export function mountVerlofRoutes(app: express.Express) {
               title: "Nieuwe verlofaanvraag",
               soort: "verlof",
               body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
-              url: viewUrl("verlof"),
+              url: recordUrl("verlof", String(next.id)),
             });
             await meldVerlofAanvraagTelegram({ id: String(next.id), naam: userName(next.userId), typeLabel, start: String(next.startDate), eind: String(next.endDate) });
           }
@@ -682,7 +683,7 @@ export function mountVerlofRoutes(app: express.Express) {
               title: action,
               soort: "verlof",
               body: `${typeLabel} (${period}), beslist door ${req.appUser.name || "Planning"}.${reden ? ` Reden: ${reden}` : ""}`,
-              url: viewUrl("verlof"),
+              url: recordUrl("verlof", String(next.id)),
             });
           }
         }

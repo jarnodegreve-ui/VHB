@@ -6030,12 +6030,13 @@ describe('meldingencentrum (public.meldingen)', () => {
     expect((await api('GET', '/api/meldingen')).status).toBe(401);
   });
 
-  it('een verlofbeslissing landt als melding bij de chauffeur (soort verlof, doel verlof)', async () => {
+  it('een verlofbeslissing landt als melding bij de chauffeur (soort verlof, doel = de aanvraag zelf)', async () => {
     const res = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending' } });
     expect(res.status).toBe(200);
     const vanA = mem.meldingen.filter((m: any) => m.userId === '3');
     expect(vanA).toHaveLength(1);
-    expect(vanA[0]).toMatchObject({ soort: 'verlof', doel: 'verlof', gelezenOp: null });
+    // Tranche 3C: de melding wijst naar de aanvraag (`/verlof/<id>`), niet naar de lijst.
+    expect(vanA[0]).toMatchObject({ soort: 'verlof', doel: 'verlof/l-a1', gelezenOp: null });
     expect(vanA[0].titel).toMatch(/goedgekeurd/i);
   });
 
