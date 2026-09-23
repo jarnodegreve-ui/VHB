@@ -32,6 +32,9 @@ const PLANNER = {
   verlofBudget: 20,
 };
 
+/** Een dag in het bereikraster van de aanvraag (datumtranche PR 5: rastercel met volledig label, "vr 10 okt 2026"). */
+const dagCel = (scope: import('@playwright/test').Locator, dag: number) => scope.getByRole('gridcell', { name: new RegExp(`^\\S+ ${dag} `) });
+
 /** Vandaag + n dagen als yyyy-mm-dd (lokale tijd, zoals de app rekent). */
 const dayOffset = (n: number) => {
   const d = new Date();
@@ -99,8 +102,8 @@ test('chauffeur vraagt verlof aan via de kalender-modal', async ({ page }) => {
   // Volgende maand: elke dag is dan klikbaar (geen verleden-disable) en de
   // gekozen data zijn deterministisch, wat de klok ook zegt.
   await modal.getByRole('button', { name: 'Volgende maand' }).click();
-  await modal.getByRole('button', { name: '10', exact: true }).click();
-  await modal.getByRole('button', { name: '12', exact: true }).click();
+  await dagCel(modal, 10).click();
+  await dagCel(modal, 12).click();
   // De gekozen periode is een selectieweergave (geen input): de ISO-datum
   // staat in data-datum, de zichtbare tekst is het korte daglabel.
   await expect(modal.getByLabel('Startdatum')).toHaveAttribute('data-datum', /-10$/);
@@ -205,8 +208,8 @@ test('chauffeur: "Niet bewaren" wist het concept, heropenen start leeg', async (
   await openKnop.click();
   const modal = page.locator('form').filter({ hasText: 'Periode kiezen' });
   await modal.getByRole('button', { name: 'Volgende maand' }).click();
-  await modal.getByRole('button', { name: '10', exact: true }).click();
-  await modal.getByRole('button', { name: '12', exact: true }).click();
+  await dagCel(modal, 10).click();
+  await dagCel(modal, 12).click();
   await expect(modal.getByLabel('Startdatum')).toHaveAttribute('data-datum', /-10$/);
 
   await page.keyboard.press('Escape');
@@ -237,8 +240,8 @@ test('planner: schoon sluiten na vastleggen houdt het concept, "Niet bewaren" wi
   const chauffeur = modal.getByLabel(/Chauffeur/);
   await chauffeur.selectOption(CHAUFFEUR.id);
   await modal.getByRole('button', { name: 'Volgende maand' }).click();
-  await modal.getByRole('button', { name: '10', exact: true }).click();
-  await modal.getByRole('button', { name: '12', exact: true }).click();
+  await dagCel(modal, 10).click();
+  await dagCel(modal, 12).click();
   await modal.getByRole('button', { name: 'Vastleggen' }).click();
   await expect.poll(() => gepost).toBe(true);
   // Na vastleggen is het venster schoon: sluiten vraagt niets.
@@ -253,7 +256,7 @@ test('planner: schoon sluiten na vastleggen houdt het concept, "Niet bewaren" wi
 
   // Nieuwe invoer, dan "Niet bewaren": heropenen start leeg.
   await modal.getByRole('button', { name: 'Volgende maand' }).click();
-  await modal.getByRole('button', { name: '10', exact: true }).click();
+  await dagCel(modal, 10).click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { name: 'Wijzigingen niet bewaren?' })).toBeVisible();
   await page.getByRole('button', { name: 'Niet bewaren' }).click();
