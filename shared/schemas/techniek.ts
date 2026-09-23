@@ -1,5 +1,5 @@
 import { z } from './zod.js';
-import { optioneel } from './basis.js';
+import { kalenderdag, optioneel } from './basis.js';
 import {
   VOERTUIG_TYPES, VOERTUIG_TYPE_LABEL, VOERTUIG_CATEGORIEEN, AANDRIJVINGEN, AANDRIJVING_LABEL, VOERTUIG_STATUSSEN, VOERTUIG_STATUS_LABEL,
   WERKTYPES, WERKTYPE_LABEL, DEFECT_STATUSSEN, DEFECT_STATUS_LABEL, WERKCODES, WERKCODE_LABEL,
@@ -24,7 +24,8 @@ export {
 };
 export type { VoertuigType, VoertuigCategorie, Aandrijving, VoertuigStatus, Werktype, DefectStatus, Werkcode, VoertuigVervalSoort };
 
-const isoDatum = z.string({ error: 'Vul een datum in' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'Ongeldige datum');
+// Echte kalenderdag (was alleen het patroon: 30/02 kwam erdoor).
+const isoDatum = kalenderdag;
 const klokTijd = z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Ongeldige tijd, verwacht uu:mm');
 /** '' of null uit een formulier = null (veld leegmaken); ontbreekt de sleutel, dan blijft hij undefined (niet aanraken bij een patch). */
 const leegNaarNull = (s: z.ZodType<string>) => z.preprocess((v) => (v === '' ? null : v), s.nullable().optional());

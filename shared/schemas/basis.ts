@@ -30,6 +30,19 @@ export const verplichteTekst = (fout: string) => z.string({ error: fout }).trim(
 /** Kalenderdag als 'JJJJ-MM-DD' (echte datum: 2026-02-30 valt af). */
 export const isoDatum = (fout: string) => z.iso.date(fout);
 
+/**
+ * Kalenderdag als 'JJJJ-MM-DD' met twee meldingen: ontbreekt ("Vul een datum
+ * in") of bestaat niet ("Ongeldige datum": ook 2026-02-30, dat het oude
+ * regex-patroon in loon en techniek doorliet). Datumtranche PR 2, 23-09.
+ */
+export const kalenderdag = z
+  .string({ error: 'Vul een datum in' })
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Ongeldige datum')
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'Ongeldige datum');
+
 /** Leesbare veldnamen voor samengestelde meldingen (bv. de details van een 400). */
 export const VELD_LABELS: Record<string, string> = {
   name: 'naam',

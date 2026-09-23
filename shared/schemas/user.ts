@@ -55,7 +55,7 @@ const userVelden = {
   showInContacts: optioneel(z.boolean()),
   wantsSystemMail: optioneel(z.boolean()),
   section: optioneel(z.string().trim()),
-  startDate: optioneel(isoDatum('Vul een datum in als JJJJ-MM-DD')),
+  startDate: optioneel(isoDatum('Vul een geldige datum in (dd/mm/jjjj)')),
   /** Eigen dashboardindeling (alleen via PATCH /api/me/voorkeuren geschreven;
    *  de gebruikers-save negeert dit veld — zie api/helpers.ts toDatabaseUser). */
   dashboardVoorkeuren: optioneel(dashboardVoorkeurenSchema),
