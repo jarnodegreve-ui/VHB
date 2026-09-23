@@ -68,7 +68,12 @@ import zlib from 'node:zlib';
 // totaal: gemeten 655,97 tegen 655,38 op de tak ervoor, die al tegen de
 // grens van 655 stond. 660 = de meting plus de marge voor de rest van 3B;
 // de deelbudgetten (entry 74) blijven de echte bewaker van de start.
-const BUDGET_KB = 660;
+// 23-09 (datumtranche PR 1): 660 → 665. Het typbare datumveld (parser,
+// foutregel, kalenderknop) en 3C (record-links, terugkeer na login, eigen
+// chunks voor terugNaLogin en ToestelGeblokkeerd) brachten het totaal op
+// 661 kB in CI; de rest van de datumtranche (MaandInput, verlofkalender) komt
+// er nog bij. De entry (74) en de warmup-sets blijven de echte bewakers.
+const BUDGET_KB = 665;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -126,7 +131,11 @@ const DEELBUDGET_KB = {
 // TabelBasis.tsx: index daalde 74,24 → 73,6 kB, de warmup-sets droegen ±1 kB
 // meer (rooster, dienstruil en de stafschermen gebruiken het kader). Dat is
 // de bedoeling: na LCP + 2 s i.p.v. vóór de eerste weergave.
-const WARMUP_BUDGET_KB = { chauffeur: 74, staf: 137 };
+// 23-09 (datumtranche PR 1): staf 137 → 138. Het datumveld werd typbaar
+// (dd/mm/jjjj-parser, foutregel, kalenderknop): de Field-chunk groeide van
+// 4,76 naar 5,36 kB gzip, en die zit in de staf-warmup (dekking, dienstruil).
+// De staf-set stond op main al op 136,x; chauffeur blijft 74 (nu 73).
+const WARMUP_BUDGET_KB = { chauffeur: 74, staf: 138 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];

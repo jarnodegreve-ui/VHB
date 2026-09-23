@@ -19,6 +19,7 @@ import { Zijvak, ZijvakRij } from '../../components/Zijvak';
 import { InfoTip } from '../../components/InfoTip';
 import { ROOSTER_MELDING_RUST_MINUTEN } from '../../../shared/roosterMelding';
 import { dienstStatistiek, formatDienstDuur } from '../../lib/dienstStatistiek';
+import { vandaagBrussel } from '../../lib/brussel';
 
 // Een deel telt alleen als het een geldige begin- én eindtijd (HH:MM) heeft.
 // Zo tonen we voor 1- of 2-delige diensten geen '--'-placeholder in de lege
@@ -201,7 +202,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     const blob = new Blob([dienstoverzichtCsv(services)], { type: 'text/csv;charset=utf-8;' });
     // downloadBlob i.p.v. een handmatige <a download>: dezelfde iOS-share-
     // route en revokeObjectURL als de andere exports.
-    void downloadBlob(`beheer_dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`, blob);
+    void downloadBlob(`beheer_dienstoverzicht_${vandaagBrussel()}.csv`, blob);
   };
 
   const handleEdit = (service: Service) => {

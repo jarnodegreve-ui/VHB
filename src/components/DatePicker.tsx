@@ -1,30 +1,41 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { forwardRef, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { forwardRef, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { addDagen, maandPlus } from '../lib/datum';
 import { WEEKDAY_SHORT_MON } from '../lib/format';
 import {
-  binnenBereik, dagPlusMaand, formatDatumKiezer, isIsoDag, klemOpBereik, maandBuitenBereik, maandGrid, maandLabel, maandVan, vandaagIso,
+  bereikFout, binnenBereik, dagPlusMaand, formatDatumKiezer, isIsoDag, isoNaarDmj, klemOpBereik, leesDmj, maandBuitenBereik, maandGrid, maandLabel, maandVan, vandaagIso, weekdagMa,
 } from '../lib/kalender';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 import { Button, IconButton } from './primitives';
 import { inputClass, invalidClass } from './controlClass';
 
 /**
- * Datumkiezer in huisstijl — vervangt de native `<input type="date">` (oogde
- * per browser anders, Safari desktop het slechtst). Trigger = knop in de
- * `Input`-look met kalender-icoon en de datum als 'di 8 sep 2026'; popover
- * onder het veld (viewport-geklemd, boven het veld als er onder geen plaats
- * is), op mobiel (<640 px) dezelfde inhoud als sheet onderaan het scherm.
+ * Datumveld in huisstijl (datumtranche PR 1, 23-09): een typbaar tekstveld
+ * dd/mm/jjjj met een kalenderknop ernaast. Vervangt de native
+ * `<input type="date">` (oogde per browser anders) en de knop-trigger van
+ * vroeger, waarin je niet kon typen.
+ *
+ * Eén eigenaar voor alles: dit component houdt de getypte tekst (concept), leest
+ * ze met `leesDmj` (src/lib/kalender.ts, geen Date.parse), controleert min/max
+ * en geeft pas door (`onChange(iso)`) bij een logisch moment: blur, Enter of
+ * een keuze in de kalender. Tijdens het typen blijft onvolledige invoer staan
+ * en verschijnt er geen fout; plakken volgt hetzelfde pad. Een ongeldige
+ * invoer geeft niets door, toont de fout bij het veld en markeert het veld
+ * (aria-invalid + customValidity + `data-datum-fout`), zodat `Formulier` niet
+ * indient met de oude waarde.
  *
  * Waarde-API zoals het native veld: `value` = '' of 'YYYY-MM-DD',
- * `onChange(value)`, `min`/`max`/`disabled`/`required`/`id`/`name`.
- * Toetsenbord: pijlen per dag/week, PageUp/PageDown per maand, Home/End
- * naar begin/einde van de week, Enter/Spatie kiest, Esc sluit (focus terug
- * naar de trigger). De terugknop op mobiel sluit de kiezer (useHistoryDismiss).
+ * `onChange(value)`, `min`/`max`/`disabled`/`required`/`id`/`name`. `name`
+ * draagt de ISO-waarde mee in FormData (verborgen veld), niet de getypte tekst.
+ *
+ * Kalender: knop "Kalender openen" (of Alt+↓ / ↓ in het veld); popover op
+ * desktop, sheet op mobiel (<640 px), zelfde inhoud en toetsen: pijlen per
+ * dag/week, PageUp/PageDown per maand (Shift = jaar), Home/End, Enter/Spatie
+ * kiest, Esc sluit met de focus terug in het veld.
  */
 export type DatePickerProps = {
   value: string;
@@ -54,7 +65,8 @@ const AFSTAND = 6;
 
 type Positie = { top: number; left: number; boven: boolean };
 
-export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(function DatePicker({
+
+export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function DatePicker({
   value,
   onChange,
   min,
@@ -66,25 +78,30 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
   className,
   size = 'md',
   invalid,
-  placeholder = 'Kies een datum',
+  placeholder = 'dd/mm/jjjj',
   dialogLabel,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
   'aria-describedby': ariaDescribedby,
 }, ref) {
   const [open, setOpen] = useState(false);
+  const [tekst, setTekst] = useState(() => isoNaarDmj(value));
+  const [fout, setFout] = useState<string | null>(null);
   const [maand, setMaand] = useState(() => maandVan(isIsoDag(value) ? value : vandaagIso()));
   const [cursor, setCursor] = useState(() => (isIsoDag(value) ? value : vandaagIso()));
   const [mobiel, setMobiel] = useState(false);
   const [positie, setPositie] = useState<Positie>({ top: 0, left: 0, boven: false });
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const veldRef = useRef<HTMLInputElement | null>(null);
+  const wortelRef = useRef<HTMLDivElement | null>(null);
+  const knopRef = useRef<HTMLButtonElement | null>(null);
   const dialoogRef = useRef<HTMLDivElement | null>(null);
   const focusNaarCel = useRef(false);
   const reduceMotion = useReducedMotion();
   const dialoogId = useId();
+  const foutId = useId();
 
-  const zetTrigger = (el: HTMLButtonElement | null) => {
-    triggerRef.current = el;
+  const zetVeld = (el: HTMLInputElement | null) => {
+    veldRef.current = el;
     if (typeof ref === 'function') ref(el);
     else if (ref) ref.current = el;
   };
@@ -92,14 +109,50 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
   const vandaag = vandaagIso();
   const geldig = isIsoDag(value) ? value : '';
 
+  // Waarde van buiten (formulier gereset, ander record, kalender): het veld
+  // volgt, behalve terwijl iemand erin typt.
+  useEffect(() => {
+    if (typeof document !== 'undefined' && document.activeElement === veldRef.current) return;
+    setTekst(isoNaarDmj(value));
+    zetFout(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  /** Fout tonen én synchroon op het veld zetten: een submit in dezelfde tik ziet ze al. */
+  const zetFout = (reden: string | null) => {
+    setFout(reden);
+    const el = veldRef.current;
+    if (!el) return;
+    el.setCustomValidity(reden ?? '');
+    if (reden) el.dataset.datumFout = '1'; else delete el.dataset.datumFout;
+  };
+
+  /** Concept lezen en doorgeven; false = ongeldig (niets doorgegeven). */
+  const bevestig = (): boolean => {
+    const r = leesDmj(tekst);
+    if (r.staat === 'leeg') {
+      zetFout(null);
+      if (value) onChange('');
+      return true;
+    }
+    if (r.staat === 'fout') { zetFout(r.reden); return false; }
+    const buiten = bereikFout(r.iso, min, max);
+    if (buiten) { zetFout(buiten); return false; }
+    zetFout(null);
+    setTekst(isoNaarDmj(r.iso));
+    if (r.iso !== value) onChange(r.iso);
+    return true;
+  };
+
   const sluit = useCallback((focusTerug = false) => {
     setOpen(false);
-    if (focusTerug) triggerRef.current?.focus();
+    if (focusTerug) veldRef.current?.focus();
   }, []);
 
   const openKiezer = () => {
     if (disabled) return;
-    const start = klemOpBereik(geldig || vandaag, min, max);
+    const concept = leesDmj(tekst);
+    const start = klemOpBereik(concept.staat === 'geldig' ? concept.iso : geldig || vandaag, min, max);
     setCursor(start);
     setMaand(maandVan(start));
     setMobiel(typeof window !== 'undefined' && window.innerWidth < MOBIEL_BREEDTE);
@@ -109,20 +162,22 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
 
   const kies = (iso: string) => {
     if (!binnenBereik(iso, min, max)) return;
-    onChange(iso);
+    setTekst(isoNaarDmj(iso));
+    zetFout(null);
+    if (iso !== value) onChange(iso);
     sluit(true);
   };
 
   // Terugknop/swipe-back op mobiel sluit de kiezer i.p.v. het scherm.
   useHistoryDismiss(open, () => setOpen(false));
 
-  // Klik buiten trigger én dialoog sluit (de dialoog hangt in een portal,
+  // Klik buiten veld én dialoog sluit (de dialoog hangt in een portal,
   // dus `contains` op één wortel volstaat niet).
   useEffect(() => {
     if (!open) return;
     const buiten = (e: PointerEvent) => {
       const doel = e.target as Node;
-      if (dialoogRef.current?.contains(doel) || triggerRef.current?.contains(doel)) return;
+      if (dialoogRef.current?.contains(doel) || wortelRef.current?.contains(doel)) return;
       setOpen(false);
     };
     document.addEventListener('pointerdown', buiten);
@@ -134,7 +189,7 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
   useLayoutEffect(() => {
     if (!open || mobiel) return;
     const plaats = () => {
-      const t = triggerRef.current;
+      const t = wortelRef.current;
       const d = dialoogRef.current;
       if (!t || !d) return;
       const r = t.getBoundingClientRect();
@@ -193,8 +248,8 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
       case 'ArrowDown': e.preventDefault(); verplaats(addDagen(cursor, 7)); return;
       case 'PageUp': e.preventDefault(); verplaats(dagPlusMaand(cursor, e.shiftKey ? -12 : -1)); return;
       case 'PageDown': e.preventDefault(); verplaats(dagPlusMaand(cursor, e.shiftKey ? 12 : 1)); return;
-      case 'Home': e.preventDefault(); verplaats(addDagen(cursor, -((new Date(`${cursor}T00:00:00Z`).getUTCDay() + 6) % 7))); return;
-      case 'End': e.preventDefault(); verplaats(addDagen(cursor, 6 - ((new Date(`${cursor}T00:00:00Z`).getUTCDay() + 6) % 7))); return;
+      case 'Home': e.preventDefault(); verplaats(addDagen(cursor, -weekdagMa(cursor))); return;
+      case 'End': e.preventDefault(); verplaats(addDagen(cursor, 6 - weekdagMa(cursor))); return;
       case 'Tab': {
         e.stopPropagation();
         const d = dialoogRef.current;
@@ -211,15 +266,27 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
     }
   };
 
-  const onTriggerKey = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+  const onVeldKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (open && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); sluit(true); return; }
-    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); openKiezer(); }
+    if (!open && e.key === 'ArrowDown') { e.preventDefault(); openKiezer(); return; }
+    // Enter = bevestigen. Ongeldig: niet indienen (de fout staat bij het veld).
+    if (e.key === 'Enter' && !bevestig()) e.preventDefault();
+  };
+
+  const onVeldBlur = (e: FocusEvent<HTMLInputElement>) => {
+    // Naar de kalenderknop of in de dialoog: nog niet bevestigen, de keuze
+    // daar is zelf een bevestiging.
+    const naar = e.relatedTarget as Node | null;
+    if (naar && (knopRef.current?.contains(naar) || dialoogRef.current?.contains(naar))) return;
+    bevestig();
   };
 
   const grid = maandGrid(maand);
   const vorigeUit = maandBuitenBereik(maandPlus(maand, -1), min, max);
   const volgendeUit = maandBuitenBereik(maandPlus(maand, 1), min, max);
   const naamDialoog = dialogLabel ?? ariaLabel ?? 'Datum kiezen';
+  const ongeldig = invalid || !!fout;
+  const beschrijving = [ariaDescribedby, fout ? foutId : null].filter(Boolean).join(' ') || undefined;
 
   // Sheet: landscape-iOS negeert de portrait-lock, dus de zij-insets tellen
   // mee (zoals SlideOver) — anders vallen de randcellen achter de notch-hoek.
@@ -303,65 +370,65 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
       </div>
       <div className="mt-2 flex items-center justify-between border-t fine-divider pt-2">
         <Button variant="ghost" size="sm" disabled={!binnenBereik(vandaag, min, max)} onClick={() => kies(vandaag)}>Vandaag</Button>
-        <Button variant="ghost" size="sm" disabled={!value} onClick={() => { onChange(''); sluit(true); }}>Wissen</Button>
+        <Button variant="ghost" size="sm" disabled={!value && !tekst} onClick={() => { setTekst(''); zetFout(null); if (value) onChange(''); sluit(true); }}>Wissen</Button>
       </div>
     </motion.div>
   );
 
   return (
-    <>
-      {/* rauw: de trigger oogt als een Input (.control-input), niet als een knop — Button heeft die vorm niet. */}
-      <button
-        ref={zetTrigger}
-        type="button"
-        id={id}
-        disabled={disabled}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={open ? dialoogId : undefined}
-        aria-invalid={invalid || undefined}
-        aria-label={ariaLabel}
-        aria-labelledby={ariaLabelledby}
-        aria-describedby={ariaDescribedby}
-        aria-required={required || undefined}
-        data-datum={geldig || undefined}
-        onClick={() => (open ? sluit() : openKiezer())}
-        onKeyDown={onTriggerKey}
-        className={cn(
-          inputClass,
-          'inline-flex items-center gap-2 text-left',
-          size === 'sm' && 'w-auto rounded-lg px-3 py-2 text-xs sm:text-xs',
-          !geldig && 'text-slate-400',
-          invalid && invalidClass,
-          className,
-        )}
-      >
-        <CalendarDays size={16} aria-hidden="true" className="shrink-0 text-slate-400" />
-        <span className="truncate tabular-nums">{geldig ? formatDatumKiezer(geldig) : placeholder}</span>
-      </button>
-      {/* Verborgen spiegel voor formulieren: draagt `name` mee in FormData en
-          laat `required` door de native validatie lopen (opent de kiezer i.p.v.
-          een ballon op een onzichtbaar veld). Bewust níet `readOnly`: read-only
-          velden zijn per HTML-spec uitgesloten van constraint validation, dus
-          `required` deed niets en een leeg verplicht veld submitte gewoon
-          (controle-ronde 05-09, nr. 10). Onbedienbaar via tabIndex/aria-hidden/
-          pointer-events; de waarde komt uitsluitend via de kiezer. */}
-      {(name || required) && (
+    <div className={cn(size === 'sm' ? 'inline-block' : 'block w-full', className)}>
+      <div ref={wortelRef} className="relative">
         <input
+          ref={zetVeld}
           type="text"
-          tabIndex={-1}
-          aria-hidden="true"
-          name={name}
-          required={required}
+          id={id}
+          value={tekst}
           disabled={disabled}
-          value={value}
+          required={required}
+          placeholder={placeholder}
+          // Cijferklavier op de telefoon; acht cijfers zonder "/" worden ook gelezen.
+          inputMode="numeric"
           autoComplete="off"
-          className="sr-only pointer-events-none"
-          onChange={() => { /* waarde komt via de kiezer */ }}
-          onKeyDown={(e) => e.preventDefault()}
-          onInvalid={(e) => { e.preventDefault(); triggerRef.current?.focus(); openKiezer(); }}
-          onFocus={() => triggerRef.current?.focus()}
+          enterKeyHint="done"
+          spellCheck={false}
+          aria-invalid={ongeldig || undefined}
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledby}
+          aria-describedby={beschrijving}
+          data-datum={geldig || undefined}
+          onChange={(e) => {
+            setTekst(e.target.value);
+            // Tijdens het typen geen fout; bij de volgende bevestiging opnieuw.
+            if (fout) zetFout(null);
+          }}
+          onBlur={onVeldBlur}
+          onKeyDown={onVeldKey}
+          className={cn(
+            inputClass,
+            'pr-12 sm:pointer-fine:pr-10',
+            size === 'sm' && 'w-[9.5rem] rounded-lg px-3 py-2 text-xs sm:text-xs',
+            ongeldig && invalidClass,
+          )}
         />
+        <IconButton
+          ref={knopRef}
+          label="Kalender openen"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={open ? dialoogId : undefined}
+          onClick={() => (open ? sluit(true) : openKiezer())}
+          className="absolute right-0.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
+        >
+          <CalendarDays size={16} aria-hidden="true" />
+        </IconButton>
+      </div>
+      {/* De ISO-waarde in FormData, niet de getypte tekst. */}
+      {name && <input type="hidden" name={name} value={geldig} />}
+      {fout && (
+        <p id={foutId} role="alert" className="mt-1.5 text-xs font-medium text-red-700">{fout}</p>
       )}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
@@ -383,6 +450,6 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
         </AnimatePresence>,
         document.body,
       )}
-    </>
+    </div>
   );
 });

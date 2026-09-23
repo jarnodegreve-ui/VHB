@@ -9,6 +9,7 @@ import { forwardRef, useRef, type FormEvent, type FormHTMLAttributes } from 'rea
  * - `onVerstuur` mag async zijn; na afloop gaat de focus naar het eerste
  *   ongeldige veld (aria-invalid, of het control in een Field met fout) en
  *   scrolt dat in beeld. Zo hoeft geen enkel formulier dat zelf te doen.
+ * - Een datumveld met een ongeldige getypte datum houdt de submit tegen.
  * - Native constraint validation (`required`, `pattern`) blijft werken; de
  *   browser focust dan zelf. Wie alles via zod doet, zet `noValidate`.
  *
@@ -51,6 +52,15 @@ export const Formulier = forwardRef<HTMLFormElement, FormulierProps>(function Fo
   };
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // Een datumveld met een ongeldige getypte datum (DatePicker zet
+    // `data-datum-fout` synchroon bij blur/Enter) heeft zijn waarde niet
+    // doorgegeven: indienen zou de oude waarde versturen. Niet indienen,
+    // de fout staat al bij het veld (datumtranche PR 1).
+    const datumFout = eigen.current?.querySelector<HTMLElement>('[data-datum-fout]');
+    if (datumFout) {
+      datumFout.focus();
+      return;
+    }
     try {
       await onVerstuur(event);
     } finally {
