@@ -2,7 +2,8 @@ import { Children, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowUpRight, ChevronRight, Download, Info, Link2, Printer, RotateCcw } from 'lucide-react';
 import type { User, View } from '../../types';
 import { isStaf } from '../../types';
-import { useQueryParams, useRoute } from '../../app/router';
+import { useRoute } from '../../app/router';
+import { useQueryParams } from '../../app/queryParams';
 import { padVan } from '../../app/routes';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { DOMEINEN, rapportVan, rapportenVanDomein, type DomeinDef } from '../../../shared/rapporten/register';
