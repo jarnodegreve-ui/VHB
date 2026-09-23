@@ -691,10 +691,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               value={zoek}
               onChange={setZoek}
               label="Zoek chauffeur of dienst"
-              placeholder="Zoek chauffeur of dienst…"
+              placeholder="Chauffeur of dienst…"
               enterKeyHint="search"
               size="sm"
-              className="min-w-40 flex-1 sm:w-60 sm:flex-none"
+              className="min-w-40 flex-1 sm:w-52 sm:flex-none"
             />
             {/* Het 2-weken-venster is een desktop-begrip; op mobiel navigeert
                 de datumstrip (met eigen maandwissel) en is dit cluster ruis. */}
