@@ -1,6 +1,6 @@
 import { ArrowUpRight, Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw, Wrench, X } from 'lucide-react';
 import { useAppDataContext } from '../app/AppDataContext';
-import { routeUitUrl } from '../app/router';
+import { openDoel } from '../app/openDoel';
 import { datumsLeesbaar, tijdVan } from '../lib/meldingen';
 import { verwijderMeldingMetOngedaan } from '../lib/meldingVerwijderen';
 import { cn } from '../lib/ui';
@@ -41,10 +41,9 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
 
   const openMelding = (m: Melding) => {
     if (!m.gelezenOp) void markeerMeldingenGelezen([m.id]);
-    if (!m.doel) return onSluit();
-    const route = routeUitUrl('/' + m.doel.replace(/^\/+/, ''));
-    if (!route) return onSluit();
-    ga(route.view);
+    onSluit();
+    // Mét het record-segment (`verlof/l1`), zie openDoel.
+    openDoel(m.doel);
   };
 
   return (

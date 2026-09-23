@@ -1,6 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
-import { ADMIN, CHAUFFEUR, seed, type Fixture } from './helpers';
-import { apiFixtures } from '../scripts/audit-fixtures.mjs';
+import { test, expect } from '@playwright/test';
+import { ADMIN, CHAUFFEUR, seed } from './helpers';
+import { logIn, zonderSessie } from './deeplinkHulp';
 
 /**
  * Deeplinks V1 (tranche 3C, 23-09).
@@ -10,28 +10,6 @@ import { apiFixtures } from '../scripts/audit-fixtures.mjs';
  * na het inloggen daar terug. Alleen interne schermen; de rol-guard blijft
  * beslissen.
  */
-
-/** Geen sessie; na "Inloggen" geeft de Supabase-mock een sessie voor `user`. */
-async function zonderSessie(page: Page, user: Fixture) {
-  await page.route('**/auth/v1/**', (route) => {
-    const nu = Math.floor(Date.now() / 1000);
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        access_token: 'e2e', refresh_token: 'e2e', token_type: 'bearer', expires_in: 3600, expires_at: nu + 3600,
-        user: { id: 'auth-e2e', email: user.email, aud: 'authenticated', role: 'authenticated' },
-      }),
-    });
-  });
-  await page.route('**/api/**', apiFixtures(user, (p: string) => (p.endsWith('/api/auth/session') ? user : undefined)));
-}
-
-async function logIn(page: Page) {
-  await page.getByPlaceholder('naam@bedrijf.be').fill('test@vhb.be');
-  await page.getByLabel(/wachtwoord/i).first().fill('geheim-geheim');
-  await page.getByRole('button', { name: 'Inloggen' }).click();
-}
 
 test.describe('login → oorspronkelijke bestemming', () => {
   test('een scherm zonder sessie: inlogscherm op dezelfde URL, daarna dat scherm', async ({ page }) => {

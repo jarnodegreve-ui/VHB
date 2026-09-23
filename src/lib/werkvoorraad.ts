@@ -299,7 +299,7 @@ export function werkvoorraadItems(
       detail: `${formatDag(req.startDate)}${req.startDate !== req.endDate ? ` → ${formatDag(req.endDate)}` : ''} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : req.type === 'klein_verlet' ? 'klein verlet' : 'ziekte'}`,
       wanneer: epochVanTijd(req.createdAt), wanneerTekst: sindsTekst(req.createdAt, now),
       naam,
-      doel: 'verlof',
+      doel: 'verlof', doelParams: [req.id],
     });
   }
   for (const swap of wv.pendingSwaps) {

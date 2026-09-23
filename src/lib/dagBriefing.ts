@@ -15,6 +15,8 @@ export type BriefingAfwezige = {
   naam: string;
   phone?: string;
   type: LeaveRequest['type'];
+  /** De aanvraag achter de afwezigheid (voor `/verlof/<id>`, tranche 3C). */
+  leaveId: string;
   /** Laatste dag van de afwezigheid (ISO). */
   tot: string;
   /** Diensten van de dag die nog op zijn naam staan: te herverdelen. */
@@ -79,6 +81,7 @@ export function bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, dive
         naam: u?.name ?? `Onbekend (${id})`,
         phone: u?.phone,
         type: l.type,
+        leaveId: String(l.id),
         tot: l.endDate,
         diensten: teHerverdelen.filter((s) => String(s.driverId) === id),
       };

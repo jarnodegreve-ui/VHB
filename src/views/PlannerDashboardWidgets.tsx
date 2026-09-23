@@ -66,7 +66,8 @@ export function PlannerDashboardWidgets({
   onNavigate,
 }: {
   currentUser: User;
-  onNavigate: (view: View) => void;
+  /** `params` = record-segment (`['l1']` → /verlof/l1), tranche 3C. */
+  onNavigate: (view: View, params?: readonly string[]) => void;
 }) {
   // Alles wat uit de datalaag komt, leest de cockpit zelf uit de context:
   // de collecties, de dekking (null = nog niet geladen → 'onbekend' i.p.v.
@@ -752,7 +753,7 @@ export function PlannerDashboardWidgets({
             primary={`Verlofaanvraag · ${userNameById(req.userId)}`}
             secondary={`${formatPeriodeDMJ(req.startDate, req.endDate)} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : 'klein verlet'}`}
             meta={relTime(req.createdAt)}
-            onClick={() => onNavigate('verlof')}
+            onClick={() => onNavigate('verlof', [req.id])}
           />
           </Fragment>
         ))}

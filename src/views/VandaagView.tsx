@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, MapPin, Phone, Repeat, UserX } from 'lucide-react';
+import { AlertTriangle, ChevronRight, MapPin, Phone, Repeat, UserX } from 'lucide-react';
 import type { LeaveRequest, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { addDays, isoDate } from '../lib/availability';
@@ -11,7 +11,7 @@ import { AllesGedaan } from '../components/illustraties';
 import { Avatar } from '../components/Avatar';
 import { LijnTegel } from '../components/LijnTegel';
 import { OpsPanel, OpsRow } from '../components/ops';
-import { Badge, Button, Segmented } from '../components/primitives';
+import { Badge, Button, Pressable, Segmented } from '../components/primitives';
 import { ServiceChip } from '../components/ServiceChip';
 
 /**
@@ -118,11 +118,30 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
                       const href = telHref(a.phone);
                       return (
                         <li key={a.userId} className="flex items-center gap-3 px-1 py-2">
-                          <Avatar naam={a.naam} size="sm" naamZichtbaar={false} />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium text-slate-800">{a.naam}</span>
-                            <span className="block text-xs text-slate-500">{afwezigTekst(a)} · geen dienst op zijn naam</span>
-                          </span>
+                          {/* Verlof opent de aanvraag zelf (`/verlof/<id>`, tranche 3C);
+                              ziekte heeft zijn eigen scherm en blijft hier stil. */}
+                          {a.type === 'ziekte' ? (
+                            <>
+                              <Avatar naam={a.naam} size="sm" naamZichtbaar={false} />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-slate-800">{a.naam}</span>
+                                <span className="block text-xs text-slate-500">{afwezigTekst(a)} · geen dienst op zijn naam</span>
+                              </span>
+                            </>
+                          ) : (
+                            <Pressable
+                              onClick={() => onNavigate('verlof', [a.leaveId])}
+                              aria-label={`Verlofaanvraag van ${a.naam} openen`}
+                              className="-my-1 flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg hover:bg-surface-soft-hover"
+                            >
+                              <Avatar naam={a.naam} size="sm" naamZichtbaar={false} />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-slate-800">{a.naam}</span>
+                                <span className="block text-xs text-slate-500">{afwezigTekst(a)} · geen dienst op zijn naam</span>
+                              </span>
+                              <ChevronRight size={16} className="shrink-0 text-slate-400" aria-hidden="true" />
+                            </Pressable>
+                          )}
                           {href && (
                             <a href={href} aria-label={`Bel ${a.naam}`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-surface-soft-hover hover:text-slate-800">
                               <Phone size={16} />
