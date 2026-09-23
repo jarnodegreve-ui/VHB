@@ -7,7 +7,7 @@ import { useCallback, Suspense, useState, useEffect, useMemo, useRef } from 'rea
 import { useRoute, routeUitUrl, neemStartDoel } from './app/router';
 import { isBreed, magView, routeVan, sectieLabel } from './app/routes';
 import { SidebarNav } from './app/SidebarNav';
-import { SessieLaden, ProfielLaden, ConfigOntbreekt } from './app/PreAppScreens';
+import { SessieLaden, ProfielLaden, ConfigOntbreekt, PrintLaden } from './app/PreAppScreens';
 import { bepaalTweeStapsStap, leesTweeStapsStatus } from './lib/tweeStaps';
 import { GEDEELD_TOESTEL_EVENT, isGedeeldToestel, useInactiviteitsUitlog } from './lib/inactiviteit';
 import { AppSkeleton, heeftOpgeslagenSessie } from './app/AppSkeleton';
@@ -36,7 +36,6 @@ import { usePullToRefresh } from './lib/usePullToRefresh';
 import { DashboardSkelet } from './components/ui';
 import { skeletVoor } from './app/skeletten';
 import { SchermInhoud } from './app/SchermInhoud';
-import { printScherm } from './app/PrintModus';
 import { useThema } from './app/useThema';
 import { IconButton } from './components/primitives';
 import { Callout } from './components/Callout';
@@ -67,6 +66,9 @@ const laadCalendarSubscribeModal = () => import('./components/CalendarSubscribeM
 const laadProbleemMelder = () => import('./app/ProbleemMelder');
 const laadWerkvoorraadMenu = () => import('./components/WerkvoorraadMenu');
 const laadRitbladViewer = () => import('./components/RitbladViewer');
+// Print-modus (?print-…=) lui: zelden gebruikt, dus niet in de startbundel (P5).
+const LazyPrintModus = lazyWithRetry(() => import('./app/PrintModus'));
+const PRINT_PARAM = /[?&](print-(driver|gele-boek|rapport|verlof-driver)|ruiloverzicht-week)=/;
 const LazyChangePasswordModal = lazyWithRetry(() => laadChangePasswordModal().then((m) => ({ default: m.ChangePasswordModal })));
 const LazyCalendarSubscribeModal = lazyWithRetry(() => laadCalendarSubscribeModal().then((m) => ({ default: m.CalendarSubscribeModal })));
 // ProbleemMelder was de laatste schil-importeur van Field, en Field sleept de
@@ -1217,6 +1219,11 @@ export default function App() {
 
   // Gedeeld toestel: na 30 minuten zonder aanraking terug naar het
   // loginscherm, met uitleg (verbeterronde 07-09, nr. 12).
+  // Print-modus: voor wie de luie module het blad weigerde (rol mag het niet),
+  // tonen we het portaal; per gebruiker, zodat een andere login opnieuw kijkt.
+  const [printGeweigerdVoor, setPrintGeweigerdVoor] = useState<string | null>(null);
+  const geenPrintblad = useCallback(() => setPrintGeweigerdVoor(currentUser?.id ?? null), [currentUser?.id]);
+
   useInactiviteitsUitlog(gedeeldToestel && !!currentUser, () => {
     void forceSignOut('Automatisch afgemeld na een half uur zonder activiteit.', 'inactief');
   });
@@ -1226,8 +1233,15 @@ export default function App() {
   if (!authReady) return warmeStart ? <AppSkeleton /> : <SessieLaden />;
 
   // Print-modus (?print-…=): een kaal blad zonder schil. Zie app/PrintModus.tsx.
-  const printblad = printScherm({ currentUser, users, shifts, leaveRequests, isInitialLoad });
-  if (printblad) return printblad;
+  // Alleen met een ingelogde gebruiker (elk blad vraagt er een); weigert de
+  // module het blad voor deze gebruiker, dan het gewone portaal.
+  if (currentUser && printGeweigerdVoor !== currentUser.id && PRINT_PARAM.test(window.location.search)) {
+    return (
+      <Suspense fallback={<PrintLaden />}>
+        <LazyPrintModus currentUser={currentUser} users={users} shifts={shifts} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onGeenBlad={geenPrintblad} />
+      </Suspense>
+    );
+  }
 
   if (!isSupabaseConfigured || !supabase) return <ConfigOntbreekt />;
 
