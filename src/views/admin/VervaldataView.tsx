@@ -17,12 +17,17 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { DateInput, Field } from '../../components/Field';
-import { Button, FilterChip } from '../../components/primitives';
+import { Badge, Button, FilterChip, TOON_NAAR_BADGE } from '../../components/primitives';
+import { VERVAL_STATUS } from '../../../shared/status';
 import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../../components/Table';
 import { Tabel, TableShell, Td } from '../../components/TabelBasis';
 
 /** Uitschakelbare kolommen: één per bewaakt document (Chauffeur en Eerst vervallend blijven altijd). */
 const KOLOMMEN = Object.entries(EXPIRY_SOORT_LABELS).map(([key, label]) => ({ key, label }));
+
+/** "Nog in te vullen" is een aandachtspunt: de gedeelde waarschuwingstoon
+ *  (VERVAL_STATUS.geen_datum, amber), nooit het merkgoud en niet grijs. */
+const GEEN_DATUM_TOON = TOON_NAAR_BADGE[VERVAL_STATUS.geen_datum.toon];
 
 type ExpiryRow = { userId: string; soort: string; validUntil: string };
 type Filter = 'all' | 'verlopen' | 'binnen30' | 'binnen90' | 'zonder';
@@ -320,8 +325,8 @@ export function VervaldataView({ users }: { users: User[] }) {
                         {soorten.filter(([soort]) => voorkeur.zichtbaar(soort)).map(([soort, label]) => (
                           <Td key={soort} nowrap>{datumPil(rij, soort, label, false)}</Td>
                         ))}
-                        <Td className={cn('text-xs font-medium', rij.eerste === null ? 'text-oker-700' : rij.eerste < 0 ? 'text-red-700' : 'text-slate-600')}>
-                          {rij.eerste === null ? 'Nog in te vullen' : eersteTekst(rij.eerste)}
+                        <Td className={cn('text-xs font-medium', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-600')}>
+                          {rij.eerste === null ? <Badge tone={GEEN_DATUM_TOON} dot className="whitespace-nowrap">Nog in te vullen</Badge> : eersteTekst(rij.eerste)}
                         </Td>
                       </tr>
                     ))}
@@ -340,7 +345,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                   >
                     <div className="flex items-baseline justify-between gap-3">
                       <p className={cn('min-w-0 truncate text-sm font-semibold', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{rij.user.name}</p>
-                      {rij.eerste === null ? <span className="shrink-0 text-xs font-semibold text-oker-700">Invullen</span> : null}
+                      {rij.eerste === null ? <Badge tone={GEEN_DATUM_TOON} dot className="shrink-0 whitespace-nowrap">Nog in te vullen</Badge> : null}
                     </div>
                     <p className="text-xs font-medium text-slate-500">{eersteTekst(rij.eerste)}</p>
                     {rij.eerste !== null && (

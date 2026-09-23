@@ -179,7 +179,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                       <div key={i} className="flex flex-col gap-1">
                         <MicroLabel>Deel {i + 1}</MicroLabel>
                         <div className="flex items-center gap-2 whitespace-nowrap text-sm font-medium text-slate-700">
-                          <Clock size={14} className="text-oker-500" />
+                          <Clock size={14} className="text-slate-500" />
                           {tijdvak(d.start ?? '', d.end ?? '')}
                           <LoopChip loopnr={d.loop} />
                         </div>
@@ -227,7 +227,7 @@ function LoopCell({ loopnr }: { loopnr?: string }) {
 function TimeCell({ start, end }: { start: string; end: string }) {
   return (
     <span className="inline-flex items-center gap-2 font-medium text-slate-700 whitespace-nowrap">
-      <Clock size={14} className="text-oker-500" />
+      <Clock size={14} className="text-slate-500" />
       {start}–{end}
     </span>
   );

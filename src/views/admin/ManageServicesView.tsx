@@ -461,7 +461,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 <div className="flex flex-col gap-1">
                   <MicroLabel>Deel 1{s.loopnr ? ` · loop ${s.loopnr}` : ''}</MicroLabel>
                   <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
-                    <Clock size={14} className="text-oker-500" />
+                    <Clock size={14} className="text-slate-500" />
                     {tijdvak(s.startTime, s.endTime)}
                   </div>
                 </div>
@@ -470,7 +470,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   <div className="flex flex-col gap-1">
                     <MicroLabel>Deel 2{s.loopnr2 ? ` · loop ${s.loopnr2}` : ''}</MicroLabel>
                     <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
-                      <Clock size={14} className="text-oker-500" />
+                      <Clock size={14} className="text-slate-500" />
                       {tijdvak(s.startTime2!, s.endTime2!)}
                     </div>
                   </div>
@@ -480,7 +480,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   <div className="flex flex-col gap-1">
                     <MicroLabel>Deel 3{s.loopnr3 ? ` · loop ${s.loopnr3}` : ''}</MicroLabel>
                     <div className="flex items-center gap-2 whitespace-nowrap text-slate-700 font-semibold text-sm">
-                      <Clock size={14} className="text-oker-500" />
+                      <Clock size={14} className="text-slate-500" />
                       {tijdvak(s.startTime3!, s.endTime3!)}
                     </div>
                   </div>
