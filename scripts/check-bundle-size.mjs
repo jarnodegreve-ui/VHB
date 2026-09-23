@@ -68,7 +68,12 @@ import zlib from 'node:zlib';
 // totaal: gemeten 655,97 tegen 655,38 op de tak ervoor, die al tegen de
 // grens van 655 stond. 660 = de meting plus de marge voor de rest van 3B;
 // de deelbudgetten (entry 74) blijven de echte bewaker van de start.
-const BUDGET_KB = 660;
+// 23-09 (datumtranche PR 1): 660 → 665. Het typbare datumveld (parser,
+// foutregel, kalenderknop) en 3C (record-links, terugkeer na login, eigen
+// chunks voor terugNaLogin en ToestelGeblokkeerd) brachten het totaal op
+// 661 kB in CI; de rest van de datumtranche (MaandInput, verlofkalender) komt
+// er nog bij. De entry (74) en de warmup-sets blijven de echte bewakers.
+const BUDGET_KB = 665;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
