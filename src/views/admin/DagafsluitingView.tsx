@@ -334,7 +334,7 @@ const KAART = {
 
 /** Kopje boven een cel in de kaart op de telefoon; vanaf md staat de kolomkop er al boven. */
 function KaartKop({ children }: { children: string }) {
-  return <span className="mb-1 block text-micro md:hidden">{children}</span>;
+  return <span className="mb-1 block text-label text-slate-500 md:hidden">{children}</span>;
 }
 
 function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaar, onBewaard, onVerwijder }: {
