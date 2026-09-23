@@ -9,7 +9,7 @@ export function useDropdown() {
   const [open, setOpen] = useState(false);
   const wortel = useRef<HTMLDivElement>(null);
   /** Het zwevende vlak als het in een portal buiten de wortel staat
-   *  (`<Popover anker vlakRef={vlak}>`): een klik daarin is geen buiten-klik. */
+   *  (`<AnkerPopover vlakRef={vlak}>`): een klik daarin is geen buiten-klik. */
   const vlak = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

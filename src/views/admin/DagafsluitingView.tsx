@@ -25,7 +25,7 @@ import { ActieMenu } from '../../components/ActieMenu';
 import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
 import { Badge, Button, FilterChip, IconButton, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
 import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
-import { Popover } from '../../components/Popover';
+import { AnkerPopover } from '../../components/AnkerPopover';
 import { useDropdown } from '../../components/useDropdown';
 import { Checkbox, StickyThead } from '../../components/Table';
 
@@ -412,7 +412,7 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
           <AutosaveTeken staat={vlagCel.staat} />
           {/* Geankerd (portal + fixed): de tabel schuift in haar kader, een
               absoluut vlak werd op de onderste rijen afgeknipt. */}
-          <Popover open={vlaggenOpen} id={vlaggenId} label={`Kwaliteitsvlaggen van ${naam}`} align="left" breedte="md" anker={vlaggenKnop} vlakRef={vlaggenVlak} onSluit={() => setVlaggenOpen(false)}>
+          <AnkerPopover open={vlaggenOpen} id={vlaggenId} label={`Kwaliteitsvlaggen van ${naam}`} align="left" breedte="md" anker={vlaggenKnop} vlakRef={vlaggenVlak} onSluit={() => setVlaggenOpen(false)}>
               {QUAL_VLAGGEN.map((k: QualVlag) => (
                 <div key={k} className="flex min-h-9 items-center gap-1 rounded-lg pr-2 text-sm hover:bg-surface-soft-hover">
                   <Checkbox
@@ -426,7 +426,7 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
                 </div>
               ))}
             <div className="mt-1 flex justify-end"><Button variant="ghost" size="sm" onClick={() => setVlaggenOpen(false)}>Sluiten</Button></div>
-          </Popover>
+          </AnkerPopover>
         </div>
         <AutosaveFout staat={vlagCel.staat} id={cellen.vlaggen} />
       </Td>

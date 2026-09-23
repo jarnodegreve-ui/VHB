@@ -61,7 +61,14 @@ import zlib from 'node:zlib';
 // vervolgstap, statuswoordenschat) en haar uitrol over ±45 formulieren: gemeten
 // 646 kB in CI na #611, met #610/#612/#613 nog te gaan. De entry blijft onder
 // 74 (73,2 kB), zod blijft uit de schermen zonder schema (valideerKern).
-const BUDGET_KB = 655;
+// 23-09 (tranche 3B.2): 655 → 660. De ankermodus van het vlaggenmenu
+// (portal + fixed) zat eerst in Popover en zette de entry op 74,58 kB; ze
+// staat nu in AnkerPopover, alleen in de lui geladen Dagafsluiting-chunk
+// (entry terug op 73,72). Los gecomprimeerd kost dat ±0,6 kB meer in het
+// totaal: gemeten 655,97 tegen 655,38 op de tak ervoor, die al tegen de
+// grens van 655 stond. 660 = de meting plus de marge voor de rest van 3B;
+// de deelbudgetten (entry 74) blijven de echte bewaker van de start.
+const BUDGET_KB = 660;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ankerPositie } from './Popover';
+import { ankerPositie } from './AnkerPopover';
 
-// Rekenkern van de geankerde Popover (portal + fixed): onder het anker als
+// Rekenkern van AnkerPopover (portal + fixed): onder het anker als
 // het past, anders erboven, anders tegen de onderrand, pas daarna een eigen
 // scroll; horizontaal altijd binnen de viewport (marge 8 px).
 const VP = { breedte: 1024, hoogte: 768 };
