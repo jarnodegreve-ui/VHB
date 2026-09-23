@@ -19,6 +19,14 @@ import { defineConfig, devices } from '@playwright/test';
  * Eenmalig lokaal: `npx playwright install chromium webkit`.
  */
 
+// De testdata (dayOffset in scripts/audit-fixtures.mjs, vandaagIso in de
+// e2e-helpers) rekent in de tijdzone van dit Node-proces, de browser draait
+// met `timezoneId` in Europe/Brussels. Op een runner in UTC viel "vandaag"
+// tussen 00:00 en 02:00 Brusselse tijd op twee verschillende dagen en faalden
+// de specs die op vandaag rekenen (main 24-09, 00:07). Hier gezet, vóór de
+// workers starten, zodat ze het erven: Node en browser in dezelfde zone.
+process.env.TZ = 'Europe/Brussels';
+
 // E2E_PORT: parallelle sessies/worktrees kiezen elk een vrije poort (4173 blijft de standaard).
 const PORT = Number(process.env.E2E_PORT) > 0 ? Number(process.env.E2E_PORT) : 4173;
 
