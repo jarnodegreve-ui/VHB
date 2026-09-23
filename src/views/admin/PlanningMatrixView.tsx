@@ -6,6 +6,8 @@ import { csvTekst } from '../../lib/csv';
 import { celBadgeTone } from '../../lib/planningKind';
 import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, Chip, FilterChip, IconButton, MicroLabel } from '../../components/primitives';
+import { StickyThead } from '../../components/Table';
+import { formatDatumDMJ, formatDayLong, WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
 import { OpsStat } from '../../components/ops';
@@ -16,7 +18,7 @@ import { Field, Input, Select } from '../../components/Field';
 import { useOptioneleAppData } from '../../app/AppDataContext';
 import { navigeer } from '../../app/router';
 import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken, suggestClosestName } from '../../lib/planning';
-import { TableShell, Td, Th } from '../../components/TabelBasis';
+import { TableShell, Td, Th, Tabel } from '../../components/TabelBasis';
 
 /** Zelfde categorieën als Planningscodes (die view is een eigen chunk, dus niet importeren). */
 const CATEGORIE_OPTIES: Array<{ value: PlanningCode['category']; label: string }> = [
@@ -26,6 +28,14 @@ const CATEGORIE_OPTIES: Array<{ value: PlanningCode['category']; label: string }
   { value: 'training', label: 'Opleiding' },
   { value: 'unknown', label: 'Onbekend' },
 ];
+
+/** "wo 17/09/2026": weekdag + dag/maand/jaar, nooit een rauwe of lokale datumnotatie. */
+const dagKort = (iso: string) => {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? formatDatumDMJ(iso) : `${WEEKDAY_SHORT_SUN[d.getDay()]} ${formatDatumDMJ(iso)}`;
+};
+/** "woensdag 17 september 2026": de kop van de gekozen dag. */
+const dagLang = (iso: string) => `${formatDayLong(iso)} ${iso.slice(0, 4)}`;
 
 /** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
 // Gedeelde kleurentaal met de Maandplanning (src/lib/planningKind.ts) —
@@ -238,7 +248,7 @@ export function PlanningMatrixView({
 
     const exportProblemReport = () => {
     const problemReportRows = deferredRows.flatMap((row) => {
-      const formattedDate = new Date(row.source_date).toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const formattedDate = formatDatumDMJ(row.source_date);
       const unknownRows = (Object.entries(row.assignments || {}) as Array<[string, string]>)
         .filter(([, code]) => {
           const normalizedCode = normalizePlanningToken(code);
@@ -434,50 +444,56 @@ export function PlanningMatrixView({
               </InfoTip>
             )}
           />
-          <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-2">
-            {visibleDayRows.length > 0 ? visibleDayRows.map((row) => {
-              const summary = derived.daySummaryByDate.get(row.source_date);
-              const assignmentCount = summary?.assignmentCount || 0;
-              const generatedServices = summary?.generatedServices || 0;
-              const rowUnknownCodes = summary?.unknownCodeCount || 0;
-              const rowUnmatchedDrivers = summary?.unmatchedDriverCount || 0;
-              const isActive = row.source_date === selectedDate;
-              return (
-                // rauw: dagkaart-als-knop met eigen layout (datum, tellingen, badges)
-                <button
-                  key={row.id}
-                  onClick={() => setSelectedDate(row.source_date)}
-                  className={cn(
-                    'ios-pressable w-full rounded-2xl border px-4 py-3 text-left',
-                    isActive ? 'border-hairline-strong bg-surface-muted' : 'border-hairline-subtle bg-surface-field hover:bg-surface-soft-hover'
-                  )}
-                >
-                  <p className="text-sm font-semibold text-slate-800 tabular-nums">
-                    {new Date(row.source_date).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
-                  </p>
-                  <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-slate-500 tabular-nums">
-                    <span>Dagtype {row.day_type || '—'}</span>
-                    <span>{assignmentCount} codes</span>
-                  </div>
-                  <div className="mt-0.5 flex items-center justify-between text-xs font-medium text-slate-500 tabular-nums">
-                    <span>{generatedServices} diensten</span>
-                    {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
-                      ? <span className="font-semibold text-amber-700">controle nodig</span>
-                      : null}
-                  </div>
-                  {(rowUnknownCodes > 0 || rowUnmatchedDrivers > 0) ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {rowUnknownCodes > 0 ? (
-                        <Badge tone="red">{rowUnknownCodes} onbekend</Badge>
-                      ) : null}
-                      {rowUnmatchedDrivers > 0 ? (
-                        <Badge tone="amber">{rowUnmatchedDrivers} chauffeur</Badge>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </button>
-              );
-            }) : (
+          <div className="max-h-[70vh] overflow-y-auto pr-2">
+            {visibleDayRows.length > 0 ? (
+              // Echte lijst; de gekozen dag draagt aria-current (tranche 3B).
+              <ul className="space-y-3" aria-label="Geüploade dagen">
+                {visibleDayRows.map((row) => {
+                  const summary = derived.daySummaryByDate.get(row.source_date);
+                  const assignmentCount = summary?.assignmentCount || 0;
+                  const generatedServices = summary?.generatedServices || 0;
+                  const rowUnknownCodes = summary?.unknownCodeCount || 0;
+                  const rowUnmatchedDrivers = summary?.unmatchedDriverCount || 0;
+                  const isActive = row.source_date === selectedDate;
+                  return (
+                    <li key={row.id}>
+                      {/* rauw: dagkaart-als-knop met eigen layout (datum, tellingen, badges) */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDate(row.source_date)}
+                        aria-current={isActive ? 'true' : undefined}
+                        className={cn(
+                          'ios-pressable w-full rounded-2xl border px-4 py-3 text-left',
+                          isActive ? 'border-hairline-strong bg-surface-muted' : 'border-hairline-subtle bg-surface-field hover:bg-surface-soft-hover'
+                        )}
+                      >
+                        <span className="block text-sm font-semibold text-slate-800">{dagKort(row.source_date)}</span>
+                        <span className="mt-1.5 flex items-center justify-between text-xs font-medium text-slate-500">
+                          <span>Dagtype {row.day_type || '—'}</span>
+                          <span>{assignmentCount} codes</span>
+                        </span>
+                        <span className="mt-0.5 flex items-center justify-between text-xs font-medium text-slate-500">
+                          <span>{generatedServices} diensten</span>
+                          {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
+                            ? <span className="font-semibold text-amber-700">controle nodig</span>
+                            : null}
+                        </span>
+                        {(rowUnknownCodes > 0 || rowUnmatchedDrivers > 0) ? (
+                          <span className="mt-2 flex flex-wrap gap-1.5">
+                            {rowUnknownCodes > 0 ? (
+                              <Badge tone="red">{rowUnknownCodes} onbekend</Badge>
+                            ) : null}
+                            {rowUnmatchedDrivers > 0 ? (
+                              <Badge tone="amber">{rowUnmatchedDrivers} chauffeur</Badge>
+                            ) : null}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
               <EmptyState
                 variant={showOnlyIssues ? 'klaar' : 'leeg'}
                 title={showOnlyIssues ? "Geen probleemdagen gevonden" : "Nog geen matrixplanning"}
@@ -489,6 +505,7 @@ export function PlanningMatrixView({
                 size="sm"
                 variant="secondary"
                 full
+                className="mt-3"
                 onClick={() => setVisibleDayCount((current) => current + 60)}
               >
                 Toon meer dagen ({visibleRows.length - visibleDayRows.length} resterend)
@@ -502,8 +519,8 @@ export function PlanningMatrixView({
             <>
               <CardHeader
                 className="mb-5"
-                title={new Date(selectedRow.source_date).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                description={<span className="tabular-nums">Dagtype {selectedRow.day_type || '—'} · {assignments.length} ingevulde chauffeurcodes.</span>}
+                title={dagLang(selectedRow.source_date)}
+                description={<span>Dagtype {selectedRow.day_type || '—'} · {assignments.length} ingevulde chauffeurcodes.</span>}
               />
 
               <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -582,22 +599,26 @@ export function PlanningMatrixView({
                 </div>
               ) : null}
 
-              <TableShell className="mt-5">
+              {/* Toewijzingen van de gekozen dag. Tabel vanaf md (vier korte
+                  kolommen, past in de kaart: `past`, dus de kop plakt onder de
+                  topbar bij een lange dag), op de telefoon een lijst met
+                  dezelfde gegevens én dezelfde actie (onbekende code toevoegen). */}
+              <TableShell className="mt-5" past label={`Toewijzingen op ${dagKort(selectedRow.source_date)}`}>
                 <div className="hidden md:block">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50/60">
+                  <Tabel>
+                    <StickyThead>
                       <tr>
                         <Th>Chauffeur</Th>
                         <Th>Code</Th>
                         <Th>Interpretatie</Th>
                         <Th>Uren / status</Th>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-hairline-subtle">
+                    </StickyThead>
+                    <tbody>
                       {filteredAssignments.map((assignment) => (
-                        <tr key={assignment.driver} className="hover:bg-surface-soft-hover transition-colors">
-                          <Td className="font-semibold text-slate-800">{assignment.driver}</Td>
-                          <Td>
+                        <tr key={assignment.driver} className="border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
+                          <Th scope="row" className="py-3 text-sm font-semibold text-slate-800 whitespace-normal">{assignment.driver}</Th>
+                          <Td nowrap>
                             <span className="inline-flex items-center gap-0.5">
                               <Chip tone={celBadgeTone(assignment)} className="uppercase">
                                 {assignment.code}
@@ -610,27 +631,35 @@ export function PlanningMatrixView({
                             </span>
                           </Td>
                           <Td className="font-semibold text-slate-800">{assignment.label}</Td>
-                          <Td className="text-slate-500 tabular-nums">{assignment.details}</Td>
+                          <Td className="text-slate-500">{assignment.details}</Td>
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </Tabel>
                 </div>
 
-                <div className="divide-y divide-hairline-subtle md:hidden">
+                <ul className="divide-y divide-hairline-subtle md:hidden">
                   {filteredAssignments.map((assignment) => (
-                    <div key={assignment.driver} className="p-5">
+                    <li key={assignment.driver} className="px-4 py-3">
                       <p className="text-sm font-semibold text-slate-800">{assignment.driver}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Chip tone={celBadgeTone(assignment)} className="uppercase">
-                          {assignment.code}
-                        </Chip>
+                        <span className="inline-flex items-center gap-0.5">
+                          <Chip tone={celBadgeTone(assignment)} className="uppercase">
+                            {assignment.code}
+                          </Chip>
+                          {/* Zelfde actie als in de tabel (was er op de telefoon niet). */}
+                          {assignment.kind === 'unknown' && savePlanningCodes && (
+                            <IconButton label={`Voeg ${assignment.code} toe als planningscode`} variant="ghost" size="sm" onClick={() => openNieuweCode(assignment.code)}>
+                              <Plus size={14} />
+                            </IconButton>
+                          )}
+                        </span>
                         <span className="text-xs font-semibold text-slate-500">{assignment.label}</span>
                       </div>
-                      <p className="mt-2 text-sm font-medium text-slate-500 tabular-nums">{assignment.details}</p>
-                    </div>
+                      {assignment.details ? <p className="mt-1.5 text-body-sm text-slate-500">{assignment.details}</p> : null}
+                    </li>
                   ))}
-                </div>
+                </ul>
               </TableShell>
             </>
           ) : (
