@@ -245,7 +245,8 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             uitleg-popover. */}
         <Segmented<'all' | PlanningCode['category']>
           label="Categorie"
-          className="mt-4 flex-wrap"
+          telefoon="schuif"
+          className="mt-4"
           waarde={filter}
           opties={[
             { waarde: 'all', label: 'Alles' },

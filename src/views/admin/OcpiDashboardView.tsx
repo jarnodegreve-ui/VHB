@@ -95,7 +95,7 @@ export function OcpiDashboardView() {
         )}
       />
 
-      <TermijnKeuze label="Onderdeel" waarde={tab} opties={TABS} onKies={(t) => gaNaar(t, t === 'maand' && periodeKeuze ? [paramUitPeriode(periodeKeuze)] : [])} />
+      <TermijnKeuze label="Onderdeel" telefoon="vol" waarde={tab} opties={TABS} onKies={(t) => gaNaar(t, t === 'maand' && periodeKeuze ? [paramUitPeriode(periodeKeuze)] : [])} />
 
       {tab === 'live' && (
         zl.fout && !data ? (

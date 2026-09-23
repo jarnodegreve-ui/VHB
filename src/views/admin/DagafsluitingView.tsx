@@ -156,15 +156,19 @@ export function DagafsluitingView({ currentUser, users }: { currentUser: User; u
 
       {/* Datumnavigatie */}
       <Card padding="sm" className="flex flex-wrap items-center gap-2">
-        <IconButton label="Vorige dag" onClick={() => zetDatum(schuifDag(datum, -1))}><ChevronLeft size={18} /></IconButton>
-        {/* Telefoon: het datumveld vult de rij tussen de pijlen (was w-44:
-            "ma 21 sep 20…") en de lange dagnaam staat er al in, dus die
-            komt pas vanaf md. */}
-        <div className="min-w-0 flex-1 md:flex-none md:w-44"><DateInput value={datum} max={vandaag} maxMelding={TOEKOMST_MELDING} wisbaar={false} onChange={zetDatum} aria-label="Dag" /></div>
-        <IconButton label="Volgende dag" disabled={datum >= vandaag} title={datum >= vandaag ? TOEKOMST_MELDING : undefined} onClick={() => zetDatum(schuifDag(datum, 1))}><ChevronRight size={18} /></IconButton>
+        {/* Telefoon: pijlen + datumveld zijn samen één volle rij, status en
+            Gisteren schuiven naar een tweede rij. Stonden ze in dezelfde
+            wrap-rij, dan kreeg het datumveld (flex-1, basis 0) alleen de
+            restruimte en bleef op 375/390 px enkel het kalendericoon over.
+            De lange dagnaam staat al in het veld, dus die komt pas vanaf md. */}
+        <div className="flex w-full min-w-0 items-center gap-2 md:w-auto">
+          <IconButton label="Vorige dag" onClick={() => zetDatum(schuifDag(datum, -1))}><ChevronLeft size={18} /></IconButton>
+          <div className="min-w-0 flex-1 md:flex-none md:w-44"><DateInput value={datum} max={vandaag} maxMelding={TOEKOMST_MELDING} wisbaar={false} onChange={zetDatum} aria-label="Dag" /></div>
+          <IconButton label="Volgende dag" disabled={datum >= vandaag} title={datum >= vandaag ? TOEKOMST_MELDING : undefined} onClick={() => zetDatum(schuifDag(datum, 1))}><ChevronRight size={18} /></IconButton>
+        </div>
         <p className="hidden md:block min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{formatDayLong(datum)}</p>
         {statusBadge}
-        <Button variant="ghost" size="sm" icon={<Calendar size={14} />} onClick={() => zetDatum(schuifDag(vandaag, -1))}>Gisteren</Button>
+        <Button variant="ghost" size="sm" className="ml-auto md:ml-0" icon={<Calendar size={14} />} onClick={() => zetDatum(schuifDag(vandaag, -1))}>Gisteren</Button>
       </Card>
 
       {zl.fout && (detail || voorstel) && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
@@ -380,12 +384,15 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
   const cellen = { geredenCode: `${r.id}-code-fout`, premie: `${r.id}-premie-fout`, vlaggen: `${r.id}-vlaggen-fout`, opmerking: `${r.id}-opmerking-fout` };
   const celProps = { r, afgesloten, bewaar, onBewaard };
   return (
-    <tr className={cn('border-b border-hairline-subtle last:border-b-0 align-top', KAART.rij)}>
-      <Td className={cn(VASTE_KOLOM, KAART.cel, 'max-md:col-span-5 max-md:-order-2')}>
+    // align-middle: invoervelden, schakelaar en knop staan op één lijn met de
+    // naam (align-top zette ze telkens een paar pixels anders).
+    <tr className={cn('border-b border-hairline-subtle last:border-b-0 align-middle', KAART.rij)}>
+      {/* Naam op één regel: de kolom was zo smal dat "Diether Van Haute" over drie regels brak. */}
+      <Td className={cn(VASTE_KOLOM, KAART.cel, 'md:whitespace-nowrap', 'max-md:col-span-5 max-md:-order-2')}>
         <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800"><Avatar naam={r.naam ?? '?'} size="sm" />{r.naam}{r.volgnr > 1 && <Badge tone="slate" stil className="whitespace-nowrap">rij {r.volgnr}</Badge>}</span>
       </Td>
       <Td nowrap className={cn('text-slate-500', KAART.cel, 'max-md:col-span-2')}><KaartKop>Planning</KaartKop>{r.planningCode ? (codeMap.get(loonCodeSleutel(r.planningCode))?.codeWeergave ?? r.planningCode) : '—'}</Td>
-      <Td className={cn(KAART.cel, 'max-md:col-span-4')}>
+      <Td className={cn(KAART.cel, 'md:whitespace-nowrap', 'max-md:col-span-4')}>
         <KaartKop>Gereden</KaartKop>
         <div className="flex items-center gap-1.5">
           <Select
@@ -394,7 +401,9 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
             disabled={afgesloten}
             invalid={onbekend || codeCel.staat.status === 'fout'}
             aria-describedby={codeCel.staat.status === 'fout' ? cellen.geredenCode : undefined}
-            className={cn('min-w-0 px-2 py-1 text-sm', afwijkend && 'font-semibold')}
+            // Vaste breedte vanaf md: met min-w-0 kromp de keuzelijst naast
+            // het afwijkt-label tot een lege strook.
+            className={cn('min-w-0 px-2 py-1 text-sm max-md:flex-1 md:w-40 md:shrink-0', afwijkend && 'font-semibold')}
             onChange={(e) => codeCel.verander(e.target.value, sleutel)}
           >
             <option value="">— geen —</option>
@@ -403,9 +412,11 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
             <optgroup label="Afwezig / ander">{variaCodes.map((c) => <option key={c.code} value={c.code}>{c.codeWeergave}{c.omschrijving ? ` · ${c.omschrijving}` : ''}</option>)}</optgroup>
           </Select>
           <AutosaveTeken staat={codeCel.staat} />
-          {/* Afwijken van de planning is informatie, geen fout: info-toon, geen goud (tranche 3B.2). */}
-          {afwijkend && <Badge tone="blue" stil dot className="whitespace-nowrap">afwijkt</Badge>}
         </div>
+        {/* Afwijken van de planning is informatie, geen fout: info-toon, geen goud (tranche 3B.2).
+            Onder de keuzelijst i.p.v. ernaast: naast elkaar maakten ze de
+            kolom voor elke rij ±90 px breder. */}
+        {afwijkend && <Badge tone="blue" stil dot className="mt-1 whitespace-nowrap">afwijkt</Badge>}
         <AutosaveFout staat={codeCel.staat} id={cellen.geredenCode} />
       </Td>
       <Td num className={cn(KAART.cel, KAART.getal)}><KaartKop>Over</KaartKop><MinutenCel veld="overmin" {...celProps} /></Td>

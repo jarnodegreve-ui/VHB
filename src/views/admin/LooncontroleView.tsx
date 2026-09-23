@@ -51,6 +51,7 @@ export function LooncontroleView({ currentUser, onNavigate }: { currentUser: Use
       <PageHeader view="looncontrole" title="Looncontrole" actions={versheid ? <VersheidRegel {...versheid} /> : undefined} />
       <Segmented<Tab>
         label="Onderdeel"
+        telefoon="vol"
         className="shrink-0"
         itemClassName="min-h-11 sm:pointer-fine:min-h-8"
         waarde={tab}

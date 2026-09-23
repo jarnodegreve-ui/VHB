@@ -160,10 +160,11 @@ export const laadpuntSort = (a: string | null | undefined, b: string | null | un
 
 // ---- Bedieningselementen ----
 /** Termijn-/tabschakelaar in de app-standaard segmented-maat. */
-export function TermijnKeuze<T extends string>({ label, waarde, opties, onKies, className }: { label: string; waarde: T; opties: Array<{ id: T; label: string }>; onKies: (t: T) => void; className?: string }) {
+export function TermijnKeuze<T extends string>({ label, waarde, opties, onKies, className, telefoon }: { label: string; waarde: T; opties: Array<{ id: T; label: string }>; onKies: (t: T) => void; className?: string; telefoon?: 'vol' | 'schuif' }) {
   return (
     <Segmented<T>
       label={label}
+      telefoon={telefoon}
       className={cn('shrink-0', className)}
       waarde={waarde}
       opties={opties.map((o) => ({ waarde: o.id, label: o.label }))}

@@ -19,6 +19,13 @@ import { cn } from '../lib/ui';
 const TabelLabelContext = createContext<string | undefined>(undefined);
 
 /**
+ * Waar in het tabelkader staat een kop-onderdeel? `true` binnen de `kop` van
+ * een `TableShell` (px-5 onder md): TableToolbar laat zijn filterrij daar tot
+ * aan de rand van de kaart doorlopen.
+ */
+export const TabelKopContext = createContext(false);
+
+/**
  * Het tabelkader: kaartvlak (`surface-table`), afgeronde rand, optioneel een
  * kop (toolbar, filters, bulkbalk) met een hairline eronder, en de tabel.
  * Schermen rollen de wrapper `div.surface-table rounded-3xl overflow-clip`
@@ -60,28 +67,40 @@ export function TableShell({ className, sticky = false, past = false, label, kop
 }) {
   const strook = useRef<HTMLDivElement>(null);
   const [schuift, setSchuift] = useState(false);
+  // Staat er rechts nog iets buiten beeld? Dan vervaagt de rechterrand van
+  // de strook (P4, 23-09): een brede tabel die in haar kader schuift
+  // (Dagadministratie, Voertuigen op 1440 px) las anders als afgeknipt.
+  const [meerRechts, setMeerRechts] = useState(false);
   useLayoutEffect(() => {
     const el = strook.current;
     if (!el || past) return;
-    const meet = () => setSchuift(el.scrollWidth > el.clientWidth + 1);
+    const meet = () => {
+      const breder = el.scrollWidth > el.clientWidth + 1;
+      setSchuift(breder);
+      setMeerRechts(breder && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    };
     meet();
-    if (typeof ResizeObserver === 'undefined') return;
+    el.addEventListener('scroll', meet, { passive: true });
+    if (typeof ResizeObserver === 'undefined') return () => el.removeEventListener('scroll', meet);
     const waarnemer = new ResizeObserver(meet);
     waarnemer.observe(el);
     for (const kind of Array.from(el.children)) waarnemer.observe(kind);
-    return () => waarnemer.disconnect();
+    return () => { waarnemer.disconnect(); el.removeEventListener('scroll', meet); };
   }, [past, children]);
   return (
     <TabelLabelContext.Provider value={label}>
       <div className={cn('surface-table rounded-3xl overflow-clip', className)}>
-        {kop ? <div className="border-b border-hairline px-5 py-4 md:px-6">{kop}</div> : null}
+        {kop ? <div className="border-b border-hairline px-5 py-4 md:px-6"><TabelKopContext.Provider value>{kop}</TabelKopContext.Provider></div> : null}
         <div
           ref={strook}
           // `relative`: een absoluut gepositioneerd kind (een sr-only-tekst in
           // een kolomkop, een popover) rekent anders tegen een voorouder
           // buiten de strook en duwt de hele pagina breder, ook als de tabel
           // zelf netjes schuift (Maandplanning op 768/1024 px in CI, 23-09).
-          className={cn('relative', past ? undefined : sticky ? 'overflow-x-auto xl:overflow-visible' : 'overflow-x-auto')}
+          // `strook-meer-rechts` (index.css): het masker hangt aan de strook
+          // zelf, niet aan de inhoud; het blijft op de rand staan terwijl de
+          // tabel eronderdoor schuift, en valt weg zodra je aan het eind bent.
+          className={cn('relative', past ? undefined : sticky ? 'overflow-x-auto xl:overflow-visible' : 'overflow-x-auto', meerRechts && !past && 'strook-meer-rechts')}
           {...(schuift && !past ? { role: 'region', 'aria-label': label ?? 'Tabel', tabIndex: 0 } : {})}
         >
           {children}

@@ -391,6 +391,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           een tabel (een persoon met één tot vier toestellen die openklappen). */}
       <div role="search" aria-label="Toestellen zoeken en filteren">
         <TableToolbar
+          rand="pagina"
           zoek={zoek}
           onZoek={setZoek}
           placeholder="Zoek gebruiker of toestel…"

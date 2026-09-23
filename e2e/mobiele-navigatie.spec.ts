@@ -59,6 +59,12 @@ for (const sluitMet of ['sluitknop', 'terugknop'] as const) {
     await expect(dock).toBeVisible({ timeout: 15_000 });
     await dock.getByRole('button', { name: 'Omleidingen', exact: true }).tap();
     await expect(page).toHaveURL(/\/omleidingen$/);
+    // De URL wisselt vóór het scherm: zolang de chunk van Omleidingen laadt,
+    // staat Mijn dag er nog, mét zijn eigen omleidingskaart "Werken Markt
+    // Zottegem". Onder belasting tikte de test die kaart aan (en scrolde Mijn
+    // dag ervoor omlaag) in plaats van de rij in de lijst, en bleef het
+    // detail weg (1 op ±30 runs). Wacht dus op de kop van het nieuwe scherm.
+    await expect(page.getByRole('heading', { level: 1, name: 'Omleidingen' })).toBeVisible();
     const rij = page.getByRole('button', { name: /Werken Markt Zottegem/ });
     await expect(rij).toBeVisible();
     await rij.tap();

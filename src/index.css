@@ -1223,6 +1223,22 @@ html.dark {
   .filter-rij::-webkit-scrollbar {
     display: none;
   }
+  /* P4 (23-09): een filterrij die op de telefoon tot de rand doorloopt
+     (TableToolbar `rand`) vervaagt over precies die binnenmarge
+     (--filter-rand), zodat een chip onder de rand door loopt i.p.v. hard
+     af te breken. Aan begin en eind van het schuiven staat elke chip
+     volledig in beeld. */
+  @media (width < 48rem) {
+    .filter-rij-rand {
+      mask-image: linear-gradient(to right, transparent, #000 var(--filter-rand), #000 calc(100% - var(--filter-rand)), transparent);
+    }
+  }
+  /* TableShell: zolang er rechts nog kolommen buiten beeld staan, vervaagt
+     de rechterrand van de schuifstrook (het masker blijft op de rand, de
+     tabel schuift eronderdoor). */
+  .strook-meer-rechts {
+    mask-image: linear-gradient(to left, transparent, #000 2rem);
+  }
 
   .btn-primary {
     /* Effen goud met een fijne rand (ronde 3, 19-09): het verloop en de

@@ -279,7 +279,7 @@ const SEG_PIL = 'bg-paper elev-pil ring-1 ring-hairline';
  * Dienstoverzicht). Reduced motion of een lopende view transition: de pil
  * springt.
  */
-export function Segmented<T extends string | number>({ waarde, opties, onChange, label, className, itemClassName }: {
+export function Segmented<T extends string | number>({ waarde, opties, onChange, label, className, itemClassName, telefoon }: {
   waarde: T;
   opties: ReadonlyArray<{ waarde: T; label: ReactNode }>;
   onChange: (waarde: T) => void;
@@ -288,11 +288,28 @@ export function Segmented<T extends string | number>({ waarde, opties, onChange,
   className?: string;
   /** Extra klassen per item (bv. een minimale hoogte). */
   itemClassName?: string;
+  /**
+   * Gedrag op de telefoon (onder sm). `vol` = de rail vult de breedte met
+   * gelijke segmenten (tot vier opties; een rail die op 70 % stopte oogde
+   * afgebroken). `schuif` = één regel die horizontaal schuift (meer dan vier
+   * opties): een rail die over twee regels brak, liet de pil tussen de
+   * regels springen. Zonder waarde: zo breed als de inhoud, zoals voorheen.
+   */
+  telefoon?: 'vol' | 'schuif';
 }) {
   const id = useId();
   const reduced = useReducedMotion();
   return (
-    <div role="group" aria-label={label} className={cn('glass-segmented inline-flex rounded-2xl p-1', className)}>
+    <div
+      role="group"
+      aria-label={label}
+      className={cn(
+        'glass-segmented inline-flex rounded-2xl p-1',
+        telefoon === 'vol' && 'max-sm:flex max-sm:w-full',
+        telefoon === 'schuif' && 'filter-rij max-w-full overflow-x-auto',
+        className,
+      )}
+    >
       {opties.map((o) => {
         const actief = o.waarde === waarde;
         return (
@@ -301,7 +318,14 @@ export function Segmented<T extends string | number>({ waarde, opties, onChange,
             type="button"
             aria-pressed={actief}
             onClick={() => onChange(o.waarde)}
-            className={cn(SEG_ITEM, 'relative transition-colors', actief ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700', itemClassName)}
+            className={cn(
+              SEG_ITEM,
+              'relative transition-colors',
+              telefoon === 'vol' && 'max-sm:flex-1',
+              telefoon === 'schuif' && 'shrink-0 whitespace-nowrap',
+              actief ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700',
+              itemClassName,
+            )}
           >
             {actief && (
               <motion.span

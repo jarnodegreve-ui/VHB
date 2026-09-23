@@ -57,6 +57,21 @@ test('dock blijft opaak tijdens een schermwissel', async ({ page, browserName })
   expect(laag.selectieDekking).toBe('1');
   const box = await dock.getByRole('button', { name: 'Dashboard', exact: true }).boundingBox();
   expect(box).not.toBeNull();
+  // De tik zelf laat een drukstand na: `.tikbaar:active` zet de knop op
+  // surface-muted en laat die bij het loslaten in 150 ms uitdoven. In donker
+  // is surface-muted doorschijnend, dus zolang dat uitdoven loopt ligt het
+  // bovenop de pil en is het vlak 3 tinten lichter (36,38,41 i.p.v.
+  // 33,35,38). Onder parallelle belasting viel de schermafdruk soms binnen
+  // die 150 ms: dat is tikfeedback, geen doorschijnend dock. Omdat de stijl
+  // tijdens de gepauzeerde overgang pas bij een meting herberekend wordt,
+  // start dat uitdoven soms zelfs ná de tik-actie; wacht dus tot de knop
+  // zelf weer zijn rustwaarde (doorzichtig) heeft. De view transition blijft
+  // intussen gepauzeerd: die animaties hangen aan de pseudo-elementen van
+  // <html>, niet aan de knop.
+  await expect.poll(
+    () => dock.getByRole('button', { name: 'Dashboard', exact: true }).evaluate((el) => getComputedStyle(el).backgroundColor),
+    { message: 'drukstand van de tik is uitgedoofd' },
+  ).toBe('rgba(0, 0, 0, 0)');
   const tijdens = browserName === 'chromium' ? PNG.sync.read(await page.screenshot({ clip: box! })) : null;
   await page.evaluate(() => {
     for (const animatie of document.getAnimations()) {
