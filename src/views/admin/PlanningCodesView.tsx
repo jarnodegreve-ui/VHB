@@ -5,10 +5,10 @@ import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
 import { metOngedaan } from '../../lib/ongedaan';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, IconButton, Segmented, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, IconButton, Segmented, Tabel, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Input, Select } from '../../components/Field';
-import { Checkbox } from '../../components/Table';
+import { Checkbox, StickyThead } from '../../components/Table';
 import { InfoTip } from '../../components/InfoTip';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../../components/Zijvak';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -224,7 +224,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           title="Codes"
           aside={(
             <>
-              <Badge tone="slate" className="tabular-nums">{filteredCodes.length} zichtbaar</Badge>
+              <Badge tone="slate">{filteredCodes.length} zichtbaar</Badge>
               {!canAdminDelete ? <Badge tone="slate">Verwijderen: alleen admin</Badge> : null}
               {uitleg}
             </>
@@ -248,12 +248,18 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           onChange={setFilter}
         />
 
-        <TableShell className="mt-5">
+        {/* `past`: het raster staat pas vanaf xl en heeft daar vaste kolommen,
+            dus geen scrollcontainer en de kolomkop plakt onder de topbar.
+            Breekpunt xl i.p.v. md (bewust): elke rij is een bewerkbaar
+            formulier (code, categorie, beschrijving, drie vinkjes, acties);
+            tussen md en xl neemt de zijbalk de ruimte die de invoervelden
+            nodig hebben, daar is de kaart per code leesbaarder. */}
+        <TableShell className="mt-5" label="Planningscodes" past>
           {filteredCodes.length > 0 ? (
             <>
               <div ref={lijstRef} className="hidden xl:block">
-                <table className="w-full table-fixed text-left">
-                  <thead className="bg-slate-50/60">
+                <Tabel className="table-fixed">
+                  <StickyThead>
                     <tr>
                       {/* Checkbox-kolommen: header gecentreerd boven de
                           (gecentreerde) checkbox; Acties rechts uitgelijnd
@@ -266,7 +272,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                       <Th className="w-14 text-center">Vrij</Th>
                       <Th className="w-20 text-right">Acties</Th>
                     </tr>
-                  </thead>
+                  </StickyThead>
                   <tbody className="divide-y divide-hairline-subtle">
                     {filteredCodes.map((code) => {
                       const index = draftCodes.findIndex((draft) => draft === code);
@@ -330,7 +336,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                       );
                     })}
                   </tbody>
-                </table>
+                </Tabel>
               </div>
 
               <div ref={kaartRef} className="divide-y divide-hairline-subtle xl:hidden">
@@ -397,6 +403,16 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                 })}
               </div>
             </>
+          ) : draftCodes.length > 0 ? (
+            // Er zijn codes, alleen niet in deze categorie: dat is geen lege
+            // lijst ("Nog geen planningscodes"), maar een leeg filter.
+            <div className="p-6">
+              <EmptyState
+                title={`Geen codes in de categorie ${CATEGORIE_OPTIES.find((o) => o.value === filter)?.label ?? filter}`}
+                message="Kies een andere categorie of toon alle codes."
+                action={<Button variant="secondary" onClick={() => setFilter('all')}>Alle codes tonen</Button>}
+              />
+            </div>
           ) : (
             <div className="p-6">
               <EmptyState
