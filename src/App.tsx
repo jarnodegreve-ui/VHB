@@ -1575,7 +1575,8 @@ export default function App() {
                       Op smal scherm een compacte oog-knop i.p.v. de pill. */}
                   {/* Alleen het oogje, op elk formaat (vraag Jarno 03-09): de
                       pill met tekst + schakelaar was op desktop het drukste
-                      element van de balk. Actief = oker gevuld. */}
+                      element van de balk. Actief = neutraal gevuld (keuze-vlak, zoals een
+                      FilterChip aan): een aan/uit-stand is selectie, geen goud. */}
                   {isRealAdmin && (
                     <IconButton
                       label={previewChauffeur ? 'Chauffeurs-weergave uit' : 'Bekijk als chauffeur'}
@@ -1584,7 +1585,7 @@ export default function App() {
                       size="sm"
                       aria-pressed={previewChauffeur}
                       onClick={() => setPreviewChauffeur((v) => !v)}
-                      className={cn(previewChauffeur && 'bg-oker-500/15 text-oker-700 hover:bg-oker-500/15 hover:text-oker-700')}
+                      className={cn(previewChauffeur && 'bg-keuze-vlak text-keuze-vlak-tekst hover:bg-keuze-vlak hover:text-keuze-vlak-tekst')}
                     >
                       <Eye size={16} />
                     </IconButton>

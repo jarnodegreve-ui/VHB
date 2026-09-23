@@ -112,7 +112,9 @@
 
   /* === VHB Amber (huisstijl #E2A323 als anker op 500) ===
      De `oker`-naam blijft (honderden usages); de waardes zijn de
-     officiële brand-schaal. 600/700 zijn verdiept voor tekst-contrast. */
+     officiële brand-schaal. 600/700 zijn verdiept voor tekst-contrast;
+     700 is sinds P1 (23-09) #8F5C17 (was #A2691A): zo haalt oker-tekst
+     ≥ 4,5:1 op oker-50, oker-100, een oker-500/15-tint en het canvas. */
   --color-oker-50: #FCF7ED;
   --color-oker-100: #F8ECD4;
   --color-oker-200: #F2DCAE;
@@ -120,7 +122,7 @@
   --color-oker-400: #EBB552;
   --color-oker-500: #E2A323;
   --color-oker-600: #C4861B;
-  --color-oker-700: #A2691A;
+  --color-oker-700: #8F5C17;
   --color-oker-800: #7C4F14;
   --color-oker-900: #5C3A0F;
 
@@ -242,6 +244,9 @@
      kaarten (wit in licht, gedempte haarlijn in donker). Alle waardes flippen
      in html.dark hieronder. */
   --color-paper: #FFFFFF;
+  /* overlay = dekkend vlak van een laag boven de inhoud (bg-overlay), zie
+     --laag-overlay. */
+  --color-overlay: var(--laag-overlay);
   --color-ink: #14181B;
   --color-ink-soft: #2C3137;
   /* Keuze (punt 4, goud rantsoeneren): de vulling voor "geselecteerd" zonder
@@ -320,7 +325,7 @@
 
   /* === Focus-tokens (één focus-systeem, zie het blok "Focus" hieronder) ===
      --focus-ring = huisstijl-goud; --focus-ring-contrast = de ring óp een
-     gouden vlak (btn-primary, goud-chip, gekozen dag): carbon op licht,
+     gouden vlak (btn-primary, bg-oker-500/400): carbon op licht,
      licht op donker. */
   --focus-ring: #E2A323;
   --focus-ring-contrast: #14181B;
@@ -335,6 +340,12 @@
   --laag-kaart: #FFFFFF;
   --laag-dock: #FFFFFF;
   --laag-sticky: #FFFFFF;
+  /* Overlay (P1, 23-09): het vlak van SlideOver, Sheet, modal, toast en de
+     installeerkaart. Volledig dekkend: een doorschijnend paneel liet de
+     inhoud eronder door de tekst schemeren, en een blur erachter deed op
+     95 % dekking niets zichtbaars (maar kostte wel frames). In donker de
+     dock-laag, één trede boven de kaart. */
+  --laag-overlay: #FFFFFF;
 
   /* === Schil- en bedieningsoppervlakken (ronde 5, F1) ===
      Zijbalk, topbar, invoerveld, zachte knop, segmented en gedempt vlak
@@ -376,7 +387,8 @@
        3  slide-over (elev-3)
        4  modal (.glass-modal, elev-4)
      lift = de hover-stand van trede 1 (.surface-card-hover), geen eigen
-     trede. accent = de gouden contactschaduw (gekozen dag, switch aan).
+     trede. accent = de gouden contactschaduw (sinds P1 zonder vaste gebruiker: de
+     gekozen dag in de kiezers is neutraal geworden).
      Als utility: elev-0 … elev-4 / elev-accent, ook met varianten
      (hover:elev-1). Geen fabrieks-shadow-sm/md/lg/xl meer (design-lint).
      De oppervlakklassen zijn consumenten van deze tokens: een schaduw
@@ -437,6 +449,7 @@ html.dark {
   --laag-kaart: #17181A;
   --laag-dock: #1B1C1F;
   --laag-sticky: #1E1F22;
+  --laag-overlay: var(--laag-dock);
 
   --laag-zijbalk: rgba(16, 17, 19, 0.97);
   --laag-topbar: rgba(16, 17, 19, 0.95);
@@ -692,7 +705,7 @@ html.dark {
    `border-radius: inherit` meer, die liet een knop de radius van zijn
    kaart aannemen) en heeft geen transition nodig. Alleen bij toetsenbord-
    focus (:focus-visible); muis/touch tonen niets.
-   Op een gouden vlak (btn-primary, goud-chip, gekozen dag, switch aan) is
+   Op een gouden vlak (btn-primary, een bg-oker-500/400-vlak) is
    een gouden ring onzichtbaar: daar wordt de ring carbon (licht) of licht
    (donker) via --focus-ring-contrast.
    Opt-out `focus-stil` alleen voor een binnenveld waarvan de ouder de ring
@@ -964,13 +977,13 @@ html.dark {
     box-shadow: var(--elev-1);
   }
 
-  /* Bewust GEEN backdrop-filter meer op het paneel: het is 95 % dekkend
-     achter een 40 %-donkere backdrop, dus de blur was onzichtbaar maar
+  /* Bewust GEEN backdrop-filter meer op het paneel: het is dekkend
+     (--laag-overlay, sinds P1) achter een 40 %-donkere backdrop, dus een blur zou onzichtbaar zijn maar
      hersampelde wel elke frame een bewegend (scale+y) paneel — hakkelig op
      oudere iPhones (controle-ronde 27-08, nr. 11). Zelfde keuze als SlideOver. */
   /* Trede 4 (top van de ladder). */
   .glass-modal {
-    background: color-mix(in srgb, var(--laag-kaart) 95%, transparent);
+    background: var(--laag-overlay);
     border: 1px solid var(--elev-4-rim);
     box-shadow: var(--elev-4);
   }
@@ -1397,10 +1410,6 @@ html.dark {
 
 :where(.dark) .surface-table {
   background: color-mix(in srgb, var(--laag-kaart) 88%, transparent);
-}
-
-:where(.dark) .glass-modal {
-  background: color-mix(in srgb, var(--laag-kaart) 96%, transparent);
 }
 
 :where(.dark) .control-input {

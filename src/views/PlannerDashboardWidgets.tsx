@@ -1367,7 +1367,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
               href={telHref(d.phone)}
               aria-label={`Bel ${d.name}`}
               title={d.phone}
-              className="-my-1.5 -ml-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center self-start rounded-lg text-slate-400 transition-colors hover:bg-surface-soft-hover hover:text-oker-700"
+              className="-my-1.5 -ml-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center self-start rounded-lg text-slate-400 transition-colors hover:bg-surface-soft-hover hover:text-slate-900"
             >
               <Phone size={14} />
             </a>

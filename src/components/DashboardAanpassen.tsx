@@ -40,7 +40,7 @@ export function DashboardAanpassen({
         description="Kies welke tegels je ziet en in welke volgorde. Je dashboard past zich meteen aan."
         onClose={onClose}
         leading={
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-surface-muted text-slate-700">
             <SlidersHorizontal size={16} />
           </span>
         }

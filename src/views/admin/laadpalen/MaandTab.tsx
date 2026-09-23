@@ -369,7 +369,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, herlaad, onGeladen }: {
                       <tr key={d.dag} className={cn(toekomst && 'text-slate-400', 'hover:bg-surface-soft-hover')}>
                         <Td className="whitespace-nowrap">
                           {/* rauw: dag-link opent het dagdetail; hele cel als tekstknop */}
-                          <button type="button" onClick={() => onDag(d.dag)} disabled={toekomst} className="ios-pressable -mx-1 rounded-md px-1 text-left font-medium text-slate-800 disabled:text-slate-400 hover:text-oker-700">
+                          <button type="button" onClick={() => onDag(d.dag)} disabled={toekomst} className="ios-pressable -mx-1 rounded-md px-1 text-left font-medium text-slate-800 disabled:text-slate-400 hover:text-slate-900">
                             {dagKort(d.dag)}
                           </button>
                           {d.dag === data.huidigeDag && <Badge tone="oker" stil className="ml-2">vandaag</Badge>}

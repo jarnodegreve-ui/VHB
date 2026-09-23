@@ -59,7 +59,7 @@ export function EntityHistoryModal({
     <Modal open={open} onClose={onClose} maxWidth="lg" ariaLabel="Wijzigingsgeschiedenis" boven>
       <div className="flex max-h-[80dvh] flex-col overflow-hidden">
             <ModalHeader
-              leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center"><History size={18} /></div>}
+              leading={<div className="w-10 h-10 rounded-2xl bg-surface-muted text-slate-700 flex items-center justify-center"><History size={18} /></div>}
               title="Wijzigingsgeschiedenis"
               description={title}
               onClose={onClose}

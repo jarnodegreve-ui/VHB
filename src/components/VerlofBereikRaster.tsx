@@ -121,10 +121,12 @@ export function VerlofBereikRaster({ maand, start, eind, min, vandaag, onKies, o
                 className={cn(
                   'aspect-square rounded-xl text-xs font-semibold transition-colors flex items-center justify-center',
                   uit && 'text-slate-300 cursor-not-allowed',
-                  !uit && !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
-                  !uit && inRange && !edge && 'bg-oker-100 text-oker-700',
-                  !uit && edge && 'bg-oker-500 text-slate-950 elev-accent',
-                  !uit && isVandaag && !inRange && !edge && 'ring-1 ring-oker-300',
+                  // Begin en einde = neutrale selectie (bg-keuze), de dagen ertussen
+                  // een gedempt vlak; vandaag = de gouden ring van DatePicker.
+                  !uit && !inRange && !edge && 'text-slate-500 hover:bg-surface-soft-hover',
+                  !uit && inRange && !edge && 'bg-surface-muted text-slate-900',
+                  !uit && edge && 'bg-keuze text-keuze-tekst',
+                  !uit && isVandaag && !inRange && !edge && 'ring-1 ring-inset ring-oker-500/35',
                 )}
               >
                 {Number(iso.slice(8, 10))}

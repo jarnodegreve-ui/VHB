@@ -51,7 +51,7 @@ export function OnbewaardDialoog({ open, onVerder, onNietBewaren }: { open: bool
         <h2 className="text-section-title">Wijzigingen niet bewaren?</h2>
         <p className="mt-1.5 text-body font-normal text-slate-500">Je hebt iets gewijzigd dat nog niet is opgeslagen.</p>
       </div>
-      <div className="flex gap-2.5 bg-slate-50/80 p-5 md:p-6">
+      <div className="flex gap-2.5 bg-slate-50 p-5 md:p-6">
         <Button variant="secondary" size="lg" className="flex-1" onClick={onVerder} autoFocus>
           Verder bewerken
         </Button>

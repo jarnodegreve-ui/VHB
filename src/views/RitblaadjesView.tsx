@@ -384,7 +384,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 onClick={() => void openHuidigRitblad()}
                 className="ios-pressable flex w-full flex-col items-center justify-center gap-3 px-8 py-14 text-center"
               >
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-700">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-muted text-slate-700">
                   <FileText size={20} />
                 </span>
                 <span className="text-base font-semibold text-slate-800">Volledige bundel</span>

@@ -84,7 +84,7 @@ export function InstallPrompt() {
           // kaart de tab-knoppen bijna volledig.
           className="fixed inset-x-0 z-toast flex justify-center px-4 pointer-events-none bottom-boven-dock md:bottom-[max(1rem,env(safe-area-inset-bottom))]"
         >
-          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-rim bg-paper/95 px-4 py-3 elev-3 backdrop-blur-sm max-w-sm">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-rim bg-overlay px-4 py-3 elev-3 max-w-sm">
             <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500 text-slate-950">
               <Download size={16} />
             </div>

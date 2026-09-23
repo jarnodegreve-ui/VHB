@@ -122,7 +122,7 @@ export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
         <ul className="divide-y divide-hairline-subtle overflow-hidden rounded-2xl bg-paper ring-1 ring-hairline">
           {bijlagen.map((b) => (
             <li key={b.slot} className="flex items-center gap-2 px-3 py-2">
-              <span aria-hidden="true" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
+              <span aria-hidden="true" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-slate-700">
                 <FileText size={14} />
               </span>
               <span className="min-w-0 flex-1">

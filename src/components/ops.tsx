@@ -133,7 +133,7 @@ export function OpsStat({
       )}
       {balk && <div className="kpi-extra">{balk}</div>}
       {note && (
-        <p className="kpi-extra mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-xs font-medium leading-snug text-oker-800">
+        <p className="kpi-extra mt-2 rounded-lg bg-surface-muted px-2 py-1.5 text-xs font-medium leading-snug text-slate-700">
           {note}
         </p>
       )}

@@ -108,7 +108,7 @@ export function ModalHeader({
       <div className="flex min-w-0 items-center gap-3">
         {leading ? <div className="shrink-0">{leading}</div> : null}
         <div className="min-w-0">
-          {eyebrow ? <p className="text-micro text-oker-700">{eyebrow}</p> : null}
+          {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
           <h2 className={cn('text-section-title', eyebrow && 'mt-1.5')}>{title}</h2>
           {description ? <p className="mt-1.5 text-body font-normal text-slate-500">{description}</p> : null}
         </div>
@@ -178,7 +178,7 @@ export function ConfirmationModal({
           <p className="text-body text-slate-500 font-normal mt-1.5">{message}</p>
           {children && <div className="mt-4">{children}</div>}
         </div>
-        <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
+        <div className="p-5 md:p-6 bg-slate-50 flex gap-2.5 shrink-0">
           <Button variant="secondary" size="lg" className="flex-1" onClick={onClose} disabled={bezig}>
             {cancelText}
           </Button>

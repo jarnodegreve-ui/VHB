@@ -58,7 +58,7 @@ export function CalendarSubscribeModal({
             als `leading`), i.p.v. een eigen h3 + losse sluitknop. */}
         <ModalHeader
           leading={
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-oker-500 text-slate-950 elev-1">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-surface-muted text-slate-700">
               <CalendarPlus size={20} />
             </div>
           }
@@ -94,7 +94,7 @@ export function CalendarSubscribeModal({
                     rel="noreferrer"
                     className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-hairline bg-surface-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
                   >
-                    <ExternalLink size={16} className="text-oker-500" /> Google Agenda
+                    <ExternalLink size={16} className="text-slate-700" /> Google Agenda
                   </a>
                 </div>
 

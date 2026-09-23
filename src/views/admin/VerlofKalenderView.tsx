@@ -372,7 +372,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                         'p-0 text-center border-l border-hairline-subtle',
                         isWeekend(day) && 'bg-slate-100/50',
                         isToday(day) && 'bg-oker-50',
-                        gekozenDag === dateIso(day) && 'bg-oker-100/60',
+                        gekozenDag === dateIso(day) && 'bg-slate-100/60',
                       )}
                     >
                       {/* Drie vaste rijen (letter · dag · markering) met vaste
@@ -393,7 +393,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                             onClick={() => openDag(dateIso(day))}
                             aria-label={`${formatDayLong(dateIso(day))} openen`}
                             aria-pressed={gekozenDag === dateIso(day)}
-                            className="ios-pressable flex w-full flex-col items-center gap-0.5 px-1 py-2 transition-colors hover:bg-oker-50"
+                            className="ios-pressable flex w-full flex-col items-center gap-0.5 px-1 py-2 transition-colors hover:bg-surface-soft-hover"
                           >
                             <div className={cn(microLabelClass, 'h-3.5 leading-3.5')}>{weekdayLetter(day)}</div>
                             <div className={cn('h-4 text-xs font-semibold leading-4', isToday(day) || feest ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
@@ -424,10 +424,10 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                         type="button"
                         onClick={() => openJaaroverzicht(u.id)}
                         title={`Verlof-jaaroverzicht ${year} openen (print)`}
-                        className="group inline-flex max-w-full items-center gap-1.5 text-left transition-colors hover:text-oker-700"
+                        className="group inline-flex max-w-full items-center gap-1.5 text-left transition-colors hover:text-slate-900"
                       >
                         <span className="truncate">{u.name}</span>
-                        <Printer size={12} className="shrink-0 text-slate-300 transition-colors group-hover:text-oker-500" />
+                        <Printer size={12} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />
                       </button>
                     </Td>
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
@@ -444,7 +444,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                             'border-l border-hairline-subtle h-9 p-0',
                             isWeekend(day) && !leave && 'bg-slate-50/40',
                             isToday(day) && !leave && 'bg-oker-50/30',
-                            gekozenDag === iso && 'bg-oker-100/40',
+                            gekozenDag === iso && 'bg-slate-100/60',
                           )}
                         >
                           {/* rauw: dagcel in een dichte 31-koloms matrix (opent dag of beoordeling), geen knopvorm */}
@@ -454,7 +454,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                             aria-label={leave
                               ? `${u.name}, ${title}: ${leave.status === 'pending' ? 'beoordelen' : 'dag openen'}`
                               : `${u.name}, ${formatDayLong(iso)}: dag openen`}
-                            className="ios-pressable flex h-9 w-full items-center px-1 transition-colors hover:bg-oker-50/60"
+                            className="ios-pressable flex h-9 w-full items-center px-1 transition-colors hover:bg-surface-soft-hover"
                           >
                             {leave && (
                               <span className={cn('block h-6 w-full rounded-md', cellColor(leave.status, leave.type))} />

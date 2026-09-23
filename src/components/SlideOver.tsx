@@ -162,9 +162,9 @@ export function SlideOver({
             className={cn(
               // Bewust géén backdrop-filter op het geanimeerde paneel zelf
               // (blur + transform op één element geeft compositing-glitches);
-              // near-opaque oppervlak heeft het ook niet nodig.
+              // een dekkend oppervlak (bg-overlay) heeft het ook niet nodig.
               'fixed inset-y-0 right-0 z-modal flex h-full w-full flex-col focus-stil sm:rounded-l-2xl',
-              'bg-paper/95 border-l border-hairline elev-3',
+              'bg-overlay border-l border-hairline elev-3',
               widthClass,
             )}
             // Toetsenbord open: het paneel inkorten tot de zichtbare viewport,

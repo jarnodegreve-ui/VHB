@@ -88,7 +88,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, ariaLa
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, info) => { if (info.offset.y > 80 || info.velocity.y > 600) onClose(); }}
             className={cn(
-              'fixed inset-x-0 bottom-0 z-modal flex max-h-overlay flex-col rounded-t-2xl border-t border-hairline bg-paper/95 elev-3 focus-stil',
+              'fixed inset-x-0 bottom-0 z-modal flex max-h-overlay flex-col rounded-t-2xl border-t border-hairline bg-overlay elev-3 focus-stil',
               'sm:inset-x-auto sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2',
               className,
             )}
