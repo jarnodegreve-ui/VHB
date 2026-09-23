@@ -45,7 +45,7 @@ export function useAppData({
   currentUser: User | null;
   currentView: View;
   showToast: ShowToast;
-  meldLaadfout: (bron: string) => void;
+  meldLaadfout: (bron: string, fout?: unknown) => void;
 }) {
   // Start leeg (geen mock-data): tot de eerste fetch klaar is gate't
   // isInitialLoad de skeleton-staat. Geen risico meer dat mock-diensten/
@@ -168,7 +168,7 @@ export function useAppData({
       else if (bron.oudste !== null) setLastSyncedAt((vorige) => (vorige === null ? bron.oudste : Math.min(vorige, bron.oudste!)));
     } catch (error) {
       console.error('Error loading app data:', error);
-      meldLaadfout('de gegevens');
+      meldLaadfout('de gegevens', error);
     } finally {
       setIsInitialLoad(false);
       // Ná de poort: de rest op de achtergrond. De fetchers vangen hun eigen

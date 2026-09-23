@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, ListChecks, Play, RefreshCw, Route, Trash2, Upload, Wand2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, ListChecks, Play, Route, Trash2, Upload, Wand2 } from 'lucide-react';
 import type { User } from '../../types';
 import { BEVINDING_LABEL, SEGMENT_TYPE_LABEL } from '../../../shared/dienst';
 import { cn, downloadBlob, notify } from '../../lib/ui';
@@ -9,7 +9,7 @@ import {
   activeerImport, bestandNaarBase64, bewaarDagtype, importeerBestand, laadDagtypes, laadImports, laadLoonparameters, laadRitblad, laadSegmenten, leidLooncodesAf,
   minNaarHHMM, verwijderImport, type Bevinding, type DagtypeCode, type LoonParameters, type RitbladRij, type Segment, type SegmentImport,
 } from '../../lib/dienst';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
@@ -19,8 +19,10 @@ import { Badge, Button, Chip, FilterChip, IconButton, Segmented } from '../../co
 import { StickyThead, TableToolbar } from '../../components/Table';
 import { Td, Th, Tabel, TableShell } from '../../components/TabelBasis';
 import { meldSchrijffout } from '../../lib/fouten';
+import { useZelfLadend } from '../../lib/zelfLadend';
 
 type Tab = 'imports' | 'diensten' | 'dagtypes';
+type ImportStand = 'laden' | 'fout' | 'klaar';
 const PORTAAL_DAGTYPES = ['schooldag', 'vakantie', 'zaterdag', 'zondag'] as const;
 
 /**
@@ -34,16 +36,17 @@ const PORTAAL_DAGTYPES = ['schooldag', 'vakantie', 'zaterdag', 'zondag'] as cons
 export function DienstopbouwView({ currentUser }: { currentUser: User }) {
   const [tab, setTab] = useState<Tab>('imports');
   const [imports, setImports] = useState<SegmentImport[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try { setImports(await laadImports()); } catch (err) { meldSchrijffout('Imports laden', err, () => void load()); } finally { setIsLoading(false); }
-  }, []);
-  useEffect(() => { void load(); }, [load]);
+  // Zelf-ladend (golf 3): laden, laadfout en versheid; na een eigen
+  // schrijfactie stil verversen, geen eigen Ververs-knop.
+  const zl = useZelfLadend(async () => { setImports(await laadImports()); }, { boodschap: 'Kon de imports niet laden.' });
   const actief = imports.find((i) => i.actief) ?? null;
+  // Zonder imports weten we pas of er een actieve is als het laden lukte:
+  // leeg mag nooit "nog niet geladen" of "laden mislukt" betekenen.
+  const importStand: ImportStand = imports.length > 0 ? 'klaar' : zl.fout ? 'fout' : zl.laden ? 'laden' : 'klaar';
   return (
     <PageShell>
-      <PageHeader view="dienstopbouw" title="Dienstopbouw" actions={<Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => void load()} disabled={isLoading}>Ververs</Button>} />
+      <PageHeader view="dienstopbouw" title="Dienstopbouw" actions={<VersheidRegel {...zl.versheid} />} />
+      {zl.fout && imports.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
       <Segmented<Tab>
         label="Onderdeel"
         className="shrink-0"
@@ -56,8 +59,12 @@ export function DienstopbouwView({ currentUser }: { currentUser: User }) {
         ]}
         onChange={setTab}
       />
-      {tab === 'imports' && <ImportsTab imports={imports} isLoading={isLoading} isAdmin={currentUser.role === 'admin'} onChanged={load} />}
-      {tab === 'diensten' && <DienstenTab actief={actief} />}
+      {tab === 'imports' && (importStand === 'fout'
+        ? <Foutkaart boodschap={zl.fout!} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+        : <ImportsTab imports={imports} isLoading={zl.laden} isAdmin={currentUser.role === 'admin'} onChanged={zl.ververs} />)}
+      {tab === 'diensten' && (importStand === 'fout'
+        ? <Foutkaart boodschap={zl.fout!} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+        : <DienstenTab actief={actief} importsLaden={importStand === 'laden'} />)}
       {tab === 'dagtypes' && <DagtypesTab />}
     </PageShell>
   );
@@ -229,23 +236,25 @@ function BevindingenModal({ imp, onClose }: { imp: SegmentImport; onClose: () =>
 /** "5 / 123 (a)": lijn, rit en variant van een ritdeel, of een streepje. */
 const lijnRit = (s: Segment) => (s.lijn ? `${s.lijn}${s.rit ? ` / ${s.rit}` : ''}${s.variant ? ` (${s.variant})` : ''}` : '—');
 
-function DienstenTab({ actief }: { actief: SegmentImport | null }) {
+function DienstenTab({ actief, importsLaden }: { actief: SegmentImport | null; importsLaden: boolean }) {
   const [segmenten, setSegmenten] = useState<Array<Segment & { id: string }>>([]);
   const [params, setParams] = useState<Map<string, LoonParameters>>(new Map());
-  const [isLoading, setIsLoading] = useState(true);
   const [zoek, setZoek] = useState('');
   const [dagtype, setDagtype] = useState('');
   const [gekozen, setGekozen] = useState<string | null>(null);
   const [ritblad, setRitblad] = useState<Array<{ dagtypeCode: string; rijen: RitbladRij[] }> | null>(null);
+  // Een mislukt ritblad is geen "Geen ritblad": eigen foutstand met opnieuw.
+  const [ritbladFout, setRitbladFout] = useState(false);
+  const [ritbladPoging, setRitbladPoging] = useState(0);
 
-  useEffect(() => {
-    if (!actief) { setIsLoading(false); return; }
-    setIsLoading(true);
-    void Promise.all([laadSegmenten({ importId: actief.id }), laadLoonparameters(actief.id)])
-      .then(([s, p]) => { setSegmenten(s.segmenten); setParams(new Map(p.diensten.map((d) => [`${d.serviceNumber}|${d.dagtypeCode}`, d.parameters]))); })
-      .catch((err) => meldSchrijffout('Diensten laden', err))
-      .finally(() => setIsLoading(false));
-  }, [actief]);
+  const actiefId = actief?.id ?? null;
+  const zl = useZelfLadend(async () => {
+    if (!actiefId) { setSegmenten([]); setParams(new Map()); return; }
+    const [s, p] = await Promise.all([laadSegmenten({ importId: actiefId }), laadLoonparameters(actiefId)]);
+    setSegmenten(s.segmenten);
+    setParams(new Map(p.diensten.map((d) => [`${d.serviceNumber}|${d.dagtypeCode}`, d.parameters])));
+  }, { deps: [actiefId], boodschap: 'Kon de diensten niet laden.' });
+  const isLoading = zl.laden;
 
   const diensten = useMemo(() => {
     const m = new Map<string, { serviceNumber: string; dagtypeCode: string; segmenten: Array<Segment & { id: string }> }>();
@@ -257,12 +266,21 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
   const lijst = diensten.filter((d) => (!dagtype || d.dagtypeCode === dagtype) && (!zoekTerm || d.serviceNumber.toLowerCase().includes(zoekTerm)));
   const detail = gekozen ? diensten.find((d) => `${d.serviceNumber}|${d.dagtypeCode}` === gekozen) ?? null : null;
 
+  const detailNummer = detail?.serviceNumber ?? null;
   useEffect(() => {
-    if (!detail) { setRitblad(null); return; }
-    void laadRitblad(detail.serviceNumber).then((r) => setRitblad(r.dagtypes)).catch(() => setRitblad([]));
-  }, [detail]);
+    setRitblad(null);
+    setRitbladFout(false);
+    if (!detailNummer) return;
+    let actueel = true;
+    void laadRitblad(detailNummer)
+      .then((r) => { if (actueel) setRitblad(r.dagtypes); })
+      .catch(() => { if (actueel) setRitbladFout(true); });
+    return () => { actueel = false; };
+  }, [detailNummer, ritbladPoging]);
 
+  if (importsLaden) return <Card padding="none" className="divide-y divide-hairline-subtle" role="status" aria-busy="true" aria-label="Diensten worden geladen"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card>;
   if (!actief) return <EmptyState title="Geen actieve import" message="Importeer en activeer eerst een ET-export in het tabblad Imports." />;
+  if (zl.fout && segmenten.length === 0) return <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />;
   const p = detail ? params.get(gekozen!) : null;
   return (
     <div className="space-y-4">
@@ -364,7 +382,7 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
                 </div>
               </TableShell>
               <TableShell label={`Ritblad van dienst ${detail.serviceNumber}`} kop={<h2 className="text-card-title">Ritblad uit data</h2>}>
-                {ritblad === null ? <div className="p-4"><SkeletonRow /></div> : ritblad.length === 0 ? <div className="p-4"><EmptyState compact title="Geen ritblad" message="Geen ritdelen voor deze dienst." /></div> : ritblad.filter((r) => r.dagtypeCode === detail.dagtypeCode).map((r) => (
+                {ritbladFout ? <div className="p-4"><Foutkaart compact boodschap="Kon het ritblad niet laden." offline={!zl.online} onOpnieuw={() => setRitbladPoging((n) => n + 1)} /></div> : ritblad === null ? <div className="p-4"><SkeletonRow /></div> : ritblad.length === 0 ? <div className="p-4"><EmptyState compact title="Geen ritblad" message="Geen ritdelen voor deze dienst." /></div> : ritblad.filter((r) => r.dagtypeCode === detail.dagtypeCode).map((r) => (
                   <div key={r.dagtypeCode}>
                     <ul className="divide-y divide-hairline-subtle md:hidden">
                       {r.rijen.map((rij, i) => (
@@ -404,8 +422,9 @@ function DienstenTab({ actief }: { actief: SegmentImport | null }) {
 
 function DagtypesTab() {
   const [rijen, setRijen] = useState<DagtypeCode[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  useEffect(() => { void laadDagtypes().then(setRijen).catch((err) => meldSchrijffout('Dagtypes laden', err)).finally(() => setIsLoading(false)); }, []);
+  const zl = useZelfLadend(async () => { setRijen(await laadDagtypes()); }, { boodschap: 'Kon de dagtypes niet laden.' });
+  if (zl.fout && rijen.length === 0) return <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />;
+  const isLoading = zl.laden && rijen.length === 0;
   const zet = async (r: DagtypeCode, v: string) => {
     try { const n = await bewaarDagtype(r.code, v || null); setRijen((l) => l.map((x) => (x.code === r.code ? n : x))); }
     catch (err) { meldSchrijffout('Bewaren', err, () => void zet(r, v)); }

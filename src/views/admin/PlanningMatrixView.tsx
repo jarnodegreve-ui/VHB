@@ -135,6 +135,10 @@ export function PlanningMatrixView({
     setVisibleDayCount(60);
   }, [showOnlyIssues]);
 
+    // Nog geen enkele geüploade dag (de view wacht op planningMatrixGeladen,
+    // dus leeg is hier echt leeg, niet "nog niet geladen").
+    const geenImport = rows.length === 0;
+
     // NB: de useMemo-hooks staan bewust BUITEN de try/catch verderop —
     // React-hooks mogen niet binnen een try/catch draaien (Rules of Hooks):
     // als de eerste hook gooit wordt de tweede overgeslagen → "rendered
@@ -299,29 +303,41 @@ export function PlanningMatrixView({
       />
       {/* OpsStat i.p.v. StatCard (vaste regel voor KPI-strips): vaste
           twee-regel-labelzone, dus cijfers en subteksten op één lijn. */}
+      {/* Zonder import is niets herkend of gekoppeld: onbekend is geen "alles
+          goed" (P3), dus een streepje en "nog geen import". */}
       <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-3">
         <OpsStat
           icon={<Clock size={16} />}
-          tone="emerald"
+          tone={geenImport ? 'slate' : 'emerald'}
           label="Gegenereerde diensten"
-          value={derived.totalGeneratedServices}
-          sub="gematcht vanuit Dienstoverzicht"
+          {...(geenImport ? { text: '—' } : { value: derived.totalGeneratedServices })}
+          sub={geenImport ? 'nog geen import' : 'gematcht vanuit Dienstoverzicht'}
         />
         <OpsStat
           icon={<AlertTriangle size={16} />}
           tone={derived.globalUnknownCodes.length > 0 ? 'amber' : 'slate'}
           label="Onbekende codes"
-          value={derived.globalUnknownCodes.length}
-          sub={derived.globalUnknownCodes.length === 0 ? 'alles herkend' : derived.globalUnknownCodes.slice(0, 3).join(' · ')}
+          {...(geenImport ? { text: '—' } : { value: derived.globalUnknownCodes.length })}
+          sub={geenImport ? 'nog geen import' : derived.globalUnknownCodes.length === 0 ? 'alles herkend' : derived.globalUnknownCodes.slice(0, 3).join(' · ')}
         />
         <OpsStat
           icon={<Users size={16} />}
           tone={derived.globalUnmatchedDrivers.length > 0 ? 'amber' : 'slate'}
           label="Niet-gematchte chauffeurs"
-          value={derived.globalUnmatchedDrivers.length}
-          sub={derived.globalUnmatchedDrivers.length === 0 ? 'alles gekoppeld' : derived.globalUnmatchedDrivers.slice(0, 2).join(' · ')}
+          {...(geenImport ? { text: '—' } : { value: derived.globalUnmatchedDrivers.length })}
+          sub={geenImport ? 'nog geen import' : derived.globalUnmatchedDrivers.length === 0 ? 'alles gekoppeld' : derived.globalUnmatchedDrivers.slice(0, 2).join(' · ')}
         />
       </div>
+
+      {geenImport ? (
+        // Eén lege staat voor het hele scherm i.p.v. vier (controlepunten,
+        // dagen, detail): zonder matrix valt er niets te controleren.
+        <EmptyState
+          title="Nog geen matrixplanning"
+          message="Upload eerst een Excel-matrix via Beheer planning om hier een overzicht te zien."
+          action={<Button variant="secondary" onClick={() => navigeer('beheer-roosters')}>Naar Beheer planning</Button>}
+        />
+      ) : (<>
 
       <Card as="section">
         <CardHeader
@@ -495,9 +511,9 @@ export function PlanningMatrixView({
               </ul>
             ) : (
               <EmptyState
-                variant={showOnlyIssues ? 'klaar' : 'leeg'}
-                title={showOnlyIssues ? "Geen probleemdagen gevonden" : "Nog geen matrixplanning"}
-                message={showOnlyIssues ? 'Alle geüploade dagen zijn volledig herkend.' : 'Upload eerst een Excel-matrix via Beheer planning om hier een overzicht te zien.'}
+                kaal
+                title={showOnlyIssues ? 'Geen probleemdagen gevonden' : 'Geen dagen'}
+                message={showOnlyIssues ? 'Alle geüploade dagen zijn volledig herkend.' : undefined}
               />
             )}
             {visibleRows.length > visibleDayRows.length ? (
@@ -664,12 +680,14 @@ export function PlanningMatrixView({
             </>
           ) : (
             <EmptyState
+              kaal
               title="Geen dag geselecteerd"
               message="Kies links een geüploade dag om de actuele matrixplanning te bekijken."
             />
           )}
         </Card>
       </div>
+      </>)}
 
       {/* Onbekende code als planningscode vastleggen zonder schermwissel. */}
       <Modal open={!!nieuweCode} onClose={() => setNieuweCode(null)} vuil={codeVuil} maxWidth="sm" className="!p-0" ariaLabel="Planningscode toevoegen">

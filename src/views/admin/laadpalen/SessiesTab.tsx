@@ -6,13 +6,14 @@ import { Badge, Button, IconButton, microLabelClass } from '../../../components/
 import { SkeletonTile } from '../../../components/Skeleton';
 import { Paginering, SortTh, TableToolbar, useSort } from '../../../components/Table';
 import { TableShell, Td } from '../../../components/TabelBasis';
-import { EmptyState } from '../../../components/ui';
+import { EmptyState, Foutkaart } from '../../../components/ui';
 import { NietGevonden } from '../../../components/illustraties';
 import { apiFetch } from '../../../lib/api';
 import { addDagen, isoDate, maandPlus } from '../../../lib/datum';
 import { formatGetal } from '../../../lib/format';
 import { busVoorLaadpunt } from '../../../lib/laadplein';
 import { cn } from '../../../lib/ui';
+import { useZelfLadend, type Versheid } from '../../../lib/zelfLadend';
 import { SessieStatusBadge, socTekst } from './DagDetail';
 import {
   TermijnKeuze, dagKort, dagVanTs, duurLabel, exporteerCsv, klasseLabel, laadpuntSort, periodeLabel, puntNaam, tekstKw, tekstKwh, tijdstipKort, uurLabel,
@@ -42,13 +43,11 @@ type Kolom = 'start' | 'eind' | 'punt' | 'kwh' | 'duurMin' | 'laadMin' | 'gemKw'
 
 const PER_PAGINA = 50;
 
-export function SessiesTab({ herlaad }: { herlaad: number }) {
+export function SessiesTab({ onVersheid }: { onVersheid?: (v: Versheid) => void }) {
   const vandaag = isoDate(new Date());
   const dezeMaand = vandaag.slice(0, 7);
   const [periode, setPeriode] = useState<Periode>({ van: `${dezeMaand}-01`, tot: vandaag });
   const [data, setData] = useState<Antwoord | null>(null);
-  const [laadt, setLaadt] = useState(true);
-  const [fout, setFout] = useState<string | null>(null);
   const [evse, setEvse] = useState('');
   const [status, setStatus] = useState<StatusFilter>('alle');
   const [zoek, setZoek] = useState('');
@@ -56,23 +55,15 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
   const [gekozen, setGekozen] = useState<SessieDetail | null>(null);
   const sort = useSort<Kolom>('start', 'desc');
 
-  useEffect(() => {
-    let actueel = true;
-    setLaadt(true);
-    (async () => {
-      try {
-        const res = await apiFetch(`/api/ocpi/sessies?van=${periode.van}&tot=${periode.tot}`);
-        if (!res.ok) throw new Error(String(res.status));
-        const json = (await res.json()) as Antwoord;
-        if (actueel) { setData(json); setFout(null); }
-      } catch {
-        if (actueel) setFout('Kon de sessies niet laden.');
-      } finally {
-        if (actueel) setLaadt(false);
-      }
-    })();
-    return () => { actueel = false; };
-  }, [periode, herlaad]);
+  // Zelf-ladend (golf 3): opnieuw bij een andere periode, stil bij focus.
+  const zl = useZelfLadend(async () => {
+    const res = await apiFetch(`/api/ocpi/sessies?van=${periode.van}&tot=${periode.tot}`);
+    if (!res.ok) throw new Error(String(res.status));
+    setData((await res.json()) as Antwoord);
+  }, { deps: [periode], boodschap: 'Kon de sessies niet laden.' });
+  const laadt = zl.laden;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { onVersheid?.(zl.versheid); }, [zl.versheid]);
   useEffect(() => { setPagina(1); }, [periode, evse, status, zoek, sort.key, sort.dir]);
 
   const laadpunten = useMemo(() => new Map((data?.laadpunten ?? []).map((p) => [p.uid, p])), [data?.laadpunten]);
@@ -168,8 +159,8 @@ export function SessiesTab({ herlaad }: { herlaad: number }) {
         acties={<Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={exporteer} disabled={gefilterd.length === 0}>CSV</Button>}
       />
 
-      {fout ? (
-        <EmptyState variant="fout" title={fout} message="Probeer het opnieuw met Ververs." />
+      {zl.fout ? (
+        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
       ) : !data ? (
         <SkeletonTile />
       ) : (

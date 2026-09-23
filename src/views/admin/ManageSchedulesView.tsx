@@ -503,8 +503,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
             // Neutraal vlak; de betekenis zit in één badge (amber = nog te
             // controleren, emerald = in sync) — geen volledig gekleurd paneel.
+            // In sync = één stille regel zonder eigen vlak (geen doos in de
+            // kaart, P3); het ingezonken vlak alleen als er iets te openen is.
             return (
-              <Card tone="muted" padding="sm" className="mt-5">
+              <div className={cn('mt-5', hasChanges && 'surface-muted rounded-2xl p-4')}>
                 <div className="flex items-start gap-2">
                   {/* rauw: hele kop (titel + samenvatting + chevron) klapt de lijst open */}
                   <button
@@ -602,7 +604,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </div>
                   </div>
                 </Uitklap>
-              </Card>
+              </div>
             );
           })()}
 
@@ -678,7 +680,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         <CardHeader
           title="Recente matriximports"
           description="Laatste importmomenten met hun controlecijfers."
-          aside={<Badge tone="slate" className="tabular-nums">{history.length} imports</Badge>}
+          aside={history.length > 0 ? <Badge tone="slate" className="tabular-nums">{history.length} imports</Badge> : undefined}
         />
 
         <div className="mt-5 space-y-3">
@@ -732,6 +734,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             );
           }) : (
             <EmptyState
+              kaal
               title="Nog geen importhistoriek"
               message="Na je eerste bevestigde matrix-import verschijnt hier automatisch een historiek."
             />

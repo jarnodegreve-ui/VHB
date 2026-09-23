@@ -122,7 +122,7 @@ export function ZiekteInzicht({ leaveRequests, users, vandaag }: {
 
           {zichtbaar.length === 0 ? (
             <EmptyState
-              compact
+              kaal
               title={chauffeurs.length === 0 ? `Geen geregistreerde ziektedagen in ${jaar}` : 'Geen chauffeur gevonden'}
               message={chauffeurs.length === 0 ? undefined : 'Pas de naam in het zoekveld aan.'}
             />

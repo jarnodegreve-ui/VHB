@@ -675,6 +675,8 @@ export function DesignsysteemView() {
           <p className="text-body-sm text-slate-500">Compacte meldingen</p>
           <Foutkaart compact boodschap="De vervaldata konden niet worden vernieuwd." onOpnieuw={probeerVoorbeeldOpnieuw} />
           <EmptyState compact illustratie={<NietGevonden />} title="Geen resultaten" message="Pas je zoekopdracht of filters aan." />
+          <p className="text-body-sm text-slate-500">Lege sectie in een kaart (kaal: één stille regel)</p>
+          <EmptyState kaal title="Nog geen importhistoriek" message="Na de eerste import verschijnt hier een historiek." />
         </div>
       </Sectie>
     </PageShell>

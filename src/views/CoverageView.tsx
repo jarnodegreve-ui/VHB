@@ -622,14 +622,8 @@ export function CoverageView() {
   // plus wat er ingesteld is en wanneer de planning voor het laatst geladen
   // is (afwerkingsronde 04-09).
   const zijvak = (
-    <Zijvak
-      titel="Deze maand"
-      voet={config && !anyExpectations ? (
-        <Button variant="secondary" size="sm" icon={<Settings2 size={14} />} onClick={() => setShowConfig(true)}>
-          Instellen
-        </Button>
-      ) : undefined}
-    >
+    // Geen tweede "Instellen" hier: de knop in de kop is de enige (P3).
+    <Zijvak titel="Deze maand">
       <ZijvakRij label="Dagen met gaten" waarde={zl.laden ? '…' : dagenMetGaten} />
       <ZijvakRij label="Open diensten" waarde={zl.laden ? '…' : totalMissing} />
       <ZijvakRij
@@ -802,7 +796,7 @@ export function CoverageView() {
               <Skeleton className="h-9 w-3/5" rounded="2xl" />
             </div>
           ) : config.services.length === 0 ? (
-            <EmptyState compact title="Geen diensten in het dienstoverzicht om uit te kiezen." />
+            <EmptyState kaal title="Geen diensten in het dienstoverzicht om uit te kiezen." />
           ) : (
             <>
               {/* 1. Dag-types + verwachte diensten */}
@@ -1153,7 +1147,12 @@ export function CoverageView() {
         </Card>
       )}
 
-      {/* === Gaten-overzicht === */}
+      {/* === Gaten-overzicht ===
+          Alleen als er verwachte diensten zijn en de maand geladen is: zonder
+          instellingen staat hieronder de lege staat met de uitleg, en een
+          rode telling erboven sprak die tegen (P3). Tijdens het laden is de
+          telling nog onbekend, geen "alles ingevuld". */}
+      {anyExpectations && !zl.laden && !(zl.fout && zl.laatstGeladen === null) && (
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex items-center gap-2 text-sm">
           {totalMissing > 0 ? (
@@ -1173,6 +1172,7 @@ export function CoverageView() {
           Alleen dagen met gaten
         </FilterChip>
       </div>
+      )}
 
       {zl.fout && zl.laatstGeladen === null ? null : zl.laden ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
