@@ -301,7 +301,7 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
         title: action,
         soort: "verlof",
         body: `${typeLabel} (${period}), beslist door ${actor.name || "Planning"}.${reden ? ` Reden: ${reden}` : ""}`,
-        url: recordUrl("verlof", String(current.id)),
+        url: recordUrl("verlof", current.id),
       });
     }
     return { leave: updated, melding: `${action}: ${requesterName}, ${typeLabel} (${period}).${reden ? ` Reden: ${reden}` : ""}` };
@@ -640,7 +640,7 @@ export function mountVerlofRoutes(app: express.Express) {
               title: "Nieuwe verlofaanvraag",
               soort: "verlof",
               body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
-              url: recordUrl("verlof", String(next.id)),
+              url: recordUrl("verlof", next.id),
             });
             await meldVerlofAanvraagTelegram({ id: String(next.id), naam: userName(next.userId), typeLabel, start: String(next.startDate), eind: String(next.endDate) });
           }
@@ -683,7 +683,7 @@ export function mountVerlofRoutes(app: express.Express) {
               title: action,
               soort: "verlof",
               body: `${typeLabel} (${period}), beslist door ${req.appUser.name || "Planning"}.${reden ? ` Reden: ${reden}` : ""}`,
-              url: recordUrl("verlof", String(next.id)),
+              url: recordUrl("verlof", next.id),
             });
           }
         }

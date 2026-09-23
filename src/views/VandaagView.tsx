@@ -201,7 +201,7 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
                         r.swap.status === 'accepted' ? 'collega akkoord, wacht op validatie' : 'wacht op de collega',
                         teKort ? 'te weinig rust' : null,
                       ].filter(Boolean).join(' · ')}
-                      onClick={() => onNavigate('ruil-verzoeken')}
+                      onClick={() => onNavigate('ruil-verzoeken', [r.swap.id])}
                     />
                   ) : (
                     <div key={`${r.swap.id}-${r.kant}`} className="flex items-center gap-3 px-1 py-2">
