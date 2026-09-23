@@ -14,12 +14,13 @@ import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Callout } from '../../components/Callout';
 import { Stat } from '../../components/Stat';
 import { Card, CardHeader } from '../../components/Card';
-import { DateInput, Field, Input, Select } from '../../components/Field';
+import { DateInput, Field, Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import type { VerwachtingAfwijking } from '../../../shared/coverageGaps';
 import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 import { meldSchrijffout } from '../../lib/fouten';
 import { Td, Th } from '../../components/TabelBasis';
+import { MaandInput } from '../../components/MaandInput';
 
 /** Inklapbare preview-sectie: de import-preview groeide naar acht blokken —
  *  met een kop + teller per blok blijft het scanbaar en klap je alleen open
@@ -776,13 +777,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             </Select>
           </Field>
           <Field label="Maand" htmlFor="print-maand">
-            <Input
-              id="print-maand"
-              type="month"
-              value={printMonth}
-              onChange={(e) => setPrintMonth(e.target.value)}
-              className="tabular-nums"
-            />
+            <MaandInput id="print-maand" value={printMonth} onChange={setPrintMonth} />
           </Field>
           <Button
             variant="secondary"
