@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Download, RotateCcw, Search, Table2, TriangleAlert } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Download, RotateCcw, Table2, TriangleAlert } from 'lucide-react';
 import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, downloadBlob, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
@@ -10,9 +10,10 @@ import { ActieMenu } from '../components/ActieMenu';
 import { apiFetch } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
 import { Button, Chip, IconButton, MicroLabel, microLabelClass } from '../components/primitives';
+import { SortTh, StickyThead } from '../components/Table';
 import { Card } from '../components/Card';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
-import { Field, Input, Select, Textarea } from '../components/Field';
+import { Field, Input, SearchField, Select, Textarea } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { meldSchrijffout } from '../lib/fouten';
 import { typedagLabel } from '../lib/typedag';
@@ -25,7 +26,7 @@ import { formatDatumDMJ, formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 import { DUR, EASE_SPRING } from '../lib/motion';
 import { useRecordParam, useRouteParam } from '../app/router';
-import { Td, Th } from '../components/TabelBasis';
+import { Td, Th, Tabel, TableShell } from '../components/TabelBasis';
 
 
 /** Sectiekop in het grid en de daglijst ("Chauffeurs", "Flexi/invallers",
@@ -70,6 +71,18 @@ const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 
  *  ondertekende papieren ruil staat erbij sinds 18-09 (Jarno): die komt als
  *  briefje binnen en is het bewijsstuk waarnaar het ruiloverzicht verwijst. */
 const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Ruil op papier ondertekend', 'Andere correctie'] as const;
+
+/** Sorteerbare kolommen van het maandoverzicht (Overig sorteert niet). */
+const OVERZICHT_KOLOMMEN = [
+  ['naam', 'Chauffeur'],
+  ['diensten', 'Diensten'],
+  ['minuten', 'Uren'],
+  ['anderWerk', 'Ander werk'],
+  ['ziek', 'Ziek'],
+  ['betaald', 'Betaald afw.'],
+  ['vrij', 'Vrij'],
+  ['dagen', 'Dagen'],
+] as const;
 
 /**
  * Maandplanning — read-only weergave van de planning-matrix (chauffeur ×
@@ -213,6 +226,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   };
   const sorteerOverzicht = (kolom: keyof OverzichtRij) =>
     setOverzichtSort((cur) => (cur.kolom === kolom ? { kolom, richting: cur.richting === 1 ? -1 : 1 } : { kolom, richting: kolom === 'naam' ? 1 : -1 }));
+  // Dezelfde sorteerstand in de vorm die SortTh leest (aria-sort, pijl).
+  const overzichtSortTh = {
+    key: overzichtSort.kolom,
+    dir: (overzichtSort.richting === 1 ? 'asc' : 'desc') as 'asc' | 'desc',
+    toggle: sorteerOverzicht,
+  };
 
   const [wisselNaar, setWisselNaar] = useState('');
   const [wisselReden, setWisselReden] = useState<string>(WISSEL_REDENEN[0]);
@@ -577,6 +596,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       );
     });
   }, [drivers, cells, zoekTerm]);
+  // Het desktopraster per sectie (één tbody per sectie). De API levert de
+  // chauffeurs al op sectie → naam, dus een nieuwe groep begint waar de
+  // sectie wisselt, precies waar de sectiekop vroeger tussen de rijen stond.
+  const gridSecties: Array<{ naam: string; drivers: typeof zichtbareDrivers }> = [];
+  for (const drv of zichtbareDrivers) {
+    const naam = sectionOf(drv);
+    const laatste = gridSecties[gridSecties.length - 1];
+    if (laatste && laatste.naam === naam) laatste.drivers.push(drv);
+    else gridSecties.push({ naam, drivers: [drv] });
+  }
 
   // Dagen waar werk wacht (dienst nog niet herverdeeld onder een afwezigheid)
   // — voedt het sprong-pijltje in de strip zodat je niet dag voor dag hoeft
@@ -656,18 +685,17 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         description="Wie rijdt welke dienst, zoals in het chauffeurslokaal."
         actions={(
           <div className="flex flex-wrap items-center gap-2">
-            <label className="relative">
-              <span className="sr-only">Zoek chauffeur</span>
-              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input
-                type="search"
-                enterKeyHint="search"
-                value={zoek}
-                onChange={(e) => setZoek(e.target.value)}
-                placeholder="Zoek chauffeur of dienst…"
-                className="h-11 sm:pointer-fine:h-9 sm:w-52 pl-9 pr-3"
-              />
-            </label>
+            {/* Gedeeld zoekveld (loep + wisknop); op de telefoon vult het de
+                regel naast Vandaag en het actiemenu. */}
+            <SearchField
+              value={zoek}
+              onChange={setZoek}
+              label="Zoek chauffeur of dienst"
+              placeholder="Zoek chauffeur of dienst…"
+              enterKeyHint="search"
+              size="sm"
+              className="min-w-40 flex-1 sm:w-52 sm:flex-none"
+            />
             {/* Het 2-weken-venster is een desktop-begrip; op mobiel navigeert
                 de datumstrip (met eigen maandwissel) en is dit cluster ruis. */}
             <div className="hidden md:flex items-center gap-2">
@@ -739,103 +767,110 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           {/* .mp-*-klassen (weekend-arcering, opake sticky-cellen) staan in
               index.css bij de andere component-klassen. */}
           {/* Desktop: Excel-achtig maandgrid (chauffeur × dag) — dunne gridlijnen,
-              platte dienstnummers, gearceerde weekend-kolommen. */}
-          <Card padding="none" className="hidden md:block overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr>
-                    <th className={cn('mp-sticky sticky left-0 top-0 z-sticky-hoek bg-surface-muted px-4 py-3 min-w-[180px] border-b-2 border-hairline-strong border-r-2 border-hairline-strong', microLabelClass)}>Chauffeur</th>
-                    {visibleDates.map((iso) => {
-                      const h = dayHeader(iso);
-                      const today = iso === todayIso;
-                      // De Lijn-typedag, alleen nog de feestdag (F, oker):
-                      // die bepaalt welke dienstregeling rijdt. De V van
-                      // schoolvakantie is eruit op vraag van Jarno (17-09),
-                      // die zegt niets over wie er rijdt.
-                      const td = typedagLabel(iso);
-                      const feestdag = td?.kort === 'F';
-                      // Maandafkorting onder élke dag (Jarno 17-09): stond
-                      // eerst alleen bij dagen uit de ándere maand van het
-                      // 2-wekenvenster, waardoor de ene week een maand toonde
-                      // en de andere niet.
-                      const maandKort = (MONTH_NAMES[Number(iso.slice(5, 7)) - 1] ?? '').slice(0, 3).toLowerCase();
-                      return (
-                        <th
-                          key={iso}
-                          title={feestdag ? td?.titel : undefined}
-                          className={cn(
-                            'sticky top-0 z-sticky-kop px-1 py-2 text-center font-medium border-b-2 border-hairline-strong',
-                            h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
-                            today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
-                          )}
-                        >
-                          <div className={microLabelClass}>{h.letter}</div>
-                          <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
+              platte dienstnummers, gearceerde weekend-kolommen.
+              TableShell `sticky` (tranche 3B): onder xl schuift het raster in
+              zijn kader met de naamkolom vast links; vanaf xl past het venster
+              van 14 dagen in het kader en plakt de dagkop onder de topbar
+              terwijl je door de chauffeurs scrollt. Vroeger plakte er
+              verticaal niets: de kaart had overflow-hidden. */}
+          <TableShell label="Maandplanning per chauffeur en dag" sticky className="hidden md:block">
+            <Tabel>
+              {/* De dagkop draagt een dikke lijn eronder (zoals het bord), niet de dunne van StickyThead. */}
+              <StickyThead className="[&_th]:border-b-2 [&_th]:border-hairline-strong">
+                <tr>
+                  <Th className="mp-sticky sticky left-0 z-sticky-hoek min-w-[180px] border-r-2 border-hairline-strong bg-surface-muted">
+                    <span className={microLabelClass}>Chauffeur</span>
+                  </Th>
+                  {visibleDates.map((iso) => {
+                    const h = dayHeader(iso);
+                    const today = iso === todayIso;
+                    // De Lijn-typedag, alleen nog de feestdag (F, oker):
+                    // die bepaalt welke dienstregeling rijdt. De V van
+                    // schoolvakantie is eruit op vraag van Jarno (17-09),
+                    // die zegt niets over wie er rijdt.
+                    const td = typedagLabel(iso);
+                    const feestdag = td?.kort === 'F';
+                    // Maandafkorting onder élke dag (Jarno 17-09): stond
+                    // eerst alleen bij dagen uit de ándere maand van het
+                    // 2-wekenvenster, waardoor de ene week een maand toonde
+                    // en de andere niet.
+                    const maandKort = (MONTH_NAMES[Number(iso.slice(5, 7)) - 1] ?? '').slice(0, 3).toLowerCase();
+                    return (
+                      <Th
+                        key={iso}
+                        title={feestdag ? td?.titel : undefined}
+                        className={cn(
+                          'px-1 py-2 text-center',
+                          h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
+                          today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
+                        )}
+                      >
+                        {/* Zichtbaar: letter, dag, maand; voorgelezen: de volledige dag. */}
+                        <span className="sr-only">{formatDayLong(iso)}{feestdag ? ', feestdag' : ''}{today ? ', vandaag' : ''}</span>
+                        <span aria-hidden="true">
+                          <span className={cn(microLabelClass, 'block')}>{h.letter}</span>
+                          <span className={cn('mt-0.5 block text-xs font-semibold', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</span>
                           {/* 2xs: matrixcel van 3 px-hoog label onder de dag, dichte planningsmatrix */}
-                          <div className="mt-0.5 h-3 text-2xs font-bold leading-3">
+                          <span className="mt-0.5 block h-3 text-2xs font-bold leading-3">
                             <span className={microLabelClass}>{maandKort}</span>
                             {feestdag && <span className="ml-1 text-oker-700">F</span>}
-                          </div>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {zichtbareDrivers.map((drv, i) => {
+                          </span>
+                        </span>
+                      </Th>
+                    );
+                  })}
+                </tr>
+              </StickyThead>
+              {/* Eén tbody per sectie (Chauffeurs, Flexi/invallers…): de
+                  sectiekop is dan een echte kop over die groep rijen. */}
+              {gridSecties.map((sectie) => (
+                <tbody key={sectie.naam}>
+                  {showSections && (
+                    <tr>
+                      {/* Label alleen in de vaste eerste cel; de dag-cellen
+                          van de band behouden weekend-arcering en de
+                          vandaag-markering, zodat die verticale gidsen
+                          niet per sectie onderbroken worden. */}
+                      <Th scope="rowgroup" className={cn('mp-sticky sticky left-0 z-sticky p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
+                        <span className={cn('flex h-8 items-center px-4', SECTIE_KOP)}>
+                          {SECTIE_STREEP}
+                          {sectieLabel(sectie.naam)}
+                        </span>
+                      </Th>
+                      {visibleDates.map((iso) => {
+                        const h = dayHeader(iso);
+                        return (
+                          <td
+                            key={iso}
+                            className={cn(
+                              'mp-sectie p-0 border-l',
+                              h.isMonday && 'mp-sectie-ma',
+                            )}
+                          />
+                        );
+                      })}
+                    </tr>
+                  )}
+                  {sectie.drivers.map((drv) => {
                     const row = cells[drv.id] || {};
                     const isOwn = ownId && drv.id === ownId;
-                    const rowBg = isOwn ? 'bg-oker-50' : 'bg-surface-white';
-                    const section = sectionOf(drv);
-                    const showHeader = showSections && (i === 0 || sectionOf(zichtbareDrivers[i - 1]) !== section);
                     return (
-                      <Fragment key={drv.id}>
-                      {showHeader && (
-                        <tr>
-                          {/* Label alleen in de vaste eerste cel; de dag-cellen
-                              van de band behouden weekend-arcering en de
-                              vandaag-markering, zodat die verticale gidsen
-                              niet per sectie onderbroken worden. */}
-                          <td className={cn('mp-sticky sticky left-0 z-sticky p-0 border-r-2 border-r-slate-300', SECTIE_BAND)}>
-                            <div className={cn('flex h-8 items-center px-4', SECTIE_KOP)}>
-                              {SECTIE_STREEP}
-                              {sectieLabel(section)}
-                            </div>
-                          </td>
-                          {visibleDates.map((iso) => {
-                            const h = dayHeader(iso);
-                            return (
-                              <td
-                                key={iso}
-                                className={cn(
-                                  'mp-sectie p-0 border-l',
-                                  h.isMonday && 'mp-sectie-ma',
-                                )}
-                              />
-                            );
-                          })}
-                        </tr>
-                      )}
-                      <tr className={cn('group border-b border-hairline', rowBg)}>
-                        <td
+                      <tr key={drv.id} className="group border-b border-hairline bg-surface-white">
+                        {/* Rijkop: de naam. Je eigen rij krijgt een neutrale stip
+                            en vet, geen goud (goud = actie, focus, nu). */}
+                        <Th
+                          scope="row"
                           className={cn(
-                            isOwn ? 'mp-sticky-own' : 'mp-sticky',
-                            'sticky left-0 z-sticky px-4 py-2 text-sm font-semibold min-w-[180px] truncate border-r-2 border-hairline-strong transition-colors',
-                            rowBg,
-                            'group-hover:bg-oker-50',
-                            isOwn ? 'text-oker-800' : 'text-slate-800',
+                            'mp-sticky sticky left-0 z-sticky min-w-[180px] truncate border-r-2 border-hairline-strong bg-surface-white px-4 py-2 text-sm text-slate-800 transition-colors group-hover:bg-surface-soft-hover',
+                            isOwn ? 'font-bold' : 'font-semibold',
                           )}
                         >
                           <span className="inline-flex items-center gap-1.5">
-                            {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500" aria-hidden />}
+                            {isOwn && <span className="size-1.5 shrink-0 rounded-full bg-slate-700" aria-hidden="true" />}
                             {drv.name}
-                            {/* Het woordje "jij" stond naast de naam; de gouden rij
-                                (en de stip) zegt het al. Alleen nog voor schermlezers,
-                                die de kleur niet horen (puntje Jarno 21-09). */}
                             {isOwn && <span className="sr-only"> (jij)</span>}
                           </span>
-                        </td>
+                        </Th>
                         {visibleDates.map((iso) => {
                           const cell = row[iso];
                           const h = dayHeader(iso);
@@ -846,8 +881,6 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               className={cn(
                                 'p-0 text-center',
                                 h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
-                                // oker-100/60 i.p.v. 50/50: blijft ook zichtbaar
-                                // in je eigen rij (die zelf al bg-oker-50 heeft).
                                 today ? 'bg-oker-100/60' : h.weekend ? 'mp-weekend' : '',
                                 // Lege cel: stippen (anders dan de weekendarcering), Jarno 08-09.
                                 !cell && 'mp-leeg',
@@ -859,8 +892,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                   type="button"
                                   onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
                                   className={cn(
-                                    // 2xs: dichte bezettingsmatrix, 12 px laat de kolommen wrappen
-                                    'relative flex h-7 w-full items-center justify-center px-1 text-2xs tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70',
+                                    // 2xs: dichte bezettingsmatrix, 12 px laat de kolommen wrappen.
+                                    // Hover = neutrale binnenrand, geen goud (tranche 3B).
+                                    'relative flex h-7 w-full cursor-pointer items-center justify-center px-1 text-2xs transition-colors hover:ring-1 hover:ring-inset hover:ring-hairline-strong',
                                     // Gewisselde cel in het geel en ziekte in
                                     // het rood (Jarno 08-09; ruil was rood sinds
                                     // 15-08): afwijkingen van de Excel moet je
@@ -886,13 +920,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           );
                         })}
                       </tr>
-                      </Fragment>
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
-          </Card>
+              ))}
+            </Tabel>
+          </TableShell>
 
           {/* Mobile: dag-weergave — datumstrip + alle chauffeurs van één dag
               in één kolom (per sectie, op dienstnummer). De cel-modal met
@@ -1040,16 +1073,15 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           key={drv.id}
                           type="button"
                           onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
-                          className={cn(
-                            'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0 active:bg-surface-soft-hover transition-colors',
-                            isOwn && 'bg-oker-50',
-                          )}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0 active:bg-surface-soft-hover transition-colors"
                         >
                           <Chip mono={false} className={cn(
                             'min-w-[46px] justify-center ring-1 ring-hairline',
                             celChipClass(cell),
                           )}>{cell.code}</Chip>
-                          <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', isOwn ? 'text-oker-800' : 'text-slate-800')}>
+                          {/* Eigen rij: neutrale stip en vet, geen gouden vlak (tranche 3B). */}
+                          <span className={cn('min-w-0 flex-1 truncate text-sm text-slate-800', isOwn ? 'font-bold' : 'font-semibold')}>
+                            {isOwn && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-slate-700 align-middle" aria-hidden="true" />}
                             {drv.name}
                             {isOwn && <span className="sr-only"> (jij)</span>}
                           </span>
@@ -1091,17 +1123,15 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             'min-w-[46px] justify-center',
                             cell ? cn('ring-1 ring-hairline', KIND_CLS[cell.kind]) : 'bg-transparent text-slate-300',
                           )}>{cell?.code ?? '—'}</Chip>
-                          <span className={cn('min-w-0 flex-1 truncate text-sm font-medium', isOwn ? 'text-oker-800' : 'text-slate-600')}>
+                          <span className={cn('min-w-0 flex-1 truncate text-sm', isOwn ? 'font-bold text-slate-800' : 'font-medium text-slate-600')}>
+                            {isOwn && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-slate-700 align-middle" aria-hidden="true" />}
                             {drv.name}
                             {isOwn && <span className="sr-only"> (jij)</span>}
                           </span>
                           <span className="shrink-0 text-xs font-medium text-slate-500">{cell?.label ?? ''}</span>
                         </>
                       );
-                      const rijCls = cn(
-                        'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0',
-                        isOwn && 'bg-oker-50',
-                      );
+                      const rijCls = 'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0';
                       // Zonder cel valt er niets te openen — dan geen knop.
                       // rauw: klikbare dagrij (zie hierboven) — kaart-als-knop met eigen layout
                       return cell ? (
@@ -1391,42 +1421,26 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <span className="text-sm font-bold">Overzicht berekenen…</span>
             </div>
           ) : overzicht && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+            // TableShell: schuift in zijn kader als de modal smal is (telefoon);
+            // de naamkolom is de rijkop, de totaalrij een rijkop "Totaal".
+            <TableShell label={`Maandoverzicht ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}`}>
+              <Tabel className="text-xs">
                 <thead>
-                  <tr>
-                    {([
-                      ['naam', 'Chauffeur'],
-                      ['diensten', 'Diensten'],
-                      ['minuten', 'Uren'],
-                      ['anderWerk', 'Ander werk'],
-                      ['ziek', 'Ziek'],
-                      ['betaald', 'Betaald afw.'],
-                      ['vrij', 'Vrij'],
-                      ['dagen', 'Dagen'],
-                    ] as Array<[keyof OverzichtRij, string]>).map(([kolom, label]) => {
-                      const actief = overzichtSort.kolom === kolom;
-                      return (
-                        <Th
-                          key={kolom}
-                          sort={actief ? (overzichtSort.richting === 1 ? 'ascending' : 'descending') : undefined}
-                          className={cn('px-2 py-1', kolom !== 'naam' && 'text-right')}
-                        >
-                          {/* rauw: sorteerbare tabelkop (tekst + pijltje) in een Th, geen knopvorm */}
-                          <button
-                            type="button"
-                            onClick={() => sorteerOverzicht(kolom)}
-                            className={cn(
-                              'inline-flex min-h-11 sm:pointer-fine:min-h-0 items-center gap-1 px-1 -mx-1 transition-colors',
-                              actief ? 'font-semibold text-slate-900' : 'font-medium hover:text-slate-800',
-                            )}
-                          >
-                            {label}
-                            {actief && (overzichtSort.richting === 1 ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
-                          </button>
-                        </Th>
-                      );
-                    })}
+                  <tr className="border-b border-hairline">
+                    {OVERZICHT_KOLOMMEN.map(([kolom, label]) => (
+                      // Eigen sorteerregel, via SortTh getoond: dezelfde kolom
+                      // keert om, een nieuwe cijferkolom begint aflopend, de
+                      // naam oplopend (zoals voorheen).
+                      <SortTh
+                        key={kolom}
+                        kolom={kolom}
+                        sort={overzichtSortTh}
+                        align={kolom === 'naam' ? 'left' : 'right'}
+                        dicht
+                      >
+                        {label}
+                      </SortTh>
+                    ))}
                     <Th className="px-2 py-1">Overig</Th>
                   </tr>
                 </thead>
@@ -1440,34 +1454,34 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       return cmp * richting || a.naam.localeCompare(b.naam);
                     })
                     .map((r) => (
-                      <tr key={r.driverId} className="border-t border-hairline-subtle">
-                        <Td className="px-2 py-1.5 text-xs font-semibold text-slate-800 whitespace-nowrap">{r.naam}</Td>
-                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.diensten}</Td>
-                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{urenLabel(r.minuten)}</Td>
-                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.anderWerk}</Td>
-                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.ziek}</Td>
-                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.betaald}</Td>
-                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.vrij}</Td>
-                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums font-semibold">{r.dagen}</Td>
-                        <Td className="px-2 py-1.5 text-xs text-slate-500 whitespace-nowrap">{r.overig.map(({ code, keren }) => `${code}×${keren}`).join(', ') || '—'}</Td>
+                      <tr key={r.driverId} className="border-b border-hairline-subtle last:border-b-0">
+                        <Th scope="row" className="px-2 py-1.5 text-xs font-semibold text-slate-800">{r.naam}</Th>
+                        <Td num className="px-2 py-1.5 text-xs">{r.diensten}</Td>
+                        <Td num className="px-2 py-1.5 text-xs">{urenLabel(r.minuten)}</Td>
+                        <Td num className="px-2 py-1.5 text-xs">{r.anderWerk}</Td>
+                        <Td num className="px-2 py-1.5 text-xs">{r.ziek}</Td>
+                        <Td num className="px-2 py-1.5 text-xs">{r.betaald}</Td>
+                        <Td num className="px-2 py-1.5 text-xs">{r.vrij}</Td>
+                        <Td num className="px-2 py-1.5 text-xs font-semibold">{r.dagen}</Td>
+                        <Td nowrap className="px-2 py-1.5 text-xs text-slate-500">{r.overig.map(({ code, keren }) => `${code}×${keren}`).join(', ') || '—'}</Td>
                       </tr>
                     ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t border-hairline">
-                    <Td className="px-2 py-2 text-xs font-bold text-slate-900">Totaal</Td>
-                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.diensten}</Td>
-                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{urenLabel(overzicht.totaal.minuten)}</Td>
-                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.anderWerk}</Td>
-                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.ziek}</Td>
-                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.betaald}</Td>
-                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.vrij}</Td>
-                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.dagen}</Td>
+                  <tr className="border-t border-hairline-strong">
+                    <Th scope="row" className="px-2 py-2 text-xs font-bold text-slate-900">Totaal</Th>
+                    <Td num className="px-2 py-2 text-xs font-bold text-slate-900">{overzicht.totaal.diensten}</Td>
+                    <Td num className="px-2 py-2 text-xs font-bold text-slate-900">{urenLabel(overzicht.totaal.minuten)}</Td>
+                    <Td num className="px-2 py-2 text-xs font-bold text-slate-900">{overzicht.totaal.anderWerk}</Td>
+                    <Td num className="px-2 py-2 text-xs font-bold text-slate-900">{overzicht.totaal.ziek}</Td>
+                    <Td num className="px-2 py-2 text-xs font-bold text-slate-900">{overzicht.totaal.betaald}</Td>
+                    <Td num className="px-2 py-2 text-xs font-bold text-slate-900">{overzicht.totaal.vrij}</Td>
+                    <Td num className="px-2 py-2 text-xs font-bold text-slate-900">{overzicht.totaal.dagen}</Td>
                     <Td className="px-2 py-2" />
                   </tr>
                 </tfoot>
-              </table>
-            </div>
+              </Tabel>
+            </TableShell>
           )}
         </div>
       </Modal>
