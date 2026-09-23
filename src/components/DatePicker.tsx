@@ -405,9 +405,12 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
                     // 44 px raakvlak op touch, 36 px met een muis — zelfde recept als IconButton.
                     'ios-pressable mx-auto flex h-11 w-11 items-center justify-center rounded-lg text-sm tabular-nums transition-colors sm:pointer-fine:h-9 sm:pointer-fine:w-9',
                     inMaand ? 'text-slate-800' : 'text-slate-400',
-                    uit ? 'cursor-not-allowed opacity-40' : 'hover:bg-surface-soft-hover',
-                    isVandaag && !gekozen && 'ring-1 ring-inset ring-hairline-strong font-semibold',
-                    gekozen && 'bg-oker-500 text-slate-950 font-semibold elev-accent hover:bg-oker-400',
+                    // Gekozen = neutrale selectie (bg-keuze, zoals Checkbox en Switch);
+                    // vandaag = "nu" en dus de gouden ring, zelfde recept als
+                    // MaandInput, VerlofBereikRaster en de dagstrip van CapacityView.
+                    uit ? 'cursor-not-allowed opacity-40' : !gekozen && 'hover:bg-surface-soft-hover',
+                    isVandaag && !gekozen && 'ring-1 ring-inset ring-oker-500/35 font-semibold',
+                    gekozen && 'bg-keuze text-keuze-tekst font-semibold',
                   )}
                 >
                   {Number(iso.slice(8, 10))}

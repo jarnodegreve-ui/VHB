@@ -71,7 +71,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
           <h4 className="text-row-title truncate">{u.name}</h4>
           {/* Mobiel: rol als micro-label onder de naam; lg+: als badge. */}
           {lg ? (
-            <Badge tone={u.role === 'chauffeur' ? 'slate' : 'oker'} className="mt-1">{roleLabel(u.role)}</Badge>
+            <Badge tone="slate" className="mt-1">{roleLabel(u.role)}</Badge>
           ) : (
             <MicroLabel className="truncate">{roleLabel(u.role)}</MicroLabel>
           )}

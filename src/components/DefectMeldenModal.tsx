@@ -104,7 +104,7 @@ export function DefectMeldenModal({
       <ModalHeader
         title="Defect melden"
         description="Wat is er mis met de bus? De garage ziet je melding meteen."
-        leading={<span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-oker-100 text-oker-800"><Wrench size={18} /></span>}
+        leading={<span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-surface-muted text-slate-700"><Wrench size={18} /></span>}
         onClose={onClose}
       />
       <Formulier onVerstuur={verstuur} noValidate className="space-y-4 p-6 md:p-7">

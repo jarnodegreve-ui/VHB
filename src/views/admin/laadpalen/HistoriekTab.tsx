@@ -171,7 +171,7 @@ export function HistoriekTab({ onMaand, herlaad, onGeladen }: { onMaand: (maand:
                     <tr className="hover:bg-surface-soft-hover">
                       <Td className="whitespace-nowrap">
                         {/* rauw: maand-link naar het maandoverzicht, hele cel als tekstknop */}
-                        <button type="button" onClick={() => onMaand(m.maand)} className="ios-pressable -mx-1 rounded-md px-1 text-left font-semibold capitalize text-slate-800 hover:text-oker-700">
+                        <button type="button" onClick={() => onMaand(m.maand)} className="ios-pressable -mx-1 rounded-md px-1 text-left font-semibold capitalize text-slate-800 hover:text-slate-900">
                           {maandLabel(m.maand)}
                         </button>
                         {lopend && <span className="ml-2 text-xs font-medium text-slate-500">lopend</span>}

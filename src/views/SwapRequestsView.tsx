@@ -1140,7 +1140,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         );
                       })}
                       {!showAllShifts && myShifts.length > 8 && (
-                        <Button variant="ghost" size="sm" full className="text-oker-700 hover:text-oker-800" onClick={() => setShowAllShifts(true)}>
+                        <Button variant="ghost" size="sm" full onClick={() => setShowAllShifts(true)}>
                           Meer tonen ({myShifts.length - 8} extra)
                         </Button>
                       )}
@@ -1266,7 +1266,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="block text-xs font-medium text-slate-500">Jij neemt een dienst of vrije dag van {voornaam} over</span>
                             </span>
                           </span>
-                          {!isTakeover ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
+                          {!isTakeover ? <Check size={16} className="shrink-0 text-slate-900" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
                         </button>
                         {/* rauw: keuzekaart ruilvorm (icoon + titel + uitleg + radio-vinkje), eigen layout via cnCard */}
                         <button
@@ -1286,7 +1286,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               </span>
                             </span>
                           </span>
-                          {isTakeover ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
+                          {isTakeover ? <Check size={16} className="shrink-0 text-slate-900" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
                         </button>
                       </div>
 
@@ -1315,13 +1315,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                     <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(o.date)}</span>
                                     <span className="block text-xs font-medium text-slate-500">{o.isFree ? 'Vrije dag van de collega' : `Dienst ${o.code}`}</span>
                                   </span>
-                                  {selected ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
+                                  {selected ? <Check size={16} className="shrink-0 text-slate-900" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-hairline-strong" />}
                                 </button>
                               );
                             })}
                           </div>
                           {!showAllReturns && (pickable.length > 8 || conflicted.length > 0) && (
-                            <Button variant="ghost" size="sm" full className="text-oker-700 hover:text-oker-800" onClick={() => setShowAllReturns(true)}>
+                            <Button variant="ghost" size="sm" full onClick={() => setShowAllReturns(true)}>
                               Meer tonen{pickable.length > 8 ? ` (${pickable.length - 8} extra)` : ''}
                             </Button>
                           )}

@@ -1242,7 +1242,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 )}
               </div>
 
-              <div className="p-5 md:p-6 bg-slate-50/80 flex gap-3 shrink-0">
+              <div className="p-5 md:p-6 bg-slate-50 flex gap-3 shrink-0">
                 <Button
                   variant="ghost"
                   size="lg"

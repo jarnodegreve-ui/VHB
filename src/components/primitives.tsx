@@ -25,7 +25,7 @@ type ButtonSize = 'sm' | 'md' | 'lg';
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: 'btn-primary',
   secondary: 'control-button-soft text-slate-700 hover:text-slate-900',
-  ghost: 'text-slate-500 hover:text-slate-800 hover:bg-surface-soft-hover',
+  ghost: 'text-slate-600 hover:text-slate-900 hover:bg-surface-soft-hover',
   // Solide statusknoppen op 600 (gedempte juweeltinten, index.css @theme):
   // wit op emerald-600 haalt 5,0:1, op red-600 5,7:1; op 500 zou het
   // 3,3 resp. 4,4:1 zijn, onder AA voor 13-14px tekst ("Verwijderen").
@@ -422,7 +422,7 @@ type IconButtonVariant = 'ghost' | 'secondary' | 'danger' | 'success' | 'primary
 type IconButtonSize = 'sm' | 'md';
 
 const ICON_BUTTON_VARIANTS: Record<IconButtonVariant, string> = {
-  ghost: 'text-slate-500 hover:bg-surface-soft-hover hover:text-slate-800',
+  ghost: 'text-slate-600 hover:bg-surface-soft-hover hover:text-slate-900',
   secondary: 'control-button-soft text-slate-600 hover:text-slate-900',
   danger: 'text-slate-400 hover:bg-red-50 hover:text-red-700',
   success: 'text-slate-400 hover:bg-emerald-50 hover:text-emerald-700',

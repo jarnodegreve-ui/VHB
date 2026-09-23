@@ -303,7 +303,7 @@ export function ManageUpdatesView({
                   </span>
                   <span className="mt-0.5 block text-xs font-medium text-slate-500 tabular-nums">{formatUpdateDate(update.date)}</span>
                 </span>
-                <ChevronRight size={16} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
+                <ChevronRight size={16} className={cn('shrink-0', isCurrent ? 'text-slate-700' : 'text-slate-300')} />
               </button>
             </Card>
             </LijstRij>
@@ -347,7 +347,7 @@ export function ManageUpdatesView({
         />
       ) : undefined}
       icon={(
-        <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', updateForm.isUrgent ? 'bg-red-500/12 text-red-700' : 'bg-oker-500/15 text-oker-700')}>
+        <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', updateForm.isUrgent ? 'bg-red-500/12 text-red-700' : 'bg-surface-muted text-slate-700')}>
           <Bell size={16} />
         </span>
       )}

@@ -284,9 +284,10 @@ export function MaandInput({
                   className={cn(
                     'ios-pressable flex h-11 items-center justify-center rounded-lg text-sm transition-colors sm:pointer-fine:h-9',
                     'text-slate-800',
-                    uit ? 'cursor-not-allowed opacity-40' : 'hover:bg-surface-soft-hover',
-                    nu && !gekozen && 'ring-1 ring-inset ring-hairline-strong font-semibold',
-                    gekozen && 'bg-oker-500 text-slate-950 font-semibold elev-accent hover:bg-oker-400',
+                    // Zelfde recept als de dagcel van DatePicker: neutraal gekozen, gouden ring voor deze maand.
+                    uit ? 'cursor-not-allowed opacity-40' : !gekozen && 'hover:bg-surface-soft-hover',
+                    nu && !gekozen && 'ring-1 ring-inset ring-oker-500/35 font-semibold',
+                    gekozen && 'bg-keuze text-keuze-tekst font-semibold',
                   )}
                 >
                   {MAAND_KORT[n]}

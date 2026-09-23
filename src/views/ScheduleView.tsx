@@ -619,7 +619,7 @@ function MonthCalendar({
         )}
 
         {selectedNote && (
-          <p className="mt-2.5 rounded-xl bg-oker-500/10 px-3 py-2 text-xs font-medium leading-snug text-oker-800">
+          <p className="mt-2.5 rounded-xl bg-surface-muted px-3 py-2 text-xs font-medium leading-snug text-slate-700">
             {selectedNote}
           </p>
         )}
@@ -710,7 +710,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                     <div className="space-y-1">
                       {g.segments.map((s) => (
                         <div key={s.id} className="flex items-center gap-3 font-medium text-slate-700">
-                          <Clock size={14} className="text-oker-400 shrink-0" />
+                          <Clock size={14} className="text-slate-500 shrink-0" />
                           <span className="font-mono tabular-nums">
                             {s.startTime} – {s.endTime}
                           </span>
@@ -799,7 +799,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
               </div>
 
               {noteFor?.(g.date) && (
-                <p className="mt-2.5 rounded-xl bg-oker-500/10 px-3 py-2 text-xs font-medium leading-snug text-oker-800">
+                <p className="mt-2.5 rounded-xl bg-surface-muted px-3 py-2 text-xs font-medium leading-snug text-slate-700">
                   {noteFor(g.date)}
                 </p>
               )}

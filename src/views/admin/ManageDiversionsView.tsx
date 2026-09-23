@@ -341,7 +341,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                   </div>
                 </div>
               </div>
-              <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
+              <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-slate-700' : 'text-slate-300')} />
             </button>
           </Card>
           </LijstRij>

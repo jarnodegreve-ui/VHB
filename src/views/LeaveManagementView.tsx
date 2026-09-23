@@ -17,6 +17,7 @@ import { brengRecordInBeeld } from '../lib/recordLink';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { ActieMenu } from '../components/ActieMenu';
+import { Checkbox } from '../components/Table';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { VerlofBereikRaster } from '../components/VerlofBereikRaster';
 import { MaandNavigatie } from '../components/MaandNavigatie';
@@ -843,12 +844,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           isSelected && 'bg-slate-100/60 ring-hairline-strong',
                         )}
                       >
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={isSelected}
                           onChange={() => togglePendingSelection(req.id)}
-                          className="w-4 h-4 rounded border-hairline-strong text-oker-500 cursor-pointer shrink-0"
-                          aria-label={`Selecteer ${requester?.name}`}
+                          label={`Selecteer ${requester?.name}`}
+                          className="shrink-0"
                         />
                         {/* rauw: rij-inhoud (naam + periode + chevron) als knop naast de checkbox — geen knopvorm */}
                         <button

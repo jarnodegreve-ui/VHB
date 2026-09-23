@@ -92,7 +92,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
     <Modal open onClose={onClose} vuil={vuil} maxWidth="lg" ariaLabel={`Documenten, ${user.name}`} boven>
       <div className="flex max-h-[85dvh] flex-col overflow-hidden">
           <ModalHeader
-            leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0"><FileText size={20} /></div>}
+            leading={<div className="w-10 h-10 rounded-2xl bg-surface-muted text-slate-700 flex items-center justify-center shrink-0"><FileText size={20} /></div>}
             title={`Documenten, ${user.name}`}
             description={`Alleen ${user.name.split(' ')[0]} ziet deze bestanden.`}
             onClose={onClose}
