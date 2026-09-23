@@ -145,3 +145,133 @@ test('Dagafsluiting op de telefoon: een kaart per chauffeur, dezelfde cellen', a
   expect(vak!.x).toBeGreaterThanOrEqual(0);
   expect(vak!.x + vak!.width).toBeLessThanOrEqual(breedte);
 });
+
+/**
+ * De kwaliteitsvlaggen (3B.2, 23-09): het vlak stond `absolute` in de strook
+ * waarin de tabel schuift en werd op de onderste rijen afgeknipt. Nu zweeft
+ * het (Popover `anker`: portal + fixed, erboven als er onder geen plaats is).
+ * Met 14 rijen is er een echte onderste rij tegen de rand van het kader. Per
+ * rij (boven, midden, onder) en per breedte: het vlak ligt volledig in de
+ * viewport, binnen de kliprechthoek van elke voorouder die knipt, niets
+ * anders ligt erover; een vlag gaat aan als volledige set (autosave);
+ * Escape en een buiten-klik sluiten en zetten de focus terug op de trigger.
+ */
+const VLAG_RIJEN = 14;
+const VLAG_NAMEN = Array.from({ length: VLAG_RIJEN }, (_, i) => `Chauffeur ${String(i + 1).padStart(2, '0')}`);
+const vlagRij = (i: number, datum: string, extra: Record<string, unknown> = {}) => ({
+  id: `v${i}`, datum, userId: `u${i}`, naam: VLAG_NAMEN[i], volgnr: 1, planningCode: '2101', geredenCode: '2101', overmin: 0, overminNacht: 0, overminExtra: 0, onvPremie: false,
+  qualOngeval: false, qualPanne: false, qualVerkeersovertreding: false, qualKlantklacht: false, qualAdmfout: false, qualInterneklacht: false, qualVertragingDrSchuld: false, qualRitNtGeredenDrSchuld: false,
+  opmerking: null, bewerktOp: null, bewerktDoor: null, ...extra,
+});
+
+for (const breedte of [null, 1024] as const) {
+  test(`vlaggenmenu blijft heel op de bovenste, middelste en onderste rij${breedte ? ` (${breedte}px)` : ''}`, async ({ page }, info) => {
+    const desktop = info.project.name.startsWith('Desktop');
+    test.skip(breedte !== null && !desktop, 'De extra breedte hoort bij het desktopproject.');
+    if (breedte) await page.setViewportSize({ width: breedte, height: 768 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    const gisteren = dayOffset(-1);
+    const puts: Array<{ id: string; body: Record<string, unknown> }> = [];
+    await seed(page, {
+      user: ADMIN,
+      view: 'dagafsluiting',
+      extra: (pad, request) => {
+        if (pad.endsWith(`/api/dagafsluiting/${gisteren}`) && request.method() === 'GET') {
+          const dag = { datum: gisteren, status: 'open', geopendOp: new Date().toISOString(), geopendDoor: '1', afgeslotenOp: null, afgeslotenDoor: null, heropendOp: null, heropendDoor: null, heropendReden: null };
+          return { dag, rijen: VLAG_NAMEN.map((_, i) => vlagRij(i, gisteren)), planningAfwijkingen: [], ontbrekendeCodes: [], inPlanning: true };
+        }
+        if (pad.includes('/rijen/') && request.method() === 'PUT') {
+          const id = pad.split('/').pop() ?? '';
+          const body = JSON.parse(request.postData() ?? '{}');
+          puts.push({ id, body });
+          return vlagRij(Number(id.slice(1)), gisteren, { ...body, bewerktOp: new Date().toISOString() });
+        }
+        return undefined;
+      },
+    });
+    await page.goto(`/beheer/dagadministratie/${gisteren}`);
+    await expect(page.getByRole('heading', { name: 'Dagadministratie', level: 1 })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(`${VLAG_RIJEN} rijen`)).toBeVisible();
+
+    const naarBeneden = () => page.evaluate(() => {
+      const root = document.querySelector<HTMLElement>('[data-scroll-root]');
+      if (root) root.scrollTop = root.scrollHeight;
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+
+    for (const [waar, i] of [['bovenste', 0], ['middelste', Math.floor(VLAG_RIJEN / 2)], ['onderste', VLAG_RIJEN - 1]] as const) {
+      const naam = VLAG_NAMEN[i];
+      const trigger = page.getByRole('button', { name: new RegExp(`^Kwaliteitsvlaggen van ${naam}`) });
+      await trigger.scrollIntoViewIfNeeded();
+      // De onderste rij tegen de onderrand: de pagina helemaal naar beneden, zodat onder de trigger geen plaats meer is.
+      if (waar === 'onderste') await naarBeneden();
+      await trigger.click();
+      const menu = page.getByRole('dialog', { name: `Kwaliteitsvlaggen van ${naam}` });
+      await expect(menu).toBeVisible();
+      // Het eerste vinkje krijgt de focus (het vlak staat achteraan in de DOM).
+      await expect(menu.getByRole('checkbox', { name: 'Ongeval' })).toBeFocused();
+
+      // Meten na de in-animatie (motion) en de overgangen die de
+      // reduced-motion-regel op elke eigenschap zet (0,01 ms, maar pas in het
+      // volgende frame afgerond): anders meet je de voorlopige plek.
+      await menu.evaluate(async (el) => {
+        await Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined)));
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      });
+      const meting = await menu.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const vw = document.documentElement.clientWidth;
+        const vh = window.innerHeight;
+        const geknipt: string[] = [];
+        for (let p = el.parentElement; p; p = p.parentElement) {
+          const s = getComputedStyle(p);
+          if ([s.overflowX, s.overflowY].every((o) => o === 'visible')) continue;
+          const c = p.getBoundingClientRect();
+          // html en body met overflow: de viewport is daar de kliprechthoek (hieronder apart).
+          if (p === document.documentElement || p === document.body) continue;
+          if (r.left < c.left - 0.5 || r.right > c.right + 0.5 || r.top < c.top - 0.5 || r.bottom > c.bottom + 0.5) geknipt.push(`${p.tagName}.${p.className}`);
+        }
+        // Geen ander element over het vlak: hoeken (4 px naar binnen) en midden.
+        const punten = [[r.left + 4, r.top + 4], [r.right - 4, r.top + 4], [r.left + 4, r.bottom - 4], [r.right - 4, r.bottom - 4], [(r.left + r.right) / 2, (r.top + r.bottom) / 2]];
+        const bedekt = punten.filter(([x, y]) => { const e = document.elementFromPoint(x, y); return !e || !el.contains(e); }).length;
+        // Heeft het vlak een eigen scroll nodig gehad, dan moet de inhoud er nog steeds volledig in kunnen schuiven.
+        return { r: { left: r.left, right: r.right, top: r.top, bottom: r.bottom }, vw, vh, geknipt, bedekt, scrollt: el.scrollHeight > el.clientHeight + 1 };
+      });
+      const tag = `${info.project.name}${breedte ? ` ${breedte}px` : ''}, ${waar} rij`;
+      expect(meting.r.left, `${tag}: links in beeld`).toBeGreaterThanOrEqual(0);
+      expect(meting.r.top, `${tag}: boven in beeld`).toBeGreaterThanOrEqual(0);
+      expect(meting.r.right, `${tag}: rechts in beeld`).toBeLessThanOrEqual(meting.vw);
+      expect(meting.r.bottom, `${tag}: onder in beeld`).toBeLessThanOrEqual(meting.vh);
+      expect(meting.geknipt, `${tag}: geknipt door een voorouder`).toEqual([]);
+      expect(meting.bedekt, `${tag}: iets ligt over het vlak`).toBe(0);
+      expect(meting.scrollt, `${tag}: het vlak past zonder eigen scroll`).toBe(false);
+
+      // Een vlag aan: de volledige set gaat mee (autosave als één cel).
+      const voor = puts.length;
+      await menu.getByText('Panne', { exact: true }).click();
+      await expect.poll(() => puts.length).toBe(voor + 1);
+      const put = puts[puts.length - 1];
+      expect(put.id).toBe(`v${i}`);
+      expect(put.body).toEqual({
+        qualOngeval: false, qualPanne: true, qualVerkeersovertreding: false, qualKlantklacht: false, qualAdmfout: false, qualInterneklacht: false, qualVertragingDrSchuld: false, qualRitNtGeredenDrSchuld: false,
+      });
+      await expect(menu.getByRole('checkbox', { name: 'Panne' })).toBeChecked();
+
+      // Escape sluit en zet de focus terug op de trigger.
+      await page.keyboard.press('Escape');
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toHaveAccessibleName(`Kwaliteitsvlaggen van ${naam}: 1 vlag`);
+
+      // Een buiten-klik (op de naam in dezelfde rij, niet focusbaar) sluit ook en zet de focus terug.
+      await trigger.click();
+      await expect(menu).toBeVisible();
+      await page.locator('tbody tr', { hasText: naam }).locator('td').first().click({ position: { x: 4, y: 4 } });
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+    }
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Lock, Plus, RotateCcw, Trash2, Unlock } from 'lucide-react';
 import type { User } from '../../types';
 import { QUAL_VLAGGEN, QUAL_VLAG_LABEL, OPMERKING_MAX, loonCodeSleutel, type QualVlag } from '../../../shared/loon';
@@ -342,7 +342,9 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
   bewaar: (body: RijBody) => Promise<DagPrestatie>; onBewaard: (p: DagPrestatie) => void; onVerwijder: () => void;
 }) {
   const [opmerking, setOpmerking] = useState(r.opmerking ?? '');
-  const { open: vlaggenOpen, setOpen: setVlaggenOpen, wortel: vlaggenWortel } = useDropdown();
+  const { open: vlaggenOpen, setOpen: setVlaggenOpen, wortel: vlaggenWortel, vlak: vlaggenVlak } = useDropdown();
+  const vlaggenKnop = useRef<HTMLButtonElement>(null);
+  const vlaggenId = `${r.id}-vlaggen`;
   useEffect(() => { setOpmerking(r.opmerking ?? ''); }, [r.opmerking]);
   const naam = r.naam ?? 'deze chauffeur';
   const codeCel = useAutosaveCel<string, DagPrestatie>({ actie: `Gereden code van ${naam} bewaren`, bewaar: (v) => bewaar({ geredenCode: v || null }), opGelukt: onBewaard });
@@ -404,11 +406,13 @@ function Rij({ r, afgesloten, afwijkend, dienstCodes, variaCodes, codeMap, bewaa
       <Td className={cn(KAART.cel, 'max-md:col-span-4')}>
         <KaartKop>Kwaliteit</KaartKop>
         <div className="relative inline-flex items-center gap-1" ref={vlaggenWortel}>
-          <Button variant={actieveVlaggen.length ? 'warning' : 'ghost'} size="sm" onClick={() => setVlaggenOpen((v) => !v)} aria-expanded={vlaggenOpen} aria-describedby={vlagCel.staat.status === 'fout' ? cellen.vlaggen : undefined} disabled={afgesloten && actieveVlaggen.length === 0}>
+          <Button ref={vlaggenKnop} variant={actieveVlaggen.length ? 'warning' : 'ghost'} size="sm" onClick={() => setVlaggenOpen((v) => !v)} aria-haspopup="dialog" aria-expanded={vlaggenOpen} aria-controls={vlaggenOpen ? vlaggenId : undefined} aria-label={`Kwaliteitsvlaggen van ${naam}: ${actieveVlaggen.length ? `${actieveVlaggen.length} vlag${actieveVlaggen.length === 1 ? '' : 'gen'}` : 'geen'}`} aria-describedby={vlagCel.staat.status === 'fout' ? cellen.vlaggen : undefined} disabled={afgesloten && actieveVlaggen.length === 0}>
             {actieveVlaggen.length ? `${actieveVlaggen.length} vlag${actieveVlaggen.length === 1 ? '' : 'gen'}` : 'Geen'}
           </Button>
           <AutosaveTeken staat={vlagCel.staat} />
-          <Popover open={vlaggenOpen} label="Kwaliteitsvlaggen" align="left" breedte="md">
+          {/* Geankerd (portal + fixed): de tabel schuift in haar kader, een
+              absoluut vlak werd op de onderste rijen afgeknipt. */}
+          <Popover open={vlaggenOpen} id={vlaggenId} label={`Kwaliteitsvlaggen van ${naam}`} align="left" breedte="md" anker={vlaggenKnop} vlakRef={vlaggenVlak} onSluit={() => setVlaggenOpen(false)}>
               {QUAL_VLAGGEN.map((k: QualVlag) => (
                 <div key={k} className="flex min-h-9 items-center gap-1 rounded-lg pr-2 text-sm hover:bg-surface-soft-hover">
                   <Checkbox
