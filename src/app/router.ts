@@ -25,7 +25,7 @@ export const ROUTE_EVENT = 'vhb-route';
 export type Route = { view: View; params: string[] };
 
 /** Zet een pad om naar view + parameters; onbekend pad → null. */
-function routeUitPad(pathname: string): Route | null {
+export function routeUitPad(pathname: string): Route | null {
   const segmenten = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean).map((s) => {
     try { return decodeURIComponent(s); } catch { return s; }
   });
@@ -56,23 +56,11 @@ const onthoud = (view: View) => {
 };
 
 /**
- * Terug naar de oorspronkelijke bestemming na het inloggen (tranche 3C, 23-09).
- * Alleen een pad op deze origin dat naar een bekend scherm wijst mag een
- * terugkeerdoel zijn: geen volledige URL, geen `//host` of `/\\host`, geen
- * stuurtekens; de hash valt weg. Wat niet voldoet geeft null, en dan gaat het
- * zoals vroeger naar het dashboard. De rol-guard en de server beslissen daarna
- * nog altijd of je het scherm en het record mag zien.
+ * Het pad waarmee de app koud opstartte, als dat een ander scherm dan het
+ * dashboard was (tranche 3C). Hier nog ruw: `veiligInternPad`
+ * (src/app/terugNaLogin.ts) keurt het pas bij het inloggen, zodat die
+ * validatie niet in de startbundel zit.
  */
-export function veiligInternPad(invoer: unknown): string | null {
-  if (typeof invoer !== 'string' || invoer.length > 2048 || !/^\/(?![/\\])/.test(invoer) || /[\u0000-\u001f\\]/.test(invoer)) return null;
-  let u: URL;
-  try { u = new URL(invoer, 'https://vhb.invalid'); } catch { return null; }
-  if (u.origin !== 'https://vhb.invalid') return null;
-  const route = routeUitPad(u.pathname);
-  return route && route.view !== 'dashboard' ? u.pathname + u.search : null;
-}
-
-/** Het pad waarmee de app koud opstartte, als dat een ander scherm dan het dashboard was. */
 let startDoel: string | null = null;
 /** Geeft het startdoel één keer terug (daarna null): na het inloggen, of weggegooid bij een bestaande sessie. */
 export const neemStartDoel = (): string | null => { const d = startDoel; startDoel = null; return d; };
@@ -90,7 +78,7 @@ function normaliseerStartUrl() {
     params.delete('view');
     const rest = params.toString();
     window.history.replaceState(null, '', padVan(oudeView as View) + (rest ? `?${rest}` : '') + hash);
-    startDoel = veiligInternPad(window.location.pathname + window.location.search);
+    startDoel = window.location.pathname + window.location.search;
     return;
   }
   if (pathname === '/' || pathname === '') {
@@ -116,7 +104,7 @@ function normaliseerStartUrl() {
     window.history.replaceState(null, '', '/' + search + hash);
     return;
   }
-  startDoel = veiligInternPad(pathname + search);
+  startDoel = pathname + search;
 }
 
 // --- Scrollpositie per route (punt 19, 15-09; src/lib/scrollGeheugen.ts) ---

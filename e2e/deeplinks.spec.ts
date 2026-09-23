@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ADMIN, CHAUFFEUR, type Fixture } from './helpers';
+import { ADMIN, CHAUFFEUR, seed, type Fixture } from './helpers';
 import { apiFixtures } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -80,7 +80,9 @@ test.describe('login → oorspronkelijke bestemming', () => {
     await page.goto('/beheer/gebruikers');
     await logIn(page);
     await expect(page.getByText('Dit scherm is niet beschikbaar voor jouw rol.')).toBeVisible();
-    expect(new URL(page.url()).pathname).toBe('/');
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/');
+    // Eén beslissing van de rol-guard, niet twee (de login zet eerst het doel, dan de gebruiker).
+    await expect(page.getByText('Dit scherm is niet beschikbaar voor jouw rol.')).toHaveCount(1);
   });
 
   test('staf komt op het beheerscherm van de link', async ({ page }) => {
@@ -92,4 +94,13 @@ test.describe('login → oorspronkelijke bestemming', () => {
     expect(url.pathname).toBe('/beheer/gebruikers');
     expect(url.searchParams.get('zoek')).toBe('test');
   });
+});
+
+test('toestel wacht op goedkeuring: het scherm laadt (eigen chunk sinds 3C.1)', async ({ page }) => {
+  await seed(page, { user: CHAUFFEUR, extra: (p) => (p.endsWith('/api/devices/register') ? { status: 'pending' } : undefined) });
+  // Zoals de server bij een toestel dat nog niet goedgekeurd is: /api/me geeft 403 device_pending.
+  await page.route('**/api/me', (route) => route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: 'Dit toestel wacht op goedkeuring.', code: 'device_pending' }) }));
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Toestel wacht op goedkeuring' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Opnieuw controleren' })).toBeVisible();
 });

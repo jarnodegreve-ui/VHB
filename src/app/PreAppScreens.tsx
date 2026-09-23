@@ -1,7 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ShieldAlert, Smartphone } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
-import { Button } from '../components/primitives';
 import { applyThemeColorMeta, cn } from '../lib/ui';
 
 /**
@@ -52,7 +50,7 @@ function useLaadFases() {
 }
 
 /** Tekstlink op carbon: Button ghost hovert met een licht vlak dat hier als vlek opvalt. */
-function CarbonLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+export function CarbonLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     // rauw: tekstlink op het carbon pre-app-scherm.
     <button type="button" onClick={onClick} className="text-xs font-semibold text-white/60 hover:text-white transition-colors">
@@ -103,32 +101,5 @@ export function ConfigOntbreekt() {
     <div className="min-h-screen bg-oker-50 flex items-center justify-center p-6 text-center text-slate-700 font-bold">
       Supabase client-configuratie ontbreekt. Voeg `VITE_SUPABASE_URL` en `VITE_SUPABASE_ANON_KEY` toe in Vercel en lokaal.
     </div>
-  );
-}
-
-export function ToestelGeblokkeerd({ revoked, onRetry, onLogout }: { revoked: boolean; onRetry: () => void; onLogout: () => void }) {
-  return (
-    <CarbonScherm className="gap-6 p-6 text-center">
-      <div className="max-w-sm">
-        <div className={cn(
-          'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
-          revoked ? 'bg-red-500/15 text-red-300' : 'bg-oker-500/15 text-oker-400',
-        )}>
-          {revoked ? <ShieldAlert size={24} /> : <Smartphone size={24} />}
-        </div>
-        <h1 className="mt-4 text-xl font-black text-white tracking-[-0.015em]">
-          {revoked ? 'Dit toestel is geblokkeerd' : 'Toestel wacht op goedkeuring'}
-        </h1>
-        <p className="mt-2 text-sm font-medium leading-6 text-slate-300">
-          {revoked
-            ? 'De toegang voor dit toestel is ingetrokken. Neem contact op met de planning als dit niet klopt.'
-            : 'Je login werkt, maar dit toestel is nog niet goedgekeurd. De planning heeft een melding gekregen, zodra het toestel is goedgekeurd kun je verder. Tip: zet je de app op je beginscherm, dan kan die één keer apart goedgekeurd moeten worden.'}
-        </p>
-        {!revoked && (
-          <Button variant="primary" className="mt-5" onClick={onRetry}>Opnieuw controleren</Button>
-        )}
-        <div className="mt-4"><CarbonLink onClick={onLogout}>Afmelden</CarbonLink></div>
-      </div>
-    </CarbonScherm>
   );
 }

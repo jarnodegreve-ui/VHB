@@ -20,7 +20,7 @@ const laadRouter = async (pad: string) => {
 afterEach(() => { window.history.replaceState(null, '', '/'); });
 
 describe('veiligInternPad', async () => {
-  const { veiligInternPad } = await import('./router');
+  const { veiligInternPad } = await import('./terugNaLogin');
 
   it.each([
     ['/verlof', '/verlof'],
