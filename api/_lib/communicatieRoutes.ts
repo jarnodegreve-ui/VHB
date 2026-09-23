@@ -300,7 +300,10 @@ export function mountCommunicatieRoutes(app: express.Express) {
     }
   });
 
-  app.get("/api/services", authenticate, async (_req, res) => {
+  // Alleen planner en admin (23-09, Jarno): het leesrecht voor elke rol was
+  // een overblijfsel van toen chauffeurs het Dienstoverzicht nog zagen (tot
+  // 26-04); geen chauffeur- of techniekerscherm vraagt deze lijst op.
+  app.get("/api/services", authenticate, requireRole("planner", "admin"), async (_req, res) => {
     try {
       const data = await getServicesData();
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
