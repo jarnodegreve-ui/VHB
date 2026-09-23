@@ -54,6 +54,15 @@ export type DatePickerProps = {
   placeholder?: string;
   /** Naam van de dialoog; valt terug op aria-label of 'Datum kiezen'. */
   dialogLabel?: string;
+  /**
+   * `false` = het veld heeft altijd een datum (dagnavigatie, een periode die
+   * een scherm stuurt): geen Wissen in de kalender, en bij blur of Enter
+   * zonder geldige datum (leeg, onbestaand, buiten min/max) komt de laatst
+   * gecommitte datum terug, nooit vandaag (datumtranche PR 3; vroeger negeerde
+   * de aanroeper '' stil met `v && …` en toonde het veld iets anders dan wat
+   * actief was).
+   */
+  wisbaar?: boolean;
   'aria-label'?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
@@ -80,6 +89,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   invalid,
   placeholder = 'dd/mm/jjjj',
   dialogLabel,
+  wisbaar = true,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
   'aria-describedby': ariaDescribedby,
@@ -87,6 +97,8 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   const [open, setOpen] = useState(false);
   const [tekst, setTekst] = useState(() => isoNaarDmj(value));
   const [fout, setFout] = useState<string | null>(null);
+  /** Navigatieveld (wisbaar={false}): waarom de vorige datum terugkwam. Geen fout: de getoonde datum is de actieve. */
+  const [hersteld, setHersteld] = useState<string | null>(null);
   const [maand, setMaand] = useState(() => maandVan(isIsoDag(value) ? value : vandaagIso()));
   const [cursor, setCursor] = useState(() => (isIsoDag(value) ? value : vandaagIso()));
   const [mobiel, setMobiel] = useState(false);
@@ -115,6 +127,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     if (typeof document !== 'undefined' && document.activeElement === veldRef.current) return;
     setTekst(isoNaarDmj(value));
     zetFout(null);
+    setHersteld(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
@@ -127,17 +140,38 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     if (reden) el.dataset.datumFout = '1'; else delete el.dataset.datumFout;
   };
 
+  /**
+   * Navigatieveld zonder geldige invoer: de laatst gecommitte datum komt
+   * terug (nooit vandaag), zodat het veld meteen weer toont wat actief is.
+   * Een ongeldige invoer zegt kort waarom; leegmaken zegt niets.
+   */
+  const herstel = (reden: string | null) => {
+    zetFout(null);
+    setTekst(isoNaarDmj(value));
+    setHersteld(reden ? `${reden} De vorige datum blijft staan.` : null);
+  };
+
   /** Concept lezen en doorgeven; false = ongeldig (niets doorgegeven). */
   const bevestig = (): boolean => {
     const r = leesDmj(tekst);
+    setHersteld(null);
     if (r.staat === 'leeg') {
       zetFout(null);
+      if (!wisbaar) { herstel(null); return true; }
       if (value) onChange('');
       return true;
     }
-    if (r.staat === 'fout') { zetFout(r.reden); return false; }
+    if (r.staat === 'fout') {
+      if (!wisbaar) { herstel(r.reden); return false; }
+      zetFout(r.reden);
+      return false;
+    }
     const buiten = bereikFout(r.iso, min, max);
-    if (buiten) { zetFout(buiten); return false; }
+    if (buiten) {
+      if (!wisbaar) { herstel(buiten); return false; }
+      zetFout(buiten);
+      return false;
+    }
     zetFout(null);
     setTekst(isoNaarDmj(r.iso));
     if (r.iso !== value) onChange(r.iso);
@@ -286,7 +320,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   const volgendeUit = maandBuitenBereik(maandPlus(maand, 1), min, max);
   const naamDialoog = dialogLabel ?? ariaLabel ?? 'Datum kiezen';
   const ongeldig = invalid || !!fout;
-  const beschrijving = [ariaDescribedby, fout ? foutId : null].filter(Boolean).join(' ') || undefined;
+  const beschrijving = [ariaDescribedby, fout || hersteld ? foutId : null].filter(Boolean).join(' ') || undefined;
 
   // Sheet: landscape-iOS negeert de portrait-lock, dus de zij-insets tellen
   // mee (zoals SlideOver) — anders vallen de randcellen achter de notch-hoek.
@@ -370,7 +404,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       </div>
       <div className="mt-2 flex items-center justify-between border-t fine-divider pt-2">
         <Button variant="ghost" size="sm" disabled={!binnenBereik(vandaag, min, max)} onClick={() => kies(vandaag)}>Vandaag</Button>
-        <Button variant="ghost" size="sm" disabled={!value && !tekst} onClick={() => { setTekst(''); zetFout(null); if (value) onChange(''); sluit(true); }}>Wissen</Button>
+        {wisbaar && (
+          <Button variant="ghost" size="sm" disabled={!value && !tekst} onClick={() => { setTekst(''); zetFout(null); if (value) onChange(''); sluit(true); }}>Wissen</Button>
+        )}
       </div>
     </motion.div>
   );
@@ -400,6 +436,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
             setTekst(e.target.value);
             // Tijdens het typen geen fout; bij de volgende bevestiging opnieuw.
             if (fout) zetFout(null);
+            if (hersteld) setHersteld(null);
           }}
           onBlur={onVeldBlur}
           onKeyDown={onVeldKey}
@@ -429,6 +466,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       {name && <input type="hidden" name={name} value={geldig} />}
       {fout && (
         <p id={foutId} role="alert" className="mt-1.5 text-xs font-medium text-red-700">{fout}</p>
+      )}
+      {hersteld && !fout && (
+        <p id={foutId} role="status" className="mt-1.5 text-xs font-medium text-slate-600">{hersteld}</p>
       )}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
