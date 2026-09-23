@@ -44,6 +44,10 @@ test('typen in Van en Tot: dd/mm/jjjj erin, ISO in de aanvraag, het raster volgt
 
 test('regels bij typen: verleden, einde vóór start, onbestaande dag en schrikkeldag', async ({ page }) => {
   const { modal } = await openAanvraag(page);
+  // Eigen aanvraag: in het raster zijn dagen vóór vandaag uitgeschakeld (zelfde regel als typen).
+  await modal.getByRole('button', { name: 'Vorige maand' }).click();
+  await expect(modal.getByRole('grid').locator('[role="gridcell"][data-iso]').first()).toBeDisabled();
+  await modal.getByRole('button', { name: 'Volgende maand' }).click();
   await van(modal).fill(dmj(dag(-2)));
   await van(modal).blur();
   await expect(modal.getByText('Je kan geen verlof aanvragen in het verleden.').first()).toBeVisible();
@@ -85,9 +89,18 @@ test('toetsenbord: één tab-stop in het raster, pijlen en Enter kiezen begin en
   await expect(grid.locator(`[data-iso="${verwachtEind}"]`)).toHaveAttribute('aria-label', /einde van de periode$/);
 });
 
-test('registratie door staf namens een chauffeur mag in het verleden (bestaande flow)', async ({ page }) => {
+test('registratie door staf namens een chauffeur mag in het verleden, typen én raster (bestaande flow)', async ({ page }) => {
   const { modal, posts } = await openAanvraag(page, ADMIN, /Verlof registreren/);
   await modal.getByLabel(/Chauffeur/).selectOption({ label: 'Test Chauffeur' });
+  // Ook in het raster: een dag in het verleden is kiesbaar (zelfde regel als typen).
+  await modal.getByRole('button', { name: 'Vorige maand' }).click();
+  const grid = modal.getByRole('grid');
+  const oudeDag = grid.locator('[role="gridcell"][data-iso]').first();
+  await expect(oudeDag).toBeEnabled();
+  const oudeIso = await oudeDag.getAttribute('data-iso');
+  await oudeDag.click();
+  await expect(van(modal)).toHaveAttribute('data-datum', oudeIso!);
+  await modal.getByRole('button', { name: 'Volgende maand' }).click();
   const start = dag(-5);
   await van(modal).fill(dmj(start));
   await van(modal).blur();
