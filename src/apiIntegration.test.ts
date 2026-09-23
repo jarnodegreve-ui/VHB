@@ -6636,6 +6636,56 @@ describe('Loon: dagafsluiting en Easypay-export', () => {
   });
 });
 
+describe('Dagadministratie: tot en met vandaag (Europe/Brussels), Jarno 23-09', () => {
+  const FOUT = 'Dagadministratie kan enkel tot en met vandaag worden aangepast.';
+  const zetNu = (iso: string) => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(iso)); };
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('verleden en vandaag openen en afsluiten; morgen geweigerd zonder iets te bewaren', async () => {
+    zetNu('2026-09-23T10:00:00Z');
+    expect((await api('POST', '/api/dagafsluiting/2026-07-01/openen', { token: 'tok-planner' })).status).toBe(201);
+    expect((await api('POST', '/api/dagafsluiting/2026-07-01/afsluiten', { token: 'tok-planner' })).status).toBe(200);
+    // Historische correctie: heropenen blijft kunnen.
+    expect((await api('POST', '/api/dagafsluiting/2026-07-01/heropenen', { token: 'tok-planner', body: { reden: 'Overminuten vergeten' } })).status).toBe(200);
+    expect((await api('POST', '/api/dagafsluiting/2026-09-23/openen', { token: 'tok-planner' })).status).toBe(201);
+
+    const voor = mem.loonRijen.dag_afsluitingen.length;
+    const morgen = await api('POST', '/api/dagafsluiting/2026-09-24/openen', { token: 'tok-planner' });
+    expect(morgen.status).toBe(400);
+    expect(morgen.json.error).toBe(FOUT);
+    expect(mem.loonRijen.dag_afsluitingen.length).toBe(voor);
+  });
+
+  it('elke schrijfactie op een toekomstige dag wordt geweigerd, ook een directe request', async () => {
+    zetNu('2026-09-23T10:00:00Z');
+    const dag = '2026-10-01';
+    const reacties = await Promise.all([
+      api('PUT', `/api/dagafsluiting/${dag}/rijen/p1`, { token: 'tok-planner', body: { overmin: 30 } }),
+      api('POST', `/api/dagafsluiting/${dag}/rijen`, { token: 'tok-planner', body: { userId: '3', geredenCode: '12' } }),
+      api('DELETE', `/api/dagafsluiting/${dag}/rijen/p1`, { token: 'tok-planner' }),
+      api('POST', `/api/dagafsluiting/${dag}/planning-overnemen`, { token: 'tok-planner' }),
+      api('POST', `/api/dagafsluiting/${dag}/afsluiten`, { token: 'tok-planner' }),
+      api('POST', `/api/dagafsluiting/${dag}/heropenen`, { token: 'tok-planner', body: { reden: 'x' } }),
+    ]);
+    for (const r of reacties) {
+      expect(r.status).toBe(400);
+      expect(r.json.error).toBe(FOUT);
+    }
+    // Lezen blijft kunnen.
+    expect((await api('GET', `/api/dagafsluiting/${dag}`, { token: 'tok-planner' })).status).not.toBe(400);
+  });
+
+  it('de grens is de Brusselse kalenderdag, niet de UTC-dag', async () => {
+    // 23/09 22:30 UTC = 24/09 00:30 in Brussel: 24/09 is "vandaag", 25/09 niet.
+    zetNu('2026-09-23T22:30:00Z');
+    expect((await api('POST', '/api/dagafsluiting/2026-09-24/openen', { token: 'tok-planner' })).status).toBe(201);
+    expect((await api('POST', '/api/dagafsluiting/2026-09-25/openen', { token: 'tok-planner' })).status).toBe(400);
+    // 23/09 21:30 UTC = 23/09 23:30 in Brussel: 24/09 is dan nog morgen.
+    zetNu('2026-09-23T21:30:00Z');
+    expect((await api('POST', '/api/dagafsluiting/2026-09-24/afsluiten', { token: 'tok-planner' })).status).toBe(400);
+  });
+});
+
 describe('rapporten (GET /api/rapporten/:id)', () => {
   it('zonder sessie 401; chauffeur en technieker 403', async () => {
     mem.users.push({ id: '5', name: 'Tom Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });

@@ -321,6 +321,19 @@ describe('DatePicker wisbaar={false} (navigatievelden, PR 3)', () => {
     await act(async () => { root.unmount(); });
   });
 
+  it('maxMelding: een datum na max zegt de regel van het scherm, de vorige datum blijft', async () => {
+    const onChange = vi.fn();
+    const { root, container } = await monteer(<DatePicker id="d" value="2026-09-22" max="2026-09-23" maxMelding="Enkel tot en met vandaag." wisbaar={false} onChange={onChange} aria-label="Dag" />);
+    const el = veld(container);
+    el.focus();
+    await act(async () => { typ(el, '24/09/2026'); });
+    await act(async () => { el.blur(); });
+    expect(el.value).toBe('22/09/2026');
+    expect(status(container)).toBe('Enkel tot en met vandaag. De vorige datum blijft staan.');
+    expect(onChange).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
+  });
+
   it('een geldige datum gaat gewoon door', async () => {
     const onChange = vi.fn();
     const { root, container } = await monteer(<Nav onChange={onChange} start="2026-09-08" />);
