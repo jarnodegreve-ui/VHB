@@ -4,8 +4,9 @@ import type { Service } from '../types';
 import { downloadBlob } from '../lib/ui';
 import { dienstoverzichtCsv } from '../lib/dienstoverzichtExport';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, Chip, MicroLabel, Segmented, TableShell, Td, Th } from '../components/primitives';
-import { Uitklap, uitklapChevron } from '../components/Uitklap';
+import { Button, Chip, MicroLabel, Segmented, Tabel, TableShell, Td, Th } from '../components/primitives';
+import { Uitklap } from '../components/Uitklap';
+import { RecordRij } from '../components/RecordRij';
 import { SearchField } from '../components/Field';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import { dienstStatistiek, formatDienstDuur } from '../lib/dienstStatistiek';
@@ -53,6 +54,9 @@ export function ServicesView({ services }: { services: Service[] }) {
       setSortOrder('asc');
     }
   };
+
+  /** "04:36–07:52": en-dash zonder spaties, zoals Beheer dienstoverzicht. */
+  const tijdvak = (van: string, tot: string) => `${van}–${tot}`;
 
   const downloadCSV = () => {
     const blob = new Blob([dienstoverzichtCsv(filteredServices)], { type: 'text/csv;charset=utf-8;' });
@@ -108,17 +112,22 @@ export function ServicesView({ services }: { services: Service[] }) {
           </Zijvak>
         ) : undefined}
       >
-      <TableShell>
-        {/* Desktop Table View */}
+      {/* Standaardoverloop (schuiven in het kader, geen plakkende kop): naast
+          de zijbalk en vanaf xl naast het zijvak is de tabel een paar
+          pixels te breed, dus een scrollcontainer is nodig en dan kan de
+          kop niet plakken (gemeten, tranche 3B). Telefoon (onder md): een
+          lijst per dienst die openklapt. */}
+      <TableShell label="Dienstoverzicht">
         <div className="hidden md:block">
-          <table className="w-full text-left">
+          <Tabel>
             <thead className="bg-surface-soft border-b border-hairline-subtle">
               {/* Zelfde indeling als het totaaloverzicht van de planning:
-                  per deel eerst het loopnummer, dan de uren. */}
+                  per deel eerst het loopnummer, dan de uren. De sortering
+                  kies je in de kop (Segmented); aria-sort volgt die keuze. */}
               <tr>
-                <Th>Dienst</Th>
+                <Th sort={sortBy === 'number' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}>Dienst</Th>
                 <Th>Loop 1</Th>
-                <Th>Deel 1</Th>
+                <Th sort={sortBy === 'time' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}>Deel 1</Th>
                 <Th>Loop 2</Th>
                 <Th>Deel 2</Th>
                 <Th>Loop 3</Th>
@@ -128,79 +137,59 @@ export function ServicesView({ services }: { services: Service[] }) {
             <tbody className="divide-y divide-hairline-subtle">
               {filteredServices.map(s => (
                 <tr key={s.id} className="hover:bg-surface-soft-hover transition-colors">
-                  <Td>
+                  <Td nowrap>
                     <span className="font-semibold text-slate-800">{s.serviceNumber}</span>
                   </Td>
-                  <Td><LoopCell loopnr={s.loopnr} /></Td>
-                  <Td><TimeCell start={s.startTime} end={s.endTime} /></Td>
-                  <Td><LoopCell loopnr={hasValidTime(s.startTime2, s.endTime2) ? s.loopnr2 : undefined} /></Td>
-                  <Td>{hasValidTime(s.startTime2, s.endTime2) ? <TimeCell start={s.startTime2!} end={s.endTime2!} /> : null}</Td>
-                  <Td><LoopCell loopnr={hasValidTime(s.startTime3, s.endTime3) ? s.loopnr3 : undefined} /></Td>
-                  <Td>{hasValidTime(s.startTime3, s.endTime3) ? <TimeCell start={s.startTime3!} end={s.endTime3!} /> : null}</Td>
+                  <Td nowrap><LoopCell loopnr={s.loopnr} /></Td>
+                  <Td nowrap><TimeCell start={s.startTime} end={s.endTime} /></Td>
+                  <Td nowrap><LoopCell loopnr={hasValidTime(s.startTime2, s.endTime2) ? s.loopnr2 : undefined} /></Td>
+                  <Td nowrap>{hasValidTime(s.startTime2, s.endTime2) ? <TimeCell start={s.startTime2!} end={s.endTime2!} /> : null}</Td>
+                  <Td nowrap><LoopCell loopnr={hasValidTime(s.startTime3, s.endTime3) ? s.loopnr3 : undefined} /></Td>
+                  <Td nowrap>{hasValidTime(s.startTime3, s.endTime3) ? <TimeCell start={s.startTime3!} end={s.endTime3!} /> : null}</Td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </Tabel>
         </div>
 
-        {/* Mobile Card View — uitklapbaar */}
-        <div className="md:hidden divide-y divide-hairline-subtle">
+        {/* Telefoon: het rijrecept (RecordRij). De titel is het dienstnummer,
+            de metaregel de uren van het eerste deel en het aantal delen, zodat
+            je zonder openklappen al ziet wanneer de dienst begint. */}
+        <ul className="md:hidden divide-y divide-hairline-subtle" aria-label="Diensten">
           {filteredServices.map((s) => {
             const isExpanded = expandedIds.has(s.id);
+            const delen = [
+              { start: s.startTime, end: s.endTime, loop: s.loopnr, geldig: true },
+              { start: s.startTime2, end: s.endTime2, loop: s.loopnr2, geldig: hasValidTime(s.startTime2, s.endTime2) },
+              { start: s.startTime3, end: s.endTime3, loop: s.loopnr3, geldig: hasValidTime(s.startTime3, s.endTime3) },
+            ].filter((d) => d.geldig);
             return (
-              <div key={s.id} className="hover:bg-surface-soft-hover transition-colors">
-                {/* rauw: hele uitklaprij is de knop (dienstnummer + badge + chevron) */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(s.id)}
-                  aria-expanded={isExpanded}
-                  className="w-full p-5 flex items-center justify-between gap-3 text-left"
-                >
-                  <span className="text-lg font-semibold text-slate-800">{s.serviceNumber}</span>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <Badge tone="oker">Dienst</Badge>
-                    <ChevronDown
-                      size={18}
-                      className={uitklapChevron(isExpanded, 180, 'text-slate-400')}
-                    />
-                  </div>
-                </button>
+              <RecordRij
+                key={s.id}
+                titel={s.serviceNumber}
+                meta={`${tijdvak(s.startTime, s.endTime)}${delen.length > 1 ? ` · ${delen.length} delen` : ''}`}
+                richting="omlaag"
+                open={isExpanded}
+                onClick={() => toggleExpanded(s.id)}
+              >
                 <Uitklap open={isExpanded}>
-                  <div className="px-5 pb-5 grid grid-cols-1 gap-3">
-                    <div className="flex flex-col gap-1">
-                      <MicroLabel>Deel 1</MicroLabel>
-                      <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
-                        <Clock size={14} className="text-oker-500" />
-                        {s.startTime} - {s.endTime}
-                        <LoopChip loopnr={s.loopnr} />
-                      </div>
-                    </div>
-                    {hasValidTime(s.startTime2, s.endTime2) && (
-                      <div className="flex flex-col gap-1">
-                        <MicroLabel>Deel 2</MicroLabel>
-                        <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
+                  <div className="grid grid-cols-1 gap-3 px-4 pb-4">
+                    {delen.map((d, i) => (
+                      <div key={i} className="flex flex-col gap-1">
+                        <MicroLabel>Deel {i + 1}</MicroLabel>
+                        <div className="flex items-center gap-2 whitespace-nowrap text-sm font-medium text-slate-700">
                           <Clock size={14} className="text-oker-500" />
-                          {s.startTime2} - {s.endTime2}
-                          <LoopChip loopnr={s.loopnr2} />
+                          {tijdvak(d.start ?? '', d.end ?? '')}
+                          <LoopChip loopnr={d.loop} />
                         </div>
                       </div>
-                    )}
-                    {hasValidTime(s.startTime3, s.endTime3) && (
-                      <div className="flex flex-col gap-1">
-                        <MicroLabel>Deel 3</MicroLabel>
-                        <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
-                          <Clock size={14} className="text-oker-500" />
-                          {s.startTime3} - {s.endTime3}
-                          <LoopChip loopnr={s.loopnr3} />
-                        </div>
-                      </div>
-                    )}
+                    ))}
                   </div>
                 </Uitklap>
-              </div>
+              </RecordRij>
             );
           })}
-        </div>
+        </ul>
 
         {filteredServices.length === 0 && (
           <div className="px-6 py-6">
@@ -230,15 +219,15 @@ function LoopChip({ loopnr }: { loopnr?: string }) {
 function LoopCell({ loopnr }: { loopnr?: string }) {
   const value = loopnr?.trim();
   if (!value) return <span className="text-slate-300">—</span>;
-  return <span className="font-semibold tabular-nums text-slate-700">{value}</span>;
+  return <span className="font-semibold text-slate-700">{value}</span>;
 }
 
 /** Uren van één dienstdeel. */
 function TimeCell({ start, end }: { start: string; end: string }) {
   return (
-    <span className="inline-flex items-center gap-2 font-medium tabular-nums text-slate-700 whitespace-nowrap">
+    <span className="inline-flex items-center gap-2 font-medium text-slate-700 whitespace-nowrap">
       <Clock size={14} className="text-oker-500" />
-      {start} - {end}
+      {start}–{end}
     </span>
   );
 }
