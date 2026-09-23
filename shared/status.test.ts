@@ -52,7 +52,7 @@ describe('statuswoordenschat', () => {
 
   it('toestel- en voertuigtonen zijn per domein één keer vastgelegd', () => {
     expect(TOESTEL_STATUS.revoked.toon).toBe('gevaar');
-    expect(VOERTUIG_STATUS.reserve.toon).toBe('aandacht');
+    expect(VOERTUIG_STATUS.reserve.toon).toBe('info');
     expect(VOERTUIG_STATUS.uit_dienst.toon).toBe('neutraal');
   });
 

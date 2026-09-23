@@ -189,7 +189,8 @@ function PrestatieRegel({ w, mecanicien, acties }: { w: Werkprestatie; mecanicie
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="text-sm font-semibold text-slate-800">{busLabel(w)}</p>
           <Chip mono={false} title={WERKCODE_LABEL[w.werkcode]}>{w.werkcode} · {WERKCODE_LABEL[w.werkcode]}</Chip>
-          {w.defectId && <Badge tone="oker" stil className="whitespace-nowrap">uit gele boek</Badge>}
+          {/* Herkomst, geen status en geen actie: neutraal, niet goud (tranche 3B.2). */}
+          {w.defectId && <Badge tone="slate" stil className="whitespace-nowrap">uit gele boek</Badge>}
         </div>
         <p className="whitespace-pre-wrap text-sm text-slate-700">{w.omschrijving}</p>
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">

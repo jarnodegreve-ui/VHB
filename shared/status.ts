@@ -60,11 +60,13 @@ export const TOESTEL_STATUS = {
   revoked: def('Geblokkeerd', 'gevaar'),
 } as const satisfies Record<string, StatusDef>;
 
-/** Voertuigen (vehicles.status). `reserve` is een aandachtspunt, geen
- *  waarschuwing; `uit_dienst` een rusttoestand, geen alarm. */
+/** Voertuigen (vehicles.status). `reserve` is informatie (inzetbaar, niet
+ *  in de vaste dienst), geen waarschuwing en geen goud: goud is actie, focus
+ *  en "nu" (tranche 3B.2, 23-09; was `aandacht` = oker). `uit_dienst` een
+ *  rusttoestand, geen alarm. */
 export const VOERTUIG_STATUS = {
   actief: def('Actief', 'goed'),
-  reserve: def('Reserve', 'aandacht'),
+  reserve: def('Reserve', 'info'),
   uit_dienst: def('Uit dienst', 'neutraal'),
 } as const satisfies Record<string, StatusDef>;
 
