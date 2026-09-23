@@ -25,6 +25,7 @@ import { ActieMenu } from '../../components/ActieMenu';
 import { Modal } from '../../components/Modal';
 import { Field, DateInput } from '../../components/Field';
 import { Button, Segmented } from '../../components/primitives';
+import { TableShell } from '../../components/TabelBasis';
 import { TableToolbar } from '../../components/Table';
 import { SkeletonRow } from '../../components/Skeleton';
 import { MaandNavigatie } from '../../components/MaandNavigatie';
@@ -380,7 +381,13 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
       {/* Eén kader: filters bovenaan, daaronder de tabel (of haar skelet). Een
           lege staat of laadfout staat ONDER het kader, niet erin: EmptyState en
           Foutkaart zijn zelf al een vlak, en een doos in een doos is geen ontwerp. */}
-      <div className="surface-table overflow-clip rounded-3xl">
+      {/* TableShell `past`: kader en naam van de tabel; de tabel schuift in
+          haar eigen strook (RapportTabel meet dat zelf, met de vaste eerste
+          kolom), dus het kader zelf is nooit een scrollcontainer en de kop
+          plakt vanaf xl. Het filterblok staat bewust in de inhoud en niet in
+          `kop`: zijn hairline hoort er alleen als er een tabel of skelet
+          onder volgt, bij een lege staat eindigt het kader op de filters. */}
+      <TableShell past label={def.titel}>
         {/* Vanaf lg staan filters en zoekveld op één regel (de labels boven de
             filters, het zoekveld op hun onderlijn); daaronder stapelen ze. Met
             veel filters krijgt het zoekveld zijn eigen regel in plaats van te krimpen. */}
@@ -425,7 +432,7 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
             <RapportTabel def={tabelDef} rijen={zichtbaar} totalen={totalen} />
           </>
         )}
-      </div>
+      </TableShell>
 
       {/* Drie lege gevallen, elk met eigen tekst; een laadfout is nooit een lege staat. */}
       {toestand === 'fout' && zl.fout && <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}

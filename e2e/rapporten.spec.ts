@@ -69,7 +69,7 @@ test('catalogus, rapport, filter, leeg en de print-URL', async ({ page }) => {
   await expect(page).toHaveURL(/jaar=2026/);
   await expect(page.getByRole('cell', { name: 'Alex Du Priez' })).toBeVisible();
   await expect(page.getByText('12 rijen')).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Totaal (12)' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Totaal (12)' })).toBeVisible();
   // De tabel schuift binnen haar kader, nooit de pagina.
   await paginaScrolltNiet(page);
 
@@ -316,7 +316,7 @@ test('voertuigrapport: wagenpark met keuzelijsten, peildatum, totaalrij en het b
   await expect(page.getByText('7 rijen')).toBeVisible();
   await expect(page.getByText('21/09/2026')).toBeVisible();
   await expect(page.getByRole('cell', { name: /Oud 01/ })).toHaveCount(0);
-  await expect(page.getByRole('columnheader', { name: 'Totaal (7)' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Totaal (7)' })).toBeVisible();
   await paginaScrolltNiet(page);
 
   if ((page.viewportSize()?.width ?? 0) < 768) {
@@ -431,7 +431,7 @@ test('ruilrapport: ruilaanvragen met status, antwoord van de collega, peildatum 
     await expect(eerste).toContainText('Geaccepteerd');
     // Rechtstreeks goedgekeurd: het antwoord van de collega is niet afgewacht.
     await expect(page.getByRole('row', { name: /Bart Claeys.*Niet afgewacht.*18\/09\/2026.*Jarno De Greve/ })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: /Totaal \(8\)/ })).toBeVisible();
+    await expect(page.getByRole('rowheader', { name: /Totaal \(8\)/ })).toBeVisible();
     // Elf kolommen passen niet altijd in het kader: dan schuift de tabel erin (ook vanaf xl), niets valt afgesneden buiten beeld.
     const kader = await page.evaluate(() => {
       const k = document.querySelector('table')!.parentElement!;
@@ -513,7 +513,7 @@ test('planningsrapport: diensten per dag met delen en uren, zonder bus, en hele 
   await expect(page.getByLabel('Van maand')).toHaveValue('2026-09');
   await expect(page.getByLabel('Tot en met maand')).toHaveValue('2026-09');
   await expect(page.getByText('6 rijen')).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Totaal (6)' })).toBeVisible();
+  await expect(page.getByRole('rowheader', { name: 'Totaal (6)' })).toBeVisible();
   await page.getByLabel('Van maand').selectOption('2026-07');
   await expect(page).toHaveURL(/van=2026-07-01&tot=2026-09-30/);
   await paginaScrolltNiet(page);
