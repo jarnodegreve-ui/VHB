@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Search, ShieldAlert, ShieldCheck, Smartphone, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ShieldAlert, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
 import type { User } from '../../types';
 import { apiJson } from '../../lib/api';
 import { getDeviceToken } from '../../lib/device';
 import { cn, notify } from '../../lib/ui';
 import { formatDateHuman } from '../../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, FilterChip, IconButton, StatusBadge, Switch, statusAccentClass } from '../../components/primitives';
+import { Badge, Button, FilterChip, StatusBadge, Switch, statusAccentClass } from '../../components/primitives';
+import { TableToolbar } from '../../components/Table';
 import { TOESTEL_STATUS, statusLabel } from '../../../shared/status';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Card } from '../../components/Card';
@@ -230,11 +231,11 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                 >
                   <Avatar naam={userName(userId)} />
                   <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-slate-800 [overflow-wrap:anywhere]">{userName(userId)}</span>
-                    {wacht > 0 && <span className="mt-0.5 block text-xs font-medium text-amber-800">{wacht} wacht op goedkeuring</span>}
+                    <span className="block text-md font-semibold text-slate-900 [overflow-wrap:anywhere]">{userName(userId)}</span>
+                    {wacht > 0 && <span className="mt-0.5 block text-body-sm font-medium text-amber-800">{wacht} wacht op goedkeuring</span>}
                   </span>
-                  <span className="whitespace-nowrap text-xs text-slate-500">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
-                  <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-500')} />
+                  <span className="whitespace-nowrap text-body-sm text-slate-500">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
+                  <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
                 </button>
                 <Uitklap open={open}>
                   <div className="space-y-1 pb-2 pt-1">
@@ -251,14 +252,14 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                           >
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-500"><Smartphone size={18} /></span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-semibold text-slate-800 [overflow-wrap:anywhere]">{device.name}</span>
-                              <span className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                              <span className="block text-md font-semibold text-slate-900 [overflow-wrap:anywhere]">{device.name}</span>
+                              <span className="mt-1 flex items-center gap-1.5 text-body-sm text-slate-500">
                                 <span aria-hidden="true" className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusAccentClass(device.status, TOESTEL_STATUS))} />
                                 {statusLabel(TOESTEL_STATUS, device.status)}
                                 {isOwnCurrent(device) && <span>· Dit toestel</span>}
                               </span>
                             </span>
-                            <ChevronRight size={14} className="shrink-0 text-slate-500" />
+                            <ChevronRight size={16} className="shrink-0 text-slate-400" />
                           </button>
                           {device.status === 'pending' && (
                             <Button variant="secondary" size="sm" className="shrink-0" disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'approve')} aria-label={`Keur ${device.name} van ${userName(userId)} goed`}>
@@ -384,21 +385,24 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       </Card>
 
       {/* Buiten de smalle lijstkolom: het zoekveld blijft bruikbaar en de
-          statusfilters blijven één leesbare groep, ook rond het lg-breekpunt. */}
-      <div className="space-y-3" role="search" aria-label="Toestellen zoeken en filteren">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-md">
-            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <Input type="search" aria-label="Zoek gebruiker of toestel" placeholder="Zoek gebruiker of toestel…" className="pl-10 pr-11" value={zoek} onChange={(e) => setZoek(e.target.value)} />
-            {zoek && <IconButton label="Zoekopdracht wissen" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => setZoek('')}><X size={16} /></IconButton>}
-          </div>
-          <p className="shrink-0 text-xs text-slate-500" aria-live="polite">{devices === null ? 'Toestellen laden…' : `${zichtbaar.length} van ${alle.length} ${alle.length === 1 ? 'toestel' : 'toestellen'}`}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter op toestelstatus">
-          <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>Alle toestellen</FilterChip>
-          <FilterChip active={statusFilter === 'pending'} onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}>{statusLabel(TOESTEL_STATUS, 'pending')} ({pending.length})</FilterChip>
-          <FilterChip active={statusFilter === 'revoked'} onClick={() => setStatusFilter(statusFilter === 'revoked' ? 'all' : 'revoked')}>Geblokkeerd ({telPerStatus('revoked')})</FilterChip>
-        </div>
+          statusfilters blijven één leesbare groep, ook rond het lg-breekpunt.
+          Zelfde toolbar als de beheertabellen (tranche 3B): de lijst blijft
+          wel gegroepeerd per gebruiker, dat is hier de betere weergave dan
+          een tabel (een persoon met één tot vier toestellen die openklappen). */}
+      <div role="search" aria-label="Toestellen zoeken en filteren">
+        <TableToolbar
+          zoek={zoek}
+          onZoek={setZoek}
+          placeholder="Zoek gebruiker of toestel…"
+          telling={<span aria-live="polite">{devices === null ? 'Toestellen laden…' : `${zichtbaar.length} van ${alle.length} ${alle.length === 1 ? 'toestel' : 'toestellen'}`}</span>}
+          filters={(
+            <div className="flex items-center gap-1.5" role="group" aria-label="Filter op toestelstatus">
+              <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>Alle toestellen</FilterChip>
+              <FilterChip active={statusFilter === 'pending'} onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}>{statusLabel(TOESTEL_STATUS, 'pending')} ({pending.length})</FilterChip>
+              <FilterChip active={statusFilter === 'revoked'} onClick={() => setStatusFilter(statusFilter === 'revoked' ? 'all' : 'revoked')}>Geblokkeerd ({telPerStatus('revoked')})</FilterChip>
+            </div>
+          )}
+        />
       </div>
 
       <MasterDetail className="lg:grid-cols-[minmax(0,46%)_minmax(0,1fr)]" lijst={lijst} paneel={devices !== null && devices.length === 0 ? undefined : paneel} />
