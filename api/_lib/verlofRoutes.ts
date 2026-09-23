@@ -583,10 +583,22 @@ export function mountVerlofRoutes(app: express.Express) {
         const start = String(next.startDate ?? "");
         const end = String(next.endDate ?? "");
         if (!ISO_DAY.test(start) || !ISO_DAY.test(end)) {
-          return res.status(400).json({ error: "Ongeldige datum in de aanvraag: verwacht JJJJ-MM-DD." });
+          return res.status(400).json({ error: "Ongeldige datum in de aanvraag." });
         }
         if (end < start) {
           return res.status(400).json({ error: "De einddatum ligt vóór de startdatum." });
+        }
+        // Een eigen aanvraag (voor jezelf, elke rol, ook een admin) kan niet in
+        // het verleden starten: dezelfde regel als het formulier, nu ook op de
+        // server (Jarno 23-09). Geldt voor een nieuwe aanvraag en voor een eigen
+        // aanvraag waarvan de start verschuift. Verlof dat staf namens een
+        // chauffeur vastlegt (registratie, de bestaande rolgebonden flow: "hij
+        // belde het vorige week door") valt hier buiten; een nieuwe uitzondering
+        // voor retroactief eigen verlof hoort in een aparte beheerflow.
+        const eigen = String(next.userId ?? "") === String(req.appUser!.id);
+        const startVerschoven = !prev || String(prev.startDate) !== start;
+        if (eigen && startVerschoven && start < brusselsDay(new Date().toISOString())) {
+          return res.status(400).json({ error: "Je kan geen verlof aanvragen in het verleden." });
         }
         if (!LEAVE_TYPE_LABEL[String(next.type ?? "")]) {
           return res.status(400).json({ error: "Ongeldig verloftype." });
