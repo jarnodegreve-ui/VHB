@@ -77,7 +77,11 @@ export function TableShell({ className, sticky = false, past = false, label, kop
         {kop ? <div className="border-b border-hairline px-5 py-4 md:px-6">{kop}</div> : null}
         <div
           ref={strook}
-          className={past ? undefined : sticky ? 'overflow-x-auto xl:overflow-visible' : 'overflow-x-auto'}
+          // `relative`: een absoluut gepositioneerd kind (een sr-only-tekst in
+          // een kolomkop, een popover) rekent anders tegen een voorouder
+          // buiten de strook en duwt de hele pagina breder, ook als de tabel
+          // zelf netjes schuift (Maandplanning op 768/1024 px in CI, 23-09).
+          className={cn('relative', past ? undefined : sticky ? 'overflow-x-auto xl:overflow-visible' : 'overflow-x-auto')}
           {...(schuift && !past ? { role: 'region', 'aria-label': label ?? 'Tabel', tabIndex: 0 } : {})}
         >
           {children}
