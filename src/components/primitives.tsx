@@ -562,9 +562,8 @@ const TabelLabelContext = createContext<string | undefined>(undefined);
  *
  * Wissel tabel ↔ kaartlijst: `hidden md:block` / `md:hidden` (CSS, md =
  * 768 px). Een scherm wijkt daar alleen van af met een reden in de code
- * (Planningscodes: xl, het bewerkbare raster heeft de breedte nodig;
- * Beheer dienstoverzicht: container query, de kolom naast zijbalk en
- * zijvak is smaller dan het scherm doet vermoeden).
+ * (Planningscodes en Beheer dienstoverzicht: container query, de kolom
+ * naast zijbalk en zijvak is smaller dan het scherm doet vermoeden).
  */
 export function TableShell({ className, sticky = false, past = false, label, kop, children }: {
   className?: string;
