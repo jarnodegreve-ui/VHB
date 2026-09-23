@@ -276,34 +276,60 @@ describe('DatePicker, kalender', () => {
 });
 
 describe('DatePicker wisbaar={false} (navigatievelden, PR 3)', () => {
-  it('leegmaken zet de huidige datum terug en geeft niets door; geen Wissen in de kalender', async () => {
+  function Nav({ onChange, start = '2020-01-15', max }: { onChange: (v: string) => void; start?: string; max?: string }) {
+    const [v, setV] = useState(start);
+    return <DatePicker id="d" value={v} max={max} wisbaar={false} onChange={(n) => { setV(n); onChange(n); }} aria-label="Dag" />;
+  }
+  const status = (c: HTMLElement) => c.querySelector('[role="status"]')?.textContent ?? null;
+
+  it('leegmaken: de laatst gecommitte (historische) datum komt terug, nooit vandaag; geen Wissen in de kalender', async () => {
     const onChange = vi.fn();
-    function Nav() {
-      const [v, setV] = useState('2026-09-08');
-      return <DatePicker id="d" value={v} wisbaar={false} onChange={(n) => { setV(n); onChange(n); }} aria-label="Dag" />;
-    }
-    const { root, container } = await monteer(<Nav />);
+    const { root, container } = await monteer(<Nav onChange={onChange} />);
     const el = veld(container);
     el.focus();
     await act(async () => { typ(el, ''); });
+    expect(el.value).toBe('');
     await act(async () => { el.blur(); });
     expect(onChange).not.toHaveBeenCalled();
-    expect(el.value).toBe('08/09/2026');
+    expect(el.value).toBe('15/01/2020');
     expect(fout(container)).toBeNull();
+    expect(status(container)).toBeNull();
     await act(async () => { klik(kalenderKnop(container)); });
     expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Wissen')).toBe(false);
-    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Vandaag')).toBe(true);
+    await act(async () => { root.unmount(); });
+  });
+
+  it('een onbestaande of te late datum: de vorige datum komt terug met een korte uitleg, het veld toont wat actief is', async () => {
+    const onChange = vi.fn();
+    const { root, container } = await monteer(<Nav onChange={onChange} start="2026-09-08" max="2026-09-20" />);
+    const el = veld(container);
+    el.focus();
+    await act(async () => { typ(el, '31/02/2026'); });
+    let e!: KeyboardEvent;
+    await act(async () => { e = toets(el, 'Enter'); });
+    expect(e.defaultPrevented).toBe(true);
+    expect(el.value).toBe('08/09/2026');
+    expect(el.getAttribute('aria-invalid')).toBeNull();
+    expect(status(container)).toBe('Die dag bestaat niet. De vorige datum blijft staan.');
+    el.focus();
+    await act(async () => { typ(el, '25/09/2026'); });
+    expect(status(container)).toBeNull();
+    await act(async () => { el.blur(); });
+    expect(el.value).toBe('08/09/2026');
+    expect(status(container)).toBe('Uiterlijk 20/09/2026. De vorige datum blijft staan.');
+    expect(onChange).not.toHaveBeenCalled();
     await act(async () => { root.unmount(); });
   });
 
   it('een geldige datum gaat gewoon door', async () => {
     const onChange = vi.fn();
-    const { root, container } = await monteer(<DatePicker id="d" value="2026-09-08" wisbaar={false} onChange={onChange} aria-label="Dag" />);
+    const { root, container } = await monteer(<Nav onChange={onChange} start="2026-09-08" />);
     const el = veld(container);
     el.focus();
     await act(async () => { typ(el, '10/09/2026'); });
     await act(async () => { el.blur(); });
     expect(onChange).toHaveBeenCalledWith('2026-09-10');
+    expect(el.value).toBe('10/09/2026');
     await act(async () => { root.unmount(); });
   });
 });

@@ -31,7 +31,7 @@ test('rapportperiode: typen zet van/tot in de URL, een onbestaande dag niet', as
   await expect(page).toHaveURL(/tot=2026-12-31/);
 });
 
-test('dagnavigatie Dagadministratie: typen gaat naar die dag, leegmaken zet de dag terug', async ({ page }) => {
+test('dagnavigatie Dagadministratie: typen gaat naar die dag, leeg of ongeldig zet de bekeken dag terug', async ({ page }) => {
   await seed(page, { user: ADMIN });
   const gisteren = dayOffset(-1);
   const eerder = dayOffset(-3);
@@ -43,9 +43,16 @@ test('dagnavigatie Dagadministratie: typen gaat naar die dag, leegmaken zet de d
   await dagVeld.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/beheer/dagadministratie/${eerder}$`));
 
+  // Leegmaken of een onbestaande dag: de bekeken (historische) dag komt terug,
+  // nooit vandaag; het veld toont wat actief is.
   await dagVeld.fill('');
   await dagVeld.blur();
   await expect(dagVeld).toHaveValue(dmj(eerder));
+  await expect(page).toHaveURL(new RegExp(`/beheer/dagadministratie/${eerder}$`));
+  await dagVeld.fill('31/02/2026');
+  await dagVeld.press('Enter');
+  await expect(dagVeld).toHaveValue(dmj(eerder));
+  await expect(page.getByText('Die dag bestaat niet. De vorige datum blijft staan.')).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/beheer/dagadministratie/${eerder}$`));
 
   // Geen Wissen in de kalender van een navigatieveld.
