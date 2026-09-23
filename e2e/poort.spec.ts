@@ -51,7 +51,7 @@ test('chauffeur: Contacten toont het skelet en nooit "Geen contacten gevonden" t
 test('staf: Dienstoverzicht toont het skelet en nooit "Nog geen diensten" terwijl de diensten laden', async ({ page }) => {
   await seed(page, { user: ADMIN, view: 'dienstoverzicht' });
   const services = await houdTegen(page, '/api/services');
-  await page.goto('/dienstoverzicht');
+  await page.goto('/beheer/dienstoverzicht');
   await services.aangevraagd;
   await expect(page.locator('[aria-label="Scherm wordt geladen"]')).toBeVisible();
   await expect(page.getByText('Nog geen diensten')).toHaveCount(0);

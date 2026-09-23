@@ -10,7 +10,7 @@ const DIENSTEN = [
 // 1280 activeerde vroeger het zijvak terwijl er onvoldoende breedte voor
 // alle acht tabelkolommen overbleef. 1536 bewaakt de nieuwe grens.
 for (const breedte of [390, 768, 1024, 1280, 1440, 1536]) {
-  test(`beheer dienstoverzicht · ${breedte}px: alle dienstgegevens en acties passen`, async ({ browser, baseURL }) => {
+  test(`dienstoverzicht · ${breedte}px: alle dienstgegevens en acties passen`, async ({ browser, baseURL }) => {
     const context = await browser.newContext({
       baseURL, viewport: { width: breedte, height: 1000 },
       isMobile: breedte < 768, hasTouch: breedte < 1024, serviceWorkers: 'block',
@@ -18,11 +18,11 @@ for (const breedte of [390, 768, 1024, 1280, 1440, 1536]) {
     try {
       const page = await context.newPage();
       await seed(page, {
-        user: ADMIN, view: 'beheer-dienstoverzicht', thema: 'dark',
+        user: ADMIN, view: 'dienstoverzicht', thema: 'dark',
         extra: (pad) => pad.endsWith('/api/services') ? DIENSTEN : undefined,
       });
       await page.goto('/beheer/dienstoverzicht');
-      await expect(page.getByRole('heading', { name: 'Beheer dienstoverzicht', level: 1 })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('heading', { name: 'Dienstoverzicht', level: 1 })).toBeVisible({ timeout: 15_000 });
       const acties = page.getByRole('button', { name: 'Acties voor dienst 2515', exact: true });
       await expect(acties).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
@@ -62,7 +62,8 @@ for (const breedte of [390, 768, 1024, 1280, 1440, 1536]) {
       // gegevens; deze regressie verstuurt geen wijziging naar de API.
       await acties.click();
       await page.getByRole('menuitem', { name: 'Bewerken', exact: true }).click();
-      const dialoog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Dienst bewerken' }) });
+      // Het detailpaneel (3D.2): een SlideOver op elke breedte, de tabel blijft staan.
+      const dialoog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Dienst 2515' }) });
       await expect(dialoog).toBeVisible();
       await expect(dialoog.getByLabel('Dienstnummer', { exact: true })).toHaveValue('2515');
       await expect(dialoog.getByLabel('Loopnummer (deel 3)', { exact: true })).toHaveValue('4515');

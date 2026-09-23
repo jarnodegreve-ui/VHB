@@ -28,7 +28,6 @@ export const uitgesteldVoor = (rol: User['role']): Uitgesteld[] =>
  *  tellen; voor staf zitten users en swaps gewoon in de poort. */
 export const UITGESTELD_PER_VIEW: Partial<Record<View, Uitgesteld[]>> = {
   dienstoverzicht: ['services'],
-  'beheer-dienstoverzicht': ['services'],
   'beheer-debug': ['services'],
   'planning-matrix': ['services', 'planningCodes', 'planningMatrix'],
   'planning-codes': ['planningCodes'],

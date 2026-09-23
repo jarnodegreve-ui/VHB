@@ -17,7 +17,7 @@ import { SchermInloop, Verwissel } from '../components/Verwissel';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { useAppDataContext } from './AppDataContext';
 import type { useRoute } from './router';
-import { LazyActivityLogView, LazyCapacityView, LazyContactsView, LazyCoverageView, LazyDagafsluitingView, LazyDashboardView, LazyDebugView, LazyDesignsysteemView, LazyDevicesView, LazyDienstopbouwView, LazyDiversionsView, LazyDocumentsView, LazyGeleBoekView, LazyInstellingenView, LazyLeaveManagementView, LazyLooncontroleView, LazyManageDiversionsView, LazyManageSchedulesView, LazyManageServicesView, LazyManageUpdatesView, LazyManageUsersView, LazyMeldingenView, LazyMijnDagView, LazyOcpiDashboardView, LazyPlannerDashboardWidgets, LazyPlanningCodesView, LazyPlanningMatrixView, LazyRapportenView, LazyRitblaadjesView, LazyScheduleView, LazyServicesView, LazySwapRequestsView, LazyUpdatesView, LazyVandaagView, LazyVerlofKalenderView, LazyVervaldataView, LazyVoertuigWerkenView, LazyVoertuigenView, LazyWerkprestatiesView, LazyWerkvoorraadView, LazyZiekteView } from './lazyViews';
+import { LazyActivityLogView, LazyCapacityView, LazyContactsView, LazyCoverageView, LazyDagafsluitingView, LazyDashboardView, LazyDebugView, LazyDesignsysteemView, LazyDevicesView, LazyDienstopbouwView, LazyDiversionsView, LazyDocumentsView, LazyGeleBoekView, LazyInstellingenView, LazyLeaveManagementView, LazyLooncontroleView, LazyManageDiversionsView, LazyManageSchedulesView, LazyManageUpdatesView, LazyManageUsersView, LazyMeldingenView, LazyMijnDagView, LazyOcpiDashboardView, LazyPlannerDashboardWidgets, LazyPlanningCodesView, LazyPlanningMatrixView, LazyRapportenView, LazyRitblaadjesView, LazyScheduleView, LazyServicesView, LazySwapRequestsView, LazyUpdatesView, LazyVandaagView, LazyVerlofKalenderView, LazyVervaldataView, LazyVoertuigWerkenView, LazyVoertuigenView, LazyWerkprestatiesView, LazyWerkvoorraadView, LazyZiekteView } from './lazyViews';
 
 export type SchermInhoudProps = {
   /** De view na de rol-check (magView): nooit een scherm dat de rol niet mag. */
@@ -76,7 +76,7 @@ export function SchermInhoud(props: SchermInhoudProps) {
     {resolvedCurrentView === 'mijn-dag' && <LazyMijnDagView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />}
     {resolvedCurrentView === 'omleidingen' && <Verwissel laden={isInitialLoad} skelet={skelet}><LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} /></Verwissel>}
     {resolvedCurrentView === 'rooster' && <LazyScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad || !ruilDataKlaar} lastSyncedAt={lastSyncedAt} planningTot={planningTot} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
-    {resolvedCurrentView === 'dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyServicesView services={services} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
     {resolvedCurrentView === 'ritblaadjes' && <LazyRitblaadjesView currentUser={currentUser!} />}
     {resolvedCurrentView === 'documenten' && <LazyDocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
     {resolvedCurrentView === 'updates' && <Verwissel laden={isInitialLoad} skelet={skelet}><LazyUpdatesView updates={updates} /></Verwissel>}
@@ -105,7 +105,7 @@ export function SchermInhoud(props: SchermInhoudProps) {
           users={users}
           canOpenUserManagement={isAdmin}
           onOpenPlanningCodes={() => setCurrentView('planning-codes')}
-          onOpenServiceOverview={() => setCurrentView('beheer-dienstoverzicht')}
+          onOpenServiceOverview={() => setCurrentView('dienstoverzicht')}
           onOpenUserManagement={() => setCurrentView('gebruikers')}
         />
       </Suspense>
@@ -140,7 +140,6 @@ export function SchermInhoud(props: SchermInhoudProps) {
     {resolvedCurrentView === 'rapporten' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyRapportenView currentUser={currentUser!} /></Suspense></Verwissel>}
     {resolvedCurrentView === 'looncontrole' && <Suspense fallback={skelet}><LazyLooncontroleView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense>}
     {resolvedCurrentView === 'beheer-omleidingen' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense></Verwissel>}
-    {resolvedCurrentView === 'beheer-dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
     {resolvedCurrentView === 'ruil-verzoeken' && <Verwissel laden={isInitialLoad || !ruilDataKlaar} skelet={skelet}><LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} /></Verwissel>}
     {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
     {resolvedCurrentView === 'dekking' && <Suspense fallback={skelet}><LazyCoverageView /></Suspense>}

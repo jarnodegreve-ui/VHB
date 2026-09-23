@@ -3,11 +3,12 @@ import { Clock } from 'lucide-react';
 import type { Service } from '../../types';
 import { EmptyState } from '../ui';
 import { Button, MicroLabel } from '../primitives';
-import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../Table';
+import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../Table';
 import { Tabel, TableShell, Td, Th } from '../TabelBasis';
 import { LegeLijst, NietGevonden } from '../illustraties';
 import { Zijvak, ZijvakRij } from '../Zijvak';
 import { dienstStatistiek, formatDienstDuur } from '../../lib/dienstStatistiek';
+import { cn } from '../../lib/ui';
 import { delenVan, dienstSorteerWaarde, hasValidTime, tijdvak, zoekDiensten, type DienstSortering } from './dienstDelen';
 
 /**
@@ -28,11 +29,18 @@ export function useDienstLijst(services: Service[], standaard: DienstSortering =
 
 export type DienstLijst = ReturnType<typeof useDienstLijst>;
 
-export function DienstTabel({ services, lijst, rijActies, leegTekst, leegActie, zijvak }: {
+export function DienstTabel({ services, lijst, rijActies, onKies, gekozenId, leegTekst, leegActie, zijvak, boven }: {
   services: Service[];
   lijst: DienstLijst;
   /** Het "…"-menu per dienst; zonder dit geen kolom Acties. */
   rijActies?: (s: Service) => ReactNode;
+  /** Dienst openen (detailpaneel): het dienstnummer wordt een knop en de
+   *  hele rij of kaart klikbaar (rijKlik negeert knoppen en menu's). */
+  onKies?: (s: Service) => void;
+  /** De dienst die nu open staat (rij gemarkeerd, aria-current). */
+  gekozenId?: string | null;
+  /** Iets boven de tabel in dezelfde kolom, bv. de melding van een onbekende recordlink. */
+  boven?: ReactNode;
   leegTekst: string;
   leegActie?: ReactNode;
   zijvak?: ReactNode;
@@ -41,6 +49,9 @@ export function DienstTabel({ services, lijst, rijActies, leegTekst, leegActie, 
   // Rijdichtheid, onthouden per toestel (zelfde sleutel als vroeger in Beheer).
   const voorkeur = useTabelVoorkeur('dienstoverzicht');
   const leeg = <span className="font-normal text-slate-300">—</span>;
+  const nummer = (s: Service, className?: string) => onKies
+    ? <CelKnop onClick={() => onKies(s)} label={`Dienst ${s.serviceNumber} openen`} className={className}>{s.serviceNumber}</CelKnop>
+    : <span className={className}>{s.serviceNumber}</span>;
 
   return (
     // Acht kolommen hebben voorrang op het zijvak: op een laptop staat het
@@ -51,7 +62,8 @@ export function DienstTabel({ services, lijst, rijActies, leegTekst, leegActie, 
           niet hoeveel plaats de kolommen krijgen. Onder 42rem echte
           kolombreedte neemt de kaartlijst het over; de layout-e2e bewaakt
           390 tot 1536 px. */}
-      <div className="@container min-w-0">
+      <div className="@container min-w-0 space-y-4">
+        {boven}
         {/* `past`: de tabel verschijnt pas vanaf 42rem en past daar in haar
             kader, dus geen scrollcontainer en de kolomkop plakt. */}
         <TableShell
@@ -90,10 +102,15 @@ export function DienstTabel({ services, lijst, rijActies, leegTekst, leegActie, 
                     const deel2 = hasValidTime(s.startTime2, s.endTime2);
                     const deel3 = hasValidTime(s.startTime3, s.endTime3);
                     return (
-                      <tr key={s.id} className="border-b border-hairline-subtle last:border-b-0 hover:bg-surface-soft-hover transition-colors">
+                      <tr
+                        key={s.id}
+                        onClick={onKies ? rijKlik(() => onKies(s)) : undefined}
+                        aria-current={gekozenId === s.id ? 'true' : undefined}
+                        className={cn('border-b border-hairline-subtle last:border-b-0 hover:bg-surface-soft-hover transition-colors', onKies && 'cursor-pointer', gekozenId === s.id && 'bg-slate-100/60')}
+                      >
                         {/* px-3 i.p.v. px-4: acht kolommen moeten vanaf 42rem
                             naast elkaar passen. Nummers en tijdvakken breken nooit af. */}
-                        <Td nowrap className="px-3 font-semibold text-slate-800">{s.serviceNumber}</Td>
+                        <Td nowrap className="px-3 font-semibold text-slate-800">{nummer(s)}</Td>
                         <Td nowrap className="px-3 font-semibold text-slate-700">{s.loopnr || leeg}</Td>
                         <Td nowrap className="px-3">{tijdvak(s.startTime, s.endTime)}</Td>
                         <Td nowrap className="px-3 font-semibold text-slate-700">{deel2 && s.loopnr2 ? s.loopnr2 : leeg}</Td>
@@ -113,9 +130,14 @@ export function DienstTabel({ services, lijst, rijActies, leegTekst, leegActie, 
               naast elkaar zonder dienst- of loopgegevens te verbergen. */}
           <div className="@[42rem]:hidden divide-y divide-hairline-subtle">
             {gesorteerd.map((s) => (
-              <div key={s.id} className="p-5 space-y-4 hover:bg-surface-soft-hover transition-colors">
+              <div
+                key={s.id}
+                onClick={onKies ? rijKlik(() => onKies(s)) : undefined}
+                aria-current={gekozenId === s.id ? 'true' : undefined}
+                className={cn('p-5 space-y-4 hover:bg-surface-soft-hover transition-colors', onKies && 'cursor-pointer', gekozenId === s.id && 'bg-slate-100/60')}
+              >
                 <div className="flex justify-between items-center">
-                  <span className="text-card-title">{s.serviceNumber}</span>
+                  {nummer(s, 'text-card-title')}
                   {rijActies?.(s)}
                 </div>
                 <div className="grid grid-cols-1 gap-3 @[30rem]:grid-cols-3">

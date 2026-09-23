@@ -26,7 +26,7 @@ fs.mkdirSync(OUT, { recursive: true });
 // ziekte, vervaldata, de loon-/dienstopbouwschermen en de techniekschermen;
 // admin heeft de TECHNIEK-rol ook, dus die draaien hier als admin).
 const CHAUFFEUR_VIEWS = ['dashboard', 'mijn-dag', 'instellingen', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten', 'contacten', 'updates', 'meldingen', 'ruil-verzoeken', 'bezetting', 'verlof'];
-const ADMIN_VIEWS = ['dashboard', 'mijn-dag', 'werkvoorraad', 'verlof', 'verlof-kalender', 'ziekte', 'dekking', 'beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dienstopbouw', 'dagafsluiting', 'looncontrole', 'rapporten', 'beheer-updates', 'beheer-omleidingen', 'meldingen', 'defecten', 'werkprestaties', 'voertuig-werken', 'voertuigen', 'vervaldata', 'gebruikers', 'toestellen', 'activiteit', 'beheer-debug', 'designsysteem', 'ocpi-monitoring', 'instellingen'];
+const ADMIN_VIEWS = ['dashboard', 'mijn-dag', 'werkvoorraad', 'verlof', 'verlof-kalender', 'ziekte', 'dekking', 'beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'dienstopbouw', 'dagafsluiting', 'looncontrole', 'rapporten', 'beheer-updates', 'beheer-omleidingen', 'meldingen', 'defecten', 'werkprestaties', 'voertuig-werken', 'voertuigen', 'vervaldata', 'gebruikers', 'toestellen', 'activiteit', 'beheer-debug', 'designsysteem', 'ocpi-monitoring', 'instellingen'];
 
 const PROFILES = [
   ...(DESKTOP ? [{ key: 'desktop', browser: chromium, device: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } }] : []),

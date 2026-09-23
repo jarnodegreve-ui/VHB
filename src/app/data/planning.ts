@@ -121,7 +121,8 @@ export function usePlanningData(ctx: DataCtx) {
 
   // Promise<boolean> zodat het beheerformulier pas sluit/wist ná succes —
   // dit was de enige mutatie-view die fire-and-forget opsloeg (controleronde).
-  const saveServices = async (newServices: Service[], opts?: { bulkReplace?: boolean }): Promise<boolean> => {
+  // `actie` = hoe een mislukking heet in de foutmelding ("Verwijderen van dienst 2515").
+  const saveServices = async (newServices: Service[], opts?: { bulkReplace?: boolean; actie?: string }): Promise<boolean> => {
     if (!ctx.guardCollectionLoaded('services', 'Het dienstoverzicht is')) return false;
     try {
       const response = await apiFetch('/api/services', {
@@ -161,11 +162,11 @@ export function usePlanningData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      laatSchrijffout('Opslaan van diensten', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
+      laatSchrijffout(opts?.actie ?? 'Opslaan van diensten', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
       console.error('Error saving services:', error);
-      laatSchrijffout('Opslaan van diensten', error, (tekst) => showToast(tekst, 'error'));
+      laatSchrijffout(opts?.actie ?? 'Opslaan van diensten', error, (tekst) => showToast(tekst, 'error'));
       return false;
     }
   };

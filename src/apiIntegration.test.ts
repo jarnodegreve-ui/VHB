@@ -878,6 +878,31 @@ describe('authenticatie & rollen', () => {
     expect(write.status).toBe(403);
   });
 
+  // 3D (23-09): het samengevoegde Dienstoverzicht is alleen voor planner en
+  // admin; de serverregels blijven de echte grens, ook voor de acties die
+  // de UI aan een chauffeur of technieker nooit toont.
+  it('dienstoverzicht: chauffeur ziet geen wijzigingsgeschiedenis en mag ook met de importvlag niet schrijven', async () => {
+    const geschiedenis = await api('GET', '/api/activity/service/1', { token: 'tok-a' });
+    expect(geschiedenis.status).toBe(403);
+    const bulk = await api('POST', '/api/services', { token: 'tok-a', body: [], headers: { 'x-bulk-replace': '1' } });
+    expect(bulk.status).toBe(403);
+    expect(mem.services.length).toBeGreaterThan(0);
+  });
+
+  it('dienstoverzicht: technieker mag niet schrijven, niet importeren en ziet geen geschiedenis', async () => {
+    mem.users.push({ id: '5', name: 'Toon Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    invalidateUsersCache();
+    const voor = JSON.stringify(mem.services);
+    const write = await api('POST', '/api/services', { token: 'tok-tech', body: mem.services });
+    expect(write.status).toBe(403);
+    const bulk = await api('POST', '/api/services', { token: 'tok-tech', body: [], headers: { 'x-bulk-replace': '1' } });
+    expect(bulk.status).toBe(403);
+    const geschiedenis = await api('GET', '/api/activity/service/1', { token: 'tok-tech' });
+    expect(geschiedenis.status).toBe(403);
+    expect(JSON.stringify(mem.services)).toBe(voor);
+  });
+
   it('weigert een chauffeur op POST /api/planning (403)', async () => {
     const res = await api('POST', '/api/planning', { token: 'tok-a', body: mem.planning });
     expect(res.status).toBe(403);

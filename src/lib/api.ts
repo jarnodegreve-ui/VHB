@@ -169,7 +169,9 @@ async function verstuur(
       meld('vhb-device-blocked', { code: body.code });
       throw new Error(detail || 'Dit toestel heeft geen toegang.');
     }
-    throw new Error(detail || 'Je hebt geen toegang tot deze actie.');
+    // Met de status erbij, zodat meldSchrijffout de reden van de server en
+    // de vervolgstap voor een 403 toont i.p.v. de algemene tekst (3D.2).
+    throw Object.assign(new Error(detail || 'Je hebt geen toegang tot deze actie.'), { status: 403 });
   }
   if (response.status === 503 && !isLezen) {
     const body = await response.clone().json().catch(() => ({} as any));

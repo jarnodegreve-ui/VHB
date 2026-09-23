@@ -42,7 +42,6 @@ const VIEWS: Record<View, { pad: string; laad: Loader }> = {
   'planning-matrix': view('views/admin/PlanningMatrixView', () => import('../views/admin/PlanningMatrixView')),
   'planning-codes': view('views/admin/PlanningCodesView', () => import('../views/admin/PlanningCodesView')),
   dienstoverzicht: view('views/ServicesView', () => import('../views/ServicesView')),
-  'beheer-dienstoverzicht': view('views/admin/ManageServicesView', () => import('../views/admin/ManageServicesView')),
   dekking: view('views/CoverageView', () => import('../views/CoverageView')),
   'verlof-kalender': view('views/admin/VerlofKalenderView', () => import('../views/admin/VerlofKalenderView')),
   ziekte: view('views/admin/ZiekteView', () => import('../views/admin/ZiekteView')),
@@ -85,7 +84,7 @@ export const wachtOpView = (v: View, maxMs: number): Promise<void> => {
   });
 };
 
-const ZWAAR: ReadonlySet<View> = new Set<View>(['beheer-roosters', 'beheer-dienstoverzicht', 'gebruikers']);
+const ZWAAR: ReadonlySet<View> = new Set<View>(['beheer-roosters', 'gebruikers']);
 const gedaan = new Set<View>();
 
 /** Stil voorladen én evalueren (idempotent); zware xlsx-views alleen op
