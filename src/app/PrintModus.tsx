@@ -8,7 +8,7 @@
  * Geen hooks hierbinnen: App roept dit aan ná al zijn eigen hooks, op de plek
  * waar de takken vroeger stonden.
  */
-import { Suspense, type ReactNode } from 'react';
+import { Suspense, useEffect, type ReactNode } from 'react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { lazyWithRetry } from '../lib/lazyRetry';
 import { PrintLaden } from './PreAppScreens';
@@ -122,3 +122,16 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
 
   return null;
 }
+
+/**
+ * De luie ingang voor App (P5, 23-09): deze module zit niet meer in de
+ * startbundel, alleen een URL met een printparameter laadt haar. Mag de rol
+ * het gevraagde blad niet zien (of vraagt de URL niets geldigs), dan meldt ze
+ * dat via `onGeenBlad` en toont App gewoon het portaal, zoals vroeger.
+ */
+export default function PrintModus({ onGeenBlad, ...rest }: Parameters<typeof printScherm>[0] & { onGeenBlad: () => void }) {
+  const blad = printScherm(rest);
+  useEffect(() => { if (!blad) onGeenBlad(); }, [blad, onGeenBlad]);
+  return blad;
+}
+
