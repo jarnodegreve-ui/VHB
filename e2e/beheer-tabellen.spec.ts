@@ -131,3 +131,61 @@ test('Vervaldata: de naam is een knop, Enter opent het bewerkvenster', async ({ 
   await expect(dialoog).toBeVisible();
   await expect(page).toHaveURL(/\/beheer\/vervaldata\/43$/);
 });
+
+/**
+ * Lay-out-polish P4 (23-09). Gebruikers op de telefoon: naast de rolkeuze
+ * viel de chip "Nog nooit ingelogd" half buiten het kader (alleen zijn icoon
+ * bleef over). Nu staat de rolkeuze over de volle breedte en de chip eronder.
+ */
+test('Gebruikers op de telefoon: rolkeuze over de volle breedte, snelfilter volledig in beeld', async ({ page }, info) => {
+  test.skip(info.project.name !== 'iPhone 13 (chromium)', 'telefoonbreedte');
+  await open(page, SCHERMEN[0]);
+  const breedte = page.viewportSize()!.width;
+  const chip = page.getByRole('button', { name: /Nog nooit ingelogd/ });
+  const vak = await chip.boundingBox();
+  expect(vak).not.toBeNull();
+  expect(vak!.x).toBeGreaterThanOrEqual(0);
+  expect(vak!.x + vak!.width, 'chip volledig in beeld').toBeLessThanOrEqual(breedte);
+  const rol = await page.getByRole('group', { name: 'Rol' }).boundingBox();
+  const zoek = await page.getByRole('searchbox').or(page.getByPlaceholder(/Zoek op naam/)).first().boundingBox();
+  // Zelfde breedte als het zoekveld erboven (± de afronding).
+  expect(Math.abs(rol!.width - zoek!.width), 'rolkeuze over de volle breedte').toBeLessThanOrEqual(2);
+});
+
+test('Gebruikers op desktop: de kop Toestellen staat rechts, boven de cijfers', async ({ page }, info) => {
+  test.skip(info.project.name !== 'Desktop (chromium)', 'de tabel staat alleen vanaf md');
+  await open(page, SCHERMEN[0]);
+  const tabel = page.getByRole('table');
+  const kop = await tabel.getByRole('columnheader', { name: 'Toestellen' }).getByText('Toestellen', { exact: true }).boundingBox();
+  const rij = tabel.getByRole('row').filter({ hasText: 'Test Chauffeur' });
+  const cel = rij.getByRole('cell').nth(5);
+  const waarde = await cel.evaluate((td) => {
+    const r = document.createRange(); r.selectNodeContents(td);
+    return r.getBoundingClientRect().right;
+  });
+  expect(Math.abs(kop!.x + kop!.width - waarde), 'kop en waarde delen de rechterrand').toBeLessThanOrEqual(2);
+});
+
+/**
+ * Verlofkalender op de telefoon: een periode las als "28, →" en de status
+ * werd afgekapt ("in behandeli…"). Nu de volledige periode en de status op
+ * een eigen regel; de maandnavigatie heeft de pijlen aan de randen.
+ */
+test('Verlofkalender op de telefoon: volledige periode en status, maandnavigatie over de breedte', async ({ page }, info) => {
+  test.skip(info.project.name !== 'iPhone 13 (chromium)', 'telefoonbreedte');
+  await open(page, { view: 'verlof-kalender', pad: '/beheer/verlofkalender', titel: 'Verlofkalender' });
+  const breedte = page.viewportSize()!.width;
+  const periode = page.getByText(/^\d{2}\/\d{2}\/\d{4} t\/m \d{2}\/\d{2}\/\d{4}$/).first();
+  await expect(periode).toBeVisible();
+  const status = page.getByText(/· in behandeling$/).first();
+  await expect(status).toBeVisible();
+  for (const el of [periode, status]) {
+    const afgekapt = await el.evaluate((n) => n.scrollWidth > n.clientWidth + 1 || getComputedStyle(n).textOverflow === 'ellipsis');
+    expect(afgekapt, 'tekst niet afgekapt').toBe(false);
+  }
+  const vorige = await page.getByRole('button', { name: 'Vorige maand' }).boundingBox();
+  const volgende = await page.getByRole('button', { name: 'Volgende maand' }).boundingBox();
+  // Pijlen aan de randen van de inhoudskolom (16 px marge), niet links gegroepeerd.
+  expect(vorige!.x).toBeLessThanOrEqual(24);
+  expect(volgende!.x + volgende!.width).toBeGreaterThanOrEqual(breedte - 24);
+});

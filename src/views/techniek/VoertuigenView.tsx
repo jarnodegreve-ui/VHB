@@ -7,7 +7,7 @@ import {
   type VoertuigCategorie,
   VOERTUIG_VERVAL_LABEL, VOERTUIG_VERVAL_SOORTEN, WERKTYPE_LABEL, voertuigNaam, type VoertuigVervalSoort,
 } from '../../../shared/techniek';
-import { notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { useRouteParam } from '../../app/router';
@@ -45,6 +45,9 @@ const KOLOMMEN = [
 
 const LEEG_FORM: VehicleBody = { busnr: '', kortNr: null, nummerplaat: '', chassisnr: '', merk: '', type: 'lijnbus', categorie: 'bus', aandrijving: 'elektrisch', status: 'actief', inDienst: '', uitDienst: '', zitplaatsen: null, opmerking: '' };
 
+/** Vaste eerste kolom (de bus), zelfde recept als Dagadministratie en RapportTabel. */
+const VASTE_KOLOM = 'sticky left-0 z-sticky bg-paper';
+
 /**
  * Voertuigen (fase A Access-migratie, 13-09): het wagenpark met per bus de
  * drie vervaldata (keuring SBAT, brandblussers, tachograaf), het aantal open
@@ -52,6 +55,8 @@ const LEEG_FORM: VehicleBody = { busnr: '', kortNr: null, nummerplaat: '', chass
  * fiche; technieker en staf zetten vervaldata. Zelfde opbouw als
  * VervaldataView: tegels, toolbar, tabel op desktop, kaartlijst op mobiel.
  */
+
+
 export function VoertuigenView({ currentUser }: { currentUser: User }) {
   const staf = isStaf(currentUser.role);
   const [voertuigen, setVoertuigen] = useState<Vehicle[]>([]);
@@ -171,7 +176,10 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
       ) : (
         // TableShell standaard (schuiven in het kader): met alle vervalkolommen
         // aan is de tabel breder dan de kaart, ook op 1280 px naast de
-        // zijbalk (B2, ronde 5). De kolomkop plakt dan niet (zie StickyThead).
+        // zijbalk (B2, ronde 5) en op 1440 px. De kolomkop plakt dan niet
+        // (zie StickyThead); de bus blijft als vaste eerste kolom staan
+        // terwijl de vervalkolommen eronderdoor schuiven, zodat je altijd
+        // ziet over welke bus een rij gaat.
         // Onder md een kaartlijst met dezelfde rijen.
         <TableShell
           label="Voertuigen"
@@ -206,7 +214,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                 <Tabel className={voorkeur.tabelClass}>
                   <StickyThead>
                     <tr>
-                      <SortTh kolom="kort" sort={sort}>Bus</SortTh>
+                      <SortTh kolom="kort" sort={sort} className={VASTE_KOLOM}>Bus</SortTh>
                       {voorkeur.zichtbaar('nummerplaat') && <SortTh kolom="nummerplaat" sort={sort}>Nummerplaat</SortTh>}
                       {voorkeur.zichtbaar('type') && <SortTh kolom="type" sort={sort}>Type</SortTh>}
                       {voorkeur.zichtbaar('aandrijving') && <SortTh kolom="aandrijving" sort={sort}>Aandrijving</SortTh>}
@@ -219,8 +227,8 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                     {gesorteerd.map((r) => (
                       // De bus is de knop (Tab + Enter opent de fiche); een klik
                       // ergens in de rij doet hetzelfde voor de muis.
-                      <tr key={r.v.id} onClick={rijKlik(() => setDetail(r.v))} className="cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
-                        <Td nowrap>
+                      <tr key={r.v.id} onClick={rijKlik(() => setDetail(r.v))} className="group cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
+                        <Td nowrap className={cn(VASTE_KOLOM, 'transition-colors group-hover:bg-surface-soft-hover')}>
                           <CelKnop onClick={() => setDetail(r.v)} label={`${voertuigNaam(r.v)} openen`}>
                             <span className="block font-semibold text-slate-800">{voertuigNaam(r.v)}</span>
                             <span className="block text-xs font-medium text-slate-500">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</span>

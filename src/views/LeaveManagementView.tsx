@@ -681,7 +681,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           {renderBeoordelingPaneel()}
           <Card padding="lg" {...swipeHandlers}>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-              <MaandNavigatie label={monthName} labelClassName="text-lg font-bold min-w-[160px]" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
+              <MaandNavigatie label={monthName} labelClassName="min-w-36" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
                 {!isCurrentMonth && (
                   <Button variant="secondary" size="sm" className="ml-1" onClick={goToCurrentMonth}>
                     Vandaag

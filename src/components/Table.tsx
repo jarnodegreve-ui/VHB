@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { tik } from '../lib/tik';
@@ -9,7 +9,7 @@ import { useDropdown } from './useDropdown';
 import { Popover } from './Popover';
 import { SearchField } from './Field';
 
-import { Tabel, TableShell, Td, Th } from './TabelBasis';
+import { Tabel, TabelKopContext, TableShell, Td, Th } from './TabelBasis';
 
 export { Tabel, TableShell, Td, Th };
 
@@ -160,7 +160,22 @@ function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
   );
 }
 
-export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling, filters, acties, dichtheid, kolommen, className }: {
+/**
+ * Filterrij op de telefoon (onder md) tot aan de rand laten doorlopen, met
+ * een zachte vervaging over precies die rand: een chip die niet meer past
+ * loopt onder de rand door ("Geblokke…" stopte hard op de marge en las als
+ * afgekapt). De vervaging ligt alleen over de binnenmarge, dus aan het begin
+ * en aan het eind van het schuiven staat elke chip volledig in beeld.
+ * `kaart` = binnen een tabelkader (px-5), `pagina` = rechtstreeks op de
+ * pagina (safe-area-gutter). Het masker zelf staat in index.css
+ * (`.filter-rij-rand`, alleen onder md).
+ */
+const FILTER_RAND = {
+  kaart: 'filter-rij-rand max-md:-mx-5 max-md:px-5 [--filter-rand:1.25rem]',
+  pagina: 'filter-rij-rand max-md:mx-gutter-neg max-md:px-gutter [--filter-rand:var(--gutter)]',
+} as const;
+
+export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling, filters, acties, dichtheid, kolommen, className, rand }: {
   zoek?: string;
   onZoek?: (v: string) => void;
   placeholder?: string;
@@ -173,7 +188,15 @@ export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling,
   /** Kolommenmenu (uit `useTabelVoorkeur().kolommen`). */
   kolommen?: KolommenProps;
   className?: string;
+  /**
+   * Waar de filterrij op de telefoon tot aan de rand doorloopt: `kaart`
+   * (tabelkader, vanzelf in de `kop` van een TableShell), `pagina` (toolbar
+   * rechtstreeks op de pagina) of `geen`.
+   */
+  rand?: 'kaart' | 'pagina' | 'geen';
 }) {
+  const inKop = useContext(TabelKopContext);
+  const filterRand = rand ?? (inKop ? 'kaart' : 'geen');
   return (
     // Vaste opbouw (ronde 3, 19-09): rij 1 = zoekveld links, telling en
     // tabelinstellingen rechts; rij 2 = de filters op ÉÉN regel die op smalle
@@ -193,7 +216,11 @@ export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling,
       </div>
       {/* -m/p van 1: de focus-outline (2 px + 2 px offset) mag niet door de
           overflow afgesneden worden. */}
-      {filters ? <div className="filter-rij -m-1 flex items-center gap-1.5 overflow-x-auto p-1 [&>*]:shrink-0">{filters}</div> : null}
+      {filters ? (
+        <div className={cn('filter-rij -m-1 flex items-center gap-1.5 overflow-x-auto p-1 [&>*]:shrink-0', filterRand !== 'geen' && FILTER_RAND[filterRand])}>
+          {filters}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -243,12 +270,18 @@ export function SortTh<K extends string>({ kolom, sort, children, className, tit
 }) {
   const actief = sort.key === kolom;
   const Pijl = !actief ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
+  const pijl = dicht && !actief ? null : <Pijl size={12} className={cn('shrink-0 transition-opacity', actief ? 'opacity-100' : 'opacity-0 group-hover:opacity-60')} />;
+  const rechts = align === 'right';
   return (
-    <Th className={cn('p-0', className)} title={title} sort={actief ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+    <Th className={cn('p-0', className)} num={rechts} title={title} sort={actief ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
       {/* rauw: kolomkop-knop (tekst + sorteerpijl) in een tabelkop. */}
-      <button type="button" aria-label={naam} onClick={() => sort.toggle(kolom)} className={cn('tikbaar group inline-flex min-h-11 sm:pointer-fine:min-h-9 w-full items-center text-xs font-medium transition-colors hover:text-slate-800', dicht ? 'gap-0.5 px-2' : 'gap-1 px-4', align === 'right' ? 'justify-end text-right' : 'text-left', actief ? 'text-slate-800' : 'text-slate-500')}>
+      <button type="button" aria-label={naam} onClick={() => sort.toggle(kolom)} className={cn('tikbaar group inline-flex min-h-11 sm:pointer-fine:min-h-9 w-full items-center text-xs font-medium transition-colors hover:text-slate-800', dicht ? 'gap-0.5 px-2' : 'gap-1 px-4', rechts ? 'justify-end text-right' : 'text-left', actief ? 'text-slate-800' : 'text-slate-500')}>
+        {/* Rechts uitgelijnd: de pijl vóór de tekst, zodat de koptekst op
+            dezelfde rechterrand staat als de cijfers eronder (de onzichtbare
+            pijl erachter schoof hem 16 px naar links, "Toestellen"). */}
+        {rechts && pijl}
         <span>{children}</span>
-        {dicht && !actief ? null : <Pijl size={12} className={cn('shrink-0 transition-opacity', actief ? 'opacity-100' : 'opacity-0 group-hover:opacity-60')} />}
+        {!rechts && pijl}
       </button>
     </Th>
   );

@@ -49,6 +49,7 @@ export function DienstopbouwView({ currentUser }: { currentUser: User }) {
       {zl.fout && imports.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
       <Segmented<Tab>
         label="Onderdeel"
+        telefoon="vol"
         className="shrink-0"
         itemClassName="min-h-11 sm:pointer-fine:min-h-8"
         waarde={tab}

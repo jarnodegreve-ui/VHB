@@ -12,7 +12,8 @@ import { RichtingWissel } from './RichtingWissel';
  * De aria-labels "Vorige maand"/"Volgende maand" zijn contract met de e2e-
  * tests — niet wijzigen. `children` = extra acties achter de pijlen (bv. een
  * "Vandaag"-knop); `className="justify-between"` spreidt de kop over de volle
- * breedte van een kaart.
+ * breedte van een kaart. Onder sm vult de kop altijd de breedte (maand in het
+ * midden tussen de pijlen).
  *
  * Richting (golf 4, punt 11): geef `veeg` (uit `useMaandVeeg`) en de pijlen
  * zetten de richting vóór ze de maand wisselen; `MaandWissel` eronder laat
@@ -47,11 +48,15 @@ export function MaandNavigatie({
   const naarVorige = veeg ? veeg.vorige : onVorige;
   const naarVolgende = veeg ? veeg.volgende : onVolgende;
   return (
-    <div className={cn('flex items-center gap-2', className)} {...rest}>
+    // Telefoon: over de volle breedte, pijlen aan de randen en de maand in het
+    // midden (P4, 23-09: in Verlofkalender en Looncontrole stond de kop links
+    // gegroepeerd met lege ruimte ernaast). Extra acties (children) volgen
+    // na de rechterpijl.
+    <div className={cn('flex items-center gap-2 max-sm:w-full', className)} {...rest}>
       <IconButton label="Vorige maand" variant="secondary" onClick={naarVorige} disabled={vorigeUit}>
         <ChevronLeft size={16} />
       </IconButton>
-      <span className={cn('text-center text-sm font-semibold capitalize text-slate-800', labelClassName)} aria-live="polite">
+      <span className={cn('text-center text-sm font-semibold capitalize text-slate-800 max-sm:flex-1', labelClassName)} aria-live="polite">
         {label}
       </span>
       <IconButton label="Volgende maand" variant="secondary" onClick={naarVolgende} disabled={volgendeUit}>

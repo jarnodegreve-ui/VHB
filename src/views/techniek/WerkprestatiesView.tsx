@@ -270,6 +270,7 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
       <div className="flex flex-wrap items-center gap-2">
         <Segmented<Tab>
           label="Weergave"
+          telefoon="vol"
           className="shrink-0"
           itemClassName="min-h-11 sm:pointer-fine:min-h-8"
           waarde={tab}

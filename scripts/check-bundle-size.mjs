@@ -139,7 +139,13 @@ const DEELBUDGET_KB = {
 // (dd/mm/jjjj-parser, foutregel, kalenderknop): de Field-chunk groeide van
 // 4,76 naar 5,36 kB gzip, en die zit in de staf-warmup (dekking, dienstruil).
 // De staf-set stond op main al op 136,x; chauffeur blijft 74 (nu 73).
-const WARMUP_BUDGET_KB = { chauffeur: 74, staf: 138 };
+// 24-09 (polish P4): staf 138 → 139. Openstaande diensten en de
+// verlofkalender (allebei in de staf-warmup) gebruiken nu de gedeelde
+// MaandNavigatie, en TableShell kreeg de vervaging aan de rechterrand van een
+// schuivende tabel; samen met P1b/P3 ging de set net over 138 (CI). De
+// warmup start pas na LCP + 2 s en raakt het eerste beeld niet; de index
+// (het kritieke pad) zakte in dezelfde ronde juist, 73,53 → ±73,5 kB na P5.
+const WARMUP_BUDGET_KB = { chauffeur: 74, staf: 139 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { typedagLabel } from '../../lib/typedag';
-import { ArrowLeft, CalendarOff, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
+import { ArrowLeft, CalendarOff, Printer } from 'lucide-react';
 import { teltInVerlofbezetting } from '../../types';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { leaveSolid } from '../../lib/statusColors';
@@ -13,9 +13,10 @@ import { SortTh, TableToolbar, useSort } from '../../components/Table';
 import { TableShell, Td, Th } from '../../components/TabelBasis';
 import { Avatar } from '../../components/Avatar';
 import { DetailPaneel } from '../../components/DetailPaneel';
+import { MaandNavigatie } from '../../components/MaandNavigatie';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { aanvragerNaam, useVerlofLimieten, VerlofBeoordelingInhoud, VerlofBeoordelingKnoppen } from '../../components/VerlofBeoordeling';
-import { formatDateHuman, formatDayLong, formatPeriodeDMJ, MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/format';
+import { formatDateHuman, formatDayLong, formatPeriodeDMJ, MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_SHORT_MON } from '../../lib/format';
 import { useRouteParam } from '../../app/router';
 import { limietVoorDag } from '../../../shared/schemas/verlofLimieten';
 import { AANVRAAG_STATUS, statusLabel } from '../../../shared/status';
@@ -71,6 +72,8 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
 
   const goToPrev = () => setViewMonth(new Date(year, monthIndex - 1, 1));
   const goToNext = () => setViewMonth(new Date(year, monthIndex + 1, 1));
+  const nu = new Date();
+  const isHuidigeMaand = year === nu.getFullYear() && monthIndex === nu.getMonth();
   const goToToday = () => {
     const now = new Date();
     setViewMonth(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -87,10 +90,12 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
   const sort = useSort<'naam'>('naam');
 
   const dateIso = (day: number) => `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  // Twee letters ("ma di wo …") zoals de andere kalenders: "D W D V Z Z M"
+  // was dubbelzinnig (twee keer D, twee keer Z).
   const weekdayLetter = (day: number) => {
     const jsDay = new Date(year, monthIndex, day).getDay();
     const mondayIndex = jsDay === 0 ? 6 : jsDay - 1;
-    return WEEKDAY_LETTER_MON[mondayIndex];
+    return WEEKDAY_SHORT_MON[mondayIndex];
   };
   const isWeekend = (day: number) => {
     const jsDay = new Date(year, monthIndex, day).getDay();
@@ -230,30 +235,27 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
         view="verlof-kalender"
         title="Verlofkalender"
         actions={(
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm" className="min-h-11 min-w-11 justify-center"
-              onClick={goToPrev}
-              aria-label="Vorige maand"
-              icon={<ChevronLeft size={16} />}
-            />
-            <span className="px-3 text-base font-semibold capitalize min-w-[150px] text-center text-slate-800 tabular-nums">{monthName} {year}</span>
-            <Button
-              variant="ghost"
-              size="sm" className="min-h-11 min-w-11 justify-center"
-              onClick={goToNext}
-              aria-label="Volgende maand"
-              icon={<ChevronRight size={16} />}
-            />
-            <Button variant="secondary" size="sm" className="ml-1" onClick={goToToday}>
-              Vandaag
-            </Button>
-          </div>
+          // Gedeelde maandnavigatie (zelfde variant als Verlof, Looncontrole en
+          // Openstaande diensten). Op de telefoon over de volle breedte: pijlen
+          // aan de randen, maand in het midden (stond links met lege ruimte
+          // rechts). "Vandaag" alleen buiten de huidige maand, zoals in Verlof.
+          <MaandNavigatie
+            label={`${monthName} ${year}`}
+            labelClassName="min-w-36"
+            onVorige={goToPrev}
+            onVolgende={goToNext}
+          >
+            {!isHuidigeMaand && (
+              <Button variant="secondary" size="sm" className="ml-1" onClick={goToToday}>
+                Vandaag
+              </Button>
+            )}
+          </MaandNavigatie>
         )}
       />
 
       <TableToolbar
+        rand="pagina"
         zoek={zoek}
         onZoek={setZoek}
         placeholder="Zoek chauffeur…"
@@ -506,29 +508,28 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
               ) : (
                 <ul className="mt-2 space-y-1">
                   {uniqueLeaves.map((leave) => {
-                    const startDay = parseInt(leave.startDate.slice(-2), 10);
-                    const endDay = parseInt(leave.endDate.slice(-2), 10);
                     const sameMonthAsStart = leave.startDate.startsWith(`${year}-${String(monthIndex + 1).padStart(2, '0')}`);
-                    const sameMonthAsEnd = leave.endDate.startsWith(`${year}-${String(monthIndex + 1).padStart(2, '0')}`);
                     const eersteDag = sameMonthAsStart ? leave.startDate : monthStart;
+                    const statusTekst = leave.status === 'pending' ? 'in behandeling'
+                      : leave.status === 'cancelled' ? 'geannuleerd'
+                        : leave.status === 'rejected' ? 'afgewezen' : null;
                     return (
                       <li key={leave.id}>
                         {/* rauw: aanvraagregel-als-knop in een dichte lijst (kleurstip + tekst, geen knopvorm) */}
                         <button
                           type="button"
                           onClick={() => openCel(eersteDag, leave)}
-                          className="ios-pressable -mx-2 flex min-h-11 w-[calc(100%+1rem)] items-center gap-2.5 rounded-lg px-2 text-left text-xs"
+                          className="ios-pressable -mx-2 flex min-h-11 w-[calc(100%+1rem)] items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-xs"
                         >
                           <span className={cn('shrink-0 w-2.5 h-2.5 rounded-full', cellColor(leave.status, leave.type))} />
-                          <span className="font-semibold text-slate-700 tabular-nums">
-                            {sameMonthAsStart ? startDay : '←'}
-                            {leave.startDate !== leave.endDate && `, ${sameMonthAsEnd ? endDay : '→'}`}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-slate-500">
-                            {LEAVE_TYPE_LABELS[leave.type] || leave.type}
-                            {leave.status === 'pending' && ' · in behandeling'}
-                            {leave.status === 'cancelled' && ' · geannuleerd'}
-                            {leave.status === 'rejected' && ' · afgewezen'}
+                          {/* Volledige periode op regel 1 ("28, →" zei niet tot
+                              wanneer), soort en status op regel 2, niets afgekapt. */}
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-semibold text-slate-700">{formatPeriodeDMJ(leave.startDate, leave.endDate)}</span>
+                            <span className="block text-slate-500">
+                              {LEAVE_TYPE_LABELS[leave.type] || leave.type}
+                              {statusTekst && ` · ${statusTekst}`}
+                            </span>
                           </span>
                           {leave.status === 'pending' && magBeslissen && (
                             <Badge tone="amber" className="shrink-0">Beoordelen</Badge>

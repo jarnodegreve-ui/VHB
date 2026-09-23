@@ -775,9 +775,14 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
               dichtheid={voorkeur.dichtheid}
               kolommen={voorkeur.kolommen}
               filters={(
-                <>
+                // Eén blok dat mag omlopen: op de telefoon staat de rolkeuze
+                // over de volle breedte en de snelfilters eronder. Als losse
+                // stukken in de schuivende filterrij viel de chip "Nog nooit
+                // ingelogd" half buiten het kader (alleen zijn icoon zichtbaar).
+                <div className="flex w-full flex-wrap items-center gap-1.5">
                   <Segmented<typeof roleFilter>
                     label="Rol"
+                    telefoon="vol"
                     itemClassName="capitalize"
                     waarde={roleFilter}
                     opties={(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => ({ waarde: role, label: role === 'all' ? 'Alles' : role }))}
@@ -797,7 +802,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                       Niet in de planning ({aantalNietInPlanning})
                     </FilterChip>
                   )}
-                </>
+                </div>
               )}
             />
             <BulkBar aantal={selectedIds.size} onWis={clearSelection}>

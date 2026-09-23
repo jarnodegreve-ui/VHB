@@ -80,6 +80,9 @@ export function useHistoryDismiss(open: boolean, onClose: () => void | boolean) 
         // Een echte paginawissel verwijdert de overlay-id in de router.
         // Een record sluiten of wisselen behoudt hem, ook al verandert het
         // pad: de entry behoort dan nog steeds aan dit paneel.
+        // Geen venster meer (test die afbrak terwijl een overlay sloot): niets
+        // op te ruimen.
+        if (typeof window === 'undefined') return;
         if (window.history.state?.vhbOverlay !== id) return;
         const urlBijSluiten = window.location.pathname + window.location.search + window.location.hash;
         onderweg.add(id);

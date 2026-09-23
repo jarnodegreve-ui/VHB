@@ -3,7 +3,7 @@ import { useVeldfouten, useVerlaatWaarschuwing, useVuil } from '../lib/formulier
 import { focusEersteFout } from '../components/Formulier';
 import { onvolledigeRijen, rijSleutel } from '../lib/dekkingRijen';
 import { meldSchrijffout } from '../lib/fouten';
-import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus, ListChecks } from 'lucide-react';
+import { CalendarPlus, ChevronDown, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus, ListChecks } from 'lucide-react';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } from '../lib/herverdeel';
@@ -19,6 +19,7 @@ import { Badge, Button, FilterChip, IconButton, MicroLabel } from '../components
 import { Tabel, TableShell, Td, Th } from '../components/TabelBasis';
 import { StickyThead } from '../components/Table';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
+import { MaandNavigatie } from '../components/MaandNavigatie';
 import { Card, CardHeader } from '../components/Card';
 import { DateInput, Input, Select } from '../components/Field';
 import { Modal } from '../components/Modal';
@@ -750,10 +751,13 @@ export function CoverageView() {
         actions={(
           <>
           <VersheidRegel {...zl.versheid} />
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} />} aria-label="Vorige maand" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} />
-            <span className="px-3 text-sm font-bold capitalize min-w-[130px] text-center tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
-            <Button variant="ghost" size="sm" icon={<ChevronRight size={18} />} aria-label="Volgende maand" onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))} />
+          {/* Gedeelde maandnavigatie (één variant voor elke maandkalender). */}
+          <MaandNavigatie
+            label={`${MONTH_NAMES[monthIndex]} ${year}`}
+            labelClassName="min-w-36"
+            onVorige={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
+            onVolgende={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
+          >
             <Button
               variant="secondary"
               size="sm"
@@ -766,7 +770,7 @@ export function CoverageView() {
             >
               Instellen
             </Button>
-          </div>
+          </MaandNavigatie>
           </>
         )}
       />

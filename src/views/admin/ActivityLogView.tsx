@@ -556,8 +556,13 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                 <div className="min-w-0 border-t border-hairline pt-5 lg:col-span-2 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
                   <h3 className="mb-1 text-card-title">Recente aanmeldingen</h3>
                   <p className="mb-3 text-xs text-slate-500">Alleen wie zich écht opnieuw moest aanmelden. Wie ingelogd blijft, telt mee in de aanwezigheid.</p>
-                  {/* Eigen scrollstrook: focusbaar en benoemd, zodat ze ook met het toetsenbord scrolt (axe). */}
-                  <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1" role="region" aria-label="Recente aanmeldingen" tabIndex={0}>
+                  {/* Eigen scrollstrook: focusbaar en benoemd, zodat ze ook met het toetsenbord scrolt (axe).
+                      Onderaan vervaagt ze over de laatste 1,5 rem: een rij die
+                      doorloopt leest dan als "er is meer", niet als afgeknipt.
+                      De ondermarge (pb-6) is even hoog, dus aan het eind van
+                      het scrollen (en bij een korte lijst) staat de laatste rij
+                      volledig in beeld. */}
+                  <div className="max-h-48 space-y-0.5 overflow-y-auto pr-1 pb-6 [mask-image:linear-gradient(to_bottom,black_calc(100%_-_1.5rem),transparent)]" role="region" aria-label="Recente aanmeldingen" tabIndex={0}>
                     {recentLogins.length === 0 ? (
                       <p className="text-sm text-slate-500">Nog geen aanmeldingen in de laatste 30 dagen.</p>
                     ) : recentLogins.map((e) => (

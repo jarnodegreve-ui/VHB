@@ -147,6 +147,87 @@ test('Dagafsluiting op de telefoon: een kaart per chauffeur, dezelfde cellen', a
 });
 
 /**
+ * Lay-out-polish P4 (23-09). Dagadministratie op de telefoon: het datumveld
+ * stond in één wrap-rij met status en Gisteren en kromp op 375/390 px tot
+ * enkel het kalendericoon. Nu is de datum volledig leesbaar.
+ */
+test('Dagafsluiting: de datum staat volledig in beeld op 375 en 390 px', async ({ page }, info) => {
+  test.skip(info.project.name !== 'iPhone 13 (chromium)', 'telefoonbreedte');
+  for (const breedte of [375, 390]) {
+    await page.setViewportSize({ width: breedte, height: 844 });
+    await open(page, SCHERMEN[6]);
+    const veld = page.getByRole('textbox', { name: 'Dag', exact: true });
+    await expect(veld).toHaveValue(/^\d{2}\/\d{2}\/\d{4}$/);
+    const m = await veld.evaluate((el: HTMLInputElement) => {
+      const r = el.getBoundingClientRect();
+      // Breedte van de getoonde tekst tegen de binnenruimte van het veld.
+      const c = document.createElement('canvas').getContext('2d')!;
+      const cs = getComputedStyle(el);
+      c.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const binnen = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      return { links: r.left, rechts: r.right, tekst: c.measureText(el.value).width, binnen };
+    });
+    expect(m.links, `${breedte}px: veld links in beeld`).toBeGreaterThanOrEqual(0);
+    expect(m.rechts, `${breedte}px: veld rechts in beeld`).toBeLessThanOrEqual(breedte);
+    expect(m.tekst, `${breedte}px: datumtekst past in het veld`).toBeLessThanOrEqual(m.binnen + 1);
+    await geenOverloop(page, `Dagafsluiting ${breedte}px`);
+  }
+});
+
+/**
+ * Dagadministratie op 1440 px: de tabel schuift in haar kader met de
+ * chauffeur als vaste kolom, namen op één regel, de keuzelijst "Gereden"
+ * houdt haar breedte naast het afwijkt-label.
+ */
+test('Dagafsluiting op desktop: vaste chauffeurkolom, naam op één regel, keuzelijst leesbaar', async ({ page }, info) => {
+  test.skip(info.project.name !== 'Desktop (chromium)', 'de tabel staat alleen vanaf md');
+  await open(page, SCHERMEN[6]);
+  const tabel = page.getByRole('table', { name: /^Dagadministratie / });
+  await expect(tabel.getByRole('columnheader', { name: 'Chauffeur' })).toHaveCSS('position', 'sticky');
+  const naamCel = tabel.getByRole('row').filter({ hasText: 'Diether Van Haute' }).getByRole('cell').first();
+  const regels = await naamCel.evaluate((td) => {
+    const walker = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+    let tekst: Node | null = null;
+    while (walker.nextNode()) if (walker.currentNode.textContent?.includes('Diether Van Haute')) tekst = walker.currentNode;
+    const r = document.createRange(); r.selectNodeContents(tekst!);
+    return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+  });
+  expect(regels, 'naam op één regel').toBe(1);
+  const keuze = tabel.getByRole('combobox', { name: 'Gereden code van Alex Du Priez' });
+  expect((await keuze.boundingBox())!.width, 'keuzelijst naast het afwijkt-label').toBeGreaterThanOrEqual(120);
+  // Na het schuiven blijft de chauffeur tegen de linkerrand van het kader.
+  const kader = await tabel.evaluate((t) => {
+    let strook: HTMLElement | null = t.parentElement;
+    while (strook && getComputedStyle(strook).overflowX !== 'auto') strook = strook.parentElement;
+    if (!strook) return null;
+    strook.scrollLeft = strook.scrollWidth;
+    return strook.getBoundingClientRect().left;
+  });
+  expect(kader).not.toBeNull();
+  await page.waitForTimeout(50);
+  const cel = await tabel.getByRole('row').filter({ hasText: 'Test Chauffeur' }).getByRole('cell').first().boundingBox();
+  expect(Math.abs(cel!.x - kader!), 'vaste eerste kolom').toBeLessThanOrEqual(1);
+});
+
+test('Voertuigen op desktop: de bus blijft als vaste eerste kolom staan', async ({ page }, info) => {
+  test.skip(info.project.name !== 'Desktop (chromium)', 'de tabel staat alleen vanaf md');
+  await open(page, SCHERMEN[0]);
+  const tabel = page.getByRole('table', { name: 'Voertuigen' });
+  await expect(tabel.getByRole('columnheader', { name: /Bus/ })).toHaveCSS('position', 'sticky');
+  const kader = await tabel.evaluate((t) => {
+    let strook: HTMLElement | null = t.parentElement;
+    while (strook && getComputedStyle(strook).overflowX !== 'auto') strook = strook.parentElement;
+    if (!strook) return null;
+    strook.scrollLeft = strook.scrollWidth;
+    return strook.getBoundingClientRect().left;
+  });
+  expect(kader).not.toBeNull();
+  await page.waitForTimeout(50);
+  const cel = await tabel.getByRole('button', { name: 'Bus 26 openen' }).evaluate((el) => el.closest('td')!.getBoundingClientRect().left);
+  expect(Math.abs(cel - kader!), 'vaste eerste kolom').toBeLessThanOrEqual(1);
+});
+
+/**
  * De kwaliteitsvlaggen (3B.2, 23-09): het vlak stond `absolute` in de strook
  * waarin de tabel schuift en werd op de onderste rijen afgeknipt. Nu zweeft
  * het (Popover `anker`: portal + fixed, erboven als er onder geen plaats is).
