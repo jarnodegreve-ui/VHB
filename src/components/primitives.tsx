@@ -448,8 +448,10 @@ type IconButtonSize = 'sm' | 'md';
 const ICON_BUTTON_VARIANTS: Record<IconButtonVariant, string> = {
   ghost: 'text-slate-600 hover:bg-surface-soft-hover hover:text-slate-900',
   secondary: 'control-button-soft text-slate-600 hover:text-slate-900',
-  danger: 'text-slate-400 hover:bg-red-50 hover:text-red-700',
-  success: 'text-slate-400 hover:bg-emerald-50 hover:text-emerald-700',
+  // slate-500, niet 400: een iconknop is een bedieningselement en moet 3:1
+  // halen tegen zijn vlak (WCAG 1.4.11); slate-400 op wit is 2,6:1 (P6).
+  danger: 'text-slate-500 hover:bg-red-50 hover:text-red-700',
+  success: 'text-slate-500 hover:bg-emerald-50 hover:text-emerald-700',
   primary: 'bg-oker-500 text-slate-950 hover:bg-oker-400 ring-1 ring-inset ring-ink/10',
 };
 

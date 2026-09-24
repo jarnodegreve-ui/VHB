@@ -14,7 +14,8 @@ import { SluitContext, useSluitPoort } from './Modal';
  * én een veeg omlaag (drempel 80 px of 600 px/s, zelfde als de toast).
  * Boven `sm` blijft het een sheet maar smaller en gecentreerd, zodat één
  * component op elk formaat werkt. Scroll-lock op body én de scroll-root,
- * focus naar het paneel en terug naar de trigger, zoals Modal en SlideOver.
+ * focus naar het paneel, Tab blijft binnen het paneel (aria-modal) en de
+ * focus gaat terug naar de trigger, zoals Modal en SlideOver.
  *
  * Wanneer welke overlay: Modal = beslissing of formulier midden in beeld;
  * SlideOver = detail naast een lijst (desktop); Sheet = keuze of kort
@@ -41,13 +42,36 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, ariaLa
   // sluiten alleen als hij bovenaan ligt; scroll-lock op dezelfde levensloop.
   const { sluitVia, dialoog } = useSluitPoort(open, vuil, onNietBewaren);
   const sluit = () => sluitVia(onClose);
-  useLaag({ open, sluit, soort: 'dialoog', scrollSlot: 'sheet' });
+  const laag = useLaag({ open, sluit, soort: 'dialoog', scrollSlot: 'sheet' });
 
   useEffect(() => {
     if (!open) return;
     const eerder = document.activeElement as HTMLElement | null;
     paneel.current?.focus({ preventScroll: true });
-    return () => { eerder?.focus?.({ preventScroll: true }); };
+    // Minimale focus-trap (P6, 24-09): zonder liep Tab het sheet uit naar de
+    // pagina eronder. Alleen het bovenste dialoog vangt Tab, zoals SlideOver.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !laag.isBovenste('dialoog')) return;
+      const panel = paneel.current;
+      if (!panel) return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) { event.preventDefault(); panel.focus(); return; }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === panel)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
+      else if (active && !panel.contains(active)) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      eerder?.focus?.({ preventScroll: true });
+    };
+    // laag is stabiel per instantie; alleen `open` bepaalt de levensloop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (typeof document === 'undefined') return null;

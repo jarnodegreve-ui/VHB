@@ -33,13 +33,6 @@ export function Tooltip({ label, kant = 'boven', className, children }: {
     return () => mq.removeEventListener('change', zet);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const toets = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('keydown', toets);
-    return () => document.removeEventListener('keydown', toets);
-  }, [open]);
-
   const kind = isValidElement(children)
     ? cloneElement(children as ReactElement<{ 'aria-describedby'?: string }>, { 'aria-describedby': open ? id : undefined })
     : children;
@@ -51,6 +44,9 @@ export function Tooltip({ label, kant = 'boven', className, children }: {
       onPointerLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}
       onBlur={() => setOpen(false)}
+      // Escape sluit één laag (lagen.ts): een open tooltip vangt hem zelf en
+      // stopt de propagatie, zodat de Modal eronder open blijft (P6, 24-09).
+      onKeyDown={(e) => { if (open && e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }}
     >
       {kind}
       <AnimatePresence>

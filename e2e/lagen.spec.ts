@@ -178,3 +178,24 @@ test.describe('meldingen', () => {
     await expect.poll(() => pad(page)).toBe('/');
   });
 });
+
+test.describe('focus blijft in een sheet', () => {
+  // P6 (24-09): Sheet had focus-naar-paneel maar geen Tab-trap, dus Tab liep
+  // het sheet uit naar de pagina eronder (aria-modal belooft het tegendeel).
+  test('Tab en Shift+Tab draaien rond binnen het sheet, Escape geeft de focus terug', async ({ page }) => {
+    await seed(page, { user: ADMIN });
+    await page.goto('/beheer/designsysteem');
+    const knop = page.getByRole('button', { name: 'Sheet openen' });
+    await knop.scrollIntoViewIfNeeded();
+    await knop.focus();
+    await page.keyboard.press('Enter');
+    const sheet = page.getByRole('dialog').last();
+    await expect(sheet).toBeVisible();
+    const binnen = () => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'));
+    for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); expect(await binnen(), `Tab ${i + 1}`).toBe(true); }
+    for (let i = 0; i < 8; i++) { await page.keyboard.press('Shift+Tab'); expect(await binnen(), `Shift+Tab ${i + 1}`).toBe(true); }
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    await expect(knop).toBeFocused();
+  });
+});

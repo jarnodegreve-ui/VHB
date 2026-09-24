@@ -118,7 +118,7 @@ export function ModalHeader({
           type="button"
           aria-label="Sluiten"
           onClick={() => sluitVia(onClose)}
-          className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-surface-soft-hover hover:text-slate-700 rounded-xl transition-colors"
+          className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-500 hover:bg-surface-soft-hover hover:text-slate-700 rounded-xl transition-colors"
         >
           <X size={18} />
         </button>
