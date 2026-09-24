@@ -6,7 +6,8 @@ import type { CellKind } from './monthPlanning';
  * beide views een tegenstrijdige legende (dienst was daar oker vs. blauw,
  * opleiding blauw vs. groen…) — wie beide schermen gebruikt leerde twee talen.
  *
- * Semantiek: dienst = oker (merk-moment), verlof = blauw (neutraal-informatief,
+ * Semantiek: dienst = neutraal (A, 24-09: een gewone dienst is geen taak van
+ * goud; goud blijft voor vandaag/"nu"), verlof = blauw (neutraal-informatief,
  * bewust GEEN amber — amber is de waarschuwingskleur), afwezig = slate,
  * opleiding = emerald, onbekend = red (moet opgelost worden).
  */
@@ -20,7 +21,7 @@ export const KIND_LABEL: Record<CellKind, string> = {
 
 /** Chip/pill-klassen (achtergrond + tekst) — dark-overrides zitten in index.css. */
 export const KIND_CLS: Record<CellKind, string> = {
-  service: 'bg-oker-50 text-oker-700',
+  service: 'bg-surface-muted text-slate-800',
   leave: 'bg-blue-50 text-blue-700',
   absence: 'bg-slate-100 text-slate-600',
   training: 'bg-emerald-50 text-emerald-700',
@@ -37,8 +38,8 @@ export const KIND_TEXT: Record<CellKind, string> = {
 };
 
 /** Badge-tone (voor de Badge-primitive in het Planning-overzicht). */
-export const KIND_BADGE_TONE: Record<CellKind, 'oker' | 'blue' | 'slate' | 'emerald' | 'red'> = {
-  service: 'oker',
+export const KIND_BADGE_TONE: Record<CellKind, 'blue' | 'slate' | 'emerald' | 'red'> = {
+  service: 'slate',
   leave: 'blue',
   absence: 'slate',
   training: 'emerald',
@@ -61,5 +62,5 @@ export const celChipClass = (cel: CelInfo): string =>
   cel.swapId ? 'bg-red-50 text-red-700' : isZiekCode(cel.code) ? 'bg-amber-50 text-amber-800' : KIND_CLS[cel.kind];
 export const celTextClass = (cel: CelInfo): string =>
   cel.swapId ? 'font-semibold text-red-700 border-b border-dashed border-red-500/80' : isZiekCode(cel.code) ? 'text-amber-700 font-semibold' : KIND_TEXT[cel.kind];
-export const celBadgeTone = (cel: CelInfo): 'oker' | 'blue' | 'slate' | 'emerald' | 'red' | 'amber' =>
+export const celBadgeTone = (cel: CelInfo): 'blue' | 'slate' | 'emerald' | 'red' | 'amber' =>
   cel.swapId ? 'red' : isZiekCode(cel.code) ? 'amber' : KIND_BADGE_TONE[cel.kind];

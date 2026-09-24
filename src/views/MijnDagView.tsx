@@ -441,7 +441,7 @@ export function MijnDagView({
       <MijnWeek dagen={week} vandaag={vandaag} gekozen={peildag} onRooster={onNavigate ? () => onNavigate('rooster') : undefined} />
       {volgende && volgende.date > laatsteWeekdag && (
         <OpsRow
-          tone="oker"
+          tone="slate"
           icon={<Calendar size={16} />}
           primary={`Volgende dienst · ${formatShortDay(volgende.date)}`}
           secondary={
@@ -449,7 +449,7 @@ export function MijnDagView({
               ? `${volgende.startTime} · ${volgendeDelen.length} delen · tot ${volgendeDelen[volgendeDelen.length - 1].endTime}`
               : `${volgende.startTime}–${volgende.endTime}${volgende.loopnr ? ` · loop ${volgende.loopnr}` : ''}`
           }
-          trailing={<ServiceChip serviceNumber={serviceNumberOf(volgende)} tone="oker" />}
+          trailing={<ServiceChip serviceNumber={serviceNumberOf(volgende)} tone="slate" />}
           onClick={() => onNavigate?.('rooster')}
         />
       )}

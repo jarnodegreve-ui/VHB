@@ -536,7 +536,7 @@ function MonthCalendar({
                   </span>
                 )}
                 {dayGroups.length > 0 ? (
-                  <span className={cn('max-w-full truncate text-xs font-mono font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-oker-800')}>
+                  <span className={cn('max-w-full truncate text-xs font-mono font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-slate-800')}>
                     {dayGroups[0].line}
                     {dayGroups.length > 1 && '+'}
                   </span>
@@ -560,7 +560,7 @@ function MonthCalendar({
 
         {/* Legende */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline-subtle pt-3 text-xs font-medium text-slate-500">
-          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-mono font-bold tabular-nums text-oker-800">2101</span> dienst</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-xs font-mono font-bold tabular-nums text-slate-800">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
           <span className="inline-flex items-center gap-1.5"><span className="text-xs font-bold text-oker-800">F</span> feestdag</span>
@@ -598,7 +598,7 @@ function MonthCalendar({
           selectedGroups.map((g) => (
             <div key={g.key} className="mt-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-base font-mono font-semibold tabular-nums text-oker-700">{g.line}</span>
+                <span className="text-base font-mono font-semibold tabular-nums text-slate-900">{g.line}</span>
                 {g.hasConflict && (
                   <Badge tone="red" icon={<AlertTriangle size={12} />}>Verlof-conflict</Badge>
                 )}
@@ -710,7 +710,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                   </Td>
                   <Td className="px-6 py-4">
                     <div className="inline-flex items-center gap-2">
-                      <span className="text-lg font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
+                      <span className="text-lg font-mono font-semibold text-slate-900 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
                         <span className="text-xs font-medium text-slate-500 tabular-nums">
                           ({g.segments.length} blokken)
@@ -793,7 +793,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-base font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
+                  <span className="text-base font-mono font-semibold text-slate-900 tabular-nums">{g.line}</span>
                 </div>
               </div>
 

@@ -525,7 +525,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2">
                 <RuilStatusBadge swap={swap} stil />
-                <Badge tone="oker" className="tabular-nums">Dienst {info.line}</Badge>
+                <Badge tone="slate" className="tabular-nums">Dienst {info.line}</Badge>
 
                 {info.date && (
                   <Badge tone="slate" className="tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${tijdvak(info.startTime, info.endTime)}` : ''}</Badge>
@@ -868,7 +868,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             </button>
                           </Td>
                           <Td>
-                            <span className="font-semibold text-oker-700 tabular-nums">Dienst {info.line}</span>
+                            <span className="font-semibold text-slate-800 tabular-nums">Dienst {info.line}</span>
                             <span className="text-slate-500 tabular-nums">, {formatDateHuman(info.date)}{info.startTime && info.endTime ? ` (${tijdvak(info.startTime, info.endTime)})` : ''}</span>
                             {isTakeoverSwap(swap) ? (
                               <span className="mt-1 block"><TakeoverBadge compact /></span>
@@ -947,7 +947,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             </span>
                             <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                           </button>
-                          <MicroLabel className="!text-oker-700 mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
+                          <MicroLabel className="mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
                           <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${tijdvak(info.startTime, info.endTime)}` : ''}</p>
                           {isTakeoverSwap(swap) && <div className="mt-1"><TakeoverBadge compact /></div>}
                         </div>
