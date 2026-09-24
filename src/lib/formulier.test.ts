@@ -61,4 +61,16 @@ describe('useVuil', () => {
     rerender({ w: { naam: 'Z' }, k: 2 });
     expect(result.current.vuil).toBe(false);
   });
+
+  it('geen enkele render van een net geopend formulier is vuil (anders vraagt een snelle terugknop om niets)', () => {
+    const gezien: boolean[] = [];
+    const { rerender } = renderHook(({ w, open, k }) => {
+      const { vuil } = useVuil(w, open, k);
+      gezien.push(vuil);
+      return vuil;
+    }, { initialProps: { w: { naam: '' }, open: false, k: null as string | null } });
+    // Openen met een record: waarden, open en sleutel wisselen in één render.
+    rerender({ w: { naam: 'Dienst 2515' }, open: true, k: '3' });
+    expect(gezien.every((v) => v === false)).toBe(true);
+  });
 });

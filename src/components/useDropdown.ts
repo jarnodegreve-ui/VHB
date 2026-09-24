@@ -1,16 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLaag } from '../lib/lagen';
+
+/** Is dit een telefoon (onder `sm`), waar een `mobielVol`-paneel het scherm vult? */
+const opTelefoon = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639.98px)').matches;
 
 /**
  * Gedeeld gedrag van de topbar-uitklapmenu's (UserMenu, WerkvoorraadMenu):
  * open/dicht-state met sluiten op buiten-klik en Escape. Eén bron zodat een
  * volgende popover niet opnieuw dezelfde listeners kopieert.
+ *
+ * Het vlak is een laag in de gedeelde stapel (src/lib/lagen.ts, polish P2a):
+ * Escape sluit alleen het vlak, niet ook een zijpaneel eronder. `mobielVol`:
+ * het vlak vult op de telefoon de breedte (Meldingen, Open taken) en telt dan
+ * als overlay met een eigen history-entry, dus de terugknop sluit eerst het
+ * paneel voor de pagina wisselt. Een klein vlak op desktop krijgt geen entry.
  */
-export function useDropdown() {
+export function useDropdown({ mobielVol = false }: { mobielVol?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const wortel = useRef<HTMLDivElement>(null);
   /** Het zwevende vlak als het in een portal buiten de wortel staat
    *  (`<AnkerPopover vlakRef={vlak}>`): een klik daarin is geen buiten-klik. */
   const vlak = useRef<HTMLDivElement>(null);
+  useLaag({ open, sluit: () => setOpen(false), historie: mobielVol && opTelefoon(), soort: 'popover' });
 
   useEffect(() => {
     if (!open) return;
@@ -19,15 +30,8 @@ export function useDropdown() {
       if (vlak.current?.contains(doel)) return;
       if (wortel.current && !wortel.current.contains(doel)) setOpen(false);
     };
-    const toets = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
     document.addEventListener('pointerdown', buiten);
-    document.addEventListener('keydown', toets);
-    return () => {
-      document.removeEventListener('pointerdown', buiten);
-      document.removeEventListener('keydown', toets);
-    };
+    return () => document.removeEventListener('pointerdown', buiten);
   }, [open]);
 
   return { open, setOpen, wortel, vlak };

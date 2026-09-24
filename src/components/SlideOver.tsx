@@ -4,8 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
-import { useHistoryDismiss } from '../lib/useHistoryDismiss';
-import { vergrendelScroll } from '../lib/scrollSlot';
+import { useLaag } from '../lib/lagen';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 import { SluitContext, useSluitPoort } from './Modal';
 
@@ -53,29 +52,12 @@ export function SlideOver({
   const reduceMotion = useReducedMotion();
   const { sluitVia, dialoog } = useSluitPoort(open, vuil, onNietBewaren);
   const sluit = () => sluitVia(onClose);
-  // Terugknop/swipe-back sluit het paneel i.p.v. de app te verlaten.
-  useHistoryDismiss(open, sluit);
-
-  // Escape sluit — listener alleen actief terwijl het paneel open is.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') sluit();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // `sluit` wisselt per render; open, onClose en vuil zijn de echte inputs.
-  }, [open, onClose, vuil]);
-
-  // Scroll-lock — zelfde reden als in Modal.tsx: de app scrolt niet op <body>
-  // maar in [data-scroll-root] (App.tsx), dus alleen body locken was een no-op
-  // en de pagina rubberbandde achter het paneel mee. Beide locken: body als
-  // vangnet (print, login), de echte scroll-root voor de app zelf.
-  // Via het gedeelde mechanisme (src/lib/scrollSlot.ts).
-  useEffect(() => {
-    if (!open) return;
-    return vergrendelScroll('slideover');
-  }, [open]);
+  // Eén laag in de gedeelde stapel (src/lib/lagen.ts): terugknop,
+  // swipe-back en Escape sluiten het paneel alleen als het bovenaan ligt (een
+  // bevestiging of geschiedenis erboven gaat eerst). De scroll-lock hangt aan
+  // dezelfde levensloop (src/lib/scrollSlot.ts): de app scrolt niet op <body>
+  // maar in [data-scroll-root], en beide gaan op slot.
+  const laag = useLaag({ open, sluit, soort: 'dialoog', scrollSlot: 'slideover' });
 
   // Focus naar het paneel zodra het mount + minimale focus-trap (Tab blijft
   // binnen de dialog, conform aria-modal) + focus-herstel bij sluiten.
@@ -86,7 +68,9 @@ export function SlideOver({
     // mag de positie van de pagina achter het paneel niet veranderen.
     panelRef.current?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab') return;
+      // Alleen de bovenste dialoog vangt Tab: een bevestiging erboven trok
+      // de focus anders terug naar dit paneel.
+      if (event.key !== 'Tab' || !laag.isBovenste('dialoog')) return;
       const panel = panelRef.current;
       if (!panel) return;
       const focusables = panel.querySelectorAll<HTMLElement>(

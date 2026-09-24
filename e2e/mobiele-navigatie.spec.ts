@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ADMIN, CHAUFFEUR, seed } from './helpers';
+import { ADMIN, CHAUFFEUR, historiekOpgeruimd, seed } from './helpers';
 
 /** Mobiele regressies: dashboard-popup, routegebonden detail en dock.
  *  Beide engines draaien de echte gebouwde app met dezelfde API-fixtures. */
@@ -10,9 +10,6 @@ const scrollPositie = (page: Page) => page.locator('[data-scroll-root]').evaluat
   paginaLinks: window.scrollX,
 }));
 
-const historiekOpgeruimd = (page: Page) => expect.poll(
-  () => page.evaluate(() => window.history.state?.vhbOverlay ?? null),
-).toBeNull();
 
 test('dashboard: een tegel openen en sluiten houdt de pagina en het logo op hun plaats', async ({ page }) => {
   await seed(page, { user: ADMIN, view: 'dashboard', thema: 'dark' });

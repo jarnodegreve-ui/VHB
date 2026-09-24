@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ROUTE_EVENT } from './router';
+import { meldUrl } from '../lib/lagen';
 
 // Eigen module (tranche 3B, 23-09): router.ts zit in de startbundel en alleen
 // Rapporten leest de hele querystring; met de sorteerstap erbij ging index
@@ -37,6 +38,7 @@ export function useQueryParams(): [URLSearchParams, (wijziging: Record<string, s
     const opStap = opties.stap !== undefined && (window.history.state as { vhbQueryStap?: unknown } | null)?.vhbQueryStap === opties.stap;
     if (opties.stap !== undefined && !opStap) window.history.pushState({ vhbQueryStap: opties.stap }, '', doel);
     else window.history.replaceState(window.history.state, '', doel);
+    meldUrl();
     window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
   }, []);
   return [huidig, zet];

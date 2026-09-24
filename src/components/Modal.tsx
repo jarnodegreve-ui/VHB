@@ -4,8 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
-import { useHistoryDismiss } from '../lib/useHistoryDismiss';
-import { vergrendelScroll } from '../lib/scrollSlot';
+import { useLaag } from '../lib/lagen';
 import { Button } from './primitives';
 
 /**
@@ -110,12 +109,6 @@ export function useSluitPoort(open: boolean, vuil: boolean, onNietBewaren?: () =
   return { sluitVia, dialoog: <OnbewaardDialoog open={vraag} onVerder={verder} onNietBewaren={nietBewaren} /> };
 }
 
-// Stapel van open modals (module-scope): bij een dialoog bóven een dialoog
-// (bv. verwijder-bevestiging boven Gebruikersbeheer-modal) mogen ESC en de
-// focus-trap alleen op de bovenste werken — anders sloten beide tegelijk en
-// trok de onderliggende trap de focus uit de bevestiging weg.
-const modalStack: symbol[] = [];
-
 /**
  * Portal-rendered modal with backdrop, click-outside-to-close and ESC support.
  *
@@ -142,6 +135,7 @@ export function Modal({
   boven = false,
   vuil = false,
   onNietBewaren,
+  vast = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -161,40 +155,25 @@ export function Modal({
   /** Rendert boven een al openstaande modal (hogere z-index) — voor
    *  bevestigings-dialogen bovenop een formulier-modal. */
   boven?: boolean;
+  /** Tijdens een lopende actie (bevestiging die op de server wacht): de
+   *  terugknop, Escape en de achtergrond sluiten niet; de terugknop laat de
+   *  entry staan, zodat een tweede tik de pagina niet midden in de actie verlaat. */
+  vast?: boolean;
 }) {
-  const idRef = useRef(Symbol('modal'));
   // Vóór élke early return (hooks-volgorde): stond eerst ná `if (!open)
   // return null`, waardoor het openen van een modal React liet crashen op
   // "rendered more hooks" — de e2e-smoke ving dat (PR #403).
   const reduceMotion = useReducedMotion();
-  const isBovenste = () => modalStack[modalStack.length - 1] === idRef.current;
-  // Terugknop/swipe-back sluit de dialoog i.p.v. de app (PWA op Android);
-  // met onbewaarde invoer weigert `sluit` (false) en blijft de entry staan.
+  // Eén laag in de gedeelde stapel (src/lib/lagen.ts): de terugknop en
+  // Escape sluiten alleen de bovenste laag, met onbewaarde invoer of tijdens
+  // een lopende actie weigert `sluit` (false) en blijft de entry staan. De
+  // scroll-lock hangt aan dezelfde levensloop (src/lib/scrollSlot.ts).
   const { sluitVia, dialoog } = useSluitPoort(open, vuil, onNietBewaren);
-  const sluit = () => sluitVia(onClose);
-  useHistoryDismiss(open, sluit);
-
-  useEffect(() => {
-    if (!open) return;
-    const id = idRef.current;
-    modalStack.push(id);
-    return () => {
-      const i = modalStack.indexOf(id);
-      if (i !== -1) modalStack.splice(i, 1);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      // Alleen de bovenste dialoog sluit op ESC — anders klapte een
-      // bevestiging én zijn onderliggende formulier in één toets dicht.
-      if (event.key === 'Escape' && isBovenste()) sluit();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // `sluit` wisselt per render; open, onClose en vuil zijn de echte inputs.
-  }, [open, onClose, vuil]);
+  const sluit = () => (vast ? false : sluitVia(onClose));
+  const laag = useLaag({ open, sluit, soort: 'dialoog', scrollSlot: 'modal' });
+  // Focus-trap alleen in de bovenste dialoog (Modal of SlideOver); een menu
+  // of datumkiezer erboven heeft zijn eigen toetsen.
+  const isBovenste = () => laag.isBovenste('dialoog');
 
   // Dialoog-semantiek + focus-beheer (zelfde patroon als SlideOver): focus
   // het paneel bij openen, houd Tab binnen de dialoog (aria-modal), en zet
@@ -242,18 +221,6 @@ export function Modal({
     };
   }, [open]);
 
-  // Scroll-lock. De app scrolt niet op <body> maar in een eigen container
-  // ([data-scroll-root] in App.tsx) — alleen body locken was daardoor een
-  // no-op en de pagina rubberbandde achter de modal mee zodra je binnenin
-  // het einde van een lijst bereikte. Beide locken: body als vangnet (print,
-  // login), de echte scroll-root voor de app zelf.
-  // Via het gedeelde mechanisme (src/lib/scrollSlot.ts): een modal boven
-  // een zijpaneel mag bij het sluiten geen verouderde waarde terugzetten.
-  useEffect(() => {
-    if (!open) return;
-    return vergrendelScroll('modal');
-  }, [open]);
-
   // iOS: het toetsenbord bedekt anders de onderkant van de modal (o.a. de
   // opslaan-knop), want de layout-viewport krimpt niet mee.
   const keyboardInset = useKeyboardInset(open);
@@ -277,7 +244,7 @@ export function Modal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
       exit={{ opacity: 0, pointerEvents: 'none', transition: { duration: reduceMotion ? 0 : DUR.fast, ease: EASE } }}
-      onClick={dismissOnBackdrop ? () => sluit() : undefined}
+      onClick={dismissOnBackdrop && !vast ? () => sluit() : undefined}
       // Op mobile: minimale padding zodat de modal bijna full-screen kan,
       // en respecteer safe-area (notch + home-indicator).
       // Op md+: 1rem padding rondom de modal.

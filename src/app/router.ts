@@ -4,7 +4,7 @@ import { bekendeView, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
 import { leesStartschermLokaal } from '../lib/startscherm';
 import { annuleerHerstel, bewaarScroll, leesScroll, planHerstel, scrollSleutel } from '../lib/scrollGeheugen';
-import { herstelOverlayUrl } from '../lib/useHistoryDismiss';
+import { meldUrl, verwerkOverlayPop } from '../lib/lagen';
 
 /**
  * Lichtgewicht router op de History API — geen library, geen <Route>-boom.
@@ -134,10 +134,12 @@ function zorgVoorScrollHerstel() {
   if (popLuisteraarActief || typeof window === 'undefined') return;
   popLuisteraarActief = true;
   huidigPad = window.location.pathname;
-  window.addEventListener('popstate', () => {
+  window.addEventListener('popstate', (e) => {
     // Deze gedeelde luisteraar staat vóór alle useRoute-luisteraars. Eerst
-    // de gesloten overlay opruimen, anders lezen zij nog de oude detail-URL.
-    herstelOverlayUrl();
+    // de lagen (src/lib/lagen.ts): een gesloten overlay opruimen of een
+    // weigerende laag (onbewaarde invoer) zijn URL teruggeven, anders lezen
+    // zij nog de oude detail-URL of wisselen ze van scherm.
+    verwerkOverlayPop(e);
     const nieuwPad = window.location.pathname;
     if (nieuwPad === huidigPad) return; // overlay-entry (useHistoryDismiss): geen schermwissel
     onthoudPositieVanHuidig();
@@ -203,6 +205,7 @@ export function navigeer(view: View, opts: { params?: readonly string[]; replace
     else window.history.pushState(null, '', pad);
   }
   huidigPad = pad;
+  meldUrl();
   onthoud(view);
   // `melden` leest de URL op het moment zelf, dus een uitgestelde melding die
   // door een volgende navigatie is ingehaald doet geen kwaad.
@@ -318,6 +321,7 @@ export function useQueryParam(naam: string): [string, (waarde: string) => void] 
     const url = new URL(window.location.href);
     if (waarde) url.searchParams.set(naam, waarde); else url.searchParams.delete(naam);
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    meldUrl();
     window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
   }, [naam]);
   return [huidig, zet];
