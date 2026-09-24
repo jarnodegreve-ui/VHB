@@ -18,7 +18,7 @@ export function TweeStapsScherm({ stap, factorId, onKlaar, onLogout }: {
   return (
     <CarbonScherm className="gap-6 p-6">
       <div className="w-full max-w-sm">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-400 ring-1 ring-white/10">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-slate-300 ring-1 ring-white/10">
           <ShieldCheck size={24} />
         </div>
         <h1 className="mt-4 text-center text-xl font-black tracking-[-0.015em] text-white">

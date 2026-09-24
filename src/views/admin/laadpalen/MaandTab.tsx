@@ -178,7 +178,7 @@ export function MaandTab({ keuze, zetKeuze, onDag, onGeladen, onVersheid }: {
           {/* KPI's: de vier getallen die je uit een maand wilt halen, elk met
               het verschil t.o.v. de vorige periode. */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <OpsStat icon={<Zap size={16} />} tone="oker" label="Verbruik" text={fmtKwh(t.kwh)} suffix={' kWh'} sub={`${vorigeLabel}: ${tekstKwhHeel(data.vorige.kwh)}`} />
+            <OpsStat icon={<Zap size={16} />} tone="slate" label="Verbruik" text={fmtKwh(t.kwh)} suffix={' kWh'} sub={`${vorigeLabel}: ${tekstKwhHeel(data.vorige.kwh)}`} />
             <OpsStat icon={<Gauge size={16} />} tone="slate" label="Piekvermogen" text={t.piekKw !== null ? formatGetal(Math.round(t.piekKw)) : '—'} suffix={t.piekKw !== null ? ' kW' : ''} sub={t.piekDag ? `${dagKort(t.piekDag)} om ${uurLabel(t.piekTs)}${typeof t.piekCharging === 'number' ? ` · ${t.piekCharging} bussen` : ''}` : 'geen kwartiermeting in deze periode'} />
             <OpsStat icon={<BatteryCharging size={16} />} tone="slate" label="Laadsessies" value={t.laadbeurten} sub={t.mislukt > 0 ? `${t.mislukt} mislukt · ${t.sessies} aankoppelingen totaal` : `${t.sessies} aankoppelingen totaal, niets mislukt`} />
             <OpsStat icon={<CalendarDays size={16} />} tone="slate" label="Per laaddag" text={fmtKwh(t.gemPerLaaddag)} suffix={' kWh'} sub={t.hoogsteDag ? `hoogste dag: ${dagKort(t.hoogsteDag.dag)}, ${tekstKwhHeel(t.hoogsteDag.kwh)}` : `${t.laaddagen} laaddagen`} />
@@ -366,10 +366,10 @@ export function MaandTab({ keuze, zetKeuze, onDag, onGeladen, onVersheid }: {
                           </button>
                           {d.dag === data.huidigeDag && <Badge tone="oker" stil className="ml-2">vandaag</Badge>}
                         </Td>
-                        <Td num className={cn('font-semibold', isTopDag ? 'text-oker-700' : d.kwh > 0 ? 'text-slate-800' : 'text-slate-500')}>{toekomst ? '' : fmtKwh(d.kwh)}</Td>
+                        <Td num className={cn('font-semibold', isTopDag ? 'text-amber-700' : d.kwh > 0 ? 'text-slate-800' : 'text-slate-500')}>{toekomst ? '' : fmtKwh(d.kwh)}</Td>
                         <Td num>{toekomst ? '' : d.laadbeurten}</Td>
                         <Td num className={cn('max-md:hidden', d.mislukt > 0 && 'font-semibold text-red-700')}>{toekomst ? '' : d.mislukt || '—'}</Td>
-                        <Td num className={cn('font-semibold', isPiekDag ? 'text-oker-700' : 'text-slate-800')}>{d.piekKw !== null ? formatGetal(Math.round(d.piekKw)) : toekomst ? '' : '—'}</Td>
+                        <Td num className={cn('font-semibold', isPiekDag ? 'text-amber-700' : 'text-slate-800')}>{d.piekKw !== null ? formatGetal(Math.round(d.piekKw)) : toekomst ? '' : '—'}</Td>
                         <Td num className="max-md:hidden">{d.piekTs ? uurLabel(d.piekTs) : ''}</Td>
                         <Td num className="max-lg:hidden">{d.piekCharging ?? ''}</Td>
                       </tr>

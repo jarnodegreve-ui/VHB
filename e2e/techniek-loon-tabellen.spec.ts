@@ -22,8 +22,8 @@ type Scherm = { naam: string; view: string; pad: string; titel: string; tab?: st
 const gisteren = dayOffset(-1);
 const SCHERMEN: Scherm[] = [
   { naam: 'Voertuigen', view: 'voertuigen', pad: '/techniek/voertuigen', titel: 'Voertuigen' },
-  { naam: 'Dagadministratie techniek, lijst', view: 'werkprestaties', pad: '/techniek/prestaties', titel: 'Dagadministratie' },
-  { naam: 'Dagadministratie techniek, rapport', view: 'werkprestaties', pad: '/techniek/prestaties', titel: 'Dagadministratie', tab: 'Rapport' },
+  { naam: 'Werkprestaties, lijst', view: 'werkprestaties', pad: '/techniek/prestaties', titel: 'Werkprestaties' },
+  { naam: 'Werkprestaties, rapport', view: 'werkprestaties', pad: '/techniek/prestaties', titel: 'Werkprestaties', tab: 'Rapport' },
   { naam: 'Looncontrole, maand', view: 'looncontrole', pad: '/beheer/looncontrole', titel: 'Looncontrole' },
   { naam: 'Looncontrole, looncodes', view: 'looncontrole', pad: '/beheer/looncontrole', titel: 'Looncontrole', tab: 'Looncodes' },
   { naam: 'Looncontrole, medewerkers', view: 'looncontrole', pad: '/beheer/looncontrole', titel: 'Looncontrole', tab: 'Medewerkers' },

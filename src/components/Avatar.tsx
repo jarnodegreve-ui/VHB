@@ -14,8 +14,8 @@ import { cn } from '../lib/ui';
  * Tekst 800 op de 12 %-tint haalt in licht ≥ 8:1 (gemeten op de gedempte
  * juweeltinten van golf 2).
  */
+// Geen oker (F, 24-09): goud is voor de topbar-avatar ("jij") en de drie taken van goud.
 export const AVATAR_TINTEN = [
-  'bg-oker-500/12 text-oker-800',
   'bg-emerald-500/12 text-emerald-800',
   'bg-blue-500/12 text-blue-800',
   'bg-rose-500/12 text-rose-800',
