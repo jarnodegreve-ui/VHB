@@ -337,7 +337,6 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     {/* data-vt-record: DetailPaneel leest er de richting van een wissel uit. */}
                     <h3 className="text-row-title" data-vt-record={div.id}>{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
-                    <Badge tone="slate">{lijnLabel(div.line)}</Badge>
                     {expired && <Badge tone="slate">Verlopen</Badge>}
                     {div.pdfUrl && <Badge tone="slate" icon={<FileText size={12} />}>PDF</Badge>}
                   </div>

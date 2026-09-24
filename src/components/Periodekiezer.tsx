@@ -48,9 +48,10 @@ export function Periodekiezer({ waarde, onChange, vandaag, className, snelkeuze 
   const maanden = heleMaanden ? maandOpties(vandaag, waarde) : [];
   return (
     // Op de telefoon: snelkeuze over de volle breedte, de datums eronder naast
-    // elkaar. Vanaf sm drie velden op één regel.
-    <div className={cn('grid grid-cols-2 gap-3 sm:grid-cols-[minmax(10rem,1.2fr)_minmax(9rem,1fr)_minmax(9rem,1fr)]', className)}>
-      <Field label="Periode" className="col-span-2 sm:col-span-1">
+    // elkaar; onder 400 px onder elkaar, want twee velden van ±155 pt kapten
+    // "31/12/2026" af (P6, 24-09). Vanaf sm drie velden op één regel.
+    <div className={cn('grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-[minmax(10rem,1.2fr)_minmax(9rem,1fr)_minmax(9rem,1fr)]', className)}>
+      <Field label="Periode" className="min-[400px]:col-span-2 sm:col-span-1">
         {({ id }) => (
           <Select id={id} value={keuze} onChange={(e) => kies(e.target.value as PeriodeKeuze)}>
             {periodeKeuzesVoor(snelkeuze).map((k) => <option key={k.waarde} value={k.waarde}>{k.label}</option>)}

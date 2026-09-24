@@ -771,7 +771,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
             <TableToolbar
               zoek={userSearch}
               onZoek={setUserSearch}
-              placeholder="Zoek naam, nummer of e-mail…"
+              placeholder="Zoek naam of nummer…"
               telling={`${sortedUsers.length} van ${zichtbareUsers.length}`}
               dichtheid={voorkeur.dichtheid}
               kolommen={voorkeur.kolommen}

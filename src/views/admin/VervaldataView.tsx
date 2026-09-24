@@ -199,6 +199,8 @@ export function VervaldataView({ users }: { users: User[] }) {
     <VervalPil key={soort} datum={rij.datums[soort]} dagen={rij.dagen[soort]} label={metLabel ? label : undefined} />
   );
 
+  const foutZonderData = !!zl.fout && expiries.length === 0;
+
   return (
     <PageShell>
       <PageHeader
@@ -208,7 +210,12 @@ export function VervaldataView({ users }: { users: User[] }) {
       />
 
       {zl.fout && expiries.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
+      {/* Laadfout zonder gegevens: de fout bovenaan en geen tegels, want "0 ·
+          niets verlopen" stelde ten onrechte gerust terwijl de Foutkaart onder
+          de vouw stond (P6, 24-09). */}
+      {foutZonderData && <Foutkaart boodschap={zl.fout!} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
+      {!foutZonderData && (<>
       {/* Ops-tegels (zelfde als de status-strip op het dashboard): vaste
           twee-regel-labelzone, dus cijfers en subteksten van alle vier de
           tegels liggen op exact dezelfde lijn. Klik op een tegel = filter. */}
@@ -251,9 +258,7 @@ export function VervaldataView({ users }: { users: User[] }) {
         />
       </div>
 
-      {zl.fout && expiries.length === 0 ? (
-        <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
-      ) : zl.laden && expiries.length === 0 ? (
+      {zl.laden && expiries.length === 0 ? (
         <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" role="status" aria-busy="true" aria-label="Vervaldata worden geladen">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
@@ -360,6 +365,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           )}
         </TableShell>
       )}
+      </>)}
 
       <Modal open={!!bewerkt} onClose={sluitBewerken} vuil={vuil} maxWidth="sm" ariaLabel={bewerkt ? `Vervaldata van ${bewerkt.name}` : 'Vervaldata'}>
         {bewerkt && (

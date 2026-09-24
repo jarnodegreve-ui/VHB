@@ -1260,7 +1260,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           className={cnCard(!isTakeover)}
                         >
                           <span className="min-w-0 flex items-start gap-2.5">
-                            <ArrowLeftRight size={16} className="mt-0.5 shrink-0 text-oker-500" />
+                            <ArrowLeftRight size={16} className="mt-0.5 shrink-0 text-slate-500" />
                             <span className="min-w-0">
                               <span className="block text-sm font-bold text-slate-800">Ruilen (1-op-1)</span>
                               <span className="block text-xs font-medium text-slate-500">Jij neemt een dienst of vrije dag van {voornaam} over</span>
