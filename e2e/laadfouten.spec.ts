@@ -10,6 +10,8 @@ import { ADMIN, seed } from './helpers';
  * Retry laadt de collectie en herstelt het scherm.
  */
 
+/** De Foutkaart (role=alert) heeft haar eigen retry; de laadfout-toast van de
+ *  datalaag ook, dus klik altijd die van de kaart. */
 function breekbaar(page: Page, pad: RegExp) {
   const s = { kapot: true };
   void page.route(pad, (r) => (s.kapot && r.request().method() === 'GET'
@@ -28,7 +30,7 @@ test('Dienstoverzicht: laadfout = Foutkaart met retry, geen lege staat en geen N
   await expect(page.getByText('0 van 0')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Nieuwe dienst' })).toHaveCount(0);
   s.kapot = false;
-  await page.getByRole('button', { name: 'Opnieuw proberen' }).click();
+  await page.getByRole('alert').getByRole('button', { name: 'Opnieuw proberen' }).click();
   await expect(page.getByRole('button', { name: 'Dienst 2515 openen' }).filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
   await expect(kaart).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Nieuwe dienst' })).toBeVisible();
@@ -44,7 +46,7 @@ test('Planningscodes: laadfout = Foutkaart, Opslaan en Code toevoegen uit tot de
   await expect(page.getByRole('button', { name: 'Opslaan' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Code toevoegen' }).first()).toBeDisabled();
   s.kapot = false;
-  await page.getByRole('button', { name: 'Opnieuw proberen' }).click();
+  await page.getByRole('alert').getByRole('button', { name: 'Opnieuw proberen' }).click();
   await expect(kaart).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Opslaan' })).toBeEnabled();
   // Na de retry: de kopknop én (bij een lege collectie) die in de lege staat.
