@@ -5,6 +5,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { DetailPaneel, MasterDetail, useDetailPoort, useStandaardKeuze } from './DetailPaneel';
 import { SluitKnop } from './Modal';
 import { useVuil } from '../lib/formulier';
+import { navigeer } from '../app/router';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -234,3 +235,78 @@ describe('DetailPaneel op desktop: onbewaarde invoer', () => {
     expect(gekozenNu()).toBe('b');
   });
 });
+
+/** Paneel dat alleen bestaat terwijl het open is (verlofbeoordeling boven de kalender). */
+function Beoordeling({ onClose }: { onClose: () => void }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <DetailPaneel open={open} onClose={() => { setOpen(false); onClose(); }} title="Aanvraag" verbergLeeg footer={<span>Goedkeuren</span>}>
+      <p>inhoud</p>
+    </DetailPaneel>
+  );
+}
+
+describe('DetailPaneel op desktop: sluiten zonder te beslissen (polish P2b)', () => {
+  it('verbergLeeg: het kruisje sluit het paneel', async () => {
+    const onClose = vi.fn();
+    await monteer(<Beoordeling onClose={onClose} />);
+    await act(async () => { screen.getByRole('button', { name: 'Sluiten' }).click(); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('inhoud')).toBeNull();
+  });
+
+  it('verbergLeeg: Escape sluit het paneel', async () => {
+    const onClose = vi.fn();
+    await monteer(<Beoordeling onClose={onClose} />);
+    await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('een paneel naast de lijst (zonder verbergLeeg) krijgt geen kruisje', async () => {
+    await monteer(<Bewerkharnas />);
+    expect(screen.queryByRole('button', { name: 'Sluiten' })).toBeNull();
+  });
+});
+
+describe('DetailPaneel op desktop: de pagina verlaten met onbewaarde invoer (polish P2b)', () => {
+  beforeEach(() => {
+    window.history.pushState(null, '', '/vorige');
+    window.history.pushState(null, '', '/beheer/omleidingen');
+  });
+  afterEach(async () => {
+    for (const r of gemonteerd) act(() => r.unmount());
+    gemonteerd = [];
+    await vi.waitFor(() => expect((window.history.state as { vhbOverlay?: unknown } | null)?.vhbOverlay).toBeUndefined());
+  });
+
+  it('de terugknop vraagt eerst; Verder bewerken blijft, Niet bewaren gaat echt terug', async () => {
+    await monteer(<Bewerkharnas />);
+    await typ('half getypt');
+    // Zolang het formulier vuil is, houdt een bewakingsentry de terugknop vast.
+    const bewaking = (window.history.state as { vhbOverlay?: unknown }).vhbOverlay;
+    expect(typeof bewaking).toBe('string');
+    await act(async () => { window.history.back(); });
+    await vi.waitFor(() => expect(vraagOpen()).toBe(true));
+    expect(window.location.pathname).toBe('/beheer/omleidingen');
+    await knopMetTekst('Verder bewerken');
+    expect(tekstveld().value).toBe('half getypt');
+    // Wachten tot de entry van de vraag is opgeruimd (een mens drukt niet
+    // binnen dezelfde taak opnieuw op terug).
+    await vi.waitFor(() => expect((window.history.state as { vhbOverlay?: unknown }).vhbOverlay).toBe(bewaking));
+    await act(async () => { window.history.back(); });
+    await vi.waitFor(() => expect(vraagOpen()).toBe(true));
+    await knopMetTekst('Niet bewaren');
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/vorige'));
+  });
+
+  it('naar een ander scherm navigeren vraagt eerst; Niet bewaren voert de wissel uit', async () => {
+    await monteer(<Bewerkharnas />);
+    await typ('half getypt');
+    await act(async () => { navigeer('rooster'); });
+    expect(vraagOpen()).toBe(true);
+    expect(window.location.pathname).toBe('/beheer/omleidingen');
+    await knopMetTekst('Niet bewaren');
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/rooster'));
+  });
+});
+

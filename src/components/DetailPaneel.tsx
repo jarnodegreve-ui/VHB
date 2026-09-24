@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { overgangActief, recordNaam } from '../lib/overgang';
 import { useMinWidth } from '../lib/useMinWidth';
@@ -7,6 +8,9 @@ import { RichtingWissel } from './RichtingWissel';
 import { SlideOver } from './SlideOver';
 import { SluitContext, useSluitPoort, type SluitVia } from './Modal';
 import { EmptyState } from './ui';
+import { IconButton } from './primitives';
+import { naOpruimen, useLaag } from '../lib/lagen';
+import { zetNavigatieBewaker } from '../app/router';
 
 /**
  * Hét detailpaneel van het portaal — één patroon voor "iets uit een lijst
@@ -16,11 +20,15 @@ import { EmptyState } from './ui';
  * blijft plakken. Views vertakken niet meer zelf op het breekpunt: ze geven
  * `open`, kop, inhoud en eventueel een footer met acties.
  *
- * Desktop heeft bewust geen sluitkruis: het paneel staat gewoon naast de
- * lijst. Een andere rij kiezen wisselt de inhoud; acties in de footer
- * (opslaan, beslissen, annuleren) roepen `onClose` aan waar dat past, en
- * het paneel valt dan terug op de lege staat ("Kies een …") — één rustige
- * compacte rij, geen hoge kaart (afwerkingsronde 04-09, nr. 2 en 4).
+ * Desktop: een paneel náást de lijst heeft geen sluitkruis nodig; een
+ * andere rij kiezen wisselt de inhoud, acties in de footer (opslaan,
+ * beslissen, annuleren) roepen `onClose` aan waar dat past, en het paneel
+ * valt dan terug op de lege staat ("Kies een …"), één rustige compacte rij
+ * (afwerkingsronde 04-09, nr. 2 en 4). Een paneel dat alleen bestaat
+ * terwijl het open is (`verbergLeeg`: de verlofbeoordeling boven de
+ * kalender, de dag in de verlofkalender) krijgt wél een kruisje en sluit op
+ * Escape (polish P2b, regel Jarno 24-09): een wachtende aanvraag bekijken
+ * zonder te beslissen moest ook kunnen.
  */
 const LG = 1024;
 
@@ -58,6 +66,24 @@ export function useDetailPoort(vuil: boolean): DetailPoort {
   const inline = useMinWidth(LG);
   const actief = inline && vuil;
   const { sluitVia, dialoog } = useSluitPoort(true, actief);
+  // De pagina verlaten met onbewaarde invoer (polish P2b, regel Jarno 24-09):
+  // zolang het formulier vuil is, houdt een onzichtbare laag een eigen
+  // history-entry vast. De terugknop raakt eerst die en vraagt dezelfde
+  // "Wijzigingen niet bewaren?"; een wissel naar een ander scherm (zijbalk,
+  // link) vraagt het via de navigatiebewaking van de router. "Niet bewaren"
+  // laat de bewaking los en voert de wissel uit zodra de historiek schoon is.
+  const [vrij, setVrij] = useState(false);
+  useEffect(() => { if (!actief) setVrij(false); }, [actief]);
+  const bewaakt = actief && !vrij;
+  const verlaat = (doorgaan: () => void) => sluitVia(() => { setVrij(true); naOpruimen(doorgaan); });
+  const verlaatRef = useRef(verlaat);
+  verlaatRef.current = verlaat;
+  useLaag({ open: bewaakt, sluit: () => verlaat(() => window.history.back()), escape: false, soort: 'bewaking' });
+  useEffect(() => {
+    if (!bewaakt) return;
+    zetNavigatieBewaker((doorgaan) => verlaatRef.current(doorgaan));
+    return () => zetNavigatieBewaker(null);
+  }, [bewaakt]);
   return { via: sluitVia, dialoog, vuil: actief };
 }
 
@@ -238,6 +264,7 @@ export function DetailPaneel({
   plakkend = true,
   vuil = false,
   poort,
+  sluitKnop = verbergLeeg,
   className,
 }: {
   open: boolean;
@@ -283,9 +310,18 @@ export function DetailPaneel({
    *  `SluitKnop` in de inhoud of footer door de poort gaan. Rijkeuze en
    *  recordwissel in de view lopen via `poort.via`. */
   poort?: DetailPoort;
+  /** Desktop: kruisje in de kop en Escape sluiten het paneel. Standaard aan
+   *  voor een paneel dat alleen bestaat terwijl het open is (`verbergLeeg`). */
+  sluitKnop?: boolean;
   className?: string;
 }) {
   const inline = useMinWidth(LG);
+  // Kruisje en Escape op desktop gaan door de sluitpoort van het scherm
+  // (onbewaarde invoer vraagt eerst); Escape als laag in de gedeelde stapel,
+  // dus een modal erboven gaat eerst dicht. Geen eigen history-entry: het
+  // paneel staat in de pagina.
+  const sluitInline = () => (poort ? poort.via(onClose) : (onClose(), true));
+  useLaag({ open: inline && open && sluitKnop, sluit: sluitInline, historie: false, soort: 'paneel' });
   const wortel = useRef<HTMLDivElement>(null);
   const kopRef = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -385,7 +421,12 @@ export function DetailPaneel({
             </div>
             {subtitle ? <p className={cn('mt-0.5 text-md text-slate-500', titelTerugloop ? '[overflow-wrap:anywhere]' : 'truncate')}>{subtitle}</p> : null}
           </div>
-          {acties ? <div className="-my-1 flex shrink-0 items-center gap-1">{acties}</div> : null}
+          {acties || sluitKnop ? (
+            <div className="-my-1 flex shrink-0 items-center gap-1">
+              {acties}
+              {sluitKnop ? <IconButton label="Sluiten" variant="ghost" size="sm" onClick={() => sluitInline()}><X size={16} /></IconButton> : null}
+            </div>
+          ) : null}
         </div>
         {/* relative: de vertrekkende inhoud (popLayout) blijft binnen de
             scroll-container staan i.p.v. op de kaart te springen. */}

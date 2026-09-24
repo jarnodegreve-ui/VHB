@@ -45,7 +45,7 @@ type Laag = {
 };
 
 /** Een entry van ons in de browserhistoriek, onderaan eerst. */
-type Entry = { id: string; nr: number; urlOnder: string; levend: boolean };
+type Entry = { id: string; nr: number; urlOnder: string; levend: boolean; ouder?: string };
 
 let teller = 0;
 let laatsteNr = 0;
@@ -92,7 +92,9 @@ export const openLagen = (): string[] => stapel.map((l) => l.soort);
  */
 export function naOpruimen(fn: () => void) {
   daarna.push(fn);
-  planOpruimen();
+  // Eén taak later plannen: de lagen die door dezelfde actie sluiten, moeten
+  // eerst hun opruiming aanmelden (React-commit en effect-opruiming).
+  setTimeout(planOpruimen, 0);
 }
 
 function draaiDaarna() {
@@ -123,7 +125,11 @@ function ruimOp() {
   while (i - n >= 0 && !entries[i - n].levend) n++;
   if (n === 0) { draaiDaarna(); return; }
   const weg = entries.slice(i - n + 1, i + 1);
-  onderweg = { ids: new Set(weg.map((e) => e.id)), urlBijSluiten: hier(), urlOnder: weg[0].urlOnder };
+  let urlOnder = weg[0].urlOnder;
+  // Het record van een koude start is gesloten (de URL staat al op de lijst):
+  // de recordstap eronder gaat mee, anders bleef er een tweede lijst staan.
+  if (weg[0].ouder && hier() === weg[0].ouder) { n++; urlOnder = weg[0].ouder; }
+  onderweg = { ids: new Set(weg.map((e) => e.id)), urlBijSluiten: hier(), urlOnder };
   zorgVoorLuisteraars();
   window.history.go(-n);
 }
@@ -149,16 +155,30 @@ export function verwerkOverlayPop(e?: Event) {
       window.history.replaceState(window.history.state, '', o.urlBijSluiten);
     }
     meldUrl();
-    // Intussen nog iets gesloten? Dan opnieuw; anders is het klaar.
-    if (entries.some((x) => !x.levend)) planOpruimen();
-    else draaiDaarna();
-    return;
+    // Een terugknop die tegelijk met onze stap kwam, kan de browser in één
+    // traversal samenvoegen: staan er nog levende entries boven de plek waar
+    // we landden, dan verwerken we die hieronder als een gewone terugstap.
+    const nrNu = typeof staat?.vhbOverlay === 'string' && typeof staat.vhbLaagNr === 'number' ? staat.vhbLaagNr : -1;
+    if (!entries.some((x) => x.levend && x.nr > nrNu)) {
+      // Intussen nog iets gesloten? Dan opnieuw; anders is het klaar.
+      if (entries.some((x) => !x.levend)) planOpruimen();
+      else draaiDaarna();
+      return;
+    }
   }
   const nr = typeof staat?.vhbOverlay === 'string' && typeof staat.vhbLaagNr === 'number' ? staat.vhbLaagNr : -1;
   // Entries boven de plek waar we nu staan zijn weg (terug, of meerdere
   // stappen tegelijk); van boven naar onder verwerken.
   const weg = entries.filter((x) => x.nr > nr).reverse();
   for (let j = entries.length - 1; j >= 0; j--) if (entries[j].nr > nr) entries.splice(j, 1);
+  // Alleen entries van net gesloten lagen weg, nog vóór ons opruimen liep
+  // (een terugknop binnen dezelfde taak als het sluiten): die terugstap was
+  // voor de gebruiker onzichtbaar. Hij geldt dan voor de volgende laag.
+  if (weg.length > 0 && weg.every((x) => !x.levend) && opruimTimer !== null) {
+    meldUrl();
+    window.history.back();
+    return;
+  }
   const lagen = weg.filter((x) => x.levend).map((x) => stapel.find((l) => l.id === x.id)).filter((l): l is Laag => !!l);
   for (let k = 0; k < lagen.length; k++) {
     const laag = lagen[k];
@@ -237,9 +257,15 @@ export function useLaag({ open, sluit, historie = true, escape = true, soort = '
       const urlOnder = wees
         ? (bekend !== -1 ? entries[bekend].urlOnder : typeof basis.vhbOverlayTerug === 'string' ? basis.vhbOverlayTerug : hier())
         : hier();
-      const staat = { ...basis, vhbOverlay: id, vhbLaagNr: volgNr(), vhbOverlayTerug: urlOnder };
+      const staat: Record<string, unknown> = { ...basis, vhbOverlay: id, vhbLaagNr: volgNr(), vhbOverlayTerug: urlOnder };
+      // Het merkteken van de recordstap hoort bij die entry, niet bij de onze.
+      delete staat.vhbOuderStap;
       laag.staat = staat;
-      const entry: Entry = { id, nr: staat.vhbLaagNr, urlOnder, levend: true };
+            // Ligt eronder de recordstap van een koude start (router.ts,
+      // zetOuderStap), dan onthouden we de lijst eronder: sluit deze laag
+      // terwijl de URL al op de lijst staat, dan gaat die stap mee weg.
+      const ouder = !wees && basis.vhbOuderStap === true && typeof basis.vhbOverlayTerug === 'string' ? basis.vhbOverlayTerug : undefined;
+      const entry: Entry = { id, nr: staat.vhbLaagNr as number, urlOnder, levend: true, ouder };
       if (wees) {
         window.history.replaceState(staat, '');
         if (bekend !== -1) entries[bekend] = entry;

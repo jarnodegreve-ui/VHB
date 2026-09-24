@@ -3,7 +3,7 @@ import { Copy, Check } from 'lucide-react';
 import { Button, IconButton } from './primitives';
 import { Field, Input } from './Field';
 import { BrandSpinner } from './BrandSpinner';
-import { bevestigCode, startInschrijving, type Inschrijving } from '../lib/tweeStaps';
+import { bevestigCode, startInschrijving, type Inschrijving } from '../lib/tweeStapsBeheer';
 import { cn } from '../lib/ui';
 
 /**

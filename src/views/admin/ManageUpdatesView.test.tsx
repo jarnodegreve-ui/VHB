@@ -84,7 +84,7 @@ describe('Beheer updates op desktop: onbewaarde invoer', () => {
     { id: 'u2', date: '2/9/2026', title: 'Tweede', content: 'Tekst twee', category: 'algemeen' as const },
   ];
 
-  it('een andere update kiezen of Annuleren vraagt eerst; Verder bewerken houdt de invoer', async () => {
+  it('een andere update kiezen of Annuleren vraagt eerst; Verder bewerken houdt de invoer, Niet bewaren sluit', async () => {
     desktop = true;
     render(<ManageUpdatesView {...props()} updates={UPDATES} />);
     const titel = await screen.findByLabelText('Titel') as HTMLInputElement;
@@ -99,7 +99,10 @@ describe('Beheer updates op desktop: onbewaarde invoer', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Annuleren' })); });
     expect(screen.getByRole('dialog', { name: 'Wijzigingen niet bewaren?' })).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Niet bewaren' })); });
-    expect((screen.getByLabelText('Titel') as HTMLInputElement).value).toBe('Eerste');
+    // Annuleren sluit het paneel, ook op desktop (polish P2b, regel Jarno
+    // 24-09), en de voorselectie kiest niet meteen weer het eerste item.
+    await waitFor(() => expect(screen.queryByLabelText('Titel')).toBeNull());
+    expect(screen.getByText('Kies een update om te bewerken, of maak een nieuwe.')).toBeTruthy();
 
     // Schoon formulier: de wissel gaat zonder vraag (de inhoud wisselt met
     // een korte overgang, vandaar waitFor).
