@@ -21,7 +21,14 @@ export function useDropdown({ mobielVol = false }: { mobielVol?: boolean } = {})
   /** Het zwevende vlak als het in een portal buiten de wortel staat
    *  (`<AnkerPopover vlakRef={vlak}>`): een klik daarin is geen buiten-klik. */
   const vlak = useRef<HTMLDivElement>(null);
-  useLaag({ open, sluit: () => setOpen(false), historie: mobielVol && opTelefoon(), soort: 'popover' });
+  // Sluiten via Escape of de terugknop (de laag) geeft de focus terug aan de
+  // knop die het vlak opende (a11y-rest, 24-09); een buiten-klik niet, die
+  // heeft zijn eigen doel.
+  const sluitMetFocus = () => {
+    wortel.current?.querySelector<HTMLElement>('[aria-expanded="true"]')?.focus({ preventScroll: true });
+    setOpen(false);
+  };
+  useLaag({ open, sluit: sluitMetFocus, historie: mobielVol && opTelefoon(), soort: 'popover' });
 
   useEffect(() => {
     if (!open) return;

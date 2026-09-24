@@ -833,7 +833,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             <TableShell>
               {/* Desktop table */}
               <div className="hidden md:block">
-                <table className="w-full text-left">
+                <table aria-label="Dienstruilen" className="w-full text-left">
                   <thead className="bg-surface-soft border-b border-hairline-subtle">
                     <tr>
                       <Th>Chauffeur</Th>

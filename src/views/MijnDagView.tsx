@@ -359,10 +359,11 @@ export function MijnDagView({
                       />
                     </span>
                   )}
-                  {/* Gereden deel gedempt, maar niet onder 4,5:1: op opacity-60
-                      zakte de loop-chip naar 3,57 en faalde Lighthouse-a11y in
-                      CI zodra een dienst van vandaag al voorbij was (07-09). */}
-                  <div className={cn('min-w-0 flex-1', gereden && 'opacity-75')}>
+                  {/* Gereden deel gedempt via de kleur (slate-500 op tekst, stip
+                      slate-300), niet via opacity: op opacity-75 zakte de tijd
+                      naar 2,9:1 (a11y-rest 24-09; op opacity-60 faalde Lighthouse
+                      al op 07-09). Wat je moet kunnen lezen blijft ≥ 4,5:1. */}
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       {/* Groot en mono: tijden zijn het instrumentpaneel, leesbaar op armlengte. */}
                       <p className={cn('text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] lg:text-xl', gereden ? 'text-slate-500' : 'text-slate-900')}>

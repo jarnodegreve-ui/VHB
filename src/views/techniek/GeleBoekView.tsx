@@ -224,7 +224,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
           ) : (
             <>
               <div className="hidden md:block">
-                <table className="w-full text-left border-collapse">
+                <table aria-label="Gele boek" className="w-full text-left border-collapse">
                   <StickyThead>
                     <tr>
                       <SortTh kolom="bus" sort={sort}>Bus</SortTh>
