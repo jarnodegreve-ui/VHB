@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { vergrendelScroll } from '../lib/scrollSlot';
 import { IconButton } from './primitives';
 
 /**
@@ -43,16 +44,12 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, ariaLa
 
   useEffect(() => {
     if (!open) return;
-    const scrollRoot = document.querySelector<HTMLElement>('[data-scroll-root]');
-    const vorigeBody = document.body.style.overflow;
-    const vorigeRoot = scrollRoot?.style.overflow ?? '';
-    document.body.style.overflow = 'hidden';
-    if (scrollRoot) scrollRoot.style.overflow = 'hidden';
+    // Scroll-lock via het gedeelde mechanisme (src/lib/scrollSlot.ts).
+    const vrijgeven = vergrendelScroll('sheet');
     const eerder = document.activeElement as HTMLElement | null;
     paneel.current?.focus({ preventScroll: true });
     return () => {
-      document.body.style.overflow = vorigeBody;
-      if (scrollRoot) scrollRoot.style.overflow = vorigeRoot;
+      vrijgeven();
       eerder?.focus?.({ preventScroll: true });
     };
   }, [open]);

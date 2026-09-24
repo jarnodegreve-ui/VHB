@@ -25,6 +25,7 @@ import { View, User, isStaf } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, LOGIN_MELDING_KEY, vergeetEffectiefThema, wisOfflineCaches, type ToastEventDetail } from './lib/ui';
 import { apiFetch, isToestelGeblokkeerd, vernieuwSessie } from './lib/api';
+import { vergrendelScroll } from './lib/scrollSlot';
 import { laadfoutOnderdrukt } from './app/laadfout';
 import { lazyWithRetry, metRetry } from './lib/lazyRetry';
 import { WARMUP_VIEWS, prefetchView, warmViews } from './app/viewLoaders';
@@ -273,13 +274,11 @@ export default function App() {
 
   // Body-scroll lock wanneer de mobiele sidebar open is — anders kan iOS
   // Safari de aside-inhoud "rubber-banden" of de hoofdpagina laten meebewegen.
+  // Via het gedeelde mechanisme (src/lib/scrollSlot.ts), samen met de
+  // overlays: zo zet geen enkele laag bij het sluiten een verouderde waarde terug.
   useEffect(() => {
     if (!isSidebarOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return vergrendelScroll('zijbalk');
   }, [isSidebarOpen]);
 
   // Op mobiel is de dichte sidebar alleen visueel weggeschoven

@@ -5,6 +5,7 @@ import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { vergrendelScroll } from '../lib/scrollSlot';
 import { Button } from './primitives';
 
 /**
@@ -246,17 +247,11 @@ export function Modal({
   // no-op en de pagina rubberbandde achter de modal mee zodra je binnenin
   // het einde van een lijst bereikte. Beide locken: body als vangnet (print,
   // login), de echte scroll-root voor de app zelf.
+  // Via het gedeelde mechanisme (src/lib/scrollSlot.ts): een modal boven
+  // een zijpaneel mag bij het sluiten geen verouderde waarde terugzetten.
   useEffect(() => {
     if (!open) return;
-    const scrollRoot = document.querySelector<HTMLElement>('[data-scroll-root]');
-    const previousBody = document.body.style.overflow;
-    const previousRoot = scrollRoot?.style.overflow ?? '';
-    document.body.style.overflow = 'hidden';
-    if (scrollRoot) scrollRoot.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousBody;
-      if (scrollRoot) scrollRoot.style.overflow = previousRoot;
-    };
+    return vergrendelScroll('modal');
   }, [open]);
 
   // iOS: het toetsenbord bedekt anders de onderkant van de modal (o.a. de
