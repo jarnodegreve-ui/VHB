@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { SwapRequest } from '../../types';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, apiLijst } from '../../lib/api';
 import { notify } from '../../lib/ui';
 import { useCollectieState, type DataCtx } from './kern';
 import { laatSchrijffout } from '../../lib/foutenLui';
@@ -18,17 +18,18 @@ export function useRuilData(ctx: DataCtx) {
 
   const fetchSwaps = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/swaps', { accessToken });
+      const { response, data } = await apiLijst('/api/swaps', { accessToken });
       ctx.noteerAntwoord(response);
       ctx.captureRevision('swaps', response);
-      const data = await response.json();
       if (data && Array.isArray(data)) {
         zetSwapsUitAntwoord(response, data, data);
         ctx.markCollectionLoaded('swaps');
+        ctx.noteerCollectie('swaps', true);
       }
     } catch (error) {
       console.error('Error fetching swaps:', error);
       meldLaadfout('de dienstruilen', error);
+      ctx.noteerCollectie('swaps', false);
     } finally {
       setSwapsGeladen(true);
     }

@@ -56,8 +56,12 @@ export function useAppData({
   // dan de kern, dan de domeinen. Kruisverbanden lopen via de ctx:
   // verlof.reportSick → planning.refreshCoverageGaps, communicatie.
   // sendUrgentEmail → mensen.users.
-  const activiteit = useActiviteitData({ session, currentUser, currentView });
+  // De kern ontstaat pas ná activiteit (kruisverband), dus het log meldt zijn
+  // laadstaat via een ref die hieronder op de kern wordt gezet.
+  const noteerRef = useRef<(key: string, geslaagd: boolean) => void>(() => {});
+  const activiteit = useActiviteitData({ session, currentUser, currentView, noteerCollectie: (k, f) => noteerRef.current(k, f) });
   const ctx = useDataKern({ session, currentUser, showToast, meldLaadfout, fetchActivityLog: activiteit.fetchActivityLog });
+  noteerRef.current = ctx.noteerCollectie;
   const planning = usePlanningData(ctx);
   const verlof = useVerlofData({ ...ctx, refreshCoverageGaps: planning.refreshCoverageGaps });
   const ruil = useRuilData(ctx);
@@ -86,24 +90,24 @@ export function useAppData({
 
   /** Eén uitgestelde collectie ophalen; een tweede vraag terwijl ze loopt
    *  krijgt dezelfde belofte (boot-start en schermwissel botsen zo niet). */
+  const haalCollectie = (sleutel: Uitgesteld, accessToken: string, userId: string): Promise<void> => {
+    switch (sleutel) {
+      case 'services': return planning.fetchServices(accessToken);
+      case 'planningCodes': return planning.fetchPlanningCodes(accessToken);
+      case 'planningMatrix': return planning.fetchPlanningMatrix(accessToken);
+      case 'activityLog': return activiteit.fetchActivityLog(accessToken);
+      case 'users': return mensen.fetchUsers(accessToken);
+      case 'swaps': return ruil.fetchSwaps(accessToken);
+      case 'documenten': return mensen.fetchUnseenDocuments(userId, accessToken);
+    }
+  };
   const laadUitgesteld = (sleutel: Uitgesteld): Promise<void> => {
     const beurt = laadbeurtRef.current;
     if (!beurt) return Promise.resolve();
     const bezig = uitgesteldBezigRef.current.get(sleutel);
     if (bezig) return bezig;
     const { accessToken, userId } = beurt;
-    const haal = (): Promise<void> => {
-      switch (sleutel) {
-        case 'services': return planning.fetchServices(accessToken);
-        case 'planningCodes': return planning.fetchPlanningCodes(accessToken);
-        case 'planningMatrix': return planning.fetchPlanningMatrix(accessToken);
-        case 'activityLog': return activiteit.fetchActivityLog(accessToken);
-        case 'users': return mensen.fetchUsers(accessToken);
-        case 'swaps': return ruil.fetchSwaps(accessToken);
-        case 'documenten': return mensen.fetchUnseenDocuments(userId, accessToken);
-      }
-    };
-    const belofte = haal().finally(() => {
+    const belofte = haalCollectie(sleutel, accessToken, userId).finally(() => {
       uitgesteldBezigRef.current.delete(sleutel);
       // Intussen uitgelogd: het late antwoord mag geen data of vlag van de
       // vorige gebruiker achterlaten voor wie daarna inlogt.
@@ -238,17 +242,21 @@ export function useAppData({
     planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, aanwezigheidLocatieMigratie, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen, planningTot,
     servicesGeladen, planningMatrixGeladen, planningCodesGeladen, activityLogGeladen, usersGeladen, swapsGeladen, documentenGeladen,
+    collectieStaat: ctx.collectieStaat,
   }), [
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
     planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, aanwezigheidLocatieMigratie, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen, planningTot,
     servicesGeladen, planningMatrixGeladen, planningCodesGeladen, activityLogGeladen, usersGeladen, swapsGeladen, documentenGeladen,
+    ctx.collectieStaat,
   ]);
 
   // Acties: blijvende identiteiten die altijd de laatste implementatie aanroepen.
   const acties = useStabieleActies({
     setIsInitialLoad, setLastSyncedAt,
-    loadAppData, refreshAll, resetAll,
+    // herlaadCollectie: retry vanuit een Foutkaart (useCollectieStaat), zelfde
+    // lader en dezelfde bundeling van een lopend verzoek als de laadbeurt.
+    loadAppData, refreshAll, resetAll, herlaadCollectie: laadUitgesteld,
     fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, fetchUnseenDocuments, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog, fetchLoginActivity,
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,

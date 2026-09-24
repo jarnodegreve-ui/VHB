@@ -5,7 +5,7 @@ import { AanwezigOpScherm } from '../components/AanwezigOpScherm';
 import { dienstoverzichtCsv } from '../lib/dienstoverzichtExport';
 import { isValidBusvakTime, normalizeTimeString } from '../lib/shiftTime';
 import { notify, downloadBlob } from '../lib/ui';
-import { ConfirmationModal, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, Foutkaart, PageHeader, PageShell } from '../components/ui';
 import { Button, IconButton } from '../components/primitives';
 import { ActieMenu } from '../components/ActieMenu';
 import { Field, Input } from '../components/Field';
@@ -17,6 +17,7 @@ import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { InfoTip } from '../components/InfoTip';
 import { RecordOnbekend } from '../components/RecordOnbekend';
 import { useRecordLink } from '../app/useRecordLink';
+import { useCollectieStaat } from '../app/collectieStaat';
 import { ROOSTER_MELDING_RUST_MINUTEN } from '../../shared/roosterMelding';
 import { vandaagBrussel } from '../lib/brussel';
 import { DienstTabel, DienstZijvak, useDienstLijst } from '../components/dienstoverzicht/DienstTabel';
@@ -63,6 +64,10 @@ const TIJD_TITEL = 'UU:MM, na middernacht als 24:00+ (bv. 26:16)';
 export function ServicesView({ services, onSave, canAdminOverride }: { services: Service[]; onSave: Opslaan; canAdminOverride: boolean }) {
   const lijst = useDienstLijst(services);
   const link = useRecordLink('dienstoverzicht', services);
+  // Laadstaat van de collectie (release-safety, 24-09): een mislukte eerste
+  // laad is een Foutkaart met retry, nooit "Nog geen diensten" met een knop
+  // Nieuwe dienst; dat lokte dubbele diensten uit.
+  const laad = useCollectieStaat('services');
   const [nieuw, setNieuw] = useState(false);
   const bewerkte = link.staat === 'gevonden' ? link.record : null;
   const paneelOpen = nieuw || bewerkte !== null;
@@ -261,15 +266,19 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
               label="Meer acties"
               align="left"
               items={[
-                ...(canAdminOverride ? [{ label: isImporting ? 'Bezig met importeren…' : 'Excel importeren', icon: <Upload size={16} />, disabled: isImporting, onClick: () => importRef.current?.click() }] : []),
+                ...(canAdminOverride ? [{ label: isImporting ? 'Bezig met importeren…' : 'Excel importeren', icon: <Upload size={16} />, disabled: isImporting || laad.foutZonderData, onClick: () => importRef.current?.click() }] : []),
                 { label: 'CSV downloaden', icon: <Download size={16} />, disabled: services.length === 0, onClick: downloadCSV },
               ]}
             />
-            <Button variant="primary" icon={<Plus size={16} />} onClick={openNieuw}>Nieuwe dienst</Button>
+            {!laad.foutZonderData && <Button variant="primary" icon={<Plus size={16} />} onClick={openNieuw}>Nieuwe dienst</Button>}
           </>
         )}
       />
 
+      {laad.foutZonderData ? (
+        <Foutkaart boodschap={laad.fout ?? 'Het dienstoverzicht kon niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />
+      ) : (<>
+      {laad.fout && <Foutkaart compact boodschap={laad.fout} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />}
       <DienstTabel
         services={services}
         lijst={lijst}
@@ -281,6 +290,7 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
         leegActie={<Button variant="secondary" icon={<Plus size={16} />} onClick={openNieuw}>Nieuwe dienst</Button>}
         zijvak={zijvak}
       />
+      </>)}
 
       {/* Het detailpaneel: op elke breedte een SlideOver (terugknop en Escape
           sluiten, useHistoryDismiss). Sluiten haalt het id uit de URL; de

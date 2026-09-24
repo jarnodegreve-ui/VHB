@@ -98,7 +98,13 @@ const DEELBUDGET_KB = {
   // doordat de werkvoorraad-berekening, de agenda-export (roosterIcs +
   // shared/ics) en de avatar-stapel lui laden (zie App.tsx); budget mee omlaag
   // zodat die winst niet stil wegsijpelt, met dezelfde ±2 kB marge.
-  index: 74,
+  // 24-09 (release-safety): 74 → 75. De datalaag houdt nu per collectie een
+  // reactieve laadstaat bij (kern `collectieStaat`, `apiLijst` in de zeven
+  // uitgestelde fetchers) zodat een laadfout nooit als lege staat verschijnt;
+  // dat kost ±0,35 kB in de entry (73,68 → 74,04 lokaal). Onderzocht en
+  // getrimd (foutteksten naar de view-hook, geen aparte retry-wrapper); wat
+  // rest is het mechanisme zelf, geen polish. Marge blijft ±1 kB.
+  index: 75,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB

@@ -166,6 +166,14 @@ export type DataCtx = DataBasis & {
   /** false (+ fout-toast) zolang de collectie nooit geladen is — opslaan
    *  vanuit een lege staat zou de server alles laten verwijderen. */
   guardCollectionLoaded: (key: string, label: string) => boolean;
+  /** Reactieve laadstaat per collectie (release-safety, 24-09): een fetcher
+   *  meldt `geslaagd` na een gelukte GET en `fout` na een mislukte. Views
+   *  lezen dit via `useCollectieStaat` en tonen bij een fout zonder
+   *  geslaagde laad een Foutkaart in plaats van een lege staat. */
+  collectieStaat: Record<string, CollectieStaat>;
+  /** Uitkomst van een GET melden: geslaagd of mislukt. De tekst van de
+   *  melding hoort bij de view (useCollectieStaat), niet in de startbundel. */
+  noteerCollectie: (key: string, geslaagd: boolean) => void;
   /** Collectie-revisie uit de responsheader bewaren. */
   captureRevision: (key: string, response: Response) => void;
   /** Header met de laatst geladen collectie-revisie (leeg als onbekend). */
@@ -189,6 +197,12 @@ export type DataCtx = DataBasis & {
   clearLoadedCollections: () => void;
 };
 
+/** Wat een view over een collectie mag weten: is ze ooit met succes geladen
+ *  en is de laatste laad mislukt. `mislukt` zonder `geslaagd` = nooit gelukt,
+ *  dus leeg betekent dan niets. */
+export type CollectieStaat = { geslaagd: boolean; mislukt: boolean };
+export const COLLECTIE_ONBEKEND: CollectieStaat = { geslaagd: false, mislukt: false };
+
 export const replaceById = <T extends { id: string }>(prev: T[], record: T): T[] =>
   prev.map((r) => (r.id === record.id ? record : r));
 export const withoutId = <T extends { id: string }>(prev: T[], id: string): T[] => prev.filter((r) => r.id !== id);
@@ -209,8 +223,20 @@ export function useDataKern(basis: DataBasis): DataCtx {
     showToast(`${label} is nog niet geladen, opslaan is geblokkeerd om dataverlies te voorkomen. Vernieuw de pagina en probeer het opnieuw.`, 'error');
     return false;
   };
+  // Reactieve tegenhanger van de ref hierboven: de ref beschermt het
+  // schrijven, deze staat stuurt wat de view toont (Foutkaart + retry, of
+  // Opslaan uit). Eén object per collectie, alleen vervangen bij een wissel.
+  const [collectieStaat, setCollectieStaat] = useState<Record<string, CollectieStaat>>({});
+  const noteerCollectie = useCallback((key: string, geslaagd: boolean) => {
+    setCollectieStaat((vorige) => {
+      const oud = vorige[key] ?? COLLECTIE_ONBEKEND;
+      const g = geslaagd || oud.geslaagd;
+      return oud.geslaagd === g && oud.mislukt === !geslaagd ? vorige : { ...vorige, [key]: { geslaagd: g, mislukt: !geslaagd } };
+    });
+  }, []);
   const clearLoadedCollections = () => {
     loadedCollectionsRef.current.clear();
+    setCollectieStaat({});
   };
 
   // Herkomst van de antwoorden in de lopende dataload: komt er ook maar één
@@ -393,6 +419,8 @@ export function useDataKern(basis: DataBasis): DataCtx {
     beginBronMeting,
     sluitBronMeting,
     guardCollectionLoaded,
+    collectieStaat,
+    noteerCollectie,
     captureRevision,
     revisionHeader,
     stripRecordRevisions,

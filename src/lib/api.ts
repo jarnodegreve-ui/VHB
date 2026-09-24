@@ -58,23 +58,37 @@ export async function apiFetch(input: RequestInfo | URL, init: ApiFetchInit = {}
   return verstuur(input, rest, accessToken ?? (await huidigToken()), false, false, stil);
 }
 
+/** Een niet-ok respons als Error met de servermelding en de status erop,
+ *  zodat meldSchrijffout (src/lib/fouten.ts) de reden van de server en de
+ *  juiste vervolgstap kan kiezen. Ook voor de collectie-fetchers van de
+ *  datalaag: een 500 met JSON-body is een laadfout, geen "lege lijst". */
+export async function foutUitAntwoord(response: Response): Promise<Error & { status: number }> {
+  let detail = '';
+  try {
+    const json = await response.json();
+    detail = json?.error || json?.details || '';
+  } catch {
+    // negeer parse-fouten — gebruik standaard message
+  }
+  return Object.assign(new Error(detail || `Er ging iets mis (code ${response.status}). Probeer het opnieuw.`), { status: response.status });
+}
+
+/** GET van een collectie voor de datalaag: gooit bij een niet-ok respons
+ *  (`foutUitAntwoord`) en geeft respons én JSON terug, zodat een fetcher de
+ *  headers (ETag, revisie, herkomst) én de lijst heeft. Een 500 met JSON-body
+ *  is zo een laadfout, geen "lege lijst". */
+export async function apiLijst<T = unknown>(url: string, init: ApiFetchInit = {}): Promise<{ response: Response; data: T }> {
+  const response = await apiFetch(url, init);
+  if (!response.ok) throw await foutUitAntwoord(response);
+  return { response, data: (await response.json()) as T };
+}
+
 /** apiFetch + JSON: gooit bij een niet-ok respons een Error met de
  *  servermelding, geeft undefined bij 204. Voor lib-helpers en losse
  *  componenten die alleen de data willen. */
 export async function apiJson<T = unknown>(url: string, init: ApiFetchInit = {}): Promise<T> {
   const response = await apiFetch(url, init);
-  if (!response.ok) {
-    let detail = '';
-    try {
-      const json = await response.json();
-      detail = json?.error || json?.details || '';
-    } catch {
-      // negeer parse-fouten — gebruik standaard message
-    }
-    // De status gaat mee op de fout, zodat meldSchrijffout (src/lib/fouten.ts)
-    // de reden van de server en de juiste vervolgstap kan kiezen.
-    throw Object.assign(new Error(detail || `Er ging iets mis (code ${response.status}). Probeer het opnieuw.`), { status: response.status });
-  }
+  if (!response.ok) throw await foutUitAntwoord(response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
