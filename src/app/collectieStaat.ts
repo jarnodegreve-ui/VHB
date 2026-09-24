@@ -3,7 +3,18 @@ import { useOptioneleAppData } from './AppDataContext';
 import { COLLECTIE_ONBEKEND, type CollectieStaat } from './data/kern';
 import type { Uitgesteld } from './data/poort';
 
-const GELADEN: CollectieStaat = { geslaagd: true, fout: null };
+const GELADEN: CollectieStaat = { geslaagd: true, mislukt: false };
+
+/** De boodschap van de Foutkaart per collectie (hier, niet in de startbundel). */
+const BOODSCHAP: Record<Uitgesteld, string> = {
+  services: 'Het dienstoverzicht kon niet laden.',
+  planningCodes: 'De planningscodes konden niet laden.',
+  planningMatrix: 'De planningsmatrix kon niet laden.',
+  activityLog: 'Het activiteitenlog kon niet laden.',
+  users: 'De gebruikerslijst kon niet laden.',
+  swaps: 'De dienstruilen konden niet laden.',
+  documenten: 'De documenten konden niet laden.',
+};
 
 /**
  * Hét patroon voor een scherm dat op een collectie uit de datalaag draait
@@ -17,10 +28,12 @@ const GELADEN: CollectieStaat = { geslaagd: true, fout: null };
  *   een Foutkaart met `opnieuw`, geen lege staat, geen create-acties.
  * - `geslaagd`: er is minstens één keer met succes geladen; opslaan mag.
  *   (De datalaag bewaakt dat zelf ook nog met `guardCollectionLoaded`.)
- * - `fout` mét `geslaagd`: een latere verversing mislukte; de gegevens zijn
+ * - `mislukt` mét `geslaagd`: een latere verversing mislukte; de gegevens zijn
  *   er nog, toon hooguit een compacte Foutkaart erboven.
  */
 export function useCollectieStaat(sleutel: Uitgesteld): CollectieStaat & {
+  /** De boodschap voor de Foutkaart, alleen als de laatste laad mislukte. */
+  fout: string | null;
   foutZonderData: boolean;
   bezig: boolean;
   opnieuw: () => Promise<void>;
@@ -36,5 +49,5 @@ export function useCollectieStaat(sleutel: Uitgesteld): CollectieStaat & {
     setBezig(true);
     try { await herlaad(sleutel); } finally { setBezig(false); }
   }, [herlaad, sleutel]);
-  return { ...staat, foutZonderData: staat.fout !== null && !staat.geslaagd, bezig, opnieuw };
+  return { ...staat, fout: staat.mislukt ? BOODSCHAP[sleutel] : null, foutZonderData: staat.mislukt && !staat.geslaagd, bezig, opnieuw };
 }

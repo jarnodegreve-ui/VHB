@@ -58,7 +58,7 @@ export function useAppData({
   // sendUrgentEmail → mensen.users.
   // De kern ontstaat pas ná activiteit (kruisverband), dus het log meldt zijn
   // laadstaat via een ref die hieronder op de kern wordt gezet.
-  const noteerRef = useRef<(key: string, fout: string | null) => void>(() => {});
+  const noteerRef = useRef<(key: string, geslaagd: boolean) => void>(() => {});
   const activiteit = useActiviteitData({ session, currentUser, currentView, noteerCollectie: (k, f) => noteerRef.current(k, f) });
   const ctx = useDataKern({ session, currentUser, showToast, meldLaadfout, fetchActivityLog: activiteit.fetchActivityLog });
   noteerRef.current = ctx.noteerCollectie;
@@ -207,10 +207,6 @@ export function useAppData({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentView]);
 
-  /** Retry vanuit een Foutkaart (useCollectieStaat): dezelfde lader als de
-   *  uitgestelde laadbeurt, met dezelfde bundeling van een lopend verzoek. */
-  const herlaadCollectie = (sleutel: Uitgesteld): Promise<void> => laadUitgesteld(sleutel);
-
   const refreshAll = () =>
     currentUser && session?.access_token ? loadAppData(currentUser, session.access_token, { wachtOpAlles: true }) : Promise.resolve();
 
@@ -258,7 +254,9 @@ export function useAppData({
   // Acties: blijvende identiteiten die altijd de laatste implementatie aanroepen.
   const acties = useStabieleActies({
     setIsInitialLoad, setLastSyncedAt,
-    loadAppData, refreshAll, resetAll, herlaadCollectie,
+    // herlaadCollectie: retry vanuit een Foutkaart (useCollectieStaat), zelfde
+    // lader en dezelfde bundeling van een lopend verzoek als de laadbeurt.
+    loadAppData, refreshAll, resetAll, herlaadCollectie: laadUitgesteld,
     fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, fetchUnseenDocuments, markDocumentsSeen,
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog, fetchLoginActivity,
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,

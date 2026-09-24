@@ -73,6 +73,16 @@ export async function foutUitAntwoord(response: Response): Promise<Error & { sta
   return Object.assign(new Error(detail || `Er ging iets mis (code ${response.status}). Probeer het opnieuw.`), { status: response.status });
 }
 
+/** GET van een collectie voor de datalaag: gooit bij een niet-ok respons
+ *  (`foutUitAntwoord`) en geeft respons én JSON terug, zodat een fetcher de
+ *  headers (ETag, revisie, herkomst) én de lijst heeft. Een 500 met JSON-body
+ *  is zo een laadfout, geen "lege lijst". */
+export async function apiLijst<T = unknown>(url: string, init: ApiFetchInit = {}): Promise<{ response: Response; data: T }> {
+  const response = await apiFetch(url, init);
+  if (!response.ok) throw await foutUitAntwoord(response);
+  return { response, data: (await response.json()) as T };
+}
+
 /** apiFetch + JSON: gooit bij een niet-ok respons een Error met de
  *  servermelding, geeft undefined bij 204. Voor lib-helpers en losse
  *  componenten die alleen de data willen. */

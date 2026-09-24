@@ -156,16 +156,16 @@ describe('laadstaat per collectie (noteerCollectie)', () => {
     }
     act(() => root.render(<Proef />));
     expect(ctx!.collectieStaat.services).toBeUndefined();
-    act(() => ctx!.noteerCollectie('services', 'Het dienstoverzicht kon niet laden.'));
-    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: false, fout: 'Het dienstoverzicht kon niet laden.' });
-    act(() => ctx!.noteerCollectie('services', null));
-    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: true, fout: null });
+    act(() => ctx!.noteerCollectie('services', false));
+    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: false, mislukt: true });
+    act(() => ctx!.noteerCollectie('services', true));
+    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: true, mislukt: false });
     // Een verversing die mislukt nadat er ooit geladen is: de gegevens zijn er nog.
-    act(() => ctx!.noteerCollectie('services', 'Even niet bereikbaar.'));
-    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: true, fout: 'Even niet bereikbaar.' });
+    act(() => ctx!.noteerCollectie('services', false));
+    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: true, mislukt: true });
     // Zelfde uitkomst opnieuw melden geeft hetzelfde object (geen re-render van elke lezer).
     const vorige = ctx!.collectieStaat;
-    act(() => ctx!.noteerCollectie('services', 'Even niet bereikbaar.'));
+    act(() => ctx!.noteerCollectie('services', false));
     expect(ctx!.collectieStaat).toBe(vorige);
     act(() => ctx!.clearLoadedCollections());
     expect(ctx!.collectieStaat).toEqual({});

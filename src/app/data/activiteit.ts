@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { ActivityLogEntry, User, View } from '../../types';
 import type { AanwezigheidSessie } from '../../lib/aanwezigheid';
-import { apiFetch, foutUitAntwoord } from '../../lib/api';
+import { apiFetch, apiLijst } from '../../lib/api';
 import { useCollectieState } from './kern';
 
 /**
@@ -16,7 +16,7 @@ export function useActiviteitData({ session, currentUser, currentView, noteerCol
   currentUser: User | null;
   currentView: View;
   /** Laadstaat melden aan de kern (die ontstaat pas ná deze hook, zie useAppData). */
-  noteerCollectie: (key: string, fout: string | null) => void;
+  noteerCollectie: (key: string, geslaagd: boolean) => void;
 }) {
   const [activityLog, setActivityLog, zetLogUitAntwoord] = useCollectieState<ActivityLogEntry[]>([]);
   // Uitgesteld (admin laadt het log ná de poort): waar zodra de eerste
@@ -31,16 +31,14 @@ export function useActiviteitData({ session, currentUser, currentView, noteerCol
 
   const fetchActivityLog = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/activity', { accessToken });
-      if (!response.ok) throw await foutUitAntwoord(response);
-      const data = await response.json();
+      const { response, data } = await apiLijst('/api/activity', { accessToken });
       if (data && Array.isArray(data)) {
         zetLogUitAntwoord(response, data, data);
-        noteerCollectie('activityLog', null);
+        noteerCollectie('activityLog', true);
       }
     } catch (error) {
       console.error('Error fetching activity log:', error);
-      noteerCollectie('activityLog', 'Het activiteitenlog kon niet laden.');
+      noteerCollectie('activityLog', false);
     } finally {
       setActivityLogGeladen(true);
     }

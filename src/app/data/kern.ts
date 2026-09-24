@@ -171,8 +171,9 @@ export type DataCtx = DataBasis & {
    *  lezen dit via `useCollectieStaat` en tonen bij een fout zonder
    *  geslaagde laad een Foutkaart in plaats van een lege staat. */
   collectieStaat: Record<string, CollectieStaat>;
-  /** Uitkomst van een GET melden: `null` = geslaagd, tekst = laadfout. */
-  noteerCollectie: (key: string, fout: string | null) => void;
+  /** Uitkomst van een GET melden: geslaagd of mislukt. De tekst van de
+   *  melding hoort bij de view (useCollectieStaat), niet in de startbundel. */
+  noteerCollectie: (key: string, geslaagd: boolean) => void;
   /** Collectie-revisie uit de responsheader bewaren. */
   captureRevision: (key: string, response: Response) => void;
   /** Header met de laatst geladen collectie-revisie (leeg als onbekend). */
@@ -197,10 +198,10 @@ export type DataCtx = DataBasis & {
 };
 
 /** Wat een view over een collectie mag weten: is ze ooit met succes geladen
- *  en wat was de laatste laadfout. `fout` zonder `geslaagd` = nooit gelukt,
+ *  en is de laatste laad mislukt. `mislukt` zonder `geslaagd` = nooit gelukt,
  *  dus leeg betekent dan niets. */
-export type CollectieStaat = { geslaagd: boolean; fout: string | null };
-export const COLLECTIE_ONBEKEND: CollectieStaat = { geslaagd: false, fout: null };
+export type CollectieStaat = { geslaagd: boolean; mislukt: boolean };
+export const COLLECTIE_ONBEKEND: CollectieStaat = { geslaagd: false, mislukt: false };
 
 export const replaceById = <T extends { id: string }>(prev: T[], record: T): T[] =>
   prev.map((r) => (r.id === record.id ? record : r));
@@ -226,12 +227,11 @@ export function useDataKern(basis: DataBasis): DataCtx {
   // schrijven, deze staat stuurt wat de view toont (Foutkaart + retry, of
   // Opslaan uit). Eén object per collectie, alleen vervangen bij een wissel.
   const [collectieStaat, setCollectieStaat] = useState<Record<string, CollectieStaat>>({});
-  const noteerCollectie = useCallback((key: string, fout: string | null) => {
+  const noteerCollectie = useCallback((key: string, geslaagd: boolean) => {
     setCollectieStaat((vorige) => {
       const oud = vorige[key] ?? COLLECTIE_ONBEKEND;
-      const nieuw: CollectieStaat = fout === null ? { geslaagd: true, fout: null } : { geslaagd: oud.geslaagd, fout };
-      if (oud.geslaagd === nieuw.geslaagd && oud.fout === nieuw.fout) return vorige;
-      return { ...vorige, [key]: nieuw };
+      const g = geslaagd || oud.geslaagd;
+      return oud.geslaagd === g && oud.mislukt === !geslaagd ? vorige : { ...vorige, [key]: { geslaagd: g, mislukt: !geslaagd } };
     });
   }, []);
   const clearLoadedCollections = () => {
