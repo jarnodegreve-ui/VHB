@@ -222,7 +222,7 @@ function OngedaanToast({ toast, reduced, klok, pauzeer, hervat, onDismiss }: {
           variant="ghost"
           size="sm"
           onClick={() => onDismiss(toast.id)}
-          className="-m-1.5 text-slate-400 sm:pointer-fine:-m-0"
+          className="-m-1.5 text-slate-500 sm:pointer-fine:-m-0"
         >
           <X size={16} />
         </IconButton>
@@ -327,7 +327,7 @@ export function ToastStack({
                   variant="ghost"
                   size="sm"
                   onClick={() => onDismiss(toast.id)}
-                  className="-m-1.5 text-slate-400 sm:pointer-fine:-m-0"
+                  className="-m-1.5 text-slate-500 sm:pointer-fine:-m-0"
                 >
                   <X size={16} />
                 </IconButton>

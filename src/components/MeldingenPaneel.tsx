@@ -112,7 +112,7 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
                   label="Melding verwijderen"
                   variant="ghost"
                   size="sm"
-                  className="mt-1 mr-1 shrink-0 text-slate-400 opacity-100 hover:text-slate-800 pointer-fine:opacity-0 pointer-fine:group-hover/rij:opacity-100 pointer-fine:focus-visible:opacity-100"
+                  className="mt-1 mr-1 shrink-0 text-slate-500 opacity-100 hover:text-slate-800 pointer-fine:opacity-0 pointer-fine:group-hover/rij:opacity-100 pointer-fine:focus-visible:opacity-100"
                   onClick={() => verwijderMeldingMetOngedaan(m.id, verwijderMelding, herstelMelding)}
                 >
                   <X size={14} />

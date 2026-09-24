@@ -148,7 +148,7 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
                             label="Melding verwijderen"
                             variant="ghost"
                             size="sm"
-                            className="text-slate-400 opacity-100 hover:text-slate-800 pointer-fine:opacity-0 pointer-fine:group-hover/rij:opacity-100 pointer-fine:focus-visible:opacity-100"
+                            className="text-slate-500 opacity-100 hover:text-slate-800 pointer-fine:opacity-0 pointer-fine:group-hover/rij:opacity-100 pointer-fine:focus-visible:opacity-100"
                             onClick={() => verwijderMeldingMetOngedaan(m.id, verwijderMelding, herstelMelding)}
                           >
                             <X size={16} />

@@ -287,7 +287,7 @@ export function SortTh<K extends string>({ kolom, sort, children, className, tit
   );
 }
 
-/** Selectievakje in huisstijl (oker vinkje op carbon), 44 px raakvlak op touch. */
+/** Selectievakje in huisstijl (aangevinkt = neutrale keuzetoestand `bg-keuze`, P1), 44 px raakvlak op touch. */
 export function Checkbox({ checked, onChange, label, indeterminate, className, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'type'> & {
   checked: boolean;
   onChange: (next: boolean) => void;
