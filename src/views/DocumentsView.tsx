@@ -76,7 +76,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
 
   return (
     <PageShell>
-      <PageHeader title="Documenten" />
+      <PageHeader title="Documenten" description="Documenten die de planning met je deelt." />
 
       {verval.length > 0 && (
         <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden">

@@ -429,7 +429,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                         className="group inline-flex max-w-full items-center gap-1.5 text-left transition-colors hover:text-slate-900"
                       >
                         <span className="truncate">{u.name}</span>
-                        <Printer size={12} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />
+                        <Printer size={14} className="shrink-0 text-slate-500 transition-colors group-hover:text-slate-700" />
                       </button>
                     </Td>
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
@@ -492,10 +492,10 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
                 <button
                   type="button"
                   onClick={() => openJaaroverzicht(u.id)}
-                  className="group inline-flex min-w-0 items-center gap-1.5 text-left text-sm font-semibold text-slate-800"
+                  className="group inline-flex min-h-11 min-w-0 items-center gap-1.5 text-left text-sm font-semibold text-slate-800"
                 >
                   <span className="truncate">{u.name}</span>
-                  <Printer size={12} className="shrink-0 text-slate-300" />
+                  <Printer size={14} className="shrink-0 text-slate-500 transition-colors group-hover:text-slate-700" />
                 </button>
                 {uniqueLeaves.length > 0 && (
                   <MicroLabel className="shrink-0">
