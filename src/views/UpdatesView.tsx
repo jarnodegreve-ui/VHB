@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Check } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
@@ -53,6 +53,12 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
   // (bericht verwijderd), dan valt het paneel terug op het eerste. Mobiel:
   // alleen wat de chauffeur zelf opentikte.
   const gekozen = updates.find((u) => u.id === selectedId) ?? null;
+  // K (24-09): een dringend bericht dat nog niet bevestigd is staat bovenaan,
+  // daarna alles van nieuw naar oud (de lijst kwam van oud naar nieuw binnen).
+  const gesorteerd = useMemo(() => {
+    const dringendOpen = (u: Update) => u.isUrgent && !gelezen.has(u.id);
+    return [...updates].sort((a, b) => Number(dringendOpen(b)) - Number(dringendOpen(a)) || b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  }, [updates, gelezen]);
   const detail = inline ? gekozen ?? updates[0] ?? null : gekozen;
 
   const markeer = (id: string) => {
@@ -103,7 +109,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
             // streep blijft alleen voor wat dringend is; een grijze streep bij
             // elk gewoon bericht zei niets.
             <LijstKaart aria-label="Berichten">
-              {updates.map((update) => (
+              {gesorteerd.map((update) => (
                 <RecordRij
                   key={update.id}
                   titel={update.title}
