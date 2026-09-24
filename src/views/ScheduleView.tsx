@@ -647,7 +647,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
     <>
       {/* Desktop tabel */}
       <TableShell className={compact ? 'hidden' : 'hidden md:block'}>
-        <table className="w-full text-left border-collapse">
+        <table aria-label="Rooster" className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/50">
               <Th className="px-6 py-4">Datum</Th>

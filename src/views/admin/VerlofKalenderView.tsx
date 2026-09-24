@@ -360,7 +360,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
           scrollen bij 31 kolommen); een sticky kolomkop kan daar niet bij
           omdat de scrollcontainer de sticky-context wordt. */}
       <TableShell className="hidden md:block">
-          <table className="w-full text-left border-collapse">
+          <table aria-label="Verlofkalender" className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/60 border-b border-hairline-subtle">
                 <SortTh kolom="naam" sort={sort} className="sticky left-0 z-sticky bg-surface-soft min-w-[180px]">

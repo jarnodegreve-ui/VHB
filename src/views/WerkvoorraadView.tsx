@@ -244,7 +244,7 @@ export function WerkvoorraadView({
           ) : (
             <>
               <div className="hidden md:block">
-                <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
+                <table aria-label="Werkvoorraad" className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
                   <StickyThead>
                     <tr>
                       <SortTh kolom="soort" sort={sort} className="w-40">Soort</SortTh>

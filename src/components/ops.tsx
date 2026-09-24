@@ -124,8 +124,9 @@ export function OpsStat({
                 {l.active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500 vhb-nu" role="img" aria-label="nu bezig" />}
                 {l.left}
               </span>
+              {/* Ook na "klaar" leesbaar: slate-400 (2,6:1) was onder AA voor "loop 4500". */}
               {l.right && (
-                <span className={cn('ml-auto shrink-0 text-slate-500', l.done && 'text-slate-400')}>{l.right}</span>
+                <span className="ml-auto shrink-0 text-slate-500">{l.right}</span>
               )}
             </div>
           ))}

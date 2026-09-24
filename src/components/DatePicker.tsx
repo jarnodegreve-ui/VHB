@@ -193,13 +193,19 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     return true;
   };
 
-  const sluit = useCallback((focusTerug = false) => {
+  // Focus na het sluiten (a11y-rest, 24-09): een keuze of Wissen zet hem in
+  // het veld (daar staat nu de waarde); Escape of de knop zelf geeft hem terug
+  // aan wat de kiezer opende: de kalenderknop als die geklikt is, anders het
+  // veld (ArrowDown).
+  const viaKnopRef = useRef(false);
+  const sluit = useCallback((focusTerug = false, naar: 'trigger' | 'veld' = 'trigger') => {
     setOpen(false);
-    if (focusTerug) veldRef.current?.focus();
+    if (focusTerug) (naar === 'veld' || !viaKnopRef.current ? veldRef.current : knopRef.current)?.focus();
   }, []);
 
-  const openKiezer = () => {
+  const openKiezer = (viaKnop = false) => {
     if (disabled) return;
+    viaKnopRef.current = viaKnop;
     const concept = leesDmj(tekst);
     const start = klemOpBereik(concept.staat === 'geldig' ? concept.iso : geldig || vandaag, min, max);
     setCursor(start);
@@ -214,7 +220,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     setTekst(isoNaarDmj(iso));
     zetFout(null);
     if (iso !== value) onChange(iso);
-    sluit(true);
+    sluit(true, 'veld');
   };
 
   // Laag in de gedeelde stapel (src/lib/lagen.ts): terugknop/swipe-back
@@ -424,7 +430,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       <div className="mt-2 flex items-center justify-between border-t fine-divider pt-2">
         <Button variant="ghost" size="sm" disabled={!binnenBereik(vandaag, min, max)} onClick={() => kies(vandaag)}>Vandaag</Button>
         {wisbaar && (
-          <Button variant="ghost" size="sm" disabled={!value && !tekst} onClick={() => { setTekst(''); zetFout(null); if (value) onChange(''); sluit(true); }}>Wissen</Button>
+          <Button variant="ghost" size="sm" disabled={!value && !tekst} onClick={() => { setTekst(''); zetFout(null); if (value) onChange(''); sluit(true, 'veld'); }}>Wissen</Button>
         )}
       </div>
     </motion.div>
@@ -475,7 +481,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? dialoogId : undefined}
-          onClick={() => (open ? sluit(true) : openKiezer())}
+          onClick={() => (open ? sluit(true) : openKiezer(true))}
           className="absolute right-0.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
         >
           <CalendarDays size={16} aria-hidden="true" />

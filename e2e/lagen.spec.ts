@@ -199,3 +199,33 @@ test.describe('focus blijft in een sheet', () => {
     await expect(knop).toBeFocused();
   });
 });
+
+test.describe('focus terug na Escape', () => {
+  // a11y-rest (24-09): een kiezer of menu dat met Escape sluit zet de focus
+  // terug op de knop die het opende, anders valt de toetsenbordgebruiker
+  // terug op <body>.
+  test('DatePicker: Escape geeft de focus terug aan de kalenderknop', async ({ page }) => {
+    await seed(page, { user: ADMIN });
+    await page.goto('/beheer/designsysteem');
+    const knop = page.getByLabel('Startdatum', { exact: true }).locator('xpath=..').getByRole('button', { name: 'Kalender openen' });
+    await knop.scrollIntoViewIfNeeded();
+    await knop.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(knop).toBeFocused();
+  });
+
+  test('accountmenu: Escape geeft de focus terug aan de knop Account', async ({ page }) => {
+    await seed(page, { user: ADMIN });
+    await page.goto('/beheer/designsysteem');
+    const knop = page.getByRole('button', { name: 'Account', exact: true });
+    await knop.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menu', { name: 'Account' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu', { name: 'Account' })).toHaveCount(0);
+    await expect(knop).toBeFocused();
+  });
+});
