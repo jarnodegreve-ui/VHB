@@ -203,3 +203,24 @@ test.describe('onbewaarde invoer in een inline paneel (desktop)', () => {
     await expect.poll(() => pad(page)).toBe('/');
   });
 });
+
+test.describe('herladen op een intern geopend record', () => {
+  test('terug = de lijst, daarna de vorige pagina; geen tweede lijststap', async ({ page }, info) => {
+    test.skip(info.project.name !== 'Desktop (chromium)', 'zijbalk-navigatie = desktop');
+    await seed(page, { user: ADMIN });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('navigation', { name: 'Zijbalk' }).getByRole('button', { name: 'Dienstoverzicht', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Dienstoverzicht', level: 1 })).toBeVisible();
+    await page.getByRole('button', { name: 'Dienst 2515 openen' }).filter({ visible: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Dienst 2515', exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: 'Dienst 2515', exact: true })).toBeVisible({ timeout: 15_000 });
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/beheer/dienstoverzicht');
+    await page.goBack();
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/');
+    await expect(page.getByRole('heading', { name: 'Dienstoverzicht', level: 1 })).toHaveCount(0);
+  });
+});

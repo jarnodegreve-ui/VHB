@@ -48,6 +48,8 @@ type Laag = {
 type Entry = { id: string; nr: number; urlOnder: string; levend: boolean; ouder?: string };
 
 let teller = 0;
+/** Per pagina-lading anders, zie het id in useLaag. */
+const SESSIE = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 let laatsteNr = 0;
 /** Volgnummer in history.state: ook over een herlaad heen oplopend. */
 const volgNr = () => { laatsteNr = Math.max(Date.now() * 1000, laatsteNr + 1); return laatsteNr; };
@@ -79,6 +81,13 @@ export function isBovensteLaag(id: string, soort?: string) {
     return stapel[i].id === id;
   }
   return false;
+}
+
+/** De router nam de entry van laag `id` over voor een nieuwe pagina: die
+ *  entry is niet meer van ons en hoeft niet opgeruimd te worden. */
+export function vergeetLaagEntry(id: string) {
+  const i = entries.findIndex((e) => e.id === id);
+  if (i !== -1) entries.splice(i, 1);
 }
 
 /** Voor tests en diagnose: de soorten van de open lagen, onderaan eerst. */
@@ -242,7 +251,11 @@ export function useLaag({ open, sluit, historie = true, escape = true, soort = '
   useEffect(() => {
     if (!open || typeof window === 'undefined') return;
     zorgVoorLuisteraars();
-    const id = `overlay-${++teller}`;
+    // Uniek over een herlaad heen: de history-state overleeft een herlaad,
+    // de teller niet. Met alleen de teller kreeg het heropende paneel het id
+    // van zijn eigen oude entry, zag die als levend i.p.v. als wees en zette
+    // er een tweede entry bovenop (dode terugstap na herladen).
+    const id = `overlay-${SESSIE}-${++teller}`;
     idRef.current = id;
     const laag: Laag = { id, sluit: sluitRef, escape, soort, staat: null };
     stapel.push(laag);

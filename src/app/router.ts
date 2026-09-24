@@ -4,7 +4,7 @@ import { bekendeView, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
 import { leesStartschermLokaal } from '../lib/startscherm';
 import { annuleerHerstel, bewaarScroll, leesScroll, planHerstel, scrollSleutel } from '../lib/scrollGeheugen';
-import { meldUrl, verwerkOverlayPop } from '../lib/lagen';
+import { meldUrl, vergeetLaagEntry, verwerkOverlayPop } from '../lib/lagen';
 
 /**
  * Lichtgewicht router op de History API — geen library, geen <Route>-boom.
@@ -132,7 +132,11 @@ const RECORD_VIEWS = new Set<View>(['verlof', 'ruil-verzoeken', 'dienstoverzicht
  */
 function zetOuderStap(start: Route) {
   if (!RECORD_VIEWS.has(start.view) || start.params.length === 0) return;
-  if ((window.history.state as { vhbOuderStap?: unknown } | null)?.vhbOuderStap) return;
+  // Alleen een koude link van buiten (lege state). Een entry die de app zelf
+  // schreef (navigatie, overlay, de ouderstap zelf) behoudt zijn state over
+  // een herlaad heen: dan staat de lijst er al onder, of was er een eigen
+  // herkomst, en zou een extra lijststap een dubbele terugstap geven.
+  if (window.history.state != null) return;
   const { search, hash } = window.location;
   const lijst = padVan(start.view);
   const record = window.location.pathname + search + hash;
@@ -243,8 +247,16 @@ export function navigeer(view: View, opts: { params?: readonly string[]; replace
     // Een record/maand vervangen binnen dezelfde view behoudt de eigenaar
     // van de overlay-entry. Bij sluiten kan useHistoryDismiss die dan
     // opruimen; anders bleef het oude detail onder de lijst in de historiek.
-    if (opts.replace || uitOverlay) window.history.replaceState(opts.replace && !anderView ? window.history.state : null, '', pad);
-    else window.history.pushState(null, '', pad);
+    // `vhbIntern`: deze entry maakte de app zelf. Een herlaad erop is geen
+    // koude recordlink, dus zetOuderStap zet er dan geen lijst onder.
+    const behoudLaag = opts.replace && !anderView;
+    // Neemt een schermwissel de entry van een laag over (menu-item in de
+    // lade), dan is die entry vanaf nu een gewone pagina: de lagenstapel moet
+    // hem vergeten, anders hield hij hem voor "gesloten, nog op te ruimen" en
+    // at een snelle terugknop er een tweede stap bij (zijbalk-e2e, 24-09).
+    if (uitOverlay && !behoudLaag) vergeetLaagEntry(String((window.history.state as { vhbOverlay: string }).vhbOverlay));
+    if (opts.replace || uitOverlay) window.history.replaceState(behoudLaag ? { ...(window.history.state ?? {}), vhbIntern: true } : { vhbIntern: true }, '', pad);
+    else window.history.pushState({ vhbIntern: true }, '', pad);
   }
   huidigPad = pad;
   meldUrl();
