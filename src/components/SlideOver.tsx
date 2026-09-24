@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { vergrendelScroll } from '../lib/scrollSlot';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 import { SluitContext, useSluitPoort } from './Modal';
 
@@ -70,17 +71,10 @@ export function SlideOver({
   // maar in [data-scroll-root] (App.tsx), dus alleen body locken was een no-op
   // en de pagina rubberbandde achter het paneel mee. Beide locken: body als
   // vangnet (print, login), de echte scroll-root voor de app zelf.
+  // Via het gedeelde mechanisme (src/lib/scrollSlot.ts).
   useEffect(() => {
     if (!open) return;
-    const scrollRoot = document.querySelector<HTMLElement>('[data-scroll-root]');
-    const previousBody = document.body.style.overflow;
-    const previousRoot = scrollRoot?.style.overflow ?? '';
-    document.body.style.overflow = 'hidden';
-    if (scrollRoot) scrollRoot.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousBody;
-      if (scrollRoot) scrollRoot.style.overflow = previousRoot;
-    };
+    return vergrendelScroll('slideover');
   }, [open]);
 
   // Focus naar het paneel zodra het mount + minimale focus-trap (Tab blijft
