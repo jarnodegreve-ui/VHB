@@ -46,8 +46,10 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
     const isMe = u.id === currentUser.id;
 
     if (isBeheerder && !isMe) return false;
-    // Handmatig verborgen in gebruikersbeheer — maar toon jezelf altijd.
-    if (u.showInContacts === false && !isMe) return false;
+    // Jezelf niet (M, 24-09): je eigen nummer hoef je niet op te zoeken.
+    if (isMe) return false;
+    // Handmatig verborgen in gebruikersbeheer.
+    if (u.showInContacts === false) return false;
 
     return u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
            (u.phone && u.phone.includes(searchQuery));

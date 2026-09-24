@@ -34,7 +34,9 @@ const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenMo
 type Filter = 'open' | 'recent' | 'alles';
 const RECENT_DAGEN = 62;
 
-const WERKTYPE_TONE: Record<Werktype, 'red' | 'amber' | 'blue' | 'oker'> = { T: 'red', C: 'amber', I: 'blue', L: 'oker' };
+// G (24-09): een werktype is een categorie, geen signaal; het kreeg per type een
+// eigen tint (rood/amber/blauw/oker). Nu neutraal; kleur alleen als het cijfer
+// aandacht vraagt (open defecten = amber, ouder dan 14 dagen = rood in de rij).
 const WERKTYPE_ICOON: Record<Werktype, typeof Wrench> = { T: Wrench, I: Armchair, C: Car, L: Route };
 
 /**
@@ -114,7 +116,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
     }
   };
 
-  const werktypeBadge = (t: Werktype) => <Badge tone={WERKTYPE_TONE[t]} stil className="whitespace-nowrap">{WERKTYPE_LABEL[t]}</Badge>;
+  const werktypeBadge = (t: Werktype) => <Badge tone="slate" stil className="whitespace-nowrap">{WERKTYPE_LABEL[t]}</Badge>;
   // Label en toon uit DEFECT_STATUS; de ouderdom (rood na 14 dagen, aantal
   // dagen achter "Open") is een signaal bóven op de status.
   const statusBadge = (d: Defect) => {
@@ -170,7 +172,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
             <OpsStat
               key={t}
               icon={<Icoon size={16} />}
-              tone={open > 0 ? WERKTYPE_TONE[t] : 'slate'}
+              tone={open > 0 ? 'amber' : 'slate'}
               label={WERKTYPE_LABEL[t]}
               value={open}
               sub={open === 0 ? 'niets open' : oud > 0 ? `open, ${oud} ouder dan 14 dagen` : 'open'}

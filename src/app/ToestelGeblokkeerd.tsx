@@ -14,7 +14,7 @@ export function ToestelGeblokkeerd({ revoked, onRetry, onLogout }: { revoked: bo
       <div className="max-w-sm">
         <div className={cn(
           'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
-          revoked ? 'bg-red-500/15 text-red-300' : 'bg-oker-500/15 text-oker-400',
+          revoked ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300',
         )}>
           {revoked ? <ShieldAlert size={24} /> : <Smartphone size={24} />}
         </div>

@@ -730,13 +730,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   {/* Ook in de compacte kaart: wie hier accepteert krijgt de dienst,
                       en moet vóór zijn antwoord weten of zijn rust in het gedrang komt. */}
                   <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} />
+                  {/* Zelfde volgorde als de verlofbeoordeling (C, 24-09): afwijzen links, toestemmen rechts. */}
                   {canRespond ? (
                     <div className="flex gap-2 pt-1">
-                      <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAccept(swap.id)}>
-                        Accepteren
-                      </Button>
                       <Button variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleDecline(swap.id)}>
                         Weigeren
+                      </Button>
+                      <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAccept(swap.id)}>
+                        Accepteren
                       </Button>
                     </div>
                   ) : swap.status === 'accepted' && swap.targetDriverId === user.id ? (

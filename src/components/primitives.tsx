@@ -587,8 +587,11 @@ export function Switch({ checked, onChange, label, disabled, className }: {
         className,
       )}
     >
-      <span className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors', checked ? 'bg-keuze' : 'bg-slate-300')}>
-        <span className={cn('inline-block h-5 w-5 rounded-full bg-surface-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+      {/* Aan = keuze-vlak (carbon in licht, verhoogd graphite in donker) met de
+          knop in de tekstkleur van dat vlak, zodat "aan" in donker een lichte
+          knop op een donkere rail is en niet andersom (N, 24-09). */}
+      <span className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors', checked ? 'bg-keuze-vlak' : 'bg-slate-300')}>
+        <span className={cn('inline-block h-5 w-5 rounded-full shadow transition-transform', checked ? 'translate-x-[22px] bg-keuze-vlak-tekst' : 'translate-x-0.5 bg-surface-white')} />
       </span>
     </button>
   );

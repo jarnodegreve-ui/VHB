@@ -49,7 +49,8 @@ const SUB_OPEN: Record<WerkSoort, string> = {
   vervaldata: 'binnen 30 dagen',
   planning: 'import en horizon',
 };
-const BADGE_TONE: Record<WerkItem['tone'], BadgeTone> = { red: 'red', amber: 'amber', blue: 'blue' };
+// G (24-09): blauw was de kleur van de soort "ruil", geen signaal; neutraal.
+const BADGE_TONE: Record<WerkItem['tone'], BadgeTone> = { red: 'red', amber: 'amber', blue: 'slate' };
 
 type Filter = WerkSoort | 'all';
 type SortKolom = 'wanneer' | 'soort' | 'titel';
@@ -151,11 +152,11 @@ export function WerkvoorraadView({
     }
   };
 
-  const tegelTone = (soort: WerkSoort): 'red' | 'amber' | 'blue' | 'slate' => {
+  // Kleur alleen als het cijfer aandacht vraagt (G, 24-09): rood als er iets
+  // rood in zit, anders amber zolang er iets open staat; geen soortkleur.
+  const tegelTone = (soort: WerkSoort): 'red' | 'amber' | 'slate' => {
     if (tellers[soort] === 0) return 'slate';
-    const vanSoort = items.filter((it) => it.soort === soort);
-    if (vanSoort.some((it) => it.tone === 'red')) return 'red';
-    return vanSoort.some((it) => it.tone === 'blue') ? 'blue' : 'amber';
+    return items.some((it) => it.soort === soort && it.tone === 'red') ? 'red' : 'amber';
   };
   const tegelSub = (soort: WerkSoort): string => {
     if (soort === 'dekking' && coverageDays === null) return 'dekking nog niet geladen';

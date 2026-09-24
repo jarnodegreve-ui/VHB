@@ -396,7 +396,7 @@ export function DashboardView({ notes = [],
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-greeting">
-                {greeting}, <span className="text-oker-700">{firstName}</span>
+                {greeting}, {firstName}
               </h1>
               <p className="mt-0.5 text-md font-normal text-slate-500">
                 {formatDayLong(isoDate(now))} ·{' '}

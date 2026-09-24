@@ -86,7 +86,8 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'rapporten', pad: 'rapporten', label: 'Rapporten', omschrijving: 'Alle overzichten op één plek: filteren, afdrukken en exporteren.', icoon: FileBarChart, sectie: 'rapporten', breed: true, rollen: STAF },
   // — Techniek (fase A Access-migratie, 13-09) —
   { view: 'defecten', pad: 'techniek/defecten', label: 'Gele boek', omschrijving: 'Gemelde defecten per bus en hun opvolging.', icoon: Wrench, sectie: 'techniek', rollen: TECHNIEK },
-  { view: 'werkprestaties', pad: 'techniek/prestaties', label: 'Dagadministratie', kort: 'Dagadmin', omschrijving: 'Wat de garage per dag aan welke bus deed, dag per dag ingegeven.', icoon: ClipboardList, sectie: 'techniek', rollen: TECHNIEK },
+  // 24-09 (B, Jarno): heette Dagadministratie, net als het loonscherm; twee schermen met één naam.
+  { view: 'werkprestaties', pad: 'techniek/prestaties', label: 'Werkprestaties', omschrijving: 'Wat de garage per dag aan welke bus deed, dag per dag ingegeven.', icoon: ClipboardList, sectie: 'techniek', rollen: TECHNIEK },
   { view: 'voertuig-werken', pad: 'techniek/werken', label: 'Uitgevoerde werken per bus', kort: 'Per bus', omschrijving: 'De volledige werkgeschiedenis van één bus, wie het deed en hoelang het duurde.', icoon: History, sectie: 'techniek', rollen: TECHNIEK },
   { view: 'voertuigen', pad: 'techniek/voertuigen', label: 'Voertuigen', omschrijving: 'Het wagenpark met keuringen en vervaldata.', icoon: Bus, sectie: 'techniek', rollen: TECHNIEK },
   // — Systeem —
