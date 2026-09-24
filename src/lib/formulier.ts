@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { z } from 'zod';
 import { valideer, veldfoutenUitAntwoord } from './valideer';
 
@@ -74,14 +74,21 @@ const serialiseer = (waarden: unknown): string => {
  */
 export function useVuil(waarden: unknown, actief = true, sleutel: unknown = undefined) {
   const huidig = serialiseer(waarden);
-  const [basis, setBasis] = useState(huidig);
-  const vorige = useRef({ actief, sleutel });
-  useEffect(() => {
-    const gewisseld = (actief && !vorige.current.actief) || (actief && sleutel !== vorige.current.sleutel);
-    vorige.current = { actief, sleutel };
-    if (gewisseld) setBasis(huidig);
-  }, [actief, sleutel, huidig]);
-  const markeerSchoon = useCallback(() => setBasis(serialiseer(waarden)), [waarden]);
+  // De momentopname wordt in de render zelf genomen, niet in een effect
+  // (polish P2a, 24-09): met een effect stond een net geopend formulier één
+  // render lang als "vuil" op het scherm, en een terugknop in dat venster
+  // vroeg "Wijzigingen niet bewaren?" zonder dat er iets gewijzigd was.
+  const [staat, setStaat] = useState({ basis: huidig, actief, sleutel });
+  let basis = staat.basis;
+  if (actief !== staat.actief || sleutel !== staat.sleutel) {
+    const gewisseld = (actief && !staat.actief) || (actief && sleutel !== staat.sleutel);
+    if (gewisseld) basis = huidig;
+    setStaat({ basis, actief, sleutel });
+  }
+  const markeerSchoon = useCallback(() => {
+    const nu = serialiseer(waarden);
+    setStaat((s) => ({ ...s, basis: nu }));
+  }, [waarden]);
   return { vuil: actief && huidig !== basis, markeerSchoon };
 }
 

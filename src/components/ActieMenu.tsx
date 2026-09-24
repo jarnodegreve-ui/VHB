@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { MoreHorizontal } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
-import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { useLaag } from '../lib/lagen';
 import { IconButton } from './primitives';
 
 /**
@@ -13,7 +13,7 @@ import { IconButton } from './primitives';
  * Zelfde popover-taal als het kolommenmenu in Table.tsx: opaak bg-paper,
  * haarlijn, klik buiten / Escape sluit, pijltjes navigeren. Escape en het
  * kiezen van een item zetten de focus terug op de trigger; de terugknop op
- * mobiel sluit het menu i.p.v. het scherm (useHistoryDismiss, zoals de
+ * mobiel sluit het menu i.p.v. het scherm (lagenstapel, src/lib/lagen.ts, zoals de
  * DatePicker). Items zijn ≥44 px op touch (controle-ronde 05-09, nr. 17).
  *
  * Het menu zelf staat in een portal op <body> met `position: fixed`, berekend
@@ -69,7 +69,7 @@ export function ActieMenu({
   }, []);
 
   // Terugknop/swipe-back op mobiel sluit het menu i.p.v. het scherm.
-  useHistoryDismiss(open, () => setOpen(false));
+  useLaag({ open, sluit: () => setOpen(false) });
 
   // Positie t.o.v. de viewport (portal + fixed). `align` is de voorkeur voor
   // de horizontale kant; valt het menu buiten beeld (bv. "…" links in een

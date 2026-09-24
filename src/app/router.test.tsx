@@ -316,3 +316,56 @@ describe('useRecordParam: selectie in de URL', () => {
     await act(async () => { root.unmount(); });
   });
 });
+
+describe('recordlink van een koude start (polish P2b)', () => {
+  /** Zoals normaliseerStartUrl het zet: de lijst eronder, het record gemerkt erboven. */
+  const koudeStart = (lijst: string, record: string) => {
+    window.history.pushState(null, '', lijst);
+    window.history.pushState({ vhbOuderStap: true, vhbOverlayTerug: lijst }, '', record);
+  };
+
+  it('inline: sluiten gaat terug naar de lijst i.p.v. een tweede lijst-entry', async () => {
+    koudeStart('/omleidingen', '/omleidingen/a');
+    const root = await monteer(<Lijst view="omleidingen" />);
+    try {
+      expect(gekozenRecord()).toBe('a');
+      await act(async () => { klik('wis'); await tikken(); });
+      expect(window.location.pathname).toBe('/omleidingen');
+      expect(gekozenRecord()).toBe('');
+      await act(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/verlof');
+    } finally {
+      await act(async () => { root.unmount(); await tikken(); });
+    }
+  });
+
+  it('overlay: sluiten ruimt de overlay én de recordstap op', async () => {
+    koudeStart('/omleidingen', '/omleidingen/a');
+    const root = await monteer(<MobieleLijst />);
+    try {
+      await act(async () => { klik('wis'); await tikken(); });
+      expect(window.location.pathname).toBe('/omleidingen');
+      expect(window.history.state?.vhbOverlay).toBeUndefined();
+      expect(window.history.state?.vhbOuderStap).toBeUndefined();
+      await act(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/verlof');
+    } finally {
+      await act(async () => { root.unmount(); await tikken(); });
+    }
+  });
+
+  it('overlay: terug sluit het record en toont de lijst; nog eens terug = de vorige pagina', async () => {
+    koudeStart('/omleidingen', '/omleidingen/a');
+    const root = await monteer(<MobieleLijst />);
+    try {
+      await act(async () => { window.history.back(); await tikken(); await tikken(); });
+      expect(window.location.pathname).toBe('/omleidingen');
+      expect(gekozenRecord()).toBe('');
+      await act(async () => { window.history.back(); await tikken(); });
+      expect(window.location.pathname).toBe('/verlof');
+    } finally {
+      await act(async () => { root.unmount(); await tikken(); });
+    }
+  });
+});
+

@@ -25,7 +25,7 @@ const LazyMeldingenPaneel = lazy(() => laadMeldingenPaneel().then((m) => ({ defa
 
 export function MeldingenBel({ onNavigate, actief = false }: { onNavigate: (view: View) => void; actief?: boolean }) {
   const { ongelezenMeldingen } = useAppDataContext();
-  const { open, setOpen, wortel } = useDropdown();
+  const { open, setOpen, wortel } = useDropdown({ mobielVol: true });
 
   return (
     <div ref={wortel} className="relative">

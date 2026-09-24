@@ -152,7 +152,12 @@ export function ManageUpdatesView({
   const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-updates' });
 
   const handleOpenAdd = () => poort.via(openNieuw);
+  // Annuleren sluit het paneel, ook op desktop (polish P2b, regel Jarno
+  // 24-09); daarna kiest de voorselectie niet meteen weer het eerste item,
+  // anders was sluiten op desktop onmogelijk. Elke nieuwe keuze heft dat op.
+  const [handDicht, setHandDicht] = useState(false);
   const openNieuw = () => {
+    setHandDicht(false);
     setEditingId(null);
     setUpdateForm(emptyUpdateForm);
     veld.wis();
@@ -164,6 +169,7 @@ export function ManageUpdatesView({
   };
 
   const handleEdit = (update: Update) => {
+    setHandDicht(false);
     setEditingId(update.id);
     setUpdateForm({
       title: update.title,
@@ -196,7 +202,7 @@ export function ManageUpdatesView({
     items: updates,
     sleutelVan: (u) => u.id,
     gekozen: paneelOpen ? editingId : null,
-    actief: !(paneelOpen && editingId === null),
+    actief: !(paneelOpen && editingId === null) && !handDicht,
     kies: handleEdit,
     wis: handleCancelEdit,
     vuil,
@@ -218,11 +224,11 @@ export function ManageUpdatesView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordParam, updates]);
 
-  // Annuleren: desktop zet het formulier terug op het item (het paneel blijft
-  // naast de lijst staan); mobiel sluit de SlideOver.
+  // Annuleren = het paneel sluiten, op elke breedte (polish P2b, regel Jarno
+  // 24-09); met onbewaarde invoer vraagt de poort eerst (SluitKnop).
   const annuleer = () => {
-    if (inline && bewerkte) handleEdit(bewerkte);
-    else handleCancelEdit();
+    setHandDicht(true);
+    handleCancelEdit();
   };
 
   // Geen bevestigingsmodal meer: verwijderen gaat meteen en de datalaag

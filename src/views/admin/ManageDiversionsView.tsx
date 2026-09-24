@@ -115,7 +115,12 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-omleidingen' });
 
   const handleOpenAdd = () => poort.via(openNieuw);
+  // Annuleren sluit het paneel, ook op desktop (polish P2b, regel Jarno
+  // 24-09); daarna kiest de voorselectie niet meteen weer het eerste item,
+  // anders was sluiten op desktop onmogelijk. Elke nieuwe keuze heft dat op.
+  const [handDicht, setHandDicht] = useState(false);
   const openNieuw = () => {
+    setHandDicht(false);
     setEditingId(null);
     setFormData({
       line: '',
@@ -134,6 +139,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   };
 
   const handleOpenEdit = (div: Diversion) => {
+    setHandDicht(false);
     setEditingId(div.id);
     setFormData({
       line: div.line,
@@ -178,7 +184,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     items: sortedDiversions,
     sleutelVan: (d) => d.id,
     gekozen: paneelOpen ? editingId : null,
-    actief: !(paneelOpen && editingId === null),
+    actief: !(paneelOpen && editingId === null) && !handDicht,
     kies: handleOpenEdit,
     wis: sluitPaneel,
     vuil,
@@ -201,11 +207,11 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordParam, diversions]);
 
-  // Annuleren: desktop zet het formulier terug op het item (het paneel blijft
-  // naast de lijst staan); mobiel sluit de SlideOver.
+  // Annuleren = het paneel sluiten, op elke breedte (polish P2b, regel Jarno
+  // 24-09); met onbewaarde invoer vraagt de poort eerst (SluitKnop).
   const annuleer = () => {
-    if (inline && bewerkte) handleOpenEdit(bewerkte);
-    else sluitPaneel();
+    setHandDicht(true);
+    sluitPaneel();
   };
 
   const handleSubmit = async () => {

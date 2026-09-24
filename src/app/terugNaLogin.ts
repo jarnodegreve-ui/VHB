@@ -22,7 +22,9 @@ export function naarStartDoel(ruw: string): boolean {
   const doel = veiligInternPad(ruw);
   const route = doel ? routeUitUrl(doel) : null;
   if (!doel || !route) return false;
-  window.history.replaceState(null, '', doel);
+  // De state blijft: een recordlink van een koude start draagt de lijst
+  // eronder (router.ts, zetOuderStap), ook na het inloggen.
+  window.history.replaceState(window.history.state, '', doel);
   navigeer(route.view, { params: route.params, replace: true });
   return true;
 }

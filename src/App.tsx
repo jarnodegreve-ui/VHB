@@ -15,7 +15,7 @@ import { useAppData } from './app/useAppData';
 import { AppDataProvider } from './app/AppDataContext';
 import { ViewFout } from './app/ViewFout';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { useHistoryDismiss } from './lib/useHistoryDismiss';
+import { useLaag } from './lib/lagen';
 import { RITBLAD_BUNDEL_EVENT } from './lib/ritblad';
 import { Eye, Menu, RefreshCw, WifiOff, X } from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
@@ -25,7 +25,6 @@ import { View, User, isStaf } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, LOGIN_MELDING_KEY, vergeetEffectiefThema, wisOfflineCaches, type ToastEventDetail } from './lib/ui';
 import { apiFetch, isToestelGeblokkeerd, vernieuwSessie } from './lib/api';
-import { vergrendelScroll } from './lib/scrollSlot';
 import { laadfoutOnderdrukt } from './app/laadfout';
 import { lazyWithRetry, metRetry } from './lib/lazyRetry';
 import { WARMUP_VIEWS, prefetchView, warmViews } from './app/viewLoaders';
@@ -272,15 +271,6 @@ export default function App() {
     setIsPasswordRecovery(v);
   };
 
-  // Body-scroll lock wanneer de mobiele sidebar open is — anders kan iOS
-  // Safari de aside-inhoud "rubber-banden" of de hoofdpagina laten meebewegen.
-  // Via het gedeelde mechanisme (src/lib/scrollSlot.ts), samen met de
-  // overlays: zo zet geen enkele laag bij het sluiten een verouderde waarde terug.
-  useEffect(() => {
-    if (!isSidebarOpen) return;
-    return vergrendelScroll('zijbalk');
-  }, [isSidebarOpen]);
-
   // Op mobiel is de dichte sidebar alleen visueel weggeschoven
   // (-translate-x-full): zonder `inert` bleef hij focusbaar en landde
   // Tab/VoiceOver onzichtbaar buiten beeld. Op lg+ staat hij altijd in
@@ -293,8 +283,12 @@ export default function App() {
     return () => mq.removeEventListener('change', luister);
   }, []);
 
-  // Terugknop/swipe-back sluit de mobiele zijbalk i.p.v. de app te verlaten.
-  useHistoryDismiss(isSidebarOpen && !isDesktopNav, () => setIsSidebarOpen(false));
+  // De mobiele zijbalk is een laag in de gedeelde stapel (src/lib/lagen.ts):
+  // terugknop/swipe-back sluit hem i.p.v. de app te verlaten, Escape sluit
+  // alleen hem, en de scroll-lock (src/lib/scrollSlot.ts) hangt aan dezelfde
+  // levensloop, anders kan iOS Safari de aside-inhoud "rubber-banden" of de
+  // hoofdpagina laten meebewegen.
+  useLaag({ open: isSidebarOpen && !isDesktopNav, sluit: () => setIsSidebarOpen(false), soort: 'zijbalk', scrollSlot: 'zijbalk' });
 
   // openHuidigRitblad() vraagt met een gebeurtenis of de app de bundel zelf
   // kan tonen; zo blijft de PWA-schil staan en werkt het offline uit de
@@ -308,13 +302,8 @@ export default function App() {
     window.addEventListener(RITBLAD_BUNDEL_EVENT, onBundel);
     return () => window.removeEventListener(RITBLAD_BUNDEL_EVENT, onBundel);
   }, []);
-  useHistoryDismiss(bundelOpen, () => setBundelOpen(false));
-  useEffect(() => {
-    if (!isSidebarOpen || isDesktopNav) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsSidebarOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isSidebarOpen, isDesktopNav]);
+  // Geen eigen history-entry: de Modal van de RitbladViewer is zelf een laag.
+  // Een tweede entry hier liet na het kruisje een dode terugstap achter.
 
   // Supabase Realtime: live sync van leave/swaps/diversions/updates/planning.
   // Activeert pas wanneer gebruiker is ingelogd (session present) — anders

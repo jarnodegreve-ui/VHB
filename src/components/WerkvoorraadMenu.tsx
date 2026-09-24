@@ -41,7 +41,7 @@ export function WerkvoorraadMenu({
   userNaam: (id: string) => string;
   onNavigate: (view: View) => void;
 }) {
-  const { open, setOpen, wortel } = useDropdown();
+  const { open, setOpen, wortel } = useDropdown({ mobielVol: true });
 
   const wv = werkvoorraad;
   const enkelvoud = (n: number, ev: string, mv: string) => `${n} ${n === 1 ? ev : mv}`;

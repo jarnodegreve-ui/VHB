@@ -4,7 +4,7 @@ import { bekendeView, padVan, routeVanPad } from './routes';
 import { metOvergang } from '../lib/overgang';
 import { leesStartschermLokaal } from '../lib/startscherm';
 import { annuleerHerstel, bewaarScroll, leesScroll, planHerstel, scrollSleutel } from '../lib/scrollGeheugen';
-import { herstelOverlayUrl } from '../lib/useHistoryDismiss';
+import { meldUrl, vergeetLaagEntry, verwerkOverlayPop } from '../lib/lagen';
 
 /**
  * Lichtgewicht router op de History API — geen library, geen <Route>-boom.
@@ -110,6 +110,38 @@ function normaliseerStartUrl() {
   const canoniek = padVan(start.view, start.params);
   if (canoniek !== pathname.replace(/\/+$/, '')) window.history.replaceState(null, '', canoniek + search + hash);
   startDoel = canoniek + search;
+  zetOuderStap(start);
+}
+
+/**
+ * Schermen met een record in het eerste pad-segment (`/verlof/<id>`,
+ * `/dienstruil/<id>` …): een koude start op zo'n link heeft geen vorige
+ * pagina in het portaal. Regel Jarno 24-09: sluiten of terug brengt je dan
+ * naar de lijst, nooit naar een lege of externe pagina.
+ */
+const RECORD_VIEWS = new Set<View>(['verlof', 'ruil-verzoeken', 'dienstoverzicht', 'omleidingen', 'updates', 'beheer-omleidingen', 'beheer-updates', 'vervaldata', 'voertuigen']);
+
+/**
+ * Koude start op een recordlink: de lijst komt eronder als eigen entry, het
+ * record erboven, gemerkt met `vhbOuderStap`. Terug = de lijst. Sluit het
+ * inline paneel, dan gaat `useRecordParam` terug i.p.v. te vervangen (anders
+ * stonden er twee lijst-entries op elkaar); een overlay (SlideOver, Modal)
+ * neemt de gemerkte entry over i.p.v. er een eigen bovenop te zetten
+ * (src/lib/lagen.ts), dus ook dan geen dubbele stap. Een herlaad op een al
+ * gemerkte entry voegt niets toe.
+ */
+function zetOuderStap(start: Route) {
+  if (!RECORD_VIEWS.has(start.view) || start.params.length === 0) return;
+  // Alleen een koude link van buiten (lege state). Een entry die de app zelf
+  // schreef (navigatie, overlay, de ouderstap zelf) behoudt zijn state over
+  // een herlaad heen: dan staat de lijst er al onder, of was er een eigen
+  // herkomst, en zou een extra lijststap een dubbele terugstap geven.
+  if (window.history.state != null) return;
+  const { search, hash } = window.location;
+  const lijst = padVan(start.view);
+  const record = window.location.pathname + search + hash;
+  window.history.replaceState(null, '', lijst + search);
+  window.history.pushState({ vhbOuderStap: true, vhbOverlayTerug: lijst + search }, '', record);
 }
 
 // --- Scrollpositie per route (punt 19, 15-09; src/lib/scrollGeheugen.ts) ---
@@ -134,10 +166,12 @@ function zorgVoorScrollHerstel() {
   if (popLuisteraarActief || typeof window === 'undefined') return;
   popLuisteraarActief = true;
   huidigPad = window.location.pathname;
-  window.addEventListener('popstate', () => {
+  window.addEventListener('popstate', (e) => {
     // Deze gedeelde luisteraar staat vóór alle useRoute-luisteraars. Eerst
-    // de gesloten overlay opruimen, anders lezen zij nog de oude detail-URL.
-    herstelOverlayUrl();
+    // de lagen (src/lib/lagen.ts): een gesloten overlay opruimen of een
+    // weigerende laag (onbewaarde invoer) zijn URL teruggeven, anders lezen
+    // zij nog de oude detail-URL of wisselen ze van scherm.
+    verwerkOverlayPop(e);
     const nieuwPad = window.location.pathname;
     if (nieuwPad === huidigPad) return; // overlay-entry (useHistoryDismiss): geen schermwissel
     onthoudPositieVanHuidig();
@@ -169,8 +203,22 @@ export const registreerSchermWachter = (w: SchermWachter | null) => { schermWach
 export const WACHT_OP_SCHERM_MS = 250;
 
 /** Navigeren buiten React om (service-worker-bericht, tests). */
+/**
+ * Navigatiebewaking (polish P2b): een scherm met onbewaarde invoer die niet
+ * in een overlay staat (inline desktoppaneel) registreert hier een bewaker.
+ * Een wissel naar een ander scherm (zijbalk, dock, een link) vraagt die eerst;
+ * geeft hij false, dan wacht de navigatie tot hij `doorgaan` aanroept.
+ */
+type NavigatieBewaker = (doorgaan: () => void) => boolean;
+let bewaker: NavigatieBewaker | null = null;
+export const zetNavigatieBewaker = (b: NavigatieBewaker | null) => { bewaker = b; };
+
 export function navigeer(view: View, opts: { params?: readonly string[]; replace?: boolean } = {}) {
   if (typeof window === 'undefined') return;
+  if (bewaker && lees().view !== view) {
+    const b = bewaker;
+    if (!b(() => { if (bewaker === b) bewaker = null; navigeer(view, opts); })) return;
+  }
   const pad = padVan(view, opts.params ?? []);
   const zelfde = window.location.pathname === pad;
   const anderView = lees().view !== view;
@@ -199,10 +247,19 @@ export function navigeer(view: View, opts: { params?: readonly string[]; replace
     // Een record/maand vervangen binnen dezelfde view behoudt de eigenaar
     // van de overlay-entry. Bij sluiten kan useHistoryDismiss die dan
     // opruimen; anders bleef het oude detail onder de lijst in de historiek.
-    if (opts.replace || uitOverlay) window.history.replaceState(opts.replace && !anderView ? window.history.state : null, '', pad);
-    else window.history.pushState(null, '', pad);
+    // `vhbIntern`: deze entry maakte de app zelf. Een herlaad erop is geen
+    // koude recordlink, dus zetOuderStap zet er dan geen lijst onder.
+    const behoudLaag = opts.replace && !anderView;
+    // Neemt een schermwissel de entry van een laag over (menu-item in de
+    // lade), dan is die entry vanaf nu een gewone pagina: de lagenstapel moet
+    // hem vergeten, anders hield hij hem voor "gesloten, nog op te ruimen" en
+    // at een snelle terugknop er een tweede stap bij (zijbalk-e2e, 24-09).
+    if (uitOverlay && !behoudLaag) vergeetLaagEntry(String((window.history.state as { vhbOverlay: string }).vhbOverlay));
+    if (opts.replace || uitOverlay) window.history.replaceState(behoudLaag ? { ...(window.history.state ?? {}), vhbIntern: true } : { vhbIntern: true }, '', pad);
+    else window.history.pushState({ vhbIntern: true }, '', pad);
   }
   huidigPad = pad;
+  meldUrl();
   onthoud(view);
   // `melden` leest de URL op het moment zelf, dus een uitgestelde melding die
   // door een volgende navigatie is ingehaald doet geen kwaad.
@@ -292,6 +349,12 @@ export function useRecordParam(index = 0, opties: { view?: View } = {}): [string
     const volgende = [...actueel.params];
     if (waarde == null) {
       if (volgende.length <= index) return;
+      // Record van een koude start (zie zetOuderStap): de lijst staat er al
+      // onder, dus terug i.p.v. een tweede lijst-entry.
+      if (index === 0 && (window.history.state as { vhbOuderStap?: unknown } | null)?.vhbOuderStap) {
+        window.history.back();
+        return;
+      }
       volgende.splice(index);
     } else {
       if (volgende.length < index) return;
@@ -318,6 +381,7 @@ export function useQueryParam(naam: string): [string, (waarde: string) => void] 
     const url = new URL(window.location.href);
     if (waarde) url.searchParams.set(naam, waarde); else url.searchParams.delete(naam);
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    meldUrl();
     window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
   }, [naam]);
   return [huidig, zet];

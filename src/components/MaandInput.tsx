@@ -7,7 +7,7 @@ import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { maandPlus } from '../lib/datum';
 import { MONTH_NAMES } from '../lib/format';
 import { isMaand, leesMj, maandBereikFout, maandNaarMj } from '../lib/maand';
-import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { useLaag } from '../lib/lagen';
 import { Button, IconButton } from './primitives';
 import { inputClass, invalidClass } from './controlClass';
 
@@ -143,7 +143,7 @@ export function MaandInput({
     sluit(true);
   };
 
-  useHistoryDismiss(open, () => setOpen(false));
+  useLaag({ open, sluit: () => setOpen(false) });
 
   useEffect(() => {
     if (!open) return;

@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { ADMIN, seed } from './helpers';
+import { ADMIN, kanScrollen, seed } from './helpers';
 
 /**
  * Hotfix 24-09: na het sluiten van een overlay bleef de pagina soms op slot
@@ -11,31 +11,6 @@ import { ADMIN, seed } from './helpers';
  * Na elke flow: geen overlay meer open, geen actieve lock, geen inline
  * overflow op body of scroll-root, en de scroll-root schuift echt.
  */
-
-async function kanScrollen(page: Page) {
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => {
-    const root = document.querySelector<HTMLElement>('[data-scroll-root]');
-    return {
-      locks: document.body.dataset.scrollLocks ?? '',
-      body: document.body.style.overflow,
-      root: root?.style.overflow ?? 'geen root',
-    };
-  })).toEqual({ locks: '', body: '', root: '' });
-  const schuift = await page.evaluate(async () => {
-    const root = document.querySelector<HTMLElement>('[data-scroll-root]')!;
-    const extra = document.createElement('div');
-    extra.style.height = '3000px';
-    root.appendChild(extra);
-    root.scrollTop = 0;
-    root.scrollBy(0, 400);
-    await new Promise((r) => setTimeout(r, 50));
-    const ok = root.scrollTop > 0;
-    extra.remove();
-    return ok;
-  });
-  expect(schuift, 'de scroll-root schuift weer').toBe(true);
-}
 
 const designsysteem = async (page: Page) => {
   await seed(page, { user: ADMIN, view: 'designsysteem' });

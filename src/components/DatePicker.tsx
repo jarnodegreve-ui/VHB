@@ -9,7 +9,7 @@ import { WEEKDAY_SHORT_MON } from '../lib/format';
 import {
   bereikFout, binnenBereik, dagPlusMaand, formatDatumKiezer, isIsoDag, isoNaarDmj, klemOpBereik, leesDmj, maandBuitenBereik, maandGrid, maandLabel, maandVan, vandaagIso, weekdagMa,
 } from '../lib/kalender';
-import { useHistoryDismiss } from '../lib/useHistoryDismiss';
+import { useLaag } from '../lib/lagen';
 import { Button, IconButton } from './primitives';
 import { inputClass, invalidClass } from './controlClass';
 
@@ -217,8 +217,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     sluit(true);
   };
 
-  // Terugknop/swipe-back op mobiel sluit de kiezer i.p.v. het scherm.
-  useHistoryDismiss(open, () => setOpen(false));
+  // Laag in de gedeelde stapel (src/lib/lagen.ts): terugknop/swipe-back
+  // sluit de kiezer i.p.v. het scherm, Escape alleen hem.
+  useLaag({ open, sluit: () => setOpen(false) });
 
   // Klik buiten veld én dialoog sluit (de dialoog hangt in een portal,
   // dus `contains` op één wortel volstaat niet).
