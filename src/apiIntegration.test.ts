@@ -685,6 +685,14 @@ vi.mock('../api/storage.js', async (importOriginal) => {
 let baseUrl = '';
 let server: ReturnType<typeof import('express')['application']['listen']> | any;
 
+// Vaste klok (J, 24-09): de fixtures spelen in juni/juli 2026 en de server
+// weigert sindsdien een ruil voor een gereden dienst op de Brusselse klok.
+// De suite draait daarom op een vast moment vóór die fixtures; alleen Date
+// wordt nagebootst, geen timers. Een test die zelf `zetNu` gebruikt zet de
+// klok gewoon opnieuw.
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-06-15T10:00:00Z')); });
+afterEach(() => { vi.useRealTimers(); });
+
 beforeAll(async () => {
   const app = (await import('../api/index')).default;
   resetAllRateLimiters = (await import('../api/rateLimit')).resetAllRateLimiters;
@@ -4007,6 +4015,8 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
   });
 
   it('een gereden (historische) dag wordt niet met terugwerkende kracht een gat', async () => {
+    // Deze test redeneert over de echte kalender (vandaag/gisteren), niet over de vaste juni-klok.
+    vi.useRealTimers();
     // Een achteraf ingevoerd ziektebriefje voor 15 juli (verleden): die dag ís
     // gereden — door een invaller die nooit in de matrix is bijgewerkt. De
     // dekking blijft hem als gedekt tonen; alleen vandaag/toekomst filtert.
@@ -6644,6 +6654,8 @@ describe('Loon: dagafsluiting en Easypay-export', () => {
   });
 
   it('blokkeert de export op een planningdag die nooit geopend is, tot die is afgesloten', async () => {
+    // Deze test redeneert over de echte kalender (vandaag/gisteren), niet over de vaste juni-klok.
+    vi.useRealTimers();
     zetLoonBasis();
     // De planningsmatrix (beforeEach) heeft inhoud op 01-07 en 08-07. Alleen
     // 01-07 wordt geopend en afgesloten; 08-07 blijft ongeopend en moet de
