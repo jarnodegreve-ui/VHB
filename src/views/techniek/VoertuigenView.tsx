@@ -10,7 +10,8 @@ import {
 import { cn, notify } from '../../lib/ui';
 import { bulkUitvoeren, meldBulkResultaat } from '../../lib/bulk';
 import { useZelfLadend } from '../../lib/zelfLadend';
-import { useRouteParam } from '../../app/router';
+import { useRecordLink } from '../../app/useRecordLink';
+import { RecordOnbekend } from '../../components/RecordOnbekend';
 import { formatDateHuman, formatRelatief } from '../../lib/format';
 import {
   bewaarVoertuig, dagenTot, laadDefecten, laadVoertuigVervaldata, laadVoertuigWerken, laadVoertuigen, maakVoertuig, TechniekFout,
@@ -65,7 +66,6 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
   const [filter, setFilter] = useState<Filter>('actief');
   const [categorie, setCategorie] = useState<CategorieFilter>('alle');
   const [zoek, setZoek] = useState('');
-  const [detail, setDetail] = useState<Vehicle | null>(null);
   const [bewerk, setBewerk] = useState<{ voertuig: Vehicle | null } | null>(null);
   const sort = useSort<string>('kort');
   const voorkeur = useTabelVoorkeur('voertuigen', KOLOMMEN);
@@ -75,16 +75,12 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
     setVoertuigen(v); setExpiries(e); setOpenDefecten(d);
   }, { boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de voertuigen niet laden.') });
 
-  // Deeplink /techniek/voertuigen/<id> (bv. "Open bus" uit de gele boek):
-  // de fiche opent zodra de lijst er is; de parameter gaat daarna weg zodat
-  // sluiten niet opnieuw opent.
-  const [voertuigParam, zetVoertuigParam] = useRouteParam(0);
-  useEffect(() => {
-    if (!voertuigParam || voertuigen.length === 0) return;
-    const v = voertuigen.find((x) => x.id === voertuigParam);
-    if (v) setDetail(v);
-    zetVoertuigParam(null);
-  }, [voertuigParam, voertuigen, zetVoertuigParam]);
+  // Recordlink /techniek/voertuigen/<id>, zelfde patroon als Verlof,
+  // Dienstruil en Dienstoverzicht (3C/P2): de fiche volgt de URL, dus een
+  // refresh, een gedeelde link en Terug/Vooruit werken; een id dat niet (meer)
+  // in de lijst staat geeft de nette melding in plaats van stil de lijst.
+  const link = useRecordLink('voertuigen', voertuigen, zl.laatstGeladen !== null);
+  const detail = link.staat === 'gevonden' ? link.record : null;
 
   const perVoertuig = useMemo(() => {
     const m = new Map<string, Partial<Record<VoertuigVervalSoort, VehicleExpiry>>>();
@@ -137,7 +133,6 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
 
   const naOpslaan = (v: Vehicle) => {
     setVoertuigen((lijst) => (lijst.some((x) => x.id === v.id) ? lijst.map((x) => (x.id === v.id ? v : x)) : [...lijst, v]));
-    if (detail?.id === v.id) setDetail(v);
   };
 
   // De lege staat draagt dezelfde actie als de kopknop; dan hoort er maar
@@ -156,6 +151,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
           </>
         )}
       />
+      {link.staat === 'onbekend' && <RecordOnbekend soort="voertuig" onzijdig onSluit={link.sluit} />}
       {zl.fout && voertuigen.length > 0 && <Foutkaart compact boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />}
 
       <div className="kpi-raster grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -227,9 +223,9 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
                     {gesorteerd.map((r) => (
                       // De bus is de knop (Tab + Enter opent de fiche); een klik
                       // ergens in de rij doet hetzelfde voor de muis.
-                      <tr key={r.v.id} onClick={rijKlik(() => setDetail(r.v))} className="group cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
+                      <tr key={r.v.id} onClick={rijKlik(() => link.open(r.v.id))} className="group cursor-pointer border-b border-hairline-subtle last:border-b-0 transition-colors hover:bg-surface-soft-hover">
                         <Td nowrap className={cn(VASTE_KOLOM, 'transition-colors group-hover:bg-surface-soft-hover')}>
-                          <CelKnop onClick={() => setDetail(r.v)} label={`${voertuigNaam(r.v)} openen`}>
+                          <CelKnop onClick={() => link.open(r.v.id)} label={`${voertuigNaam(r.v)} openen`}>
                             <span className="block font-semibold text-slate-800">{voertuigNaam(r.v)}</span>
                             <span className="block text-xs font-medium text-slate-500">{r.v.busnr}{r.v.merk ? ` · ${r.v.merk}` : ''}</span>
                           </CelKnop>
@@ -248,7 +244,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
               <div className="md:hidden divide-y divide-hairline-subtle">
                 {gesorteerd.map((r) => (
                   // rauw: hele kaartrij (naam + pillen) is de knop die het detail opent
-                  <button key={r.v.id} type="button" onClick={() => setDetail(r.v)} className="ios-pressable flex min-h-11 w-full flex-col gap-2 px-5 py-3.5 text-left transition-colors hover:bg-surface-soft-hover">
+                  <button key={r.v.id} type="button" onClick={() => link.open(r.v.id)} className="ios-pressable flex min-h-11 w-full flex-col gap-2 px-5 py-3.5 text-left transition-colors hover:bg-surface-soft-hover">
                     <div className="flex items-baseline justify-between gap-3">
                       <p className="min-w-0 truncate text-sm font-semibold text-slate-800">{voertuigNaam(r.v)} <span className="font-medium text-slate-500">· {r.v.nummerplaat ?? r.v.busnr}</span></p>
                       {statusBadge(r.v)}
@@ -272,7 +268,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
           currentUser={currentUser}
           vervaldata={perVoertuig.get(detail.id) ?? {}}
           defecten={openDefecten.filter((d) => d.vehicleId === detail.id)}
-          onClose={() => setDetail(null)}
+          onClose={link.sluit}
           onBewerk={() => setBewerk({ voertuig: detail })}
           onVervaldatum={async (soort, validUntil, opmerking) => {
             await zetVoertuigVervaldatum(detail.id, { soort, validUntil: validUntil || null, opmerking: opmerking || null });
@@ -289,7 +285,7 @@ export function VoertuigenView({ currentUser }: { currentUser: User }) {
           voertuig={bewerk.voertuig}
           onClose={() => setBewerk(null)}
           onKlaar={(v) => { naOpslaan(v); setBewerk(null); }}
-          onVerwijderd={(id) => { setVoertuigen((lijst) => lijst.filter((x) => x.id !== id)); setDetail(null); setBewerk(null); }}
+          onVerwijderd={(id) => { link.sluit(); setBewerk(null); setVoertuigen((lijst) => lijst.filter((x) => x.id !== id)); }}
         />
       )}
     </PageShell>
