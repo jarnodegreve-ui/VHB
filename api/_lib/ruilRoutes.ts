@@ -18,7 +18,8 @@ import { DAG_KORT, meldRuilTerValidatieTelegram } from "../telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { RUIL_BEKEKEN_ACTIE, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
 import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoorRust, type RustPlanningRij } from "../../shared/ruilRust.js";
-import { addDagenIso, DAG_DMJ, toLookupToken, matrixCodesForDate, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur } from "../helpers.js";
+import { addDagenIso, DAG_DMJ, toLookupToken, matrixCodesForDate, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
+import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getPlanningMatrixRows, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
@@ -546,6 +547,14 @@ export function mountRuilRoutes(app: express.Express) {
             const offeredShift = await getShiftById(String(next.shiftId ?? ""));
             if (!offeredShift || String(offeredShift.driverId) !== selfId) {
               return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen dienst te ruil aanbieden." });
+            }
+            // Een gereden dienst (laatste deel voorbij, Brusselse klok) is niet
+            // meer te ruilen: dezelfde regel als de ruilknop in het rooster
+            // (shared/dienstGereden.ts, J 24-09). De delen van een gesplitste
+            // dienst delen datum en dienstnummer; het laatste einde telt.
+            const delenVanDienst = (await getShiftsOnDate(offeredShift.date)).filter((s) => String(s.driverId) === selfId && s.line === offeredShift.line);
+            if (dienstGereden({ date: offeredShift.date, delen: delenVanDienst.length ? delenVanDienst : [offeredShift] }, brusselsDay(new Date().toISOString()), brusselseMinuten())) {
+              return res.status(400).json({ error: "Deze dienst is al gereden en kan niet meer geruild worden." });
             }
             // Exclusiviteit per dienst, dus ook over de delen van een
             // gesplitste dienst heen (offeredShift komt van de server).

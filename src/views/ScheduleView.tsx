@@ -19,6 +19,7 @@ import { cn, telHref } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { formatDuration } from '../lib/shiftTime';
+import { brusselseMinuten, dienstGereden } from '../../shared/dienstGereden';
 import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUren';
 import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
 import { formatDatumDMJ, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
@@ -214,8 +215,13 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
   // isoDate = lokale tijd; toISOString() gaf in BE 's nachts de UTC-dag
   // (off-by-one), waardoor 'vandaag' soms in 'verleden' belandde.
   const today = isoDate(new Date());
-  const upcoming = grouped.filter((g) => g.date >= today);
-  const past = grouped.filter((g) => g.date < today).reverse();
+  // Een dienst van vandaag is gereden na het einde van haar laatste deel
+  // (shared/dienstGereden.ts, J 24-09): dan hoort ze bij het verleden en is
+  // er niets meer te ruilen; het dashboard telt haar dan ook niet als volgende.
+  const nuMin = brusselseMinuten();
+  const gereden = (g: GroupedShift) => dienstGereden({ date: g.date, delen: g.segments }, today, nuMin);
+  const upcoming = grouped.filter((g) => !gereden(g));
+  const past = grouped.filter(gereden).reverse();
 
   // Geplande uren deze week/maand (punt 15): afgeleid uit de dienstvensters,
   // geen loonberekening (src/lib/roosterUren.ts); de strook zegt dat ook.
@@ -362,6 +368,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
               maandParam={maandParam}
               onMaandParam={zetMaandParam}
               planningTel={planningTel}
+              detailVandaag={!(xl && toonLijst)}
             />
           )}
         </div>
@@ -381,9 +388,14 @@ function MonthCalendar({
   maandParam,
   onMaandParam,
   planningTel,
+  detailVandaag = true,
 }: {
   groups: GroupedShift[];
   today: string;
+  /** Het dagdetail ook voor vandaag tonen. Op xl staat de lijst ernaast en is
+   *  vandaag daar al de eerste kaart (L, 24-09); een andere gekozen dag krijgt
+   *  zijn detail wel. */
+  detailVandaag?: boolean;
   leaves: LeaveRequest[];
   noteFor: (date: string) => string | undefined;
   onRequestSwap?: (shiftId: string) => void;
@@ -557,7 +569,7 @@ function MonthCalendar({
       </Card>
 
       {/* Detail van de geselecteerde dag */}
-      <Card padding="sm">
+      {(detailVandaag || selected !== today) && <Card padding="sm">
         <MicroLabel className={cn('tabular-nums', selected === today && 'text-oker-700')}>
           {selected === today ? 'Vandaag' : `Wk ${isoWeekOf(selected)}`}
         </MicroLabel>
@@ -629,12 +641,12 @@ function MonthCalendar({
             Ritblad van vandaag
           </Button>
         )}
-        {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict || g.openSwap) && (
+        {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict || g.openSwap || dienstGereden({ date: g.date, delen: g.segments }, today, brusselseMinuten())) && (
           <Button variant="secondary" size="sm" className="mt-3" onClick={() => onRequestSwap(selectedGroups[0].segments[0].id)} icon={<ArrowLeftRight size={14} />}>
             Deze dienst ruilen
           </Button>
         )}
-      </Card>
+      </Card>}
     </div>
   );
 }

@@ -638,6 +638,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 label="Meer acties"
                 align="left"
                 items={[
+                  // H (24-09): een planner registreert vaker verlof dan hij het zelf aanvraagt,
+                  // dus Registreren is de gouden knop en Aanvragen staat hier.
+                  { label: 'Verlof aanvragen', icon: <Plus size={16} />, onClick: openAanvraag },
                   { label: "Saldo's", icon: <Users size={16} />, onClick: () => setShowSaldoModal(true) },
                   ...(user.role === 'admin' ? [
                     { label: 'Feestdagen', icon: <CalendarOff size={16} />, onClick: () => setShowFeestdagenModal(true) },
@@ -646,17 +649,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 ]}
               />
             )}
-            {isPlanner && (
-              <Button variant="secondary" icon={<ClipboardCheck size={16} />} onClick={openRegistratie}>
+            {isPlanner ? (
+              <Button variant="primary" icon={<ClipboardCheck size={16} />} onClick={openRegistratie}>
                 Verlof registreren
               </Button>
+            ) : (
+              <Button variant="primary" icon={<Plus size={16} />} onClick={openAanvraag}>
+                Verlof aanvragen
+              </Button>
             )}
-            {/* Planner: "…", Verlof registreren én de gouden knop passen niet
-                naast elkaar op 390 px; de gouden knop krijgt dan bewust de
-                hele tweede regel i.p.v. half af te breken (B4, ronde 5). */}
-            <Button variant="primary" icon={<Plus size={16} />} onClick={openAanvraag} className={isPlanner ? 'max-sm:w-full' : undefined}>
-              Verlof aanvragen
-            </Button>
           </>
         )}
       />

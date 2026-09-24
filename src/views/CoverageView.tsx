@@ -625,8 +625,11 @@ export function CoverageView() {
   const zijvak = (
     // Geen tweede "Instellen" hier: de knop in de kop is de enige (P3).
     <Zijvak titel="Deze maand">
-      <ZijvakRij label="Dagen met gaten" waarde={zl.laden ? '…' : dagenMetGaten} />
-      <ZijvakRij label="Open diensten" waarde={zl.laden ? '…' : totalMissing} />
+      {/* Zonder ingestelde verwachting zijn er geen gaten te tellen (de lijst
+          zegt dan "nog niets ingesteld"); een los cijfer van een afwezige
+          sprak dat tegen (O, 24-09). Eén bron: pas tellen als de lijst telt. */}
+      <ZijvakRij label="Dagen met gaten" waarde={zl.laden ? '…' : !anyExpectations ? '—' : dagenMetGaten} />
+      <ZijvakRij label="Open diensten" waarde={zl.laden ? '…' : !anyExpectations ? '—' : totalMissing} />
       <ZijvakRij
         label="Dag-types"
         waarde={!config ? '…' : dayTypeNames.length === 0 ? 'nog niet ingesteld' : dayTypeNames.length}

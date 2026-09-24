@@ -231,10 +231,10 @@ export const savePlanningData = async (data: any) => {
  * `line` horen erbij sinds de overname-check en de planning-doorvoer: de
  * server moet weten op welke dag en om welk dienstnummer het gaat.
  */
-export const getShiftById = async (id: string): Promise<{ id: string; driverId: string; date: string; line: string } | null> => {
+export const getShiftById = async (id: string): Promise<{ id: string; driverId: string; date: string; line: string; endTime: string } | null> => {
   if (!id) return null;
   const client = requireDb();
-  const { data, error } = await client.from('planning').select('id, driverId, date, line').eq('id', id).maybeSingle();
+  const { data, error } = await client.from('planning').select('id, driverId, date, line, endTime').eq('id', id).maybeSingle();
   if (error) throw error;
   if (!data) return null;
   return {
@@ -242,6 +242,7 @@ export const getShiftById = async (id: string): Promise<{ id: string; driverId: 
     driverId: String((data as any).driverId ?? ''),
     date: String((data as any).date ?? ''),
     line: String((data as any).line ?? ''),
+    endTime: String((data as any).endTime ?? ''),
   };
 };
 
@@ -250,16 +251,17 @@ export const getShiftById = async (id: string): Promise<{ id: string; driverId: 
  * eigendoms-check (staat de dienst nog op de huidige chauffeur?) en
  * conflict-check (heeft de nieuwe chauffeur die dag al een dienst?).
  */
-export const getShiftsOnDate = async (date: string): Promise<Array<{ id: string; driverId: string; date: string; line: string }>> => {
+export const getShiftsOnDate = async (date: string): Promise<Array<{ id: string; driverId: string; date: string; line: string; endTime: string }>> => {
   const client = requireDb();
   const rows = await paginatedFetch((from, to) =>
-    client.from('planning').select('id, driverId, date, line').eq('date', date).order('id', { ascending: true }).range(from, to),
+    client.from('planning').select('id, driverId, date, line, endTime').eq('date', date).order('id', { ascending: true }).range(from, to),
   );
   return rows.map((r: any) => ({
     id: String(r.id),
     driverId: String(r.driverId ?? ''),
     date: String(r.date ?? ''),
     line: String(r.line ?? ''),
+    endTime: String(r.endTime ?? ''),
   }));
 };
 
