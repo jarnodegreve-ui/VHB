@@ -1,4 +1,5 @@
 import { addDays, isoDate } from './datum';
+import { eindtijdMinuten } from '../../shared/dienstGereden';
 
 /** 'HH:MM' → minuten sinds middernacht van de dienstdag, of null bij een
  *  ongeldige tijd. Uren ≥ 24 zijn geldig: het Dienstoverzicht gebruikt de
@@ -19,15 +20,9 @@ export const normalizeTimeString = (t: string): string => {
   return `${m[1].padStart(2, '0')}:${m[2]}`;
 };
 
-/** 'HH:MM' → minuten; busvak-uren tot 47 toegestaan (26:16 = dag erna). null bij vuil. */
-export const parseHHMM = (t: string): number | null => {
-  const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? '').trim());
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 47 || min > 59) return null;
-  return h * 60 + min;
-};
+/** 'HH:MM' → minuten; busvak-uren tot 47 toegestaan (26:16 = dag erna). null bij vuil.
+ *  Eén implementatie met de server (shared/dienstGereden.ts, J 24-09). */
+export const parseHHMM = eindtijdMinuten;
 
 /**
  * Is dit dienstsegment op dit moment bezig? Gesplitste diensten zijn aparte

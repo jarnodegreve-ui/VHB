@@ -151,7 +151,12 @@ const DEELBUDGET_KB = {
 // schuivende tabel; samen met P1b/P3 ging de set net over 138 (CI). De
 // warmup start pas na LCP + 2 s en raakt het eerste beeld niet; de index
 // (het kritieke pad) zakte in dezelfde ronde juist, 73,53 → ±73,5 kB na P5.
-const WARMUP_BUDGET_KB = { chauffeur: 74, staf: 139 };
+// 25-09 (J, productbeslissing): chauffeur 74 → 75. ScheduleView (in de
+// chauffeur-warmup) deelt nu de regel "gereden na het laatste deel" met de
+// server (shared/dienstGereden.ts, ±0,3 kB); de CI-runner mat de set op 74,0x
+// waar lokaal 73,9 stond. Onderzocht: parseHHMM is één implementatie geworden
+// (shiftTime re-exporteert de shared versie), de rest is de regel zelf.
+const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 139 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
