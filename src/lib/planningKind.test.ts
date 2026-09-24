@@ -9,8 +9,8 @@ describe('celkleuren', () => {
   const dienst = { kind: 'service' as const, code: '2101' };
 
   it('een gewone dienst volgt de soort', () => {
-    expect(celChipClass(dienst)).toContain('oker');
-    expect(celBadgeTone(dienst)).toBe('oker');
+    expect(celChipClass(dienst)).toContain('slate');
+    expect(celBadgeTone(dienst)).toBe('slate');
   });
 
   it('een geruilde of overgezette dienst is rood', () => {

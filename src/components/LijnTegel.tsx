@@ -44,6 +44,7 @@ function badgeKlassen(size: Maat, tone: Toon, lijn?: string) {
     lijn === '50' ? 'lijnbadge--oranje'
       : lijn && STREEKLIJNEN.has(lijn) ? 'lijnbadge--streek'
       : tone === 'muted' ? 'border-hairline bg-slate-500/12 text-slate-600'
-      : 'border-oker-100 bg-oker-50 text-oker-800',
+      // A (24-09): een lijnnummer is informatie, geen taak van goud; neutraal vlak.
+      : 'border-hairline bg-surface-muted text-slate-800',
   );
 }
