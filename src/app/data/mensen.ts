@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { User } from '../../types';
-import { apiFetch, apiJson } from '../../lib/api';
+import { apiFetch, apiJson, foutUitAntwoord } from '../../lib/api';
 import type { VervaldataRij, PendingDevice } from '../../lib/werkvoorraad';
 import { startRustigePoll } from '../../lib/rustigePoll';
 import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
@@ -66,6 +66,7 @@ export function useMensenData(ctx: DataCtx) {
   const fetchUsers = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/users', { accessToken });
+      if (!response.ok) throw await foutUitAntwoord(response);
       ctx.noteerAntwoord(response);
       ctx.captureRevision('users', response);
       const data = await response.json();
@@ -74,10 +75,12 @@ export function useMensenData(ctx: DataCtx) {
         // bij gewijzigde inhoud.
         zetUsersUitAntwoord(response, data, ctx.stripRecordRevisions<User>('users', data));
         ctx.markCollectionLoaded('users');
+        ctx.noteerCollectie('users', null);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
       meldLaadfout('de gebruikerslijst', error);
+      ctx.noteerCollectie('users', 'De gebruikerslijst kon niet laden.');
     } finally {
       setUsersGeladen(true);
     }
@@ -156,6 +159,7 @@ export function useMensenData(ctx: DataCtx) {
   const fetchUnseenDocuments = async (userId: string, accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/documents', { accessToken });
+      if (!response.ok) throw await foutUitAntwoord(response);
       const data = await response.json();
       if (!Array.isArray(data)) return;
       let lokaal: string | null = null;
@@ -166,8 +170,10 @@ export function useMensenData(ctx: DataCtx) {
       const lastSeen = [lokaal, server].filter(Boolean).sort().pop() ?? null;
       const unseen = lastSeen ? data.filter((d: any) => String(d.uploadedAt) > lastSeen).length : data.length;
       setUnseenDocuments(unseen);
+      ctx.noteerCollectie('documenten', null);
     } catch (error) {
       console.error('Error fetching documents badge:', error);
+      ctx.noteerCollectie('documenten', 'De documenten konden niet laden.');
     } finally {
       setDocumentenGeladen(true);
     }

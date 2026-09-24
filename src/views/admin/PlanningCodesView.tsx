@@ -4,7 +4,8 @@ import { History, Plus, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
 import { metOngedaan } from '../../lib/ongedaan';
-import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell } from '../../components/ui';
+import { useCollectieStaat } from '../../app/collectieStaat';
 import { Badge, Button, IconButton, Segmented } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Input, Select } from '../../components/Field';
@@ -72,7 +73,14 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
     if ('code' in patch) fouten.wisVeld(`${index}.code`);
   };
 
+  // Laadstaat (release-safety, 24-09): zolang de codes nooit met succes
+  // geladen zijn is er niets om te bewerken. Opslaan en toevoegen staan dan
+  // uit en het scherm toont een Foutkaart, geen lege lijst: een lege lijst
+  // opslaan zou de codes wissen (de datalaag blokkeert dat óók, met een toast).
+  const laad = useCollectieStaat('planningCodes');
+
   const addCode = () => {
+    if (!laad.geslaagd) return;
     setDraftCodes((current) => [
       ...current,
       {
@@ -114,6 +122,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
   };
 
   const handleSave = async () => {
+    if (!laad.geslaagd) return;
     if (isSaving) return;
     const normalized = draftCodes.map(({ _key, ...code }) => ({
       ...code,
@@ -190,10 +199,10 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         actions={(
           <>
             <AanwezigOpScherm />
-            <Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>
+            <Button variant="secondary" icon={<Plus size={16} />} onClick={addCode} disabled={!laad.geslaagd}>
               Code toevoegen
             </Button>
-            <Button variant="primary" onClick={handleSave} bezig={isSaving}>
+            <Button variant="primary" onClick={handleSave} bezig={isSaving} disabled={!laad.geslaagd}>
               Opslaan
             </Button>
           </>
@@ -222,7 +231,9 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
       >
       {/* Nog geen enkele code: de hoofdleegte van het scherm staat zelf,
           niet als doos in de tabel in de kaart (P3). */}
-      {draftCodes.length === 0 ? (
+      {laad.foutZonderData ? (
+        <Foutkaart boodschap={laad.fout ?? 'De planningscodes konden niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />
+      ) : draftCodes.length === 0 ? (
         <EmptyState
           title="Nog geen planningscodes"
           message="Voeg de eerste matrixcodes toe zodat planners en admins hun betekenis centraal beheren."

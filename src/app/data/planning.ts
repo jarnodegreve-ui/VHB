@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PlanningCode, PlanningMatrixImportHistory, PlanningMatrixRow, Service, Shift } from '../../types';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, foutUitAntwoord } from '../../lib/api';
 import { fetchCoverageGaps, type DayGap } from '../../lib/coverage';
 import { addDays, isoDate } from '../../lib/availability';
 import { useCollectieState, type DataCtx } from './kern';
@@ -105,15 +105,18 @@ export function usePlanningData(ctx: DataCtx) {
   const fetchServices = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/services', { accessToken });
+      if (!response.ok) throw await foutUitAntwoord(response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         zetServicesUitAntwoord(response, data, data);
         ctx.markCollectionLoaded('services');
         ctx.captureRevision('services', response);
+        ctx.noteerCollectie('services', null);
       }
     } catch (error) {
       console.error('Error fetching services:', error);
       meldLaadfout('het dienstoverzicht', error);
+      ctx.noteerCollectie('services', 'Het dienstoverzicht kon niet laden.');
     } finally {
       setServicesGeladen(true);
     }
@@ -174,10 +177,12 @@ export function usePlanningData(ctx: DataCtx) {
   const fetchPlanningMatrix = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/planning-matrix', { accessToken });
+      if (!response.ok) throw await foutUitAntwoord(response);
       const data = await response.json();
-      if (data && Array.isArray(data)) zetMatrixUitAntwoord(response, data, data);
+      if (data && Array.isArray(data)) { zetMatrixUitAntwoord(response, data, data); ctx.noteerCollectie('planningMatrix', null); }
     } catch (error) {
       console.error('Error fetching planning matrix:', error);
+      ctx.noteerCollectie('planningMatrix', 'De planningsmatrix kon niet laden.');
     } finally {
       setPlanningMatrixGeladen(true);
     }
@@ -186,14 +191,17 @@ export function usePlanningData(ctx: DataCtx) {
   const fetchPlanningCodes = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/planning-codes', { accessToken });
+      if (!response.ok) throw await foutUitAntwoord(response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         zetCodesUitAntwoord(response, data, data);
         ctx.markCollectionLoaded('planningCodes');
         ctx.captureRevision('planningCodes', response);
+        ctx.noteerCollectie('planningCodes', null);
       }
     } catch (error) {
       console.error('Error fetching planning codes:', error);
+      ctx.noteerCollectie('planningCodes', 'De planningscodes konden niet laden.');
     } finally {
       setPlanningCodesGeladen(true);
     }

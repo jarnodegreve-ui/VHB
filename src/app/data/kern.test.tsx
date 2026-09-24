@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { antwoordAfdruk, antwoordDatum, antwoordUitCache, useCollectieState, useStabieleActies } from './kern';
+import { antwoordAfdruk, antwoordDatum, antwoordUitCache, useCollectieState, useDataKern, useStabieleActies, type DataCtx } from './kern';
 
 /**
  * Stabiele acties en de cache-herkomst van antwoorden (punt 19, 15-09).
@@ -132,5 +132,42 @@ describe('useCollectieState', () => {
     act(() => { gezet = api.current!.uit([{ id: 'a', n: 1 }]); });
     expect(gezet).toBe(true);
     expect(api.current!.waarde[0].n).toBe(1);
+  });
+});
+
+describe('laadstaat per collectie (noteerCollectie)', () => {
+  let root: Root;
+  let el: HTMLDivElement;
+  beforeEach(() => {
+    el = document.createElement('div');
+    document.body.appendChild(el);
+    root = createRoot(el);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    el.remove();
+  });
+
+  it('fout zonder eerdere laad = niet geslaagd; geslaagd blijft staan bij een latere fout; uitloggen wist alles', () => {
+    let ctx: DataCtx | null = null;
+    function Proef() {
+      ctx = useDataKern({ session: null, currentUser: null, showToast: () => {}, meldLaadfout: () => {}, fetchActivityLog: async () => {} });
+      return null;
+    }
+    act(() => root.render(<Proef />));
+    expect(ctx!.collectieStaat.services).toBeUndefined();
+    act(() => ctx!.noteerCollectie('services', 'Het dienstoverzicht kon niet laden.'));
+    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: false, fout: 'Het dienstoverzicht kon niet laden.' });
+    act(() => ctx!.noteerCollectie('services', null));
+    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: true, fout: null });
+    // Een verversing die mislukt nadat er ooit geladen is: de gegevens zijn er nog.
+    act(() => ctx!.noteerCollectie('services', 'Even niet bereikbaar.'));
+    expect(ctx!.collectieStaat.services).toEqual({ geslaagd: true, fout: 'Even niet bereikbaar.' });
+    // Zelfde uitkomst opnieuw melden geeft hetzelfde object (geen re-render van elke lezer).
+    const vorige = ctx!.collectieStaat;
+    act(() => ctx!.noteerCollectie('services', 'Even niet bereikbaar.'));
+    expect(ctx!.collectieStaat).toBe(vorige);
+    act(() => ctx!.clearLoadedCollections());
+    expect(ctx!.collectieStaat).toEqual({});
   });
 });
