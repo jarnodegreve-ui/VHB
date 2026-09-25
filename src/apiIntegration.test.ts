@@ -508,6 +508,9 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   },
     getLoginActivity: async () => mem.activity.filter((a: any) => a.action === 'Aangemeld' || a.action === 'Actief'),
     getLatestAuthEventAt: async () => mem.lastAuthEventAt,
+    // Weekcijfers in de digest (25-09): uitgevoerde wissels uit het
+    // activiteitenlog; de mock heeft geen activity_log-tabel.
+    getSwapExecutions: async () => [],
     getAanwezigheid: async (sinceIso: string) => {
       if (!mem.presenceTabel) {
         const err: any = new Error('relation "public.user_presence" does not exist');
@@ -1053,7 +1056,9 @@ describe('PII-scoping voor chauffeurs', () => {
     // De opengevallen diensten staan in de mail: per dag het nummer, de
     // gesplitste dienst één keer, de dienst van de collega niet.
     const body = sickMails[0]?.text ?? '';
-    expect(body).toContain('Openstaande dienst(en):');
+    expect(body).toContain('Openstaande dienst(en)');
+    // De toelichting (medisch) gaat bewust niet mee in de mail (mailtranche 25-09).
+    expect(body).not.toContain('Toelichting');
     expect(body).toMatch(/wo 2 sep.*, 4407/);
     expect(body).toMatch(/do 3 sep.*, 4408/);
     expect(body).not.toContain('4407 / 4407');
@@ -2732,8 +2737,11 @@ describe('foutmelding-digest (cron)', () => {
     const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
     expect(res.status).toBe(200);
     expect(mem.emailsSent).toHaveLength(1);
-    expect(mem.emailsSent[0].subject).toContain('weekoverzicht');
+    expect(mem.emailsSent[0].subject).toMatch(/^Weekoverzicht portaal: /);
     expect(mem.emailsSent[0].text).toContain('7 dagen');
+    // De weekcijfers (vroeger de aparte maandagmail) zitten in dezelfde mail.
+    expect(mem.emailsSent[0].text).toContain('Cijfers van de afgelopen 7 dagen');
+    expect(mem.emailsSent[0].text).toMatch(/Verlof: \d+ nieuw, \d+ beslist, \d+ open/);
   });
   const recent = () => new Date().toISOString();
 
@@ -2782,7 +2790,7 @@ describe('foutmelding-digest (cron)', () => {
     const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
     expect(res.status).toBe(200);
     expect(mem.emailsSent[0].subject).not.toContain('⚠');
-    expect(mem.emailsSent[0].subject).toContain('dagoverzicht');
+    expect(mem.emailsSent[0].subject).toMatch(/^Dagoverzicht portaal: /);
     // 'onbevestigd:3' en '3' zijn hetzelfde toestel.
     expect(mem.emailsSent[0].subject).toContain('1 toestel');
   });

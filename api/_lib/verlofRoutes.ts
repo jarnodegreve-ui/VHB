@@ -10,7 +10,7 @@
 
 import express from "express";
 import crypto from "node:crypto";
-import { sendLeaveDecisionEmail, sendEmail, escapeHtml, type LeaveDecisionAction } from "../email.js";
+import { sendLeaveDecisionEmail, sendEmail, escapeHtml, mailOpbouw, portalUrl, type LeaveDecisionAction } from "../email.js";
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { isStafRol, authenticate, requireRole } from "../middleware.js";
@@ -180,22 +180,36 @@ export async function registreerZiekmeldingIntern(
     // planners die elkaars adres kennen is los versturen veiliger én leest de
     // mail normaal. Volgorde: één voor één, fouten loggen maar niet blokkeren.
     const recipients = planningRollen.filter((u) => u.email).map((u) => u.email as string);
-    // Openstaande diensten in de mail (zelfde term als het scherm): "do 6 aug — 4407". Geen diensten in
+    // Openstaande diensten in de mail (zelfde term als het scherm): "do 6 aug, 4407". Geen diensten in
     // de periode (ziek op vrije dagen) → dat óók gewoon zeggen, dan hoeft de
     // planner het rooster niet open te doen om niets te vinden.
-    const dienstenTekst = openDiensten.length > 0
-      ? `\n\nOpenstaande dienst(en):\n${openDiensten.map((o) => `- ${o.label}, ${o.nummers}`).join("\n")}\n\nDeze staan nu als onbeschikbaar in de Maandplanning en Dekking.`
-      : "\n\nGeen ingeplande diensten in deze periode.";
-    const dienstenHtml = openDiensten.length > 0
-      ? `<p><strong>Openstaande dienst(en):</strong></p><ul>${openDiensten.map((o) => `<li>${escapeHtml(o.label)}, ${escapeHtml(o.nummers)}</li>`).join("")}</ul><p>Deze staan nu als onbeschikbaar in de Maandplanning en Dekking.</p>`
-      : `<p>Geen ingeplande diensten in deze periode.</p>`;
+    // De toelichting gaat BEWUST niet mee (mailtranche 25-09): dat is
+    // medische informatie die niet in mailboxen hoort; ze staat in het portaal.
+    const actorNaam = actor.name || "Planning";
+    const { html, text } = mailOpbouw({
+      kicker: "Ziekmelding",
+      titel: `${target.name} is ziek gemeld`,
+      status: { label: "Afwezig", toon: "aandacht" },
+      alineas: openDiensten.length > 0
+        ? ["De diensten hieronder staan nu als onbeschikbaar in de Maandplanning en Dekking."]
+        : ["Geen ingeplande diensten in deze periode."],
+      feiten: [
+        { label: "Chauffeur", waarde: target.name },
+        { label: "Periode", waarde: period },
+        { label: "Gemeld door", waarde: actorNaam },
+      ],
+      ...(openDiensten.length > 0 ? { lijst: { kop: "Openstaande dienst(en)", items: openDiensten.map((o) => `${o.label}, ${o.nummers}`) } } : {}),
+      knop: { tekst: "Open Vandaag", url: `${portalUrl()}/vandaag` },
+    });
     for (const adres of recipients) {
       await sendEmail({
         to: [adres],
         context: `sick:${forUserId}`,
+        soort: "ziekmelding",
+        door: actorNaam,
         subject: `Ziekmelding, ${target.name} (${period})`,
-        text: `${target.name} is ziek gemeld voor ${period}.${comment ? `\n\nToelichting: ${comment}` : ""}${dienstenTekst}`,
-        html: `<p><strong>${escapeHtml(target.name)}</strong> is ziek gemeld voor <strong>${escapeHtml(period)}</strong>.</p>${comment ? `<p>Toelichting: ${escapeHtml(comment)}</p>` : ""}${dienstenHtml}`,
+        text,
+        html,
       });
     }
 
