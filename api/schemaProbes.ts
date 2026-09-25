@@ -50,6 +50,8 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "user_documents", columns: "id,user_id,filename,storage_path,category,size_bytes,uploaded_at,uploaded_by,opened_at" },
   // app_settings hoort bij de toestel-schakelaar (supabase/2026-07-30_app_settings.sql)
   // — staat hier alvast zodat de schema-check meldt zolang die migratie mist.
+  // mail_log: verzendlog van de mails (2026-09-25_mail_log.sql), server-only.
+  { table: "mail_log", columns: "id,verzonden_op,soort,aantal,gelukt,fout,door" },
   { table: "app_settings", columns: "key,value,updated_at" },
   // planning_notes hoort bij de dienstnotities (2026-07-30_planning_notes.sql)
   { table: "planning_notes", columns: "driver_id,date,note,updated_by,updated_at" },
