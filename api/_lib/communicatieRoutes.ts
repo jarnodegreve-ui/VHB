@@ -12,69 +12,113 @@ import express from "express";
 import { sendEmail, escapeHtml } from "../email.js";
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
-import { db, supabaseAdmin } from "../db.js";
 import { authenticate, requireRole } from "../middleware.js";
 import { isMissingColumnError } from "../deviceGate.js";
 import { urgentEmailRateLimit } from "../rateLimit.js";
 import { dienstenVerschillenVoorPlanning, heropbouwNaDienstoverzicht, ROOSTER_MELDING_RUST_MINUTEN } from "./planningHeropbouw.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { diversionBodySchema, diversionLijstSchema } from "../../shared/schemas/diversion.js";
+import { MAX_OMLEIDING_BIJLAGEN, diversionBodySchema, diversionLijstSchema } from "../../shared/schemas/diversion.js";
 import { MAX_UPDATE_BIJLAGEN, updateBodySchema, updateLijstSchema } from "../../shared/schemas/update.js";
 import { recordUrl } from "./meldingen.js";
 import { valideerLijst, valideerRecord } from "./valideer.js";
 import { recordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkDiversionsOpslag, verwerkUpdatesOpslag } from "./recordWrites.js";
-import { bijlagenUitKolom } from "../helpers.js";
+import { bijlagenUitKolom, omleidingBijlagen } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, DIVERSIONS_BUCKET, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
+import { getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlage, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 
-// Bijlage-URL's zijn kortlevend ondertekend (bucket is privé, zie
-// supabase/2026-07-26_diversions_private.sql): een gedeelde link vervalt,
-// i.p.v. eeuwig te blijven werken voor ex-medewerkers. Pad is stabiel
-// `${id}.pdf`. De opgeslagen pdfUrl is alleen een marker "er is een PDF";
-// wat de chauffeur krijgt komt altijd uit de bucket. Mislukt het
-// ondertekenen (bestand weg), dan valt de bijlage weg i.p.v. de rauwe
-// opgeslagen waarde door te geven — die was vroeger een (nu waardeloze)
-// publieke URL en kon, vóór nr. 28 van de controle 05-09, ook een door de
-// client opgegeven externe link zijn.
-const DIVERSION_URL_TTL_SEC = 60 * 60 * 12;
+// --- PDF-bijlagen bij een omleiding (2026-09-25_diversions_bijlagen.sql) ---
+// Zelfde afspraak als bij de updates: het bestand staat in de privé bucket
+// op een vaste sleutel (`<id>-<slot>.pdf`, slot 1 tot 5) en de URL wordt per
+// request ondertekend (bucket privé sinds 2026-07-26_diversions_private.sql:
+// een gedeelde link vervalt i.p.v. eeuwig te blijven werken voor
+// ex-medewerkers). De kolom `bijlagen` zegt alleen wát er hangt, nooit waar,
+// zodat een planner geen externe link als "de PDF van deze omleiding" kan
+// laten doorgaan (controle 05-09, nr. 28). Een PDF van vóór 25-09 hangt op
+// `<id>.pdf` en telt als slot 1 zolang de rij geen lijst heeft
+// (omleidingBijlagen in api/helpers.ts).
 
-/** Ondertekende URL van `${id}.pdf`, of undefined als het bestand er niet is. */
-const signedDiversionPdfUrl = async (id: string): Promise<string | undefined> => {
-  if (!db) return undefined;
-  try {
-    const { data: signed } = await db.storage
-      .from(DIVERSIONS_BUCKET)
-      .createSignedUrl(`${id}.pdf`, DIVERSION_URL_TTL_SEC);
-    return signed?.signedUrl || undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const withSignedDiversionUrls = async (diversions: any[]): Promise<any[]> =>
+/** Elke bijlage een verse, ondertekende URL geven; wat niet te ondertekenen
+ *  is (bestand weg) valt uit de lijst in plaats van als dode link mee te
+ *  gaan. De marker "pdfUrl" verlaat de server nooit. */
+const metOndertekendeOmleidingBijlagen = async (diversions: any[]): Promise<any[]> =>
   Promise.all(
-    diversions.map(async (d) => {
-      if (!d?.pdfUrl || !d?.id) return d;
-      const { pdfUrl: _bewaard, ...rest } = d;
-      const pdfUrl = await signedDiversionPdfUrl(String(d.id));
-      return pdfUrl ? { ...rest, pdfUrl } : rest;
+    diversions.map(async (d: any) => {
+      const { pdfUrl: _marker, bijlagen: _kolom, ...rest } = d ?? {};
+      if (!d?.id) return rest;
+      const bijlagen = (
+        await Promise.all(
+          omleidingBijlagen(d).map(async ({ legacy, ...b }) => {
+            const url = await ondertekenDiversionBijlage(String(d.id), b.slot, Boolean(legacy));
+            return url ? { ...b, url } : null;
+          }),
+        )
+      ).filter(Boolean);
+      return bijlagen.length > 0 ? { ...rest, bijlagen } : rest;
     }),
   );
 
 /**
- * Server-side normalisatie van `pdfUrl` bij het schrijven: de clientwaarde
- * wordt genegeerd (het schema accepteert het veld alleen omdat het formulier
- * het record heen en terug stuurt) en afgeleid uit Storage — bestaat
- * `${id}.pdf` (geüpload via POST /api/diversions/pdf), dan een verse
- * ondertekende URL, anders geen pdfUrl. Zo kan een planner nooit een
- * externe link als "officiële PDF" bij een omleiding zetten.
+ * Bij het schrijven van een omleiding komen de bijlagen nooit van de client:
+ * het schema accepteert `bijlagen` alleen omdat het formulier het record
+ * heen en terug stuurt. We houden wat er al bij het record hoort (de lijst
+ * én de oude marker), zodat een gewone save de PDF's met rust laat; alleen
+ * de upload- en verwijderroutes hieronder schrijven de lijst.
  */
-const metServerPdfUrl = async <T extends { id: string; pdfUrl?: string }>(record: T): Promise<T> => {
-  const { pdfUrl: _client, ...rest } = record;
-  const pdfUrl = await signedDiversionPdfUrl(String(record.id));
-  return (pdfUrl ? { ...rest, pdfUrl } : rest) as T;
+const metBewaardeBijlagen = <T extends { id: string }>(record: T, huidig?: { pdfUrl?: string; bijlagen?: unknown } | null): T => {
+  const { bijlagen: _client, pdfUrl: _clientMarker, ...rest } = record as T & { bijlagen?: unknown; pdfUrl?: unknown };
+  return {
+    ...rest,
+    ...(huidig?.pdfUrl ? { pdfUrl: huidig.pdfUrl } : {}),
+    ...(Array.isArray(huidig?.bijlagen) && huidig.bijlagen.length > 0 ? { bijlagen: huidig.bijlagen } : {}),
+  } as T;
 };
+
+/** Ruim onder de 5 MB die express.json aankan, na base64-opslag (+33 %). */
+const MAX_PDF_BIJLAGE_BYTES = 4 * 1024 * 1024;
+
+/** Body van een PDF-upload lezen en controleren (updates en omleidingen):
+ *  slot binnen bereik, bestandsnaam op .pdf, base64 data-URL, niet leeg en
+ *  niet te groot. Geeft de fout met status terug, of de buffer. */
+const leesPdfUpload = (
+  body: any,
+  maxSlot: number,
+): { fout: { status: number; error: string } } | { slot: number; filename: string; buffer: Buffer } => {
+  const slot = Number(body?.slot);
+  if (!Number.isInteger(slot) || slot < 1 || slot > maxSlot) {
+    return { fout: { status: 400, error: maxSlot === 2 ? "Kies plaats 1 of 2." : `Kies een plaats van 1 tot ${maxSlot}.` } };
+  }
+  const filename = String(body?.filename || "").trim();
+  if (!filename || !filename.toLowerCase().endsWith(".pdf")) {
+    return { fout: { status: 400, error: "Geef een PDF-bestand met een .pdf extensie." } };
+  }
+  const base64Match = String(body?.dataUrl || "").match(/^data:application\/pdf;base64,(.+)$/);
+  if (!base64Match) return { fout: { status: 400, error: "Bestand is geen geldige PDF (base64 data URL verwacht)." } };
+  const buffer = Buffer.from(base64Match[1], "base64");
+  if (buffer.length === 0) return { fout: { status: 400, error: "Bestand is leeg." } };
+  if (buffer.length > MAX_PDF_BIJLAGE_BYTES) {
+    return { fout: { status: 413, error: `Bestand is te groot (max ${Math.round(MAX_PDF_BIJLAGE_BYTES / (1024 * 1024))} MB).` } };
+  }
+  return { slot, filename, buffer };
+};
+
+/** Vóór de lijst van een omleiding geschreven wordt: hangt er nog een PDF
+ *  van vóór 25-09 op `<id>.pdf` die blijft (niet het slot dat nu vervangen
+ *  of verwijderd wordt), verhuis die dan naar `<id>-1.pdf`, want de lijst
+ *  kent geen oude sleutel. Geeft de lijst terug zonder de legacy-vlag. */
+const zonderLegacy = async (
+  id: string,
+  bestaande: ReturnType<typeof omleidingBijlagen>,
+  slotDatWeggaat: number,
+): Promise<Array<{ slot: number; filename: string; sizeBytes?: number }>> => {
+  const blijvend = bestaande.filter((b) => b.slot !== slotDatWeggaat);
+  if (blijvend.some((b) => b.legacy)) await verplaatsDiversionLegacyBijlage(id);
+  return blijvend.map(({ legacy: _l, ...b }) => b);
+};
+
+// Strak formaat op een record-id dat rechtstreeks de storage-sleutel wordt:
+// zonder deze check kon '../iets' naar een andere plek in de bucket schrijven.
+const STORAGE_ID = /^[a-zA-Z0-9_-]+$/;
 
 // --- Omleidingen per record ---
 // Veldvalidatie (titel, datums, einddatum ≥ startdatum) zit in het gedeelde
@@ -82,7 +126,7 @@ const metServerPdfUrl = async <T extends { id: string; pdfUrl?: string }>(record
 const diversionResponseRecord = async (id: string) => {
   const raw = (await getDiversionsData()).find((d: any) => String(d.id) === id);
   if (!raw) return null;
-  const [signed] = await withSignedDiversionUrls([raw]);
+  const [signed] = await metOndertekendeOmleidingBijlagen([raw]);
   return withRecordRevision(signed, recordRevisionOf(raw));
 };
 
@@ -138,10 +182,9 @@ const updateResponseRecord = async (id: string) => {
   return u ? withRecordRevision(u, recordRevisionOf(u)) : null;
 };
 
-// PDF bij een update zetten. Zelfde vorm als POST /api/diversions/pdf: een
-// base64 data-URL in de body, een strak id (de sleutel in de bucket) en
-// upsert, zodat opnieuw uploaden het vorige bestand vervangt.
-const MAX_UPDATE_BIJLAGE_BYTES = 4 * 1024 * 1024;
+// PDF bij een update zetten: een base64 data-URL in de body, een strak id
+// (de sleutel in de bucket) en upsert, zodat opnieuw uploaden het vorige
+// bestand vervangt. Zelfde vorm als bij de omleidingen (leesPdfUpload).
 
 export function mountCommunicatieRoutes(app: express.Express) {
   app.get("/api/diversions", authenticate, async (_req, res) => {
@@ -152,7 +195,7 @@ export function mountCommunicatieRoutes(app: express.Express) {
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
       // `_rev` per record over de rauwe rij (vóór het ondertekenen, zelfde reden).
       const revs = data.map((d: any) => recordRevisionOf(d));
-      res.json((await withSignedDiversionUrls(data)).map((d: any, i: number) => withRecordRevision(d, revs[i])));
+      res.json((await metOndertekendeOmleidingBijlagen(data)).map((d: any, i: number) => withRecordRevision(d, revs[i])));
     } catch (err) {
       console.error("Error reading diversions data:", err);
       res.status(500).json({ error: "Gegevens laden is mislukt." });
@@ -169,8 +212,9 @@ export function mountCommunicatieRoutes(app: express.Express) {
         { const rp = revisionCheck(req, previousDiversions); if (rp) return revisionProbleemResponse(res, "De omleidingen", rp); }
         const diversionsRemoved = detectMassDelete(previousDiversions, newData);
         if (diversionsRemoved !== null) return massDeleteResponse(res, diversionsRemoved, previousDiversions.length, "omleidingen");
-        // pdfUrl komt uit Storage, nooit van de client (zie metServerPdfUrl).
-        const genormaliseerd = await Promise.all(newData.map((d: any) => metServerPdfUrl({ ...d, id: String(d.id) })));
+        // Bijlagen komen uit Storage, nooit van de client (zie metBewaardeBijlagen).
+        const huidigById = new Map(previousDiversions.map((d: any) => [String(d.id), d]));
+        const genormaliseerd = newData.map((d: any) => metBewaardeBijlagen({ ...d, id: String(d.id) }, huidigById.get(String(d.id))));
         await verwerkDiversionsOpslag(req as AuthenticatedRequest, previousDiversions, genormaliseerd);
 
         res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
@@ -196,7 +240,7 @@ export function mountCommunicatieRoutes(app: express.Express) {
       if (previousDiversions.some((d: any) => String(d.id) === id)) {
         return res.status(409).json({ error: "Er bestaat al een omleiding met dit id.", conflict: "exists" });
       }
-      const record = await metServerPdfUrl({ ...body, id });
+      const record = metBewaardeBijlagen({ ...body, id });
       await verwerkDiversionsOpslag(req, previousDiversions, [...previousDiversions, record], { samenvatting: false, herstel: String(req.get("x-herstel") ?? "") === "1" });
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.status(201).json({ success: true, diversion: await diversionResponseRecord(id) });
@@ -218,7 +262,7 @@ export function mountCommunicatieRoutes(app: express.Express) {
       const current = previousDiversions.find((d: any) => String(d.id) === id);
       if (!current) return res.status(404).json({ error: "Omleiding niet gevonden, mogelijk intussen verwijderd." });
       if (rev !== recordRevisionOf(current)) return recordConflictResponse(res, "Deze omleiding", withRecordRevision(current, recordRevisionOf(current)));
-      const record = await metServerPdfUrl({ ...body, id });
+      const record = metBewaardeBijlagen({ ...body, id }, current);
       const newData = previousDiversions.map((d: any) => (String(d.id) === id ? record : d));
       await verwerkDiversionsOpslag(req, previousDiversions, newData, { samenvatting: false });
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
@@ -247,56 +291,66 @@ export function mountCommunicatieRoutes(app: express.Express) {
     }
   });
 
-  app.post("/api/diversions/pdf", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  app.post("/api/diversions/:id/bijlage", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
     try {
-      if (!supabaseAdmin) {
-        return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
-      }
+      const id = String(req.params.id || "").trim();
+      if (!id || !STORAGE_ID.test(id)) return res.status(400).json({ error: "Ongeldig omleiding-id." });
+      const upload = leesPdfUpload(req.body, MAX_OMLEIDING_BIJLAGEN);
+      if ("fout" in upload) return res.status(upload.fout.status).json({ error: upload.fout.error });
+      const { slot, filename, buffer } = upload;
 
-      const id = String(req.body?.id || "").trim();
-      const filename = String(req.body?.filename || "").trim();
-      const dataUrl = String(req.body?.dataUrl || "");
-      // Strak formaat op het id: het wordt rechtstreeks de storage-key
-      // (`${id}.pdf`), dus zonder deze check kon een planner met `../iets` naar
-      // een afwijkende sleutel schrijven of een bestaand object overschrijven
-      // (path-traversal in de diversions-bucket).
-      if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
-        return res.status(400).json({ error: "Ongeldig diversion-id." });
-      }
-      if (!filename || !filename.toLowerCase().endsWith(".pdf")) {
-        return res.status(400).json({ error: "Geef een PDF-bestand met een .pdf extensie." });
-      }
-      const base64Match = dataUrl.match(/^data:application\/pdf;base64,(.+)$/);
-      if (!base64Match) {
-        return res.status(400).json({ error: "Bestand is geen geldige PDF (base64 data URL verwacht)." });
-      }
-      const buffer = Buffer.from(base64Match[1], "base64");
-      if (buffer.length === 0) {
-        return res.status(400).json({ error: "Bestand is leeg." });
-      }
+      const huidig = (await getDiversionsData()).find((d: any) => String(d.id) === id);
+      if (!huidig) return res.status(404).json({ error: "Omleiding niet gevonden, mogelijk intussen verwijderd." });
 
-      // Stable path per diversion: re-uploaden = upsert overschrijft het oude bestand.
-      const storagePath = `${id}.pdf`;
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from(DIVERSIONS_BUCKET)
-        .upload(storagePath, buffer, {
-          contentType: "application/pdf",
-          upsert: true,
-        });
-      if (uploadError) throw uploadError;
-
-      // Ondertekende URL i.p.v. publieke: de bucket is privé. De opgeslagen
-      // pdfUrl vervalt, maar GET /api/diversions ondertekent bij élk ophalen
-      // opnieuw op basis van `${id}.pdf`, dus de bijlage blijft bereikbaar.
-      const { data: signed, error: signError } = await supabaseAdmin.storage
-        .from(DIVERSIONS_BUCKET)
-        .createSignedUrl(storagePath, DIVERSION_URL_TTL_SEC);
-      if (signError || !signed?.signedUrl) throw signError ?? new Error("Kon geen ondertekende URL maken.");
-      res.json({ publicUrl: signed.signedUrl, storagePath, filename, sizeBytes: buffer.length });
+      const bestaande = omleidingBijlagen(huidig);
+      // Eerst de oude sleutel afhandelen, dan pas uploaden en de lijst
+      // schrijven: faalt de verhuis, dan is er nog niets veranderd.
+      const blijvend = await zonderLegacy(id, bestaande, slot);
+      await uploadDiversionBijlage(id, slot, buffer);
+      // Een PDF van vóór 25-09 op slot 1 wordt hier vervangen: alleen de oude
+      // sleutel mag weg (de lijst hieronder wijst naar `<id>-1.pdf`).
+      if (bestaande.some((b) => b.slot === slot && b.legacy)) {
+        await verwijderDiversionLegacyBijlage(id).catch(() => undefined);
+      }
+      const lijst = [...blijvend, { slot, filename, sizeBytes: buffer.length }].sort((a, b) => a.slot - b.slot);
+      await zetDiversionBijlagen(id, lijst);
+      await logActivity(req, "diversions", "Bijlage toegevoegd", `${filename} bij omleiding "${huidig.title}".`, { type: "diversion", id });
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
+      res.json({ success: true, diversion: await diversionResponseRecord(id) });
     } catch (err: any) {
-      console.error("Diversion PDF upload error:", err);
-      console.error("Kon PDF niet uploaden.", err);
-      res.status(500).json({ error: "Kon PDF niet uploaden." });
+      if (isMissingColumnError(err)) {
+        return res.status(503).json({ error: "De kolom voor bijlagen bestaat nog niet: draai supabase/2026-09-25_diversions_bijlagen.sql in de SQL Editor." });
+      }
+      console.error("Bijlage bij omleiding opslaan is mislukt.", err?.message || err);
+      res.status(500).json({ error: "Kon de PDF niet opslaan." });
+    }
+  });
+
+  app.delete("/api/diversions/:id/bijlage/:slot", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const id = String(req.params.id || "").trim();
+      if (!id || !STORAGE_ID.test(id)) return res.status(400).json({ error: "Ongeldig omleiding-id." });
+      const slot = Number(req.params.slot);
+      if (!Number.isInteger(slot) || slot < 1 || slot > MAX_OMLEIDING_BIJLAGEN) {
+        return res.status(400).json({ error: `Kies een plaats van 1 tot ${MAX_OMLEIDING_BIJLAGEN}.` });
+      }
+      const huidig = (await getDiversionsData()).find((d: any) => String(d.id) === id);
+      if (!huidig) return res.status(404).json({ error: "Omleiding niet gevonden, mogelijk intussen verwijderd." });
+
+      const bestaande = omleidingBijlagen(huidig);
+      const weg = bestaande.find((b) => b.slot === slot);
+      const lijst = await zonderLegacy(id, bestaande, slot);
+      await verwijderDiversionBijlage(id, slot, { legacy: Boolean(weg?.legacy) });
+      await zetDiversionBijlagen(id, lijst);
+      await logActivity(req, "diversions", "Bijlage verwijderd", `${weg?.filename ?? `Bijlage ${slot}`} bij omleiding "${huidig.title}".`, { type: "diversion", id });
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
+      res.json({ success: true, diversion: await diversionResponseRecord(id) });
+    } catch (err: any) {
+      if (isMissingColumnError(err)) {
+        return res.status(503).json({ error: "De kolom voor bijlagen bestaat nog niet: draai supabase/2026-09-25_diversions_bijlagen.sql in de SQL Editor." });
+      }
+      console.error("Bijlage bij omleiding verwijderen is mislukt.", err?.message || err);
+      res.status(500).json({ error: "Kon de PDF niet verwijderen." });
     }
   });
 
@@ -480,22 +534,10 @@ export function mountCommunicatieRoutes(app: express.Express) {
       const id = String(req.params.id || "").trim();
       // Strak formaat: het id wordt rechtstreeks de storage-sleutel, dus zonder
       // deze check kon '../iets' naar een andere plek in de bucket schrijven.
-      if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: "Ongeldig update-id." });
-      const slot = Number(req.body?.slot);
-      if (!Number.isInteger(slot) || slot < 1 || slot > MAX_UPDATE_BIJLAGEN) {
-        return res.status(400).json({ error: `Kies plaats 1 of ${MAX_UPDATE_BIJLAGEN}.` });
-      }
-      const filename = String(req.body?.filename || "").trim();
-      if (!filename || !filename.toLowerCase().endsWith(".pdf")) {
-        return res.status(400).json({ error: "Geef een PDF-bestand met een .pdf extensie." });
-      }
-      const base64Match = String(req.body?.dataUrl || "").match(/^data:application\/pdf;base64,(.+)$/);
-      if (!base64Match) return res.status(400).json({ error: "Bestand is geen geldige PDF (base64 data URL verwacht)." });
-      const buffer = Buffer.from(base64Match[1], "base64");
-      if (buffer.length === 0) return res.status(400).json({ error: "Bestand is leeg." });
-      if (buffer.length > MAX_UPDATE_BIJLAGE_BYTES) {
-        return res.status(413).json({ error: `Bestand is te groot (max ${Math.round(MAX_UPDATE_BIJLAGE_BYTES / (1024 * 1024))} MB).` });
-      }
+      if (!id || !STORAGE_ID.test(id)) return res.status(400).json({ error: "Ongeldig update-id." });
+      const upload = leesPdfUpload(req.body, MAX_UPDATE_BIJLAGEN);
+      if ("fout" in upload) return res.status(upload.fout.status).json({ error: upload.fout.error });
+      const { slot, filename, buffer } = upload;
 
       const updates = await getUpdatesData();
       const huidig = updates.find((u: any) => String(u.id) === id);
@@ -522,7 +564,7 @@ export function mountCommunicatieRoutes(app: express.Express) {
   app.delete("/api/updates/:id/bijlage/:slot", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
     try {
       const id = String(req.params.id || "").trim();
-      if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return res.status(400).json({ error: "Ongeldig update-id." });
+      if (!id || !STORAGE_ID.test(id)) return res.status(400).json({ error: "Ongeldig update-id." });
       const slot = Number(req.params.slot);
       if (!Number.isInteger(slot) || slot < 1 || slot > MAX_UPDATE_BIJLAGEN) {
         return res.status(400).json({ error: `Kies plaats 1 of ${MAX_UPDATE_BIJLAGEN}.` });

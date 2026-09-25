@@ -6,6 +6,9 @@ import type { Diversion } from '../src/types';
 const TITEL = 'Leestjeskermis (S26WRT0004), tijdelijke verplaatsing van de halte aan de Leestjesbrug en gewijzigde reisweg naar het station';
 const OMSCHRIJVING = 'Richting station rijdt de bus via de ring en de tijdelijke halte aan de school.\nDe haltes Markt en Leestjesbrug worden niet bediend.\nRichting centrum blijft de normale reisweg behouden.';
 const PDF_PAD = '/__test__/omleiding.pdf';
+const PDF_PAD_2 = '/__test__/haltekaart.pdf';
+const PDF_NAAM = 'Omleidingsplan lijn 50.pdf';
+const PDF_NAAM_2 = 'Haltekaart station.pdf';
 const OMLEIDINGEN: Diversion[] = [
   { id: 'lange-omleiding', line: '50, 58, 82', title: TITEL, location: 'Maldegem, stationsomgeving', description: OMSCHRIJVING, startDate: '2026-09-12', endDate: '2026-09-19' },
   { id: 'andere-lijn', line: '883, 884', title: 'Brugwerken aan de Zuidlaan', location: 'Eeklo', description: 'De brug blijft afgesloten voor doorgaand verkeer.', startDate: '2026-09-14', endDate: '2026-09-21' },
@@ -19,8 +22,14 @@ async function openOmleidingen(page: Page, baseURL: string, pad = '/omleidingen'
   await page.clock.setFixedTime(new Date('2026-09-16T08:00:00Z'));
   await seed(page, {
     user: CHAUFFEUR, view: 'omleidingen', thema: 'dark',
+    // Zoals de server ze geeft: de lijst met per bijlage een ondertekende URL.
     extra: (endpoint) => endpoint.endsWith('/api/diversions')
-      ? omleidingen.map((item) => item.id === 'lange-omleiding' ? { ...item, pdfUrl: new URL(PDF_PAD, baseURL).href } : item)
+      ? omleidingen.map((item) => item.id === 'lange-omleiding'
+        ? { ...item, bijlagen: [
+          { slot: 1, filename: PDF_NAAM, sizeBytes: 1200, url: new URL(PDF_PAD, baseURL).href },
+          { slot: 2, filename: PDF_NAAM_2, sizeBytes: 800, url: new URL(PDF_PAD_2, baseURL).href },
+        ] }
+        : item)
       : undefined,
   });
   await page.goto(pad);
@@ -85,11 +94,12 @@ test('omleidingen: lange titels, alle lijnnummers en filters blijven bruikbaar',
   await pastZonderHorizontaleScroll(page);
 });
 
-test('omleidingen: volledig detail, PDF, URL-selectie en mobiel sluiten blijven werken', async ({ page, baseURL, isMobile }) => {
+test('omleidingen: volledig detail, PDF-bijlagen, URL-selectie en mobiel sluiten blijven werken', async ({ page, baseURL, isMobile }) => {
   const pdf = await PDFDocument.create();
   pdf.addPage([200, 200]);
   const pdfBytes = Buffer.from(await pdf.save());
   await page.context().route(`**${PDF_PAD}`, (route) => route.fulfill({ contentType: 'application/pdf', body: pdfBytes }));
+  await page.context().route(`**${PDF_PAD_2}`, (route) => route.fulfill({ contentType: 'application/pdf', body: pdfBytes }));
   await openOmleidingen(page, baseURL!);
   await page.getByRole('button', { name: /Leestjeskermis/ }).click();
   await expect(page).toHaveURL(/\/omleidingen\/lange-omleiding$/);
@@ -107,10 +117,14 @@ test('omleidingen: volledig detail, PDF, URL-selectie en mobiel sluiten blijven 
   await expect(detail.locator('time').nth(0)).toHaveAttribute('datetime', '2026-09-12');
   await expect(detail.locator('time').nth(1)).toHaveAttribute('datetime', '2026-09-19');
 
-  const pdfUrl = new URL(PDF_PAD, baseURL!).href;
+  // Elke bijlage is een eigen knop met de bestandsnaam; de lijst staat
+  // vóór de omschrijving zodat een lange tekst ze niet verstopt.
+  const bijlagen = detail.getByRole('list', { name: 'Bijlagen' });
+  await expect(bijlagen.getByRole('button')).toHaveText([PDF_NAAM, PDF_NAAM_2]);
+  const pdfUrl = new URL(PDF_PAD_2, baseURL!).href;
   const pdfResponsePromise = page.context().waitForEvent('response', { predicate: (response) => response.url() === pdfUrl });
   const popupPromise = page.waitForEvent('popup');
-  await detail.getByRole('button', { name: 'Open PDF', exact: true }).click();
+  await bijlagen.getByRole('button', { name: PDF_NAAM_2, exact: true }).click();
   const popup = await popupPromise;
   const pdfResponse = await pdfResponsePromise;
   // Headless browsers behandelen een PDF als download of native reader en
@@ -141,7 +155,7 @@ test('omleidingen: volledig detail, PDF, URL-selectie en mobiel sluiten blijven 
   await page.getByRole('button', { name: /Marktplein tijdelijk/ }).click();
   const zonderEinddatum = page.getByRole(isMobile ? 'dialog' : 'region', { name: 'Marktplein tijdelijk afgesloten voor alle lijnen', exact: true });
   await expect(zonderEinddatum.getByText('Geen einddatum', { exact: true })).toBeVisible();
-  await expect(zonderEinddatum.getByRole('button', { name: 'Open PDF' })).toHaveCount(0);
+  await expect(zonderEinddatum.getByRole('list', { name: 'Bijlagen' })).toHaveCount(0);
   await pastZonderHorizontaleScroll(page);
 });
 
@@ -180,7 +194,7 @@ for (const viewport of [{ width: 320, height: 800 }, { width: 844, height: 390 }
     await volledigeTekstZichtbaar(detail.getByText(OMSCHRIJVING, { exact: true }));
     const sluit = detail.getByRole('button', { name: 'Sluiten', exact: true });
     await expect(sluit).toBeInViewport();
-    await detail.getByRole('button', { name: 'Open PDF', exact: true }).scrollIntoViewIfNeeded();
+    await detail.getByRole('button', { name: PDF_NAAM, exact: true }).scrollIntoViewIfNeeded();
     await expect(sluit).toBeInViewport();
     await sluit.click();
     await expect(detail).toHaveCount(0);

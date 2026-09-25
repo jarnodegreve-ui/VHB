@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Calendar, Check, ChevronDown, ChevronRight, FileText, Search, X } from 'lucide-react';
 import { LijnTegel } from '../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenVan, raaktLijn } from '../../shared/lijnen';
-import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, type OmleidingsFase } from '../lib/diversions';
+import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, type OmleidingsFase, pdfLabel } from '../lib/diversions';
 import { isoDate } from '../lib/availability';
 import type { Diversion } from '../types';
 import { cn } from '../lib/ui';
@@ -275,7 +275,7 @@ function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; va
               : <LijnTegel line={div.line} size="sm" layout="rij" tone="muted" />}
           </div>
           <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
-            {div.pdfUrl && <span className="inline-flex items-center gap-1"><FileText size={14} aria-hidden="true" />PDF</span>}
+            {(div.bijlagen?.length ?? 0) > 0 && <span className="inline-flex items-center gap-1"><FileText size={14} aria-hidden="true" />{pdfLabel(div.bijlagen!.length)}</span>}
             {isCurrent ? <Check size={16} className="text-slate-800" aria-label="Geselecteerd" /> : <ChevronRight size={16} aria-hidden="true" />}
           </span>
         </div>

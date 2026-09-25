@@ -6,9 +6,10 @@ import { Button, MicroLabel } from './primitives';
 import { LijnTegel } from './LijnTegel';
 
 /**
- * Inhoud van één omleiding: periode bovenaan, dan de omschrijving met behoud
- * van regeleinden. De PDF-knop staat bij de kop van de omschrijving, zodat
- * een lange tekst de bijlage niet onderaan het paneel verstopt.
+ * Inhoud van één omleiding: periode bovenaan, dan de bijlagen (tot vijf
+ * PDF's, één knop per bestand) en pas dan de omschrijving met behoud van
+ * regeleinden, zodat een lange tekst de bijlagen niet onderaan het paneel
+ * verstopt.
  *
  * Woont bewust hier en niet in DiversionsView: het dashboard toont hetzelfde
  * blok in zijn SlideOver, en een import daarvandaan maakte de (lui geladen)
@@ -16,6 +17,7 @@ import { LijnTegel } from './LijnTegel';
  */
 export function OmleidingDetail({ diversion: div }: { diversion: Diversion }) {
   const hint = omleidingsTijdshint(div);
+  const bijlagen = (div.bijlagen ?? []).filter((b) => b.url);
   return (
     <div className="space-y-5">
       <LijnTegel line={div.line} layout="rij" />
@@ -37,20 +39,28 @@ export function OmleidingDetail({ diversion: div }: { diversion: Diversion }) {
         {hint && <p className="mt-3 text-xs font-medium text-slate-500">{hint}</p>}
       </div>
 
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <MicroLabel>Omschrijving</MicroLabel>
-          {div.pdfUrl && (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<FileText size={16} className="text-red-500" />}
-              onClick={() => openPdfInNewTab(div.pdfUrl)}
-            >
-              Open PDF
-            </Button>
-          )}
+      {bijlagen.length > 0 && (
+        <div>
+          <MicroLabel>Bijlagen</MicroLabel>
+          <ul className="mt-3 flex flex-wrap gap-2" aria-label="Bijlagen">
+            {bijlagen.map((b) => (
+              <li key={b.slot} className="min-w-0 max-w-full">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<FileText size={16} className="text-red-500" />}
+                  onClick={() => openPdfInNewTab(b.url)}
+                >
+                  <span className="truncate">{b.filename}</span>
+                </Button>
+              </li>
+            ))}
+          </ul>
         </div>
+      )}
+
+      <div>
+        <MicroLabel>Omschrijving</MicroLabel>
         <p className="mt-3 max-w-prose whitespace-pre-wrap text-body font-normal text-slate-700 [overflow-wrap:anywhere]">{div.description}</p>
       </div>
     </div>

@@ -212,7 +212,15 @@ export interface DiversionRecord {
   description: string;
   startDate: string;
   endDate?: string;
+  /**
+   * Kolom "pdfUrl" (quoted camelCase): vóór 25-09 de marker "er hangt één PDF
+   * op `<id>.pdf`". Zolang een rij geen `bijlagen` heeft, telt die PDF als
+   * slot 1 (zie omleidingBijlagen in api/helpers.ts); de eerste upload of
+   * verwijdering op die omleiding zet de marker op null.
+   */
   pdfUrl?: string;
+  /** PDF-bijlagen (kolom `bijlagen`, migratie 2026-09-25): wát er hangt, nooit waar. */
+  bijlagen?: Array<{ slot: number; filename: string; sizeBytes?: number }>;
 }
 
 export interface ServiceRecord {

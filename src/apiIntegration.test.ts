@@ -473,7 +473,44 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       for (const id of ids) for (const slot of [1, 2]) mem.opslag.delete(`update-bijlagen/${id}-${slot}.pdf`);
     },
     getDiversionsData: async () => mem.diversions,
-    saveDiversionsData: async (data: any[]) => { mem.diversions = data; },
+    // Zoals de echte: een upsert noemt `bijlagen` niet (de route draagt de
+    // lijst zelf mee), en een verwijderde omleiding neemt haar bestanden mee
+    // (alle slots én de oude sleutel `<id>.pdf`).
+    saveDiversionsData: async (data: any[]) => {
+      const blijvend = new Set((Array.isArray(data) ? data : []).map((d: any) => String(d.id)));
+      for (const d of mem.diversions) {
+        if (blijvend.has(String(d.id))) continue;
+        for (const pad of [`${d.id}.pdf`, ...[1, 2, 3, 4, 5].map((slot) => `${d.id}-${slot}.pdf`)]) mem.opslag.delete(`diversions/${pad}`);
+      }
+      mem.diversions = data;
+    },
+    uploadDiversionBijlage: async (id: string, slot: number) => {
+      mem.opslag.add(`diversions/${id}-${slot}.pdf`);
+    },
+    verwijderDiversionBijlage: async (id: string, slot: number, opts?: { legacy?: boolean }) => {
+      mem.opslag.delete(`diversions/${id}-${slot}.pdf`);
+      if (opts?.legacy) mem.opslag.delete(`diversions/${id}.pdf`);
+    },
+    verwijderDiversionLegacyBijlage: async (id: string) => {
+      mem.opslag.delete(`diversions/${id}.pdf`);
+    },
+    verplaatsDiversionLegacyBijlage: async (id: string) => {
+      if (!mem.opslag.has(`diversions/${id}.pdf`)) throw new Error('Object not found');
+      mem.opslag.delete(`diversions/${id}.pdf`);
+      mem.opslag.add(`diversions/${id}-1.pdf`);
+    },
+    ondertekenDiversionBijlage: async (id: string, slot: number, legacy = false) => {
+      const pad = legacy ? `${id}.pdf` : `${id}-${slot}.pdf`;
+      return mem.opslag.has(`diversions/${pad}`) ? `https://opslag.test/diversions/${pad}?sig=test` : undefined;
+    },
+    zetDiversionBijlagen: async (id: string, bijlagen: any[]) => {
+      const d = mem.diversions.find((x: any) => String(x.id) === String(id));
+      if (!d) return;
+      if (bijlagen.length > 0) d.bijlagen = bijlagen;
+      else delete d.bijlagen;
+      // De oude marker gaat mee op null (zoals de echte update-query).
+      delete d.pdfUrl;
+    },
     getPlanningCodesData: async () => mem.planningCodes,
     savePlanningCodesData: async (data: any[]) => { mem.planningCodes = data; },
     logActivity: async (_req: any, domain: string, action: string, message: string, entity?: { type?: string; id?: string }) => {
@@ -5889,30 +5926,39 @@ describe('per-record API (PUT / POST one / DELETE), gebruikers, omleidingen, upd
       expect(mem.activity.find((a) => a.action === 'Omleidingen opgeslagen')).toBeFalsy();
     });
 
-    it('pdfUrl komt uit Storage, nooit van de client: een externe link wordt genegeerd bij POST one, PUT, bulk én GET (controle 05-09, nr. 28)', async () => {
-      // Geen db.storage in de testomgeving = "geen `${id}.pdf` in de bucket".
+    it('bijlagen komen uit Storage, nooit van de client: een meegestuurde lijst of oude pdfUrl wordt genegeerd bij POST one, PUT, bulk én GET (controle 05-09, nr. 28)', async () => {
+      const nep = [{ slot: 1, filename: 'nep.pdf' }];
       const extern = 'https://kwaad.example/nep.pdf';
-      const post = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '1', title: 'Met link', description: 'x', startDate: '2026-09-10', pdfUrl: extern } });
+      const post = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '1', title: 'Met lijst', description: 'x', startDate: '2026-09-10', bijlagen: nep, pdfUrl: extern } });
       expect(post.status).toBe(201);
+      expect(post.json.diversion.bijlagen).toBeUndefined();
       expect(post.json.diversion.pdfUrl).toBeUndefined();
-      expect(mem.diversions.find((d: any) => d.id === post.json.diversion.id)?.pdfUrl).toBeUndefined();
+      const nieuw = mem.diversions.find((d: any) => d.id === post.json.diversion.id);
+      expect(nieuw.bijlagen).toBeUndefined();
+      expect(nieuw.pdfUrl).toBeUndefined();
 
+      // Wat er écht hangt blijft, wat de client meestuurt telt niet.
+      mem.opslag.add('diversions/o-1-2.pdf');
+      mem.diversions[0].bijlagen = [{ slot: 2, filename: 'echt.pdf', sizeBytes: 10 }];
       const rev = await revVan('/api/diversions', 'tok-planner', 'o-1');
-      const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...mem.diversions[0], pdfUrl: extern }, headers: { [REV]: rev } });
+      const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...mem.diversions[0], bijlagen: nep, pdfUrl: extern }, headers: { [REV]: rev } });
       expect(put.status).toBe(200);
-      expect(put.json.diversion.pdfUrl).toBeUndefined();
-      expect(mem.diversions.find((d: any) => d.id === 'o-1')?.pdfUrl).toBeUndefined();
+      expect(put.json.diversion.bijlagen).toEqual([{ slot: 2, filename: 'echt.pdf', sizeBytes: 10, url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' }]);
+      expect(mem.diversions.find((d: any) => d.id === 'o-1').bijlagen).toEqual([{ slot: 2, filename: 'echt.pdf', sizeBytes: 10 }]);
 
-      const bulk = await api('POST', '/api/diversions', { token: 'tok-planner', body: mem.diversions.map((d: any) => ({ ...d, pdfUrl: extern })) });
+      const bulk = await api('POST', '/api/diversions', { token: 'tok-planner', body: mem.diversions.map((d: any) => ({ ...d, bijlagen: nep, pdfUrl: extern })) });
       expect(bulk.status).toBe(200);
-      expect(mem.diversions.every((d: any) => d.pdfUrl === undefined)).toBe(true);
+      expect(mem.diversions.find((d: any) => d.id === 'o-1').bijlagen).toEqual([{ slot: 2, filename: 'echt.pdf', sizeBytes: 10 }]);
+      expect(mem.diversions.filter((d: any) => d.id !== 'o-1').every((d: any) => d.bijlagen === undefined && d.pdfUrl === undefined)).toBe(true);
 
-      // Een oude rij met een rauwe URL gaat ook bij het lezen niet door
-      // zolang het bestand niet ondertekend kan worden.
-      mem.diversions[0].pdfUrl = 'https://oud.example/publiek.pdf';
+      // Een oude rij met een rauwe marker maar zonder bestand: niets, en de
+      // marker zelf verlaat de server nooit.
+      mem.diversions[1].pdfUrl = 'https://oud.example/publiek.pdf';
       const get = await api('GET', '/api/diversions', { token: 'tok-a' });
       expect(get.status).toBe(200);
-      expect(get.json.find((d: any) => d.id === 'o-1').pdfUrl).toBeUndefined();
+      const o2 = get.json.find((d: any) => d.id === 'o-2');
+      expect(o2.pdfUrl).toBeUndefined();
+      expect(o2.bijlagen).toBeUndefined();
     });
 
     it('POST one valideert titel en datums (400) en weigert chauffeurs (403)', async () => {
@@ -6963,6 +7009,153 @@ describe('bijlagen bij een update', () => {
     const res = await api('DELETE', `/api/updates/${id}`, { token: 'tok-planner', headers: { 'X-Record-Revision': rev } });
     expect(res.status).toBe(200);
     expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(false);
+  });
+});
+
+// --- PDF-bijlagen bij een omleiding (2026-09-25_diversions_bijlagen.sql) ---
+describe('bijlagen bij een omleiding', () => {
+  const PDF = 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=';
+  const upload = (id: string, slot: number, filename = `plan-${slot}.pdf`, token = 'tok-planner') =>
+    api('POST', `/api/diversions/${id}/bijlage`, { token, body: { slot, filename, dataUrl: PDF } });
+  beforeEach(() => {
+    mem.opslag.clear();
+    mem.diversions = [
+      { id: 'o-1', line: '12', title: 'Werken N70', description: 'Omrijden via …', startDate: '2026-07-01', endDate: '2026-07-31' },
+      { id: 'o-2', line: '14', title: 'Kermis', description: 'Centrum afgesloten', startDate: '2026-08-01' },
+    ];
+  });
+
+  it('POST …/bijlage zet het bestand op <id>-<slot>.pdf, hangt de lijst aan het record en logt', async () => {
+    const res = await upload('o-1', 1, 'omleidingsplan.pdf');
+    expect(res.status).toBe(200);
+    expect(res.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'omleidingsplan.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' }]);
+    expect(res.json.diversion._rev).toBeTruthy();
+    expect(mem.opslag.has('diversions/o-1-1.pdf')).toBe(true);
+    expect(mem.diversions[0].bijlagen).toEqual([{ slot: 1, filename: 'omleidingsplan.pdf', sizeBytes: expect.any(Number) }]);
+    expect(mem.activity.find((a) => a.action === 'Bijlage toegevoegd' && a.entityType === 'diversion')).toBeTruthy();
+  });
+
+  it('vijf plaatsen, op slot gesorteerd; een zesde en slot 0 worden geweigerd', async () => {
+    for (const slot of [3, 1, 5, 2, 4]) expect((await upload('o-1', slot)).status).toBe(200);
+    const get = await api('GET', '/api/diversions', { token: 'tok-a' });
+    expect(get.json.find((d: any) => d.id === 'o-1').bijlagen.map((b: any) => b.slot)).toEqual([1, 2, 3, 4, 5]);
+    expect((await upload('o-1', 6)).status).toBe(400);
+    expect((await upload('o-1', 0)).status).toBe(400);
+  });
+
+  it('dezelfde plaats opnieuw vervangt de vorige, geen dubbele rij', async () => {
+    await upload('o-1', 2, 'oud.pdf');
+    const res = await upload('o-1', 2, 'nieuw.pdf');
+    expect(res.json.diversion.bijlagen).toEqual([{ slot: 2, filename: 'nieuw.pdf', sizeBytes: expect.any(Number), url: expect.any(String) }]);
+  });
+
+  it('weigert geen-PDF, leeg bestand, onbekende omleiding, chauffeur en een id met padtekens', async () => {
+    expect((await api('POST', '/api/diversions/o-1/bijlage', { token: 'tok-planner', body: { slot: 1, filename: 'foto.png', dataUrl: PDF } })).status).toBe(400);
+    expect((await api('POST', '/api/diversions/o-1/bijlage', { token: 'tok-planner', body: { slot: 1, filename: 'leeg.pdf', dataUrl: 'data:application/pdf;base64,' } })).status).toBe(400);
+    expect((await upload('bestaat-niet', 1)).status).toBe(404);
+    expect((await upload('o-1', 1, 'x.pdf', 'tok-a')).status).toBe(403);
+    const traversal = await api('POST', '/api/diversions/..%2Fgeheim/bijlage', { token: 'tok-planner', body: { slot: 1, filename: 'x.pdf', dataUrl: PDF } });
+    expect(traversal.status).toBe(400);
+    expect(mem.opslag.size).toBe(0);
+  });
+
+  it('DELETE …/bijlage/:slot haalt het bestand weg; zonder bijlagen verdwijnt het veld', async () => {
+    await upload('o-1', 1);
+    await upload('o-1', 2);
+    const eerste = await api('DELETE', '/api/diversions/o-1/bijlage/1', { token: 'tok-planner' });
+    expect(eerste.status).toBe(200);
+    expect(eerste.json.diversion.bijlagen.map((b: any) => b.slot)).toEqual([2]);
+    expect(mem.opslag.has('diversions/o-1-1.pdf')).toBe(false);
+    const tweede = await api('DELETE', '/api/diversions/o-1/bijlage/2', { token: 'tok-planner' });
+    expect(tweede.json.diversion.bijlagen).toBeUndefined();
+    expect(mem.diversions[0].bijlagen).toBeUndefined();
+    expect(mem.activity.filter((a) => a.action === 'Bijlage verwijderd')).toHaveLength(2);
+  });
+
+  it('een gewone save (PUT en bulk) laat de bijlagen staan', async () => {
+    await upload('o-1', 1, 'blijft.pdf');
+    const rev = (await api('GET', '/api/diversions', { token: 'tok-planner' })).json.find((d: any) => d.id === 'o-1')._rev;
+    const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { id: 'o-1', line: '12', title: 'Werken N70 (verlengd)', description: 'Omrijden via …', startDate: '2026-07-01', endDate: '2026-08-31' }, headers: { 'X-Record-Revision': rev } });
+    expect(put.status).toBe(200);
+    expect(put.json.diversion.title).toBe('Werken N70 (verlengd)');
+    expect(put.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number), url: expect.any(String) }]);
+    const bulk = await api('POST', '/api/diversions', { token: 'tok-planner', body: mem.diversions.map((d: any) => ({ id: d.id, line: d.line, title: d.title, description: d.description, startDate: d.startDate, endDate: d.endDate })) });
+    expect(bulk.status).toBe(200);
+    expect(mem.diversions.find((d: any) => d.id === 'o-1').bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number) }]);
+  });
+
+  it('GET ondertekent elke bijlage en laat een verdwenen bestand weg', async () => {
+    await upload('o-1', 1);
+    await upload('o-1', 2);
+    mem.opslag.delete('diversions/o-1-1.pdf');
+    const get = await api('GET', '/api/diversions', { token: 'tok-a' });
+    const o1 = get.json.find((d: any) => d.id === 'o-1');
+    expect(o1.bijlagen).toEqual([{ slot: 2, filename: 'plan-2.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' }]);
+    expect(get.json.find((d: any) => d.id === 'o-2').bijlagen).toBeUndefined();
+  });
+
+  it('een verwijderde omleiding neemt haar bestanden mee', async () => {
+    await upload('o-1', 1);
+    await upload('o-1', 4);
+    const rev = (await api('GET', '/api/diversions', { token: 'tok-planner' })).json.find((d: any) => d.id === 'o-1')._rev;
+    const res = await api('DELETE', '/api/diversions/o-1', { token: 'tok-planner', headers: { 'X-Record-Revision': rev } });
+    expect(res.status).toBe(200);
+    expect([...mem.opslag].filter((k) => k.startsWith('diversions/o-1'))).toEqual([]);
+  });
+
+  describe('een PDF van vóór 25-09 (<id>.pdf met marker pdfUrl)', () => {
+    beforeEach(() => {
+      mem.opslag.add('diversions/o-1.pdf');
+      mem.diversions[0].pdfUrl = 'https://oud.supabase.test/storage/v1/object/sign/diversions/o-1.pdf?token=x';
+    });
+
+    it('telt als slot 1 met de naam omleiding.pdf, zolang de rij geen lijst heeft', async () => {
+      const get = await api('GET', '/api/diversions', { token: 'tok-a' });
+      const o1 = get.json.find((d: any) => d.id === 'o-1');
+      expect(o1.bijlagen).toEqual([{ slot: 1, filename: 'omleiding.pdf', url: 'https://opslag.test/diversions/o-1.pdf?sig=test' }]);
+      expect(o1.pdfUrl).toBeUndefined();
+      // Bestand weg maar marker nog aanwezig: geen bijlage, geen dode link.
+      mem.opslag.delete('diversions/o-1.pdf');
+      const zonder = (await api('GET', '/api/diversions', { token: 'tok-a' })).json.find((d: any) => d.id === 'o-1');
+      expect(zonder.bijlagen).toBeUndefined();
+    });
+
+    it('een tweede PDF erbij verhuist de oude naar <id>-1.pdf en wist de marker', async () => {
+      const res = await upload('o-1', 2, 'haltekaart.pdf');
+      expect(res.status).toBe(200);
+      expect(res.json.diversion.bijlagen).toEqual([
+        { slot: 1, filename: 'omleiding.pdf', url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' },
+        { slot: 2, filename: 'haltekaart.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' },
+      ]);
+      expect(mem.opslag.has('diversions/o-1.pdf')).toBe(false);
+      expect(mem.diversions[0].pdfUrl).toBeUndefined();
+      expect(mem.diversions[0].bijlagen).toEqual([{ slot: 1, filename: 'omleiding.pdf' }, { slot: 2, filename: 'haltekaart.pdf', sizeBytes: expect.any(Number) }]);
+    });
+
+    it('slot 1 vervangen ruimt de oude sleutel op', async () => {
+      const res = await upload('o-1', 1, 'nieuw-plan.pdf');
+      expect(res.status).toBe(200);
+      expect(res.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'nieuw-plan.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' }]);
+      expect(mem.opslag.has('diversions/o-1.pdf')).toBe(false);
+      expect(mem.diversions[0].pdfUrl).toBeUndefined();
+    });
+
+    it('slot 1 verwijderen haalt de oude sleutel weg en laat een lege omleiding achter', async () => {
+      const res = await api('DELETE', '/api/diversions/o-1/bijlage/1', { token: 'tok-planner' });
+      expect(res.status).toBe(200);
+      expect(res.json.diversion.bijlagen).toBeUndefined();
+      expect(mem.opslag.has('diversions/o-1.pdf')).toBe(false);
+      expect(mem.diversions[0].pdfUrl).toBeUndefined();
+      expect(mem.diversions[0].bijlagen).toBeUndefined();
+    });
+
+    it('een gewone save houdt de marker (en dus de oude PDF) vast', async () => {
+      const rev = (await api('GET', '/api/diversions', { token: 'tok-planner' })).json.find((d: any) => d.id === 'o-1')._rev;
+      const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { id: 'o-1', line: '12', title: 'Werken N70', description: 'Anders', startDate: '2026-07-01' }, headers: { 'X-Record-Revision': rev } });
+      expect(put.status).toBe(200);
+      expect(put.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'omleiding.pdf', url: 'https://opslag.test/diversions/o-1.pdf?sig=test' }]);
+      expect(mem.diversions[0].pdfUrl).toBeTruthy();
+    });
   });
 });
 

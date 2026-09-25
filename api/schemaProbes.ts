@@ -27,7 +27,8 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // mapCoordinates bestaat live NIET en is uit de schrijfmapper gehaald.
   // location: plaats van de omleiding (2026-09-10_diversions_location.sql);
   // zonder migratie valt de upsert terug op de kolommen zonder location.
-  { table: "diversions", columns: "id,line,title,description,startDate,endDate,severity,pdfUrl,location" },
+  // bijlagen: PDF-lijst per omleiding (2026-09-25_diversions_bijlagen.sql).
+  { table: "diversions", columns: "id,line,title,description,startDate,endDate,severity,pdfUrl,location,bijlagen" },
   // updates stond hier niet; sinds 2026-09-21_updates_bijlagen.sql meldt de
   // schema-check ook de twee kolommen van de PDF-bijlagen. Bewust zónder
   // `isurgent`: die kolom bestaat live niet, toDatabaseUpdate schrijft hem

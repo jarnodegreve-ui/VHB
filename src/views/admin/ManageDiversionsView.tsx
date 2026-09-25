@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
-import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, X } from 'lucide-react';
 import { LijnTegel } from '../../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenNaarTekst, lijnenVan } from '../../../shared/lijnen';
 import type { Diversion } from '../../types';
 import { cn } from '../../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { apiFetch } from '../../lib/api';
+import { OmleidingBijlagen, uploadWachtrij } from '../../components/OmleidingBijlagen';
 import { Badge, Button, IconButton, TOON_NAAR_BADGE } from '../../components/primitives';
 import { SluitKnop } from '../../components/Modal';
 import { OMLEIDING_FASE } from '../../../shared/status';
 import { Card } from '../../components/Card';
 import { DateInput, Field, Input, Textarea } from '../../components/Field';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
-import { meldSchrijffout } from '../../lib/fouten';
 import { Formulier } from '../../components/Formulier';
 import { diversionSchema } from '../../../shared/schemas/diversion';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -24,7 +23,7 @@ import { useRecordParam } from '../../app/router';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
  *  actief tot hij verwijderd wordt. */
-import { isExpiredDiversion as isExpired, omleidingsFase, omleidingsPeriode, sorteerOmleidingen } from '../../lib/diversions';
+import { isExpiredDiversion as isExpired, omleidingsFase, omleidingsPeriode, pdfLabel, sorteerOmleidingen } from '../../lib/diversions';
 // isoDate = lokale dag. toISOString() is UTC en gaf tussen 00:00 en 02:00
 // Belgische zomertijd de dag ervóór: een omleiding die om 00:30 werd
 // aangemaakt kreeg standaard gisteren als startdatum. Zelfde reden als de
@@ -33,7 +32,7 @@ import { isoDate } from '../../lib/availability';
 
 const FORM_ID = 'omleiding-form';
 
-export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCreateDiversion, onDeleteDiversion }: {
+export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCreateDiversion, onDeleteDiversion, onHerlaad }: {
   diversions: Diversion[];
   /** Collectie-saver (hele lijst) — alleen nog de terugval als de
    *  per-record-savers hieronder niet doorgegeven zijn. */
@@ -42,6 +41,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   onSaveDiversion?: (d: Diversion, opVeldfouten?: (fouten: Record<string, string>) => void) => Promise<boolean>;
   onCreateDiversion?: (d: Diversion, opVeldfouten?: (fouten: Record<string, string>) => void) => Promise<boolean>;
   onDeleteDiversion?: (id: string) => Promise<boolean>;
+  /** Omleidingen opnieuw ophalen na een bijlage-actie (die schrijft server-side). */
+  onHerlaad?: () => void;
 }) {
   // Het bewerkformulier leeft in het DetailPaneel: desktop naast de lijst,
   // mobiel als SlideOver. "Nieuw" opent hetzelfde paneel leeg.
@@ -59,7 +60,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     description: '',
     startDate: isoDate(new Date()),
   });
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  // PDF's voor een nieuwe omleiding wachten tot het record bestaat
+  // (OmleidingBijlagen); bij een bestaande gaan ze meteen naar de server.
+  const [wachtrij, setWachtrij] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [bezig, setBezig] = useState(false);
   // Veldfouten: gedeeld schema vóór submit + server-veldfouten van een 400.
@@ -69,45 +72,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   // na een geslaagde save op desktop, waar het paneel op hetzelfde record
   // blijft staan (zelfde editingId). Zo neemt useVuil een nieuwe momentopname.
   const [vulling, setVulling] = useState(0);
-  const { vuil, markeerSchoon } = useVuil({ formData, pdf: pdfFile?.name ?? null }, paneelOpen, vulling);
+  const { vuil, markeerSchoon } = useVuil({ formData, pdf: wachtrij.map((f) => f.name).join('|') }, paneelOpen, vulling);
   // Desktop: rij kiezen, Nieuw, Annuleren en een recordwissel via de URL
   // vragen eerst bevestiging zolang het formulier vuil is.
   const poort = useDetailPoort(vuil);
-
-  const uploadPdf = async (id: string, file: File): Promise<string | null> => {
-    if (file.size > 20 * 1024 * 1024) {
-      veld.zet({ pdf: 'PDF is te groot (max 20 MB).' });
-      return null;
-    }
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      veld.zet({ pdf: 'Alleen PDF-bestanden zijn toegestaan.' });
-      return null;
-    }
-    const dataUrl: string = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error ?? new Error('Kon bestand niet lezen.'));
-      reader.readAsDataURL(file);
-    });
-    const response = await apiFetch('/api/diversions/pdf', {
-      method: 'POST',
-      body: JSON.stringify({ id, filename: file.name, dataUrl }),
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      let detail = text;
-      try { detail = JSON.parse(text).error || detail; } catch {}
-      meldSchrijffout('Uploaden', { status: response.status, message: detail });
-      return null;
-    }
-    try {
-      const result = JSON.parse(text);
-      return result.publicUrl as string;
-    } catch {
-      meldSchrijffout('Uploaden');
-      return null;
-    }
-  };
 
   // De expliciet gekozen omleiding staat in de URL (/beheer/omleidingen/<id>):
   // deelbaar met een collega, en een refresh houdt het formulier open. De
@@ -129,7 +97,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       description: '',
       startDate: isoDate(new Date()),
     });
-    setPdfFile(null);
+    setWachtrij([]);
     veld.wis();
     setVulling((n) => n + 1);
     setPaneelOpen(true);
@@ -149,7 +117,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       startDate: div.startDate,
       endDate: div.endDate,
     });
-    setPdfFile(null);
+    setWachtrij([]);
     veld.wis();
     setVulling((n) => n + 1);
     setPaneelOpen(true);
@@ -225,38 +193,22 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   };
 
   const verstuur = async () => {
-    // UUID i.p.v. Date.now() zodat de Storage-path (${id}.pdf) niet te
-    // raden is voor wie het URL-patroon kent.
+    // UUID i.p.v. Date.now() zodat de Storage-sleutel (<id>-<slot>.pdf) niet
+    // te raden is voor wie het URL-patroon kent.
     const generateId = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
       ? crypto.randomUUID()
       : `d-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const targetId = editingId || generateId();
 
-    // Gedeeld contract (shared/schemas/diversion.ts) vóór de upload: fouten
-    // bij het veld, en geen PDF naar Storage voor een omleiding die afketst.
+    // Gedeeld contract (shared/schemas/diversion.ts): fouten bij het veld,
+    // en geen PDF naar Storage voor een omleiding die afketst.
     const huidige = editingId ? diversions.find((d) => d.id === editingId) : undefined;
     if (!veld.controleer(diversionSchema, { ...huidige, ...formData, id: targetId })) return;
 
-    let uploadedPdfUrl: string | null = null;
-
-    if (pdfFile) {
-      setIsUploading(true);
-      try {
-        uploadedPdfUrl = await uploadPdf(targetId, pdfFile);
-      } catch (error) {
-        // fetch/FileReader kan ook gooien (offline, leesfout) — zonder deze
-        // catch bleef de knop eeuwig op 'PDF uploaden…' hangen.
-        meldSchrijffout('Uploaden', error);
-        return;
-      } finally {
-        setIsUploading(false);
-      }
-      if (!uploadedPdfUrl) return; // fout staat al bij het veld of in een toast
-    }
-
     if (editingId) {
       const bestaande = diversions.find((d) => d.id === editingId);
-      const bijgewerkt = { ...bestaande, ...formData, location: formData.location?.trim() || undefined, id: editingId, pdfUrl: uploadedPdfUrl || bestaande?.pdfUrl } as Diversion;
+      // Bijlagen gaan niet mee: de server houdt wat er in Storage hangt.
+      const bijgewerkt = { ...bestaande, ...formData, location: formData.location?.trim() || undefined, id: editingId } as Diversion;
       if (onSaveDiversion) {
         // Per record: het paneel blijft open als het misging (409 → de lijst
         // is ververst; de gebruiker ziet de nieuwe staat en kan opnieuw).
@@ -275,12 +227,23 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         description: formData.description || '',
         startDate: formData.startDate || '',
         endDate: formData.endDate,
-        pdfUrl: uploadedPdfUrl || undefined,
       };
       if (onCreateDiversion) {
         if (!(await onCreateDiversion(diversionToAdd, veld.zet))) return;
       } else {
         onSave([...diversions, diversionToAdd]);
+      }
+      // De omleiding staat er; nu pas de wachtende PDF's, naar de slots 1, 2, …
+      // Een mislukte upload meldt zichzelf; de omleiding blijft staan en de
+      // planner kan de PDF in het bewerkpaneel opnieuw proberen.
+      if (wachtrij.length > 0) {
+        setIsUploading(true);
+        try {
+          if ((await uploadWachtrij(targetId, wachtrij)) > 0) onHerlaad?.();
+        } finally {
+          setIsUploading(false);
+          setWachtrij([]);
+        }
       }
       // Desktop opent meteen de nieuwe omleiding in het paneel.
       if (inline) return handleOpenEdit(diversionToAdd);
@@ -338,7 +301,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                     {/* data-vt-record: DetailPaneel leest er de richting van een wissel uit. */}
                     <h3 className="text-row-title" data-vt-record={div.id}>{div.location && <span className="text-oker-800">{div.location} · </span>}{div.title}</h3>
                     {expired && <Badge tone="slate">Verlopen</Badge>}
-                    {div.pdfUrl && <Badge tone="slate" icon={<FileText size={12} />}>PDF</Badge>}
+                    {(div.bijlagen?.length ?? 0) > 0 && <Badge tone="slate" icon={<FileText size={12} />}>{pdfLabel(div.bijlagen!.length)}</Badge>}
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-xs font-medium text-slate-500 tabular-nums">
                     <Calendar size={12} className="text-slate-400" />
@@ -498,28 +461,12 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
           </Field>
         </div>
 
-        <Field label={editingId ? 'PDF-bestand (optioneel)' : 'PDF-bestand'} htmlFor="pdf-upload" error={fouten.pdf}>
-          <div className="relative">
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={(e) => { setPdfFile(e.target.files?.[0] || null); veld.wisVeld('pdf'); }}
-              className="hidden"
-              id="pdf-upload"
-            />
-            {/* Label-als-knop voor het verborgen file-input: de native
-                bestandskiezer opent via het label, niet via een knop. */}
-            <label
-              htmlFor="pdf-upload"
-              className="ios-pressable control-button-soft inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:text-slate-900"
-            >
-              <Upload size={16} />
-              <span className="truncate">
-                {pdfFile ? pdfFile.name : (editingId ? (bewerkte?.pdfUrl ? 'PDF vervangen…' : 'PDF kiezen…') : 'PDF kiezen…')}
-              </span>
-            </label>
-          </div>
-        </Field>
+        <OmleidingBijlagen
+          diversion={bewerkte}
+          wachtrij={wachtrij}
+          onWachtrij={setWachtrij}
+          onGewijzigd={() => onHerlaad?.()}
+        />
       </Formulier>
     </DetailPaneel>
   );
