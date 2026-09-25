@@ -2295,9 +2295,21 @@ export const getClientErrorsSince = async (sinceIso: string, limit = 1000) => {
  * back-upcron nooit laten falen.
  */
 export const pruneOldRecords = async (opts: { errorDays: number; logDays: number; noteDays: number; meldingDays: number; aanwezigheidDays: number }) => {
-  const summary = { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0, aanwezigheid: 0 };
+  const summary = { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0, meldingen: 0, aanwezigheid: 0, mailLog: 0 };
   if (!db) return summary;
   const cutoff = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+  try {
+    // Verzendlog van de mails: zelfde bewaartermijn als het auditlog (het is
+    // een bewijs dat er verstuurd is, geen inhoud); anders groeit het eeuwig
+    // met tientallen rijen per dag.
+    const { count, error } = await db
+      .from("mail_log")
+      .delete({ count: "exact" })
+      .lt("verzonden_op", cutoff(opts.logDays));
+    if (!error) summary.mailLog = count ?? 0;
+  } catch {
+    // tabel ontbreekt (migratie niet gedraaid) — bewust stil
+  }
   try {
     // Aanwezigheid is een waarneming van dagelijks gebruik, geen bewijsstuk.
     // Het overzicht kijkt hoogstens 90 dagen terug, dus alles daarvóór is

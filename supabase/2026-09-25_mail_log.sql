@@ -37,8 +37,24 @@ create table if not exists public.mail_log (
 comment on table public.mail_log is
   'Verzendlog van de portaalmails: soort, moment, aantal, gelukt/mislukt, door wie. Bewust zonder inhoud of adressen.';
 
+-- De foutmelding is een serverfout die de code op 500 tekens knipt; de DB
+-- dwingt dezelfde grens af (zelfde patroon als leave.beslisreden, 22-09).
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'mail_log_fout_check') then
+    alter table public.mail_log
+      add constraint mail_log_fout_check check (fout is null or char_length(fout) <= 500);
+  end if;
+end
+$$;
+
+-- Nieuwste eerst met een limiet (getMailLog) en "laatst verstuurd per soort"
+-- (Beheer › Mails, PR 3).
 create index if not exists mail_log_verzonden_op_idx on public.mail_log (verzonden_op desc);
 create index if not exists mail_log_soort_idx on public.mail_log (soort, verzonden_op desc);
+
+-- Retentie: de nachtelijke back-up-cron ruimt regels ouder dan de
+-- auditlog-termijn op (pruneOldRecords, RETENTION_LOG_DAYS, standaard 1 jaar).
 
 alter table public.mail_log enable row level security;
 revoke all on table public.mail_log from anon, authenticated;
@@ -59,7 +75,15 @@ begin
   ) then
     raise exception 'post-conditie faalt: anon/authenticated hebben nog rechten op public.mail_log';
   end if;
+  if not exists (select 1 from pg_constraint where conname = 'mail_log_fout_check') then
+    raise exception 'post-conditie faalt: check-constraint mail_log_fout_check ontbreekt';
+  end if;
 end
 $$;
 
 commit;
+
+-- Ook op staging draaien (daar óók de beleidssnapshot niet: die is van
+-- productie) en bijschrijven in supabase/staging/README.md. GET
+-- /api/health/schema meldt de tabel tot de migratie is gedraaid
+-- (api/schemaProbes.ts).

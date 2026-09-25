@@ -260,9 +260,9 @@ export function mountCronRoutes(app: express.Express) {
       // bewaren levert niets op en is wél doorlopende registratie van gedrag.
       const aanwezigheidDays = Number(process.env.RETENTION_AANWEZIGHEID_DAYS) > 0 ? Number(process.env.RETENTION_AANWEZIGHEID_DAYS) : 90;
       const pruned = await pruneOldRecords({ errorDays, logDays, noteDays, meldingDays, aanwezigheidDays });
-      const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions + pruned.meldingen + pruned.aanwezigheid;
+      const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions + pruned.meldingen + pruned.aanwezigheid + pruned.mailLog;
       if (prunedTotal > 0) {
-        console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
+        console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d), ${pruned.mailLog} mail-logregels (>${logDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
       }
 
       await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.meldingen} meldingen + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
