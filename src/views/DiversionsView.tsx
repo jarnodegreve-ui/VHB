@@ -275,7 +275,7 @@ function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; va
               : <LijnTegel line={div.line} size="sm" layout="rij" tone="muted" />}
           </div>
           <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
-            {div.pdfUrl && <span className="inline-flex items-center gap-1"><FileText size={14} aria-hidden="true" />PDF</span>}
+            {(div.bijlagen?.length ?? 0) > 0 && <span className="inline-flex items-center gap-1"><FileText size={14} aria-hidden="true" />{pdfLabel(div.bijlagen!.length)}</span>}
             {isCurrent ? <Check size={16} className="text-slate-800" aria-label="Geselecteerd" /> : <ChevronRight size={16} aria-hidden="true" />}
           </span>
         </div>
@@ -294,3 +294,6 @@ function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; va
     </li>
   );
 }
+
+/** "PDF" bij één bijlage, anders het aantal: "3 PDF's". */
+export const pdfLabel = (n: number) => (n === 1 ? 'PDF' : `${n} PDF's`);

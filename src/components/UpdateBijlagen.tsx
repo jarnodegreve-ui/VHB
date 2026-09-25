@@ -1,14 +1,13 @@
 import { useRef, useState } from 'react';
-import { FileText, Trash2, Upload } from 'lucide-react';
 import { MAX_UPDATE_BIJLAGEN } from '../../shared/schemas/update';
 import type { Update, UpdateBijlage } from '../types';
 import { apiFetch } from '../lib/api';
-import { prettySize } from '../lib/format';
-import { notify, openPdfInNewTab } from '../lib/ui';
-import { Button, IconButton, Switch } from './primitives';
+import { notify } from '../lib/ui';
+import { Switch } from './primitives';
 import { Card } from './Card';
 import { InfoTip } from './InfoTip';
 import { meldSchrijffout } from '../lib/fouten';
+import { PDF_MAX_TEKST, PdfBijlagenLijst, PdfKiesKnop, leesAlsDataUrl, pdfBestandFout } from './PdfBijlagen';
 
 /**
  * PDF's bij een update (puntje Jarno 8, 21-09): hoogstens twee per bericht,
@@ -18,19 +17,6 @@ import { meldSchrijffout } from '../lib/fouten';
  * in de bucket (`<update-id>-<slot>.pdf`) en de server hangt de lijst aan het
  * record. Bij een nieuwe update staat er daarom eerst "publiceer eerst".
  */
-
-/** Ruim onder de 5 MB die express.json aankan, na base64-opslag (+33 %). */
-const MAX_BYTES = 3.5 * 1024 * 1024;
-
-async function leesAlsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('Kon bestand niet lezen.'));
-    reader.readAsDataURL(file);
-  });
-}
-
 export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
   /** De opgeslagen update, of null zolang ze nog gepubliceerd moet worden. */
   update: Update | null;
@@ -54,8 +40,8 @@ export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
     if (!file || !update) return;
     const slot = vrijSlot();
     if (slot === null) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) return notify('Alleen PDF-bestanden.', 'error');
-    if (file.size > MAX_BYTES) return notify(`PDF is te groot (max ${Math.round(MAX_BYTES / (1024 * 1024))} MB).`, 'error');
+    const fout = pdfBestandFout(file);
+    if (fout) return notify(fout, 'error');
     setBezig(true);
     try {
       const dataUrl = await leesAlsDataUrl(file);
@@ -107,7 +93,7 @@ export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
             </InfoTip>
           </div>
           <p className="mt-0.5 text-xs text-slate-500">
-            {update ? `${bijlagen.length} van ${MAX_UPDATE_BIJLAGEN} · PDF, max 3,5 MB` : 'Publiceer de update eerst, daarna kan je PDF’s toevoegen.'}
+            {update ? `${bijlagen.length} van ${MAX_UPDATE_BIJLAGEN} · ${PDF_MAX_TEKST}` : 'Publiceer de update eerst, daarna kan je PDF’s toevoegen.'}
           </p>
         </div>
         <Switch
@@ -118,55 +104,15 @@ export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
         />
       </div>
 
-      {bijlagen.length > 0 && (
-        <ul className="divide-y divide-hairline-subtle overflow-hidden rounded-2xl bg-paper ring-1 ring-hairline">
-          {bijlagen.map((b) => (
-            <li key={b.slot} className="flex items-center gap-2 px-3 py-2">
-              <span aria-hidden="true" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-slate-700">
-                <FileText size={14} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-slate-800">{b.filename}</span>
-                {b.sizeBytes != null && <span className="block text-xs text-slate-500">{prettySize(b.sizeBytes)}</span>}
-              </span>
-              <Button variant="ghost" size="sm" disabled={!b.url} onClick={() => b.url && openPdfInNewTab(b.url)}>
-                Openen
-              </Button>
-              <IconButton label={`Bijlage ${b.filename} verwijderen`} variant="ghost" size="sm" disabled={bezig} onClick={() => void verwijder(b.slot)}>
-                <Trash2 size={14} />
-              </IconButton>
-            </li>
-          ))}
-        </ul>
-      )}
+      <PdfBijlagenLijst
+        rijen={bijlagen.map((b) => ({ sleutel: String(b.slot), filename: b.filename, sizeBytes: b.sizeBytes, url: b.url }))}
+        bezig={bezig}
+        onVerwijder={(rij) => void verwijder(Number(rij.sleutel))}
+      />
 
       {update && !vol && (
-        <>
-          <input
-            ref={bestandRef}
-            type="file"
-            accept="application/pdf,.pdf"
-            className="hidden"
-            id="update-bijlage-upload"
-            onChange={(e) => void kies(e.target.files?.[0])}
-          />
-          {/* Label-als-knop voor het verborgen bestandsveld: de native kiezer
-              opent via het label, niet via een knop (zelfde als omleidingen). */}
-          <label
-            htmlFor="update-bijlage-upload"
-            className={cnLabel(bezig)}
-          >
-            <Upload size={16} />
-            <span className="truncate">{bezig ? 'Bezig…' : 'PDF toevoegen…'}</span>
-          </label>
-        </>
+        <PdfKiesKnop id="update-bijlage-upload" bezig={bezig} label="PDF toevoegen…" inputRef={bestandRef} onKies={(f) => void kies(f)} />
       )}
     </Card>
   );
 }
-
-const cnLabel = (bezig: boolean) =>
-  [
-    'ios-pressable control-button-soft inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:text-slate-900',
-    bezig ? 'pointer-events-none opacity-60' : 'cursor-pointer',
-  ].join(' ');

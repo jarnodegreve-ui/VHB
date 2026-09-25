@@ -1,4 +1,5 @@
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
+import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
 import type {
   ActivityLogRecord,
   ActivityLogRow,
@@ -991,11 +992,14 @@ export const diffDiversionChanges = (previousDiversions: any[], nextDiversions: 
       previous.startDate !== item.startDate ||
       previous.endDate !== item.endDate ||
       previous.line !== item.line ||
-      previous.pdfUrl !== item.pdfUrl
+      previous.location !== item.location ||
+      bijlagenSleutel(previous) !== bijlagenSleutel(item)
     );
   });
   return { added, removed, changed };
 };
+/** Bijlagen vergelijken op slot en naam; de ondertekende URL wisselt per request. */
+const bijlagenSleutel = (d: any) => (Array.isArray(d?.bijlagen) ? d.bijlagen.map((b: any) => `${b.slot}:${b.filename}`).join("|") : "");
 
 /** Structurele diff per update voor per-entity audit-logging. */
 export const diffUpdateChanges = (previousUpdates: any[], nextUpdates: any[]) => {
@@ -1613,13 +1617,101 @@ export const bumpActiveSessions = async (userId: string, delta: number) => {
 
 // --- Diversions ---
 
+// PDF-bijlagen (2026-09-25_diversions_bijlagen.sql): zelfde afspraak als bij
+// de updates. Het bestand staat in de privé bucket op een vaste sleutel
+// (`<id>-<slot>.pdf`, slot 1 tot 5) en de kolom `bijlagen` zegt alleen wát er
+// hangt; de URL wordt per request ondertekend. Vóór 25-09 hing er hoogstens
+// één PDF op `<id>.pdf` (marker in "pdfUrl"): die sleutel blijft slot 1
+// zolang de rij geen `bijlagen` heeft (zie omleidingBijlagen in helpers).
 export const DIVERSIONS_BUCKET = "diversions";
 
+export const diversionBijlagePad = (diversionId: string, slot: number) => `${diversionId}-${slot}.pdf`;
+/** De sleutel van vóór 25-09: één PDF zonder slot. */
+export const diversionLegacyPad = (diversionId: string) => `${diversionId}.pdf`;
+
+/** PDF wegschrijven op de vaste plek van deze omleiding en dit slot; opnieuw
+ *  uploaden vervangt het vorige bestand. */
+export const uploadDiversionBijlage = async (diversionId: string, slot: number, buffer: Buffer): Promise<void> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { error } = await supabaseAdmin.storage
+    .from(DIVERSIONS_BUCKET)
+    .upload(diversionBijlagePad(diversionId, slot), buffer, { contentType: "application/pdf", upsert: true });
+  if (error) throw error;
+};
+
+/** Eén bijlage weghalen; met `legacy` ook de oude `<id>.pdf`. "Not found" is
+ *  geen fout: dan stond er al niets. */
+export const verwijderDiversionBijlage = async (diversionId: string, slot: number, opts: { legacy?: boolean } = {}): Promise<void> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const paden = [diversionBijlagePad(diversionId, slot), ...(opts.legacy ? [diversionLegacyPad(diversionId)] : [])];
+  const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove(paden);
+  if (error && !/not.?found/i.test(String(error.message || ""))) throw error;
+};
+
+/** Alleen de oude sleutel `<id>.pdf` weghalen (slot 1 is net vervangen door
+ *  `<id>-1.pdf`); "not found" is geen fout. */
+export const verwijderDiversionLegacyBijlage = async (diversionId: string): Promise<void> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove([diversionLegacyPad(diversionId)]);
+  if (error && !/not.?found/i.test(String(error.message || ""))) throw error;
+};
+
+/** De PDF van vóór 25-09 (`<id>.pdf`) naar de sleutel van slot 1 verhuizen,
+ *  zodra de rij een lijst krijgt: vanaf dan leest de API alleen nog
+ *  `<id>-<slot>.pdf`. Faalt de verhuis, dan gooien we: liever geen lijst
+ *  schrijven dan een lijst die naar een bestand wijst dat er niet hangt. */
+export const verplaatsDiversionLegacyBijlage = async (diversionId: string): Promise<void> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { error } = await supabaseAdmin.storage
+    .from(DIVERSIONS_BUCKET)
+    .move(diversionLegacyPad(diversionId), diversionBijlagePad(diversionId, 1));
+  if (error) throw error;
+};
+
+// Bijlage-URL's zijn kortlevend ondertekend (bucket is privé, zie
+// supabase/2026-07-26_diversions_private.sql): een gedeelde link vervalt,
+// i.p.v. eeuwig te blijven werken voor ex-medewerkers.
+export const DIVERSION_URL_TTL_SEC = 60 * 60 * 12;
+/** Tijdelijke, ondertekende URL van één bijlage; undefined als het bestand er
+ *  niet (meer) is. `legacy` leest de oude sleutel `<id>.pdf`. */
+export const ondertekenDiversionBijlage = async (diversionId: string, slot: number, legacy = false): Promise<string | undefined> => {
+  if (!db) return undefined;
+  try {
+    const { data } = await db.storage
+      .from(DIVERSIONS_BUCKET)
+      .createSignedUrl(legacy ? diversionLegacyPad(diversionId) : diversionBijlagePad(diversionId, slot), DIVERSION_URL_TTL_SEC);
+    return data?.signedUrl || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** De bijlagenlijst van één omleiding bijwerken. Wist meteen de oude marker
+ *  "pdfUrl": vanaf nu is de lijst de waarheid, ook als ze leeg is. */
+export const zetDiversionBijlagen = async (
+  diversionId: string,
+  bijlagen: Array<{ slot: number; filename: string; sizeBytes?: number }>,
+): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('diversions')
+    .update({ bijlagen: bijlagen.length > 0 ? bijlagen : null, pdfUrl: null })
+    .eq('id', String(diversionId));
+  if (error) throw error;
+};
+
+/** Bestanden van verwijderde omleidingen opruimen (alle slots én de oude
+ *  sleutel); best-effort, een achtergebleven PDF mag een delete niet laten
+ *  mislukken. */
 const removeDiversionPdfs = async (diversionIds: string[]) => {
   if (!supabaseAdmin || diversionIds.length === 0) return;
-  const paths = diversionIds.map((id) => `${id}.pdf`);
+  const paths = diversionIds.flatMap((id) => [
+    diversionLegacyPad(id),
+    ...Array.from({ length: MAX_OMLEIDING_BIJLAGEN }, (_, i) => diversionBijlagePad(id, i + 1)),
+  ]);
   const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove(paths);
-  if (error) console.warn("Diversion PDF storage cleanup error:", error);
+  // "not found" is de normale uitkomst voor een omleiding zonder bijlage.
+  if (error && !/not.?found/i.test(String(error.message || ""))) console.warn("Diversion PDF storage cleanup error:", error);
 };
 
 export const getDiversionsData = async () => {

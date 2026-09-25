@@ -41,8 +41,10 @@ const apiNaarSchemaUser = (u: Required<IncomingUser>): Required<GevalideerdeUser
 const schemaNaarClientUser = (u: Required<GevalideerdeUser>): Required<UserDraft> => u;
 const clientNaarSchemaUser = (u: Required<UserDraft>): Required<GevalideerdeUser> => u;
 
-const schemaNaarApiDiversion = (d: Required<GevalideerdeDiversion>): Required<DiversionRecord> => d;
-const apiNaarSchemaDiversion = (d: Required<DiversionRecord>): Required<GevalideerdeDiversion> => d;
+// "pdfUrl" is de oude marker van vóór 25-09 en blijft server-intern
+// (omleidingBijlagen in api/helpers.ts); ze hoort niet in het contract.
+const schemaNaarApiDiversion = (d: Required<GevalideerdeDiversion>): Required<Omit<DiversionRecord, 'pdfUrl'>> => d;
+const apiNaarSchemaDiversion = (d: Required<Omit<DiversionRecord, 'pdfUrl'>>): Required<GevalideerdeDiversion> => d;
 const schemaNaarClientDiversion = (d: Required<GevalideerdeDiversion>): Required<Diversion> => d;
 const clientNaarSchemaDiversion = (d: Required<Diversion>): Required<GevalideerdeDiversion> => d;
 
@@ -160,8 +162,16 @@ describe('diversionSchema', () => {
 
   it('accepteert een omleiding met en zonder einddatum', () => {
     expect(valideer(diversionSchema, geldig).ok).toBe(true);
-    const zonder = valideer(diversionSchema, { ...geldig, endDate: '', pdfUrl: null });
+    const zonder = valideer(diversionSchema, { ...geldig, endDate: '', bijlagen: undefined });
     expect(zonder.ok && zonder.data.endDate).toBeUndefined();
+    // Een oude client die nog `pdfUrl` meestuurt, mag niet afketsen: het veld
+    // valt gewoon weg (zod strip).
+    const oud = valideer(diversionSchema, { ...geldig, pdfUrl: 'https://x.test/a.pdf' });
+    expect(oud.ok && (oud.data as any).pdfUrl).toBeUndefined();
+    // Hoogstens vijf bijlagen, slots 1 tot 5.
+    const vijf = Array.from({ length: 5 }, (_, i) => ({ slot: i + 1, filename: `plan-${i + 1}.pdf` }));
+    expect(valideer(diversionSchema, { ...geldig, bijlagen: vijf }).ok).toBe(true);
+    expect(valideer(diversionSchema, { ...geldig, bijlagen: [...vijf, { slot: 6, filename: 'zes.pdf' }] }).ok).toBe(false);
   });
 
   it('einddatum vóór begindatum → fout bij einddatum', () => {

@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
+import { MAX_UPDATE_BIJLAGEN } from "../shared/schemas/update.js";
+import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
 import type {
   AppUser,
   DiversionRecord,
@@ -588,16 +590,37 @@ export const vindOngeregistreerdeZiekte = (
   return out.sort((a, b) => a.van.localeCompare(b.van) || a.naam.localeCompare(b.naam));
 };
 
-export const toPublicDiversion = (d: any): DiversionRecord => ({
-  id: String(d.id),
-  line: d.line ?? "",
-  location: d.location ? String(d.location) : undefined,
-  title: d.title ?? "",
-  description: d.description ?? "",
-  startDate: d.startDate ?? d.startdate ?? "",
-  endDate: d.endDate ?? d.enddate ?? undefined,
-  pdfUrl: d.pdfUrl ?? d.pdfurl ?? undefined,
-});
+export const toPublicDiversion = (d: any): DiversionRecord => {
+  const bijlagen = bijlagenUitKolom(d.bijlagen, MAX_OMLEIDING_BIJLAGEN);
+  return {
+    id: String(d.id),
+    line: d.line ?? "",
+    location: d.location ? String(d.location) : undefined,
+    title: d.title ?? "",
+    description: d.description ?? "",
+    startDate: d.startDate ?? d.startdate ?? "",
+    endDate: d.endDate ?? d.enddate ?? undefined,
+    pdfUrl: d.pdfUrl ?? d.pdfurl ?? undefined,
+    // Lege lijst niet meesturen: dan blijft het record (en de revisie) gelijk
+    // aan vóór de migratie van 25-09.
+    ...(bijlagen.length > 0 ? { bijlagen } : {}),
+  };
+};
+
+/**
+ * De PDF's van een omleiding zoals ze in Storage hangen. Vóór 25-09 hing er
+ * hoogstens één, op `<id>.pdf`, met de kolom "pdfUrl" als marker. Zolang zo'n
+ * rij geen `bijlagen` heeft, telt die PDF als slot 1 (`legacy`), zodat geen
+ * enkele bestaande omleiding haar bijlage kwijtraakt bij de deploy. De eerste
+ * upload of verwijdering op die omleiding schrijft de lijst en wist de marker.
+ */
+export const omleidingBijlagen = (d: { pdfUrl?: string | null; bijlagen?: unknown }): Array<{ slot: number; filename: string; sizeBytes?: number; legacy?: boolean }> => {
+  const lijst = bijlagenUitKolom(d.bijlagen, MAX_OMLEIDING_BIJLAGEN);
+  if (lijst.length > 0) return lijst;
+  return d.pdfUrl ? [{ slot: 1, filename: LEGACY_OMLEIDING_PDF_NAAM, legacy: true }] : [];
+};
+/** Bestandsnaam van een PDF van vóór 25-09: die is nooit bewaard. */
+export const LEGACY_OMLEIDING_PDF_NAAM = "omleiding.pdf";
 
 /** De bijlage van een omleiding hoort altijd in onze eigen (privé) Storage-bucket
  *  te staan; op lezen wordt de URL toch vervangen door een verse signed URL uit
@@ -732,10 +755,11 @@ export const toDatabasePlanningCode = (code: PlanningCodeRecord) => ({
   is_day_off: code.isDayOff === true,
 });
 
-/** Bijlagenlijst uit de kolom `updates.bijlagen` (jsonb), opgeschoond en
- *  op slot gesorteerd. Onbekende vormen leveren een lege lijst: de bijlage
- *  is een extra, nooit een reden om de update zelf te laten vallen. */
-export const bijlagenUitKolom = (waarde: any): Array<{ slot: number; filename: string; sizeBytes?: number }> => {
+/** Bijlagenlijst uit een kolom `bijlagen` (jsonb; updates en omleidingen),
+ *  opgeschoond en op slot gesorteerd. `max` is het hoogste slot dat telt.
+ *  Onbekende vormen leveren een lege lijst: de bijlage is een extra, nooit
+ *  een reden om het record zelf te laten vallen. */
+export const bijlagenUitKolom = (waarde: any, max: number = MAX_UPDATE_BIJLAGEN): Array<{ slot: number; filename: string; sizeBytes?: number }> => {
   if (!Array.isArray(waarde)) return [];
   return waarde
     .map((b: any) => ({
@@ -743,7 +767,7 @@ export const bijlagenUitKolom = (waarde: any): Array<{ slot: number; filename: s
       filename: String(b?.filename || ""),
       ...(Number.isFinite(Number(b?.sizeBytes)) ? { sizeBytes: Number(b.sizeBytes) } : {}),
     }))
-    .filter((b) => Number.isInteger(b.slot) && b.slot >= 1 && b.slot <= 2 && b.filename)
+    .filter((b) => Number.isInteger(b.slot) && b.slot >= 1 && b.slot <= max && b.filename)
     .sort((a, b) => a.slot - b.slot);
 };
 

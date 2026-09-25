@@ -63,7 +63,8 @@ export interface Diversion {
   description: string;
   startDate: string;
   endDate?: string;
-  pdfUrl?: string;
+  /** Hoogstens vijf PDF's; de lijst komt van de server (Storage is de bron). */
+  bijlagen?: OmleidingBijlage[];
 }
 
 /**
@@ -131,14 +132,17 @@ export interface Shift {
   driverId: string;
 }
 
-export interface UpdateBijlage {
-  /** 1 of 2: de plek in de bucket (`<update-id>-<slot>.pdf`). */
+/** Eén PDF-bijlage zoals de server ze teruggeeft (updates en omleidingen). */
+export interface PdfBijlage {
+  /** De plek in de bucket (`<record-id>-<slot>.pdf`): 1 of 2 bij een update, 1 tot 5 bij een omleiding. */
   slot: number;
   filename: string;
   sizeBytes?: number;
   /** Ondertekend en tijdelijk; komt van de server, wordt nooit bewaard. */
   url?: string;
 }
+export type UpdateBijlage = PdfBijlage;
+export type OmleidingBijlage = PdfBijlage;
 
 export interface Update {
   id: string;
