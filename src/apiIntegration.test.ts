@@ -83,7 +83,7 @@ const mem = vi.hoisted(() => ({
   // simuleert een niet-gedraaide migratie (probe → null / 42P01).
   clientErrorStatus: [] as any[],
   clientErrorStatusTabel: true,
-  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; text?: string }>,
+  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; text?: string; attachments?: Array<{ filename: string; content: unknown; contentType?: string }> }>,
   storedBackups: [] as Array<{ filename: string; size: number }>,
   pushSubscriptions: [] as any[],
   pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
@@ -7317,7 +7317,7 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect(res.json).toMatchObject({ droog: false, aantal: 2, gelukt: 2, mislukt: 0, bijlagen: 1 });
       expect(mem.emailsSent).toHaveLength(2);
       // slot 3 (haltes.pdf) hangt niet in de opslag → alleen plan.pdf gaat mee.
-      expect(mem.emailsSent[0].attachments.map((a: any) => a.filename)).toEqual(['plan.pdf']);
+      expect(mem.emailsSent[0].attachments?.map((a) => a.filename)).toEqual(['plan.pdf']);
       expect(mem.emailsSent[0].context).toBe('omleiding-mail:o-1');
       expect(mem.mailLog.filter((r: any) => r.soort === 'omleiding-mail')).toHaveLength(1);
       expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')).toMatchObject({ entityType: 'diversion', entityId: 'o-1' });
@@ -7328,7 +7328,7 @@ describe('Beheer › Mails (/api/mails)', () => {
       const res = await api('POST', '/api/diversions/o-2/mail', { token: 'tok-planner', body: { ontvangers: { adressen: ['x@y.be'] } } });
       expect(res.status).toBe(200);
       expect(res.json.bijlagen).toBe(1);
-      expect(mem.emailsSent[0].attachments[0].filename).toBe('omleiding.pdf');
+      expect(mem.emailsSent[0].attachments?.[0]?.filename).toBe('omleiding.pdf');
       expect(mem.emailsSent[0].text).toContain('tot nader bericht');
     });
 
