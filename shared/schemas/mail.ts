@@ -117,7 +117,8 @@ export const leesAdressen = (tekst: string): { adressen: string[]; fouten: strin
 /** Sleutel in het verzendlog; staat niet in MAIL_SOORTEN (geen automatische mail). */
 export const EIGEN_MAIL_SOORT = 'eigen-mail';
 /** Namen voor logregels van soorten die niet in de registry staan. */
-export const EXTRA_SOORT_NAMEN: Readonly<Record<string, string>> = { [EIGEN_MAIL_SOORT]: 'Eigen mail' };
+export const OMLEIDING_MAIL_SOORT = 'omleiding-mail';
+export const EXTRA_SOORT_NAMEN: Readonly<Record<string, string>> = { [EIGEN_MAIL_SOORT]: 'Eigen mail', [OMLEIDING_MAIL_SOORT]: 'Omleiding gemaild' };
 export const naamVanSoort = (soort: string): string => MAIL_SOORT_PER_SLEUTEL.get(soort)?.naam ?? EXTRA_SOORT_NAMEN[soort] ?? soort;
 
 export const ONTVANGER_GROEPEN = ['chauffeurs', 'techniekers', 'planning'] as const;
@@ -150,3 +151,19 @@ export const eigenMailSchema = z.object({
 });
 export type EigenMail = z.output<typeof eigenMailSchema>;
 export type EigenMailInvoer = z.input<typeof eigenMailSchema>;
+
+// --- Een omleiding mailen (PR 4, planner en admin) ---
+
+export const OMLEIDING_MAIL_BERICHT_MAX = 2000;
+export const omleidingMailSchema = z.object({
+  /** Verzendlijst-id's en vrije adressen; geen groepen (dit is extern gericht: De Lijn, garage). */
+  ontvangers: z.object({
+    lijsten: z.array(z.string().trim().min(1).max(64)).max(50).default([]),
+    adressen: z.array(emailAdres).max(VERZENDLIJST_MAX_ADRESSEN, `Hooguit ${VERZENDLIJST_MAX_ADRESSEN} losse adressen`).default([]),
+  }),
+  /** Vrije begeleidende tekst bovenaan de mail. */
+  bericht: z.string().trim().max(OMLEIDING_MAIL_BERICHT_MAX, `Hooguit ${OMLEIDING_MAIL_BERICHT_MAX} tekens`).default(''),
+  droog: z.boolean().default(false),
+});
+export type OmleidingMail = z.output<typeof omleidingMailSchema>;
+export type OmleidingMailInvoer = z.input<typeof omleidingMailSchema>;

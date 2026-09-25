@@ -1687,6 +1687,17 @@ export const ondertekenDiversionBijlage = async (diversionId: string, slot: numb
   }
 };
 
+/** De PDF zelf ophalen (voor de mailknop op een omleiding, PR 4); null als
+ *  het bestand er niet (meer) hangt. `legacy` leest de oude sleutel. */
+export const downloadDiversionBijlage = async (diversionId: string, slot: number, legacy = false): Promise<Buffer | null> => {
+  if (!supabaseAdmin) return null;
+  const { data, error } = await supabaseAdmin.storage
+    .from(DIVERSIONS_BUCKET)
+    .download(legacy ? diversionLegacyPad(diversionId) : diversionBijlagePad(diversionId, slot));
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+};
+
 /** De bijlagenlijst van één omleiding bijwerken. Wist meteen de oude marker
  *  "pdfUrl": vanaf nu is de lijst de waarheid, ook als ze leeg is. */
 export const zetDiversionBijlagen = async (

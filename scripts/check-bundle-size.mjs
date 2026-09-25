@@ -90,7 +90,10 @@ import zlib from 'node:zlib';
 // 25-09 (mailtranche PR 5): 678 → 680. "Mail versturen" (EigenMail.tsx,
 // SlideOver + bevestigingsmodal, ±2 kB in de lazy Mails-chunk). Niets in de
 // start- of warmup-sets; de deelbudgetten bleven gelijk.
-const BUDGET_KB = 680;
+// 25-09 (mailtranche PR 4): 680 → 682. Mailknop op een omleiding
+// (OmleidingMail.tsx, ±2 kB in de lazy Beheer-omleidingen-chunk). Niets in
+// de start- of warmup-sets; de deelbudgetten bleven gelijk.
+const BUDGET_KB = 682;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

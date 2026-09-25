@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eigenMailSchema, isMailAan, leesAdressen, MAIL_SOORTEN, naamVanSoort, parseMailInstellingen, parseVerzendlijsten, UITZETBARE_MAIL_SOORTEN, verzendlijstenSchema } from './mail';
+import { eigenMailSchema, omleidingMailSchema, isMailAan, leesAdressen, MAIL_SOORTEN, naamVanSoort, parseMailInstellingen, parseVerzendlijsten, UITZETBARE_MAIL_SOORTEN, verzendlijstenSchema } from './mail';
 
 describe('mailinstellingen', () => {
   it('kent elke mailsoort één keer en markeert welkom, wachtwoord, back-up en herstel als altijd aan', () => {
@@ -65,5 +65,15 @@ describe('eigen mail', () => {
     expect(naamVanSoort('eigen-mail')).toBe('Eigen mail');
     expect(naamVanSoort('ziekmelding')).toBe('Ziekmelding');
     expect(naamVanSoort('onbekend')).toBe('onbekend');
+  });
+});
+
+describe('omleiding mailen', () => {
+  it('vult lege delen aan, normaliseert adressen en kent geen groepen', () => {
+    const r = omleidingMailSchema.safeParse({ ontvangers: { adressen: ['A@B.be'] } });
+    expect(r.success && r.data).toEqual({ droog: false, bericht: '', ontvangers: { lijsten: [], adressen: ['a@b.be'] } });
+    expect(omleidingMailSchema.safeParse({ ontvangers: { groepen: ['chauffeurs'] } }).success).toBe(true); // onbekende sleutel wordt gestript
+    expect(omleidingMailSchema.safeParse({ ontvangers: { adressen: ['nope'] } }).success).toBe(false);
+    expect(naamVanSoort('omleiding-mail')).toBe('Omleiding gemaild');
   });
 });

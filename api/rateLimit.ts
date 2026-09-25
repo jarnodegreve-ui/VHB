@@ -400,6 +400,7 @@ export const urgentEmailRateLimit = createActionRateLimit("urgent-email", num(pr
 // tientallen mailboxen; tien per venster is ruim voor een mens, te weinig
 // voor een gekaapte sessie die de SMTP als relay wil gebruiken.
 export const eigenMailRateLimit = createActionRateLimit("eigen-mail", num(process.env.RATE_LIMIT_EIGEN_MAIL_MAX, 10));
+export const omleidingMailRateLimit = createActionRateLimit("omleiding-mail", num(process.env.RATE_LIMIT_EIGEN_MAIL_MAX, 10));
 
 /** Voor tests: wis alle telstanden zodat testvolgorde geen 429 veroorzaakt. */
 export const resetAllRateLimiters = () => {
