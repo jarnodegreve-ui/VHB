@@ -9,8 +9,10 @@
  * en schrijft ze naar supabase/auth-mails/*.html (gecommit, plakbaar in het
  * dashboard: Authentication › Emails › Templates).
  *
- *   node scripts/auth-mails.mjs            schrijft de HTML-bestanden
- *   node scripts/auth-mails.mjs --push     zet ze via de Management API
+ *   npx tsx scripts/auth-mails.mjs            schrijft de HTML-bestanden
+ *   npx tsx scripts/auth-mails.mjs --push     zet ze via de Management API
+ *       (tsx, want de lay-out is de TypeScript-module api/_lib/mailLayout.ts;
+ *       sinds 25-09 dezelfde opbouw als alle portaalmails)
  *       vereist SUPABASE_ACCESS_TOKEN (persoonlijk token, supabase.com/dashboard/account/tokens)
  *       en SUPABASE_PROJECT_REF (bv. nbupdofxuoxvgeiedzkk); nooit in git.
  *
@@ -19,31 +21,27 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { bouwMail } from '../api/_lib/mailLayout.ts';
 
 const UIT = path.resolve('supabase/auth-mails');
-const GOUD = '#E2A323';
-const CARBON = '#0D0D0F';
+// Supabase vult {{ .SiteURL }} in; dezelfde basis als het logo in de mail.
+const SITE = '{{ .SiteURL }}';
 
-const knop = (url, tekst) =>
-  `<a href="${url}" style="background-color: ${GOUD}; color: ${CARBON}; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">${tekst}</a>`;
-
-const layout = ({ kicker, titel, alinea, actie, voet }) => `
-<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
-  <div style="background-color: ${CARBON}; color: white; padding: 22px 30px; text-align: center;">
-    <p style="margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: ${GOUD};">${kicker}</p>
-    <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800;">VHB Portaal</h1>
-  </div>
-  <div style="padding: 30px;">
-    <p style="color: #1e293b; font-size: 16px; margin-top: 0;">${titel}</p>
-    <p style="color: #475569; line-height: 1.6;">${alinea}</p>
-    ${actie ? `<div style="margin-top: 26px; text-align: center;">${actie}</div>` : ''}
-    <p style="margin-top: 26px; color: #94a3b8; font-size: 12px; line-height: 1.6;">${voet}</p>
-  </div>
-  <div style="background-color: #f8fafc; padding: 14px 30px; text-align: center; font-size: 11px; color: #94a3b8;">
-    Automatisch bericht van het VHB Portaal, niet beantwoorden. Vragen? Contacteer de planning.
-  </div>
-</div>
-`.trim();
+/** Zelfde lay-out als de portaalmails (api/_lib/mailLayout.ts); alleen de
+ *  HTML gaat naar Supabase, de tekstversie maakt Supabase niet. */
+const layout = ({ kicker, titel, alinea, knop, code, voet }) =>
+  bouwMail({
+    portaalUrl: SITE,
+    kicker,
+    titel,
+    aanhef: 'Hallo,',
+    alineas: [
+      { html: `<p style="margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: #1F2937;">${alinea}</p>`, tekst: alinea },
+      ...(code ? [{ html: `<p style="margin: 8px 0 18px; font-size: 28px; font-weight: 700; letter-spacing: 0.3em; color: #0D0D0F;">${code}</p>`, tekst: code }] : []),
+    ],
+    ...(knop ? { knop } : {}),
+    voet,
+  }).html;
 
 const NIET_JIJ = 'Vroeg je dit niet aan? Dan kun je deze mail negeren, er verandert niets aan je account.';
 const LINK_DUUR = 'De link werkt één uur en is eenmalig.';
@@ -52,60 +50,60 @@ export const MAILS = {
   recovery: {
     onderwerp: 'VHB Portaal: nieuw wachtwoord instellen',
     html: layout({
-      kicker: 'WACHTWOORD',
-      titel: 'Hallo,',
+      kicker: 'Wachtwoord',
+      titel: 'Nieuw wachtwoord instellen',
       alinea: 'Je vroeg een nieuw wachtwoord aan voor het VHB Portaal. Kies er hieronder een; je huidige wachtwoord blijft werken tot je dat doet.',
-      actie: knop('{{ .ConfirmationURL }}', 'Nieuw wachtwoord kiezen'),
+      knop: { tekst: 'Nieuw wachtwoord kiezen', url: '{{ .ConfirmationURL }}' },
       voet: `${LINK_DUUR} ${NIET_JIJ}`,
     }),
   },
   invite: {
     onderwerp: 'Welkom op het VHB Portaal, stel je wachtwoord in',
     html: layout({
-      kicker: 'WELKOM',
-      titel: 'Hallo,',
+      kicker: 'Welkom',
+      titel: 'Je account op het VHB Portaal',
       alinea: 'Er is een account voor je aangemaakt op het VHB Portaal. Daar vind je je rooster, verlofaanvragen, dienstruilen en updates van de planning. Je logt in met dit e-mailadres.',
-      actie: knop('{{ .ConfirmationURL }}', 'Wachtwoord instellen'),
+      knop: { tekst: 'Wachtwoord instellen', url: '{{ .ConfirmationURL }}' },
       voet: 'Tip: open {{ .SiteURL }} op je telefoon en kies “Zet op beginscherm”, dan werkt het portaal als app.',
     }),
   },
   magic_link: {
     onderwerp: 'VHB Portaal: je aanmeldlink',
     html: layout({
-      kicker: 'AANMELDEN',
-      titel: 'Hallo,',
+      kicker: 'Aanmelden',
+      titel: 'Je aanmeldlink',
       alinea: 'Met de knop hieronder meld je je in één keer aan op het VHB Portaal, zonder wachtwoord.',
-      actie: knop('{{ .ConfirmationURL }}', 'Aanmelden'),
+      knop: { tekst: 'Aanmelden', url: '{{ .ConfirmationURL }}' },
       voet: `${LINK_DUUR} ${NIET_JIJ}`,
     }),
   },
   confirmation: {
     onderwerp: 'VHB Portaal: bevestig je e-mailadres',
     html: layout({
-      kicker: 'BEVESTIGEN',
-      titel: 'Hallo,',
+      kicker: 'Bevestigen',
+      titel: 'Bevestig je e-mailadres',
       alinea: 'Bevestig dat dit e-mailadres bij jou hoort, dan is je account op het VHB Portaal klaar voor gebruik.',
-      actie: knop('{{ .ConfirmationURL }}', 'E-mailadres bevestigen'),
+      knop: { tekst: 'E-mailadres bevestigen', url: '{{ .ConfirmationURL }}' },
       voet: NIET_JIJ,
     }),
   },
   email_change: {
     onderwerp: 'VHB Portaal: bevestig je nieuwe e-mailadres',
     html: layout({
-      kicker: 'E-MAILADRES',
-      titel: 'Hallo,',
+      kicker: 'E-mailadres',
+      titel: 'Bevestig je nieuwe e-mailadres',
       alinea: 'Je e-mailadres op het VHB Portaal wordt gewijzigd naar <strong>{{ .NewEmail }}</strong>. Bevestig de wijziging met de knop hieronder; tot dan blijft <strong>{{ .Email }}</strong> je aanmeldadres.',
-      actie: knop('{{ .ConfirmationURL }}', 'Wijziging bevestigen'),
+      knop: { tekst: 'Wijziging bevestigen', url: '{{ .ConfirmationURL }}' },
       voet: `${LINK_DUUR} Vroeg je dit niet aan? Neem dan meteen contact op met de planning.`,
     }),
   },
   reauthentication: {
     onderwerp: 'VHB Portaal: je bevestigingscode',
     html: layout({
-      kicker: 'BEVESTIGING',
-      titel: 'Hallo,',
+      kicker: 'Bevestiging',
+      titel: 'Je bevestigingscode',
       alinea: 'Voor deze wijziging vraagt het portaal een extra bevestiging. Vul deze code in:',
-      actie: `<p style="font-size: 28px; font-weight: 800; letter-spacing: 0.3em; color: #1e293b; margin: 0;">{{ .Token }}</p>`,
+      code: '{{ .Token }}',
       voet: `De code is kort geldig. ${NIET_JIJ}`,
     }),
   },

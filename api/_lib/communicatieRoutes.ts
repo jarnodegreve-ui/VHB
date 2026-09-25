@@ -9,7 +9,7 @@
  */
 
 import express from "express";
-import { sendEmail, escapeHtml } from "../email.js";
+import { sendEmail, mailOpbouw } from "../email.js";
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { authenticate, requireRole } from "../middleware.js";
@@ -658,7 +658,7 @@ export function mountCommunicatieRoutes(app: express.Express) {
     }
   });
 
-  app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "admin"), urgentEmailRateLimit, async (req, res) => {
+  app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "admin"), urgentEmailRateLimit, async (req: AuthenticatedRequest, res) => {
     const { update } = req.body;
 
     if (!update || !update.title) {
@@ -686,29 +686,26 @@ export function mountCommunicatieRoutes(app: express.Express) {
     }
 
     // Via de gedeelde sendEmail-helper (api/email.ts): één SMTP-configuratie
-    // en één mock-pad i.p.v. een eigen transporter per route.
+    // en één mock-pad i.p.v. een eigen transporter per route. Op de vaste
+    // lay-out; de knop landt op het bericht zelf zodra er een id is.
+    const doelPad = update.id ? recordUrl("updates", String(update.id)) : viewUrl("updates");
+    const { html, text } = mailOpbouw({
+      kicker: "Dringende update",
+      titel: String(update.title),
+      status: { label: "Dringend, lees dit vandaag", toon: "aandacht" },
+      // Regeleinden uit het bericht blijven alinea's.
+      alineas: String(update.content || "").split(/\n{2,}/).map((a) => a.trim()).filter(Boolean),
+      knop: { tekst: "Open de update", url: `${process.env.APP_URL || "https://vhbportaal.com"}${doelPad}` },
+      voet: "Bevestig in het portaal met de knop \"Gelezen en begrepen\".",
+    });
     const result = await sendEmail({
       to: emails,
       context: "urgent-update",
-      subject: `DRINGENDE UPDATE: ${update.title}`,
-      text: `${update.content}\n\nBekijk de volledige update in het VHB Portaal.`,
-      html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
-        <div style="background-color: #f59e0b; color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0; font-size: 24px;">DRINGENDE UPDATE</h1>
-        </div>
-        <div style="padding: 30px;">
-          <h2 style="color: #1e293b; margin-top: 0;">${escapeHtml(update.title)}</h2>
-          <p style="color: #475569; line-height: 1.6;">${escapeHtml(update.content)}</p>
-          <div style="margin-top: 30px; text-align: center;">
-            <a href="${process.env.APP_URL || '#'}" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Open VHB Portaal</a>
-          </div>
-        </div>
-        <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
-          Dit is een automatisch bericht van het VHB Portaal.
-        </div>
-      </div>
-    `,
+      soort: "dringende-update",
+      door: req.appUser?.name ?? null,
+      subject: `Dringende update: ${update.title}`,
+      text,
+      html,
     });
 
     if (result.mocked) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
-import { Bell, ChevronRight, History, Plus, Trash2 } from 'lucide-react';
+import { Bell, ChevronRight, History, Mail, Plus, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { formatUpdateDate } from '../../lib/format';
@@ -127,7 +127,10 @@ export function ManageUpdatesView({
           : [updateToSave, ...updates]
       );
     if (success) {
-      if (updateForm.isUrgent && canSendUrgentEmail) {
+      // De dringende mail gaat alleen bij de eerste publicatie (mailtranche
+      // 25-09): een tikfout verbeteren mag niet opnieuw alle mailboxen vullen.
+      // Opnieuw versturen kan bewust, via het actiemenu van de update.
+      if (updateForm.isUrgent && canSendUrgentEmail && !editingId) {
         await onSendUrgentEmail(updateToSave);
       }
       notify(editingId ? 'Update bijgewerkt.' : 'Update gepubliceerd.', 'success');
@@ -150,6 +153,19 @@ export function ManageUpdatesView({
   // deelbaar met een collega, en een refresh houdt het formulier open. De
   // desktop-voorselectie (useStandaardKeuze) schrijft níét, alleen een klik.
   const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-updates' });
+
+  // Dringende mail nog eens sturen (bv. na een correctie of omdat ze de
+  // eerste keer niet aankwam); de server bepaalt de ontvangers.
+  const [mailBezig, setMailBezig] = useState(false);
+  const verstuurOpnieuw = async (update: Update) => {
+    if (mailBezig) return;
+    setMailBezig(true);
+    try {
+      await onSendUrgentEmail(update);
+    } finally {
+      setMailBezig(false);
+    }
+  };
 
   const handleOpenAdd = () => poort.via(openNieuw);
   // Annuleren sluit het paneel, ook op desktop (polish P2b, regel Jarno
@@ -348,6 +364,9 @@ export function ManageUpdatesView({
           label="Meer acties"
           items={[
             { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setHistoryUpdate(bewerkte) },
+            ...(bewerkte.isUrgent && canSendUrgentEmail
+              ? [{ label: mailBezig ? 'Mail wordt verstuurd…' : 'Mail opnieuw versturen', icon: <Mail size={16} />, disabled: mailBezig, onClick: () => { void verstuurOpnieuw(bewerkte); } }]
+              : []),
             { label: 'Verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, disabled: deletingId === bewerkte.id, onClick: () => { void handleDelete(bewerkte.id); } },
           ]}
         />
@@ -396,12 +415,12 @@ export function ManageUpdatesView({
             <div className="flex items-center gap-1">
               <p className="text-sm font-semibold text-slate-800">Dringend</p>
               <InfoTip label="Uitleg bij dringende updates">
-                <p>Een dringende update krijgt een rode markering op het dashboard en verstuurt meteen een e-mail naar alle gebruikers; je ziet achteraf hoeveel chauffeurs ze geopend hebben.</p>
+                <p>Een dringende update krijgt een rode markering op het dashboard en verstuurt bij het publiceren een e-mail naar alle gebruikers; je ziet achteraf hoeveel chauffeurs ze geopend hebben. Een latere correctie mailt niet opnieuw; dat kan via "Mail opnieuw versturen" in het actiemenu.</p>
                 {!canSendUrgentEmail ? <p className="mt-2">Dringend verzenden is voorbehouden aan admins; planners kunnen gewone updates publiceren.</p> : null}
               </InfoTip>
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
-              {canSendUrgentEmail ? 'Verstuurt meteen een e-mail naar alle gebruikers.' : 'Alleen een admin kan een update dringend versturen.'}
+              {canSendUrgentEmail ? 'Verstuurt bij het publiceren een e-mail naar alle gebruikers.' : 'Alleen een admin kan een update dringend versturen.'}
             </p>
           </div>
           {canSendUrgentEmail ? (

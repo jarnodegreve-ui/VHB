@@ -10,7 +10,7 @@
 
 import { bouwHerstelPlan } from "../../shared/herstelPlan.js";
 import express from "express";
-import { sendEmail, sendExpiryReminderEmail, escapeHtml } from "../email.js";
+import { sendEmail, sendExpiryReminderEmail, escapeHtml, mailOpbouw, portalUrl } from "../email.js";
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { supabaseAdmin } from "../db.js";
@@ -120,6 +120,45 @@ const systemMailRecipients = async (): Promise<string[]> => {
     .map((u) => u.email as string);
 };
 
+/**
+ * Cijfers van de afgelopen zeven dagen voor het weekoverzicht. Tot 25-09 een
+ * aparte maandagmail (/api/cron/week-rapport, vercel.json); sinds de
+ * mailtranche een sectie in de weekmail van de digest, zodat er op maandag
+ * één mail komt in plaats van twee.
+ */
+const weekcijfers = async (): Promise<string[]> => {
+  const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const nuIso = new Date().toISOString();
+  const [sessies, leave, swaps, ruilUitvoeringen] = await Promise.all([
+    // Actieve gebruikers uit de aanwezigheid, niet uit de auth-regels: die
+    // telden alleen wie zich opnieuw aanmeldde plus één regel per dag per
+    // persoon, en telden dus structureel te laag. Ontbreekt de migratie, dan
+    // is de telling 0 in plaats van dat de mail uitblijft.
+    getAanwezigheid(sinceIso).catch((err) => {
+      if (!isMissingTableError(err)) throw err;
+      return [];
+    }),
+    getLeaveData(),
+    getSwapsData(),
+    // Uitgevoerde wissels uit het activiteitenlog, niet uit `decidedAt`: dat
+    // veld wordt door een latere terugdraai overschreven, waardoor een wissel
+    // van vorige week deze week meegeteld werd (en omgekeerd).
+    getSwapExecutions(sinceIso, nuIso, SWAP_UITVOERING_ACTIES),
+  ]);
+  const uniekeGebruikers = new Set(sessies.map((s) => s.userId)).size;
+  const inWindow = (iso?: string) => Boolean(iso && iso >= sinceIso);
+  const verlofBeslist = leave.filter((l) => inWindow(l.decidedAt)).length;
+  const verlofNieuw = leave.filter((l) => inWindow(l.createdAt)).length;
+  const ruilNieuw = swaps.filter((sw) => inWindow(sw.createdAt)).length;
+  const openVerlof = leave.filter((l) => l.status === "pending").length;
+  const openRuil = swaps.filter((sw) => sw.status === "pending" || sw.status === "accepted").length;
+  return [
+    `Actieve gebruikers: ${uniekeGebruikers}`,
+    `Verlof: ${verlofNieuw} nieuw, ${verlofBeslist} beslist, ${openVerlof} open`,
+    `Dienstruil: ${ruilNieuw} nieuw, ${ruilUitvoeringen.length} uitgevoerd, ${openRuil} open`,
+  ];
+};
+
 export function mountCronRoutes(app: express.Express) {
   app.get("/api/backup", authenticate, requireRole("admin"), async (_req, res) => {
     try {
@@ -153,13 +192,14 @@ export function mountCronRoutes(app: express.Express) {
         try {
           const alertTo = await systemMailRecipients();
           if (alertTo.length > 0) {
-            await sendEmail({
-              to: alertTo,
-              context: "backup-integrity",
-              subject: `⚠️ VHB back-up-integriteit, controleer ${filename}`,
-              text: `De back-up ${filename} is opgeslagen maar faalde de integriteitscheck:\n\n- ${integrity.issues.join("\n- ")}\n\nControleer of de portaal-data compleet is.`,
-              html: `<p>De back-up <strong>${escapeHtml(filename)}</strong> is opgeslagen maar faalde de integriteitscheck:</p><ul>${integrity.issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul><p>Controleer of de portaal-data compleet is.</p>`,
+            const { html, text } = mailOpbouw({
+              kicker: "Back-up",
+              titel: "Back-up faalde de integriteitscheck",
+              status: { label: "Controleer de portaal-data", toon: "fout" },
+              alineas: [`De back-up ${filename} is opgeslagen, maar de integriteitscheck vond problemen. Controleer of de portaal-data compleet is.`],
+              lijst: { kop: "Bevindingen", items: integrity.issues },
             });
+            await sendEmail({ to: alertTo, context: "backup-integrity", soort: "backup-integriteit", subject: `Back-up-integriteit: controleer ${filename}`, text, html });
           }
         } catch (mailErr) {
           console.error("[cron-backup] integriteit-alert mailen mislukt:", mailErr);
@@ -182,13 +222,25 @@ export function mountCronRoutes(app: express.Express) {
           const recipients = await systemMailRecipients();
           if (recipients.length > 0) {
             const encrypted = encryptOpensslCompatible(json, passphrase);
-            const uitleg = "Ontsleutelen (vraagt om de wachtwoordzin uit je wachtwoordmanager):\n\n  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in " + filename + ".enc -out " + filename + "\n\nZie ook docs/RESTORE.md in de repo.";
+            const commando = `openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in ${filename}.enc -out ${filename}`;
+            const { html, text } = mailOpbouw({
+              kicker: "Back-up",
+              titel: `Wekelijkse back-up ${payload.exportedAt.slice(0, 10)}`,
+              status: { label: "Versleuteld, bewaar buiten Supabase en Vercel", toon: "neutraal" },
+              alineas: [
+                "In bijlage de wekelijkse off-site kopie van de portaal-back-up, AES-256-versleuteld. Bewaar deze mail buiten Supabase en Vercel.",
+                "Ontsleutelen (vraagt om de wachtwoordzin uit je wachtwoordmanager):",
+                { html: `<pre style="margin: 0 0 14px; padding: 12px 14px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 12px; white-space: pre-wrap;">${commando.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, tekst: `  ${commando}` },
+                "Zie ook docs/RESTORE.md in de repo.",
+              ],
+            });
             const result = await sendEmail({
               to: recipients,
               context: "weekly-backup",
-              subject: `VHB Portaal, wekelijkse back-up ${payload.exportedAt.slice(0, 10)} (versleuteld)`,
-              text: `In bijlage de wekelijkse off-site kopie van de portaal-back-up, AES-256-versleuteld. Bewaar deze mail buiten Supabase/Vercel.\n\n${uitleg}`,
-              html: `<p>In bijlage de wekelijkse off-site kopie van de portaal-back-up, <strong>AES-256-versleuteld</strong>. Bewaar deze mail buiten Supabase/Vercel.</p><p>Ontsleutelen (vraagt om de wachtwoordzin uit je wachtwoordmanager):</p><pre>openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in ${escapeHtml(filename)}.enc -out ${escapeHtml(filename)}</pre><p>Zie ook <code>docs/RESTORE.md</code> in de repo.</p>`,
+              soort: "backup-weekkopie",
+              subject: `Wekelijkse back-up ${payload.exportedAt.slice(0, 10)}, versleuteld`,
+              text,
+              html,
               attachments: [{ filename: `${filename}.enc`, content: encrypted }],
             });
             mailedOffsite = result.ok && !result.mocked;
@@ -208,9 +260,9 @@ export function mountCronRoutes(app: express.Express) {
       // bewaren levert niets op en is wél doorlopende registratie van gedrag.
       const aanwezigheidDays = Number(process.env.RETENTION_AANWEZIGHEID_DAYS) > 0 ? Number(process.env.RETENTION_AANWEZIGHEID_DAYS) : 90;
       const pruned = await pruneOldRecords({ errorDays, logDays, noteDays, meldingDays, aanwezigheidDays });
-      const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions + pruned.meldingen + pruned.aanwezigheid;
+      const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions + pruned.meldingen + pruned.aanwezigheid + pruned.mailLog;
       if (prunedTotal > 0) {
-        console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
+        console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d), ${pruned.mailLog} mail-logregels (>${logDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
       }
 
       await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.meldingen} meldingen + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
@@ -231,67 +283,6 @@ export function mountCronRoutes(app: express.Express) {
   // aanvragen en de foutentrend van de afgelopen week — voor Jarno's
   // maandagoverzicht zonder het portaal te openen. Zelfde ontvangers en
   // opt-out als de andere systeemmails.
-  app.get("/api/cron/week-rapport", async (req, res) => {
-    if (!isCronAuthorized(req)) {
-      return res.status(401).json({ error: "Niet toegestaan." });
-    }
-    try {
-      const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const nuIso = new Date().toISOString();
-      const [sessies, leave, swaps, errors, ruilUitvoeringen] = await Promise.all([
-        // Actieve gebruikers uit de aanwezigheid, niet meer uit de auth-regels:
-        // die telden alleen wie zich opnieuw aanmeldde plus één regel per dag
-        // per persoon, en telden dus structureel te laag. Ontbreekt de migratie,
-        // dan is de telling 0 in plaats van dat de mail uitblijft.
-        getAanwezigheid(sinceIso).catch((err) => {
-          if (!isMissingTableError(err)) throw err;
-          return [];
-        }),
-        getLeaveData(),
-        getSwapsData(),
-        getClientErrorsSince(sinceIso),
-        // Uitgevoerde wissels uit het activiteitenlog, niet uit `decidedAt`:
-        // dat veld wordt door een latere terugdraai overschreven (en tot 20-09
-        // ook door afhandelen, 'completed'), waardoor een wissel van vorige
-        // week deze week meegeteld werd (en omgekeerd). Zelfde bron als het
-        // wekelijkse ruiloverzicht.
-        getSwapExecutions(sinceIso, nuIso, SWAP_UITVOERING_ACTIES),
-      ]);
-      const uniekeGebruikers = new Set(sessies.map((s) => s.userId)).size;
-      const inWindow = (iso?: string) => Boolean(iso && iso >= sinceIso);
-      const verlofBeslist = leave.filter((l) => inWindow(l.decidedAt)).length;
-      const verlofNieuw = leave.filter((l) => inWindow(l.createdAt)).length;
-      const ruilUitgevoerd = ruilUitvoeringen.length;
-      const ruilNieuw = swaps.filter((sw) => inWindow(sw.createdAt)).length;
-      const openVerlof = leave.filter((l) => l.status === "pending").length;
-      const openRuil = swaps.filter((sw) => sw.status === "pending" || sw.status === "accepted").length;
-      const echteFouten = errors.filter((e) => !isDigestRuis(e.message)).length;
-
-      const recipients = await systemMailRecipients();
-      if (recipients.length === 0) {
-        return res.json({ success: true, sent: false, reason: "geen ontvangers" });
-      }
-      const regels = [
-        `Actieve gebruikers: ${uniekeGebruikers}`,
-        `Verlof: ${verlofNieuw} nieuw · ${verlofBeslist} beslist · ${openVerlof} open`,
-        `Dienstruil: ${ruilNieuw} nieuw · ${ruilUitgevoerd} uitgevoerd · ${openRuil} open`,
-        `Client-fouten: ${echteFouten} (sessie-meldingen niet meegeteld)`,
-      ];
-      await sendEmail({
-        to: recipients,
-        context: "week-rapport",
-        subject: `VHB Portaal, weekoverzicht`,
-        text: `Cijfers van de afgelopen 7 dagen:\n\n- ${regels.join("\n- ")}\n\nBekijk de details in het portaal.`,
-        html: `<p>Cijfers van de afgelopen <strong>7 dagen</strong>:</p><ul>${regels.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul><p>Bekijk de details in het portaal.</p>`,
-      });
-      await logCronHeartbeat("week-rapport", `Weekoverzicht gemaild aan ${recipients.length} ontvanger(s).`);
-      res.json({ success: true, sent: true });
-    } catch (err: any) {
-      console.error("[week-rapport] mislukt:", err?.message || err);
-      res.status(500).json({ error: "Weekrapport mislukt" });
-    }
-  });
-
   // Maandelijkse restore-proef: de back-up wordt elke nacht gemaakt en op
   // integriteit gecheckt bij het MAKEN — maar of het bestand ook terug te
   // lezen en te herstellen valt, werd nooit geoefend. Deze cron leest de
@@ -345,13 +336,14 @@ export function mountCronRoutes(app: express.Express) {
       if (issues.length > 0) {
         const recipients = await systemMailRecipients();
         if (recipients.length > 0) {
-          await sendEmail({
-            to: recipients,
-            context: "restore-proef",
-            subject: `⚠️ VHB restore-proef gefaald${filename ? `, ${filename}` : ""}`,
-            text: `De maandelijkse restore-proef vond problemen:\n\n- ${issues.join("\n- ")}\n\nControleer de back-ups zo snel mogelijk, dit is je herstelpad.`,
-            html: `<p>De maandelijkse restore-proef vond problemen:</p><ul>${issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul><p>Controleer de back-ups zo snel mogelijk, dit is je herstelpad.</p>`,
+          const { html, text } = mailOpbouw({
+            kicker: "Back-up",
+            titel: "Restore-proef gefaald",
+            status: { label: "Controleer de back-ups zo snel mogelijk", toon: "fout" },
+            alineas: [`De maandelijkse restore-proef${filename ? ` van ${filename}` : ""} vond problemen. Dit is je herstelpad, dus controleer de back-ups zo snel mogelijk.`],
+            lijst: { kop: "Bevindingen", items: issues },
           });
+          await sendEmail({ to: recipients, context: "restore-proef", soort: "restore-proef", subject: `Restore-proef gefaald${filename ? `, ${filename}` : ""}`, text, html });
         }
         await logCronHeartbeat("restore-proef", `GEFAALD: ${issues.join("; ")}`);
         return res.json({ success: false, issues });
@@ -497,8 +489,9 @@ export function mountCronRoutes(app: express.Express) {
       // verstuurd-administratie. De mailsectie hieronder toont alles binnen 60
       // dagen (herhaling in een dagoverzicht is juist de bedoeling).
       // Best-effort — mag het dagoverzicht nooit breken.
-      let vervalTekst = "";
-      let vervalHtml = "";
+      // Extra secties van het overzicht (documenten, voertuigen, openstaande
+      // diensten) als opsommingen voor de lay-out, in deze volgorde.
+      const extraLijsten: Array<{ kop: string; items: string[] }> = [];
       try {
         const [expiries, alleUsers] = await Promise.all([getUserExpiries(), getUsersData()]);
         const actief = new Map(alleUsers.filter((u: any) => u.isActive !== false).map((u: any) => [String(u.id), u]));
@@ -551,8 +544,7 @@ export function mountCronRoutes(app: express.Express) {
               : e.dagen === 0
                 ? `${e.naam}, ${e.label} verloopt VANDAAG (${DAG_DMJ(e.validUntil)})`
                 : `${e.naam}, ${e.label} verloopt over ${e.dagen} ${e.dagen === 1 ? "dag" : "dagen"} (${DAG_DMJ(e.validUntil)})`;
-          vervalTekst = `\n\nDocumenten (binnen 60 dagen):\n${teMelden.map((e) => `• ${regel(e)}`).join("\n")}`;
-          vervalHtml = `<p><strong>Documenten (binnen 60 dagen)</strong></p><ul>${teMelden.map((e) => `<li>${escapeHtml(regel(e))}</li>`).join("")}</ul>`;
+          extraLijsten.push({ kop: "Documenten (binnen 60 dagen)", items: teMelden.map(regel) });
         }
       } catch (err: any) {
         console.error("[error-digest] vervaldata-sectie mislukt:", err?.message ?? err);
@@ -562,8 +554,6 @@ export function mountCronRoutes(app: express.Express) {
       // tachograaf. Zelfde mijlpalen-mechaniek als hierboven, maar de push gaat
       // naar de techniekers en admins (het voertuig heeft geen mailbox) en de
       // mailsectie toont alles binnen 60 dagen. Best-effort.
-      let voertuigVervalTekst = "";
-      let voertuigVervalHtml = "";
       try {
         const [voertuigExpiries, voertuigen, alleUsers] = await Promise.all([getVehicleExpiries(), getVehicles(), getUsersData()]);
         const perVoertuig = new Map(voertuigen.filter((v) => v.status !== "uit_dienst").map((v) => [v.id, v]));
@@ -595,8 +585,7 @@ export function mountCronRoutes(app: express.Express) {
               : e.dagen === 0
                 ? `${e.naam}, ${e.label} verloopt VANDAAG (${DAG_DMJ(e.validUntil)})`
                 : `${e.naam}, ${e.label} verloopt over ${e.dagen} ${e.dagen === 1 ? "dag" : "dagen"} (${DAG_DMJ(e.validUntil)})`;
-          voertuigVervalTekst = `\n\nVoertuigen (binnen 60 dagen):\n${teMelden.map((e) => `• ${regel(e)}`).join("\n")}`;
-          voertuigVervalHtml = `<p><strong>Voertuigen (binnen 60 dagen)</strong></p><ul>${teMelden.map((e) => `<li>${escapeHtml(regel(e))}</li>`).join("")}</ul>`;
+          extraLijsten.push({ kop: "Voertuigen (binnen 60 dagen)", items: teMelden.map(regel) });
         }
       } catch (err: any) {
         // Vóór de migratie bestaat de tabel niet: stil overslaan.
@@ -608,8 +597,6 @@ export function mountCronRoutes(app: express.Express) {
       // het portaal niet meer te openen om te wéten dat er iets openstaat. Best-
       // effort, mag het dagoverzicht nooit breken. Per gat draait de volledige
       // adviesberekening; cap op 8 zodat de cron niet ontspoort bij een lege maand.
-      let dekkingTekst = "";
-      let dekkingHtml = "";
       try {
         const vandaagBrussel = brusselsDay(new Date().toISOString());
         const dagen = await berekenDekkingsGaten(vandaagBrussel, addDagenIso(vandaagBrussel, 6));
@@ -628,8 +615,7 @@ export function mountCronRoutes(app: express.Express) {
           if (gaten.length > MAX_ADVIEZEN) {
             regels.push(`…en nog ${gaten.length - MAX_ADVIEZEN} openstaande diensten, zie Openstaande diensten in het portaal.`);
           }
-          dekkingTekst = `\n\nOpenstaande diensten (komende 7 dagen):\n${regels.map((r) => `• ${r}`).join("\n")}`;
-          dekkingHtml = `<p><strong>Openstaande diensten (komende 7 dagen)</strong></p><ul>${regels.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>`;
+          extraLijsten.push({ kop: "Openstaande diensten (komende 7 dagen)", items: regels });
           // Push naar planners/admins — 1×/dag en alleen als er echt iets
           // openstaat (geen ruis bij een gedekte week, zelfde principe als
           // isDigestRuis). Mail blijft het volledige overzicht.
@@ -698,15 +684,15 @@ export function mountCronRoutes(app: express.Express) {
         } catch { /* digest nooit laten falen op symbolicatie */ }
       }
 
-      const topLines = sorted.slice(0, 15)
-        .map((g) => `• [${g.count}×] ${g.source}: ${g.message}${originOf.has(g) ? ` → ${originOf.get(g)}` : ""}${g.lastUrl ? ` (${g.lastUrl})` : ""}`)
-        .join("\n");
-      const moreLine = sorted.length > 15 ? `\n…en nog ${sorted.length - 15} andere foutsoorten.` : "";
+      const meldingItems = sorted.slice(0, 15)
+        .map((g) => `${g.count}× [${g.source}] ${g.message}${originOf.has(g) ? ` → ${originOf.get(g)}` : ""}${g.lastUrl ? ` (${g.lastUrl})` : ""}`);
+      if (sorted.length > 15) meldingItems.push(`…en nog ${sorted.length - 15} andere foutsoorten.`);
 
       const windowLabel = intervalMin % 1440 === 0 && intervalMin > 1440
         ? `${intervalMin / 1440} dagen`
         : intervalMin % 60 === 0 ? `${intervalMin / 60} uur` : `${intervalMin} min`;
       const overzichtNaam = weekdag === "elke" ? "dagoverzicht" : "weekoverzicht";
+      const Overzicht = `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)}`;
 
       // Hoeveel toestellen/gebruikers raakte het? Dát is het signaal, niet het
       // aantal meldingen: 16 meldingen van één toestel is iemand die zit te
@@ -715,28 +701,41 @@ export function mountCronRoutes(app: express.Express) {
       const gebruikers = new Set(errors.map((e) => String(e.userId || "").replace(/^onbevestigd:/, "") || "onbekend"));
       const impact = errors.length === 0
         ? "geen meldingen"
-        : `${errors.length} melding${errors.length === 1 ? "" : "en"} · ${gebruikers.size} ${gebruikers.size === 1 ? "toestel" : "toestellen"}`;
+        : `${errors.length} melding${errors.length === 1 ? "" : "en"}, ${gebruikers.size} ${gebruikers.size === 1 ? "toestel" : "toestellen"}`;
 
       // Neutrale toon, bewust zonder waarschuwingsteken (verzoek Jarno, 02-08):
-      // dit is een dagoverzicht dat élke ochtend komt, geen alarm. Een
-      // ⚠️ bij 16 meldingen van je eigen toestel las als een storing terwijl er
-      // niets aan de hand was. Wat er wél toe doet — hoeveel mensen geraakt
-      // zijn — staat nu in de onderwerpregel.
-      const subject = `VHB Portaal · ${overzichtNaam}, ${impact}`;
+      // dit is een overzicht dat élke week komt, geen alarm. Wat er wél toe
+      // doet, hoeveel mensen geraakt zijn, staat in de onderwerpregel.
+      const subject = `${Overzicht} portaal: ${impact}`;
       const inleiding = errors.length === 0
         ? `In de afgelopen ${windowLabel} zijn er geen meldingen binnengekomen.`
         : `In de afgelopen ${windowLabel}: ${errors.length} melding${errors.length === 1 ? "" : "en"} van ${gebruikers.size} ${gebruikers.size === 1 ? "toestel" : "toestellen"} (${sorted.length} unieke soorten).`;
-      const staart = filtered > 0
-        ? `\n\n${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol, die vangt de app zelf op).`
+      const ruisregel = filtered > 0
+        ? `${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol, die vangt de app zelf op).`
         : "";
-      const text = `${inleiding}${errors.length === 0 ? "" : `\n\n${topLines}${moreLine}`}${staart}${vervalTekst}${voertuigVervalTekst}${dekkingTekst}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
-      // g.source/message/lastUrl zijn door de client aangeleverd — escapen,
-      // anders is de digest-mail een HTML-injectiekanaal richting de admins.
-      // De symbolicatie-uitkomst komt uit de sourcemap (indirect ook input) —
-      // dus óók escapen.
-      const html = `<p>${escapeHtml(inleiding)}</p>${errors.length === 0 ? "" : `<ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere soorten.</p>` : ""}`}${filtered > 0 ? `<p style="color:#6E767F">${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol, die vangt de app zelf op).</p>` : ""}${vervalHtml}${voertuigVervalHtml}${dekkingHtml}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+      // De weekcijfers (vroeger de aparte maandagmail) alleen in het weekoverzicht.
+      const week = weekdag === "elke" ? [] : await weekcijfers().catch((err) => {
+        console.error("[error-digest] weekcijfers mislukt:", err?.message ?? err);
+        return [] as string[];
+      });
+      // g.source/message/lastUrl zijn door de client aangeleverd; de lay-out
+      // escapet elke regel, anders is de digest-mail een HTML-injectiekanaal
+      // richting de admins.
+      const { html, text } = mailOpbouw({
+        kicker: "Systeem",
+        titel: `${Overzicht} van het portaal`,
+        status: { label: impact, toon: errors.length === 0 ? "goed" : "aandacht" },
+        alineas: [inleiding, ...(ruisregel ? [ruisregel] : [])],
+        lijsten: [
+          ...(meldingItems.length > 0 ? [{ kop: "Meldingen", items: meldingItems }] : []),
+          ...(week.length > 0 ? [{ kop: "Cijfers van de afgelopen 7 dagen", items: week }] : []),
+          ...extraLijsten,
+        ],
+        knop: { tekst: "Open Systeemstatus", url: `${portalUrl()}${viewUrl("beheer-debug")}` },
+        voet: "Details staan in het portaal onder Systeemstatus en in de Vercel-logs.",
+      });
 
-      const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
+      const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest", soort: overzichtNaam });
       console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
       await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} verstuurd: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
       res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });
