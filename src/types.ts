@@ -251,4 +251,7 @@ export interface ActivityLogEntry {
   entityId?: string | null;
 }
 
+/** Verzendlijst (Beheer › Mails), spiegel van shared/schemas/mail.ts. */
+export interface Verzendlijst { id: string; naam: string; adressen: string[]; }
+
 export type View = 'dashboard' | 'mijn-dag' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'ruil-verzoeken' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'ocpi-monitoring' | 'vervaldata' | 'ziekte' | 'instellingen' | 'designsysteem' | 'meldingen' | 'defecten' | 'werkprestaties' | 'voertuig-werken' | 'voertuigen' | 'dagafsluiting' | 'looncontrole' | 'dienstopbouw' | 'werkvoorraad' | 'vandaag' | 'rapporten' | 'beheer-mails';

@@ -111,3 +111,42 @@ export const leesAdressen = (tekst: string): { adressen: string[]; fouten: strin
   }
   return { adressen, fouten };
 };
+
+// --- Zelf een mail sturen (PR 5, alleen admin) ---
+
+/** Sleutel in het verzendlog; staat niet in MAIL_SOORTEN (geen automatische mail). */
+export const EIGEN_MAIL_SOORT = 'eigen-mail';
+/** Namen voor logregels van soorten die niet in de registry staan. */
+export const EXTRA_SOORT_NAMEN: Readonly<Record<string, string>> = { [EIGEN_MAIL_SOORT]: 'Eigen mail' };
+export const naamVanSoort = (soort: string): string => MAIL_SOORT_PER_SLEUTEL.get(soort)?.naam ?? EXTRA_SOORT_NAMEN[soort] ?? soort;
+
+export const ONTVANGER_GROEPEN = ['chauffeurs', 'techniekers', 'planning'] as const;
+export type OntvangerGroep = (typeof ONTVANGER_GROEPEN)[number];
+export const GROEP_LABEL: Record<OntvangerGroep, string> = {
+  chauffeurs: 'Alle chauffeurs',
+  techniekers: 'Alle techniekers',
+  planning: 'Alle planners en admins',
+};
+
+export const EIGEN_MAIL_ONDERWERP_MAX = 150;
+export const EIGEN_MAIL_TEKST_MAX = 5000;
+
+export const eigenMailOntvangersSchema = z.object({
+  groepen: z.array(z.enum(ONTVANGER_GROEPEN)).max(3).default([]),
+  /** Id's van verzendlijsten. */
+  lijsten: z.array(z.string().trim().min(1).max(64)).max(50).default([]),
+  /** Id's van bestaande gebruikers. */
+  gebruikers: z.array(z.string().trim().min(1).max(64)).max(500).default([]),
+  /** Vrij ingetypte adressen. */
+  adressen: z.array(emailAdres).max(VERZENDLIJST_MAX_ADRESSEN, `Hooguit ${VERZENDLIJST_MAX_ADRESSEN} losse adressen`).default([]),
+});
+
+export const eigenMailSchema = z.object({
+  onderwerp: z.string({ error: 'Vul een onderwerp in' }).trim().min(1, 'Vul een onderwerp in').max(EIGEN_MAIL_ONDERWERP_MAX, `Hooguit ${EIGEN_MAIL_ONDERWERP_MAX} tekens`),
+  tekst: z.string({ error: 'Schrijf een bericht' }).trim().min(1, 'Schrijf een bericht').max(EIGEN_MAIL_TEKST_MAX, `Hooguit ${EIGEN_MAIL_TEKST_MAX} tekens`),
+  ontvangers: eigenMailOntvangersSchema,
+  /** true = alleen tonen wie de mail zou krijgen en hoe ze eruitziet. */
+  droog: z.boolean().default(false),
+});
+export type EigenMail = z.output<typeof eigenMailSchema>;
+export type EigenMailInvoer = z.input<typeof eigenMailSchema>;

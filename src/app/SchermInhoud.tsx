@@ -180,7 +180,7 @@ export function SchermInhoud(props: SchermInhoudProps) {
       </Suspense>
     </Verwissel>}
     {resolvedCurrentView === 'designsysteem' && <LazyDesignsysteemView />}
-    {resolvedCurrentView === 'beheer-mails' && <Suspense fallback={skelet}><LazyMailsView /></Suspense>}
+    {resolvedCurrentView === 'beheer-mails' && <Suspense fallback={skelet}><LazyMailsView users={users} /></Suspense>}
     {resolvedCurrentView === 'instellingen' && (
       <LazyInstellingenView
         user={currentUser}

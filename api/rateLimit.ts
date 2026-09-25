@@ -396,6 +396,10 @@ export function createActionRateLimit(name: string, max: number) {
 export const deviceRegisterRateLimit = createActionRateLimit("device-register", num(process.env.RATE_LIMIT_DEVICE_MAX, 12));
 // Bedrijfsbreed noodbericht (mail + push naar de hele ploeg): een paar per uur.
 export const urgentEmailRateLimit = createActionRateLimit("urgent-email", num(process.env.RATE_LIMIT_URGENT_MAX, 6));
+// Zelf een mail sturen (admin, PR 5): een echte verzending gaat naar
+// tientallen mailboxen; tien per venster is ruim voor een mens, te weinig
+// voor een gekaapte sessie die de SMTP als relay wil gebruiken.
+export const eigenMailRateLimit = createActionRateLimit("eigen-mail", num(process.env.RATE_LIMIT_EIGEN_MAIL_MAX, 10));
 
 /** Voor tests: wis alle telstanden zodat testvolgorde geen 429 veroorzaakt. */
 export const resetAllRateLimiters = () => {

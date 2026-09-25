@@ -82,7 +82,9 @@ export interface MailOpbouw {
 const P = (inhoud: string, extra = "") =>
   `<p style="margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: ${MAIL_KLEUR.tekst};${extra}">${inhoud}</p>`;
 
-const alineaHtml = (a: MailAlinea) => (typeof a === "string" ? P(escapeMailHtml(a)) : a.html);
+// Een regeleinde in een gewone alinea blijft een regeleinde (eigen mail van
+// een admin, meerregelige omschrijving).
+const alineaHtml = (a: MailAlinea) => (typeof a === "string" ? P(escapeMailHtml(a).replace(/\n/g, "<br>")) : a.html);
 const alineaTekst = (a: MailAlinea) => (typeof a === "string" ? a : a.tekst);
 
 const lijstHtml = (l: { kop?: string; items: string[] }) => {

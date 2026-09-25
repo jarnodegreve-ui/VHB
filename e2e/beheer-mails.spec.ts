@@ -31,6 +31,13 @@ async function opzet(page: Page) {
       if (pad.endsWith('/api/mails/instellingen') && m === 'PUT') { const body = request.postDataJSON(); calls.push({ pad: 'instellingen', body }); instellingen = body; return body; }
       if (pad.endsWith('/api/mails/verzendlijsten') && m === 'PUT') { const body = request.postDataJSON(); calls.push({ pad: 'verzendlijsten', body }); lijsten = body; return body; }
       if (pad.includes('/api/mails/voorbeeld/')) return { onderwerp: 'Ziekmelding, Dirk Maes', html: '<!DOCTYPE html><html><body><h1>Voorbeeldmail</h1></body></html>' };
+      if (pad.endsWith('/api/mails/eigen') && m === 'POST') {
+        const body = request.postDataJSON();
+        calls.push({ pad: 'eigen', body });
+        return body.droog
+          ? { droog: true, aantal: 3, ontvangers: [{ adres: 'a@vhb.be', naam: 'Alex Du Priez' }, { adres: 'b@vhb.be', naam: 'Bart Claeys' }, { adres: 'extern@voorbeeld.be', naam: 'extern@voorbeeld.be' }], onderwerp: body.onderwerp, html: '<!DOCTYPE html><html><body><h1>Eigen mail</h1></body></html>' }
+          : { droog: false, aantal: 3, gelukt: 3, mislukt: 0, mocked: false };
+      }
       return undefined;
     },
   });
@@ -94,4 +101,43 @@ test('mails: verzendlijst toevoegen met adrescontrole, en verwijderen', async ({
   await expect(log.getByText('Verstuurd')).toBeVisible();
   await expect(log.getByText('Alleen gelogd')).toBeVisible();
   await expect(log.getByText('Els Goossens')).toBeVisible();
+});
+
+test('mails: zelf een mail sturen, met voorbeeld en bevestiging', async ({ page, isMobile }) => {
+  const { calls } = await opzet(page);
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await expect(paneel).toBeVisible();
+  // Zonder ontvangers: veldfout, geen call.
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.\n\nKom passen in het depot.');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  await expect(paneel.getByText('Kies minstens één ontvanger')).toBeVisible();
+  expect(calls.filter((c) => c.pad === 'eigen')).toHaveLength(0);
+  // Groep + verzendlijst + één gebruiker + vrij adres.
+  // De Checkbox-primitief verbergt de input (sr-only) in een label: klik het
+  // label, zoals een vinger dat doet, en controleer de staat van de input.
+  const vink = async (vak: ReturnType<typeof paneel.getByRole>) => { await vak.locator('..').click(); await expect(vak).toBeChecked(); };
+  await vink(paneel.getByRole('checkbox', { name: 'Alle chauffeurs' }));
+  await vink(paneel.getByRole('checkbox', { name: 'Verzendlijst De Lijn' }));
+  await paneel.getByRole('searchbox', { name: 'Zoek een gebruiker' }).fill('Alex');
+  await vink(paneel.getByRole('list', { name: 'Gebruikers' }).getByRole('checkbox').first());
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  await expect.poll(() => calls.filter((c) => c.pad === 'eigen').length).toBe(1);
+  const droog = calls.find((c) => c.pad === 'eigen')!.body;
+  expect(droog.droog).toBe(true);
+  expect(droog.ontvangers).toMatchObject({ groepen: ['chauffeurs'], lijsten: ['l-1'], adressen: ['extern@voorbeeld.be'] });
+  expect(droog.ontvangers.gebruikers).toHaveLength(1);
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van je mail' });
+  await expect(bevestiging.getByText('Naar 3 ontvangers')).toBeVisible();
+  await expect(bevestiging.getByText(/Alex Du Priez, Bart Claeys/)).toBeVisible();
+  await expect(bevestiging.frameLocator('iframe').getByRole('heading', { name: 'Eigen mail' })).toBeVisible();
+  await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();
+  await expect.poll(() => calls.filter((c) => c.pad === 'eigen').length).toBe(2);
+  expect(calls.filter((c) => c.pad === 'eigen')[1].body.droog).toBe(false);
+  await expect(page.getByText('Mail verstuurd naar 3 ontvangers.')).toBeVisible();
+  await expect(bevestiging).toHaveCount(0);
+  await expect(paneel).toHaveCount(0);
+  if (isMobile) await expect(page.getByRole('dialog')).toHaveCount(0);
 });
