@@ -20,6 +20,11 @@ interface SendEmailOptions {
   soort?: string;
   /** Wie de mail veroorzaakte (naam), voor het verzendlog; leeg = Systeem. */
   door?: string | null;
+  /** Antwoordadres voor déze mail (bv. de admin die zelf mailt); anders MAIL_REPLY_TO. */
+  replyTo?: string;
+  /** Geen eigen logregel: de aanroeper logt zelf één regel voor een reeks
+   *  (zelf een mail sturen: één regel met het aantal, niet één per persoon). */
+  zonderLog?: boolean;
   /** Bijlagen (bv. de wekelijkse backup-JSON, PDF's bij een omleiding) — 1-op-1 doorgegeven aan nodemailer. */
   attachments?: Array<{ filename: string; content: string | Buffer; contentType?: string }>;
 }
@@ -79,7 +84,7 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
   if (recipients.length === 0) return { ok: true, mocked: false };
   const soort = opts.soort || String(opts.context || "onbekend").split(":")[0];
   const log = (gelukt: boolean, fout?: string) =>
-    logMail({ soort, aantal: recipients.length, gelukt, fout: fout ?? null, door: opts.door ?? null });
+    opts.zonderLog ? Promise.resolve() : logMail({ soort, aantal: recipients.length, gelukt, fout: fout ?? null, door: opts.door ?? null });
 
   // Uitgezet in Beheer › Mails (PR 3): niet versturen, wel een logregel zodat
   // zichtbaar blijft dát er iets had kunnen uitgaan. Soorten die altijd aan
@@ -125,9 +130,10 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
     // ontvanger blijft gewoon in `To:` staan — dat leest normaal in de
     // mailclient en verklapt niets.
     const single = recipients.length === 1;
+    const replyTo = opts.replyTo || afzender.replyTo;
     await transporter.sendMail({
       from: afzender.from,
-      ...(afzender.replyTo ? { replyTo: afzender.replyTo } : {}),
+      ...(replyTo ? { replyTo } : {}),
       to: single ? recipients[0] : afzender.adres,
       ...(single ? {} : { bcc: recipients }),
       subject: opts.subject,

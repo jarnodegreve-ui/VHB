@@ -7239,6 +7239,50 @@ describe('Beheer › Mails (/api/mails)', () => {
     expect(mem.activity.filter((a: any) => a.action === 'Verzendlijsten gewijzigd').at(-1)?.message).toBe('Verwijderd: De Lijn.');
   });
 
+  describe('zelf een mail sturen (POST /api/mails/eigen)', () => {
+    const basis = { onderwerp: 'Nieuwe uniformen', tekst: 'Vanaf 1 juli.\n\nKom passen in het depot.' };
+    beforeEach(() => {
+      mem.emailsSent = [];
+      mem.appSettings['verzendlijsten'] = [{ id: 'l-1', naam: 'De Lijn', adressen: ['dispatching@delijn.be', 'a@vhb.be'] }];
+      mem.users.push({ id: '9', name: 'Inactieve Chauffeur', email: 'inactief@vhb.be', role: 'chauffeur', isActive: false });
+      mem.users.push({ id: '10', name: 'Technieker Tom', email: 'tom@vhb.be', role: 'technieker', isActive: true });
+    });
+    afterEach(() => { mem.users = mem.users.filter((u: any) => !['9', '10'].includes(u.id)); });
+
+    it('droog: leidt de ontvangers server-side af, ontdubbelt over groepen, lijsten, gebruikers en adressen, en geeft de mail terug', async () => {
+      const res = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, droog: true, ontvangers: { groepen: ['chauffeurs'], lijsten: ['l-1'], gebruikers: ['3', '10', '9', 'bestaat-niet'], adressen: ['B@vhb.be', 'extern@voorbeeld.be'] } } });
+      expect(res.status).toBe(200);
+      expect(res.json.droog).toBe(true);
+      // chauffeurs a + b, lijst dispatching (+ a dubbel), gebruiker tom, adres extern; inactief valt af, b dubbel.
+      expect(res.json.ontvangers.map((o: any) => o.adres).sort()).toEqual(['a@vhb.be', 'b@vhb.be', 'dispatching@delijn.be', 'extern@voorbeeld.be', 'tom@vhb.be']);
+      expect(res.json.aantal).toBe(5);
+      expect(res.json.html).toContain('Nieuwe uniformen');
+      expect(res.json.html).toContain('Kom passen in het depot.');
+      expect(res.json.html).toContain('Verstuurd door Annelies Admin');
+      expect(mem.emailsSent).toHaveLength(0);
+    });
+
+    it('versturen: één mail per persoon met de admin als antwoordadres, één logregel, activity-log', async () => {
+      const res = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { groepen: ['planning'], adressen: ['extern@voorbeeld.be'] } } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ droog: false, aantal: 3, gelukt: 3, mislukt: 0 });
+      expect(mem.emailsSent.map((m) => m.to).sort()).toEqual([['admin@vhb.be'], ['extern@voorbeeld.be'], ['planner@vhb.be']]);
+      expect(mem.emailsSent.every((m) => m.subject === 'Nieuwe uniformen' && m.context?.startsWith('eigen-mail:'))).toBe(true);
+      expect(mem.mailLog.filter((r: any) => r.soort === 'eigen-mail')).toHaveLength(1);
+      expect(mem.mailLog.find((r: any) => r.soort === 'eigen-mail')).toMatchObject({ aantal: 3, door: 'Annelies Admin' });
+      expect(mem.activity.find((a: any) => a.action === 'Eigen mail verstuurd')?.message).toContain('"Nieuwe uniformen" naar 3 ontvangers');
+    });
+
+    it('weigert zonder ontvangers, met een ongeldig adres, een onbekende lijst, een leeg onderwerp, en voor niet-admins', async () => {
+      expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: {} } })).status).toBe(400);
+      expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { adressen: ['geen-adres'] } } })).status).toBe(400);
+      expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { lijsten: ['bestaat-niet'] } } })).status).toBe(400);
+      expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, onderwerp: ' ', ontvangers: { groepen: ['chauffeurs'] } } })).status).toBe(400);
+      expect((await api('POST', '/api/mails/eigen', { token: 'tok-planner', body: { ...basis, ontvangers: { groepen: ['chauffeurs'] } } })).status).toBe(403);
+      expect(mem.emailsSent).toHaveLength(0);
+    });
+  });
+
   it('GET voorbeeld geeft onderwerp en HTML op de vaste lay-out; onbekende soort 404', async () => {
     const res = await api('GET', '/api/mails/voorbeeld/verlof-beslissing', { token: 'tok-admin' });
     expect(res.status).toBe(200);

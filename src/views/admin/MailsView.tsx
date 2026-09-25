@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Eye, ListChecks, Mail, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Bell, Eye, ListChecks, Mail, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '../../components/Card';
 import { Badge, Button, IconButton, Switch } from '../../components/primitives';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
@@ -11,7 +11,9 @@ import { apiJson } from '../../lib/api';
 import { notify } from '../../lib/ui';
 import { meldSchrijffout } from '../../lib/fouten';
 import { formatDateTimeHuman, aantal as tel } from '../../lib/format';
-import { leesAdressen, MAIL_SOORT_PER_SLEUTEL, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
+import { leesAdressen, naamVanSoort, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
+import type { User } from '../../types';
+import { EigenMailPaneel } from './EigenMail';
 
 /**
  * Beheer › Mails (mailtranche PR 3, admin): elke automatische mail met
@@ -27,9 +29,10 @@ type Antwoord = { soorten: Soort[]; instellingen: MailInstellingen; verzendlijst
 
 const nieuwId = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `l-${Date.now()}`);
 
-export function MailsView() {
+export function MailsView({ users }: { users: User[] }) {
   const [data, setData] = useState<Antwoord | null>(null);
   const [fout, setFout] = useState<string | null>(null);
+  const [eigenOpen, setEigenOpen] = useState(false);
 
   const laad = async () => {
     try {
@@ -43,7 +46,13 @@ export function MailsView() {
 
   return (
     <PageShell>
-      <PageHeader view="beheer-mails" title="Mails" description="Welke mails het portaal verstuurt, de verzendlijsten en het verzendlog." />
+      <PageHeader
+        view="beheer-mails"
+        title="Mails"
+        description="Welke mails het portaal verstuurt, de verzendlijsten en het verzendlog."
+        actions={<Button variant="primary" icon={<Send size={16} />} onClick={() => setEigenOpen(true)}>Mail versturen</Button>}
+      />
+      <EigenMailPaneel open={eigenOpen} onClose={() => setEigenOpen(false)} users={users} lijsten={data?.verzendlijsten ?? []} onVerstuurd={() => void laad()} />
       {fout ? (
         <EmptyState variant="fout" title="Mails laden is mislukt" message={fout} action={<Button variant="secondary" onClick={() => void laad()}>Opnieuw proberen</Button>} />
       ) : (
@@ -295,7 +304,7 @@ function Verzendlog({ log }: { log: LogRij[] | null }) {
                 {log.map((r) => (
                   <tr key={r.id}>
                     <Td nowrap>{formatDateTimeHuman(r.verzondenOp)}</Td>
-                    <Td>{MAIL_SOORT_PER_SLEUTEL.get(r.soort)?.naam ?? r.soort}</Td>
+                    <Td>{naamVanSoort(r.soort)}</Td>
                     <Td num>{r.aantal}</Td>
                     <Td>{r.gelukt ? <Badge tone="emerald" stil>Verstuurd</Badge> : <span className="inline-flex flex-wrap items-center gap-1.5"><Badge tone="amber" stil>{/uitgeschakeld/i.test(r.fout ?? '') ? 'Uitgeschakeld' : /SMTP niet/i.test(r.fout ?? '') ? 'Alleen gelogd' : 'Mislukt'}</Badge>{r.fout && !/uitgeschakeld|SMTP niet/i.test(r.fout) && <span className="text-xs text-slate-500">{r.fout}</span>}</span>}</Td>
                     <Td nowrap>{r.door ?? 'Systeem'}</Td>

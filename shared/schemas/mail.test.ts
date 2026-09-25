@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMailAan, leesAdressen, MAIL_SOORTEN, parseMailInstellingen, parseVerzendlijsten, UITZETBARE_MAIL_SOORTEN, verzendlijstenSchema } from './mail';
+import { eigenMailSchema, isMailAan, leesAdressen, MAIL_SOORTEN, naamVanSoort, parseMailInstellingen, parseVerzendlijsten, UITZETBARE_MAIL_SOORTEN, verzendlijstenSchema } from './mail';
 
 describe('mailinstellingen', () => {
   it('kent elke mailsoort één keer en markeert welkom, wachtwoord, back-up en herstel als altijd aan', () => {
@@ -47,5 +47,23 @@ describe('verzendlijsten', () => {
     const r = leesAdressen('a@b.be\nB@c.be, c@d.be; geen adres\n\n a@b.be ');
     expect(r.adressen).toEqual(['a@b.be', 'b@c.be', 'c@d.be']);
     expect(r.fouten).toEqual(['geen adres']);
+  });
+});
+
+describe('eigen mail', () => {
+  it('vult de ontvangersdelen aan met lege lijsten en normaliseert adressen', () => {
+    const r = eigenMailSchema.safeParse({ onderwerp: ' Test ', tekst: 'Hallo', ontvangers: { adressen: ['A@B.be'] } });
+    expect(r.success).toBe(true);
+    expect(r.success && r.data).toEqual({ onderwerp: 'Test', tekst: 'Hallo', droog: false, ontvangers: { groepen: [], lijsten: [], gebruikers: [], adressen: ['a@b.be'] } });
+  });
+  it('weigert een onbekende groep, een leeg bericht en een ongeldig adres', () => {
+    expect(eigenMailSchema.safeParse({ onderwerp: 'x', tekst: 'y', ontvangers: { groepen: ['iedereen'] } }).success).toBe(false);
+    expect(eigenMailSchema.safeParse({ onderwerp: 'x', tekst: '  ', ontvangers: {} }).success).toBe(false);
+    expect(eigenMailSchema.safeParse({ onderwerp: 'x', tekst: 'y', ontvangers: { adressen: ['nope'] } }).success).toBe(false);
+  });
+  it('naamVanSoort kent ook de eigen mail', () => {
+    expect(naamVanSoort('eigen-mail')).toBe('Eigen mail');
+    expect(naamVanSoort('ziekmelding')).toBe('Ziekmelding');
+    expect(naamVanSoort('onbekend')).toBe('onbekend');
   });
 });
