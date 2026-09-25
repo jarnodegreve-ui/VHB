@@ -1,6 +1,7 @@
 import { DAG_DMJ, PERIODE_DMJ } from "./helpers.js";
 import { bouwMail, escapeMailHtml, type MailOpbouw } from "./_lib/mailLayout.js";
 import { logMail } from "./storage.js";
+import { mailSoortAan } from "./_lib/mailInstellingen.js";
 
 /** Escape user-invoer vóór die in HTML-e-mails belandt (injectie-preventie).
  *  Eén bron: de routes importeren deze i.p.v. een eigen kopie. */
@@ -26,6 +27,8 @@ interface SendEmailOptions {
 interface SendEmailResult {
   ok: boolean;
   mocked: boolean;
+  /** De mailsoort staat uit in Beheer › Mails: niets verstuurd, wel gelogd. */
+  overgeslagen?: boolean;
   /** Serverfout bij een mislukte verzending (alleen aan admins tonen). */
   error?: string;
 }
@@ -77,6 +80,14 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
   const soort = opts.soort || String(opts.context || "onbekend").split(":")[0];
   const log = (gelukt: boolean, fout?: string) =>
     logMail({ soort, aantal: recipients.length, gelukt, fout: fout ?? null, door: opts.door ?? null });
+
+  // Uitgezet in Beheer › Mails (PR 3): niet versturen, wel een logregel zodat
+  // zichtbaar blijft dát er iets had kunnen uitgaan. Soorten die altijd aan
+  // staan (welkom, back-up, herstel, testmail) komen hier nooit langs.
+  if (!(await mailSoortAan(soort))) {
+    await log(false, "uitgeschakeld in Beheer › Mails");
+    return { ok: true, mocked: false, overgeslagen: true };
+  }
 
   if (!isSmtpConfigured()) {
     // In productie NOOIT de body loggen: welkomstmails bevatten wachtwoord-

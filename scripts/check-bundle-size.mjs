@@ -83,7 +83,11 @@ import zlib from 'node:zlib';
 // een wachtrij voor een nieuwe omleiding. Netto +1,0 kB gemeten (CI +0,3 kB
 // zwaarder dan lokaal), niets in de start- of warmup-sets; de deelbudgetten
 // bleven gelijk.
-const BUDGET_KB = 672;
+// 25-09 (mailtranche PR 3): 672 → 678. Nieuw adminscherm Beheer › Mails
+// (MailsView, lazy chunk ±5 kB: mailsoorten met schakelaars, verzendlijsten
+// met modal, verzendlog-tabel) plus het gedeelde mail-schema. Niets in de
+// start- of warmup-sets; de deelbudgetten bleven gelijk.
+const BUDGET_KB = 678;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

@@ -1,0 +1,51 @@
+import { describe, expect, it } from 'vitest';
+import { isMailAan, leesAdressen, MAIL_SOORTEN, parseMailInstellingen, parseVerzendlijsten, UITZETBARE_MAIL_SOORTEN, verzendlijstenSchema } from './mail';
+
+describe('mailinstellingen', () => {
+  it('kent elke mailsoort één keer en markeert welkom, wachtwoord, back-up en herstel als altijd aan', () => {
+    const sleutels = MAIL_SOORTEN.map((m) => m.soort);
+    expect(new Set(sleutels).size).toBe(sleutels.length);
+    for (const s of ['welkom', 'wachtwoord', 'backup-integriteit', 'backup-weekkopie', 'restore-proef', 'testmail']) {
+      expect(UITZETBARE_MAIL_SOORTEN, s).not.toContain(s);
+    }
+    for (const s of ['verlof-beslissing', 'ziekmelding', 'dringende-update', 'vervaldatum', 'weekoverzicht']) {
+      expect(UITZETBARE_MAIL_SOORTEN, s).toContain(s);
+    }
+  });
+
+  it('parse laat onbekende en altijd-aan soorten uit de uit-lijst vallen; rommel wordt "alles aan"', () => {
+    expect(parseMailInstellingen({ uit: ['ziekmelding', 'welkom', 'bestaat-niet', 'ziekmelding'] })).toEqual({ uit: ['ziekmelding'] });
+    expect(parseMailInstellingen(null)).toEqual({ uit: [] });
+    expect(parseMailInstellingen({ uit: 'ziekmelding' })).toEqual({ uit: [] });
+  });
+
+  it('isMailAan: uitgezet = uit; altijd-aan en onbekende soorten blijven aan', () => {
+    const inst = { uit: ['ziekmelding'] };
+    expect(isMailAan(inst, 'ziekmelding')).toBe(false);
+    expect(isMailAan(inst, 'verlof-beslissing')).toBe(true);
+    expect(isMailAan({ uit: ['welkom'] }, 'welkom')).toBe(true);
+    expect(isMailAan({ uit: ['nieuwe-mail'] }, 'nieuwe-mail')).toBe(true);
+  });
+});
+
+describe('verzendlijsten', () => {
+  it('valideert naam en adressen, normaliseert naar kleine letters en ontdubbelt', () => {
+    const r = verzendlijstenSchema.safeParse([{ id: 'l1', naam: ' De Lijn ', adressen: ['Dispatching@DeLijn.be', 'planning@delijn.be'] }]);
+    expect(r.success).toBe(true);
+    expect(r.success && r.data[0].naam).toBe('De Lijn');
+    expect(r.success && r.data[0].adressen).toEqual(['dispatching@delijn.be', 'planning@delijn.be']);
+    expect(parseVerzendlijsten([{ id: 'l1', naam: 'x', adressen: ['a@b.be', 'A@B.BE'] }])[0].adressen).toEqual(['a@b.be']);
+  });
+
+  it('weigert een lege naam, een ongeldig adres en rommel', () => {
+    expect(verzendlijstenSchema.safeParse([{ id: 'l1', naam: '', adressen: ['a@b.be'] }]).success).toBe(false);
+    expect(verzendlijstenSchema.safeParse([{ id: 'l1', naam: 'x', adressen: ['geen-adres'] }]).success).toBe(false);
+    expect(parseVerzendlijsten('rommel')).toEqual([]);
+  });
+
+  it('leesAdressen: regels, komma\'s en puntkomma\'s, met de foute regels apart', () => {
+    const r = leesAdressen('a@b.be\nB@c.be, c@d.be; geen adres\n\n a@b.be ');
+    expect(r.adressen).toEqual(['a@b.be', 'b@c.be', 'c@d.be']);
+    expect(r.fouten).toEqual(['geen adres']);
+  });
+});

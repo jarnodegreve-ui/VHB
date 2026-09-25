@@ -36,6 +36,7 @@ export const SKELET_PER_VIEW: Partial<Record<View, SkeletVorm>> = {
   voertuigen: { soort: 'tabel', kpis: 4 },
   defecten: { soort: 'tabel', kpis: 4 },
   gebruikers: { soort: 'tabel' },
+  'beheer-mails': { beschrijving: true },
   activiteit: { soort: 'tabel', kpis: 4 },
   looncontrole: { soort: 'tabel', kpis: 4 },
   dienstopbouw: { soort: 'tabel' },
