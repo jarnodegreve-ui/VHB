@@ -65,6 +65,7 @@ const VIEWS: Record<View, { pad: string; laad: Loader }> = {
   werkvoorraad: view('views/WerkvoorraadView', () => import('../views/WerkvoorraadView')),
   vandaag: view('views/VandaagView', () => import('../views/VandaagView')),
   rapporten: view('views/admin/RapportenView', () => import('../views/admin/RapportenView')),
+  'beheer-mails': view('views/admin/MailsView', () => import('../views/admin/MailsView')),
 };
 
 export const VIEW_LOADERS: Record<View, Loader> = Object.fromEntries(

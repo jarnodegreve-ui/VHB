@@ -44,6 +44,7 @@ export const LazyManageDiversionsView = scherm<typeof import('../views/admin/Man
 export const LazyVerlofKalenderView = scherm<typeof import('../views/admin/VerlofKalenderView'), 'VerlofKalenderView'>('verlof-kalender', 'VerlofKalenderView');
 export const LazyCoverageView = scherm<typeof import('../views/CoverageView'), 'CoverageView'>('dekking', 'CoverageView');
 export const LazyDebugView = scherm<typeof import('../views/admin/DebugView'), 'DebugView'>('beheer-debug', 'DebugView');
+export const LazyMailsView = scherm<typeof import('../views/admin/MailsView'), 'MailsView'>('beheer-mails', 'MailsView');
 // Techniek (fase A Access-migratie, 13-09): gele boek, werkprestaties, voertuigen.
 export const LazyGeleBoekView = scherm<typeof import('../views/techniek/GeleBoekView'), 'GeleBoekView'>('defecten', 'GeleBoekView');
 export const LazyWerkprestatiesView = scherm<typeof import('../views/techniek/WerkprestatiesView'), 'WerkprestatiesView'>('werkprestaties', 'WerkprestatiesView');

@@ -735,7 +735,7 @@ export function mountCronRoutes(app: express.Express) {
         voet: "Details staan in het portaal onder Systeemstatus en in de Vercel-logs.",
       });
 
-      const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest", soort: overzichtNaam });
+      const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest", soort: "weekoverzicht" });
       console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
       await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} verstuurd: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
       res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });

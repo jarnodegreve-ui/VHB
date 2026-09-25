@@ -17,7 +17,7 @@ import { SchermInloop, Verwissel } from '../components/Verwissel';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { useAppDataContext } from './AppDataContext';
 import type { useRoute } from './router';
-import { LazyActivityLogView, LazyCapacityView, LazyContactsView, LazyCoverageView, LazyDagafsluitingView, LazyDashboardView, LazyDebugView, LazyDesignsysteemView, LazyDevicesView, LazyDienstopbouwView, LazyDiversionsView, LazyDocumentsView, LazyGeleBoekView, LazyInstellingenView, LazyLeaveManagementView, LazyLooncontroleView, LazyManageDiversionsView, LazyManageSchedulesView, LazyManageUpdatesView, LazyManageUsersView, LazyMeldingenView, LazyMijnDagView, LazyOcpiDashboardView, LazyPlannerDashboardWidgets, LazyPlanningCodesView, LazyPlanningMatrixView, LazyRapportenView, LazyRitblaadjesView, LazyScheduleView, LazyServicesView, LazySwapRequestsView, LazyUpdatesView, LazyVandaagView, LazyVerlofKalenderView, LazyVervaldataView, LazyVoertuigWerkenView, LazyVoertuigenView, LazyWerkprestatiesView, LazyWerkvoorraadView, LazyZiekteView } from './lazyViews';
+import { LazyActivityLogView, LazyCapacityView, LazyContactsView, LazyCoverageView, LazyDagafsluitingView, LazyDashboardView, LazyDebugView, LazyDesignsysteemView, LazyDevicesView, LazyDienstopbouwView, LazyDiversionsView, LazyDocumentsView, LazyGeleBoekView, LazyInstellingenView, LazyLeaveManagementView, LazyLooncontroleView, LazyManageDiversionsView, LazyManageSchedulesView, LazyManageUpdatesView, LazyManageUsersView, LazyMailsView, LazyMeldingenView, LazyMijnDagView, LazyOcpiDashboardView, LazyPlannerDashboardWidgets, LazyPlanningCodesView, LazyPlanningMatrixView, LazyRapportenView, LazyRitblaadjesView, LazyScheduleView, LazyServicesView, LazySwapRequestsView, LazyUpdatesView, LazyVandaagView, LazyVerlofKalenderView, LazyVervaldataView, LazyVoertuigWerkenView, LazyVoertuigenView, LazyWerkprestatiesView, LazyWerkvoorraadView, LazyZiekteView } from './lazyViews';
 
 export type SchermInhoudProps = {
   /** De view na de rol-check (magView): nooit een scherm dat de rol niet mag. */
@@ -180,6 +180,7 @@ export function SchermInhoud(props: SchermInhoudProps) {
       </Suspense>
     </Verwissel>}
     {resolvedCurrentView === 'designsysteem' && <LazyDesignsysteemView />}
+    {resolvedCurrentView === 'beheer-mails' && <Suspense fallback={skelet}><LazyMailsView /></Suspense>}
     {resolvedCurrentView === 'instellingen' && (
       <LazyInstellingenView
         user={currentUser}

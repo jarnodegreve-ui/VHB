@@ -43,6 +43,20 @@ export const DIVERSIONS = [
   { id: 'd1', line: '58', title: 'Werken Markt Zottegem', description: 'Omleiding via de ring, haltes Markt en Station vervallen tijdelijk.', startDate: dayOffset(-3), endDate: dayOffset(14), severity: 'medium' },
   { id: 'd2', line: '23', title: 'Wielerwedstrijd', description: 'Volledige doortocht afgesloten tussen 12u en 18u.', startDate: dayOffset(-30), endDate: dayOffset(-2), severity: 'high' },
 ];
+/** Beheer › Mails (PR 3): drie soorten, één lijst, twee logregels. */
+export const MAILS = {
+  soorten: [
+    { soort: 'welkom', naam: 'Welkomstmail', wanneer: 'Bij een nieuw account', ontvangers: 'De nieuwe gebruiker', altijdAan: true, aan: true, laatst: null },
+    { soort: 'ziekmelding', naam: 'Ziekmelding', wanneer: 'Als een planner iemand ziek meldt', ontvangers: 'Planners en admins, elk apart', push: true, aan: true, laatst: { op: '2026-09-15T10:00:00Z', aantal: 2, gelukt: true } },
+    { soort: 'dringende-update', naam: 'Dringende update', wanneer: 'Bij het publiceren van een dringende update', ontvangers: 'Alle actieve gebruikers met een e-mailadres', push: true, aan: false, laatst: null },
+  ],
+  instellingen: { uit: ['dringende-update'] },
+  verzendlijsten: [{ id: 'l-1', naam: 'De Lijn', adressen: ['dispatching@delijn.be', 'planning@delijn.be'] }],
+  log: [
+    { id: 'm-1', verzondenOp: '2026-09-15T10:00:00Z', soort: 'ziekmelding', aantal: 2, gelukt: true, door: 'Els Goossens' },
+    { id: 'm-2', verzondenOp: '2026-09-14T06:00:00Z', soort: 'weekoverzicht', aantal: 1, gelukt: false, fout: 'SMTP niet geconfigureerd, mail alleen gelogd', door: 'Systeem' },
+  ],
+};
 export const UPDATES = [
   { id: 'u1', title: 'Nieuwe zomeruniformen beschikbaar', content: 'Vanaf volgende week liggen de nieuwe zomeruniformen klaar in het depot. Kom langs tijdens de kantooruren om jouw maat te passen.\n\nGraag ophalen vóór eind augustus.', date: '2026-07-20', isUrgent: false, category: 'algemeen' },
   { id: 'u2', title: 'Onderhoud aan boordcomputers', content: 'Alle bussen krijgen dit weekend een software-update.', date: '2026-07-27', isUrgent: true, category: 'technisch' },
@@ -381,6 +395,7 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/users')) return json(USERS);
     if (p.endsWith('/api/services')) return json(SERVICES);
     if (p.endsWith('/api/diversions')) return json(DIVERSIONS);
+    if (p.endsWith('/api/mails')) return json(MAILS);
     if (p.endsWith('/api/updates')) return json(UPDATES);
     if (p.endsWith('/api/leave/bezetting')) {
       // Chauffeurs-kalender: aantallen per dag, geen namen (PR #526).

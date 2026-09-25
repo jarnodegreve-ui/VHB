@@ -49,6 +49,8 @@ const SCHERMEN: Scherm[] = [
   { naam: 'chauffeur-meldingen', user: CHAUFFEUR, view: 'meldingen', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Meldingen', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
   { naam: 'admin-maandplanning', user: ADMIN, view: 'bezetting', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Maandplanning', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
   { naam: 'admin-instellingen', user: ADMIN, view: 'instellingen', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Instellingen', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
+  // Mailtranche PR 3 (25-09): het mailbeheer met schakelaars, lijsten en log.
+  { naam: 'admin-mails', user: ADMIN, view: 'beheer-mails', klaar: async (page) => { await expect(page.getByRole('heading', { name: 'Mails', level: 1 })).toBeVisible({ timeout: 15_000 }); } },
 ];
 
 const beschrijf = (v: { id: string; impact?: string | null; help: string; nodes: { target: unknown[] }[] }) =>
