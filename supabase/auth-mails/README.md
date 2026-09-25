@@ -24,7 +24,7 @@ inhoud van het bijbehorende `.html`-bestand plakken en opslaan:
 supabase.com/dashboard/account/tokens en dan
 
 ```sh
-SUPABASE_ACCESS_TOKEN=… SUPABASE_PROJECT_REF=nbupdofxuoxvgeiedzkk node scripts/auth-mails.mjs --push
+SUPABASE_ACCESS_TOKEN=… SUPABASE_PROJECT_REF=nbupdofxuoxvgeiedzkk npx tsx scripts/auth-mails.mjs --push
 ```
 
 Herhalen voor staging (`bzxnkjswfhaiqqbxbmky`). Het token nooit in git of in

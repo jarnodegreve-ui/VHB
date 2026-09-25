@@ -45,6 +45,7 @@ import {
 } from "./helpers.js";
 import { hoortBijSessie, type AanwezigheidLocatie } from "./_lib/aanwezigheid.js";
 import { db, supabaseAdmin } from "./db.js";
+import { isMissingTableError } from "./deviceGate.js";
 import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import type { MeldingInvoer } from "./_lib/meldingen.js";
 
@@ -3369,6 +3370,64 @@ export const restoreFromBackup = async (collections: RestorableCollections): Pro
 // endpoint markeert heartbeats die ouder zijn dan 2× het interval. Voor
 // hoogfrequente crons (OCPI, elke 2-5 min) throttelen we naar max. 1
 // heartbeat per uur zodat het log niet volloopt.
+// --- Verzendlog van de mails (2026-09-25_mail_log.sql) ---
+
+export interface MailLogRegel {
+  soort: string;
+  aantal: number;
+  gelukt: boolean;
+  fout?: string | null;
+  door?: string | null;
+}
+
+/** Eén regel in het verzendlog; best-effort, en stil zolang de migratie niet
+ *  gedraaid is. Nooit inhoud of adressen (zie de migratie). */
+export const logMail = async (regel: MailLogRegel): Promise<void> => {
+  try {
+    const client = requireDb();
+    const { error } = await client.from("mail_log").insert({
+      soort: regel.soort,
+      aantal: regel.aantal,
+      gelukt: regel.gelukt,
+      fout: regel.fout ? String(regel.fout).slice(0, 500) : null,
+      door: regel.door ?? "Systeem",
+    });
+    if (error && !isMissingTableError(error)) console.warn("[mail-log] schrijven mislukt:", error.message);
+  } catch (err) {
+    if (!isMissingTableError(err)) console.warn("[mail-log] schrijven mislukt:", err);
+  }
+};
+
+export interface MailLogRij extends MailLogRegel {
+  id: string;
+  verzondenOp: string;
+}
+
+/** De laatste regels van het verzendlog (nieuwste eerst); lege lijst zonder migratie. */
+export const getMailLog = async (limit = 200): Promise<MailLogRij[]> => {
+  try {
+    const client = requireDb();
+    const { data, error } = await client
+      .from("mail_log")
+      .select("id, verzonden_op, soort, aantal, gelukt, fout, door")
+      .order("verzonden_op", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data ?? []).map((r: any) => ({
+      id: String(r.id),
+      verzondenOp: String(r.verzonden_op),
+      soort: String(r.soort),
+      aantal: Number(r.aantal) || 0,
+      gelukt: Boolean(r.gelukt),
+      fout: r.fout ?? null,
+      door: r.door ?? null,
+    }));
+  } catch (err) {
+    if (isMissingTableError(err)) return [];
+    throw err;
+  }
+};
+
 export const logCronHeartbeat = async (name: string, details: string, minIntervalMin = 0) => {
   try {
     const client = requireDb();

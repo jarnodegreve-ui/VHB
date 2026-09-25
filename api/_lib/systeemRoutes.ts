@@ -10,7 +10,7 @@
 
 import express from "express";
 import { TABLE_PROBES } from "../schemaProbes.js";
-import { sendEmail, isSmtpConfigured } from "../email.js";
+import { sendEmail, isSmtpConfigured, mailAfzender, mailOpbouw } from "../email.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { db, supabase } from "../db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "../middleware.js";
@@ -118,12 +118,26 @@ export function mountSysteemRoutes(app: express.Express) {
         smtpConfigured: false,
       });
     }
+    const afzender = mailAfzender();
+    const { html, text } = mailOpbouw({
+      kicker: "Systeem",
+      titel: "Testmail van het portaal",
+      status: { label: "Mailinstellingen werken", toon: "goed" },
+      alineas: ["Deze testmail bevestigt dat het portaal mails kan versturen. Komt ze in je spam-map terecht, controleer dan de domeinverificatie bij de mailprovider."],
+      feiten: [
+        { label: "Afzender", waarde: afzender.from },
+        { label: "Antwoordadres", waarde: afzender.replyTo ?? "geen (niet beantwoorden)" },
+        { label: "Verstuurd op", waarde: new Date().toLocaleString("nl-BE", { timeZone: "Europe/Brussels" }) },
+      ],
+    });
     const result = await sendEmail({
       to: [to],
-      subject: "VHB Portaal, testmail",
-      text: `Deze testmail bevestigt dat de mailinstellingen van het portaal werken.\n\nVerstuurd op ${new Date().toLocaleString("nl-BE", { timeZone: "Europe/Brussels" })}.`,
-      html: `<p>Deze testmail bevestigt dat de mailinstellingen van het portaal werken.</p><p style="color:#64748b;font-size:12px">Verstuurd op ${new Date().toLocaleString("nl-BE", { timeZone: "Europe/Brussels" })}.</p>`,
+      subject: "Testmail van het VHB Portaal",
+      text,
+      html,
       context: "test-email",
+      soort: "testmail",
+      door: req.appUser?.name ?? null,
     });
     if (!result.ok) {
       return res.status(502).json({ error: result.error || "Verzenden mislukt, controleer host, poort, gebruiker en wachtwoord.", smtpConfigured: true });
