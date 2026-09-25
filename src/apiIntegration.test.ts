@@ -293,7 +293,7 @@ vi.mock('../api/email.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
   sendLeaveDecisionEmail: vi.fn(async () => ({ ok: true, mocked: true })),
   sendEmail: vi.fn(async (opts: any) => {
-    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text });
+    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
     return { ok: true, mocked: true };
   }),
   sendWelcomeEmail: vi.fn(async (ctx: any) => {
@@ -495,6 +495,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.opslag.delete(`diversions/${id}-${slot}.pdf`);
       if (opts?.legacy) mem.opslag.delete(`diversions/${id}.pdf`);
     },
+    downloadDiversionBijlage: async (id: string, slot: number, legacy = false) =>
+      mem.opslag.has(`diversions/${legacy ? `${id}.pdf` : `${id}-${slot}.pdf`}`) ? Buffer.from('%PDF-1.4 test') : null,
     verwijderDiversionLegacyBijlage: async (id: string) => {
       mem.opslag.delete(`diversions/${id}.pdf`);
     },
@@ -7280,6 +7282,68 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, onderwerp: ' ', ontvangers: { groepen: ['chauffeurs'] } } })).status).toBe(400);
       expect((await api('POST', '/api/mails/eigen', { token: 'tok-planner', body: { ...basis, ontvangers: { groepen: ['chauffeurs'] } } })).status).toBe(403);
       expect(mem.emailsSent).toHaveLength(0);
+    });
+  });
+
+  describe('een omleiding mailen (POST /api/diversions/:id/mail)', () => {
+    beforeEach(() => {
+      mem.emailsSent = [];
+      mem.opslag.clear();
+      mem.appSettings['verzendlijsten'] = [{ id: 'l-1', naam: 'De Lijn', adressen: ['dispatching@delijn.be', 'planning@delijn.be'] }];
+      mem.diversions = [
+        { id: 'o-1', line: '58, 82', location: 'Zottegem', title: 'Werken Markt', description: 'Omrijden via de ring.\n\nHaltes Markt en Station vervallen.', startDate: '2026-10-01', endDate: '2026-10-10', bijlagen: [{ slot: 1, filename: 'plan.pdf', sizeBytes: 1200 }, { slot: 3, filename: 'haltes.pdf' }] },
+        { id: 'o-2', line: 'Alle', title: 'Kermis', description: 'x', startDate: '2026-10-05', pdfUrl: 'https://oud.supabase.test/o-2.pdf' },
+      ];
+      mem.opslag.add('diversions/o-1-1.pdf');
+      mem.opslag.add('diversions/o-2.pdf');
+    });
+
+    it('droog: verzendlijsten plus vrije adressen, ontdubbeld, met onderwerp, mail en bijlagenlijst; planner mag', async () => {
+      const res = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-planner', body: { droog: true, bericht: 'Beste, hierbij de omleiding.', ontvangers: { lijsten: ['l-1'], adressen: ['Planning@DeLijn.be', 'garage@vhb.be'] } } });
+      expect(res.status).toBe(200);
+      expect(res.json.ontvangers.map((o: any) => o.adres).sort()).toEqual(['dispatching@delijn.be', 'garage@vhb.be', 'planning@delijn.be']);
+      expect(res.json.onderwerp).toBe('Omleiding lijnen 58 en 82: Werken Markt (01/10/2026 t/m 10/10/2026)');
+      expect(res.json.html).toContain('Beste, hierbij de omleiding.');
+      expect(res.json.html).toContain('Haltes Markt en Station vervallen.');
+      expect(res.json.html).toContain('Zottegem');
+      expect(res.json.html).toContain('In bijlage');
+      expect(res.json.bijlagen.map((b: any) => b.filename)).toEqual(['plan.pdf', 'haltes.pdf']);
+      expect(mem.emailsSent).toHaveLength(0);
+    });
+
+    it('versturen: één mail per ontvanger met alleen de PDF\'s die echt hangen als bijlage, één logregel en een logboekregel op de omleiding', async () => {
+      const res = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ droog: false, aantal: 2, gelukt: 2, mislukt: 0, bijlagen: 1 });
+      expect(mem.emailsSent).toHaveLength(2);
+      // slot 3 (haltes.pdf) hangt niet in de opslag → alleen plan.pdf gaat mee.
+      expect(mem.emailsSent[0].attachments.map((a: any) => a.filename)).toEqual(['plan.pdf']);
+      expect(mem.emailsSent[0].context).toBe('omleiding-mail:o-1');
+      expect(mem.mailLog.filter((r: any) => r.soort === 'omleiding-mail')).toHaveLength(1);
+      expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')).toMatchObject({ entityType: 'diversion', entityId: 'o-1' });
+      expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')?.message).toContain('naar 2 ontvangers met 1 PDF');
+    });
+
+    it('een PDF van vóór 25-09 (<id>.pdf) gaat mee als omleiding.pdf; zonder einddatum zegt de mail "tot nader bericht"', async () => {
+      const res = await api('POST', '/api/diversions/o-2/mail', { token: 'tok-planner', body: { ontvangers: { adressen: ['x@y.be'] } } });
+      expect(res.status).toBe(200);
+      expect(res.json.bijlagen).toBe(1);
+      expect(mem.emailsSent[0].attachments[0].filename).toBe('omleiding.pdf');
+      expect(mem.emailsSent[0].text).toContain('tot nader bericht');
+    });
+
+    it('weigert chauffeurs, een onbekende omleiding, een onbekende lijst, geen ontvangers en een fout adres', async () => {
+      expect((await api('POST', '/api/diversions/o-1/mail', { token: 'tok-a', body: { ontvangers: { adressen: ['x@y.be'] } } })).status).toBe(403);
+      expect((await api('POST', '/api/diversions/bestaat-niet/mail', { token: 'tok-planner', body: { ontvangers: { adressen: ['x@y.be'] } } })).status).toBe(404);
+      expect((await api('POST', '/api/diversions/o-1/mail', { token: 'tok-planner', body: { ontvangers: { lijsten: ['weg'] } } })).status).toBe(400);
+      expect((await api('POST', '/api/diversions/o-1/mail', { token: 'tok-planner', body: { ontvangers: {} } })).status).toBe(400);
+      expect((await api('POST', '/api/diversions/o-1/mail', { token: 'tok-planner', body: { ontvangers: { adressen: ['nope'] } } })).status).toBe(400);
+      expect(mem.emailsSent).toHaveLength(0);
+    });
+
+    it('GET /api/mails/verzendlijsten is voor planner en admin, niet voor chauffeurs', async () => {
+      expect((await api('GET', '/api/mails/verzendlijsten', { token: 'tok-planner' })).json).toHaveLength(1);
+      expect((await api('GET', '/api/mails/verzendlijsten', { token: 'tok-a' })).status).toBe(403);
     });
   });
 

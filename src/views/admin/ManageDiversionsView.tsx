@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
-import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, X } from 'lucide-react';
+import { Calendar, ChevronRight, FileText, History, Mail, MapPin, Plus, Trash2, X } from 'lucide-react';
 import { LijnTegel } from '../../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenNaarTekst, lijnenVan } from '../../../shared/lijnen';
 import type { Diversion } from '../../types';
 import { cn } from '../../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { OmleidingBijlagen, uploadWachtrij } from '../../components/OmleidingBijlagen';
+import { OmleidingMailPaneel } from './OmleidingMail';
 import { Badge, Button, IconButton, TOON_NAAR_BADGE } from '../../components/primitives';
 import { SluitKnop } from '../../components/Modal';
 import { OMLEIDING_FASE } from '../../../shared/status';
@@ -52,6 +53,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   const sortedDiversions = useMemo(() => sorteerOmleidingen(diversions), [diversions]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyDiversion, setHistoryDiversion] = useState<Diversion | null>(null);
+  // Mailknop (mailtranche PR 4): de omleiding met haar PDF's naar verzendlijsten en adressen.
+  const [mailDiversion, setMailDiversion] = useState<Diversion | null>(null);
 
   const [formData, setFormData] = useState<Partial<Diversion>>({
     line: '',
@@ -343,6 +346,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
           size="sm"
           label="Meer acties"
           items={[
+            { label: 'Mailen…', icon: <Mail size={16} />, onClick: () => setMailDiversion(bewerkte) },
             { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setHistoryDiversion(bewerkte) },
             { label: 'Verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, onClick: () => { void handleDelete(bewerkte.id); } },
           ]}
@@ -491,6 +495,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       {/* Zonder omleidingen (en zonder open "nieuw"-formulier) vult de lege
           staat van de lijst de volle breedte — geen leeg paneel ernaast. */}
       <MasterDetail lijst={lijst} paneel={sortedDiversions.length === 0 && !paneelOpen ? undefined : paneel} />
+
+      <OmleidingMailPaneel diversion={mailDiversion} onClose={() => setMailDiversion(null)} />
 
       <EntityHistoryModal
         open={!!historyDiversion}
