@@ -77,7 +77,11 @@ import zlib from 'node:zlib';
 // Van/Tot en een eigen toegankelijk bereikraster (VerlofBereikRaster), en
 // MaandInput (PR 4) kwam erbij: CI mat 666 kB. Entry (74) en warmup-sets
 // (chauffeur 74, staf 138) blijven ongewijzigd en de echte bewakers.
-const BUDGET_KB = 670;
+// 25-09 (mailtranche PR 3): 670 → 676. Nieuw adminscherm Beheer › Mails
+// (MailsView, lazy chunk ±5 kB: mailsoorten met schakelaars, verzendlijsten
+// met modal, verzendlog-tabel) plus het gedeelde mail-schema. Niets in de
+// start- of warmup-sets; de deelbudgetten bleven gelijk.
+const BUDGET_KB = 676;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

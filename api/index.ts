@@ -15,6 +15,7 @@ import { rateLimitMiddleware } from "./rateLimit.js";
 import { mountOcpiRoutes } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { mountOnderhoudRoutes } from "./_lib/onderhoudRoutes.js";
+import { mountMailRoutes } from "./_lib/mailRoutes.js";
 import { serverTiming } from "./_lib/serverTiming.js";
 import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
 import { mountLoonRoutes } from "./_lib/loonRoutes.js";
@@ -133,6 +134,7 @@ mountDeviceRoutes(app);
 // Onderhoudsmodus (banner + schrijfblok). Zie api/_lib/onderhoudRoutes.ts;
 // het blok zelf zit in authenticate (middleware.ts).
 mountOnderhoudRoutes(app);
+mountMailRoutes(app);
 
 // Techniek: voertuigen, gele boek, werkprestaties, vervaldata per voertuig.
 // Zie api/_lib/techniekRoutes.ts (fase A Access-migratie, 13-09).

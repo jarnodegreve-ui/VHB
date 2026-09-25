@@ -51,6 +51,7 @@ export const PAD_PER_VIEW: Record<string, string> = {
   "ocpi-monitoring": "beheer/laadpalen",
   designsysteem: "beheer/designsysteem",
   "beheer-debug": "beheer/systeemstatus",
+  "beheer-mails": "beheer/mails",
   instellingen: "instellingen",
 };
 

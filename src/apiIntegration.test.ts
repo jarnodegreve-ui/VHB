@@ -44,6 +44,8 @@ const mem = vi.hoisted(() => ({
   planningMatrix: [] as any[],
   // Sleutels in Supabase Storage ('<bucket>/<pad>'), voor de bijlage-routes.
   opslag: new Set<string>(),
+  // Verzendlog van de mails (mail_log), nieuwste eerst.
+  mailLog: [] as any[],
   importHistory: [] as any[],
   snapshots: {} as Record<string, any>,
   historiekFaalt: false,
@@ -310,6 +312,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   };
   return {
     ...orig,
+    getMailLog: async (limit = 200) => mem.mailLog.slice(0, limit),
+    logMail: async (regel: any) => { mem.mailLog.unshift({ id: `m-${mem.mailLog.length + 1}`, verzondenOp: new Date().toISOString(), ...regel }); },
     getAppSetting: async (key: string) => mem.appSettings[key] ?? null,
     setAppSetting: async (key: string, value: unknown) => { mem.appSettings[key] = value; },
     getUsersData: async () => mem.users,
@@ -6974,6 +6978,84 @@ describe('bijlagen bij een update', () => {
   });
 });
 
+
+// --- Beheer › Mails (mailtranche PR 3) ---
+describe('Beheer › Mails (/api/mails)', () => {
+  beforeEach(async () => {
+    delete mem.appSettings['mail_instellingen'];
+    delete mem.appSettings['verzendlijsten'];
+    mem.mailLog = [
+      { id: 'm-1', verzondenOp: '2026-09-25T06:00:00Z', soort: 'weekoverzicht', aantal: 2, gelukt: true, fout: null, door: 'Systeem' },
+      { id: 'm-2', verzondenOp: '2026-09-24T10:00:00Z', soort: 'ziekmelding', aantal: 1, gelukt: false, fout: 'uitgeschakeld in Beheer › Mails', door: 'Planner Piet' },
+      { id: 'm-3', verzondenOp: '2026-09-23T10:00:00Z', soort: 'ziekmelding', aantal: 2, gelukt: true, fout: null, door: 'Planner Piet' },
+    ];
+    const { invalidateMailCaches } = await import('../api/_lib/mailInstellingen.js');
+    invalidateMailCaches();
+  });
+
+  it('GET geeft elke mailsoort met aan/uit en laatst geslaagde verzending, de lijsten en het log; alleen admin', async () => {
+    const res = await api('GET', '/api/mails', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    const ziek = res.json.soorten.find((s: any) => s.soort === 'ziekmelding');
+    expect(ziek.aan).toBe(true);
+    // "Laatst" = de laatste GESLAAGDE verzending, niet de uitgeschakelde poging.
+    expect(ziek.laatst).toEqual({ op: '2026-09-23T10:00:00Z', aantal: 2, gelukt: true });
+    expect(res.json.soorten.find((s: any) => s.soort === 'welkom')).toMatchObject({ altijdAan: true, aan: true, laatst: null });
+    expect(res.json.verzendlijsten).toEqual([]);
+    expect(res.json.log).toHaveLength(3);
+    expect((await api('GET', '/api/mails', { token: 'tok-planner' })).status).toBe(403);
+    expect((await api('GET', '/api/mails', { token: 'tok-a' })).status).toBe(403);
+  });
+
+  it('PUT instellingen zet een uitzetbare soort uit, negeert altijd-aan en onbekende soorten, en logt de omslag', async () => {
+    const res = await api('PUT', '/api/mails/instellingen', { token: 'tok-admin', body: { uit: ['ziekmelding', 'welkom', 'bestaat-niet'] } });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ uit: ['ziekmelding'] });
+    expect(mem.appSettings['mail_instellingen']).toEqual({ uit: ['ziekmelding'] });
+    const get = await api('GET', '/api/mails', { token: 'tok-admin' });
+    expect(get.json.soorten.find((s: any) => s.soort === 'ziekmelding').aan).toBe(false);
+    expect(get.json.soorten.find((s: any) => s.soort === 'welkom').aan).toBe(true);
+    expect(mem.activity.find((a: any) => a.action === 'Mailinstellingen gewijzigd')?.message).toContain('Uit: Ziekmelding.');
+    // Weer aan: opnieuw een logregel, deze keer "Aan".
+    await api('PUT', '/api/mails/instellingen', { token: 'tok-admin', body: { uit: [] } });
+    expect(mem.activity.filter((a: any) => a.action === 'Mailinstellingen gewijzigd').at(-1)?.message).toContain('Aan: Ziekmelding.');
+    expect((await api('PUT', '/api/mails/instellingen', { token: 'tok-planner', body: { uit: [] } })).status).toBe(403);
+    expect((await api('PUT', '/api/mails/instellingen', { token: 'tok-admin', body: { uit: 'x' } })).status).toBe(400);
+  });
+
+  it('een uitgezette soort houdt sendEmail tegen (mailSoortAan), altijd-aan niet', async () => {
+    const { mailSoortAan } = await import('../api/_lib/mailInstellingen.js');
+    await api('PUT', '/api/mails/instellingen', { token: 'tok-admin', body: { uit: ['dringende-update'] } });
+    expect(await mailSoortAan('dringende-update')).toBe(false);
+    expect(await mailSoortAan('welkom')).toBe(true);
+    expect(await mailSoortAan('verlof-beslissing')).toBe(true);
+  });
+
+  it('PUT verzendlijsten valideert (naam, adressen), normaliseert en logt; GET geeft ze terug', async () => {
+    const lijsten = [{ id: 'l-1', naam: 'De Lijn', adressen: ['Dispatching@DeLijn.be', 'planning@delijn.be'] }];
+    const res = await api('PUT', '/api/mails/verzendlijsten', { token: 'tok-admin', body: lijsten });
+    expect(res.status).toBe(200);
+    expect(res.json[0].adressen).toEqual(['dispatching@delijn.be', 'planning@delijn.be']);
+    expect((await api('GET', '/api/mails', { token: 'tok-admin' })).json.verzendlijsten).toHaveLength(1);
+    expect(mem.activity.find((a: any) => a.action === 'Verzendlijsten gewijzigd')?.message).toBe('Nieuw: De Lijn.');
+    expect((await api('PUT', '/api/mails/verzendlijsten', { token: 'tok-admin', body: [{ id: 'l-2', naam: '', adressen: ['a@b.be'] }] })).status).toBe(400);
+    expect((await api('PUT', '/api/mails/verzendlijsten', { token: 'tok-admin', body: [{ id: 'l-2', naam: 'x', adressen: ['geen-adres'] }] })).status).toBe(400);
+    expect((await api('PUT', '/api/mails/verzendlijsten', { token: 'tok-planner', body: [] })).status).toBe(403);
+    const weg = await api('PUT', '/api/mails/verzendlijsten', { token: 'tok-admin', body: [] });
+    expect(weg.status).toBe(200);
+    expect(mem.activity.filter((a: any) => a.action === 'Verzendlijsten gewijzigd').at(-1)?.message).toBe('Verwijderd: De Lijn.');
+  });
+
+  it('GET voorbeeld geeft onderwerp en HTML op de vaste lay-out; onbekende soort 404', async () => {
+    const res = await api('GET', '/api/mails/voorbeeld/verlof-beslissing', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json.onderwerp).toContain('Verlofaanvraag');
+    expect(res.json.html).toContain('/mail/vhb-logo.png');
+    expect(res.json.html).toContain('REDEN');
+    expect((await api('GET', '/api/mails/voorbeeld/bestaat-niet', { token: 'tok-admin' })).status).toBe(404);
+    expect((await api('GET', '/api/mails/voorbeeld/welkom', { token: 'tok-planner' })).status).toBe(403);
+  });
+});
 
 // --- Rusttijd bij een dienstruil (shared/ruilRust.ts, 22-09) ---
 describe('rusttijd bij een dienstruil (GET /api/swaps › rust)', () => {
