@@ -23,8 +23,7 @@ import { useRecordParam } from '../../app/router';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
  *  actief tot hij verwijderd wordt. */
-import { isExpiredDiversion as isExpired, omleidingsFase, omleidingsPeriode, sorteerOmleidingen } from '../../lib/diversions';
-import { pdfLabel } from '../DiversionsView';
+import { isExpiredDiversion as isExpired, omleidingsFase, omleidingsPeriode, pdfLabel, sorteerOmleidingen } from '../../lib/diversions';
 // isoDate = lokale dag. toISOString() is UTC en gaf tussen 00:00 en 02:00
 // Belgische zomertijd de dag ervóór: een omleiding die om 00:30 werd
 // aangemaakt kreeg standaard gisteren als startdatum. Zelfde reden als de

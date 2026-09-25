@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Calendar, Check, ChevronDown, ChevronRight, FileText, Search, X } from 'lucide-react';
 import { LijnTegel } from '../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenVan, raaktLijn } from '../../shared/lijnen';
-import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, type OmleidingsFase } from '../lib/diversions';
+import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, type OmleidingsFase, pdfLabel } from '../lib/diversions';
 import { isoDate } from '../lib/availability';
 import type { Diversion } from '../types';
 import { cn } from '../lib/ui';
@@ -294,6 +294,3 @@ function OmleidingRij({ div, vandaag, isCurrent, onClick }: { div: Diversion; va
     </li>
   );
 }
-
-/** "PDF" bij één bijlage, anders het aantal: "3 PDF's". */
-export const pdfLabel = (n: number) => (n === 1 ? 'PDF' : `${n} PDF's`);

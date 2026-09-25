@@ -77,7 +77,13 @@ import zlib from 'node:zlib';
 // Van/Tot en een eigen toegankelijk bereikraster (VerlofBereikRaster), en
 // MaandInput (PR 4) kwam erbij: CI mat 666 kB. Entry (74) en warmup-sets
 // (chauffeur 74, staf 138) blijven ongewijzigd en de echte bewakers.
-const BUDGET_KB = 670;
+// 25-09 (mailtranche PR 1): 670 → 672. Omleidingen dragen tot vijf PDF's; de
+// gedeelde bijlagen-bouwstenen (PdfBijlagen, ±1,2 kB) zijn een eigen lazy
+// chunk voor Beheer updates en Beheer omleidingen, en het beheerpaneel kreeg
+// een wachtrij voor een nieuwe omleiding. Netto +1,0 kB gemeten (CI +0,3 kB
+// zwaarder dan lokaal), niets in de start- of warmup-sets; de deelbudgetten
+// bleven gelijk.
+const BUDGET_KB = 672;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

@@ -95,3 +95,6 @@ export const groepeerOmleidingen = <T extends Periode>(list: T[], vandaag: strin
   for (const d of sorteerOmleidingen(list, vandaag)) groepen[omleidingsFase(d, vandaag)].push(d);
   return groepen;
 };
+
+/** "PDF" bij één bijlage, anders het aantal: "3 PDF's" (lijstrijen chauffeur en beheer). */
+export const pdfLabel = (n: number) => (n === 1 ? 'PDF' : `${n} PDF's`);
