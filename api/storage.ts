@@ -1734,8 +1734,6 @@ export const getDiversionsData = async () => {
   return rows.map(toPublicDiversion);
 };
 
-// null = nog niet geprobeerd; false = kolom `location` bestaat (nog) niet.
-let diversionsMetLocation: boolean | null = null;
 const zonderLocation = ({ location: _l, ...rest }: ReturnType<typeof toDatabaseDiversion>) => rest;
 
 export const saveDiversionsData = async (data: any) => {
@@ -1756,16 +1754,13 @@ export const saveDiversionsData = async (data: any) => {
   // upsert-fout de zojuist verwijderde records.
   if (normalized.length > 0) {
     const rows = normalized.map(toDatabaseDiversion);
-    let { error: upsertError } = diversionsMetLocation === false
-      ? await client.from('diversions').upsert(rows.map(zonderLocation))
-      : await client.from('diversions').upsert(rows);
-    // Migratie 2026-09-10_diversions_location.sql nog niet gedraaid: één
-    // mislukte upsert, daarna schrijven we (per warme lambda) zonder `location`.
-    if (upsertError && diversionsMetLocation !== false && isMissingColumnError(upsertError)) {
-      diversionsMetLocation = false;
+    let { error: upsertError } = await client.from('diversions').upsert(rows);
+    // Migratie 2026-09-10_diversions_location.sql nog niet gedraaid: opnieuw
+    // zonder `location`. Bewust bij elke save opnieuw geprobeerd en niet per
+    // warme lambda onthouden: dat liet de plaats na het draaien van de
+    // migratie stil wegvallen tot de lambda koud werd (Jarno 28-09).
+    if (upsertError && isMissingColumnError(upsertError)) {
       ({ error: upsertError } = await client.from('diversions').upsert(rows.map(zonderLocation)));
-    } else if (!upsertError) {
-      diversionsMetLocation = true;
     }
     if (upsertError) throw upsertError;
   }
@@ -3642,7 +3637,7 @@ const toPublicAanwezigheid = (row: Record<string, unknown>): AanwezigheidSessie 
 });
 
 // Per warme lambda onthouden dat de plaatskolommen ontbreken (zelfde patroon
-// als clientErrorsUitgebreid en diversionsMetLocation), maar met een
+// als clientErrorsUitgebreid), maar met een
 // houdbaarheid: een instantie kan uren warm blijven, en Jarno draait de
 // migratie wanneer het hem past. Na dit venster probeert ze het opnieuw, zodat
 // de plaats vanzelf begint te lopen zonder nieuwe deploy. Kost in de tussentijd
