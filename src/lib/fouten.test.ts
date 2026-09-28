@@ -33,6 +33,15 @@ describe('schrijffout', () => {
     expect(schrijffout('Dienstwissel', err)).toBe('Dienstwissel is mislukt. Dienst EEK6 op 28/09/2026 staat niet (meer) op naam van Jan, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.');
   });
 
+  it('503 door een ontbrekende migratie is geen onderhoud, en het bestand komt niet in beeld', () => {
+    online(true);
+    const err = { status: 503, message: 'De kolom voor bijlagen bestaat nog niet: draai supabase/2026-09-25_diversions_bijlagen.sql in de SQL Editor.' };
+    const tekst = schrijffout('Uploaden', err);
+    expect(tekst).toBe('Uploaden is mislukt. Dit onderdeel is op de server nog niet ingesteld, er moet nog een migratie draaien. Meld het aan de beheerder.');
+    expect(tekst).not.toMatch(/onderhoud|\.sql/);
+    expect(vervolgstap(leesFout({ status: 503 }))).toMatch(/onderhoud/);
+  });
+
   it('een fout uit apiJson draagt de status, dus de serverreden komt mee', async () => {
     online(true);
     const { apiJson } = await import('./api');
