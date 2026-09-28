@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { ADMIN, seed } from './helpers';
+import { dayOffset } from '../scripts/audit-fixtures.mjs';
 
 /**
  * Tranche 3B.1 (23-09): de vijf beheerschermen op het gedeelde tabelkader
@@ -43,8 +44,8 @@ const extra = (pad: string) => {
   return undefined;
 };
 
-async function open(page: Page, scherm: Scherm) {
-  await seed(page, { user: ADMIN, view: scherm.view, extra });
+async function open(page: Page, scherm: Scherm, eigen?: (pad: string) => unknown) {
+  await seed(page, { user: ADMIN, view: scherm.view, extra: (pad) => eigen?.(pad) ?? extra(pad) });
   await page.goto(scherm.pad);
   await expect(page.getByRole('heading', { name: scherm.titel, level: 1 })).toBeVisible({ timeout: 15_000 });
   await page.evaluate(() => document.fonts.ready);
@@ -173,7 +174,12 @@ test('Gebruikers op desktop: de kop Toestellen staat rechts, boven de cijfers', 
  */
 test('Verlofkalender op de telefoon: volledige periode en status, maandnavigatie over de breedte', async ({ page }, info) => {
   test.skip(info.project.name !== 'iPhone 13 (chromium)', 'telefoonbreedte');
-  await open(page, { view: 'verlof-kalender', pad: '/beheer/verlofkalender', titel: 'Verlofkalender' });
+  // Eigen aanvraag die vandaag begint, dus altijd in de maand die het scherm
+  // opent. De gedeelde fixture begint op vandaag + 5: de laatste vijf dagen
+  // van een maand viel ze volledig in de volgende maand en faalde deze test.
+  const verlof = [{ id: 'l-nu', userId: '43', startDate: dayOffset(0), endDate: dayOffset(4), type: 'betaald_verlof', status: 'pending', createdAt: new Date().toISOString() }];
+  await open(page, { view: 'verlof-kalender', pad: '/beheer/verlofkalender', titel: 'Verlofkalender' },
+    (pad) => (pad.endsWith('/api/leave') ? verlof : undefined));
   const breedte = page.viewportSize()!.width;
   const periode = page.getByText(/^\d{2}\/\d{2}\/\d{4} t\/m \d{2}\/\d{2}\/\d{4}$/).first();
   await expect(periode).toBeVisible();
