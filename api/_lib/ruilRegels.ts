@@ -21,26 +21,35 @@ export const TERMINAL_SWAP_STATES = new Set(["rejected", "cancelled", "completed
 
 /** Leesbare activity-log-melding van een planning-doorvoer. `r` = resultaat
  *  van applySwapToPlanning/revertSwapFromPlanning; null = geen dienst-info op
- *  de swap (aanvraag van vóór de shift_info-migratie). */
+ *  de swap (aanvraag van vóór de shift_info-migratie). `bord` = de benen die
+ *  alleen op het bord leven (code-dienst, api/_lib/codeDienst.ts): daar valt
+ *  in de planning niets te verplaatsen, dus 0 rijen is er geen waarschuwing. */
 export const describeSwapCarry = (
   swap: any,
   r: { offeredMoved: number; returnMoved: number | null } | null,
   richting: "doorgevoerd" | "teruggedraaid",
+  bord?: { aangeboden: boolean; terug: boolean },
 ): string => {
   if (!r) {
     return "Planning NIET automatisch bijgewerkt (aanvraag zonder dienst-info), pas de planning handmatig aan.";
   }
+  const opBord = (wat: string, dag: unknown) =>
+    `${wat} op ${DAG_DMJ(String(dag ?? ""))}: code-dienst zonder rijen in de planning, op het bord ${richting}`;
   const delen: string[] = [];
   delen.push(
     r.offeredMoved > 0
       ? `dienst ${swap.shiftLine} op ${DAG_DMJ(swap.shiftDate)}: ${r.offeredMoved} rij(en) ${richting}`
-      : `LET OP: dienst ${swap.shiftLine} op ${DAG_DMJ(swap.shiftDate)} niet gevonden in de planning, controleer handmatig`,
+      : bord?.aangeboden
+        ? opBord(`dienst ${swap.shiftLine}`, swap.shiftDate)
+        : `LET OP: dienst ${swap.shiftLine} op ${DAG_DMJ(swap.shiftDate)} niet gevonden in de planning, controleer handmatig`,
   );
   if (r.returnMoved !== null) {
     delen.push(
       r.returnMoved > 0
         ? `terugruil ${swap.returnCode} op ${DAG_DMJ(swap.returnDate)}: ${r.returnMoved} rij(en) ${richting}`
-        : `LET OP: terugruil ${swap.returnCode} op ${DAG_DMJ(swap.returnDate)} niet gevonden, controleer handmatig`,
+        : bord?.terug
+          ? opBord(`terugruil ${swap.returnCode}`, swap.returnDate)
+          : `LET OP: terugruil ${swap.returnCode} op ${DAG_DMJ(swap.returnDate)} niet gevonden, controleer handmatig`,
     );
   }
   return `Planning ${richting}: ${delen.join("; ")}.`;

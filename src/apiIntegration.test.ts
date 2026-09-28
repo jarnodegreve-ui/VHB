@@ -4341,6 +4341,167 @@ describe('handmatige dienstwissel, gates uit de controle-ronde', () => {
   });
 });
 
+describe('handmatige dienstwissel, code-diensten (schoolrit, bureau, garage)', () => {
+  // Melding Jarno 28-09: EEK6 overzetten strandde op "de planning is intussen
+  // gewijzigd". Een EEK-rit is een planningscode, geen dienst uit het
+  // dienstoverzicht: de opbouw maakt er geen planning-rijen voor, dus de
+  // eigendomscheck op `planning` vond nooit iets. Voor zulke diensten is het
+  // bord (matrix + ruilen + afwezigheden) de waarheid.
+  const DAG = '2026-07-24';
+  const wissel = (body: Record<string, unknown>) =>
+    api('POST', '/api/admin/shift-swap', { token: 'tok-admin', body: { date: DAG, reason: 'Ziekte', ...body } });
+  const bord = async () => (await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' })).json.cells;
+  const matrix = (assignments: Record<string, string>) => {
+    mem.planningMatrix = [{ id: 'm-eek', source_date: DAG, day_type: 'week', assignments, raw_row: '' }];
+  };
+
+  beforeEach(() => {
+    mem.planningCodes = [
+      { code: 'eek5', category: 'service', description: 'Schoolrit', countsAsShift: true },
+      { code: 'eek6', category: 'service', description: 'Schoolrit', countsAsShift: true },
+      { code: 'vrij', category: 'absence', description: 'Geen dienst', isDayOff: true },
+      { code: 'ziek', category: 'absence', description: 'Ziek', isDayOff: true },
+    ];
+    mem.swaps = [];
+    matrix({ 'Chauffeur A': 'EEK6', 'Chauffeur B': 'vrij' });
+  });
+
+  it('zet een schoolrit over naar een vrije collega, zonder rijen in de planning', async () => {
+    const planningVoor = JSON.stringify(mem.planning);
+    const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' });
+    expect(res.status).toBe(200);
+    expect(mem.swaps).toHaveLength(1);
+    expect(mem.swaps[0]).toMatchObject({ status: 'approved', swapType: 'overname', shiftDate: DAG, shiftLine: 'EEK6', requesterId: '3', targetDriverId: '4' });
+    expect(String(mem.swaps[0].shiftId)).toBeTruthy();
+    // Er valt niets te verplaatsen, en dat is geen waarschuwing.
+    expect(JSON.stringify(mem.planning)).toBe(planningVoor);
+    expect(String(res.json.carry)).toContain('op het bord doorgevoerd');
+    expect(String(res.json.carry)).not.toContain('LET OP');
+    // Het bord toont de wissel: de rit bij de collega, de gever vrij.
+    const cells = await bord();
+    expect(cells['4'][DAG]).toMatchObject({ code: 'EEK6', kind: 'service', swapManual: true });
+    expect(cells['3'][DAG]).toMatchObject({ code: 'vrij', swapAway: true });
+    expect(mem.pushesSent.length).toBeGreaterThan(0);
+  });
+
+  it('vindt de rit ook onder een ziekmelding', async () => {
+    mem.leave = [{ id: 'l-ziek', userId: '3', startDate: DAG, endDate: DAG, type: 'ziekte', status: 'approved', comment: '', createdAt: `${DAG}T05:00:00Z`, decidedAt: `${DAG}T05:00:00Z` }];
+    expect((await bord())['3'][DAG]).toMatchObject({ code: 'ziek', hiddenService: 'EEK6' });
+    const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' });
+    expect(res.status).toBe(200);
+    const cells = await bord();
+    expect(cells['4'][DAG]).toMatchObject({ code: 'EEK6', kind: 'service' });
+    expect(cells['3'][DAG]).toMatchObject({ code: 'ziek' });
+    expect(cells['3'][DAG].hiddenService).toBeUndefined();
+  });
+
+  it('weigert als de rit op het bord niet (meer) bij de gever staat', async () => {
+    matrix({ 'Chauffeur A': 'vrij', 'Chauffeur B': 'EEK6' });
+    const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' });
+    expect(res.status).toBe(409);
+    expect(String(res.json?.error)).toContain('staat niet (meer) op naam van Chauffeur A');
+    expect(mem.swaps).toHaveLength(0);
+  });
+
+  it('weigert een tweede keer: na de wissel staat de rit niet meer bij de gever', async () => {
+    expect((await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' })).status).toBe(200);
+    const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' });
+    expect(res.status).toBe(409);
+    expect(mem.swaps).toHaveLength(1);
+  });
+
+  it('blijft weigeren voor een code die geen dienst is, en voor een onbekende dienst', async () => {
+    matrix({ 'Chauffeur A': 'ziek', 'Chauffeur B': 'vrij' });
+    expect((await wissel({ line: 'ziek', fromDriverId: '3', toDriverId: '4' })).status).toBe(409);
+    expect((await wissel({ line: '99', fromDriverId: '3', toDriverId: '4' })).status).toBe(409);
+    expect(mem.swaps).toHaveLength(0);
+  });
+
+  it('weigert een dubbele inplanning: de collega rijdt die dag al een dienst', async () => {
+    matrix({ 'Chauffeur A': 'EEK6', 'Chauffeur B': '14' });
+    mem.planning.push({ id: 'sh-eek-b', driverId: '4', date: DAG, line: '14' });
+    const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' });
+    expect(res.status).toBe(409);
+    expect(String(res.json?.error)).toContain('dubbele inplanning');
+    expect(mem.swaps).toHaveLength(0);
+  });
+
+  it('weigert een collega die niet op het bord staat', async () => {
+    const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '2' });
+    expect(res.status).toBe(400);
+    expect(String(res.json?.error)).toContain('staat niet op het bord');
+    expect(mem.swaps).toHaveLength(0);
+  });
+
+  it('wisselt 1-op-1: schoolrit tegen een dienst uit het dienstoverzicht', async () => {
+    matrix({ 'Chauffeur A': 'EEK6', 'Chauffeur B': '14' });
+    mem.planning.push({ id: 'sh-eek-b', driverId: '4', date: DAG, line: '14' });
+    const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4', returnLine: '14' });
+    expect(res.status).toBe(200);
+    expect(mem.swaps[0]).toMatchObject({ swapType: 'ruil', shiftLine: 'EEK6', returnDate: DAG, returnCode: '14' });
+    // De dienst met rijen verhuist in de planning, de schoolrit op het bord.
+    expect(mem.planning.find((r: any) => r.id === 'sh-eek-b')?.driverId).toBe('3');
+    const cells = await bord();
+    expect(cells['4'][DAG]).toMatchObject({ code: 'EEK6', kind: 'service' });
+    expect(cells['3'][DAG]).toMatchObject({ code: '14', kind: 'service' });
+  });
+
+  it('wisselt 1-op-1: dienst uit het dienstoverzicht tegen een schoolrit', async () => {
+    matrix({ 'Chauffeur A': '12', 'Chauffeur B': 'EEK5' });
+    mem.planning.push({ id: 'sh-eek-a', driverId: '3', date: DAG, line: '12' });
+    const res = await wissel({ line: '12', fromDriverId: '3', toDriverId: '4', returnLine: 'eek5' });
+    expect(res.status).toBe(200);
+    // De swap bewaart de schrijfwijze van het bord.
+    expect(mem.swaps[0]).toMatchObject({ swapType: 'ruil', shiftLine: '12', returnCode: 'EEK5' });
+    expect(mem.planning.find((r: any) => r.id === 'sh-eek-a')?.driverId).toBe('4');
+    expect(String(res.json.carry)).not.toContain('LET OP');
+    const cells = await bord();
+    expect(cells['4'][DAG]).toMatchObject({ code: '12', kind: 'service' });
+    expect(cells['3'][DAG]).toMatchObject({ code: 'EEK5', kind: 'service' });
+  });
+
+  it('wisselt 1-op-1 tussen twee schoolritten', async () => {
+    matrix({ 'Chauffeur A': 'EEK6', 'Chauffeur B': 'EEK5' });
+    const res = await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4', returnLine: 'EEK5' });
+    expect(res.status).toBe(200);
+    const cells = await bord();
+    expect(cells['4'][DAG]).toMatchObject({ code: 'EEK6' });
+    expect(cells['3'][DAG]).toMatchObject({ code: 'EEK5' });
+  });
+
+  it('weigert de 1-op-1 als de schoolrit van de collega niet (meer) op het bord staat', async () => {
+    matrix({ 'Chauffeur A': '12', 'Chauffeur B': 'vrij' });
+    mem.planning.push({ id: 'sh-eek-a', driverId: '3', date: DAG, line: '12' });
+    const res = await wissel({ line: '12', fromDriverId: '3', toDriverId: '4', returnLine: 'EEK5' });
+    expect(res.status).toBe(409);
+    expect(String(res.json?.error)).toContain('geen dienst EEK5');
+    expect(mem.planning.find((r: any) => r.id === 'sh-eek-a')?.driverId).toBe('3');
+    expect(mem.swaps).toHaveLength(0);
+  });
+
+  it('terugdraaien zet het bord terug, zonder waarschuwing in het log', async () => {
+    expect((await wissel({ line: 'EEK6', fromDriverId: '3', toDriverId: '4' })).status).toBe(200);
+    const id = String(mem.swaps[0].id);
+    const res = await api('PATCH', `/api/swaps/${id}`, { token: 'tok-admin', body: { status: 'cancelled', ifStatus: 'approved' } });
+    expect(res.status).toBe(200);
+    const logregel = mem.activity.map((a: any) => String(a.message)).find((m: string) => m.includes('teruggedraaid'));
+    expect(logregel).toContain('op het bord teruggedraaid');
+    expect(logregel).not.toContain('LET OP');
+    const cells = await bord();
+    expect(cells['3'][DAG]).toMatchObject({ code: 'EEK6', kind: 'service' });
+    expect(cells['3'][DAG].swapId).toBeUndefined();
+    expect(cells['4'][DAG]).toMatchObject({ code: 'vrij' });
+  });
+
+  it('de gewone wissel leest het bord niet', async () => {
+    mem.planning.push({ id: 'sh-gewoon', driverId: '3', date: DAG, line: '12' });
+    mem.matrixMaandFilters = [];
+    const res = await wissel({ line: '12', fromDriverId: '3', toDriverId: '4' });
+    expect(res.status).toBe(200);
+    expect(mem.matrixMaandFilters).toHaveLength(0);
+  });
+});
+
 describe('planning-import, ziekte blokkeert niet, gepland verlof wel', () => {
   // Melding Jarno 15-08: een upload werd geblokkeerd door een "verlofconflict"
   // dat in werkelijkheid een ziekteperiode was. Ziekte is onvoorzien (de Excel

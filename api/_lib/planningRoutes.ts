@@ -14,7 +14,7 @@ import type { AuthenticatedRequest } from "../types.js";
 import { isStafRol, authenticate, requireRole } from "../middleware.js";
 import { isMissingTableError } from "../deviceGate.js";
 import { berekenCelWaarheid } from "./celWaarheid.js";
-import { heropbouwPlanning, reapplyApprovedSwaps } from "./planningHeropbouw.js";
+import { heropbouwPlanning, reapplyApprovedSwaps, replayTekst } from "./planningHeropbouw.js";
 import { berekenVerwachtingsCheck } from "../coverageRoutes.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "../helpers.js";
@@ -701,7 +701,7 @@ export function mountPlanningRoutes(app: express.Express) {
         req,
         "planning",
         "Matrix import bevestigd",
-        `${rows.length} dagen verwerkt (periode ${rows.length ? PERIODE_DMJ(String(rows[0].source_date), String(rows[rows.length - 1].source_date)) : "?"} vervangen; planning daarbuiten onaangetast${fileStartDate !== startDate || fileEndDate !== endDate ? `; selectie uit bestand ${PERIODE_DMJ(fileStartDate, fileEndDate)}` : ""}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
+        `${rows.length} dagen verwerkt (periode ${rows.length ? PERIODE_DMJ(String(rows[0].source_date), String(rows[rows.length - 1].source_date)) : "?"} vervangen; planning daarbuiten onaangetast${fileStartDate !== startDate || fileEndDate !== endDate ? `; selectie uit bestand ${PERIODE_DMJ(fileStartDate, fileEndDate)}` : ""}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${replayTekst(reapplied)}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
       );
 
       // Chauffeurs met diensten in deze import krijgen een seintje.

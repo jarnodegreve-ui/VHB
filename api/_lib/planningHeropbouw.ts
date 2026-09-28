@@ -4,9 +4,10 @@ import { DAG_DMJ, toLookupToken } from "../helpers.js";
 import { sendPushToUsers } from "../push.js";
 import { ROOSTER_MELDING_RUST_MINUTEN } from "../../shared/roosterMelding.js";
 import {
-  applySwapsToPlanningRows, buildPlanningFromMatrix, getAppSetting, getPlanningData, getPlanningVersion, getSwapsData,
-  logActivity, replacePlanningData, setAppSetting, summarizeTokens, swapRaaktBereik,
+  applySwapsToPlanningRows, buildPlanningFromMatrix, getAppSetting, getPlanningCodesData, getPlanningData, getPlanningVersion,
+  getServicesData, getSwapsData, logActivity, replacePlanningData, setAppSetting, summarizeTokens, swapRaaktBereik,
 } from "../storage.js";
+import { maakCodeDienstToets } from "./codeDienst.js";
 
 /**
  * Planning heropbouwen uit de opgeslagen matrix: de ENE kern achter
@@ -35,7 +36,7 @@ type PlanningRij = {
 };
 
 type OpbouwSamenvatting = Awaited<ReturnType<typeof buildPlanningFromMatrix>>["summary"];
-type ReplayTelling = { applied: number; skipped: number; alVerwerkt: number };
+type ReplayTelling = { applied: number; skipped: number; alVerwerkt: number; opBord?: number };
 
 export type HeropbouwUitkomst =
   | {
@@ -100,7 +101,10 @@ export const reapplyApprovedSwaps = async (
   const relevant = bereik?.van && bereik?.tot
     ? approved.filter((sw) => swapRaaktBereik(sw, { van: bereik.van!, tot: bereik.tot! }))
     : approved;
-  return applySwapsToPlanningRows(shifts, relevant);
+  // Code-diensten hebben geen rijen om te verhuizen; zonder deze toets telde
+  // elke wissel van een schoolrit bij elke import als "niet toepasbaar".
+  const [services, codes] = await Promise.all([getServicesData(), getPlanningCodesData()]);
+  return applySwapsToPlanningRows(shifts, relevant, maakCodeDienstToets(services as any[], codes as any[]));
 };
 
 // --- Wat telt als "het dienstoverzicht wijzigde" ---------------------------
@@ -264,8 +268,8 @@ export const verstuurRoosterMeldingen = async (nu = Date.now()): Promise<{ statu
 
 // --- De kern ------------------------------------------------------------------
 
-const replayTekst = (reapplied: ReplayTelling) =>
-  `${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}`;
+export const replayTekst = (reapplied: ReplayTelling) =>
+  `${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.alVerwerkt > 0 ? `, ${reapplied.alVerwerkt} al in de Excel verwerkt` : ""}${(reapplied.opBord ?? 0) > 0 ? `, ${reapplied.opBord} van een code-dienst op het bord` : ""}${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}`;
 
 const dienstLabel = (r: PlanningRij) => `${DAG_DMJ(tekst(r.date))} dienst ${tekst(r.line)}`;
 

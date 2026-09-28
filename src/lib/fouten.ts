@@ -83,6 +83,11 @@ export function vervolgstap(info: FoutInfo): string {
 
 const zin = (tekst: string) => (/[.!?]$/.test(tekst) ? tekst : `${tekst}.`);
 
+// Zegt de reden van de server zelf al wat je moet doen ("Vernieuw de pagina
+// en probeer opnieuw"), dan komt de algemene stap er niet nog eens achter: de
+// melding zei dan twee keer hetzelfde (Jarno 28-09).
+const HEEFT_VERVOLGSTAP = /\b(vernieuw|probeer)\b/i;
+
 /**
  * "Opslaan is mislukt. <reden van de server.> <vervolgstap>"
  * `actie` is de werkwoordsvorm die de knop droeg: 'Opslaan', 'Verwijderen',
@@ -93,7 +98,7 @@ export function schrijffout(actie: string, err?: unknown): string {
   const info = leesFout(err);
   const delen = [`${actie} is mislukt.`];
   if (info.tekst) delen.push(zin(info.tekst));
-  delen.push(vervolgstap(info));
+  if (!info.tekst || !HEEFT_VERVOLGSTAP.test(info.tekst)) delen.push(vervolgstap(info));
   return delen.join(' ');
 }
 

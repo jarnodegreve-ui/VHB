@@ -3045,9 +3045,16 @@ export const swapRaaktBereik = (swap: SwapCarryFields, bereik: { van: string; to
 export const applySwapsToPlanningRows = (
   rows: Array<Pick<ShiftRecord, 'date' | 'line' | 'driverId'>>,
   swaps: SwapCarryFields[],
-): { applied: number; skipped: number; alVerwerkt: number } => {
+  /** Toets "is dit een code-dienst?" (api/_lib/codeDienst.ts). Zonder toets
+   *  telt een ruil zonder rijen als overgeslagen, zoals voorheen. */
+  isCodeDienst?: (line: unknown) => boolean,
+): { applied: number; skipped: number; alVerwerkt: number; opBord: number } => {
   let applied = 0;
   let skipped = 0;
+  // Een ruil van code-diensten (schoolrit, bureau, garage) heeft geen rijen om
+  // te verhuizen: het bord legt hem erover. Apart geteld, om dezelfde reden
+  // als alVerwerkt hieronder.
+  let opBord = 0;
   // De planner had de ruil al in de Excel verwerkt (voorlopig de werkwijze,
   // Jarno 12-09): de dienst staat vers op de ontvanger, er valt niets te
   // verhuizen. Apart geteld, zodat het importlogje dit niet als "niet
@@ -3079,9 +3086,10 @@ export const applySwapsToPlanningRows = (
     if (swapHasReturnShift(swap)) verhuis(String(swap.returnDate), String(swap.returnCode), target, String(swap.requesterId));
     if (touched) applied++;
     else if (alBijOntvanger) alVerwerkt++;
+    else if (isCodeDienst?.(swap.shiftLine) && (!swapHasReturnShift(swap) || isCodeDienst(swap.returnCode))) opBord++;
     else skipped++;
   }
-  return { applied, skipped, alVerwerkt };
+  return { applied, skipped, alVerwerkt, opBord };
 };
 
 /**

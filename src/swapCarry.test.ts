@@ -20,7 +20,7 @@ describe('applySwapsToPlanningRows', () => {
       requesterId: '3', targetDriverId: '4', swapType: 'overname',
       shiftDate: '2026-07-08', shiftLine: '12',
     }]);
-    expect(res).toEqual({ applied: 1, skipped: 0, alVerwerkt: 0 });
+    expect(res).toEqual({ applied: 1, skipped: 0, alVerwerkt: 0, opBord: 0 });
     expect(r[0].driverId).toBe('4');
     expect(r[1].driverId).toBe('4');
     expect(r[2].driverId).toBe('4'); // onaangeraakt
@@ -55,7 +55,7 @@ describe('applySwapsToPlanningRows', () => {
       { requesterId: '3', targetDriverId: '4', swapType: 'ruil' }, // legacy: geen shiftDate/shiftLine
       { requesterId: '3', targetDriverId: '4', swapType: 'overname', shiftDate: '2099-01-01', shiftLine: '99' },
     ]);
-    expect(res).toEqual({ applied: 0, skipped: 2, alVerwerkt: 0 });
+    expect(res).toEqual({ applied: 0, skipped: 2, alVerwerkt: 0, opBord: 0 });
     expect(r.every((row, i) => row.driverId === rows()[i].driverId)).toBe(true);
   });
 
@@ -65,7 +65,7 @@ describe('applySwapsToPlanningRows', () => {
       { requesterId: '3', targetDriverId: '4', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' },
       { requesterId: '4', targetDriverId: '5', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' },
     ]);
-    expect(res).toEqual({ applied: 2, skipped: 0, alVerwerkt: 0 });
+    expect(res).toEqual({ applied: 2, skipped: 0, alVerwerkt: 0, opBord: 0 });
     expect(r[0].driverId).toBe('5');
   });
 
@@ -76,7 +76,7 @@ describe('applySwapsToPlanningRows', () => {
     const res = applySwapsToPlanningRows(r, [{
       requesterId: '3', targetDriverId: '4', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12',
     }]);
-    expect(res).toEqual({ applied: 0, skipped: 0, alVerwerkt: 1 });
+    expect(res).toEqual({ applied: 0, skipped: 0, alVerwerkt: 1, opBord: 0 });
     expect(r[0].driverId).toBe('4');
   });
 
@@ -89,7 +89,51 @@ describe('applySwapsToPlanningRows', () => {
       requesterId: '3', targetDriverId: '4', swapType: 'ruil',
       shiftDate: '2026-07-08', shiftLine: '12', returnDate: '2026-07-02', returnCode: '14',
     }]);
-    expect(res).toEqual({ applied: 0, skipped: 0, alVerwerkt: 1 });
+    expect(res).toEqual({ applied: 0, skipped: 0, alVerwerkt: 1, opBord: 0 });
+  });
+});
+
+/**
+ * Code-diensten (schoolrit, bureau, garage) hebben geen rijen in de planning:
+ * het bord legt de wissel erover. De replay mag ze niet als "niet toepasbaar"
+ * melden, want dat woord hoort een échte mismatch te betekenen.
+ */
+describe('applySwapsToPlanningRows, code-diensten', () => {
+  const isCodeDienst = (line: unknown) => String(line ?? '').toLowerCase().startsWith('eek');
+  const rijen = () => [{ date: '2026-09-28', line: '2105', driverId: '4' }];
+
+  it('telt een wissel van een schoolrit apart, niet als overgeslagen', () => {
+    const res = applySwapsToPlanningRows(rijen(), [{
+      requesterId: '3', targetDriverId: '4', swapType: 'overname',
+      shiftDate: '2026-09-28', shiftLine: 'EEK6',
+    }], isCodeDienst);
+    expect(res).toEqual({ applied: 0, skipped: 0, alVerwerkt: 0, opBord: 1 });
+  });
+
+  it('zonder toets blijft het gedrag van vroeger: overgeslagen', () => {
+    const res = applySwapsToPlanningRows(rijen(), [{
+      requesterId: '3', targetDriverId: '4', swapType: 'overname',
+      shiftDate: '2026-09-28', shiftLine: 'EEK6',
+    }]);
+    expect(res).toEqual({ applied: 0, skipped: 1, alVerwerkt: 0, opBord: 0 });
+  });
+
+  it('een gemengde 1-op-1 verhuist de dienst met rijen en telt als doorgevoerd', () => {
+    const r = rijen();
+    const res = applySwapsToPlanningRows(r, [{
+      requesterId: '3', targetDriverId: '4', swapType: 'ruil',
+      shiftDate: '2026-09-28', shiftLine: 'EEK6', returnDate: '2026-09-28', returnCode: '2105',
+    }], isCodeDienst);
+    expect(res).toEqual({ applied: 1, skipped: 0, alVerwerkt: 0, opBord: 0 });
+    expect(r[0].driverId).toBe('3');
+  });
+
+  it('een gemengde 1-op-1 waarvan de dienst met rijen zoek is, blijft een mismatch', () => {
+    const res = applySwapsToPlanningRows([], [{
+      requesterId: '3', targetDriverId: '4', swapType: 'ruil',
+      shiftDate: '2026-09-28', shiftLine: 'EEK6', returnDate: '2026-09-28', returnCode: '2105',
+    }], isCodeDienst);
+    expect(res).toEqual({ applied: 0, skipped: 1, alVerwerkt: 0, opBord: 0 });
   });
 });
 
@@ -128,7 +172,7 @@ describe('swapRaaktBereik (periode-import)', () => {
     // Alleen september-rijen (periode-import): de terugdienst staat vers op de collega.
     const rijen = [{ date: '2026-09-03', line: '14', driverId: '4' }];
     const res = applySwapsToPlanningRows(rijen, [ruil({})]);
-    expect(res).toEqual({ applied: 1, skipped: 0, alVerwerkt: 0 });
+    expect(res).toEqual({ applied: 1, skipped: 0, alVerwerkt: 0, opBord: 0 });
     expect(rijen[0].driverId).toBe('3');
   });
 });
