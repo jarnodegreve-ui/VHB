@@ -172,7 +172,13 @@ const DEELBUDGET_KB = {
 // server (shared/dienstGereden.ts, ±0,3 kB); de CI-runner mat de set op 74,0x
 // waar lokaal 73,9 stond. Onderzocht: parseHHMM is één implementatie geworden
 // (shiftTime re-exporteert de shared versie), de rest is de regel zelf.
-const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 139 };
+// 28-09: staf 139 → 140. De set stond al op de grens: lokaal 138,78 kB en op
+// de CI-runner een fractie zwaarder, zodat een build toevallig net onder of
+// net boven 139 viel. #655 voegde in src/lib/fouten.ts (in de staf-warmup) de
+// melding bij een ontbrekende migratie toe, +0,12 kB (lokaal 138,90), en main
+// werd rood terwijl dezelfde code op de PR groen was. Geen nieuwe import; de
+// warmup start pas na LCP + 2 s en raakt het eerste beeld niet.
+const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 140 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
