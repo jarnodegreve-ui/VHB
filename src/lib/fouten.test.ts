@@ -27,6 +27,12 @@ describe('schrijffout', () => {
     expect(schrijffout('Bewaren', err)).toBe('Bewaren is mislukt. Busnummer 12 bestaat al. Iemand anders heeft dit intussen gewijzigd. Vernieuw de lijst en probeer het opnieuw.');
   });
 
+  it('zegt de server zelf al wat je moet doen, dan komt de algemene stap er niet achter', () => {
+    online(true);
+    const err = Object.assign(new Error('Dienst EEK6 op 28/09/2026 staat niet (meer) op naam van Jan, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.'), { status: 409 });
+    expect(schrijffout('Dienstwissel', err)).toBe('Dienstwissel is mislukt. Dienst EEK6 op 28/09/2026 staat niet (meer) op naam van Jan, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.');
+  });
+
   it('een fout uit apiJson draagt de status, dus de serverreden komt mee', async () => {
     online(true);
     const { apiJson } = await import('./api');

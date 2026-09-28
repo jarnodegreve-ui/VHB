@@ -25,6 +25,7 @@ import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, ge
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
+import { bordBenenVan, bordOpDag, dienstOpCel } from "./codeDienst.js";
 
 /**
  * Hangt aan elke ruil het verloop per persoon (`verloop`, zie
@@ -229,11 +230,11 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
         if (r && r.offeredMoved === 0) {
           return { fout: { status: 409, error: "De planning is intussen gewijzigd, de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." } };
         }
-        carry = describeSwapCarry(current, r, "doorgevoerd");
+        carry = describeSwapCarry(current, r, "doorgevoerd", await bordBenenVan(current, r));
       }
     } else if ((current.status === "approved" || alDoorgevoerd) && (status === "cancelled" || status === "rejected")) {
       const r = await revertSwapFromPlanning(current);
-      carry = describeSwapCarry(current, r, "teruggedraaid");
+      carry = describeSwapCarry(current, r, "teruggedraaid", await bordBenenVan(current, r));
     }
 
     // 'accepted' is een tussenstap (collega akkoord), nog géén beslismoment —
@@ -908,7 +909,7 @@ export function mountRuilRoutes(app: express.Express) {
           if (r && r.offeredMoved === 0) {
             return res.status(409).json({ error: "De planning is intussen gewijzigd, de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." });
           }
-          carryLogById.set(String(next.id), describeSwapCarry(next, r, "doorgevoerd"));
+          carryLogById.set(String(next.id), describeSwapCarry(next, r, "doorgevoerd", await bordBenenVan(next, r)));
         } else if (next.status === "cancelled" || next.status === "rejected") {
           // Terugdraaien vanuit 'approved', en bij afwijzen ook een halve
           // doorvoer (planning gewisseld zonder opgeslagen status).
@@ -916,7 +917,7 @@ export function mountRuilRoutes(app: express.Express) {
             || (next.status === "rejected" && (await swapToestandInPlanning(prev)) === "doorgevoerd");
           if (terug) {
             const r = await revertSwapFromPlanning(next);
-            carryLogById.set(String(next.id), describeSwapCarry(next, r, "teruggedraaid"));
+            carryLogById.set(String(next.id), describeSwapCarry(next, r, "teruggedraaid", await bordBenenVan(next, r)));
           }
         }
       }
@@ -1103,12 +1104,27 @@ export function mountRuilRoutes(app: express.Express) {
       // op 409 stranden.
       const lineToken = toLookupToken(line);
       const ownRows = dayRows.filter((r) => toLookupToken(r.line) === lineToken && String(r.driverId) === fromDriverId);
-      if (ownRows.length === 0) {
-        return res.status(409).json({ error: `Dienst ${line} op ${DAG_DMJ(date)} staat niet (meer) op naam van ${fromUser.name}, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
+      // Code-dienst (schoolrit, bureau, garage): bestaat alleen als
+      // planningscode, dus zonder rijen in de planning. Daar is het bord de
+      // waarheid (api/_lib/codeDienst.ts). Pas gelezen als de planning de
+      // dienst niet kent: de gewone wissel betaalt er niets voor.
+      let bord: Awaited<ReturnType<typeof bordOpDag>> | null = null;
+      const haalBord = async () => (bord ??= await bordOpDag(date, users as any[]));
+      const aangebodenOpBord = ownRows.length === 0;
+      // De schrijfwijze uit de planning (of van het bord) zelf: die gaat de swap
+      // in en stuurt de doorvoer (movePlanningRows matcht exact op line).
+      let dienstLine = aangebodenOpBord ? "" : String(ownRows[0].line);
+      if (aangebodenOpBord) {
+        const b = await haalBord();
+        const opCel = b.isCodeDienst(line) ? dienstOpCel(b.celVan(fromDriverId), line) : null;
+        if (!opCel) {
+          return res.status(409).json({ error: `Dienst ${line} op ${DAG_DMJ(date)} staat niet (meer) op naam van ${fromUser.name}, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
+        }
+        dienstLine = opCel;
+        if (!b.staatOpBord(toDriverId)) {
+          return res.status(400).json({ error: `${toUser.name} staat niet op het bord van de maandplanning. Dienst ${opCel} kan alleen naar een chauffeur op het bord.` });
+        }
       }
-      // Vanaf hier de schrijfwijze uit de planning zelf: die gaat de swap in en
-      // stuurt de doorvoer (movePlanningRows matcht exact op line).
-      const dienstLine = String(ownRows[0].line);
 
       // Planningsconflict: de nieuwe chauffeur rijdt die dag al een dienst.
       // Zonder returnLine is dat een fout (dubbele inplanning); mét returnLine
@@ -1117,13 +1133,24 @@ export function mountRuilRoutes(app: express.Express) {
       const returnToken = toLookupToken(returnLine);
       const toRows = dayRows.filter((r) => String(r.driverId) === toDriverId);
       let terugLine: string | null = null;
+      let terugOpBord = false;
       if (returnLine) {
         if (returnToken === lineToken) return res.status(400).json({ error: "De terugdienst is dezelfde als de dienst die je overzet." });
         const terugRow = toRows.find((r) => toLookupToken(r.line) === returnToken);
-        if (!terugRow) {
-          return res.status(409).json({ error: `${toUser.name} rijdt op ${DAG_DMJ(date)} geen dienst ${returnLine} (meer), de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
+        if (terugRow) {
+          terugLine = String(terugRow.line);
+        } else {
+          // Ook de terugdienst kan een code-dienst zijn. Alleen wat de collega
+          // die dag zelf rijdt: een dienst onder zijn afwezigheid ruilt hij niet.
+          const b = await haalBord();
+          const naarCel = b.celVan(toDriverId);
+          const opCel = b.isCodeDienst(returnLine) && naarCel?.kind === "service" ? dienstOpCel(naarCel, returnLine) : null;
+          if (!opCel) {
+            return res.status(409).json({ error: `${toUser.name} rijdt op ${DAG_DMJ(date)} geen dienst ${returnLine} (meer), de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
+          }
+          terugLine = opCel;
+          terugOpBord = true;
         }
-        terugLine = String(terugRow.line);
         // De gever moet die dag zelf kunnen rijden: op een afwezigheidscel
         // (ziek, verlof) zet je een dienst wég, je haalt er geen bij.
         const andereVanGever = dayRows.find((r) => String(r.driverId) === fromDriverId && toLookupToken(r.line) !== lineToken);
@@ -1171,7 +1198,9 @@ export function mountRuilRoutes(app: express.Express) {
       const nu = new Date().toISOString();
       const swap = {
         id: crypto.randomUUID(),
-        shiftId: String(ownRows[0].id),
+        // Een code-dienst heeft geen planning-rij om naar te verwijzen; de
+        // kolom is verplicht, dus een sprekende sleutel in dezelfde vorm.
+        shiftId: aangebodenOpBord ? `${date}-${fromDriverId}-${dienstLine}-bord` : String(ownRows[0].id),
         requesterId: fromDriverId,
         targetDriverId: toDriverId,
         status: "approved" as const,
@@ -1189,11 +1218,14 @@ export function mountRuilRoutes(app: express.Express) {
       // Doorvoer VÓÓR het opslaan (zelfde volgorde en motivatie als bij het
       // goedkeuren van een ruil): mislukt de verplaatsing, dan bestaat er ook
       // geen swap-record dat de replay later alsnog zou toepassen.
+      //
+      // Een been dat alleen op het bord leeft verplaatst hier niets: het
+      // opgeslagen record is de wissel, het bord legt hem erover.
       const carryResult = await applySwapToPlanning(swap);
-      if (!carryResult || carryResult.offeredMoved === 0) {
+      if (!carryResult || (!aangebodenOpBord && carryResult.offeredMoved === 0)) {
         return res.status(409).json({ error: "De dienst kon niet verplaatst worden, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw." });
       }
-      if (terugLine && !carryResult.returnMoved) {
+      if (terugLine && !terugOpBord && !carryResult.returnMoved) {
         // Halve wissel: de aangeboden dienst is al verhuisd, de terugdienst
         // niet. Terugdraaien en melden, anders staat de gever zonder dienst.
         await revertSwapFromPlanning({ ...swap, swapType: "overname", returnDate: undefined, returnCode: undefined });
@@ -1201,7 +1233,7 @@ export function mountRuilRoutes(app: express.Express) {
       }
       await saveSwapsData([swap], []);
 
-      const carry = describeSwapCarry(swap, carryResult, "doorgevoerd");
+      const carry = describeSwapCarry(swap, carryResult, "doorgevoerd", { aangeboden: aangebodenOpBord, terug: terugOpBord });
       await logActivity(
         req,
         "swaps",
