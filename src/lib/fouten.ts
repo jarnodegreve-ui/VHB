@@ -25,6 +25,8 @@ export type FoutInfo = {
   netwerk: boolean;
   /** De browser meldt dat er geen verbinding is. */
   offline: boolean;
+  /** 503 omdat een migratie nog niet gedraaid is: geen onderhoud. */
+  migratie?: boolean;
 };
 
 const GENERIEK = /^Er ging iets mis|^Opslaan mislukt|mislukt\.?$/i;
@@ -51,7 +53,11 @@ export function leesFout(err: unknown): FoutInfo {
   const netwerk = status === undefined && (o.name === 'TypeError' || /failed to fetch|networkerror|load failed|network request failed/i.test(bericht));
   // Alleen een 4xx-reden is een gebruikerstekst; 5xx- en fallbackteksten zijn generiek.
   const tekst = status !== undefined && status >= 400 && status < 500 && bericht && !GENERIEK.test(bericht) && isVeiligeFouttekst(bericht) ? bericht : undefined;
-  return { status, tekst, netwerk, offline };
+  // De server noemt bij een ontbrekende migratie het .sql-bestand. Die tekst
+  // is voor de beheerder en komt niet in beeld, maar "onderhoud" klopt dan
+  // niet: wachten lost niets op (Jarno 28-09, PDF bij een omleiding).
+  const migratie = status === 503 && /\.sql\b/i.test(bericht);
+  return { status, tekst, netwerk, offline, ...(migratie ? { migratie } : {}) };
 }
 
 /** De concrete volgende stap bij deze fout, als volledige zin. */
@@ -75,7 +81,9 @@ export function vervolgstap(info: FoutInfo): string {
     case 429:
       return 'Wacht even en probeer het opnieuw.';
     case 503:
-      return 'Het portaal is even in onderhoud. Probeer het zo opnieuw.';
+      return info.migratie
+        ? 'Dit onderdeel is op de server nog niet ingesteld, er moet nog een migratie draaien. Meld het aan de beheerder.'
+        : 'Het portaal is even in onderhoud. Probeer het zo opnieuw.';
     default:
       return 'Probeer het zo opnieuw. Blijft het misgaan, meld het via het accountmenu, Meld een probleem.';
   }
