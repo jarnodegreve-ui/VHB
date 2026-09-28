@@ -559,7 +559,10 @@ test('planner keurt een geaccepteerde ruil goed (PATCH met ifStatus accepted)', 
   // shiftLine op de ruil zelf (blok 1 #13), niet uit de eigen planning.
   await expect(page.getByText('Beheer dienstruilen')).toBeVisible({ timeout: 15_000 });
 
-  await page.getByRole('button', { name: 'Goedkeuren' }).first().click();
+  // Op de telefoon staat elke ruil dicht in de beheerlijst (28-09): eerst openklappen.
+  const beheer = page.getByRole('list', { name: 'Beheer dienstruilen' });
+  await beheer.getByRole('button', { name: /Dienst 2505/ }).click();
+  await beheer.getByRole('button', { name: 'Goedkeuren' }).click();
   await expect.poll(() => patched).not.toBeNull();
   expect(patched!.path).toMatch(/\/api\/swaps\/a1$/);
   expect(patched!.body).toMatchObject({ status: 'approved', ifStatus: 'accepted' });
@@ -638,14 +641,115 @@ test('de planner ziet de rust van beide chauffeurs bij een te beoordelen ruil', 
   await page.goto('/');
   await expect(page.getByText('Beheer dienstruilen')).toBeVisible({ timeout: 15_000 });
 
-  const rust = page.getByRole('region', { name: 'Rusttijd' }).first();
+  // Dicht (28-09): de waarschuwing staat al op de rij, de details nog niet.
+  const beheer = page.getByRole('list', { name: 'Beheer dienstruilen' });
+  const rij = beheer.getByRole('button', { name: /Dienst 2101/ });
+  await expect(rij).toContainText('Te weinig rust');
+  await expect(beheer.getByRole('region', { name: 'Rusttijd' })).toHaveCount(0);
+  await rij.click();
+
+  const rust = beheer.getByRole('region', { name: 'Rusttijd' });
   await expect(rust.getByRole('listitem')).toHaveCount(2);
   await expect(rust.getByRole('listitem').nth(0)).toContainText(`Te weinig rust: ${COLLEGA.name}, dienst 2101`);
   await expect(rust.getByRole('listitem').nth(1)).toContainText(`${CHAUFFEUR.name}, dienst 2230`);
   await expect(rust.getByRole('listitem').nth(1)).toContainText('11u tot de dienst van de dag erna');
   await expect(rust.getByRole('listitem').nth(1)).not.toContainText('Te weinig rust');
   // De planner beslist: goedkeuren blijft beschikbaar.
-  await expect(page.getByRole('button', { name: 'Goedkeuren' }).first()).toBeEnabled();
+  await expect(beheer.getByRole('button', { name: 'Goedkeuren' })).toBeEnabled();
+
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});
+
+test('beheerlijst op de telefoon: wat op een beslissing wacht bovenaan, elke ruil dicht tot je hem opent', async ({ page }) => {
+  // Jarno 28-09: de lijst volgde de database (op id) en elke kaart stond
+  // volledig open. Nu: collega akkoord, wacht op collega, goedgekeurd; per
+  // groep de vroegste dienst eerst; dicht tot je erop tikt.
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seedSession(page, PLANNER);
+
+  const basis = { requesterId: CHAUFFEUR.id, targetDriverId: COLLEGA.id, createdAt: new Date().toISOString(), returnDate: dayOffset(20), returnCode: 'vrij' };
+  const ruilen = [
+    { ...basis, id: 'g-laat', shiftId: 'x1', status: 'approved', shiftDate: dayOffset(8), shiftLine: '2303' },
+    { ...basis, id: 'wacht', shiftId: 'x2', status: 'pending', shiftDate: dayOffset(6), shiftLine: '2202' },
+    {
+      ...basis, id: 'akkoord', shiftId: 'x3', status: 'accepted', shiftDate: dayOffset(10), shiftLine: '2505', reason: 'Trouwfeest van mijn zus',
+      rust: [{ wie: 'collega', datum: dayOffset(10), dienst: '2505', rustVoor: 340, rustNa: null, teKort: true }],
+    },
+    { ...basis, id: 'g-vroeg', shiftId: 'x4', status: 'approved', shiftDate: dayOffset(3), shiftLine: '2101' },
+  ];
+
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.endsWith('/api/me')) return json(PLANNER);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([PLANNER, CHAUFFEUR, COLLEGA]);
+    if (path.endsWith('/api/swaps') && route.request().method() === 'GET') return json(ruilen);
+    return json([]);
+  });
+
+  await page.goto('/');
+  const beheer = page.getByRole('list', { name: 'Beheer dienstruilen' });
+  await expect(beheer).toBeVisible({ timeout: 15_000 });
+
+  const rijen = beheer.locator(':scope > li');
+  await expect(rijen).toHaveCount(4);
+  await expect(rijen.nth(0)).toContainText('Dienst 2505');
+  await expect(rijen.nth(1)).toContainText('Dienst 2202');
+  await expect(rijen.nth(2)).toContainText('Dienst 2101');
+  await expect(rijen.nth(3)).toContainText('Dienst 2303');
+
+  // Dicht: wie, welke dienst en de stand, plus de rustwaarschuwing; geen verloop, geen knoppen.
+  await expect(rijen.nth(0)).toContainText(`${CHAUFFEUR.name} → ${COLLEGA.name}`);
+  await expect(rijen.nth(0)).toContainText('Te weinig rust');
+  await expect(beheer.getByRole('region', { name: 'Verloop per persoon' })).toHaveCount(0);
+  await expect(beheer.getByRole('button', { name: 'Goedkeuren' })).toHaveCount(0);
+
+  // Open: verloop, toelichting en de knoppen, afwijzen links (C, 24-09).
+  const eerste = rijen.nth(0).getByRole('button', { name: /Dienst 2505/ });
+  await eerste.click();
+  await expect(eerste).toHaveAttribute('aria-expanded', 'true');
+  await expect(rijen.nth(0).getByRole('region', { name: 'Verloop per persoon' })).toBeVisible();
+  await expect(rijen.nth(0)).toContainText('Trouwfeest van mijn zus');
+  await expect(rijen.nth(0).getByRole('button', { name: /^(Afwijzen|Goedkeuren)$/ })).toHaveText(['Afwijzen', 'Goedkeuren']);
+  await expect(rijen.nth(1).getByRole('button', { name: /Dienst 2202/ })).toHaveAttribute('aria-expanded', 'false');
+
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});
+
+test('chauffeur: wat op zijn antwoord wacht bovenaan, lopende verzoeken boven afgeronde', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seedSession(page, CHAUFFEUR);
+
+  const nu = new Date().toISOString();
+  const ruilen = [
+    // Mijn verzoeken: een afgeronde en een lopende.
+    { id: 'mv-klaar', shiftId: 'm1', requesterId: CHAUFFEUR.id, targetDriverId: COLLEGA.id, status: 'completed', createdAt: nu, decidedAt: nu, shiftDate: dayOffset(-10), shiftLine: '2101', returnDate: dayOffset(-9), returnCode: 'vrij' },
+    { id: 'mv-lopend', shiftId: 'm2', requesterId: CHAUFFEUR.id, targetDriverId: COLLEGA.id, status: 'pending', createdAt: nu, shiftDate: dayOffset(12), shiftLine: '2202', returnDate: dayOffset(13), returnCode: 'vrij' },
+    // Aan hem gericht: een die bij de planner ligt (vroegere dienst) en een die op zijn antwoord wacht.
+    { id: 'os-planner', shiftId: 'o1', requesterId: COLLEGA.id, targetDriverId: CHAUFFEUR.id, status: 'accepted', createdAt: nu, shiftDate: dayOffset(2), shiftLine: '2303', returnDate: dayOffset(4), returnCode: 'vrij' },
+    { id: 'os-antwoord', shiftId: 'o2', requesterId: COLLEGA.id, targetDriverId: CHAUFFEUR.id, status: 'pending', createdAt: nu, shiftDate: dayOffset(9), shiftLine: '2404', returnDate: dayOffset(11), returnCode: 'vrij' },
+  ];
+
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.endsWith('/api/me')) return json(CHAUFFEUR);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([CHAUFFEUR, COLLEGA]);
+    if (path.endsWith('/api/swaps') && route.request().method() === 'GET') return json(ruilen);
+    return json([]);
+  });
+
+  await page.goto('/');
+  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+  // Mijn verzoeken staat eerst op de pagina, dan de ruilen die aan hem gericht zijn.
+  await expect.poll(() => page.locator('[data-record]').evaluateAll((els) => els.map((e) => e.getAttribute('data-record'))))
+    .toEqual(['mv-lopend', 'mv-klaar', 'os-antwoord', 'os-planner']);
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { ADMIN, CHAUFFEUR, seed } from './helpers';
+import { vandaagIso } from './deeplinkHulp';
 
 /**
  * Desktop-viewport (1440×900, project "Desktop (chromium)"): de schermen die
@@ -140,5 +141,32 @@ test.describe('desktop: activiteitenlog', () => {
 
     await page.getByRole('button', { name: 'Vorige pagina' }).click();
     await expect(page.getByText('1–50 van 60')).toBeVisible();
+  });
+});
+
+test.describe('desktop: Beheer dienstruilen', () => {
+  test('wat op een beslissing wacht staat bovenaan, per groep de vroegste dienst eerst', async ({ page }) => {
+    // Jarno 28-09: de tabel volgde de database (op id). Nu: collega akkoord,
+    // wacht op collega, goedgekeurd; binnen elke groep de vroegste dienst.
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    const basis = { requesterId: '43', targetDriverId: '44', createdAt: new Date().toISOString(), returnDate: vandaagIso(20), returnCode: 'vrij' };
+    const ruilen = [
+      { ...basis, id: 'b-laat', shiftId: 'x1', status: 'approved', shiftDate: vandaagIso(8), shiftLine: '2303' },
+      { ...basis, id: 'b-wacht', shiftId: 'x2', status: 'pending', shiftDate: vandaagIso(6), shiftLine: '2202' },
+      { ...basis, id: 'b-akkoord', shiftId: 'x3', status: 'accepted', shiftDate: vandaagIso(10), shiftLine: '2505' },
+      { ...basis, id: 'b-vroeg', shiftId: 'x4', status: 'approved', shiftDate: vandaagIso(3), shiftLine: '2101' },
+    ];
+    await seed(page, { user: ADMIN, view: 'ruil-verzoeken', extra: (pad) => (pad.endsWith('/api/swaps') ? ruilen : undefined) });
+    await page.goto('/');
+
+    const rijen = page.getByRole('table', { name: 'Dienstruilen' }).locator('tbody > tr');
+    await expect(rijen).toHaveCount(4, { timeout: 15_000 });
+    await expect(rijen.nth(0)).toContainText('Dienst 2505');
+    await expect(rijen.nth(1)).toContainText('Dienst 2202');
+    await expect(rijen.nth(2)).toContainText('Dienst 2101');
+    await expect(rijen.nth(3)).toContainText('Dienst 2303');
+
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
   });
 });
