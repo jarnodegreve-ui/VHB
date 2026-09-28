@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
+import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
@@ -26,6 +26,7 @@ import { maandagVan } from '../lib/roosterUren';
 import { isoWeekOf } from '../lib/week';
 import { formatDateHuman, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
+import { sorteerRuilen } from '../lib/ruilVolgorde';
 import { canRespondToSwap } from '../lib/authorization';
 import { notify, openPdfInNewTab } from '../lib/ui';
 import { AllesGedaan, LegeLijst } from '../components/illustraties';
@@ -309,10 +310,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   const freeCount = freeForDate
     ? eligibleTargetDrivers.filter((u) => isAvailableOnShiftDate(u.id)).length
     : null;
-  const mySwaps = swaps.filter(s => s.requesterId === user.id);
+  // Elke lijst in de volgorde van lib/ruilVolgorde (Jarno 28-09): wat nog
+  // actie vraagt bovenaan, per groep de vroegste dienst eerst. De server geeft
+  // de ruilen op id, dus zonder sortering stonden ze willekeurig.
+  const dienstDatumVan = (swap: SwapRequest) => shiftInfoFor(swap).date;
+  const mySwaps = sorteerRuilen(swaps.filter(s => s.requesterId === user.id), { dienstDatum: dienstDatumVan, kijkerId: user.id });
   // Aan mij gerichte ruilverzoeken: pending (te beantwoorden) + accepted
   // (door mij geaccepteerd, wacht op planner) zodat de collega de status volgt.
-  const availableSwaps = swaps.filter(s => {
+  const availableSwaps = sorteerRuilen(swaps.filter(s => {
     if (s.requesterId === user.id) return false;
     // Een doorgevoerde wissel die de chauffeur nog niet bevestigde blijft in
     // zijn lijst staan mét bevestig-knop — zo weet de planner dat de nieuwe
@@ -327,7 +332,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
     if (isBeheerder) return false;
     return true;
-  });
+  }), { dienstDatum: dienstDatumVan, kijkerId: user.id });
 
   // Deeplink van een chauffeur: staat de ruil in een van zijn lijsten, dan daar
   // open (eigen verzoek) en in beeld met de focus erop, één keer per id.
@@ -517,6 +522,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     });
   };
 
+  /** De reden die de aanvrager meegaf: in het beoordelingspaneel en in de
+   *  uitklap van de beheerlijst op de telefoon. */
+  const toelichting = (swap: SwapRequest, className?: string) => swap.reason ? (
+    <div className={className}>
+      <MicroLabel>Toelichting van de aanvrager</MicroLabel>
+      <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-body font-normal text-slate-700">
+        {swap.reason}
+      </p>
+    </div>
+  ) : null;
+
   /** Inhoud van één ruil (status, dienst, verloop, rust, toelichting): het
    *  beoordelingspaneel van de staf en de alleen-lezen kaart van een chauffeur. */
   const ruilDetail = (swap: SwapRequest) => {
@@ -538,14 +554,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
               <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
 
-              {swap.reason && (
-                <div>
-                  <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-hairline-subtle px-4 py-3 text-body font-normal text-slate-700">
-                    {swap.reason}
-                  </p>
-                </div>
-              )}
+              {toelichting(swap)}
             </div>
     );
   };
@@ -801,14 +810,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             </div>
           </div>
         );
-        const actionableSwaps = swaps.filter(s => {
+        // Wat op een beslissing wacht bovenaan (Jarno 28-09): collega akkoord,
+        // dan wacht op collega, dan goedgekeurd; zonder kijker, want hier telt
+        // alleen de stand van de ruil (lib/ruilVolgorde).
+        const actionableSwaps = sorteerRuilen(swaps.filter(s => {
           if (s.status !== 'pending' && s.status !== 'accepted' && s.status !== 'approved') return false;
           const requester = users.find(u => u.id === s.requesterId);
           const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
           const isMe = s.requesterId === user.id;
           if (isBeheerder && !isMe) return false;
           return true;
-        });
+        }), { dienstDatum: dienstDatumVan });
 
         // Eén gedeelde lege staat i.p.v. drie verschillende leegtes op één
         // pagina: de desktoptabel liet enkel een kaal kopje achter en de
@@ -924,87 +936,102 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 </table>
               </div>
 
-              {/* Mobile cards */}
-              <div className="md:hidden divide-y divide-hairline-subtle">
+              {/* Telefoon (Jarno 28-09): het rijrecept in hetzelfde kader, elke
+                  ruil dicht. Dicht staat wat je nodig hebt om te kiezen (wie,
+                  welke dienst, de stand) en een rustwaarschuwing, die klapt
+                  nooit weg; verloop, rusttijd, toelichting en de knoppen staan
+                  in de uitklap, dus je beslist met de rust in beeld. Met elke
+                  kaart volledig open was dit op een telefoon een lange lijst,
+                  waarin de ruil die op jou wachtte wegviel. */}
+              <ul className="md:hidden divide-y divide-hairline-subtle" aria-label="Beheer dienstruilen">
                 {actionableSwaps.map(swap => {
                   const info = shiftInfoFor(swap);
-                  const requester = users.find(u => u.id === swap.requesterId);
+                  // Eigen sleutel: dezelfde ruil kan ook onder Mijn verzoeken open staan.
+                  const sleutel = `beheer:${swap.id}`;
+                  const open = expandedSwapIds.includes(sleutel);
+                  const ontvanger = swap.targetDriverId ? naamVan(swap.targetDriverId) || 'onbekend' : undefined;
+                  const teWeinigRust = !!swap.rust?.some((r) => r.teKort);
+                  const bevestiging = swap.status === 'approved' && swap.targetDriverId
+                    ? (swap.targetSeenAt
+                      ? <Badge tone="emerald" stil icon={<Check size={12} />}>Gezien</Badge>
+                      : <Badge tone="slate">Niet bevestigd</Badge>)
+                    : null;
                   return (
-                    <div key={swap.id} className="p-5 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          {/* rauw: rij-knop met naam + doelcollega + chevron (opent het beoordelingspaneel) */}
-                          <button
-                            type="button"
-                            onClick={() => setReviewSwap(swap)}
-                            title="Details bekijken"
-                            className="group flex items-center gap-1.5 text-left"
-                          >
-                            <Avatar naam={requester?.name ?? 'Onbekend'} size="sm" className="mr-0.5" />
-                            <span className="font-bold text-slate-800">
-                              {requester?.name}
-                              {swap.targetDriverId && <span className="font-medium text-slate-500"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
-                            </span>
-                            <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
-                          </button>
-                          <MicroLabel className="mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
-                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${tijdvak(info.startTime, info.endTime)}` : ''}</p>
-                          {isTakeoverSwap(swap) && <div className="mt-1"><TakeoverBadge compact /></div>}
-                        </div>
-                        <span className="flex shrink-0 flex-col items-end gap-1">
-                          <RuilStatusBadge swap={swap} stil />
-                          {swap.status === 'approved' && swap.targetDriverId && (
-                            swap.targetSeenAt
-                              ? <Badge tone="emerald" stil icon={<Check size={12} />}>Gezien</Badge>
-                              : <Badge tone="slate">Niet bevestigd</Badge>
-                          )}
-                        </span>
-                      </div>
-                      <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
-                      <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
-                      <div className="flex gap-2 pt-1">
-                        {swap.status === 'accepted' && (
-                          <>
-                            <Button bezig={beslisBezig === swap.id} variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleStatusUpdate(swap.id, 'approved')}>
-                              Goedkeuren
-                            </Button>
-                            <Button bezig={beslisBezig === swap.id} variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
-                              Afwijzen
-                            </Button>
-                          </>
-                        )}
-                        {swap.status === 'pending' && (isAdmin ? (
-                          <>
-                            <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAdminForceApprove(swap.id)}>
-                              Goedkeuren
-                            </Button>
-                            <Button bezig={beslisBezig === swap.id} variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
-                              Afwijzen
-                            </Button>
-                          </>
-                        ) : (
-                          <div className="flex-1 flex items-center justify-between gap-2">
-                            <Badge tone="amber" stil>Wacht op collega</Badge>
-                            <Button bezig={beslisBezig === swap.id} variant="danger" size="sm" onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
-                              Afwijzen
-                            </Button>
+                    <RecordRij
+                      key={swap.id}
+                      titel={<>{naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger && <span className="font-medium text-slate-500"> → {ontvanger}</span>}</>}
+                      meta={`Dienst ${info.line}${info.date ? ` · ${fmtShort(info.date)}` : ''}`}
+                      status={<RuilStatusBadge swap={swap} stil />}
+                      voorproef={teWeinigRust ? <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge> : undefined}
+                      richting="omlaag"
+                      open={open}
+                      onClick={() => toggleSwapExpanded(sleutel)}
+                    >
+                      <Uitklap open={open}>
+                        <div className="px-4 pb-4 pt-0.5">
+                          {(info.startTime && info.endTime) || isTakeoverSwap(swap) || bevestiging ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {info.startTime && info.endTime && (
+                                <span className="text-xs font-mono font-medium text-slate-500 tabular-nums">{tijdvak(info.startTime, info.endTime)}</span>
+                              )}
+                              {isTakeoverSwap(swap) && <TakeoverBadge compact />}
+                              {bevestiging}
+                            </div>
+                          ) : null}
+                          <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} className="mt-3" />
+                          <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
+                          {toelichting(swap, 'mt-3')}
+                          {/* De geschiedenis zat vroeger achter de naam (het paneel); die
+                              tik klapt nu open. Afwijzen links, goedkeuren rechts, zoals
+                              het paneel en de verlofbeoordeling (C, 24-09). */}
+                          <div className="mt-4 flex items-center gap-2">
+                            <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="md" onClick={() => setHistorySwap(swap)}>
+                              <History size={16} />
+                            </IconButton>
+                            {swap.status === 'accepted' && (
+                              <>
+                                <Button bezig={beslisBezig === swap.id} variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                                  Afwijzen
+                                </Button>
+                                <Button bezig={beslisBezig === swap.id} variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleStatusUpdate(swap.id, 'approved')}>
+                                  Goedkeuren
+                                </Button>
+                              </>
+                            )}
+                            {swap.status === 'pending' && (isAdmin ? (
+                              <>
+                                <Button bezig={beslisBezig === swap.id} variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                                  Afwijzen
+                                </Button>
+                                <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAdminForceApprove(swap.id)}>
+                                  Goedkeuren
+                                </Button>
+                              </>
+                            ) : (
+                              <div className="flex-1 flex items-center justify-between gap-2">
+                                <Badge tone="amber" stil>Wacht op collega</Badge>
+                                <Button bezig={beslisBezig === swap.id} variant="danger" size="sm" onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                                  Afwijzen
+                                </Button>
+                              </div>
+                            ))}
+                            {swap.status === 'approved' && (
+                              <>
+                                <Button variant="secondary" className="flex-1" icon={<Archive size={16} />} onClick={() => handleAfhandelen(swap.id)}>
+                                  Afhandelen
+                                </Button>
+                                <Button variant="danger" className="flex-1" onClick={() => handleCancel(swap.id)}>
+                                  Annuleren
+                                </Button>
+                              </>
+                            )}
                           </div>
-                        ))}
-                        {swap.status === 'approved' && (
-                          <>
-                            <Button variant="secondary" className="flex-1" icon={<Archive size={16} />} onClick={() => handleAfhandelen(swap.id)}>
-                              Afhandelen
-                            </Button>
-                            <Button variant="danger" className="flex-1" onClick={() => handleCancel(swap.id)}>
-                              Annuleren
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
+                        </div>
+                      </Uitklap>
+                    </RecordRij>
                   );
                 })}
-              </div>
+              </ul>
             </TableShell>
           </div>
         );
