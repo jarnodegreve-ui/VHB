@@ -37,6 +37,10 @@ export const toPublicUser = (user: any): AppUserIntern => ({
   wantsSystemMail: (user.wantsSystemMail ?? user.wantssystemmail) !== false,
   section: (user.section ?? undefined) || undefined,
   startDate: (user.startDate ?? user.startdate) || undefined,
+  // Schakelaar "Ook technieker" (2026-09-28_users_ook_technieker.sql). Alleen
+  // `true` reist mee, zodat de andere records en hun revisie niet wijzigen;
+  // vóór de migratie ontbreekt de kolom en heeft niemand hem.
+  ...((user.ookTechnieker ?? user.ooktechnieker) === true ? { ookTechnieker: true } : {}),
   // jsonb-kolom (2026-09-06_meldingen.sql); ongeldige inhoud = geen voorkeur.
   dashboardVoorkeuren: parseDashboardVoorkeuren(user.dashboardVoorkeuren ?? user.dashboardvoorkeuren) ?? undefined,
 });
@@ -93,6 +97,9 @@ export const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
   wantsSystemMail: user.wantsSystemMail !== false,
   section: user.section?.trim() || undefined,
   startDate: user.startDate?.trim() || undefined,
+  // Alleen bij een chauffeur: bij een andere rol valt de schakelaar weg, zodat
+  // hij niet stil terugkomt als iemand later weer chauffeur wordt.
+  ...((user.role || "chauffeur") === "chauffeur" && user.ookTechnieker === true ? { ookTechnieker: true } : {}),
 });
 
 export const toDatabaseUser = (user: AppUser) => ({
@@ -110,6 +117,9 @@ export const toDatabaseUser = (user: AppUser) => ({
   wantssystemmail: user.wantsSystemMail !== false,
   section: user.section?.trim() || null,
   startdate: user.startDate?.trim() || null,
+  // Elke rij draagt de kolom (PostgREST eist per batch dezelfde sleutels);
+  // saveUsersData valt terug op een upsert zonder, zolang de migratie ontbreekt.
+  ooktechnieker: user.ookTechnieker === true,
 });
 
 /**

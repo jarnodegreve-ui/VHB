@@ -11,16 +11,20 @@ import { prefetchView } from './viewLoaders';
  */
 export function SidebarNav({
   rol,
+  ookTechnieker,
   currentView,
   badges,
   onNavigate,
 }: {
   /** Effectieve rol (preview-modus verrekend) — bepaalt welke secties er zijn. */
   rol: Role;
+  /** Chauffeur die ook technieker is: de sectie Techniek komt erbij. */
+  ookTechnieker?: boolean;
   currentView: View;
   badges: Partial<Record<View, number>>;
   onNavigate: (view: View) => void;
 }) {
+  const wie = { role: rol, ookTechnieker };
   const isPlanner = rol === 'planner' || rol === 'admin';
   const isAdmin = rol === 'admin';
   const item = (r: RouteDef) => {
@@ -37,13 +41,13 @@ export function SidebarNav({
       />
     );
   };
-  const algemeen = sidebarRoutes(rol, 'algemeen');
-  const planning = sidebarRoutes(rol, 'planning');
-  const mensen = sidebarRoutes(rol, 'mensen');
-  const communicatie = sidebarRoutes(rol, 'communicatie');
-  const rapporten = sidebarRoutes(rol, 'rapporten');
-  const techniek = sidebarRoutes(rol, 'techniek');
-  const systeem = sidebarRoutes(rol, 'systeem');
+  const algemeen = sidebarRoutes(wie, 'algemeen');
+  const planning = sidebarRoutes(wie, 'planning');
+  const mensen = sidebarRoutes(wie, 'mensen');
+  const communicatie = sidebarRoutes(wie, 'communicatie');
+  const rapporten = sidebarRoutes(wie, 'rapporten');
+  const techniek = sidebarRoutes(wie, 'techniek');
+  const systeem = sidebarRoutes(wie, 'systeem');
   const beheer = [...planning, ...mensen, ...communicatie];
   return (
     <nav className="flex-1 min-h-0 px-3 py-2 space-y-0.5 overflow-y-auto overscroll-contain" aria-label="Zijbalk">
@@ -68,8 +72,8 @@ export function SidebarNav({
           {rapporten.map(item)}
         </>
       )}
-      {/* Techniek: garagewerk voor de technieker (zijn enige beheerblok) en
-          voor staf (bussen inplannen, opvolgen). */}
+      {/* Techniek: garagewerk voor de technieker (zijn enige beheerblok), een
+          chauffeur met "Ook technieker" en staf (bussen inplannen, opvolgen). */}
       {techniek.length > 0 && (
         <NavSection title="Techniek" count={techniek.length} active={techniek.some((r) => r.view === currentView)}>
           {techniek.map(item)}

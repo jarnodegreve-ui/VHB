@@ -34,6 +34,9 @@ import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 
 type UserDraft = User & { password?: string };
 
+/** Rol als metaregel in de lijst; een chauffeur met "Ook technieker" toont beide. */
+const rolRegel = (u: User) => (u.role === 'chauffeur' && u.ookTechnieker ? 'chauffeur + technieker' : u.role);
+
 /** Uitschakelbare kolommen van de gebruikerstabel (Medewerker en Acties blijven altijd). */
 const KOLOMMEN = [
   { key: 'status', label: 'Status' },
@@ -859,7 +862,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                               signalen (Niet in planning) onzichtbaar. Staf krijgt
                               wat meer gewicht, geen kleur. */}
                           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                            <span className={cn('text-xs capitalize', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{u.role}</span>
+                            <span className={cn('text-xs capitalize', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{rolRegel(u)}</span>
                             {nietInPlanning(u) && (
                               <Badge
                                 tone="amber"
@@ -917,7 +920,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                     <div className="font-semibold text-slate-800 leading-tight">{u.name}</div>
                     {/* Rol zoals op desktop: een stille metaregel, geen pil. */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <span className={cn('text-xs capitalize', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{u.role}</span>
+                      <span className={cn('text-xs capitalize', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{rolRegel(u)}</span>
                       {nietInPlanning(u) && (
                         <Badge tone="amber" icon={<CalendarOff size={12} />}>Niet in planning</Badge>
                       )}
@@ -1067,6 +1070,15 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-xs text-slate-500">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
                 <Switch checked={editingUser.showInContacts !== false} onChange={(aan) => setEditingUser({ ...editingUser, showInContacts: aan })} label="Tonen in contactlijst" />
               </Card>
+              {/* Chauffeur die ook in de garage werkt (28-09): krijgt Techniek
+                  erbij en blijft voor al de rest chauffeur. Bij een andere rol
+                  valt de schakelaar weg (ook op de server). */}
+              {editingUser.role === 'chauffeur' && (
+                <Card tone="muted" padding="sm" className="flex items-center justify-between">
+                  <div><p className="text-sm font-semibold text-slate-700">Ook technieker</p><p className="text-xs text-slate-500">Krijgt er het techniekgedeelte bij: gele boek, werkprestaties, werken per bus en voertuigen, en de meldingen van de garage. Rooster en planning blijven die van een chauffeur.</p></div>
+                  <Switch checked={editingUser.ookTechnieker === true} onChange={(aan) => setEditingUser({ ...editingUser, ookTechnieker: aan })} label="Ook technieker" />
+                </Card>
+              )}
               {editingUser.role === 'admin' && (
                 <Card tone="muted" padding="sm" className="flex items-center justify-between">
                   <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-xs text-slate-500">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>

@@ -12,6 +12,7 @@ import { Suspense, useEffect, type ReactNode } from 'react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { lazyWithRetry } from '../lib/lazyRetry';
 import { PrintLaden } from './PreAppScreens';
+import { magView } from './routes';
 
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('../views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 const LazyPrintLeaveYearView = lazyWithRetry(() => import('../views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
@@ -59,9 +60,10 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
   // Verlof-jaaroverzicht: planner/admin voor iedereen, een chauffeur alleen
   // voor zichzelf (met zijn eigen currentUser en eigen verloflijst — de
   // users-collectie is voor chauffeurs niet volledig).
-  // Papieren gele boek (ISO-map): techniekers en staf, haalt zelf zijn data op.
+  // Papieren gele boek (ISO-map): wie het gele boek mag openen (techniekers,
+  // ook een chauffeur met "Ook technieker", en staf); haalt zelf zijn data op.
   const printGeleBoek = printParams?.get('print-gele-boek');
-  if ((printGeleBoek === 'open' || printGeleBoek === 'alles') && currentUser && (currentUser.role === 'technieker' || currentUser.role === 'planner' || currentUser.role === 'admin')) {
+  if ((printGeleBoek === 'open' || printGeleBoek === 'alles') && currentUser && magView(currentUser, 'defecten')) {
     return (
       <Suspense fallback={<PrintLaden />}>
         <LazyPrintGeleBoekView filter={printGeleBoek} />

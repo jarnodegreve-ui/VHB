@@ -2,6 +2,7 @@ import { Children, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowUpRight, ChevronRight, Download, Info, Link2, Printer, RotateCcw } from 'lucide-react';
 import type { User, View } from '../../types';
 import { isStaf } from '../../types';
+import { heeftRol } from '../../../shared/toegang';
 import { useRoute } from '../../app/router';
 import { useQueryParams } from '../../app/queryParams';
 import { padVan } from '../../app/routes';
@@ -304,10 +305,11 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
 
   const voertuigen = useVoertuigen(def.filters.some((f) => f.soort === 'voertuig'));
   // Wie er in de personenkiezer staat volgt uit het filter: standaard iedereen
-  // buiten de staf, of de rollen die de definitie noemt (mecaniciens).
+  // buiten de staf, of de rollen die de definitie noemt (mecaniciens; een
+  // chauffeur met "Ook technieker" telt daar als technieker).
   const kiesRollen = def.filters.find((f): f is Extract<RapportFilter, { soort: 'chauffeur' }> => f.soort === 'chauffeur')?.rollen;
   const mensen = useMemo(
-    () => users.filter((u) => (kiesRollen ? kiesRollen.includes(u.role) : !isStaf(u.role)) && u.name.trim().toLowerCase() !== 'beheerder'),
+    () => users.filter((u) => (kiesRollen ? heeftRol(u, kiesRollen) : !isStaf(u.role)) && u.name.trim().toLowerCase() !== 'beheerder'),
     [users, kiesRollen],
   );
   const { navigeer } = useRoute();

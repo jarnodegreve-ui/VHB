@@ -19,7 +19,7 @@ import { userRecordRevisionOf, withRecordRevision, requestedRecordRevision, verw
 import { DAG_DMJ, normalizeEmail, toRoleScopedUser, sanitizeIncomingUser, countAdmins, EXPIRY_SOORT_LABEL } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { isIsoDag } from "../../shared/rapporten/periode.js";
-import { getUsersData, EmailInGebruikError, logActivity, getUserExpiries, saveUserExpiry, deleteUserExpiry } from "../storage.js";
+import { getUsersData, EmailInGebruikError, MigratieOntbreektError, logActivity, getUserExpiries, saveUserExpiry, deleteUserExpiry } from "../storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse } from "./collectie.js";
 
 /** Revisie van de gebruikerslijst ZONDER de sessie-velden. lastLogin en
@@ -221,6 +221,8 @@ export function mountGebruikersRoutes(app: express.Express) {
       }
     } catch (err: any) {
       if (err instanceof EmailInGebruikError) return res.status(409).json({ error: err.message, conflict: "email" });
+      // "Ook technieker" aangezet vóór de migratie: 503 met het .sql-bestand.
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
       console.error("Error saving users data:", errorMessage);
       console.error("Opslaan is mislukt.", errorMessage);
@@ -248,6 +250,7 @@ export function mountGebruikersRoutes(app: express.Express) {
       // Het adres hoort in Supabase Auth al bij een ánder account (de
       // users-tabel-check hierboven ziet dat niet) — 409, geen stille herkoppeling.
       if (err instanceof EmailInGebruikError) return res.status(409).json({ error: err.message, conflict: "email" });
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       console.error("Gebruiker toevoegen is mislukt.", err?.message || err);
       res.status(500).json({ error: "Opslaan is mislukt." });
     }
@@ -275,6 +278,7 @@ export function mountGebruikersRoutes(app: express.Express) {
       res.json({ success: true, user: await userResponseRecord(id) });
     } catch (err: any) {
       if (err instanceof EmailInGebruikError) return res.status(409).json({ error: err.message, conflict: "email" });
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       console.error("Gebruiker opslaan is mislukt.", err?.message || err);
       res.status(500).json({ error: "Opslaan is mislukt." });
     }

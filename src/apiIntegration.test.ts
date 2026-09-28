@@ -6733,6 +6733,55 @@ describe('rol technieker', () => {
   });
 });
 
+// "Ook technieker" (Jarno 28-09): een chauffeur die ook in de garage werkt.
+// Alleen een admin zet de schakelaar, de chauffeur zelf niet, en hij geeft
+// geen stafrechten. De techniekroutes zelf: src/techniekToegangRoutes.test.ts.
+describe('Ook technieker', () => {
+  const REV = 'x-record-revision';
+  const revVan = async (id: string): Promise<string> => {
+    const res = await api('GET', '/api/users', { token: 'tok-admin' });
+    return res.json.find((r: any) => String(r.id) === id)?._rev as string;
+  };
+  const zetSchakelaar = () => {
+    mem.users = mem.users.map((u: any) => (u.id === '3' ? { ...u, ookTechnieker: true } : u));
+    invalidateUsersCache();
+  };
+
+  it('een admin zet de schakelaar bij een chauffeur, en het activiteitenlog zegt het', async () => {
+    const res = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], ookTechnieker: true }, headers: { [REV]: await revVan('3') } });
+    expect(res.status).toBe(200);
+    expect(res.json.user.ookTechnieker).toBe(true);
+    const regel = mem.activity.find((a) => a.action === 'Gebruiker gewijzigd' && a.entityId === '3');
+    expect(regel?.message).toContain('ook technieker: uit→aan');
+  });
+
+  it('de chauffeur kan hem niet zelf aanzetten', async () => {
+    const put = await api('PUT', '/api/users/3', { token: 'tok-a', body: { ...mem.users[2], ookTechnieker: true }, headers: { [REV]: 'x' } });
+    expect(put.status).toBe(403);
+    const lijst = await api('POST', '/api/users', { token: 'tok-a', body: mem.users.map((u: any) => (u.id === '3' ? { ...u, ookTechnieker: true } : u)) });
+    expect(lijst.status).toBe(403);
+    expect(mem.users.find((u: any) => u.id === '3')?.ookTechnieker).toBeUndefined();
+  });
+
+  it('/api/me geeft hem mee; een collega-chauffeur ziet hem niet, de planner wel', async () => {
+    zetSchakelaar();
+    const me = await api('GET', '/api/me', { token: 'tok-a' });
+    expect(me.status).toBe(200);
+    expect(me.json.ookTechnieker).toBe(true);
+    const collega = await api('GET', '/api/users', { token: 'tok-b' });
+    expect(collega.json.find((u: any) => u.id === '3')).not.toHaveProperty('ookTechnieker');
+    const planner = await api('GET', '/api/users', { token: 'tok-planner' });
+    expect(planner.json.find((u: any) => u.id === '3')?.ookTechnieker).toBe(true);
+  });
+
+  it('geeft geen stafrechten: het loonscherm Dagadministratie, verlof beslissen en de maandplanning blijven dicht', async () => {
+    zetSchakelaar();
+    expect((await api('GET', '/api/dagafsluiting/2026-09-27', { token: 'tok-a' })).status).toBe(403);
+    expect((await api('PATCH', '/api/leave/l-b1', { token: 'tok-a', body: { status: 'approved', ifStatus: 'pending' } })).status).toBe(403);
+    expect((await api('GET', '/api/month-planning?month=2026-09&format=summary', { token: 'tok-a' })).status).toBe(403);
+  });
+});
+
 // Wissels uit de geschiedenis wissen (Jarno 09-09, om testwissels op te
 // ruimen): staf laat de rij weg uit de payload. Afgewezen/ingetrokken mag,
 // doorgevoerd niet (die zit in de heropbouw-replay).

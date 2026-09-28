@@ -12,6 +12,7 @@ import { bijUsersCacheWissel, epochStand, getUsersCached, invalidateUsersCache }
 import { maakSwrCache, SWR_STALE_MS } from "./_lib/swrCache.js";
 import { isStafRol } from "./types.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, Role } from "./types.js";
+import { heeftRol } from "../shared/toegang.js";
 
 // --- Toestel-whitelist (zie supabase/user_devices.sql + api/deviceGate.ts) ---
 // Chauffeurs mogen de API alleen gebruiken vanaf een goedgekeurd toestel;
@@ -410,13 +411,16 @@ const registreerAanwezigheid = (appUser: { id: string | number; role: Role }, he
   });
 };
 
+/** Rolcontrole per route. Een chauffeur met "Ook technieker" (28-09) telt als
+ *  technieker, dus overal waar 'technieker' in de lijst staat mag hij mee;
+ *  zie shared/toegang.ts. */
 export const requireRole = (...roles: Role[]) => {
   return (req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) => {
     if (!req.appUser) {
       return res.status(401).json({ error: "Niet aangemeld." });
     }
 
-    if (!roles.includes(req.appUser.role)) {
+    if (!heeftRol(req.appUser, roles)) {
       return res.status(403).json({ error: "Onvoldoende rechten." });
     }
 

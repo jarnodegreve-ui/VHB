@@ -49,6 +49,9 @@ export interface User {
   section?: string;
   /** In dienst sinds (YYYY-MM-DD) — anciënniteit-sortering binnen een sectie. */
   startDate?: string;
+  /** Chauffeur die ook technieker is (schakelaar in Gebruikers, 28-09): krijgt
+   *  het techniekgedeelte erbij. Zie shared/toegang.ts. */
+  ookTechnieker?: boolean;
   /** Eigen dashboardindeling (verborgen tegels + volgorde); alleen in het
    *  eigen profiel (/api/me), opgeslagen via PATCH /api/me/voorkeuren. */
   dashboardVoorkeuren?: DashboardVoorkeuren;

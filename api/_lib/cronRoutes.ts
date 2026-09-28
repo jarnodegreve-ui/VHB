@@ -21,6 +21,7 @@ import { symbolicateTopFrame } from "../symbolicate.js";
 import { getOcpiRegistration } from "../ocpi.js";
 import { getVehicleExpiries, getVehicles } from "./techniekStorage.js";
 import { VOERTUIG_VERVAL_LABEL, voertuigNaam } from "../../shared/schemas/techniek.js";
+import { isTechnieker } from "../../shared/toegang.js";
 import { verstuurRoosterMeldingen } from "./planningHeropbouw.js";
 import { stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT } from "../telegram.js";
 import { berekenDekkingsGaten, berekenCoverageAdvies } from "../coverageRoutes.js";
@@ -552,8 +553,9 @@ export function mountCronRoutes(app: express.Express) {
 
       // Vervaldata per voertuig (techniek, 13-09): keuring SBAT, brandblussers,
       // tachograaf. Zelfde mijlpalen-mechaniek als hierboven, maar de push gaat
-      // naar de techniekers en admins (het voertuig heeft geen mailbox) en de
-      // mailsectie toont alles binnen 60 dagen. Best-effort.
+      // naar de techniekers (ook een chauffeur met "Ook technieker") en admins
+      // (het voertuig heeft geen mailbox) en de mailsectie toont alles binnen
+      // 60 dagen. Best-effort.
       try {
         const [voertuigExpiries, voertuigen, alleUsers] = await Promise.all([getVehicleExpiries(), getVehicles(), getUsersData()]);
         const perVoertuig = new Map(voertuigen.filter((v) => v.status !== "uit_dienst").map((v) => [v.id, v]));
@@ -565,7 +567,7 @@ export function mountCronRoutes(app: express.Express) {
           .filter((e) => Number.isFinite(e.dagen))
           .sort((a, b) => a.dagen - b.dagen);
         const ontvangers = alleUsers
-          .filter((u: any) => u.isActive !== false && (u.role === "technieker" || u.role === "admin"))
+          .filter((u: any) => u.isActive !== false && (isTechnieker(u) || u.role === "admin"))
           .map((u: any) => String(u.id));
         for (const e of rijen) {
           if (e.dagen === 60 || e.dagen === 30 || e.dagen === 7 || e.dagen === 0) {

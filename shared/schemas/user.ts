@@ -56,6 +56,9 @@ const userVelden = {
   wantsSystemMail: optioneel(z.boolean()),
   section: optioneel(z.string().trim()),
   startDate: optioneel(isoDatum('Vul een geldige datum in (dd/mm/jjjj)')),
+  /** Chauffeur die ook technieker is (28-09); de server negeert hem bij elke
+   *  andere rol (sanitizeIncomingUser). Zie shared/toegang.ts. */
+  ookTechnieker: optioneel(z.boolean()),
   /** Eigen dashboardindeling (alleen via PATCH /api/me/voorkeuren geschreven;
    *  de gebruikers-save negeert dit veld — zie api/helpers.ts toDatabaseUser). */
   dashboardVoorkeuren: optioneel(dashboardVoorkeurenSchema),

@@ -11,8 +11,11 @@ import { eigenMailRateLimit, omleidingMailRateLimit } from "../rateLimit.js";
 import { valideerRecord } from "./valideer.js";
 import { getMailInstellingen, getVerzendlijsten, meldMailWijziging } from "./mailInstellingen.js";
 import { voorbeeldMail } from "./mailVoorbeelden.js";
+import { heeftRol } from "../../shared/toegang.js";
 
-/** Rol per ontvangersgroep; "planning" = planners én admins. */
+/** Rol per ontvangersgroep; "planning" = planners én admins. Een chauffeur met
+ *  "Ook technieker" hoort bij de chauffeurs én de techniekers (de adressen
+ *  worden ontdubbeld). */
 const GROEP_ROLLEN: Record<OntvangerGroep, readonly string[]> = { chauffeurs: ["chauffeur"], techniekers: ["technieker"], planning: ["planner", "admin"] };
 
 /** Bouwt de eigen mail van een admin: onderwerp als titel, de tekst in
@@ -217,7 +220,7 @@ export function mountMailRoutes(app: express.Express) {
         if (a && !ontvangers.has(a)) ontvangers.set(a, { adres: a, naam });
       };
       for (const groep of body.ontvangers.groepen) {
-        for (const u of actief) if (GROEP_ROLLEN[groep].includes(u.role)) voeg(u.email, u.name);
+        for (const u of actief) if (heeftRol(u, GROEP_ROLLEN[groep])) voeg(u.email, u.name);
       }
       const onbekendeLijsten = body.ontvangers.lijsten.filter((id) => !lijsten.some((l) => l.id === id));
       if (onbekendeLijsten.length > 0) return res.status(400).json({ error: "Een gekozen verzendlijst bestaat niet meer; ververs het scherm." });
