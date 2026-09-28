@@ -4,6 +4,7 @@ import { isMissingTableError } from "../deviceGate.js";
 import { getUsersData, logActivity } from "../storage.js";
 import { sendPushToUsers } from "../push.js";
 import { isStafRol, type AuthenticatedRequest, type Role } from "../types.js";
+import { heeftRol, isTechnieker, type Toegang } from "../../shared/toegang.js";
 import { DAG_DMJ } from "../helpers.js";
 import {
   defectMeldingBodySchema, defectPatchSchema, vehicleBodySchema, vehicleExpiryBodySchema, werkprestatieBodySchema,
@@ -26,9 +27,12 @@ import {
  * - technieker + staf: het gele boek, meldingen afhandelen, werkprestaties
  *   (technieker alleen de eigen rijen), vervaldata zetten;
  * - staf: voertuigen aanmaken/bewerken/verwijderen, alle werkprestaties.
+ *
+ * Een chauffeur met "Ook technieker" (28-09) telt hier als technieker; de
+ * regel staat in shared/toegang.ts, zodat app en API hetzelfde beslissen.
  */
 const TECHNIEK: Role[] = ["technieker", "planner", "admin"];
-const isTechniekRol = (role: Role | string) => role === "technieker" || isStafRol(role);
+const magTechniek = (wie: Toegang) => heeftRol(wie, TECHNIEK);
 
 const migratieOntbreekt = (res: express.Response) =>
   res.status(503).json({ error: `De techniek-tabellen bestaan nog niet: draai ${TECHNIEK_MIGRATIE} in de SQL Editor.` });
@@ -61,7 +65,7 @@ export function mountTechniekRoutes(app: express.Express) {
       const actief = String(req.query.actief ?? "") === "1";
       const lijst = actief ? alle.filter((v) => v.status !== "uit_dienst") : alle;
       res.setHeader("Cache-Control", "no-store");
-      if (isTechniekRol(req.appUser!.role)) return res.json(lijst);
+      if (magTechniek(req.appUser!)) return res.json(lijst);
       // Chauffeur: alleen wat hij nodig heeft om een bus te kiezen (geen
       // nummerplaat, Jarno 13-09) en géén privéwagens (Jarno 14-09): daar
       // meldt een chauffeur nooit een defect op.
@@ -170,7 +174,6 @@ export function mountTechniekRoutes(app: express.Express) {
   // --- Gele boek ---
   app.get("/api/defecten", authenticate, async (req: AuthenticatedRequest, res) => {
     try {
-      const rol = req.appUser!.role;
       const mijn = String(req.query.mijn ?? "") === "1";
       const statusQ = String(req.query.status ?? "");
       const status = (["open", "alles", "uitgevoerd", "geannuleerd"] as const).find((s) => s === statusQ);
@@ -178,7 +181,7 @@ export function mountTechniekRoutes(app: express.Express) {
       const sinds = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.sinds ?? "")) ? String(req.query.sinds) : undefined;
       const vehicleId = String(req.query.vehicleId ?? "").trim() || undefined;
       // Chauffeur: altijd hard gescoped op de eigen meldingen (net als /api/planning).
-      const gemeldDoor = mijn || !isTechniekRol(rol) ? String(req.appUser!.id) : undefined;
+      const gemeldDoor = mijn || !magTechniek(req.appUser!) ? String(req.appUser!.id) : undefined;
       const [rijen, users] = await Promise.all([getDefecten({ status: status ?? (gemeldDoor ? "alles" : "open"), vehicleId, sinds, gemeldDoor, limit }), getUsersData()]);
       res.setHeader("Cache-Control", "no-store");
       res.json(rijen.map(metNamen(users)));
@@ -204,7 +207,7 @@ export function mountTechniekRoutes(app: express.Express) {
       if (!v || v.status === "uit_dienst") return res.status(400).json({ error: "Ongeldige invoer", details: "Kies een bestaande bus.", veldfouten: { vehicleId: "Kies een bestaande bus" } });
       // Chauffeurs melden alleen op bussen en bedrijfswagens; een privéwagen
       // krijgen ze niet in de keuzelijst en ook niet via een oude respons.
-      if (!isTechniekRol(req.appUser!.role) && v.categorie === "privewagen") {
+      if (!magTechniek(req.appUser!) && v.categorie === "privewagen") {
         return res.status(400).json({ error: "Ongeldige invoer", details: "Op een privéwagen kan je geen defect melden.", veldfouten: { vehicleId: "Kies een bus of bedrijfswagen" } });
       }
       const melderId = String(req.appUser!.id);
@@ -216,7 +219,7 @@ export function mountTechniekRoutes(app: express.Express) {
       // (die nemen contact op met De Lijn). Best-effort.
       const ontvangers = users
         .filter((u) => u.isActive !== false && String(u.id) !== melderId)
-        .filter((u) => u.role === "technieker" || (body.werktype === "L" && isStafRol(u.role)))
+        .filter((u) => isTechnieker(u) || (body.werktype === "L" && isStafRol(u.role)))
         .map((u) => String(u.id));
       try {
         await sendPushToUsers(ontvangers, {
@@ -240,9 +243,8 @@ export function mountTechniekRoutes(app: express.Express) {
     try {
       const bestaand = await getDefect(String(req.params.id));
       if (!bestaand) return res.status(404).json({ error: "Melding niet gevonden." });
-      const rol = req.appUser!.role;
       const eigenId = String(req.appUser!.id);
-      if (!isTechniekRol(rol)) {
+      if (!magTechniek(req.appUser!)) {
         // Chauffeur: alleen de eigen open melding annuleren, niets anders.
         const alleenAnnuleren = body.status === "geannuleerd" && Object.keys(body).every((k) => k === "status");
         if (bestaand.gemeldDoor !== eigenId || bestaand.status !== "open" || !alleenAnnuleren) {

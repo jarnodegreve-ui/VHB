@@ -827,7 +827,7 @@ export default function App() {
       return;
     }
 
-    if (!magView(currentUser.role, currentView)) {
+    if (!magView(currentUser, currentView)) {
       navigeer('dashboard', { replace: true });
       showToast('Dit scherm is niet beschikbaar voor jouw rol.', 'info');
     }
@@ -1334,7 +1334,7 @@ export default function App() {
   const effectiveRole = previewingChauffeur ? 'chauffeur' : currentUser.role;
   const isPlanner = effectiveRole === 'planner' || effectiveRole === 'admin';
   const isAdmin = effectiveRole === 'admin';
-  const resolvedCurrentView: View = magView(currentUser.role, currentView) ? currentView : 'dashboard';
+  const resolvedCurrentView: View = magView(currentUser, currentView) ? currentView : 'dashboard';
   // Titel in de topbar = het label uit de routetabel (één naam per scherm).
   const currentMeta = { title: routeVan(resolvedCurrentView).label };
   // Kolombreedte van de schil volgt de route (routes.tsx `breed`): topbar,
@@ -1468,6 +1468,7 @@ export default function App() {
 
         <SidebarNav
           rol={effectiveRole}
+          ookTechnieker={currentUser.ookTechnieker}
           currentView={currentView}
           badges={{
             documenten: unseenDocuments,

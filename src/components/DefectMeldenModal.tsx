@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Wrench } from 'lucide-react';
 import { isStaf, type User } from '../types';
+import { isTechnieker } from '../../shared/toegang';
 import { WERKTYPES, WERKTYPE_LABEL, DEFECT_OMSCHRIJVING_MAX, VOERTUIG_CATEGORIEEN, VOERTUIG_CATEGORIE_MEERVOUD, voertuigNaam, type Werktype } from '../../shared/techniek';
 import { DEFECT_STATUS } from '../../shared/status';
 import { defectMeldingBodySchema } from '../../shared/schemas/techniek';
@@ -64,10 +65,10 @@ export function DefectMeldenModal({
   // categorie lijnbussen vóór schoolbussen en dan op kort nummer. De keuzelijst
   // toont alleen het busnummer zoals het op de bus staat (Jarno 13-09): geen
   // nummerplaat of andere gegevens voor chauffeurs.
-  // Privéwagens zijn er alleen voor de garage (technieker/staf): een chauffeur
-  // krijgt ze niet te zien (Jarno 14-09; de server filtert ze ook al uit
-  // /api/vehicles en weigert de melding).
-  const magPrivewagen = currentUser.role === 'technieker' || isStaf(currentUser.role);
+  // Privéwagens zijn er alleen voor de garage (technieker/staf, ook een
+  // chauffeur met "Ook technieker"): een chauffeur krijgt ze niet te zien
+  // (Jarno 14-09; de server filtert ze ook al uit /api/vehicles en weigert de melding).
+  const magPrivewagen = isTechnieker(currentUser) || isStaf(currentUser.role);
   const groepen = useMemo(() => {
     const rang = (v: VehicleKort) => (v.type === 'lijnbus' ? 0 : v.type === 'schoolbus' ? 1 : 2);
     const gesorteerd = [...bussen]

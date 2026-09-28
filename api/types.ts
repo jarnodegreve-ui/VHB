@@ -28,6 +28,9 @@ export interface AppUser {
   wantsSystemMail?: boolean;
   section?: string;
   startDate?: string;
+  /** Chauffeur die ook technieker is (schakelaar in Gebruikers, 28-09): krijgt
+   *  het techniekgedeelte erbij. Alleen `true` of afwezig; zie shared/toegang.ts. */
+  ookTechnieker?: boolean;
   /** Eigen dashboardindeling (verborgen tegels + volgorde) — alleen in het
    *  eigen profiel (/api/me); PATCH /api/me/voorkeuren schrijft hem. */
   dashboardVoorkeuren?: DashboardVoorkeuren;

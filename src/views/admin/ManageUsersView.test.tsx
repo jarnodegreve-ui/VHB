@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Role, User } from '../../types';
 import { magView } from '../../app/routes';
 
@@ -155,5 +155,41 @@ describe.each([
       expect(vakjes[1].disabled).toBe(vakjes[0].disabled);
     }
     expect((screen.getAllByRole('checkbox', { name: `Selecteer ${ADMIN.name}` })[0] as HTMLInputElement).disabled).toBe(true);
+  });
+});
+
+// "Ook technieker" (28-09): een chauffeur die ook in de garage werkt. De
+// schakelaar staat alleen bij de rol chauffeur en reist mee in de save; de
+// lijst zegt het in de rolregel, op tabelrij én kaart.
+describe('Gebruikers: Ook technieker', () => {
+  const saveUser = () => (dataCtx as unknown as { saveUser: ReturnType<typeof vi.fn> }).saveUser;
+  const bewerk = async (naam: string) => {
+    const rij = screen.getAllByText(naam).map((el) => el.closest('tr')).find((tr): tr is HTMLTableRowElement => tr !== null)!;
+    await act(async () => { fireEvent.click(within(rij).getByRole('button', { name: 'Bewerken' })); });
+    return screen.findByRole('dialog');
+  };
+
+  it('staat bij een chauffeur, en gaat mee bij opslaan', async () => {
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const dialoog = await bewerk(CHAUFFEUR.name);
+    const schakelaar = within(dialoog).getByRole('switch', { name: 'Ook technieker' });
+    expect(schakelaar.getAttribute('aria-checked')).toBe('false');
+    await act(async () => { fireEvent.click(schakelaar); });
+    expect(schakelaar.getAttribute('aria-checked')).toBe('true');
+    await act(async () => { fireEvent.click(within(dialoog).getByRole('button', { name: 'Opslaan' })); });
+    await waitFor(() => expect(saveUser()).toHaveBeenCalled());
+    expect(saveUser().mock.calls[0][0]).toMatchObject({ id: '3', role: 'chauffeur', ookTechnieker: true });
+  });
+
+  it('staat niet bij een planner of een admin', async () => {
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const dialoog = await bewerk(PLANNER.name);
+    expect(within(dialoog).queryByRole('switch', { name: 'Ook technieker' })).toBeNull();
+  });
+
+  it('de lijst toont "chauffeur + technieker" bij wie hem aan heeft', () => {
+    dataCtx.users = [ADMIN, PLANNER, { ...CHAUFFEUR, ookTechnieker: true }, GEPAUZEERD];
+    render(<ManageUsersView currentUser={ADMIN} />);
+    expect(screen.getAllByText('chauffeur + technieker')).toHaveLength(2);
   });
 });

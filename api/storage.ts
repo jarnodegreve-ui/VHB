@@ -1039,7 +1039,8 @@ export const diffUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUse
         anders(previous.phone, user.phone) ||
         anders(previous.email, user.email) ||
         previous.verlofBudget !== user.verlofBudget ||
-        Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true)
+        Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true) ||
+        Boolean(previous.ookTechnieker) !== Boolean(user.ookTechnieker)
       );
     })
     .map((user) => {
@@ -1053,6 +1054,9 @@ export const diffUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUse
       if (previous.verlofBudget !== user.verlofBudget) fields.push(`verlofBudget: ${previous.verlofBudget ?? 'standaard'}→${user.verlofBudget ?? 'standaard'}`);
       if (Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true)) {
         fields.push(`status: ${previous.isActive === false ? 'inactief' : 'actief'}→${user.isActive === false ? 'inactief' : 'actief'}`);
+      }
+      if (Boolean(previous.ookTechnieker) !== Boolean(user.ookTechnieker)) {
+        fields.push(`ook technieker: ${previous.ookTechnieker ? 'aan' : 'uit'}→${user.ookTechnieker ? 'aan' : 'uit'}`);
       }
       return { user, fields };
     });
@@ -1350,6 +1354,18 @@ export class EmailInGebruikError extends Error {
   }
 }
 
+export const OOK_TECHNIEKER_MIGRATIE = "supabase/2026-09-28_users_ook_technieker.sql";
+
+/** Een save zet een waarde in een kolom waarvan de migratie nog niet gedraaid
+ *  is. De routes geven een 503 met deze tekst; de app herkent het .sql-bestand
+ *  erin als "er moet een migratie draaien", niet als onderhoud (src/lib/fouten.ts). */
+export class MigratieOntbreektError extends Error {
+  constructor(kolom: string, public readonly migratie: string) {
+    super(`De kolom ${kolom} bestaat nog niet: draai ${migratie} in de SQL Editor.`);
+    this.name = "MigratieOntbreektError";
+  }
+}
+
 export const getUsersData = async (): Promise<AppUserIntern[]> => {
   const client = requireDb();
   const rows = await paginatedFetch((from, to) =>
@@ -1450,9 +1466,18 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
   const nieuweRijen = sanitizedUsers
     .filter((user) => !currentById.has(String(user.id)))
     .map(toDatabaseUser);
-  for (const rijen of [bestaandeRijen, nieuweRijen]) {
+  for (const rijen of [bestaandeRijen, nieuweRijen] as Array<Record<string, unknown>>[]) {
     if (rijen.length === 0) continue;
-    const { error } = await client.from('users').upsert(rijen);
+    let { error } = await client.from('users').upsert(rijen);
+    // Migratie 2026-09-28_users_ook_technieker.sql nog niet gedraaid: opnieuw
+    // zonder de kolom, zolang niemand de schakelaar aan heeft. Zet iemand hem
+    // aan, dan een duidelijke fout en geen stil verlies (zoals de plaats bij
+    // de omleidingen, 28-09). Bij elke save opnieuw geprobeerd, niet per warme
+    // lambda onthouden: dat overleefde daar de migratie.
+    if (error && isMissingColumnError(error)) {
+      if (rijen.some((rij) => rij.ooktechnieker === true)) throw new MigratieOntbreektError("users.ooktechnieker", OOK_TECHNIEKER_MIGRATIE);
+      ({ error } = await client.from('users').upsert(rijen.map(({ ooktechnieker: _weg, ...rest }) => rest)));
+    }
     if (error) throw error;
   }
 

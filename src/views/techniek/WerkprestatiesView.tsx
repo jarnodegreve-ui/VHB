@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Clock, ClipboardList, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { User } from '../../types';
 import { isStaf } from '../../types';
+import { isTechnieker } from '../../../shared/toegang';
 import { WERKCODES, WERKCODE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werkcode } from '../../../shared/techniek';
 import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
@@ -55,17 +56,17 @@ const opTijd = (a: Werkprestatie, b: Werkprestatie) =>
  * route en de API heten nog werkprestaties, dat is de naam van het record.
  *
  * Twee schermen achter één route (Jarno 18-09):
- * - technieker: een dagboek. Eén dag tegelijk, taken ingeven, terug naar
- *   vorige dagen bladeren en een eigen taak rechtzetten. Geen cijfers, geen
- *   periodelijst en geen rapport: die horen bij het opvolgen, niet bij het
- *   ingeven.
+ * - technieker (ook een chauffeur met "Ook technieker"): een dagboek. Eén dag
+ *   tegelijk, taken ingeven, terug naar vorige dagen bladeren en een eigen
+ *   taak rechtzetten. Geen cijfers, geen periodelijst en geen rapport: die
+ *   horen bij het opvolgen, niet bij het ingeven.
  * - staf: het volledige overzicht (periodes, filter per technieker, de drie
  *   Access-kruistabellen) over alle techniekers heen.
  */
 export function WerkprestatiesView({ currentUser, users }: { currentUser: User; users: User[] }) {
   const staf = isStaf(currentUser.role);
   const techniekers = useMemo(
-    () => users.filter((u) => (u.role === 'technieker' || (staf && isStaf(u.role))) && u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name, 'nl')),
+    () => users.filter((u) => (isTechnieker(u) || (staf && isStaf(u.role))) && u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name, 'nl')),
     [users, staf],
   );
   return staf

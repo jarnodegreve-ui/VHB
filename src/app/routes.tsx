@@ -4,6 +4,7 @@ import {
   Hash, HeartPulse, History, IdCard, Inbox, LayoutDashboard, ListChecks, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
   Sun, Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route, FileBarChart, Mail } from 'lucide-react';
 import type { Role, View } from '../types';
+import { heeftRol, type Toegang } from '../../shared/toegang';
 
 /**
  * Dé routetabel van het portaal — één bron voor: het pad in de URL, de
@@ -43,7 +44,8 @@ const STAF: readonly Role[] = ['planner', 'admin'];
  *  leeg en staan niet in zijn menu (Jarno 09-09). */
 const RIJDEND_EN_STAF: readonly Role[] = ['chauffeur', 'planner', 'admin'];
 const ADMIN: readonly Role[] = ['admin'];
-/** Garagewerk: de technieker plus staf (die plant de bussen in en volgt op). */
+/** Garagewerk: de technieker plus staf (die plant de bussen in en volgt op).
+ *  Een chauffeur met "Ook technieker" krijgt ze erbij (magView, sidebarRoutes). */
 const TECHNIEK: readonly Role[] = ['technieker', 'planner', 'admin'];
 
 export const ROUTES: readonly RouteDef[] = [
@@ -143,7 +145,11 @@ export const bekendeView = (sleutel: string | null | undefined): View | null => 
   return OUDE_VIEWS.get(sleutel) ?? null;
 };
 
-export const magView = (rol: Role, view: View): boolean => routeVan(view).rollen.includes(rol);
+/** Een rol, of een persoon: dan telt "Ook technieker" mee (shared/toegang.ts). */
+type Wie = Role | Toegang;
+const alsToegang = (wie: Wie): Toegang => (typeof wie === 'string' ? { role: wie } : wie);
+
+export const magView = (wie: Wie, view: View): boolean => heeftRol(alsToegang(wie), routeVan(view).rollen);
 
 /** Brede kolom voor dit scherm? (zie RouteDef.breed) */
 export const isBreed = (view: View): boolean => routeVan(view).breed === true;
@@ -167,9 +173,9 @@ const SECTIE_LABEL: Record<Sectie, string | null> = {
 };
 export const sectieLabel = (view: View): string | null => SECTIE_LABEL[routeVan(view).sectie];
 
-/** Routes voor de sidebar van een rol, gegroepeerd per sectie. */
-export const sidebarRoutes = (rol: Role, sectie: Sectie): RouteDef[] =>
-  ROUTES.filter((r) => r.sectie === sectie && r.rollen.includes(rol) && !r.verborgen);
+/** Routes voor de sidebar van een rol of persoon, gegroepeerd per sectie. */
+export const sidebarRoutes = (wie: Wie, sectie: Sectie): RouteDef[] =>
+  ROUTES.filter((r) => r.sectie === sectie && heeftRol(alsToegang(wie), r.rollen) && !r.verborgen);
 
 /** Pad van een view (met optionele parameters), voor href's en pushState. */
 export const padVan = (view: View, params: readonly string[] = []): string => {
