@@ -8,6 +8,7 @@ import { useOptioneleAppData } from '../app/AppDataContext';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { adviesSleutel, haalBatchAdvies, vulVervangersVoor, type BatchAdvies } from '../lib/herverdeel';
 import { kandidaatLabel, nietBeschikbaarUitMatrix, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
+import { useBordCellen } from '../lib/bordCellen';
 import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, notify } from '../lib/ui';
 import { isoDate } from '../lib/datum';
@@ -129,6 +130,8 @@ export function CoverageView() {
   const planningMatrixGeladen = appData?.planningMatrixGeladen ?? true;
   const werkdagen = useMemo(() => werkdagenUitShifts(alleShifts), [alleShifts]);
   const [batch, setBatch] = useState<{ date: string; codes: string[] } | null>(null);
+  // Het bord van de dag in de wizard: dezelfde cellen als de Maandplanning.
+  const bordVan = useBordCellen(batch ? [batch.date] : []);
   const [batchAdvies, setBatchAdvies] = useState<Record<string, BatchAdvies>>({});
   const [batchLaden, setBatchLaden] = useState(false);
   const [batchKeuze, setBatchKeuze] = useState<Record<string, string>>({});
@@ -162,7 +165,7 @@ export function CoverageView() {
     ?? 'de chauffeur';
   const optiesVoor = (date: string, code: string): Array<{ id: string; label: string }> => {
     if (chauffeurs.length > 0) {
-      return rangschikKandidaten(chauffeurs, vrijOpDatum(alleShifts, date, nietBeschikbaarUitMatrix(appData?.planningMatrixRows ?? [], chauffeurs, date)), werkdagen, date)
+      return rangschikKandidaten(chauffeurs, vrijOpDatum(alleShifts, date, nietBeschikbaarUitMatrix(appData?.planningMatrixRows ?? [], chauffeurs, date), bordVan(date)), werkdagen, date)
         .map((k) => ({ id: String(k.user.id), label: kandidaatLabel(k) }));
     }
     return (batchAdvies[adviesSleutel(date, code)]?.passend ?? []).map((k) => ({ id: String(k.id), label: k.name }));

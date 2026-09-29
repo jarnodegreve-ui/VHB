@@ -45,7 +45,10 @@ const DIENSTEN = [
 
 type ZiekmeldingPayload = { userId: string; startDate: string; endDate: string; comment?: string };
 
-async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, users = CHAUFFEURS }: { user?: User; records?: LeaveRequest[]; users?: User[] } = {}) {
+/** Bordcellen zoals /api/month-planning ze geeft: cells[chauffeur][dag]. */
+type Bord = Record<string, Record<string, { code: string; kind: string; label: string; segments: string[]; hiddenService?: string; swapId?: string; swapAway?: boolean }>>;
+
+async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, users = CHAUFFEURS, bord }: { user?: User; records?: LeaveRequest[]; users?: User[]; bord?: Bord } = {}) {
   await page.clock.setFixedTime(new Date(`${VANDAAG}T08:00:00Z`));
   let opgeslagen = records.map((r) => ({ ...r }));
   const registraties: ZiekmeldingPayload[] = [];
@@ -57,6 +60,12 @@ async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, u
       if (pad.endsWith('/api/users')) return [BEHEERDER, PLANNER, ...users];
       if (pad.endsWith('/api/planning')) return DIENSTEN;
       if (pad.endsWith('/api/ziekte-zonder-registratie')) return { reeksen: [] };
+      // Zonder `bord` blijft het antwoord de lege lijst van de fixtures: de
+      // vervangerlijst valt dan terug op de matrixregel, zoals vóór 29-09.
+      if (bord && pad.endsWith('/api/month-planning')) {
+        const month = new URL(request.url()).searchParams.get('month') ?? '';
+        return { month, dates: [VANDAAG, '2026-09-17'], drivers: users.map((u) => ({ id: u.id, name: u.name })), cells: bord };
+      }
       if (pad.endsWith('/api/leave/sick-report') && request.method() === 'POST') {
         const payload: ZiekmeldingPayload = request.postDataJSON();
         registraties.push(payload);
@@ -303,4 +312,31 @@ test('ziekte: chauffeurpaginering houdt zoeken, jaartotalen en jaarwissel samen'
   await expect(lijst(2025).getByText('Chauffeur 01', { exact: true })).toBeVisible();
   await expect(totaal).toHaveText('16');
   await pastBinnenScherm(page);
+});
+
+test('ziekte: de vervangerlijst leest het bord, een schoolrit via een wissel is niet vrij', async ({ page }) => {
+  // Controle 29-09: Dina staat in de matrix op vrij maar kreeg via een wissel
+  // de schoolrit van Cem. Het bord (zelfde cellen als de Maandplanning) toont
+  // dat, de rauwe matrix niet: Dina stond als "vrij" bovenaan de lijst.
+  const vrij = { code: 'vrij', kind: 'absence', label: 'Geen dienst', segments: [] };
+  await openZiekte(page, { bord: {
+    alex: { [VANDAAG]: { code: 'ziek', kind: 'absence', label: 'Ziek', segments: [], hiddenService: '2101' } },
+    bea: { [VANDAAG]: { code: 'ziek', kind: 'absence', label: 'Ziek', segments: [] } },
+    cem: { [VANDAAG]: { ...vrij, swapId: 'wissel-1', swapAway: true } },
+    dina: { [VANDAAG]: { code: 'EEK6', kind: 'service', label: 'Schoolrit', segments: [], swapId: 'wissel-1' } },
+  } });
+  await rij(page.getByRole('region', { name: 'Actueel', exact: true }), 0, '2026-09-14').click();
+  const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[0].name, exact: true }) });
+  const keuze = modal.getByRole('combobox', { name: `Vervanger voor dienst 2101 op ${dmj(VANDAAG)}`, exact: true });
+  const optie = (naam: string) => keuze.locator('option').filter({ hasText: naam });
+  // Wie zijn schoolrit afgaf is vrij, wie ze kreeg niet, wie ziek is ook niet.
+  // (Cem rijdt die week op 18/09, vandaar de telling achter zijn naam.)
+  await expect(optie('Cem Yilmaz')).toHaveText('Cem Yilmaz · vrij · 1 dag deze week');
+  await expect(optie('Dina Goossens')).toHaveText('Dina Goossens');
+  await expect(optie('Bea De Wilde')).toHaveText('Bea De Wilde');
+  // Vrij staat bovenaan, meteen na de lege keuze.
+  await expect(keuze.locator('option').nth(1)).toHaveText('Cem Yilmaz · vrij · 1 dag deze week');
+  // Een dag waarvoor het bord niets zegt: iedereen zonder dienst is vrij.
+  const morgen = modal.getByRole('combobox', { name: `Vervanger voor dienst 2607 op ${dmj('2026-09-17')}`, exact: true });
+  await expect(morgen.locator('option').filter({ hasText: 'Dina Goossens' })).toHaveText('Dina Goossens · vrij');
 });
