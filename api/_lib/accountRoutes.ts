@@ -267,8 +267,9 @@ export function mountAccountRoutes(app: express.Express) {
           noteByDate = new Map(notes.map((n) => [n.date, n.note]));
         }
       } catch { /* notities zijn nice-to-have in de feed */ }
-      // Rijen zonder tijden overslaan: de 00:00-fallback werd door de
-      // eind≤start-regel van buildVevent een 24-uursblok in de agenda.
+      // Rijen zonder tijden overslaan: de 00:00-fallback werd vroeger door de
+      // eind≤start-regel van buildVevent een 24-uursblok in de agenda, en is
+      // sinds 29-09 (gelijke tijden = geen DTEND) een afspraak om middernacht.
       // Diensten binnen een goedgekeurde afwezigheid overslaan: wie ziek
       // gemeld is, hoort geen agenda-melding voor die dienst te krijgen —
       // de hele-dag-gebeurtenis hieronder dekt die dag al.

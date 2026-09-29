@@ -39,8 +39,11 @@ const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal
  *
  * Zelfde bronnen als het dashboard (shifts/notes/diversions); alle tijd-
  * rekenwerk zit in minuten t.o.v. middernacht van de peildag, zodat de
- * busvak-notatie ("26:16") en een impliciete nachtdienst (eind ≤ start)
- * dezelfde regel volgen als isShiftActiveAt.
+ * busvak-notatie ("26:16") en een impliciete nachtdienst (einde vóór de
+ * start) dezelfde regel volgen als isShiftActiveAt (deelVenster, via
+ * shiftWindowMinutes). Een deel met gelijke begin- en eindtijd is ongeldig
+ * (Jarno 29-09): het valt uit de tijdlijn zoals een deel met vuile tijden,
+ * de dienst zelf blijft in de kop staan.
  */
 
 

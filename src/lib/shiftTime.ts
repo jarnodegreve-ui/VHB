@@ -31,7 +31,7 @@ export { deelMinuten, parseHHMM };
  * segmenten, dus een chauffeur met pauze tussen twee delen telt dan terecht
  * niet mee. Over middernacht kan op twee manieren: expliciet via de busvak-
  * notatie (eindtijd ≥ 24:00, bv. "26:16") of impliciet (eindtijd vóór de
- * starttijd met gewone uren, bv. 22:00–06:00) — beide lopen door tot op de
+ * starttijd met gewone uren, bv. 22:00–06:00), en beide lopen door tot op de
  * dag na de dienstdatum. Start is inclusief, einde exclusief; ongeldige
  * tijden, ook gelijke begin- en eindtijd, tellen nooit mee.
  */

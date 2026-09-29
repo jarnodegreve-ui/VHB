@@ -7,7 +7,8 @@ import type { Shift } from '../types';
  * Download het rooster van één chauffeur als agendabestand (.ics). Gedeeld
  * door het rooster ("Aan agenda toevoegen") en Instellingen › Agenda-koppeling.
  * De ICS-builder schrijft floating local time en zet DTEND een dag verder
- * bij een nachtdienst (eind <= start).
+ * bij een nachtdienst (einde vóór de start); een deel met gelijke begin- en
+ * eindtijd krijgt geen DTEND, een afspraak van nul minuten (Jarno 29-09).
  */
 export function downloadRoosterIcs(userName: string, shifts: Shift[]) {
   const dtstamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
