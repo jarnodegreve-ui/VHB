@@ -26,6 +26,9 @@ async function opzet(page: Page, opties: { verstuur?: (body: any) => unknown } =
         return { soorten: SOORTEN.map((s) => ({ ...s, aan: s.altijdAan ? true : !instellingen.uit.includes(s.soort) })), instellingen, verzendlijsten: lijsten, log: [
           { id: 'm-1', verzondenOp: '2026-09-23T10:00:00Z', soort: 'ziekmelding', aantal: 2, gelukt: true, door: 'Els Goossens' },
           { id: 'm-2', verzondenOp: '2026-09-22T06:00:00Z', soort: 'weekoverzicht', aantal: 1, gelukt: false, fout: 'SMTP niet geconfigureerd, mail alleen gelogd', door: 'Systeem' },
+          { id: 'm-3', verzondenOp: '2026-09-21T10:00:00Z', soort: 'eigen-mail', aantal: 40, gelukt: false, fout: '2 van 40 mislukt', door: 'Annelies Admin' },
+          { id: 'm-4', verzondenOp: '2026-09-20T10:00:00Z', soort: 'omleiding-mail', aantal: 12, gelukt: false, fout: 'onderbroken: de verzending is niet afgerond, mogelijk is een deel vertrokken', door: 'Pieter Planner' },
+          { id: 'm-5', verzondenOp: '2026-09-19T10:00:00Z', soort: 'dringende-update', aantal: 31, gelukt: false, fout: 'uitgeschakeld in Beheer › Mails', door: 'Pieter Planner' },
         ] };
       }
       if (pad.endsWith('/api/mails/instellingen') && m === 'PUT') { const body = request.postDataJSON(); calls.push({ pad: 'instellingen', body }); instellingen = body; return body; }
@@ -297,4 +300,24 @@ test('mails: formulieren brengen de focus naar het eerste foute veld, Enter dien
   await page.getByRole('button', { name: 'Mail versturen' }).click();
   await expect(paneel.getByLabel('Onderwerp')).toHaveValue('');
   await expect(paneel.getByLabel('Vrije adressen')).toHaveValue('');
+});
+
+test('mails: in het verzendlog is een fout rood en heeft een onderbroken verzending een eigen toon (nr. 25)', async ({ page }) => {
+  await opzet(page);
+  const log = page.getByRole('table', { name: 'Verzendlog' });
+  const pil = (tekst: string) => log.getByText(tekst, { exact: true });
+  // Mislukt: rode pil, met de reden ernaast.
+  await expect(pil('Mislukt')).toHaveClass(/text-red-700/);
+  await expect(pil('Mislukt')).toHaveClass(/bg-red-50/);
+  await expect(log.getByText('2 van 40 mislukt')).toBeVisible();
+  // Onderbroken: volle amber pil, met uitleg; nooit dezelfde als Mislukt.
+  await expect(pil('Onderbroken')).toHaveClass(/text-amber-700/);
+  await expect(pil('Onderbroken')).toHaveClass(/bg-amber-50/);
+  await expect(log.getByText('Niet afgerond; onbekend hoeveel er vertrokken zijn.')).toBeVisible();
+  // De technische reden van een onderbroken verzending staat niet in beeld.
+  await expect(log.getByText(/mogelijk is een deel vertrokken/)).toHaveCount(0);
+  // Rusttoestanden blijven stil: een neutrale pil, geen rood en geen amber vlak.
+  for (const stil of ['Uitgeschakeld', 'Alleen gelogd', 'Verstuurd']) {
+    await expect(pil(stil)).not.toHaveClass(/text-red-700|bg-red-50|bg-amber-50/);
+  }
 });

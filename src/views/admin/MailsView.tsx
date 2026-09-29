@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bell, Eye, ListChecks, Mail, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '../../components/Card';
-import { Badge, Button, IconButton, Switch } from '../../components/primitives';
+import { Badge, Button, IconButton, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
 import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Field, Input, Textarea } from '../../components/Field';
@@ -14,6 +14,7 @@ import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil, type Veldfouten } from '../../lib/formulier';
 import { formatDateTimeHuman, aantal as tel } from '../../lib/format';
 import { leesAdressen, naamVanSoort, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
+import { MAIL_LOG_STATUS, mailLogStatus, mailLogToelichting, mailLogVraagtAandacht } from '../../../shared/mailLog';
 import type { User } from '../../types';
 import { EigenMailPaneel } from './EigenMail';
 
@@ -294,7 +295,7 @@ function Verzendlog({ log }: { log: LogRij[] | null }) {
         icon={<ListChecks size={18} />}
         title="Verzendlog"
         description="De laatste honderd verzendingen: wat, wanneer, naar hoeveel ontvangers en door wie. Bewust zonder inhoud of adressen."
-        aside={<InfoTip label="Uitleg bij het verzendlog"><p>Een regel met "uitgeschakeld" betekent dat de mail zou zijn uitgegaan maar hier uit staat. Zonder SMTP-instellingen wordt elke mail alleen gelogd.</p></InfoTip>}
+        aside={<InfoTip label="Uitleg bij het verzendlog"><p>“Uitgeschakeld” betekent dat de mail zou zijn uitgegaan maar hier uit staat. Zonder SMTP-instellingen wordt elke mail alleen gelogd. “Onderbroken” betekent dat de verzending niet is afgerond: een deel van de mails kan vertrokken zijn.</p></InfoTip>}
       />
       {log === null ? (
         <p className="mt-4 text-body-sm text-slate-500" role="status">Laden…</p>
@@ -314,15 +315,28 @@ function Verzendlog({ log }: { log: LogRij[] | null }) {
                 </tr>
               </thead>
               <tbody>
-                {log.map((r) => (
-                  <tr key={r.id}>
-                    <Td nowrap>{formatDateTimeHuman(r.verzondenOp)}</Td>
-                    <Td>{naamVanSoort(r.soort)}</Td>
-                    <Td num>{r.aantal}</Td>
-                    <Td>{r.gelukt ? <Badge tone="emerald" stil>Verstuurd</Badge> : <span className="inline-flex flex-wrap items-center gap-1.5"><Badge tone="amber" stil>{/uitgeschakeld/i.test(r.fout ?? '') ? 'Uitgeschakeld' : /SMTP niet/i.test(r.fout ?? '') ? 'Alleen gelogd' : 'Mislukt'}</Badge>{r.fout && !/uitgeschakeld|SMTP niet/i.test(r.fout) && <span className="text-xs text-slate-500">{r.fout}</span>}</span>}</Td>
-                    <Td nowrap>{r.door ?? 'Systeem'}</Td>
-                  </tr>
-                ))}
+                {log.map((r) => {
+                  // Eén woordenschat (shared/mailLog.ts). Een fout is rood en
+                  // een onderbroken verzending een volle amber pil (nr. 25);
+                  // vroeger waren Mislukt, Uitgeschakeld en Alleen gelogd
+                  // dezelfde stille amber pil.
+                  const status = mailLogStatus(r);
+                  const toelichting = mailLogToelichting(status, r.fout);
+                  return (
+                    <tr key={r.id}>
+                      <Td nowrap>{formatDateTimeHuman(r.verzondenOp)}</Td>
+                      <Td>{naamVanSoort(r.soort)}</Td>
+                      <Td num>{r.aantal}</Td>
+                      <Td>
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <Badge tone={TOON_NAAR_BADGE[MAIL_LOG_STATUS[status].toon]} {...(mailLogVraagtAandacht(status) ? { dot: true } : { stil: true })}>{MAIL_LOG_STATUS[status].label}</Badge>
+                          {toelichting && <span className="text-xs text-slate-500">{toelichting}</span>}
+                        </span>
+                      </Td>
+                      <Td nowrap>{r.door ?? 'Systeem'}</Td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </Tabel>
           </TableShell>

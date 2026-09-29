@@ -33,10 +33,11 @@ export const MAIL_LOG_STATUS = {
   // Een fout is rood, zoals een afgewezen aanvraag (nr. 25): vroeger was
   // "Mislukt" dezelfde stille amber pil als "Uitgeschakeld".
   mislukt: { label: 'Mislukt', toon: 'gevaar' },
-  // Niemand weet hoeveel er vertrokken zijn: vraagt een blik, geen paniek.
+  // Niemand weet hoeveel er vertrokken zijn: een volle amber pil, tegenover
+  // het stille amber puntje van de twee rusttoestanden hieronder.
   onderbroken: { label: 'Onderbroken', toon: 'waarschuwing' },
-  uitgeschakeld: { label: 'Uitgeschakeld', toon: 'neutraal' },
-  'alleen-gelogd': { label: 'Alleen gelogd', toon: 'neutraal' },
+  uitgeschakeld: { label: 'Uitgeschakeld', toon: 'waarschuwing' },
+  'alleen-gelogd': { label: 'Alleen gelogd', toon: 'waarschuwing' },
 } as const satisfies Record<string, StatusDef>;
 export type MailLogStatus = keyof typeof MAIL_LOG_STATUS;
 
