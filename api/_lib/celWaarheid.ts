@@ -103,32 +103,54 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
   // de toelichting bij de route (api/_lib/planningRoutes.ts) en commit f2a9b33 voor de
   // maskering mocht die ooit terug moeten.
   const cells: Record<string, Record<string, OverlayCel>> = {};
-  for (const row of monthRows) {
-    const date = String(row.source_date);
-    const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? (row.assignments as Record<string, unknown>) : {};
-    for (const [driverName, rawCode] of Object.entries(assignments)) {
-      const id = idByNameKey.get(toLookupToken(driverName)) ?? idByNameKey.get(sortedNameToken(driverName));
-      if (!id) continue;
-      const code = String(rawCode ?? "").trim();
-      if (!code) continue;
-      const r = resolve(code);
-      if (!r) continue;
-      if (!cells[id]) cells[id] = {};
-      cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
+  const opNaam = (index: Map<string, string>, naam: string) => index.get(toLookupToken(naam)) ?? index.get(sortedNameToken(naam));
+  /** Leest de matrixkolommen van wie in `index` staat; `behalve` = kolommen
+   *  die al van iemand anders zijn. */
+  const leesMatrix = (index: Map<string, string>, behalve?: Map<string, string>) => {
+    for (const row of monthRows) {
+      const date = String(row.source_date);
+      const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? (row.assignments as Record<string, unknown>) : {};
+      for (const [driverName, rawCode] of Object.entries(assignments)) {
+        if (behalve && opNaam(behalve, driverName)) continue;
+        const id = opNaam(index, driverName);
+        if (!id) continue;
+        const code = String(rawCode ?? "").trim();
+        if (!code) continue;
+        const r = resolve(code);
+        if (!r) continue;
+        if (!cells[id]) cells[id] = {};
+        cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
+      }
     }
-  }
+  };
+  leesMatrix(idByNameKey);
 
   const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
 
+  // Wie een dienst weggaf en niet (meer) op het bord staat, bv. uit dienst
+  // gezet (Jarno 29-09): zijn matrixkolom dient alleen om de overlay te laten
+  // zien wat de ontvanger van hem kreeg. Hij verschijnt zelf niet op het bord:
+  // zijn cellen gaan er na de overlay weer uit. Een kolom die op naam van een
+  // chauffeur op het bord staat blijft van die chauffeur.
+  const buitenBord = new Set<string>();
+  for (const sw of swaps) {
+    if (sw?.status !== "approved" && sw?.status !== "completed") continue;
+    const van = String(sw.requesterId ?? "");
+    const naar = String(sw.targetDriverId ?? "");
+    if (van && naar && chauffeurIds.has(van) !== chauffeurIds.has(naar)) buitenBord.add(chauffeurIds.has(van) ? naar : van);
+  }
+  if (buitenBord.size > 0) leesMatrix(nameIdIndex(users.filter((u) => buitenBord.has(String(u.id)))), idByNameKey);
+
   // Goedgekeurde dienstruilen over het maandbeeld (api/_lib/ruilOverlay.ts).
-  const naamVanId = (id: string) => chauffeurs.find((c) => c.id === id)?.name ?? "";
+  const naamVanId = (id: string) => chauffeurs.find((c) => c.id === id)?.name ?? users.find((u) => String(u.id) === id)?.name ?? "";
   // De “vrij”-cel voor een gever wiens ontvanger geen dienst had, met het
   // label uit de planningscodes (valt terug op de vaste cel).
   const vrijResolved = resolve("vrij");
   const vrijCel = vrijResolved && vrijResolved.kind !== "unknown"
     ? { code: "vrij", kind: vrijResolved.kind, label: vrijResolved.label, segments: [] }
     : undefined;
-  legRuilenOverMaandbeeld(cells, swaps, { dates, chauffeurIds, naamVanId, vrijCel });
+  legRuilenOverMaandbeeld(cells, swaps, { dates, chauffeurIds, naamVanId, vrijCel, buitenBord });
+  for (const id of buitenBord) delete cells[id];
 
   // Goedgekeurde afwezigheden uit de verlof-module overschrijven de matrix-
   // cel; ziekte als laatste zodat die bij overlap wint. De overdekte dienst

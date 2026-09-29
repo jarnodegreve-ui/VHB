@@ -5287,6 +5287,7 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
     api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s: any) => (s.id === id ? { ...s, status: 'approved' } : s)) });
   const wijsToe = (driverId: string, serviceNumber = '15', date = DAG) =>
     api('POST', '/api/planning/assign-service', { token: 'tok-planner', body: { date, serviceNumber, driverId } });
+  const bord = async () => (await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' })).json;
   const dag = (id: string, date: string, assignments: unknown) => ({ id, source_date: date, day_type: 'week', assignments, raw_row: '' });
   const rij = (id: string, driverId: string, line: string, date = DAG, tijd: [string, string] = ['10:00', '18:00']) =>
     ({ id, driverId, date, line, startTime: tijd[0], endTime: tijd[1] });
@@ -5764,6 +5765,107 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
           expect(JSON.stringify({ planning: mem.planning, swaps: mem.swaps, matrix: mem.planningMatrix }), naam).toBe(voor);
         }
       });
+    });
+  });
+
+  describe('variant 3: de gever is intussen uit dienst', () => {
+    const uitDienst = (id: string) => {
+      mem.users = mem.users.map((u: any) => (u.id === id ? { ...u, isActive: false } : u));
+      invalidateUsersCache();
+    };
+    /** A gaf zijn schoolrit aan B en werd daarna uit dienst gezet. */
+    const schoolritVanVertrokkenA = async () => {
+      expect((await wissel({ line: 'EEK6', fromDriverId: A, toDriverId: B })).status).toBe(200);
+      uitDienst(A);
+    };
+
+    it('het bord: de ontvanger houdt de schoolrit, de vertrokken gever staat er niet op', async () => {
+      await schoolritVanVertrokkenA();
+      const { cells, drivers } = await bord();
+      // Vóór de invariant: B stond weer op vrij, terwijl hij de rit nog reed.
+      expect(cells[B][DAG]).toMatchObject({ code: 'EEK6', kind: 'service', swapManual: true, swapFrom: 'Chauffeur A' });
+      expect(cells[A]).toBeUndefined();
+      expect(drivers.map((d: any) => d.id)).not.toContain(A);
+    });
+
+    it('handmatige wissel naar de ontvanger: geweigerd', async () => {
+      await schoolritVanVertrokkenA();
+      const voor = stand();
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toContain('Chauffeur B rijdt op 24/07/2026 al dienst EEK6');
+      expect(stand()).toBe(voor);
+    });
+
+    it('ruil goedkeuren naar de ontvanger: geweigerd, via PATCH en via de lijst', async () => {
+      await schoolritVanVertrokkenA();
+      mem.swaps = [...mem.swaps, { id: 's-v3', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14' }];
+      for (const res of [await keurGoed('s-v3'), await keurGoedViaLijst('s-v3')]) {
+        expect(res.status).toBe(409);
+        expect(String(res.json?.error)).toContain('Chauffeur B rijdt op 24/07/2026 al dienst EEK6');
+      }
+      expect(mem.planning.find((r: any) => r.id === 'sh-c14')?.driverId).toBe(C);
+      expect(mem.swaps.find((s: any) => s.id === 's-v3')?.status).toBe('accepted');
+    });
+
+    it('overname aanvragen bij de ontvanger: geweigerd', async () => {
+      await schoolritVanVertrokkenA();
+      const voor = mem.swaps.length;
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [...mem.swaps, { id: 's-v3-nieuw', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'pending', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname' }] });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toContain("Chauffeur B staat op 24/07/2026 ingepland als 'EEK6'");
+      expect(mem.swaps).toHaveLength(voor);
+    });
+
+    it('dienst toewijzen aan de ontvanger: geweigerd', async () => {
+      await schoolritVanVertrokkenA();
+      const res = await wijsToe(B);
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toContain('Chauffeur B rijdt op 24/07/2026 al dienst EEK6');
+      expect(mem.planningMatrix[0].assignments['Chauffeur B']).toBe('vrij');
+    });
+
+    it('beschikbaarheid en advies: de ontvanger is niet vrij', async () => {
+      await schoolritVanVertrokkenA();
+      const dagen = (await api('GET', `/api/availability?from=${DAG}&to=${DAG}&takeover=1`, { token: 'tok-planner' })).json.days[0];
+      expect(dagen.free).toEqual([D]);
+      expect(dagen.takeover).toEqual({ [D]: 'vrij' });
+      const advies = (await api('GET', `/api/coverage-advisor?date=${DAG}&code=15`, { token: 'tok-planner' })).json;
+      expect(advies.kandidaten.map((k: any) => k.name)).toEqual(['Chauffeur D']);
+    });
+
+    it('ook een gewone dienst blijft op het bord bij de ontvanger staan', async () => {
+      expect((await wissel({ line: '14', fromDriverId: C, toDriverId: B })).status).toBe(200);
+      uitDienst(C);
+      const { cells } = await bord();
+      expect(cells[B][DAG]).toMatchObject({ code: '14', kind: 'service', swapFrom: 'Chauffeur C' });
+      expect(cells[C]).toBeUndefined();
+    });
+
+    it('1-op-1: wat de vertrokken collega teruggaf blijft bij de aanvrager', async () => {
+      // C gaf 14 aan B en kreeg 12 terug op dag 2; daarna vertrok B.
+      mem.swaps = [{ id: 's-v3-ruil', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'ruil', shiftDate: DAG, shiftLine: '14', returnDate: DAG2, returnCode: '12' }];
+      expect((await keurGoed('s-v3-ruil')).status).toBe(200);
+      uitDienst(B);
+      const { cells } = await bord();
+      expect(cells[C][DAG2]).toMatchObject({ code: '12', kind: 'service', swapFrom: 'Chauffeur B' });
+      expect(cells[B]).toBeUndefined();
+    });
+
+    it('het gewone geval: beiden in dienst, het bord toont de wissel zoals altijd', async () => {
+      expect((await wissel({ line: 'EEK6', fromDriverId: A, toDriverId: B })).status).toBe(200);
+      const { cells } = await bord();
+      expect(cells[B][DAG]).toMatchObject({ code: 'EEK6', swapFrom: 'Chauffeur A' });
+      expect(cells[A][DAG]).toMatchObject({ code: 'vrij', swapAway: true, swapTo: 'Chauffeur B' });
+      expect((await wissel({ line: '14', fromDriverId: C, toDriverId: D })).status).toBe(200);
+    });
+
+    it('een teruggedraaide wissel van een vertrokken gever geldt niet meer', async () => {
+      await schoolritVanVertrokkenA();
+      const id = String(mem.swaps[0].id);
+      expect((await api('PATCH', `/api/swaps/${id}`, { token: 'tok-admin', body: { status: 'cancelled', ifStatus: 'approved' } })).status).toBe(200);
+      expect((await bord()).cells[B][DAG]).toMatchObject({ code: 'vrij' });
+      expect((await wissel({ line: '14', fromDriverId: C, toDriverId: B })).status).toBe(200);
     });
   });
 });
