@@ -309,6 +309,15 @@ if (!kaartMatch) {
   fouten.push('Geen chunk-kaart (globalThis.__VHB_VIEW_CHUNKS__) achteraan index-*.js; de plugin vhb-view-chunks in vite.config.ts werkt niet meer en de warmup valt terug op import().');
 } else {
   const kaart = JSON.parse(kaartMatch[1]);
+  // 29-09 (controle-ronde): chauffeur-warmup 75 → 75,5, akkoord Jarno. Elke PR
+  // van de ronde past apart, maar samen staat de set lokaal op ±74,8 kB en de
+  // CI-runner meet ±0,35 kB zwaarder, dus main zou na de laatste merge rood
+  // gaan. Groei zit in ScheduleView (de regel "gereden" met de starttijd,
+  // nummer 28) en het rooster; geen nieuwe import. Zelfde stap als de
+  // startbundel (75 → 75,5). Bewust hier en niet in WARMUP_BUDGET_KB zelf:
+  // zes open PR's wijzigden die regel al (staf 140 → 141) en zouden anders
+  // elk op main botsen. Bij de volgende budgetwijziging daar samenvoegen.
+  WARMUP_BUDGET_KB.chauffeur = 75.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

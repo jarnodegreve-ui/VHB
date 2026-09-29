@@ -9,7 +9,8 @@
  */
 
 import express from "express";
-import { sendEmail, mailOpbouw } from "../email.js";
+import { sendEmail, MAIL_UIT_MELDING } from "../email.js";
+import { bouwDringendeUpdateMail } from "./mailTeksten.js";
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { authenticate, requireRole } from "../middleware.js";
@@ -712,25 +713,24 @@ export function mountCommunicatieRoutes(app: express.Express) {
     // en één mock-pad i.p.v. een eigen transporter per route. Op de vaste
     // lay-out; de knop landt op het bericht zelf zodra er een id is.
     const doelPad = update.id ? recordUrl("updates", String(update.id)) : viewUrl("updates");
-    const { html, text } = mailOpbouw({
-      kicker: "Dringende update",
-      titel: String(update.title),
-      status: { label: "Dringend, lees dit vandaag", toon: "aandacht" },
-      // Regeleinden uit het bericht blijven alinea's.
-      alineas: String(update.content || "").split(/\n{2,}/).map((a) => a.trim()).filter(Boolean),
-      knop: { tekst: "Open de update", url: `${process.env.APP_URL || "https://vhbportaal.com"}${doelPad}` },
-      voet: "Bevestig in het portaal met de knop \"Gelezen en begrepen\".",
-    });
+    const { onderwerp, html, text } = bouwDringendeUpdateMail({ titel: String(update.title), inhoud: String(update.content || ""), doelPad });
     const result = await sendEmail({
       to: emails,
       context: "urgent-update",
       soort: "dringende-update",
       door: req.appUser?.name ?? null,
-      subject: `Dringende update: ${update.title}`,
+      subject: onderwerp,
       text,
       html,
     });
 
+    // Uitgezet in Beheer › Mails: sendEmail verstuurt dan niets en geeft
+    // `ok` met `overgeslagen`. Dat eerlijk doorgeven (nr. 13): vroeger stond
+    // hier "Emails succesvol verzonden" en zei het scherm dat alle chauffeurs
+    // de mail hadden. De push hierboven is wel vertrokken.
+    if (result.overgeslagen) {
+      return res.json({ success: true, overgeslagen: true, message: MAIL_UIT_MELDING });
+    }
     if (result.mocked) {
       return res.json({ success: true, message: "Email gelogd (geen SMTP geconfigureerd)", mocked: true });
     }

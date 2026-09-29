@@ -19,6 +19,7 @@ import type {
   DeviceStatus,
   UserDevice,
 } from "./types.js";
+import { MAIL_LOG_NIET_AFGEROND } from "../shared/mailLog.js";
 import { RUIL_BEKEKEN_ACTIE } from "../shared/ruilVerloop.js";
 import {
   countAdmins,
@@ -3599,6 +3600,53 @@ export const logMail = async (regel: MailLogRegel): Promise<void> => {
     if (error && !isMissingTableError(error)) console.warn("[mail-log] schrijven mislukt:", error.message);
   } catch (err) {
     if (!isMissingTableError(err)) console.warn("[mail-log] schrijven mislukt:", err);
+  }
+};
+
+/**
+ * Logregel van een reeks, geschreven VÓÓR de eerste mail vertrekt (nr. 5):
+ * `gelukt: false` met de reden "niet afgerond". Breekt de functie onderweg
+ * af, dan blijft die regel staan en is de verzending zichtbaar in het
+ * verzendlog. Geeft het id voor `rondMailLogAf`, of null als schrijven niet
+ * lukte (tabel ontbreekt, database weg): de aanroeper logt dan achteraf één
+ * regel met `logMail`, zoals vroeger.
+ */
+export const startMailLog = async (regel: { soort: string; aantal: number; door?: string | null }): Promise<string | null> => {
+  try {
+    const client = requireDb();
+    const { data, error } = await client
+      .from("mail_log")
+      .insert({ soort: regel.soort, aantal: regel.aantal, gelukt: false, fout: MAIL_LOG_NIET_AFGEROND, door: regel.door ?? "Systeem" })
+      .select("id")
+      .single();
+    if (error) {
+      if (!isMissingTableError(error)) console.warn("[mail-log] schrijven mislukt:", error.message);
+      return null;
+    }
+    return data?.id ? String(data.id) : null;
+  } catch (err) {
+    if (!isMissingTableError(err)) console.warn("[mail-log] schrijven mislukt:", err);
+    return null;
+  }
+};
+
+/** Werkt de regel van `startMailLog` bij naar het eindresultaat. False als
+ *  dat niet lukte; de regel blijft dan als "onderbroken" staan. */
+export const rondMailLogAf = async (id: string, uitkomst: { gelukt: boolean; fout?: string | null }): Promise<boolean> => {
+  try {
+    const client = requireDb();
+    const { error } = await client
+      .from("mail_log")
+      .update({ gelukt: uitkomst.gelukt, fout: uitkomst.fout ? String(uitkomst.fout).slice(0, 500) : null })
+      .eq("id", id);
+    if (error) {
+      console.warn("[mail-log] bijwerken mislukt:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[mail-log] bijwerken mislukt:", err);
+    return false;
   }
 };
 

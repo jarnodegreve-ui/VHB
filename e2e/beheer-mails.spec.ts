@@ -1,5 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { ADMIN, seed } from './helpers';
+import { MAIL_SOORTEN } from '../shared/schemas/mail';
 
 /**
  * Beheer › Mails (mailtranche PR 3): de lijst met automatische mails en hun
@@ -13,7 +14,7 @@ const SOORTEN = [
   { soort: 'dringende-update', naam: 'Dringende update', wanneer: 'Bij het publiceren van een dringende update', ontvangers: 'Alle actieve gebruikers', push: true, aan: false, laatst: null },
 ];
 
-async function opzet(page: Page) {
+async function opzet(page: Page, opties: { verstuur?: (body: any) => unknown } = {}) {
   const calls: Array<{ pad: string; body: any }> = [];
   let instellingen = { uit: ['dringende-update'] };
   let lijsten: any[] = [{ id: 'l-1', naam: 'De Lijn', adressen: ['dispatching@delijn.be'] }];
@@ -26,6 +27,9 @@ async function opzet(page: Page) {
         return { soorten: SOORTEN.map((s) => ({ ...s, aan: s.altijdAan ? true : !instellingen.uit.includes(s.soort) })), instellingen, verzendlijsten: lijsten, log: [
           { id: 'm-1', verzondenOp: '2026-09-23T10:00:00Z', soort: 'ziekmelding', aantal: 2, gelukt: true, door: 'Els Goossens' },
           { id: 'm-2', verzondenOp: '2026-09-22T06:00:00Z', soort: 'weekoverzicht', aantal: 1, gelukt: false, fout: 'SMTP niet geconfigureerd, mail alleen gelogd', door: 'Systeem' },
+          { id: 'm-3', verzondenOp: '2026-09-21T10:00:00Z', soort: 'eigen-mail', aantal: 40, gelukt: false, fout: '2 van 40 mislukt', door: 'Annelies Admin' },
+          { id: 'm-4', verzondenOp: '2026-09-20T10:00:00Z', soort: 'omleiding-mail', aantal: 12, gelukt: false, fout: 'onderbroken: de verzending is niet afgerond, mogelijk is een deel vertrokken', door: 'Pieter Planner' },
+          { id: 'm-5', verzondenOp: '2026-09-19T10:00:00Z', soort: 'dringende-update', aantal: 31, gelukt: false, fout: 'uitgeschakeld in Beheer › Mails', door: 'Pieter Planner' },
         ] };
       }
       if (pad.endsWith('/api/mails/instellingen') && m === 'PUT') { const body = request.postDataJSON(); calls.push({ pad: 'instellingen', body }); instellingen = body; return body; }
@@ -36,7 +40,7 @@ async function opzet(page: Page) {
         calls.push({ pad: 'eigen', body });
         return body.droog
           ? { droog: true, aantal: 3, ontvangers: [{ adres: 'a@vhb.be', naam: 'Alex Du Priez' }, { adres: 'b@vhb.be', naam: 'Bart Claeys' }, { adres: 'extern@voorbeeld.be', naam: 'extern@voorbeeld.be' }], onderwerp: body.onderwerp, html: '<!DOCTYPE html><html><body><h1>Eigen mail</h1></body></html>' }
-          : { droog: false, aantal: 3, gelukt: 3, mislukt: 0, mocked: false };
+          : opties.verstuur?.(body) ?? { droog: false, aantal: 3, gelukt: 3, mislukt: 0, mocked: false };
       }
       return undefined;
     },
@@ -45,6 +49,50 @@ async function opzet(page: Page) {
   await expect(page.getByRole('heading', { level: 1, name: 'Mails' })).toBeVisible({ timeout: 15_000 });
   return { calls };
 }
+
+/** Het verzendlog: een tabel waar ze past, op de telefoon een lijst (nr. 6). */
+const verzendlog = (page: Page, isMobile: boolean) => page.getByRole(isMobile ? 'list' : 'table', { name: 'Verzendlog' });
+
+/** De inhoud staat links en rechts minstens 16 px van de rand van het venster.
+ *  De body van een modal is p-6 = 1,5 rem: 24 px op de telefoon, ±19 px op
+ *  desktop (kleinere wortelmaat). Modal zelf draagt geen padding. */
+async function heeftBinnenmarge(dialoog: Locator, inhoud: Locator) {
+  const d = (await dialoog.boundingBox())!;
+  const i = (await inhoud.boundingBox())!;
+  expect(i.x - d.x, 'marge links').toBeGreaterThanOrEqual(16);
+  expect(d.x + d.width - (i.x + i.width), 'marge rechts').toBeGreaterThanOrEqual(16);
+}
+
+test('mails: elke modal heeft een kop (h2) en een binnenmarge (nr. 3)', async ({ page }) => {
+  await opzet(page);
+  // Voorbeeld van een mail.
+  await page.getByRole('list', { name: 'Automatische mails' }).getByRole('listitem').filter({ hasText: 'Ziekmelding' }).getByRole('button', { name: 'Voorbeeld' }).click();
+  const voorbeeld = page.getByRole('dialog', { name: 'Voorbeeld: Ziekmelding' });
+  await expect(voorbeeld.getByRole('heading', { level: 2, name: 'Ziekmelding' })).toBeVisible();
+  await heeftBinnenmarge(voorbeeld, voorbeeld.locator('iframe'));
+  await heeftBinnenmarge(voorbeeld, voorbeeld.getByRole('heading', { level: 2 }));
+  await voorbeeld.getByRole('button', { name: 'Sluiten' }).click();
+  await expect(voorbeeld).toHaveCount(0);
+  // Verzendlijst.
+  await page.getByRole('button', { name: 'Nieuwe lijst' }).click();
+  const lijst = page.getByRole('dialog', { name: 'Nieuwe verzendlijst' });
+  await expect(lijst.getByRole('heading', { level: 2, name: 'Nieuwe verzendlijst' })).toBeVisible();
+  await heeftBinnenmarge(lijst, lijst.getByLabel('Naam'));
+  await heeftBinnenmarge(lijst, lijst.getByLabel('Adressen'));
+  await lijst.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(lijst).toHaveCount(0);
+  // Bevestiging van een eigen mail.
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.');
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van je mail' });
+  await expect(bevestiging.getByRole('heading', { level: 2, name: 'Naar 3 ontvangers' })).toBeVisible();
+  await heeftBinnenmarge(bevestiging, bevestiging.locator('iframe'));
+  await heeftBinnenmarge(bevestiging, bevestiging.getByRole('heading', { level: 2 }));
+});
 
 test('mails: lijst, schakelaar en voorbeeld', async ({ page }) => {
   const { calls } = await opzet(page);
@@ -71,7 +119,7 @@ test('mails: lijst, schakelaar en voorbeeld', async ({ page }) => {
   await expect(dialoog).toHaveCount(0);
 });
 
-test('mails: verzendlijst toevoegen met adrescontrole, en verwijderen', async ({ page }) => {
+test('mails: verzendlijst toevoegen met adrescontrole, en verwijderen', async ({ page, isMobile }) => {
   const { calls } = await opzet(page);
   const kaart = page.getByRole('list', { name: 'Verzendlijsten' });
   await expect(kaart.getByText('De Lijn')).toBeVisible();
@@ -96,8 +144,8 @@ test('mails: verzendlijst toevoegen met adrescontrole, en verwijderen', async ({
   await page.getByRole('button', { name: 'Verwijderen', exact: true }).click();
   await expect.poll(() => calls.length).toBe(2);
   expect(calls[1].body.map((l: any) => l.naam)).toEqual(['Garage']);
-  // Verzendlog toont status en wie.
-  const log = page.getByRole('table', { name: 'Verzendlog' });
+  // Verzendlog toont status en wie (op de telefoon een lijst, nr. 6).
+  const log = verzendlog(page, isMobile);
   await expect(log.getByText('Verstuurd')).toBeVisible();
   await expect(log.getByText('Alleen gelogd')).toBeVisible();
   await expect(log.getByText('Els Goossens')).toBeVisible();
@@ -140,4 +188,398 @@ test('mails: zelf een mail sturen, met voorbeeld en bevestiging', async ({ page,
   await expect(bevestiging).toHaveCount(0);
   await expect(paneel).toHaveCount(0);
   if (isMobile) await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+/** Vult het formulier en opent de bevestiging. */
+async function naarBevestiging(page: Page) {
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.');
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van je mail' });
+  await expect(bevestiging.getByRole('button', { name: 'Versturen naar 3' })).toBeVisible();
+  return { paneel, bevestiging };
+}
+
+test('mails: deels vertrokken zegt hoeveel, en verstuurt daarna alleen de rest (nr. 5)', async ({ page }) => {
+  const { calls } = await opzet(page, {
+    verstuur: (body) => (body.alleen
+      ? { droog: false, aantal: 1, gelukt: 1, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, mocked: false, resterend: [], onzekerAdressen: [] }
+      : { droog: false, aantal: 3, gelukt: 2, mislukt: 1, nietGeprobeerd: 0, onzeker: 0, mocked: false, resterend: ['b@vhb.be'], onzekerAdressen: [] }),
+  });
+  const { paneel, bevestiging } = await naarBevestiging(page);
+  await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();
+  const melding = bevestiging.getByRole('alert');
+  await expect(melding).toContainText('Verstuurd naar 2 van 3');
+  await expect(melding).toContainText('1 adres heeft de mail niet gekregen: b@vhb.be.');
+  // Geen knop die alles opnieuw verstuurt.
+  await expect(bevestiging.getByRole('button', { name: 'Versturen naar 3' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Opnieuw proberen' })).toHaveCount(0);
+  await bevestiging.getByRole('button', { name: 'Alleen de resterende 1 versturen' }).click();
+  await expect.poll(() => calls.filter((c) => c.pad === 'eigen' && !c.body.droog).length).toBe(2);
+  const echte = calls.filter((c) => c.pad === 'eigen' && !c.body.droog);
+  expect(echte[0].body.alleen).toBeUndefined();
+  expect(echte[1].body.alleen).toEqual(['b@vhb.be']);
+  // Dezelfde mail en dezelfde keuze, alleen het filter erbij.
+  expect(echte[1].body).toMatchObject({ onderwerp: 'Nieuwe uniformen', ontvangers: { adressen: ['extern@voorbeeld.be'] } });
+  await expect(page.getByText('Mail verstuurd naar 1 ontvanger.')).toBeVisible();
+  await expect(bevestiging).toHaveCount(0);
+  await expect(paneel).toHaveCount(0);
+});
+
+test('mails: geen antwoord van de server biedt geen knop om alles opnieuw te versturen (nr. 5)', async ({ page }) => {
+  const { calls } = await opzet(page);
+  // Alleen de echte verzending valt weg (time-out van de functie); het voorbeeld werkt.
+  await page.route('**/api/mails/eigen', (r) => (r.request().postDataJSON()?.droog ? r.fallback() : r.fulfill({ status: 504, contentType: 'text/plain', body: 'FUNCTION_INVOCATION_TIMEOUT' })));
+  const { paneel, bevestiging } = await naarBevestiging(page);
+  await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();
+  const melding = bevestiging.getByRole('alert');
+  await expect(melding).toContainText('Geen antwoord van de server');
+  await expect(melding).toContainText('Mogelijk is een deel van de mails toch vertrokken.');
+  await expect(melding).toContainText('verzendlog');
+  await expect(page.getByRole('button', { name: 'Opnieuw proberen' })).toHaveCount(0);
+  await expect(bevestiging.getByRole('button', { name: /Versturen/ })).toHaveCount(0);
+  await bevestiging.getByRole('button', { name: 'Sluiten' }).click();
+  await expect(bevestiging).toHaveCount(0);
+  // Het formulier staat er nog, met de invoer: de admin beslist na het log.
+  await expect(paneel.getByLabel('Onderwerp')).toHaveValue('Nieuwe uniformen');
+  expect(calls.filter((c) => c.pad === 'eigen' && !c.body.droog)).toHaveLength(0);
+});
+
+test('mails: formulieren brengen de focus naar het eerste foute veld, Enter dient in, en sluiten vraagt bevestiging (nr. 21)', async ({ page }) => {
+  const { calls } = await opzet(page);
+  // Verzendlijst: leeg indienen → focus op Naam; naam ingevuld → focus op Adressen.
+  await page.getByRole('button', { name: 'Nieuwe lijst' }).click();
+  const lijst = page.getByRole('dialog', { name: 'Nieuwe verzendlijst' });
+  await lijst.getByRole('button', { name: 'Toevoegen' }).click();
+  await expect(lijst.getByText('Geef de lijst een naam')).toBeVisible();
+  await expect(lijst.getByLabel('Naam')).toBeFocused();
+  await lijst.getByLabel('Naam').fill('Garage');
+  await lijst.getByLabel('Naam').press('Enter');
+  await expect(lijst.getByText('Vul minstens één adres in')).toBeVisible();
+  await expect(lijst.getByLabel('Adressen')).toBeFocused();
+  // Sluiten met invoer vraagt eerst bevestiging.
+  await page.keyboard.press('Escape');
+  const vraag = page.getByRole('dialog', { name: 'Wijzigingen niet bewaren?' });
+  await expect(vraag).toBeVisible();
+  await vraag.getByRole('button', { name: 'Niet bewaren' }).click();
+  await expect(lijst).toHaveCount(0);
+  expect(calls).toHaveLength(0);
+  // Zonder invoer sluit het venster meteen.
+  await page.getByRole('button', { name: 'Nieuwe lijst' }).click();
+  await expect(lijst.getByLabel('Naam')).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(lijst).toHaveCount(0);
+  await expect(vraag).toHaveCount(0);
+
+  // Eigen mail: leeg indienen → focus op Onderwerp.
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  await expect(paneel.getByText('Vul een onderwerp in')).toBeVisible();
+  await expect(paneel.getByLabel('Onderwerp')).toBeFocused();
+  // Alleen de ontvangers ontbreken → focus op het eerste vakje van de ontvangers.
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.');
+  await paneel.getByLabel('Onderwerp').press('Enter');
+  await expect(paneel.getByText('Kies minstens één ontvanger')).toBeVisible();
+  await expect(paneel.getByRole('checkbox', { name: 'Alle chauffeurs' })).toBeFocused();
+  expect(calls.filter((c) => c.pad === 'eigen')).toHaveLength(0);
+  // Enter in een veld dient in zodra alles klopt.
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  await expect(paneel.getByText('Kies minstens één ontvanger')).toHaveCount(0);
+  await paneel.getByLabel('Onderwerp').press('Enter');
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van je mail' });
+  await expect(bevestiging).toBeVisible();
+  expect(calls.filter((c) => c.pad === 'eigen')).toHaveLength(1);
+  await bevestiging.getByRole('button', { name: 'Terug' }).click();
+  await expect(bevestiging).toHaveCount(0);
+  // Sluiten met invoer vraagt bevestiging; "Niet bewaren" gooit de invoer weg.
+  await paneel.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(vraag).toBeVisible();
+  await vraag.getByRole('button', { name: 'Niet bewaren' }).click();
+  await expect(paneel).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  await expect(paneel.getByLabel('Onderwerp')).toHaveValue('');
+  await expect(paneel.getByLabel('Vrije adressen')).toHaveValue('');
+});
+
+test('mails: in het verzendlog is een fout rood en heeft een onderbroken verzending een eigen toon (nr. 25)', async ({ page, isMobile }) => {
+  await opzet(page);
+  const log = verzendlog(page, isMobile);
+  const pil = (tekst: string) => log.getByText(tekst, { exact: true });
+  // Mislukt: rode pil, met de reden ernaast.
+  await expect(pil('Mislukt')).toHaveClass(/text-red-700/);
+  await expect(pil('Mislukt')).toHaveClass(/bg-red-50/);
+  await expect(log.getByText('2 van 40 mislukt')).toBeVisible();
+  // Onderbroken: volle amber pil, met uitleg; nooit dezelfde als Mislukt.
+  await expect(pil('Onderbroken')).toHaveClass(/text-amber-700/);
+  await expect(pil('Onderbroken')).toHaveClass(/bg-amber-50/);
+  await expect(log.getByText('Niet afgerond; onbekend hoeveel er vertrokken zijn.')).toBeVisible();
+  // De technische reden van een onderbroken verzending staat niet in beeld.
+  await expect(log.getByText(/mogelijk is een deel vertrokken/)).toHaveCount(0);
+  // De naam van de mail komt uit de soorten die de server meestuurt, of uit
+  // de vaste namen van de twee mails die een mens zelf verstuurt.
+  for (const naam of ['Ziekmelding', 'Dringende update', 'Eigen mail', 'Omleiding gemaild']) {
+    await expect(log.getByText(naam, { exact: true })).toBeVisible();
+  }
+  // Rusttoestanden blijven stil: een neutrale pil, geen rood en geen amber vlak.
+  for (const stil of ['Uitgeschakeld', 'Alleen gelogd', 'Verstuurd']) {
+    await expect(pil(stil)).not.toHaveClass(/text-red-700|bg-red-50|bg-amber-50/);
+  }
+});
+
+// --- Nr. 6: het verzendlog was op de telefoon afgeknipt ---
+
+/** Wat er van de mislukte verzending (m-3) te lezen moet zijn. */
+const M3 = { mail: 'Eigen mail', moment: /21 september/, aantal: '40', status: 'Mislukt', reden: '2 van 40 mislukt', door: /Annelies Admin/ };
+
+/** Geen horizontale overloop van de pagina, en het element valt volledig
+ *  binnen het kader van het verzendlog (niets afgeknipt). */
+async function paginaSchuiftNiet(page: Page, waar: string) {
+  const m = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('[data-scroll-root]');
+    return { doc: document.documentElement.scrollWidth, vp: window.innerWidth, root: root ? root.scrollWidth - root.clientWidth : 0 };
+  });
+  expect(m.doc, `${waar}: documentbreedte`).toBeLessThanOrEqual(m.vp);
+  expect(m.root, `${waar}: de pagina schuift horizontaal`).toBeLessThanOrEqual(1);
+}
+async function binnenKader(el: Locator, waar: string) {
+  await expect(el, waar).toBeVisible();
+  const m = await el.evaluate((n) => {
+    const r = n.getBoundingClientRect();
+    const k = n.closest('.surface-table')!.getBoundingClientRect();
+    return { links: r.left - k.left, rechts: k.right - r.right, afgekapt: n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).overflow !== 'visible' };
+  });
+  expect(m.links, `${waar}: begint binnen het kader`).toBeGreaterThanOrEqual(0);
+  expect(m.rechts, `${waar}: eindigt binnen het kader`).toBeGreaterThanOrEqual(0);
+  expect(m.afgekapt, `${waar}: niet afgekapt`).toBe(false);
+}
+
+for (const breedte of [320, 375]) {
+  test(`mails: verzendlog op ${breedte} px toont elke waarde van een verzending, zonder schuiven of afknippen (nr. 6)`, async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'telefoonbreedte');
+    await page.setViewportSize({ width: breedte, height: 740 });
+    await opzet(page);
+    const lijst = page.getByRole('list', { name: 'Verzendlog' });
+    await expect(lijst.getByRole('listitem')).toHaveCount(5);
+    await expect(page.getByRole('table', { name: 'Verzendlog' })).toHaveCount(0);
+    const rij = lijst.getByRole('listitem').filter({ hasText: M3.mail });
+    await rij.scrollIntoViewIfNeeded();
+    await binnenKader(rij.getByText(M3.mail, { exact: true }), 'mail');
+    await binnenKader(rij.getByText(M3.moment), 'moment');
+    await binnenKader(rij.getByText(`${M3.aantal} ontvangers`), 'aantal ontvangers');
+    await binnenKader(rij.getByText(M3.status, { exact: true }), 'status');
+    await binnenKader(rij.getByText(M3.reden, { exact: true }), 'reden van de fout');
+    await binnenKader(rij.getByText(M3.door), 'door wie');
+    // De tonen van nr. 25 gelden ook in de lijst.
+    await expect(rij.getByText(M3.status, { exact: true })).toHaveClass(/text-red-700/);
+    // Ook de onderbroken verzending, met haar uitleg, en een rij zonder reden.
+    const onderbroken = lijst.getByRole('listitem').filter({ hasText: 'Omleiding gemaild' });
+    await binnenKader(onderbroken.getByText('Onderbroken', { exact: true }), 'onderbroken');
+    await binnenKader(onderbroken.getByText('Niet afgerond; onbekend hoeveel er vertrokken zijn.'), 'uitleg');
+    await binnenKader(lijst.getByRole('listitem').filter({ hasText: 'Ziekmelding' }).getByText(/Els Goossens/), 'door wie, eerste rij');
+    await paginaSchuiftNiet(page, `${breedte} px`);
+  });
+}
+
+for (const breedte of [768, 1024]) {
+  test(`mails: verzendlog op ${breedte} px is een tabel die in haar kader past (nr. 6)`, async ({ page, isMobile }) => {
+    test.skip(isMobile, 'desktopbreedtes, in het desktopproject');
+    await page.setViewportSize({ width: breedte, height: 900 });
+    await opzet(page);
+    const tabel = page.getByRole('table', { name: 'Verzendlog' });
+    await expect(tabel).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Verzendlog' })).toHaveCount(0);
+    for (const kop of ['Moment', 'Mail', 'Ontvangers', 'Status', 'Door']) await binnenKader(tabel.getByRole('columnheader', { name: kop, exact: true }), `kolomkop ${kop}`);
+    // De tabel zelf valt binnen haar kader en schuift niet.
+    const m = await tabel.evaluate((t) => {
+      const r = t.getBoundingClientRect();
+      const k = t.closest('.surface-table')!.getBoundingClientRect();
+      const strook = t.parentElement!.parentElement!;
+      return { over: Math.round(r.right - k.right), schuift: strook.scrollWidth - strook.clientWidth };
+    });
+    expect(m.over, 'tabel breder dan haar kader').toBeLessThanOrEqual(1);
+    expect(m.schuift, 'de tabel schuift in haar kader').toBeLessThanOrEqual(1);
+    const rij = tabel.getByRole('row').filter({ hasText: M3.mail });
+    await binnenKader(rij.getByRole('cell', { name: M3.moment }), 'moment');
+    await binnenKader(rij.getByRole('cell', { name: M3.aantal, exact: true }), 'aantal ontvangers');
+    await binnenKader(rij.getByText(M3.status, { exact: true }), 'status');
+    await binnenKader(rij.getByText(M3.reden, { exact: true }), 'reden van de fout');
+    await binnenKader(rij.getByRole('cell', { name: M3.door }), 'door wie');
+    await paginaSchuiftNiet(page, `${breedte} px`);
+    // Geen doos in doos: het tabelkader is zelf de kaart.
+    expect(await tabel.evaluate((t) => t.closest('.surface-table')!.parentElement!.closest('.surface-card, .surface-table') === null)).toBe(true);
+  });
+}
+
+// --- Nr. 22: laden, verversen en offline via de gedeelde bouwstenen ---
+
+/** Het antwoord van /api/mails zoals productie het geeft: alle mailsoorten
+ *  uit de gedeelde lijst, aan en al eens verstuurd. */
+const VOLLEDIG = {
+  soorten: MAIL_SOORTEN.map((m) => ({ ...m, aan: true, laatst: { op: '2026-09-23T10:00:00Z', aantal: 2, gelukt: true } })),
+  instellingen: { uit: [] as string[] },
+  verzendlijsten: [{ id: 'l-1', naam: 'De Lijn', adressen: ['dispatching@delijn.be'] }, { id: 'l-2', naam: 'Garage', adressen: ['garage@vhb.be'] }],
+  log: [{ id: 'm-1', verzondenOp: '2026-09-23T10:00:00Z', soort: 'ziekmelding', aantal: 2, gelukt: true, door: 'Els Goossens' }],
+};
+
+/** /api/mails onder controle van de test: elk antwoord wacht tot `laat()`
+ *  het vrijgeeft, en `antwoord` bepaalt wat er dan terugkomt. */
+async function trageMails(page: Page) {
+  const s = { antwoord: VOLLEDIG as unknown, status: 200, aanvragen: 0, wachtend: [] as Array<() => void>, vertraag: true };
+  await page.route(/\/api\/mails(\?|$)/, async (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    s.aanvragen += 1;
+    if (s.vertraag) await new Promise<void>((los) => { s.wachtend.push(los); });
+    await r.fulfill(s.status === 200 ? { json: s.antwoord } : { status: s.status, contentType: 'application/json', body: '{"error":"Serverfout"}' });
+  });
+  return { s, laat: () => { s.wachtend.splice(0).forEach((los) => los()); } };
+}
+
+/** Verticale plaats van een kop op de pagina, los van de scrollstand. */
+const plaatsVan = (page: Page, koppen: string[]) => page.evaluate((namen) => {
+  const root = document.querySelector('[data-scroll-root]')!;
+  return Object.fromEntries(namen.map((n) => {
+    const kop = [...document.querySelectorAll('h1, h2')].find((e) => e.textContent === n);
+    return [n, kop ? Math.round(kop.getBoundingClientRect().top + root.scrollTop) : null];
+  }));
+}, koppen);
+
+test('mails: tijdens het laden een skelet, geen tekst “Laden…”, en de kaarten verspringen niet (nr. 22)', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
+  await seed(page, { user: ADMIN, view: 'beheer-mails' });
+  const { laat } = await trageMails(page);
+  await page.goto('/beheer/mails');
+  await expect(page.getByRole('heading', { level: 1, name: 'Mails' })).toBeVisible({ timeout: 15_000 });
+  // Laden: de drie kaarten staan er met hun kop, de inhoud is een skelet.
+  await expect(page.getByRole('status', { name: 'Verzendlijsten worden geladen' })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Verzendlog wordt geladen' })).toBeVisible();
+  const mails = page.getByRole('list', { name: 'Automatische mails' });
+  await expect(mails).toHaveAttribute('aria-busy', 'true');
+  await expect(mails.getByRole('listitem')).toHaveCount(MAIL_SOORTEN.length);
+  await expect(page.getByText(/Laden…/)).toHaveCount(0);
+  await expect(page.getByText('Bijwerken…')).toBeVisible();
+  // Geen acties zolang de gegevens er niet zijn (nr. 14 blijft gelden).
+  await expect(page.getByRole('button', { name: 'Mail versturen' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Nieuwe lijst' })).toBeDisabled();
+  await expect(mails.getByRole('switch')).toHaveCount(0);
+  await page.evaluate(() => document.fonts.ready);
+  const koppen = ['Mails', 'Automatische mails', 'Verzendlijsten'];
+  const voor = await plaatsVan(page, koppen);
+
+  laat();
+  await expect(page.getByRole('list', { name: 'Verzendlijsten' })).toBeVisible();
+  await expect(mails.getByRole('switch').first()).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(mails).not.toHaveAttribute('aria-busy', 'true');
+  await expect(page.getByText(/^Bijgewerkt om \d{2}:\d{2}$/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mail versturen' })).toBeEnabled();
+  const na = await plaatsVan(page, koppen);
+  // Elke kop staat waar hij stond: niets is omlaag of omhoog gesprongen.
+  for (const kop of koppen) expect(Math.abs(na[kop]! - voor[kop]!), `${kop}: ${voor[kop]} → ${na[kop]}`).toBeLessThanOrEqual(2);
+});
+
+test('mails: een verversing laat een open venster en zijn invoer met rust (nr. 22)', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
+  await seed(page, { user: ADMIN, view: 'beheer-mails' });
+  const { s } = await trageMails(page);
+  s.vertraag = false;
+  const geschreven: any[] = [];
+  await page.route('**/api/mails/verzendlijsten', async (r) => {
+    if (r.request().method() !== 'PUT') return r.fallback();
+    geschreven.push(r.request().postDataJSON());
+    await r.fulfill({ json: r.request().postDataJSON() });
+  });
+  await page.goto('/beheer/mails');
+  await expect(page.getByRole('list', { name: 'Verzendlijsten' }).getByRole('listitem')).toHaveCount(2, { timeout: 15_000 });
+  expect(s.aanvragen).toBe(1);
+  /** Terug naar het tabblad, ruim na de vorige laad: het scherm ververst stil. */
+  const ververs = async (minuten: number, verwacht: number) => {
+    await page.clock.setFixedTime(new Date(Date.parse('2026-09-25T09:00:00Z') + minuten * 60_000));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect.poll(() => s.aanvragen).toBe(verwacht);
+  };
+
+  // 1. Een half ingevulde verzendlijst.
+  await page.getByRole('button', { name: 'Nieuwe lijst' }).click();
+  const lijst = page.getByRole('dialog', { name: 'Nieuwe verzendlijst' });
+  await lijst.getByLabel('Naam').fill('Politie Zottegem');
+  await lijst.getByLabel('Adressen').fill('verkeer@politie.be\nwijk@poli');
+  // Intussen voegde een collega een lijst toe en kwam er een logregel bij.
+  s.antwoord = { ...VOLLEDIG, verzendlijsten: [...VOLLEDIG.verzendlijsten, { id: 'l-3', naam: 'Dispatching Gent', adressen: ['gent@delijn.be'] }] };
+  await ververs(5, 2);
+  await expect(page.getByRole('list', { name: 'Verzendlijsten' }).getByRole('listitem')).toHaveCount(3);
+  await expect(lijst).toBeVisible();
+  await expect(lijst.getByLabel('Naam')).toHaveValue('Politie Zottegem');
+  await expect(lijst.getByLabel('Adressen')).toHaveValue('verkeer@politie.be\nwijk@poli');
+  // Opslaan bewaart de nieuwe lijst naast de drie die er nu zijn, ook die van de collega.
+  await lijst.getByLabel('Adressen').fill('verkeer@politie.be');
+  await lijst.getByRole('button', { name: 'Toevoegen' }).click();
+  await expect(lijst).toHaveCount(0);
+  expect(geschreven).toHaveLength(1);
+  expect(geschreven[0].map((l: any) => l.naam)).toEqual(['De Lijn', 'Garage', 'Dispatching Gent', 'Politie Zottegem']);
+
+  // 2. Een half geschreven mail.
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.');
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  const vak = paneel.getByRole('checkbox', { name: 'Verzendlijst De Lijn' });
+  await vak.locator('..').click();
+  await expect(vak).toBeChecked();
+  let verstuurd = 0;
+  await page.route('**/api/mails/eigen', async (r) => { verstuurd += 1; await r.fulfill({ status: 500, body: '{}' }); });
+  s.antwoord = VOLLEDIG;
+  await ververs(10, 3);
+  await expect(paneel).toBeVisible();
+  await expect(paneel.getByLabel('Onderwerp')).toHaveValue('Nieuwe uniformen');
+  await expect(paneel.getByLabel('Bericht')).toHaveValue('Vanaf 1 juli.');
+  await expect(paneel.getByLabel('Vrije adressen')).toHaveValue('extern@voorbeeld.be');
+  await expect(vak).toBeChecked();
+  // Een verversing leest alleen: er vertrekt geen mail en er wordt niets geschreven.
+  expect(verstuurd).toBe(0);
+  expect(geschreven).toHaveLength(1);
+});
+
+test('mails: een eigen wijziging wint van een verversing die eerder vertrok (nr. 22)', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
+  await seed(page, { user: ADMIN, view: 'beheer-mails' });
+  const { s, laat } = await trageMails(page);
+  s.vertraag = false;
+  await page.route('**/api/mails/instellingen', async (r) => (r.request().method() === 'PUT' ? r.fulfill({ json: r.request().postDataJSON() }) : r.fallback()));
+  await page.goto('/beheer/mails');
+  const ziek = page.getByRole('switch', { name: 'Ziekmelding versturen' });
+  await expect(ziek).toBeChecked({ timeout: 15_000 });
+  // Een verversing vertrekt en blijft hangen; intussen zet de admin Ziekmelding uit.
+  s.vertraag = true;
+  await page.clock.setFixedTime(new Date('2026-09-25T09:05:00Z'));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect.poll(() => s.aanvragen).toBe(2);
+  await ziek.click();
+  await expect(ziek).not.toBeChecked();
+  // Het oude antwoord (Ziekmelding nog aan) komt nu pas binnen en mag de schakelaar niet terugzetten.
+  laat();
+  await expect(page.getByText(/^Bijgewerkt om/)).toBeVisible();
+  await page.waitForTimeout(400);
+  await expect(ziek).not.toBeChecked();
+});
+
+test('mails: offline staat in de kop en de gegevens blijven staan (nr. 22)', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'offline zetten is alleen in Chromium betrouwbaar');
+  await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
+  await seed(page, { user: ADMIN, view: 'beheer-mails' });
+  const { s } = await trageMails(page);
+  s.vertraag = false;
+  await page.goto('/beheer/mails');
+  await expect(page.getByText(/^Bijgewerkt om \d{2}:\d{2}$/)).toBeVisible({ timeout: 15_000 });
+  await context.setOffline(true);
+  await expect(page.getByText(/^Offline · Bijgewerkt om \d{2}:\d{2}$/)).toBeVisible();
+  // De gegevens blijven staan.
+  await expect(page.getByRole('list', { name: 'Verzendlijsten' }).getByRole('listitem')).toHaveCount(2);
+  await context.setOffline(false);
+  await expect(page.getByText(/^Offline · /)).toHaveCount(0);
 });

@@ -6,7 +6,8 @@ import { dayOffset } from '../scripts/audit-fixtures.mjs';
 /**
  * Tranche 3B.1 (23-09): de vijf beheerschermen op het gedeelde tabelkader
  * (Gebruikers, Toestellen, Vervaldata, Planningscodes, Beheer
- * dienstoverzicht; sinds 3D één scherm Dienstoverzicht).
+ * dienstoverzicht; sinds 3D één scherm Dienstoverzicht), en sinds 29-09 ook
+ * Mails (het verzendlog).
  *
  * - geen horizontale paginaoverloop (document én scroll-root) op de
  *   projectbreedte (iPhone 390 / desktop 1440) en, in het desktopproject,
@@ -36,6 +37,8 @@ const SCHERMEN: Scherm[] = [
   { view: 'planning-codes', pad: '/beheer/planningscodes', titel: 'Planningscodes' },
   // 3D (23-09): Dienstoverzicht en Beheer dienstoverzicht zijn één scherm.
   { view: 'dienstoverzicht', pad: '/beheer/dienstoverzicht', titel: 'Dienstoverzicht' },
+  // Controle-ronde 29-09 (nr. 6): het verzendlog knipte op de telefoon af.
+  { view: 'beheer-mails', pad: '/beheer/mails', titel: 'Mails' },
 ];
 
 const extra = (pad: string) => {
@@ -97,7 +100,7 @@ for (const scherm of SCHERMEN) {
 
 test.describe('breedtes', () => {
   for (const breedte of [375, 768, 1024, 1280]) {
-    test(`alle vijf schermen op ${breedte}px: geen overloop, tabel in haar kader`, async ({ browser, baseURL }, info) => {
+    test(`alle schermen op ${breedte}px: geen overloop, tabel in haar kader`, async ({ browser, baseURL }, info) => {
       test.skip(info.project.name !== 'Desktop (chromium)', 'eenmaal per run, in het desktopproject');
       const context = await browser.newContext({
         baseURL, viewport: { width: breedte, height: 900 },

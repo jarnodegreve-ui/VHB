@@ -9,6 +9,14 @@ import { metOngedaan } from '../../lib/ongedaan';
  * per-record-savers — plus de dringende e-mail bij een urgente update.
  * `users` komt uit de mensen-module (de ontvangerslijst van de mail).
  */
+/** Wat de planner leest na de dringende mail, eerlijk over wat er vertrok
+ *  (nr. 13): staat de mail uit in Beheer › Mails, dan is er niets verstuurd
+ *  en zegt de toast dat, in plaats van "verzonden naar alle chauffeurs". */
+export const urgenteMailMelding = (data: { mocked?: boolean; overgeslagen?: boolean; message?: string }): { tekst: string; toon: 'success' | 'info' } =>
+  data.overgeslagen
+    ? { tekst: data.message || 'Mail staat uit in Beheer › Mails, er is niets verstuurd.', toon: 'info' }
+    : { tekst: data.mocked ? `E-mail gelogd: ${data.message}` : 'E-mails verzonden naar alle chauffeurs.', toon: 'success' };
+
 export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
   const { session, currentUser, showToast, meldLaadfout, fetchActivityLog, users } = ctx;
   const [updates, setUpdates, zetUpdatesUitAntwoord] = useCollectieState<Update[]>([]);
@@ -100,7 +108,8 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       });
       const data = await response.json().catch(() => ({} as any));
       if (response.ok && data.success) {
-        showToast(data.mocked ? `E-mail gelogd: ${data.message}` : 'E-mails verzonden naar alle chauffeurs.', 'success');
+        const melding = urgenteMailMelding(data);
+        showToast(melding.tekst, melding.toon);
       } else {
         laatSchrijffout('Verzenden van de e-mailupdate', { status: response.status, message: data.details || data.error }, (tekst) => showToast(tekst, 'error'));
       }
