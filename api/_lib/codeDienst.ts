@@ -10,7 +10,7 @@
  * intussen gewijzigd", terwijl er niets gewijzigd was.
  */
 import { toLookupToken } from "../helpers.js";
-import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData } from "../storage.js";
+import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData } from "../storage.js";
 import { berekenCelWaarheid, type CelWaarheidUser } from "./celWaarheid.js";
 import type { OverlayCel } from "./ruilOverlay.js";
 import { dienstOpBord } from "../../shared/bordBezetting.js";
@@ -65,19 +65,35 @@ export const bordVanDag = (date: string, bron: BordBron) => {
 
 export type BordVanDag = ReturnType<typeof bordVanDag>;
 
+/** Wat voor elke dag hetzelfde is: gebruikers, dienstoverzicht en
+ *  planningscodes. Een route die het bord van meer dan één dag nodig heeft
+ *  (een lijst ruilen goedkeuren, meerdere overnames indienen) leest dit één
+ *  keer vóór haar lus en geeft het mee; per dag blijft alleen de matrixrij. */
+export type BordVast = { users: CelWaarheidUser[]; services: any[]; codes: any[] };
+
+export const laadBordVast = async (): Promise<BordVast> => {
+  const [users, services, codes] = await Promise.all([getUsersData(), getServicesData(), getPlanningCodesData()]);
+  return { users: users as any[], services: services as any[], codes: codes as any[] };
+};
+
 /**
  * Het bord van één dag: per chauffeur de cel zoals de maandplanning ze toont.
  *
  * `zonderAfwezigheid`: de cel met de ruilen erover maar zonder het verlof en
  * de ziekte uit het portaal. Voor de controles die vroeger de rauwe matrixcel
  * lazen en de afwezigheid apart toetsen (ruilAfwezigheidsFout): zo blijft hun
- * melding dezelfde, en het scheelt een lezing. `swaps`: al geladen ruilen.
+ * melding dezelfde, en het scheelt een lezing. `swaps`, `services`, `codes`:
+ * al geladen, dan geen tweede lezing.
  */
-export const bordOpDag = async (date: string, users: CelWaarheidUser[], opts?: { zonderAfwezigheid?: boolean; swaps?: any[] }) => {
+export const bordOpDag = async (
+  date: string,
+  users: CelWaarheidUser[],
+  opts?: { zonderAfwezigheid?: boolean; swaps?: any[]; services?: any[]; codes?: any[] },
+) => {
   const [rows, services, codes, leave, swaps] = await Promise.all([
     getPlanningMatrixRows({ van: date, tot: date }),
-    getServicesData(),
-    getPlanningCodesData(),
+    opts?.services ?? getServicesData(),
+    opts?.codes ?? getPlanningCodesData(),
     opts?.zonderAfwezigheid ? [] : getLeaveData({ endOnOrAfter: date }),
     opts?.swaps ?? getSwapsData(),
   ]);

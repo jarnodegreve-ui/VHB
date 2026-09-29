@@ -25,7 +25,7 @@ import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, ge
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
-import { bezetOpBord, bordBenenVan, bordOpDag, dienstOpCel } from "./codeDienst.js";
+import { bezetOpBord, bordBenenVan, bordOpDag, dienstOpCel, laadBordVast } from "./codeDienst.js";
 
 /**
  * Hangt aan elke ruil het verloop per persoon (`verloop`, zie
@@ -670,10 +670,17 @@ export function mountRuilRoutes(app: express.Express) {
       // de planning, dan slaan de checks én de doorvoer over en wordt alleen
       // de status alsnog opgeslagen.
       const alDoorgevoerdIds = new Set<string>();
+      const wordtGoedgekeurd = (next: any) => {
+        const prev = previousById.get(String(next.id));
+        return next.status === "approved" && (!prev || prev.status !== "approved");
+      };
+      // Gebruikers, dienstoverzicht en planningscodes voor de bordcontrole:
+      // één keer vóór de lus, en alleen als er iets goed te keuren valt. Per
+      // ruil blijft dan alleen de matrixrij van zijn dag te lezen.
+      const bordVast = recordsToWrite.some(wordtGoedgekeurd) ? await laadBordVast() : undefined;
       for (const next of recordsToWrite) {
         const prev = previousById.get(String(next.id));
-        const becomesApproved = next.status === "approved" && (!prev || prev.status !== "approved");
-        if (!becomesApproved) continue;
+        if (!wordtGoedgekeurd(next)) continue;
         if (prev && (await swapToestandInPlanning(prev)) === "doorgevoerd") {
           alDoorgevoerdIds.add(String(next.id));
           continue;
@@ -685,7 +692,7 @@ export function mountRuilRoutes(app: express.Express) {
         const afwFout = await ruilAfwezigheidsFout(prev ?? next);
         if (afwFout) return res.status(409).json({ error: afwFout });
         // …en de collega kan intussen een dienst gekregen hebben.
-        const dubbelFout = await dubbeleInplanningFout(prev ?? next, { swaps: previousSwaps });
+        const dubbelFout = await dubbeleInplanningFout(prev ?? next, { swaps: previousSwaps, vast: bordVast });
         if (dubbelFout) return res.status(409).json({ error: dubbelFout });
       }
 
@@ -757,7 +764,9 @@ export function mountRuilRoutes(app: express.Express) {
           (n: any) => !previousById.has(String(n.id)) && normalizeSwapType(n.swapType) === "overname",
         );
         if (newTakeovers.length > 0) {
-          const usersForTakeover = await getUsersData();
+          // Eén keer vóór de lus: gebruikers, dienstoverzicht en planningscodes.
+          const bordVast = await laadBordVast();
+          const usersForTakeover = bordVast.users as any[];
           for (const next of newTakeovers) {
             const targetId = String(next.targetDriverId ?? "").trim();
             if (!targetId) {
@@ -780,7 +789,7 @@ export function mountRuilRoutes(app: express.Express) {
             // 'vrij' en kreeg er zo een tweede dienst bij; wie zijn dienst
             // afgaf, staat er nog met die dienst en werd onterecht geweigerd.
             // Zonder de afwezigheden: die toetst ruilAfwezigheidsFout hieronder.
-            const bord = await bordOpDag(date, usersForTakeover as any[], { zonderAfwezigheid: true, swaps: previousSwaps });
+            const bord = await bordOpDag(date, bordVast.users, { zonderAfwezigheid: true, swaps: previousSwaps, services: bordVast.services, codes: bordVast.codes });
             const code = bord.celVan(targetId)?.code;
             if (!isTakeoverCode(code)) {
               const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";

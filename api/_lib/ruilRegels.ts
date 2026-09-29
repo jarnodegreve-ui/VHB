@@ -15,7 +15,7 @@ import { DAG_DMJ, toLookupToken, afwezigOp, normalizeSwapType } from "../helpers
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { getLeaveData, getUsersData, getShiftById, getShiftsOnDate } from "../storage.js";
 import { ISO_DAY_RE } from "./collectie.js";
-import { bezetOpBord, bordOpDag } from "./codeDienst.js";
+import { bezetOpBord, bordOpDag, laadBordVast, type BordVast } from "./codeDienst.js";
 
 // Afgehandelde ruil-statussen: hieruit is geen overgang meer toegestaan.
 export const TERMINAL_SWAP_STATES = new Set(["rejected", "cancelled", "completed"]);
@@ -111,11 +111,15 @@ export const ruilAfwezigheidsFout = async (swap: {
  *  garage) die de collega die dag volgens het BORD rijdt (matrixcel met de
  *  doorgevoerde ruilen erover): zo'n dienst heeft geen rijen in de planning,
  *  dus de rijencontrole alleen zag hem niet. Zelfde uitzonderingen, zelfde
- *  melding. Het bord wordt samen met de rijen gelezen, niet erna. */
+ *  melding. Het bord wordt samen met de rijen gelezen, niet erna.
+ *
+ *  `vooraf`: wat de aanroeper al las. Wie een lijst ruilen goedkeurt geeft
+ *  `vast` mee (laadBordVast, één keer vóór de lus): per ruil blijven dan
+ *  alleen de rijen en de matrixrij van die dag te lezen. */
 export const dubbeleInplanningFout = async (swap: {
   targetDriverId?: unknown; shiftDate?: unknown; shiftLine?: unknown;
   returnDate?: unknown; returnCode?: unknown; swapType?: unknown;
-}, vooraf?: { swaps?: any[] }): Promise<string | null> => {
+}, vooraf?: { swaps?: any[]; vast?: BordVast }): Promise<string | null> => {
   const targetId = String(swap.targetDriverId ?? "").trim();
   const dienstDag = String(swap.shiftDate ?? "").trim();
   // Legacy-ruil zonder dienst-info: niets te controleren (de doorvoer slaat
@@ -124,12 +128,12 @@ export const dubbeleInplanningFout = async (swap: {
   const terugCode = normalizeSwapType(swap.swapType) === "overname" ? "" : String(swap.returnCode ?? "").trim();
   const terugDag = String(swap.returnDate ?? "").trim();
   const aangeboden = toLookupToken(String(swap.shiftLine ?? ""));
-  const usersLezing = getUsersData();
-  const [rijen, users, bord] = await Promise.all([
+  const vastLezing = vooraf?.vast ? Promise.resolve(vooraf.vast) : laadBordVast();
+  const [rijen, { users }, bord] = await Promise.all([
     getShiftsOnDate(dienstDag),
-    usersLezing,
+    vastLezing,
     // De afwezigheid toetst ruilAfwezigheidsFout al, vóór deze controle.
-    usersLezing.then((u) => bordOpDag(dienstDag, u as any[], { zonderAfwezigheid: true, swaps: vooraf?.swaps })),
+    vastLezing.then((v) => bordOpDag(dienstDag, v.users, { zonderAfwezigheid: true, swaps: vooraf?.swaps, services: v.services, codes: v.codes })),
   ]);
   const bezet = rijen.filter((r) => {
     if (String(r.driverId) !== targetId) return false;

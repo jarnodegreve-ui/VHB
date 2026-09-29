@@ -72,6 +72,10 @@ const mem = vi.hoisted(() => ({
   // niet-staf in de query filtert i.p.v. de hele tabel te lezen.
   leaveFilters: [] as any[],
   swapFilters: [] as any[],
+  // Aantal lezingen van het dienstoverzicht en de planningscodes: bewijst dat
+  // een route ze één keer leest, niet per ruil in een lus.
+  servicesLezingen: 0,
+  codesLezingen: 0,
   // Id-filters waarmee getSwapVerloopRegels aangeroepen werd (null = alles),
   // en een schakelaar om de logquery te laten mislukken.
   verloopFilters: [] as Array<string[] | null>,
@@ -442,7 +446,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.planning.filter((s: any) =>
         (!f?.driverId || String(s.driverId) === String(f.driverId)) &&
         (!f?.monthIso || String(s.date ?? '').startsWith(`${f.monthIso}-`))),
-    getServicesData: async () => mem.services,
+    getServicesData: async () => { mem.servicesLezingen += 1; return mem.services; },
     saveServicesData: async (data: any[]) => { mem.services = data; },
     getUpdatesData: async () => mem.updates,
     // Zoals de echte: een upsert noemt alleen de eigen kolommen, dus
@@ -517,7 +521,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       // De oude marker gaat mee op null (zoals de echte update-query).
       delete d.pdfUrl;
     },
-    getPlanningCodesData: async () => mem.planningCodes,
+    getPlanningCodesData: async () => { mem.codesLezingen += 1; return mem.planningCodes; },
     savePlanningCodesData: async (data: any[]) => { mem.planningCodes = data; },
     logActivity: async (_req: any, domain: string, action: string, message: string, entity?: { type?: string; id?: string }) => {
       // actorName/actorRole/gelogdOp: wie de regel schreef, zoals de echte
@@ -852,6 +856,8 @@ beforeEach(() => {
   mem.matrixMaandFilters = [];
   mem.leaveFilters = [];
   mem.swapFilters = [];
+  mem.servicesLezingen = 0;
+  mem.codesLezingen = 0;
   mem.verloopFilters = [];
   mem.verloopFaalt = false;
   mem.clientErrors = [];
@@ -4508,6 +4514,7 @@ describe('handmatige dienstwissel, code-diensten (schoolrit, bureau, garage)', (
   //  - in dezelfde beweging als de planning-rijen, niet erna;
   //  - het verlof en de ruilen die het bord leest, dienen ook voor de
   //    afwezigheidscontrole en de open ruilaanvragen: geen dubbele lezing.
+  //  - het dienstoverzicht en de planningscodes elk één keer.
   // Netto leest een gewone wissel drie dingen meer dan vroeger (de matrixrij
   // van de dag, het dienstoverzicht en de planningscodes) en één ding minder
   // (de gebruikers een tweede keer).
@@ -4516,9 +4523,13 @@ describe('handmatige dienstwissel, code-diensten (schoolrit, bureau, garage)', (
     mem.matrixMaandFilters = [];
     mem.leaveFilters = [];
     mem.swapFilters = [];
+    mem.servicesLezingen = 0;
+    mem.codesLezingen = 0;
     const res = await wissel({ line: '12', fromDriverId: '3', toDriverId: '4' });
     expect(res.status).toBe(200);
     expect(mem.planning.find((r: any) => r.id === 'sh-gewoon')?.driverId).toBe('4');
+    // Het dienstoverzicht en de planningscodes elk één keer.
+    expect({ diensten: mem.servicesLezingen, codes: mem.codesLezingen }).toEqual({ diensten: 1, codes: 1 });
     // Eén lezing van de matrix, begrensd tot de dag van de wissel.
     expect(mem.matrixMaandFilters).toEqual([`${DAG}..${DAG}`]);
     // Het verlof één keer (bord én afwezigheidscontrole samen).
@@ -4798,6 +4809,97 @@ describe('dubbele inplanning met een code-dienst: het bord is de waarheid (contr
       const cells = await bord();
       expect(cells[B][DAG]).toMatchObject({ code: '14', kind: 'service' });
       expect(cells[C][DAG]).toMatchObject({ code: 'EEK6', kind: 'service' });
+    });
+  });
+
+  describe('lezingen buiten de lus', () => {
+    // Het dienstoverzicht en de planningscodes zijn voor elke dag dezelfde:
+    // een route die meerdere ruilen in één keer behandelt leest ze één keer.
+    const DAG2 = '2026-07-25';
+    const tel = () => ({ diensten: mem.servicesLezingen, codes: mem.codesLezingen, matrix: mem.matrixMaandFilters });
+    const nulstand = () => { mem.servicesLezingen = 0; mem.codesLezingen = 0; mem.matrixMaandFilters = []; };
+
+    beforeEach(() => {
+      mem.planningMatrix = [
+        { id: 'm-dag1', source_date: DAG, day_type: 'week', assignments: { 'Chauffeur A': 'EEK6', 'Chauffeur B': 'vrij', 'Chauffeur C': '14' }, raw_row: '' },
+        { id: 'm-dag2', source_date: DAG2, day_type: 'week', assignments: { 'Chauffeur A': 'vrij', 'Chauffeur B': 'vrij', 'Chauffeur C': '15' }, raw_row: '' },
+      ];
+      mem.planning = [
+        { id: 'sh-c14', driverId: C, date: DAG, line: '14', startTime: '10:00', endTime: '18:00' },
+        { id: 'sh-c15', driverId: C, date: DAG2, line: '15', startTime: '11:00', endTime: '19:00' },
+      ];
+    });
+
+    it('twee ruilen in één keer goedkeuren: dienstoverzicht en codes één keer, per dag één matrixrij', async () => {
+      mem.swaps = [
+        { id: 's-een', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14' },
+        { id: 's-twee', shiftId: 'sh-c15', requesterId: C, targetDriverId: A, status: 'accepted', reason: '', createdAt: '2026-07-20T09:00:00Z', swapType: 'overname', shiftDate: DAG2, shiftLine: '15' },
+      ];
+      nulstand();
+      const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s: any) => ({ ...s, status: 'approved' })) });
+      expect(res.status).toBe(200);
+      expect(tel()).toEqual({ diensten: 1, codes: 1, matrix: [`${DAG}..${DAG}`, `${DAG2}..${DAG2}`] });
+      // De uitkomst per ruil is dezelfde als één voor één.
+      expect(mem.planning.find((r: any) => r.id === 'sh-c14')?.driverId).toBe(B);
+      expect(mem.planning.find((r: any) => r.id === 'sh-c15')?.driverId).toBe(A);
+      expect(mem.swaps.map((s: any) => s.status)).toEqual(['approved', 'approved']);
+    });
+
+    it('twee ruilen in één keer: de tweede strandt nog altijd op de schoolrit van de collega', async () => {
+      // De eerste is in orde, de tweede gaat naar A, die de schoolrit rijdt.
+      mem.planningMatrix[1].assignments = { 'Chauffeur A': 'EEK5', 'Chauffeur B': 'vrij', 'Chauffeur C': '15' };
+      mem.swaps = [
+        { id: 's-een', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14' },
+        { id: 's-twee', shiftId: 'sh-c15', requesterId: C, targetDriverId: A, status: 'accepted', reason: '', createdAt: '2026-07-20T09:00:00Z', swapType: 'overname', shiftDate: DAG2, shiftLine: '15' },
+      ];
+      const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s: any) => ({ ...s, status: 'approved' })) });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe('Chauffeur A rijdt op 25/07/2026 al dienst EEK5, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.');
+      // De controles lopen vóór de doorvoer: er is niets verplaatst.
+      expect(mem.planning.map((r: any) => r.driverId)).toEqual([C, C]);
+      expect(mem.swaps.map((s: any) => s.status)).toEqual(['accepted', 'accepted']);
+    });
+
+    it('een lijst zonder goedkeuring leest het bord niet', async () => {
+      mem.swaps = [
+        { id: 's-een', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14' },
+      ];
+      nulstand();
+      const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s: any) => ({ ...s, status: 'rejected' })) });
+      expect(res.status).toBe(200);
+      expect(tel()).toEqual({ diensten: 0, codes: 0, matrix: [] });
+    });
+
+    it('één ruil goedkeuren via PATCH: dienstoverzicht en codes één keer', async () => {
+      mem.swaps = [
+        { id: 's-een', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14' },
+      ];
+      nulstand();
+      const res = await api('PATCH', '/api/swaps/s-een', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+      expect(res.status).toBe(200);
+      expect(tel()).toEqual({ diensten: 1, codes: 1, matrix: [`${DAG}..${DAG}`] });
+    });
+
+    it('twee overnames in één keer aanvragen: dienstoverzicht en codes één keer', async () => {
+      const nieuw = (id: string, shiftId: string, targetDriverId: string) => ({
+        id, shiftId, requesterId: C, targetDriverId, status: 'pending', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname',
+      });
+      nulstand();
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [nieuw('s-o1', 'sh-c14', B), nieuw('s-o2', 'sh-c15', A)] });
+      expect(res.status).toBe(200);
+      expect(tel()).toEqual({ diensten: 1, codes: 1, matrix: [`${DAG}..${DAG}`, `${DAG2}..${DAG2}`] });
+      expect(mem.swaps.map((s: any) => [s.id, s.status, s.shiftDate])).toEqual([['s-o1', 'pending', DAG], ['s-o2', 'pending', DAG2]]);
+    });
+
+    it('twee overnames in één keer: de tweede strandt nog altijd op de schoolrit van de collega', async () => {
+      const nieuw = (id: string, shiftId: string, targetDriverId: string) => ({
+        id, shiftId, requesterId: C, targetDriverId, status: 'pending', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname',
+      });
+      // Op de eerste dag rijdt A de schoolrit.
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [nieuw('s-o1', 'sh-c15', B), nieuw('s-o2', 'sh-c14', A)] });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toContain("Chauffeur A staat op 24/07/2026 ingepland als 'EEK6'");
+      expect(mem.swaps).toHaveLength(0);
     });
   });
 
