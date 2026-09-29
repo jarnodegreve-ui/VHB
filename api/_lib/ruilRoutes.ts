@@ -1191,7 +1191,7 @@ export function mountRuilRoutes(app: express.Express) {
       const conflicten = dubbeleInplanningen(() => ({ rijen: dayRows, bord }), ontvangsten);
       const conflictFout = (c: DubbeleInplanning) => {
         const naam = c.driverId === fromDriverId ? fromUser.name : toUser.name;
-        if (c.bron === "onbekend") return onbekendeCodeFout(naam, date, c.dienst);
+        if (c.bron === "onbekend") return onbekendeCodeFout(naam, c);
         if (c.driverId === fromDriverId) return `${naam} rijdt op ${DAG_DMJ(date)} ook dienst ${c.dienst}, de terugdienst zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
         return terugLine
           ? `${naam} rijdt op ${DAG_DMJ(date)} ook dienst ${c.dienst}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg.`

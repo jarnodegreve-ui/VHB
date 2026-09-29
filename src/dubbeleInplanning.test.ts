@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { dubbeleInplanningen, onbekendeCodeFout, type DagStand, type Ontvangst } from '../api/_lib/dubbeleInplanning.js';
 import { bordVanDag } from '../api/_lib/codeDienst.js';
 import { ontvangstenVanRuil } from '../api/_lib/ruilRegels.js';
+import { isVeiligeFouttekst, leesFout, schrijffout } from './lib/fouten';
 
 /**
  * DE regel tegen dubbele inplanning (Jarno 29-09), puur: na de bewerking
@@ -20,6 +21,12 @@ const codes = [{ code: 'eek6', category: 'service' }, { code: 'vrij', category: 
 const stand = (assignments: Record<string, string>, rijen: DagStand['rijen'] = [], date = DAG): DagStand => ({
   rijen,
   bord: bordVanDag(date, { rows: [{ source_date: date, assignments }], users, services, codes, leave: [], swaps: [] }),
+});
+/** Een stand waarin het dienstoverzicht of de planningscodes anders zijn,
+ *  bv. leeg teruggekomen. */
+const standMet = (assignments: Record<string, string>, bron: { services?: any[]; codes?: any[] }): DagStand => ({
+  rijen: [],
+  bord: bordVanDag(DAG, { rows: [{ source_date: DAG, assignments }], users, services: bron.services ?? services, codes: bron.codes ?? codes, leave: [], swaps: [] }),
 });
 const toets = (s: DagStand, ontvangsten: Ontvangst[]) => dubbeleInplanningen((d) => (d === DAG ? s : undefined), ontvangsten);
 const krijgt14 = (extra: Partial<Ontvangst> = {}): Ontvangst => ({ driverId: 'b', date: DAG, krijgt: '14', ...extra });
@@ -70,6 +77,29 @@ describe('dubbeleInplanningen', () => {
     expect(toets(stand({ Bert: '-' }), [krijgt14()])).toEqual([]);
   });
 
+  it('kwam een lijst leeg terug, dan draagt een onbekende code dat mee (controle 29-09, 1c)', () => {
+    expect(toets(standMet({ Bert: 'FD' }, { codes: [] }), [krijgt14()]))
+      .toEqual([{ driverId: 'b', date: DAG, dienst: 'FD', bron: 'onbekend', bronLeeg: 'planningscodes' }]);
+    expect(toets(standMet({ Bert: '13' }, { services: [] }), [krijgt14()]))
+      .toEqual([{ driverId: 'b', date: DAG, dienst: '13', bron: 'onbekend', bronLeeg: 'dienstoverzicht' }]);
+    expect(toets(standMet({ Bert: 'FD' }, { services: [], codes: [] }), [krijgt14()]))
+      .toEqual([{ driverId: 'b', date: DAG, dienst: 'FD', bron: 'onbekend', bronLeeg: 'beide' }]);
+    // Beide lijsten gevuld: zoals altijd, zonder bronLeeg.
+    expect(toets(standMet({ Bert: 'FD' }, {}), [krijgt14()]))
+      .toEqual([{ driverId: 'b', date: DAG, dienst: 'FD', bron: 'onbekend' }]);
+  });
+
+  it('een lege lijst verandert niets aan rijen, code-diensten, overname-codes en een lege cel', () => {
+    expect(toets({ ...standMet({}, { services: [], codes: [] }), rijen: [{ driverId: 'b', line: '12' }] }, [krijgt14()]))
+      .toEqual([{ driverId: 'b', date: DAG, dienst: '12', bron: 'rijen' }]);
+    // Een schoolrit uit de planningscodes blijft een code-dienst, ook zonder dienstoverzicht.
+    expect(toets(standMet({ Bert: 'EEK6' }, { services: [] }), [krijgt14()]))
+      .toEqual([{ driverId: 'b', date: DAG, dienst: 'EEK6', bron: 'bord' }]);
+    expect(toets(standMet({ Bert: 'vrij' }, { services: [], codes: [] }), [krijgt14()])).toEqual([]);
+    expect(toets(standMet({ Bert: 'bv' }, { codes: [] }), [krijgt14()])).toEqual([]);
+    expect(toets(standMet({}, { services: [], codes: [] }), [krijgt14()])).toEqual([]);
+  });
+
   it('geldt voor elke ontvangst, op elke dag; rijen gaan vóór het bord', () => {
     const dag1 = stand({ Bert: 'EEK6' });
     const dag2 = stand({ Cis: 'vrij' }, [{ driverId: 'c', line: '13' }], DAG2);
@@ -118,8 +148,35 @@ describe('ontvangstenVanRuil', () => {
 
 describe('onbekendeCodeFout', () => {
   it('noemt de chauffeur, de dag en de code, en zegt wat de planner kan doen', () => {
-    expect(onbekendeCodeFout('Bert', DAG, 'FD')).toBe(
-      "Bert staat op 24/07/2026 op 'FD', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of Bert die dag een dienst rijdt.",
+    expect(onbekendeCodeFout('Bert', { date: DAG, dienst: 'FD' })).toBe(
+      "Bert staat op 24/07/2026 op 'FD', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of het een dienst is.",
     );
+  });
+
+  it('kwam een lijst leeg terug: niet "voeg de code toe", wel wat er echt aan de hand is (1c)', () => {
+    expect(onbekendeCodeFout('Bert', { date: DAG, dienst: 'FD', bronLeeg: 'planningscodes' })).toBe(
+      'De planningscodes kwamen leeg terug, dus het portaal kan niet nagaan of Bert op 24/07/2026 al een dienst rijdt. Er is niets gewijzigd. Kijk Planningscodes na en probeer opnieuw.',
+    );
+    expect(onbekendeCodeFout('Bert', { date: DAG, dienst: '13', bronLeeg: 'dienstoverzicht' })).toBe(
+      'Het dienstoverzicht kwam leeg terug, dus het portaal kan niet nagaan of Bert op 24/07/2026 al een dienst rijdt. Er is niets gewijzigd. Kijk het Dienstoverzicht na en probeer opnieuw.',
+    );
+    expect(onbekendeCodeFout('Bert', { date: DAG, dienst: 'FD', bronLeeg: 'beide' })).toBe(
+      'Het dienstoverzicht en de planningscodes kwamen leeg terug, dus het portaal kan niet nagaan of Bert op 24/07/2026 al een dienst rijdt. Er is niets gewijzigd. Kijk beide lijsten na en probeer opnieuw.',
+    );
+  });
+
+  it('de app toont de melding zelf, ook bij een lange naam en een lange code', () => {
+    // meldSchrijffout toont een servertekst alleen als die veilig en hoogstens
+    // 240 tekens is; anders wordt het een algemene zin (src/lib/fouten.ts).
+    const naam = 'Alexandra Vandenbroucke-Vanderstraeten';
+    for (const bronLeeg of [undefined, 'dienstoverzicht', 'planningscodes', 'beide'] as const) {
+      const tekst = onbekendeCodeFout(naam, { date: DAG, dienst: 'naar garage brengen', bronLeeg });
+      expect(isVeiligeFouttekst(tekst), tekst).toBe(true);
+      expect(leesFout({ status: 409, message: tekst }).tekst).toBe(tekst);
+    }
+    // Bij een lege lijst zegt de melding zelf wat te doen: er komt geen
+    // "Iemand anders heeft dit intussen gewijzigd" achter.
+    const leeg = onbekendeCodeFout(naam, { date: DAG, dienst: 'FD', bronLeeg: 'planningscodes' });
+    expect(schrijffout('Dienstwissel', { status: 409, message: leeg })).toBe(`Dienstwissel is mislukt. ${leeg}`);
   });
 });

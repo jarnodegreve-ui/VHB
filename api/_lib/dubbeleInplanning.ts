@@ -26,7 +26,7 @@
 import { DAG_DMJ, isTakeoverCode, toLookupToken } from "../helpers.js";
 import { getShiftsOnDate, getSwapsData } from "../storage.js";
 import { dienstOpBord } from "../../shared/bordBezetting.js";
-import { bordOpDag, laadBordVast, type BordVanDag, type BordVast } from "./codeDienst.js";
+import { bordOpDag, laadBordVast, type BordVanDag, type BordVast, type BronLeeg } from "./codeDienst.js";
 
 const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -48,7 +48,7 @@ export type Ontvangst = {
 /** Wat er op één dag staat: de rijen in de planning en het bord. */
 export type DagStand = {
   rijen: Array<{ driverId?: unknown; line?: unknown }>;
-  bord: Pick<BordVanDag, "celVan" | "isCodeDienst" | "isBekend">;
+  bord: Pick<BordVanDag, "celVan" | "isCodeDienst" | "isBekend"> & Partial<Pick<BordVanDag, "bronLeeg">>;
 };
 
 export type DubbeleInplanning = {
@@ -59,6 +59,9 @@ export type DubbeleInplanning = {
   /** Waar hij staat: in de planning-rijen, als code-dienst op het bord, of
    *  als code die het portaal niet kent. */
   bron: "rijen" | "bord" | "onbekend";
+  /** Alleen bij "onbekend": het dienstoverzicht of de planningscodes kwam
+   *  leeg terug, dus de code is niet onbekend maar niet te beoordelen. */
+  bronLeeg?: BronLeeg;
 };
 
 /**
@@ -86,7 +89,10 @@ export const dubbeleInplanningen = (
     } else if (cel && cel.kind === "unknown" && !cel.hiddenService) {
       const token = toLookupToken(cel.code);
       if (token && !isTakeoverCode(cel.code) && !stand.bord.isBekend(cel.code) && !telNiet.has(token)) {
-        uitBord.push({ driverId: o.driverId, date: o.date, dienst: cel.code, bron: "onbekend" });
+        uitBord.push({
+          driverId: o.driverId, date: o.date, dienst: cel.code, bron: "onbekend",
+          ...(stand.bord.bronLeeg ? { bronLeeg: stand.bord.bronLeeg } : {}),
+        });
       }
     }
   }
@@ -117,6 +123,27 @@ export const laadDagStanden = async (dagen: unknown[], vooraf?: { swaps?: any[];
   return { vast, standOp: (dag: string) => perDag.get(dag) };
 };
 
-/** De melding bij een code die het portaal niet kent. */
-export const onbekendeCodeFout = (naam: string, date: string, code: string) =>
-  `${naam} staat op ${DAG_DMJ(date)} op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of ${naam} die dag een dienst rijdt.`;
+const LEEG: Record<BronLeeg, { wat: string; plek: string }> = {
+  dienstoverzicht: { wat: "Het dienstoverzicht kwam leeg terug", plek: "het Dienstoverzicht" },
+  planningscodes: { wat: "De planningscodes kwamen leeg terug", plek: "Planningscodes" },
+  beide: { wat: "Het dienstoverzicht en de planningscodes kwamen leeg terug", plek: "beide lijsten" },
+};
+
+/**
+ * De melding bij een code die het portaal niet kent.
+ *
+ * Kwam het dienstoverzicht of kwamen de planningscodes leeg terug, dan is de
+ * code niet onbekend maar niet te beoordelen, en zou "voeg ze toe in
+ * Planningscodes" de planner op een dwaalspoor zetten (controle 29-09, 1c).
+ * Het blijft een 409 waarbij niets geschreven wordt: de app toont de tekst
+ * van een 409, die van een 503 niet (daar wordt het "het portaal is even in
+ * onderhoud", src/lib/fouten.ts). De melding blijft onder 240 tekens, anders
+ * valt de app terug op een algemene zin (isVeiligeFouttekst).
+ */
+export const onbekendeCodeFout = (naam: string, c: Pick<DubbeleInplanning, "date" | "dienst" | "bronLeeg">) => {
+  if (c.bronLeeg) {
+    const { wat, plek } = LEEG[c.bronLeeg];
+    return `${wat}, dus het portaal kan niet nagaan of ${naam} op ${DAG_DMJ(c.date)} al een dienst rijdt. Er is niets gewijzigd. Kijk ${plek} na en probeer opnieuw.`;
+  }
+  return `${naam} staat op ${DAG_DMJ(c.date)} op '${c.dienst}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of het een dienst is.`;
+};

@@ -149,7 +149,7 @@ export const dubbeleInplanningFout = async (swap: {
   const naam = vast.users.find((u: any) => String(u.id) === conflict.driverId)?.name
     ?? (conflict.driverId === String(swap.targetDriverId ?? "").trim() ? "De collega" : "De aanvrager");
   return conflict.bron === "onbekend"
-    ? onbekendeCodeFout(naam, conflict.date, conflict.dienst)
+    ? onbekendeCodeFout(naam, conflict)
     : `${naam} rijdt op ${DAG_DMJ(conflict.date)} al dienst ${conflict.dienst}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
 };
 

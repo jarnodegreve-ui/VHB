@@ -210,7 +210,7 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
     const opBord = conflicten[0];
     if (opBord) {
       return { fout: { status: 409, error: opBord.bron === "onbekend"
-        ? onbekendeCodeFout(driver.name, date, opBord.dienst)
+        ? onbekendeCodeFout(driver.name, opBord)
         : `${driver.name} rijdt op ${DAG_DMJ(date)} al dienst ${opBord.dienst}, dubbele inplanning kan niet.` } };
     }
     assignments[bestaandeKey ?? driver.name] = String(service.serviceNumber);

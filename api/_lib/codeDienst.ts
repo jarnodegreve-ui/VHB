@@ -43,6 +43,18 @@ export const dienstOpCel = (cel: OverlayCel | undefined, line: unknown): string 
 /** Alles waaruit het bord van een dag (of maand) berekend wordt. */
 export type BordBron = { rows: any[]; users: CelWaarheidUser[]; services: any[]; codes: any[]; leave: any[]; swaps: any[] };
 
+/** Welke lijst leeg terugkwam. Dan kent het portaal geen enkele code van die
+ *  soort en is elke cel "onbekend": een lege lijst is geen bewijs dat een
+ *  code onbekend is (controle 29-09, 1c). */
+export type BronLeeg = "dienstoverzicht" | "planningscodes" | "beide";
+
+const bronLeegVan = (services: unknown[], codes: unknown[]): BronLeeg | null => {
+  if (services.length === 0 && codes.length === 0) return "beide";
+  if (services.length === 0) return "dienstoverzicht";
+  if (codes.length === 0) return "planningscodes";
+  return null;
+};
+
 /** Pure kern van `bordOpDag`: het bord van één dag uit een al geladen bron.
  *  Zo betaalt een route die de matrix, de diensten of de ruilen al in handen
  *  heeft er geen tweede lezing voor. */
@@ -64,6 +76,9 @@ export const bordVanDag = (date: string, bron: BordBron) => {
     /** Kent het portaal deze code: staat ze in het dienstoverzicht of in de
      *  planningscodes (welke categorie ook)? */
     isBekend: (code: unknown): boolean => bekend.has(toLookupToken(String(code ?? ""))),
+    /** Kwam het dienstoverzicht of kwamen de planningscodes leeg terug? Dan
+     *  kan het portaal een code niet beoordelen (api/_lib/dubbeleInplanning.ts). */
+    bronLeeg: bronLeegVan(bron.services, bron.codes),
     swaps: bron.swaps,
     leave: bron.leave,
   };

@@ -5466,7 +5466,7 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
       mem.planningMatrix[0] = dag('m-d1', DAG, { 'Chauffeur A': 'EEK6', 'Chauffeur B': code, 'Chauffeur C': '14', 'Chauffeur D': 'vrij' });
     };
     const onbekend = (naam: string, datum: string, code: string) =>
-      `${naam} staat op ${datum} op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of ${naam} die dag een dienst rijdt.`;
+      `${naam} staat op ${datum} op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of het een dienst is.`;
     const overname = (extra: Record<string, unknown> = {}) => ({
       id: 's-onb', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '',
       createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14', ...extra,
@@ -5638,30 +5638,84 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
       });
     });
 
+    // Controle 29-09, 1c: een lege lijst is geen bewijs dat een code onbekend
+    // is. Het blijft een weigering (409, er wordt niets geschreven), maar de
+    // melding zegt wat er echt aan de hand is in plaats van "voeg de code toe
+    // in Planningscodes". Een 409 en geen 503: de app toont de tekst van een
+    // 409, en maakt van een 503 "het portaal is even in onderhoud".
+    const leegMelding = (wat: string, plek: string) =>
+      `${wat}, dus het portaal kan niet nagaan of Chauffeur B op 24/07/2026 al een dienst rijdt. Er is niets gewijzigd. Kijk ${plek} na en probeer opnieuw.`;
+    const nietVoegToe = (r: { goedkeuren: any; handmatig: any }) => {
+      for (const res of [r.handmatig, r.goedkeuren]) expect(String(res.json?.error)).not.toContain('Voeg ze eerst toe');
+    };
+
     describe('met een lege planningscodes-tabel', () => {
       beforeEach(() => { mem.planningCodes = []; });
 
-      it.each(['opl', 'ziek', 'kv', 'fd', 'EEK6'])("wordt geweigerd: '%s' is dan een onbekende code", async (code) => {
+      it.each(['opl', 'ziek', 'kv', 'fd', 'EEK6'])("wordt geweigerd met de melding dat de planningscodes leeg terugkwamen: '%s'", async (code) => {
         metCode(code);
-        verwacht(await beide(), 409, `Chauffeur B staat op 24/07/2026 op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes.`);
+        const r = await beide();
+        verwacht(r, 409, leegMelding('De planningscodes kwamen leeg terug', 'Planningscodes'));
+        nietVoegToe(r);
       });
 
       it.each(['vrij', 'bv', 'tk', 'ta', '', '13'])("blijft doorgaan: '%s'", async (code) => {
         metCode(code);
         verwacht(await beide(), 200);
       });
+
+      it('elk schrijfpad weigert en schrijft niets; overname aanvragen en toewijzen houden hun eigen melding', async () => {
+        metCode('kv');
+        const leeg = leegMelding('De planningscodes kwamen leeg terug', 'Planningscodes');
+        const nieuw = { id: 's-nieuw-leeg', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'pending', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname' };
+        const paden: Array<[string, any[], () => Promise<any>, string]> = [
+          ['handmatige wissel', [], () => wissel({ line: '14', fromDriverId: C, toDriverId: B }), leeg],
+          ['goedkeuren via PATCH', [overname()], () => keurGoed('s-gemeten'), leeg],
+          ['goedkeuren via de lijst', [overname()], () => keurGoedViaLijst('s-gemeten'), leeg],
+          // Deze twee weigerden een cel die geen overname-code is altijd al,
+          // vóór de regel tegen dubbele inplanning, met hun eigen melding.
+          ['overname aanvragen', [], () => api('POST', '/api/swaps', { token: 'tok-planner', body: [nieuw] }), "Chauffeur B staat op 24/07/2026 ingepland als 'kv'."],
+          ['dienst toewijzen', [], () => wijsToe(B), "Chauffeur B staat op 2026-07-24 al op 'kv' in de planning, die cel kan niet stil overschreven worden."],
+        ];
+        for (const [naam, ruilen, doe, melding] of paden) {
+          mem.swaps = ruilen;
+          const voor = JSON.stringify({ planning: mem.planning, swaps: mem.swaps, matrix: mem.planningMatrix });
+          const res = await doe();
+          expect([naam, res.status]).toEqual([naam, 409]);
+          expect(String(res.json?.error), naam).toContain(melding);
+          expect(JSON.stringify({ planning: mem.planning, swaps: mem.swaps, matrix: mem.planningMatrix }), naam).toBe(voor);
+        }
+      });
     });
 
     describe('met een leeg dienstoverzicht', () => {
       beforeEach(() => { mem.services = []; });
 
-      it('wordt geweigerd: een dienstnummer zonder rijen is dan een onbekende code', async () => {
+      it('wordt geweigerd met de melding dat het dienstoverzicht leeg terugkwam', async () => {
         metCode('13');
-        verwacht(await beide(), 409, "Chauffeur B staat op 24/07/2026 op '13', en die code staat niet in het dienstoverzicht of de planningscodes.");
+        const r = await beide();
+        verwacht(r, 409, leegMelding('Het dienstoverzicht kwam leeg terug', 'het Dienstoverzicht'));
+        nietVoegToe(r);
       });
 
       it('blijft doorgaan: de collega staat op vrij', async () => {
         metCode('vrij');
+        verwacht(await beide(), 200);
+      });
+    });
+
+    describe('met beide lijsten leeg', () => {
+      beforeEach(() => { mem.services = []; mem.planningCodes = []; });
+
+      it('wordt geweigerd met de melding dat beide leeg terugkwamen', async () => {
+        metCode('kv');
+        const r = await beide();
+        verwacht(r, 409, leegMelding('Het dienstoverzicht en de planningscodes kwamen leeg terug', 'beide lijsten'));
+        nietVoegToe(r);
+      });
+
+      it.each(['vrij', 'bv', ''])("blijft doorgaan: '%s'", async (code) => {
+        metCode(code);
         verwacht(await beide(), 200);
       });
     });
