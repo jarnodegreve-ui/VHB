@@ -4,24 +4,19 @@ import type { Shift, User } from '../types';
 import { isoWeekNumber } from '../lib/week';
 import { MONTH_NAMES, serviceNumberOf, tijdvak } from '../lib/format';
 import { apiFetch } from '../lib/api';
+import { deelMinuten } from '../lib/shiftTime';
 import { Button } from '../components/primitives';
 
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
 
-export const minutesBetween = (start: string, end: string) => {
-  const s = start.split(':').map(Number);
-  const e = end.split(':').map(Number);
-  if (s.length < 2 || e.length < 2) return 0;
-  const startMin = s[0] * 60 + s[1];
-  let endMin = e[0] * 60 + e[1];
-  // Impliciete nachtdienst (eind ≤ start, bv. 22:00–06:00) = +24u — zelfde
-  // regel als buildVevent/isShiftActiveAt. Zonder dit telde de maandprint
-  // zo'n dienst als 0 uur en klopte geen enkel urenoverzicht van een
-  // nachtchauffeur (controleronde 30/07). Busvak-notatie (26:16) telde al goed.
-  if (endMin <= startMin) endMin += 1440;
-  return endMin - startMin;
-};
+/** Minuten van één planning-rij: de gedeelde regel `deelMinuten` (Jarno
+ *  29-09): 22:00 tot 06:00 is 8 uur (zonder die regel telde de maandprint een
+ *  nachtdienst vroeger als 0 uur, controleronde 30/07), busvak-notatie (26:16)
+ *  telt zoals ze er staat, en een deel met gelijke begin- en eindtijd of
+ *  zonder leesbare tijden telt 0. Via lib/shiftTime: een rechtstreekse import
+ *  uit shared/busvakTijd.ts maakte er een eigen chunk van. */
+export const minutesBetween = (start: string, end: string) => deelMinuten(start, end) ?? 0;
 
 const formatHours = (totalMinutes: number) => {
   const h = Math.floor(totalMinutes / 60);

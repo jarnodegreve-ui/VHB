@@ -192,8 +192,9 @@ describe('elke aanroepplek geeft nog wat haar oude parser gaf', () => {
   it('api/helpers.ts dienstMinuten (einde van één deel dat om 00:00 begint)', () => {
     for (const t of invoeren) {
       const p = oudLees(t as string);
-      // einde ≤ start telt als nacht: 00:00 tot 00:00 is een etmaal.
-      const verwacht = p === null ? null : p === 0 ? 1440 : p;
+      // Gelijke begin- en eindtijd (00:00 tot 00:00) is ongeldig: null (Jarno
+      // 29-09; vroeger telde einde ≤ start als nacht en was het een etmaal).
+      const verwacht = p === null || p === 0 ? null : p;
       expect(dienstMinutenServer({ startTime: '00:00', endTime: t }), naam(t)).toBe(verwacht);
     }
   });
@@ -201,7 +202,10 @@ describe('elke aanroepplek geeft nog wat haar oude parser gaf', () => {
   it('src/lib/dienstStatistiek.ts dienstMinuten (einde van één deel dat om 00:00 begint)', () => {
     for (const t of invoeren) {
       const dienst = { id: 'x', serviceNumber: 'x', startTime: '00:00', endTime: t as string };
-      expect(dienstMinutenStatistiek(dienst), naam(t)).toBe(oudStatistiek(t as string));
+      // De kerncijfers keuren nog strikt (oudStatistiek), maar 00:00 tot 00:00
+      // is sinds 29-09 ongeldig: null in plaats van 0.
+      const p = oudStatistiek(t as string);
+      expect(dienstMinutenStatistiek(dienst), naam(t)).toBe(p === 0 ? null : p);
     }
   });
 

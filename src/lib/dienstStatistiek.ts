@@ -1,11 +1,12 @@
 import type { Service } from '../types';
-import { parseHHMMStrikt } from '../../shared/busvakTijd';
+import { deelMinuten, parseHHMMStrikt } from '../../shared/busvakTijd';
 
 /**
  * Kerncijfers van het dienstoverzicht voor het zijvak (Dienstoverzicht en
  * Beheer dienstoverzicht): aantal diensten, aantal verschillende loops en
- * de langste/kortste dienst (som van de geldige delen, busvak-notatie —
- * "26:16" = 02:16 de volgende nacht, dus geen middernacht-omslag nodig).
+ * de langste/kortste dienst (som van de geldige delen, met dezelfde regel als
+ * de rest van het portaal: `deelMinuten`, einde vóór de start = over
+ * middernacht, busvak-uren zoals ze er staan).
  */
 export type DienstStatistiek = {
   diensten: number;
@@ -14,14 +15,13 @@ export type DienstStatistiek = {
   kortste: { serviceNumber: string; minuten: number } | null;
 };
 
-/** Gewerkte minuten van één dienst: som van de delen met geldige tijden;
- *  null als geen enkel deel te lezen is (dan telt de dienst niet mee).
+/** Gewerkte minuten van één dienst: som van de geldige delen; null als geen
+ *  enkel deel geldig is (dan telt de dienst niet mee).
  *
- *  Bewust niet de gedeelde deelMinuten (shared/busvakTijd.ts), want de
- *  uitkomst verschilt: een deel met het einde vóór de start ("22:00 tot
- *  06:00") wordt hier overgeslagen en telt daar als nacht (8 uur), en een
- *  deel met gelijke begin- en eindtijd is hier 0 en daar een etmaal. Welke
- *  regel juist is, is een productbeslissing (src/dienstMinuten.test.ts). */
+ *  De duur van een deel is de gedeelde `deelMinuten` (Jarno 29-09): 22:00 tot
+ *  06:00 telt als 8 uur, een deel met gelijke begin- en eindtijd is ongeldig
+ *  en telt niet mee. Keuren blijft strikt (`parseHHMMStrikt`, zoals de
+ *  planningsopbouw): een tijd met seconden maakt geen geldig deel. */
 export function dienstMinuten(s: Service): number | null {
   const delen: Array<[string | undefined, string | undefined]> = [
     [s.startTime, s.endTime],
@@ -31,10 +31,10 @@ export function dienstMinuten(s: Service): number | null {
   let totaal = 0;
   let geldig = false;
   for (const [van, tot] of delen) {
-    const a = parseHHMMStrikt(van);
-    const b = parseHHMMStrikt(tot);
-    if (a === null || b === null || b < a) continue;
-    totaal += b - a;
+    if (parseHHMMStrikt(van) === null || parseHHMMStrikt(tot) === null) continue;
+    const duur = deelMinuten(van, tot);
+    if (duur === null) continue;
+    totaal += duur;
     geldig = true;
   }
   return geldig ? totaal : null;
