@@ -79,6 +79,9 @@ export interface MailOpbouw {
   portaalUrl: string;
 }
 
+/** Binnenmarge van de knop; op de link én (voor Outlook) op de cel. */
+const KNOP_MARGE = "12px 22px";
+
 const P = (inhoud: string, extra = "") =>
   `<p style="margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: ${MAIL_KLEUR.tekst};${extra}">${inhoud}</p>`;
 
@@ -118,9 +121,14 @@ ${o.feiten.map((f) => `<tr>
   <p style="margin: 0; font-size: 14px; line-height: 1.6; color: ${MAIL_KLEUR.tekst}; white-space: pre-wrap;">${escapeMailHtml(o.blok.tekst)}</p>
 </td></tr></table>`
     : "";
+  // Outlook op Windows (Word-motor) negeert padding op een <a>: de knop was
+  // daar een donker vlak strak om de tekst. De marge staat daarom óók op de
+  // cel, als `mso-padding-alt` (alleen Outlook leest dat), met de achtergrond
+  // op de cel (`bgcolor` + stijl). Andere clients houden de padding op de
+  // link zelf, zodat de hele knop aanklikbaar blijft en er niets verschuift.
   const knop = o.knop
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 18px;"><tr><td style="background-color: ${MAIL_KLEUR.carbon}; border-radius: 8px;">
-  <a href="${escapeMailHtml(o.knop.url)}" style="display: inline-block; padding: 12px 22px; font-size: 14px; font-weight: 600; color: ${MAIL_KLEUR.wit}; text-decoration: none;">${escapeMailHtml(o.knop.tekst)}</a>
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 18px;"><tr><td bgcolor="${MAIL_KLEUR.carbon}" style="background-color: ${MAIL_KLEUR.carbon}; border-radius: 8px; mso-padding-alt: ${KNOP_MARGE};">
+  <a href="${escapeMailHtml(o.knop.url)}" style="display: inline-block; padding: ${KNOP_MARGE}; mso-padding-alt: 0; font-size: 14px; font-weight: 600; color: ${MAIL_KLEUR.wit}; text-decoration: none;">${escapeMailHtml(o.knop.tekst)}</a>
 </td></tr></table>`
     : "";
   const voet = o.voet ? `<p style="margin: 0 0 6px; font-size: 12px; line-height: 1.6; color: ${MAIL_KLEUR.gedempt};">${escapeMailHtml(o.voet)}</p>` : "";

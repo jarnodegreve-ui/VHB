@@ -77,6 +77,16 @@ describe('bouwMail', () => {
     expect(text).not.toMatch(/\n{3,}/);
   });
 
+  it('de knop houdt zijn marge in Outlook: marge en achtergrond op de cel, de link blijft volledig aanklikbaar', () => {
+    const { html } = bouwMail(basis);
+    const cel = html.match(/<td[^>]*>\s*<a href="https:\/\/vhbportaal\.com\/verlof"[^>]*>/)?.[0] ?? '';
+    // Outlook (Word-motor) leest de padding van een <a> niet, wel die van de cel.
+    expect(cel).toContain('bgcolor="#0D0D0F"');
+    expect(cel).toMatch(/<td[^>]*style="[^"]*background-color: #0D0D0F;[^"]*mso-padding-alt: 12px 22px;/);
+    // Andere clients: de padding blijft op de link, dus hetzelfde beeld en de hele knop klikbaar.
+    expect(cel).toMatch(/<a [^>]*style="display: inline-block; padding: 12px 22px; mso-padding-alt: 0;/);
+  });
+
   it('zonder status, feiten, blok of knop blijft de opbouw geldig en leeg waar niets is', () => {
     const { html, text } = bouwMail({ portaalUrl: 'https://vhbportaal.com', titel: 'Testmail', nietBeantwoorden: false });
     expect(html).toContain('Testmail');
