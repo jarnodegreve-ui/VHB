@@ -118,7 +118,7 @@ export const toDatabaseUser = (user: AppUser) => ({
   section: user.section?.trim() || null,
   startdate: user.startDate?.trim() || null,
   // Elke rij draagt de kolom (PostgREST eist per batch dezelfde sleutels);
-  // saveUsersData valt terug op een upsert zonder, zolang de migratie ontbreekt.
+  // zonder de migratie geeft saveUsersData een fout met het .sql-bestand.
   ooktechnieker: user.ookTechnieker === true,
 });
 

@@ -1468,15 +1468,14 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
     .map(toDatabaseUser);
   for (const rijen of [bestaandeRijen, nieuweRijen] as Array<Record<string, unknown>>[]) {
     if (rijen.length === 0) continue;
-    let { error } = await client.from('users').upsert(rijen);
-    // Migratie 2026-09-28_users_ook_technieker.sql nog niet gedraaid: opnieuw
-    // zonder de kolom, zolang niemand de schakelaar aan heeft. Zet iemand hem
-    // aan, dan een duidelijke fout en geen stil verlies (zoals de plaats bij
-    // de omleidingen, 28-09). Bij elke save opnieuw geprobeerd, niet per warme
-    // lambda onthouden: dat overleefde daar de migratie.
-    if (error && isMissingColumnError(error)) {
-      if (rijen.some((rij) => rij.ooktechnieker === true)) throw new MigratieOntbreektError("users.ooktechnieker", OOK_TECHNIEKER_MIGRATIE);
-      ({ error } = await client.from('users').upsert(rijen.map(({ ooktechnieker: _weg, ...rest }) => rest)));
+    const { error } = await client.from('users').upsert(rijen);
+    // Kolom ooktechnieker ontbreekt (migratie 2026-09-28 niet gedraaid): een
+    // duidelijke fout met het .sql-bestand, bij elke save. Geen tweede poging
+    // zonder de kolom meer (controle 29-09): de migratie staat op productie
+    // en staging, en een stille terugval kostte bij de omleidingen wekenlang
+    // de plaats. Van de upsert zelf is dan niets geschreven.
+    if (error && isMissingColumnError(error) && /ooktechnieker/i.test(String((error as { message?: unknown }).message ?? ""))) {
+      throw new MigratieOntbreektError("users.ooktechnieker", OOK_TECHNIEKER_MIGRATIE);
     }
     if (error) throw error;
   }

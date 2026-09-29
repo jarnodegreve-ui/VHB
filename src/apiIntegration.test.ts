@@ -98,6 +98,10 @@ const mem = vi.hoisted(() => ({
   // saveUsersData-mock gooit dan dezelfde EmailInGebruikError als de echte
   // (de Auth-kant zelf zit in src/storageAuthSync.test.ts).
   authEmailBezet: null as string | null,
+  // De opslag meldt dat een kolom ontbreekt (migratie niet gedraaid), met
+  // dezelfde MigratieOntbreektError als de echte; de kant van de database zelf
+  // zit in src/storageOokTechnieker.test.ts.
+  migratieMist: null as 'users' | null,
   // Loon-tabellen voor de mini-PostgREST in de db.js-mock: loonStorage draait
   // hier integraal (inclusief de paginering voorbij de 1000-rijen-cap).
   loonRijen: {
@@ -358,6 +362,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     saveUsersData: async (data: any[]) => {
       const bezet = mem.authEmailBezet && data.find((u: any) => String(u.email || '').toLowerCase() === mem.authEmailBezet);
       if (bezet) throw new orig.EmailInGebruikError(bezet.email);
+      if (mem.migratieMist === 'users') throw new orig.MigratieOntbreektError('users.ooktechnieker', orig.OOK_TECHNIEKER_MIGRATIE);
       // Zelfde contract als de echte functie: nieuwe e-mailadressen = nieuw
       // Auth-account → welkomstmail-kandidaat.
       const beforeEmails = new Set(mem.users.map((u: any) => String(u.email || '').toLowerCase()).filter(Boolean));
@@ -872,6 +877,7 @@ beforeEach(() => {
   mem.userExpiries = [];
   mem.meldingen = [];
   mem.authEmailBezet = null;
+  mem.migratieMist = null;
   mem.loonRijen = { loon_codes: [], loon_medewerkers: [], dag_afsluitingen: [], dag_prestaties: [] };
   mem.loonVolgnummer = 0;
   mem.planningVersies = null;
@@ -6779,6 +6785,31 @@ describe('Ook technieker', () => {
     expect((await api('GET', '/api/dagafsluiting/2026-09-27', { token: 'tok-a' })).status).toBe(403);
     expect((await api('PATCH', '/api/leave/l-b1', { token: 'tok-a', body: { status: 'approved', ifStatus: 'pending' } })).status).toBe(403);
     expect((await api('GET', '/api/month-planning?month=2026-09&format=summary', { token: 'tok-a' })).status).toBe(403);
+  });
+
+  // Controle 29-09: de stille tweede poging zonder de kolom is weg. Ontbreekt
+  // de kolom, dan krijgt ook een gewone save (schakelaar uit) de melding.
+  it('zonder de kolom ooktechnieker: elke save geeft een 503 met het .sql-bestand, en er is niets bewaard', async () => {
+    const MELDING = 'De kolom users.ooktechnieker bestaat nog niet: draai supabase/2026-09-28_users_ook_technieker.sql in de SQL Editor.';
+    const rev = await revVan('3');
+    const voor = JSON.stringify(mem.users);
+    const logVoor = mem.activity.length;
+    mem.migratieMist = 'users';
+
+    const put = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], phone: '0470 11 22 33' }, headers: { [REV]: rev } });
+    expect(put.status).toBe(503);
+    expect(put.json.error).toBe(MELDING);
+
+    const nieuw = await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'Nieuwe Chauffeur', role: 'chauffeur', employeeId: 'VHB-900', isActive: true } });
+    expect(nieuw.status).toBe(503);
+    expect(nieuw.json.error).toBe(MELDING);
+
+    const lijst = await api('POST', '/api/users', { token: 'tok-admin', body: mem.users.map((u: any) => (u.id === '3' ? { ...u, phone: '0470 11 22 33' } : u)) });
+    expect(lijst.status).toBe(503);
+    expect(lijst.json.error).toBe(MELDING);
+
+    expect(JSON.stringify(mem.users)).toBe(voor);
+    expect(mem.activity.length).toBe(logVoor);
   });
 });
 
