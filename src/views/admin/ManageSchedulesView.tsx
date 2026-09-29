@@ -8,6 +8,7 @@ import { cn, notify, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
+import { matrixVerzoek, pakBestandIn, teGrootFout, type IngepaktBestand } from '../../lib/bestandInpakken';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
@@ -61,10 +62,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [isMatrixImporting, setIsMatrixImporting] = useState(false);
   const [matrixPreviewOpen, setMatrixPreviewOpen] = useState(false);
-  // Base64-encoded inhoud van het geüploade .xls/.xlsx-bestand. Blijft in
-  // state zodat de gebruiker in de preview kan bevestigen zonder opnieuw
-  // te uploaden.
-  const [pendingMatrixXlsxBase64, setPendingMatrixXlsxBase64] = useState('');
+  // Het geüploade .xls/.xlsx-bestand, één keer ingepakt (gzip, zie
+  // src/lib/bestandInpakken.ts). Blijft in state zodat een andere periode en
+  // de bevestiging precies hetzelfde versturen, zonder opnieuw te uploaden.
+  const [pendingMatrixBestand, setPendingMatrixBestand] = useState<IngepaktBestand | null>(null);
   const [pendingMatrixFilename, setPendingMatrixFilename] = useState('');
   // Terugzetten naar het herstelpunt van een import (admin-only): knop in de
   // historiek + expliciete bevestigmodal — dit vervangt de volledige planning.
@@ -191,31 +192,22 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClearingPlanning, setIsClearingPlanning] = useState(false);
 
-  // Lees binary file → base64 in chunks. btoa(String.fromCharCode(...arr))
-  // klapt over de stack-limit voor bestanden > ~1MB, dus we hakken het in
-  // stukken van 32 KB en concateneren.
-  const fileToBase64 = async (file: File): Promise<string> => {
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    const chunkSize = 0x8000;
-    let binary = '';
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
-    }
-    return btoa(binary);
-  };
-
-  const fetchMatrixPreview = async (xlsxBase64: string, periode?: { van: string; tot: string }) => {
-    const response = await apiFetch('/api/planning-matrix/preview', {
-      method: 'POST',
-      body: JSON.stringify(periode ? { xlsxBase64, periode } : { xlsxBase64 }),
-    });
+  // Eén weg naar voorbeeld en import: dezelfde ingepakte body, eerst langs de
+  // controle op de platformgrens (matrixVerzoek). Een 413 zonder JSON komt
+  // van het platform zelf en krijgt dezelfde uitleg met de grens, niet alleen
+  // "Maak het bestand kleiner".
+  const verstuurMatrix = async (pad: string, bestand: IngepaktBestand, extra?: Record<string, unknown>) => {
+    const response = await apiFetch(pad, { method: 'POST', body: matrixVerzoek(bestand, extra) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 413 && !data.error) throw teGrootFout(bestand);
       throw Object.assign(new Error(data.details || data.error || ''), { status: response.status });
     }
     return data;
   };
+
+  const fetchMatrixPreview = (bestand: IngepaktBestand, periode?: { van: string; tot: string }) =>
+    verstuurMatrix('/api/planning-matrix/preview', bestand, periode ? { periode } : undefined);
 
   const previewToState = (data: any) => ({
     importedDays: data.importedDays || 0,
@@ -285,9 +277,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
     try {
       setIsMatrixImporting(true);
-      const xlsxBase64 = await fileToBase64(file);
-      const data = await fetchMatrixPreview(xlsxBase64);
-      setPendingMatrixXlsxBase64(xlsxBase64);
+      const bestand = await pakBestandIn(file);
+      const data = await fetchMatrixPreview(bestand);
+      setPendingMatrixBestand(bestand);
       setPendingMatrixFilename(file.name);
       setZiekteGeregistreerd(new Set());
       setMatrixPreview(previewToState(data));
@@ -308,11 +300,11 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const handlePeriodeChange = async (van: string, tot: string) => {
     setPeriodeVan(van);
     setPeriodeTot(tot);
-    if (!pendingMatrixXlsxBase64 || !van || !tot || van > tot) return;
+    if (!pendingMatrixBestand || !van || !tot || van > tot) return;
     const volgnummer = ++previewVolgnummerRef.current;
     try {
       setIsPreviewVerversen(true);
-      const data = await fetchMatrixPreview(pendingMatrixXlsxBase64, { van, tot });
+      const data = await fetchMatrixPreview(pendingMatrixBestand, { van, tot });
       if (volgnummer !== previewVolgnummerRef.current) return;
       setMatrixPreview(previewToState(data));
     } catch (error) {
@@ -345,30 +337,21 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   };
 
   const confirmMatrixImport = async () => {
-    if (!pendingMatrixXlsxBase64) {
+    if (!pendingMatrixBestand) {
       notify('Er is geen matrixbestand klaar om te importeren.', 'error');
       return;
     }
 
     try {
       setIsMatrixImporting(true);
-      const response = await apiFetch('/api/planning-matrix/import', {
-        method: 'POST',
-        body: JSON.stringify({
-          xlsxBase64: pendingMatrixXlsxBase64,
-          // Bestandsnaam mee voor de historiek ("welk bestand was dit ook
-          // alweer?") — puur informatief.
-          ...(pendingMatrixFilename ? { filename: pendingMatrixFilename } : {}),
-          // Zelfde periode als het getoonde voorbeeld — de import verwerkt
-          // en vervangt alleen de geselecteerde dagen.
-          ...(periodeVan && periodeTot ? { periode: { van: periodeVan, tot: periodeTot } } : {}),
-        }),
+      const data = await verstuurMatrix('/api/planning-matrix/import', pendingMatrixBestand, {
+        // Bestandsnaam mee voor de historiek ("welk bestand was dit ook
+        // alweer?") — puur informatief.
+        ...(pendingMatrixFilename ? { filename: pendingMatrixFilename } : {}),
+        // Zelfde periode als het getoonde voorbeeld — de import verwerkt
+        // en vervangt alleen de geselecteerde dagen.
+        ...(periodeVan && periodeTot ? { periode: { van: periodeVan, tot: periodeTot } } : {}),
       });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw Object.assign(new Error(data.details || data.error || ''), { status: response.status });
-      }
 
       const syncNotes: string[] = [];
       if (Array.isArray(data.unknownCodes) && data.unknownCodes.length > 0) {
@@ -386,7 +369,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         'success'
       );
       setMatrixPreviewOpen(false);
-      setPendingMatrixXlsxBase64('');
+      setPendingMatrixBestand(null);
       setPendingMatrixFilename('');
       setMatrixPreview(null);
       setPeriodeVan('');
@@ -1252,7 +1235,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   className="flex-1"
                   onClick={() => {
                     setMatrixPreviewOpen(false);
-                    setPendingMatrixXlsxBase64('');
+                    setPendingMatrixBestand(null);
                     setPendingMatrixFilename('');
                     setMatrixPreview(null);
                     setPeriodeVan('');
