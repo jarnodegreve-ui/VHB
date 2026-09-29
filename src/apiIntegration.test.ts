@@ -76,6 +76,9 @@ const mem = vi.hoisted(() => ({
   // een route ze één keer leest, niet per ruil in een lus.
   servicesLezingen: 0,
   codesLezingen: 0,
+  // true = de lezing faalt (databasefout), zoals de echte lezers dan gooien.
+  servicesFaalt: false,
+  codesFaalt: false,
   // Id-filters waarmee getSwapVerloopRegels aangeroepen werd (null = alles),
   // en een schakelaar om de logquery te laten mislukken.
   verloopFilters: [] as Array<string[] | null>,
@@ -446,7 +449,11 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.planning.filter((s: any) =>
         (!f?.driverId || String(s.driverId) === String(f.driverId)) &&
         (!f?.monthIso || String(s.date ?? '').startsWith(`${f.monthIso}-`))),
-    getServicesData: async () => { mem.servicesLezingen += 1; return mem.services; },
+    getServicesData: async () => {
+      mem.servicesLezingen += 1;
+      if (mem.servicesFaalt) throw new Error('services: connection failure');
+      return mem.services;
+    },
     saveServicesData: async (data: any[]) => { mem.services = data; },
     getUpdatesData: async () => mem.updates,
     // Zoals de echte: een upsert noemt alleen de eigen kolommen, dus
@@ -521,7 +528,11 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       // De oude marker gaat mee op null (zoals de echte update-query).
       delete d.pdfUrl;
     },
-    getPlanningCodesData: async () => { mem.codesLezingen += 1; return mem.planningCodes; },
+    getPlanningCodesData: async () => {
+      mem.codesLezingen += 1;
+      if (mem.codesFaalt) throw new Error('planning_codes: connection failure');
+      return mem.planningCodes;
+    },
     savePlanningCodesData: async (data: any[]) => { mem.planningCodes = data; },
     logActivity: async (_req: any, domain: string, action: string, message: string, entity?: { type?: string; id?: string }) => {
       // actorName/actorRole/gelogdOp: wie de regel schreef, zoals de echte
@@ -858,6 +869,8 @@ beforeEach(() => {
   mem.swapFilters = [];
   mem.servicesLezingen = 0;
   mem.codesLezingen = 0;
+  mem.servicesFaalt = false;
+  mem.codesFaalt = false;
   mem.verloopFilters = [];
   mem.verloopFaalt = false;
   mem.clientErrors = [];
@@ -5567,6 +5580,119 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
       expect(res.status).toBe(409);
       expect(String(res.json?.error)).toContain("Chauffeur B staat op 2026-07-24 al op 'FD' in de planning");
       expect(mem.planningMatrix[0].assignments['Chauffeur B']).toBe('FD');
+    });
+  });
+
+  describe('variant 2, gemeten gevallen (tegenlezing 29-09)', () => {
+    // Wat de tegenlezer mat, zwart op wit: welke cellen bij de ontvanger van
+    // 200 naar 409 gingen en welke 200 bleven. De regel zelf is niet gewijzigd.
+    // Of de matrix op productie zulke codes bevat, is niet nagekeken.
+    const metCode = (code: string) => {
+      mem.planningMatrix[0] = dag('m-d1', DAG, { 'Chauffeur A': 'EEK6', 'Chauffeur B': code, 'Chauffeur C': '14', 'Chauffeur D': 'vrij' });
+    };
+    const overname = () => ({ id: 's-gemeten', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14' });
+    /** De twee paden die de tegenlezer mat: handmatige wissel en goedkeuren. */
+    const beide = async () => {
+      mem.swaps = [overname()];
+      const goedkeuren = await keurGoed('s-gemeten');
+      mem.swaps = [];
+      mem.planning = [rij('sh-c14', C, '14'), rij('sh-b12', B, '12', DAG2)];
+      const handmatig = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      return { goedkeuren, handmatig };
+    };
+    const verwacht = (r: { goedkeuren: any; handmatig: any }, status: number, inMelding?: string) => {
+      expect([r.handmatig.status, r.goedkeuren.status]).toEqual([status, status]);
+      if (inMelding) for (const res of [r.handmatig, r.goedkeuren]) expect(String(res.json?.error)).toContain(inMelding);
+    };
+
+    describe('met de planningscodes eek5, eek6, vrij, ziek en opl', () => {
+      beforeEach(() => {
+        mem.planningCodes = [
+          { code: 'eek5', category: 'service', description: 'Schoolrit', countsAsShift: true },
+          { code: 'eek6', category: 'service', description: 'Schoolrit', countsAsShift: true },
+          { code: 'vrij', category: 'absence', description: 'Geen dienst', isDayOff: true },
+          { code: 'ziek', category: 'absence', description: 'Ziek', isDayOff: true },
+          { code: 'opl', category: 'training', description: 'Opleiding' },
+        ];
+      });
+
+      it.each(['kv', 'fd', 'rec', 'R', 'X', '99', 'v', 'bv/2', 'eek 6', 'EEK-6', 'EEK6/2', 'naar garage brengen'])(
+        "wordt geweigerd: de collega staat op '%s', een code die het portaal niet kent", async (code) => {
+          metCode(code);
+          verwacht(await beide(), 409, `Chauffeur B staat op 24/07/2026 op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes.`);
+        });
+
+      it.each(['EEK6', 'eek5'])("wordt geweigerd: de collega rijdt de schoolrit '%s'", async (code) => {
+        metCode(code);
+        verwacht(await beide(), 409, `Chauffeur B rijdt op 24/07/2026 al dienst ${code}`);
+      });
+
+      it.each(['vrij', 'bv', 'tk', 'ta', '', '-', '/', 'opl', 'ziek', '13'])("blijft doorgaan: de collega staat op '%s'", async (code) => {
+        // vrij/bv/tk/ta en een lege cel zijn nooit bezet. 'opl' en 'ziek'
+        // staan in Planningscodes en zijn dus bekend: de handmatige wissel en
+        // het goedkeuren toetsten een afwezigheidscode in de matrix nooit
+        // (alleen de afwezigheid uit het portaal), en doen dat nog altijd niet.
+        // '13' staat in het dienstoverzicht; zonder rijen is het geen conflict.
+        metCode(code);
+        verwacht(await beide(), 200);
+      });
+    });
+
+    describe('met een lege planningscodes-tabel', () => {
+      beforeEach(() => { mem.planningCodes = []; });
+
+      it.each(['opl', 'ziek', 'kv', 'fd', 'EEK6'])("wordt geweigerd: '%s' is dan een onbekende code", async (code) => {
+        metCode(code);
+        verwacht(await beide(), 409, `Chauffeur B staat op 24/07/2026 op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes.`);
+      });
+
+      it.each(['vrij', 'bv', 'tk', 'ta', '', '13'])("blijft doorgaan: '%s'", async (code) => {
+        metCode(code);
+        verwacht(await beide(), 200);
+      });
+    });
+
+    describe('met een leeg dienstoverzicht', () => {
+      beforeEach(() => { mem.services = []; });
+
+      it('wordt geweigerd: een dienstnummer zonder rijen is dan een onbekende code', async () => {
+        metCode('13');
+        verwacht(await beide(), 409, "Chauffeur B staat op 24/07/2026 op '13', en die code staat niet in het dienstoverzicht of de planningscodes.");
+      });
+
+      it('blijft doorgaan: de collega staat op vrij', async () => {
+        metCode('vrij');
+        verwacht(await beide(), 200);
+      });
+    });
+
+    describe('de lezing van de planningscodes of het dienstoverzicht faalt', () => {
+      // De echte lezers gooien bij een databasefout (api/storage.ts:
+      // getPlanningCodesData en paginatedFetch). Dat wordt een 500, geen
+      // "alles is onbekend": er wordt niets geweigerd met een misleidende
+      // melding over een onbekende code, en er wordt niets geschreven.
+      const nieuw = () => ({ id: 's-nieuw-fout', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'pending', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname' });
+      // Per pad: de ruilen die er vooraf staan, en de bewerking.
+      const paden = (): Array<[string, any[], () => Promise<any>]> => [
+        ['handmatige wissel', [], () => wissel({ line: '14', fromDriverId: C, toDriverId: B })],
+        ['goedkeuren via PATCH', [overname()], () => keurGoed('s-gemeten')],
+        ['goedkeuren via de lijst', [overname()], () => keurGoedViaLijst('s-gemeten')],
+        ['overname aanvragen', [], () => api('POST', '/api/swaps', { token: 'tok-planner', body: [nieuw()] })],
+        ['dienst toewijzen', [], () => wijsToe(B)],
+      ];
+
+      it.each(['codesFaalt', 'servicesFaalt'] as const)('%s: elk schrijfpad geeft 500 en schrijft niets', async (welke) => {
+        for (const [naam, ruilen, doe] of paden()) {
+          mem.swaps = ruilen;
+          const voor = JSON.stringify({ planning: mem.planning, swaps: mem.swaps, matrix: mem.planningMatrix });
+          mem[welke] = true;
+          const res = await doe();
+          mem[welke] = false;
+          expect([naam, res.status]).toEqual([naam, 500]);
+          expect(String(res.json?.error), naam).not.toContain('niet in het dienstoverzicht of de planningscodes');
+          expect(JSON.stringify({ planning: mem.planning, swaps: mem.swaps, matrix: mem.planningMatrix }), naam).toBe(voor);
+        }
+      });
     });
   });
 });
