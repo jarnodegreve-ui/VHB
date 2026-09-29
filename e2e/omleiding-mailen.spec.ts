@@ -9,14 +9,14 @@ import { ADMIN, seed } from './helpers';
 const OMLEIDING = { id: 'd1', line: '58', location: 'Zottegem', title: 'Werken Markt Zottegem', description: 'Omleiding via de ring.', startDate: '2026-09-20', endDate: '2026-10-10', _rev: 'r1',
   bijlagen: [{ slot: 1, filename: 'Omleidingsplan lijn 58.pdf', sizeBytes: 182_000, url: 'https://x.test/1.pdf' }] };
 
-async function opzet(page: Page, opties: { verstuur?: (body: any) => unknown } = {}) {
+async function opzet(page: Page, opties: { verstuur?: (body: any) => unknown; omleiding?: typeof OMLEIDING } = {}) {
   const calls: any[] = [];
   await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
   await seed(page, {
     user: ADMIN, view: 'beheer-omleidingen',
     extra: (pad, request) => {
       const m = request.method();
-      if (pad.endsWith('/api/diversions') && m === 'GET') return [OMLEIDING];
+      if (pad.endsWith('/api/diversions') && m === 'GET') return [opties.omleiding ?? OMLEIDING];
       if (pad.endsWith('/api/mails/verzendlijsten') && m === 'GET') return [{ id: 'l-1', naam: 'De Lijn', adressen: ['dispatching@delijn.be', 'planning@delijn.be'] }];
       if (pad.endsWith('/api/diversions/d1/mail') && m === 'POST') {
         const body = request.postDataJSON();
@@ -127,7 +127,11 @@ test('omleiding mailen: focus naar het eerste foute veld, Enter dient in, sluite
   await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
   await expect(paneel.getByText('Kies minstens één verzendlijst of adres')).toBeVisible();
   await expect(paneel.getByRole('checkbox', { name: 'Verzendlijst De Lijn' })).toBeFocused();
-  // Een fout adres: de focus gaat naar dat veld.
+  // Een fout adres (met een lijst gekozen): de focus gaat naar dat veld.
+  const vak = paneel.getByRole('checkbox', { name: 'Verzendlijst De Lijn' });
+  await vak.locator('..').click();
+  await expect(vak).toBeChecked();
+  await expect(paneel.getByText('Kies minstens één verzendlijst of adres')).toHaveCount(0);
   await paneel.getByLabel('Vrije adressen').fill('geen adres');
   await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
   await expect(paneel.getByText('Geen geldig adres: geen adres')).toBeVisible();
@@ -143,4 +147,33 @@ test('omleiding mailen: focus naar het eerste foute veld, Enter dient in, sluite
   await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
   await expect(page.getByRole('dialog', { name: 'Voorbeeld van de omleidingsmail' })).toBeVisible();
   expect(calls).toHaveLength(1);
+});
+
+test('omleiding mailen: een lange bestandsnaam kapt af binnen het paneel op 320 px', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Het smalle paneel is de telefoon.');
+  await page.setViewportSize({ width: 320, height: 640 });
+  const naam = 'Omleidingsplan lijn 58 en 82 Zottegem centrum fase 2 def.pdf';
+  expect(naam).toHaveLength(60);
+  await opzet(page, { omleiding: { ...OMLEIDING, bijlagen: [{ slot: 1, filename: naam, sizeBytes: 182_000, url: 'https://x.test/1.pdf' }] } });
+  const bewerk = page.getByRole('dialog', { name: /Omleiding bewerken/ });
+  await bewerk.getByRole('button', { name: 'Meer acties' }).click();
+  await page.getByRole('menuitem', { name: 'Mailen…' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Omleiding mailen' });
+  const bijlage = paneel.getByRole('list', { name: 'Bijlagen' }).getByRole('listitem').first();
+  await expect(bijlage).toBeVisible();
+  // Paneel en pil in hetzelfde frame meten: het paneel schuift nog binnen.
+  const maten = await bijlage.locator('> span').evaluate((pil) => {
+    const p = pil.closest('[role="dialog"]')!.getBoundingClientRect();
+    const b = pil.getBoundingClientRect();
+    const naamEl = pil.querySelector('span.truncate') as HTMLElement;
+    return { links: b.left - p.left, rechts: p.right - b.right, paneel: p.width, afgekapt: naamEl.scrollWidth > naamEl.clientWidth };
+  });
+  expect(maten.paneel).toBeLessThanOrEqual(320);
+  expect(maten.links, 'de pil begint binnen het paneel').toBeGreaterThanOrEqual(8);
+  expect(maten.rechts, 'de pil eindigt binnen het paneel').toBeGreaterThanOrEqual(8);
+  expect(maten.afgekapt, 'de naam is afgekapt, niet afgebroken of uitgelopen').toBe(true);
+  // Niets schuift horizontaal en de volledige naam blijft opvraagbaar.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect(bijlage.locator('> span')).toHaveAttribute('title', naam);
+  await expect(bijlage).toContainText('178');
 });

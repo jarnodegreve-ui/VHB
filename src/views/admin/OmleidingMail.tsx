@@ -118,7 +118,16 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
               <p className="mt-1 text-body-sm text-slate-500">Deze omleiding heeft geen PDF; de mail bevat de omschrijving en de periode.</p>
             ) : (
               <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Bijlagen">
-                {bijlagen.map((b) => <li key={b.slot}><Badge tone="slate" icon={<FileText size={12} />}>{b.filename}{b.sizeBytes != null ? ` · ${prettySize(b.sizeBytes)}` : ''}</Badge></li>)}
+                {/* Een lange bestandsnaam kapt af binnen het paneel (320 px); de
+                    grootte blijft staan en de volledige naam zit in de title. */}
+                {bijlagen.map((b) => (
+                  <li key={b.slot} className="min-w-0 max-w-full">
+                    <Badge tone="slate" icon={<FileText size={12} className="shrink-0" />} title={b.filename} className="max-w-full">
+                      <span className="min-w-0 truncate">{b.filename}</span>
+                      {b.sizeBytes != null && <span className="shrink-0">· {prettySize(b.sizeBytes)}</span>}
+                    </Badge>
+                  </li>
+                ))}
               </ul>
             )}
           </div>
