@@ -27,7 +27,7 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // severity bestaat live nog (nullable) maar wordt niet meer geschreven;
   // mapCoordinates bestaat live NIET en is uit de schrijfmapper gehaald.
   // location: plaats van de omleiding (2026-09-10_diversions_location.sql);
-  // zonder migratie valt de upsert terug op de kolommen zonder location.
+  // zonder migratie geeft de save een 503 met het .sql-bestand.
   // bijlagen: PDF-lijst per omleiding (2026-09-25_diversions_bijlagen.sql).
   { table: "diversions", columns: "id,line,title,description,startDate,endDate,severity,pdfUrl,location,bijlagen" },
   // updates stond hier niet; sinds 2026-09-21_updates_bijlagen.sql meldt de

@@ -1,11 +1,12 @@
 // @vitest-environment node
 /**
  * "Ook technieker" in de opslag (28-09): de kolom users.ooktechnieker komt
- * met een migratie die Jarno met de hand draait. Tot dan moet élke
- * gebruikers-save blijven werken (saveUsersData schrijft de hele lijst in één
- * upsert), en wie de schakelaar toch aanzet krijgt een duidelijke fout in
- * plaats van een stil verlies. Supabase is hier een in-memory users-tabel die
- * PGRST204 geeft zolang de kolom "ontbreekt".
+ * met een migratie die Jarno met de hand draait. Ontbreekt de kolom, dan
+ * geeft élke gebruikers-save een duidelijke fout met het .sql-bestand en
+ * wordt er niets geschreven. Tot de controle van 29-09 ging een gewone save
+ * dan stil opnieuw zonder de kolom; die terugval is weg, want de migratie
+ * staat op productie en staging. Supabase is hier een in-memory users-tabel
+ * die PGRST204 geeft zolang de kolom "ontbreekt".
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IncomingUser } from '../api/types';
@@ -13,6 +14,8 @@ import type { IncomingUser } from '../api/types';
 const mem = vi.hoisted(() => ({
   rijen: [] as any[],
   kolomOntbreekt: false,
+  // Een andere fout van de database op de upsert (null = geen).
+  upsertFout: null as { code: string; message: string } | null,
   upserts: [] as any[][],
 }));
 
@@ -24,6 +27,7 @@ vi.mock('../api/db.js', () => {
       range: async (from: number, to: number) => ({ data: mem.rijen.slice(from, to + 1), error: null }),
       delete: () => ({ in: async () => ({ error: null }) }),
       upsert: async (rijen: any[]) => {
+        if (mem.upsertFout) return { error: mem.upsertFout };
         if (mem.kolomOntbreekt && rijen.some((r) => 'ooktechnieker' in r)) {
           return { error: { code: 'PGRST204', message: "Could not find the 'ooktechnieker' column of 'users' in the schema cache" } };
         }
@@ -55,6 +59,7 @@ const invoer = (extra: Record<string, Partial<IncomingUser>> = {}): IncomingUser
 
 beforeEach(() => {
   mem.kolomOntbreekt = false;
+  mem.upsertFout = null;
   mem.upserts = [];
   mem.rijen = invoer().map((u) => ({ id: u.id, name: u.name, role: u.role, employeeid: u.employeeId, isactive: true, activesessions: 0 }));
 });
@@ -69,11 +74,25 @@ describe('saveUsersData: kolom ooktechnieker', () => {
     expect(users.find((u) => u.id === '1')).not.toHaveProperty('ookTechnieker');
   });
 
-  it('zonder de kolom (migratie niet gedraaid): elke gewone save blijft werken, zonder de kolom', async () => {
+  it('zonder de kolom (migratie niet gedraaid): ook een gewone save geeft de fout met het .sql-bestand, geen stille tweede poging', async () => {
     mem.kolomOntbreekt = true;
-    await expect(saveUsersData(invoer({ '2': { phone: '0470 11 22 33' } }))).resolves.toEqual({ createdAccounts: [] });
-    expect(mem.rijen.find((r) => r.id === '2')?.phone).toBe('0470 11 22 33');
-    expect(mem.upserts.flat().some((r) => 'ooktechnieker' in r)).toBe(false);
+    const voor = JSON.stringify(mem.rijen);
+    const poging = saveUsersData(invoer({ '2': { phone: '0470 11 22 33' } }));
+    await expect(poging).rejects.toBeInstanceOf(MigratieOntbreektError);
+    await expect(saveUsersData(invoer({ '2': { phone: '0470 11 22 33' } }))).rejects.toThrow(
+      'De kolom users.ooktechnieker bestaat nog niet: draai supabase/2026-09-28_users_ook_technieker.sql in de SQL Editor.',
+    );
+    // Niets half geschreven: geen enkele upsert kwam door, de rijen zijn ongewijzigd.
+    expect(mem.upserts).toEqual([]);
+    expect(JSON.stringify(mem.rijen)).toBe(voor);
+  });
+
+  it('een andere ontbrekende kolom krijgt niet het etiket van ooktechnieker: de fout van de database gaat ongewijzigd door', async () => {
+    mem.upsertFout = { code: 'PGRST204', message: "Could not find the 'startdate' column of 'users' in the schema cache" };
+    const poging = saveUsersData(invoer({ '2': { phone: '0470 11 22 33' } }));
+    await expect(poging).rejects.toMatchObject({ code: 'PGRST204' });
+    await expect(saveUsersData(invoer())).rejects.not.toBeInstanceOf(MigratieOntbreektError);
+    expect(mem.upserts).toEqual([]);
   });
 
   it('zonder de kolom en met de schakelaar aan: een fout met het .sql-bestand, en niets geschreven', async () => {

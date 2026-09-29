@@ -1468,15 +1468,14 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
     .map(toDatabaseUser);
   for (const rijen of [bestaandeRijen, nieuweRijen] as Array<Record<string, unknown>>[]) {
     if (rijen.length === 0) continue;
-    let { error } = await client.from('users').upsert(rijen);
-    // Migratie 2026-09-28_users_ook_technieker.sql nog niet gedraaid: opnieuw
-    // zonder de kolom, zolang niemand de schakelaar aan heeft. Zet iemand hem
-    // aan, dan een duidelijke fout en geen stil verlies (zoals de plaats bij
-    // de omleidingen, 28-09). Bij elke save opnieuw geprobeerd, niet per warme
-    // lambda onthouden: dat overleefde daar de migratie.
-    if (error && isMissingColumnError(error)) {
-      if (rijen.some((rij) => rij.ooktechnieker === true)) throw new MigratieOntbreektError("users.ooktechnieker", OOK_TECHNIEKER_MIGRATIE);
-      ({ error } = await client.from('users').upsert(rijen.map(({ ooktechnieker: _weg, ...rest }) => rest)));
+    const { error } = await client.from('users').upsert(rijen);
+    // Kolom ooktechnieker ontbreekt (migratie 2026-09-28 niet gedraaid): een
+    // duidelijke fout met het .sql-bestand, bij elke save. Geen tweede poging
+    // zonder de kolom meer (controle 29-09): de migratie staat op productie
+    // en staging, en een stille terugval kostte bij de omleidingen wekenlang
+    // de plaats. Van de upsert zelf is dan niets geschreven.
+    if (error && isMissingColumnError(error) && /ooktechnieker/i.test(String((error as { message?: unknown }).message ?? ""))) {
+      throw new MigratieOntbreektError("users.ooktechnieker", OOK_TECHNIEKER_MIGRATIE);
     }
     if (error) throw error;
   }
@@ -1759,7 +1758,7 @@ export const getDiversionsData = async () => {
   return rows.map(toPublicDiversion);
 };
 
-const zonderLocation = ({ location: _l, ...rest }: ReturnType<typeof toDatabaseDiversion>) => rest;
+export const DIVERSIONS_LOCATION_MIGRATIE = "supabase/2026-09-10_diversions_location.sql";
 
 export const saveDiversionsData = async (data: any) => {
   const client = requireDb();
@@ -1779,13 +1778,13 @@ export const saveDiversionsData = async (data: any) => {
   // upsert-fout de zojuist verwijderde records.
   if (normalized.length > 0) {
     const rows = normalized.map(toDatabaseDiversion);
-    let { error: upsertError } = await client.from('diversions').upsert(rows);
-    // Migratie 2026-09-10_diversions_location.sql nog niet gedraaid: opnieuw
-    // zonder `location`. Bewust bij elke save opnieuw geprobeerd en niet per
-    // warme lambda onthouden: dat liet de plaats na het draaien van de
-    // migratie stil wegvallen tot de lambda koud werd (Jarno 28-09).
-    if (upsertError && isMissingColumnError(upsertError)) {
-      ({ error: upsertError } = await client.from('diversions').upsert(rows.map(zonderLocation)));
+    const { error: upsertError } = await client.from('diversions').upsert(rows);
+    // Kolom location ontbreekt (migratie 2026-09-10 niet gedraaid): een
+    // duidelijke fout met het .sql-bestand. Geen tweede poging zonder de
+    // kolom meer (controle 29-09): door die terugval werd de plaats wekenlang
+    // stil niet bewaard, en de migratie staat op productie en staging.
+    if (upsertError && isMissingColumnError(upsertError) && /location/i.test(String((upsertError as { message?: unknown }).message ?? ""))) {
+      throw new MigratieOntbreektError("diversions.location", DIVERSIONS_LOCATION_MIGRATIE);
     }
     if (upsertError) throw upsertError;
   }

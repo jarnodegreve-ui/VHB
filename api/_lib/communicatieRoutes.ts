@@ -14,6 +14,7 @@ import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { authenticate, requireRole } from "../middleware.js";
 import { isMissingColumnError } from "../deviceGate.js";
+import { MigratieOntbreektError } from "../storage.js";
 import { urgentEmailRateLimit } from "../rateLimit.js";
 import { dienstenVerschillenVoorPlanning, heropbouwNaDienstoverzicht, ROOSTER_MELDING_RUST_MINUTEN } from "./planningHeropbouw.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
@@ -223,6 +224,8 @@ export function mountCommunicatieRoutes(app: express.Express) {
         res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
       }
     } catch (err: any) {
+      // Kolom location ontbreekt (migratie niet gedraaid): 503 met het .sql-bestand.
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
       console.error("Error saving diversions data:", errorMessage);
       console.error("Opslaan is mislukt.", errorMessage);
@@ -245,6 +248,8 @@ export function mountCommunicatieRoutes(app: express.Express) {
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.status(201).json({ success: true, diversion: await diversionResponseRecord(id) });
     } catch (err: any) {
+      // Kolom location ontbreekt (migratie niet gedraaid): 503 met het .sql-bestand.
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       console.error("Omleiding toevoegen is mislukt.", err?.message || err);
       res.status(500).json({ error: "Opslaan is mislukt." });
     }
@@ -268,6 +273,8 @@ export function mountCommunicatieRoutes(app: express.Express) {
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.json({ success: true, diversion: await diversionResponseRecord(id) });
     } catch (err: any) {
+      // Kolom location ontbreekt (migratie niet gedraaid): 503 met het .sql-bestand.
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       console.error("Omleiding opslaan is mislukt.", err?.message || err);
       res.status(500).json({ error: "Opslaan is mislukt." });
     }
@@ -286,6 +293,8 @@ export function mountCommunicatieRoutes(app: express.Express) {
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.json({ success: true });
     } catch (err: any) {
+      // Kolom location ontbreekt (migratie niet gedraaid): 503 met het .sql-bestand.
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       console.error("Omleiding verwijderen is mislukt.", err?.message || err);
       res.status(500).json({ error: "Verwijderen is mislukt." });
     }
