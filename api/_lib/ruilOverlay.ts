@@ -27,6 +27,14 @@ import type { SwapRecord } from "../types.js";
  * Volgorde = beslisvolgorde (decidedAt), zodat kettingen (A→B, daarna B→C)
  * kloppen: de laatste ruil op een cel bepaalt het merk. 'completed' telt
  * mee, een voltooide ruil is gereden zoals gewisseld.
+ *
+ * Wie niet op het bord staat (uit dienst, een andere rol) krijgt er geen
+ * dienst bij: een been naar hem wordt overgeslagen. Wat hij WEGGAF blijft wel
+ * bij de ontvanger (Jarno 29-09). Tot dan viel de hele ruil weg zodra één van
+ * beiden niet op het bord stond: werd de gever uit dienst gezet, dan stond de
+ * ontvanger weer als vrij op het bord terwijl hij de dienst nog reed.
+ * `buitenBord` = de gevers van wie de aanroeper de matrixcel meegeeft zonder
+ * dat ze op het bord staan; hun cellen dienen alleen de overlay.
  */
 export type OverlayCel = {
   code: string;
@@ -74,7 +82,7 @@ export const VRIJ_CEL: OverlayCel = { code: "vrij", kind: "absence", label: "Gee
 export function legRuilenOverMaandbeeld(
   cells: OverlayCellen,
   swaps: OverlayRuil[],
-  opts: { dates: Iterable<string>; chauffeurIds: Set<string>; naamVanId: (id: string) => string; vrijCel?: OverlayCel },
+  opts: { dates: Iterable<string>; chauffeurIds: Set<string>; naamVanId: (id: string) => string; vrijCel?: OverlayCel; buitenBord?: ReadonlySet<string> },
 ): OverlayUitkomst {
   const dateSet = new Set(opts.dates);
   const uit: OverlayUitkomst = { gewisseld: 0, gemarkeerd: 0, overgeslagen: 0 };
@@ -124,16 +132,19 @@ export function legRuilenOverMaandbeeld(
   for (const sw of doorgevoerd) {
     const van = String(sw.requesterId ?? "");
     const naar = String(sw.targetDriverId ?? "");
-    if (!opts.chauffeurIds.has(van) || !opts.chauffeurIds.has(naar)) continue;
+    // Per been: de ontvanger staat op het bord, de gever staat erop of gaf
+    // zijn cel mee via `buitenBord`.
+    const magKrijgen = (id: string) => opts.chauffeurIds.has(id);
+    const magGeven = (id: string) => opts.chauffeurIds.has(id) || !!opts.buitenBord?.has(id);
     const dienstDag = String(sw.shiftDate ?? "");
     const dienstCode = String(sw.shiftLine ?? "").trim();
     const merk = { swapId: String(sw.id), swapManual: isHandmatigeWissel(sw), swapDone: sw.status === "completed", swapFrom: opts.naamVanId(van) };
     // Zonder dienst-info (aanvraag van vóór de shift_info-migratie) valt er
     // niets veilig te wisselen of te markeren.
-    if (dienstDag && dienstCode && dateSet.has(dienstDag)) wisselCel(dienstDag, van, naar, dienstCode, merk);
+    if (dienstDag && dienstCode && dateSet.has(dienstDag) && magGeven(van) && magKrijgen(naar)) wisselCel(dienstDag, van, naar, dienstCode, merk);
     const terugDag = String(sw.returnDate ?? "");
     const terugCode = String(sw.returnCode ?? "").trim();
-    if (normalizeSwapType(sw.swapType) !== "overname" && terugDag && terugCode && terugCode.toLowerCase() !== "vrij" && dateSet.has(terugDag)) {
+    if (normalizeSwapType(sw.swapType) !== "overname" && terugDag && terugCode && terugCode.toLowerCase() !== "vrij" && dateSet.has(terugDag) && magGeven(naar) && magKrijgen(van)) {
       wisselCel(terugDag, naar, van, terugCode, { ...merk, swapFrom: opts.naamVanId(naar) });
     }
   }

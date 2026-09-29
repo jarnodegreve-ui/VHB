@@ -250,3 +250,60 @@ describe('legRuilenOverMaandbeeld, doorschuiven bij een ontvanger met een dienst
   });
 });
 
+/**
+ * Wie niet op het bord staat (Jarno 29-09). Een been naar iemand buiten het
+ * bord wordt overgeslagen, zoals altijd. Wat iemand buiten het bord WEGGAF
+ * blijft bij de ontvanger, als de aanroeper zijn cel meegeeft (`buitenBord`).
+ */
+describe('legRuilenOverMaandbeeld, gever of ontvanger buiten het bord', () => {
+  const DAG = '2026-09-15';
+  const opBord = (ids: string[], buitenBord?: string[]) => ({
+    dates: [DAG, '2026-09-16'],
+    chauffeurIds: new Set(ids),
+    naamVanId: (id: string) => namen[id] ?? '',
+    ...(buitenBord ? { buitenBord: new Set(buitenBord) } : {}),
+  });
+
+  it('zonder buitenBord: een ruil met iemand buiten het bord doet niets (bestaand gedrag)', () => {
+    const cells: OverlayCellen = { A: { [DAG]: cel('2101') }, B: { [DAG]: vrij() } };
+    const kopie = structuredClone(cells);
+    expect(legRuilenOverMaandbeeld(cells, [ruil({})], opBord(['B']))).toEqual({ gewisseld: 0, gemarkeerd: 0, overgeslagen: 0 });
+    expect(legRuilenOverMaandbeeld(cells, [ruil({})], opBord(['A']))).toEqual({ gewisseld: 0, gemarkeerd: 0, overgeslagen: 0 });
+    expect(cells).toEqual(kopie);
+  });
+
+  it('gever buiten het bord, cel meegegeven: de ontvanger krijgt de dienst', () => {
+    const cells: OverlayCellen = { A: { [DAG]: cel('2101') }, B: { [DAG]: vrij() } };
+    const uit = legRuilenOverMaandbeeld(cells, [ruil({})], opBord(['B'], ['A']));
+    expect(uit).toEqual({ gewisseld: 1, gemarkeerd: 0, overgeslagen: 0 });
+    expect(cells.B[DAG]).toMatchObject({ code: '2101', swapId: 'sw1', swapFrom: 'An' });
+  });
+
+  it('gever buiten het bord en de Excel had de ruil al verwerkt: alleen het merk', () => {
+    const cells: OverlayCellen = { B: { [DAG]: cel('2101') } };
+    const uit = legRuilenOverMaandbeeld(cells, [ruil({})], opBord(['B'], ['A']));
+    expect(uit).toEqual({ gewisseld: 0, gemarkeerd: 1, overgeslagen: 0 });
+    expect(cells.B[DAG]).toMatchObject({ code: '2101', swapId: 'sw1', swapFrom: 'An' });
+    expect(cells.A).toBeUndefined();
+  });
+
+  it('ontvanger buiten het bord: het been wordt overgeslagen, ook met buitenBord', () => {
+    const cells: OverlayCellen = { A: { [DAG]: cel('2101') }, B: { [DAG]: vrij() } };
+    const kopie = structuredClone(cells);
+    expect(legRuilenOverMaandbeeld(cells, [ruil({})], opBord(['A'], ['B']))).toEqual({ gewisseld: 0, gemarkeerd: 0, overgeslagen: 0 });
+    expect(cells).toEqual(kopie);
+  });
+
+  it('1-op-1 over twee dagen: elk been apart, alleen het been naar wie op het bord staat', () => {
+    // A (op het bord) gaf 2101 aan B en kreeg 2607 terug; B staat niet meer op het bord.
+    const cells: OverlayCellen = {
+      A: { [DAG]: cel('2101'), '2026-09-16': vrij() },
+      B: { [DAG]: vrij(), '2026-09-16': cel('2607') },
+    };
+    const uit = legRuilenOverMaandbeeld(cells, [ruil({ swapType: 'ruil', returnDate: '2026-09-16', returnCode: '2607' })], opBord(['A'], ['B']));
+    expect(uit).toEqual({ gewisseld: 1, gemarkeerd: 0, overgeslagen: 0 });
+    expect(cells.A['2026-09-16']).toMatchObject({ code: '2607', swapFrom: 'Bert' });
+    expect(cells.A[DAG]).toEqual(cel('2101'));
+  });
+});
+
