@@ -27,10 +27,13 @@ export function LijstKaart({ children, className, ...rest }: { children: ReactNo
   );
 }
 
-export function RecordRij({ titel, titelAttrs, meta, status, voorproef, leading, accent, richting, open, actief, onClick, children, className }: {
+export function RecordRij({ titel, titelAttrs, titelTerugloop = false, meta, status, voorproef, leading, accent, richting, open, actief, onClick, children, className }: {
   titel: ReactNode;
   /** Extra attributen op de titel, bv. `data-vt-record` voor de view transition. */
   titelAttrs?: Record<string, string>;
+  /** De titel loopt door op een volgende regel in plaats van af te kappen: voor
+   *  een titel die je volledig moet kunnen lezen (twee namen). Standaard uit. */
+  titelTerugloop?: boolean;
   meta?: ReactNode;
   /** Badges rechts op regel 2. */
   status?: ReactNode;
@@ -62,7 +65,7 @@ export function RecordRij({ titel, titelAttrs, meta, status, voorproef, leading,
       >
         {leading && <span className="shrink-0">{leading}</span>}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-md font-semibold text-slate-900" {...titelAttrs}>{titel}</span>
+          <span className={cn('block text-md font-semibold text-slate-900', titelTerugloop ? '[overflow-wrap:anywhere]' : 'truncate')} {...titelAttrs}>{titel}</span>
           {(meta || status) && (
             <span className="mt-1 flex items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-body-sm text-slate-500">{meta}</span>

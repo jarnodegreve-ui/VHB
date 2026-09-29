@@ -963,7 +963,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   return (
                     <RecordRij
                       key={swap.id}
-                      titel={<>{naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger && <span className="font-medium text-slate-500"> → {ontvanger}</span>}</>}
+                      // Twee lange namen pasten op een smalle telefoon niet op één
+                      // regel en de ontvanger viel weg: de titel loopt hier door, en
+                      // de ontvanger schuift als geheel naar de volgende regel.
+                      titel={<>{naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger && <>{' '}<span className="inline-block font-medium text-slate-500">→ {ontvanger}</span></>}</>}
+                      titelTerugloop
                       meta={`Dienst ${info.line}${info.date ? ` · ${fmtShort(info.date)}` : ''}`}
                       status={<RuilStatusBadge swap={swap} stil />}
                       voorproef={teWeinigRust ? <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge> : undefined}

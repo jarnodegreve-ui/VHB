@@ -861,3 +861,92 @@ test('Mijn verzoeken: het scrollvak blijft, maar aan het einde van de lijst scro
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
+
+test('beheerlijst op een smalle telefoon: twee lange namen blijven allebei leesbaar', async ({ page }) => {
+  // Controle 29-09, nr. 23: de titel "aanvrager → ontvanger" werd op 320 px
+  // afgekapt, bij twee lange namen viel de ontvanger weg.
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await page.setViewportSize({ width: 320, height: 568 });
+  await seedSession(page, PLANNER);
+
+  const AANVRAGER = { ...CHAUFFEUR, id: '51', name: 'Maximiliaan Vandenbroucke', email: 'lang1@vhb.be' };
+  const ONTVANGER = { ...COLLEGA, id: '52', name: 'Christophe Vanderstraeten', email: 'lang2@vhb.be' };
+  expect([AANVRAGER.name.length, ONTVANGER.name.length]).toEqual([25, 25]);
+
+  const basis = { createdAt: new Date().toISOString(), returnDate: dayOffset(20), returnCode: 'vrij' };
+  const ruilen = [
+    {
+      ...basis, id: 'lang', shiftId: 'x1', requesterId: AANVRAGER.id, targetDriverId: ONTVANGER.id, status: 'accepted', shiftDate: dayOffset(5), shiftLine: '2505',
+      rust: [{ wie: 'collega', datum: dayOffset(5), dienst: '2505', rustVoor: 340, rustNa: null, teKort: true }],
+    },
+    { ...basis, id: 'kort', shiftId: 'x2', requesterId: CHAUFFEUR.id, targetDriverId: COLLEGA.id, status: 'accepted', shiftDate: dayOffset(6), shiftLine: '2202' },
+  ];
+
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.endsWith('/api/me')) return json(PLANNER);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([PLANNER, CHAUFFEUR, COLLEGA, AANVRAGER, ONTVANGER]);
+    if (path.endsWith('/api/swaps') && route.request().method() === 'GET') return json(ruilen);
+    return json([]);
+  });
+
+  await page.goto('/');
+  const beheer = page.getByRole('list', { name: 'Beheer dienstruilen' });
+  await expect(beheer).toBeVisible({ timeout: 15_000 });
+  const rijen = beheer.locator(':scope > li');
+  await expect(rijen).toHaveCount(2);
+
+  // De titelregel van een rij: wat ervan zichtbaar is, en over hoeveel regels.
+  const meetTitel = (naam: string) => beheer.getByText(naam).evaluate((el) => {
+    let titel = el as HTMLElement;
+    while (getComputedStyle(titel).display !== 'block') titel = titel.parentElement!;
+    const kader = titel.getBoundingClientRect();
+    const bereik = document.createRange();
+    bereik.selectNodeContents(titel);
+    const stukken = [...bereik.getClientRects()].filter((r) => r.width > 0);
+    const ontvanger = el.getBoundingClientRect();
+    return {
+      // De ontvanger (met zijn pijl) staat vooraan op een regel en is zelf niet gebroken.
+      ontvangerVooraan: Math.abs(ontvanger.left - kader.left) < 1,
+      ontvangerOpEenRegel: ontvanger.height < 30,
+      tekst: titel.textContent,
+      afgekapt: titel.scrollWidth > titel.clientWidth,
+      weglating: getComputedStyle(titel).textOverflow === 'ellipsis',
+      buitenKader: stukken.filter((r) => r.left < kader.left - 0.5 || r.right > kader.right + 0.5 || r.bottom > kader.bottom + 0.5).length,
+      binnenScherm: kader.left >= 0 && kader.right <= window.innerWidth,
+      // Stukken op dezelfde regel beginnen binnen een halve regelhoogte van elkaar.
+      regels: stukken.map((r) => r.top).sort((x, y) => x - y).filter((top, i, alle) => i === 0 || top - alle[i - 1] > 8).length,
+    };
+  });
+
+  const lang = rijen.nth(0);
+  await expect(lang).toContainText(`${AANVRAGER.name} → ${ONTVANGER.name}`);
+  expect(await meetTitel(ONTVANGER.name)).toEqual({
+    ontvangerVooraan: true,
+    ontvangerOpEenRegel: true,
+    tekst: `${AANVRAGER.name} → ${ONTVANGER.name}`,
+    afgekapt: false,
+    weglating: false,
+    buitenKader: 0,
+    binnenScherm: true,
+    // Elke naam op zijn eigen regel, de pijl bij de ontvanger.
+    regels: 2,
+  });
+  // Dicht staat er nog altijd: de dienst, de stand en de rustwaarschuwing.
+  await expect(lang).toContainText('Dienst 2505');
+  await expect(lang.getByText('Wacht op planner')).toBeVisible();
+  await expect(lang.getByText('Te weinig rust')).toBeVisible();
+  await expect(lang.getByRole('button', { name: /Dienst 2505/ })).toHaveAttribute('aria-expanded', 'false');
+
+  // Twee korte namen blijven op één regel, zoals voorheen.
+  expect(await meetTitel(COLLEGA.name)).toMatchObject({ afgekapt: false, buitenKader: 0, regels: 1, ontvangerVooraan: false });
+
+  // Niets duwt de pagina breder dan het scherm.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});
