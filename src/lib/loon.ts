@@ -1,5 +1,5 @@
 import type { DagPrestatie, DagPrestatieBody, LoonCode, LoonCodeBody, LoonInstellingen } from '../../shared/schemas/loon';
-import { apiFetch } from './api';
+import { ApiFout, json, maakVraag } from './vraag';
 import { veldfoutenUitAntwoord } from './valideer';
 
 /**
@@ -9,30 +9,9 @@ import { veldfoutenUitAntwoord } from './valideer';
  */
 export type { DagPrestatie, DagPrestatieBody, LoonCode, LoonCodeBody, LoonInstellingen };
 
-export class LoonFout extends Error {
-  status: number;
-  veldfouten: Record<string, string> | null;
-  data: unknown;
-  constructor(message: string, status: number, veldfouten: Record<string, string> | null, data: unknown) {
-    super(message);
-    this.status = status;
-    this.veldfouten = veldfouten;
-    this.data = data;
-  }
-}
+export class LoonFout extends ApiFout {}
 
-async function vraag<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await apiFetch(url, init);
-  if (!res.ok) {
-    let data: unknown = null;
-    try { data = await res.json(); } catch { /* geen json */ }
-    const d = data as { error?: string; details?: string } | null;
-    throw new LoonFout(d?.details || d?.error || `Er ging iets mis (code ${res.status}).`, res.status, veldfoutenUitAntwoord(data), data);
-  }
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
-}
-const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+const vraag = maakVraag((melding, status, data) => new LoonFout(melding, status, veldfoutenUitAntwoord(data), data));
 
 export type DagAfsluiting = {
   datum: string; status: 'open' | 'afgesloten'; geopendOp: string; geopendDoor: string | null;
