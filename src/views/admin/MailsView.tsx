@@ -1,19 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Eye, ListChecks, Mail, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '../../components/Card';
 import { Badge, Button, IconButton, Switch, TOON_NAAR_BADGE } from '../../components/primitives';
-import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
+import { Skeleton } from '../../components/Skeleton';
+import { Verwissel } from '../../components/Verwissel';
+import { useZelfLadend } from '../../lib/zelfLadend';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Field, Input, Textarea } from '../../components/Field';
 import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
 import { InfoTip } from '../../components/InfoTip';
 import { apiJson } from '../../lib/api';
-import { notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { meldSchrijffout } from '../../lib/fouten';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil, type Veldfouten } from '../../lib/formulier';
 import { formatDateTimeHuman, aantal as tel } from '../../lib/format';
-import { EXTRA_SOORT_NAMEN, leesAdressen, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
+import { EXTRA_SOORT_NAMEN, leesAdressen, MAIL_SOORTEN, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
 import { MAIL_LOG_STATUS, mailLogStatus, mailLogToelichting, mailLogVraagtAandacht } from '../../../shared/mailLog';
 import type { User } from '../../types';
 import { EigenMailPaneel } from './EigenMail';
@@ -34,22 +37,30 @@ const nieuwId = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID
 
 export function MailsView({ users }: { users: User[] }) {
   const [data, setData] = useState<Antwoord | null>(null);
-  const [fout, setFout] = useState(false);
   const [eigenOpen, setEigenOpen] = useState(false);
 
-  const laad = async () => {
-    try {
-      setData(await apiJson<Antwoord>('/api/mails'));
-      setFout(false);
-    } catch {
-      setFout(true);
-    }
+  // Laden, opnieuw proberen en verversen via het gedeelde model (nr. 22):
+  // stil verversen bij terugkeer naar het tabblad en als de verbinding
+  // terugkomt. Een verversing vervangt alleen wat de server stuurt; de
+  // formulieren en vensters houden hun eigen invoer en raken die niet kwijt.
+  // `schrijf` telt de eigen wijzigingen (schakelaar, verzendlijsten): een
+  // antwoord dat vóór zo'n wijziging vertrok is ouder dan het scherm en wordt
+  // genegeerd. Anders zette een verversing de oude verzendlijsten terug, en
+  // schreef de volgende opslag (die de hele lijst stuurt) die oude stand weg.
+  const schrijf = useRef(0);
+  const zl = useZelfLadend(async () => {
+    const bij = schrijf.current;
+    const antwoord = await apiJson<Antwoord>('/api/mails');
+    if (bij === schrijf.current) setData(antwoord);
+  }, { boodschap: 'De mails konden niet laden.' });
+  const gewijzigd = (pas: (d: Antwoord) => Antwoord) => {
+    schrijf.current += 1;
+    setData((d) => (d ? pas(d) : d));
   };
-  useEffect(() => { void laad(); }, []);
   // Een laadfout is geen lege staat (nr. 14): zonder gegevens geen scherm met
   // lege lijsten en geen maak-acties. "Mail versturen" zou anders opengaan
   // zonder verzendlijsten, alsof er geen bestaan.
-  const foutZonderData = fout && data === null;
+  const foutZonderData = !!zl.fout && data === null;
 
   return (
     <PageShell>
@@ -57,14 +68,22 @@ export function MailsView({ users }: { users: User[] }) {
         view="beheer-mails"
         title="Mails"
         description="Welke mails het portaal verstuurt, de verzendlijsten en het verzendlog."
-        actions={foutZonderData ? undefined : <Button variant="primary" icon={<Send size={16} />} disabled={data === null} onClick={() => setEigenOpen(true)}>Mail versturen</Button>}
+        actions={(
+          <>
+            {/* Ook tijdens een zichtbare laad "Bijwerken…": de regel staat er dan
+                al en de kop groeit niet op het moment dat de gegevens komen
+                (onder 1280 px staat hij op een eigen regel). */}
+            <VersheidRegel {...zl.versheid} verversen={zl.verversen || zl.laden} />
+            {!foutZonderData && <Button variant="primary" icon={<Send size={16} />} disabled={data === null} onClick={() => setEigenOpen(true)}>Mail versturen</Button>}
+          </>
+        )}
       />
-      <EigenMailPaneel open={eigenOpen && data !== null} onClose={() => setEigenOpen(false)} users={users} lijsten={data?.verzendlijsten ?? []} onVerstuurd={() => void laad()} />
-      {fout && <Foutkaart boodschap="De mails konden niet laden." onOpnieuw={laad} compact={data !== null} className={data !== null ? 'mb-6' : undefined} />}
+      <EigenMailPaneel open={eigenOpen && data !== null} onClose={() => setEigenOpen(false)} users={users} lijsten={data?.verzendlijsten ?? []} onVerstuurd={() => void zl.ververs()} />
+      {zl.fout && <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} compact={data !== null} className={data !== null ? 'mb-6' : undefined} />}
       {!foutZonderData && (
         <div className="space-y-6">
-          <AutomatischeMails soorten={data?.soorten ?? null} instellingen={data?.instellingen ?? { uit: [] }} onGewijzigd={(inst) => setData((d) => (d ? { ...d, instellingen: inst, soorten: d.soorten.map((s) => ({ ...s, aan: s.altijdAan ? true : !inst.uit.includes(s.soort) })) } : d))} />
-          <Verzendlijsten lijsten={data?.verzendlijsten ?? null} onGewijzigd={(lijsten) => setData((d) => (d ? { ...d, verzendlijsten: lijsten } : d))} />
+          <AutomatischeMails soorten={data?.soorten ?? null} instellingen={data?.instellingen ?? { uit: [] }} onGewijzigd={(inst) => gewijzigd((d) => ({ ...d, instellingen: inst, soorten: d.soorten.map((s) => ({ ...s, aan: s.altijdAan ? true : !inst.uit.includes(s.soort) })) }))} />
+          <Verzendlijsten lijsten={data?.verzendlijsten ?? null} onGewijzigd={(lijsten) => gewijzigd((d) => ({ ...d, verzendlijsten: lijsten }))} />
           <Verzendlog log={data?.log ?? null} soorten={data?.soorten ?? []} />
         </div>
       )}
@@ -72,14 +91,62 @@ export function MailsView({ users }: { users: User[] }) {
   );
 }
 
+// --- Laden ---
+// Zolang de gegevens er niet zijn staan de drie kaarten er al, met hun echte
+// kop (nr. 22). Vroeger stond in elke kaart de tekst "Laden…" en sprong alles
+// onder de eerste kaart een scherm omlaag zodra de mailsoorten verschenen.
+
+/** Een regel tekst als skeletbalk, in een vak met de hoogte van die regel. */
+const Regel = ({ hoogte, balk }: { hoogte: string; balk: string }) => <div className={cn('flex items-center', hoogte)}><Skeleton className={balk} /></div>;
+
+/** Skelet van de verzendlijsten: de maten van een rij (naam, adressen, twee knoppen). */
+function SkeletLijsten() {
+  return (
+    <div className="mt-4" role="status" aria-busy="true" aria-label="Verzendlijsten worden geladen">
+      {[0, 1].map((i) => (
+        <div key={i} className="flex flex-wrap items-start gap-3 border-b border-hairline-subtle py-3.5 first:pt-0 last:border-b-0 last:pb-0">
+          <div className="min-w-[12rem] flex-1 basis-0">
+            <Regel hoogte="h-[1.45rem]" balk="h-3.5 w-40" />
+            <div className="mt-0.5"><Regel hoogte="h-[1.26rem]" balk="h-3 w-4/5" /></div>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <Skeleton rounded="xl" className="h-9 w-9 sm:pointer-fine:h-8 sm:pointer-fine:w-8" />
+            <Skeleton rounded="xl" className="h-9 w-9 sm:pointer-fine:h-8 sm:pointer-fine:w-8" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Een mailsoort zolang de server nog niet geantwoord heeft: wat vastligt
+ *  (naam, wanneer, naar wie) is bekend, of ze aan staat en wanneer ze het
+ *  laatst vertrok nog niet. */
+type SoortRij = MailSoortInfo & Partial<Pick<Soort, 'aan' | 'laatst'>>;
+const NOG_NIET_VERSTUURD = 'Nog niet verstuurd sinds het verzendlog bestaat';
+/** Houdt tijdens het laden de plaats vrij van de regel "laatst verstuurd":
+ *  onzichtbare opvulling die precies zo breed is als de regel meestal is
+ *  ("Laatst verstuurd wo 23 september om 12:00 naar 2 ontvangers", elk woord
+ *  achterstevoren: zelfde letters, zelfde woordgrenzen), zodat ze op een
+ *  smalle telefoon net als de echte regel over twee regels loopt. Bewust geen
+ *  leesbare tekst: er staat niets dat nog niet bekend is. */
+const PLAATS_LAATST = 'tstaaL druutsrev ow 32 rebmetpes mo 00:21 raan 2 sregnavtno';
+
 // --- Automatische mails ---
 
 function AutomatischeMails({ soorten, instellingen, onGewijzigd }: { soorten: Soort[] | null; instellingen: MailInstellingen; onGewijzigd: (i: MailInstellingen) => void }) {
+  // Tijdens het laden staan de mailsoorten er al, uit dezelfde lijst die de
+  // server gebruikt (MAIL_SOORTEN): elke rij heeft dan meteen haar echte
+  // hoogte, op elke schermbreedte, en de kaarten eronder verspringen niet.
+  // Alleen wat van de server komt is nog een skelet: de schakelaar en de
+  // regel "laatst verstuurd".
+  const laden = soorten === null;
+  const rijen: readonly SoortRij[] = soorten ?? MAIL_SOORTEN;
   const [bezig, setBezig] = useState<string | null>(null);
-  const [voorbeeld, setVoorbeeld] = useState<{ soort: Soort; onderwerp: string; html: string } | null>(null);
+  const [voorbeeld, setVoorbeeld] = useState<{ soort: MailSoortInfo; onderwerp: string; html: string } | null>(null);
   const [voorbeeldBezig, setVoorbeeldBezig] = useState<string | null>(null);
 
-  const zet = async (soort: Soort, aan: boolean) => {
+  const zet = async (soort: MailSoortInfo, aan: boolean) => {
     const uit = aan ? instellingen.uit.filter((s) => s !== soort.soort) : [...new Set([...instellingen.uit, soort.soort])];
     setBezig(soort.soort);
     try {
@@ -93,7 +160,7 @@ function AutomatischeMails({ soorten, instellingen, onGewijzigd }: { soorten: So
     }
   };
 
-  const toonVoorbeeld = async (soort: Soort) => {
+  const toonVoorbeeld = async (soort: MailSoortInfo) => {
     setVoorbeeldBezig(soort.soort);
     try {
       const v = await apiJson<{ onderwerp: string; html: string }>(`/api/mails/voorbeeld/${encodeURIComponent(soort.soort)}`);
@@ -112,11 +179,8 @@ function AutomatischeMails({ soorten, instellingen, onGewijzigd }: { soorten: So
         title="Automatische mails"
         description="Wat het portaal uit zichzelf verstuurt. Zet een mail uit en ze gaat niet meer de deur uit; de melding in het portaal en de push blijven."
       />
-      {soorten === null ? (
-        <p className="mt-4 text-body-sm text-slate-500" role="status">Laden…</p>
-      ) : (
-        <ul className="mt-4" aria-label="Automatische mails">
-          {soorten.map((s) => (
+        <ul className="mt-4" aria-label="Automatische mails" aria-busy={laden || undefined}>
+          {rijen.map((s) => (
             <li key={s.soort} className="flex flex-wrap items-start gap-3 border-b border-hairline-subtle py-3.5 first:pt-0 last:border-b-0 last:pb-0">
               <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600"><Mail size={16} /></span>
               <div className="min-w-[12rem] flex-1 basis-0">
@@ -124,25 +188,45 @@ function AutomatischeMails({ soorten, instellingen, onGewijzigd }: { soorten: So
                   {s.naam}
                   {s.push && <Badge tone="slate" icon={<Bell size={12} />}>ook push</Badge>}
                   {s.viaSupabase && <Badge tone="slate" stil>via Supabase</Badge>}
-                  {!s.aan && <Badge tone="amber" dot>Uit</Badge>}
+                  {s.aan === false && <Badge tone="amber" dot>Uit</Badge>}
                 </p>
                 <p className="mt-0.5 break-words text-body-sm text-slate-500">{s.wanneer}. Naar: {s.ontvangers}.</p>
-                <p className="mt-1 text-xs text-slate-500 tabular-nums">
-                  {s.laatst ? `Laatst verstuurd ${formatDateTimeHuman(s.laatst.op)} naar ${tel(s.laatst.aantal, 'ontvanger', 'ontvangers')}` : 'Nog niet verstuurd sinds het verzendlog bestaat'}
-                </p>
+                <Verwissel
+                  laden={laden}
+                  skelet={(
+                    // De onzichtbare tekst houdt de plaats van de regel vrij
+                    // (op een smal scherm twee regels), de balk ligt erover.
+                    // Geen eigen status per rij: de lijst zelf is aria-busy en de
+                    // kop zegt "Bijwerken…"; elf statusvelden zou een
+                    // schermlezer elf keer voorlezen.
+                    <div className="relative" aria-hidden="true">
+                      <p className="invisible mt-1 text-xs tabular-nums">{PLAATS_LAATST}</p>
+                      <div className="absolute inset-x-0 top-1"><Regel hoogte="h-4" balk="h-2.5 w-44 max-w-full" /></div>
+                    </div>
+                  )}
+                >
+                  <p className="mt-1 text-xs text-slate-500 tabular-nums">
+                    {s.laatst ? `Laatst verstuurd ${formatDateTimeHuman(s.laatst.op)} naar ${tel(s.laatst.aantal, 'ontvanger', 'ontvangers')}` : NOG_NIET_VERSTUURD}
+                  </p>
+                </Verwissel>
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-2 pt-0.5">
-                <Button variant="ghost" size="sm" icon={<Eye size={14} />} bezig={voorbeeldBezig === s.soort} onClick={() => void toonVoorbeeld(s)}>Voorbeeld</Button>
+                <Button variant="ghost" size="sm" icon={<Eye size={14} />} disabled={laden} bezig={voorbeeldBezig === s.soort} onClick={() => void toonVoorbeeld(s)}>Voorbeeld</Button>
                 {s.altijdAan ? (
                   <Badge tone="slate" stil title="Zonder deze mail werkt het portaal niet of verlies je je vangnet">Altijd aan</Badge>
                 ) : (
-                  <Switch checked={s.aan} disabled={bezig === s.soort} label={`${s.naam} versturen`} onChange={(aan) => { void zet(s, aan); }} />
+                  <Verwissel
+                    laden={laden}
+                    // Zelfde raakvlak en rail als de Switch.
+                    skelet={<div className="inline-flex min-h-11 min-w-11 items-center justify-center sm:pointer-fine:min-h-6" aria-hidden="true"><Skeleton rounded="full" className="h-6 w-11" /></div>}
+                  >
+                    <Switch checked={s.aan !== false} disabled={bezig === s.soort} label={`${s.naam} versturen`} onChange={(aan) => { void zet(s, aan); }} />
+                  </Verwissel>
                 )}
               </div>
             </li>
           ))}
         </ul>
-      )}
 
       <Modal open={voorbeeld !== null} onClose={() => setVoorbeeld(null)} maxWidth="2xl" ariaLabel={voorbeeld ? `Voorbeeld: ${voorbeeld.soort.naam}` : 'Voorbeeld'}>
         {voorbeeld && (
@@ -193,9 +277,8 @@ function Verzendlijsten({ lijsten, onGewijzigd }: { lijsten: Verzendlijst[] | nu
         // op een nog niet geladen stand zou de bestaande overschrijven.
         aside={<Button variant="secondary" size="sm" icon={<Plus size={16} />} disabled={lijsten === null} onClick={() => setBewerk({ id: nieuwId(), naam: '', adressen: [] })}>Nieuwe lijst</Button>}
       />
-      {lijsten === null ? (
-        <p className="mt-4 text-body-sm text-slate-500" role="status">Laden…</p>
-      ) : lijsten.length === 0 ? (
+      <Verwissel laden={lijsten === null} skelet={<SkeletLijsten />}>
+      {lijsten === null ? null : lijsten.length === 0 ? (
         <div className="mt-4"><EmptyState compact kaal title="Nog geen verzendlijsten" message="Maak een lijst met de adressen die je vaker samen mailt." /></div>
       ) : (
         <ul className="mt-4" aria-label="Verzendlijsten">
@@ -213,6 +296,7 @@ function Verzendlijsten({ lijsten, onGewijzigd }: { lijsten: Verzendlijst[] | nu
           ))}
         </ul>
       )}
+      </Verwissel>
 
       <VerzendlijstModal
         lijst={bewerk}
@@ -331,9 +415,22 @@ function Verzendlog({ log, soorten }: { log: LogRij[] | null; soorten: Soort[] }
         />
       )}
     >
-      {log === null ? (
-        <p className="px-5 py-4 text-body-sm text-slate-500 md:px-6" role="status">Laden…</p>
-      ) : log.length === 0 ? (
+      <Verwissel
+        laden={log === null}
+        skelet={(
+          // De maten van een rij in de lijst (px-5 py-3.5: mail en status,
+          // daaronder de metaregel); ook in de tabel is een rij zo hoog.
+          <div className="divide-y divide-hairline-subtle" role="status" aria-busy="true" aria-label="Verzendlog wordt geladen">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="px-5 py-3.5">
+                <div className="flex items-center justify-between gap-3"><Skeleton className="h-3.5 w-36" /><Skeleton rounded="full" className="h-6 w-24" /></div>
+                <div className="mt-1"><Regel hoogte="h-4" balk="h-2.5 w-3/5" /></div>
+              </div>
+            ))}
+          </div>
+        )}
+      >
+      {log === null ? null : log.length === 0 ? (
         <div className="p-6"><EmptyState compact kaal title="Nog niets verstuurd" message="Zodra het portaal een mail verstuurt, staat ze hier." /></div>
       ) : (
         <>
@@ -388,6 +485,7 @@ function Verzendlog({ log, soorten }: { log: LogRij[] | null; soorten: Soort[] }
           </ul>
         </>
       )}
+      </Verwissel>
     </TableShell>
   );
 }

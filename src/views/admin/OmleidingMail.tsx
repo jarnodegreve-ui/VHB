@@ -7,6 +7,9 @@ import { MailBevestiging } from '../../components/MailBevestiging';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil, type Veldfouten } from '../../lib/formulier';
 import { Foutkaart } from '../../components/ui';
+import { Skeleton } from '../../components/Skeleton';
+import { Verwissel } from '../../components/Verwissel';
+import { useZelfLadend } from '../../lib/zelfLadend';
 import { Field, Textarea } from '../../components/Field';
 import { Badge, Button } from '../../components/primitives';
 import { Checkbox } from '../../components/Table';
@@ -29,9 +32,6 @@ const FORM_ID = 'omleiding-mail-formulier';
 export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversion | null; onClose: () => void }) {
   const open = diversion !== null;
   const [lijsten, setLijsten] = useState<Verzendlijst[] | null>(null);
-  // Een laadfout is geen lege staat (nr. 14): vroeger werd een mislukte
-  // lezing een lege lijst en stond er "Nog geen verzendlijsten".
-  const [lijstenFout, setLijstenFout] = useState(false);
   const [lijstIds, setLijstIds] = useState<string[]>([]);
   const [adressenTekst, setAdressenTekst] = useState('');
   const [bericht, setBericht] = useState('');
@@ -44,20 +44,18 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
   const [bezig, setBezig] = useState(false);
   const [voorbeeld, setVoorbeeld] = useState<Droog | null>(null);
 
-  const laadLijsten = async (actief: () => boolean = () => true) => {
-    try {
-      const l = await apiJson<Verzendlijst[]>('/api/mails/verzendlijsten');
-      if (actief()) { setLijsten(l); setLijstenFout(false); }
-    } catch {
-      if (actief()) setLijstenFout(true);
-    }
-  };
+  // De verzendlijsten laden zodra het paneel opent, via het gedeelde model
+  // (nr. 22). Een laadfout is geen lege staat (nr. 14): vroeger werd een
+  // mislukte lezing een lege lijst en stond er "Nog geen verzendlijsten".
+  // Zonder focus-verversing: dit is een formulier, de lijsten wisselen niet
+  // onder de invoer. Dicht laadt het paneel niets.
+  const zl = useZelfLadend(async () => {
+    if (open) setLijsten(await apiJson<Verzendlijst[]>('/api/mails/verzendlijsten'));
+  }, { deps: [open, diversion?.id], focusRefresh: false, boodschap: 'De verzendlijsten konden niet laden. Een vrij adres invullen kan wel.' });
   useEffect(() => {
     if (!open) return;
-    let actief = true;
     setLijstIds([]); setAdressenTekst(''); setBericht(''); veld.wis(); setVoorbeeld(null); setVulling((v) => v + 1);
-    void laadLijsten(() => actief);
-    return () => { actief = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, diversion?.id]);
 
   const adressen = useMemo(() => leesAdressen(adressenTekst), [adressenTekst]);
@@ -138,11 +136,19 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
           <fieldset className="space-y-3" data-fout={fouten.ontvangers ? '' : undefined}>
             <legend className="text-sm font-semibold text-slate-800">Ontvangers</legend>
             {fouten.ontvangers && <p className="text-body-sm text-red-700" role="alert">{fouten.ontvangers}</p>}
-            {lijstenFout && lijsten === null ? (
-              <Foutkaart compact titel="Dit kon niet laden" boodschap="De verzendlijsten konden niet laden. Een vrij adres invullen kan wel." onOpnieuw={() => laadLijsten()} />
-            ) : lijsten === null ? (
-              <p className="text-body-sm text-slate-500" role="status">Verzendlijsten laden…</p>
-            ) : lijsten.length === 0 ? (
+            {zl.fout && lijsten === null ? (
+              <Foutkaart compact titel="Dit kon niet laden" boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
+            ) : (
+            <Verwissel
+              laden={lijsten === null}
+              skelet={(
+                // Zelfde maten als een rij met een vakje, de naam en het aantal adressen.
+                <div className="space-y-1.5" role="status" aria-busy="true" aria-label="Verzendlijsten worden geladen">
+                  {[0, 1].map((i) => <div key={i} className="flex min-h-6 items-center gap-2"><Skeleton className="h-5 w-5 shrink-0" /><Skeleton className="h-3 w-32" /><Skeleton className="h-2.5 w-16" /></div>)}
+                </div>
+              )}
+            >
+            {lijsten === null ? null : lijsten.length === 0 ? (
               <p className="text-body-sm text-slate-500">Nog geen verzendlijsten; een admin maakt ze aan onder Beheer › Mails.</p>
             ) : (
               <ul className="space-y-1.5" aria-label="Verzendlijsten">
@@ -154,6 +160,8 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
                   </li>
                 ))}
               </ul>
+            )}
+            </Verwissel>
             )}
             <Field label="Vrije adressen" htmlFor="omleiding-mail-adressen" error={fouten.adressen} hint="Eén per regel of met komma's.">
               <Textarea id="omleiding-mail-adressen" rows={3} value={adressenTekst} onChange={(e) => { setAdressenTekst(e.target.value); veld.wisVeld('adressen'); veld.wisVeld('ontvangers'); }} placeholder="dispatching@delijn.be" />

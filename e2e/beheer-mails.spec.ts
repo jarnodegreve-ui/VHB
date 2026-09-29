@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { ADMIN, seed } from './helpers';
+import { MAIL_SOORTEN } from '../shared/schemas/mail';
 
 /**
  * Beheer › Mails (mailtranche PR 3): de lijst met automatische mails en hun
@@ -413,3 +414,172 @@ for (const breedte of [768, 1024]) {
     expect(await tabel.evaluate((t) => t.closest('.surface-table')!.parentElement!.closest('.surface-card, .surface-table') === null)).toBe(true);
   });
 }
+
+// --- Nr. 22: laden, verversen en offline via de gedeelde bouwstenen ---
+
+/** Het antwoord van /api/mails zoals productie het geeft: alle mailsoorten
+ *  uit de gedeelde lijst, aan en al eens verstuurd. */
+const VOLLEDIG = {
+  soorten: MAIL_SOORTEN.map((m) => ({ ...m, aan: true, laatst: { op: '2026-09-23T10:00:00Z', aantal: 2, gelukt: true } })),
+  instellingen: { uit: [] as string[] },
+  verzendlijsten: [{ id: 'l-1', naam: 'De Lijn', adressen: ['dispatching@delijn.be'] }, { id: 'l-2', naam: 'Garage', adressen: ['garage@vhb.be'] }],
+  log: [{ id: 'm-1', verzondenOp: '2026-09-23T10:00:00Z', soort: 'ziekmelding', aantal: 2, gelukt: true, door: 'Els Goossens' }],
+};
+
+/** /api/mails onder controle van de test: elk antwoord wacht tot `laat()`
+ *  het vrijgeeft, en `antwoord` bepaalt wat er dan terugkomt. */
+async function trageMails(page: Page) {
+  const s = { antwoord: VOLLEDIG as unknown, status: 200, aanvragen: 0, wachtend: [] as Array<() => void>, vertraag: true };
+  await page.route(/\/api\/mails(\?|$)/, async (r) => {
+    if (r.request().method() !== 'GET') return r.fallback();
+    s.aanvragen += 1;
+    if (s.vertraag) await new Promise<void>((los) => { s.wachtend.push(los); });
+    await r.fulfill(s.status === 200 ? { json: s.antwoord } : { status: s.status, contentType: 'application/json', body: '{"error":"Serverfout"}' });
+  });
+  return { s, laat: () => { s.wachtend.splice(0).forEach((los) => los()); } };
+}
+
+/** Verticale plaats van een kop op de pagina, los van de scrollstand. */
+const plaatsVan = (page: Page, koppen: string[]) => page.evaluate((namen) => {
+  const root = document.querySelector('[data-scroll-root]')!;
+  return Object.fromEntries(namen.map((n) => {
+    const kop = [...document.querySelectorAll('h1, h2')].find((e) => e.textContent === n);
+    return [n, kop ? Math.round(kop.getBoundingClientRect().top + root.scrollTop) : null];
+  }));
+}, koppen);
+
+test('mails: tijdens het laden een skelet, geen tekst “Laden…”, en de kaarten verspringen niet (nr. 22)', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
+  await seed(page, { user: ADMIN, view: 'beheer-mails' });
+  const { laat } = await trageMails(page);
+  await page.goto('/beheer/mails');
+  await expect(page.getByRole('heading', { level: 1, name: 'Mails' })).toBeVisible({ timeout: 15_000 });
+  // Laden: de drie kaarten staan er met hun kop, de inhoud is een skelet.
+  await expect(page.getByRole('status', { name: 'Verzendlijsten worden geladen' })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Verzendlog wordt geladen' })).toBeVisible();
+  const mails = page.getByRole('list', { name: 'Automatische mails' });
+  await expect(mails).toHaveAttribute('aria-busy', 'true');
+  await expect(mails.getByRole('listitem')).toHaveCount(MAIL_SOORTEN.length);
+  await expect(page.getByText(/Laden…/)).toHaveCount(0);
+  await expect(page.getByText('Bijwerken…')).toBeVisible();
+  // Geen acties zolang de gegevens er niet zijn (nr. 14 blijft gelden).
+  await expect(page.getByRole('button', { name: 'Mail versturen' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Nieuwe lijst' })).toBeDisabled();
+  await expect(mails.getByRole('switch')).toHaveCount(0);
+  await page.evaluate(() => document.fonts.ready);
+  const koppen = ['Mails', 'Automatische mails', 'Verzendlijsten'];
+  const voor = await plaatsVan(page, koppen);
+
+  laat();
+  await expect(page.getByRole('list', { name: 'Verzendlijsten' })).toBeVisible();
+  await expect(mails.getByRole('switch').first()).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(mails).not.toHaveAttribute('aria-busy', 'true');
+  await expect(page.getByText(/^Bijgewerkt om \d{2}:\d{2}$/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mail versturen' })).toBeEnabled();
+  const na = await plaatsVan(page, koppen);
+  // Elke kop staat waar hij stond: niets is omlaag of omhoog gesprongen.
+  for (const kop of koppen) expect(Math.abs(na[kop]! - voor[kop]!), `${kop}: ${voor[kop]} → ${na[kop]}`).toBeLessThanOrEqual(2);
+});
+
+test('mails: een verversing laat een open venster en zijn invoer met rust (nr. 22)', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
+  await seed(page, { user: ADMIN, view: 'beheer-mails' });
+  const { s } = await trageMails(page);
+  s.vertraag = false;
+  const geschreven: any[] = [];
+  await page.route('**/api/mails/verzendlijsten', async (r) => {
+    if (r.request().method() !== 'PUT') return r.fallback();
+    geschreven.push(r.request().postDataJSON());
+    await r.fulfill({ json: r.request().postDataJSON() });
+  });
+  await page.goto('/beheer/mails');
+  await expect(page.getByRole('list', { name: 'Verzendlijsten' }).getByRole('listitem')).toHaveCount(2, { timeout: 15_000 });
+  expect(s.aanvragen).toBe(1);
+  /** Terug naar het tabblad, ruim na de vorige laad: het scherm ververst stil. */
+  const ververs = async (minuten: number, verwacht: number) => {
+    await page.clock.setFixedTime(new Date(Date.parse('2026-09-25T09:00:00Z') + minuten * 60_000));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect.poll(() => s.aanvragen).toBe(verwacht);
+  };
+
+  // 1. Een half ingevulde verzendlijst.
+  await page.getByRole('button', { name: 'Nieuwe lijst' }).click();
+  const lijst = page.getByRole('dialog', { name: 'Nieuwe verzendlijst' });
+  await lijst.getByLabel('Naam').fill('Politie Zottegem');
+  await lijst.getByLabel('Adressen').fill('verkeer@politie.be\nwijk@poli');
+  // Intussen voegde een collega een lijst toe en kwam er een logregel bij.
+  s.antwoord = { ...VOLLEDIG, verzendlijsten: [...VOLLEDIG.verzendlijsten, { id: 'l-3', naam: 'Dispatching Gent', adressen: ['gent@delijn.be'] }] };
+  await ververs(5, 2);
+  await expect(page.getByRole('list', { name: 'Verzendlijsten' }).getByRole('listitem')).toHaveCount(3);
+  await expect(lijst).toBeVisible();
+  await expect(lijst.getByLabel('Naam')).toHaveValue('Politie Zottegem');
+  await expect(lijst.getByLabel('Adressen')).toHaveValue('verkeer@politie.be\nwijk@poli');
+  // Opslaan bewaart de nieuwe lijst naast de drie die er nu zijn, ook die van de collega.
+  await lijst.getByLabel('Adressen').fill('verkeer@politie.be');
+  await lijst.getByRole('button', { name: 'Toevoegen' }).click();
+  await expect(lijst).toHaveCount(0);
+  expect(geschreven).toHaveLength(1);
+  expect(geschreven[0].map((l: any) => l.naam)).toEqual(['De Lijn', 'Garage', 'Dispatching Gent', 'Politie Zottegem']);
+
+  // 2. Een half geschreven mail.
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.');
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  const vak = paneel.getByRole('checkbox', { name: 'Verzendlijst De Lijn' });
+  await vak.locator('..').click();
+  await expect(vak).toBeChecked();
+  let verstuurd = 0;
+  await page.route('**/api/mails/eigen', async (r) => { verstuurd += 1; await r.fulfill({ status: 500, body: '{}' }); });
+  s.antwoord = VOLLEDIG;
+  await ververs(10, 3);
+  await expect(paneel).toBeVisible();
+  await expect(paneel.getByLabel('Onderwerp')).toHaveValue('Nieuwe uniformen');
+  await expect(paneel.getByLabel('Bericht')).toHaveValue('Vanaf 1 juli.');
+  await expect(paneel.getByLabel('Vrije adressen')).toHaveValue('extern@voorbeeld.be');
+  await expect(vak).toBeChecked();
+  // Een verversing leest alleen: er vertrekt geen mail en er wordt niets geschreven.
+  expect(verstuurd).toBe(0);
+  expect(geschreven).toHaveLength(1);
+});
+
+test('mails: een eigen wijziging wint van een verversing die eerder vertrok (nr. 22)', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
+  await seed(page, { user: ADMIN, view: 'beheer-mails' });
+  const { s, laat } = await trageMails(page);
+  s.vertraag = false;
+  await page.route('**/api/mails/instellingen', async (r) => (r.request().method() === 'PUT' ? r.fulfill({ json: r.request().postDataJSON() }) : r.fallback()));
+  await page.goto('/beheer/mails');
+  const ziek = page.getByRole('switch', { name: 'Ziekmelding versturen' });
+  await expect(ziek).toBeChecked({ timeout: 15_000 });
+  // Een verversing vertrekt en blijft hangen; intussen zet de admin Ziekmelding uit.
+  s.vertraag = true;
+  await page.clock.setFixedTime(new Date('2026-09-25T09:05:00Z'));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect.poll(() => s.aanvragen).toBe(2);
+  await ziek.click();
+  await expect(ziek).not.toBeChecked();
+  // Het oude antwoord (Ziekmelding nog aan) komt nu pas binnen en mag de schakelaar niet terugzetten.
+  laat();
+  await expect(page.getByText(/^Bijgewerkt om/)).toBeVisible();
+  await page.waitForTimeout(400);
+  await expect(ziek).not.toBeChecked();
+});
+
+test('mails: offline staat in de kop en de gegevens blijven staan (nr. 22)', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'offline zetten is alleen in Chromium betrouwbaar');
+  await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
+  await seed(page, { user: ADMIN, view: 'beheer-mails' });
+  const { s } = await trageMails(page);
+  s.vertraag = false;
+  await page.goto('/beheer/mails');
+  await expect(page.getByText(/^Bijgewerkt om \d{2}:\d{2}$/)).toBeVisible({ timeout: 15_000 });
+  await context.setOffline(true);
+  await expect(page.getByText(/^Offline · Bijgewerkt om \d{2}:\d{2}$/)).toBeVisible();
+  // De gegevens blijven staan.
+  await expect(page.getByRole('list', { name: 'Verzendlijsten' }).getByRole('listitem')).toHaveCount(2);
+  await context.setOffline(false);
+  await expect(page.getByText(/^Offline · /)).toHaveCount(0);
+});
