@@ -100,8 +100,8 @@ const mem = vi.hoisted(() => ({
   authEmailBezet: null as string | null,
   // De opslag meldt dat een kolom ontbreekt (migratie niet gedraaid), met
   // dezelfde MigratieOntbreektError als de echte; de kant van de database zelf
-  // zit in src/storageOokTechnieker.test.ts.
-  migratieMist: null as 'users' | null,
+  // zit in src/storageOokTechnieker.test.ts en src/storageOmleidingPlaats.test.ts.
+  migratieMist: null as 'users' | 'diversions' | null,
   // Loon-tabellen voor de mini-PostgREST in de db.js-mock: loonStorage draait
   // hier integraal (inclusief de paginering voorbij de 1000-rijen-cap).
   loonRijen: {
@@ -486,6 +486,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     // lijst zelf mee), en een verwijderde omleiding neemt haar bestanden mee
     // (alle slots én de oude sleutel `<id>.pdf`).
     saveDiversionsData: async (data: any[]) => {
+      if (mem.migratieMist === 'diversions') throw new orig.MigratieOntbreektError('diversions.location', orig.DIVERSIONS_LOCATION_MIGRATIE);
       const blijvend = new Set((Array.isArray(data) ? data : []).map((d: any) => String(d.id)));
       for (const d of mem.diversions) {
         if (blijvend.has(String(d.id))) continue;
@@ -6173,6 +6174,39 @@ describe('per-record API (PUT / POST one / DELETE), gebruikers, omleidingen, upd
       expect(res.headers.get(COLL)).toBeTruthy();
       expect(mem.diversions.map((d: any) => d.id)).toEqual(['o-1']);
       expect(mem.activity.find((a) => a.action === 'Omleiding verwijderd' && a.entityId === 'o-2')).toBeTruthy();
+    });
+
+    // Controle 29-09: de stille tweede poging zonder de kolom location is weg
+    // (daardoor werd "Plaats" wekenlang niet bewaard). Ontbreekt de kolom, dan
+    // zegt elke schrijfroute welke migratie moet draaien.
+    it('zonder de kolom location: elke save geeft een 503 met het .sql-bestand, en er is niets bewaard, gelogd of gepusht', async () => {
+      const MELDING = 'De kolom diversions.location bestaat nog niet: draai supabase/2026-09-10_diversions_location.sql in de SQL Editor.';
+      const rev1 = await revVan('/api/diversions', 'tok-planner', 'o-1');
+      const rev2 = await revVan('/api/diversions', 'tok-planner', 'o-2');
+      const voor = JSON.stringify(mem.diversions);
+      const logVoor = mem.activity.length;
+      const pushVoor = mem.pushesSent.length;
+      mem.migratieMist = 'diversions';
+
+      const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...mem.diversions[0], location: 'Eeklo, Markt' }, headers: { [REV]: rev1 } });
+      expect(put.status).toBe(503);
+      expect(put.json.error).toBe(MELDING);
+
+      const nieuw = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '1', location: 'Gent', title: 'Nieuwe omleiding', description: 'x', startDate: '2026-09-10' } });
+      expect(nieuw.status).toBe(503);
+      expect(nieuw.json.error).toBe(MELDING);
+
+      const lijst = await api('POST', '/api/diversions', { token: 'tok-planner', body: mem.diversions.map((d: any) => ({ ...d, location: 'Eeklo' })) });
+      expect(lijst.status).toBe(503);
+      expect(lijst.json.error).toBe(MELDING);
+
+      const weg = await api('DELETE', '/api/diversions/o-2', { token: 'tok-planner', headers: { [REV]: rev2 } });
+      expect(weg.status).toBe(503);
+      expect(weg.json.error).toBe(MELDING);
+
+      expect(JSON.stringify(mem.diversions)).toBe(voor);
+      expect(mem.activity.length).toBe(logVoor);
+      expect(mem.pushesSent.length).toBe(pushVoor);
     });
   });
 

@@ -671,9 +671,9 @@ export const sanitizeDiversionPdfUrl = (value?: string | null): string | null =>
 export const toDatabaseDiversion = (d: DiversionRecord) => ({
   id: String(d.id),
   line: d.line,
-  // location: supabase/2026-09-10_diversions_location.sql. Zolang die migratie
-  // niet gedraaid is, valt saveDiversionsData terug op een upsert zónder deze
-  // kolom (zie zonderLocation daar), zodat het beheer niet met 42703 breekt.
+  // location: supabase/2026-09-10_diversions_location.sql. Zonder die migratie
+  // geeft saveDiversionsData een fout met het .sql-bestand (controle 29-09:
+  // de stille terugval zonder deze kolom is weg).
   location: d.location?.trim() || null,
   title: d.title,
   description: d.description,

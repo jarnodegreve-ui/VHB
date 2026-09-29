@@ -1758,7 +1758,7 @@ export const getDiversionsData = async () => {
   return rows.map(toPublicDiversion);
 };
 
-const zonderLocation = ({ location: _l, ...rest }: ReturnType<typeof toDatabaseDiversion>) => rest;
+export const DIVERSIONS_LOCATION_MIGRATIE = "supabase/2026-09-10_diversions_location.sql";
 
 export const saveDiversionsData = async (data: any) => {
   const client = requireDb();
@@ -1778,13 +1778,13 @@ export const saveDiversionsData = async (data: any) => {
   // upsert-fout de zojuist verwijderde records.
   if (normalized.length > 0) {
     const rows = normalized.map(toDatabaseDiversion);
-    let { error: upsertError } = await client.from('diversions').upsert(rows);
-    // Migratie 2026-09-10_diversions_location.sql nog niet gedraaid: opnieuw
-    // zonder `location`. Bewust bij elke save opnieuw geprobeerd en niet per
-    // warme lambda onthouden: dat liet de plaats na het draaien van de
-    // migratie stil wegvallen tot de lambda koud werd (Jarno 28-09).
-    if (upsertError && isMissingColumnError(upsertError)) {
-      ({ error: upsertError } = await client.from('diversions').upsert(rows.map(zonderLocation)));
+    const { error: upsertError } = await client.from('diversions').upsert(rows);
+    // Kolom location ontbreekt (migratie 2026-09-10 niet gedraaid): een
+    // duidelijke fout met het .sql-bestand. Geen tweede poging zonder de
+    // kolom meer (controle 29-09): door die terugval werd de plaats wekenlang
+    // stil niet bewaard, en de migratie staat op productie en staging.
+    if (upsertError && isMissingColumnError(upsertError) && /location/i.test(String((upsertError as { message?: unknown }).message ?? ""))) {
+      throw new MigratieOntbreektError("diversions.location", DIVERSIONS_LOCATION_MIGRATIE);
     }
     if (upsertError) throw upsertError;
   }
