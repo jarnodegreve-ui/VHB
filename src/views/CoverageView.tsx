@@ -1280,7 +1280,7 @@ export function CoverageView() {
 
                   {advies.tijdenOnbekend && (
                     <p className="text-xs font-semibold text-amber-800">
-                      Dienst {pick.code} heeft geen tijden in het dienstoverzicht, de rustcheck kon niet, alleen de 6-dagenregel is toegepast.
+                      Dienst {pick.code} heeft geen geldige tijden in het dienstoverzicht, de rustcheck kon niet, alleen de 6-dagenregel is toegepast.
                     </p>
                   )}
 
