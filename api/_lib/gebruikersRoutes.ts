@@ -301,6 +301,7 @@ export function mountGebruikersRoutes(app: express.Express) {
       res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
       res.json({ success: true });
     } catch (err: any) {
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       console.error("Gebruiker verwijderen is mislukt.", err?.message || err);
       res.status(500).json({ error: "Verwijderen is mislukt." });
     }

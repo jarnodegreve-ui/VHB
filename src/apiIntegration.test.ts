@@ -6808,6 +6808,15 @@ describe('Ook technieker', () => {
     expect(lijst.status).toBe(503);
     expect(lijst.json.error).toBe(MELDING);
 
+    const weg = await api('DELETE', '/api/users/3', { token: 'tok-admin', headers: { [REV]: rev } });
+    expect(weg.status).toBe(503);
+    expect(weg.json.error).toBe(MELDING);
+
+    // Uit dienst meldt de oorzaak in de stap die mislukte.
+    const uit = await api('POST', '/api/users/3/uitdienst', { token: 'tok-admin', body: {} });
+    expect(uit.status).toBe(500);
+    expect(uit.json.stappen[0]).toMatchObject({ stap: 'deactiveren', ok: false, detail: MELDING });
+
     expect(JSON.stringify(mem.users)).toBe(voor);
     expect(mem.activity.length).toBe(logVoor);
   });
