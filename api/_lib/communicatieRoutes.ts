@@ -9,7 +9,7 @@
  */
 
 import express from "express";
-import { sendEmail } from "../email.js";
+import { sendEmail, MAIL_UIT_MELDING } from "../email.js";
 import { bouwDringendeUpdateMail } from "./mailTeksten.js";
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
@@ -701,6 +701,13 @@ export function mountCommunicatieRoutes(app: express.Express) {
       html,
     });
 
+    // Uitgezet in Beheer › Mails: sendEmail verstuurt dan niets en geeft
+    // `ok` met `overgeslagen`. Dat eerlijk doorgeven (nr. 13): vroeger stond
+    // hier "Emails succesvol verzonden" en zei het scherm dat alle chauffeurs
+    // de mail hadden. De push hierboven is wel vertrokken.
+    if (result.overgeslagen) {
+      return res.json({ success: true, overgeslagen: true, message: MAIL_UIT_MELDING });
+    }
     if (result.mocked) {
       return res.json({ success: true, message: "Email gelogd (geen SMTP geconfigureerd)", mocked: true });
     }

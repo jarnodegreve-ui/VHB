@@ -161,6 +161,16 @@ const weekcijfers = async (): Promise<string[]> => {
   ];
 };
 
+/** Wat er met het overzicht gebeurde, in de woorden van de hartslag. Zonder
+ *  SMTP telt de mail als "afgehandeld" (alerted), zoals altijd: dat is de
+ *  bekende stand van een omgeving zonder mailserver. */
+export const overzichtVerzending = (r: { ok: boolean; mocked: boolean; overgeslagen?: boolean }): { woord: string; alerted: boolean; reden?: string } => {
+  if (r.overgeslagen) return { woord: "niet verstuurd (mail staat uit in Beheer › Mails)", alerted: false, reden: "mail uit" };
+  if (r.mocked) return { woord: "alleen gelogd (geen SMTP ingesteld)", alerted: true };
+  if (!r.ok) return { woord: "NIET verstuurd (verzending mislukt)", alerted: false, reden: "verzending mislukt" };
+  return { woord: "verstuurd", alerted: true };
+};
+
 export function mountCronRoutes(app: express.Express) {
   app.get("/api/backup", authenticate, requireRole("admin"), async (_req, res) => {
     try {
@@ -713,9 +723,13 @@ export function mountCronRoutes(app: express.Express) {
       });
 
       const result = await sendEmail({ to: recipients, subject: onderwerp, text, html, context: "error-digest", soort: "weekoverzicht" });
-      console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
-      await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} verstuurd: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
-      res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });
+      // De hartslag zegt wat er echt gebeurde (nr. 13): vroeger stond er
+      // "verstuurd", ook als het overzicht uit stond in Beheer › Mails, er
+      // geen SMTP was of de verzending mislukte.
+      const verzonden = overzichtVerzending(result);
+      console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), ${verzonden.woord}`);
+      await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} ${verzonden.woord}: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
+      res.json({ success: true, count: errors.length, alerted: verzonden.alerted, recipients: recipients.length, mocked: result.mocked, ...(verzonden.reden ? { reason: verzonden.reden } : {}) });
     } catch (err: any) {
       console.error("[error-digest] mislukt:", err?.message || err);
       console.error("Digest mislukt", err);

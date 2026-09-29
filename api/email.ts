@@ -68,6 +68,9 @@ export const mailAfzender = () => {
   return { naam, adres, replyTo, from: `"${naam.replace(/"/g, "")}" <${adres}>` };
 };
 
+/** Wat een gebruiker leest als de mailsoort uit staat en er dus niets vertrok. */
+export const MAIL_UIT_MELDING = "Mail staat uit in Beheer › Mails, er is niets verstuurd.";
+
 export const portalUrl = () => process.env.APP_URL || "https://vhbportaal.com";
 
 /** Mail bouwen op de vaste lay-out (api/_lib/mailLayout.ts) met de portaal-URL erbij. */

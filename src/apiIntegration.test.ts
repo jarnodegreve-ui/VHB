@@ -46,6 +46,8 @@ const mem = vi.hoisted(() => ({
   opslag: new Set<string>(),
   // Verzendlog van de mails (mail_log), nieuwste eerst.
   mailLog: [] as any[],
+  // Hartslagen van de crons (logCronHeartbeat), in volgorde.
+  hartslagen: [] as Array<{ naam: string; details: string }>,
   importHistory: [] as any[],
   snapshots: {} as Record<string, any>,
   historiekFaalt: false,
@@ -312,6 +314,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   };
   return {
     ...orig,
+    logCronHeartbeat: async (naam: string, details: string) => { mem.hartslagen.push({ naam, details }); },
     getMailLog: async (limit = 200) => mem.mailLog.slice(0, limit),
     logMail: async (regel: any) => { mem.mailLog.unshift({ id: `m-${mem.mailLog.length + 1}`, verzondenOp: new Date().toISOString(), ...regel }); },
     getAppSetting: async (key: string) => mem.appSettings[key] ?? null,
@@ -1738,6 +1741,50 @@ describe('planning-doorvoer van goedgekeurde ruilen', () => {
     // Chauffeur 4 kreeg een nieuwe dienst → push; chauffeur 3 bleef gelijk → stil.
     expect(push?.userIds).toEqual(['4']);
     expect(res.json.notifiedDrivers).toBe(1);
+  });
+});
+
+describe('een uitgeschakelde mail meldt niet dat hij verstuurd is (nr. 13)', () => {
+  const UIT = { ok: true, mocked: false, overgeslagen: true };
+
+  it('dringende update: het antwoord zegt dat de mail uit staat, niet "succesvol verzonden"', async () => {
+    const { sendEmail } = await import('../api/email.js');
+    vi.mocked(sendEmail).mockResolvedValueOnce(UIT);
+    const res = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 'Test', content: 'x' } } });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, overgeslagen: true, message: 'Mail staat uit in Beheer › Mails, er is niets verstuurd.' });
+    expect(JSON.stringify(res.json)).not.toMatch(/verzonden/i);
+  });
+
+  it('weekoverzicht: de hartslag en het antwoord zeggen "niet verstuurd", niet "verstuurd"', async () => {
+    const { sendEmail } = await import('../api/email.js');
+    process.env.ERROR_DIGEST_WEEKDAG = 'elke';
+    mem.hartslagen = [];
+    mem.clientErrors = [];
+    try {
+      vi.mocked(sendEmail).mockResolvedValueOnce(UIT);
+      const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ success: true, alerted: false, reason: 'mail uit' });
+      const hartslag = mem.hartslagen.filter((h) => h.naam === 'error-digest').at(-1)?.details ?? '';
+      expect(hartslag).toContain('Dagoverzicht niet verstuurd (mail staat uit in Beheer › Mails)');
+      expect(hartslag).not.toMatch(/overzicht verstuurd/i);
+
+      // Een mislukte verzending is evenmin "verstuurd".
+      vi.mocked(sendEmail).mockResolvedValueOnce({ ok: false, mocked: false, error: 'ECONNREFUSED' });
+      const mislukt = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(mislukt.json).toMatchObject({ alerted: false, reason: 'verzending mislukt' });
+      expect(mem.hartslagen.at(-1)?.details).toContain('NIET verstuurd (verzending mislukt)');
+
+      // Een echte verzending blijft "verstuurd".
+      vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, mocked: false });
+      const gelukt = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(gelukt.json).toMatchObject({ alerted: true });
+      expect(gelukt.json.reason).toBeUndefined();
+      expect(mem.hartslagen.at(-1)?.details).toContain('Dagoverzicht verstuurd: ');
+    } finally {
+      delete process.env.ERROR_DIGEST_WEEKDAG;
+    }
   });
 });
 
