@@ -18,8 +18,8 @@ import type {
   DeviceStatus,
   UserDevice,
 } from "./types.js";
-import { RUIL_BEKEKEN_ACTIE } from "../shared/ruilVerloop.js";
 import { MAIL_LOG_NIET_AFGEROND } from "../shared/mailLog.js";
+import { RUIL_BEKEKEN_ACTIE } from "../shared/ruilVerloop.js";
 import {
   countAdmins,
   ensureUniqueUserEmails,
