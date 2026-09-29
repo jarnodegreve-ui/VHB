@@ -1,0 +1,158 @@
+/**
+ * DE regel tegen dubbele inplanning (Jarno 29-09), op één plek:
+ *
+ *   Na de bewerking heeft geen enkele chauffeur op één dag meer dan één
+ *   dienst, behalve waar de bewerking zelf de tweede dienst in dezelfde
+ *   beweging wegneemt (1-op-1).
+ *
+ * Een dienst is: een gewone dienst volgens de planning-rijen, of een
+ * code-dienst (schoolrit, bureau, garage) volgens het bord, want die heeft
+ * geen rijen (api/_lib/codeDienst.ts). De regel geldt voor ELKE chauffeur die
+ * door de bewerking een dienst krijgt, op ELKE dag waarop hij die krijgt: de
+ * ontvanger op de dienstdag, en bij een 1-op-1 ook de aanvrager op de terugdag.
+ *
+ * Elk schrijfpad beschrijft wat het doet als een lijst ontvangsten en vraagt
+ * hier de conflicten: de handmatige wissel, een ruil goedkeuren (PATCH, de
+ * lijst en de Telegram-knop, via dubbeleInplanningFout), een overname
+ * aanvragen en een dienst toewijzen (ook de Telegram-knop). De zin die de
+ * planner leest maakt het pad zelf, de regel is overal dezelfde.
+ *
+ * Een code op het bord die het portaal niet kent (niet in het dienstoverzicht,
+ * niet in de planningscodes) telt als bezet: ze kan een rit zijn die nog niet
+ * is ingevoerd. De import en de heropbouw weigeren zo'n code al; de planner
+ * zet ze eerst in Planningscodes. Een lege cel, een cel met alleen leestekens
+ * en de overname-codes (vrij, bv, tk, ta) zijn nooit bezet.
+ */
+import { DAG_DMJ, isTakeoverCode, toLookupToken } from "../helpers.js";
+import { getShiftsOnDate, getSwapsData } from "../storage.js";
+import { dienstOpBord } from "../../shared/bordBezetting.js";
+import { bordOpDag, laadBordVast, type BordVanDag, type BordVast, type BronLeeg } from "./codeDienst.js";
+
+const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Eén chauffeur die door de bewerking op één dag een dienst krijgt. */
+export type Ontvangst = {
+  driverId: string;
+  date: string;
+  /** De dienst die hij krijgt. Heeft hij die al, dan is dat geen conflict:
+   *  een herhaalde doorvoer blijft idempotent. */
+  krijgt: unknown;
+  /** Wat hij in dezelfde beweging op die dag afgeeft (1-op-1). */
+  geeftAf?: unknown[];
+  /** Een aanvraag die nog niet is doorgevoerd (overname indienen): van een
+   *  herhaalde doorvoer is dan geen sprake, dus ook een dienst met het nummer
+   *  van de aangeboden dienst telt. */
+  aanvraag?: boolean;
+};
+
+/** Wat er op één dag staat: de rijen in de planning en het bord. */
+export type DagStand = {
+  rijen: Array<{ driverId?: unknown; line?: unknown }>;
+  bord: Pick<BordVanDag, "celVan" | "isCodeDienst" | "isBekend" | "bronLeeg">;
+};
+
+export type DubbeleInplanning = {
+  driverId: string;
+  date: string;
+  /** De dienst (of de onbekende code) die de chauffeur die dag al draagt. */
+  dienst: string;
+  /** Waar hij staat: in de planning-rijen, als code-dienst op het bord, of
+   *  als code die het portaal niet kent. */
+  bron: "rijen" | "bord" | "onbekend";
+  /** Alleen bij "onbekend": het dienstoverzicht of de planningscodes kwam
+   *  leeg terug, dus de code is niet onbekend maar niet te beoordelen. */
+  bronLeeg?: BronLeeg;
+};
+
+/**
+ * De conflicten van een bewerking, puur. Eerst wat in de planning-rijen staat
+ * (in de volgorde van de ontvangsten), daarna wat alleen het bord toont: zo
+ * kan een pad zijn afwezigheidscontrole tussen de twee houden, zoals het dat
+ * altijd deed.
+ */
+export const dubbeleInplanningen = (
+  standOp: (date: string) => DagStand | undefined,
+  ontvangsten: Ontvangst[],
+): DubbeleInplanning[] => {
+  const uitRijen: DubbeleInplanning[] = [];
+  const uitBord: DubbeleInplanning[] = [];
+  for (const o of ontvangsten) {
+    const stand = ISO_DAG.test(o.date) && o.driverId && toLookupToken(String(o.krijgt ?? "")) ? standOp(o.date) : undefined;
+    if (!stand) continue;
+    const telNiet = new Set([o.aanvraag ? "" : o.krijgt, ...(o.geeftAf ?? [])].map((d) => toLookupToken(String(d ?? ""))).filter(Boolean));
+    const rij = stand.rijen.find((r) => String(r.driverId) === o.driverId && !telNiet.has(toLookupToken(String(r.line ?? ""))));
+    if (rij) uitRijen.push({ driverId: o.driverId, date: o.date, dienst: String(rij.line), bron: "rijen" });
+    const cel = stand.bord.celVan(o.driverId);
+    const dienst = dienstOpBord(cel);
+    if (dienst && stand.bord.isCodeDienst(dienst) && !telNiet.has(toLookupToken(dienst))) {
+      uitBord.push({ driverId: o.driverId, date: o.date, dienst, bron: "bord" });
+    } else if (cel && cel.kind === "unknown" && !cel.hiddenService) {
+      const token = toLookupToken(cel.code);
+      if (token && !isTakeoverCode(cel.code) && !stand.bord.isBekend(cel.code) && !telNiet.has(token)) {
+        uitBord.push({
+          driverId: o.driverId, date: o.date, dienst: cel.code, bron: "onbekend",
+          ...(stand.bord.bronLeeg ? { bronLeeg: stand.bord.bronLeeg } : {}),
+        });
+      }
+    }
+  }
+  return [...uitRijen, ...uitBord];
+};
+
+/**
+ * De stand van de gevraagde dagen: per dag de planning-rijen en het bord
+ * (matrixcel met de ruilen erover, zonder de afwezigheden: die toetst elk pad
+ * apart, vóór de melding over een dubbele dienst). Alles in één beweging;
+ * `vooraf` is wat de aanroeper al las (de ruilen, en in een lus `vast`).
+ */
+export const laadDagStanden = async (dagen: unknown[], vooraf?: { swaps?: any[]; vast?: BordVast }) => {
+  const vastLezing = vooraf?.vast ? Promise.resolve(vooraf.vast) : laadBordVast();
+  const bron = Promise.all([vastLezing, vooraf?.swaps ?? getSwapsData()]);
+  const uniek = [...new Set(dagen.map((d) => String(d ?? "").trim()).filter((d) => ISO_DAG.test(d)))];
+  const [vast, standen] = await Promise.all([
+    vastLezing,
+    Promise.all(uniek.map(async (dag): Promise<[string, DagStand]> => {
+      const [rijen, bord] = await Promise.all([
+        getShiftsOnDate(dag),
+        bron.then(([v, swaps]) => bordOpDag(dag, v.users, { zonderAfwezigheid: true, swaps: swaps as any[], services: v.services, codes: v.codes })),
+      ]);
+      return [dag, { rijen, bord }];
+    })),
+  ]);
+  const perDag = new Map(standen);
+  return { vast, standOp: (dag: string) => perDag.get(dag) };
+};
+
+const LEEG: Record<BronLeeg, { wat: string; plek: string }> = {
+  dienstoverzicht: { wat: "Het dienstoverzicht kwam leeg terug", plek: "het Dienstoverzicht" },
+  planningscodes: { wat: "De planningscodes kwamen leeg terug", plek: "Planningscodes" },
+  beide: { wat: "Het dienstoverzicht en de planningscodes kwamen leeg terug", plek: "beide lijsten" },
+};
+
+/**
+ * De melding bij een code die het portaal niet kent.
+ *
+ * Kwam het dienstoverzicht of kwamen de planningscodes leeg terug, dan is de
+ * code niet onbekend maar niet te beoordelen, en zou "voeg ze toe in
+ * Planningscodes" de planner op een dwaalspoor zetten (controle 29-09, 1c).
+ * Het blijft een 409 waarbij niets geschreven wordt: de app toont de tekst
+ * van een 409, die van een 503 niet (daar wordt het "het portaal is even in
+ * onderhoud", src/lib/fouten.ts).
+ *
+ * Wat de app met de tekst doet (src/lib/fouten.ts, schrijffout): boven 240
+ * tekens toont ze een algemene zin in plaats van deze melding, dus naam en
+ * code worden ingekort; en zonder "probeer" of "vernieuw" plakt ze er "Iemand
+ * anders heeft dit intussen gewijzigd" achter, dus elke melding eindigt op
+ * wat de planner nu doet.
+ */
+export const onbekendeCodeFout = (naam: string, c: Pick<DubbeleInplanning, "date" | "dienst" | "bronLeeg">) => {
+  const wie = kort(naam, 40);
+  if (c.bronLeeg) {
+    const { wat, plek } = LEEG[c.bronLeeg];
+    return `${wat}, dus het portaal kan niet nagaan of ${wie} op ${DAG_DMJ(c.date)} al een dienst rijdt. Er is niets gewijzigd. Kijk ${plek} na en probeer opnieuw.`;
+  }
+  return `${wie} staat op ${DAG_DMJ(c.date)} op '${kort(c.dienst, 30)}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze toe in Planningscodes en probeer opnieuw.`;
+};
+
+/** Tekst van hoogstens `max` tekens, met een beletselteken als ze korter moest. */
+const kort = (tekst: string, max: number) => (tekst.length > max ? `${tekst.slice(0, max - 1)}…` : tekst);

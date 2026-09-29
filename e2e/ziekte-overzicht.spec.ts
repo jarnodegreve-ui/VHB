@@ -45,7 +45,11 @@ const DIENSTEN = [
 
 type ZiekmeldingPayload = { userId: string; startDate: string; endDate: string; comment?: string };
 
-async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, users = CHAUFFEURS }: { user?: User; records?: LeaveRequest[]; users?: User[] } = {}) {
+/** Bordcellen zoals /api/month-planning ze geeft: cells[chauffeur][dag]. */
+type Bord = Record<string, Record<string, { code: string; kind: string; label: string; segments: string[]; hiddenService?: string; swapId?: string; swapAway?: boolean }>>;
+
+/** `bordPoort`: het bord antwoordt pas als deze belofte afloopt; `bordFaalt`: het antwoordt met een 500. */
+async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, users = CHAUFFEURS, bord, bordPoort, bordFaalt }: { user?: User; records?: LeaveRequest[]; users?: User[]; bord?: Bord; bordPoort?: Promise<void>; bordFaalt?: boolean } = {}) {
   await page.clock.setFixedTime(new Date(`${VANDAAG}T08:00:00Z`));
   let opgeslagen = records.map((r) => ({ ...r }));
   const registraties: ZiekmeldingPayload[] = [];
@@ -57,6 +61,12 @@ async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, u
       if (pad.endsWith('/api/users')) return [BEHEERDER, PLANNER, ...users];
       if (pad.endsWith('/api/planning')) return DIENSTEN;
       if (pad.endsWith('/api/ziekte-zonder-registratie')) return { reeksen: [] };
+      // Zonder `bord` blijft het antwoord de lege lijst van de fixtures: de
+      // vervangerlijst valt dan terug op de matrixregel, zoals vóór 29-09.
+      if (bord && pad.endsWith('/api/month-planning')) {
+        const month = new URL(request.url()).searchParams.get('month') ?? '';
+        return { month, dates: [VANDAAG, '2026-09-17'], drivers: users.map((u) => ({ id: u.id, name: u.name })), cells: bord };
+      }
       if (pad.endsWith('/api/leave/sick-report') && request.method() === 'POST') {
         const payload: ZiekmeldingPayload = request.postDataJSON();
         registraties.push(payload);
@@ -78,6 +88,15 @@ async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, u
       return undefined;
     },
   });
+  // Later geregistreerd dan de fixtures, dus deze route gaat voor.
+  if (bordPoort || bordFaalt) {
+    await page.route('**/api/month-planning**', async (route) => {
+      if (bordFaalt) return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Gegevens laden is mislukt.' }) });
+      await bordPoort;
+      const month = new URL(route.request().url()).searchParams.get('month') ?? '';
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ month, dates: [VANDAAG], drivers: users.map((u) => ({ id: u.id, name: u.name })), cells: bord ?? {} }) });
+    });
+  }
   await page.goto('/beheer/ziekte');
   await expect(page.getByRole('heading', { level: 1, name: 'Ziekte', exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Actueel', exact: true })).toBeVisible();
@@ -303,4 +322,61 @@ test('ziekte: chauffeurpaginering houdt zoeken, jaartotalen en jaarwissel samen'
   await expect(lijst(2025).getByText('Chauffeur 01', { exact: true })).toBeVisible();
   await expect(totaal).toHaveText('16');
   await pastBinnenScherm(page);
+});
+
+test('ziekte: de vervangerlijst leest het bord, een schoolrit via een wissel is niet vrij', async ({ page }) => {
+  // Controle 29-09: Dina staat in de matrix op vrij maar kreeg via een wissel
+  // de schoolrit van Cem. Het bord (zelfde cellen als de Maandplanning) toont
+  // dat, de rauwe matrix niet: Dina stond als "vrij" bovenaan de lijst.
+  const vrij = { code: 'vrij', kind: 'absence', label: 'Geen dienst', segments: [] };
+  await openZiekte(page, { bord: {
+    alex: { [VANDAAG]: { code: 'ziek', kind: 'absence', label: 'Ziek', segments: [], hiddenService: '2101' } },
+    bea: { [VANDAAG]: { code: 'ziek', kind: 'absence', label: 'Ziek', segments: [] } },
+    cem: { [VANDAAG]: { ...vrij, swapId: 'wissel-1', swapAway: true } },
+    dina: { [VANDAAG]: { code: 'EEK6', kind: 'service', label: 'Schoolrit', segments: [], swapId: 'wissel-1' } },
+  } });
+  await rij(page.getByRole('region', { name: 'Actueel', exact: true }), 0, '2026-09-14').click();
+  const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[0].name, exact: true }) });
+  const keuze = modal.getByRole('combobox', { name: `Vervanger voor dienst 2101 op ${dmj(VANDAAG)}`, exact: true });
+  const optie = (naam: string) => keuze.locator('option').filter({ hasText: naam });
+  // Wie zijn schoolrit afgaf is vrij, wie ze kreeg niet, wie ziek is ook niet.
+  // (Cem rijdt die week op 18/09, vandaar de telling achter zijn naam.)
+  await expect(optie('Cem Yilmaz')).toHaveText('Cem Yilmaz · vrij · 1 dag deze week');
+  await expect(optie('Dina Goossens')).toHaveText('Dina Goossens');
+  await expect(optie('Bea De Wilde')).toHaveText('Bea De Wilde');
+  // Vrij staat bovenaan, meteen na de lege keuze.
+  await expect(keuze.locator('option').nth(1)).toHaveText('Cem Yilmaz · vrij · 1 dag deze week');
+  // Een dag waarvoor het bord niets zegt: iedereen zonder dienst is vrij.
+  const morgen = modal.getByRole('combobox', { name: `Vervanger voor dienst 2607 op ${dmj('2026-09-17')}`, exact: true });
+  await expect(morgen.locator('option').filter({ hasText: 'Dina Goossens' })).toHaveText('Dina Goossens · vrij');
+});
+
+test('ziekte: geen kandidaten tot het bord er is, daarna de lijst volgens het bord', async ({ page }) => {
+  // Tijdens het laden gold de matrixregel en stond Dina, die een schoolrit
+  // rijdt, kort als vrij in de lijst. Nu toont de lijst niets tot het bord er is.
+  let laatLos = () => {};
+  const bordPoort = new Promise<void>((los) => { laatLos = los; });
+  await openZiekte(page, { bordPoort, bord: {
+    dina: { [VANDAAG]: { code: 'EEK6', kind: 'service', label: 'Schoolrit', segments: [], swapId: 'wissel-1' } },
+  } });
+  await rij(page.getByRole('region', { name: 'Actueel', exact: true }), 0, '2026-09-14').click();
+  const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[0].name, exact: true }) });
+  const keuze = modal.getByRole('combobox', { name: `Vervanger voor dienst 2101 op ${dmj(VANDAAG)}`, exact: true });
+  await expect(keuze).toBeDisabled();
+  await expect(keuze.locator('option')).toHaveText(['Kandidaten laden…']);
+  laatLos();
+  await expect(keuze).toBeEnabled();
+  await expect(keuze.locator('option').first()).toHaveText('Kies een chauffeur…');
+  await expect(keuze.locator('option').filter({ hasText: 'Dina Goossens' })).toHaveText('Dina Goossens');
+  await expect(keuze.locator('option').filter({ hasText: 'Cem Yilmaz' })).toHaveText('Cem Yilmaz · vrij · 1 dag deze week');
+});
+
+test('ziekte: mislukt het bord, dan toont de lijst de kandidaten volgens de matrixregel', async ({ page }) => {
+  await openZiekte(page, { bordFaalt: true });
+  await rij(page.getByRole('region', { name: 'Actueel', exact: true }), 0, '2026-09-14').click();
+  const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[0].name, exact: true }) });
+  const keuze = modal.getByRole('combobox', { name: `Vervanger voor dienst 2101 op ${dmj(VANDAAG)}`, exact: true });
+  await expect(keuze).toBeEnabled();
+  await expect(keuze.locator('option').first()).toHaveText('Kies een chauffeur…');
+  await expect(keuze.locator('option').filter({ hasText: 'Dina Goossens' })).toHaveText('Dina Goossens · vrij');
 });

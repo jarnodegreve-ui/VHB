@@ -17,13 +17,16 @@ import { berekenCelWaarheid } from "./celWaarheid.js";
 import { heropbouwPlanning, reapplyApprovedSwaps, replayTekst } from "./planningHeropbouw.js";
 import { berekenVerwachtingsCheck } from "../coverageRoutes.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "../helpers.js";
+import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./matrixXlsx.js";
 import { leesMatrixUpload } from "./matrixUpload.js";
 import { buildPlanningFromMatrix, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { ruilAfwezigheidsFout } from "./ruilRegels.js";
+import { vrijOpBord } from "../../shared/bordBezetting.js";
+import { bordCellenVoor, bordVanDag } from "./codeDienst.js";
+import { dubbeleInplanningen, onbekendeCodeFout } from "./dubbeleInplanning.js";
 
 // Helper: haal de geüploade Excel uit de body (gzip of base64, met de
 // grenzen per soort, zie api/_lib/matrixUpload.ts) en parse de praktijk-tab.
@@ -136,11 +139,15 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
     if (!ISO_DAY_RE.test(date)) return { fout: { status: 400, error: "Ongeldige datum (JJJJ-MM-DD verwacht)." } };
     if (!serviceNumber || !driverId) return { fout: { status: 400, error: "Kies de dienst én de chauffeur." } };
 
-    const [users, services, matrixRows, dayRows] = await Promise.all([
+    // De planningscodes en de ruilen gaan mee voor het bord van die dag (zie
+    // de bordcontrole verderop); in dezelfde beweging, dus geen extra ronde.
+    const [users, services, matrixRows, dayRows, codes, swaps] = await Promise.all([
       getUsersData(),
       getServicesData(),
       getPlanningMatrixRows(),
       getShiftsOnDate(date),
+      getPlanningCodesData(),
+      getSwapsData(),
     ]);
     const driver = users.find((u) => String(u.id) === driverId);
     if (!driver || driver.isActive === false) return { fout: { status: 400, error: "De gekozen chauffeur bestaat niet (meer) of is inactief." } };
@@ -158,15 +165,20 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
       const naam = users.find((u) => String(u.id) === String(alBemand.driverId))?.name ?? "iemand";
       return { fout: { status: 409, error: `Dienst ${service.serviceNumber} is op ${date} intussen al ingevuld door ${naam}, vernieuw de pagina.` } };
     }
-    const heeftAl = dayRows.find((r) => String(r.driverId) === driverId);
-    if (heeftAl) return { fout: { status: 409, error: `${driver.name} rijdt op ${date} al dienst ${heeftAl.line}, dubbele inplanning kan niet.` } };
+    // DE regel (api/_lib/dubbeleInplanning.ts): wie een dienst krijgt, mag die
+    // dag geen andere hebben. Eerst wat in de planning-rijen staat, dan de
+    // afwezigheid, dan de matrixcel en wat alleen het bord toont (zie verderop).
+    const matrixRow = (matrixRows as any[]).find((r) => String(r.source_date) === date);
+    const bord = bordVanDag(date, { rows: matrixRow ? [matrixRow] : [], users: users as any[], services: services as any[], codes: codes as any[], leave: [], swaps: swaps as any[] });
+    const conflicten = dubbeleInplanningen(() => ({ rijen: dayRows, bord }), [{ driverId, date, krijgt: service.serviceNumber }]);
+    const heeftAl = conflicten.find((c) => c.bron === "rijen");
+    if (heeftAl) return { fout: { status: 409, error: `${driver.name} rijdt op ${DAG_DMJ(date)} al dienst ${heeftAl.dienst}, dubbele inplanning kan niet.` } };
     const afwFout = await ruilAfwezigheidsFout({ requesterId: "", targetDriverId: driverId, swapType: "overname", shiftDate: date });
     if (afwFout) return { fout: { status: 409, error: afwFout } };
 
     // Matrix-rij van die dag: sleutel is de chauffeursnáám zoals de Excel die
     // schrijft — hergebruik een bestaande naamvariant van deze chauffeur als
     // die er is (accenten/volgorde), anders de naam uit gebruikersbeheer.
-    const matrixRow = (matrixRows as any[]).find((r) => String(r.source_date) === date);
     if (!matrixRow) return { fout: { status: 409, error: `Er is geen geïmporteerde planning voor ${date}, importeer eerst de Excel.` } };
     const assignments: Record<string, string> = { ...(matrixRow.assignments ?? {}) };
     const eigenToken = toLookupToken(driver.name);
@@ -177,6 +189,18 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
     // overschreven worden — zelfde regel als de overname bij dienstruil.
     if (huidigeCode && !isTakeoverCode(huidigeCode)) {
       return { fout: { status: 409, error: `${driver.name} staat op ${date} al op '${huidigeCode}' in de planning, die cel kan niet stil overschreven worden.` } };
+    }
+    // De matrixcel is vrij, maar wat zegt het BORD (controle 29-09)? Wie via
+    // een wissel een code-dienst kreeg (schoolrit, bureau, garage) heeft geen
+    // rijen in de planning en staat in de matrix nog op 'vrij': de cel werd
+    // dan overschreven, de chauffeur reed twee diensten en het bord schoof de
+    // nieuwe dienst door naar wie de wissel gaf. Zonder de afwezigheden, die
+    // zijn hierboven al getoetst.
+    const opBord = conflicten[0];
+    if (opBord) {
+      return { fout: { status: 409, error: opBord.bron === "onbekend"
+        ? onbekendeCodeFout(driver.name, opBord)
+        : `${driver.name} rijdt op ${DAG_DMJ(date)} al dienst ${opBord.dienst}, dubbele inplanning kan niet.` } };
     }
     assignments[bestaandeKey ?? driver.name] = String(service.serviceNumber);
 
@@ -332,10 +356,16 @@ export function mountPlanningRoutes(app: express.Express) {
       // De matrix wordt altijd geladen (één rij per dag, dus klein): zonder
       // matrixcodes stond wie in de Excel op ZIEK/OPL/... zonder
       // portaalregistratie als "vrij" in het bezettingsoverzicht (15-09).
-      const [users, leave, matrixRows] = await Promise.all([
+      // Diensten, planningscodes en ruilen erbij (controle 29-09): de
+      // beschikbaarheid leest de cel van het bord, de matrixcel met de
+      // doorgevoerde ruilen erover, niet langer de rauwe matrixcel.
+      const [users, leave, matrixRows, services, codes, swaps] = await Promise.all([
         getUsersData(),
         getLeaveData(),
         getPlanningMatrixRows(),
+        getServicesData(),
+        getPlanningCodesData(),
+        getSwapsData(),
       ]);
       const shiftChunks = await Promise.all(months.map((m) => getPlanningData({ monthIso: m })));
       const shifts = shiftChunks.flat().filter((s: any) => s.date >= from && s.date <= to);
@@ -346,6 +376,11 @@ export function mountPlanningRoutes(app: express.Express) {
         .sort((a, b) => a.name.localeCompare(b.name));
       const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
       const approvedLeave = leave.filter((l: any) => l.status === "approved");
+      // Eén waarheid met de maandplanning (berekenCelWaarheid): wie via een
+      // wissel een schoolrit kreeg is niet vrij, wie zijn dienst afgaf is dat
+      // wel, ook al toont de matrix zijn oude code nog. Het verlof uit het
+      // portaal telt hierboven al apart (approvedLeave).
+      const bordOp = bordCellenVoor(dates, { rows: matrixRows as any[], users: users as any[], services: services as any[], codes: codes as any[], swaps: swaps as any[] });
 
       const days = dates.map((date) => {
         const working = new Set<string>();
@@ -370,12 +405,14 @@ export function mountPlanningRoutes(app: express.Express) {
             onLeave.add(String(l.userId));
           }
         }
-        // Een matrixcode die geen overname-code is (ziek, opl, kv, gar, ...)
-        // maakt iemand die dag niet vrij, ook zonder planning-rij of
-        // portaalverlof; zelfde regel als de takeover-kaart en POST /api/swaps.
+        // Een code op het bord die geen overname-code is (ziek, opl, kv, gar,
+        // een dienst, ...) maakt iemand die dag niet vrij, ook zonder
+        // planning-rij of portaalverlof; zelfde regel als de takeover-kaart
+        // en POST /api/swaps.
+        const bordCellen = bordOp(date);
         const nietBeschikbaar = new Set<string>();
-        for (const [driverId, code] of matrixCodesForDate(matrixRows, chauffeurs, date)) {
-          if (chauffeurIds.has(driverId) && !isTakeoverCode(code)) nietBeschikbaar.add(driverId);
+        for (const [driverId, cel] of bordCellen) {
+          if (chauffeurIds.has(driverId) && !vrijOpBord(cel)) nietBeschikbaar.add(driverId);
         }
         const free = chauffeurs.filter((c) => !working.has(c.id) && !onLeave.has(c.id) && !nietBeschikbaar.has(c.id)).map((c) => c.id);
         const day: Record<string, unknown> = { date, working: Array.from(working), leave: Array.from(onLeave), free, lines };
@@ -385,9 +422,9 @@ export function mountPlanningRoutes(app: express.Express) {
           // de code, zodat de UI kan tonen wáárom ('bv' leest anders dan 'vrij').
           // Dezelfde regel als de server-validatie in POST /api/swaps.
           const takeover: Record<string, string> = {};
-          for (const [driverId, code] of matrixCodesForDate(matrixRows, chauffeurs, date)) {
+          for (const [driverId, cel] of bordCellen) {
             if (!chauffeurIds.has(driverId) || working.has(driverId)) continue;
-            if (isTakeoverCode(code)) takeover[driverId] = code.toLowerCase();
+            if (isTakeoverCode(cel.code)) takeover[driverId] = cel.code.toLowerCase();
           }
           day.takeover = takeover;
         }
