@@ -13,7 +13,7 @@ import { meldSchrijffout } from '../../lib/fouten';
 import { Formulier } from '../../components/Formulier';
 import { useVeldfouten, useVuil, type Veldfouten } from '../../lib/formulier';
 import { formatDateTimeHuman, aantal as tel } from '../../lib/format';
-import { leesAdressen, naamVanSoort, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
+import { EXTRA_SOORT_NAMEN, leesAdressen, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
 import { MAIL_LOG_STATUS, mailLogStatus, mailLogToelichting, mailLogVraagtAandacht } from '../../../shared/mailLog';
 import type { User } from '../../types';
 import { EigenMailPaneel } from './EigenMail';
@@ -65,7 +65,7 @@ export function MailsView({ users }: { users: User[] }) {
         <div className="space-y-6">
           <AutomatischeMails soorten={data?.soorten ?? null} instellingen={data?.instellingen ?? { uit: [] }} onGewijzigd={(inst) => setData((d) => (d ? { ...d, instellingen: inst, soorten: d.soorten.map((s) => ({ ...s, aan: s.altijdAan ? true : !inst.uit.includes(s.soort) })) } : d))} />
           <Verzendlijsten lijsten={data?.verzendlijsten ?? null} onGewijzigd={(lijsten) => setData((d) => (d ? { ...d, verzendlijsten: lijsten } : d))} />
-          <Verzendlog log={data?.log ?? null} />
+          <Verzendlog log={data?.log ?? null} soorten={data?.soorten ?? []} />
         </div>
       )}
     </PageShell>
@@ -288,7 +288,10 @@ function VerzendlijstModal({ lijst, bezig, onClose, onBewaar }: { lijst: Verzend
 
 // --- Verzendlog ---
 
-function Verzendlog({ log }: { log: LogRij[] | null }) {
+function Verzendlog({ log, soorten }: { log: LogRij[] | null; soorten: Soort[] }) {
+  // De namen komen van de server (dezelfde lijst als hierboven op het scherm),
+  // zodat de lijst met mailsoorten niet ook in de bundel van het scherm zit.
+  const naamVan = (soort: string) => soorten.find((s) => s.soort === soort)?.naam ?? EXTRA_SOORT_NAMEN[soort] ?? soort;
   return (
     <Card>
       <CardHeader
@@ -325,7 +328,7 @@ function Verzendlog({ log }: { log: LogRij[] | null }) {
                   return (
                     <tr key={r.id}>
                       <Td nowrap>{formatDateTimeHuman(r.verzondenOp)}</Td>
-                      <Td>{naamVanSoort(r.soort)}</Td>
+                      <Td>{naamVan(r.soort)}</Td>
                       <Td num>{r.aantal}</Td>
                       <Td>
                         <span className="inline-flex flex-wrap items-center gap-1.5">

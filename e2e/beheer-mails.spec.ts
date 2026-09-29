@@ -316,6 +316,12 @@ test('mails: in het verzendlog is een fout rood en heeft een onderbroken verzend
   await expect(log.getByText('Niet afgerond; onbekend hoeveel er vertrokken zijn.')).toBeVisible();
   // De technische reden van een onderbroken verzending staat niet in beeld.
   await expect(log.getByText(/mogelijk is een deel vertrokken/)).toHaveCount(0);
+  // De naam van de mail komt uit de soorten die de server meestuurt, of uit
+  // de vaste namen van de twee mails die een mens zelf verstuurt.
+  await expect(log.getByRole('cell', { name: 'Ziekmelding', exact: true })).toBeVisible();
+  await expect(log.getByRole('cell', { name: 'Dringende update', exact: true })).toBeVisible();
+  await expect(log.getByRole('cell', { name: 'Eigen mail', exact: true })).toBeVisible();
+  await expect(log.getByRole('cell', { name: 'Omleiding gemaild', exact: true })).toBeVisible();
   // Rusttoestanden blijven stil: een neutrale pil, geen rood en geen amber vlak.
   for (const stil of ['Uitgeschakeld', 'Alleen gelogd', 'Verstuurd']) {
     await expect(pil(stil)).not.toHaveClass(/text-red-700|bg-red-50|bg-amber-50/);

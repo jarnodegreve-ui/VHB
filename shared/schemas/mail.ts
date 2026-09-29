@@ -41,10 +41,13 @@ export const MAIL_SOORTEN: readonly MailSoortInfo[] = [
   { soort: 'restore-proef', naam: 'Restore-proef', wanneer: 'Elke eerste van de maand, alleen als het herstel faalt', ontvangers: 'Admins die systeemmail willen (of ALERT_EMAIL)', altijdAan: true },
 ];
 
-export const MAIL_SOORT_PER_SLEUTEL: ReadonlyMap<string, MailSoortInfo> = new Map(MAIL_SOORTEN.map((m) => [m.soort, m]));
+// De twee afgeleiden hieronder zijn als zuiver gemarkeerd: het scherm gebruikt
+// ze niet (de server stuurt de soorten mee), en zonder de markering hield de
+// bundelaar de hele lijst hierboven in de lui geladen mailchunk.
+export const MAIL_SOORT_PER_SLEUTEL: ReadonlyMap<string, MailSoortInfo> = /* @__PURE__ */ (() => new Map(MAIL_SOORTEN.map((m) => [m.soort, m])))();
 
 /** Soorten die een admin mag uitzetten. */
-export const UITZETBARE_MAIL_SOORTEN: readonly string[] = MAIL_SOORTEN.filter((m) => !m.altijdAan).map((m) => m.soort);
+export const UITZETBARE_MAIL_SOORTEN: readonly string[] = /* @__PURE__ */ (() => MAIL_SOORTEN.filter((m) => !m.altijdAan).map((m) => m.soort))();
 
 export const mailInstellingenSchema = z.object({
   /** Mailsoorten die uit staan; alles wat er niet in staat is aan. */
