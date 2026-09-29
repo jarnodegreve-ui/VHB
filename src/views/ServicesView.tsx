@@ -394,10 +394,6 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
   );
 }
 
-/** "2118", "2118 en 2119", "2118, 2119 en 2120". */
-const opsomming = (lijst: readonly string[]) =>
-  lijst.length > 1 ? `${lijst.slice(0, -1).join(', ')} en ${lijst[lijst.length - 1]}` : lijst[0] ?? '';
-
 /**
  * Wat de Excel-import leeg maakte (Jarno 29-09, nummer 28b), in de
  * bevestiging vóór de import. Compact: de uitleg één keer, dan per deel één
@@ -416,7 +412,7 @@ function ImportMeldingen({ legeDelen, ongeldig, zonderGeldigDeel }: Omit<DienstI
       {zonderGeldigDeel.length > 0 && (
         <Callout tone="warning" title={zonderGeldigDeel.length === 1 ? `Dienst ${zonderGeldigDeel[0]} krijgt geen planning` : `${zonderGeldigDeel.length} diensten krijgen geen planning`}>
           <p>
-            {zonderGeldigDeel.length === 1 ? 'Ze heeft' : `Diensten ${opsomming(zonderGeldigDeel)} hebben`} na de import geen enkel deel met geldige tijden, dus geen planning-rijen.
+            {zonderGeldigDeel.length === 1 ? 'Ze heeft' : `Diensten ${zonderGeldigDeel.join(', ')} hebben`} na de import geen enkel deel met geldige tijden, dus geen planning-rijen.
             {' '}Rijdt iemand zo'n dienst, dan werkt het portaal de planning niet automatisch bij; bouw je de planning opnieuw op in Beheer planning, dan valt ze uit het rooster.
           </p>
         </Callout>
@@ -435,7 +431,7 @@ function ImportMeldingen({ legeDelen, ongeldig, zonderGeldigDeel }: Omit<DienstI
       )}
       {legeDelen > 0 && (
         <p className="text-body-sm text-slate-500">
-          {legeDelen === 1 ? '1 deel had 0 als begin en einde (een lege kolom in Excel) en is' : `${legeDelen} delen hadden 0 als begin en einde (lege kolommen in Excel) en zijn`} als leeg ingelezen.
+          {legeDelen} {legeDelen === 1 ? 'deel' : 'delen'} met 0 als begin en einde (lege kolom in Excel) als leeg ingelezen.
         </p>
       )}
     </div>

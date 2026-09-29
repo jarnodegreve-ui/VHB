@@ -289,7 +289,7 @@ test.describe('deel zonder geldige tijden', () => {
     ]));
     const dialoog = page.getByRole('dialog', { name: 'Diensten importeren' });
     await expect(dialoog).toBeVisible({ timeout: 15_000 });
-    await expect(dialoog).toContainText('1 deel had 0 als begin en einde (een lege kolom in Excel) en is als leeg ingelezen.');
+    await expect(dialoog).toContainText('1 deel met 0 als begin en einde (lege kolom in Excel) als leeg ingelezen.');
     await expect(dialoog).not.toContainText('zonder tijden mee');
     expect(vangst.body).toBeNull();
     await dialoog.getByRole('button', { name: 'Importeren', exact: true }).click();
@@ -320,7 +320,7 @@ test.describe('deel zonder geldige tijden', () => {
     await expect(dialoog).toBeVisible({ timeout: 15_000 });
     await expect(dialoog).toContainText('9 delen gaan zonder tijden mee');
     await expect(dialoog).toContainText('Dienst 2209 krijgt geen planning');
-    await expect(dialoog).toContainText('2 delen hadden 0 als begin en einde');
+    await expect(dialoog).toContainText('2 delen met 0 als begin en einde (lege kolom in Excel) als leeg ingelezen.');
     const lijst = dialoog.getByRole('region', { name: 'Meldingen bij de import' });
     await expect(lijst.getByRole('listitem')).toHaveText([
       'Dienst 2201, deel 2 (08:00)',
