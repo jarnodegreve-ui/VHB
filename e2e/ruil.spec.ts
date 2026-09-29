@@ -754,15 +754,21 @@ test('chauffeur: wat op zijn antwoord wacht bovenaan, lopende verzoeken boven af
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
 
-test('Mijn verzoeken: het scrollvak blijft, maar aan het einde van de lijst scrolt de pagina door', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'de veeg loopt via het Chrome DevTools Protocol');
-  // Controle 29-09, nr. 18: het vak (max. 420 px) vult op een telefoon bijna
-  // het scherm en hield met overscroll-contain de veeg vast; de ruilen die op
-  // antwoord wachten staan eronder en waren zo alleen naast het vak te bereiken.
-  const pageErrors: string[] = [];
-  page.on('pageerror', (err) => pageErrors.push(err.message));
+/**
+ * Controle 29-09, nr. 18: het scrollvak van Mijn verzoeken (max. 420 px) vult
+ * op een telefoon bijna het scherm en hield met overscroll-contain de veeg
+ * vast; de ruilen die op antwoord wachten staan eronder.
+ *
+ * Drie bewijzen, van omgevingsonafhankelijk naar gedrag:
+ *  1. de berekende stijl (geen contain onder md, wel vanaf md) en de maten;
+ *  2. het muiswiel boven het vak op zijn einde scrolt de pagina door;
+ *  3. hetzelfde met echte touch-events (Input.dispatchTouchEvent).
+ * Bewust NIET met Input.synthesizeScrollGesture: die doet in headless Chromium
+ * op Linux (de CI) helemaal niets, ook niet op de pagina zelf, en slaagde
+ * alleen op macOS (PR #660).
+ */
+const openMijnVerzoeken = async (page: Page) => {
   await seedSession(page, CHAUFFEUR);
-
   const nu = new Date().toISOString();
   // Eén lopend verzoek (staat bovenaan) en dertien afgeronde.
   const eigen = Array.from({ length: 14 }, (_, i) => ({
@@ -792,74 +798,175 @@ test('Mijn verzoeken: het scrollvak blijft, maar aan het einde van de lijst scro
   await expect(page.getByText('Jouw antwoord')).toBeAttached();
 
   // Het scrollvak = de dichtste voorouder van de lijst die zelf schuift.
-  const markeerVak = () => lijst.evaluate((ul) => {
+  const gevonden = await lijst.evaluate((ul) => {
     let vak = ul.parentElement;
     while (vak && !['auto', 'scroll'].includes(getComputedStyle(vak).overflowY)) vak = vak.parentElement;
     if (!vak || vak.hasAttribute('data-scroll-root')) return false;
     vak.setAttribute('data-test-scrollvak', '');
     return true;
   });
-  expect(await markeerVak(), 'Mijn verzoeken staat in een eigen scrollvak').toBe(true);
+  expect(gevonden, 'Mijn verzoeken staat in een eigen scrollvak').toBe(true);
   const vak = page.locator('[data-test-scrollvak]');
+
   const stand = () => page.evaluate(() => {
     const v = document.querySelector<HTMLElement>('[data-test-scrollvak]')!;
     const root = document.querySelector<HTMLElement>('[data-scroll-root]')!;
-    return { vak: Math.round(v.scrollTop), eindeVak: Math.round(v.scrollHeight - v.clientHeight), pagina: Math.round(root.scrollTop) };
+    return {
+      vak: Math.round(v.scrollTop),
+      eindeVak: Math.round(v.scrollHeight - v.clientHeight),
+      pagina: Math.round(root.scrollTop),
+      eindePagina: Math.round(root.scrollHeight - root.clientHeight),
+    };
   });
-  // Eén veeg omhoog met de vinger, midden in het vak (echte touch-gesture, geen scrollTo).
-  const cdp = await page.context().newCDPSession(page);
-  const veegOmhoog = async (afstand: number) => {
-    const kader = (await vak.boundingBox())!;
-    await cdp.send('Input.synthesizeScrollGesture', {
-      x: Math.round(kader.x + kader.width / 2),
-      y: Math.round(kader.y + kader.height / 2),
-      yDistance: -afstand,
-      speed: 1200,
-      gestureSourceType: 'touch',
+  /** Zet vak en pagina op een vaste stand en wacht tot de browser die getekend heeft. */
+  const zet = (waar: 'begin' | 'einde') => page.evaluate(async (w) => {
+    const v = document.querySelector<HTMLElement>('[data-test-scrollvak]')!;
+    document.querySelector<HTMLElement>('[data-scroll-root]')!.scrollTop = 0;
+    v.scrollTop = w === 'einde' ? v.scrollHeight : 0;
+    await new Promise<void>((klaar) => requestAnimationFrame(() => requestAnimationFrame(() => klaar())));
+  }, waar);
+  /** Een punt in het zichtbare deel van het vak, dat ook echt het vak raakt (niet het dock of de topbar). */
+  const puntInVak = async () => {
+    const punt = await vak.evaluate((v) => {
+      const k = v.getBoundingClientRect();
+      const x = Math.round(k.left + k.width / 2);
+      const y = Math.round(k.top + 150);
+      return { x, y, raakt: v.contains(document.elementFromPoint(x, y)) };
     });
+    expect(punt.raakt, 'het punt ligt in het scrollvak').toBe(true);
+    return punt;
   };
+  return { lijst, vak, stand, zet, puntInVak };
+};
 
-  // Het vak bestaat nog en schuift zelf (wens Jarno): de lijst is hoger dan het vak.
+test('Mijn verzoeken: het scrollvak blijft, maar aan het einde van de lijst scrolt de pagina door', async ({ page, browserName }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  const { vak, stand, zet, puntInVak } = await openMijnVerzoeken(page);
+
+  // 1. Zonder invoer: het vak bestaat en schuift (wens Jarno), de pagina eronder
+  //    is langer dan het scherm, en op de telefoon houdt het vak de veeg niet vast.
   const begin = await stand();
   expect(begin.eindeVak, 'de lijst is langer dan het vak').toBeGreaterThan(100);
+  expect(begin.eindePagina, 'de pagina is langer dan het scherm').toBeGreaterThan(100);
   expect(begin).toMatchObject({ vak: 0, pagina: 0 });
-  await veegOmhoog(120);
-  await expect.poll(async () => (await stand()).vak).toBeGreaterThan(0);
-  expect((await stand()).pagina, 'midden in de lijst schuift alleen het vak').toBe(0);
+  expect(await vak.evaluate((v) => getComputedStyle(v).overscrollBehaviorY), 'telefoon: de veeg gaat door naar de pagina').toBe('auto');
+  await zet('einde');
+  expect(await stand(), 'het vak schuift tot het einde van de lijst').toMatchObject({ vak: begin.eindeVak, pagina: 0 });
+  // Wat op antwoord wacht staat onder het vak en is met de pagina te bereiken.
+  const onder = await page.getByText('Jouw antwoord').evaluate((el) => {
+    const v = document.querySelector<HTMLElement>('[data-test-scrollvak]')!;
+    const root = document.querySelector<HTMLElement>('[data-scroll-root]')!;
+    const top = el.getBoundingClientRect().top;
+    return { onderVak: top >= v.getBoundingClientRect().bottom, bereikbaar: top - window.innerHeight < root.scrollHeight - root.clientHeight };
+  });
+  expect(onder).toEqual({ onderVak: true, bereikbaar: true });
 
-  // Doorvegen tot het einde van de lijst (een veeg die in het vak begon, blijft in het vak).
-  await expect(async () => {
-    await veegOmhoog(400);
-    const s = await stand();
-    expect(s.vak).toBe(s.eindeVak);
-  }).toPass({ timeout: 15_000 });
-  const opEinde = (await stand()).pagina;
+  // 2. Met het wiel (in Chromium ook op de telefoon-emulatie; mobiel WebKit kent het niet).
+  if (browserName === 'chromium') {
+    await zet('begin');
+    await expect(async () => {
+      const punt = await puntInVak();
+      await page.mouse.move(punt.x, punt.y);
+      await page.mouse.wheel(0, 120);
+      const s = await stand();
+      expect(s.vak, 'midden in de lijst schuift het vak').toBeGreaterThan(0);
+      expect(s.pagina, 'en de pagina niet').toBe(0);
+    }).toPass({ timeout: 10_000 });
 
-  // Aan het einde van de lijst: verder vegen scrolt de pagina door.
-  await expect(async () => {
-    await veegOmhoog(200);
-    expect((await stand()).pagina, 'de pagina scrolt door naar wat onder het vak staat').toBeGreaterThan(opEinde);
-  }).toPass({ timeout: 10_000 });
-
-  // Een overlay vanuit de lijst zet de pagina nog altijd op slot (#637/#638).
-  const rij = lijst.locator(':scope > li').first();
-  await rij.getByRole('button', { name: /Dienst 2101/ }).click();
-  await rij.getByRole('button', { name: 'Aanvraag intrekken' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  expect(await page.evaluate(() => document.body.dataset.scrollLocks ?? '')).not.toBe('');
-  const { vak: vakVoor, pagina: paginaVoor } = await stand();
-  await veegOmhoog(200);
-  expect(await stand(), 'met een overlay open schuift er niets onder').toMatchObject({ vak: vakVoor, pagina: paginaVoor });
-  await page.getByRole('dialog').getByRole('button', { name: 'Annuleren' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => document.body.dataset.scrollLocks ?? '')).toBe('');
+    await expect(async () => {
+      await zet('einde');
+      const punt = await puntInVak();
+      // De muis even weg en terug: een nieuwe wielbeurt, niet het staartje van de vorige.
+      await page.mouse.move(punt.x, punt.y - 40);
+      await page.mouse.move(punt.x, punt.y);
+      await page.mouse.wheel(0, 200);
+      await expect.poll(async () => (await stand()).pagina, { timeout: 1_500, message: 'de pagina scrolt door naar wat onder het vak staat' }).toBeGreaterThan(0);
+    }).toPass({ timeout: 15_000 });
+  }
 
   // Op een breed scherm staan de twee lijsten naast elkaar: daar blijft het vak de veeg vasthouden.
-  expect(await vak.evaluate((v) => getComputedStyle(v).overscrollBehaviorY)).toBe('auto');
   await page.setViewportSize({ width: 1024, height: 800 });
   await expect.poll(() => vak.evaluate((v) => getComputedStyle(v).overscrollBehaviorY)).toBe('contain');
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});
+
+test.describe('Mijn verzoeken met de vinger', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium', 'touch-events lopen via het Chrome DevTools Protocol (Input.dispatchTouchEvent)');
+
+  /** Eén veeg omhoog met echte touch-events; de vinger staat stil voor hij loslaat, dus geen uitloop. */
+  const maakVeeg = async (page: Page) => {
+    const cdp = await page.context().newCDPSession(page);
+    return async (punt: { x: number; y: number }, afstand: number) => {
+      const van = punt.y + afstand / 2;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: punt.x, y: van }] });
+      const stappen = 12;
+      for (let i = 1; i <= stappen; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: punt.x, y: van - (afstand * i) / stappen }] });
+        await page.waitForTimeout(16);
+      }
+      await page.waitForTimeout(150);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+  };
+
+  test('midden in de lijst schuift het vak, aan het einde scrolt de pagina door', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    const { stand, zet, puntInVak } = await openMijnVerzoeken(page);
+    const veeg = await maakVeeg(page);
+
+    await expect(async () => {
+      await zet('begin');
+      await veeg(await puntInVak(), 160);
+      await expect.poll(async () => (await stand()).vak, { timeout: 1_500, message: 'midden in de lijst schuift het vak' }).toBeGreaterThan(0);
+      expect((await stand()).pagina, 'en de pagina niet').toBe(0);
+    }).toPass({ timeout: 15_000 });
+
+    await expect(async () => {
+      await zet('einde');
+      await veeg(await puntInVak(), 160);
+      await expect.poll(async () => (await stand()).pagina, { timeout: 1_500, message: 'de pagina scrolt door naar wat onder het vak staat' }).toBeGreaterThan(0);
+    }).toPass({ timeout: 15_000 });
+
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+
+  test('een overlay vanuit de lijst zet de pagina nog altijd op slot', async ({ page }) => {
+    // De scroll-lock van #637/#638: met een bevestiging open schuift er niets onder.
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    const { lijst, stand, puntInVak } = await openMijnVerzoeken(page);
+    const veeg = await maakVeeg(page);
+    const punt = await puntInVak();
+
+    const rij = lijst.locator(':scope > li').first();
+    const kop = rij.getByRole('button', { name: /Dienst 2101/ });
+    await kop.click();
+    await expect(kop).toHaveAttribute('aria-expanded', 'true');
+    // Eerst de uitklap laten uitlopen: schuift de knop nog onder de muis weg,
+    // dan valt het loslaten naast de knop en komt er geen klik.
+    await rij.evaluate((li) => Promise.all(li.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))));
+    await rij.getByRole('button', { name: 'Aanvraag intrekken' }).click();
+    const dialoog = page.getByRole('dialog');
+    await expect(dialoog).toBeVisible({ timeout: 10_000 });
+    expect(await page.evaluate(() => document.body.dataset.scrollLocks ?? '')).not.toBe('');
+
+    const { vak: vakVoor, pagina: paginaVoor } = await stand();
+    await veeg(punt, 160);
+    await page.mouse.move(punt.x, punt.y);
+    await page.mouse.wheel(0, 200);
+    await page.waitForTimeout(300);
+    expect(await stand(), 'met een overlay open schuift er niets onder').toMatchObject({ vak: vakVoor, pagina: paginaVoor });
+
+    await expect(dialoog).toBeVisible();
+    await dialoog.getByRole('button', { name: 'Annuleren' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => document.body.dataset.scrollLocks ?? '')).toBe('');
+
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
 });
 
 test('beheerlijst op een smalle telefoon: twee lange namen blijven allebei leesbaar', async ({ page }) => {
