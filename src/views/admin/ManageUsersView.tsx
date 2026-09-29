@@ -3,7 +3,7 @@ import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { nieuweUserFormulierSchema, userFormulierSchema, wachtwoordResetSchema } from '../../../shared/schemas/user';
 import { CalendarOff, FolderOpen, History, Info, LogIn, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
-import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
+import { ROLLEN, ROL_FILTER, ROL_LABEL, pastBijRolFilter, rolLabel, rolRegel, type RolFilter } from '../../../shared/rollen';
 import { ACCOUNT_STATUS } from '../../../shared/status';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
@@ -33,9 +33,6 @@ import { LegeLijst, NietGevonden } from '../../components/illustraties';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
 
 type UserDraft = User & { password?: string };
-
-/** Rol als metaregel in de lijst; een chauffeur met "Ook technieker" toont beide. */
-const rolRegel = (u: User) => (u.role === 'chauffeur' && u.ookTechnieker ? 'chauffeur + technieker' : u.role);
 
 /** Uitschakelbare kolommen van de gebruikerstabel (Medewerker en Acties blijven altijd). */
 const KOLOMMEN = [
@@ -167,7 +164,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const [documentsUser, setDocumentsUser] = useState<User | null>(null);
   const [showBroadcast, setShowBroadcast] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
-  const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
+  const [roleFilter, setRoleFilter] = useState<RolFilter>('all');
   // Uitrol-filter: toon alleen wie nog nooit inlogde (idee 47).
   const [alleenNooitIn, setAlleenNooitIn] = useState(false);
   // Planning-filter: toon alleen chauffeurs die nergens in de matrix staan.
@@ -229,7 +226,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     return !isBeheerder || isMe;
   });
   const filteredUsers = zichtbareUsers
-    .filter((u) => roleFilter === 'all' || u.role === roleFilter)
+    .filter((u) => pastBijRolFilter(u, roleFilter))
     .filter((u) => !alleenNooitIn || (u.role === 'chauffeur' && u.isActive !== false && !u.lastLogin))
     .filter((u) => !alleenNietInPlanning || nietInPlanning(u))
     .filter((u) => {
@@ -786,10 +783,10 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 <div className="flex w-full flex-wrap items-center gap-1.5">
                   <Segmented<typeof roleFilter>
                     label="Rol"
-                    telefoon="vol"
-                    itemClassName="capitalize"
+                    telefoon="schuif"
+                    className="max-sm:w-full"
                     waarde={roleFilter}
-                    opties={(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => ({ waarde: role, label: role === 'all' ? 'Alles' : role }))}
+                    opties={ROL_FILTER}
                     onChange={setRoleFilter}
                   />
                   {/* Snelfilters voor de uitrol. Blijven renderen zolang het
@@ -862,7 +859,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                               signalen (Niet in planning) onzichtbaar. Staf krijgt
                               wat meer gewicht, geen kleur. */}
                           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                            <span className={cn('text-xs capitalize', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{rolRegel(u)}</span>
+                            <span className={cn('text-xs', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{rolRegel(u)}</span>
                             {nietInPlanning(u) && (
                               <Badge
                                 tone="amber"
@@ -920,7 +917,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                     <div className="font-semibold text-slate-800 leading-tight">{u.name}</div>
                     {/* Rol zoals op desktop: een stille metaregel, geen pil. */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <span className={cn('text-xs capitalize', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{rolRegel(u)}</span>
+                      <span className={cn('text-xs', (u.role === 'admin' || u.role === 'planner') ? 'font-semibold text-slate-700' : 'font-medium text-slate-500')}>{rolRegel(u)}</span>
                       {nietInPlanning(u) && (
                         <Badge tone="amber" icon={<CalendarOff size={12} />}>Niet in planning</Badge>
                       )}
@@ -987,7 +984,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
             >
               <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => { setNewUser({ ...newUser, name: e.target.value }); nieuwF.wisVeld('name'); }} placeholder="bv. Jan Janssen" />
             </Field>
-            <Field label="Rol" htmlFor="nieuw-rol" error={nieuwFouten.role}><Select id="nieuw-rol" value={newUser.role} onChange={(e) => { setNewUser({ ...newUser, role: e.target.value }); nieuwF.wisVeld('role'); }}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}</Select></Field>
+            <Field label="Rol" htmlFor="nieuw-rol" error={nieuwFouten.role}><Select id="nieuw-rol" value={newUser.role} onChange={(e) => { setNewUser({ ...newUser, role: e.target.value }); nieuwF.wisVeld('role'); }}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}</Select></Field>
             <Field label="Personeelsnummer" htmlFor="nieuw-personeelsnr" error={nieuwFouten.employeeId}><Input id="nieuw-personeelsnr" invalid={!!nieuwFouten.employeeId} type="text" autoComplete="off" value={newUser.employeeId} onChange={(e) => { setNewUser({ ...newUser, employeeId: e.target.value }); nieuwF.wisVeld('employeeId'); }} placeholder="Optioneel" /></Field>
             <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2" error={nieuwFouten.email}><Input id="nieuw-email" invalid={!!nieuwFouten.email} type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => { setNewUser({ ...newUser, email: e.target.value }); nieuwF.wisVeld('email'); }} placeholder="bv. jan@voorbeeld.be" /></Field>
             <Field label="Tijdelijk wachtwoord" htmlFor="nieuw-wachtwoord" error={nieuwFouten.password}><Input id="nieuw-wachtwoord" invalid={!!nieuwFouten.password} type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => { setNewUser({ ...newUser, password: e.target.value }); nieuwF.wisVeld('password'); }} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} /></Field>
@@ -1015,7 +1012,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 >
                   <Input id="bewerk-naam" type="text" autoComplete="name" required value={editingUser.name} onChange={(e) => { setEditingUser({ ...editingUser, name: e.target.value }); bewerkF.wisVeld('name'); }} />
                 </Field>
-                <Field label="Rol" htmlFor="bewerk-rol" error={bewerkFouten.role}><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => { setEditingUser({ ...editingUser, role: e.target.value as any }); bewerkF.wisVeld('role'); }}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}</Select></Field>
+                <Field label="Rol" htmlFor="bewerk-rol" error={bewerkFouten.role}><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => { setEditingUser({ ...editingUser, role: e.target.value as any }); bewerkF.wisVeld('role'); }}>{ROLLEN.map((r) => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}</Select></Field>
                 <Field label="Personeelsnummer" htmlFor="bewerk-personeelsnr" error={bewerkFouten.employeeId}><Input id="bewerk-personeelsnr" invalid={!!bewerkFouten.employeeId} type="text" autoComplete="off" value={editingUser.employeeId} onChange={(e) => { setEditingUser({ ...editingUser, employeeId: e.target.value }); bewerkF.wisVeld('employeeId'); }} /></Field>
                 <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2" error={bewerkFouten.email}><Input id="bewerk-email" invalid={!!bewerkFouten.email} type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => { setEditingUser({ ...editingUser, email: e.target.value }); bewerkF.wisVeld('email'); }} placeholder="bv. jan@voorbeeld.be" /></Field>
                 <Field label="Nieuw wachtwoord" htmlFor="bewerk-wachtwoord" error={bewerkFouten.password}><Input id="bewerk-wachtwoord" invalid={!!bewerkFouten.password} type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => { setEditingUser({ ...editingUser, password: e.target.value }); bewerkF.wisVeld('password'); }} placeholder="Optioneel" /></Field>
@@ -1177,7 +1174,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
         onClose={() => setViewingChangeLogUser(null)}
         entityType="user"
         entityId={viewingChangeLogUser?.id ?? ''}
-        title={viewingChangeLogUser ? `${viewingChangeLogUser.name} (${viewingChangeLogUser.role})` : undefined}
+        title={viewingChangeLogUser ? `${viewingChangeLogUser.name} (${rolLabel(viewingChangeLogUser.role)})` : undefined}
       />
     </PageShell>
   );

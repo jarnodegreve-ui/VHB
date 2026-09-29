@@ -1,5 +1,5 @@
 import type { RapportDefinitie, RapportFilter } from '../types.js';
-import { ROLLEN, ROL_LABELS } from '../../schemas/constanten.js';
+import { ROLLEN, ROL_LABEL, type Rol } from '../../rollen.js';
 import { GELDIG_TOT_KOLOM, RESTEREND_KOLOM, TERMIJN_FILTER, VERVAL_STATUS_KOLOM, keuzeUit } from './bouwstenen.js';
 
 /**
@@ -15,7 +15,18 @@ export const SECTIES = ['Reguliere', 'Nacht', 'Flexi', 'Schoolvervoer'] as const
 /** Filterwaarde voor wie geen sectie heeft (staf, techniekers). */
 export const ZONDER_SECTIE = 'geen';
 
-const ROL_FILTER = keuzeUit('rol', 'Rol', ROLLEN, ROL_LABELS);
+/**
+ * De rol in de personeelsrapporten. OPEN PUNT (rollabels, 29-09): de
+ * rapporten zeggen nog "Planning" en "Beheer" waar de rest van het portaal
+ * "Planner" en "Beheerder" zegt (`ROL_LABEL`). Bewust niet mee omgezet: de
+ * waarde in de rij is ook de waarde in de CSV-export, en een export wijzigt
+ * niet stil mee met een schermtekst. Omzetten = deze tabel schrappen en
+ * `ROL_LABEL` gebruiken, hier en in api/_lib/rapporten/personeel.ts; filter,
+ * tabel, printblad en CSV volgen dan samen.
+ */
+export const ROL_IN_RAPPORT: Record<Rol, string> = { ...ROL_LABEL, planner: 'Planning', admin: 'Beheer' };
+
+const ROL_FILTER = keuzeUit('rol', 'Rol', ROLLEN, ROL_IN_RAPPORT);
 const SECTIE_FILTER: RapportFilter = {
   soort: 'keuze',
   id: 'sectie',

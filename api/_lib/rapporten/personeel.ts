@@ -1,6 +1,5 @@
-import { ROL_LABELS } from "../../../shared/schemas/constanten.js";
 import { onbekendLabel } from "../../../shared/rapporten/filters.js";
-import { ZONDER_SECTIE } from "../../../shared/rapporten/definities/personeel.js";
+import { ROL_IN_RAPPORT, ZONDER_SECTIE } from "../../../shared/rapporten/definities/personeel.js";
 import { VERVAL_STATUS_LABEL, brusselseDag, dagenTussen, isoDagVan, jarenTussen, pastInTermijn, vervalStatus } from "../../../shared/rapporten/peildatum.js";
 import type { RapportBereik, RapportFilters, RapportResultaat, RapportRij } from "../../../shared/rapporten/types.js";
 
@@ -26,7 +25,7 @@ export type RapportMedewerker = {
 };
 
 const tekst = (waarde: string | null | undefined): string | null => waarde?.trim() || null;
-const rolLabel = (rol: string): string => (ROL_LABELS as Record<string, string>)[rol] ?? rol;
+const rolLabel = (rol: string): string => (ROL_IN_RAPPORT as Record<string, string>)[rol] ?? rol;
 
 /** Het systeemaccount "beheerder" is geen medewerker. */
 const isMedewerker = (u: RapportMedewerker): boolean => u.name.trim().toLowerCase() !== "beheerder";

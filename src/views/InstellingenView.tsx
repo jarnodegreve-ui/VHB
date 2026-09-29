@@ -21,7 +21,8 @@ import { supabase } from '../lib/supabase';
 import { leesTweeStapsStatus, type TweeStapsStatus } from '../lib/tweeStaps';
 import { schakelUit } from '../lib/tweeStapsBeheer';
 import { notify } from '../lib/ui';
-import { ROL_LABEL, type User, type View } from '../types';
+import { ROL_LABEL } from '../../shared/rollen';
+import type { User, View } from '../types';
 import { OnderhoudBeheer } from './instellingen/OnderhoudBeheer';
 import { meldSchrijffout } from '../lib/fouten';
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock, History } from 'lucide-react';
 import type { ActivityEntityType, ActivityLogEntry } from '../types';
+import { rolLabel } from '../../shared/rollen';
 import { apiJson } from '../lib/api';
 import { cn } from '../lib/ui';
 import { Modal } from './Modal';
@@ -105,7 +106,7 @@ export function EntityHistoryModal({
                         </div>
                         <p className="mt-1 text-body-sm text-slate-600">{entry.details}</p>
                         <MicroLabel className="mt-2">
-                          {entry.actorName} · {entry.actorRole}
+                          {entry.actorName} · {rolLabel(entry.actorRole)}
                         </MicroLabel>
                       </Card>
                     </li>
