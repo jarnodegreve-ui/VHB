@@ -26,6 +26,11 @@
  * weggegooide is niet terug te halen. Mislukt een lezing of komt er een
  * antwoord dat niet past bij de vraag, dan blijft de hele bucket die nacht
  * onaangeroerd.
+ *
+ * Tijdsbudget: de opruiming draait in de functie van de nachtelijke back-up
+ * (hoogstens 60 s). Ze krijgt ongeveer 15 s; een aanroep die blijft hangen
+ * wordt losgelaten en wat niet meer aan de beurt komt blijft staan tot de
+ * volgende nacht.
  */
 import { MAX_OMLEIDING_BIJLAGEN } from "../../shared/schemas/diversion.js";
 import { MAX_UPDATE_BIJLAGEN } from "../../shared/schemas/update.js";
@@ -50,6 +55,46 @@ export const WEES_MARGE_MS = 24 * 60 * 60 * 1000;
 /** Rem per nacht en per bucket: een fout in de telling mag nooit in één
  *  beurt een hele bucket leegmaken. De rest volgt de nacht erna. */
 export const WEES_MAX_PER_BEURT = 100;
+
+/** Zoveel tijd krijgt de opruiming per nacht, alle buckets samen. */
+export const WEES_BUDGET_MS = 15_000;
+/** De functie van de back-up mag 60 s duren (vercel.json); de opruiming
+ *  stopt ruim daarvoor, zodat het antwoord van de cron nog weg kan. */
+const FUNCTIE_GRENS_MS = 50_000;
+
+/**
+ * Het budget van deze nacht: hoogstens WEES_BUDGET_MS (of de waarde uit
+ * BIJLAGEN_OPRUIM_BUDGET_MS), en nooit meer dan wat de functie nog over
+ * heeft na de back-up en de retentie. Nul = deze nacht niet opruimen.
+ */
+export const opruimBudget = (verstrekenMs: number, ingesteld: number = Number(process.env.BIJLAGEN_OPRUIM_BUDGET_MS)): number => {
+  const plafond = Number.isFinite(ingesteld) && ingesteld > 0 ? ingesteld : WEES_BUDGET_MS;
+  const rest = FUNCTIE_GRENS_MS - Math.max(0, verstrekenMs);
+  return Math.max(0, Math.min(plafond, rest));
+};
+
+class TijdOp extends Error {}
+
+/** Met minder dan dit over begint er geen nieuwe aanroep meer: een wekker
+ *  loopt soms een fractie te vroeg af, en in zo weinig tijd komt toch geen
+ *  antwoord. */
+const MINSTENS_OVER_MS = 25;
+
+/** Voert `werk` uit, maar wacht hoogstens tot `eindtijd` (performance.now).
+ *  Is de tijd (bijna) op, dan begint het werk niet eens. */
+const binnenDeTijd = async <T>(werk: () => Promise<T>, eindtijd: number): Promise<T> => {
+  const rest = eindtijd - performance.now();
+  if (rest < MINSTENS_OVER_MS) throw new TijdOp();
+  let wekker: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      werk(),
+      new Promise<never>((_, weiger) => { wekker = setTimeout(() => weiger(new TijdOp()), rest); }),
+    ]);
+  } finally {
+    if (wekker !== undefined) clearTimeout(wekker);
+  }
+};
 
 type Vorm = { maxSlot: number; metOudeSleutel: boolean };
 
@@ -139,13 +184,15 @@ const SOORTEN = [
 /**
  * De opruimbeurt van de nachtcron. Best-effort per bucket: mislukt een
  * lezing (records, bestanden, gerichte lezing, log), dan blijft die bucket
- * deze nacht onaangeroerd. Gooit nooit.
+ * deze nacht onaangeroerd. Gooit nooit en duurt nooit langer dan `budgetMs`.
  */
-export const ruimWeesBijlagenOp = async (nu: number = Date.now()): Promise<WeesOpruiming> => {
+export const ruimWeesBijlagenOp = async (nu: number = Date.now(), opties: { budgetMs?: number } = {}): Promise<WeesOpruiming> => {
   const uit: WeesOpruiming = { omleidingen: 0, updates: 0, overgeslagen: [] };
+  const eindtijd = performance.now() + (opties.budgetMs ?? WEES_BUDGET_MS);
   for (const soort of SOORTEN) {
+    let aanHetWissen = false;
     try {
-      const [records, bestanden] = await Promise.all([soort.records(), lijstBijlageBestanden(soort.bucket)]);
+      const [records, bestanden] = await binnenDeTijd(() => Promise.all([soort.records(), lijstBijlageBestanden(soort.bucket)]), eindtijd);
       const kandidaten = kandidaatBijlagen({
         bestanden,
         bekendeIds: new Set((records as Array<{ id: unknown }>).map((r) => String(r.id))),
@@ -165,10 +212,10 @@ export const ruimWeesBijlagenOp = async (nu: number = Date.now()): Promise<WeesO
       // Vlak voor het wissen: bestaat een van de mogelijke eigenaars toch, en
       // wat zegt hun laatste logregel? Beide gooien bij een fout of een
       // antwoord dat niet past: dan vangt de catch en blijft de bucket staan.
-      const [bestaandeIds, regels] = await Promise.all([
+      const [bestaandeIds, regels] = await binnenDeTijd(() => Promise.all([
         bestaandeRecordIds(soort.tabel, beurt.ids),
         logregelsVanEntiteiten(soort.entiteit, beurt.ids),
-      ]);
+      ]), eindtijd);
       const weg = kiesWeesBijlagen({
         kandidaten: beurt.namen,
         bestaandeIds,
@@ -179,9 +226,16 @@ export const ruimWeesBijlagenOp = async (nu: number = Date.now()): Promise<WeesO
         metOudeSleutel: soort.metOudeSleutel,
       });
       if (weg.length === 0) continue;
-      await verwijderBijlageBestanden(soort.bucket, weg);
+      aanHetWissen = true;
+      await binnenDeTijd(() => verwijderBijlageBestanden(soort.bucket, weg), eindtijd);
       uit[soort.sleutel] = weg.length;
     } catch (err: any) {
+      if (err instanceof TijdOp) {
+        // Tijdens het wissen zelf losgelaten: de aanroep loopt misschien nog
+        // af, dus het aantal is niet bekend. Alles wat ze raakt was gekeurd.
+        uit.overgeslagen.push(aanHetWissen ? `${soort.sleutel}: wissen liep uit, uitkomst onbekend` : `${soort.sleutel}: geen tijd meer`);
+        continue;
+      }
       console.warn(`[bijlagen-opruim] ${soort.sleutel} overgeslagen:`, err?.message || err);
       uit.overgeslagen.push(`${soort.sleutel}: mislukt`);
     }

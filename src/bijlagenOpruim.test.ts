@@ -14,6 +14,9 @@ const mem = vi.hoisted(() => ({
   buckets: { diversions: new Map<string, { size: number; updated_at: string }>(), 'update-bijlagen': new Map<string, { size: number; updated_at: string }>() } as Record<string, Map<string, { size: number; updated_at: string }>>,
   verwijderd: [] as Array<{ bucket: string; paden: string[] }>,
   lijstFaalt: false,
+  // true = Storage antwoordt niet meer (de aanroep blijft hangen).
+  lijstHangt: false,
+  verwijderenHangt: false,
   // Zoals max-rows in PostgREST: de server geeft zonder fout hoogstens
   // zoveel rijen per verzoek terug, hoeveel er ook gevraagd zijn.
   maxRijen: null as number | null,
@@ -82,6 +85,7 @@ vi.mock('../api/db.js', () => {
     from: (bucket: string) => ({
       // Zoals Supabase: `search` is ruim (elke naam waarin de term voorkomt).
       list: async (_pad: string, opts: { limit: number; offset?: number; search?: string }) => {
+        if (mem.lijstHangt) return new Promise<never>(() => {});
         if (mem.lijstFaalt) return { data: null, error: { message: 'storage onbereikbaar' } };
         const alle = [...mem.buckets[bucket].entries()]
           .filter(([name]) => !opts.search || name.toLowerCase().includes(opts.search.toLowerCase()))
@@ -93,6 +97,7 @@ vi.mock('../api/db.js', () => {
         };
       },
       remove: async (paden: string[]) => {
+        if (mem.verwijderenHangt) return new Promise<never>(() => {});
         mem.verwijderd.push({ bucket, paden });
         for (const pad of paden) mem.buckets[bucket].delete(pad);
         return { data: [], error: null };
@@ -105,7 +110,7 @@ vi.mock('../api/db.js', () => {
 
 const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden, bestaandeRecordIds, logregelsVanEntiteiten, GERICHTE_LEZING_MAX } = await import('../api/storage.js');
 const { laatsteVerwijdering } = await import('../api/_lib/bijlagenActies.js');
-const { begrensBeurt, kandidaatBijlagen, kiesWeesBijlagen, mogelijkeEigenaars, ruimWeesBijlagenOp, WEES_MARGE_MS, WEES_MAX_PER_BEURT } = await import('../api/_lib/bijlagenOpruim.js');
+const { begrensBeurt, kandidaatBijlagen, kiesWeesBijlagen, mogelijkeEigenaars, opruimBudget, ruimWeesBijlagenOp, WEES_BUDGET_MS, WEES_MARGE_MS, WEES_MAX_PER_BEURT } = await import('../api/_lib/bijlagenOpruim.js');
 
 const NU = Date.parse('2026-09-29T02:00:00Z');
 const OUD = '2026-09-01T08:00:00Z';
@@ -123,6 +128,8 @@ beforeEach(() => {
   mem.buckets['update-bijlagen'].clear();
   mem.verwijderd = [];
   mem.lijstFaalt = false;
+  mem.lijstHangt = false;
+  mem.verwijderenHangt = false;
   mem.maxRijen = null;
   mem.gerichtFaalt.clear();
   mem.gerichtVreemd.clear();
@@ -458,5 +465,56 @@ describe('ruimWeesBijlagenOp', () => {
     }
     expect((await ruimWeesBijlagenOp(NU)).updates).toBe(WEES_MAX_PER_BEURT);
     expect(mem.buckets['update-bijlagen'].size).toBe(7);
+  });
+});
+
+// Tegenlezing 29-09, punt 3: de opruiming draait in de functie van de
+// back-up. Een aanroep die blijft hangen mag die functie niet over haar 60 s
+// duwen.
+describe('tijdsbudget van de opruiming', () => {
+  it('opruimBudget: ongeveer 15 s, nooit meer dan wat de functie nog over heeft', () => {
+    expect(WEES_BUDGET_MS).toBe(15_000);
+    expect(opruimBudget(0, Number.NaN)).toBe(15_000);
+    expect(opruimBudget(20_000, Number.NaN)).toBe(15_000);
+    // Back-up en retentie duurden 40 s: nog 10 s tot de grens van 50 s.
+    expect(opruimBudget(40_000, Number.NaN)).toBe(10_000);
+    expect(opruimBudget(55_000, Number.NaN)).toBe(0);
+    // Instelbaar, maar ook dan nooit voorbij de grens van de functie.
+    expect(opruimBudget(0, 2_000)).toBe(2_000);
+    expect(opruimBudget(49_000, 30_000)).toBe(1_000);
+    expect(opruimBudget(0, -5)).toBe(15_000);
+  });
+
+  it('Storage blijft hangen: de opruiming komt binnen haar budget terug en wist niets', async () => {
+    hang('diversions', 'o-9-1.pdf');
+    log('diversion', 'o-9', '2026-09-20T09:00:00Z');
+    mem.lijstHangt = true;
+    const start = performance.now();
+    const uit = await ruimWeesBijlagenOp(NU, { budgetMs: 80 });
+    expect(performance.now() - start).toBeLessThan(1_000);
+    // De eerste bucket liep uit; voor de tweede was er geen tijd meer, die is niet eens begonnen.
+    expect(uit).toEqual({ omleidingen: 0, updates: 0, overgeslagen: ['omleidingen: geen tijd meer', 'updates: geen tijd meer'] });
+    expect(mem.lezingen.filter((l) => l.tabel === 'updates')).toEqual([]);
+    expect(mem.verwijderd).toEqual([]);
+    // De volgende nacht, met een Storage die weer antwoordt, gaat het bestand alsnog weg.
+    mem.lijstHangt = false;
+    expect((await ruimWeesBijlagenOp(NU, { budgetMs: 5_000 })).omleidingen).toBe(1);
+  });
+
+  it('zonder budget begint de opruiming niet', async () => {
+    hang('diversions', 'o-9-1.pdf');
+    log('diversion', 'o-9', '2026-09-20T09:00:00Z');
+    expect(await ruimWeesBijlagenOp(NU, { budgetMs: 0 })).toEqual({ omleidingen: 0, updates: 0, overgeslagen: ['omleidingen: geen tijd meer', 'updates: geen tijd meer'] });
+    expect(mem.lezingen).toEqual([]);
+    expect(mem.buckets.diversions.has('o-9-1.pdf')).toBe(true);
+  });
+
+  it('blijft het wissen zelf hangen, dan zegt de uitkomst dat ze niet bekend is', async () => {
+    hang('diversions', 'o-9-1.pdf');
+    log('diversion', 'o-9', '2026-09-20T09:00:00Z');
+    mem.verwijderenHangt = true;
+    const uit = await ruimWeesBijlagenOp(NU, { budgetMs: 80 });
+    expect(uit.omleidingen).toBe(0);
+    expect(uit.overgeslagen[0]).toBe('omleidingen: wissen liep uit, uitkomst onbekend');
   });
 });

@@ -53,6 +53,11 @@ const mem = vi.hoisted(() => ({
   // gerichte lezing "bestaat dit record?" mislukt.
   logLezingFaalt: false,
   recordLezingFaalt: false,
+  // true = Storage antwoordt niet meer bij het oplijsten van een bucket.
+  opslagHangt: false,
+  // Wat de nachtcron in welke volgorde deed: heartbeats en de eerste
+  // aanroep van de opruiming.
+  cronVolgorde: [] as string[],
   // Verzendlog van de mails (mail_log), nieuwste eerst.
   mailLog: [] as any[],
   importHistory: [] as any[],
@@ -499,10 +504,18 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     // Uitgestelde opruiming (api/_lib/bijlagenOpruim.ts): de bucket oplijsten
     // en bestanden weghalen. Het log en de gerichte lezing staan hieronder.
-    lijstBijlageBestanden: async (bucket: string) =>
-      [...mem.opslag]
+    lijstBijlageBestanden: async (bucket: string) => {
+      mem.cronVolgorde.push(`opruiming: ${bucket}`);
+      if (mem.opslagHangt) return new Promise<never>(() => {});
+      return [...mem.opslag]
         .filter((k) => k.startsWith(`${bucket}/`))
-        .map((k) => ({ naam: k.slice(bucket.length + 1), gewijzigdOp: mem.opslagTijd.get(k) ?? '2026-01-01T00:00:00Z' })),
+        .map((k) => ({ naam: k.slice(bucket.length + 1), gewijzigdOp: mem.opslagTijd.get(k) ?? '2026-01-01T00:00:00Z' }));
+    },
+    // De heartbeat van een cron: hier alleen onthouden wat er wanneer kwam.
+    logCronHeartbeat: async (naam: string, details: string) => {
+      mem.cronVolgorde.push(`heartbeat: ${naam}`);
+      mem.activity.push({ domain: 'system', action: `Cron geslaagd: ${naam}`, message: details, gelogdOp: new Date().toISOString() });
+    },
     verwijderBijlageBestanden: async (bucket: string, paden: string[]) => {
       for (const pad of paden) mem.opslag.delete(`${bucket}/${pad}`);
     },
@@ -850,6 +863,8 @@ beforeEach(() => {
   mem.opslagFaalt = false;
   mem.logLezingFaalt = false;
   mem.recordLezingFaalt = false;
+  mem.opslagHangt = false;
+  mem.cronVolgorde = [];
   mem.users = [
     { id: '1', name: 'Annelies Admin', email: 'admin@vhb.be', role: 'admin', isActive: true },
     { id: '2', name: 'Pieter Planner', email: 'planner@vhb.be', role: 'planner', isActive: true },
@@ -2718,6 +2733,39 @@ describe('back-up export', () => {
     expect(mem.storedBackups[0].size).toBeGreaterThan(100);
     // Integriteitscheck: seed heeft een admin + alle collecties → ok.
     expect(goed.json.integrity.ok).toBe(true);
+  });
+
+  // Tegenlezing 29-09, punt 3: de opruiming van de bijlagen praat met
+  // Storage en het log. Blijft daar iets hangen, dan mag dat nooit lezen als
+  // een mislukte back-up.
+  it('schrijft de heartbeat van de back-up vóór de opruiming van de bijlagen begint', async () => {
+    const res = await api('GET', '/api/cron/backup', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(mem.cronVolgorde[0]).toBe('heartbeat: backup');
+    expect(mem.cronVolgorde.indexOf('heartbeat: backup')).toBeLessThan(mem.cronVolgorde.indexOf('opruiming: diversions'));
+    // Niets opgeruimd en niets overgeslagen: geen aparte regel over de bijlagen.
+    expect(mem.cronVolgorde).not.toContain('heartbeat: bijlagen-opruim');
+  });
+
+  it('Storage hangt tijdens de opruiming: de cron antwoordt binnen het budget, met heartbeat en een eigen regel over de bijlagen', async () => {
+    const vorig = process.env.BIJLAGEN_OPRUIM_BUDGET_MS;
+    process.env.BIJLAGEN_OPRUIM_BUDGET_MS = '150';
+    mem.opslagHangt = true;
+    try {
+      const start = performance.now();
+      const res = await api('GET', '/api/cron/backup', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(performance.now() - start).toBeLessThan(5_000);
+      expect(res.status).toBe(200);
+      expect(res.json.success).toBe(true);
+      expect(mem.storedBackups).toHaveLength(1);
+      expect(res.json.bijlagen).toEqual({ omleidingen: 0, updates: 0, overgeslagen: ['omleidingen: geen tijd meer', 'updates: geen tijd meer'] });
+      expect(mem.cronVolgorde).toEqual(['heartbeat: backup', 'opruiming: diversions', 'heartbeat: bijlagen-opruim']);
+      const regel = mem.activity.find((a) => a.action === 'Cron geslaagd: bijlagen-opruim');
+      expect(regel.message).toBe('Verweesde bijlagen: 0 van omleidingen en 0 van updates opgeruimd, overgeslagen: omleidingen: geen tijd meer; updates: geen tijd meer.');
+    } finally {
+      if (vorig === undefined) delete process.env.BIJLAGEN_OPRUIM_BUDGET_MS;
+      else process.env.BIJLAGEN_OPRUIM_BUDGET_MS = vorig;
+    }
   });
 
   it('integriteitscheck flagt een back-up zonder admin en mailt een alert', async () => {
