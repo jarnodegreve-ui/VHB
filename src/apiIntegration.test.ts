@@ -336,7 +336,6 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   };
   return {
     ...orig,
-    logCronHeartbeat: async (naam: string, details: string) => { mem.hartslagen.push({ naam, details }); },
     getMailLog: async (limit = 200) => mem.mailLog.slice(0, limit),
     logMail: async (regel: any) => { mem.mailLog.unshift({ id: `m-${mem.mailLog.length + 1}`, verzondenOp: new Date().toISOString(), ...regel }); },
     // Een reeks schrijft haar regel vooraf als "niet afgerond" en werkt hem
@@ -541,7 +540,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         .map((k) => ({ naam: k.slice(bucket.length + 1), gewijzigdOp: mem.opslagTijd.get(k) ?? '2026-01-01T00:00:00Z' }));
     },
     // De heartbeat van een cron: hier alleen onthouden wat er wanneer kwam.
+    // Eén opname voor de mail-tests (mem.hartslagen) en de nachtcron
+    // (mem.cronVolgorde, mem.activity).
     logCronHeartbeat: async (naam: string, details: string) => {
+      mem.hartslagen.push({ naam, details });
       mem.cronVolgorde.push(`heartbeat: ${naam}`);
       mem.activity.push({ domain: 'system', action: `Cron geslaagd: ${naam}`, message: details, gelogdOp: new Date().toISOString() });
     },
