@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react';
 import { Send } from 'lucide-react';
 import type { User, Verzendlijst } from '../../types';
 import { SlideOver } from '../../components/SlideOver';
-import { Modal, SluitKnop } from '../../components/Modal';
-import { ModalHeader } from '../../components/ui';
+import { SluitKnop } from '../../components/Modal';
+import { MailBevestiging } from '../../components/MailBevestiging';
 import { Field, Input, SearchField, Textarea } from '../../components/Field';
 import { Badge, Button } from '../../components/primitives';
 import { Checkbox } from '../../components/Table';
 import { apiJson } from '../../lib/api';
-import { notify } from '../../lib/ui';
 import { meldSchrijffout } from '../../lib/fouten';
+import type { MailUitkomst } from '../../lib/mailUitkomst';
 import { valideer } from '../../lib/valideer';
 import { aantal as tel } from '../../lib/format';
 import { ROL_LABEL } from '../../types';
@@ -20,7 +20,8 @@ import { eigenMailSchema, EIGEN_MAIL_ONDERWERP_MAX, EIGEN_MAIL_TEKST_MAX, GROEP_
  * ontvangers uit groepen, verzendlijsten, losse gebruikers en vrije
  * adressen. Eerst een voorbeeld met het aantal en de lijst ontvangers (de
  * server bepaalt die), dan pas versturen: één mail per persoon, één regel
- * in het verzendlog.
+ * in het verzendlog. De bevestiging en de afloop (deels vertrokken, geen
+ * antwoord) zitten in MailBevestiging, gedeeld met de omleidingsmail.
  */
 type Droog = { droog: true; aantal: number; ontvangers: Array<{ adres: string; naam: string }>; onderwerp: string; html: string };
 
@@ -57,9 +58,10 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
     setOnderwerp(''); setTekst(''); setGroepen([]); setLijstIds([]); setGebruikerIds([]); setAdressenTekst(''); setZoek(''); setFouten({}); setVoorbeeld(null);
   };
 
-  const invoer = (droog: boolean): EigenMailInvoer => ({
+  const invoer = (droog: boolean, alleen?: string[]): EigenMailInvoer => ({
     onderwerp, tekst, droog,
     ontvangers: { groepen, lijsten: lijstIds, gebruikers: gebruikerIds, adressen: adressen.adressen },
+    ...(alleen ? { alleen } : {}),
   });
 
   const toonVoorbeeld = async () => {
@@ -80,21 +82,12 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
     }
   };
 
-  const verstuur = async () => {
-    if (!voorbeeld) return;
-    setBezig(true);
-    try {
-      const r = await apiJson<{ aantal: number; gelukt: number; mislukt: number; mocked: boolean }>('/api/mails/eigen', { method: 'POST', body: JSON.stringify(invoer(false)) });
-      notify(r.mocked ? `Mail gelogd voor ${tel(r.aantal, 'ontvanger', 'ontvangers')} (geen SMTP ingesteld).` : r.mislukt > 0 ? `Mail verstuurd naar ${r.gelukt} van ${r.aantal}; ${r.mislukt} mislukt.` : `Mail verstuurd naar ${tel(r.aantal, 'ontvanger', 'ontvangers')}.`, r.mislukt > 0 ? 'error' : 'success');
-      setVoorbeeld(null);
-      reset();
-      onVerstuurd();
-      onClose();
-    } catch (err) {
-      meldSchrijffout('Mail versturen', err, () => void verstuur());
-    } finally {
-      setBezig(false);
-    }
+  const verstuur = (alleen?: string[]) => apiJson<MailUitkomst>('/api/mails/eigen', { method: 'POST', body: JSON.stringify(invoer(false, alleen)) });
+  const klaar = () => {
+    setVoorbeeld(null);
+    reset();
+    onVerstuurd();
+    onClose();
   };
 
   return (
@@ -165,23 +158,16 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
         </form>
       </SlideOver>
 
-      <Modal open={voorbeeld !== null} onClose={() => setVoorbeeld(null)} maxWidth="2xl" ariaLabel="Voorbeeld van je mail" boven>
-        {voorbeeld && (
-          <>
-            <ModalHeader
-              title={`Naar ${tel(voorbeeld.aantal, 'ontvanger', 'ontvangers')}`}
-              description={<span className="break-words">{voorbeeld.ontvangers.slice(0, 12).map((o) => o.naam).join(', ')}{voorbeeld.ontvangers.length > 12 ? ` en nog ${voorbeeld.ontvangers.length - 12}` : ''}.</span>}
-            />
-            <div className="space-y-4 p-6">
-              <iframe title="Voorbeeld van je mail" srcDoc={voorbeeld.html} sandbox="" className="h-[50vh] min-h-[320px] w-full rounded-xl bg-surface-white ring-1 ring-hairline" />
-              <div className="flex items-center justify-end gap-2">
-                <SluitKnop onClose={() => setVoorbeeld(null)} variant="secondary" disabled={bezig}>Terug</SluitKnop>
-                <Button variant="primary" icon={<Send size={16} />} bezig={bezig} onClick={() => void verstuur()}>Versturen naar {voorbeeld.aantal}</Button>
-              </div>
-            </div>
-          </>
-        )}
-      </Modal>
+      <MailBevestiging
+        voorbeeld={voorbeeld}
+        naam="Voorbeeld van je mail"
+        toon="naam"
+        werkwoord="Mail verstuurd"
+        logVerwijzing="Het verzendlog staat onderaan dit scherm, Beheer › Mails."
+        verstuur={verstuur}
+        onTerug={() => setVoorbeeld(null)}
+        onKlaar={klaar}
+      />
     </>
   );
 }

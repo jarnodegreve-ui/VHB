@@ -13,7 +13,7 @@ const SOORTEN = [
   { soort: 'dringende-update', naam: 'Dringende update', wanneer: 'Bij het publiceren van een dringende update', ontvangers: 'Alle actieve gebruikers', push: true, aan: false, laatst: null },
 ];
 
-async function opzet(page: Page) {
+async function opzet(page: Page, opties: { verstuur?: (body: any) => unknown } = {}) {
   const calls: Array<{ pad: string; body: any }> = [];
   let instellingen = { uit: ['dringende-update'] };
   let lijsten: any[] = [{ id: 'l-1', naam: 'De Lijn', adressen: ['dispatching@delijn.be'] }];
@@ -36,7 +36,7 @@ async function opzet(page: Page) {
         calls.push({ pad: 'eigen', body });
         return body.droog
           ? { droog: true, aantal: 3, ontvangers: [{ adres: 'a@vhb.be', naam: 'Alex Du Priez' }, { adres: 'b@vhb.be', naam: 'Bart Claeys' }, { adres: 'extern@voorbeeld.be', naam: 'extern@voorbeeld.be' }], onderwerp: body.onderwerp, html: '<!DOCTYPE html><html><body><h1>Eigen mail</h1></body></html>' }
-          : { droog: false, aantal: 3, gelukt: 3, mislukt: 0, mocked: false };
+          : opties.verstuur?.(body) ?? { droog: false, aantal: 3, gelukt: 3, mislukt: 0, mocked: false };
       }
       return undefined;
     },
@@ -46,13 +46,14 @@ async function opzet(page: Page) {
   return { calls };
 }
 
-/** De inhoud staat links en rechts minstens 20 px van de rand van het venster
- *  (de body van een modal is p-6 = 24 px; Modal zelf draagt geen padding). */
+/** De inhoud staat links en rechts minstens 16 px van de rand van het venster.
+ *  De body van een modal is p-6 = 1,5 rem: 24 px op de telefoon, ±19 px op
+ *  desktop (kleinere wortelmaat). Modal zelf draagt geen padding. */
 async function heeftBinnenmarge(dialoog: Locator, inhoud: Locator) {
   const d = (await dialoog.boundingBox())!;
   const i = (await inhoud.boundingBox())!;
-  expect(i.x - d.x, 'marge links').toBeGreaterThanOrEqual(20);
-  expect(d.x + d.width - (i.x + i.width), 'marge rechts').toBeGreaterThanOrEqual(20);
+  expect(i.x - d.x, 'marge links').toBeGreaterThanOrEqual(16);
+  expect(d.x + d.width - (i.x + i.width), 'marge rechts').toBeGreaterThanOrEqual(16);
 }
 
 test('mails: elke modal heeft een kop (h2) en een binnenmarge (nr. 3)', async ({ page }) => {
@@ -180,4 +181,62 @@ test('mails: zelf een mail sturen, met voorbeeld en bevestiging', async ({ page,
   await expect(bevestiging).toHaveCount(0);
   await expect(paneel).toHaveCount(0);
   if (isMobile) await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+/** Vult het formulier en opent de bevestiging. */
+async function naarBevestiging(page: Page) {
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.');
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van je mail' });
+  await expect(bevestiging.getByRole('button', { name: 'Versturen naar 3' })).toBeVisible();
+  return { paneel, bevestiging };
+}
+
+test('mails: deels vertrokken zegt hoeveel, en verstuurt daarna alleen de rest (nr. 5)', async ({ page }) => {
+  const { calls } = await opzet(page, {
+    verstuur: (body) => (body.alleen
+      ? { droog: false, aantal: 1, gelukt: 1, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, mocked: false, resterend: [], onzekerAdressen: [] }
+      : { droog: false, aantal: 3, gelukt: 2, mislukt: 1, nietGeprobeerd: 0, onzeker: 0, mocked: false, resterend: ['b@vhb.be'], onzekerAdressen: [] }),
+  });
+  const { paneel, bevestiging } = await naarBevestiging(page);
+  await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();
+  const melding = bevestiging.getByRole('alert');
+  await expect(melding).toContainText('Verstuurd naar 2 van 3');
+  await expect(melding).toContainText('1 adres heeft de mail niet gekregen: b@vhb.be.');
+  // Geen knop die alles opnieuw verstuurt.
+  await expect(bevestiging.getByRole('button', { name: 'Versturen naar 3' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Opnieuw proberen' })).toHaveCount(0);
+  await bevestiging.getByRole('button', { name: 'Alleen de resterende 1 versturen' }).click();
+  await expect.poll(() => calls.filter((c) => c.pad === 'eigen' && !c.body.droog).length).toBe(2);
+  const echte = calls.filter((c) => c.pad === 'eigen' && !c.body.droog);
+  expect(echte[0].body.alleen).toBeUndefined();
+  expect(echte[1].body.alleen).toEqual(['b@vhb.be']);
+  // Dezelfde mail en dezelfde keuze, alleen het filter erbij.
+  expect(echte[1].body).toMatchObject({ onderwerp: 'Nieuwe uniformen', ontvangers: { adressen: ['extern@voorbeeld.be'] } });
+  await expect(page.getByText('Mail verstuurd naar 1 ontvanger.')).toBeVisible();
+  await expect(bevestiging).toHaveCount(0);
+  await expect(paneel).toHaveCount(0);
+});
+
+test('mails: geen antwoord van de server biedt geen knop om alles opnieuw te versturen (nr. 5)', async ({ page }) => {
+  const { calls } = await opzet(page);
+  // Alleen de echte verzending valt weg (time-out van de functie); het voorbeeld werkt.
+  await page.route('**/api/mails/eigen', (r) => (r.request().postDataJSON()?.droog ? r.fallback() : r.fulfill({ status: 504, contentType: 'text/plain', body: 'FUNCTION_INVOCATION_TIMEOUT' })));
+  const { paneel, bevestiging } = await naarBevestiging(page);
+  await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();
+  const melding = bevestiging.getByRole('alert');
+  await expect(melding).toContainText('Geen antwoord van de server');
+  await expect(melding).toContainText('Mogelijk is een deel van de mails toch vertrokken.');
+  await expect(melding).toContainText('verzendlog');
+  await expect(page.getByRole('button', { name: 'Opnieuw proberen' })).toHaveCount(0);
+  await expect(bevestiging.getByRole('button', { name: /Versturen/ })).toHaveCount(0);
+  await bevestiging.getByRole('button', { name: 'Sluiten' }).click();
+  await expect(bevestiging).toHaveCount(0);
+  // Het formulier staat er nog, met de invoer: de admin beslist na het log.
+  await expect(paneel.getByLabel('Onderwerp')).toHaveValue('Nieuwe uniformen');
+  expect(calls.filter((c) => c.pad === 'eigen' && !c.body.droog)).toHaveLength(0);
 });

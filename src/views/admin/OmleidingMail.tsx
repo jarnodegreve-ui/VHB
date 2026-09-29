@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { FileText, Send } from 'lucide-react';
 import type { Diversion, Verzendlijst } from '../../types';
 import { SlideOver } from '../../components/SlideOver';
-import { Modal, SluitKnop } from '../../components/Modal';
-import { ModalHeader } from '../../components/ui';
+import { SluitKnop } from '../../components/Modal';
+import { MailBevestiging } from '../../components/MailBevestiging';
 import { Field, Textarea } from '../../components/Field';
 import { Badge, Button } from '../../components/primitives';
 import { Checkbox } from '../../components/Table';
 import { apiJson } from '../../lib/api';
-import { notify } from '../../lib/ui';
 import { meldSchrijffout } from '../../lib/fouten';
+import type { MailUitkomst } from '../../lib/mailUitkomst';
 import { aantal as tel, prettySize } from '../../lib/format';
 import { leesAdressen, OMLEIDING_MAIL_BERICHT_MAX, type OmleidingMailInvoer } from '../../../shared/schemas/mail';
 
@@ -45,7 +45,7 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
   const adressen = useMemo(() => leesAdressen(adressenTekst), [adressenTekst]);
   const ietsGekozen = lijstIds.length + adressen.adressen.length > 0;
   const vuil = Boolean(bericht || ietsGekozen);
-  const invoer = (droog: boolean): OmleidingMailInvoer => ({ droog, bericht, ontvangers: { lijsten: lijstIds, adressen: adressen.adressen } });
+  const invoer = (droog: boolean, alleen?: string[]): OmleidingMailInvoer => ({ droog, bericht, ontvangers: { lijsten: lijstIds, adressen: adressen.adressen }, ...(alleen ? { alleen } : {}) });
 
   const toonVoorbeeld = async () => {
     if (!diversion) return;
@@ -64,19 +64,10 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
     }
   };
 
-  const verstuur = async () => {
-    if (!diversion || !voorbeeld) return;
-    setBezig(true);
-    try {
-      const r = await apiJson<{ aantal: number; gelukt: number; mislukt: number; mocked: boolean; bijlagen: number }>(`/api/diversions/${encodeURIComponent(diversion.id)}/mail`, { method: 'POST', body: JSON.stringify(invoer(false)) });
-      notify(r.mocked ? `Mail gelogd voor ${tel(r.aantal, 'ontvanger', 'ontvangers')} (geen SMTP ingesteld).` : r.mislukt > 0 ? `Omleiding gemaild naar ${r.gelukt} van ${r.aantal}; ${r.mislukt} mislukt.` : `Omleiding gemaild naar ${tel(r.aantal, 'ontvanger', 'ontvangers')}.`, r.mislukt > 0 ? 'error' : 'success');
-      setVoorbeeld(null);
-      onClose();
-    } catch (err) {
-      meldSchrijffout('Mail versturen', err, () => void verstuur());
-    } finally {
-      setBezig(false);
-    }
+  const verstuur = (alleen?: string[]) => apiJson<MailUitkomst>(`/api/diversions/${encodeURIComponent(diversion?.id ?? '')}/mail`, { method: 'POST', body: JSON.stringify(invoer(false, alleen)) });
+  const klaar = () => {
+    setVoorbeeld(null);
+    onClose();
   };
 
   const wissel = (id: string, aan: boolean) => setLijstIds((x) => (aan ? [...new Set([...x, id])] : x.filter((y) => y !== id)));
@@ -137,28 +128,17 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
         </form>
       </SlideOver>
 
-      <Modal open={voorbeeld !== null} onClose={() => setVoorbeeld(null)} maxWidth="2xl" ariaLabel="Voorbeeld van de omleidingsmail" boven>
-        {voorbeeld && (
-          <>
-            <ModalHeader
-              title={`Naar ${tel(voorbeeld.aantal, 'ontvanger', 'ontvangers')}`}
-              description={(
-                <>
-                  <span className="block break-words">{voorbeeld.ontvangers.map((o) => o.adres).slice(0, 8).join(', ')}{voorbeeld.ontvangers.length > 8 ? ` en nog ${voorbeeld.ontvangers.length - 8}` : ''}.</span>
-                  <span className="mt-0.5 block break-words">Onderwerp: {voorbeeld.onderwerp}. {voorbeeld.bijlagen.length > 0 ? `${tel(voorbeeld.bijlagen.length, 'PDF', "PDF's")} in bijlage.` : 'Geen bijlage.'}</span>
-                </>
-              )}
-            />
-            <div className="space-y-4 p-6">
-              <iframe title="Voorbeeld van de omleidingsmail" srcDoc={voorbeeld.html} sandbox="" className="h-[50vh] min-h-[320px] w-full rounded-xl bg-surface-white ring-1 ring-hairline" />
-              <div className="flex items-center justify-end gap-2">
-                <SluitKnop onClose={() => setVoorbeeld(null)} variant="secondary" disabled={bezig}>Terug</SluitKnop>
-                <Button variant="primary" icon={<Send size={16} />} bezig={bezig} onClick={() => void verstuur()}>Versturen naar {voorbeeld.aantal}</Button>
-              </div>
-            </div>
-          </>
-        )}
-      </Modal>
+      <MailBevestiging
+        voorbeeld={voorbeeld}
+        naam="Voorbeeld van de omleidingsmail"
+        toon="adres"
+        werkwoord="Omleiding gemaild"
+        extra={voorbeeld ? `Onderwerp: ${voorbeeld.onderwerp}. ${voorbeeld.bijlagen.length > 0 ? `${tel(voorbeeld.bijlagen.length, 'PDF', "PDF's")} in bijlage.` : 'Geen bijlage.'}` : undefined}
+        logVerwijzing="Een admin ziet in het verzendlog (Beheer › Mails) wat er vertrokken is."
+        verstuur={verstuur}
+        onTerug={() => setVoorbeeld(null)}
+        onKlaar={klaar}
+      />
     </>
   );
 }

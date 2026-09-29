@@ -9,7 +9,7 @@ import { ADMIN, seed } from './helpers';
 const OMLEIDING = { id: 'd1', line: '58', location: 'Zottegem', title: 'Werken Markt Zottegem', description: 'Omleiding via de ring.', startDate: '2026-09-20', endDate: '2026-10-10', _rev: 'r1',
   bijlagen: [{ slot: 1, filename: 'Omleidingsplan lijn 58.pdf', sizeBytes: 182_000, url: 'https://x.test/1.pdf' }] };
 
-async function opzet(page: Page) {
+async function opzet(page: Page, opties: { verstuur?: (body: any) => unknown } = {}) {
   const calls: any[] = [];
   await page.clock.setFixedTime(new Date('2026-09-25T09:00:00Z'));
   await seed(page, {
@@ -23,7 +23,7 @@ async function opzet(page: Page) {
         calls.push(body);
         return body.droog
           ? { droog: true, aantal: 3, ontvangers: [{ adres: 'dispatching@delijn.be', naam: 'De Lijn' }, { adres: 'planning@delijn.be', naam: 'De Lijn' }, { adres: 'garage@vhb.be', naam: 'garage@vhb.be' }], onderwerp: 'Omleiding lijn 58: Werken Markt Zottegem (20/09/2026 t/m 10/10/2026)', html: '<!DOCTYPE html><html><body><h1>Werken Markt Zottegem</h1></body></html>', bijlagen: [{ filename: 'Omleidingsplan lijn 58.pdf', sizeBytes: 182_000 }] }
-          : { droog: false, aantal: 3, gelukt: 3, mislukt: 0, mocked: false, bijlagen: 1 };
+          : opties.verstuur?.(body) ?? { droog: false, aantal: 3, gelukt: 3, mislukt: 0, mocked: false, bijlagen: 1 };
       }
       return undefined;
     },
@@ -58,14 +58,52 @@ test('omleiding mailen: verzendlijst en vrij adres, voorbeeld, bevestigen', asyn
   await expect(bevestiging.getByRole('heading', { level: 2, name: 'Naar 3 ontvangers' })).toBeVisible();
   const venster = (await bevestiging.boundingBox())!;
   const mail = (await bevestiging.locator('iframe').boundingBox())!;
-  expect(mail.x - venster.x).toBeGreaterThanOrEqual(20);
-  expect(venster.x + venster.width - (mail.x + mail.width)).toBeGreaterThanOrEqual(20);
+  expect(mail.x - venster.x).toBeGreaterThanOrEqual(16);
+  expect(venster.x + venster.width - (mail.x + mail.width)).toBeGreaterThanOrEqual(16);
   await expect(bevestiging.getByText(/1 PDF in bijlage/)).toBeVisible();
   await expect(bevestiging.frameLocator('iframe').getByRole('heading', { name: 'Werken Markt Zottegem' })).toBeVisible();
   await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();
   await expect.poll(() => calls.length).toBe(2);
   expect(calls[1].droog).toBe(false);
   await expect(page.getByText('Omleiding gemaild naar 3 ontvangers.')).toBeVisible();
+  await expect(bevestiging).toHaveCount(0);
+  await expect(paneel).toHaveCount(0);
+});
+
+test('omleiding mailen: een bijlage die niet meeging wordt gemeld (nr. 11)', async ({ page, isMobile }) => {
+  await opzet(page, { verstuur: () => ({ droog: false, aantal: 3, gelukt: 3, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, mocked: false, resterend: [], onzekerAdressen: [], bijlagen: 0, ontbrekendeBijlagen: ['Omleidingsplan lijn 58.pdf'] }) });
+  const bewerk = page.getByRole(isMobile ? 'dialog' : 'region', { name: /Omleiding bewerken/ });
+  await bewerk.getByRole('button', { name: 'Meer acties' }).click();
+  await page.getByRole('menuitem', { name: 'Mailen…' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Omleiding mailen' });
+  await paneel.getByLabel('Vrije adressen').fill('garage@vhb.be');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van de omleidingsmail' });
+  await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();
+  await expect(page.getByText('Omleiding gemaild naar 3 ontvangers. Niet meegegaan, bestand niet gevonden: Omleidingsplan lijn 58.pdf.')).toBeVisible();
+  await expect(paneel).toHaveCount(0);
+});
+
+test('omleiding mailen: deels vertrokken verstuurt daarna alleen de rest (nr. 5 en 34)', async ({ page, isMobile }) => {
+  const { calls } = await opzet(page, {
+    verstuur: (body) => (body.alleen
+      ? { droog: false, aantal: 2, gelukt: 2, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, mocked: false, resterend: [], onzekerAdressen: [], bijlagen: 1, ontbrekendeBijlagen: [] }
+      : { droog: false, aantal: 3, gelukt: 1, mislukt: 0, nietGeprobeerd: 2, onzeker: 0, mocked: false, resterend: ['planning@delijn.be', 'garage@vhb.be'], onzekerAdressen: [], bijlagen: 1, ontbrekendeBijlagen: [] }),
+  });
+  const bewerk = page.getByRole(isMobile ? 'dialog' : 'region', { name: /Omleiding bewerken/ });
+  await bewerk.getByRole('button', { name: 'Meer acties' }).click();
+  await page.getByRole('menuitem', { name: 'Mailen…' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Omleiding mailen' });
+  await paneel.getByLabel('Vrije adressen').fill('garage@vhb.be');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van de omleidingsmail' });
+  await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();
+  await expect(bevestiging.getByRole('alert')).toContainText('Verstuurd naar 1 van 3');
+  await expect(bevestiging.getByRole('alert')).toContainText('2 adressen hebben de mail niet gekregen: planning@delijn.be, garage@vhb.be.');
+  await bevestiging.getByRole('button', { name: 'Alleen de resterende 2 versturen' }).click();
+  await expect.poll(() => calls.filter((c) => !c.droog).length).toBe(2);
+  expect(calls.filter((c) => !c.droog)[1].alleen).toEqual(['planning@delijn.be', 'garage@vhb.be']);
+  await expect(page.getByText('Omleiding gemaild naar 2 ontvangers.')).toBeVisible();
   await expect(bevestiging).toHaveCount(0);
   await expect(paneel).toHaveCount(0);
 });
