@@ -1,12 +1,13 @@
 import type express from "express";
 import { authenticate, requireRole } from "../middleware.js";
 import { isMissingTableError } from "../deviceGate.js";
-import { downloadDiversionBijlage, getDiversionsData, getMailLog, getUsersData, logActivity, logMail, setAppSetting } from "../storage.js";
+import { downloadDiversionBijlage, getDiversionsData, getMailLog, getUsersData, logActivity, setAppSetting } from "../storage.js";
 import { omleidingBijlagen, PERIODE_DMJ } from "../helpers.js";
 import { lijnLabel } from "../../shared/lijnen.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { EIGEN_MAIL_SOORT, OMLEIDING_MAIL_SOORT, omleidingMailSchema, MAIL_INSTELLINGEN_KEY, MAIL_SOORTEN, MAIL_SOORT_PER_SLEUTEL, eigenMailSchema, isMailAan, mailInstellingenSchema, parseMailInstellingen, verzendlijstenSchema, VERZENDLIJSTEN_KEY, type OntvangerGroep } from "../../shared/schemas/mail.js";
-import { mailOpbouw, sendEmail } from "../email.js";
+import { mailOpbouw } from "../email.js";
+import { verstuurMailReeks, type ReeksUitkomst } from "./mailReeks.js";
 import { eigenMailRateLimit, omleidingMailRateLimit } from "../rateLimit.js";
 import { valideerRecord } from "./valideer.js";
 import { getMailInstellingen, getVerzendlijsten, meldMailWijziging } from "./mailInstellingen.js";
@@ -38,25 +39,66 @@ export const bouwEigenMail = (o: { onderwerp: string; tekst: string; afzenderNaa
  */
 const TABEL_ONTBREEKT = { error: "De instellingen-tabel bestaat nog niet: draai supabase/2026-07-30_app_settings.sql in de SQL Editor." };
 
-/** Adressen uit verzendlijsten en vrije adressen, ontdubbeld op adres; null
- *  als een gekozen lijst niet (meer) bestaat. */
-const ontvangersUitLijstenEnAdressen = (
-  lijsten: Awaited<ReturnType<typeof getVerzendlijsten>>,
-  keuze: { lijsten: string[]; adressen: string[] },
-): Array<{ adres: string; naam: string }> | null => {
-  const uit = new Map<string, { adres: string; naam: string }>();
-  const voeg = (adres: string, naam: string) => {
-    const a = adres.trim().toLowerCase();
+export type Ontvanger = { adres: string; naam: string };
+
+/**
+ * De ontvangers van een mail, server-side afgeleid uit de keuze en ontdubbeld
+ * op adres: groepen (actieve gebruikers met die rol), verzendlijsten,
+ * losse gebruikers en vrije adressen, in die volgorde (de eerste bron bepaalt
+ * de naam). Eén functie voor de eigen mail en de omleiding (nr. 34); de
+ * omleiding kent geen groepen en geen losse gebruikers en geeft die niet mee.
+ * `alleen` houdt van het resultaat alleen die adressen over (het restant van
+ * een verzending die deels vertrok). Null als een gekozen lijst niet (meer)
+ * bestaat.
+ */
+export const leidOntvangersAf = (
+  bron: { lijsten: Awaited<ReturnType<typeof getVerzendlijsten>>; gebruikers?: Awaited<ReturnType<typeof getUsersData>> },
+  keuze: { groepen?: OntvangerGroep[]; lijsten: string[]; gebruikers?: string[]; adressen: string[]; alleen?: string[] },
+): Ontvanger[] | null => {
+  const uit = new Map<string, Ontvanger>();
+  const voeg = (adres: string | undefined, naam: string) => {
+    const a = String(adres ?? "").trim().toLowerCase();
     if (a && !uit.has(a)) uit.set(a, { adres: a, naam });
   };
+  const actief = (bron.gebruikers ?? []).filter((u) => u.isActive !== false && u.email);
+  for (const groep of keuze.groepen ?? []) {
+    for (const u of actief) if (heeftRol(u, GROEP_ROLLEN[groep])) voeg(u.email, u.name);
+  }
+  if (keuze.lijsten.some((id) => !bron.lijsten.some((l) => l.id === id))) return null;
   for (const id of keuze.lijsten) {
-    const lijst = lijsten.find((l) => l.id === id);
-    if (!lijst) return null;
+    const lijst = bron.lijsten.find((l) => l.id === id)!;
     for (const adres of lijst.adressen) voeg(adres, lijst.naam);
   }
+  for (const id of keuze.gebruikers ?? []) {
+    const u = actief.find((x) => String(x.id) === id);
+    if (u) voeg(u.email, u.name);
+  }
   for (const adres of keuze.adressen) voeg(adres, adres);
-  return [...uit.values()];
+  const alles = [...uit.values()];
+  if (!keuze.alleen) return alles;
+  const alleen = new Set(keuze.alleen.map((a) => a.trim().toLowerCase()));
+  return alles.filter((o) => alleen.has(o.adres));
 };
+
+const GEEN_RESTANT = "Geen van de resterende adressen hoort nog bij deze keuze; maak een nieuw voorbeeld.";
+
+/** Staart van een logboekregel: wat er naast de geslaagde mails gebeurde. */
+const reeksStaart = (u: ReeksUitkomst) =>
+  `${u.mislukt ? `, ${u.mislukt} mislukt` : ""}${u.nietGeprobeerd ? `, ${u.nietGeprobeerd} niet verstuurd` : ""}${u.onzeker ? `, ${u.onzeker} onzeker` : ""}${u.mocked ? " (alleen gelogd, geen SMTP)" : ""}`;
+
+/** Het antwoord van een echte verzending, gelijk voor beide routes. */
+const reeksAntwoord = (u: ReeksUitkomst) => ({
+  droog: false as const,
+  aantal: u.aantal,
+  gelukt: u.gelukt,
+  mislukt: u.mislukt,
+  nietGeprobeerd: u.nietGeprobeerd,
+  onzeker: u.onzeker,
+  mocked: u.mocked,
+  overgeslagen: u.overgeslagen,
+  resterend: u.resterend,
+  onzekerAdressen: u.onzekerAdressen,
+});
 
 export function mountMailRoutes(app: express.Express) {
   // Verzendlijsten voor wie een omleiding mag mailen (planner én admin);
@@ -70,15 +112,16 @@ export function mountMailRoutes(app: express.Express) {
   // vrije adressen (De Lijn, de garage), met de PDF's als bijlage. Eén mail
   // per ontvanger, één logregel; `droog` toont eerst wie en wat.
   app.post("/api/diversions/:id/mail", authenticate, requireRole("planner", "admin"), omleidingMailRateLimit, async (req: AuthenticatedRequest, res) => {
+    const gestartOp = Date.now();
     const body = valideerRecord(res, omleidingMailSchema, req.body ?? {});
     if (!body) return;
     try {
       const id = String(req.params.id || "");
       const omleiding = (await getDiversionsData()).find((d: any) => String(d.id) === id);
       if (!omleiding) return res.status(404).json({ error: "Omleiding niet gevonden, mogelijk intussen verwijderd." });
-      const ontvangers = ontvangersUitLijstenEnAdressen(await getVerzendlijsten(), body.ontvangers);
+      const ontvangers = leidOntvangersAf({ lijsten: await getVerzendlijsten() }, { ...body.ontvangers, alleen: body.alleen });
       if (!ontvangers) return res.status(400).json({ error: "Een gekozen verzendlijst bestaat niet meer; ververs het scherm." });
-      if (ontvangers.length === 0) return res.status(400).json({ error: "Kies minstens één verzendlijst of adres." });
+      if (ontvangers.length === 0) return res.status(400).json({ error: body.alleen ? GEEN_RESTANT : "Kies minstens één verzendlijst of adres." });
 
       const afzenderNaam = req.appUser?.name || "Planning VHB";
       const antwoordAan = String(req.appUser?.email ?? "").trim() || undefined;
@@ -112,17 +155,12 @@ export function mountMailRoutes(app: express.Express) {
         const buffer = await downloadDiversionBijlage(id, b.slot, Boolean(b.legacy));
         if (buffer) attachments.push({ filename: b.filename, content: buffer, contentType: "application/pdf" });
       }
-      let gelukt = 0;
-      let mocked = false;
-      const fouten: string[] = [];
-      for (const o of ontvangers) {
-        const r = await sendEmail({ to: [o.adres], subject: onderwerp, text, html, attachments, context: `omleiding-mail:${id}`, soort: OMLEIDING_MAIL_SOORT, door: afzenderNaam, replyTo: antwoordAan, zonderLog: true });
-        if (r.ok) gelukt += 1; else fouten.push(o.adres);
-        if (r.mocked) mocked = true;
-      }
-      await logMail({ soort: OMLEIDING_MAIL_SOORT, aantal: ontvangers.length, gelukt: fouten.length === 0 && !mocked, fout: mocked ? "SMTP niet geconfigureerd, mail alleen gelogd" : fouten.length ? `${fouten.length} van ${ontvangers.length} mislukt` : null, door: afzenderNaam });
-      await logActivity(req, "diversions", "Omleiding gemaild", `"${omleiding.title}" naar ${ontvangers.length} ontvanger${ontvangers.length === 1 ? "" : "s"} met ${attachments.length} PDF${attachments.length === 1 ? "" : "'s"}${fouten.length ? `, ${fouten.length} mislukt` : ""}${mocked ? " (alleen gelogd, geen SMTP)" : ""}.`, { type: "diversion", id });
-      res.json({ droog: false, aantal: ontvangers.length, gelukt, mislukt: fouten.length, mocked, bijlagen: attachments.length });
+      const uitkomst = await verstuurMailReeks({ soort: OMLEIDING_MAIL_SOORT, door: afzenderNaam, context: `omleiding-mail:${id}`, ontvangers, onderwerp, text, html, attachments, replyTo: antwoordAan, gestartOp });
+      // De mails zijn weg en het verzendlog klopt: een logboekregel die niet
+      // lukt mag het antwoord niet in een fout veranderen (dan zou het scherm
+      // denken dat er niets vertrok).
+      await logActivity(req, "diversions", "Omleiding gemaild", `"${omleiding.title}" naar ${ontvangers.length} ontvanger${ontvangers.length === 1 ? "" : "s"} met ${attachments.length} PDF${attachments.length === 1 ? "" : "'s"}${reeksStaart(uitkomst)}.`, { type: "diversion", id }).catch((err) => console.error("Logboekregel van de omleidingsmail is mislukt.", err));
+      res.json({ ...reeksAntwoord(uitkomst), bijlagen: attachments.length });
     } catch (err) {
       console.error("Omleiding mailen is mislukt.", err);
       res.status(500).json({ error: "Versturen is mislukt." });
@@ -209,32 +247,14 @@ export function mountMailRoutes(app: express.Express) {
   // wie hem krijgt en hoe hij eruitziet; de echte verzending gaat één mail
   // per persoon (niemand ziet elkaars adres) en laat één logregel achter.
   app.post("/api/mails/eigen", authenticate, requireRole("admin"), eigenMailRateLimit, async (req: AuthenticatedRequest, res) => {
+    const gestartOp = Date.now();
     const body = valideerRecord(res, eigenMailSchema, req.body ?? {});
     if (!body) return;
     try {
-      const [users, lijsten] = await Promise.all([getUsersData(), getVerzendlijsten()]);
-      const actief = users.filter((u) => u.isActive !== false && u.email);
-      const ontvangers = new Map<string, { adres: string; naam: string }>();
-      const voeg = (adres: string | undefined, naam: string) => {
-        const a = String(adres ?? "").trim().toLowerCase();
-        if (a && !ontvangers.has(a)) ontvangers.set(a, { adres: a, naam });
-      };
-      for (const groep of body.ontvangers.groepen) {
-        for (const u of actief) if (heeftRol(u, GROEP_ROLLEN[groep])) voeg(u.email, u.name);
-      }
-      const onbekendeLijsten = body.ontvangers.lijsten.filter((id) => !lijsten.some((l) => l.id === id));
-      if (onbekendeLijsten.length > 0) return res.status(400).json({ error: "Een gekozen verzendlijst bestaat niet meer; ververs het scherm." });
-      for (const id of body.ontvangers.lijsten) {
-        const lijst = lijsten.find((l) => l.id === id)!;
-        for (const adres of lijst.adressen) voeg(adres, lijst.naam);
-      }
-      for (const id of body.ontvangers.gebruikers) {
-        const u = actief.find((x) => String(x.id) === id);
-        if (u) voeg(u.email, u.name);
-      }
-      for (const adres of body.ontvangers.adressen) voeg(adres, adres);
-      const lijst = [...ontvangers.values()];
-      if (lijst.length === 0) return res.status(400).json({ error: "Kies minstens één ontvanger met een e-mailadres." });
+      const [gebruikers, lijsten] = await Promise.all([getUsersData(), getVerzendlijsten()]);
+      const lijst = leidOntvangersAf({ lijsten, gebruikers }, { ...body.ontvangers, alleen: body.alleen });
+      if (!lijst) return res.status(400).json({ error: "Een gekozen verzendlijst bestaat niet meer; ververs het scherm." });
+      if (lijst.length === 0) return res.status(400).json({ error: body.alleen ? GEEN_RESTANT : "Kies minstens één ontvanger met een e-mailadres." });
 
       const afzenderNaam = req.appUser?.name || "VHB";
       const antwoordAan = String(req.appUser?.email ?? "").trim() || undefined;
@@ -243,17 +263,9 @@ export function mountMailRoutes(app: express.Express) {
         return res.json({ droog: true, aantal: lijst.length, ontvangers: lijst, onderwerp: body.onderwerp, html });
       }
 
-      let gelukt = 0;
-      let mocked = false;
-      const fouten: string[] = [];
-      for (const o of lijst) {
-        const r = await sendEmail({ to: [o.adres], subject: body.onderwerp, text, html, context: `eigen-mail:${req.appUser?.id ?? ""}`, soort: EIGEN_MAIL_SOORT, door: afzenderNaam, replyTo: antwoordAan, zonderLog: true });
-        if (r.ok) gelukt += 1; else fouten.push(o.adres);
-        if (r.mocked) mocked = true;
-      }
-      await logMail({ soort: EIGEN_MAIL_SOORT, aantal: lijst.length, gelukt: fouten.length === 0 && !mocked, fout: mocked ? "SMTP niet geconfigureerd, mail alleen gelogd" : fouten.length ? `${fouten.length} van ${lijst.length} mislukt` : null, door: afzenderNaam });
-      await logActivity(req, "system", "Eigen mail verstuurd", `"${body.onderwerp}" naar ${lijst.length} ontvanger${lijst.length === 1 ? "" : "s"}${fouten.length ? `, ${fouten.length} mislukt` : ""}${mocked ? " (alleen gelogd, geen SMTP)" : ""}.`);
-      res.json({ droog: false, aantal: lijst.length, gelukt, mislukt: fouten.length, mocked });
+      const uitkomst = await verstuurMailReeks({ soort: EIGEN_MAIL_SOORT, door: afzenderNaam, context: `eigen-mail:${req.appUser?.id ?? ""}`, ontvangers: lijst, onderwerp: body.onderwerp, text, html, replyTo: antwoordAan, gestartOp });
+      await logActivity(req, "system", "Eigen mail verstuurd", `"${body.onderwerp}" naar ${lijst.length} ontvanger${lijst.length === 1 ? "" : "s"}${reeksStaart(uitkomst)}.`).catch((err) => console.error("Logboekregel van de eigen mail is mislukt.", err));
+      res.json(reeksAntwoord(uitkomst));
     } catch (err) {
       console.error("Eigen mail versturen is mislukt.", err);
       res.status(500).json({ error: "Versturen is mislukt." });

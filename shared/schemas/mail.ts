@@ -129,6 +129,16 @@ export const GROEP_LABEL: Record<OntvangerGroep, string> = {
   planning: 'Alle planners en admins',
 };
 
+/**
+ * Alleen naar deze adressen (nr. 5): na een verzending die maar deels
+ * vertrok stuurt het scherm dezelfde keuze opnieuw, met de adressen die niet
+ * vertrokken zijn. De server leidt de ontvangers nog altijd zelf af uit de
+ * keuze en houdt daarvan alleen deze adressen over; het is een filter, geen
+ * extra bron van ontvangers.
+ */
+export const ALLEEN_MAX_ADRESSEN = 5000;
+const alleenAdressen = z.array(emailAdres).max(ALLEEN_MAX_ADRESSEN).optional();
+
 export const EIGEN_MAIL_ONDERWERP_MAX = 150;
 export const EIGEN_MAIL_TEKST_MAX = 5000;
 
@@ -148,6 +158,7 @@ export const eigenMailSchema = z.object({
   ontvangers: eigenMailOntvangersSchema,
   /** true = alleen tonen wie de mail zou krijgen en hoe ze eruitziet. */
   droog: z.boolean().default(false),
+  alleen: alleenAdressen,
 });
 export type EigenMail = z.output<typeof eigenMailSchema>;
 export type EigenMailInvoer = z.input<typeof eigenMailSchema>;
@@ -164,6 +175,7 @@ export const omleidingMailSchema = z.object({
   /** Vrije begeleidende tekst bovenaan de mail. */
   bericht: z.string().trim().max(OMLEIDING_MAIL_BERICHT_MAX, `Hooguit ${OMLEIDING_MAIL_BERICHT_MAX} tekens`).default(''),
   droog: z.boolean().default(false),
+  alleen: alleenAdressen,
 });
 export type OmleidingMail = z.output<typeof omleidingMailSchema>;
 export type OmleidingMailInvoer = z.input<typeof omleidingMailSchema>;

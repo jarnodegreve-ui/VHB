@@ -27,6 +27,15 @@ interface SendEmailOptions {
   zonderLog?: boolean;
   /** Bijlagen (bv. de wekelijkse backup-JSON, PDF's bij een omleiding) — 1-op-1 doorgegeven aan nodemailer. */
   attachments?: Array<{ filename: string; content: string | Buffer; contentType?: string }>;
+  /** Hergebruikte verbinding voor een reeks (`maakMailTransport`); zonder
+   *  deze optie opent elke mail zijn eigen verbinding, zoals altijd. */
+  transport?: MailTransport | null;
+}
+
+/** Wat sendEmail van een verbinding nodig heeft (nodemailer-transporter). */
+export interface MailTransport {
+  sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
+  close?: () => void;
 }
 
 interface SendEmailResult {
@@ -53,6 +62,40 @@ const getSmtpConfig = () => ({
 });
 
 export const isSmtpConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+const laadNodemailer = async () => {
+  // nodemailer lui geladen (ronde 3): alleen wie echt mailt betaalt het
+  // inlezen, niet elke koude start. CJS-pakket: module.exports zit onder
+  // `default`.
+  const mod = await import("nodemailer");
+  return (mod as unknown as { default?: typeof mod }).default ?? mod;
+};
+
+/**
+ * Eén verbinding voor een hele reeks mails (nr. 5): een pool die zijn
+ * SMTP-verbindingen openhoudt, in plaats van per mail opnieuw te verbinden,
+ * TLS op te zetten en aan te melden. `gelijktijdig` verbindingen tegelijk en
+ * hoogstens `perSeconde` mails per seconde (de mailprovider begrenst het
+ * tempo; wie te snel gaat krijgt weigeringen). Korte time-outs, zodat één
+ * hangende verbinding de functie niet tot haar limiet van 60 s ophoudt.
+ * Null zonder SMTP-gegevens: sendEmail logt de mail dan alleen. Sluit de
+ * pool na de reeks met `close()`.
+ */
+export const maakMailTransport = async (o: { gelijktijdig: number; perSeconde: number }): Promise<MailTransport | null> => {
+  if (!isSmtpConfigured()) return null;
+  const nodemailer = await laadNodemailer();
+  return nodemailer.createTransport({
+    ...getSmtpConfig(),
+    pool: true,
+    maxConnections: o.gelijktijdig,
+    maxMessages: Infinity,
+    rateDelta: 1000,
+    rateLimit: o.perSeconde,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  } as Parameters<typeof nodemailer.createTransport>[0]) as unknown as MailTransport;
+};
 
 /**
  * Afzender uit de omgeving (beslissing Jarno 25-09: "VHB Portaal"
@@ -119,13 +162,7 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
   }
 
   try {
-    const smtp = getSmtpConfig();
-    // nodemailer lui geladen (ronde 3): alleen wie echt mailt betaalt het
-    // inlezen, niet elke koude start. CJS-pakket: module.exports zit onder
-    // `default`.
-    const mod = await import("nodemailer");
-    const nodemailer = (mod as unknown as { default?: typeof mod }).default ?? mod;
-    const transporter = nodemailer.createTransport(smtp);
+    const transporter: MailTransport = opts.transport ?? ((await laadNodemailer()).createTransport(getSmtpConfig()) as unknown as MailTransport);
     const afzender = mailAfzender();
     // BCC bij meerdere ontvangers: met alles in `To:` kreeg elke chauffeur bij
     // een dringende update het volledige adressenbestand van het personeel in
