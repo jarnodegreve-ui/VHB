@@ -15,6 +15,7 @@ import { DAG_DMJ, toLookupToken, afwezigOp, normalizeSwapType } from "../helpers
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { getLeaveData, getUsersData, getShiftById, getShiftsOnDate } from "../storage.js";
 import { ISO_DAY_RE } from "./collectie.js";
+import { bezetOpBord, bordOpDag } from "./codeDienst.js";
 
 // Afgehandelde ruil-statussen: hieruit is geen overgang meer toegestaan.
 export const TERMINAL_SWAP_STATES = new Set(["rejected", "cancelled", "completed"]);
@@ -66,7 +67,7 @@ const AFWEZIG_LABEL: Record<string, string> = { ziekte: "ziek gemeld", betaald_v
 export const ruilAfwezigheidsFout = async (swap: {
   requesterId?: unknown; targetDriverId?: unknown; swapType?: unknown;
   shiftDate?: unknown; returnDate?: unknown; returnCode?: unknown;
-}): Promise<string | null> => {
+}, vooraf?: { leave: any[]; users: any[] }): Promise<string | null> => {
   const targetId = String(swap.targetDriverId ?? "").trim();
   const requesterId = String(swap.requesterId ?? "").trim();
   const dienstDag = String(swap.shiftDate ?? "").trim();
@@ -80,7 +81,11 @@ export const ruilAfwezigheidsFout = async (swap: {
   }
   if (checks.length === 0) return null;
   const vroegste = checks.map((c) => c.date).sort()[0];
-  const [leave, users] = await Promise.all([getLeaveData({ endOnOrAfter: vroegste }), getUsersData()]);
+  // `vooraf`: de aanroeper las het verlof (vanaf de vroegste dag) en de
+  // gebruikers al, bv. samen met het bord; dan geen tweede lezing.
+  const [leave, users] = vooraf
+    ? [vooraf.leave, vooraf.users]
+    : await Promise.all([getLeaveData({ endOnOrAfter: vroegste }), getUsersData()]);
   for (const c of checks) {
     const afwezig = afwezigOp(leave as any[], c.userId, c.date);
     if (afwezig) {
@@ -100,11 +105,17 @@ export const ruilAfwezigheidsFout = async (swap: {
  *
  *  Twee rijen tellen bewust NIET mee: de terugruil-dienst bij een 1-op-1 ruil
  *  op dezelfde dag (die verhuist in dezelfde beweging naar de aanvrager) en de
- *  aangeboden dienst zelf (al doorgevoerd → herhaling blijft idempotent). */
+ *  aangeboden dienst zelf (al doorgevoerd → herhaling blijft idempotent).
+ *
+ *  Sinds de controle van 29-09 telt ook de code-dienst (schoolrit, bureau,
+ *  garage) die de collega die dag volgens het BORD rijdt (matrixcel met de
+ *  doorgevoerde ruilen erover): zo'n dienst heeft geen rijen in de planning,
+ *  dus de rijencontrole alleen zag hem niet. Zelfde uitzonderingen, zelfde
+ *  melding. Het bord wordt samen met de rijen gelezen, niet erna. */
 export const dubbeleInplanningFout = async (swap: {
   targetDriverId?: unknown; shiftDate?: unknown; shiftLine?: unknown;
   returnDate?: unknown; returnCode?: unknown; swapType?: unknown;
-}): Promise<string | null> => {
+}, vooraf?: { swaps?: any[] }): Promise<string | null> => {
   const targetId = String(swap.targetDriverId ?? "").trim();
   const dienstDag = String(swap.shiftDate ?? "").trim();
   // Legacy-ruil zonder dienst-info: niets te controleren (de doorvoer slaat
@@ -113,7 +124,13 @@ export const dubbeleInplanningFout = async (swap: {
   const terugCode = normalizeSwapType(swap.swapType) === "overname" ? "" : String(swap.returnCode ?? "").trim();
   const terugDag = String(swap.returnDate ?? "").trim();
   const aangeboden = toLookupToken(String(swap.shiftLine ?? ""));
-  const rijen = await getShiftsOnDate(dienstDag);
+  const usersLezing = getUsersData();
+  const [rijen, users, bord] = await Promise.all([
+    getShiftsOnDate(dienstDag),
+    usersLezing,
+    // De afwezigheid toetst ruilAfwezigheidsFout al, vóór deze controle.
+    usersLezing.then((u) => bordOpDag(dienstDag, u as any[], { zonderAfwezigheid: true, swaps: vooraf?.swaps })),
+  ]);
   const bezet = rijen.filter((r) => {
     if (String(r.driverId) !== targetId) return false;
     const lijnToken = toLookupToken(r.line);
@@ -121,9 +138,12 @@ export const dubbeleInplanningFout = async (swap: {
     if (terugCode && terugDag === dienstDag && lijnToken === toLookupToken(terugCode)) return false;
     return true;
   });
-  if (bezet.length === 0) return null;
-  const naam = (await getUsersData()).find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
-  return `${naam} rijdt op ${DAG_DMJ(dienstDag)} al dienst ${bezet[0].line}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
+  const bezetteDienst = bezet.length > 0
+    ? String(bezet[0].line)
+    : bezetOpBord(bord, targetId, [swap.shiftLine, terugCode && terugDag === dienstDag ? terugCode : ""]);
+  if (!bezetteDienst) return null;
+  const naam = users.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
+  return `${naam} rijdt op ${DAG_DMJ(dienstDag)} al dienst ${bezetteDienst}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
 };
 
 /**

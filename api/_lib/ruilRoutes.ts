@@ -18,14 +18,14 @@ import { DAG_KORT, meldRuilTerValidatieTelegram } from "../telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { RUIL_BEKEKEN_ACTIE, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
 import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoorRust, type RustPlanningRij } from "../../shared/ruilRust.js";
-import { addDagenIso, DAG_DMJ, toLookupToken, matrixCodesForDate, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
+import { addDagenIso, DAG_DMJ, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
 import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getPlanningMatrixRows, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData } from "../storage.js";
+import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
-import { bordBenenVan, bordOpDag, dienstOpCel } from "./codeDienst.js";
+import { bezetOpBord, bordBenenVan, bordOpDag, dienstOpCel } from "./codeDienst.js";
 
 /**
  * Hangt aan elke ruil het verloop per persoon (`verloop`, zie
@@ -202,7 +202,7 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       // sinds het indienen, mag de dienst niet alsnog toegeschoven krijgen.
       const afwFout = await ruilAfwezigheidsFout(current);
       if (afwFout) return { fout: { status: 409, error: afwFout } };
-      const dubbelFout = await dubbeleInplanningFout(current);
+      const dubbelFout = await dubbeleInplanningFout(current, { swaps: all });
       if (dubbelFout) return { fout: { status: 409, error: dubbelFout } };
     }
 
@@ -685,7 +685,7 @@ export function mountRuilRoutes(app: express.Express) {
         const afwFout = await ruilAfwezigheidsFout(prev ?? next);
         if (afwFout) return res.status(409).json({ error: afwFout });
         // …en de collega kan intussen een dienst gekregen hebben.
-        const dubbelFout = await dubbeleInplanningFout(prev ?? next);
+        const dubbelFout = await dubbeleInplanningFout(prev ?? next, { swaps: previousSwaps });
         if (dubbelFout) return res.status(409).json({ error: dubbelFout });
       }
 
@@ -757,7 +757,7 @@ export function mountRuilRoutes(app: express.Express) {
           (n: any) => !previousById.has(String(n.id)) && normalizeSwapType(n.swapType) === "overname",
         );
         if (newTakeovers.length > 0) {
-          const [matrixRows, usersForTakeover] = await Promise.all([getPlanningMatrixRows(), getUsersData()]);
+          const usersForTakeover = await getUsersData();
           for (const next of newTakeovers) {
             const targetId = String(next.targetDriverId ?? "").trim();
             if (!targetId) {
@@ -772,9 +772,16 @@ export function mountRuilRoutes(app: express.Express) {
             // account met dezelfde naam liet de sleutel wegvallen, waardoor de
             // overname met "staat niets in de planning" werd geweigerd terwijl
             // /api/availability de collega wél aanbood (controle-ronde 27-08,
-            // bevinding 23; zelfde regel als /api/planning-presence).
-            const actieveChauffeurs = usersForTakeover.filter((u: any) => u?.role === "chauffeur" && u?.isActive !== false);
-            const code = matrixCodesForDate(matrixRows, actieveChauffeurs, date).get(targetId);
+            // bevinding 23; zelfde regel als /api/planning-presence). Het bord
+            // (berekenCelWaarheid) neemt dezelfde chauffeurs.
+            //
+            // De cel van het BORD, niet de rauwe matrixcel (controle 29-09): wie
+            // via een wissel een schoolrit kreeg, staat in de matrix nog op
+            // 'vrij' en kreeg er zo een tweede dienst bij; wie zijn dienst
+            // afgaf, staat er nog met die dienst en werd onterecht geweigerd.
+            // Zonder de afwezigheden: die toetst ruilAfwezigheidsFout hieronder.
+            const bord = await bordOpDag(date, usersForTakeover as any[], { zonderAfwezigheid: true, swaps: previousSwaps });
+            const code = bord.celVan(targetId)?.code;
             if (!isTakeoverCode(code)) {
               const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
               return res.status(409).json({
@@ -1097,7 +1104,13 @@ export function mountRuilRoutes(app: express.Express) {
       // Eigendom: de dienst moet op dit moment écht op naam van de huidige
       // chauffeur staan (zelfde principe als staleApprovalError — tussen openen
       // van het scherm en bevestigen kan de planning gewijzigd zijn).
-      const dayRows = await getShiftsOnDate(date);
+      //
+      // Het bord van die dag (matrixcel met de ruilen en afwezigheden erover)
+      // wordt in dezelfde beweging gelezen als de rijen, voor élke wissel
+      // (controle 29-09): de ontvanger wordt getoetst tegen wat hij volgens het
+      // bord rijdt, ook als de aangeboden dienst een gewone dienst is. De
+      // ruilen en het verlof die het bord toch leest, dienen verderop opnieuw.
+      const [dayRows, bord] = await Promise.all([getShiftsOnDate(date), bordOpDag(date, users as any[])]);
       // Genormaliseerd vergelijken: de maandplanning-cel stuurt de rúwe
       // Excel-code mee ("R12"), planning.line bevat het canonieke
       // dienstnummer ("r12"). Exact vergelijken liet zulke diensten altijd
@@ -1106,22 +1119,18 @@ export function mountRuilRoutes(app: express.Express) {
       const ownRows = dayRows.filter((r) => toLookupToken(r.line) === lineToken && String(r.driverId) === fromDriverId);
       // Code-dienst (schoolrit, bureau, garage): bestaat alleen als
       // planningscode, dus zonder rijen in de planning. Daar is het bord de
-      // waarheid (api/_lib/codeDienst.ts). Pas gelezen als de planning de
-      // dienst niet kent: de gewone wissel betaalt er niets voor.
-      let bord: Awaited<ReturnType<typeof bordOpDag>> | null = null;
-      const haalBord = async () => (bord ??= await bordOpDag(date, users as any[]));
+      // waarheid (api/_lib/codeDienst.ts).
       const aangebodenOpBord = ownRows.length === 0;
       // De schrijfwijze uit de planning (of van het bord) zelf: die gaat de swap
       // in en stuurt de doorvoer (movePlanningRows matcht exact op line).
       let dienstLine = aangebodenOpBord ? "" : String(ownRows[0].line);
       if (aangebodenOpBord) {
-        const b = await haalBord();
-        const opCel = b.isCodeDienst(line) ? dienstOpCel(b.celVan(fromDriverId), line) : null;
+        const opCel = bord.isCodeDienst(line) ? dienstOpCel(bord.celVan(fromDriverId), line) : null;
         if (!opCel) {
           return res.status(409).json({ error: `Dienst ${line} op ${DAG_DMJ(date)} staat niet (meer) op naam van ${fromUser.name}, de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
         }
         dienstLine = opCel;
-        if (!b.staatOpBord(toDriverId)) {
+        if (!bord.staatOpBord(toDriverId)) {
           return res.status(400).json({ error: `${toUser.name} staat niet op het bord van de maandplanning. Dienst ${opCel} kan alleen naar een chauffeur op het bord.` });
         }
       }
@@ -1142,9 +1151,8 @@ export function mountRuilRoutes(app: express.Express) {
         } else {
           // Ook de terugdienst kan een code-dienst zijn. Alleen wat de collega
           // die dag zelf rijdt: een dienst onder zijn afwezigheid ruilt hij niet.
-          const b = await haalBord();
-          const naarCel = b.celVan(toDriverId);
-          const opCel = b.isCodeDienst(returnLine) && naarCel?.kind === "service" ? dienstOpCel(naarCel, returnLine) : null;
+          const naarCel = bord.celVan(toDriverId);
+          const opCel = bord.isCodeDienst(returnLine) && naarCel?.kind === "service" ? dienstOpCel(naarCel, returnLine) : null;
           if (!opCel) {
             return res.status(409).json({ error: `${toUser.name} rijdt op ${DAG_DMJ(date)} geen dienst ${returnLine} (meer), de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
           }
@@ -1153,14 +1161,23 @@ export function mountRuilRoutes(app: express.Express) {
         }
         // De gever moet die dag zelf kunnen rijden: op een afwezigheidscel
         // (ziek, verlof) zet je een dienst wég, je haalt er geen bij.
-        const andereVanGever = dayRows.find((r) => String(r.driverId) === fromDriverId && toLookupToken(r.line) !== lineToken);
-        if (andereVanGever) {
-          return res.status(409).json({ error: `${fromUser.name} rijdt op ${date} ook dienst ${andereVanGever.line}, de terugdienst zou een dubbele inplanning geven. Zet die dienst eerst weg.` });
+        // Ook wat de gever volgens het bord nog rijdt telt: hij krijgt er de
+        // terugdienst bij. De dienst die hij afgeeft en de terugdienst zelf
+        // (de Excel kan de wissel al verwerkt hebben) zijn geen conflict.
+        const andereRij = dayRows.find((r) => String(r.driverId) === fromDriverId && toLookupToken(r.line) !== lineToken);
+        const andereVanGever = andereRij ? andereRij.line : bezetOpBord(bord, fromDriverId, [line, returnLine]);
+        if (andereRij || andereVanGever) {
+          return res.status(409).json({ error: `${fromUser.name} rijdt op ${DAG_DMJ(date)} ook dienst ${andereVanGever}, de terugdienst zou een dubbele inplanning geven. Zet die dienst eerst weg.` });
         }
       } else {
+        // De rijen in de planning, en anders wat de ontvanger volgens het bord
+        // rijdt: een code-dienst (schoolrit, bureau, garage) heeft geen rijen.
+        // Zonder die tweede blik kreeg hij er stil een dienst bij en schoof het
+        // bord zijn schoolrit door naar de gever (controle 29-09).
         const conflictRow = toRows[0];
-        if (conflictRow) {
-          return res.status(409).json({ error: `${toUser.name} rijdt op ${date} al dienst ${conflictRow.line}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg, kies iemand anders, of wissel de twee diensten 1-op-1.` });
+        const conflictDienst = conflictRow ? conflictRow.line : bezetOpBord(bord, toDriverId, [line]);
+        if (conflictRow || conflictDienst) {
+          return res.status(409).json({ error: `${toUser.name} rijdt op ${DAG_DMJ(date)} al dienst ${conflictDienst}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg, kies iemand anders, of wissel de twee diensten 1-op-1.` });
         }
       }
 
@@ -1169,7 +1186,8 @@ export function mountRuilRoutes(app: express.Express) {
       // een 1-op-1-wissel geldt dat voor béíde chauffeurs.
       const afwFout = await ruilAfwezigheidsFout(terugLine
         ? { requesterId: fromDriverId, targetDriverId: toDriverId, swapType: "ruil", shiftDate: date, returnDate: date, returnCode: terugLine }
-        : { requesterId: fromDriverId, targetDriverId: toDriverId, swapType: "overname", shiftDate: date });
+        : { requesterId: fromDriverId, targetDriverId: toDriverId, swapType: "overname", shiftDate: date },
+        { leave: bord.leave, users });
       if (afwFout) return res.status(409).json({ error: afwFout });
 
       // Een openstaande ruilaanvraag op dezelfde dienst zou door deze wissel
@@ -1178,7 +1196,7 @@ export function mountRuilRoutes(app: express.Express) {
       // als TEGENPRESTATIE in een open ruil, dan verhuist bij goedkeuring wel de
       // aangeboden dienst maar niet de terugruil — de aanvrager levert dan in
       // zonder iets terug te krijgen, en de replay reproduceert die halve staat.
-      const allSwaps = await getSwapsData();
+      const allSwaps = bord.swaps;
       const zelfdeDienst = (d?: unknown, l?: unknown) =>
         String(d ?? "") === date && !!String(l ?? "").trim() && toLookupToken(String(l ?? "")) === lineToken;
       const zelfdeTerugDienst = (d?: unknown, l?: unknown) =>
