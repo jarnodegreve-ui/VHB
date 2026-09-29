@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bell, Eye, ListChecks, Mail, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '../../components/Card';
 import { Badge, Button, IconButton, Switch } from '../../components/primitives';
-import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Field, Input, Textarea } from '../../components/Field';
 import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
@@ -31,18 +31,22 @@ const nieuwId = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID
 
 export function MailsView({ users }: { users: User[] }) {
   const [data, setData] = useState<Antwoord | null>(null);
-  const [fout, setFout] = useState<string | null>(null);
+  const [fout, setFout] = useState(false);
   const [eigenOpen, setEigenOpen] = useState(false);
 
   const laad = async () => {
     try {
       setData(await apiJson<Antwoord>('/api/mails'));
-      setFout(null);
-    } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Laden is mislukt.');
+      setFout(false);
+    } catch {
+      setFout(true);
     }
   };
   useEffect(() => { void laad(); }, []);
+  // Een laadfout is geen lege staat (nr. 14): zonder gegevens geen scherm met
+  // lege lijsten en geen maak-acties. "Mail versturen" zou anders opengaan
+  // zonder verzendlijsten, alsof er geen bestaan.
+  const foutZonderData = fout && data === null;
 
   return (
     <PageShell>
@@ -50,12 +54,11 @@ export function MailsView({ users }: { users: User[] }) {
         view="beheer-mails"
         title="Mails"
         description="Welke mails het portaal verstuurt, de verzendlijsten en het verzendlog."
-        actions={<Button variant="primary" icon={<Send size={16} />} onClick={() => setEigenOpen(true)}>Mail versturen</Button>}
+        actions={foutZonderData ? undefined : <Button variant="primary" icon={<Send size={16} />} disabled={data === null} onClick={() => setEigenOpen(true)}>Mail versturen</Button>}
       />
-      <EigenMailPaneel open={eigenOpen} onClose={() => setEigenOpen(false)} users={users} lijsten={data?.verzendlijsten ?? []} onVerstuurd={() => void laad()} />
-      {fout ? (
-        <EmptyState variant="fout" title="Mails laden is mislukt" message={fout} action={<Button variant="secondary" onClick={() => void laad()}>Opnieuw proberen</Button>} />
-      ) : (
+      <EigenMailPaneel open={eigenOpen && data !== null} onClose={() => setEigenOpen(false)} users={users} lijsten={data?.verzendlijsten ?? []} onVerstuurd={() => void laad()} />
+      {fout && <Foutkaart boodschap="De mails konden niet laden." onOpnieuw={laad} compact={data !== null} className={data !== null ? 'mb-6' : undefined} />}
+      {!foutZonderData && (
         <div className="space-y-6">
           <AutomatischeMails soorten={data?.soorten ?? null} instellingen={data?.instellingen ?? { uit: [] }} onGewijzigd={(inst) => setData((d) => (d ? { ...d, instellingen: inst, soorten: d.soorten.map((s) => ({ ...s, aan: s.altijdAan ? true : !inst.uit.includes(s.soort) })) } : d))} />
           <Verzendlijsten lijsten={data?.verzendlijsten ?? null} onGewijzigd={(lijsten) => setData((d) => (d ? { ...d, verzendlijsten: lijsten } : d))} />
@@ -183,7 +186,9 @@ function Verzendlijsten({ lijsten, onGewijzigd }: { lijsten: Verzendlijst[] | nu
         icon={<ListChecks size={18} />}
         title="Verzendlijsten"
         description="Vaste groepen adressen, ook buiten het portaal (bv. De Lijn of de garage). Te kiezen bij de mailknop op een omleiding en bij het zelf versturen van een mail."
-        aside={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={() => setBewerk({ id: nieuwId(), naam: '', adressen: [] })}>Nieuwe lijst</Button>}
+        // Pas na het laden: opslaan schrijft de hele lijst, en een nieuwe lijst
+        // op een nog niet geladen stand zou de bestaande overschrijven.
+        aside={<Button variant="secondary" size="sm" icon={<Plus size={16} />} disabled={lijsten === null} onClick={() => setBewerk({ id: nieuwId(), naam: '', adressen: [] })}>Nieuwe lijst</Button>}
       />
       {lijsten === null ? (
         <p className="mt-4 text-body-sm text-slate-500" role="status">Laden…</p>

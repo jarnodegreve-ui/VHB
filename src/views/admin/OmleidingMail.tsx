@@ -4,6 +4,7 @@ import type { Diversion, Verzendlijst } from '../../types';
 import { SlideOver } from '../../components/SlideOver';
 import { SluitKnop } from '../../components/Modal';
 import { MailBevestiging } from '../../components/MailBevestiging';
+import { Foutkaart } from '../../components/ui';
 import { Field, Textarea } from '../../components/Field';
 import { Badge, Button } from '../../components/primitives';
 import { Checkbox } from '../../components/Table';
@@ -25,6 +26,9 @@ type Droog = { droog: true; aantal: number; ontvangers: Array<{ adres: string; n
 export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversion | null; onClose: () => void }) {
   const open = diversion !== null;
   const [lijsten, setLijsten] = useState<Verzendlijst[] | null>(null);
+  // Een laadfout is geen lege staat (nr. 14): vroeger werd een mislukte
+  // lezing een lege lijst en stond er "Nog geen verzendlijsten".
+  const [lijstenFout, setLijstenFout] = useState(false);
   const [lijstIds, setLijstIds] = useState<string[]>([]);
   const [adressenTekst, setAdressenTekst] = useState('');
   const [bericht, setBericht] = useState('');
@@ -32,13 +36,19 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
   const [bezig, setBezig] = useState(false);
   const [voorbeeld, setVoorbeeld] = useState<Droog | null>(null);
 
+  const laadLijsten = async (actief: () => boolean = () => true) => {
+    try {
+      const l = await apiJson<Verzendlijst[]>('/api/mails/verzendlijsten');
+      if (actief()) { setLijsten(l); setLijstenFout(false); }
+    } catch {
+      if (actief()) setLijstenFout(true);
+    }
+  };
   useEffect(() => {
     if (!open) return;
     let actief = true;
     setLijstIds([]); setAdressenTekst(''); setBericht(''); setFouten({}); setVoorbeeld(null);
-    apiJson<Verzendlijst[]>('/api/mails/verzendlijsten')
-      .then((l) => { if (actief) setLijsten(l); })
-      .catch(() => { if (actief) setLijsten([]); });
+    void laadLijsten(() => actief);
     return () => { actief = false; };
   }, [open, diversion?.id]);
 
@@ -106,7 +116,9 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
           <fieldset className="space-y-3">
             <legend className="text-sm font-semibold text-slate-800">Ontvangers</legend>
             {fouten.ontvangers && <p className="text-body-sm text-red-700" role="alert">{fouten.ontvangers}</p>}
-            {lijsten === null ? (
+            {lijstenFout && lijsten === null ? (
+              <Foutkaart compact titel="Dit kon niet laden" boodschap="De verzendlijsten konden niet laden. Een vrij adres invullen kan wel." onOpnieuw={() => laadLijsten()} />
+            ) : lijsten === null ? (
               <p className="text-body-sm text-slate-500" role="status">Verzendlijsten laden…</p>
             ) : lijsten.length === 0 ? (
               <p className="text-body-sm text-slate-500">Nog geen verzendlijsten; een admin maakt ze aan onder Beheer › Mails.</p>
