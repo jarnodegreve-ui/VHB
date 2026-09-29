@@ -26,6 +26,7 @@ import { bijlagenUitKolom, omleidingBijlagen } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlage, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
+import { herstelOmleidingBijlagen, herstelUpdateBijlagen } from "./bijlagenHerstel.js";
 
 // --- PDF-bijlagen bij een omleiding (2026-09-25_diversions_bijlagen.sql) ---
 // Zelfde afspraak als bij de updates: het bestand staat in de privé bucket
@@ -241,7 +242,16 @@ export function mountCommunicatieRoutes(app: express.Express) {
         return res.status(409).json({ error: "Er bestaat al een omleiding met dit id.", conflict: "exists" });
       }
       const record = metBewaardeBijlagen({ ...body, id });
-      await verwerkDiversionsOpslag(req, previousDiversions, [...previousDiversions, record], { samenvatting: false, herstel: String(req.get("x-herstel") ?? "") === "1" });
+      // X-Herstel: 1 = "Ongedaan maken" na verwijderen. De PDF's zijn bij het
+      // verwijderen blijven staan; de server hangt terug wat hij zelf nog in
+      // Storage vindt (api/_lib/bijlagenHerstel.ts), nooit een pad of URL
+      // van de client.
+      const herstel = String(req.get("x-herstel") ?? "") === "1";
+      await verwerkDiversionsOpslag(req, previousDiversions, [...previousDiversions, record], { samenvatting: false, herstel });
+      if (herstel) {
+        const terug = await herstelOmleidingBijlagen(id, (body as { bijlagen?: unknown }).bijlagen);
+        if (terug > 0) await logActivity(req, "diversions", "Bijlagen hersteld", `${terug} ${terug === 1 ? "bijlage" : "bijlagen"} bij omleiding "${String(body.title ?? "")}".`, { type: "diversion", id });
+      }
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.status(201).json({ success: true, diversion: await diversionResponseRecord(id) });
     } catch (err: any) {
@@ -499,6 +509,12 @@ export function mountCommunicatieRoutes(app: express.Express) {
       // X-Herstel: 1 = "Ongedaan maken" na verwijderen → geen tweede push.
       const herstel = String(req.get("x-herstel") ?? "") === "1";
       await verwerkUpdatesOpslag(req, previousUpdates, [{ ...body, id }, ...previousUpdates], { samenvatting: false, herstel, pushUrl: viewUrl("updates") });
+      // De PDF's zijn bij het verwijderen blijven staan: terughangen wat de
+      // server zelf nog in Storage vindt (api/_lib/bijlagenHerstel.ts).
+      if (herstel) {
+        const terug = await herstelUpdateBijlagen(id, (body as { bijlagen?: unknown }).bijlagen);
+        if (terug > 0) await logActivity(req, "updates", "Bijlagen hersteld", `${terug} ${terug === 1 ? "bijlage" : "bijlagen"} bij update "${String(body.title ?? "")}".`, { type: "update", id });
+      }
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
       res.status(201).json({ success: true, update: await updateResponseRecord(id) });
     } catch (err: any) {

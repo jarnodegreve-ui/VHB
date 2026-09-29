@@ -1,5 +1,6 @@
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
 import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
+import { MAX_UPDATE_BIJLAGEN } from "../shared/schemas/update.js";
 import type {
   ActivityLogRecord,
   ActivityLogRow,
@@ -1737,18 +1738,129 @@ export const zetDiversionBijlagen = async (
   if (error) throw error;
 };
 
-/** Bestanden van verwijderde omleidingen opruimen (alle slots én de oude
- *  sleutel); best-effort, een achtergebleven PDF mag een delete niet laten
- *  mislukken. */
-const removeDiversionPdfs = async (diversionIds: string[]) => {
-  if (!supabaseAdmin || diversionIds.length === 0) return;
-  const paths = diversionIds.flatMap((id) => [
-    diversionLegacyPad(id),
-    ...Array.from({ length: MAX_OMLEIDING_BIJLAGEN }, (_, i) => diversionBijlagePad(id, i + 1)),
-  ]);
-  const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove(paths);
-  // "not found" is de normale uitkomst voor een omleiding zonder bijlage.
-  if (error && !/not.?found/i.test(String(error.message || ""))) console.warn("Diversion PDF storage cleanup error:", error);
+/** De bestanden van één record in een bijlagen-bucket: naam → grootte. Eén
+ *  lijst-aanroep met het id als zoekterm; de zoekterm is ruim (ook andere
+ *  namen waarin het id voorkomt), de aanroeper kijkt daarom alleen naar de
+ *  exacte namen die hij zelf uit id en slot opbouwt, nooit naar een pad van
+ *  de client. Gooit bij een fout: "niet te controleren" is niet "bestaat niet". */
+const bestandenVanRecord = async (bucket: string, recordId: string): Promise<Map<string, { sizeBytes?: number }>> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { data, error } = await supabaseAdmin.storage
+    .from(bucket)
+    .list("", { limit: 1000, search: recordId, sortBy: { column: "name", order: "asc" } });
+  if (error) throw error;
+  const uit = new Map<string, { sizeBytes?: number }>();
+  for (const rij of data ?? []) {
+    // Mappen hebben geen id; die slaan we over.
+    if (!rij?.id || !rij.name) continue;
+    const grootte = Number((rij.metadata as { size?: unknown } | null | undefined)?.size);
+    uit.set(String(rij.name), Number.isFinite(grootte) && grootte >= 0 ? { sizeBytes: grootte } : {});
+  }
+  return uit;
+};
+
+/**
+ * Welke PDF's van deze omleiding hangen er nu echt in Storage? Voor het
+ * herstel na "Ongedaan maken": de server hangt alleen terug wat hij hier zelf
+ * terugvindt. `oudeSleutel` = er hangt nog een `<id>.pdf` van vóór 25-09.
+ */
+export const bestaandeDiversionBijlagen = async (
+  diversionId: string,
+): Promise<{ slots: Array<{ slot: number; sizeBytes?: number }>; oudeSleutel: boolean }> => {
+  const bestanden = await bestandenVanRecord(DIVERSIONS_BUCKET, diversionId);
+  const nummers = Array.from({ length: MAX_OMLEIDING_BIJLAGEN }, (_, i) => i + 1);
+  return {
+    slots: nummers.flatMap((slot) => {
+      const gevonden = bestanden.get(diversionBijlagePad(diversionId, slot));
+      return gevonden ? [{ slot, ...gevonden }] : [];
+    }),
+    oudeSleutel: bestanden.has(diversionLegacyPad(diversionId)),
+  };
+};
+
+// --- Uitgestelde opruiming van bijlagen (29-09) ---
+// Een verwijderde omleiding of update nam haar PDF's vroeger meteen mee uit
+// Storage. "Ongedaan maken" bracht het record dan terug zonder bijlagen: de
+// bestanden waren al weg. Nu blijven ze staan tot de nachtcron ze opruimt
+// (api/_lib/bijlagenOpruim.ts): alleen bestanden waarvan het record niet meer
+// bestaat, en pas na een veilige marge.
+
+/** Eén bestand in een bucket, zoals de opruiming het nodig heeft. */
+export type BijlageBestand = { naam: string; gewijzigdOp: string | null };
+
+const BIJLAGE_LIJST_PAGINA = 1000;
+const BIJLAGE_LIJST_MAX_PAGINAS = 20;
+
+/** Alle bestanden in de wortel van een bijlagen-bucket. Gooit bij een fout:
+ *  een halve lijst is geen basis om iets weg te gooien. */
+export const lijstBijlageBestanden = async (bucket: string): Promise<BijlageBestand[]> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const uit: BijlageBestand[] = [];
+  for (let pagina = 0; pagina < BIJLAGE_LIJST_MAX_PAGINAS; pagina += 1) {
+    const { data, error } = await supabaseAdmin.storage
+      .from(bucket)
+      .list("", { limit: BIJLAGE_LIJST_PAGINA, offset: pagina * BIJLAGE_LIJST_PAGINA, sortBy: { column: "name", order: "asc" } });
+    if (error) throw error;
+    const rijen = data ?? [];
+    for (const rij of rijen) {
+      // Mappen hebben geen id; die slaan we over.
+      if (!rij?.id || !rij.name) continue;
+      uit.push({ naam: String(rij.name), gewijzigdOp: rij.updated_at ?? rij.created_at ?? null });
+    }
+    if (rijen.length < BIJLAGE_LIJST_PAGINA) break;
+  }
+  return uit;
+};
+
+/** Bestanden weghalen uit een bijlagen-bucket; "not found" is geen fout. */
+export const verwijderBijlageBestanden = async (bucket: string, paden: string[]): Promise<void> => {
+  if (paden.length === 0) return;
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { error } = await supabaseAdmin.storage.from(bucket).remove(paden);
+  if (error && !/not.?found/i.test(String(error.message || ""))) throw error;
+};
+
+/** Id's van omleidingen of updates waarop sinds `sindsIso` iets gelogd is
+ *  (verwijderd, hersteld, bijlage gewisseld). De opruiming laat hun bestanden
+ *  met rust: een verwijdering van zonet moet nog ongedaan te maken zijn. */
+export const recentGelogdeEntiteiten = async (
+  entityType: "diversion" | "update",
+  sindsIso: string,
+): Promise<Set<string>> => {
+  const client = requireDb();
+  const rows = await paginatedFetch<Pick<ActivityLogRow, "id" | "entity_id">>((from, to) =>
+    client
+      .from("activity_log")
+      .select("id, entity_id")
+      .eq("entity_type", entityType)
+      .gte("created_at", sindsIso)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+  return new Set(rows.map((r) => String(r.entity_id ?? "")).filter(Boolean));
+};
+
+/** Id's van omleidingen of updates waarvan het log zegt dat ze via het
+ *  portaal verwijderd zijn (`actie` = "Omleiding verwijderd" of "Update
+ *  verwijderd"). De opruiming gooit alleen bestanden weg met zo'n bewijs:
+ *  een bestand van onbekende herkomst blijft staan. */
+export const verwijderdeEntiteiten = async (
+  entityType: "diversion" | "update",
+  actie: string,
+): Promise<Set<string>> => {
+  const client = requireDb();
+  const rows = await paginatedFetch<Pick<ActivityLogRow, "id" | "entity_id">>((from, to) =>
+    client
+      .from("activity_log")
+      .select("id, entity_id")
+      .eq("entity_type", entityType)
+      .eq("action", actie)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+  return new Set(rows.map((r) => String(r.entity_id ?? "")).filter(Boolean));
 };
 
 export const getDiversionsData = async () => {
@@ -1793,8 +1905,8 @@ export const saveDiversionsData = async (data: any) => {
   if (idsToDelete.length > 0) {
     const { error: deleteError } = await client.from('diversions').delete().in('id', idsToDelete);
     if (deleteError) throw deleteError;
-    // Best-effort: also remove the PDFs from Storage (pas ná geslaagde delete).
-    await removeDiversionPdfs(idsToDelete);
+    // De PDF's blijven bewust staan: "Ongedaan maken" moet ze kunnen
+    // terughangen. De nachtcron ruimt ze op (api/_lib/bijlagenOpruim.ts).
   }
 };
 
@@ -2583,16 +2695,15 @@ export const zetUpdateBijlagen = async (
   if (error) throw error;
 };
 
-/** Bestanden van verwijderde updates opruimen; best-effort, zoals bij de
- *  omleidingen: een achtergebleven PDF mag een delete niet laten mislukken. */
-export const verwijderUpdateBijlagen = async (updateIds: string[]): Promise<void> => {
-  if (!supabaseAdmin || updateIds.length === 0) return;
-  const paden = updateIds.flatMap((id) => [updateBijlagePad(id, 1), updateBijlagePad(id, 2)]);
-  const { error } = await supabaseAdmin.storage.from(UPDATE_BIJLAGEN_BUCKET).remove(paden);
-  // "not found" is de normale uitkomst voor een update zonder bijlage.
-  if (error && !/not.?found/i.test(String(error.message || ""))) {
-    console.warn("Opruimen van update-bijlagen is mislukt:", error);
-  }
+/** Welke PDF's van deze update hangen er nu echt in Storage? Voor het
+ *  herstel na "Ongedaan maken", zoals bestaandeDiversionBijlagen. */
+export const bestaandeUpdateBijlagen = async (updateId: string): Promise<Array<{ slot: number; sizeBytes?: number }>> => {
+  const bestanden = await bestandenVanRecord(UPDATE_BIJLAGEN_BUCKET, updateId);
+  const nummers = Array.from({ length: MAX_UPDATE_BIJLAGEN }, (_, i) => i + 1);
+  return nummers.flatMap((slot) => {
+    const gevonden = bestanden.get(updateBijlagePad(updateId, slot));
+    return gevonden ? [{ slot, ...gevonden }] : [];
+  });
 };
 
 export const saveUpdatesData = async (data: any) => {

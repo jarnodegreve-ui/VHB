@@ -31,6 +31,7 @@ import { addDagenIso, brusselsDay, DAG_DMJ, isDigestRuis, SWAP_UITVOERING_ACTIES
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesData, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "../storage.js";
 import { viewUrl } from "./collectie.js";
+import { ruimWeesBijlagenOp } from "./bijlagenOpruim.js";
 
 // --- Back-up: alle collecties als één JSON ---
 const buildBackupPayload = async () => {
@@ -266,8 +267,17 @@ export function mountCronRoutes(app: express.Express) {
         console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d), ${pruned.mailLog} mail-logregels (>${logDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
       }
 
-      await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.meldingen} meldingen + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
-      res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned, integrity });
+      // Bijlagen van verwijderde omleidingen en updates: pas nu opruimen, een
+      // dag na het verdwijnen van het record, zodat "Ongedaan maken" de PDF's
+      // kon terughangen (api/_lib/bijlagenOpruim.ts). Gooit nooit.
+      const bijlagen = await ruimWeesBijlagenOp();
+      const bijlagenTotaal = bijlagen.omleidingen + bijlagen.updates;
+      if (bijlagenTotaal > 0 || bijlagen.overgeslagen.length > 0) {
+        console.log(`[cron-backup] bijlagen: ${bijlagen.omleidingen} van omleidingen en ${bijlagen.updates} van updates opgeruimd${bijlagen.overgeslagen.length ? `, overgeslagen: ${bijlagen.overgeslagen.join("; ")}` : ""}.`);
+      }
+
+      await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.meldingen} meldingen + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${bijlagenTotaal ? `, ${bijlagenTotaal} verweesde bijlagen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
+      res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned, bijlagen, integrity });
     } catch (err: any) {
       console.error("[cron-backup] mislukt:", err?.message || err);
       console.error("Back-up mislukt", err);
