@@ -19,8 +19,9 @@ export type DienstStatistiek = {
  *  enkel deel geldig is (dan telt de dienst niet mee).
  *
  *  De duur van een deel is de gedeelde `deelMinuten` (Jarno 29-09): 22:00 tot
- *  06:00 telt als 8 uur, een deel met gelijke begin- en eindtijd is ongeldig
- *  en telt niet mee. Keuren blijft strikt (`parseHHMMStrikt`, zoals de
+ *  06:00 telt als 8 uur, een deel zonder venster (gelijke begin- en
+ *  eindtijd, of een einde dat ook na +24 u niet na de start ligt) is
+ *  ongeldig en telt niet mee. Keuren blijft strikt (`parseHHMMStrikt`, zoals de
  *  planningsopbouw): een tijd met seconden maakt geen geldig deel. */
 export function dienstMinuten(s: Service): number | null {
   const delen: Array<[string | undefined, string | undefined]> = [

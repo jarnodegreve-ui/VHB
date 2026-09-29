@@ -17,8 +17,9 @@
  * eindigt dus om 30:00 en is op haar eigen dienstdag nooit gereden (vroeger
  * vanaf 06:00 's ochtends, 16 uur voor ze begon), 16:00 tot 00:00 eindigt om
  * 24:00 (vroeger de hele dag gereden). Busvak-notatie verandert niet. Een
- * deel met gelijke begin- en eindtijd is ongeldig en telt, zoals vroeger,
- * alleen met zijn eindtijd; ook een deel zonder leesbare begintijd.
+ * deel zonder venster (gelijke begin- en eindtijd, of een einde dat ook na
+ * +24 u niet na de start ligt) is ongeldig en telt, zoals vroeger, alleen met
+ * zijn eindtijd; ook een deel zonder leesbare begintijd.
  */
 import { deelVenster, parseHHMM } from './busvakTijd.js';
 

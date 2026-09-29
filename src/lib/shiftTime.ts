@@ -31,7 +31,8 @@ export { parseHHMM };
  * notatie (eindtijd ≥ 24:00, bv. "26:16") of impliciet (eindtijd vóór de
  * starttijd met gewone uren, bv. 22:00–06:00), en beide lopen door tot op de
  * dag na de dienstdatum. Start is inclusief, einde exclusief; ongeldige
- * tijden, ook gelijke begin- en eindtijd, tellen nooit mee.
+ * tijden, ook een deel zonder venster (gelijke begin- en eindtijd), tellen
+ * nooit mee.
  */
 export const isShiftActiveAt = (
   shift: { date: string; startTime: string; endTime: string },
@@ -39,8 +40,8 @@ export const isShiftActiveAt = (
 ): boolean => {
   // Alles in minuten t.o.v. middernacht van de díenstdag, met de regel van
   // het hele portaal (deelVenster): een einde vóór de start in gewone uren
-  // is +24u, busvak-uren ≥ 24 zijn al volgende-dag, gelijke tijden = geen
-  // venster.
+  // is +24u, busvak-uren ≥ 24 zijn al volgende-dag, en een einde dat dan
+  // nog niet na de start ligt (ook gelijke tijden) = geen venster.
   const venster = deelVenster(shift.startTime, shift.endTime);
   if (!venster) return false;
   const { start, end: endNorm } = venster;
@@ -159,7 +160,8 @@ export const formatStartsIn = (minuten: number): string => `over ${formatDuratio
 /**
  * Start/eind van een dienstblok in minuten t.o.v. middernacht van de
  * dienstdag, met de regel van deelVenster (shared/busvakTijd.ts): einde vóór
- * de start = impliciete nachtdienst (+24u), gelijke begin- en eindtijd =
+ * de start = impliciete nachtdienst (+24u), een deel zonder venster (gelijke
+ * begin- en eindtijd, of een einde dat ook na +24 u niet na de start ligt) =
  * ongeldig (null, het deel valt uit de tijdlijn en de balk zoals een deel
  * zonder leesbare tijden). Eén plek voor de regel die MijnDagView,
  * DashboardView en de dienstbalk vroeger elk zelf hadden (controle-ronde

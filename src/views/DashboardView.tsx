@@ -102,8 +102,8 @@ export function DashboardView({ notes = [],
   }));
   // Dienstbalk-delen in minuten (einde vóór de start = nachtdienst, +24u),
   // zelfde venster-regel als Mijn dag (shiftWindowMinutes); een deel met vuile
-  // tijden of met gelijke begin- en eindtijd (ongeldig, Jarno 29-09) valt weg
-  // uit de balk.
+  // tijden of zonder venster, zoals gelijke begin- en eindtijd (ongeldig,
+  // Jarno 29-09), valt weg uit de balk.
   const balkDelen = todayParts.flatMap((p) => {
     const venster = shiftWindowMinutes(p);
     return venster ? [{ ...venster, loopnr: p.loopnr }] : [];

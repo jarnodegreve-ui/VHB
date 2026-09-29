@@ -186,8 +186,9 @@ export const veilig = (raw: string): string =>
 // bij elke koude start laden.
 
 /** Som van de segmentduren van één dienst in minuten, per deel `deelMinuten`
- *  (shared/busvakTijd.ts: einde vóór de start = nacht, +24u; gelijke begin- en
- *  eindtijd = ongeldig, telt niet mee); null zonder één geldig deel. De
+ *  (shared/busvakTijd.ts: einde vóór de start = nacht, +24u; een deel zonder
+ *  venster, zoals gelijke begin- en eindtijd, is ongeldig en telt niet mee);
+ *  null zonder één geldig deel. De
  *  aanroepers tellen dan 0 minuten, de dienst telt wel als dienst. */
 export const dienstMinuten = (s: {
   startTime?: string | null; endTime?: string | null;

@@ -29,7 +29,8 @@ export type TijdRij = { startTime: string; endTime: string };
  * Elk deel volgt `deelVenster` (shared/busvakTijd.ts, de regel van het hele
  * portaal): een einde vóór de start in gewone uren (22:00–06:00) is over
  * middernacht, busvak-uren gelden zoals ze er staan. Rijen met kapotte tijden
- * of met gelijke begin- en eindtijd (ongeldig, Jarno 29-09) tellen niet mee;
+ * of zonder venster (gelijke begin- en eindtijd, of een einde dat ook na
+ * +24 u niet na de start ligt: ongeldig, Jarno 29-09) tellen niet mee;
  * null = geen bruikbare tijden, en dan legt de rustregel niets op ("weet ik
  * niet", nooit een verzonnen etmaal).
  */
