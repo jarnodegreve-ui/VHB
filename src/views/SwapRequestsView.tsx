@@ -24,7 +24,7 @@ import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
 import { maandagVan } from '../lib/roosterUren';
 import { isoWeekOf } from '../lib/week';
-import { formatDateHuman, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
+import { formatDateHuman, formatDatumDMJ, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { sorteerRuilen } from '../lib/ruilVolgorde';
 import { canRespondToSwap } from '../lib/authorization';
@@ -1530,7 +1530,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         onClose={() => setHistorySwap(null)}
         entityType="swap"
         entityId={historySwap?.id ?? ''}
-        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'}, ${shifts.find((s) => s.id === historySwap.shiftId)?.date ?? ''}` : undefined}
+        // Naam en dag van de dienst, dd/mm/jjjj. De dag komt van de ruil zelf
+        // (shiftInfoFor), zoals in de rij waar je op tikte; zonder dag alleen de naam.
+        title={historySwap ? [naamVan(historySwap.requesterId) || 'Onbekend', formatDatumDMJ(shiftInfoFor(historySwap).date)].filter(Boolean).join(', ') : undefined}
       />
     </PageShell>
   );
