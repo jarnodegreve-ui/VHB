@@ -4,7 +4,10 @@ const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
 vi.mock('./api', () => ({ apiFetch: apiFetchMock }));
 
 import { bijlageVersie } from './bijlageCache';
-import { BijlageWeg, LINK_MARGE_MS, haalVerseBijlage, isPdf, laadBijlage, linkVerlooptOp, linkVerlopen, type BijlageBron } from './bijlageLaden';
+import {
+  BijlageWeg, LINK_MARGE_MS, bronVanDocument, haalVerseBijlage, isPdf, laadBijlage, linkVerlooptOp, linkVerlopen, magBewaren,
+  type BijlageBron, type DocumentBron, type LaadBron,
+} from './bijlageLaden';
 
 const NU = Date.parse('2026-09-29T08:00:00Z');
 const OPSLAG = 'https://x.supabase.co/storage/v1/object/sign/diversions/o-1-1.pdf';
@@ -169,5 +172,123 @@ describe('bijlageLaden: een verse link uit de lijst', () => {
     expect(await haalVerseBijlage({ soort: 'omleiding', recordId: 'o-1', slot: 1 })).toEqual({ status: 'onbekend' });
     apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     expect(await haalVerseBijlage({ soort: 'omleiding', recordId: 'o-1', slot: 1 })).toEqual({ status: 'onbekend' });
+  });
+});
+
+// --- Persoonlijke documenten (29-09): in de app, nooit op het toestel ---
+
+const DOC_OPSLAG = 'https://x.supabase.co/storage/v1/object/sign/user-documents/c-1/3f2a-loonbrief.pdf';
+const docLink = (verlooptOp: number, merk = 'a') => {
+  const deel = (o: unknown) => btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${DOC_OPSLAG}?token=${deel({ alg: 'HS256' })}.${deel({ url: 'user-documents/c-1/3f2a-loonbrief.pdf', exp: Math.floor(verlooptOp / 1000), merk })}.handtekening`;
+};
+/** De documentlink leeft 15 minuten (DOCUMENT_URL_TTL_SEC op de server). */
+const DOC_GELDIG = docLink(NU + 14 * 60_000);
+const DOC_VERLOPEN = docLink(NU - 60_000);
+const DOC_VERS = docLink(NU + 15 * 60_000, 'vers');
+const loonbrief = (url: string, lijst = '/api/documents'): DocumentBron =>
+  bronVanDocument({ id: 'doc-1', filename: 'Loonbrief september.pdf', sizeBytes: 3000, url }, lijst);
+
+describe('bijlageLaden: persoonlijk document, de modus zonder bewaren', () => {
+  const lees = vi.fn();
+  const bewaar = vi.fn();
+  const vers = vi.fn();
+  const net = vi.fn();
+  const deps = { lees, bewaar, vers, fetch: net as unknown as typeof fetch, nu: () => NU };
+  const antwoord = (b: Uint8Array, status = 200) => new Response(b, { status, headers: { 'Cache-Control': 'max-age=3600' } });
+
+  beforeEach(() => {
+    for (const m of [lees, bewaar, vers, net]) m.mockReset();
+    // Stond er ooit een kopie, dan mag die nog altijd niet gelezen worden.
+    lees.mockResolvedValue(pdf('van het toestel'));
+    bewaar.mockResolvedValue(true);
+    vers.mockResolvedValue({ status: 'onbekend' });
+  });
+
+  it('leest niet van en bewaart niet op het toestel, en haalt met no-store; een bijlage doet dat wel, zoals voorheen', async () => {
+    net.mockImplementation(async () => antwoord(pdf('server')));
+    const uit = await laadBijlage(loonbrief(DOC_GELDIG), undefined, deps);
+    expect(tekst(uit.bytes)).toContain('server');
+    expect(uit).toMatchObject({ bewaard: false, sleutel: null, url: DOC_GELDIG });
+    expect(lees).not.toHaveBeenCalled();
+    expect(bewaar).not.toHaveBeenCalled();
+    expect(net).toHaveBeenCalledExactlyOnceWith(DOC_GELDIG, { signal: undefined, cache: 'no-store' });
+
+    // De modus hoort bij de bron: een bijlage van een omleiding komt nog
+    // altijd van het toestel en haalt zonder no-store.
+    lees.mockResolvedValueOnce(null);
+    net.mockClear();
+    await laadBijlage(bron(GELDIG), undefined, deps);
+    expect(lees).toHaveBeenCalledTimes(1);
+    expect(net).toHaveBeenCalledExactlyOnceWith(GELDIG, { signal: undefined });
+    expect(bewaar).toHaveBeenCalledTimes(1);
+  });
+
+  it('ook als iemand de modus vergeet (typecheck omzeild), blijft een persoonlijk document van het toestel weg', async () => {
+    net.mockResolvedValue(antwoord(pdf()));
+    const zonderModus = { soort: 'document', recordId: 'doc-1', lijst: '/api/documents', filename: 'Loonbrief september.pdf', url: DOC_GELDIG } as unknown as LaadBron;
+    const uit = await laadBijlage(zonderModus, undefined, deps);
+    expect(uit.bewaard).toBe(false);
+    expect(lees).not.toHaveBeenCalled();
+    expect(bewaar).not.toHaveBeenCalled();
+    expect(net.mock.calls[0][1]).toEqual({ signal: undefined, cache: 'no-store' });
+  });
+
+  it('de modus is verplicht: een DocumentBron zonder `bewaren: false` is een typefout', () => {
+    // @ts-expect-error: zonder `bewaren: false` is het geen DocumentBron.
+    const zonder: DocumentBron = { soort: 'document', recordId: 'doc-1', lijst: '/api/documents', filename: 'a.pdf', url: DOC_GELDIG };
+    // @ts-expect-error: een persoonlijk document kent geen `bewaren: true`.
+    const metBewaren: DocumentBron = { soort: 'document', bewaren: true, recordId: 'doc-1', lijst: '/api/documents', filename: 'a.pdf', url: DOC_GELDIG };
+    expect(magBewaren(zonder)).toBe(false);
+    expect(magBewaren(metBewaren)).toBe(false);
+    expect(loonbrief(DOC_GELDIG).bewaren).toBe(false);
+    expect(magBewaren(loonbrief(DOC_GELDIG))).toBe(false);
+    expect(magBewaren(bron(GELDIG))).toBe(true);
+  });
+
+  it('een verlopen link: eerst een verse uit de documentenlijst, de oude gaat nooit naar de opslag', async () => {
+    vers.mockResolvedValue({ status: 'vers', bron: loonbrief(DOC_VERS) });
+    net.mockResolvedValue(antwoord(pdf()));
+    const uit = await laadBijlage(loonbrief(DOC_VERLOPEN), undefined, deps);
+    expect(vers).toHaveBeenCalledExactlyOnceWith(loonbrief(DOC_VERLOPEN), undefined);
+    expect(net.mock.calls).toEqual([[DOC_VERS, { signal: undefined, cache: 'no-store' }]]);
+    expect(uit).toMatchObject({ url: DOC_VERS, bewaard: false, sleutel: null });
+    expect(bewaar).not.toHaveBeenCalled();
+  });
+
+  it('een fout van de opslag: één verse link en opnieuw; lukt ook dat niet, dan een fout en niets bewaard', async () => {
+    net.mockResolvedValue(antwoord(new TextEncoder().encode('{"error":"InvalidJWT"}'), 400));
+    vers.mockResolvedValue({ status: 'vers', bron: loonbrief(DOC_VERS) });
+    await expect(laadBijlage(loonbrief(DOC_GELDIG), undefined, deps)).rejects.toThrow('Bijlage ophalen mislukte.');
+    expect(net.mock.calls.map((c) => c[0])).toEqual([DOC_GELDIG, DOC_VERS]);
+    expect(bewaar).not.toHaveBeenCalled();
+    // Staat het document niet meer in de lijst, dan is het weg.
+    vers.mockResolvedValue({ status: 'weg' });
+    await expect(laadBijlage(loonbrief(DOC_GELDIG), undefined, deps)).rejects.toBeInstanceOf(BijlageWeg);
+  });
+
+  it('een document zonder link (niet te ondertekenen) haalt eerst een verse, zonder een lege aanvraag', async () => {
+    vers.mockResolvedValue({ status: 'vers', bron: loonbrief(DOC_VERS) });
+    net.mockResolvedValue(antwoord(pdf()));
+    await laadBijlage(bronVanDocument({ id: 'doc-1', filename: 'Loonbrief september.pdf', url: null }, '/api/documents'), undefined, deps);
+    expect(net.mock.calls.map((c) => c[0])).toEqual([DOC_VERS]);
+  });
+});
+
+describe('bijlageLaden: een verse link voor een persoonlijk document', () => {
+  const json = (data: unknown, init: ResponseInit = {}) => new Response(JSON.stringify(data), init);
+  beforeEach(() => apiFetchMock.mockReset());
+
+  it('komt uit de eigen lijst of die van één gebruiker, zonder cache; niet in de lijst of zonder link = weg', async () => {
+    apiFetchMock.mockImplementation(async () => json([
+      { id: 'doc-1', userId: 'c-1', filename: 'Loonbrief september.pdf', sizeBytes: 3000, url: DOC_VERS, storagePath: 'c-1/3f2a-loonbrief.pdf' },
+      { id: 'doc-2', userId: 'c-1', filename: 'Attest.pdf', url: null },
+    ]));
+    const uit = await haalVerseBijlage({ soort: 'document', bewaren: false, recordId: 'doc-1', lijst: '/api/documents?userId=c-1' });
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/documents?userId=c-1', { cache: 'no-store', signal: undefined });
+    expect(uit).toEqual({ status: 'vers', bron: { soort: 'document', bewaren: false, recordId: 'doc-1', lijst: '/api/documents?userId=c-1', filename: 'Loonbrief september.pdf', sizeBytes: 3000, url: DOC_VERS } });
+    expect(await haalVerseBijlage({ soort: 'document', bewaren: false, recordId: 'doc-9', lijst: '/api/documents' })).toEqual({ status: 'weg' });
+    expect(await haalVerseBijlage({ soort: 'document', bewaren: false, recordId: 'doc-2', lijst: '/api/documents' })).toEqual({ status: 'weg' });
+    expect(apiFetchMock).toHaveBeenLastCalledWith('/api/documents', { cache: 'no-store', signal: undefined });
   });
 });
