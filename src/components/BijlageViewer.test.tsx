@@ -203,6 +203,29 @@ describe('BijlageViewer: een bijlage in de app', () => {
     expect(screen.queryByText('Bijlage kon niet geladen worden')).toBeNull();
   });
 
+  it('het uploadmoment van de server gaat mee naar de lader; een vervanging met dezelfde naam en grootte laadt opnieuw', async () => {
+    const VROEG = '2026-09-29T08:00:00.000Z';
+    const LAAT = '2026-09-29T09:30:00.000Z';
+    const { rerender } = render(<BijlageViewer soort="omleiding" recordId="o-1" bijlage={{ ...PLAN, uploadedAt: VROEG }} onClose={() => {}} />);
+    await screen.findByText('3 pagina’s');
+    // De versie in de cache kent het uploadmoment (bijlageVersie).
+    expect(laadBijlageMock).toHaveBeenCalledWith(
+      { soort: 'omleiding', recordId: 'o-1', slot: 1, filename: PLAN.filename, sizeBytes: 1200, uploadedAt: VROEG, url: LINK },
+      expect.any(AbortSignal),
+    );
+    // Alleen een nieuw token: hetzelfde bestand.
+    rerender(<BijlageViewer soort="omleiding" recordId="o-1" bijlage={{ ...PLAN, uploadedAt: VROEG, url: VERS }} onClose={() => {}} />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(laadBijlageMock).toHaveBeenCalledTimes(1);
+    // Zelfde plaats, naam en grootte, maar een later uploadmoment: vervangen.
+    rerender(<BijlageViewer soort="omleiding" recordId="o-1" bijlage={{ ...PLAN, uploadedAt: LAAT, url: VERS }} onClose={() => {}} />);
+    await waitFor(() => expect(laadBijlageMock).toHaveBeenCalledTimes(2));
+    expect(laadBijlageMock).toHaveBeenLastCalledWith(
+      { soort: 'omleiding', recordId: 'o-1', slot: 1, filename: PLAN.filename, sizeBytes: 1200, uploadedAt: LAAT, url: VERS },
+      expect.any(AbortSignal),
+    );
+  });
+
   it('een nieuw token in de lijst laadt de open bijlage niet opnieuw', async () => {
     const { rerender } = render(<BijlageViewer soort="omleiding" recordId="o-1" bijlage={PLAN} onClose={() => {}} />);
     await screen.findByText('3 pagina’s');

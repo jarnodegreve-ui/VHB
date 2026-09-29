@@ -133,8 +133,9 @@ export function usePdfBijlagen({ recordPad, bijlagen, max, onGewijzigd, zonderRe
   return { bestandRef, bezig, kies, verwijder };
 }
 
-/** Een rij in de lijst: opgeslagen (met slot en url) of nog te uploaden. */
-export type BijlageRij = Pick<PdfBijlage, 'filename' | 'sizeBytes' | 'url'> & { sleutel: string; slot?: number; wachtend?: boolean };
+/** Een rij in de lijst: opgeslagen (met slot, url en uploadmoment) of nog te
+ *  uploaden. */
+export type BijlageRij = Pick<PdfBijlage, 'filename' | 'sizeBytes' | 'uploadedAt' | 'url'> & { sleutel: string; slot?: number; wachtend?: boolean };
 
 export function PdfBijlagenLijst({ rijen, bezig, onVerwijder, bron }: {
   rijen: BijlageRij[];
@@ -162,7 +163,7 @@ export function PdfBijlagenLijst({ rijen, bezig, onVerwijder, bron }: {
             </span>
           </span>
           {!b.wachtend && (
-            <Button variant="ghost" size="sm" disabled={!b.url || !bron || b.slot === undefined} onClick={() => b.slot !== undefined && setOpen({ slot: b.slot, filename: b.filename, sizeBytes: b.sizeBytes, url: b.url })}>
+            <Button variant="ghost" size="sm" disabled={!b.url || !bron || b.slot === undefined} onClick={() => b.slot !== undefined && setOpen({ slot: b.slot, filename: b.filename, sizeBytes: b.sizeBytes, uploadedAt: b.uploadedAt, url: b.url })}>
               Openen
             </Button>
           )}

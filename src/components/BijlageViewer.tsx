@@ -9,7 +9,7 @@ import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
 import { Fout, GeenBereik, NietGevonden } from './illustraties';
 import { vergeetBijlage, type BijlageSoort } from '../lib/bijlageCache';
-import { BijlageWeg, haalVerseBijlage, laadBijlage, linkVerlopen } from '../lib/bijlageLaden';
+import { BijlageWeg, bronVanBijlage, haalVerseBijlage, laadBijlage, linkVerlopen } from '../lib/bijlageLaden';
 import { aantal } from '../lib/format';
 import { openPdfInNewTab } from '../lib/ui';
 import { useOnline } from '../lib/useOnline';
@@ -75,12 +75,14 @@ export default function BijlageViewer({ soort, recordId, bijlage, onClose }: Bij
   const url = b?.url ?? '';
   const filename = b?.filename ?? '';
   const sizeBytes = b?.sizeBytes;
+  const uploadedAt = b?.uploadedAt;
 
   // Bytes (toestel of server) → pdfjs. Sluiten breekt af via het
   // AbortSignal; een document dat pas ná het sluiten binnenkomt wordt meteen
   // vernietigd, anders blijft het in de pdfjs-worker hangen. De link zelf
   // staat bewust niet in de afhankelijkheden: elke lijst die binnenkomt
-  // draagt een nieuw token, en dat is geen reden om opnieuw te laden.
+  // draagt een nieuw token, en dat is geen reden om opnieuw te laden. Een
+  // ander uploadmoment op dezelfde plaats is wel een ander bestand.
   useEffect(() => {
     if (!open || !url) return;
     const afbreker = new AbortController();
@@ -89,7 +91,7 @@ export default function BijlageViewer({ soort, recordId, bijlage, onClose }: Bij
     externUrl.current = url;
     setStaat({ soort: 'laden' });
     (async () => {
-      const bron = { soort, recordId, slot, filename, sizeBytes, url };
+      const bron = bronVanBijlage(soort, recordId, { slot, filename, sizeBytes, uploadedAt, url });
       const [pdfjs, geladen] = await Promise.all([laadPdfjs(), laadBijlage(bron, signal)]);
       if (signal.aborted) return;
       externUrl.current = geladen.url;
@@ -129,7 +131,7 @@ export default function BijlageViewer({ soort, recordId, bijlage, onClose }: Bij
       doc = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, soort, recordId, slot, filename, sizeBytes, poging]);
+  }, [open, soort, recordId, slot, filename, sizeBytes, uploadedAt, poging]);
 
   // Zelfde stille aanduiding als bij het ritblad: alleen zonder bereik.
   const opgeslagenLabel = !online && staat.soort === 'klaar' && staat.bewaard ? ' · opgeslagen exemplaar' : '';

@@ -27,6 +27,8 @@ vi.mock('./BijlageViewer', () => ({
 import { OmleidingDetail } from './OmleidingDetail';
 import { UpdateBijlagenLezen } from './UpdateBijlagenLezen';
 import { PdfBijlagenLijst } from './PdfBijlagen';
+import { OmleidingBijlagen } from './OmleidingBijlagen';
+import { UpdateBijlagen } from './UpdateBijlagen';
 import type { Diversion, Update } from '../types';
 
 const PLAN = { slot: 1, filename: 'plan.pdf', sizeBytes: 1200, url: 'https://opslag.test/o-1-1.pdf?token=a' };
@@ -93,5 +95,30 @@ describe('een bijlage openen', () => {
     cleanup();
     render(<PdfBijlagenLijst rijen={[{ sleutel: 'wacht-0', filename: 'nieuw.pdf', sizeBytes: 10, wachtend: true }]} bron={{ soort: 'omleiding', recordId: 'o-1' }} bezig={false} onVerwijder={() => {}} />);
     expect(screen.queryByRole('button', { name: 'Openen' })).toBeNull();
+  });
+
+  // Uploadmoment (29-09): wat de server meegeeft, bereikt de viewer ook vanuit
+  // het beheer, anders ziet de cache een vervanging met dezelfde naam en
+  // grootte als hetzelfde bestand.
+  it('beheer: het uploadmoment van de server gaat mee naar de viewer, bij omleidingen en updates', async () => {
+    const MOMENT = '2026-09-29T08:00:00.000Z';
+    const metMoment = { ...HALTES, uploadedAt: MOMENT };
+    render(<OmleidingBijlagen diversion={{ ...OMLEIDING, bijlagen: [PLAN, metMoment] }} wachtrij={[]} onWachtrij={() => {}} onGewijzigd={() => {}} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[1]);
+    expect(await screen.findByRole('dialog', { name: 'haltes.pdf' })).toBeTruthy();
+    expect(laatste()).toMatchObject({ soort: 'omleiding', recordId: 'o-1', bijlage: metMoment });
+    // Een bijlage zonder uploadmoment (van vóór 29-09) blijft gewoon openen.
+    fireEvent.click(screen.getByRole('button', { name: 'Terug' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0]);
+    expect(await screen.findByRole('dialog', { name: 'plan.pdf' })).toBeTruthy();
+    expect(laatste().bijlage).toEqual({ ...PLAN, uploadedAt: undefined });
+
+    cleanup();
+    const mededeling = { ...UPDATE.bijlagen![0], uploadedAt: MOMENT };
+    render(<UpdateBijlagen update={{ ...UPDATE, bijlagen: [mededeling] }} tonen={false} onTonenChange={() => {}} onGewijzigd={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Openen' }));
+    expect(await screen.findByRole('dialog', { name: 'mededeling.pdf' })).toBeTruthy();
+    expect(laatste()).toMatchObject({ soort: 'update', recordId: 'u-1', bijlage: mededeling });
+    expect(openPdfMock).not.toHaveBeenCalled();
   });
 });

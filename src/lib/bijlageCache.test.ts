@@ -4,6 +4,7 @@ import {
   bewaarBijlage, bijlageSleutel, bijlageVersie, leesBijlage, teSnoeien, vergeetBijlage,
 } from './bijlageCache';
 import { wisOfflineCaches } from './ui';
+import { bronVanBijlage } from './bijlageLaden';
 
 /** Nep-Cache Storage met meerdere caches, zoals de browser ze heeft. */
 function nepCaches() {
@@ -120,6 +121,26 @@ describe('bijlageCache: lezen en bewaren', () => {
     await bewaarBijlage(PLAN, 'omleiding', nieuw, bytes(5, 2));
     const terug = await leesBijlage(PLAN, nieuw);
     expect(terug && [...terug]).toEqual([2, 2, 2, 2, 2]);
+  });
+
+  // Uploadmoment (29-09): de server zet het bij elke upload en de viewer geeft
+  // het door (bronVanBijlage). Een vervanging met exact dezelfde naam en
+  // grootte op dezelfde plaats was voor de cache vroeger hetzelfde bestand.
+  it('een vervanging met dezelfde naam en grootte (ander uploadmoment) toont nooit het vorige bestand', async () => {
+    const element = { slot: 1, filename: 'plan.pdf', sizeBytes: 4 };
+    const oud = bronVanBijlage('omleiding', 'o-1', { ...element, uploadedAt: '2026-09-29T08:00:00.000Z', url: `${PLAN}?token=gisteren` });
+    const nieuw = bronVanBijlage('omleiding', 'o-1', { ...element, uploadedAt: '2026-09-29T09:30:00.000Z', url: `${PLAN}?token=vandaag` });
+    expect(bijlageSleutel(nieuw.url)).toBe(bijlageSleutel(oud.url));
+    expect(bijlageVersie(nieuw)).not.toBe(bijlageVersie(oud));
+    await bewaarBijlage(bijlageSleutel(oud.url)!, 'omleiding', bijlageVersie(oud), bytes(4, 1));
+    // De nieuwe versie leest het oude bestand niet, en het oude gaat weg.
+    expect(await leesBijlage(bijlageSleutel(nieuw.url)!, bijlageVersie(nieuw))).toBeNull();
+    expect(nep.opslag.get(BIJLAGEN_CACHE)!.has(PLAN)).toBe(false);
+    await bewaarBijlage(bijlageSleutel(nieuw.url)!, 'omleiding', bijlageVersie(nieuw), bytes(4, 2));
+    const terug = await leesBijlage(bijlageSleutel(nieuw.url)!, bijlageVersie(nieuw));
+    expect(terug && [...terug]).toEqual([2, 2, 2, 2]);
+    // Een bijlage zonder uploadmoment (van vóór 29-09) houdt haar vaste versie.
+    expect(bijlageVersie(bronVanBijlage('omleiding', 'o-1', { ...element, url: PLAN }))).toBe('plan.pdf|4|');
   });
 
   it('een gewone heropening met een nieuw token is dezelfde bijlage', async () => {

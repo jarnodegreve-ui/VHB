@@ -30,6 +30,27 @@ export type BijlageBron = {
   url: string;
 };
 
+/**
+ * De bron voor de lader, uit een bijlage zoals de server ze in de lijst geeft.
+ * Alles wat de versie in de cache bepaalt gaat mee (bestandsnaam, grootte en
+ * sinds 29-09 het uploadmoment van de server), zodat een vervanging met
+ * dezelfde naam en grootte nooit het vorige bestand van het toestel toont.
+ * Een bijlage zonder uploadmoment (van vóór 29-09) houdt haar vaste versie.
+ */
+export const bronVanBijlage = (
+  soort: BijlageSoort,
+  recordId: string,
+  b: { slot: number; filename: string; sizeBytes?: number; uploadedAt?: string; url?: string },
+): BijlageBron => ({
+  soort,
+  recordId,
+  slot: b.slot,
+  filename: b.filename,
+  sizeBytes: b.sizeBytes,
+  uploadedAt: b.uploadedAt,
+  url: b.url ?? '',
+});
+
 export type GeladenBijlage = {
   bytes: Uint8Array;
   /** Staat het bestand (nu) op het toestel? */
