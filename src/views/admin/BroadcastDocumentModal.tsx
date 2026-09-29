@@ -9,6 +9,7 @@ import { Formulier } from '../../components/Formulier';
 import { useVeldfouten } from '../../lib/formulier';
 import { meldSchrijffout } from '../../lib/fouten';
 import { apiFetch } from '../../lib/api';
+import { leesAlsDataUrl } from '../../lib/dataUrl';
 
 const MAX_MB = 15;
 const ACCEPT = '.pdf,.png,.jpg,.jpeg';
@@ -31,12 +32,7 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
     if (!file) return;
     if (file.size > MAX_MB * 1024 * 1024) return fouten.zet({ bestand: `Bestand is te groot (max ${MAX_MB} MB).` });
     try {
-      const url = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(String(r.result));
-        r.onerror = () => reject(new Error('lezen mislukt'));
-        r.readAsDataURL(file);
-      });
+      const url = await leesAlsDataUrl(file);
       setFileName(file.name);
       setDataUrl(url);
       fouten.wisVeld('bestand');
