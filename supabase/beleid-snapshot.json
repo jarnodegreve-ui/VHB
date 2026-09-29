@@ -15,6 +15,14 @@
       "security_definer": true
     },
     {
+      "definitie": "CREATE OR REPLACE FUNCTION public.current_app_user_mfa_ok() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO '' AS $function$ select coalesce((select auth.jwt()) ->> 'aal', 'aal1') = 'aal2' or not exists ( select 1 from auth.mfa_factors f where f.user_id = (select auth.uid()) and f.status = 'verified' ) $function$",
+      "execute": [
+        "authenticated"
+      ],
+      "functie": "current_app_user_mfa_ok()",
+      "security_definer": true
+    },
+    {
       "definitie": "CREATE OR REPLACE FUNCTION public.current_app_user_role() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO '' AS $function$ select role from public.users where isactive and ( authid = (select auth.uid()) or (authid is null and lower(email) = lower((select auth.email()))) ) order by authid is null limit 1 $function$",
       "execute": [
         "authenticated"
@@ -58,12 +66,6 @@
   "grants": [
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "activity_log"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "activity_log"
@@ -106,12 +108,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "app_settings"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "app_settings"
@@ -151,12 +147,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "app_settings"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "chauffeur_ids"
     },
     {
       "grantable": false,
@@ -244,12 +234,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "client_errors"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "client_errors"
@@ -289,12 +273,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "client_errors"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "coverage_expectations"
     },
     {
       "grantable": false,
@@ -820,12 +798,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ocpi_cdrs"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "ocpi_cdrs"
@@ -865,12 +837,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "ocpi_cdrs"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ocpi_connectors"
     },
     {
       "grantable": false,
@@ -916,12 +882,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ocpi_dagpieken"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "ocpi_dagpieken"
@@ -961,12 +921,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "ocpi_dagpieken"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ocpi_evses"
     },
     {
       "grantable": false,
@@ -1012,12 +966,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ocpi_locations"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "ocpi_locations"
@@ -1057,12 +1005,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "ocpi_locations"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ocpi_power_snapshots"
     },
     {
       "grantable": false,
@@ -1108,12 +1050,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ocpi_registration"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "ocpi_registration"
@@ -1153,12 +1089,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "ocpi_registration"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ocpi_sessions"
     },
     {
       "grantable": false,
@@ -1204,12 +1134,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "planning"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "planning"
@@ -1249,12 +1173,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "planning"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "planning_codes"
     },
     {
       "grantable": false,
@@ -1300,12 +1218,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "planning_matrix_import_history"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "planning_matrix_import_history"
@@ -1348,12 +1260,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "planning_matrix_rows"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "planning_matrix_rows"
@@ -1393,12 +1299,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "planning_matrix_rows"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "planning_notes"
     },
     {
       "grantable": false,
@@ -1492,12 +1392,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "push_subscriptions"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "push_subscriptions"
@@ -1537,12 +1431,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "push_subscriptions"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "ritblaadje"
     },
     {
       "grantable": false,
@@ -1714,12 +1602,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "services"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "services"
@@ -1807,12 +1689,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "swaps"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "update_reads"
     },
     {
       "grantable": false,
@@ -1906,12 +1782,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "user_devices"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "user_devices"
@@ -1954,12 +1824,6 @@
     },
     {
       "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "user_documents"
-    },
-    {
-      "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
       "tabel": "user_documents"
@@ -1999,12 +1863,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "user_documents"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "user_expiries"
     },
     {
       "grantable": false,
@@ -2089,12 +1947,6 @@
       "grantee": "service_role",
       "privilege": "UPDATE",
       "tabel": "user_presence"
-    },
-    {
-      "grantable": false,
-      "grantee": "authenticated",
-      "privilege": "SELECT",
-      "tabel": "users"
     },
     {
       "grantable": false,
@@ -2353,18 +2205,6 @@
     {
       "cmd": "SELECT",
       "permissive": "PERMISSIVE",
-      "policy": "chauffeur_ids_staff_only",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "chauffeur_ids",
-      "using": "(( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text]))",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
       "policy": "diversions_read_authenticated",
       "rollen": [
         "authenticated"
@@ -2383,7 +2223,7 @@
       ],
       "schema": "public",
       "tabel": "leave",
-      "using": "((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) OR (userid = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
+      "using": "(((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) AND ( SELECT public.current_app_user_mfa_ok() AS current_app_user_mfa_ok)) OR (userid = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
       "with_check": null
     },
     {
@@ -2401,54 +2241,6 @@
     {
       "cmd": "SELECT",
       "permissive": "PERMISSIVE",
-      "policy": "planning_read_authenticated",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "planning",
-      "using": "((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) OR (\"driverId\" = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
-      "policy": "planning_codes_read_authenticated",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "planning_codes",
-      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
-      "policy": "planning_matrix_import_history_staff_only",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "planning_matrix_import_history",
-      "using": "(( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text]))",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
-      "policy": "planning_matrix_rows_staff_only",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "planning_matrix_rows",
-      "using": "(( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text]))",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
       "policy": "planning_version_read_authenticated",
       "rollen": [
         "authenticated"
@@ -2461,37 +2253,13 @@
     {
       "cmd": "SELECT",
       "permissive": "PERMISSIVE",
-      "policy": "Authenticated can read ritblaadje",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "ritblaadje",
-      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
-      "policy": "services_read_authenticated",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "services",
-      "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
       "policy": "swaps_read_involved_or_staff",
       "rollen": [
         "authenticated"
       ],
       "schema": "public",
       "tabel": "swaps",
-      "using": "((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) OR (requesterid = ( SELECT public.current_app_user_id() AS current_app_user_id)) OR (targetdriverid = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
+      "using": "(((( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])) AND ( SELECT public.current_app_user_mfa_ok() AS current_app_user_mfa_ok)) OR (requesterid = ( SELECT public.current_app_user_id() AS current_app_user_id)) OR (targetdriverid = ( SELECT public.current_app_user_id() AS current_app_user_id)))",
       "with_check": null
     },
     {
@@ -2504,18 +2272,6 @@
       "schema": "public",
       "tabel": "updates",
       "using": "( SELECT public.is_active_app_user() AS is_active_app_user)",
-      "with_check": null
-    },
-    {
-      "cmd": "SELECT",
-      "permissive": "PERMISSIVE",
-      "policy": "users_select_self_or_staff",
-      "rollen": [
-        "authenticated"
-      ],
-      "schema": "public",
-      "tabel": "users",
-      "using": "((isactive AND ((authid = ( SELECT auth.uid() AS uid)) OR ((authid IS NULL) AND (lower(email) = lower(( SELECT auth.email() AS email)))))) OR (( SELECT public.current_app_user_role() AS current_app_user_role) = ANY (ARRAY['planner'::text, 'admin'::text])))",
       "with_check": null
     },
     {

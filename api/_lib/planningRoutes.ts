@@ -20,29 +20,18 @@ import { berekenVerwachtingsCheck } from "../coverageRoutes.js";
 import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, matrixCodesForDate, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./matrixXlsx.js";
+import { leesMatrixUpload } from "./matrixUpload.js";
 import { buildPlanningFromMatrix, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { ruilAfwezigheidsFout } from "./ruilRegels.js";
 
-// Helper: decode de geüploade Excel-buffer en parse de praktijk-tab.
-const parseMatrixInput = async (body: any) => {
-  const xlsxBase64 = typeof body?.xlsxBase64 === "string" ? body.xlsxBase64 : "";
-  if (!xlsxBase64) {
-    throw new Error("Geen Excel-bestand meegegeven (verwacht xlsxBase64 in body).");
-  }
-  const cleaned = xlsxBase64.replace(/^data:[^;]+;base64,/, "");
-  const buffer = Buffer.from(cleaned, "base64");
-  if (buffer.length === 0) {
-    throw new Error("Excel-bestand is leeg.");
-  }
-  // Harde limiet vóór het parsen: een .xlsx is een zip en kan bij het
-  // uitpakken exploderen (zip-bomb → geheugen-DoS van de functie). Een echte
-  // praktijk-tab is enkele honderden kB; 5 MB is ruim.
-  if (buffer.length > 5 * 1024 * 1024) {
-    throw new Error("Excel-bestand is te groot (max 5 MB). Exporteer enkel de praktijk-tab.");
-  }
-  return parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
-};
+// Helper: haal de geüploade Excel uit de body (gzip of base64, met de
+// grenzen per soort, zie api/_lib/matrixUpload.ts) en parse de praktijk-tab.
+const parseMatrixInput = async (body: any) => parsePlanningMatrixXlsxMetWaarschuwingen(leesMatrixUpload(body));
+
+/** Een te groot bestand is een 413 (grens en grootte staan in de melding),
+ *  elke andere invoerfout een 400, zoals voorheen. */
+const invoerStatus = (err: any) => (err?.status === 413 ? 413 : 400);
 
 // Parse + optionele periode-selectie, gedeeld door import en preview. De
 // planner maakt de Excel vaak maanden vooruit, maar alleen het vaststaande
@@ -579,7 +568,7 @@ export function mountPlanningRoutes(app: express.Express) {
       try {
         ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = await parseMatrixInputMetPeriode(req.body));
       } catch (parseErr: any) {
-        return res.status(400).json({ error: parseErr.message });
+        return res.status(invoerStatus(parseErr)).json({ error: parseErr.message });
       }
       const importedDates = rows.map((row) => row.source_date).filter(Boolean);
       const startDate = importedDates[0] || null;
@@ -783,7 +772,7 @@ export function mountPlanningRoutes(app: express.Express) {
       try {
         ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = await parseMatrixInputMetPeriode(req.body));
       } catch (parseErr: any) {
-        return res.status(400).json({ error: parseErr.message });
+        return res.status(invoerStatus(parseErr)).json({ error: parseErr.message });
       }
       const importedDates = rows.map((row) => row.source_date).filter(Boolean);
       const startDate = importedDates[0] || null;

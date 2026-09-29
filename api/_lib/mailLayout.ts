@@ -6,7 +6,12 @@
  * Bewust ouderwets: tabellen en inline stijlen, want mailclients (Outlook,
  * Gmail-app) kennen geen flex, geen externe CSS en geen webfonts. Eén kolom
  * van 600 px, het echte logo als PNG (public/mail/vhb-logo.png, links
- * uitgelijnd), een rustige kop, een statuspuntje waar een uitkomst is, een
+ * uitgelijnd; op een witte tegel die in de afbeelding zelf zit, zie
+ * scripts/mail-logo.mjs: Gmail en Outlook keren in dark mode de achtergrond
+ * om maar laten afbeeldingen staan, dus een transparant logo met donkere
+ * letters verdween daar. De tegel heeft 10 px marge rond het logo; de cel
+ * eromheen heeft er 10 minder, zodat het logo in een lichte mail op dezelfde
+ * plek staat als vroeger), een rustige kop, een statuspuntje waar een uitkomst is, een
  * feitenlijst voor de kerngegevens, hoogstens één donkere knop, en een vaste
  * voet. Onderwerpen zijn zakelijk en zonder emoji (die zet Outlook als
  * vraagtekens en spamfilters wegen ze mee).
@@ -17,6 +22,11 @@
  * Alle teksten worden hier ge-escaped; wie bewust HTML wil (bv. een
  * <pre>-blok met een commando) gebruikt `html` in een alinea. Geen em dash
  * als zinsscheiding (CLAUDE.md), ook niet in de vaste teksten hier.
+ *
+ * Kleurenschema: de mail is licht ontworpen en zegt dat ook (`color-scheme`
+ * en `supported-color-schemes` = light), zodat clients die het respecteren
+ * (Apple Mail) hem niet zelf omkeren. Gmail en Outlook negeren dat; daar
+ * vangt de tegel achter het logo het op.
  */
 
 export const MAIL_KLEUR = {
@@ -69,8 +79,10 @@ export interface MailOpbouw {
   lijsten?: Array<{ kop?: string; items: string[] }>;
   /** Grijs blok met kop, bv. de reden van een afwijzing (regeleinden blijven). */
   blok?: { kop: string; tekst: string };
-  /** Eén knop, donker. */
-  knop?: { tekst: string; url: string };
+  /** Eén knop, donker. `actie`: de knop voert iets uit met een eenmalige link
+   *  (wachtwoord instellen, adres bevestigen) in plaats van een scherm van
+   *  het portaal te openen; de iPhone-regel eronder past zich daaraan aan. */
+  knop?: { tekst: string; url: string; actie?: boolean };
   /** Kleine tekst onder de knop. */
   voet?: string;
   /** Vaste voetregel; standaard "niet beantwoorden". `false` laat de regel weg. */
@@ -78,6 +90,22 @@ export interface MailOpbouw {
   /** Publieke basis-URL van het portaal (voor het logo en de voet). */
   portaalUrl: string;
 }
+
+/**
+ * Onder elke knop, in de stijl van de voetregels (nr. 16): op een iPhone
+ * opent een link uit de mail altijd in Safari, nooit in de app op het
+ * beginscherm, en daar is de gebruiker niet aangemeld. Technisch niet op te
+ * lossen, dus zeggen we het. Een knop met een eenmalige link (`actie`) moet
+ * wél gevolgd worden; daar zegt de regel waar je daarna verder gaat.
+ */
+export const IPHONE_REGEL = {
+  portaal: "Op iPhone open je beter de app op je beginscherm, daar ben je al aangemeld.",
+  actie: "Op iPhone opent deze knop in Safari, ga daarna verder in de app op je beginscherm.",
+} as const;
+const iphoneRegel = (knop: NonNullable<MailOpbouw["knop"]>) => (knop.actie ? IPHONE_REGEL.actie : IPHONE_REGEL.portaal);
+
+/** Binnenmarge van de knop; op de link én (voor Outlook) op de cel. */
+const KNOP_MARGE = "12px 22px";
 
 const P = (inhoud: string, extra = "") =>
   `<p style="margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: ${MAIL_KLEUR.tekst};${extra}">${inhoud}</p>`;
@@ -118,10 +146,16 @@ ${o.feiten.map((f) => `<tr>
   <p style="margin: 0; font-size: 14px; line-height: 1.6; color: ${MAIL_KLEUR.tekst}; white-space: pre-wrap;">${escapeMailHtml(o.blok.tekst)}</p>
 </td></tr></table>`
     : "";
+  // Outlook op Windows (Word-motor) negeert padding op een <a>: de knop was
+  // daar een donker vlak strak om de tekst. De marge staat daarom óók op de
+  // cel, als `mso-padding-alt` (alleen Outlook leest dat), met de achtergrond
+  // op de cel (`bgcolor` + stijl). Andere clients houden de padding op de
+  // link zelf, zodat de hele knop aanklikbaar blijft en er niets verschuift.
   const knop = o.knop
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 18px;"><tr><td style="background-color: ${MAIL_KLEUR.carbon}; border-radius: 8px;">
-  <a href="${escapeMailHtml(o.knop.url)}" style="display: inline-block; padding: 12px 22px; font-size: 14px; font-weight: 600; color: ${MAIL_KLEUR.wit}; text-decoration: none;">${escapeMailHtml(o.knop.tekst)}</a>
-</td></tr></table>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 18px;"><tr><td bgcolor="${MAIL_KLEUR.carbon}" style="background-color: ${MAIL_KLEUR.carbon}; border-radius: 8px; mso-padding-alt: ${KNOP_MARGE};">
+  <a href="${escapeMailHtml(o.knop.url)}" style="display: inline-block; padding: ${KNOP_MARGE}; mso-padding-alt: 0; font-size: 14px; font-weight: 600; color: ${MAIL_KLEUR.wit}; text-decoration: none;">${escapeMailHtml(o.knop.tekst)}</a>
+</td></tr></table>
+  <p style="margin: 0 0 6px; font-size: 12px; line-height: 1.6; color: ${MAIL_KLEUR.gedempt};">${escapeMailHtml(iphoneRegel(o.knop))}</p>`
     : "";
   const voet = o.voet ? `<p style="margin: 0 0 6px; font-size: 12px; line-height: 1.6; color: ${MAIL_KLEUR.gedempt};">${escapeMailHtml(o.voet)}</p>` : "";
   const voetregels = [
@@ -134,14 +168,16 @@ ${o.feiten.map((f) => `<tr>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
 <title>${escapeMailHtml(o.titel)}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: ${MAIL_KLEUR.achtergrond};">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: ${MAIL_KLEUR.achtergrond};">
 <tr><td align="center" style="padding: 24px 12px;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px; width: 100%; background-color: ${MAIL_KLEUR.wit}; border: 1px solid ${MAIL_KLEUR.hairline}; border-radius: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
-<tr><td style="padding: 22px 32px; border-bottom: 1px solid ${MAIL_KLEUR.hairline};">
-  <img src="${logo}" width="180" height="36" alt="VHB, Van Hoorebeke &amp; Zoon" style="display: block; width: 180px; height: auto; border: 0;">
+<tr><td style="padding: 12px 22px; border-bottom: 1px solid ${MAIL_KLEUR.hairline};">
+  <img src="${logo}" width="200" height="56" alt="VHB, Van Hoorebeke &amp; Zoon" style="display: block; width: 200px; height: auto; border: 0;">
 </td></tr>
 <tr><td style="padding: 28px 32px 20px;">
   ${o.kicker ? `<p style="margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: ${MAIL_KLEUR.gedempt};">${escapeMailHtml(o.kicker).toUpperCase()}</p>` : ""}
@@ -172,7 +208,7 @@ ${o.feiten.map((f) => `<tr>
     o.feiten && o.feiten.length > 0 ? o.feiten.map((f) => `${f.label}: ${f.waarde}`).join("\n") : "",
     ...lijsten.map(lijstTekst),
     o.blok ? `${o.blok.kop}: ${o.blok.tekst}` : "",
-    o.knop ? `${o.knop.tekst}: ${o.knop.url}` : "",
+    o.knop ? `${o.knop.tekst}: ${o.knop.url}\n${iphoneRegel(o.knop)}` : "",
     o.voet ?? "",
     [nietBeantwoorden ? "Automatisch bericht van het VHB Portaal, niet beantwoorden. Vragen? Contacteer de planning." : "", o.portaalUrl].filter(Boolean).join("\n"),
   ];

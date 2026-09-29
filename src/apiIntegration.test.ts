@@ -13,6 +13,10 @@ import type { AddressInfo } from 'node:net';
 // De versie waarmee de cache op het toestel een bijlage herkent: de bijlagen-
 // tests rekenen ermee op wat de route echt teruggeeft.
 import { bijlageSleutel, bijlageVersie } from './lib/bijlageCache';
+import { gzipSync } from 'node:zlib';
+// De client-hulp van de planning-upload (zuiver, geen app-imports): de tests
+// van de gzip-upload bouwen hun verzoek er precies zoals de browser mee.
+import { PLATFORM_GRENS_BYTES, matrixVerzoek, pakBestandIn } from './lib/bestandInpakken';
 
 // Dynamisch geladen ná de env-set hieronder (statische imports worden
 // gehoist en zouden rateLimit.ts met de default-limiet laden vóór
@@ -63,6 +67,11 @@ const mem = vi.hoisted(() => ({
   cronVolgorde: [] as string[],
   // Verzendlog van de mails (mail_log), nieuwste eerst.
   mailLog: [] as any[],
+  // Volgorde van schrijven naar het verzendlog en versturen (nr. 5).
+  mailLogVerloop: [] as string[],
+  mailLogStuk: false,
+  // Hartslagen van de crons (logCronHeartbeat), in volgorde.
+  hartslagen: [] as Array<{ naam: string; details: string }>,
   importHistory: [] as any[],
   snapshots: {} as Record<string, any>,
   historiekFaalt: false,
@@ -311,6 +320,7 @@ vi.mock('../api/email.js', async (importOriginal) => ({
   sendLeaveDecisionEmail: vi.fn(async () => ({ ok: true, mocked: true })),
   sendEmail: vi.fn(async (opts: any) => {
     mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
+    mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
     return { ok: true, mocked: true };
   }),
   sendWelcomeEmail: vi.fn(async (ctx: any) => {
@@ -331,6 +341,24 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     ...orig,
     getMailLog: async (limit = 200) => mem.mailLog.slice(0, limit),
     logMail: async (regel: any) => { mem.mailLog.unshift({ id: `m-${mem.mailLog.length + 1}`, verzondenOp: new Date().toISOString(), ...regel }); },
+    // Een reeks schrijft haar regel vooraf als "niet afgerond" en werkt hem
+    // na afloop bij (nr. 5). `mailLogStuk` = de tabel is er niet of schrijven
+    // mislukt: dan komt er geen id terug en logt de reeks achteraf.
+    startMailLog: async (regel: any) => {
+      if (mem.mailLogStuk) return null;
+      const id = `m-${mem.mailLog.length + 1}`;
+      mem.mailLog.unshift({ id, verzondenOp: new Date().toISOString(), soort: regel.soort, aantal: regel.aantal, gelukt: false, fout: 'onderbroken: de verzending is niet afgerond, mogelijk is een deel vertrokken', door: regel.door ?? 'Systeem' });
+      mem.mailLogVerloop.push(`start:${regel.soort}`);
+      return id;
+    },
+    rondMailLogAf: async (id: string, uitkomst: any) => {
+      const rij = mem.mailLog.find((r: any) => r.id === id);
+      if (!rij) return false;
+      rij.gelukt = uitkomst.gelukt;
+      rij.fout = uitkomst.fout ?? null;
+      mem.mailLogVerloop.push(`klaar:${rij.soort}`);
+      return true;
+    },
     getAppSetting: async (key: string) => mem.appSettings[key] ?? null,
     setAppSetting: async (key: string, value: unknown) => { mem.appSettings[key] = value; },
     getUsersData: async () => mem.users,
@@ -523,7 +551,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         .map((k) => ({ naam: k.slice(bucket.length + 1), gewijzigdOp: mem.opslagTijd.get(k) ?? '2026-01-01T00:00:00Z' }));
     },
     // De heartbeat van een cron: hier alleen onthouden wat er wanneer kwam.
+    // Eén opname voor de mail-tests (mem.hartslagen) en de nachtcron
+    // (mem.cronVolgorde, mem.activity).
     logCronHeartbeat: async (naam: string, details: string) => {
+      mem.hartslagen.push({ naam, details });
       mem.cronVolgorde.push(`heartbeat: ${naam}`);
       mem.activity.push({ domain: 'system', action: `Cron geslaagd: ${naam}`, message: details, gelogdOp: new Date().toISOString() });
     },
@@ -1816,6 +1847,50 @@ describe('planning-doorvoer van goedgekeurde ruilen', () => {
     // Chauffeur 4 kreeg een nieuwe dienst → push; chauffeur 3 bleef gelijk → stil.
     expect(push?.userIds).toEqual(['4']);
     expect(res.json.notifiedDrivers).toBe(1);
+  });
+});
+
+describe('een uitgeschakelde mail meldt niet dat hij verstuurd is (nr. 13)', () => {
+  const UIT = { ok: true, mocked: false, overgeslagen: true };
+
+  it('dringende update: het antwoord zegt dat de mail uit staat, niet "succesvol verzonden"', async () => {
+    const { sendEmail } = await import('../api/email.js');
+    vi.mocked(sendEmail).mockResolvedValueOnce(UIT);
+    const res = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 'Test', content: 'x' } } });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, overgeslagen: true, message: 'Mail staat uit in Beheer › Mails, er is niets verstuurd.' });
+    expect(JSON.stringify(res.json)).not.toMatch(/verzonden/i);
+  });
+
+  it('weekoverzicht: de hartslag en het antwoord zeggen "niet verstuurd", niet "verstuurd"', async () => {
+    const { sendEmail } = await import('../api/email.js');
+    process.env.ERROR_DIGEST_WEEKDAG = 'elke';
+    mem.hartslagen = [];
+    mem.clientErrors = [];
+    try {
+      vi.mocked(sendEmail).mockResolvedValueOnce(UIT);
+      const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ success: true, alerted: false, reason: 'mail uit' });
+      const hartslag = mem.hartslagen.filter((h) => h.naam === 'error-digest').at(-1)?.details ?? '';
+      expect(hartslag).toContain('Dagoverzicht niet verstuurd (mail staat uit in Beheer › Mails)');
+      expect(hartslag).not.toMatch(/overzicht verstuurd/i);
+
+      // Een mislukte verzending is evenmin "verstuurd".
+      vi.mocked(sendEmail).mockResolvedValueOnce({ ok: false, mocked: false, error: 'ECONNREFUSED' });
+      const mislukt = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(mislukt.json).toMatchObject({ alerted: false, reason: 'verzending mislukt' });
+      expect(mem.hartslagen.at(-1)?.details).toContain('NIET verstuurd (verzending mislukt)');
+
+      // Een echte verzending blijft "verstuurd".
+      vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, mocked: false });
+      const gelukt = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(gelukt.json).toMatchObject({ alerted: true });
+      expect(gelukt.json.reason).toBeUndefined();
+      expect(mem.hartslagen.at(-1)?.details).toContain('Dagoverzicht verstuurd: ');
+    } finally {
+      delete process.env.ERROR_DIGEST_WEEKDAG;
+    }
   });
 });
 
@@ -4729,6 +4804,218 @@ describe('planning-import, periode-selectie', () => {
     });
     expect(res.status).toBe(400);
     expect(String(res.json.error)).toContain('begindatum ligt na de einddatum');
+  });
+});
+
+describe('planning-import, ingepakt met gzip (413 van het platform, 29-09)', () => {
+  // 29-09: Jarno kon de nieuwe planning niet meer uploaden. Het bestand (.xls,
+  // ±3,5 MB en groeiend) ging als base64 in JSON en werd 4/3 groter: boven de
+  // 4,5 MB request body die een Vercel-functie aanneemt, dus een 413 van het
+  // platform nog vóór de route draaide. De client pakt nu in met gzip
+  // (src/lib/bestandInpakken.ts), de server pakt uit met een grens per soort
+  // (api/_lib/matrixUpload.ts). Alle werkmappen hier zijn synthetisch.
+  const MIB = 1024 * 1024;
+  const CHAUFFEURS = Array.from({ length: 24 }, (_, i) => `Testchauffeur ${String(i + 1).padStart(2, '0')}`);
+  const CODES = ['2101', '2102', '2103', 'V', ''];
+  const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+  const dag = (n: number) => new Date(Date.UTC(2030, 8, 1 + n)).toISOString().slice(0, 10);
+  const RAAD = 'Bewaar een kopie met alleen het tabblad “praktijk” en probeer het opnieuw.';
+
+  const zaai = () => {
+    mem.users.push(...CHAUFFEURS.map((name, i) => ({ id: String(100 + i), name, email: `tc${i}@vhb.be`, role: 'chauffeur', isActive: true })));
+    mem.services = [
+      { id: 'g1', serviceNumber: '2101', startTime: '06:15', endTime: '09:05', startTime2: '12:10', endTime2: '14:30', startTime3: '16:00', endTime3: '18:45', loopnr: '4500', loopnr2: '4611', loopnr3: '4702' },
+      { id: 'g2', serviceNumber: '2102', startTime: '07:00', endTime: '10:00', startTime2: '15:00', endTime2: '19:00', loopnr: '4510', loopnr2: '4620' },
+      { id: 'g3', serviceNumber: '2103', startTime: '05:30', endTime: '13:30', loopnr: '4520' },
+    ];
+    mem.planningCodes = [{ code: 'V', category: 'leave', description: 'Verlof', countsAsShift: false, isPaidAbsence: true, isDayOff: false }];
+    mem.leave = [];
+    mem.swaps = [];
+    leegNaImport();
+  };
+  /** Wat een import schrijft, terug naar leeg (voor een tweede import in dezelfde test). */
+  const leegNaImport = () => {
+    mem.planning = [];
+    mem.planningMatrix = [];
+    mem.importHistory = [];
+    mem.snapshots = {};
+  };
+
+  /** Een werkmap zoals die van de planning: "praktijk" (datum, dagtype, een
+   *  kolom per chauffeur, "aantal") plus vulbladen die de import niet leest.
+   *  Pseudo-willekeurig maar vast, en slechter comprimeerbaar dan de echte
+   *  (±3,6× tegen 6× voor de werkmap van 19-08). */
+  const werkmap = async (o: { dagen: number; vulbladen: number; rijen: number; soort: 'biff8' | 'xlsx' }) => {
+    const XLSX = await import('xlsx');
+    let x = 20260929;
+    const kans = () => { x = (Math.imul(x, 1103515245) + 12345) >>> 0; return x / 2 ** 32; };
+    const kies = <T,>(lijst: T[]) => lijst[Math.floor(kans() * lijst.length)];
+    const praktijk: unknown[][] = [['datum', 'dagtype', ...CHAUFFEURS, 'aantal']];
+    for (let d = 0; d < o.dagen; d++) {
+      const codes = CHAUFFEURS.map(() => kies(CODES));
+      praktijk.push([serial(dag(d)), 'schooldag', ...codes, codes.filter((c) => /^\d/.test(c)).length]);
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(praktijk), 'praktijk');
+    for (let s = 1; s <= o.vulbladen; s++) {
+      const blad: unknown[][] = [Array.from({ length: 20 }, (_, c) => `kolom ${c + 1}`)];
+      for (let r = 0; r < o.rijen; r++) {
+        blad.push(Array.from({ length: 20 }, (_, c) => (c % 3 === 0 ? kies(CODES) : Math.round(kans() * 100000) / 100)));
+      }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(blad), `vulblad ${s}`);
+    }
+    return XLSX.write(wb, { type: 'buffer', bookType: o.soort }) as Buffer;
+  };
+  const KLEIN = { dagen: 60, vulbladen: 2, rijen: 300 } as const;
+
+  /** De ruwe body naar de route sturen, byte voor byte wat de client bouwde. */
+  const stuur = async (pad: string, body: string) => {
+    const res = await fetch(`${baseUrl}${pad}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok-planner', 'X-Device-Token': 'dev-ok' },
+      body,
+    });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  };
+  /** Zoals de browser het verstuurt: dezelfde hulp, dezelfde body. */
+  const alsClient = async (bestand: Buffer, extra?: Record<string, unknown>) => matrixVerzoek(await pakBestandIn(new Blob([bestand])), extra);
+  const gzipVeld = (bestand: Buffer) => JSON.stringify({ xlsxGzipBase64: gzipSync(bestand).toString('base64') });
+  /** Een bestand dat met de handtekening van een soort begint en verder leeg is. */
+  const metKop = (bytes: number, kop: number[]) => { const b = Buffer.alloc(bytes); Buffer.from(kop).copy(b); return b; };
+  const XLS_KOP = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+
+  it('het voorbeeld is met gzip exact hetzelfde als met de oude base64-vorm, voor een .xls en een .xlsx', async () => {
+    zaai();
+    for (const soort of ['biff8', 'xlsx'] as const) {
+      const bestand = await werkmap({ ...KLEIN, soort });
+      const periode = { van: dag(5), tot: dag(40) };
+      const oud = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: bestand.toString('base64'), periode } });
+      const nieuw = await stuur('/api/planning-matrix/preview', await alsClient(bestand, { periode }));
+      expect(oud.status, soort).toBe(200);
+      expect(nieuw.status, soort).toBe(200);
+      expect(nieuw.json, soort).toEqual(oud.json);
+      expect(nieuw.json, soort).toMatchObject({ importedDays: 36, startDate: dag(5), endDate: dag(40), fileStartDate: dag(0), fileEndDate: dag(59), unknownCodes: [], unmatchedDrivers: [] });
+    }
+  });
+
+  it('de import met gzip schrijft hetzelfde als met base64: matrix, planning, historiek en herstelpunt', async () => {
+    zaai();
+    const bestand = await werkmap({ ...KLEIN, soort: 'biff8' });
+    const extra = { filename: 'Dienstregeling test.xls', periode: { van: dag(0), tot: dag(29) } };
+    const stand = () => JSON.parse(JSON.stringify({ matrix: mem.planningMatrix, planning: mem.planning, historiek: mem.importHistory, snapshots: mem.snapshots }));
+
+    mem.planningMatrix = [{ id: 'm-oud', source_date: dag(0), day_type: 'W', assignments: { 'Testchauffeur 01': '2103' }, raw_row: '' }];
+    const oud = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: bestand.toString('base64'), ...extra } });
+    expect(oud.status).toBe(200);
+    const naOud = stand();
+
+    leegNaImport();
+    mem.planningMatrix = [{ id: 'm-oud', source_date: dag(0), day_type: 'W', assignments: { 'Testchauffeur 01': '2103' }, raw_row: '' }];
+    const nieuw = await stuur('/api/planning-matrix/import', await alsClient(bestand, extra));
+    expect(nieuw.status).toBe(200);
+    expect(nieuw.json).toEqual(oud.json);
+    expect(stand()).toEqual(naOud);
+    expect(naOud.matrix).toHaveLength(30);
+    expect(naOud.historiek[0]).toMatchObject({ filename: 'Dienstregeling test.xls', importedDays: 30, periodStart: dag(0), periodEnd: dag(29) });
+  });
+
+  it('regressiebewaker: een .xls van meer dan 4 MB gaat als verzoek ruim onder de 4,5 MB en de server haalt er dezelfde rijen uit', async () => {
+    zaai();
+    // Boven het breekpunt van 29-09 (±3,37 MB): als base64 zou dit verzoek
+    // het platform nooit halen.
+    const bestand = await werkmap({ dagen: 123, vulbladen: 8, rijen: 1500, soort: 'biff8' });
+    expect(bestand.length).toBeGreaterThanOrEqual(4 * MIB);
+    expect(bestand.subarray(0, 4).toString('hex')).toBe('d0cf11e0');
+    expect(JSON.stringify({ xlsxBase64: bestand.toString('base64') }).length).toBeGreaterThan(PLATFORM_GRENS_BYTES);
+
+    // Het verzoek zoals de client het bouwt (matrixVerzoek gooit boven de
+    // eigen grens, dus dat hij iets teruggeeft is al de controle vooraf).
+    const ingepakt = await pakBestandIn(new Blob([bestand]));
+    expect(ingepakt.gzip).toBe(true);
+    const body = matrixVerzoek(ingepakt, { filename: 'Dienstregeling test.xls' });
+    const bytes = new TextEncoder().encode(body).length;
+    expect(bytes).toBeLessThan(PLATFORM_GRENS_BYTES);
+    expect(bytes).toBeLessThan(bestand.length / 2);
+
+    // De server leest er exact de rijen uit die het bestand zelf geeft.
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/_lib/matrixXlsx');
+    const { rows } = await parsePlanningMatrixXlsxMetWaarschuwingen(bestand);
+    expect(rows).toHaveLength(123);
+
+    const voorbeeld = await stuur('/api/planning-matrix/preview', body);
+    expect(voorbeeld.status).toBe(200);
+    expect(voorbeeld.json).toMatchObject({
+      importedDays: 123,
+      detectedDrivers: Object.keys(rows[0].assignments).length,
+      startDate: dag(0),
+      endDate: dag(122),
+      unknownCodes: [],
+      unmatchedDrivers: [],
+    });
+
+    const imp = await stuur('/api/planning-matrix/import', body);
+    expect(imp.status).toBe(200);
+    expect(imp.json).toMatchObject({ success: true, importedDays: 123 });
+    expect(mem.planningMatrix).toEqual(rows);
+    expect(mem.importHistory[0]).toMatchObject({ filename: 'Dienstregeling test.xls', importedDays: 123 });
+  }, 60_000);
+
+  it('een gzip-bom (klein ingepakt, groot uitgepakt) geeft een 413 met leesbare melding, en de server draait door', async () => {
+    zaai();
+    const bom = metKop(64 * MIB, XLS_KOP);
+    const ingepakt = gzipSync(bom);
+    expect(ingepakt.length).toBeLessThan(MIB);
+
+    const res = await stuur('/api/planning-matrix/preview', JSON.stringify({ xlsxGzipBase64: ingepakt.toString('base64') }));
+    expect(res.status).toBe(413);
+    expect(res.json.error).toBe(`Het Excel-bestand is 64 MB, de grens voor een .xls is 15 MB. ${RAAD}`);
+    expect((await stuur('/api/planning-matrix/import', JSON.stringify({ xlsxGzipBase64: ingepakt.toString('base64') }))).status).toBe(413);
+
+    // Een staart die liegt (ISIZE 1000): de rem op het uitpakken houdt hem tegen.
+    const liegt = Buffer.from(ingepakt);
+    liegt.writeUInt32LE(1000, liegt.length - 4);
+    const res2 = await stuur('/api/planning-matrix/preview', JSON.stringify({ xlsxGzipBase64: liegt.toString('base64') }));
+    expect(res2.status).toBe(413);
+    expect(res2.json.error).toBe(`Het Excel-bestand is meer dan 15 MB, de grens voor een .xls is 15 MB. ${RAAD}`);
+
+    // Geen crash: het volgende verzoek werkt gewoon.
+    const daarna = await stuur('/api/planning-matrix/preview', await alsClient(await werkmap({ ...KLEIN, soort: 'biff8' })));
+    expect(daarna.status).toBe(200);
+    expect(daarna.json.importedDays).toBe(60);
+  });
+
+  it('een .xls boven 15 MB en een .xlsx boven 5 MB geven elk een 413 met hun eigen grens', async () => {
+    const xls = await stuur('/api/planning-matrix/preview', gzipVeld(metKop(15 * MIB + 1, XLS_KOP)));
+    expect(xls.status).toBe(413);
+    expect(xls.json.error).toBe(`Het Excel-bestand is 15,1 MB, de grens voor een .xls is 15 MB. ${RAAD}`);
+
+    const xlsx = await stuur('/api/planning-matrix/preview', gzipVeld(metKop(5 * MIB + 1, [0x50, 0x4b, 0x03, 0x04])));
+    expect(xlsx.status).toBe(413);
+    expect(xlsx.json.error).toBe(`Het Excel-bestand is 5,1 MB, de grens voor een .xlsx is 5 MB. ${RAAD}`);
+  });
+
+  it('een onbekend formaat gaat zoals vroeger naar de parser (400 van de parser), een beschadigde gzip geeft een nette 400', async () => {
+    // Geen .xls en geen .xlsx: zoals vóór 29-09 beslist de parser (hier: geen
+    // tabblad "praktijk"), in beide vormen met dezelfde melding.
+    const tekst = Buffer.from('datum;dagtype;Testchauffeur 01;aantal\n01/09/2030;W;2101;1\n');
+    for (const body of [gzipVeld(tekst), JSON.stringify({ xlsxBase64: tekst.toString('base64') })]) {
+      const res = await stuur('/api/planning-matrix/preview', body);
+      expect(res.status).toBe(400);
+      expect(res.json.error).toMatch(/^Tabblad "praktijk" niet gevonden/);
+    }
+    // Groter dan de grens van vóór 29-09 (5 MB): 413 met die grens.
+    const grootTekst = Buffer.alloc(5 * 1024 * 1024 + 1024, 0x41);
+    const teGrootTekst = await stuur('/api/planning-matrix/preview', gzipVeld(grootTekst));
+    expect(teGrootTekst.status).toBe(413);
+    expect(teGrootTekst.json.error).toBe(`Het Excel-bestand is 5,1 MB, de grens is 5 MB. ${RAAD}`);
+    const BESCHADIGD = 'Het ingepakte Excel-bestand is beschadigd. Kies het bestand opnieuw.';
+    const geenGzip = await stuur('/api/planning-matrix/preview', JSON.stringify({ xlsxGzipBase64: tekst.toString('base64') }));
+    expect(geenGzip.status).toBe(400);
+    expect(geenGzip.json.error).toBe(BESCHADIGD);
+    const afgebroken = gzipSync(await werkmap({ ...KLEIN, soort: 'biff8' })).subarray(0, 5000);
+    const halve = await stuur('/api/planning-matrix/import', JSON.stringify({ xlsxGzipBase64: afgebroken.toString('base64') }));
+    expect(halve.status).toBe(400);
+    expect(halve.json.error).toBe(BESCHADIGD);
   });
 });
 
@@ -8113,6 +8400,75 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect(mem.activity.find((a: any) => a.action === 'Eigen mail verstuurd')?.message).toContain('"Nieuwe uniformen" naar 3 ontvangers');
     });
 
+    it('de logregel staat er vóór de eerste mail, als niet afgerond, en wordt daarna bijgewerkt (nr. 5)', async () => {
+      const { sendEmail } = await import('../api/email.js');
+      mem.mailLogVerloop = [];
+      const tijdens: any[] = [];
+      vi.mocked(sendEmail).mockImplementationOnce(async (opts: any) => {
+        // Zou de functie hier afbreken, dan is dit wat er in het verzendlog blijft staan.
+        tijdens.push({ ...mem.mailLog.find((r: any) => r.soort === 'eigen-mail') });
+        mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context });
+        mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
+        return { ok: true, mocked: false };
+      });
+      const res = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { groepen: ['planning'], adressen: ['extern@voorbeeld.be'] } } });
+      expect(res.status).toBe(200);
+      expect(mem.mailLogVerloop[0]).toBe('start:eigen-mail');
+      expect(mem.mailLogVerloop.at(-1)).toBe('klaar:eigen-mail');
+      expect(mem.mailLogVerloop.filter((v: string) => v.startsWith('mail:'))).toHaveLength(3);
+      expect(tijdens[0]).toMatchObject({ soort: 'eigen-mail', aantal: 3, gelukt: false, door: 'Annelies Admin' });
+      expect(tijdens[0].fout).toMatch(/^onderbroken/);
+      // Eén regel, geen tweede erbij, en nooit een adres of de inhoud.
+      expect(mem.mailLog.filter((r: any) => r.soort === 'eigen-mail')).toHaveLength(1);
+      expect(JSON.stringify(mem.mailLog)).not.toMatch(/@|Nieuwe uniformen|Kom passen/);
+    });
+
+    it('deels mislukt: het antwoord noemt wie niet vertrok, en `alleen` stuurt daarna alleen naar hen (nr. 5)', async () => {
+      const { sendEmail } = await import('../api/email.js');
+      vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
+        if (opts.to[0] === 'planner@vhb.be') return { ok: false, mocked: false, error: '450 rate limit' };
+        mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context });
+        return { ok: true, mocked: false };
+      });
+      const keuze = { groepen: ['planning'], adressen: ['extern@voorbeeld.be'] };
+      try {
+        const res = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: keuze } });
+        expect(res.status).toBe(200);
+        expect(res.json).toMatchObject({ droog: false, aantal: 3, gelukt: 2, mislukt: 1, nietGeprobeerd: 0, onzeker: 0, mocked: false, resterend: ['planner@vhb.be'], onzekerAdressen: [] });
+        expect(mem.mailLog.find((r: any) => r.soort === 'eigen-mail')).toMatchObject({ aantal: 3, gelukt: false, fout: '1 van 3 mislukt' });
+        expect(mem.activity.find((a: any) => a.action === 'Eigen mail verstuurd')?.message).toContain('naar 3 ontvangers, 1 mislukt');
+      } finally {
+        vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
+          mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
+          mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
+          return { ok: true, mocked: true };
+        });
+      }
+      // Alleen de rest: dezelfde keuze, met het adres dat niet vertrok.
+      mem.emailsSent = [];
+      const rest = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: keuze, alleen: ['Planner@VHB.be'] } });
+      expect(rest.status).toBe(200);
+      expect(rest.json).toMatchObject({ aantal: 1, gelukt: 1, resterend: [] });
+      expect(mem.emailsSent.map((m) => m.to)).toEqual([['planner@vhb.be']]);
+      // `alleen` is een filter op de keuze, geen extra bron van ontvangers.
+      mem.emailsSent = [];
+      const vreemd = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: keuze, alleen: ['iemand-anders@voorbeeld.be'] } });
+      expect(vreemd.status).toBe(400);
+      expect(mem.emailsSent).toHaveLength(0);
+    });
+
+    it('zonder regel vooraf (tabel ontbreekt) blijft het één regel achteraf', async () => {
+      mem.mailLogStuk = true;
+      try {
+        const res = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { adressen: ['extern@voorbeeld.be'] } } });
+        expect(res.status).toBe(200);
+        expect(mem.mailLog.filter((r: any) => r.soort === 'eigen-mail')).toHaveLength(1);
+        expect(mem.mailLog.find((r: any) => r.soort === 'eigen-mail')).toMatchObject({ aantal: 1, gelukt: false, fout: 'SMTP niet geconfigureerd, mail alleen gelogd' });
+      } finally {
+        mem.mailLogStuk = false;
+      }
+    });
+
     it('weigert zonder ontvangers, met een ongeldig adres, een onbekende lijst, een leeg onderwerp, en voor niet-admins', async () => {
       expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: {} } })).status).toBe(400);
       expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { adressen: ['geen-adres'] } } })).status).toBe(400);
@@ -8160,6 +8516,40 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect(mem.mailLog.filter((r: any) => r.soort === 'omleiding-mail')).toHaveLength(1);
       expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')).toMatchObject({ entityType: 'diversion', entityId: 'o-1' });
       expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')?.message).toContain('naar 2 ontvangers met 1 PDF');
+    });
+
+    it('de mail noemt alleen de bijlagen die echt meegaan, en het antwoord zegt welke ontbrak (nr. 11)', async () => {
+      const res = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(res.status).toBe(200);
+      // slot 3 (haltes.pdf) hangt niet in de opslag.
+      expect(res.json).toMatchObject({ bijlagen: 1, ontbrekendeBijlagen: ['haltes.pdf'] });
+      for (const mail of mem.emailsSent) {
+        expect(mail.attachments?.map((a) => a.filename)).toEqual(['plan.pdf']);
+        expect(mail.text).toContain('In bijlage\n- plan.pdf');
+        expect(mail.text).not.toContain('haltes.pdf');
+      }
+      expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')?.message).toContain('met 1 PDF (niet meegegaan, bestand niet gevonden: haltes.pdf)');
+      // Hangt geen enkele bijlage meer, dan noemt de mail er ook geen.
+      mem.opslag.clear();
+      mem.emailsSent = [];
+      const zonder = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(zonder.json).toMatchObject({ bijlagen: 0, ontbrekendeBijlagen: ['plan.pdf', 'haltes.pdf'] });
+      expect(mem.emailsSent[0].text).not.toContain('In bijlage');
+      // Alles aanwezig: niets te melden.
+      mem.opslag.add('diversions/o-1-1.pdf');
+      mem.opslag.add('diversions/o-1-3.pdf');
+      const volledig = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(volledig.json).toMatchObject({ bijlagen: 2, ontbrekendeBijlagen: [] });
+    });
+
+    it('gaat door dezelfde verzendfunctie: regel vooraf, en `alleen` stuurt alleen naar het restant (nr. 5 en 34)', async () => {
+      mem.mailLogVerloop = [];
+      const res = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-planner', body: { ontvangers: { lijsten: ['l-1'], adressen: ['garage@vhb.be'] }, alleen: ['planning@delijn.be'] } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ droog: false, aantal: 1, gelukt: 1, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, resterend: [], bijlagen: 1 });
+      expect(mem.emailsSent.map((m) => m.to)).toEqual([['planning@delijn.be']]);
+      expect(mem.mailLogVerloop).toEqual(['start:omleiding-mail', 'mail:planning@delijn.be', 'klaar:omleiding-mail']);
+      expect(mem.mailLog.filter((r: any) => r.soort === 'omleiding-mail')).toHaveLength(1);
     });
 
     it('een PDF van vóór 25-09 (<id>.pdf) gaat mee als omleiding.pdf; zonder einddatum zegt de mail "tot nader bericht"', async () => {

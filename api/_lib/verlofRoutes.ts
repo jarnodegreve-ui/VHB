@@ -10,7 +10,8 @@
 
 import express from "express";
 import crypto from "node:crypto";
-import { sendLeaveDecisionEmail, sendEmail, escapeHtml, mailOpbouw, portalUrl, type LeaveDecisionAction } from "../email.js";
+import { sendLeaveDecisionEmail, sendEmail, escapeHtml, type LeaveDecisionAction } from "../email.js";
+import { bouwZiekmeldingMail } from "./mailTeksten.js";
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { isStafRol, authenticate, requireRole } from "../middleware.js";
@@ -186,20 +187,11 @@ export async function registreerZiekmeldingIntern(
     // De toelichting gaat BEWUST niet mee (mailtranche 25-09): dat is
     // medische informatie die niet in mailboxen hoort; ze staat in het portaal.
     const actorNaam = actor.name || "Planning";
-    const { html, text } = mailOpbouw({
-      kicker: "Ziekmelding",
-      titel: `${target.name} is ziek gemeld`,
-      status: { label: "Afwezig", toon: "aandacht" },
-      alineas: openDiensten.length > 0
-        ? ["De diensten hieronder staan nu als onbeschikbaar in de Maandplanning en Dekking."]
-        : ["Geen ingeplande diensten in deze periode."],
-      feiten: [
-        { label: "Chauffeur", waarde: target.name },
-        { label: "Periode", waarde: period },
-        { label: "Gemeld door", waarde: actorNaam },
-      ],
-      ...(openDiensten.length > 0 ? { lijst: { kop: "Openstaande dienst(en)", items: openDiensten.map((o) => `${o.label}, ${o.nummers}`) } } : {}),
-      knop: { tekst: "Open Vandaag", url: `${portalUrl()}/vandaag` },
+    const { onderwerp, html, text } = bouwZiekmeldingMail({
+      naam: target.name,
+      periode: period,
+      gemeldDoor: actorNaam,
+      openDiensten: openDiensten.map((o) => `${o.label}, ${o.nummers}`),
     });
     for (const adres of recipients) {
       await sendEmail({
@@ -207,7 +199,7 @@ export async function registreerZiekmeldingIntern(
         context: `sick:${forUserId}`,
         soort: "ziekmelding",
         door: actorNaam,
-        subject: `Ziekmelding, ${target.name} (${period})`,
+        subject: onderwerp,
         text,
         html,
       });

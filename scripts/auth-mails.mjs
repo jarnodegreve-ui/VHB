@@ -39,7 +39,9 @@ const layout = ({ kicker, titel, alinea, knop, code, voet }) =>
       { html: `<p style="margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: #1F2937;">${alinea}</p>`, tekst: alinea },
       ...(code ? [{ html: `<p style="margin: 8px 0 18px; font-size: 28px; font-weight: 700; letter-spacing: 0.3em; color: #0D0D0F;">${code}</p>`, tekst: code }] : []),
     ],
-    ...(knop ? { knop } : {}),
+    // Elke knop hier draagt een eenmalige link van Supabase: die moet gevolgd
+    // worden, dus de iPhone-regel zegt waar je daarna verder gaat (nr. 16).
+    ...(knop ? { knop: { ...knop, actie: true } } : {}),
     voet,
   }).html;
 
