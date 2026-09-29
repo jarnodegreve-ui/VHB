@@ -1,4 +1,5 @@
-import { test, expect, type BrowserContext, type Page } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page, type Route } from '@playwright/test';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { CHAUFFEUR, SESSION_KEY, apiFixtures, sessieInitScript } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -15,6 +16,15 @@ import { CHAUFFEUR, SESSION_KEY, apiFixtures, sessieInitScript } from '../script
  *     public/sw-ritbladen.js) in de build-onafhankelijke cache
  *     'vhb-ritbladen'; met het netwerk uit toont Mijn dag de gecachte
  *     dienst met het stille offline-label;
+ *  2b. bijlagen van omleidingen (29-09, onderaan deze spec): na één opening
+ *     met bereik opent de bijlage zonder bereik, ook na een koude start; een
+ *     vervangen bijlage toont de nieuwe; een verwijderde bijlage gaat uit de
+ *     cache zodra een verse lijst binnen is en blijft staan zolang de lijst
+ *     uit de cache komt; na uitloggen is de cache weg; een vervanging met
+ *     dezelfde naam en grootte toont de nieuwe (uploadmoment van de server);
+ *  2c. persoonlijke documenten (29-09, onderaan): openen in de app zonder
+ *     spoor in Cache Storage, localStorage, sessionStorage of IndexedDB, met
+ *     no-store opgehaald; zonder bereik de foutstaat, de viewer uit de precache;
  *  3. update-flow: een nieuwe worker (dezelfde sw.js onder een andere
  *     script-URL, want een nieuwe build is hier niet te maken) installeert,
  *     blijft wachten, de app toont de "Vernieuw"-toast, de klik stuurt
@@ -193,5 +203,482 @@ test.describe('pwa: service worker', () => {
     }, { timeout: 20_000, message: 'nieuwe worker heeft de controle' }).toContain('versie=e2e-nieuw');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
     expect(await vraagVersie(page)).toMatch(/^vhb-portaal-/);
+  });
+});
+
+/**
+ * Bijlagen van omleidingen en updates (controle-ronde 29-09, nr. 2). De PDF
+ * komt van een andere origin, zoals de opslag in productie; de viewer in de
+ * app bewaart hem in 'vhb-bijlagen-v1' (src/lib/bijlageCache.ts) en de service
+ * worker ruimt op zodra een verse lijst binnenkomt (public/sw-bijlagen.js).
+ */
+const BIJLAGEN_CACHE = 'vhb-bijlagen-v1';
+const OPSLAG = 'https://opslag.test';
+const PLAN_PAD = '/storage/v1/object/sign/diversions/d1-1.pdf';
+const PLAN = 'Omleidingsplan lijn 58.pdf';
+const OMLEIDING = 'Werken Markt Zottegem';
+
+async function maakPdf(kop: string, paginas: number): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  for (let i = 1; i <= paginas; i++) pdf.addPage([595, 842]).drawText(`${kop}, blad ${i}`, { x: 40, y: 780, size: 18, font });
+  return Buffer.from(await pdf.save());
+}
+
+type Bijlage = { slot: number; filename: string; sizeBytes: number; url: string; uploadedAt?: string };
+type BijlagenStaat = {
+  /** Wat de server nu in de lijst zet; leeg = de bijlage is verwijderd. */
+  bijlagen: Bijlage[];
+  /** Wat de opslag nu op het pad van de bijlage heeft hangen. */
+  pdf: Buffer;
+  /** Aantal keren dat de opslag het bestand leverde. */
+  downloads: number;
+};
+
+/**
+ * Sessie, API en opslag; `staat` bepaalt wat server en opslag teruggeven.
+ *
+ * De chunks gaan zonder `Vary` naar de browser. De preview-server (vite
+ * preview) zet `Vary: Origin` op elk bestand, en de service worker zoekt met
+ * `caches.match(req)`, dat die kop volgt: een chunk die de warmup met een
+ * prefetch in de cache zette (zonder Origin) past dan niet op de latere
+ * import van dezelfde chunk (met Origin). Welke van de twee eerst komt is een
+ * race, en zonder bereik viel de koude start daardoor de ene keer wel en de
+ * andere keer niet om, los van de bijlagen. Bestaand gedrag van sw.js, hier
+ * niet gewijzigd; deze tests halen alleen de kop van de testserver weg.
+ */
+async function seedBijlagen(context: BrowserContext, page: Page, staat: BijlagenStaat) {
+  await page.addInitScript(sessieInitScript, { key: SESSION_KEY, user: CHAUFFEUR, view: 'omleidingen', thema: 'light' });
+  await context.route('**/assets/**', async (route) => {
+    try {
+      const antwoord = await route.fetch();
+      const headers = { ...antwoord.headers() };
+      delete headers.vary;
+      await route.fulfill({ response: antwoord, headers });
+    } catch {
+      // Zonder bereik (of de test is klaar): gewoon laten mislukken.
+      await route.abort('internetdisconnected').catch(() => undefined);
+    }
+  });
+  await context.route('**/api/**', apiFixtures(CHAUFFEUR, (pad: string) => (pad.endsWith('/api/diversions')
+    ? [{ id: 'd1', line: '58', location: 'Zottegem', title: OMLEIDING, description: 'Omleiding via de ring.', startDate: '2026-01-01', endDate: '2099-12-31', _rev: 'r1', ...(staat.bijlagen.length ? { bijlagen: staat.bijlagen } : {}) }]
+    : undefined)));
+  await context.route(`${OPSLAG}/**`, (route) => {
+    staat.downloads += 1;
+    return route.fulfill({ contentType: 'application/pdf', headers: { 'access-control-allow-origin': '*' }, body: staat.pdf });
+  });
+}
+
+const planBijlage = (sizeBytes: number, token: string): Bijlage => ({ slot: 1, filename: PLAN, sizeBytes, url: `${OPSLAG}${PLAN_PAD}?token=${token}` });
+
+/**
+ * Eerste laad (SW neemt de controle), dan de omleiding openen door de SW.
+ * Met een herlaad erbij, zoals de koude start van Mijn dag hierboven: wat de
+ * eerste laad ophaalde vóór de SW de controle had, kan de browser bij een
+ * gewone navigatie uit zijn eigen geheugen hergebruiken, en dan ziet de SW
+ * die chunks nooit. Een herlaad stuurt alles langs de SW.
+ */
+async function openOmleiding(page: Page) {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+  await wachtOpControle(page);
+  await page.goto('/omleidingen/d1');
+  const detail = page.getByRole('dialog', { name: OMLEIDING, exact: true });
+  await expect(detail).toBeVisible({ timeout: 15_000 });
+  await page.reload();
+  await expect(detail).toBeVisible({ timeout: 15_000 });
+  return detail;
+}
+
+/** De bijlage openen en wachten tot pdfjs de eerste pagina getekend heeft. */
+async function openBijlage(page: Page) {
+  await page.getByRole('dialog', { name: OMLEIDING, exact: true }).getByRole('button', { name: PLAN, exact: true }).click();
+  const laag = page.getByRole('dialog', { name: PLAN, exact: true });
+  const canvas = laag.getByRole('img', { name: `Pagina 1 van ${PLAN}`, exact: true });
+  await expect(canvas).toBeVisible({ timeout: 20_000 });
+  await expect.poll(() => canvas.evaluate((el: HTMLCanvasElement) => el.getContext('2d')!.getImageData(10, 10, 1, 1).data[3]), { timeout: 20_000 }).toBe(255);
+  return laag;
+}
+
+/**
+ * De viewer sluiten met zijn terugknop. De laag ruimt haar history-entry
+ * daarna zelf op met een terugstap (src/lib/lagen.ts); pas als die geland is
+ * mag de test herladen, anders breekt de ene navigatie de andere af.
+ */
+async function sluitViewer(page: Page) {
+  const laag = page.getByRole('dialog', { name: PLAN, exact: true });
+  const entry = await page.evaluate(() => history.state?.vhbLaagNr ?? null);
+  await laag.getByRole('button', { name: 'Terug', exact: true }).click();
+  await expect(laag).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => history.state?.vhbLaagNr ?? null)).not.toBe(entry);
+}
+
+/** Wat er in de bijlagen-cache staat: pad (zonder token) en versie per bestand. */
+const bewaardeBijlagen = (page: Page) => page.evaluate(async (naam) => {
+  if (!(await caches.has(naam))) return null;
+  const cache = await caches.open(naam);
+  const uit: Array<{ sleutel: string; versie: string | null; soort: string | null }> = [];
+  for (const req of await cache.keys()) {
+    const res = await cache.match(req);
+    uit.push({ sleutel: req.url, versie: res?.headers.get('X-VHB-Bijlage-Versie') ?? null, soort: res?.headers.get('X-VHB-Bijlage-Soort') ?? null });
+  }
+  return uit;
+}, BIJLAGEN_CACHE);
+
+const geenNetwerk = (route: Route) => route.abort('internetdisconnected');
+
+/**
+ * Netwerk weg: API en opslag falen, de navigatie komt uit de shell-cache.
+ * De afbrekende routes komen BOVENOP de bestaande (de laatst geregistreerde
+ * wint) in plaats van ze eerst weg te halen: in het gat daartussen zou een
+ * lopende poll bij de echte preview-server uitkomen, die op elk pad de shell
+ * teruggeeft.
+ */
+async function zonderBereik(context: BrowserContext) {
+  await context.route('**/api/**', geenNetwerk);
+  await context.route(`${OPSLAG}/**`, geenNetwerk);
+  await context.route('**/assets/**', geenNetwerk);
+  await context.setOffline(true);
+}
+
+/** Weer bereik: de afbrekende routes weg, de fixtures eronder gelden weer. */
+async function metBereik(context: BrowserContext) {
+  await context.setOffline(false);
+  await context.unroute('**/api/**', geenNetwerk);
+  await context.unroute(`${OPSLAG}/**`, geenNetwerk);
+  await context.unroute('**/assets/**', geenNetwerk);
+}
+
+test.describe('pwa: bijlagen van omleidingen', () => {
+  // Elke test installeert de service worker (met de pdf-chunks in de
+  // precache), tekent een PDF en herlaadt een of twee keer: ruimer dan de
+  // standaard 30 s, anders valt hij op een drukke runner om op de klok.
+  test.describe.configure({ timeout: 90_000 });
+
+  test('na één keer openen met bereik opent de bijlage zonder bereik, ook na een koude start', async ({ page, context }) => {
+    // De preview-server kent /_vercel/speed-insights/script.js niet en geeft
+    // er de shell voor terug; dat script struikelt dan over de eerste "<".
+    // Geen fout van de app, en elke andere fout telt wel.
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => { if (err.message !== "Unexpected token '<'") pageErrors.push(err.message); });
+    const staat: BijlagenStaat = { bijlagen: [planBijlage(182_000, 'vandaag')], pdf: await maakPdf('Omleidingsplan', 2), downloads: 0 };
+    await seedBijlagen(context, page, staat);
+    await openOmleiding(page);
+
+    const laag = await openBijlage(page);
+    await expect(laag.getByText('2 pagina’s')).toBeVisible();
+    // Met bereik geen aanduiding: die is er alleen zonder bereik, zoals bij het ritblad.
+    await expect(laag.getByText(/opgeslagen exemplaar/)).toHaveCount(0);
+    // Bewaard op het pad, zonder het token uit de link.
+    await expect.poll(() => bewaardeBijlagen(page)).toEqual([{ sleutel: `${OPSLAG}${PLAN_PAD}`, soort: 'omleiding', versie: `${encodeURIComponent(PLAN)}|182000|` }]);
+    expect(staat.downloads).toBe(1);
+    await sluitViewer(page);
+
+    // Koude start zonder bereik: shell, lijst en viewer uit de caches van de
+    // service worker, de PDF uit de bijlagen-cache.
+    await zonderBereik(context);
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: OMLEIDING, exact: true })).toBeVisible({ timeout: 20_000 });
+    const offline = await openBijlage(page);
+    await expect(offline.getByText('2 pagina’s · opgeslagen exemplaar')).toBeVisible({ timeout: 10_000 });
+    await expect(offline.getByRole('heading', { name: 'Bijlage kon niet geladen worden' })).toHaveCount(0);
+    expect(staat.downloads).toBe(1);
+
+    await metBereik(context);
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+
+  test('een vervangen bijlage toont de nieuwe, nooit het vorige bestand', async ({ page, context }) => {
+    const staat: BijlagenStaat = { bijlagen: [planBijlage(182_000, 'eerste')], pdf: await maakPdf('Omleidingsplan versie 1', 1), downloads: 0 };
+    await seedBijlagen(context, page, staat);
+    await openOmleiding(page);
+    const eerste = await openBijlage(page);
+    await expect(eerste.getByText('1 pagina', { exact: true })).toBeVisible();
+    await expect.poll(async () => (await bewaardeBijlagen(page))?.[0]?.versie).toBe(`${encodeURIComponent(PLAN)}|182000|`);
+
+    await sluitViewer(page);
+
+    // De planner vervangt het plan: zelfde plaats (dus zelfde pad in de
+    // opslag) en zelfde naam, ander bestand. Alleen de grootte verraadt het.
+    staat.bijlagen = [planBijlage(207_500, 'tweede')];
+    staat.pdf = await maakPdf('Omleidingsplan versie 2', 3);
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: OMLEIDING, exact: true })).toBeVisible({ timeout: 15_000 });
+    // De verse lijst is binnen: de service worker gooit het oude bestand weg.
+    await expect.poll(() => bewaardeBijlagen(page), { timeout: 10_000 }).toEqual([]);
+
+    const tweede = await openBijlage(page);
+    await expect(tweede.getByText('3 pagina’s')).toBeVisible();
+    await expect.poll(() => bewaardeBijlagen(page)).toEqual([{ sleutel: `${OPSLAG}${PLAN_PAD}`, soort: 'omleiding', versie: `${encodeURIComponent(PLAN)}|207500|` }]);
+    expect(staat.downloads).toBe(2);
+    await sluitViewer(page);
+
+    // Ook zonder bereik is het daarna de nieuwe.
+    await zonderBereik(context);
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: OMLEIDING, exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect((await openBijlage(page)).getByText('3 pagina’s · opgeslagen exemplaar')).toBeVisible({ timeout: 10_000 });
+    await metBereik(context);
+  });
+
+  test('een verwijderde bijlage gaat uit de cache op een verse lijst, niet op een lijst uit de cache', async ({ page, context }) => {
+    const staat: BijlagenStaat = { bijlagen: [planBijlage(182_000, 'a')], pdf: await maakPdf('Omleidingsplan', 1), downloads: 0 };
+    await seedBijlagen(context, page, staat);
+    await openOmleiding(page);
+    await openBijlage(page);
+    await sluitViewer(page);
+    await expect.poll(async () => (await bewaardeBijlagen(page))?.length).toBe(1);
+
+    // Zonder bereik komt de lijst uit de cache van de service worker en
+    // mislukken de ophalingen: de bijlage blijft op het toestel staan.
+    await zonderBereik(context);
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: OMLEIDING, exact: true })).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(1500);
+    expect(await bewaardeBijlagen(page)).toHaveLength(1);
+
+    // Weer bereik, en de planner heeft de bijlage intussen verwijderd.
+    staat.bijlagen = [];
+    await metBereik(context);
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: OMLEIDING, exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => bewaardeBijlagen(page), { timeout: 10_000 }).toEqual([]);
+  });
+
+  test('na uitloggen is de bijlagen-cache weg', async ({ page, context }) => {
+    const staat: BijlagenStaat = { bijlagen: [planBijlage(182_000, 'a')], pdf: await maakPdf('Omleidingsplan', 1), downloads: 0 };
+    await seedBijlagen(context, page, staat);
+    const detail = await openOmleiding(page);
+    await openBijlage(page);
+    await sluitViewer(page);
+    await expect.poll(async () => (await bewaardeBijlagen(page))?.length).toBe(1);
+    await detail.getByRole('button', { name: 'Sluiten', exact: true }).click();
+    await expect(detail).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Accountmenu' }).click();
+    await page.getByRole('menuitem', { name: 'Uitloggen' }).click();
+    await expect(page.getByRole('button', { name: /Inloggen|Aanmelden/ }).first()).toBeVisible({ timeout: 15_000 });
+    // Niets van de vorige gebruiker blijft achter: de cache zelf is weg.
+    await expect.poll(() => bewaardeBijlagen(page)).toBeNull();
+    expect(await page.evaluate(async (naam) => (await caches.keys()).includes(naam), BIJLAGEN_CACHE)).toBe(false);
+  });
+});
+
+/**
+ * Uploadmoment (29-09): de server zet `uploadedAt` bij elke bijlage. Een
+ * vervanging met exact dezelfde naam en grootte is daardoor voor de cache op
+ * het toestel een ander bestand, en een verse lijst zonder vervanging laat
+ * de bewaarde bijlage staan.
+ */
+test.describe('pwa: uploadmoment van een bijlage', () => {
+  test.describe.configure({ timeout: 90_000 });
+
+  test('een vervanging met dezelfde naam en grootte toont de nieuwe; zonder vervanging blijft de bijlage bewaard', async ({ page, context }) => {
+    const VROEG = '2026-09-29T08:00:00.000Z';
+    const LAAT = '2026-09-29T09:30:00.000Z';
+    const staat: BijlagenStaat = { bijlagen: [{ ...planBijlage(182_000, 'eerste'), uploadedAt: VROEG }], pdf: await maakPdf('Omleidingsplan versie 1', 1), downloads: 0 };
+    await seedBijlagen(context, page, staat);
+    await openOmleiding(page);
+    const eerste = await openBijlage(page);
+    await expect(eerste.getByText('1 pagina', { exact: true })).toBeVisible();
+    // Bewaard met het uploadmoment in de versie.
+    await expect.poll(() => bewaardeBijlagen(page)).toEqual([{ sleutel: `${OPSLAG}${PLAN_PAD}`, soort: 'omleiding', versie: `${encodeURIComponent(PLAN)}|182000|${encodeURIComponent(VROEG)}` }]);
+    await sluitViewer(page);
+
+    // Een verse lijst met een nieuw token maar hetzelfde bestand: de bijlage blijft op het toestel.
+    staat.bijlagen = [{ ...planBijlage(182_000, 'tweede'), uploadedAt: VROEG }];
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: OMLEIDING, exact: true })).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    expect(await bewaardeBijlagen(page)).toHaveLength(1);
+
+    // De planner vervangt het plan: zelfde plaats, zelfde naam, zelfde grootte.
+    // Alleen het uploadmoment van de server verraadt het.
+    staat.bijlagen = [{ ...planBijlage(182_000, 'derde'), uploadedAt: LAAT }];
+    staat.pdf = await maakPdf('Omleidingsplan versie 2', 3);
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: OMLEIDING, exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => bewaardeBijlagen(page), { timeout: 10_000 }).toEqual([]);
+    const tweede = await openBijlage(page);
+    await expect(tweede.getByText('3 pagina’s')).toBeVisible();
+    await expect.poll(() => bewaardeBijlagen(page)).toEqual([{ sleutel: `${OPSLAG}${PLAN_PAD}`, soort: 'omleiding', versie: `${encodeURIComponent(PLAN)}|182000|${encodeURIComponent(LAAT)}` }]);
+    expect(staat.downloads).toBe(2);
+  });
+});
+
+/**
+ * Persoonlijke documenten (29-09): een PDF opent in de app, maar er blijft
+ * niets op het toestel. Hier mét service worker: Cache Storage vóór en na,
+ * de inhoud van de bijlagen-cache, localStorage, sessionStorage en IndexedDB,
+ * en hoe de viewer de PDF ophaalt (no-store). De link komt van de opslag-
+ * origin, zoals in productie.
+ */
+const DOC_PAD = '/storage/v1/object/sign/user-documents/42/3f2a-loonbrief.pdf';
+const DOC_URL = `${OPSLAG}${DOC_PAD}?token=doc`;
+const LOONBRIEF = 'Loonbrief september.pdf';
+/** Wat van het document nergens op het toestel mag opduiken. */
+const DOC_SPOREN = ['user-documents', '3f2a-loonbrief', LOONBRIEF];
+
+type DocumentStaat = BijlagenStaat & {
+  loonbrief: Buffer;
+  documentAanvragen: Array<{ url: string; headers: Record<string, string> }>;
+  bevestigd: string[];
+};
+
+/** Sessie, API en opslag, met naast de omleiding ook de documenten van de chauffeur. */
+async function seedDocumenten(context: BrowserContext, page: Page, staat: DocumentStaat) {
+  await page.addInitScript(sessieInitScript, { key: SESSION_KEY, user: CHAUFFEUR, view: 'omleidingen', thema: 'light' });
+  // Elke fetch van de pagina met zijn cache-modus: zo is te zien hoe de viewer de PDF haalt.
+  await page.addInitScript(() => {
+    const venster = window as unknown as { __vhbFetches: Array<{ url: string; cache: string }> };
+    venster.__vhbFetches = [];
+    const echt = window.fetch.bind(window);
+    window.fetch = (invoer: RequestInfo | URL, init?: RequestInit) => {
+      const url = invoer instanceof Request ? invoer.url : String(invoer);
+      venster.__vhbFetches.push({ url, cache: init?.cache ?? (invoer instanceof Request ? invoer.cache : 'default') });
+      return echt(invoer, init);
+    };
+  });
+  // Zelfde reden als in seedBijlagen: de chunks zonder `Vary`.
+  await context.route('**/assets/**', async (route) => {
+    try {
+      const antwoord = await route.fetch();
+      const headers = { ...antwoord.headers() };
+      delete headers.vary;
+      await route.fulfill({ response: antwoord, headers });
+    } catch {
+      await route.abort('internetdisconnected').catch(() => undefined);
+    }
+  });
+  await context.route('**/api/**', apiFixtures(CHAUFFEUR, (pad: string, request: { method: () => string }) => {
+    if (pad.endsWith('/api/diversions')) {
+      return [{ id: 'd1', line: '58', location: 'Zottegem', title: OMLEIDING, description: 'Omleiding via de ring.', startDate: '2026-01-01', endDate: '2099-12-31', _rev: 'r1', ...(staat.bijlagen.length ? { bijlagen: staat.bijlagen } : {}) }];
+    }
+    if (pad.endsWith('/api/documents') && request.method() === 'GET') {
+      return [{ id: 'd-loon', userId: '42', filename: LOONBRIEF, category: 'Loonbrief', sizeBytes: staat.loonbrief.length, uploadedAt: '2026-09-25T08:00:00Z', uploadedBy: 'Admin', url: DOC_URL, openedAt: null }];
+    }
+    if (pad.endsWith('/opened') && request.method() === 'POST') {
+      staat.bevestigd.push(pad);
+      return {};
+    }
+    return undefined;
+  }));
+  await context.route(`${OPSLAG}/**`, (route) => {
+    const url = route.request().url();
+    if (url.includes('/user-documents/')) {
+      staat.documentAanvragen.push({ url, headers: route.request().headers() });
+      // Zoals de opslag: met een Cache-Control-kop die de browser zou mogen volgen.
+      return route.fulfill({ contentType: 'application/pdf', headers: { 'access-control-allow-origin': '*', 'cache-control': 'max-age=3600' }, body: staat.loonbrief });
+    }
+    staat.downloads += 1;
+    return route.fulfill({ contentType: 'application/pdf', headers: { 'access-control-allow-origin': '*' }, body: staat.pdf });
+  });
+}
+
+/** Namen van de caches in Cache Storage, gesorteerd. */
+const cacheNamen = (page: Page) => page.evaluate(async () => (await caches.keys()).sort());
+/** Namen van de IndexedDB-databanken, gesorteerd. */
+const idbNamen = (page: Page) => page.evaluate(async () => (typeof indexedDB.databases === 'function' ? (await indexedDB.databases()).map((d) => d.name ?? '').sort() : []));
+/** Waar op het toestel iets van het document staat: Cache Storage (elke cache),
+ *  localStorage, sessionStorage en de namen in IndexedDB. Leeg = nergens. */
+const documentSporen = (page: Page) => page.evaluate(async (zoek) => {
+  const treffers: string[] = [];
+  const bevat = (s: string | null | undefined) => typeof s === 'string' && zoek.some((z) => s.includes(z));
+  for (const [naam, opslag] of [['localStorage', localStorage], ['sessionStorage', sessionStorage]] as const) {
+    for (let i = 0; i < opslag.length; i++) {
+      const sleutel = opslag.key(i) ?? '';
+      if (bevat(sleutel) || bevat(opslag.getItem(sleutel))) treffers.push(`${naam}: ${sleutel}`);
+    }
+  }
+  const dbs = typeof indexedDB.databases === 'function' ? await indexedDB.databases() : [];
+  for (const db of dbs) if (bevat(db.name)) treffers.push(`IndexedDB: ${db.name}`);
+  for (const naam of await caches.keys()) {
+    for (const verzoek of await (await caches.open(naam)).keys()) if (bevat(verzoek.url)) treffers.push(`${naam}: ${verzoek.url}`);
+  }
+  return treffers;
+}, DOC_SPOREN);
+
+const documentKnop = (page: Page) => page.getByRole('button', { name: `Open ${LOONBRIEF}`, exact: true });
+const documentLaag = (page: Page) => page.getByRole('dialog', { name: LOONBRIEF, exact: true });
+
+test.describe('pwa: persoonlijke documenten, niets op het toestel', () => {
+  test.describe.configure({ timeout: 90_000 });
+
+  test('opent in de app; daarna staat er niets nieuws in Cache Storage en de viewer haalde met no-store', async ({ page, context }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => { if (err.message !== "Unexpected token '<'") pageErrors.push(err.message); });
+    const staat: DocumentStaat = {
+      bijlagen: [planBijlage(182_000, 'vandaag')], pdf: await maakPdf('Omleidingsplan', 1), downloads: 0,
+      loonbrief: await maakPdf('Loonbrief', 2), documentAanvragen: [], bevestigd: [],
+    };
+    await seedDocumenten(context, page, staat);
+    // Eerst een bijlage van een omleiding: zo bestaat de bijlagen-cache en is
+    // te zien dat een persoonlijk document er niets aan verandert.
+    await openOmleiding(page);
+    await openBijlage(page);
+    await sluitViewer(page);
+    await expect.poll(async () => (await bewaardeBijlagen(page))?.length).toBe(1);
+
+    await page.goto('/documenten');
+    await expect(documentKnop(page)).toBeVisible({ timeout: 15_000 });
+    const namenVoor = await cacheNamen(page);
+    const bijlagenVoor = await bewaardeBijlagen(page);
+    const idbVoor = await idbNamen(page);
+    expect(namenVoor).toContain(BIJLAGEN_CACHE);
+
+    await documentKnop(page).click();
+    const laag = documentLaag(page);
+    const canvas = laag.getByRole('img', { name: `Pagina 1 van ${LOONBRIEF}`, exact: true });
+    await expect(canvas).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => canvas.evaluate((el: HTMLCanvasElement) => el.getContext('2d')!.getImageData(10, 10, 1, 1).data[3]), { timeout: 20_000 }).toBe(255);
+    await expect(laag.getByText('2 pagina’s')).toBeVisible();
+    await expect.poll(() => staat.bevestigd).toEqual(['/api/documents/d-loon/opened']);
+    await laag.getByRole('button', { name: 'Terug', exact: true }).click();
+    await expect(laag).toHaveCount(0);
+    // Wat nog op de achtergrond zou lopen, krijgt de tijd.
+    await page.waitForTimeout(1500);
+
+    // Niets nieuws in Cache Storage: dezelfde caches, en de bijlagen-cache ongewijzigd.
+    expect(await cacheNamen(page)).toEqual(namenVoor);
+    expect(await bewaardeBijlagen(page)).toEqual(bijlagenVoor);
+    expect(await idbNamen(page)).toEqual(idbVoor);
+    // Nergens op het toestel een spoor van het document.
+    expect(await documentSporen(page)).toEqual([]);
+    // Eén aanvraag naar de opslag, door de pagina zelf en met no-store; de
+    // service worker heeft ze niet beantwoord (anders stond ze niet in dit log).
+    const docFetches = await page.evaluate(() => (window as unknown as { __vhbFetches: Array<{ url: string; cache: string }> }).__vhbFetches.filter((f) => f.url.includes('/user-documents/')));
+    expect(docFetches).toEqual([{ url: DOC_URL, cache: 'no-store' }]);
+    expect(staat.documentAanvragen.map((a) => a.url)).toEqual([DOC_URL]);
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+
+  test('zonder bereik: de viewer komt uit de precache en zegt waarom het document niet opent; niets opgehaald', async ({ page, context }) => {
+    const staat: DocumentStaat = {
+      bijlagen: [], pdf: await maakPdf('Omleidingsplan', 1), downloads: 0,
+      loonbrief: await maakPdf('Loonbrief', 1), documentAanvragen: [], bevestigd: [],
+    };
+    await seedDocumenten(context, page, staat);
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+    await wachtOpControle(page);
+    // Alles door de service worker, zoals bij de bijlagen hierboven.
+    await page.goto('/documenten');
+    await expect(documentKnop(page)).toBeVisible({ timeout: 15_000 });
+    await page.reload();
+    await expect(documentKnop(page)).toBeVisible({ timeout: 15_000 });
+
+    // Het bereik valt weg terwijl de lijst er staat; de viewer is in deze
+    // sessie nog nooit geopend.
+    await zonderBereik(context);
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+    await documentKnop(page).click();
+    const laag = documentLaag(page);
+    await expect(laag.getByRole('heading', { name: 'Document kon niet geladen worden' })).toBeVisible({ timeout: 15_000 });
+    await expect(laag.getByText(/Persoonlijke documenten openen alleen met bereik: ze worden niet op dit toestel bewaard\./)).toBeVisible();
+    await expect(laag.getByRole('button', { name: 'Extern openen', exact: true })).toBeDisabled();
+    expect(staat.documentAanvragen).toEqual([]);
+    expect(staat.bevestigd).toEqual([]);
+    expect(await documentSporen(page)).toEqual([]);
+    await metBereik(context);
   });
 });

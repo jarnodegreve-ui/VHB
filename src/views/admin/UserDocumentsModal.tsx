@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileText, Trash2, Upload } from 'lucide-react';
 import type { User } from '../../types';
 import { Modal } from '../../components/Modal';
@@ -12,14 +12,25 @@ import { Formulier } from '../../components/Formulier';
 import { useVeldfouten } from '../../lib/formulier';
 import { meldSchrijffout } from '../../lib/fouten';
 import { formatDateHuman, prettySize } from '../../lib/format';
+import { opentInDeApp } from '../../lib/documentLink';
+// Lui geladen: de viewer en pdfjs horen niet in de startbundel of de warmup.
+import { LazyBijlageViewer } from '../../app/lazyViews';
 import type { UserDocument } from '../DocumentsView';
 
 const MAX_MB = 15;
 const ACCEPT = '.pdf,.png,.jpg,.jpeg';
 
-/** Documenten van één gebruiker beheren (planner/admin): lijst, upload, verwijderen. */
+/**
+ * Documenten van één gebruiker beheren (planner/admin): lijst, upload,
+ * verwijderen. "Openen" toont een PDF sinds 29-09 in de viewer van de app,
+ * zoals bij de chauffeur zelf: niets blijft op het toestel en een verse link
+ * komt uit de lijst van deze gebruiker. Een foto gaat de oude weg. Openen door
+ * het beheer is geen leesbevestiging: die is van de chauffeur.
+ */
 export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () => void }) {
   const [docs, setDocs] = useState<UserDocument[]>([]);
+  // Het document in de viewer: undefined = nog nooit geopend, null = gesloten.
+  const [inViewer, setInViewer] = useState<UserDocument | null>();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState('');
@@ -144,7 +155,17 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                         <p className="mt-0.5 text-xs font-medium text-slate-500">Nog niet geopend</p>
                       )}
                     </div>
-                    <IconButton label="Openen" variant="secondary" onClick={() => doc.url && openPdfInNewTab(doc.url)}><Download size={16} /></IconButton>
+                    <IconButton
+                      label="Openen"
+                      variant="secondary"
+                      onClick={() => {
+                        if (!doc.url) return;
+                        if (opentInDeApp(doc.filename)) setInViewer(doc);
+                        else openPdfInNewTab(doc.url);
+                      }}
+                    >
+                      <Download size={16} />
+                    </IconButton>
                     <IconButton label="Verwijderen" variant="danger" onClick={() => void handleDelete(doc)}><Trash2 size={16} /></IconButton>
                   </div>
                 ))}
@@ -152,6 +173,16 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             )}
           </div>
       </div>
+      {inViewer !== undefined && (
+        <Suspense fallback={null}>
+          <LazyBijlageViewer
+            soort="document"
+            document={inViewer}
+            lijst={`/api/documents?userId=${encodeURIComponent(user.id)}`}
+            onClose={() => setInViewer(null)}
+          />
+        </Suspense>
+      )}
     </Modal>
   );
 }

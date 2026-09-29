@@ -15,6 +15,9 @@
 //   diensten ook zonder signaal. Gecachet per volledige URL (incl.
 //   ?driverId=&month=), dus per gebruiker/maand geïsoleerd.
 // - Overige /api/*: network-only (geen stale-data risico).
+// - Bijlagen van omleidingen en updates: niet via deze handler. De viewer in
+//   de app bewaart ze zelf in 'vhb-bijlagen-v1'; de SW houdt die cache aan
+//   bij een deploy en ruimt op bij een verse lijst (sw-bijlagen.js).
 // v5: cache-hardening — v4-caches kunnen door de SPA-rewrite index.html
 // onder asset-URLs bevatten (cache-first = blijvend kapot); bump ruimt op.
 // v8: logo-SVG's gewijzigd (tagline 'SINDS 1922' verwijderd) — bump zodat
@@ -63,6 +66,15 @@ const CACHE_NAME = 'vhb-portaal-__VHB_BUILD_ID__';
 // try/catch — zonder dit script is de SW kapot en dat moet zichtbaar zijn.
 importScripts('/sw-ritbladen.js');
 const RITBLADEN_CACHE = self.VHB_RITBLADEN.RITBLADEN_CACHE;
+// Bijlagen van omleidingen en updates (29-09): eigen build-onafhankelijke
+// cache 'vhb-bijlagen-v1', gevuld door de viewer in de app zelf
+// (src/lib/bijlageCache.ts) en hier alleen bewaard bij activate en opgeruimd
+// zodra een verse lijst van de server zegt dat een bijlage weg of vervangen
+// is. De PDF's zelf komen van de storage-origin en lopen NIET door deze
+// fetch-handler (alleen /ritblaadjes/ doet dat); de regels staan in
+// sw-bijlagen.js. De lijsten waaruit de bijlagen komen, op exact pad:
+importScripts('/sw-bijlagen.js');
+const BIJLAGEN_LIJST = { '/api/diversions': 'omleiding', '/api/updates': 'update' };
 // Lazy chunks die óók zonder eerste online-gebruik in de cache horen: de
 // pdfjs-viewer + worker voor "Ritblad van vandaag". Ze staan niet in
 // index.html (precacheShell ziet ze niet) en krijgen per build een nieuwe
@@ -137,8 +149,11 @@ self.addEventListener('activate', (event) => {
       const heeftShell = Boolean(await cache.match('/'));
       if (heeftShell) {
         const keys = await caches.keys();
-        // De ritbladen-cache is build-onafhankelijk en blijft staan.
-        await Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== RITBLADEN_CACHE).map((k) => caches.delete(k)));
+        // De ritbladen-cache is build-onafhankelijk en blijft staan, net als
+        // de bijlagen-cache van de huidige versie. Een bijlagen-cache met een
+        // ander versienummer staat niet op deze lijst en gaat dus weg.
+        const bijlagenCache = self.VHB_BIJLAGEN.BIJLAGEN_CACHE;
+        await Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== RITBLADEN_CACHE && k !== bijlagenCache).map((k) => caches.delete(k)));
       }
       await self.clients.claim();
     })(),
@@ -187,6 +202,27 @@ async function snoeiRitbladen(cache) {
   const keys = await cache.keys();
   const weg = self.VHB_RITBLADEN.snoeiSleutels(keys.map((r) => r.url));
   await Promise.all(weg.map((k) => cache.delete(k)));
+}
+
+// Een VERSE lijst omleidingen of updates is binnen: gecachete bijlagen van
+// die soort die er niet meer in staan (record weg, plaats weg) of vervangen
+// zijn (andere versie) gaan uit de cache. Alleen aangeroepen vanuit de
+// netwerk-tak hieronder, met een geslaagd antwoord van de server zelf; een
+// antwoord uit de cache of een mislukte ophaling komt hier nooit, anders
+// gooide een chauffeur zonder bereik zijn offline PDF's weg.
+async function ruimBijlagenOp(soort, antwoord) {
+  const B = self.VHB_BIJLAGEN;
+  // Nog nooit een bijlage bewaard: niets te doen, en geen lege cache aanmaken.
+  if (!(await caches.has(B.BIJLAGEN_CACHE))) return;
+  const lijst = await antwoord.json();
+  if (!Array.isArray(lijst)) return;
+  const cache = await caches.open(B.BIJLAGEN_CACHE);
+  const entries = [];
+  for (const sleutel of await cache.keys()) {
+    const bewaard = await cache.match(sleutel);
+    if (bewaard) entries.push(B.leesEntry(sleutel.url, bewaard));
+  }
+  await Promise.all(B.teVerwijderen(soort, entries, lijst).map((k) => cache.delete(k)));
 }
 
 self.addEventListener('fetch', (event) => {
@@ -269,6 +305,18 @@ self.addEventListener('fetch', (event) => {
           if (res && res.ok) {
             const copy = res.clone();
             caches.open(RITBLADEN_CACHE).then((cache) => cache.put(req, copy));
+            // Bijlagen opruimen op deze verse lijst (zie ruimBijlagenOp).
+            // Zonder querystring: een gefilterde lijst zou bijlagen "missen"
+            // die er gewoon nog zijn. Best-effort, het antwoord wacht er niet op.
+            // In een try: wat hier ook misgaat, het antwoord aan de app
+            // blijft het verse antwoord van de server.
+            const soort = url.search ? undefined : BIJLAGEN_LIJST[url.pathname];
+            if (soort) {
+              try {
+                const opruimen = ruimBijlagenOp(soort, res.clone()).catch(() => {});
+                if (typeof event.waitUntil === 'function') event.waitUntil(opruimen);
+              } catch (_) { /* opruimen kan wachten tot de volgende verse lijst */ }
+            }
           }
           return res;
         })

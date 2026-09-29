@@ -141,6 +141,10 @@ export interface PdfBijlage {
   slot: number;
   filename: string;
   sizeBytes?: number;
+  /** Uploadmoment (ISO), sinds 29-09 van de server; oudere bijlagen hebben het
+   *  niet. Maakt een vervanging met dezelfde naam en grootte herkenbaar voor
+   *  de cache op het toestel (bijlageVersie in src/lib/bijlageCache.ts). */
+  uploadedAt?: string;
   /** Ondertekend en tijdelijk; komt van de server, wordt nooit bewaard. */
   url?: string;
 }

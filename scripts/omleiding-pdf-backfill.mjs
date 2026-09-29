@@ -13,7 +13,9 @@
  *
  * Per omleiding met een oude PDF:
  *   1. `<id>.pdf` verhuist naar `<id>-1.pdf`;
- *   2. `bijlagen` wordt [{ slot: 1, filename: "omleiding.pdf", sizeBytes }];
+ *   2. `bijlagen` wordt [{ slot: 1, filename: "omleiding.pdf", sizeBytes,
+ *      uploadedAt }], met het uploadmoment uit Storage (weg als Storage er
+ *      geen geeft);
  *   3. "pdfUrl" gaat op null.
  * Met de functies die het portaal zelf gebruikt
  * (verplaatsDiversionLegacyBijlage en zetDiversionBijlagen uit

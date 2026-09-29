@@ -216,6 +216,29 @@ describe('updateSchema', () => {
   });
 });
 
+// Uploadmoment (29-09): het veld staat in het contract, zodat een record dat
+// heen en terug gaat het houdt en het type het kent; een bijlage van vóór
+// 29-09 heeft het niet en blijft geldig. De server negeert wat de client hier
+// stuurt (zie api/_lib/communicatieRoutes.ts, metBewaardeBijlagen).
+describe('bijlagen: uploadmoment', () => {
+  const MOMENT = '2026-09-29T08:15:00.000Z';
+  const omleiding = { id: 'o-1', line: '12', title: 'Werken N70', description: 'Omrijden via …', startDate: '2026-07-01' };
+  const update = { id: 'u-1', date: '2026-09-03', title: 'T', content: 'C' };
+
+  it('een bijlage met en een zonder uploadmoment, naast elkaar, in omleiding en update', () => {
+    const bijlagen = [{ slot: 1, filename: 'oud.pdf', sizeBytes: 900 }, { slot: 2, filename: 'nieuw.pdf', sizeBytes: 1200, uploadedAt: MOMENT, url: 'https://x.test/b.pdf' }];
+    for (const [schema, record] of [[diversionSchema, omleiding], [diversionBodySchema, omleiding], [updateSchema, update], [updateBodySchema, update]] as const) {
+      const r = valideer(schema, { ...record, bijlagen });
+      expect(r.ok).toBe(true);
+      if (r.ok === false) continue;
+      expect(r.data.bijlagen).toEqual([{ slot: 1, filename: 'oud.pdf', sizeBytes: 900 }, { slot: 2, filename: 'nieuw.pdf', sizeBytes: 1200, uploadedAt: MOMENT, url: 'https://x.test/b.pdf' }]);
+    }
+    // Leeg of null (zoals een formulier of de database het geeft) = geen uploadmoment.
+    const leeg = valideer(diversionSchema, { ...omleiding, bijlagen: [{ slot: 1, filename: 'a.pdf', uploadedAt: '' }, { slot: 2, filename: 'b.pdf', uploadedAt: null }] });
+    expect(leeg.ok && leeg.data.bijlagen?.map((b) => b.uploadedAt)).toEqual([undefined, undefined]);
+  });
+});
+
 describe('basis: foutteksten', () => {
   it('veldfoutenVan: eerste tekst per veld, wortelfouten onder "_"', () => {
     const s = z.object({ a: z.string().min(1, 'eerste').min(2, 'tweede') });

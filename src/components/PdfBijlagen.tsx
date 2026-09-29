@@ -1,11 +1,14 @@
-import { useRef, useState } from 'react';
+import { Suspense, useRef, useState } from 'react';
 import { FileText, Trash2, Upload } from 'lucide-react';
 import type { PdfBijlage } from '../types';
 import { apiFetch } from '../lib/api';
 import { leesAlsDataUrl } from '../lib/dataUrl';
 import { prettySize } from '../lib/format';
 import { meldSchrijffout } from '../lib/fouten';
-import { notify, openPdfInNewTab } from '../lib/ui';
+import { notify } from '../lib/ui';
+import type { BijlageSoort } from '../lib/bijlageCache';
+// Lui geladen: de viewer en pdfjs horen niet in de startbundel of de warmup.
+import { LazyBijlageViewer } from '../app/lazyViews';
 import { Button, IconButton } from './primitives';
 
 /**
@@ -130,16 +133,23 @@ export function usePdfBijlagen({ recordPad, bijlagen, max, onGewijzigd, zonderRe
   return { bestandRef, bezig, kies, verwijder };
 }
 
-/** Een rij in de lijst: opgeslagen (met slot en url) of nog te uploaden. */
-export type BijlageRij = Pick<PdfBijlage, 'filename' | 'sizeBytes' | 'url'> & { sleutel: string; wachtend?: boolean };
+/** Een rij in de lijst: opgeslagen (met slot, url en uploadmoment) of nog te
+ *  uploaden. */
+export type BijlageRij = Pick<PdfBijlage, 'filename' | 'sizeBytes' | 'uploadedAt' | 'url'> & { sleutel: string; slot?: number; wachtend?: boolean };
 
-export function PdfBijlagenLijst({ rijen, bezig, onVerwijder }: {
+export function PdfBijlagenLijst({ rijen, bezig, onVerwijder, bron }: {
   rijen: BijlageRij[];
   bezig: boolean;
   onVerwijder: (rij: BijlageRij) => void;
+  /** Het opgeslagen record waar de bijlagen bij horen; "Openen" toont de
+   *  bijlage dan in de app, dezelfde viewer als aan de leeskant. */
+  bron?: { soort: BijlageSoort; recordId: string };
 }) {
+  // undefined = nog nooit geopend, null = gesloten na een opening.
+  const [open, setOpen] = useState<PdfBijlage | null>();
   if (rijen.length === 0) return null;
   return (
+    <>
     <ul className="divide-y divide-hairline-subtle overflow-hidden rounded-2xl bg-paper ring-1 ring-hairline">
       {rijen.map((b) => (
         <li key={b.sleutel} className="flex items-center gap-2 px-3 py-2">
@@ -153,7 +163,7 @@ export function PdfBijlagenLijst({ rijen, bezig, onVerwijder }: {
             </span>
           </span>
           {!b.wachtend && (
-            <Button variant="ghost" size="sm" disabled={!b.url} onClick={() => b.url && openPdfInNewTab(b.url)}>
+            <Button variant="ghost" size="sm" disabled={!b.url || !bron || b.slot === undefined} onClick={() => b.slot !== undefined && setOpen({ slot: b.slot, filename: b.filename, sizeBytes: b.sizeBytes, uploadedAt: b.uploadedAt, url: b.url })}>
               Openen
             </Button>
           )}
@@ -163,6 +173,12 @@ export function PdfBijlagenLijst({ rijen, bezig, onVerwijder }: {
         </li>
       ))}
     </ul>
+    {bron && open !== undefined && (
+      <Suspense fallback={null}>
+        <LazyBijlageViewer soort={bron.soort} recordId={bron.recordId} bijlage={open} onClose={() => setOpen(null)} />
+      </Suspense>
+    )}
+    </>
   );
 }
 

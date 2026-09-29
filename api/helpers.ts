@@ -3,6 +3,7 @@ import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.
 import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
 import { MAX_UPDATE_BIJLAGEN } from "../shared/schemas/update.js";
 import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
+import { uploadMoment } from "./_lib/bijlagenActies.js";
 import type {
   AppUser,
   DiversionRecord,
@@ -624,7 +625,7 @@ export const toPublicDiversion = (d: any): DiversionRecord => {
  * enkele bestaande omleiding haar bijlage kwijtraakt bij de deploy. De eerste
  * upload of verwijdering op die omleiding schrijft de lijst en wist de marker.
  */
-export const omleidingBijlagen = (d: { pdfUrl?: string | null; bijlagen?: unknown }): Array<{ slot: number; filename: string; sizeBytes?: number; legacy?: boolean }> => {
+export const omleidingBijlagen = (d: { pdfUrl?: string | null; bijlagen?: unknown }): Array<{ slot: number; filename: string; sizeBytes?: number; uploadedAt?: string; legacy?: boolean }> => {
   const lijst = bijlagenUitKolom(d.bijlagen, MAX_OMLEIDING_BIJLAGEN);
   if (lijst.length > 0) return lijst;
   return d.pdfUrl ? [{ slot: 1, filename: LEGACY_OMLEIDING_PDF_NAAM, legacy: true }] : [];
@@ -770,15 +771,21 @@ export const toDatabasePlanningCode = (code: PlanningCodeRecord) => ({
 /** Bijlagenlijst uit een kolom `bijlagen` (jsonb; updates en omleidingen),
  *  opgeschoond en op slot gesorteerd. `max` is het hoogste slot dat telt.
  *  Onbekende vormen leveren een lege lijst: de bijlage is een extra, nooit
- *  een reden om het record zelf te laten vallen. */
-export const bijlagenUitKolom = (waarde: any, max: number = MAX_UPDATE_BIJLAGEN): Array<{ slot: number; filename: string; sizeBytes?: number }> => {
+ *  een reden om het record zelf te laten vallen. `uploadedAt` (29-09) gaat
+ *  alleen mee als het een leesbaar tijdstip is; een element van daarvoor heeft
+ *  er geen en blijft zonder (zie uploadMoment in _lib/bijlagenActies.ts). */
+export const bijlagenUitKolom = (waarde: any, max: number = MAX_UPDATE_BIJLAGEN): Array<{ slot: number; filename: string; sizeBytes?: number; uploadedAt?: string }> => {
   if (!Array.isArray(waarde)) return [];
   return waarde
-    .map((b: any) => ({
-      slot: Number(b?.slot),
-      filename: String(b?.filename || ""),
-      ...(Number.isFinite(Number(b?.sizeBytes)) ? { sizeBytes: Number(b.sizeBytes) } : {}),
-    }))
+    .map((b: any) => {
+      const uploadedAt = uploadMoment(b?.uploadedAt);
+      return {
+        slot: Number(b?.slot),
+        filename: String(b?.filename || ""),
+        ...(Number.isFinite(Number(b?.sizeBytes)) ? { sizeBytes: Number(b.sizeBytes) } : {}),
+        ...(uploadedAt ? { uploadedAt } : {}),
+      };
+    })
     .filter((b) => Number.isInteger(b.slot) && b.slot >= 1 && b.slot <= max && b.filename)
     .sort((a, b) => a.slot - b.slot);
 };

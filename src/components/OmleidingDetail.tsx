@@ -1,7 +1,9 @@
+import { Suspense, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { omleidingsPeriode, omleidingsTijdshint } from '../lib/diversions';
-import type { Diversion } from '../types';
-import { openPdfInNewTab } from '../lib/ui';
+import type { Diversion, PdfBijlage } from '../types';
+// Lui geladen: de viewer en pdfjs horen niet in de startbundel of de warmup.
+import { LazyBijlageViewer } from '../app/lazyViews';
 import { Button, MicroLabel } from './primitives';
 import { LijnTegel } from './LijnTegel';
 
@@ -9,7 +11,8 @@ import { LijnTegel } from './LijnTegel';
  * Inhoud van één omleiding: periode bovenaan, dan de bijlagen (tot vijf
  * PDF's, één knop per bestand) en pas dan de omschrijving met behoud van
  * regeleinden, zodat een lange tekst de bijlagen niet onderaan het paneel
- * verstopt.
+ * verstopt. Een bijlage opent in de app (BijlageViewer): terug sluit de
+ * viewer en laat deze omleiding open staan.
  *
  * Woont bewust hier en niet in DiversionsView: het dashboard toont hetzelfde
  * blok in zijn SlideOver, en een import daarvandaan maakte de (lui geladen)
@@ -18,6 +21,9 @@ import { LijnTegel } from './LijnTegel';
 export function OmleidingDetail({ diversion: div }: { diversion: Diversion }) {
   const hint = omleidingsTijdshint(div);
   const bijlagen = (div.bijlagen ?? []).filter((b) => b.url);
+  // undefined = nog nooit geopend (de viewer is dan niet geladen), null =
+  // gesloten na een opening (de laag fadet nog uit).
+  const [open, setOpen] = useState<PdfBijlage | null>();
   return (
     <div className="space-y-5">
       <LijnTegel line={div.line} layout="rij" />
@@ -54,13 +60,18 @@ export function OmleidingDetail({ diversion: div }: { diversion: Diversion }) {
                   size="sm"
                   className="max-w-full min-w-0"
                   icon={<FileText size={16} />}
-                  onClick={() => openPdfInNewTab(b.url)}
+                  onClick={() => setOpen(b)}
                 >
                   <span className="min-w-0 truncate">{b.filename}</span>
                 </Button>
               </li>
             ))}
           </ul>
+          {open !== undefined && (
+            <Suspense fallback={null}>
+              <LazyBijlageViewer soort="omleiding" recordId={div.id} bijlage={open} onClose={() => setOpen(null)} />
+            </Suspense>
+          )}
         </div>
       )}
 

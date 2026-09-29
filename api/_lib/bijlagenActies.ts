@@ -66,3 +66,15 @@ export const laatsteVerwijdering = (regels: ReadonlyArray<BijlageLogregel>, id: 
 
 /** Heeft het log regels over dit id? */
 export const heeftLogregels = (regels: ReadonlyArray<BijlageLogregel>, id: string): boolean => regels.some((r) => r.entityId === id);
+
+/**
+ * Het uploadmoment van één bijlage (ISO), zoals alleen de server het zet: bij
+ * een upload de servertijd, bij een herstel of een verhuis het tijdstip dat
+ * Storage bij het bestand bijhoudt (`updated_at`, anders `created_at`). Het
+ * maakt een vervanging met dezelfde naam en grootte herkenbaar voor de cache
+ * van de client (bijlageVersie in src/lib/bijlageCache.ts). Wat geen leesbaar
+ * tijdstip is valt weg: een element zonder uploadmoment blijft overal geldig,
+ * de client valt dan terug op naam en grootte.
+ */
+export const uploadMoment = (waarde: unknown): string | undefined =>
+  typeof waarde === "string" && waarde.trim() !== "" && Number.isFinite(Date.parse(waarde)) ? waarde : undefined;

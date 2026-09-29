@@ -18,3 +18,12 @@ export const DOCUMENT_VERVERS_NA_MS = 5 * 60_000;
  *  Onbekend moment of een klok die terugsprong = nee. */
 export const linkNogGeldig = (ondertekendOp: number | null, nu: number): boolean =>
   ondertekendOp !== null && nu >= ondertekendOp && nu - ondertekendOp < DOCUMENT_LINK_GELDIG_MS;
+
+/**
+ * Opent dit persoonlijke document in de viewer van de app (29-09)? Alleen een
+ * PDF: een persoonlijk document mag ook een foto zijn (.png, .jpg, .jpeg; zie
+ * de uploadschermen en POST /api/documents), en die gaat de oude weg, extern
+ * openen, zoals vroeger. Het type volgt uit de bestandsnaam, die de server bij
+ * de upload op die extensies controleert.
+ */
+export const opentInDeApp = (filename: string): boolean => /\.pdf$/i.test(filename.trim());

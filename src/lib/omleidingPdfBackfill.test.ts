@@ -167,6 +167,40 @@ describe('de chauffeur ziet voor en na dezelfde bijlage', () => {
   });
 });
 
+// Uploadmoment (29-09): het script schrijft een bijlagenlijst en zet daarin het
+// tijdstip dat Storage bij het bestand bijhoudt, zoals het herstel na
+// Ongedaan maken; zonder tijdstip blijft het veld weg.
+describe('uploadmoment uit Storage', () => {
+  it('gaat mee in de lijst als Storage een tijdstip kent, en blijft anders weg', async () => {
+    const tabel: Rij[] = [
+      { id: 'a', title: 'Te verhuizen', pdfUrl: MARKER },
+      { id: 'b', title: 'Verhuisd zonder lijst', pdfUrl: MARKER },
+      { id: 'c', title: 'Zonder tijdstip', pdfUrl: MARKER },
+    ];
+    const bestanden = [
+      { naam: 'a.pdf', sizeBytes: 100, gewijzigdOp: '2026-08-01T07:00:00.000Z' },
+      { naam: 'b-1.pdf', sizeBytes: 200, gewijzigdOp: '2026-08-02T07:00:00.000Z' },
+      { naam: 'c.pdf', sizeBytes: 300, gewijzigdOp: null },
+    ];
+    const plan = planBackfill(tabel, bestanden);
+    expect(plan.map((r) => [r.id, r.actie, r.uploadedAt ?? null])).toEqual([
+      ['a', 'verhuizen', '2026-08-01T07:00:00.000Z'],
+      ['b', 'lijst-herstellen', '2026-08-02T07:00:00.000Z'],
+      ['c', 'verhuizen', null],
+    ]);
+    const lijsten: Record<string, unknown> = {};
+    await voerBackfillUit(plan, { verplaats: async () => {}, zetLijst: async (id, lijst) => { lijsten[id] = lijst; } });
+    expect(lijsten).toEqual({
+      a: [{ slot: 1, filename: 'omleiding.pdf', sizeBytes: 100, uploadedAt: '2026-08-01T07:00:00.000Z' }],
+      b: [{ slot: 1, filename: 'omleiding.pdf', sizeBytes: 200, uploadedAt: '2026-08-02T07:00:00.000Z' }],
+      c: [{ slot: 1, filename: 'omleiding.pdf', sizeBytes: 300 }],
+    });
+    // Wat de server daarna uit de kolom leest, draagt hetzelfde uploadmoment.
+    expect(omleidingBijlagen({ bijlagen: lijsten.a })).toEqual([{ slot: 1, filename: 'omleiding.pdf', sizeBytes: 100, uploadedAt: '2026-08-01T07:00:00.000Z' }]);
+    expect(omleidingBijlagen({ bijlagen: lijsten.c })).toEqual([{ slot: 1, filename: 'omleiding.pdf', sizeBytes: 300 }]);
+  });
+});
+
 // Tegenlezing 29-09, punt 4a: dezelfde dubbelzinnigheid als bij het herstel.
 describe('een bestand dat van twee omleidingen kan zijn blijft onaangeroerd', () => {
   it('het script kent hetzelfde aantal plaatsen als het portaal', () => {

@@ -10,6 +10,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import type { AddressInfo } from 'node:net';
+// De versie waarmee de cache op het toestel een bijlage herkent: de bijlagen-
+// tests rekenen ermee op wat de route echt teruggeeft.
+import { bijlageSleutel, bijlageVersie } from './lib/bijlageCache';
 import { gzipSync } from 'node:zlib';
 // De client-hulp van de planning-upload (zuiver, geen app-imports): de tests
 // van de gzip-upload bouwen hun verzoek er precies zoals de browser mee.
@@ -529,15 +532,23 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       else delete u.bijlagen;
     },
     // Wat er echt in Storage hangt (herstel na "Ongedaan maken"): de grootte
-    // komt uit Storage, niet van de client.
+    // komt uit Storage, niet van de client, net als het uploadmoment (het
+    // tijdstip dat Storage bijhoudt, hier `mem.opslagTijd`; zonder ingang
+    // geeft Storage er geen en blijft het veld weg).
     bestaandeUpdateBijlagen: async (updateId: string) => {
       if (mem.opslagFaalt) throw new Error('storage onbereikbaar');
-      return [1, 2].filter((slot) => mem.opslag.has(`update-bijlagen/${updateId}-${slot}.pdf`)).map((slot) => ({ slot, sizeBytes: 1000 + slot }));
+      return [1, 2].filter((slot) => mem.opslag.has(`update-bijlagen/${updateId}-${slot}.pdf`)).map((slot) => {
+        const tijd = mem.opslagTijd.get(`update-bijlagen/${updateId}-${slot}.pdf`);
+        return { slot, sizeBytes: 1000 + slot, ...(tijd ? { uploadedAt: tijd } : {}) };
+      });
     },
     bestaandeDiversionBijlagen: async (id: string) => {
       if (mem.opslagFaalt) throw new Error('storage onbereikbaar');
       return {
-        slots: [1, 2, 3, 4, 5].filter((slot) => mem.opslag.has(`diversions/${id}-${slot}.pdf`)).map((slot) => ({ slot, sizeBytes: 1000 + slot })),
+        slots: [1, 2, 3, 4, 5].filter((slot) => mem.opslag.has(`diversions/${id}-${slot}.pdf`)).map((slot) => {
+          const tijd = mem.opslagTijd.get(`diversions/${id}-${slot}.pdf`);
+          return { slot, sizeBytes: 1000 + slot, ...(tijd ? { uploadedAt: tijd } : {}) };
+        }),
         oudeSleutel: mem.opslag.has(`diversions/${id}.pdf`),
       };
     },
@@ -856,6 +867,11 @@ afterAll(async () => {
 /** De klok een seconde verder: in het echt staan twee handelingen nooit op
  *  dezelfde milliseconde in het log, onder de vaste testklok wel. */
 const tik = (ms = 1000) => vi.setSystemTime(new Date(Date.now() + ms));
+
+/** De vaste testklok als ISO: het uploadmoment dat de server sinds 29-09 bij
+ *  elke geüploade bijlage zet (`uploadedAt`), zolang de test de klok niet
+ *  verzet. Oudere elementen zonder dat veld blijven overal geldig. */
+const KLOK_ISO = '2026-06-15T10:00:00.000Z';
 
 const COLLECTIE_PADEN = new Set(['/api/planning', '/api/planning-codes', '/api/users', '/api/diversions', '/api/services', '/api/updates', '/api/swaps', '/api/leave']);
 const api = async (
@@ -8846,7 +8862,7 @@ describe('bijlagen bij een update', () => {
     const id = eersteId();
     const res = await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'mededeling.pdf', dataUrl: PDF } });
     expect(res.status).toBe(200);
-    expect(res.json.update.bijlagen).toEqual([{ slot: 1, filename: 'mededeling.pdf', sizeBytes: expect.any(Number) }]);
+    expect(res.json.update.bijlagen).toEqual([{ slot: 1, filename: 'mededeling.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO }]);
     expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(true);
   });
 
@@ -8863,7 +8879,7 @@ describe('bijlagen bij een update', () => {
     const id = eersteId();
     await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'oud.pdf', dataUrl: PDF } });
     const res = await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'nieuw.pdf', dataUrl: PDF } });
-    expect(res.json.update.bijlagen).toEqual([{ slot: 1, filename: 'nieuw.pdf', sizeBytes: expect.any(Number) }]);
+    expect(res.json.update.bijlagen).toEqual([{ slot: 1, filename: 'nieuw.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO }]);
   });
 
   it('weigert niet-PDF, een leeg bestand, een onbekende update en een chauffeur', async () => {
@@ -8897,7 +8913,7 @@ describe('bijlagen bij een update', () => {
     expect(res.status).toBe(200);
     const bewaard = mem.updates.find((u: any) => String(u.id) === id);
     expect(bewaard.title).toBe('Nieuwe titel');
-    expect(bewaard.bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number) }]);
+    expect(bewaard.bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO }]);
   });
 
   it('GET /api/updates ondertekent elke bijlage en laat een verdwenen bestand weg', async () => {
@@ -9032,6 +9048,103 @@ describe('bijlagen bij een update', () => {
       expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(true);
     });
   });
+
+  // Uploadmoment (29-09): de server zet `uploadedAt` bij elke upload, zodat een
+  // vervanging met dezelfde naam en grootte voor de cache op het toestel een
+  // ander bestand is. Een client kan het nooit zetten; een bijlage van
+  // daarvoor heeft het niet en blijft overal geldig.
+  describe('uploadmoment (uploadedAt)', () => {
+    const upload = (id: string, slot: number, filename: string, extra: Record<string, unknown> = {}) =>
+      api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot, filename, dataUrl: PDF, ...extra } });
+    const inLijst = async (id: string, token = 'tok-a') => (await api('GET', '/api/updates', { token })).json.find((u: any) => String(u.id) === id);
+    const VALS = '2099-01-01T00:00:00.000Z';
+
+    it('een upload zet het uploadmoment van de server, en de chauffeur krijgt het mee in de lijst', async () => {
+      const id = eersteId();
+      tik(5 * 60_000);
+      const moment = new Date(Date.parse(KLOK_ISO) + 5 * 60_000).toISOString();
+      const res = await upload(id, 2, 'formulier.pdf');
+      expect(res.json.update.bijlagen).toEqual([{ slot: 2, filename: 'formulier.pdf', sizeBytes: expect.any(Number), uploadedAt: moment }]);
+      expect(mem.updates.find((u: any) => String(u.id) === id).bijlagen).toEqual([{ slot: 2, filename: 'formulier.pdf', sizeBytes: expect.any(Number), uploadedAt: moment }]);
+      expect((await inLijst(id)).bijlagen).toEqual([{ slot: 2, filename: 'formulier.pdf', sizeBytes: expect.any(Number), uploadedAt: moment, url: `https://opslag.test/${id}-2.pdf?sig=test` }]);
+    });
+
+    it('een vervanging op dezelfde plaats met dezelfde naam en grootte is voor de cache van de client een ander bestand', async () => {
+      const id = eersteId();
+      await upload(id, 1, 'rooster.pdf');
+      const eerste = (await inLijst(id)).bijlagen[0];
+      tik(90_000);
+      await upload(id, 1, 'rooster.pdf');
+      const tweede = (await inLijst(id)).bijlagen[0];
+      // Plaats, naam, grootte en pad in de opslag zijn gelijk: zonder het
+      // uploadmoment hield de telefoon het vorige bestand voor dit.
+      expect([tweede.slot, tweede.filename, tweede.sizeBytes]).toEqual([eerste.slot, eerste.filename, eerste.sizeBytes]);
+      expect(bijlageSleutel(tweede.url)).toBe(bijlageSleutel(eerste.url));
+      expect(eerste.uploadedAt).toBe(KLOK_ISO);
+      expect(tweede.uploadedAt).toBe(new Date(Date.parse(KLOK_ISO) + 90_000).toISOString());
+      expect(bijlageVersie(tweede)).not.toBe(bijlageVersie(eerste));
+    });
+
+    it('een meegestuurd uploadedAt van de client telt nooit: niet bij opslaan, niet bij uploaden, niet bij herstellen', async () => {
+      const id = eersteId();
+      await upload(id, 1, 'een.pdf');
+      tik();
+      // In de body van de upload zelf.
+      const tweede = await upload(id, 2, 'twee.pdf', { uploadedAt: VALS });
+      expect(tweede.json.update.bijlagen.map((b: any) => b.uploadedAt)).toEqual([KLOK_ISO, new Date(Date.parse(KLOK_ISO) + 1000).toISOString()]);
+      const serverLijst = mem.updates.find((u: any) => String(u.id) === id).bijlagen;
+
+      // PUT met een vervalste lijst: de server houdt de zijne.
+      const { _rev, ...record } = await inLijst(id, 'tok-planner');
+      const vervalst = record.bijlagen.map((b: any) => ({ ...b, uploadedAt: VALS }));
+      const put = await api('PUT', `/api/updates/${id}`, { token: 'tok-planner', body: { ...record, bijlagen: vervalst }, headers: { 'X-Record-Revision': _rev } });
+      expect(put.status).toBe(200);
+      expect(put.json.update.bijlagen).toEqual(serverLijst);
+
+      // De hele collectie opslaan (bulk) met dezelfde vervalsing.
+      const bulk = await api('POST', '/api/updates', { token: 'tok-planner', body: mem.updates.map((u: any) => ({ id: u.id, date: u.date, title: u.title, content: u.content, category: u.category ?? 'algemeen', bijlagen: String(u.id) === id ? vervalst : undefined })) });
+      expect(bulk.status).toBe(200);
+      expect(mem.updates.find((u: any) => String(u.id) === id).bijlagen).toEqual(serverLijst);
+
+      // Ongedaan maken na verwijderen: het uploadmoment komt uit Storage.
+      // Voor slot 1 kent Storage er een, voor slot 2 niet: dan blijft het weg.
+      mem.opslagTijd.set(`update-bijlagen/${id}-1.pdf`, '2026-06-15T09:59:58.000Z');
+      const weg = await inLijst(id, 'tok-planner');
+      tik();
+      expect((await api('DELETE', `/api/updates/${id}`, { token: 'tok-planner', headers: { 'X-Record-Revision': weg._rev } })).status).toBe(200);
+      tik();
+      const { _rev: _weg, ...terugTeZetten } = weg;
+      const terug = await api('POST', '/api/updates/one', {
+        token: 'tok-planner',
+        headers: { 'X-Herstel': '1' },
+        body: { ...terugTeZetten, bijlagen: weg.bijlagen.map((b: any) => ({ ...b, uploadedAt: VALS })) },
+      });
+      expect(terug.status).toBe(201);
+      expect(terug.json.update.bijlagen).toEqual([
+        { slot: 1, filename: 'een.pdf', sizeBytes: 1001, uploadedAt: '2026-06-15T09:59:58.000Z' },
+        { slot: 2, filename: 'twee.pdf', sizeBytes: 1002 },
+      ]);
+    });
+
+    it('een bijlage zonder uploadmoment (van vóór 29-09) blijft geldig naast een nieuwe: lijst, versie, opslaan en verwijderen', async () => {
+      const id = eersteId();
+      mem.updates[0].bijlagen = [{ slot: 1, filename: 'oud.pdf', sizeBytes: 900 }];
+      mem.opslag.add(`update-bijlagen/${id}-1.pdf`);
+      const res = await upload(id, 2, 'nieuw.pdf');
+      expect(res.json.update.bijlagen).toEqual([
+        { slot: 1, filename: 'oud.pdf', sizeBytes: 900 },
+        { slot: 2, filename: 'nieuw.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO },
+      ]);
+      const lijst = (await inLijst(id)).bijlagen;
+      expect(lijst.map((b: any) => [b.slot, b.uploadedAt ?? null, typeof b.url])).toEqual([[1, null, 'string'], [2, KLOK_ISO, 'string']]);
+      // Zonder uploadmoment valt de client terug op naam en grootte.
+      expect(bijlageVersie(lijst[0])).toBe('oud.pdf|900|');
+      // Het nieuwe weghalen laat het oude ongemoeid.
+      const na = await api('DELETE', `/api/updates/${id}/bijlage/2`, { token: 'tok-planner' });
+      expect(na.status).toBe(200);
+      expect(na.json.update.bijlagen).toEqual([{ slot: 1, filename: 'oud.pdf', sizeBytes: 900 }]);
+    });
+  });
 });
 
 // --- PDF-bijlagen bij een omleiding (2026-09-25_diversions_bijlagen.sql) ---
@@ -9050,10 +9163,10 @@ describe('bijlagen bij een omleiding', () => {
   it('POST …/bijlage zet het bestand op <id>-<slot>.pdf, hangt de lijst aan het record en logt', async () => {
     const res = await upload('o-1', 1, 'omleidingsplan.pdf');
     expect(res.status).toBe(200);
-    expect(res.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'omleidingsplan.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' }]);
+    expect(res.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'omleidingsplan.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO, url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' }]);
     expect(res.json.diversion._rev).toBeTruthy();
     expect(mem.opslag.has('diversions/o-1-1.pdf')).toBe(true);
-    expect(mem.diversions[0].bijlagen).toEqual([{ slot: 1, filename: 'omleidingsplan.pdf', sizeBytes: expect.any(Number) }]);
+    expect(mem.diversions[0].bijlagen).toEqual([{ slot: 1, filename: 'omleidingsplan.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO }]);
     expect(mem.activity.find((a) => a.action === 'Bijlage toegevoegd' && a.entityType === 'diversion')).toBeTruthy();
   });
 
@@ -9068,7 +9181,7 @@ describe('bijlagen bij een omleiding', () => {
   it('dezelfde plaats opnieuw vervangt de vorige, geen dubbele rij', async () => {
     await upload('o-1', 2, 'oud.pdf');
     const res = await upload('o-1', 2, 'nieuw.pdf');
-    expect(res.json.diversion.bijlagen).toEqual([{ slot: 2, filename: 'nieuw.pdf', sizeBytes: expect.any(Number), url: expect.any(String) }]);
+    expect(res.json.diversion.bijlagen).toEqual([{ slot: 2, filename: 'nieuw.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO, url: expect.any(String) }]);
   });
 
   it('weigert geen-PDF, leeg bestand, onbekende omleiding, chauffeur en een id met padtekens', async () => {
@@ -9100,10 +9213,10 @@ describe('bijlagen bij een omleiding', () => {
     const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { id: 'o-1', line: '12', title: 'Werken N70 (verlengd)', description: 'Omrijden via …', startDate: '2026-07-01', endDate: '2026-08-31' }, headers: { 'X-Record-Revision': rev } });
     expect(put.status).toBe(200);
     expect(put.json.diversion.title).toBe('Werken N70 (verlengd)');
-    expect(put.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number), url: expect.any(String) }]);
+    expect(put.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO, url: expect.any(String) }]);
     const bulk = await api('POST', '/api/diversions', { token: 'tok-planner', body: mem.diversions.map((d: any) => ({ id: d.id, line: d.line, title: d.title, description: d.description, startDate: d.startDate, endDate: d.endDate })) });
     expect(bulk.status).toBe(200);
-    expect(mem.diversions.find((d: any) => d.id === 'o-1').bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number) }]);
+    expect(mem.diversions.find((d: any) => d.id === 'o-1').bijlagen).toEqual([{ slot: 1, filename: 'blijft.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO }]);
   });
 
   it('GET ondertekent elke bijlage en laat een verdwenen bestand weg', async () => {
@@ -9112,7 +9225,7 @@ describe('bijlagen bij een omleiding', () => {
     mem.opslag.delete('diversions/o-1-1.pdf');
     const get = await api('GET', '/api/diversions', { token: 'tok-a' });
     const o1 = get.json.find((d: any) => d.id === 'o-1');
-    expect(o1.bijlagen).toEqual([{ slot: 2, filename: 'plan-2.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' }]);
+    expect(o1.bijlagen).toEqual([{ slot: 2, filename: 'plan-2.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO, url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' }]);
     expect(get.json.find((d: any) => d.id === 'o-2').bijlagen).toBeUndefined();
   });
 
@@ -9240,7 +9353,7 @@ describe('bijlagen bij een omleiding', () => {
         expect(inOpslag()).toEqual(voor);
         expect(inOpslag()).toEqual(['diversions/o-1-2.pdf']);
         const o1 = (await api('GET', '/api/diversions', { token: 'tok-a' })).json.find((d: any) => d.id === 'o-1');
-        expect(o1.bijlagen).toEqual([{ slot: 2, filename: 'van-o-1.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' }]);
+        expect(o1.bijlagen).toEqual([{ slot: 2, filename: 'van-o-1.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO, url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' }]);
         expect(mem.activity.some((a) => a.action === 'Bijlagen hersteld')).toBe(false);
       });
 
@@ -9347,17 +9460,17 @@ describe('bijlagen bij een omleiding', () => {
       expect(res.status).toBe(200);
       expect(res.json.diversion.bijlagen).toEqual([
         { slot: 1, filename: 'omleiding.pdf', url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' },
-        { slot: 2, filename: 'haltekaart.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' },
+        { slot: 2, filename: 'haltekaart.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO, url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' },
       ]);
       expect(mem.opslag.has('diversions/o-1.pdf')).toBe(false);
       expect(mem.diversions[0].pdfUrl).toBeUndefined();
-      expect(mem.diversions[0].bijlagen).toEqual([{ slot: 1, filename: 'omleiding.pdf' }, { slot: 2, filename: 'haltekaart.pdf', sizeBytes: expect.any(Number) }]);
+      expect(mem.diversions[0].bijlagen).toEqual([{ slot: 1, filename: 'omleiding.pdf' }, { slot: 2, filename: 'haltekaart.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO }]);
     });
 
     it('slot 1 vervangen ruimt de oude sleutel op', async () => {
       const res = await upload('o-1', 1, 'nieuw-plan.pdf');
       expect(res.status).toBe(200);
-      expect(res.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'nieuw-plan.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' }]);
+      expect(res.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'nieuw-plan.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO, url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' }]);
       expect(mem.opslag.has('diversions/o-1.pdf')).toBe(false);
       expect(mem.diversions[0].pdfUrl).toBeUndefined();
     });
@@ -9388,6 +9501,102 @@ describe('bijlagen bij een omleiding', () => {
       expect(put.status).toBe(200);
       expect(put.json.diversion.bijlagen).toEqual([{ slot: 1, filename: 'omleiding.pdf', url: 'https://opslag.test/diversions/o-1.pdf?sig=test' }]);
       expect(mem.diversions[0].pdfUrl).toBeTruthy();
+    });
+  });
+
+  // Uploadmoment (29-09): zelfde regels als bij de updates.
+  describe('uploadmoment (uploadedAt)', () => {
+    const inLijst = async (id: string, token = 'tok-a') => (await api('GET', '/api/diversions', { token })).json.find((d: any) => d.id === id);
+    const VALS = '2099-01-01T00:00:00.000Z';
+    const velden = (d: any) => ({ id: d.id, line: d.line, title: d.title, description: d.description, startDate: d.startDate, endDate: d.endDate });
+
+    it('een upload zet het uploadmoment van de server, en de chauffeur krijgt het mee in de lijst', async () => {
+      tik(5 * 60_000);
+      const moment = new Date(Date.parse(KLOK_ISO) + 5 * 60_000).toISOString();
+      const res = await upload('o-1', 3, 'haltes.pdf');
+      expect(res.json.diversion.bijlagen).toEqual([{ slot: 3, filename: 'haltes.pdf', sizeBytes: expect.any(Number), uploadedAt: moment, url: 'https://opslag.test/diversions/o-1-3.pdf?sig=test' }]);
+      expect(mem.diversions[0].bijlagen).toEqual([{ slot: 3, filename: 'haltes.pdf', sizeBytes: expect.any(Number), uploadedAt: moment }]);
+      expect((await inLijst('o-1')).bijlagen).toEqual([{ slot: 3, filename: 'haltes.pdf', sizeBytes: expect.any(Number), uploadedAt: moment, url: 'https://opslag.test/diversions/o-1-3.pdf?sig=test' }]);
+    });
+
+    it('een vervanging op dezelfde plaats met dezelfde naam en grootte is voor de cache van de client een ander bestand', async () => {
+      await upload('o-1', 1, 'plan.pdf');
+      const eerste = (await inLijst('o-1')).bijlagen[0];
+      tik(90_000);
+      await upload('o-1', 1, 'plan.pdf');
+      const tweede = (await inLijst('o-1')).bijlagen[0];
+      expect([tweede.slot, tweede.filename, tweede.sizeBytes]).toEqual([eerste.slot, eerste.filename, eerste.sizeBytes]);
+      expect(bijlageSleutel(tweede.url)).toBe(bijlageSleutel(eerste.url));
+      expect(eerste.uploadedAt).toBe(KLOK_ISO);
+      expect(tweede.uploadedAt).toBe(new Date(Date.parse(KLOK_ISO) + 90_000).toISOString());
+      expect(bijlageVersie(tweede)).not.toBe(bijlageVersie(eerste));
+    });
+
+    it('een meegestuurd uploadedAt van de client telt nooit: niet bij opslaan, niet bij uploaden, niet bij herstellen', async () => {
+      await upload('o-1', 1, 'plan.pdf');
+      tik();
+      const tweede = await api('POST', '/api/diversions/o-1/bijlage', { token: 'tok-planner', body: { slot: 2, filename: 'haltes.pdf', dataUrl: PDF, uploadedAt: VALS } });
+      expect(tweede.json.diversion.bijlagen.map((b: any) => b.uploadedAt)).toEqual([KLOK_ISO, new Date(Date.parse(KLOK_ISO) + 1000).toISOString()]);
+      const serverLijst = mem.diversions[0].bijlagen;
+
+      // PUT met een vervalste lijst: de server houdt de zijne.
+      const { _rev, ...record } = await inLijst('o-1', 'tok-planner');
+      const vervalst = record.bijlagen.map((b: any) => ({ ...b, uploadedAt: VALS }));
+      const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...record, bijlagen: vervalst }, headers: { 'X-Record-Revision': _rev } });
+      expect(put.status).toBe(200);
+      expect(mem.diversions[0].bijlagen).toEqual(serverLijst);
+      expect(put.json.diversion.bijlagen.map((b: any) => b.uploadedAt)).toEqual(serverLijst.map((b: any) => b.uploadedAt));
+
+      // Bulk met dezelfde vervalsing.
+      const bulk = await api('POST', '/api/diversions', { token: 'tok-planner', body: mem.diversions.map((d: any) => ({ ...velden(d), ...(d.id === 'o-1' ? { bijlagen: vervalst } : {}) })) });
+      expect(bulk.status).toBe(200);
+      expect(mem.diversions.find((d: any) => d.id === 'o-1').bijlagen).toEqual(serverLijst);
+
+      // Een nieuwe omleiding met een vervalste lijst krijgt geen bijlagen.
+      const nieuw = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '9', title: 'Nieuw', description: 'x', startDate: '2026-07-01', bijlagen: vervalst } });
+      expect(nieuw.status).toBe(201);
+      expect(nieuw.json.diversion.bijlagen).toBeUndefined();
+
+      // Ongedaan maken: het uploadmoment komt uit Storage (slot 1), of blijft
+      // weg als Storage er geen kent (slot 2).
+      mem.opslagTijd.set('diversions/o-1-1.pdf', '2026-06-15T09:59:58.000Z');
+      const weg = await verwijder('o-1');
+      const terug = await api('POST', '/api/diversions/one', {
+        token: 'tok-planner',
+        headers: { 'X-Herstel': '1' },
+        body: { ...weg, bijlagen: weg.bijlagen.map((b: any) => ({ ...b, uploadedAt: VALS })) },
+      });
+      expect(terug.status).toBe(201);
+      expect(mem.diversions.find((d: any) => d.id === 'o-1').bijlagen).toEqual([
+        { slot: 1, filename: 'plan.pdf', sizeBytes: 1001, uploadedAt: '2026-06-15T09:59:58.000Z' },
+        { slot: 2, filename: 'haltes.pdf', sizeBytes: 1002 },
+      ]);
+    });
+
+    it('een bijlage zonder uploadmoment (van vóór 29-09) blijft overal geldig naast een nieuwe: lijst, versie, mail en nachtcron', async () => {
+      mem.diversions[0].bijlagen = [{ slot: 1, filename: 'oud.pdf', sizeBytes: 900 }];
+      mem.opslag.add('diversions/o-1-1.pdf');
+      const res = await upload('o-1', 2, 'nieuw.pdf');
+      expect(res.json.diversion.bijlagen).toEqual([
+        { slot: 1, filename: 'oud.pdf', sizeBytes: 900, url: 'https://opslag.test/diversions/o-1-1.pdf?sig=test' },
+        { slot: 2, filename: 'nieuw.pdf', sizeBytes: expect.any(Number), uploadedAt: KLOK_ISO, url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' },
+      ]);
+      const lijst = (await inLijst('o-1')).bijlagen;
+      // Zonder uploadmoment valt de client terug op naam en grootte.
+      expect(bijlageVersie(lijst[0])).toBe('oud.pdf|900|');
+      expect(bijlageVersie(lijst[1])).toBe(`nieuw.pdf|${lijst[1].sizeBytes}|${encodeURIComponent(KLOK_ISO)}`);
+
+      // De mailknop stuurt beide PDF's mee.
+      mem.emailsSent = [];
+      const mail = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-planner', body: { ontvangers: { adressen: ['x@y.be'] } } });
+      expect(mail.status).toBe(200);
+      expect(mem.emailsSent[0].attachments?.map((a) => a.filename)).toEqual(['oud.pdf', 'nieuw.pdf']);
+
+      // Verwijderd en een dag later: de nachtcron ruimt beide bestanden op.
+      await verwijder('o-1');
+      vi.setSystemTime(new Date('2026-06-16T11:00:00Z'));
+      expect((await cron()).json.bijlagen).toEqual({ omleidingen: 2, updates: 0, overgeslagen: [] });
+      expect(inOpslag()).toEqual([]);
     });
   });
 });

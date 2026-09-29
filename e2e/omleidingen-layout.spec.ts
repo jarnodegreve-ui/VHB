@@ -123,10 +123,16 @@ test('omleidingen: volledig detail, PDF-bijlagen, URL-selectie en mobiel sluiten
   // vóór de omschrijving zodat een lange tekst ze niet verstopt.
   const bijlagen = detail.getByRole('list', { name: 'Bijlagen' });
   await expect(bijlagen.getByRole('button')).toHaveText([PDF_NAAM, PDF_NAAM_2]);
+  // Sinds 29-09 opent een bijlage in de app (e2e/bijlage-viewer.spec.ts); de
+  // nieuwe tab van vroeger is de secundaire knop "Extern openen" in de viewer.
   const pdfUrl = new URL(PDF_PAD_2, baseURL!).href;
-  const pdfResponsePromise = page.context().waitForEvent('response', { predicate: (response) => response.url() === pdfUrl });
-  const popupPromise = page.waitForEvent('popup');
   await bijlagen.getByRole('button', { name: PDF_NAAM_2, exact: true }).click();
+  const viewer = page.getByRole('dialog', { name: PDF_NAAM_2, exact: true });
+  await expect(viewer.getByRole('img', { name: `Pagina 1 van ${PDF_NAAM_2}`, exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page).toHaveURL(/\/omleidingen\/lange-omleiding$/);
+  const pdfResponsePromise = page.context().waitForEvent('response', { predicate: (response) => response.url() === pdfUrl && response.request().isNavigationRequest() });
+  const popupPromise = page.waitForEvent('popup');
+  await viewer.getByRole('button', { name: 'Extern openen', exact: true }).click();
   const popup = await popupPromise;
   const pdfResponse = await pdfResponsePromise;
   // Headless browsers behandelen een PDF als download of native reader en
@@ -137,6 +143,9 @@ test('omleidingen: volledig detail, PDF-bijlagen, URL-selectie en mobiel sluiten
   expect(pdfResponse.request().frame().page()).toBe(popup);
   await expect(page).toHaveURL(/\/omleidingen\/lange-omleiding$/);
   await popup.close();
+  await viewer.getByRole('button', { name: 'Terug', exact: true }).click();
+  await expect(viewer).toHaveCount(0);
+  await expect(detail).toBeVisible();
 
   if (isMobile) {
     await detail.getByRole('button', { name: 'Sluiten', exact: true }).click();

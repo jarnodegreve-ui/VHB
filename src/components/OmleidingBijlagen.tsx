@@ -55,7 +55,7 @@ export function OmleidingBijlagen({ diversion, wachtrij, onWachtrij, onGewijzigd
   });
 
   const rijen = diversion
-    ? bijlagen.map((b) => ({ sleutel: String(b.slot), filename: b.filename, sizeBytes: b.sizeBytes, url: b.url }))
+    ? bijlagen.map((b) => ({ sleutel: String(b.slot), slot: b.slot, filename: b.filename, sizeBytes: b.sizeBytes, uploadedAt: b.uploadedAt, url: b.url }))
     : wachtrij.map((f, i) => ({ sleutel: `wacht-${i}`, filename: f.name, sizeBytes: f.size, wachtend: true }));
 
   return (
@@ -72,6 +72,7 @@ export function OmleidingBijlagen({ diversion, wachtrij, onWachtrij, onGewijzigd
 
       <PdfBijlagenLijst
         rijen={rijen}
+        bron={diversion ? { soort: 'omleiding', recordId: diversion.id } : undefined}
         bezig={bezig}
         onVerwijder={(rij) => {
           if (rij.wachtend) onWachtrij(wachtrij.filter((_, i) => `wacht-${i}` !== rij.sleutel));

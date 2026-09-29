@@ -8,10 +8,13 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type Bestand = { size: number; updated_at: string | null; created_at?: string | null };
+
 const mem = vi.hoisted(() => ({
   tabellen: { diversions: [] as any[], updates: [] as any[], activity_log: [] as any[] } as Record<string, any[]>,
-  // bucket → pad → { size, updated_at }
-  buckets: { diversions: new Map<string, { size: number; updated_at: string }>(), 'update-bijlagen': new Map<string, { size: number; updated_at: string }>() } as Record<string, Map<string, { size: number; updated_at: string }>>,
+  // bucket → pad → { size, updated_at, created_at? } (zonder created_at geeft
+  // de lijst updated_at voor allebei, zoals een bestand dat nooit vervangen is)
+  buckets: { diversions: new Map<string, Bestand>(), 'update-bijlagen': new Map<string, Bestand>() } as Record<string, Map<string, Bestand>>,
   verwijderd: [] as Array<{ bucket: string; paden: string[] }>,
   lijstFaalt: false,
   // true = Storage antwoordt niet meer (de aanroep blijft hangen).
@@ -99,7 +102,7 @@ vi.mock('../api/db.js', () => {
         const vanaf = opts.offset ?? 0;
         mem.lijstAanroepen.push({ bucket, offset: vanaf });
         return {
-          data: alle.slice(vanaf, vanaf + Math.min(opts.limit, mem.lijstPlafond ?? opts.limit)).map(([name, m]) => ({ id: `id-${name}`, name, updated_at: m.updated_at, created_at: m.updated_at, metadata: { size: m.size } })),
+          data: alle.slice(vanaf, vanaf + Math.min(opts.limit, mem.lijstPlafond ?? opts.limit)).map(([name, m]) => ({ id: `id-${name}`, name, updated_at: m.updated_at, created_at: m.created_at === undefined ? m.updated_at : m.created_at, metadata: { size: m.size } })),
           error: null,
         };
       },
@@ -345,9 +348,32 @@ describe('opslag: verwijderen laat de bestanden staan', () => {
     hang('diversions', 'o-1.pdf');
     hang('diversions', 'o-2-1.pdf');
     hang('update-bijlagen', 'u-1-2.pdf');
-    expect(await bestaandeDiversionBijlagen('o-1')).toEqual({ slots: [{ slot: 2, sizeBytes: 1234 }], oudeSleutel: true });
+    // Sinds 29-09 ook het uploadmoment dat Storage bij het bestand bijhoudt.
+    expect(await bestaandeDiversionBijlagen('o-1')).toEqual({ slots: [{ slot: 2, sizeBytes: 1234, uploadedAt: OUD }], oudeSleutel: true });
     expect(await bestaandeDiversionBijlagen('o-9')).toEqual({ slots: [], oudeSleutel: false });
-    expect(await bestaandeUpdateBijlagen('u-1')).toEqual([{ slot: 2, sizeBytes: 1234 }]);
+    expect(await bestaandeUpdateBijlagen('u-1')).toEqual([{ slot: 2, sizeBytes: 1234, uploadedAt: OUD }]);
+  });
+
+  it('het uploadmoment komt uit Storage: updated_at, anders created_at; zonder leesbaar tijdstip blijft het veld weg', async () => {
+    mem.buckets.diversions.set('o-1-1.pdf', { size: 10, updated_at: '2026-09-29T08:00:00.000Z', created_at: '2026-09-01T08:00:00.000Z' });
+    mem.buckets.diversions.set('o-1-2.pdf', { size: 20, updated_at: null, created_at: '2026-09-28T07:00:00.000Z' });
+    mem.buckets.diversions.set('o-1-3.pdf', { size: 30, updated_at: null, created_at: null });
+    mem.buckets.diversions.set('o-1-4.pdf', { size: 40, updated_at: 'geen tijdstip' });
+    expect(await bestaandeDiversionBijlagen('o-1')).toEqual({
+      slots: [
+        { slot: 1, sizeBytes: 10, uploadedAt: '2026-09-29T08:00:00.000Z' },
+        { slot: 2, sizeBytes: 20, uploadedAt: '2026-09-28T07:00:00.000Z' },
+        { slot: 3, sizeBytes: 30 },
+        { slot: 4, sizeBytes: 40 },
+      ],
+      oudeSleutel: false,
+    });
+    mem.buckets['update-bijlagen'].set('u-1-1.pdf', { size: 5, updated_at: '2026-09-29T09:15:00.000Z' });
+    mem.buckets['update-bijlagen'].set('u-1-2.pdf', { size: 6, updated_at: null, created_at: null });
+    expect(await bestaandeUpdateBijlagen('u-1')).toEqual([
+      { slot: 1, sizeBytes: 5, uploadedAt: '2026-09-29T09:15:00.000Z' },
+      { slot: 2, sizeBytes: 6 },
+    ]);
   });
 
   it('de bestaanscontrole kijkt alleen naar de exacte naam, niet naar wat op het id lijkt', async () => {

@@ -6,7 +6,9 @@
  * server bouwt elk pad zelf uit id en slot en gebruikt nooit een pad of URL
  * van de client. Van de client komt alleen de bestandsnaam als etiket, en
  * alleen voor een slot waarvan de server zelf vaststelt dat het bestand nog
- * in Storage hangt. De grootte komt uit Storage.
+ * in Storage hangt. De grootte en het uploadmoment (`uploadedAt`, het
+ * tijdstip dat Storage bij het bestand bijhoudt) komen uit Storage; een
+ * uploadmoment van de client telt nooit.
  *
  * Twee vangrails erbij (tegenlezing 29-09). Het id in het verzoek komt van
  * de client, dus de header alleen bewijst niets:
@@ -41,21 +43,26 @@ import {
 /** Zelfde strakke vorm als de bijlage-routes: het id wordt de sleutel. */
 const STORAGE_ID = /^[a-zA-Z0-9_-]+$/;
 
-type Bijlage = { slot: number; filename: string; sizeBytes?: number };
+type Bijlage = { slot: number; filename: string; sizeBytes?: number; uploadedAt?: string };
 
 /** Wat de client zich herinnert, opgeschoond: alleen slot en een naam op
- *  .pdf, nooit een URL of pad. */
+ *  .pdf, nooit een URL, pad, grootte of uploadmoment. */
 const gevraagdeBijlagen = (vanClient: unknown, maxSlot: number): Bijlage[] =>
   bijlagenUitKolom(vanClient, maxSlot)
     .map((b) => ({ slot: b.slot, filename: b.filename.trim() }))
     .filter((b) => b.filename.toLowerCase().endsWith(".pdf") && !/[\\/]/.test(b.filename));
 
-const doorsnede = (gevraagd: Bijlage[], aanwezig: Array<{ slot: number; sizeBytes?: number }>): Bijlage[] => {
+const doorsnede = (gevraagd: Bijlage[], aanwezig: Array<{ slot: number; sizeBytes?: number; uploadedAt?: string }>): Bijlage[] => {
   const perSlot = new Map(aanwezig.map((a) => [a.slot, a]));
   return gevraagd.flatMap((g) => {
     const gevonden = perSlot.get(g.slot);
     if (!gevonden) return [];
-    return [{ slot: g.slot, filename: g.filename, ...(gevonden.sizeBytes !== undefined ? { sizeBytes: gevonden.sizeBytes } : {}) }];
+    return [{
+      slot: g.slot,
+      filename: g.filename,
+      ...(gevonden.sizeBytes !== undefined ? { sizeBytes: gevonden.sizeBytes } : {}),
+      ...(gevonden.uploadedAt !== undefined ? { uploadedAt: gevonden.uploadedAt } : {}),
+    }];
   });
 };
 
