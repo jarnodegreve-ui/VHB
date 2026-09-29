@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { bouwMail, IPHONE_REGEL } from '../api/_lib/mailLayout';
 
@@ -109,6 +111,16 @@ describe('bouwMail', () => {
     expect(IPHONE_REGEL.portaal).not.toContain(' — ');
   });
 
+  it('zegt dat de mail licht ontworpen is (color-scheme) en toont het logo op zijn tegel van 200 × 56', () => {
+    const { html } = bouwMail(basis);
+    const head = html.slice(0, html.indexOf('</head>'));
+    expect(head).toContain('<meta name="color-scheme" content="light">');
+    expect(head).toContain('<meta name="supported-color-schemes" content="light">');
+    expect(html).toContain('<img src="https://vhbportaal.com/mail/vhb-logo.png" width="200" height="56"');
+    // 10 px minder marge op de cel dan vroeger (22/32): de tegel brengt er zelf 10 mee.
+    expect(html).toMatch(/<td style="padding: 12px 22px; border-bottom: 1px solid #E5E7EB;">\s*<img/);
+  });
+
   it('zonder status, feiten, blok of knop blijft de opbouw geldig en leeg waar niets is', () => {
     const { html, text } = bouwMail({ portaalUrl: 'https://vhbportaal.com', titel: 'Testmail', nietBeantwoorden: false });
     expect(html).toContain('Testmail');
@@ -116,5 +128,50 @@ describe('bouwMail', () => {
     expect(html).not.toContain('<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 4px 0 18px');
     expect(html).not.toContain('niet beantwoorden');
     expect(text.trim().split('\n')[0]).toBe('Testmail');
+  });
+});
+
+/**
+ * Het logo in de mails (nr. 4): Gmail en Outlook keren in dark mode de
+ * achtergrond om en laten afbeeldingen staan. Een transparant logo met
+ * carbon letters verdween daar; de witte tegel zit daarom in de PNG zelf.
+ */
+describe('public/mail/vhb-logo.png', () => {
+  const lees = (pad: string) => PNG.sync.read(fs.readFileSync(pad));
+  const logo = lees('public/mail/vhb-logo.png');
+  const bron = lees('brand/mail/vhb-logo-transparant.png');
+  const pixel = (p: PNG, x: number, y: number) => [...p.data.subarray((y * p.width + x) * 4, (y * p.width + x) * 4 + 4)];
+
+  it('is 800 × 224 (200 × 56 in de mail) met een dekkende witte tegel achter het logo', () => {
+    expect([logo.width, logo.height]).toEqual([800, 224]);
+    // Rand van de tegel, midden boven en links: dekkend wit.
+    expect(pixel(logo, 400, 4)).toEqual([255, 255, 255, 255]);
+    expect(pixel(logo, 4, 112)).toEqual([255, 255, 255, 255]);
+    // Waar de bron doorzichtig was (tussen merk en naam) staat nu wit, niets doorzichtigs.
+    let doorzichtigInTegel = 0;
+    for (let y = 32; y < logo.height - 32; y += 1) {
+      for (let x = 0; x < logo.width; x += 1) if (pixel(logo, x, y)[3] !== 255) doorzichtigInTegel += 1;
+    }
+    expect(doorzichtigInTegel).toBe(0);
+  });
+
+  it('heeft afgeronde, doorzichtige hoeken', () => {
+    for (const [x, y] of [[0, 0], [799, 0], [0, 223], [799, 223]]) expect(pixel(logo, x, y)[3]).toBe(0);
+  });
+
+  it('laat het logo zelf ongemoeid: elke dekkende pixel van de bron staat er ongewijzigd, ook het goud', () => {
+    let vergeleken = 0;
+    let goud = 0;
+    for (let y = 0; y < bron.height; y += 1) {
+      for (let x = 0; x < bron.width; x += 1) {
+        const b = pixel(bron, x, y);
+        if (b[3] !== 255) continue;
+        vergeleken += 1;
+        if (b[0] === 202 && b[1] === 160 && b[2] === 68) goud += 1;
+        expect(pixel(logo, x + 40, y + 41)).toEqual(b);
+      }
+    }
+    expect(vergeleken).toBeGreaterThan(15_000);
+    expect(goud).toBeGreaterThan(500);
   });
 });

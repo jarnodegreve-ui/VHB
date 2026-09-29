@@ -6,7 +6,12 @@
  * Bewust ouderwets: tabellen en inline stijlen, want mailclients (Outlook,
  * Gmail-app) kennen geen flex, geen externe CSS en geen webfonts. Eén kolom
  * van 600 px, het echte logo als PNG (public/mail/vhb-logo.png, links
- * uitgelijnd), een rustige kop, een statuspuntje waar een uitkomst is, een
+ * uitgelijnd; op een witte tegel die in de afbeelding zelf zit, zie
+ * scripts/mail-logo.mjs: Gmail en Outlook keren in dark mode de achtergrond
+ * om maar laten afbeeldingen staan, dus een transparant logo met donkere
+ * letters verdween daar. De tegel heeft 10 px marge rond het logo; de cel
+ * eromheen heeft er 10 minder, zodat het logo in een lichte mail op dezelfde
+ * plek staat als vroeger), een rustige kop, een statuspuntje waar een uitkomst is, een
  * feitenlijst voor de kerngegevens, hoogstens één donkere knop, en een vaste
  * voet. Onderwerpen zijn zakelijk en zonder emoji (die zet Outlook als
  * vraagtekens en spamfilters wegen ze mee).
@@ -17,6 +22,11 @@
  * Alle teksten worden hier ge-escaped; wie bewust HTML wil (bv. een
  * <pre>-blok met een commando) gebruikt `html` in een alinea. Geen em dash
  * als zinsscheiding (CLAUDE.md), ook niet in de vaste teksten hier.
+ *
+ * Kleurenschema: de mail is licht ontworpen en zegt dat ook (`color-scheme`
+ * en `supported-color-schemes` = light), zodat clients die het respecteren
+ * (Apple Mail) hem niet zelf omkeren. Gmail en Outlook negeren dat; daar
+ * vangt de tegel achter het logo het op.
  */
 
 export const MAIL_KLEUR = {
@@ -158,14 +168,16 @@ ${o.feiten.map((f) => `<tr>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
 <title>${escapeMailHtml(o.titel)}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: ${MAIL_KLEUR.achtergrond};">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: ${MAIL_KLEUR.achtergrond};">
 <tr><td align="center" style="padding: 24px 12px;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px; width: 100%; background-color: ${MAIL_KLEUR.wit}; border: 1px solid ${MAIL_KLEUR.hairline}; border-radius: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
-<tr><td style="padding: 22px 32px; border-bottom: 1px solid ${MAIL_KLEUR.hairline};">
-  <img src="${logo}" width="180" height="36" alt="VHB, Van Hoorebeke &amp; Zoon" style="display: block; width: 180px; height: auto; border: 0;">
+<tr><td style="padding: 12px 22px; border-bottom: 1px solid ${MAIL_KLEUR.hairline};">
+  <img src="${logo}" width="200" height="56" alt="VHB, Van Hoorebeke &amp; Zoon" style="display: block; width: 200px; height: auto; border: 0;">
 </td></tr>
 <tr><td style="padding: 28px 32px 20px;">
   ${o.kicker ? `<p style="margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: ${MAIL_KLEUR.gedempt};">${escapeMailHtml(o.kicker).toUpperCase()}</p>` : ""}
