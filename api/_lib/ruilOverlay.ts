@@ -29,9 +29,14 @@ import type { SwapRecord } from "../types.js";
  * mee, een voltooide ruil is gereden zoals gewisseld.
  *
  * Wie niet op het bord staat (uit dienst, een andere rol) telt mee als de
- * aanroeper zijn matrixcellen meegeeft (`buitenBord`), en dan gelden BEIDE
- * benen van de ruil, zoals toen hij nog op het bord stond (Jarno 29-09,
- * optie A). Anders valt de hele ruil weg, zoals altijd. Tot 29-09 viel de
+ * aanroeper hem in `buitenBord` zet, met zijn matrixcellen erbij voor de
+ * benen waarin hij geeft, en dan gelden BEIDE benen van de ruil, zoals toen
+ * hij nog op het bord stond (Jarno 29-09, optie A). Anders valt de hele ruil
+ * weg, zoals altijd. De aanroeper (api/_lib/celWaarheid.ts) beslist wie
+ * meedoet, los van het venster: een bestaand account met een eenduidige naam.
+ * Een been waarin hij geeft vraagt, zoals elk been, dat zijn cel die dag de
+ * dienst toont; is zijn kolom na het vertrek leeggemaakt of op vrij gezet,
+ * dan valt dat been weg (bekende beperking). Tot 29-09 viel de
  * ruil altijd weg zodra één van beiden niet op het bord stond: werd de gever
  * uit dienst gezet, dan stond de ontvanger weer als vrij op het bord terwijl
  * hij de dienst nog reed. Beide benen of geen: de eerste versie van 29-09
@@ -141,9 +146,9 @@ export function legRuilenOverMaandbeeld(
   for (const sw of doorgevoerd) {
     const van = String(sw.requesterId ?? "");
     const naar = String(sw.targetDriverId ?? "");
-    // Beide benen of geen (Jarno 29-09, optie A): wie op het bord staat of via
-    // `buitenBord` meegelezen is, geeft én krijgt. Met iemand anders valt de
-    // hele ruil weg; één been alleen gaf een dienst te veel of te weinig.
+    // Beide benen of geen (Jarno 29-09, optie A): wie op het bord staat of in
+    // `buitenBord` zit, geeft én krijgt. Met iemand anders valt de hele ruil
+    // weg; één been alleen gaf een dienst te veel of te weinig.
     const doetMee = (id: string) => opts.chauffeurIds.has(id) || !!opts.buitenBord?.has(id);
     if (!doetMee(van) || !doetMee(naar)) continue;
     const dienstDag = String(sw.shiftDate ?? "");

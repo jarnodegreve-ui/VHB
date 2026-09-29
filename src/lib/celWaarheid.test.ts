@@ -140,11 +140,13 @@ describe('berekenCelWaarheid, een ruil met iemand die niet meer op het bord staa
 
 /**
  * Optie A (Jarno 29-09): met een collega die vertrok gelden beide benen van
- * een ruil, zodra zijn kolom meegelezen is. Voor wie op het bord staat is het
- * bord dan hetzelfde als toen hij nog in dienst was. De eerste versie van
- * 29-09 paste alleen het been VAN hem toe en telde zo bij een 1-op-1 over twee
- * dagen een dienst te veel. Zonder gelezen kolom (verwijderd account, botsende
- * naam) valt de ruil weg zoals vroeger.
+ * een ruil, als zijn account bestaat en zijn naam over alle accounts
+ * eenduidig is. Voor wie op het bord staat is het bord dan hetzelfde als toen
+ * hij nog in dienst was. De eerste versie van 29-09 paste alleen het been VAN
+ * hem toe en telde zo bij een 1-op-1 over twee dagen een dienst te veel. Zonder
+ * account of met een botsende naam valt de ruil weg zoals vroeger. De toets
+ * hangt niet af van de dagen die de aanroeper meegeeft: het dagbord van de
+ * schrijfpaden en het maandbord tonen hetzelfde.
  */
 describe('berekenCelWaarheid, optie A: beide benen, ook met wie vertrok', () => {
   const JAN = { id: '1', name: 'Jan Janssen', role: 'chauffeur', isActive: true, section: 'Reguliere', startDate: '2010-01-01' };
@@ -212,7 +214,9 @@ describe('berekenCelWaarheid, optie A: beide benen, ook met wie vertrok', () => 
   it('twee vertrokken accounts met botsende naam ("Oud Weg" en "Weg Oud"): geen kolom gaat naar de verkeerde, de ruil valt weg zoals vroeger', () => {
     const wegOud = { id: '7', name: 'Weg Oud', role: 'chauffeur', isActive: false };
     // Weg Oud gaf An op 02/09 dienst 2703. Die staat in de kolom "Oud Weg",
-    // maar is niet van hem: de naamindex laat de botsende sleutel vallen.
+    // maar is niet van hem: de naamindex over alle accounts laat de botsende
+    // sleutel vallen. Oud Weg zelf is daardoor niet eenduidig en doet niet
+    // mee; Weg Oud wel, maar een kolom op zijn eigen naam heeft hij niet.
     const vanWegOud = { id: 'r7', requesterId: '7', targetDriverId: '2', status: 'approved', decidedAt: '2026-08-21T10:00:00Z', shiftDate: '2026-09-02', shiftLine: '2703', swapType: 'overname', reason: '' };
     const mensen = [JAN, AN, oudWeg(false), wegOud];
     const uit = bord([ruil(), vanWegOud], mensen);
@@ -227,8 +231,9 @@ describe('berekenCelWaarheid, optie A: beide benen, ook met wie vertrok', () => 
   it('beide partijen vertrokken: hun ruil raakt niemand op het bord, en geen van beiden verschijnt', () => {
     const els = { id: '8', name: 'Els Vertrokken', role: 'chauffeur', isActive: false };
     const rows = rijen.map((r) => ({ ...r, assignments: { ...r.assignments, 'Els Vertrokken': 'vrij' } }));
-    // Oud Weg gaf Els op 02/09 dienst 2703. Beiden ruilden in augustus ook met
-    // Jan, dus beider kolom wordt meegelezen.
+    // Oud Weg gaf Els op 02/09 dienst 2703. Beiden doen mee (bestaand account,
+    // eenduidige naam), dus hun ruil telt, maar hun cellen gaan er daarna uit.
+    // Hun ruilen van augustus met Jan vallen buiten deze maand.
     const tussenBeiden = { id: 'r8', requesterId: '5', targetDriverId: '8', status: 'approved', decidedAt: '2026-08-22T10:00:00Z', shiftDate: '2026-09-02', shiftLine: '2703', swapType: 'overname', reason: '' };
     const augustus = ['5', '8'].map((id) => ({ id: `aug-${id}`, requesterId: '1', targetDriverId: id, status: 'approved', decidedAt: '2026-08-01T10:00:00Z', shiftDate: '2026-08-15', shiftLine: '2102', swapType: 'overname', reason: '' }));
     const mensen = [JAN, AN, oudWeg(false), els];
@@ -237,6 +242,21 @@ describe('berekenCelWaarheid, optie A: beide benen, ook met wie vertrok', () => 
     expect({ jan: uit.cells['1'], an: uit.cells['2'] }).toEqual({ jan: zonder.cells['1'], an: zonder.cells['2'] });
     expect(Object.keys(uit.cells).sort()).toEqual(['1', '2']);
     expect(uit.chauffeurs.map((c) => c.id)).toEqual(['1', '2']);
+  });
+
+  it('dagbord en maandbord zijn gelijk, ook als hij op die dag geen code heeft (tegenlezing 29-09)', () => {
+    // Jan gaf 2102 (01/09) aan Oud Weg, die daarna vertrok. Diens kolom is op
+    // 01/09 leeg en heeft alleen op 02/09 een code. De schrijfpaden rekenen het
+    // bord van één dag, de maandplanning en de Dagafsluiting dat van de maand.
+    const rows = [
+      { source_date: '2026-09-01', day_type: '21', assignments: { 'Jan Janssen': '2102', 'An Peeters': 'vrij' } },
+      { source_date: '2026-09-02', day_type: '22', assignments: { 'Jan Janssen': 'vrij', 'An Peeters': 'vrij', 'Oud Weg': '2703' } },
+    ];
+    const overname = [ruil({ swapType: 'overname', returnDate: undefined, returnCode: undefined })];
+    const maand = bord(overname, [JAN, AN, oudWeg(false)], rows);
+    const dag = bord(overname, [JAN, AN, oudWeg(false)], [rows[0]]);
+    expect(dag.cells['1']['2026-09-01']).toEqual(maand.cells['1']['2026-09-01']);
+    expect(maand.cells['1']['2026-09-01']).toMatchObject({ code: 'vrij', swapId: 'r1', swapAway: true, swapTo: 'Oud Weg' });
   });
 });
 

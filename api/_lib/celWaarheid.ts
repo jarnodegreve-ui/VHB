@@ -127,29 +127,42 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
 
   const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
 
-  // Wie een ruil deed met een collega op het bord maar zelf niet (meer) op het
-  // bord staat, bv. uit dienst gezet (Jarno 29-09): zijn matrixkolom wordt
-  // meegelezen, alleen voor de overlay, en dan gelden beide benen van de ruil
-  // (optie A, api/_lib/ruilOverlay.ts). Voor wie op het bord staat is het bord
-  // zo hetzelfde als toen de vertrokken collega nog in dienst was: wat die
-  // weggaf blijft bij de ontvanger, en een gever wiens ontvanger vertrok staat
-  // op "vrij (weggeruild)", zoals in de planning-rijen. Wie vertrok verschijnt
-  // zelf niet op het bord: zijn cellen gaan er na de overlay weer uit. Een
-  // kolom die op naam van een chauffeur op het bord staat blijft van die
-  // chauffeur.
+  // Wie een ruil deed maar zelf niet (meer) op het bord staat, bv. uit dienst
+  // gezet of met een andere rol (Jarno 29-09), doet mee in de overlay, en dan
+  // gelden beide benen van de ruil (optie A, api/_lib/ruilOverlay.ts). Voor
+  // wie op het bord staat is het bord zo hetzelfde als toen de vertrokken
+  // collega nog in dienst was: wat die weggaf blijft bij de ontvanger, en een
+  // gever wiens ontvanger vertrok staat op "vrij (weggeruild)", zoals in de
+  // planning-rijen. Wie vertrok verschijnt zelf niet op het bord: zijn cellen
+  // gaan er na de overlay weer uit.
+  //
+  // Of hij meedoet hangt alleen af van de accounts, nooit van het venster (één
+  // dag voor de schrijfpaden, een maand voor de maandplanning, de Dagafsluiting
+  // en de rapporten): zijn account bestaat en zijn naam is over alle accounts
+  // eenduidig. Anders toonden dagbord en maandbord iets anders (tegenlezing
+  // 29-09). Zonder account of met een botsende naam valt de hele ruil weg,
+  // zoals vroeger. Ook een ruil tussen twee mensen buiten het bord telt, zodat
+  // een ketting via twee vertrokken collega's sluit.
+  const alleNamen = nameIdIndex(users);
+  const accountVan = new Map(users.map((u) => [String(u.id), u]));
+  const eenduidig = (id: string) => {
+    const u = accountVan.get(id);
+    return !!u && (alleNamen.get(toLookupToken(u.name)) === id || alleNamen.get(sortedNameToken(u.name)) === id);
+  };
   const buitenBord = new Set<string>();
   for (const sw of swaps) {
     if (sw?.status !== "approved" && sw?.status !== "completed") continue;
-    const van = String(sw.requesterId ?? "");
-    const naar = String(sw.targetDriverId ?? "");
-    if (van && naar && chauffeurIds.has(van) !== chauffeurIds.has(naar)) buitenBord.add(chauffeurIds.has(van) ? naar : van);
+    for (const id of [String(sw.requesterId ?? ""), String(sw.targetDriverId ?? "")]) {
+      if (id && !chauffeurIds.has(id) && eenduidig(id)) buitenBord.add(id);
+    }
   }
-  if (buitenBord.size > 0) leesMatrix(nameIdIndex(users.filter((u) => buitenBord.has(String(u.id)))), idByNameKey);
-  // Alleen wie echt meegelezen is (deze maand minstens één cel) doet mee.
-  // Zonder kolom (verwijderd account, botsende naam, niet in de matrix van
-  // deze maand) valt de ruil weg zoals vroeger: anders had alleen het been
-  // náár hem effect, en dat gaf een dienst te weinig.
-  const meegelezen = new Set([...buitenBord].filter((id) => cells[id]));
+  // Zijn matrixkolom dient voor de benen waarin hij geeft. Gelezen met dezelfde
+  // eenduidige namen: een kolom die ook bij een ander account kan horen telt
+  // voor niemand, en een kolom op naam van een chauffeur op het bord blijft van
+  // die chauffeur. Bekende beperking: een been waarin hij geeft vraagt dat zijn
+  // eigen cel die dag de dienst toont; is zijn kolom na het vertrek leeggemaakt
+  // of op vrij gezet, dan valt dat been weg (zoals bij een collega op het bord).
+  if (buitenBord.size > 0) leesMatrix(new Map([...alleNamen].filter(([, id]) => buitenBord.has(id))), idByNameKey);
 
   // Goedgekeurde dienstruilen over het maandbeeld (api/_lib/ruilOverlay.ts).
   const naamVanId = (id: string) => chauffeurs.find((c) => c.id === id)?.name ?? users.find((u) => String(u.id) === id)?.name ?? "";
@@ -159,7 +172,7 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
   const vrijCel = vrijResolved && vrijResolved.kind !== "unknown"
     ? { code: "vrij", kind: vrijResolved.kind, label: vrijResolved.label, segments: [] }
     : undefined;
-  legRuilenOverMaandbeeld(cells, swaps, { dates, chauffeurIds, naamVanId, vrijCel, buitenBord: meegelezen });
+  legRuilenOverMaandbeeld(cells, swaps, { dates, chauffeurIds, naamVanId, vrijCel, buitenBord });
   for (const id of buitenBord) delete cells[id];
 
   // Goedgekeurde afwezigheden uit de verlof-module overschrijven de matrix-
