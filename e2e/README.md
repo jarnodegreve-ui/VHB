@@ -40,6 +40,12 @@ dist via `vite preview` op poort 4173.
   sessie; alle specs (ook `dock.spec.ts` met zijn eigen contexts) volgen de
   poort uit de config.
 
+- **`bijlage-viewer.spec.ts`** (29-09): PDF-bijlagen van omleidingen en
+  updates openen in de app, op de telefoon (Chromium en WebKit) en op desktop:
+  echte pdfjs-render, Terug sluit alleen de viewer, "Extern openen" is de oude
+  weg, een verlopen of falende link geeft de foutstaat. Bewaren, openen zonder
+  bereik, vervangen en uitloggen staan in `pwa.spec.ts` (mét service worker).
+
 - **Mobiele specs** (`smoke`, `dashboard`, `verlof`, `ruil`, `sessie`, `dock`,
   `donker`): elk met eigen, kleine fixtures — ze testen één schrijfpad en
   willen precies weten wat er in de POST/PATCH zit.
