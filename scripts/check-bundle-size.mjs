@@ -206,6 +206,9 @@ const DEELBUDGET_KB = {
 // pas na LCP + 2 s en raakt het eerste beeld niet.
 const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 141 };
 
+// Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
+const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
+
 // Modules die niet in de startbundel horen (bewaker 6, 29-09): ze zijn pas
 // nodig na een bewuste klik of in een lui geladen scherm. De datalaag zit in
 // index-*.js en één statische import volstaat om ze mee te slepen; op de CI
@@ -215,9 +218,6 @@ const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 141 };
 //  - documentLink: alleen het scherm Documenten;
 //  - dataUrl: alleen de uploadschermen.
 const BUITEN_STARTBUNDEL = ['src/lib/herstel.ts', 'src/lib/herstelMelding.ts', 'src/lib/documentLink.ts', 'src/lib/dataUrl.ts'];
-
-// Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
-const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
 
 const dir = 'dist/assets';
 if (!fs.existsSync(dir)) {
