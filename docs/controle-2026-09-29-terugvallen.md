@@ -42,8 +42,8 @@ Alles daarbuiten is niet bewezen, ook als de migratie oud is. De tabellen `user_
 
 | Nr | Bestand en regel | Kolom | Migratie | Wat de gebruiker merkt | Welk veld gaat verloren | Bewijs | Voorstel |
 |---|---|---|---|---|---|---|---|
-| S1 | `api/storage.ts:1477` | `users.ooktechnieker` | `2026-09-28_users_ook_technieker.sql` | Niets, zolang niemand de schakelaar aan heeft: de save gaat opnieuw zonder de kolom. Met de schakelaar aan al een 503 met het .sql-bestand. | De schakelaar "Ook technieker" (alleen de waarde uit) | 2 | **Verwijderen**: elke ontbrekende kolom `ooktechnieker` geeft de bestaande 503 |
-| S2 | `api/storage.ts:1787` (met `zonderLocation`, regel 1762) | `diversions.location` | `2026-09-10_diversions_location.sql` | Niets: de omleiding wordt bewaard, de plaats niet | Plaats van de omleiding | 1 | **Verwijderen**: 503 met het .sql-bestand |
+| S1 | `api/storage.ts:1477` | `users.ooktechnieker` | `2026-09-28_users_ook_technieker.sql` | Niets, zolang niemand de schakelaar aan heeft: de save gaat opnieuw zonder de kolom. Met de schakelaar aan al een 503 met het .sql-bestand. | De schakelaar "Ook technieker" (alleen de waarde uit) | 2 | **Verwijderd** (8479680, 6f1cfd9): elke ontbrekende kolom `ooktechnieker` geeft de bestaande 503 |
+| S2 | `api/storage.ts:1787` (met `zonderLocation`, regel 1762) | `diversions.location` | `2026-09-10_diversions_location.sql` | Niets: de omleiding wordt bewaard, de plaats niet | Plaats van de omleiding | 1 | **Verwijderd** (ba77bf6): 503 met het .sql-bestand |
 | S3 | `api/storage.ts:2217` | `client_errors`: `fingerprint`, `release`, `view`, `role`, `online`, `breadcrumbs`, `top_frame` | `2026-09-06_client_errors_groepen.sql` | Niets: het foutrapport komt binnen zonder context. De stand wordt per warme instantie onthouden zonder houdbaarheid, hetzelfde patroon dat bij de plaats van de omleidingen misliep. | Context van het foutrapport (release, scherm, rol, broodkruimels, vingerafdruk) | geen | Laten staan |
 | S4 | `api/storage.ts:2798` | `user_devices.session_id` (update) | `2026-09-09_user_devices_sessie.sql` | Niets; er komt wel een regel in het serverlog | Sessiebinding van het toestel | geen | Laten staan |
 | S5 | `api/storage.ts:2823` | `user_devices.session_id` (insert) | `2026-09-09_user_devices_sessie.sql` | Niets; er komt wel een regel in het serverlog | Sessiebinding van het toestel | geen | Laten staan |
@@ -101,6 +101,24 @@ Bij V15 tot en met V19 vangt de code elke fout op, niet alleen een ontbrekende t
 | L19 | `api/_lib/communicatieRoutes.ts:583` | `updates.bijlagen`, `bijlagen_tonen` | `2026-09-21_updates_bijlagen.sql` | 503 met het .sql-bestand |
 | L20 | `api/_lib/mailRoutes.ts:178` | `app_settings` | `2026-07-30_app_settings.sql` | 503 met het .sql-bestand |
 | L21 | `api/_lib/mailRoutes.ts:200` | `app_settings` | `2026-07-30_app_settings.sql` | 503 met het .sql-bestand |
+
+## Uitkomst van de ronde
+
+Twee stille terugvallen verwijderd, elk met bewijs. De aanroep van `isMissingColumnError` blijft op beide plaatsen staan, maar is nu luid: ze herkent de ontbrekende kolom en gooit `MigratieOntbreektError` in plaats van opnieuw te schrijven.
+
+| Nr | Na de ronde | Wat de gebruiker ziet als de kolom zou ontbreken | Test |
+|---|---|---|---|
+| S1 | `api/storage.ts`, `saveUsersData` | 503 "De kolom users.ooktechnieker bestaat nog niet: draai supabase/2026-09-28_users_ook_technieker.sql in de SQL Editor." In de app: "Opslaan is mislukt. Dit onderdeel is op de server nog niet ingesteld, er moet nog een migratie draaien. Meld het aan de beheerder." | `src/storageOokTechnieker.test.ts`, `src/apiIntegration.test.ts` (Ook technieker) |
+| S2 | `api/storage.ts`, `saveDiversionsData` | 503 "De kolom diversions.location bestaat nog niet: draai supabase/2026-09-10_diversions_location.sql in de SQL Editor." In de app dezelfde melding als bij S1. | `src/storageOmleidingPlaats.test.ts`, `src/apiIntegration.test.ts` (omleidingen) |
+
+Stand na de ronde: 47 aanroepen, waarvan 23 luid, 4 stil bij het schrijven (S3 tot en met S6) en 20 stil als vangnet.
+
+Twee kanttekeningen, beide alleen van belang in een omgeving waar de kolom echt ontbreekt (productie en staging hebben ze):
+
+- `saveUsersData` verwijdert eerst de rijen van verwijderde gebruikers en schrijft dan pas de rest. Die volgorde bestond al en is niet gewijzigd. Wie in zo'n omgeving een gebruiker verwijdert, krijgt de 503 terwijl de rij al weg is. Bij de omleidingen speelt dit niet: daar komt de upsert eerst.
+- Het herstel uit een back-up (`POST /api/restore`) schrijft via dezelfde opslag en geeft bij een ontbrekende kolom zijn bestaande 500 "Herstellen is mislukt"; de tekst met het .sql-bestand staat dan in het serverlog en in de logregel "Back-up gedeeltelijk hersteld".
+
+De melding in de app noemt het .sql-bestand bewust niet (keuze van 28-09, `src/lib/fouten.ts`). De beheerder vindt het bestand in het antwoord van de server en in Systeemstatus, waar `/api/health/schema` de ontbrekende kolom toont.
 
 ## Stil met bewijs, niet verwijderd
 
