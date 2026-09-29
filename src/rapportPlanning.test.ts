@@ -130,6 +130,27 @@ describe('Overzicht per chauffeur is het Maandoverzicht van de maandplanning', (
   });
 });
 
+describe('Overzicht per chauffeur, een 1-op-1 met een collega die vertrok (optie A, Jarno 29-09)', () => {
+  // Jan gaf 2102 (29/09, 8:44) aan Oud Weg en kreeg diens 2703 (30/09, 4:30)
+  // terug; daarna vertrok Oud Weg. Ook voor een voorbije maand telt het
+  // rapport wat Jan echt reed.
+  const rijen = [
+    { source_date: '2026-09-29', assignments: { 'Jan Janssen': '2102', 'Oud Weg': 'vrij' } },
+    { source_date: '2026-09-30', assignments: { 'Jan Janssen': 'vrij', 'Oud Weg': '2703' } },
+  ];
+  const deRuil = { id: 'r5', requesterId: '1', targetDriverId: '5', status: 'approved', decidedAt: '2026-09-20T10:00:00Z', shiftDate: '2026-09-29', shiftLine: '2102', returnDate: '2026-09-30', returnCode: '2703', swapType: 'ruil', reason: '' };
+  const janMet = (oudWegActief: boolean) => bouwOverzichtPerChauffeur(
+    { rows: rijen, users: users.map((u) => (u.id === '5' ? { ...u, isActive: oudWegActief } : u)), services, codes, leave: [], swaps: [deRuil], grenzen: { eerste: '2026-09-29', laatste: '2026-09-30' } } as unknown as OverzichtBron,
+    filters('2026-09-01', '2026-09-30', { chauffeur: '1' }),
+  ).rijen[0];
+
+  it('Jan telt één dienst, die van 30/09 (4:30), zoals toen Oud Weg nog in dienst was', () => {
+    // Vóór 29-09: de 2102 van 29/09 (8:44). Eerste versie van 29-09: beide, twee diensten.
+    expect(janMet(false)).toMatchObject({ id: '1', diensten: 1, minuten: 270, vrij: 1, dagen: 2 });
+    expect(janMet(false)).toEqual(janMet(true));
+  });
+});
+
 // === Diensten per dag ===
 
 const planning = [

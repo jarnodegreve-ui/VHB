@@ -103,32 +103,83 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
   // de toelichting bij de route (api/_lib/planningRoutes.ts) en commit f2a9b33 voor de
   // maskering mocht die ooit terug moeten.
   const cells: Record<string, Record<string, OverlayCel>> = {};
-  for (const row of monthRows) {
-    const date = String(row.source_date);
-    const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? (row.assignments as Record<string, unknown>) : {};
-    for (const [driverName, rawCode] of Object.entries(assignments)) {
-      const id = idByNameKey.get(toLookupToken(driverName)) ?? idByNameKey.get(sortedNameToken(driverName));
-      if (!id) continue;
-      const code = String(rawCode ?? "").trim();
-      if (!code) continue;
-      const r = resolve(code);
-      if (!r) continue;
-      if (!cells[id]) cells[id] = {};
-      cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
+  const opNaam = (index: Map<string, string>, naam: string) => index.get(toLookupToken(naam)) ?? index.get(sortedNameToken(naam));
+  /** Leest de matrixkolommen van wie in `index` staat; `behalve` = kolommen
+   *  die al van iemand anders zijn. */
+  const leesMatrix = (index: Map<string, string>, behalve?: Map<string, string>) => {
+    for (const row of monthRows) {
+      const date = String(row.source_date);
+      const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? (row.assignments as Record<string, unknown>) : {};
+      for (const [driverName, rawCode] of Object.entries(assignments)) {
+        if (behalve && opNaam(behalve, driverName)) continue;
+        const id = opNaam(index, driverName);
+        if (!id) continue;
+        const code = String(rawCode ?? "").trim();
+        if (!code) continue;
+        const r = resolve(code);
+        if (!r) continue;
+        if (!cells[id]) cells[id] = {};
+        cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
+      }
     }
-  }
+  };
+  leesMatrix(idByNameKey);
 
   const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
 
+  // Wie een ruil deed maar zelf niet (meer) op het bord staat, bv. uit dienst
+  // gezet of met een andere rol (Jarno 29-09), doet mee in de overlay (optie A,
+  // api/_lib/ruilOverlay.ts): per ruil beslist ze of beide partijen meedoen, en
+  // dan past ze elk been toe waarvan de gever de dienst op zijn cel draagt.
+  // Voor wie op het bord staat is het bord zo hetzelfde als toen de vertrokken
+  // collega nog in dienst was: wat die weggaf blijft bij de ontvanger, en een
+  // gever wiens ontvanger vertrok staat op "vrij (weggeruild)", zoals in de
+  // planning-rijen. Wie vertrok verschijnt zelf niet op het bord: zijn cellen
+  // gaan er na de overlay weer uit.
+  //
+  // Of hij meedoet hangt alleen af van de accounts, nooit van het venster (één
+  // dag voor de schrijfpaden, een maand voor de maandplanning, de Dagafsluiting
+  // en de rapporten): zijn account bestaat, een van zijn naamsleutels is over
+  // alle accounts eenduidig, en zijn naam hoort niet bij een chauffeur op het
+  // bord (dan gaat zijn kolom naar die chauffeur en is ze voor hem nooit
+  // leesbaar, tegenlezing 29-09). Anders toonden dagbord en maandbord iets
+  // anders. Doet hij niet mee, dan valt de hele ruil weg, zoals vroeger. Ook
+  // een ruil tussen twee mensen buiten het bord telt, zodat een ketting via
+  // twee vertrokken collega's sluit.
+  const alleNamen = nameIdIndex(users);
+  const accountVan = new Map(users.map((u) => [String(u.id), u]));
+  const eenduidig = (id: string) => {
+    const u = accountVan.get(id);
+    return !!u && (alleNamen.get(toLookupToken(u.name)) === id || alleNamen.get(sortedNameToken(u.name)) === id) && !opNaam(idByNameKey, u.name);
+  };
+  const buitenBord = new Set<string>();
+  for (const sw of swaps) {
+    if (sw?.status !== "approved" && sw?.status !== "completed") continue;
+    for (const id of [String(sw.requesterId ?? ""), String(sw.targetDriverId ?? "")]) {
+      if (id && !chauffeurIds.has(id) && eenduidig(id)) buitenBord.add(id);
+    }
+  }
+  // Zijn matrixkolom dient voor de benen waarin hij geeft, gelezen met dezelfde
+  // eenduidige namen: een kolom die ook bij een ander account kan horen telt
+  // voor niemand, en een kolom op naam van een chauffeur op het bord blijft van
+  // die chauffeur. Bekende beperking: staat zijn kolom op de dag dat hij geeft
+  // leeg of op vrij, of stond hij nooit (of onder een andere naam) in de Excel,
+  // dan valt dat been weg. Bij een 1-op-1 telt wie bleef dan een dienst te
+  // weinig, na een heropbouw ook in de planning-rijen (de dekking toont die
+  // dienst dan als open). Dat voorkomen gebeurt bij de bron, bij Uit dienst
+  // eerst de ruilen afhandelen (nummer 92), niet in de overlay.
+  if (buitenBord.size > 0) leesMatrix(new Map([...alleNamen].filter(([, id]) => buitenBord.has(id))), idByNameKey);
+
   // Goedgekeurde dienstruilen over het maandbeeld (api/_lib/ruilOverlay.ts).
-  const naamVanId = (id: string) => chauffeurs.find((c) => c.id === id)?.name ?? "";
+  const naamVanId = (id: string) => chauffeurs.find((c) => c.id === id)?.name ?? users.find((u) => String(u.id) === id)?.name ?? "";
   // De “vrij”-cel voor een gever wiens ontvanger geen dienst had, met het
   // label uit de planningscodes (valt terug op de vaste cel).
   const vrijResolved = resolve("vrij");
   const vrijCel = vrijResolved && vrijResolved.kind !== "unknown"
     ? { code: "vrij", kind: vrijResolved.kind, label: vrijResolved.label, segments: [] }
     : undefined;
-  legRuilenOverMaandbeeld(cells, swaps, { dates, chauffeurIds, naamVanId, vrijCel });
+  legRuilenOverMaandbeeld(cells, swaps, { dates, chauffeurIds, naamVanId, vrijCel, buitenBord });
+  for (const id of buitenBord) delete cells[id];
 
   // Goedgekeurde afwezigheden uit de verlof-module overschrijven de matrix-
   // cel; ziekte als laatste zodat die bij overlap wint. De overdekte dienst

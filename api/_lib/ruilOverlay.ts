@@ -27,6 +27,29 @@ import type { SwapRecord } from "../types.js";
  * Volgorde = beslisvolgorde (decidedAt), zodat kettingen (A→B, daarna B→C)
  * kloppen: de laatste ruil op een cel bepaalt het merk. 'completed' telt
  * mee, een voltooide ruil is gereden zoals gewisseld.
+ *
+ * Wie niet op het bord staat (uit dienst, een andere rol) telt mee als de
+ * aanroeper hem in `buitenBord` zet, met zijn matrixcellen erbij voor de
+ * benen waarin hij geeft (Jarno 29-09, optie A). Per ruil beslist de overlay
+ * of beide partijen meedoen; zo niet, dan valt de hele ruil weg, zoals
+ * altijd. Doen ze mee, dan past ze elk been toe waarvan de gever de dienst op
+ * zijn cel draagt, zoals toen hij nog op het bord stond. De aanroeper
+ * (api/_lib/celWaarheid.ts) beslist wie meedoet, los van het venster. Een
+ * been waarin de vertrokken collega geeft vraagt dus dat zijn cel die dag de
+ * dienst toont; staat ze leeg of op vrij, dan valt dat been weg (bekende
+ * beperking, zie celWaarheid.ts). Tot 29-09 viel de
+ * ruil altijd weg zodra één van beiden niet op het bord stond: werd de gever
+ * uit dienst gezet, dan stond de ontvanger weer als vrij op het bord terwijl
+ * hij de dienst nog reed. Beide partijen of geen: de eerste versie van 29-09
+ * paste alleen het been VAN de vertrokken collega toe, en telde zo bij een
+ * 1-op-1 over twee dagen een dienst te veel bij wie op het bord bleef (hij
+ * hield wat hij weggaf en kreeg wat hij terugkreeg); dat bord voedt het
+ * voorstel van de Dagafsluiting, het Maandoverzicht en de rapporten. Het open
+ * punt van die versie is daarmee ook opgelost: vertrok de ONTVANGER, dan
+ * toont de gever niet langer de dienst maar "vrij (weggeruild)", zoals de
+ * planning-rijen, waar de dienst op naam van de ontvanger staat. De aanroeper
+ * haalt de cellen van wie buiten het bord staat na de overlay weer weg
+ * (api/_lib/celWaarheid.ts); hun cellen dienen alleen de overlay.
  */
 export type OverlayCel = {
   code: string;
@@ -74,7 +97,7 @@ export const VRIJ_CEL: OverlayCel = { code: "vrij", kind: "absence", label: "Gee
 export function legRuilenOverMaandbeeld(
   cells: OverlayCellen,
   swaps: OverlayRuil[],
-  opts: { dates: Iterable<string>; chauffeurIds: Set<string>; naamVanId: (id: string) => string; vrijCel?: OverlayCel },
+  opts: { dates: Iterable<string>; chauffeurIds: Set<string>; naamVanId: (id: string) => string; vrijCel?: OverlayCel; buitenBord?: ReadonlySet<string> },
 ): OverlayUitkomst {
   const dateSet = new Set(opts.dates);
   const uit: OverlayUitkomst = { gewisseld: 0, gemarkeerd: 0, overgeslagen: 0 };
@@ -124,7 +147,12 @@ export function legRuilenOverMaandbeeld(
   for (const sw of doorgevoerd) {
     const van = String(sw.requesterId ?? "");
     const naar = String(sw.targetDriverId ?? "");
-    if (!opts.chauffeurIds.has(van) || !opts.chauffeurIds.has(naar)) continue;
+    // Beide partijen of geen (Jarno 29-09, optie A): wie op het bord staat of
+    // in `buitenBord` zit, geeft én krijgt. Met iemand anders valt de hele ruil
+    // weg. Daarna wisselt elk been als de gever de dienst op zijn cel draagt, of
+    // krijgt het alleen het merk als de ontvanger hem al heeft (wisselCel).
+    const doetMee = (id: string) => opts.chauffeurIds.has(id) || !!opts.buitenBord?.has(id);
+    if (!doetMee(van) || !doetMee(naar)) continue;
     const dienstDag = String(sw.shiftDate ?? "");
     const dienstCode = String(sw.shiftLine ?? "").trim();
     const merk = { swapId: String(sw.id), swapManual: isHandmatigeWissel(sw), swapDone: sw.status === "completed", swapFrom: opts.naamVanId(van) };
