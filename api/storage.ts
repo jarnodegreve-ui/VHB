@@ -19,6 +19,7 @@ import type {
   UserDevice,
 } from "./types.js";
 import { RUIL_BEKEKEN_ACTIE } from "../shared/ruilVerloop.js";
+import { parseHHMMStrikt } from "../shared/busvakTijd.js";
 import {
   countAdmins,
   ensureUniqueUserEmails,
@@ -1139,12 +1140,8 @@ export const summarizeUpdateChanges = (previousUpdates: any[], nextUpdates: any[
 // Zelfde regels als de gedeelde client-validator (shiftTime.isValidBusvakTime):
 // uur 0–47 (busvak), minuten 0–59. De oude regex accepteerde "08:75"/"99:00",
 // die vervolgens per component anders geïnterpreteerd werden.
-const isValidHHMM = (v?: string) => {
-  if (!v) return false;
-  const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
-  if (!m) return false;
-  return Number(m[1]) <= 47 && Number(m[2]) <= 59;
-};
+// Strikt (niets achter de minuten): wat hier geldig is wordt een planning-rij.
+const isValidHHMM = (v?: string) => parseHHMMStrikt(v) !== null;
 const validSegment = (start: string | undefined, end: string | undefined, segment: number) =>
   isValidHHMM(start) && isValidHHMM(end)
     ? { startTime: start as string, endTime: end as string, segment }

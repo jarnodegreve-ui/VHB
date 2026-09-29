@@ -3,6 +3,7 @@ import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.
 import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
 import { MAX_UPDATE_BIJLAGEN } from "../shared/schemas/update.js";
 import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
+import { parseHHMM } from "../shared/busvakTijd.js";
 import type {
   AppUser,
   DiversionRecord,
@@ -184,17 +185,6 @@ export const veilig = (raw: string): string =>
 // helpers.ts zit in het auth-pad en mag de xlsx-bibliotheek (±1 MB) niet
 // bij elke koude start laden.
 
-/** 'HH:MM' → minuten; busvak-uren ≥ 24 ("26:16") geldig tot 47:59 — zelfde
- *  regels als parseBusvakMin in api/advisor.ts. */
-const parseBusvakMinuten = (t: string): number | null => {
-  const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? "").trim());
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 47 || min > 59) return null;
-  return h * 60 + min;
-};
-
 /** Som van de segmentduren van één dienst in minuten (einde ≤ start = nacht,
  *  +24u); null zonder bruikbare tijden. */
 export const dienstMinuten = (s: {
@@ -209,8 +199,8 @@ export const dienstMinuten = (s: {
   ];
   let som: number | null = null;
   for (const [a, b] of paren) {
-    const start = parseBusvakMinuten(String(a ?? ""));
-    const eind = parseBusvakMinuten(String(b ?? ""));
+    const start = parseHHMM(a);
+    const eind = parseHHMM(b);
     if (start === null || eind === null) continue;
     som = (som ?? 0) + (eind <= start ? eind + 24 * 60 : eind) - start;
   }

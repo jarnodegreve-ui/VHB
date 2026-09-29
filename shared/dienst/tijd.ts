@@ -4,6 +4,8 @@
  * exports, '01u10' voor de vroege ochtend). Intern rekenen we in minuten
  * sinds 00:00 van de dienstdag.
  */
+// Bewust niet de gedeelde parseHHMM (shared/busvakTijd.ts): de uurnotatie van
+// De Lijn schrijft '07u24' (ook 'h', '.' en ':'), en kent geen bovengrens.
 export const parseUurNotatie = (t: string | null | undefined): number | null => {
   const s = String(t ?? '').trim().toLowerCase();
   const m = /^(\d{1,2})[u:h.](\d{2})$/.exec(s);

@@ -74,7 +74,11 @@ export type DienstenBron = {
 };
 
 const tekst = (v: unknown): string => String(v ?? "").trim();
-/** 'UU:MM' → minuten, voor de volgorde van de delen (een busdag loopt tot 47:59). */
+/** 'UU:MM' → minuten, voor de volgorde van de delen (een busdag loopt tot 47:59).
+ *  Bewust niet de gedeelde parseHHMM (shared/busvakTijd.ts): deze kent geen
+ *  bovengrens en geeft nooit null, zodat ook een deel met een tijd buiten de
+ *  grenzen ("48:00") op zijn getal sorteert en alleen een onleesbare tijd
+ *  achteraan komt. */
 const minutenVan = (tijd: string): number => {
   const m = /^(\d{1,2}):(\d{2})/.exec(tijd);
   return m ? Number(m[1]) * 60 + Number(m[2]) : Number.MAX_SAFE_INTEGER;

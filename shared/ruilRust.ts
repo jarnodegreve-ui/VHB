@@ -17,21 +17,11 @@
  *   exporteert ze door), zodat beide nooit een andere uitkomst geven.
  */
 
+import { parseHHMM } from './busvakTijd.js';
+
 export const MIN_RUST_UREN = 8;
 
 export type TijdRij = { startTime: string; endTime: string };
-
-/** 'HH:MM' → minuten sinds middernacht van de dienstdag. Busvak-uren ≥ 24
- *  ("26:16" = 02:16 de nacht erna) zijn geldig tot 47:59 — zelfde regels als
- *  parseHHMM in src/lib/shiftTime.ts. */
-const parseBusvakMin = (t: string): number | null => {
-  const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? '').trim());
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 47 || min > 59) return null;
-  return h * 60 + min;
-};
 
 /**
  * Werkvenster van één dag (gesplitste dienst = meerdere rijen): vroegste
@@ -45,8 +35,8 @@ export const dagVenster = (rijen: readonly TijdRij[]): { start: number; eind: nu
   let start: number | null = null;
   let eind: number | null = null;
   for (const rij of rijen) {
-    const s = parseBusvakMin(rij.startTime);
-    const e = parseBusvakMin(rij.endTime);
+    const s = parseHHMM(rij.startTime);
+    const e = parseHHMM(rij.endTime);
     if (s === null || e === null) continue;
     const eNorm = e <= s ? e + 24 * 60 : e;
     start = start === null ? s : Math.min(start, s);
