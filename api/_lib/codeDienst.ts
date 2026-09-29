@@ -13,7 +13,6 @@ import { toLookupToken } from "../helpers.js";
 import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData } from "../storage.js";
 import { berekenCelWaarheid, type CelWaarheidUser } from "./celWaarheid.js";
 import type { OverlayCel } from "./ruilOverlay.js";
-import { dienstOpBord } from "../../shared/bordBezetting.js";
 
 type DienstBron = { serviceNumber?: unknown };
 type CodeBron = { code: string; category?: string };
@@ -52,12 +51,19 @@ export const bordVanDag = (date: string, bron: BordBron) => {
     rows: bron.rows, users: bron.users, services: bron.services, codes: bron.codes, leave: bron.leave, swaps: bron.swaps,
   });
   const opBord = new Set(chauffeurs.map((c) => c.id));
+  const bekend = new Set([
+    ...bron.services.map((s) => toLookupToken(String(s?.serviceNumber ?? ""))),
+    ...bron.codes.map((c) => toLookupToken(String(c?.code ?? ""))),
+  ]);
   return {
     celVan: (driverId: string): OverlayCel | undefined => cells[driverId]?.[date],
     /** Alleen chauffeurs staan op het bord; een wissel naar iemand anders zou
      *  het bord nooit kunnen tonen. */
     staatOpBord: (driverId: string): boolean => opBord.has(driverId),
     isCodeDienst: maakCodeDienstToets(bron.services as DienstBron[], bron.codes as CodeBron[]),
+    /** Kent het portaal deze code: staat ze in het dienstoverzicht of in de
+     *  planningscodes (welke categorie ook)? */
+    isBekend: (code: unknown): boolean => bekend.has(toLookupToken(String(code ?? ""))),
     swaps: bron.swaps,
     leave: bron.leave,
   };
@@ -98,32 +104,6 @@ export const bordOpDag = async (
     opts?.swaps ?? getSwapsData(),
   ]);
   return bordVanDag(date, { rows: rows as any[], users, services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[] });
-};
-
-/**
- * De code-dienst die een chauffeur die dag volgens het bord al draagt, of
- * null (controle 29-09). Een conflictcontrole die alleen de planning-rijen
- * leest, ziet een code-dienst niet: die heeft geen rijen. De ontvanger kreeg
- * er dan stil een tweede dienst bij, en het bord schoof zijn schoolrit door
- * naar de gever.
- *
- * Bewust alleen code-diensten. Voor een dienst uit het dienstoverzicht blijven
- * de planning-rijen de waarheid en doet de bestaande rijencontrole haar werk;
- * het bord kan daar achterlopen (een wissel naar iemand die niet op het bord
- * staat, een handmatig bijgewerkte planning) en zou dan ten onrechte weigeren.
- *
- * `behalve`: diensten die in dezelfde beweging verhuizen en dus geen conflict
- * zijn (de aangeboden dienst zelf, de terugdienst van een 1-op-1).
- */
-export const bezetOpBord = (
-  bord: Pick<BordVanDag, "celVan" | "isCodeDienst">,
-  driverId: string,
-  behalve: unknown[] = [],
-): string | null => {
-  const dienst = dienstOpBord(bord.celVan(driverId));
-  if (!dienst || !bord.isCodeDienst(dienst)) return null;
-  const token = toLookupToken(dienst);
-  return behalve.some((b) => toLookupToken(String(b ?? "")) === token) ? null : dienst;
 };
 
 /**

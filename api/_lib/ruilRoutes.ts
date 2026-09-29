@@ -25,7 +25,8 @@ import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, ge
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
-import { bezetOpBord, bordBenenVan, bordOpDag, dienstOpCel, laadBordVast } from "./codeDienst.js";
+import { bordBenenVan, bordOpDag, dienstOpCel, laadBordVast } from "./codeDienst.js";
+import { dubbeleInplanningen, laadDagStanden, onbekendeCodeFout, type DubbeleInplanning, type Ontvangst } from "./dubbeleInplanning.js";
 
 /**
  * Hangt aan elke ruil het verloop per persoon (`verloop`, zie
@@ -789,8 +790,8 @@ export function mountRuilRoutes(app: express.Express) {
             // 'vrij' en kreeg er zo een tweede dienst bij; wie zijn dienst
             // afgaf, staat er nog met die dienst en werd onterecht geweigerd.
             // Zonder de afwezigheden: die toetst ruilAfwezigheidsFout hieronder.
-            const bord = await bordOpDag(date, bordVast.users, { zonderAfwezigheid: true, swaps: previousSwaps, services: bordVast.services, codes: bordVast.codes });
-            const code = bord.celVan(targetId)?.code;
+            const { standOp } = await laadDagStanden([date], { swaps: previousSwaps, vast: bordVast });
+            const code = standOp(date)?.bord.celVan(targetId)?.code;
             if (!isTakeoverCode(code)) {
               const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
               return res.status(409).json({
@@ -801,8 +802,9 @@ export function mountRuilRoutes(app: express.Express) {
             }
             // Dubbelcheck op de planning zelf: de matrix is de bron van de
             // codes, maar een handmatig toegevoegde dienst staat er niet in.
-            const monthShifts = await getPlanningData({ monthIso: date.slice(0, 7) });
-            if (monthShifts.some((s: any) => String(s.driverId) === targetId && String(s.date) === date)) {
+            // Volgens DE regel (api/_lib/dubbeleInplanning.ts), op de stand
+            // van die dag die hierboven al gelezen is.
+            if (dubbeleInplanningen(standOp, [{ driverId: targetId, date, krijgt: offeredShift.line }]).length > 0) {
               const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
               return res.status(409).json({ error: `${naam} heeft op ${DAG_DMJ(date)} toch een dienst in de planning staan, ruilen zonder tegenprestatie kan dan niet.` });
             }
@@ -1150,11 +1152,6 @@ export function mountRuilRoutes(app: express.Express) {
       // hun diensten 1-op-1 (Jarno 14-09).
       const returnToken = toLookupToken(returnLine);
       const toRows = dayRows.filter((r) => String(r.driverId) === toDriverId);
-      // Eén zin per conflict, voor de rijen in de planning én voor het bord.
-      const ontvangerBezetFout = (dienst: unknown) =>
-        `${toUser.name} rijdt op ${DAG_DMJ(date)} al dienst ${dienst}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg, kies iemand anders, of wissel de twee diensten 1-op-1.`;
-      const geverBezetFout = (dienst: unknown) =>
-        `${fromUser.name} rijdt op ${DAG_DMJ(date)} ook dienst ${dienst}, de terugdienst zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
       let terugLine: string | null = null;
       let terugOpBord = false;
       if (returnLine) {
@@ -1173,14 +1170,33 @@ export function mountRuilRoutes(app: express.Express) {
           terugLine = opCel;
           terugOpBord = true;
         }
-        // De gever moet die dag zelf kunnen rijden: op een afwezigheidscel
-        // (ziek, verlof) zet je een dienst wég, je haalt er geen bij.
-        const andereVanGever = dayRows.find((r) => String(r.driverId) === fromDriverId && toLookupToken(r.line) !== lineToken);
-        if (andereVanGever) return res.status(409).json({ error: geverBezetFout(andereVanGever.line) });
-      } else {
-        const conflictRow = toRows[0];
-        if (conflictRow) return res.status(409).json({ error: ontvangerBezetFout(conflictRow.line) });
       }
+
+      // DE regel (api/_lib/dubbeleInplanning.ts): wie door deze wissel een
+      // dienst krijgt, mag die dag geen andere dienst hebben. Zonder terugdienst
+      // is dat de ontvanger. Bij een 1-op-1 zijn het er twee: de ontvanger, die
+      // zijn terugdienst in dezelfde beweging afgeeft, en de gever, die de
+      // terugdienst krijgt en de aangeboden dienst afgeeft. De gever moet die
+      // dag zelf kunnen rijden: op een afwezigheidscel (ziek, verlof) zet je een
+      // dienst wég, je haalt er geen bij.
+      const ontvangsten: Ontvangst[] = terugLine
+        ? [
+            { driverId: toDriverId, date, krijgt: line, geeftAf: [terugLine, returnLine] },
+            { driverId: fromDriverId, date, krijgt: terugLine, geeftAf: [line, returnLine] },
+          ]
+        : [{ driverId: toDriverId, date, krijgt: line }];
+      const conflicten = dubbeleInplanningen(() => ({ rijen: dayRows, bord }), ontvangsten);
+      const conflictFout = (c: DubbeleInplanning) => {
+        const naam = c.driverId === fromDriverId ? fromUser.name : toUser.name;
+        if (c.bron === "onbekend") return onbekendeCodeFout(naam, date, c.dienst);
+        if (c.driverId === fromDriverId) return `${naam} rijdt op ${DAG_DMJ(date)} ook dienst ${c.dienst}, de terugdienst zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
+        return terugLine
+          ? `${naam} rijdt op ${DAG_DMJ(date)} ook dienst ${c.dienst}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg.`
+          : `${naam} rijdt op ${DAG_DMJ(date)} al dienst ${c.dienst}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg, kies iemand anders, of wissel de twee diensten 1-op-1.`;
+      };
+      // Een dienst in de planning-rijen gaat vóór de afwezigheid, zoals altijd.
+      const inRijen = conflicten.find((c) => c.bron === "rijen");
+      if (inRijen) return res.status(409).json({ error: conflictFout(inRijen) });
 
       // Afwezigheid: wie ziek of met verlof gemeld is, krijgt geen dienst
       // toegeschoven (zelfde check als bij het goedkeuren van een ruil). Bij
@@ -1191,20 +1207,14 @@ export function mountRuilRoutes(app: express.Express) {
         { leave: bord.leave, users });
       if (afwFout) return res.status(409).json({ error: afwFout });
 
-      // Het bord, ná de afwezigheid (controle 29-09): een code-dienst
-      // (schoolrit, bureau, garage) heeft geen rijen in de planning, dus de
-      // rijencontrole hierboven ziet hem niet. Zonder deze tweede blik kreeg de
-      // ontvanger er stil een dienst bij en schoof het bord zijn schoolrit door
-      // naar de gever. Bewust in deze volgorde, zoals bij goedkeuren en
-      // toewijzen: wie ziek gemeld is met een schoolrit onder zijn afwezigheid
-      // krijgt de melding over zijn afwezigheid, zoals vóór de controle.
-      // Bij een 1-op-1 telt wat de gever volgens het bord nog rijdt, hij krijgt
-      // er de terugdienst bij; de dienst die hij afgeeft en de terugdienst zelf
-      // (de Excel kan de wissel al verwerkt hebben) zijn geen conflict.
-      const opBord = terugLine
-        ? bezetOpBord(bord, fromDriverId, [line, returnLine])
-        : bezetOpBord(bord, toDriverId, [line]);
-      if (opBord) return res.status(409).json({ error: terugLine ? geverBezetFout(opBord) : ontvangerBezetFout(opBord) });
+      // Wat alleen het bord toont, ná de afwezigheid (controle 29-09): een
+      // code-dienst (schoolrit, bureau, garage) heeft geen rijen in de planning,
+      // en een code die het portaal niet kent evenmin. Zonder deze tweede blik
+      // kreeg de ontvanger er stil een dienst bij en schoof het bord zijn
+      // schoolrit door naar de gever. Bewust in deze volgorde, zoals bij
+      // goedkeuren en toewijzen: wie ziek gemeld is met een schoolrit onder
+      // zijn afwezigheid krijgt de melding over zijn afwezigheid.
+      if (conflicten[0]) return res.status(409).json({ error: conflictFout(conflicten[0]) });
 
       // Een openstaande ruilaanvraag op dezelfde dienst zou door deze wissel
       // stale worden (en bij goedkeuring niets meer verplaatsen) — eerst

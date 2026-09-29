@@ -24,7 +24,8 @@ import { buildPlanningFromMatrix, getPlanningMatrixGrenzen, getLeaveData, getPla
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { ruilAfwezigheidsFout } from "./ruilRegels.js";
 import { vrijOpBord } from "../../shared/bordBezetting.js";
-import { bezetOpBord, bordCellenVoor, bordVanDag } from "./codeDienst.js";
+import { bordCellenVoor, bordVanDag } from "./codeDienst.js";
+import { dubbeleInplanningen, onbekendeCodeFout } from "./dubbeleInplanning.js";
 
 // Helper: decode de geüploade Excel-buffer en parse de praktijk-tab.
 const parseMatrixInput = async (body: any) => {
@@ -175,15 +176,20 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
       const naam = users.find((u) => String(u.id) === String(alBemand.driverId))?.name ?? "iemand";
       return { fout: { status: 409, error: `Dienst ${service.serviceNumber} is op ${date} intussen al ingevuld door ${naam}, vernieuw de pagina.` } };
     }
-    const heeftAl = dayRows.find((r) => String(r.driverId) === driverId);
-    if (heeftAl) return { fout: { status: 409, error: `${driver.name} rijdt op ${DAG_DMJ(date)} al dienst ${heeftAl.line}, dubbele inplanning kan niet.` } };
+    // DE regel (api/_lib/dubbeleInplanning.ts): wie een dienst krijgt, mag die
+    // dag geen andere hebben. Eerst wat in de planning-rijen staat, dan de
+    // afwezigheid, dan de matrixcel en wat alleen het bord toont (zie verderop).
+    const matrixRow = (matrixRows as any[]).find((r) => String(r.source_date) === date);
+    const bord = bordVanDag(date, { rows: matrixRow ? [matrixRow] : [], users: users as any[], services: services as any[], codes: codes as any[], leave: [], swaps: swaps as any[] });
+    const conflicten = dubbeleInplanningen(() => ({ rijen: dayRows, bord }), [{ driverId, date, krijgt: service.serviceNumber }]);
+    const heeftAl = conflicten.find((c) => c.bron === "rijen");
+    if (heeftAl) return { fout: { status: 409, error: `${driver.name} rijdt op ${DAG_DMJ(date)} al dienst ${heeftAl.dienst}, dubbele inplanning kan niet.` } };
     const afwFout = await ruilAfwezigheidsFout({ requesterId: "", targetDriverId: driverId, swapType: "overname", shiftDate: date });
     if (afwFout) return { fout: { status: 409, error: afwFout } };
 
     // Matrix-rij van die dag: sleutel is de chauffeursnáám zoals de Excel die
     // schrijft — hergebruik een bestaande naamvariant van deze chauffeur als
     // die er is (accenten/volgorde), anders de naam uit gebruikersbeheer.
-    const matrixRow = (matrixRows as any[]).find((r) => String(r.source_date) === date);
     if (!matrixRow) return { fout: { status: 409, error: `Er is geen geïmporteerde planning voor ${date}, importeer eerst de Excel.` } };
     const assignments: Record<string, string> = { ...(matrixRow.assignments ?? {}) };
     const eigenToken = toLookupToken(driver.name);
@@ -201,11 +207,12 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
     // dan overschreven, de chauffeur reed twee diensten en het bord schoof de
     // nieuwe dienst door naar wie de wissel gaf. Zonder de afwezigheden, die
     // zijn hierboven al getoetst.
-    const opBord = bezetOpBord(
-      bordVanDag(date, { rows: [matrixRow], users: users as any[], services: services as any[], codes: codes as any[], leave: [], swaps: swaps as any[] }),
-      driverId,
-    );
-    if (opBord) return { fout: { status: 409, error: `${driver.name} rijdt op ${DAG_DMJ(date)} al dienst ${opBord}, dubbele inplanning kan niet.` } };
+    const opBord = conflicten[0];
+    if (opBord) {
+      return { fout: { status: 409, error: opBord.bron === "onbekend"
+        ? onbekendeCodeFout(driver.name, date, opBord.dienst)
+        : `${driver.name} rijdt op ${DAG_DMJ(date)} al dienst ${opBord.dienst}, dubbele inplanning kan niet.` } };
+    }
     assignments[bestaandeKey ?? driver.name] = String(service.serviceNumber);
 
     const nieuweRijen = segments.map((segment: any) => ({
