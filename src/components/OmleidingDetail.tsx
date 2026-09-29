@@ -45,13 +45,18 @@ export function OmleidingDetail({ diversion: div }: { diversion: Diversion }) {
           <ul className="mt-3 flex flex-wrap gap-2" aria-label="Bijlagen">
             {bijlagen.map((b) => (
               <li key={b.slot} className="min-w-0 max-w-full">
+                {/* max-w-full + min-w-0: zonder die twee groeit de knop met een
+                    lange bestandsnaam mee en kapt de naam nooit af. Het icoon
+                    volgt de tekstkleur, zoals bij de updates: rood betekent
+                    in het portaal fout of dringend. */}
                 <Button
                   variant="secondary"
                   size="sm"
-                  icon={<FileText size={16} className="text-red-500" />}
+                  className="max-w-full min-w-0"
+                  icon={<FileText size={16} />}
                   onClick={() => openPdfInNewTab(b.url)}
                 >
-                  <span className="truncate">{b.filename}</span>
+                  <span className="min-w-0 truncate">{b.filename}</span>
                 </Button>
               </li>
             ))}

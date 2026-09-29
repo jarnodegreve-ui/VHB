@@ -9,6 +9,8 @@ const PDF_PAD = '/__test__/omleiding.pdf';
 const PDF_PAD_2 = '/__test__/haltekaart.pdf';
 const PDF_NAAM = 'Omleidingsplan lijn 50.pdf';
 const PDF_NAAM_2 = 'Haltekaart station.pdf';
+// Zestig tekens: zo lang zijn de bestandsnamen die planners echt uploaden.
+const PDF_NAAM_LANG = 'Omleidingsplan lijnen 50 en 58, tijdelijke halte station.pdf';
 const OMLEIDINGEN: Diversion[] = [
   { id: 'lange-omleiding', line: '50, 58, 82', title: TITEL, location: 'Maldegem, stationsomgeving', description: OMSCHRIJVING, startDate: '2026-09-12', endDate: '2026-09-19' },
   { id: 'andere-lijn', line: '883, 884', title: 'Brugwerken aan de Zuidlaan', location: 'Eeklo', description: 'De brug blijft afgesloten voor doorgaand verkeer.', startDate: '2026-09-14', endDate: '2026-09-21' },
@@ -18,7 +20,7 @@ const OMLEIDINGEN: Diversion[] = [
   { id: 'oud-archief', line: '82', title: 'Afgewerkte rioleringswerken van juli', location: 'Maldegem', description: 'Ouder dan de zichtbare bewaartermijn.', startDate: '2026-07-01', endDate: '2026-07-31' },
 ];
 
-async function openOmleidingen(page: Page, baseURL: string, pad = '/omleidingen', omleidingen = OMLEIDINGEN) {
+async function openOmleidingen(page: Page, baseURL: string, pad = '/omleidingen', omleidingen = OMLEIDINGEN, eersteBijlage = PDF_NAAM) {
   await page.clock.setFixedTime(new Date('2026-09-16T08:00:00Z'));
   await seed(page, {
     user: CHAUFFEUR, view: 'omleidingen', thema: 'dark',
@@ -26,7 +28,7 @@ async function openOmleidingen(page: Page, baseURL: string, pad = '/omleidingen'
     extra: (endpoint) => endpoint.endsWith('/api/diversions')
       ? omleidingen.map((item) => item.id === 'lange-omleiding'
         ? { ...item, bijlagen: [
-          { slot: 1, filename: PDF_NAAM, sizeBytes: 1200, url: new URL(PDF_PAD, baseURL).href },
+          { slot: 1, filename: eersteBijlage, sizeBytes: 1200, url: new URL(PDF_PAD, baseURL).href },
           { slot: 2, filename: PDF_NAAM_2, sizeBytes: 800, url: new URL(PDF_PAD_2, baseURL).href },
         ] }
         : item)
@@ -200,6 +202,49 @@ for (const viewport of [{ width: 320, height: 800 }, { width: 844, height: 390 }
     await expect(detail).toHaveCount(0);
   });
 }
+
+test('omleidingen: een bestandsnaam van 60 tekens kapt af binnen het paneel, met een neutraal icoon', async ({ page, baseURL, isMobile }) => {
+  expect(PDF_NAAM_LANG).toHaveLength(60);
+  // Het smalste toestel dat we ondersteunen; op desktop het gewone paneel.
+  if (isMobile) await page.setViewportSize({ width: 320, height: 800 });
+  await openOmleidingen(page, baseURL!, '/omleidingen', OMLEIDINGEN, PDF_NAAM_LANG);
+  await page.getByRole('button', { name: /Leestjeskermis/ }).click();
+  const detail = page.getByRole(isMobile ? 'dialog' : 'region', { name: TITEL, exact: true });
+  await expect(detail).toBeVisible();
+  const lijst = detail.getByRole('list', { name: 'Bijlagen' });
+  const knop = lijst.getByRole('button', { name: PDF_NAAM_LANG, exact: true });
+  await knop.scrollIntoViewIfNeeded();
+  await expect(knop).toBeVisible();
+
+  // De knop blijft binnen de lijst en de lijst binnen het paneel: niets
+  // schuift horizontaal, ook niet de inhoud waarin het paneel scrolt.
+  const maten = await knop.evaluate((el) => {
+    const lijstEl = el.closest('ul')!;
+    const k = el.getBoundingClientRect();
+    const l = lijstEl.getBoundingClientRect();
+    const schuivers: number[] = [];
+    for (let ouder = el.parentElement; ouder; ouder = ouder.parentElement) schuivers.push(ouder.scrollWidth - ouder.clientWidth);
+    return { knopLinks: k.left, knopRechts: k.right, lijstLinks: l.left, lijstRechts: l.right, overloop: Math.max(...schuivers), venster: window.innerWidth };
+  });
+  expect(maten.knopLinks, 'de knop begint binnen de lijst').toBeGreaterThanOrEqual(maten.lijstLinks - 1);
+  expect(maten.knopRechts, 'de knop eindigt binnen de lijst').toBeLessThanOrEqual(maten.lijstRechts + 1);
+  expect(maten.lijstRechts, 'de lijst blijft binnen het venster').toBeLessThanOrEqual(maten.venster + 1);
+  expect(maten.overloop, 'geen enkele ouder schuift horizontaal').toBeLessThanOrEqual(1);
+  expect(await detail.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  if (isMobile) {
+    // Op 320 px past de naam niet: ze kapt af met een beletselteken, de
+    // volledige naam blijft de toegankelijke naam van de knop.
+    const naam = knop.locator('span.truncate');
+    expect(await naam.evaluate((el) => el.scrollWidth > el.clientWidth), 'de naam is afgekapt').toBe(true);
+    await expect(detail.getByRole('button', { name: 'Sluiten', exact: true })).toBeInViewport();
+  }
+
+  // Het icoon volgt de tekstkleur van de knop, zoals bij de updates: rood
+  // betekent in het portaal fout of dringend, niet "PDF".
+  const kleuren = await knop.evaluate((el) => ({ knop: getComputedStyle(el).color, icoon: getComputedStyle(el.querySelector('svg')!).color }));
+  expect(kleuren.icoon).toBe(kleuren.knop);
+  await pastZonderHorizontaleScroll(page);
+});
 
 test('omleidingen: een volgend desktopdetail begint ook na scrollen in een lange titel bovenaan', async ({ page, baseURL, isMobile }) => {
   test.skip(isMobile, 'Alleen desktop wisselt records in hetzelfde open paneel.');
