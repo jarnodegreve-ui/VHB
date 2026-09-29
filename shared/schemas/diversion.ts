@@ -20,6 +20,9 @@ export const omleidingBijlageSchema = z.object({
   slot: z.number().int().min(1).max(MAX_OMLEIDING_BIJLAGEN),
   filename: verplichteTekst('Bestandsnaam ontbreekt'),
   sizeBytes: optioneel(z.number().int().nonnegative()),
+  /** Uploadmoment (ISO), sinds 29-09; zet alleen de server, oudere bijlagen
+   *  hebben het niet. Wat de client hier meestuurt, negeert de server. */
+  uploadedAt: optioneel(z.string()),
   /** Alleen in het antwoord van de server; ondertekend en tijdelijk. */
   url: optioneel(z.string()),
 });

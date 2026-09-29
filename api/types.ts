@@ -222,8 +222,10 @@ export interface DiversionRecord {
    * verwijdering op die omleiding zet de marker op null.
    */
   pdfUrl?: string;
-  /** PDF-bijlagen (kolom `bijlagen`, migratie 2026-09-25): wát er hangt, nooit waar. */
-  bijlagen?: Array<{ slot: number; filename: string; sizeBytes?: number }>;
+  /** PDF-bijlagen (kolom `bijlagen`, migratie 2026-09-25): wát er hangt, nooit
+   *  waar. `uploadedAt` (29-09) zet alleen de server; oudere elementen hebben
+   *  het niet. */
+  bijlagen?: Array<{ slot: number; filename: string; sizeBytes?: number; uploadedAt?: string }>;
 }
 
 export interface ServiceRecord {

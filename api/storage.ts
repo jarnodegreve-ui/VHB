@@ -45,6 +45,7 @@ import {
   toPublicUser,
 } from "./helpers.js";
 import { hoortBijSessie, type AanwezigheidLocatie } from "./_lib/aanwezigheid.js";
+import { uploadMoment } from "./_lib/bijlagenActies.js";
 import { db, supabaseAdmin } from "./db.js";
 import { isMissingTableError } from "./deviceGate.js";
 import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
@@ -1728,7 +1729,7 @@ export const downloadDiversionBijlage = async (diversionId: string, slot: number
  *  "pdfUrl": vanaf nu is de lijst de waarheid, ook als ze leeg is. */
 export const zetDiversionBijlagen = async (
   diversionId: string,
-  bijlagen: Array<{ slot: number; filename: string; sizeBytes?: number }>,
+  bijlagen: Array<{ slot: number; filename: string; sizeBytes?: number; uploadedAt?: string }>,
 ): Promise<void> => {
   const client = requireDb();
   const { error } = await client
@@ -1738,23 +1739,30 @@ export const zetDiversionBijlagen = async (
   if (error) throw error;
 };
 
-/** De bestanden van één record in een bijlagen-bucket: naam → grootte. Eén
- *  lijst-aanroep met het id als zoekterm; de zoekterm is ruim (ook andere
- *  namen waarin het id voorkomt), de aanroeper kijkt daarom alleen naar de
- *  exacte namen die hij zelf uit id en slot opbouwt, nooit naar een pad van
- *  de client. Gooit bij een fout: "niet te controleren" is niet "bestaat niet". */
-const bestandenVanRecord = async (bucket: string, recordId: string): Promise<Map<string, { sizeBytes?: number }>> => {
+/** De bestanden van één record in een bijlagen-bucket: naam → grootte en
+ *  uploadmoment. Eén lijst-aanroep met het id als zoekterm; de zoekterm is
+ *  ruim (ook andere namen waarin het id voorkomt), de aanroeper kijkt daarom
+ *  alleen naar de exacte namen die hij zelf uit id en slot opbouwt, nooit naar
+ *  een pad van de client. Het uploadmoment is wat Storage bij het bestand
+ *  bijhoudt (`updated_at`, anders `created_at`); zonder leesbaar tijdstip
+ *  blijft het weg. Gooit bij een fout: "niet te controleren" is niet "bestaat
+ *  niet". */
+const bestandenVanRecord = async (bucket: string, recordId: string): Promise<Map<string, { sizeBytes?: number; uploadedAt?: string }>> => {
   if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
   const { data, error } = await supabaseAdmin.storage
     .from(bucket)
     .list("", { limit: 1000, search: recordId, sortBy: { column: "name", order: "asc" } });
   if (error) throw error;
-  const uit = new Map<string, { sizeBytes?: number }>();
+  const uit = new Map<string, { sizeBytes?: number; uploadedAt?: string }>();
   for (const rij of data ?? []) {
     // Mappen hebben geen id; die slaan we over.
     if (!rij?.id || !rij.name) continue;
     const grootte = Number((rij.metadata as { size?: unknown } | null | undefined)?.size);
-    uit.set(String(rij.name), Number.isFinite(grootte) && grootte >= 0 ? { sizeBytes: grootte } : {});
+    const uploadedAt = uploadMoment(rij.updated_at ?? rij.created_at);
+    uit.set(String(rij.name), {
+      ...(Number.isFinite(grootte) && grootte >= 0 ? { sizeBytes: grootte } : {}),
+      ...(uploadedAt ? { uploadedAt } : {}),
+    });
   }
   return uit;
 };
@@ -1766,7 +1774,7 @@ const bestandenVanRecord = async (bucket: string, recordId: string): Promise<Map
  */
 export const bestaandeDiversionBijlagen = async (
   diversionId: string,
-): Promise<{ slots: Array<{ slot: number; sizeBytes?: number }>; oudeSleutel: boolean }> => {
+): Promise<{ slots: Array<{ slot: number; sizeBytes?: number; uploadedAt?: string }>; oudeSleutel: boolean }> => {
   const bestanden = await bestandenVanRecord(DIVERSIONS_BUCKET, diversionId);
   const nummers = Array.from({ length: MAX_OMLEIDING_BIJLAGEN }, (_, i) => i + 1);
   return {
@@ -2727,7 +2735,7 @@ export const ondertekenUpdateBijlage = async (updateId: string, slot: number): P
 /** De bijlagenlijst van één update bijwerken (alleen deze kolom). */
 export const zetUpdateBijlagen = async (
   updateId: string,
-  bijlagen: Array<{ slot: number; filename: string; sizeBytes?: number }>,
+  bijlagen: Array<{ slot: number; filename: string; sizeBytes?: number; uploadedAt?: string }>,
 ): Promise<void> => {
   const client = requireDb();
   const { error } = await client
@@ -2739,7 +2747,7 @@ export const zetUpdateBijlagen = async (
 
 /** Welke PDF's van deze update hangen er nu echt in Storage? Voor het
  *  herstel na "Ongedaan maken", zoals bestaandeDiversionBijlagen. */
-export const bestaandeUpdateBijlagen = async (updateId: string): Promise<Array<{ slot: number; sizeBytes?: number }>> => {
+export const bestaandeUpdateBijlagen = async (updateId: string): Promise<Array<{ slot: number; sizeBytes?: number; uploadedAt?: string }>> => {
   const bestanden = await bestandenVanRecord(UPDATE_BIJLAGEN_BUCKET, updateId);
   const nummers = Array.from({ length: MAX_UPDATE_BIJLAGEN }, (_, i) => i + 1);
   return nummers.flatMap((slot) => {

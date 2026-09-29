@@ -4,7 +4,7 @@
  * het script aanreikt (api/storage.ts). Geen netwerk, geen env: getest in
  * src/lib/omleidingPdfBackfill.test.ts.
  */
-import { mogelijkeEigenaars } from '../api/_lib/bijlagenActies.ts';
+import { mogelijkeEigenaars, uploadMoment } from '../api/_lib/bijlagenActies.ts';
 
 /** Hoogstens vijf PDF's per omleiding (MAX_OMLEIDING_BIJLAGEN in
  *  shared/schemas/diversion.ts; de test bewaakt dat ze gelijk blijven). */
@@ -20,8 +20,20 @@ const STORAGE_ID = /^[a-zA-Z0-9_-]+$/;
 
 /**
  * @typedef {'klaar' | 'geen-pdf' | 'verhuizen' | 'lijst-herstellen' | 'conflict' | 'marker-zonder-bestand' | 'ongeldig-id'} Actie
- * @typedef {{ id: string, titel: string, actie: Actie, sizeBytes?: number }} PlanRegel
+ * @typedef {{ id: string, titel: string, actie: Actie, sizeBytes?: number, uploadedAt?: string }} PlanRegel
  */
+
+/** Grootte en uploadmoment van het bestand dat slot 1 wordt, zoals Storage ze
+ *  kent (`gewijzigdOp` = updated_at, anders created_at). Zonder leesbaar
+ *  tijdstip blijft `uploadedAt` weg, zoals bij elke bijlage van vóór 29-09.
+ *  @param {{ sizeBytes?: number, gewijzigdOp?: string | null }} bestand */
+const kenmerken = (bestand) => {
+  const uploadedAt = uploadMoment(bestand.gewijzigdOp);
+  return {
+    ...(bestand.sizeBytes !== undefined ? { sizeBytes: bestand.sizeBytes } : {}),
+    ...(uploadedAt ? { uploadedAt } : {}),
+  };
+};
 
 export const ACTIE_UITLEG = {
   klaar: 'heeft al een bijlagenlijst',
@@ -41,10 +53,10 @@ export const BLOKKEERT_STAP_2 = ['verhuizen', 'lijst-herstellen', 'conflict', 'o
 /**
  * Per omleiding de actie. `omleidingen` zoals getDiversionsData ze geeft
  * (pdfUrl = marker, bijlagen = lijst); `bestanden` = wat er in de bucket
- * `diversions` hangt (naam, grootte).
+ * `diversions` hangt (naam, grootte, laatst gewijzigd).
  *
  * @param {Array<{ id: unknown, title?: unknown, pdfUrl?: unknown, bijlagen?: unknown }>} omleidingen
- * @param {Array<{ naam: string, sizeBytes?: number }>} bestanden
+ * @param {Array<{ naam: string, sizeBytes?: number, gewijzigdOp?: string | null }>} bestanden
  * @returns {PlanRegel[]}
  */
 export function planBackfill(omleidingen, bestanden) {
@@ -65,8 +77,8 @@ export function planBackfill(omleidingen, bestanden) {
     if (oud && nieuw) return { id, titel, actie: 'conflict' };
     if (oud && ookVanEenAnder(`${id}.pdf`, id)) return { id, titel, actie: 'conflict' };
     if (nieuw && ookVanEenAnder(`${id}-1.pdf`, id)) return { id, titel, actie: 'conflict' };
-    if (oud) return { id, titel, actie: 'verhuizen', ...(oud.sizeBytes !== undefined ? { sizeBytes: oud.sizeBytes } : {}) };
-    if (nieuw) return { id, titel, actie: 'lijst-herstellen', ...(nieuw.sizeBytes !== undefined ? { sizeBytes: nieuw.sizeBytes } : {}) };
+    if (oud) return { id, titel, actie: 'verhuizen', ...kenmerken(oud) };
+    if (nieuw) return { id, titel, actie: 'lijst-herstellen', ...kenmerken(nieuw) };
     return { id, titel, actie: 'marker-zonder-bestand' };
   });
 }
@@ -143,7 +155,7 @@ export function oordeelStap2(plan, zekerheid) {
  * wordt dan "lijst-herstellen").
  *
  * @param {PlanRegel[]} plan
- * @param {{ verplaats: (id: string) => Promise<void>, zetLijst: (id: string, lijst: Array<{ slot: number, filename: string, sizeBytes?: number }>) => Promise<void>, meld?: (tekst: string) => void }} doe
+ * @param {{ verplaats: (id: string) => Promise<void>, zetLijst: (id: string, lijst: Array<{ slot: number, filename: string, sizeBytes?: number, uploadedAt?: string }>) => Promise<void>, meld?: (tekst: string) => void }} doe
  */
 export async function voerBackfillUit(plan, doe) {
   const uit = { verhuisd: 0, hersteld: 0, mislukt: /** @type {Array<{ id: string, fout: string }>} */ ([]) };
@@ -151,7 +163,12 @@ export async function voerBackfillUit(plan, doe) {
     if (!SCHRIJF_ACTIES.includes(regel.actie)) continue;
     try {
       if (regel.actie === 'verhuizen') await doe.verplaats(regel.id);
-      await doe.zetLijst(regel.id, [{ slot: 1, filename: OUDE_PDF_NAAM, ...(regel.sizeBytes !== undefined ? { sizeBytes: regel.sizeBytes } : {}) }]);
+      await doe.zetLijst(regel.id, [{
+        slot: 1,
+        filename: OUDE_PDF_NAAM,
+        ...(regel.sizeBytes !== undefined ? { sizeBytes: regel.sizeBytes } : {}),
+        ...(regel.uploadedAt !== undefined ? { uploadedAt: regel.uploadedAt } : {}),
+      }]);
       if (regel.actie === 'verhuizen') uit.verhuisd += 1;
       else uit.hersteld += 1;
       doe.meld?.(`  ✓ ${regel.id}  ${regel.actie}`);

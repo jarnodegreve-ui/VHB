@@ -64,7 +64,9 @@ const metOndertekendeOmleidingBijlagen = async (diversions: any[]): Promise<any[
  * het schema accepteert `bijlagen` alleen omdat het formulier het record
  * heen en terug stuurt. We houden wat er al bij het record hoort (de lijst
  * én de oude marker), zodat een gewone save de PDF's met rust laat; alleen
- * de upload- en verwijderroutes hieronder schrijven de lijst.
+ * de upload- en verwijderroutes hieronder schrijven de lijst. Dat geldt ook
+ * voor het uploadmoment (`uploadedAt`): de hele lijst van de client valt weg,
+ * dus een client kan het nooit zetten of verschuiven.
  */
 const metBewaardeBijlagen = <T extends { id: string }>(record: T, huidig?: { pdfUrl?: string; bijlagen?: unknown } | null): T => {
   const { bijlagen: _client, pdfUrl: _clientMarker, ...rest } = record as T & { bijlagen?: unknown; pdfUrl?: unknown };
@@ -111,7 +113,7 @@ const zonderLegacy = async (
   id: string,
   bestaande: ReturnType<typeof omleidingBijlagen>,
   slotDatWeggaat: number,
-): Promise<Array<{ slot: number; filename: string; sizeBytes?: number }>> => {
+): Promise<Array<{ slot: number; filename: string; sizeBytes?: number; uploadedAt?: string }>> => {
   const blijvend = bestaande.filter((b) => b.slot !== slotDatWeggaat);
   if (blijvend.some((b) => b.legacy)) await verplaatsDiversionLegacyBijlage(id);
   return blijvend.map(({ legacy: _l, ...b }) => b);
@@ -321,12 +323,16 @@ export function mountCommunicatieRoutes(app: express.Express) {
       // schrijven: faalt de verhuis, dan is er nog niets veranderd.
       const blijvend = await zonderLegacy(id, bestaande, slot);
       await uploadDiversionBijlage(id, slot, buffer);
+      // Het uploadmoment komt van de server, nooit van de client: zo is een
+      // vervanging met dezelfde naam en grootte voor de cache van de
+      // chauffeur toch een ander bestand (src/lib/bijlageCache.ts).
+      const uploadedAt = new Date().toISOString();
       // Een PDF van vóór 25-09 op slot 1 wordt hier vervangen: alleen de oude
       // sleutel mag weg (de lijst hieronder wijst naar `<id>-1.pdf`).
       if (bestaande.some((b) => b.slot === slot && b.legacy)) {
         await verwijderDiversionLegacyBijlage(id).catch(() => undefined);
       }
-      const lijst = [...blijvend, { slot, filename, sizeBytes: buffer.length }].sort((a, b) => a.slot - b.slot);
+      const lijst = [...blijvend, { slot, filename, sizeBytes: buffer.length, uploadedAt }].sort((a, b) => a.slot - b.slot);
       await zetDiversionBijlagen(id, lijst);
       await logActivity(req, "diversions", "Bijlage toegevoegd", `${filename} bij omleiding "${huidig.title}".`, { type: "diversion", id });
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
@@ -567,10 +573,12 @@ export function mountCommunicatieRoutes(app: express.Express) {
       if (!huidig) return res.status(404).json({ error: "Update niet gevonden, mogelijk intussen verwijderd." });
 
       await uploadUpdateBijlage(id, slot, buffer);
+      // Uploadmoment van de server, zoals bij de omleidingen.
+      const uploadedAt = new Date().toISOString();
 
       const lijst = [
         ...bijlagenUitKolom((huidig as any).bijlagen).filter((b) => b.slot !== slot),
-        { slot, filename, sizeBytes: buffer.length },
+        { slot, filename, sizeBytes: buffer.length, uploadedAt },
       ].sort((a, b) => a.slot - b.slot);
       await zetUpdateBijlagen(id, lijst);
       await logActivity(req, "updates", "Bijlage toegevoegd", `${filename} bij update "${huidig.title}".`, { type: "update", id });
