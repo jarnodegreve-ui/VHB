@@ -105,8 +105,9 @@ export type BordCellen = Record<string, Record<string, BordCel>>;
  *  Met `bord` (useBordCellen) beslist de cel van het bord in de plaats van de
  *  rauwe matrix, met dezelfde regel als de server (shared/bordBezetting.ts):
  *  wie via een wissel een schoolrit kreeg is niet vrij, wie zijn dienst afgaf
- *  wel. Zonder `bord` (nog niet geladen, laden mislukt) geldt de matrixregel. */
-export const vrijOpDatum = (shifts: Shift[], datum: string, nietBeschikbaar?: ReadonlySet<string>, bord?: BordCellen) => {
+ *  wel. Zonder `bord` (laden mislukt, of een scherm zonder bord) geldt de
+ *  matrixregel; zolang het bord laadt toont het scherm geen lijst. */
+export const vrijOpDatum = (shifts: Shift[], datum: string, nietBeschikbaar?: ReadonlySet<string>, bord?: BordCellen | null) => {
   const bezet = new Set(shifts.filter((s) => s.date === datum).map((s) => String(s.driverId)));
   return (u: Kandidaat) => !bezet.has(String(u.id))
     && (bord ? vrijOpBord(bord[String(u.id)]?.[datum]) : !nietBeschikbaar?.has(String(u.id)));

@@ -254,6 +254,9 @@ export function ZiekteView({
   // een wissel een schoolrit kreeg is die dag niet vrij, ook al toont de
   // matrix 'vrij'. Alleen de admin zet over, dus alleen dan geladen.
   const bordVan = useBordCellen(isAdmin && detail ? openDienstenLijst(detail).map((d) => d.date) : []);
+  // Geen kandidaten tot de matrix én het bord van die dag er zijn (of het
+  // bord mislukte): anders stond iemand met een schoolrit even als vrij.
+  const lijstKlaar = (datum: string) => planningMatrixGeladen && bordVan(datum) !== undefined;
   const bewaarEinde = async (endDate: string) => {
     if (!detail || isOpslaan) return;
     if (!endDate || endDate < detail.startDate) { return; }
@@ -515,12 +518,12 @@ export function ZiekteView({
                                     value={vervangerPerDienst[dienst.id] ?? ''}
                                     onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [dienst.id]: e.target.value }))}
                                     className="min-w-0 flex-1"
-                                    disabled={!planningMatrixGeladen}
+                                    disabled={!lijstKlaar(dienst.date)}
                                   >
-                                    {/* Zonder matrix geen kandidaten: een afwezige
-                                        stond anders even als vrij in de lijst. */}
-                                    <option value="">{planningMatrixGeladen ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
-                                    {planningMatrixGeladen && rangschikKandidaten(
+                                    {/* Zonder matrix en bord geen kandidaten: een
+                                        afwezige stond anders even als vrij in de lijst. */}
+                                    <option value="">{lijstKlaar(dienst.date) ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
+                                    {lijstKlaar(dienst.date) && rangschikKandidaten(
                                       users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId)),
                                       vrijOpDatum(shifts, dienst.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, dienst.date), bordVan(dienst.date)),
                                       werkdagen,

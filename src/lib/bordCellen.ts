@@ -3,6 +3,21 @@ import { useOptioneleAppData } from '../app/AppDataContext';
 import { fetchMonthPlanning } from './monthPlanning';
 import type { BordCellen } from './vervangers';
 
+/** Eén laadbeurt: waarvoor ze gold en wat ze per maand opleverde (null = mislukt). */
+export type BordLading = { sleutel: readonly unknown[]; perMaand: Record<string, BordCellen | null> };
+
+/**
+ * Het bord van een dag uit de laatste laadbeurt: de cellen, `null` als het
+ * laden mislukte, `undefined` zolang het bord voor déze vraag (maanden,
+ * planning, ruilen) nog niet binnen is. Een laadbeurt voor een andere vraag
+ * telt niet: cellen van een vorige maand of van vóór een wissel blijven nooit
+ * staan terwijl de nieuwe laden.
+ */
+export const leesBord = (lading: BordLading | null, sleutel: readonly unknown[], datum: string): BordCellen | null | undefined =>
+  lading && sleutel.every((v, i) => v === lading.sleutel[i])
+    ? lading.perMaand[datum.slice(0, 7)]
+    : undefined;
+
 /**
  * De bordcellen van de maanden waarin `datums` vallen, voor de
  * vervangerlijsten (Ziekte, dashboard, Openstaande diensten). Dezelfde bron
@@ -11,23 +26,24 @@ import type { BordCellen } from './vervangers';
  * schoolrit kreeg staat daar met die rit, wie zijn dienst afgaf staat er vrij
  * (controle 29-09); de rauwe matrix toont dat allebei niet.
  *
- * Geeft per dag de cellen, of `undefined` zolang de maand niet geladen is of
- * het laden mislukte: `vrijOpDatum` valt dan terug op de matrixregel. Laadt
- * opnieuw na elke wijziging van de planning of de ruilen in de datalaag.
+ * Per dag: de cellen, `null` als het laden mislukte (`vrijOpDatum` valt dan
+ * terug op de matrixregel), of `undefined` zolang het bord laadt. Tot dan
+ * toont de lijst geen kandidaten: leeg mag nooit "nog niet geladen" betekenen.
+ * Laadt opnieuw na elke wijziging van de planning of de ruilen in de datalaag.
  */
-export function useBordCellen(datums: string[]): (datum: string) => BordCellen | undefined {
+export function useBordCellen(datums: string[]): (datum: string) => BordCellen | null | undefined {
   const data = useOptioneleAppData();
   const maanden = [...new Set(datums.map((d) => d.slice(0, 7)))].sort().join();
-  const [perMaand, setPerMaand] = useState<Record<string, BordCellen | undefined>>({});
+  const sleutel = [maanden, data?.shifts, data?.swaps];
+  const [lading, setLading] = useState<BordLading | null>(null);
   useEffect(() => {
+    if (!maanden) return;
     let weg = false;
-    for (const maand of maanden ? maanden.split(',') : []) {
-      fetchMonthPlanning(maand)
-        // Alleen een echt antwoord telt; al het andere is "niet geladen".
-        .then((mp) => (mp && !Array.isArray(mp) && mp.cells ? mp.cells : undefined), () => undefined)
-        .then((cellen) => { if (!weg) setPerMaand((cur) => ({ ...cur, [maand]: cellen })); });
-    }
+    const lijst = maanden.split(',');
+    // Alleen een antwoord met cellen telt; al het andere is "mislukt".
+    void Promise.all(lijst.map((maand) => fetchMonthPlanning(maand).then((mp) => mp?.cells || null, () => null)))
+      .then((uit) => { if (!weg) setLading({ sleutel, perMaand: Object.fromEntries(lijst.map((maand, i) => [maand, uit[i]])) }); });
     return () => { weg = true; };
-  }, [maanden, data?.shifts, data?.swaps]);
-  return (datum) => perMaand[datum.slice(0, 7)];
+  }, sleutel);
+  return (datum) => leesBord(lading, sleutel, datum);
 }

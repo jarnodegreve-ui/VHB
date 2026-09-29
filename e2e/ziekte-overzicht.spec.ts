@@ -48,7 +48,8 @@ type ZiekmeldingPayload = { userId: string; startDate: string; endDate: string; 
 /** Bordcellen zoals /api/month-planning ze geeft: cells[chauffeur][dag]. */
 type Bord = Record<string, Record<string, { code: string; kind: string; label: string; segments: string[]; hiddenService?: string; swapId?: string; swapAway?: boolean }>>;
 
-async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, users = CHAUFFEURS, bord }: { user?: User; records?: LeaveRequest[]; users?: User[]; bord?: Bord } = {}) {
+/** `bordPoort`: het bord antwoordt pas als deze belofte afloopt; `bordFaalt`: het antwoordt met een 500. */
+async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, users = CHAUFFEURS, bord, bordPoort, bordFaalt }: { user?: User; records?: LeaveRequest[]; users?: User[]; bord?: Bord; bordPoort?: Promise<void>; bordFaalt?: boolean } = {}) {
   await page.clock.setFixedTime(new Date(`${VANDAAG}T08:00:00Z`));
   let opgeslagen = records.map((r) => ({ ...r }));
   const registraties: ZiekmeldingPayload[] = [];
@@ -87,6 +88,15 @@ async function openZiekte(page: Page, { user = BEHEERDER, records = MELDINGEN, u
       return undefined;
     },
   });
+  // Later geregistreerd dan de fixtures, dus deze route gaat voor.
+  if (bordPoort || bordFaalt) {
+    await page.route('**/api/month-planning**', async (route) => {
+      if (bordFaalt) return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Gegevens laden is mislukt.' }) });
+      await bordPoort;
+      const month = new URL(route.request().url()).searchParams.get('month') ?? '';
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ month, dates: [VANDAAG], drivers: users.map((u) => ({ id: u.id, name: u.name })), cells: bord ?? {} }) });
+    });
+  }
   await page.goto('/beheer/ziekte');
   await expect(page.getByRole('heading', { level: 1, name: 'Ziekte', exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Actueel', exact: true })).toBeVisible();
@@ -339,4 +349,34 @@ test('ziekte: de vervangerlijst leest het bord, een schoolrit via een wissel is 
   // Een dag waarvoor het bord niets zegt: iedereen zonder dienst is vrij.
   const morgen = modal.getByRole('combobox', { name: `Vervanger voor dienst 2607 op ${dmj('2026-09-17')}`, exact: true });
   await expect(morgen.locator('option').filter({ hasText: 'Dina Goossens' })).toHaveText('Dina Goossens · vrij');
+});
+
+test('ziekte: geen kandidaten tot het bord er is, daarna de lijst volgens het bord', async ({ page }) => {
+  // Tijdens het laden gold de matrixregel en stond Dina, die een schoolrit
+  // rijdt, kort als vrij in de lijst. Nu toont de lijst niets tot het bord er is.
+  let laatLos = () => {};
+  const bordPoort = new Promise<void>((los) => { laatLos = los; });
+  await openZiekte(page, { bordPoort, bord: {
+    dina: { [VANDAAG]: { code: 'EEK6', kind: 'service', label: 'Schoolrit', segments: [], swapId: 'wissel-1' } },
+  } });
+  await rij(page.getByRole('region', { name: 'Actueel', exact: true }), 0, '2026-09-14').click();
+  const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[0].name, exact: true }) });
+  const keuze = modal.getByRole('combobox', { name: `Vervanger voor dienst 2101 op ${dmj(VANDAAG)}`, exact: true });
+  await expect(keuze).toBeDisabled();
+  await expect(keuze.locator('option')).toHaveText(['Kandidaten laden…']);
+  laatLos();
+  await expect(keuze).toBeEnabled();
+  await expect(keuze.locator('option').first()).toHaveText('Kies een chauffeur…');
+  await expect(keuze.locator('option').filter({ hasText: 'Dina Goossens' })).toHaveText('Dina Goossens');
+  await expect(keuze.locator('option').filter({ hasText: 'Cem Yilmaz' })).toHaveText('Cem Yilmaz · vrij · 1 dag deze week');
+});
+
+test('ziekte: mislukt het bord, dan toont de lijst de kandidaten volgens de matrixregel', async ({ page }) => {
+  await openZiekte(page, { bordFaalt: true });
+  await rij(page.getByRole('region', { name: 'Actueel', exact: true }), 0, '2026-09-14').click();
+  const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[0].name, exact: true }) });
+  const keuze = modal.getByRole('combobox', { name: `Vervanger voor dienst 2101 op ${dmj(VANDAAG)}`, exact: true });
+  await expect(keuze).toBeEnabled();
+  await expect(keuze.locator('option').first()).toHaveText('Kies een chauffeur…');
+  await expect(keuze.locator('option').filter({ hasText: 'Dina Goossens' })).toHaveText('Dina Goossens · vrij');
 });
