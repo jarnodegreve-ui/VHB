@@ -3,6 +3,7 @@ import { Send } from 'lucide-react';
 import type { User, Verzendlijst } from '../../types';
 import { SlideOver } from '../../components/SlideOver';
 import { Modal, SluitKnop } from '../../components/Modal';
+import { ModalHeader } from '../../components/ui';
 import { Field, Input, SearchField, Textarea } from '../../components/Field';
 import { Badge, Button } from '../../components/primitives';
 import { Checkbox } from '../../components/Table';
@@ -166,19 +167,19 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
 
       <Modal open={voorbeeld !== null} onClose={() => setVoorbeeld(null)} maxWidth="2xl" ariaLabel="Voorbeeld van je mail" boven>
         {voorbeeld && (
-          <div className="space-y-3">
-            <div>
-              <p className="text-card-title">Naar {tel(voorbeeld.aantal, 'ontvanger', 'ontvangers')}</p>
-              <p className="mt-0.5 break-words text-body-sm text-slate-500">
-                {voorbeeld.ontvangers.slice(0, 12).map((o) => o.naam).join(', ')}{voorbeeld.ontvangers.length > 12 ? ` en nog ${voorbeeld.ontvangers.length - 12}` : ''}.
-              </p>
+          <>
+            <ModalHeader
+              title={`Naar ${tel(voorbeeld.aantal, 'ontvanger', 'ontvangers')}`}
+              description={<span className="break-words">{voorbeeld.ontvangers.slice(0, 12).map((o) => o.naam).join(', ')}{voorbeeld.ontvangers.length > 12 ? ` en nog ${voorbeeld.ontvangers.length - 12}` : ''}.</span>}
+            />
+            <div className="space-y-4 p-6">
+              <iframe title="Voorbeeld van je mail" srcDoc={voorbeeld.html} sandbox="" className="h-[50vh] min-h-[320px] w-full rounded-xl bg-surface-white ring-1 ring-hairline" />
+              <div className="flex items-center justify-end gap-2">
+                <SluitKnop onClose={() => setVoorbeeld(null)} variant="secondary" disabled={bezig}>Terug</SluitKnop>
+                <Button variant="primary" icon={<Send size={16} />} bezig={bezig} onClick={() => void verstuur()}>Versturen naar {voorbeeld.aantal}</Button>
+              </div>
             </div>
-            <iframe title="Voorbeeld van je mail" srcDoc={voorbeeld.html} sandbox="" className="h-[55vh] min-h-[360px] w-full rounded-xl bg-surface-white ring-1 ring-hairline" />
-            <div className="flex items-center justify-end gap-2">
-              <SluitKnop onClose={() => setVoorbeeld(null)} variant="secondary" disabled={bezig}>Terug</SluitKnop>
-              <Button variant="primary" icon={<Send size={16} />} bezig={bezig} onClick={() => void verstuur()}>Versturen naar {voorbeeld.aantal}</Button>
-            </div>
-          </div>
+          </>
         )}
       </Modal>
     </>

@@ -54,6 +54,12 @@ test('omleiding mailen: verzendlijst en vrij adres, voorbeeld, bevestigen', asyn
   expect(calls[0]).toMatchObject({ droog: true, bericht: 'Beste, hierbij de omleiding.', ontvangers: { lijsten: ['l-1'], adressen: ['garage@vhb.be'] } });
   const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van de omleidingsmail' });
   await expect(bevestiging.getByText('Naar 3 ontvangers')).toBeVisible();
+  // Kop als h2 en de inhoud met binnenmarge (nr. 3): Modal draagt zelf geen padding.
+  await expect(bevestiging.getByRole('heading', { level: 2, name: 'Naar 3 ontvangers' })).toBeVisible();
+  const venster = (await bevestiging.boundingBox())!;
+  const mail = (await bevestiging.locator('iframe').boundingBox())!;
+  expect(mail.x - venster.x).toBeGreaterThanOrEqual(20);
+  expect(venster.x + venster.width - (mail.x + mail.width)).toBeGreaterThanOrEqual(20);
   await expect(bevestiging.getByText(/1 PDF in bijlage/)).toBeVisible();
   await expect(bevestiging.frameLocator('iframe').getByRole('heading', { name: 'Werken Markt Zottegem' })).toBeVisible();
   await bevestiging.getByRole('button', { name: 'Versturen naar 3' }).click();

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bell, Eye, ListChecks, Mail, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '../../components/Card';
 import { Badge, Button, IconButton, Switch } from '../../components/primitives';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Modal, SluitKnop } from '../../components/Modal';
 import { Field, Input, Textarea } from '../../components/Field';
 import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
@@ -140,16 +140,16 @@ function AutomatischeMails({ soorten, instellingen, onGewijzigd }: { soorten: So
 
       <Modal open={voorbeeld !== null} onClose={() => setVoorbeeld(null)} maxWidth="2xl" ariaLabel={voorbeeld ? `Voorbeeld: ${voorbeeld.soort.naam}` : 'Voorbeeld'}>
         {voorbeeld && (
-          <div className="space-y-3">
-            <div>
-              <p className="text-card-title">{voorbeeld.soort.naam}</p>
-              <p className="mt-0.5 text-body-sm text-slate-500">Onderwerp: {voorbeeld.onderwerp}</p>
+          <>
+            {/* Zonder kruisje: de knop Sluiten onderaan is de enige sluitknop. */}
+            <ModalHeader title={voorbeeld.soort.naam} description={`Onderwerp: ${voorbeeld.onderwerp}`} />
+            <div className="space-y-4 p-6">
+              <iframe title={`Voorbeeld ${voorbeeld.soort.naam}`} srcDoc={voorbeeld.html} sandbox="" className="h-[60vh] min-h-[360px] w-full rounded-xl bg-surface-white ring-1 ring-hairline" />
+              <div className="flex justify-end">
+                <SluitKnop onClose={() => setVoorbeeld(null)} variant="secondary">Sluiten</SluitKnop>
+              </div>
             </div>
-            <iframe title={`Voorbeeld ${voorbeeld.soort.naam}`} srcDoc={voorbeeld.html} sandbox="" className="h-[70vh] min-h-[420px] w-full rounded-xl bg-surface-white ring-1 ring-hairline" />
-            <div className="flex justify-end">
-              <SluitKnop onClose={() => setVoorbeeld(null)} variant="secondary">Sluiten</SluitKnop>
-            </div>
-          </div>
+          </>
         )}
       </Modal>
     </Card>
@@ -255,8 +255,8 @@ function VerzendlijstModal({ lijst, bezig, onClose, onBewaar }: { lijst: Verzend
 
   return (
     <Modal open={lijst !== null} onClose={onClose} vuil={vuil} maxWidth="md" ariaLabel={nieuw ? 'Nieuwe verzendlijst' : 'Verzendlijst bewerken'}>
-      <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); verstuur(); }}>
-        <p className="text-card-title">{nieuw ? 'Nieuwe verzendlijst' : 'Verzendlijst bewerken'}</p>
+      <ModalHeader title={nieuw ? 'Nieuwe verzendlijst' : 'Verzendlijst bewerken'} onClose={onClose} />
+      <form className="space-y-4 p-6" onSubmit={(e) => { e.preventDefault(); verstuur(); }}>
         <Field label="Naam" htmlFor="verzendlijst-naam" error={fouten.naam}>
           <Input id="verzendlijst-naam" value={naam} maxLength={60} onChange={(e) => { setNaam(e.target.value); setFouten((f) => ({ ...f, naam: undefined })); }} placeholder="bv. De Lijn, dispatching Gent" />
         </Field>

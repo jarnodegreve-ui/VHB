@@ -3,6 +3,7 @@ import { FileText, Send } from 'lucide-react';
 import type { Diversion, Verzendlijst } from '../../types';
 import { SlideOver } from '../../components/SlideOver';
 import { Modal, SluitKnop } from '../../components/Modal';
+import { ModalHeader } from '../../components/ui';
 import { Field, Textarea } from '../../components/Field';
 import { Badge, Button } from '../../components/primitives';
 import { Checkbox } from '../../components/Table';
@@ -138,18 +139,24 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
 
       <Modal open={voorbeeld !== null} onClose={() => setVoorbeeld(null)} maxWidth="2xl" ariaLabel="Voorbeeld van de omleidingsmail" boven>
         {voorbeeld && (
-          <div className="space-y-3">
-            <div>
-              <p className="text-card-title">Naar {tel(voorbeeld.aantal, 'ontvanger', 'ontvangers')}</p>
-              <p className="mt-0.5 break-words text-body-sm text-slate-500">{voorbeeld.ontvangers.map((o) => o.adres).slice(0, 8).join(', ')}{voorbeeld.ontvangers.length > 8 ? ` en nog ${voorbeeld.ontvangers.length - 8}` : ''}.</p>
-              <p className="mt-0.5 text-body-sm text-slate-500">Onderwerp: {voorbeeld.onderwerp}. {voorbeeld.bijlagen.length > 0 ? `${tel(voorbeeld.bijlagen.length, 'PDF', "PDF's")} in bijlage.` : 'Geen bijlage.'}</p>
+          <>
+            <ModalHeader
+              title={`Naar ${tel(voorbeeld.aantal, 'ontvanger', 'ontvangers')}`}
+              description={(
+                <>
+                  <span className="block break-words">{voorbeeld.ontvangers.map((o) => o.adres).slice(0, 8).join(', ')}{voorbeeld.ontvangers.length > 8 ? ` en nog ${voorbeeld.ontvangers.length - 8}` : ''}.</span>
+                  <span className="mt-0.5 block break-words">Onderwerp: {voorbeeld.onderwerp}. {voorbeeld.bijlagen.length > 0 ? `${tel(voorbeeld.bijlagen.length, 'PDF', "PDF's")} in bijlage.` : 'Geen bijlage.'}</span>
+                </>
+              )}
+            />
+            <div className="space-y-4 p-6">
+              <iframe title="Voorbeeld van de omleidingsmail" srcDoc={voorbeeld.html} sandbox="" className="h-[50vh] min-h-[320px] w-full rounded-xl bg-surface-white ring-1 ring-hairline" />
+              <div className="flex items-center justify-end gap-2">
+                <SluitKnop onClose={() => setVoorbeeld(null)} variant="secondary" disabled={bezig}>Terug</SluitKnop>
+                <Button variant="primary" icon={<Send size={16} />} bezig={bezig} onClick={() => void verstuur()}>Versturen naar {voorbeeld.aantal}</Button>
+              </div>
             </div>
-            <iframe title="Voorbeeld van de omleidingsmail" srcDoc={voorbeeld.html} sandbox="" className="h-[55vh] min-h-[360px] w-full rounded-xl bg-surface-white ring-1 ring-hairline" />
-            <div className="flex items-center justify-end gap-2">
-              <SluitKnop onClose={() => setVoorbeeld(null)} variant="secondary" disabled={bezig}>Terug</SluitKnop>
-              <Button variant="primary" icon={<Send size={16} />} bezig={bezig} onClick={() => void verstuur()}>Versturen naar {voorbeeld.aantal}</Button>
-            </div>
-          </div>
+          </>
         )}
       </Modal>
     </>

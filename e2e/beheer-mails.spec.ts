@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { ADMIN, seed } from './helpers';
 
 /**
@@ -45,6 +45,46 @@ async function opzet(page: Page) {
   await expect(page.getByRole('heading', { level: 1, name: 'Mails' })).toBeVisible({ timeout: 15_000 });
   return { calls };
 }
+
+/** De inhoud staat links en rechts minstens 20 px van de rand van het venster
+ *  (de body van een modal is p-6 = 24 px; Modal zelf draagt geen padding). */
+async function heeftBinnenmarge(dialoog: Locator, inhoud: Locator) {
+  const d = (await dialoog.boundingBox())!;
+  const i = (await inhoud.boundingBox())!;
+  expect(i.x - d.x, 'marge links').toBeGreaterThanOrEqual(20);
+  expect(d.x + d.width - (i.x + i.width), 'marge rechts').toBeGreaterThanOrEqual(20);
+}
+
+test('mails: elke modal heeft een kop (h2) en een binnenmarge (nr. 3)', async ({ page }) => {
+  await opzet(page);
+  // Voorbeeld van een mail.
+  await page.getByRole('list', { name: 'Automatische mails' }).getByRole('listitem').filter({ hasText: 'Ziekmelding' }).getByRole('button', { name: 'Voorbeeld' }).click();
+  const voorbeeld = page.getByRole('dialog', { name: 'Voorbeeld: Ziekmelding' });
+  await expect(voorbeeld.getByRole('heading', { level: 2, name: 'Ziekmelding' })).toBeVisible();
+  await heeftBinnenmarge(voorbeeld, voorbeeld.locator('iframe'));
+  await heeftBinnenmarge(voorbeeld, voorbeeld.getByRole('heading', { level: 2 }));
+  await voorbeeld.getByRole('button', { name: 'Sluiten' }).click();
+  await expect(voorbeeld).toHaveCount(0);
+  // Verzendlijst.
+  await page.getByRole('button', { name: 'Nieuwe lijst' }).click();
+  const lijst = page.getByRole('dialog', { name: 'Nieuwe verzendlijst' });
+  await expect(lijst.getByRole('heading', { level: 2, name: 'Nieuwe verzendlijst' })).toBeVisible();
+  await heeftBinnenmarge(lijst, lijst.getByLabel('Naam'));
+  await heeftBinnenmarge(lijst, lijst.getByLabel('Adressen'));
+  await lijst.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(lijst).toHaveCount(0);
+  // Bevestiging van een eigen mail.
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.');
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van je mail' });
+  await expect(bevestiging.getByRole('heading', { level: 2, name: 'Naar 3 ontvangers' })).toBeVisible();
+  await heeftBinnenmarge(bevestiging, bevestiging.locator('iframe'));
+  await heeftBinnenmarge(bevestiging, bevestiging.getByRole('heading', { level: 2 }));
+});
 
 test('mails: lijst, schakelaar en voorbeeld', async ({ page }) => {
   const { calls } = await opzet(page);
