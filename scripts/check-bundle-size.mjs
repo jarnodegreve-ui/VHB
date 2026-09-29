@@ -93,7 +93,16 @@ import zlib from 'node:zlib';
 // 25-09 (mailtranche PR 4): 680 → 682. Mailknop op een omleiding
 // (OmleidingMail.tsx, ±2 kB in de lazy Beheer-omleidingen-chunk). Niets in
 // de start- of warmup-sets; de deelbudgetten bleven gelijk.
-const BUDGET_KB = 682;
+// 29-09 (controle-ronde): 682 → 686, akkoord Jarno. Zes branches samen
+// kwamen lokaal op 683 kB, elk apart bleef net onder de grens (tot 681,99).
+// Geen nieuwe dependency: de groei is schermlogica die fouten dichtmaakt
+// (verzending in stappen met "alleen de rest versturen", verzendlog als lijst
+// op de telefoon, één bevestigingsmodal, herstel van bijlagen na Ongedaan
+// maken, het bord in de vervangerlijsten). 686 = de gemeten 683 plus de
+// ±0,3 kB die de CI-runner zwaarder meet en ruimte voor de nummers die nog
+// volgen. De index (75) en de chauffeur-warmup (75) blijven ongewijzigd en
+// zijn de echte bewakers van de start.
+const BUDGET_KB = 686;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -178,7 +187,13 @@ const DEELBUDGET_KB = {
 // melding bij een ontbrekende migratie toe, +0,12 kB (lokaal 138,90), en main
 // werd rood terwijl dezelfde code op de PR groen was. Geen nieuwe import; de
 // warmup start pas na LCP + 2 s en raakt het eerste beeld niet.
-const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 140 };
+// 29-09 (controle-ronde): staf 140 → 141, akkoord Jarno. De fix voor de
+// dubbele inplanning bij code-diensten laat de vervangerlijsten (Ziekte,
+// dashboard, Openstaande diensten, alle drie in de staf-warmup) het bord
+// lezen in plaats van de rauwe matrix: lokaal 139,23 → 139,75 kB, en de
+// CI-runner meet een fractie zwaarder. Geen nieuwe import; de warmup start
+// pas na LCP + 2 s en raakt het eerste beeld niet.
+const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 141 };
 
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
