@@ -4812,14 +4812,20 @@ describe('planning-import, ingepakt met gzip (413 van het platform, 29-09)', () 
     expect(xlsx.json.error).toBe(`Het Excel-bestand is 5,1 MB, de grens voor een .xlsx is 5 MB. ${RAAD}`);
   });
 
-  it('een onbekend formaat of een beschadigde gzip geeft een nette 400', async () => {
+  it('een onbekend formaat gaat zoals vroeger naar de parser (400 van de parser), een beschadigde gzip geeft een nette 400', async () => {
+    // Geen .xls en geen .xlsx: zoals vóór 29-09 beslist de parser (hier: geen
+    // tabblad "praktijk"), in beide vormen met dezelfde melding.
     const tekst = Buffer.from('datum;dagtype;Testchauffeur 01;aantal\n01/09/2030;W;2101;1\n');
-    const GEEN_WERKMAP = 'Dit is geen Excel-werkmap. Bewaar het bestand in Excel als .xls of .xlsx en probeer het opnieuw.';
     for (const body of [gzipVeld(tekst), JSON.stringify({ xlsxBase64: tekst.toString('base64') })]) {
       const res = await stuur('/api/planning-matrix/preview', body);
       expect(res.status).toBe(400);
-      expect(res.json.error).toBe(GEEN_WERKMAP);
+      expect(res.json.error).toMatch(/^Tabblad "praktijk" niet gevonden/);
     }
+    // Groter dan de grens van vóór 29-09 (5 MB): 413 met die grens.
+    const grootTekst = Buffer.alloc(5 * 1024 * 1024 + 1024, 0x41);
+    const teGrootTekst = await stuur('/api/planning-matrix/preview', gzipVeld(grootTekst));
+    expect(teGrootTekst.status).toBe(413);
+    expect(teGrootTekst.json.error).toBe(`Het Excel-bestand is 5,1 MB, de grens is 5 MB. ${RAAD}`);
     const BESCHADIGD = 'Het ingepakte Excel-bestand is beschadigd. Kies het bestand opnieuw.';
     const geenGzip = await stuur('/api/planning-matrix/preview', JSON.stringify({ xlsxGzipBase64: tekst.toString('base64') }));
     expect(geenGzip.status).toBe(400);

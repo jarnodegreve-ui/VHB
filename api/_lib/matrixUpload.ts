@@ -23,7 +23,10 @@ import { constants, gunzipSync } from "node:zlib";
  *  - .xlsx (zip, begint met PK): 5 MB zoals voorheen. Een .xlsx is zelf een
  *    zip die SheetJS uitpakt, daar zit het risico van een zip-bom; dezelfde
  *    werkmap is als .xlsx maar 1,5 MB.
- *  - iets anders: 400, de parser krijgt het niet te zien.
+ *  - iets anders (bv. een XML-werkmap van Excel 2003 of een HTML-export met
+ *    de extensie .xls): 5 MB en door naar de parser, precies zoals vóór
+ *    29-09. Die weigert het zelf met een 400 als er geen tabblad "praktijk"
+ *    in staat; zo verandert er voor zo'n bestand niets.
  * Het uitpakken zelf is begrensd (`maxOutputLength`): een gzip-bom (klein
  * ingepakt, enorm uitgepakt) zet nooit meer dan de grootste grens in het
  * geheugen. De grootte in de melding komt uit de gzip-staart (ISIZE).
@@ -52,10 +55,13 @@ const fout = (melding: string, status: 400 | 413) => Object.assign(new Error(mel
 
 const RAAD = "Bewaar een kopie met alleen het tabblad “praktijk” en probeer het opnieuw.";
 
+/** Grens voor een bestand dat geen .xls of .xlsx is: die van vóór 29-09. */
+const MAX_ANDERS_BYTES = 5 * MB;
+
 /** 413 met grootte en grens. Zonder soort (het begin van het bestand is
- *  geen .xls of .xlsx) geldt de grootste grens. */
+ *  geen .xls of .xlsx) geldt de grens van vóór 29-09. */
 const teGroot = (bytes: number | null, soort: Soort | null) => {
-  const grens = soort ? GRENS[soort] : MAX_XLS_BYTES;
+  const grens = soort ? GRENS[soort] : MAX_ANDERS_BYTES;
   const grootte = bytes !== null && bytes > grens ? mb(bytes) : `meer dan ${mb(grens)}`;
   return fout(`Het Excel-bestand is ${grootte}, de grens${soort ? ` voor een .${soort}` : ""} is ${mb(grens)}. ${RAAD}`, 413);
 };
@@ -75,12 +81,12 @@ const soortVanBegin = (gz: Buffer): Soort | null => {
 };
 
 /** Pakt de gzip uit, hoogstens tot de grens van de soort (onbekend: de
- *  grootste grens; wat het dan is, beslist leesMatrixUpload). */
+ *  grens van vóór 29-09). */
 const pakUit = (gz: Buffer): Buffer => {
   if (gz[0] !== 0x1f || gz[1] !== 0x8b) throw beschadigd();
   const soort = soortVanBegin(gz);
   try {
-    return gunzipSync(gz, { maxOutputLength: soort ? GRENS[soort] : MAX_XLS_BYTES });
+    return gunzipSync(gz, { maxOutputLength: soort ? GRENS[soort] : MAX_ANDERS_BYTES });
   } catch (err: any) {
     if (err?.code !== "ERR_BUFFER_TOO_LARGE") throw beschadigd();
     // De grootte voor de melding komt uit de staart (ISIZE: de oorspronkelijke
@@ -102,9 +108,7 @@ export const leesMatrixUpload = (body: any): Buffer => {
   const buffer = gzip ? pakUit(ruw) : ruw;
   if (buffer.length === 0) throw fout("Excel-bestand is leeg.", 400);
   const soort = soortVan(buffer);
-  if (!soort) {
-    throw fout("Dit is geen Excel-werkmap. Bewaar het bestand in Excel als .xls of .xlsx en probeer het opnieuw.", 400);
-  }
-  if (buffer.length > GRENS[soort]) throw teGroot(buffer.length, soort);
+  const grens = soort ? GRENS[soort] : MAX_ANDERS_BYTES;
+  if (buffer.length > grens) throw teGroot(buffer.length, soort);
   return buffer;
 };
