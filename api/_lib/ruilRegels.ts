@@ -11,10 +11,12 @@
  */
 
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { DAG_DMJ, toLookupToken, afwezigOp, normalizeSwapType } from "../helpers.js";
+import { DAG_DMJ, afwezigOp, normalizeSwapType } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getLeaveData, getUsersData, getShiftById, getShiftsOnDate } from "../storage.js";
+import { getLeaveData, getUsersData, getShiftById } from "../storage.js";
 import { ISO_DAY_RE } from "./collectie.js";
+import type { BordVast } from "./codeDienst.js";
+import { dubbeleInplanningen, laadDagStanden, onbekendeCodeFout, type Ontvangst } from "./dubbeleInplanning.js";
 
 // Afgehandelde ruil-statussen: hieruit is geen overgang meer toegestaan.
 export const TERMINAL_SWAP_STATES = new Set(["rejected", "cancelled", "completed"]);
@@ -66,7 +68,7 @@ const AFWEZIG_LABEL: Record<string, string> = { ziekte: "ziek gemeld", betaald_v
 export const ruilAfwezigheidsFout = async (swap: {
   requesterId?: unknown; targetDriverId?: unknown; swapType?: unknown;
   shiftDate?: unknown; returnDate?: unknown; returnCode?: unknown;
-}): Promise<string | null> => {
+}, vooraf?: { leave: any[]; users: any[] }): Promise<string | null> => {
   const targetId = String(swap.targetDriverId ?? "").trim();
   const requesterId = String(swap.requesterId ?? "").trim();
   const dienstDag = String(swap.shiftDate ?? "").trim();
@@ -80,7 +82,11 @@ export const ruilAfwezigheidsFout = async (swap: {
   }
   if (checks.length === 0) return null;
   const vroegste = checks.map((c) => c.date).sort()[0];
-  const [leave, users] = await Promise.all([getLeaveData({ endOnOrAfter: vroegste }), getUsersData()]);
+  // `vooraf`: de aanroeper las het verlof (vanaf de vroegste dag) en de
+  // gebruikers al, bv. samen met het bord; dan geen tweede lezing.
+  const [leave, users] = vooraf
+    ? [vooraf.leave, vooraf.users]
+    : await Promise.all([getLeaveData({ endOnOrAfter: vroegste }), getUsersData()]);
   for (const c of checks) {
     const afwezig = afwezigOp(leave as any[], c.userId, c.date);
     if (afwezig) {
@@ -91,39 +97,60 @@ export const ruilAfwezigheidsFout = async (swap: {
   return null;
 };
 
-/** Dubbele inplanning bij het goedkeuren van een ruil: de collega mag op de
- *  dienstdag niet al een ándere dienst hebben. De overname-voorwaarde werd tot
- *  nu alleen bij het indienen getoetst (isTakeoverCode op de matrix); tussen
- *  accepteren en goedkeuren kan de collega intussen een dienst gekregen hebben
- *  — bijvoorbeeld via de handmatige admin-wissel, die zélf wél op conflicten
- *  controleert. Dan leverde de goedkeuring stil een dubbel ingeplande dag op.
- *
- *  Twee rijen tellen bewust NIET mee: de terugruil-dienst bij een 1-op-1 ruil
- *  op dezelfde dag (die verhuist in dezelfde beweging naar de aanvrager) en de
- *  aangeboden dienst zelf (al doorgevoerd → herhaling blijft idempotent). */
-export const dubbeleInplanningFout = async (swap: {
-  targetDriverId?: unknown; shiftDate?: unknown; shiftLine?: unknown;
+/** Wie door een ruil op welke dag een dienst krijgt: de collega op de
+ *  dienstdag, en bij een 1-op-1 de aanvrager op de terugdag. Wat iemand in
+ *  dezelfde beweging op die dag afgeeft telt niet mee. Een oude ruil zonder
+ *  dienst-info geeft niets: de doorvoer slaat die sowieso over, met een
+ *  waarschuwing in de log. */
+export const ontvangstenVanRuil = (swap: {
+  requesterId?: unknown; targetDriverId?: unknown; shiftDate?: unknown; shiftLine?: unknown;
   returnDate?: unknown; returnCode?: unknown; swapType?: unknown;
-}): Promise<string | null> => {
+}): Ontvangst[] => {
   const targetId = String(swap.targetDriverId ?? "").trim();
+  const requesterId = String(swap.requesterId ?? "").trim();
   const dienstDag = String(swap.shiftDate ?? "").trim();
-  // Legacy-ruil zonder dienst-info: niets te controleren (de doorvoer slaat
-  // die sowieso over, met een waarschuwing in de log).
-  if (!targetId || !ISO_DAY_RE.test(dienstDag)) return null;
+  if (!targetId || !ISO_DAY_RE.test(dienstDag)) return [];
   const terugCode = normalizeSwapType(swap.swapType) === "overname" ? "" : String(swap.returnCode ?? "").trim();
   const terugDag = String(swap.returnDate ?? "").trim();
-  const aangeboden = toLookupToken(String(swap.shiftLine ?? ""));
-  const rijen = await getShiftsOnDate(dienstDag);
-  const bezet = rijen.filter((r) => {
-    if (String(r.driverId) !== targetId) return false;
-    const lijnToken = toLookupToken(r.line);
-    if (aangeboden && lijnToken === aangeboden) return false;
-    if (terugCode && terugDag === dienstDag && lijnToken === toLookupToken(terugCode)) return false;
-    return true;
-  });
-  if (bezet.length === 0) return null;
-  const naam = (await getUsersData()).find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
-  return `${naam} rijdt op ${DAG_DMJ(dienstDag)} al dienst ${bezet[0].line}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
+  const metTerug = !!terugCode && terugCode.toLowerCase() !== "vrij" && ISO_DAY_RE.test(terugDag);
+  const zelfdeDag = metTerug && terugDag === dienstDag;
+  const uit: Ontvangst[] = [{ driverId: targetId, date: dienstDag, krijgt: swap.shiftLine, geeftAf: zelfdeDag ? [terugCode] : [] }];
+  if (metTerug && requesterId) uit.push({ driverId: requesterId, date: terugDag, krijgt: terugCode, geeftAf: zelfdeDag ? [swap.shiftLine] : [] });
+  return uit;
+};
+
+/** Dubbele inplanning bij het goedkeuren van een ruil, volgens DE regel in
+ *  api/_lib/dubbeleInplanning.ts: wie door de ruil een dienst krijgt, mag die
+ *  dag niet al een andere dienst hebben. De overname-voorwaarde werd eerst
+ *  alleen bij het indienen getoetst; tussen accepteren en goedkeuren kan de
+ *  collega intussen een dienst gekregen hebben, bijvoorbeeld via de
+ *  handmatige admin-wissel. Dan leverde de goedkeuring stil een dubbel
+ *  ingeplande dag op.
+ *
+ *  Getoetst worden de collega op de dienstdag en, bij een 1-op-1, de
+ *  aanvrager op de terugdag (Jarno 29-09: ook over twee dagen). Twee diensten
+ *  tellen bewust NIET mee: wat iemand in dezelfde beweging afgeeft (1-op-1 op
+ *  dezelfde dag) en de dienst die hij krijgt zelf (al doorgevoerd → herhaling
+ *  blijft idempotent). Een dienst is een rij in de planning of een code-dienst
+ *  op het bord; een code die het portaal niet kent telt als bezet.
+ *
+ *  `vooraf`: wat de aanroeper al las. Wie een lijst ruilen goedkeurt geeft
+ *  `vast` mee (laadBordVast, één keer vóór de lus): per ruil blijven dan
+ *  alleen de rijen en de matrixrij van zijn dag (en zijn terugdag) te lezen. */
+export const dubbeleInplanningFout = async (swap: {
+  requesterId?: unknown; targetDriverId?: unknown; shiftDate?: unknown; shiftLine?: unknown;
+  returnDate?: unknown; returnCode?: unknown; swapType?: unknown;
+}, vooraf?: { swaps?: any[]; vast?: BordVast }): Promise<string | null> => {
+  const ontvangsten = ontvangstenVanRuil(swap);
+  if (ontvangsten.length === 0) return null;
+  const { vast, standOp } = await laadDagStanden(ontvangsten.map((o) => o.date), vooraf);
+  const [conflict] = dubbeleInplanningen(standOp, ontvangsten);
+  if (!conflict) return null;
+  const naam = vast.users.find((u: any) => String(u.id) === conflict.driverId)?.name
+    ?? (conflict.driverId === String(swap.targetDriverId ?? "").trim() ? "De collega" : "De aanvrager");
+  return conflict.bron === "onbekend"
+    ? onbekendeCodeFout(naam, conflict)
+    : `${naam} rijdt op ${DAG_DMJ(conflict.date)} al dienst ${conflict.dienst}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
 };
 
 /**

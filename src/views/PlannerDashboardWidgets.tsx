@@ -33,6 +33,7 @@ import { kandidaatLabel, nietBeschikbaarUitMatrix, rangschikKandidaten, vrijOpDa
 import { lopendeDiversions as lopendeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
+import { useBordCellen } from '../lib/bordCellen';
 import { apiFetch } from '../lib/api';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Verwissel } from '../components/Verwissel';
@@ -188,6 +189,12 @@ export function PlannerDashboardWidgets({
   const [vervangerPerDienst, setVervangerPerDienst] = useState<Record<string, string>>({});
   const [wisselBezig, setWisselBezig] = useState<string | null>(null);
   const [afgehandeld, setAfgehandeld] = useState<Record<string, string>>({});
+  // Het bord van de dagen in stap 2: de vervangerlijst leest dezelfde cellen
+  // als de Maandplanning (een schoolrit via een wissel telt als dienst).
+  const bordVan = useBordCellen(ziekVervolg ? ziekVervolg.diensten.map((d) => d.date) : []);
+  // Geen kandidaten tot de matrix én het bord van die dag er zijn (of het
+  // bord mislukte): anders stond iemand met een schoolrit even als vrij.
+  const lijstKlaar = (datum: string) => planningMatrixGeladen && bordVan(datum) !== undefined;
   const closeSickModal = () => { setShowSickModal(false); setZiekVervolg(null); setVervangerPerDienst({}); setAfgehandeld({}); };
   // Onbewaarde invoer (tranche 3A): alleen in stap 1 (het formulier); in stap
   // 2 is de melding al geregistreerd en valt er niets te verliezen.
@@ -1194,18 +1201,19 @@ export function PlannerDashboardWidgets({
                           value={vervangerPerDienst[d.id] ?? ''}
                           onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [d.id]: e.target.value }))}
                           className="min-w-0 flex-1"
-                          disabled={!planningMatrixGeladen}
+                          disabled={!lijstKlaar(d.date)}
                         >
                           {/* De matrix (wie is die dag niet beschikbaar) laadt
-                              ná de poort: tot ze er is geen kandidaten tonen,
-                              anders stond een afwezige even als vrij in de lijst. */}
-                          <option value="">{planningMatrixGeladen ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
+                              ná de poort, het bord bij het openen: tot ze er
+                              zijn geen kandidaten tonen, anders stond een
+                              afwezige even als vrij in de lijst. */}
+                          <option value="">{lijstKlaar(d.date) ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
                           {/* Vrij die dag bovenaan, daarbinnen minst gewerkt
                               die week — zelfde criteria als de advisor
                               (keuze Jarno 19-08). */}
-                          {planningMatrixGeladen && rangschikKandidaten(
+                          {lijstKlaar(d.date) && rangschikKandidaten(
                             users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(d.driverId)),
-                            vrijOpDatum(shifts, d.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, d.date)),
+                            vrijOpDatum(shifts, d.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, d.date), bordVan(d.date)),
                             werkdagen,
                             d.date,
                           ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}

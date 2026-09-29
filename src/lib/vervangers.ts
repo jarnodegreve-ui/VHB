@@ -1,6 +1,7 @@
 import type { Shift } from '../types';
 import { normalizePlanningToken, sortedNameToken } from './planning';
 import { addDagen } from './datum';
+import { vrijOpBord, type BordCel } from '../../shared/bordBezetting';
 
 type Kandidaat = { id: string | number; name: string };
 
@@ -94,16 +95,23 @@ export const kandidaatLabel = (k: KandidaatInfo, metVrij = true): string => {
   return delen.join(' · ');
 };
 
+/** Bordcellen per chauffeur-id en dag, zoals /api/month-planning ze levert. */
+export type BordCellen = Record<string, Record<string, BordCel>>;
+
 /** Vrij-op-datum op basis van de planning-lijst (dashboard, Ziekte-blad).
  *  Geef `nietBeschikbaar` (uit nietBeschikbaarUitMatrix) mee zodat ook wie
- *  in de Excel op ZIEK/OPL/... staat niet als vrij telt. */
-export const vrijOpDatum = (shifts: Shift[], datum: string, nietBeschikbaar?: ReadonlySet<string>) => {
+ *  in de Excel op ZIEK/OPL/... staat niet als vrij telt.
+ *
+ *  Met `bord` (useBordCellen) beslist de cel van het bord in de plaats van de
+ *  rauwe matrix, met dezelfde regel als de server (shared/bordBezetting.ts):
+ *  wie via een wissel een schoolrit kreeg is niet vrij, wie zijn dienst afgaf
+ *  wel. Zonder `bord` (laden mislukt, of een scherm zonder bord) geldt de
+ *  matrixregel; zolang het bord laadt toont het scherm geen lijst. */
+export const vrijOpDatum = (shifts: Shift[], datum: string, nietBeschikbaar?: ReadonlySet<string>, bord?: BordCellen | null) => {
   const bezet = new Set(shifts.filter((s) => s.date === datum).map((s) => String(s.driverId)));
-  return (u: Kandidaat) => !bezet.has(String(u.id)) && !nietBeschikbaar?.has(String(u.id));
+  return (u: Kandidaat) => !bezet.has(String(u.id))
+    && (bord ? vrijOpBord(bord[String(u.id)]?.[datum]) : !nietBeschikbaar?.has(String(u.id)));
 };
-
-/** Overname-codes uit de matrix (zelfde lijst als TAKEOVER_CODES op de server). */
-const OVERNAME_CODES = new Set(['vrij', 'bv', 'tk', 'ta']);
 
 /**
  * Wie volgens de planningsmatrix die dag niet beschikbaar is: een code die
@@ -127,8 +135,8 @@ export const nietBeschikbaarUitMatrix = (
     if (String(row.source_date) !== datum) continue;
     const assignments = row.assignments && typeof row.assignments === 'object' && !Array.isArray(row.assignments) ? row.assignments : {};
     for (const [naam, rawCode] of Object.entries(assignments)) {
-      const code = normalizePlanningToken(rawCode);
-      if (!code || OVERNAME_CODES.has(code)) continue;
+      // Lege cel of overname-code: dezelfde regel als op het bord.
+      if (vrijOpBord({ code: String(rawCode ?? ''), kind: '' })) continue;
       const id = idByToken.get(normalizePlanningToken(naam)) ?? idByToken.get(sortedNameToken(naam));
       if (id) uit.add(id);
     }
