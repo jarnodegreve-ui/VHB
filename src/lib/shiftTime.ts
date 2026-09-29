@@ -1,5 +1,5 @@
 import { addDays, isoDate } from './datum';
-import { parseHHMM } from '../../shared/busvakTijd';
+import { deelVenster, parseHHMM } from '../../shared/busvakTijd';
 
 /** 'HH:MM' → minuten sinds middernacht van de dienstdag, of null bij een
  *  ongeldige tijd. Uren ≥ 24 zijn geldig: het Dienstoverzicht gebruikt de
@@ -161,9 +161,5 @@ export const formatStartsIn = (minuten: number): string => `over ${formatDuratio
  * regel die MijnDagView, DashboardView en de dienstbalk vroeger elk zelf
  * hadden (controle-ronde 05-09, dode code 26).
  */
-export const shiftWindowMinutes = (s: { startTime: string; endTime: string }): { start: number; end: number } | null => {
-  const start = parseHHMM(s.startTime);
-  const end = parseHHMM(s.endTime);
-  if (start === null || end === null) return null;
-  return { start, end: end <= start ? end + 1440 : end };
-};
+export const shiftWindowMinutes = (s: { startTime: string; endTime: string }): { start: number; end: number } | null =>
+  deelVenster(s.startTime, s.endTime);

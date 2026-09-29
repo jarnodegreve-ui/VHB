@@ -35,3 +35,28 @@ export const parseHHMM = (t: unknown): number | null => lees(t, BEGIN);
 
 /** Zoals `parseHHMM`, maar met niets achter de minuten. */
 export const parseHHMMStrikt = (t: unknown): number | null => lees(t, GEHEEL);
+
+/**
+ * Begin en einde van één dienst-deel in minuten sinds middernacht van de
+ * dienstdag. Einde op of vóór de start telt als over middernacht (+24 u):
+ * 22:00 tot 06:00 loopt tot 30:00, en een deel met gelijke begin- en eindtijd
+ * is een etmaal. null zonder twee leesbare tijden.
+ *
+ * Eén regel voor de server (Maandoverzicht en rapporten, api/helpers.ts) en
+ * de app (Mijn dag, dashboard en de geplande uren op het rooster, via
+ * shiftWindowMinutes in src/lib/shiftTime.ts). De kerncijfers van het
+ * Dienstoverzicht (src/lib/dienstStatistiek.ts) rekenen bewust anders en
+ * staan er los van; src/dienstMinuten.test.ts legt het verschil vast.
+ */
+export const deelVenster = (start: unknown, eind: unknown): { start: number; end: number } | null => {
+  const s = parseHHMM(start);
+  const e = parseHHMM(eind);
+  if (s === null || e === null) return null;
+  return { start: s, end: e <= s ? e + 1440 : e };
+};
+
+/** Duur van één dienst-deel in minuten (`deelVenster`); null zonder twee leesbare tijden. */
+export const deelMinuten = (start: unknown, eind: unknown): number | null => {
+  const v = deelVenster(start, eind);
+  return v ? v.end - v.start : null;
+};

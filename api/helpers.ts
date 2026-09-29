@@ -3,7 +3,7 @@ import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.
 import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
 import { MAX_UPDATE_BIJLAGEN } from "../shared/schemas/update.js";
 import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
-import { parseHHMM } from "../shared/busvakTijd.js";
+import { deelMinuten } from "../shared/busvakTijd.js";
 import type {
   AppUser,
   DiversionRecord,
@@ -199,10 +199,9 @@ export const dienstMinuten = (s: {
   ];
   let som: number | null = null;
   for (const [a, b] of paren) {
-    const start = parseHHMM(a);
-    const eind = parseHHMM(b);
-    if (start === null || eind === null) continue;
-    som = (som ?? 0) + (eind <= start ? eind + 24 * 60 : eind) - start;
+    const duur = deelMinuten(a, b);
+    if (duur === null) continue;
+    som = (som ?? 0) + duur;
   }
   return som;
 };

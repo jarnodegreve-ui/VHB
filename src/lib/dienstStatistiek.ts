@@ -15,7 +15,13 @@ export type DienstStatistiek = {
 };
 
 /** Gewerkte minuten van één dienst: som van de delen met geldige tijden;
- *  null als geen enkel deel te lezen is (dan telt de dienst niet mee). */
+ *  null als geen enkel deel te lezen is (dan telt de dienst niet mee).
+ *
+ *  Bewust niet de gedeelde deelMinuten (shared/busvakTijd.ts), want de
+ *  uitkomst verschilt: een deel met het einde vóór de start ("22:00 tot
+ *  06:00") wordt hier overgeslagen en telt daar als nacht (8 uur), en een
+ *  deel met gelijke begin- en eindtijd is hier 0 en daar een etmaal. Welke
+ *  regel juist is, is een productbeslissing (src/dienstMinuten.test.ts). */
 export function dienstMinuten(s: Service): number | null {
   const delen: Array<[string | undefined, string | undefined]> = [
     [s.startTime, s.endTime],
