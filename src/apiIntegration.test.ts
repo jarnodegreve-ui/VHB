@@ -49,6 +49,10 @@ const mem = vi.hoisted(() => ({
   opslagTijd: new Map<string, string>(),
   // true = de bestaanscontrole in Storage mislukt (storing).
   opslagFaalt: false,
+  // true = het log van een omleiding of update is niet te lezen, resp. de
+  // gerichte lezing "bestaat dit record?" mislukt.
+  logLezingFaalt: false,
+  recordLezingFaalt: false,
   // Verzendlog van de mails (mail_log), nieuwste eerst.
   mailLog: [] as any[],
   importHistory: [] as any[],
@@ -502,6 +506,20 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     verwijderBijlageBestanden: async (bucket: string, paden: string[]) => {
       for (const pad of paden) mem.opslag.delete(`${bucket}/${pad}`);
     },
+    // Zoals de echte: de logregels van deze id's, nieuwste eerst.
+    logregelsVanEntiteiten: async (type: string, ids: string[]) => {
+      if (mem.logLezingFaalt) throw new Error('log onbereikbaar');
+      return mem.activity
+        .filter((a) => a.entityType === type && ids.includes(String(a.entityId)))
+        .map((a) => ({ entityId: String(a.entityId), action: String(a.action), createdAt: String(a.gelogdOp) }))
+        .reverse();
+    },
+    // Zoals de echte: gerichte lezing op id, gooit bij een storing.
+    bestaandeRecordIds: async (tabel: 'diversions' | 'updates', ids: string[]) => {
+      if (mem.recordLezingFaalt) throw new Error('database onbereikbaar');
+      const rijen: any[] = tabel === 'diversions' ? mem.diversions : mem.updates;
+      return new Set(rijen.map((r) => String(r.id)).filter((id) => ids.includes(id)));
+    },
     verwijderdeEntiteiten: async (type: string, actie: string) =>
       new Set(mem.activity.filter((a) => a.entityType === type && a.action === actie).map((a) => String(a.entityId))),
     recentGelogdeEntiteiten: async (type: string, sindsIso: string) =>
@@ -780,6 +798,10 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server?.close(() => resolve()));
 });
 
+/** De klok een seconde verder: in het echt staan twee handelingen nooit op
+ *  dezelfde milliseconde in het log, onder de vaste testklok wel. */
+const tik = (ms = 1000) => vi.setSystemTime(new Date(Date.now() + ms));
+
 const COLLECTIE_PADEN = new Set(['/api/planning', '/api/planning-codes', '/api/users', '/api/diversions', '/api/services', '/api/updates', '/api/swaps', '/api/leave']);
 const api = async (
   method: string,
@@ -830,6 +852,8 @@ beforeEach(() => {
   mem.opslag.clear();
   mem.opslagTijd.clear();
   mem.opslagFaalt = false;
+  mem.logLezingFaalt = false;
+  mem.recordLezingFaalt = false;
   mem.users = [
     { id: '1', name: 'Annelies Admin', email: 'admin@vhb.be', role: 'admin', isActive: true },
     { id: '2', name: 'Pieter Planner', email: 'planner@vhb.be', role: 'planner', isActive: true },
@@ -7279,8 +7303,10 @@ describe('bijlagen bij een update', () => {
   describe('ongedaan maken na verwijderen (X-Herstel)', () => {
     const verwijder = async (id: string) => {
       const record = (await api('GET', '/api/updates', { token: 'tok-planner' })).json.find((u: any) => String(u.id) === id);
+      tik();
       const res = await api('DELETE', `/api/updates/${id}`, { token: 'tok-planner', headers: { 'X-Record-Revision': record._rev } });
       expect(res.status).toBe(200);
+      tik();
       const { _rev, ...zonderRev } = record;
       return zonderRev;
     };
@@ -7318,11 +7344,39 @@ describe('bijlagen bij een update', () => {
       expect(gewoon.status).toBe(201);
       expect(gewoon.json.update.bijlagen).toBeUndefined();
       const rev = gewoon.json.update._rev;
+      tik();
       await api('DELETE', `/api/updates/${id}`, { token: 'tok-planner', headers: { 'X-Record-Revision': rev } });
+      tik();
 
       const terug = await api('POST', '/api/updates/one', { token: 'tok-planner', body: record, headers: { 'X-Herstel': '1' } });
       expect(terug.status).toBe(201);
       expect(terug.json.update.bijlagen).toEqual([{ slot: 1, filename: 'een.pdf', sizeBytes: 1001 }]);
+    });
+
+    it('X-Herstel zonder verwijdering in het log is een gewone opslag: er gaat niets terug', async () => {
+      // Een bestand dat toevallig op de sleutel van het nieuwe id hangt.
+      mem.opslag.add('update-bijlagen/nooit-verwijderd-1.pdf');
+      const res = await api('POST', '/api/updates/one', {
+        token: 'tok-planner',
+        headers: { 'X-Herstel': '1' },
+        body: { id: 'nooit-verwijderd', date: '29/09/2026', title: 'Nieuw', content: 'Tekst', bijlagen: [{ slot: 1, filename: 'x.pdf' }] },
+      });
+      expect(res.status).toBe(201);
+      expect(res.json.update.bijlagen).toBeUndefined();
+      expect(mem.updates.find((u: any) => u.id === 'nooit-verwijderd').bijlagen).toBeUndefined();
+      expect(mem.activity.some((a) => a.action === 'Bijlagen hersteld')).toBe(false);
+    });
+
+    it('een verwijdering van langer dan vijf minuten geleden is geen herstel meer', async () => {
+      const id = eersteId();
+      await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'een.pdf', dataUrl: PDF } });
+      const record = await verwijder(id);
+      tik(6 * 60_000);
+      const terug = await api('POST', '/api/updates/one', { token: 'tok-planner', body: record, headers: { 'X-Herstel': '1' } });
+      expect(terug.status).toBe(201);
+      expect(terug.json.update.bijlagen).toBeUndefined();
+      // Het bestand zelf blijft staan: er is alleen niets aan het record gehangen.
+      expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(true);
     });
   });
 });
@@ -7414,11 +7468,15 @@ describe('bijlagen bij een omleiding', () => {
    *  terug dat "Ongedaan maken" opnieuw zou posten. */
   const verwijder = async (id: string) => {
     const record = (await api('GET', '/api/diversions', { token: 'tok-planner' })).json.find((d: any) => d.id === id);
+    tik();
     const res = await api('DELETE', `/api/diversions/${id}`, { token: 'tok-planner', headers: { 'X-Record-Revision': record._rev } });
     expect(res.status).toBe(200);
+    tik();
     const { _rev, ...zonderRev } = record;
     return zonderRev;
   };
+  /** Alles wat er in de bucket van de omleidingen hangt, gesorteerd. */
+  const inOpslag = () => [...mem.opslag].filter((k) => k.startsWith('diversions/')).sort();
 
   // Gewijzigd op 29-09 (controle-ronde nr. 12): heette 'een verwijderde
   // omleiding neemt haar bestanden mee' en eiste dat de PDF's meteen weg
@@ -7511,6 +7569,87 @@ describe('bijlagen bij een omleiding', () => {
       expect(terug.status).toBe(201);
       expect(terug.json.diversion.title).toBe('Werken N70');
       expect(terug.json.diversion.bijlagen).toBeUndefined();
+    });
+
+    // Tegenlezing 29-09, punt 1: het id komt van de client. Omleiding o-1
+    // heeft een PDF op slot 2 (o-1-2.pdf); wie "herstelt" met het id o-1-2
+    // liet de server dat bestand lezen als de oude sleutel van het nieuwe
+    // id en verhuizen naar o-1-2-1.pdf: o-1 was zijn PDF kwijt.
+    describe('een vreemd id kaapt geen PDF van een bestaande omleiding', () => {
+      const kaping = { id: 'o-1-2', line: '12', title: 'Kaping', description: 'x', startDate: '2026-09-29', bijlagen: [{ slot: 1, filename: 'x.pdf' }] };
+
+      it('X-Herstel zonder verwijdering in het log: geen verhuis, o-1 houdt zijn PDF, Storage ongewijzigd', async () => {
+        await upload('o-1', 2, 'van-o-1.pdf');
+        const voor = inOpslag();
+        const res = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: kaping, headers: { 'X-Herstel': '1' } });
+        expect(res.status).toBe(201);
+        expect(res.json.diversion.bijlagen).toBeUndefined();
+        expect(inOpslag()).toEqual(voor);
+        expect(inOpslag()).toEqual(['diversions/o-1-2.pdf']);
+        const o1 = (await api('GET', '/api/diversions', { token: 'tok-a' })).json.find((d: any) => d.id === 'o-1');
+        expect(o1.bijlagen).toEqual([{ slot: 2, filename: 'van-o-1.pdf', sizeBytes: expect.any(Number), url: 'https://opslag.test/diversions/o-1-2.pdf?sig=test' }]);
+        expect(mem.activity.some((a) => a.action === 'Bijlagen hersteld')).toBe(false);
+      });
+
+      it('ook met een echte, verse verwijdering van o-1-2 blijft het bestand van o-1: de naam kan slot 2 van een bestaand record zijn', async () => {
+        await upload('o-1', 2, 'van-o-1.pdf');
+        // De planner maakt o-1-2 echt aan en verwijdert het, zodat het log
+        // een verse verwijdering van precies dat id kent.
+        const { bijlagen: _b, ...zonder } = kaping;
+        expect((await api('POST', '/api/diversions/one', { token: 'tok-planner', body: zonder })).status).toBe(201);
+        await verwijder('o-1-2');
+        const voor = inOpslag();
+        const res = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: kaping, headers: { 'X-Herstel': '1' } });
+        expect(res.status).toBe(201);
+        expect(res.json.diversion.bijlagen).toBeUndefined();
+        expect(inOpslag()).toEqual(voor);
+        const o1 = (await api('GET', '/api/diversions', { token: 'tok-a' })).json.find((d: any) => d.id === 'o-1');
+        expect(o1.bijlagen.map((b: any) => b.url)).toEqual(['https://opslag.test/diversions/o-1-2.pdf?sig=test']);
+      });
+
+      it('andersom: een herstelde omleiding hangt geen bestand terug dat de oude PDF van een bestaand record kan zijn', async () => {
+        // o-1-1.pdf is slot 1 van o-1, maar ook de oude sleutel van een
+        // omleiding met id o-1-1 (marker pdfUrl, geen lijst).
+        await upload('o-1', 1, 'plan.pdf');
+        mem.diversions.push({ id: 'o-1-1', line: '14', title: 'Oude PDF', description: 'x', startDate: '2026-07-01', pdfUrl: 'https://oud.supabase.test/o-1-1.pdf' });
+        const record = await verwijder('o-1');
+        const res = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: record, headers: { 'X-Herstel': '1' } });
+        expect(res.status).toBe(201);
+        expect(res.json.diversion.bijlagen).toBeUndefined();
+        expect(inOpslag()).toEqual(['diversions/o-1-1.pdf']);
+      });
+
+      it('is niet na te gaan of de andere eigenaar bestaat, dan gebeurt er niets', async () => {
+        mem.opslag.add('diversions/o-1.pdf');
+        mem.diversions[0].pdfUrl = 'https://oud.supabase.test/o-1.pdf';
+        const record = await verwijder('o-1');
+        mem.recordLezingFaalt = true;
+        const res = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: record, headers: { 'X-Herstel': '1' } });
+        expect(res.status).toBe(201);
+        expect(res.json.diversion.bijlagen).toBeUndefined();
+        expect(inOpslag()).toEqual(['diversions/o-1.pdf']);
+      });
+    });
+
+    it('is het log niet te lezen, dan komt de omleiding terug zonder bijlagen en blijft Storage ongewijzigd', async () => {
+      await upload('o-1', 1, 'plan.pdf');
+      const record = await verwijder('o-1');
+      mem.logLezingFaalt = true;
+      const terug = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: record, headers: { 'X-Herstel': '1' } });
+      expect(terug.status).toBe(201);
+      expect(terug.json.diversion.title).toBe('Werken N70');
+      expect(terug.json.diversion.bijlagen).toBeUndefined();
+      expect(inOpslag()).toEqual(['diversions/o-1-1.pdf']);
+    });
+
+    it('een verwijdering van langer dan vijf minuten geleden is geen herstel meer', async () => {
+      await upload('o-1', 1, 'plan.pdf');
+      const record = await verwijder('o-1');
+      tik(6 * 60_000);
+      const terug = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: record, headers: { 'X-Herstel': '1' } });
+      expect(terug.status).toBe(201);
+      expect(terug.json.diversion.bijlagen).toBeUndefined();
+      expect(inOpslag()).toEqual(['diversions/o-1-1.pdf']);
     });
 
     it('is Storage niet te controleren, dan komt de omleiding toch terug, zonder bijlagen en zonder de bestanden te raken', async () => {

@@ -23,7 +23,7 @@
  */
 import { MAX_OMLEIDING_BIJLAGEN } from "../../shared/schemas/diversion.js";
 import { MAX_UPDATE_BIJLAGEN } from "../../shared/schemas/update.js";
-import { VERWIJDERD_ACTIE } from "./bijlagenActies.js";
+import { VERWIJDERD_ACTIE, mogelijkeEigenaars } from "./bijlagenActies.js";
 import {
   DIVERSIONS_BUCKET,
   UPDATE_BIJLAGEN_BUCKET,
@@ -42,21 +42,7 @@ export const WEES_MARGE_MS = 24 * 60 * 60 * 1000;
  *  beurt een hele bucket leegmaken. De rest volgt de nacht erna. */
 export const WEES_MAX_PER_BEURT = 100;
 
-/** De record-id's waar deze bestandsnaam bij kan horen; leeg = geen bijlage
- *  in onze vorm, dus afblijven. */
-export const mogelijkeEigenaars = (naam: string, maxSlot: number, metOudeSleutel: boolean): string[] => {
-  const pdf = /^([^/]+)\.pdf$/.exec(naam);
-  if (!pdf) return [];
-  const stam = pdf[1];
-  const ids: string[] = [];
-  const metSlot = /^(.+)-(\d+)$/.exec(stam);
-  if (metSlot) {
-    const slot = Number(metSlot[2]);
-    if (slot >= 1 && slot <= maxSlot) ids.push(metSlot[1]);
-  }
-  if (metOudeSleutel) ids.push(stam);
-  return ids;
-};
+export { mogelijkeEigenaars };
 
 /** Puur: welke bestanden mogen weg? Zie de vijf voorwaarden in de kop. */
 export const kiesWeesBijlagen = (invoer: {

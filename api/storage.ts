@@ -1868,6 +1868,63 @@ export const verwijderdeEntiteiten = async (
   return new Set(rows.map((r) => String(r.entity_id ?? "")).filter(Boolean));
 };
 
+/** Hoogstens zoveel id's per gerichte lezing (de lijst reist in de URL). */
+export const GERICHTE_LEZING_MAX = 100;
+
+/**
+ * Gerichte lezing: welke van deze id's bestaan als rij in de tabel? Anders dan
+ * de brede lijst (getDiversionsData, gepagineerd) kan dit antwoord niet
+ * afgekapt zijn: hoogstens 100 rijen op een primaire sleutel. Gooit bij een
+ * fout of een antwoord dat niet past bij de vraag: "niet te controleren" is
+ * nooit "bestaat niet".
+ */
+export const bestaandeRecordIds = async (tabel: "diversions" | "updates", ids: string[]): Promise<Set<string>> => {
+  const gevraagd = [...new Set(ids.map((id) => String(id)).filter(Boolean))];
+  if (gevraagd.length === 0) return new Set();
+  if (gevraagd.length > GERICHTE_LEZING_MAX) throw new Error(`Gerichte lezing: hoogstens ${GERICHTE_LEZING_MAX} id's per keer.`);
+  const client = requireDb();
+  const { data, error } = await client.from(tabel).select("id").in("id", gevraagd);
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error("Gerichte lezing: onverwacht antwoord.");
+  const mag = new Set(gevraagd);
+  const uit = new Set<string>();
+  for (const rij of data as Array<{ id?: unknown }>) {
+    const id = String(rij?.id ?? "");
+    if (!id || !mag.has(id)) throw new Error("Gerichte lezing: onverwacht antwoord.");
+    uit.add(id);
+  }
+  return uit;
+};
+
+const LOGREGELS_MAX = 5000;
+
+/**
+ * De logregels van deze omleidingen of updates, NIEUWSTE EERST. Die volgorde
+ * is de vangrail: geeft de server minder rijen terug dan gevraagd, dan vallen
+ * de oudste weg en blijft de laatste regel per id de juiste. Een id zonder
+ * regels in het antwoord heeft dan gewoon geen bewijs.
+ */
+export const logregelsVanEntiteiten = async (
+  entityType: "diversion" | "update",
+  ids: string[],
+): Promise<Array<{ entityId: string; action: string; createdAt: string }>> => {
+  const gevraagd = [...new Set(ids.map((id) => String(id)).filter(Boolean))];
+  if (gevraagd.length === 0) return [];
+  if (gevraagd.length > GERICHTE_LEZING_MAX) throw new Error(`Logregels: hoogstens ${GERICHTE_LEZING_MAX} id's per keer.`);
+  const client = requireDb();
+  const rows = await paginatedFetch<Pick<ActivityLogRow, "id" | "entity_id" | "action" | "created_at">>((from, to) =>
+    client
+      .from("activity_log")
+      .select("id, entity_id, action, created_at")
+      .eq("entity_type", entityType)
+      .in("entity_id", gevraagd)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  LOGREGELS_MAX);
+  return rows.map((r) => ({ entityId: String(r.entity_id ?? ""), action: String(r.action ?? ""), createdAt: String(r.created_at ?? "") }));
+};
+
 export const getDiversionsData = async () => {
   const client = requireDb();
   const rows = await paginatedFetch((from, to) =>

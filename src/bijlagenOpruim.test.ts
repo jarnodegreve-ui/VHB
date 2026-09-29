@@ -14,17 +14,54 @@ const mem = vi.hoisted(() => ({
   buckets: { diversions: new Map<string, { size: number; updated_at: string }>(), 'update-bijlagen': new Map<string, { size: number; updated_at: string }>() } as Record<string, Map<string, { size: number; updated_at: string }>>,
   verwijderd: [] as Array<{ bucket: string; paden: string[] }>,
   lijstFaalt: false,
+  // Zoals max-rows in PostgREST: de server geeft zonder fout hoogstens
+  // zoveel rijen per verzoek terug, hoeveel er ook gevraagd zijn.
+  maxRijen: null as number | null,
+  // Tabellen waarvan de gerichte lezing (`.in('id', …)`) mislukt of iets
+  // teruggeeft wat niet gevraagd was.
+  gerichtFaalt: new Set<string>(),
+  gerichtVreemd: new Set<string>(),
+  // Elke lezing van een tabel: naam + of ze gericht was.
+  lezingen: [] as Array<{ tabel: string; gericht: boolean }>,
 }));
 
 vi.mock('../api/db.js', () => {
   const tabel = (naam: string) => {
     let rijen = [...(mem.tabellen[naam] ?? [])];
+    const volgorde: Array<{ kolom: string; oplopend: boolean }> = [];
+    let gerichtOpId = false;
+    const gesorteerd = () => [...rijen].sort((x, y) => {
+      for (const { kolom, oplopend } of volgorde) {
+        const c = String(x[kolom] ?? '').localeCompare(String(y[kolom] ?? ''));
+        if (c !== 0) return oplopend ? c : -c;
+      }
+      return 0;
+    });
+    const begrens = (lijst: any[]) => (mem.maxRijen === null ? lijst : lijst.slice(0, mem.maxRijen));
     const b: any = {
       select: () => b,
-      order: () => b,
+      order: (kolom: string, opts?: { ascending?: boolean }) => { volgorde.push({ kolom, oplopend: opts?.ascending !== false }); return b; },
       eq: (kolom: string, waarde: unknown) => { rijen = rijen.filter((r) => r[kolom] === waarde); return b; },
       gte: (kolom: string, waarde: string) => { rijen = rijen.filter((r) => String(r[kolom]) >= waarde); return b; },
-      range: async (from: number, to: number) => ({ data: rijen.slice(from, to + 1), error: null }),
+      in: (kolom: string, waarden: string[]) => {
+        if (kolom === 'id') gerichtOpId = true;
+        rijen = rijen.filter((r) => waarden.includes(String(r[kolom])));
+        return b;
+      },
+      range: async (from: number, to: number) => {
+        mem.lezingen.push({ tabel: naam, gericht: gerichtOpId });
+        return { data: begrens(gesorteerd().slice(from, to + 1)), error: null };
+      },
+      // Zonder range: de query zelf is het antwoord (gerichte lezing).
+      then: (klaar: (antwoord: { data: any[] | null; error: unknown }) => unknown, mis?: (fout: unknown) => unknown) => {
+        mem.lezingen.push({ tabel: naam, gericht: gerichtOpId });
+        const antwoord = gerichtOpId && mem.gerichtFaalt.has(naam)
+          ? { data: null, error: { message: 'database onbereikbaar' } }
+          : gerichtOpId && mem.gerichtVreemd.has(naam)
+            ? { data: [{ id: 'niet-gevraagd' }], error: null }
+            : { data: begrens(gesorteerd()), error: null };
+        return Promise.resolve(antwoord).then(klaar, mis);
+      },
       upsert: async (nieuw: any[]) => {
         for (const rij of nieuw) {
           const i = mem.tabellen[naam].findIndex((r) => String(r.id) === String(rij.id));
@@ -66,7 +103,8 @@ vi.mock('../api/db.js', () => {
   return { supabase: client, supabaseAdmin: client, db: client };
 });
 
-const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden } = await import('../api/storage.js');
+const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden, bestaandeRecordIds, logregelsVanEntiteiten } = await import('../api/storage.js');
+const { laatsteVerwijdering } = await import('../api/_lib/bijlagenActies.js');
 const { kiesWeesBijlagen, mogelijkeEigenaars, ruimWeesBijlagenOp, WEES_MARGE_MS, WEES_MAX_PER_BEURT } = await import('../api/_lib/bijlagenOpruim.js');
 
 const NU = Date.parse('2026-09-29T02:00:00Z');
@@ -85,6 +123,10 @@ beforeEach(() => {
   mem.buckets['update-bijlagen'].clear();
   mem.verwijderd = [];
   mem.lijstFaalt = false;
+  mem.maxRijen = null;
+  mem.gerichtFaalt.clear();
+  mem.gerichtVreemd.clear();
+  mem.lezingen = [];
 });
 
 describe('mogelijkeEigenaars', () => {
@@ -107,6 +149,78 @@ describe('mogelijkeEigenaars', () => {
     expect(mogelijkeEigenaars('notities.txt', 5, true)).toEqual([]);
     expect(mogelijkeEigenaars('map/o-1-1.pdf', 5, true)).toEqual([]);
     expect(mogelijkeEigenaars('.pdf', 5, true)).toEqual([]);
+  });
+});
+
+describe('laatsteVerwijdering', () => {
+  const regel = (entityId: string, action: string, createdAt: string) => ({ entityId, action, createdAt });
+  const ACTIE = 'Omleiding verwijderd';
+
+  it('de laatste regel is de verwijdering: bewijs, met het moment', () => {
+    const regels = [regel('o-1', 'Omleiding toegevoegd', '2026-09-01T08:00:00Z'), regel('o-1', ACTIE, '2026-09-20T09:00:00Z')];
+    expect(laatsteVerwijdering(regels, 'o-1', ACTIE)).toEqual({ op: Date.parse('2026-09-20T09:00:00Z') });
+    // De volgorde van de lijst doet er niet toe, het tijdstip wel.
+    expect(laatsteVerwijdering([...regels].reverse(), 'o-1', ACTIE)).toEqual({ op: Date.parse('2026-09-20T09:00:00Z') });
+  });
+
+  it('volgt er na de verwijdering nog iets (hersteld, gewijzigd, bijlage), dan is er geen bewijs', () => {
+    for (const later of ['Omleiding hersteld', 'Bijlagen hersteld', 'Omleiding gewijzigd', 'Bijlage toegevoegd', 'Omleiding toegevoegd']) {
+      const regels = [regel('o-1', ACTIE, '2026-09-20T09:00:00Z'), regel('o-1', later, '2026-09-20T09:00:04Z')];
+      expect(laatsteVerwijdering(regels, 'o-1', ACTIE), later).toBeNull();
+    }
+  });
+
+  it('kijkt alleen naar het gevraagde id', () => {
+    const regels = [regel('o-1', ACTIE, '2026-09-20T09:00:00Z'), regel('o-2', 'Omleiding hersteld', '2026-09-21T09:00:00Z')];
+    expect(laatsteVerwijdering(regels, 'o-1', ACTIE)).not.toBeNull();
+    expect(laatsteVerwijdering(regels, 'o-2', ACTIE)).toBeNull();
+    expect(laatsteVerwijdering(regels, 'o-3', ACTIE)).toBeNull();
+  });
+
+  it('twijfel is geen bewijs: onleesbaar tijdstip, of een andere regel op dezelfde milliseconde', () => {
+    expect(laatsteVerwijdering([regel('o-1', ACTIE, 'geen datum')], 'o-1', ACTIE)).toBeNull();
+    const gelijk = [regel('o-1', ACTIE, '2026-09-20T09:00:00.000Z'), regel('o-1', 'Omleiding hersteld', '2026-09-20T09:00:00.000Z')];
+    expect(laatsteVerwijdering(gelijk, 'o-1', ACTIE)).toBeNull();
+  });
+});
+
+describe('gerichte lezingen', () => {
+  it('bestaandeRecordIds geeft precies de gevraagde id\'s die bestaan', async () => {
+    expect(await bestaandeRecordIds('diversions', ['o-1', 'o-9', 'o-1'])).toEqual(new Set(['o-1']));
+    expect(await bestaandeRecordIds('updates', ['u-2', 'u-1'])).toEqual(new Set(['u-1', 'u-2']));
+    expect(await bestaandeRecordIds('diversions', [])).toEqual(new Set());
+  });
+
+  it('bestaandeRecordIds gooit bij een fout, een onverwacht antwoord of te veel id\'s', async () => {
+    mem.gerichtFaalt.add('diversions');
+    await expect(bestaandeRecordIds('diversions', ['o-1'])).rejects.toBeTruthy();
+    mem.gerichtFaalt.clear();
+    mem.gerichtVreemd.add('diversions');
+    await expect(bestaandeRecordIds('diversions', ['o-1'])).rejects.toThrow(/onverwacht antwoord/);
+    mem.gerichtVreemd.clear();
+    await expect(bestaandeRecordIds('diversions', Array.from({ length: 101 }, (_, i) => `x-${i}`))).rejects.toThrow(/hoogstens 100/);
+  });
+
+  it('logregelsVanEntiteiten geeft de regels van de gevraagde id\'s en het type, nieuwste eerst', async () => {
+    log('diversion', 'o-9', '2026-09-20T09:00:00Z');
+    log('diversion', 'o-9', '2026-09-20T09:00:05Z', 'Omleiding hersteld');
+    log('diversion', 'o-8', '2026-09-21T09:00:00Z');
+    log('update', 'o-9', '2026-09-22T09:00:00Z');
+    expect(await logregelsVanEntiteiten('diversion', ['o-9'])).toEqual([
+      { entityId: 'o-9', action: 'Omleiding hersteld', createdAt: '2026-09-20T09:00:05Z' },
+      { entityId: 'o-9', action: 'Omleiding verwijderd', createdAt: '2026-09-20T09:00:00Z' },
+    ]);
+  });
+
+  it('een afgekapt log verliest de oudste regels, nooit de laatste', async () => {
+    log('diversion', 'o-9', '2026-09-20T09:00:00Z');
+    for (let i = 0; i < 6; i += 1) log('diversion', 'o-9', `2026-09-21T09:00:0${i}Z`, 'Omleiding gewijzigd');
+    log('diversion', 'o-9', '2026-09-22T09:00:00Z', 'Omleiding hersteld');
+    mem.maxRijen = 3;
+    const regels = await logregelsVanEntiteiten('diversion', ['o-9']);
+    expect(regels).toHaveLength(3);
+    expect(regels[0].action).toBe('Omleiding hersteld');
+    expect(laatsteVerwijdering(regels, 'o-9', 'Omleiding verwijderd')).toBeNull();
   });
 });
 
