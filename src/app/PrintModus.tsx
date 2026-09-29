@@ -13,6 +13,7 @@ import type { LeaveRequest, Shift, User } from '../types';
 import { lazyWithRetry } from '../lib/lazyRetry';
 import { PrintLaden } from './PreAppScreens';
 import { magView } from './routes';
+import { isSysteemAccount } from '../../shared/toegang';
 
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('../views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 const LazyPrintLeaveYearView = lazyWithRetry(() => import('../views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
@@ -41,7 +42,7 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
         return <PrintLaden />;
       }
       const bulkDrivers = users
-        .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
+        .filter((u) => u.isActive !== false && !isSysteemAccount(u.name))
         .sort((a, b) => a.name.localeCompare(b.name));
       return (
         <Suspense fallback={<PrintLaden />}>

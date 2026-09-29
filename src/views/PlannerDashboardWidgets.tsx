@@ -52,6 +52,7 @@ import { cn, telHref } from '../lib/ui';
 import { navigeer } from '../app/router';
 import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../lib/uitweg';
 import { meldSchrijffout } from '../lib/fouten';
+import { isSysteemAccount } from '../../shared/toegang';
 
 /**
  * Operations Center — het planner/admin-dashboard als operationele cockpit.
@@ -309,7 +310,7 @@ export function PlannerDashboardWidgets({
   // afbakening als /api/availability en de Beschikbaar-tegel — anders telt
   // "ingepland + beschikbaar" zichtbaar niet op tot N.
   const isRealDriver = (u: User) =>
-    u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder';
+    u.role === 'chauffeur' && u.isActive !== false && !isSysteemAccount(u.name);
   const totalDrivers = users.filter(isRealDriver).length;
 
   // Werkvoorraad — gedeelde berekening met de topbar-knop (lib/werkvoorraad):

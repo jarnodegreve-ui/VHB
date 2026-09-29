@@ -2,7 +2,7 @@ import { Children, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowUpRight, ChevronRight, Download, Info, Link2, Printer, RotateCcw } from 'lucide-react';
 import type { User, View } from '../../types';
 import { isStaf } from '../../types';
-import { heeftRol } from '../../../shared/toegang';
+import { heeftRol, isSysteemAccount } from '../../../shared/toegang';
 import { useRoute } from '../../app/router';
 import { useQueryParams } from '../../app/queryParams';
 import { padVan } from '../../app/routes';
@@ -223,7 +223,7 @@ function PrintbladModal({ def, onClose }: { def: PrintbladDef; onClose: () => vo
   const vandaag = isoDate(new Date());
   const [w, setW] = useState<PrintbladWaarden>({ maand: vandaag.slice(0, 7), chauffeur: '', jaar: Number(vandaag.slice(0, 4)), dag: vandaag, omvang: 'open' });
   const zet = (deel: Partial<PrintbladWaarden>) => setW((v) => ({ ...v, ...deel }));
-  const mensen = useMemo(() => users.filter((u) => u.name.trim().toLowerCase() !== 'beheerder'), [users]);
+  const mensen = useMemo(() => users.filter((u) => !isSysteemAccount(u.name)), [users]);
   const [j, m] = w.maand.split('-').map(Number);
   const maandag = w.dag ? maandagVan(w.dag) : '';
   const open = () => {
@@ -309,7 +309,7 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
   // chauffeur met "Ook technieker" telt daar als technieker).
   const kiesRollen = def.filters.find((f): f is Extract<RapportFilter, { soort: 'chauffeur' }> => f.soort === 'chauffeur')?.rollen;
   const mensen = useMemo(
-    () => users.filter((u) => (kiesRollen ? heeftRol(u, kiesRollen) : !isStaf(u.role)) && u.name.trim().toLowerCase() !== 'beheerder'),
+    () => users.filter((u) => (kiesRollen ? heeftRol(u, kiesRollen) : !isStaf(u.role)) && !isSysteemAccount(u.name)),
     [users, kiesRollen],
   );
   const { navigeer } = useRoute();

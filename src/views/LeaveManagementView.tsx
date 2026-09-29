@@ -37,6 +37,7 @@ import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
 import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
 import { BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
+import { isSysteemAccount } from '../../shared/toegang';
 
 
 // Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
@@ -568,7 +569,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       const current = new Date(dateStr);
       if (r.status !== 'approved' || current < start || current > end) return false;
       const requester = users.find((u) => u.id === r.userId);
-      const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+      const isBeheerder = isSysteemAccount(requester?.name);
       const isMe = r.userId === user.id;
       if (isBeheerder && !isMe) return false;
       // De bezetting gaat over rijdend personeel: een technieker vraagt wel
@@ -801,7 +802,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
             const plannerPending = verlofRequests.filter((r) => {
               if (r.status !== 'pending') return false;
               const requester = users.find((u) => u.id === r.userId);
-              const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+              const isBeheerder = isSysteemAccount(requester?.name);
               const isMe = r.userId === user.id;
               if (isBeheerder && !isMe) return false;
               return true;
@@ -947,7 +948,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             ? <option value="">Kies een chauffeur…</option>
                             : <option value="">Mezelf ({user.name})</option>}
                           {users
-                            .filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
+                            .filter((u) => u.role === 'chauffeur' && u.isActive !== false && !isSysteemAccount(u.name))
                             .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
                             .map((u) => (
                               <option key={u.id} value={String(u.id)}>{u.name}</option>

@@ -21,6 +21,7 @@ import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type Zie
 import { meldSchrijffout } from '../../lib/fouten';
 import { Td, Th } from '../../components/TabelBasis';
 import { MaandInput } from '../../components/MaandInput';
+import { isSysteemAccount } from '../../../shared/toegang';
 
 /** Inklapbare preview-sectie: de import-preview groeide naar acht blokken —
  *  met een kop + teller per blok blijft het scanbaar en klap je alleen open
@@ -772,7 +773,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               <option value="">Kies een chauffeur…</option>
               <option value="alle">Alle chauffeurs (blad per chauffeur)</option>
               {users
-                .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
+                .filter((u) => u.isActive !== false && !isSysteemAccount(u.name))
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((u) => (
                   <option key={u.id} value={u.id}>{u.name}</option>

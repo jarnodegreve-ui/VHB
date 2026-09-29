@@ -20,6 +20,7 @@ import { formatDateHuman, formatDayLong, formatPeriodeDMJ, MONTH_NAMES, LEAVE_TY
 import { useRouteParam } from '../../app/router';
 import { limietVoorDag } from '../../../shared/schemas/verlofLimieten';
 import { AANVRAAG_STATUS, statusLabel } from '../../../shared/status';
+import { isSysteemAccount } from '../../../shared/toegang';
 
 /** Maand in de URL (`/beheer/verlofkalender/2026-10`) — spiegel van `viewMonth`;
  *  een ongeldige waarde wordt genegeerd. */
@@ -81,7 +82,7 @@ export function VerlofKalenderView({ users, leaveRequests, shifts = [], onDecide
 
   // Toon enkel actieve chauffeurs en planners (niet de admin/beheerder).
   const alleUsers = users
-    .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder' && (u.role === 'chauffeur' || u.role === 'planner'))
+    .filter((u) => u.isActive !== false && !isSysteemAccount(u.name) && (u.role === 'chauffeur' || u.role === 'planner'))
     .sort((a, b) => a.name.localeCompare(b.name, 'nl'));
   // Zoeken op naam + "alleen met afwezigheid deze maand"; de naamkolom
   // sorteert op- of aflopend (standaard oplopend, zoals voorheen).
