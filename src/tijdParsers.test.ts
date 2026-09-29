@@ -252,10 +252,16 @@ describe('elke aanroepplek geeft nog wat haar oude parser gaf', () => {
       const ruw = oudIcs(t as string);
       // Een negatief getal ("-1:00") geeft geen geldige DTEND; dat is de bestaande toestand en hoort niet bij deze meting.
       if (ruw < 0) continue;
-      const verwacht = ruw <= 0 ? ruw + 1440 : ruw;
       const regels = buildVevent({ uid: 'u', date: '2026-09-29', startTime: '00:00', endTime: t as string, summary: 's' }, '20260929T000000Z');
-      const dtend = regels.find((r) => r.startsWith('DTEND:'))!;
-      expect(minutenNa(dtend), naam(t)).toBe(verwacht);
+      const dtend = regels.find((r) => r.startsWith('DTEND:'));
+      // Einde gelijk aan de start (00:00): geen blok van een etmaal meer maar
+      // een afspraak zonder DTEND, nul minuten op het begintijdstip (Jarno
+      // 29-09; vroeger DTEND de dag erna om 00:00).
+      if (ruw === 0) {
+        expect(dtend, naam(t)).toBeUndefined();
+        continue;
+      }
+      expect(minutenNa(dtend!), naam(t)).toBe(ruw);
     }
   });
 
