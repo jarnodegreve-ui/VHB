@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { Download, FileText, IdCard } from 'lucide-react';
 import type { User } from '../types';
 import { isSafeDocumentUrl, notify, openPdfInNewTab } from '../lib/ui';
@@ -11,7 +11,10 @@ import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format'
 import { meldSchrijffout } from '../lib/fouten';
 import { TableShell, Td, Th } from '../components/TabelBasis';
 import { useZelfLadend } from '../lib/zelfLadend';
-import { DOCUMENT_VERVERS_NA_MS, linkNogGeldig } from '../lib/documentLink';
+import { useOnline } from '../lib/useOnline';
+import { DOCUMENT_VERVERS_NA_MS, linkNogGeldig, opentInDeApp } from '../lib/documentLink';
+// Lui geladen: de viewer en pdfjs horen niet in de startbundel of de warmup.
+import { LazyBijlageViewer } from '../app/lazyViews';
 
 export type UserDocument = {
   id: string;
@@ -25,9 +28,20 @@ export type UserDocument = {
   openedAt?: string | null;
 };
 
-/** Eigen documenten voor de chauffeur (attesten, reglement, loonbrieven). */
+/**
+ * Eigen documenten voor de chauffeur (attesten, reglement, loonbrieven).
+ *
+ * Sinds 29-09 opent een PDF in de viewer van de app (BijlageViewer in de
+ * modus voor persoonlijke documenten): niets blijft op het toestel, zonder
+ * bereik opent hij niet, en de leesbevestiging gaat pas weg als de PDF in de
+ * viewer staat. Een foto (.png, .jpg) gaat de oude weg: extern openen.
+ */
 export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSeen?: () => void }) {
   const [docs, setDocs] = useState<UserDocument[]>([]);
+  // Het document in de viewer: undefined = nog nooit geopend (de viewer is dan
+  // niet geladen), null = gesloten (de laag fadet nog uit).
+  const [inViewer, setInViewer] = useState<UserDocument | null>();
+  const online = useOnline();
   // Wanneer de links van de lijst binnenkwamen: ze zijn maar 15 minuten
   // geldig (src/lib/documentLink.ts).
   const ondertekendOp = useRef<number | null>(null);
@@ -87,8 +101,17 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
     }
   }, { deps: [currentUser.id], focusIntervalMs: DOCUMENT_VERVERS_NA_MS });
 
+  /** Leesbevestiging (fire-and-forget): de planner ziet "geopend". */
+  const bevestigOpening = (id: string) => {
+    void apiFetch(`/api/documents/${encodeURIComponent(id)}/opened`, { method: 'POST' }).catch(() => {});
+  };
+
   const openDoc = async (doc: UserDocument) => {
-    let url = doc.url;
+    const inDeApp = opentInDeApp(doc.filename);
+    // Zonder bereik opent een PDF niet (er staat niets op het toestel): de
+    // viewer zegt dat zelf, zonder eerst een verse link te proberen.
+    if (inDeApp && !online) return setInViewer(doc);
+    let actueel = doc;
     if (!linkNogGeldig(ondertekendOp.current, Date.now())) {
       // De link is (bijna) verlopen: eerst een verse ophalen, anders geeft
       // Supabase een rauwe foutpagina in plaats van het document.
@@ -96,22 +119,24 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
       try {
         const vers = (await haalDocumenten()).find((d) => d.id === doc.id);
         if (!vers) return notify('Dit document is niet meer beschikbaar.', 'error');
-        url = vers.url;
+        actueel = vers;
       } catch (err) {
         return meldSchrijffout('Document openen', err);
       } finally {
         setBezigId(null);
       }
     }
+    const url = actueel.url;
     if (!url) return notify('Bestand is niet beschikbaar.', 'error');
+    // Een PDF in de app: de leesbevestiging volgt pas als de viewer hem
+    // geladen heeft (onGeopend), niet bij de tik.
+    if (inDeApp) return setInViewer({ ...actueel, url });
     openPdfInNewTab(url);
-    // Leesbevestiging (fire-and-forget), pas nadat het document met een
-    // geldige link geopend is: de planner mag niet "geopend" zien staan bij
-    // iets wat de chauffeur nooit te zien kreeg. Een ongeldig adres opent
-    // openPdfInNewTab niet, dus dan ook geen bevestiging.
-    if (isSafeDocumentUrl(url)) {
-      void apiFetch(`/api/documents/${encodeURIComponent(doc.id)}/opened`, { method: 'POST' }).catch(() => {});
-    }
+    // Leesbevestiging pas nadat het document met een geldige link geopend is:
+    // de planner mag niet "geopend" zien staan bij iets wat de chauffeur nooit
+    // te zien kreeg. Een ongeldig adres opent openPdfInNewTab niet, dus dan
+    // ook geen bevestiging.
+    if (isSafeDocumentUrl(url)) bevestigOpening(doc.id);
   };
 
   return (
@@ -224,6 +249,12 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
             ))}
           </Card>
         </>
+      )}
+
+      {inViewer !== undefined && (
+        <Suspense fallback={null}>
+          <LazyBijlageViewer soort="document" document={inViewer} lijst="/api/documents" onClose={() => setInViewer(null)} onGeopend={bevestigOpening} />
+        </Suspense>
       )}
     </PageShell>
   );
