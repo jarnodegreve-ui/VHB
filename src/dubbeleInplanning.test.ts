@@ -149,7 +149,7 @@ describe('ontvangstenVanRuil', () => {
 describe('onbekendeCodeFout', () => {
   it('noemt de chauffeur, de dag en de code, en zegt wat de planner kan doen', () => {
     expect(onbekendeCodeFout('Bert', { date: DAG, dienst: 'FD' })).toBe(
-      "Bert staat op 24/07/2026 op 'FD', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of het een dienst is.",
+      "Bert staat op 24/07/2026 op 'FD', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze toe in Planningscodes en probeer opnieuw.",
     );
   });
 
@@ -165,18 +165,26 @@ describe('onbekendeCodeFout', () => {
     );
   });
 
-  it('de app toont de melding zelf, ook bij een lange naam en een lange code', () => {
+  it('de app toont de melding zelf, zonder verkeerde vervolgzin, ook bij een heel lange naam en code', () => {
     // meldSchrijffout toont een servertekst alleen als die veilig en hoogstens
-    // 240 tekens is; anders wordt het een algemene zin (src/lib/fouten.ts).
-    const naam = 'Alexandra Vandenbroucke-Vanderstraeten';
+    // 240 tekens is, en zet er "Iemand anders heeft dit intussen gewijzigd"
+    // achter als de tekst zelf geen "probeer" of "vernieuw" bevat
+    // (src/lib/fouten.ts). Beide mogen hier nooit gebeuren.
+    const naam = 'Alexandra-Fleur Vandenbroucke-Vanderstraeten de Wilde-Van Acker';
+    const code = 'naar de garage brengen en daarna de bus tanken';
     for (const bronLeeg of [undefined, 'dienstoverzicht', 'planningscodes', 'beide'] as const) {
-      const tekst = onbekendeCodeFout(naam, { date: DAG, dienst: 'naar garage brengen', bronLeeg });
+      const tekst = onbekendeCodeFout(naam, { date: DAG, dienst: code, bronLeeg });
+      expect(tekst.length, tekst).toBeLessThanOrEqual(240);
       expect(isVeiligeFouttekst(tekst), tekst).toBe(true);
       expect(leesFout({ status: 409, message: tekst }).tekst).toBe(tekst);
+      expect(schrijffout('Dienstwissel', { status: 409, message: tekst })).toBe(`Dienstwissel is mislukt. ${tekst}`);
     }
-    // Bij een lege lijst zegt de melding zelf wat te doen: er komt geen
-    // "Iemand anders heeft dit intussen gewijzigd" achter.
-    const leeg = onbekendeCodeFout(naam, { date: DAG, dienst: 'FD', bronLeeg: 'planningscodes' });
-    expect(schrijffout('Dienstwissel', { status: 409, message: leeg })).toBe(`Dienstwissel is mislukt. ${leeg}`);
+  });
+
+  it('kort een te lange naam en code in, een gewone blijft ongemoeid', () => {
+    const lang = onbekendeCodeFout('A'.repeat(60), { date: DAG, dienst: 'X'.repeat(60) });
+    expect(lang).toContain(`${'A'.repeat(39)}… staat op`);
+    expect(lang).toContain(`'${'X'.repeat(29)}…'`);
+    expect(onbekendeCodeFout('Bert', { date: DAG, dienst: 'FD' })).toContain("Bert staat op 24/07/2026 op 'FD'");
   });
 });

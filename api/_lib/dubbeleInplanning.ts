@@ -48,7 +48,7 @@ export type Ontvangst = {
 /** Wat er op één dag staat: de rijen in de planning en het bord. */
 export type DagStand = {
   rijen: Array<{ driverId?: unknown; line?: unknown }>;
-  bord: Pick<BordVanDag, "celVan" | "isCodeDienst" | "isBekend"> & Partial<Pick<BordVanDag, "bronLeeg">>;
+  bord: Pick<BordVanDag, "celVan" | "isCodeDienst" | "isBekend" | "bronLeeg">;
 };
 
 export type DubbeleInplanning = {
@@ -137,13 +137,22 @@ const LEEG: Record<BronLeeg, { wat: string; plek: string }> = {
  * Planningscodes" de planner op een dwaalspoor zetten (controle 29-09, 1c).
  * Het blijft een 409 waarbij niets geschreven wordt: de app toont de tekst
  * van een 409, die van een 503 niet (daar wordt het "het portaal is even in
- * onderhoud", src/lib/fouten.ts). De melding blijft onder 240 tekens, anders
- * valt de app terug op een algemene zin (isVeiligeFouttekst).
+ * onderhoud", src/lib/fouten.ts).
+ *
+ * Wat de app met de tekst doet (src/lib/fouten.ts, schrijffout): boven 240
+ * tekens toont ze een algemene zin in plaats van deze melding, dus naam en
+ * code worden ingekort; en zonder "probeer" of "vernieuw" plakt ze er "Iemand
+ * anders heeft dit intussen gewijzigd" achter, dus elke melding eindigt op
+ * wat de planner nu doet.
  */
 export const onbekendeCodeFout = (naam: string, c: Pick<DubbeleInplanning, "date" | "dienst" | "bronLeeg">) => {
+  const wie = kort(naam, 40);
   if (c.bronLeeg) {
     const { wat, plek } = LEEG[c.bronLeeg];
-    return `${wat}, dus het portaal kan niet nagaan of ${naam} op ${DAG_DMJ(c.date)} al een dienst rijdt. Er is niets gewijzigd. Kijk ${plek} na en probeer opnieuw.`;
+    return `${wat}, dus het portaal kan niet nagaan of ${wie} op ${DAG_DMJ(c.date)} al een dienst rijdt. Er is niets gewijzigd. Kijk ${plek} na en probeer opnieuw.`;
   }
-  return `${naam} staat op ${DAG_DMJ(c.date)} op '${c.dienst}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of het een dienst is.`;
+  return `${wie} staat op ${DAG_DMJ(c.date)} op '${kort(c.dienst, 30)}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze toe in Planningscodes en probeer opnieuw.`;
 };
+
+/** Tekst van hoogstens `max` tekens, met een beletselteken als ze korter moest. */
+const kort = (tekst: string, max: number) => (tekst.length > max ? `${tekst.slice(0, max - 1)}…` : tekst);

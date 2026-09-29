@@ -5466,7 +5466,7 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
       mem.planningMatrix[0] = dag('m-d1', DAG, { 'Chauffeur A': 'EEK6', 'Chauffeur B': code, 'Chauffeur C': '14', 'Chauffeur D': 'vrij' });
     };
     const onbekend = (naam: string, datum: string, code: string) =>
-      `${naam} staat op ${datum} op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of het een dienst is.`;
+      `${naam} staat op ${datum} op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze toe in Planningscodes en probeer opnieuw.`;
     const overname = (extra: Record<string, unknown> = {}) => ({
       id: 's-onb', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '',
       createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14', ...extra,
@@ -5646,7 +5646,7 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
     const leegMelding = (wat: string, plek: string) =>
       `${wat}, dus het portaal kan niet nagaan of Chauffeur B op 24/07/2026 al een dienst rijdt. Er is niets gewijzigd. Kijk ${plek} na en probeer opnieuw.`;
     const nietVoegToe = (r: { goedkeuren: any; handmatig: any }) => {
-      for (const res of [r.handmatig, r.goedkeuren]) expect(String(res.json?.error)).not.toContain('Voeg ze eerst toe');
+      for (const res of [r.handmatig, r.goedkeuren]) expect(String(res.json?.error)).not.toContain('Voeg ze');
     };
 
     describe('met een lege planningscodes-tabel', () => {
@@ -5679,12 +5679,29 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
         ];
         for (const [naam, ruilen, doe, melding] of paden) {
           mem.swaps = ruilen;
-          const voor = JSON.stringify({ planning: mem.planning, swaps: mem.swaps, matrix: mem.planningMatrix });
+          const voor = stand();
           const res = await doe();
           expect([naam, res.status]).toEqual([naam, 409]);
           expect(String(res.json?.error), naam).toContain(melding);
-          expect(JSON.stringify({ planning: mem.planning, swaps: mem.swaps, matrix: mem.planningMatrix }), naam).toBe(voor);
+          expect(stand(), naam).toBe(voor);
         }
+      });
+
+      it('dienst toewijzen aan wie een schoolrit via een wissel kreeg: de melding over de lege lijst', async () => {
+        // In de matrix staat B op vrij, op het bord rijdt hij EEK6 (van A).
+        // Zonder planningscodes is EEK6 niet te beoordelen: vóór 1c zei de
+        // melding "voeg de code toe in Planningscodes".
+        mem.planningCodes = [
+          { code: 'eek6', category: 'service', description: 'Schoolrit', countsAsShift: true },
+          { code: 'vrij', category: 'absence', description: 'Geen dienst', isDayOff: true },
+        ];
+        expect((await wissel({ line: 'EEK6', fromDriverId: A, toDriverId: B })).status).toBe(200);
+        mem.planningCodes = [];
+        const voor = stand();
+        const res = await wijsToe(B);
+        expect(res.status).toBe(409);
+        expect(String(res.json?.error)).toBe(leegMelding('De planningscodes kwamen leeg terug', 'Planningscodes'));
+        expect(stand()).toBe(voor);
       });
     });
 
