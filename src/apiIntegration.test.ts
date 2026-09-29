@@ -1549,6 +1549,50 @@ describe('dienstruil: autorisatieregels', () => {
   });
 });
 
+describe('dienstruil: "al gereden" volgt deelVenster (Jarno 29-09, 28e)', () => {
+  // In juli is Brussel UTC+2: 05:00Z = 07:00, 18:00Z = 20:00, 07:00Z = 09:00.
+  const DAG = '2026-07-10';
+  const vraagRuil = (shiftId: string) => api('POST', '/api/swaps', {
+    token: 'tok-a',
+    body: [{ id: `s-${shiftId}`, shiftId, requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: `${DAG}T05:00:00Z`, returnDate: '2026-07-12', returnCode: 'VRIJ' }],
+  });
+  beforeEach(() => { mem.swaps = []; });
+
+  it('22:00 tot 06:00 op dag D is om 07:00 op D nog niet gereden: de server aanvaardt de ruil', async () => {
+    vi.setSystemTime(new Date(`${DAG}T05:00:00Z`));
+    mem.planning = [{ id: 'sh-n', driverId: '3', date: DAG, line: '12', startTime: '22:00', endTime: '06:00' }];
+    const res = await vraagRuil('sh-n');
+    expect(res.status).toBe(200);
+    expect(mem.swaps.map((s: any) => s.id)).toEqual(['s-sh-n']);
+  });
+
+  it('16:00 tot 00:00 is om 20:00 op D nog niet gereden; 22:00 tot 30:00 blijft zoals vroeger', async () => {
+    vi.setSystemTime(new Date(`${DAG}T18:00:00Z`));
+    mem.planning = [
+      { id: 'sh-m', driverId: '3', date: DAG, line: '12', startTime: '16:00', endTime: '00:00' },
+      { id: 'sh-b', driverId: '3', date: DAG, line: '13', startTime: '22:00', endTime: '30:00' },
+    ];
+    expect((await vraagRuil('sh-m')).status).toBe(200);
+    mem.swaps = [];
+    expect((await vraagRuil('sh-b')).status).toBe(200);
+  });
+
+  it('een deel met gelijke tijden: gereden zoals vroeger, alleen op de eindtijd; naast een nachtdeel beslist het nachtdeel', async () => {
+    vi.setSystemTime(new Date(`${DAG}T07:00:00Z`)); // 09:00
+    mem.planning = [{ id: 'sh-g', driverId: '3', date: DAG, line: '12', startTime: '08:00', endTime: '08:00' }];
+    const geweigerd = await vraagRuil('sh-g');
+    expect(geweigerd.status).toBe(400);
+    expect(geweigerd.json.error).toBe('Deze dienst is al gereden en kan niet meer geruild worden.');
+    expect(mem.swaps).toEqual([]);
+    // Gesplitste dienst 12: het ongeldige deel en een nachtdeel van 22:00 tot 06:00.
+    mem.planning = [
+      { id: 'sh-g', driverId: '3', date: DAG, line: '12', startTime: '08:00', endTime: '08:00' },
+      { id: 'sh-g2', driverId: '3', date: DAG, line: '12', startTime: '22:00', endTime: '06:00' },
+    ];
+    expect((await vraagRuil('sh-g')).status).toBe(200);
+  });
+});
+
 describe('dienstruil zonder tegenprestatie (overname)', () => {
   // Chauffeur 3 biedt sh-c aan (2026-07-08); chauffeur 4 staat die dag op 'bv'.
   const overname = (extra: Record<string, unknown> = {}) => ({
