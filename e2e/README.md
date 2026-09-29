@@ -46,6 +46,15 @@ dist via `vite preview` op poort 4173.
   weg, een verlopen of falende link geeft de foutstaat. Bewaren, openen zonder
   bereik, vervangen en uitloggen staan in `pwa.spec.ts` (mét service worker).
 
+- **`document-viewer.spec.ts`** (29-09): persoonlijke documenten (loonbrieven,
+  attesten) openen in de app, op de telefoon (Chromium en WebKit) en op
+  desktop: Terug sluit alleen de viewer, de leesbevestiging pas als de PDF in
+  beeld staat (nooit bij een mislukte opening of vanuit het beheer), een foto
+  gaat de oude weg, zonder bereik een foutstaat met uitleg. Dat er niets in
+  Cache Storage, localStorage, sessionStorage of IndexedDB belandt en dat de
+  viewer met no-store haalt, staat in `pwa.spec.ts` (mét service worker), net
+  als de vervanging van een bijlage met dezelfde naam en grootte (uploadmoment).
+
 - **Mobiele specs** (`smoke`, `dashboard`, `verlof`, `ruil`, `sessie`, `dock`,
   `donker`): elk met eigen, kleine fixtures — ze testen één schrijfpad en
   willen precies weten wat er in de POST/PATCH zit.
