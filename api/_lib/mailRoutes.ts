@@ -31,6 +31,35 @@ export const bouwEigenMail = (o: { onderwerp: string; tekst: string; afzenderNaa
     nietBeantwoorden: !o.antwoordAan,
   });
 
+/** Bouwt de mail van een omleiding. `inBijlage` = de bestandsnamen die de
+ *  mail noemt: bij het versturen alleen wat echt meegaat (nr. 11). */
+export const bouwOmleidingMail = (o: {
+  omleiding: { title: string; description?: string | null; line: string; location?: string | null; startDate: string; endDate?: string | null };
+  bericht: string;
+  afzenderNaam: string;
+  antwoordAan?: string;
+  inBijlage: string[];
+}) => {
+  const periode = PERIODE_DMJ(o.omleiding.startDate, o.omleiding.endDate);
+  const { html, text } = mailOpbouw({
+    kicker: "Omleiding",
+    titel: o.omleiding.title,
+    alineas: [
+      ...(o.bericht ? [o.bericht] : []),
+      ...String(o.omleiding.description || "").split(/\n{2,}/).map((a) => a.trim()).filter(Boolean),
+    ],
+    feiten: [
+      { label: "Lijn(en)", waarde: lijnLabel(o.omleiding.line) },
+      ...(o.omleiding.location ? [{ label: "Plaats", waarde: o.omleiding.location }] : []),
+      { label: "Periode", waarde: o.omleiding.endDate ? periode : `vanaf ${periode}, tot nader bericht` },
+    ],
+    ...(o.inBijlage.length > 0 ? { lijst: { kop: "In bijlage", items: o.inBijlage } } : {}),
+    voet: o.antwoordAan ? `Verstuurd door ${o.afzenderNaam} (VHB). Antwoorden komen bij ${o.afzenderNaam} terecht.` : `Verstuurd door ${o.afzenderNaam} (VHB).`,
+    nietBeantwoorden: !o.antwoordAan,
+  });
+  return { onderwerp: `Omleiding ${lijnLabel(o.omleiding.line).toLowerCase()}: ${o.omleiding.title} (${periode})`, html, text };
+};
+
 /**
  * Beheer › Mails (mailtranche PR 3): alles wat een admin over de mails wil
  * weten en instellen op één adres. Lezen en schrijven alleen voor admins;
@@ -125,42 +154,29 @@ export function mountMailRoutes(app: express.Express) {
 
       const afzenderNaam = req.appUser?.name || "Planning VHB";
       const antwoordAan = String(req.appUser?.email ?? "").trim() || undefined;
-      const periode = PERIODE_DMJ(omleiding.startDate, omleiding.endDate);
       const bijlagen = omleidingBijlagen(omleiding);
-      const { html, text } = mailOpbouw({
-        kicker: "Omleiding",
-        titel: omleiding.title,
-        alineas: [
-          ...(body.bericht ? [body.bericht] : []),
-          ...String(omleiding.description || "").split(/\n{2,}/).map((a) => a.trim()).filter(Boolean),
-        ],
-        feiten: [
-          { label: "Lijn(en)", waarde: lijnLabel(omleiding.line) },
-          ...(omleiding.location ? [{ label: "Plaats", waarde: omleiding.location }] : []),
-          { label: "Periode", waarde: omleiding.endDate ? periode : `vanaf ${periode}, tot nader bericht` },
-        ],
-        ...(bijlagen.length > 0 ? { lijst: { kop: "In bijlage", items: bijlagen.map((b) => b.filename) } } : {}),
-        voet: antwoordAan ? `Verstuurd door ${afzenderNaam} (VHB). Antwoorden komen bij ${afzenderNaam} terecht.` : `Verstuurd door ${afzenderNaam} (VHB).`,
-        nietBeantwoorden: !antwoordAan,
-      });
-      const onderwerp = `Omleiding ${lijnLabel(omleiding.line).toLowerCase()}: ${omleiding.title} (${periode})`;
+      const bouw = (inBijlage: string[]) => bouwOmleidingMail({ omleiding, bericht: body.bericht, afzenderNaam, antwoordAan, inBijlage });
       if (body.droog) {
+        // Het voorbeeld toont de lijst van het record; de bestanden zelf
+        // worden pas bij het versturen opgehaald.
+        const { onderwerp, html } = bouw(bijlagen.map((b) => b.filename));
         return res.json({ droog: true, aantal: ontvangers.length, ontvangers, onderwerp, html, bijlagen: bijlagen.map((b) => ({ filename: b.filename, sizeBytes: b.sizeBytes ?? null })) });
       }
 
-      // PDF's één keer ophalen; een bestand dat niet meer hangt valt weg
-      // (de lijst in de mail noemt dan alleen wat écht meegaat).
-      const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
-      for (const b of bijlagen) {
-        const buffer = await downloadDiversionBijlage(id, b.slot, Boolean(b.legacy));
-        if (buffer) attachments.push({ filename: b.filename, content: buffer, contentType: "application/pdf" });
-      }
+      // Eerst de PDF's ophalen, dan pas de mail bouwen (nr. 11): vroeger
+      // stond de tekst al vast en noemde "In bijlage" ook een bestand dat
+      // daarna niet bleek te laden en stil wegviel. De mail noemt nu alleen
+      // wat echt meegaat, en het antwoord zegt welke bijlage ontbrak.
+      const opgehaald = await Promise.all(bijlagen.map(async (b) => ({ filename: b.filename, buffer: await downloadDiversionBijlage(id, b.slot, Boolean(b.legacy)) })));
+      const attachments = opgehaald.flatMap((b) => (b.buffer ? [{ filename: b.filename, content: b.buffer, contentType: "application/pdf" }] : []));
+      const ontbrekend = opgehaald.filter((b) => !b.buffer).map((b) => b.filename);
+      const { onderwerp, html, text } = bouw(attachments.map((a) => a.filename));
       const uitkomst = await verstuurMailReeks({ soort: OMLEIDING_MAIL_SOORT, door: afzenderNaam, context: `omleiding-mail:${id}`, ontvangers, onderwerp, text, html, attachments, replyTo: antwoordAan, gestartOp });
       // De mails zijn weg en het verzendlog klopt: een logboekregel die niet
       // lukt mag het antwoord niet in een fout veranderen (dan zou het scherm
       // denken dat er niets vertrok).
-      await logActivity(req, "diversions", "Omleiding gemaild", `"${omleiding.title}" naar ${ontvangers.length} ontvanger${ontvangers.length === 1 ? "" : "s"} met ${attachments.length} PDF${attachments.length === 1 ? "" : "'s"}${reeksStaart(uitkomst)}.`, { type: "diversion", id }).catch((err) => console.error("Logboekregel van de omleidingsmail is mislukt.", err));
-      res.json({ ...reeksAntwoord(uitkomst), bijlagen: attachments.length });
+      await logActivity(req, "diversions", "Omleiding gemaild", `"${omleiding.title}" naar ${ontvangers.length} ontvanger${ontvangers.length === 1 ? "" : "s"} met ${attachments.length} PDF${attachments.length === 1 ? "" : "'s"}${ontbrekend.length ? ` (niet meegegaan, bestand niet gevonden: ${ontbrekend.join(", ")})` : ""}${reeksStaart(uitkomst)}.`, { type: "diversion", id }).catch((err) => console.error("Logboekregel van de omleidingsmail is mislukt.", err));
+      res.json({ ...reeksAntwoord(uitkomst), bijlagen: attachments.length, ontbrekendeBijlagen: ontbrekend });
     } catch (err) {
       console.error("Omleiding mailen is mislukt.", err);
       res.status(500).json({ error: "Versturen is mislukt." });

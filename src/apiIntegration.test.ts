@@ -7672,6 +7672,30 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')?.message).toContain('naar 2 ontvangers met 1 PDF');
     });
 
+    it('de mail noemt alleen de bijlagen die echt meegaan, en het antwoord zegt welke ontbrak (nr. 11)', async () => {
+      const res = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(res.status).toBe(200);
+      // slot 3 (haltes.pdf) hangt niet in de opslag.
+      expect(res.json).toMatchObject({ bijlagen: 1, ontbrekendeBijlagen: ['haltes.pdf'] });
+      for (const mail of mem.emailsSent) {
+        expect(mail.attachments?.map((a) => a.filename)).toEqual(['plan.pdf']);
+        expect(mail.text).toContain('In bijlage\n- plan.pdf');
+        expect(mail.text).not.toContain('haltes.pdf');
+      }
+      expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')?.message).toContain('met 1 PDF (niet meegegaan, bestand niet gevonden: haltes.pdf)');
+      // Hangt geen enkele bijlage meer, dan noemt de mail er ook geen.
+      mem.opslag.clear();
+      mem.emailsSent = [];
+      const zonder = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(zonder.json).toMatchObject({ bijlagen: 0, ontbrekendeBijlagen: ['plan.pdf', 'haltes.pdf'] });
+      expect(mem.emailsSent[0].text).not.toContain('In bijlage');
+      // Alles aanwezig: niets te melden.
+      mem.opslag.add('diversions/o-1-1.pdf');
+      mem.opslag.add('diversions/o-1-3.pdf');
+      const volledig = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(volledig.json).toMatchObject({ bijlagen: 2, ontbrekendeBijlagen: [] });
+    });
+
     it('gaat door dezelfde verzendfunctie: regel vooraf, en `alleen` stuurt alleen naar het restant (nr. 5 en 34)', async () => {
       mem.mailLogVerloop = [];
       const res = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-planner', body: { ontvangers: { lijsten: ['l-1'], adressen: ['garage@vhb.be'] }, alleen: ['planning@delijn.be'] } });
