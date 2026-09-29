@@ -11,17 +11,11 @@
  *  hier niet onder te liggen. */
 export const WACHTWOORD_MIN = 10;
 
-export const ROLLEN = ['chauffeur', 'technieker', 'planner', 'admin'] as const;
-
-/** NL-label per rol, één bron voor de keuzelijst in gebruikersbeheer, de
- *  contactenkaartjes en het profielmenu. 'technieker' bestaat sinds 09-09:
- *  eigen verlof en meldingen, maar geen diensten en niet inplanbaar. */
-export const ROL_LABELS: Record<(typeof ROLLEN)[number], string> = {
-  chauffeur: 'Chauffeur',
-  technieker: 'Technieker',
-  planner: 'Planning',
-  admin: 'Beheer',
-};
+/** De rollen staan sinds 29-09 in shared/rollen.ts, samen met hun label en
+ *  het rolfilter; hier alleen nog doorgegeven voor het gebruikersschema.
+ *  De labeltabel die hier stond ("Planning", "Beheer") is weg: een rol heet
+ *  overal zoals in `ROL_LABEL` daar. */
+export { ROLLEN } from '../rollen.js';
 
 // --- Onderhoudsmodus (shared/schemas/onderhoud.ts) ---
 // Zod-vrij, want de schil (useOnderhoud, OnderhoudBanner) en het loginscherm

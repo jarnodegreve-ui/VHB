@@ -8,6 +8,7 @@ import { isoWeekOf } from '../lib/week';
 import { addDagen, isoDate } from '../lib/datum';
 import { kaleReden } from '../lib/ruilBadge';
 import { RUIL_STATUS } from '../../shared/status';
+import { rolLabel } from '../../shared/rollen';
 
 /**
  * Weekoverzicht van de dienstwissels als bewijsstuk voor het klassement
@@ -33,8 +34,6 @@ const STATUS_LABEL: Record<SwapRequest['status'], string> = {
   rejected: 'Teruggedraaid',
   cancelled: 'Teruggedraaid',
 };
-
-const ROL_LABEL: Record<string, string> = { chauffeur: 'chauffeur', planner: 'planner', admin: 'admin', technieker: 'technieker' };
 
 type UitgevoerdeWissel = {
   swap: SwapRequest;
@@ -173,7 +172,7 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
                         <dt className={label}>Uitgevoerd om</dt>
                         <dd>
                           {uur(wissel.uitgevoerdOp)} door {wissel.uitgevoerdDoor}
-                          <span className="text-slate-500"> ({ROL_LABEL[wissel.uitgevoerdDoorRol] ?? wissel.uitgevoerdDoorRol})</span>
+                          <span className="text-slate-500"> ({rolLabel(wissel.uitgevoerdDoorRol)})</span>
                           {wissel.handmatig ? ', handmatige wissel' : ''}
                         </dd>
                         <dt className={label}>Geeft dienst af</dt><dd>{wissel.aanvragerNaam}</dd>
@@ -198,7 +197,7 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
                               <tr key={e.id} className="align-top">
                                 <td className="whitespace-nowrap py-0.5 pr-2">{tijdstip(e.createdAt)}</td>
                                 <td className="py-0.5 pr-2">{e.action}</td>
-                                <td className="py-0.5">{e.actorName} <span className="text-slate-500">({ROL_LABEL[e.actorRole] ?? e.actorRole})</span></td>
+                                <td className="py-0.5">{e.actorName} <span className="text-slate-500">({rolLabel(e.actorRole)})</span></td>
                               </tr>
                             ))}
                           </tbody>

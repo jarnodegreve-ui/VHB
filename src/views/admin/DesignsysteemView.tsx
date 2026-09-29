@@ -52,6 +52,7 @@ function VuilAnnuleren({ onClose }: { onClose: () => void }) {
 import { Chauffeurkiezer } from '../../components/Chauffeurkiezer';
 import { Voertuigkiezer } from '../../components/Voertuigkiezer';
 import { MaandInput } from '../../components/MaandInput';
+import { ROLLEN, ROL_LABEL } from '../../../shared/rollen';
 
 /**
  * Designsysteem — alle bouwstenen, tokens en toestanden op één pagina
@@ -402,9 +403,7 @@ export function DesignsysteemView() {
             </Field>
             <Field label="Rol">
               <Select defaultValue="chauffeur">
-                <option value="chauffeur">Chauffeur</option>
-                <option value="planner">Planner</option>
-                <option value="admin">Beheerder</option>
+                {ROLLEN.map((rol) => <option key={rol} value={rol}>{ROL_LABEL[rol]}</option>)}
               </Select>
             </Field>
             <Field label="Startdatum" hint="Typ dd/mm/jjjj of kies in de kalender; op mobiel opent de kalender onderaan.">
@@ -552,7 +551,7 @@ export function DesignsysteemView() {
           <div ref={menu.wortel} className="relative inline-flex">
             <Button variant="secondary" size="sm" aria-haspopup="menu" aria-expanded={menu.open} onClick={() => menu.setOpen((v) => !v)}>Account</Button>
             <Popover open={menu.open} rol="menu" label="Account" align="left" breedte="md">
-              <PopoverKop titel="Jarno De Greve" aside={<Badge tone="slate">Admin</Badge>} />
+              <PopoverKop titel="Jarno De Greve" aside={<Badge tone="slate">{ROL_LABEL.admin}</Badge>} />
               <MenuItem icon={<Settings size={16} />} onClick={() => menu.setOpen(false)}>Instellingen</MenuItem>
               <MenuItem icon={<Bell size={16} />} sub="3 ongelezen" onClick={() => menu.setOpen(false)}>Meldingen</MenuItem>
               <MenuItem icon={<LogOut size={16} />} gevaarlijk onClick={() => menu.setOpen(false)}>Uitloggen</MenuItem>

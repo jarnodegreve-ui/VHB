@@ -19,6 +19,7 @@ import { LegeLijst, NietGevonden } from '../../components/illustraties';
 import { balkenVoorDag, duurKort, isBuitenland, nuOnline, periodeRegels, rijStaatOpen, telBuitenlandPerDag, telPerDag, type AanwezigheidSessie, type DagBalk } from '../../lib/aanwezigheid';
 import { asMarkeringen, asVenster, blokOpAs, labelStapVoor } from '../../lib/tijdAs';
 import { useMinWidth } from '../../lib/useMinWidth';
+import { rolLabel } from '../../../shared/rollen';
 
 /**
  * Activiteit (herwerking 08-09-2026, vraag Jarno: professioneler en
@@ -783,7 +784,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                           </button>
                           <Uitklap open={isOpen}>
                             <div className="bg-surface-muted/40 px-4 pb-4 pt-1 sm:pl-[calc(4.5rem+8rem+2.5rem)]">
-                              <p className="text-xs font-medium text-slate-500 sm:hidden">{e.actorName} · {e.actorRole}</p>
+                              <p className="text-xs font-medium text-slate-500 sm:hidden">{e.actorName} · {rolLabel(e.actorRole)}</p>
                               {n === 1 ? (
                                 <p className="mt-1 text-sm text-slate-700">{e.details || 'Geen details.'}</p>
                               ) : (
@@ -796,7 +797,7 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                                   ))}
                                 </ul>
                               )}
-                              <p className="mt-2 text-xs text-slate-500"><time dateTime={e.createdAt}>{moment(e.createdAt)}</time> · {e.actorName} ({e.actorRole}){e.entityType ? ` · ${e.entityType}${e.entityId ? ` ${e.entityId}` : ''}` : ''}</p>
+                              <p className="mt-2 text-xs text-slate-500"><time dateTime={e.createdAt}>{moment(e.createdAt)}</time> · {e.actorName} ({rolLabel(e.actorRole)}){e.entityType ? ` · ${e.entityType}${e.entityId ? ` ${e.entityId}` : ''}` : ''}</p>
                             </div>
                           </Uitklap>
                         </li>

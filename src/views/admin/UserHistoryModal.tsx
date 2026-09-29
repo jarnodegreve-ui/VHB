@@ -1,5 +1,6 @@
 import { Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
+import { rolLabel } from '../../../shared/rollen';
 import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
 import { microLabelClass, StatusBadge } from '../../components/primitives';
@@ -57,7 +58,7 @@ export function UserHistoryModal({
       <ModalHeader
         eyebrow={`Historiek ${currentYear}`}
         title={user.name}
-        description={<span className="capitalize">{user.role}{user.employeeId ? ` · #${user.employeeId}` : ''}</span>}
+        description={`${rolLabel(user.role)}${user.employeeId ? ` · #${user.employeeId}` : ''}`}
         onClose={onClose}
       />
 

@@ -1,6 +1,6 @@
 import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Settings, Sun } from 'lucide-react';
 import { cn } from '../lib/ui';
-import { ROL_LABELS } from '../../shared/schemas/constanten';
+import { rolLabel } from '../../shared/rollen';
 import type { User } from '../types';
 import { useDropdown } from './useDropdown';
 import { MenuItem, Popover } from './Popover';
@@ -72,7 +72,7 @@ export function UserMenu({
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-slate-800 truncate leading-tight">{user.name}</span>
               <span className="block text-xs text-slate-500 font-medium">
-                {ROL_LABELS[user.role as keyof typeof ROL_LABELS] ?? user.role}
+                {rolLabel(user.role)}
               </span>
             </span>
           </div>
