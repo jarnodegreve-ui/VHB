@@ -32,6 +32,7 @@ import { addDagenIso, brusselsDay, DAG_DMJ, isDigestRuis, SWAP_UITVOERING_ACTIES
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesData, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "../storage.js";
 import { viewUrl } from "./collectie.js";
+import { opruimBudget, ruimWeesBijlagenOp } from "./bijlagenOpruim.js";
 
 // --- Back-up: alle collecties als één JSON ---
 const buildBackupPayload = async () => {
@@ -188,6 +189,9 @@ export function mountCronRoutes(app: express.Express) {
     if (!isCronAuthorized(req)) {
       return res.status(401).json({ error: "Niet toegestaan." });
     }
+    // Startmoment op de monotone klok: de opruiming van de bijlagen krijgt
+    // onderaan wat er van de 60 s van de functie overblijft.
+    const gestart = performance.now();
     try {
       const payload = await buildBackupPayload();
       const filename = `vhb-backup-${payload.exportedAt.slice(0, 10)}.json`;
@@ -260,8 +264,25 @@ export function mountCronRoutes(app: express.Express) {
         console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d), ${pruned.meldingen} meldingen (>${meldingDays}d), ${pruned.aanwezigheid} aanwezigheidssessies (>${aanwezigheidDays}d), ${pruned.mailLog} mail-logregels (>${logDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
       }
 
+      // De heartbeat van de back-up EERST: de back-up staat op dit punt al
+      // opgeslagen. De opruiming hieronder praat met Storage en het log; blijft
+      // daar iets hangen, dan mag dat nooit lezen als "de back-up is mislukt".
       await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.meldingen} meldingen + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
-      res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned, integrity });
+
+      // Bijlagen van verwijderde omleidingen en updates: pas nu opruimen, een
+      // dag na het verdwijnen van het record, zodat "Ongedaan maken" de PDF's
+      // kon terughangen (api/_lib/bijlagenOpruim.ts). Gooit nooit en houdt
+      // zich aan een tijdsbudget: wat niet meer aan de beurt komt blijft
+      // staan tot de volgende nacht. De uitkomst krijgt haar eigen regel.
+      const bijlagen = await ruimWeesBijlagenOp(Date.now(), { budgetMs: opruimBudget(performance.now() - gestart) });
+      const bijlagenTotaal = bijlagen.omleidingen + bijlagen.updates;
+      if (bijlagenTotaal > 0 || bijlagen.overgeslagen.length > 0) {
+        const uitkomst = `${bijlagen.omleidingen} van omleidingen en ${bijlagen.updates} van updates opgeruimd${bijlagen.overgeslagen.length ? `, overgeslagen: ${bijlagen.overgeslagen.join("; ")}` : ""}`;
+        console.log(`[cron-backup] bijlagen: ${uitkomst}.`);
+        await logCronHeartbeat("bijlagen-opruim", `Verweesde bijlagen: ${uitkomst}.`);
+      }
+
+      res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned, bijlagen, integrity });
     } catch (err: any) {
       console.error("[cron-backup] mislukt:", err?.message || err);
       console.error("Back-up mislukt", err);

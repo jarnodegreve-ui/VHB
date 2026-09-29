@@ -1,5 +1,6 @@
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
 import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
+import { MAX_UPDATE_BIJLAGEN } from "../shared/schemas/update.js";
 import type {
   ActivityLogRecord,
   ActivityLogRow,
@@ -1738,18 +1739,171 @@ export const zetDiversionBijlagen = async (
   if (error) throw error;
 };
 
-/** Bestanden van verwijderde omleidingen opruimen (alle slots én de oude
- *  sleutel); best-effort, een achtergebleven PDF mag een delete niet laten
- *  mislukken. */
-const removeDiversionPdfs = async (diversionIds: string[]) => {
-  if (!supabaseAdmin || diversionIds.length === 0) return;
-  const paths = diversionIds.flatMap((id) => [
-    diversionLegacyPad(id),
-    ...Array.from({ length: MAX_OMLEIDING_BIJLAGEN }, (_, i) => diversionBijlagePad(id, i + 1)),
-  ]);
-  const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove(paths);
-  // "not found" is de normale uitkomst voor een omleiding zonder bijlage.
-  if (error && !/not.?found/i.test(String(error.message || ""))) console.warn("Diversion PDF storage cleanup error:", error);
+/** De bestanden van één record in een bijlagen-bucket: naam → grootte. Eén
+ *  lijst-aanroep met het id als zoekterm; de zoekterm is ruim (ook andere
+ *  namen waarin het id voorkomt), de aanroeper kijkt daarom alleen naar de
+ *  exacte namen die hij zelf uit id en slot opbouwt, nooit naar een pad van
+ *  de client. Gooit bij een fout: "niet te controleren" is niet "bestaat niet". */
+const bestandenVanRecord = async (bucket: string, recordId: string): Promise<Map<string, { sizeBytes?: number }>> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { data, error } = await supabaseAdmin.storage
+    .from(bucket)
+    .list("", { limit: 1000, search: recordId, sortBy: { column: "name", order: "asc" } });
+  if (error) throw error;
+  const uit = new Map<string, { sizeBytes?: number }>();
+  for (const rij of data ?? []) {
+    // Mappen hebben geen id; die slaan we over.
+    if (!rij?.id || !rij.name) continue;
+    const grootte = Number((rij.metadata as { size?: unknown } | null | undefined)?.size);
+    uit.set(String(rij.name), Number.isFinite(grootte) && grootte >= 0 ? { sizeBytes: grootte } : {});
+  }
+  return uit;
+};
+
+/**
+ * Welke PDF's van deze omleiding hangen er nu echt in Storage? Voor het
+ * herstel na "Ongedaan maken": de server hangt alleen terug wat hij hier zelf
+ * terugvindt. `oudeSleutel` = er hangt nog een `<id>.pdf` van vóór 25-09.
+ */
+export const bestaandeDiversionBijlagen = async (
+  diversionId: string,
+): Promise<{ slots: Array<{ slot: number; sizeBytes?: number }>; oudeSleutel: boolean }> => {
+  const bestanden = await bestandenVanRecord(DIVERSIONS_BUCKET, diversionId);
+  const nummers = Array.from({ length: MAX_OMLEIDING_BIJLAGEN }, (_, i) => i + 1);
+  return {
+    slots: nummers.flatMap((slot) => {
+      const gevonden = bestanden.get(diversionBijlagePad(diversionId, slot));
+      return gevonden ? [{ slot, ...gevonden }] : [];
+    }),
+    oudeSleutel: bestanden.has(diversionLegacyPad(diversionId)),
+  };
+};
+
+// --- Uitgestelde opruiming van bijlagen (29-09) ---
+// Een verwijderde omleiding of update nam haar PDF's vroeger meteen mee uit
+// Storage. "Ongedaan maken" bracht het record dan terug zonder bijlagen: de
+// bestanden waren al weg. Nu blijven ze staan tot de nachtcron ze opruimt
+// (api/_lib/bijlagenOpruim.ts): alleen bestanden waarvan het record niet meer
+// bestaat, en pas na een veilige marge. De lezingen waar ze op steunt
+// (bestaandeRecordIds, logregelsVanEntiteiten) staan verderop.
+
+/** Eén bestand in een bucket, zoals de opruiming het nodig heeft. */
+export type BijlageBestand = { naam: string; gewijzigdOp: string | null; sizeBytes?: number };
+
+const BIJLAGE_LIJST_PAGINA = 1000;
+const BIJLAGE_LIJST_MAX_PAGINAS = 200;
+
+/**
+ * Alle bestanden in de wortel van een bijlagen-bucket, met de zekerheid dat
+ * het er ook echt allemaal zijn. De lijst loopt door tot een LEGE pagina en
+ * schuift op met het aantal rijen dat echt terugkwam: geeft de server minder
+ * dan gevraagd (een eigen plafond), dan valt er niets tussen de pagina's.
+ * `volledig` is alleen waar als de lijst op zo'n lege pagina eindigde. Gooit
+ * bij een fout: een halve lijst is geen basis om iets weg te gooien.
+ */
+export const lijstBijlageBestandenVolledig = async (bucket: string): Promise<{ bestanden: BijlageBestand[]; volledig: boolean }> => {
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const uit: BijlageBestand[] = [];
+  let gelezen = 0;
+  for (let pagina = 0; pagina < BIJLAGE_LIJST_MAX_PAGINAS; pagina += 1) {
+    const { data, error } = await supabaseAdmin.storage
+      .from(bucket)
+      .list("", { limit: BIJLAGE_LIJST_PAGINA, offset: gelezen, sortBy: { column: "name", order: "asc" } });
+    if (error) throw error;
+    const rijen = data ?? [];
+    if (rijen.length === 0) return { bestanden: uit, volledig: true };
+    gelezen += rijen.length;
+    for (const rij of rijen) {
+      // Mappen hebben geen id; die slaan we over.
+      if (!rij?.id || !rij.name) continue;
+      const grootte = Number((rij.metadata as { size?: unknown } | null | undefined)?.size);
+      uit.push({
+        naam: String(rij.name),
+        gewijzigdOp: rij.updated_at ?? rij.created_at ?? null,
+        ...(Number.isFinite(grootte) && grootte >= 0 ? { sizeBytes: grootte } : {}),
+      });
+    }
+  }
+  return { bestanden: uit, volledig: false };
+};
+
+/** Zoals hierboven, zonder de zekerheid: voor de opruiming, die alleen
+ *  bestanden raakt die ze gezien heeft. */
+export const lijstBijlageBestanden = async (bucket: string): Promise<BijlageBestand[]> =>
+  (await lijstBijlageBestandenVolledig(bucket)).bestanden;
+
+/** Het exacte aantal rijen in een tabel, los van elke paginering. null = de
+ *  server gaf geen telling. */
+export const telRijen = async (tabel: "diversions" | "updates"): Promise<number | null> => {
+  const client = requireDb();
+  const { count, error } = await client.from(tabel).select("id", { count: "exact", head: true });
+  if (error) throw error;
+  return typeof count === "number" && Number.isFinite(count) ? count : null;
+};
+
+/** Bestanden weghalen uit een bijlagen-bucket; "not found" is geen fout. */
+export const verwijderBijlageBestanden = async (bucket: string, paden: string[]): Promise<void> => {
+  if (paden.length === 0) return;
+  if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
+  const { error } = await supabaseAdmin.storage.from(bucket).remove(paden);
+  if (error && !/not.?found/i.test(String(error.message || ""))) throw error;
+};
+
+/** Hoogstens zoveel id's per gerichte lezing (de lijst reist in de URL). */
+export const GERICHTE_LEZING_MAX = 100;
+
+/**
+ * Gerichte lezing: welke van deze id's bestaan als rij in de tabel? Anders dan
+ * de brede lijst (getDiversionsData, gepagineerd) kan dit antwoord niet
+ * afgekapt zijn: hoogstens 100 rijen op een primaire sleutel. Gooit bij een
+ * fout of een antwoord dat niet past bij de vraag: "niet te controleren" is
+ * nooit "bestaat niet".
+ */
+export const bestaandeRecordIds = async (tabel: "diversions" | "updates", ids: string[]): Promise<Set<string>> => {
+  const gevraagd = [...new Set(ids.map((id) => String(id)).filter(Boolean))];
+  if (gevraagd.length === 0) return new Set();
+  if (gevraagd.length > GERICHTE_LEZING_MAX) throw new Error(`Gerichte lezing: hoogstens ${GERICHTE_LEZING_MAX} id's per keer.`);
+  const client = requireDb();
+  const { data, error } = await client.from(tabel).select("id").in("id", gevraagd);
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error("Gerichte lezing: onverwacht antwoord.");
+  const mag = new Set(gevraagd);
+  const uit = new Set<string>();
+  for (const rij of data as Array<{ id?: unknown }>) {
+    const id = String(rij?.id ?? "");
+    if (!id || !mag.has(id)) throw new Error("Gerichte lezing: onverwacht antwoord.");
+    uit.add(id);
+  }
+  return uit;
+};
+
+const LOGREGELS_MAX = 5000;
+
+/**
+ * De logregels van deze omleidingen of updates, NIEUWSTE EERST. Die volgorde
+ * is de vangrail: geeft de server minder rijen terug dan gevraagd, dan vallen
+ * de oudste weg en blijft de laatste regel per id de juiste. Een id zonder
+ * regels in het antwoord heeft dan gewoon geen bewijs.
+ */
+export const logregelsVanEntiteiten = async (
+  entityType: "diversion" | "update",
+  ids: string[],
+): Promise<Array<{ entityId: string; action: string; createdAt: string }>> => {
+  const gevraagd = [...new Set(ids.map((id) => String(id)).filter(Boolean))];
+  if (gevraagd.length === 0) return [];
+  if (gevraagd.length > GERICHTE_LEZING_MAX) throw new Error(`Logregels: hoogstens ${GERICHTE_LEZING_MAX} id's per keer.`);
+  const client = requireDb();
+  const rows = await paginatedFetch<Pick<ActivityLogRow, "id" | "entity_id" | "action" | "created_at">>((from, to) =>
+    client
+      .from("activity_log")
+      .select("id, entity_id, action, created_at")
+      .eq("entity_type", entityType)
+      .in("entity_id", gevraagd)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  LOGREGELS_MAX);
+  return rows.map((r) => ({ entityId: String(r.entity_id ?? ""), action: String(r.action ?? ""), createdAt: String(r.created_at ?? "") }));
 };
 
 export const getDiversionsData = async () => {
@@ -1794,8 +1948,8 @@ export const saveDiversionsData = async (data: any) => {
   if (idsToDelete.length > 0) {
     const { error: deleteError } = await client.from('diversions').delete().in('id', idsToDelete);
     if (deleteError) throw deleteError;
-    // Best-effort: also remove the PDFs from Storage (pas ná geslaagde delete).
-    await removeDiversionPdfs(idsToDelete);
+    // De PDF's blijven bewust staan: "Ongedaan maken" moet ze kunnen
+    // terughangen. De nachtcron ruimt ze op (api/_lib/bijlagenOpruim.ts).
   }
 };
 
@@ -2584,16 +2738,15 @@ export const zetUpdateBijlagen = async (
   if (error) throw error;
 };
 
-/** Bestanden van verwijderde updates opruimen; best-effort, zoals bij de
- *  omleidingen: een achtergebleven PDF mag een delete niet laten mislukken. */
-export const verwijderUpdateBijlagen = async (updateIds: string[]): Promise<void> => {
-  if (!supabaseAdmin || updateIds.length === 0) return;
-  const paden = updateIds.flatMap((id) => [updateBijlagePad(id, 1), updateBijlagePad(id, 2)]);
-  const { error } = await supabaseAdmin.storage.from(UPDATE_BIJLAGEN_BUCKET).remove(paden);
-  // "not found" is de normale uitkomst voor een update zonder bijlage.
-  if (error && !/not.?found/i.test(String(error.message || ""))) {
-    console.warn("Opruimen van update-bijlagen is mislukt:", error);
-  }
+/** Welke PDF's van deze update hangen er nu echt in Storage? Voor het
+ *  herstel na "Ongedaan maken", zoals bestaandeDiversionBijlagen. */
+export const bestaandeUpdateBijlagen = async (updateId: string): Promise<Array<{ slot: number; sizeBytes?: number }>> => {
+  const bestanden = await bestandenVanRecord(UPDATE_BIJLAGEN_BUCKET, updateId);
+  const nummers = Array.from({ length: MAX_UPDATE_BIJLAGEN }, (_, i) => i + 1);
+  return nummers.flatMap((slot) => {
+    const gevonden = bestanden.get(updateBijlagePad(updateId, slot));
+    return gevonden ? [{ slot, ...gevonden }] : [];
+  });
 };
 
 export const saveUpdatesData = async (data: any) => {

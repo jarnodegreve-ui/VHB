@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, FileText, IdCard } from 'lucide-react';
 import type { User } from '../types';
-import { notify, openPdfInNewTab } from '../lib/ui';
+import { isSafeDocumentUrl, notify, openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
 import { Badge, Button, MicroLabel } from '../components/primitives';
@@ -10,6 +10,8 @@ import { SkeletonRow } from '../components/Skeleton';
 import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format';
 import { meldSchrijffout } from '../lib/fouten';
 import { TableShell, Td, Th } from '../components/TabelBasis';
+import { useZelfLadend } from '../lib/zelfLadend';
+import { DOCUMENT_VERVERS_NA_MS, linkNogGeldig } from '../lib/documentLink';
 
 export type UserDocument = {
   id: string;
@@ -26,7 +28,12 @@ export type UserDocument = {
 /** Eigen documenten voor de chauffeur (attesten, reglement, loonbrieven). */
 export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSeen?: () => void }) {
   const [docs, setDocs] = useState<UserDocument[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Wanneer de links van de lijst binnenkwamen: ze zijn maar 15 minuten
+  // geldig (src/lib/documentLink.ts).
+  const ondertekendOp = useRef<number | null>(null);
+  const eersteLaadKlaar = useRef(false);
+  // Het document waarvoor net een verse link opgehaald wordt.
+  const [bezigId, setBezigId] = useState<string | null>(null);
   // Eigen vervaldata (Code 95 / medische schifting): zo ziet de
   // chauffeur zelf wanneer er iets vernieuwd moet worden — de pushmeldingen
   // op 90/30/7 dagen verwijzen hierheen. Best-effort: zonder data geen blok.
@@ -49,29 +56,62 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
   useEffect(() => {
     // De view openen = documenten gezien: badge/lastseen bijwerken.
     onSeen?.();
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiFetch('/api/documents');
-        if (!res.ok) throw Object.assign(new Error(''), { status: res.status });
-        const data = (await res.json()) as UserDocument[];
-        if (!cancelled) setDocs(data);
-      } catch (err) {
-        if (!cancelled) meldSchrijffout('Documenten laden', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.id]);
 
-  const openDoc = (doc: UserDocument) => {
-    if (!doc.url) return notify('Bestand is niet beschikbaar.', 'error');
-    // Leesbevestiging (fire-and-forget): de planner ziet zo dat
-    // dit document geopend is. Mag het openen nooit vertragen.
-    void apiFetch(`/api/documents/${encodeURIComponent(doc.id)}/opened`, { method: 'POST' }).catch(() => {});
-    openPdfInNewTab(doc.url);
+  /** De lijst met verse links ophalen; gooit bij een fout. */
+  const haalDocumenten = async (): Promise<UserDocument[]> => {
+    const res = await apiFetch('/api/documents');
+    if (!res.ok) throw Object.assign(new Error(''), { status: res.status });
+    const data = (await res.json()) as UserDocument[];
+    // Een antwoord uit de offline-cache draagt oude links: dan telt het
+    // moment niet als "vers ondertekend".
+    ondertekendOp.current = res.headers.get('x-vhb-bron') === 'cache' ? null : Date.now();
+    setDocs(data);
+    return data;
+  };
+
+  // Laden bij het openen, en stil verversen bij het hervatten van de app
+  // zodra de lijst ouder is dan een paar minuten: zo zijn de links vers op
+  // het moment dat de chauffeur tikt. Een mislukte eerste laad meldt zich
+  // als toast, zoals voorheen; een mislukte stille verversing vangt de tik
+  // zelf op (openDoc haalt dan een verse link).
+  const { laden: loading } = useZelfLadend(async () => {
+    try {
+      await haalDocumenten();
+    } catch (err) {
+      if (!eersteLaadKlaar.current) meldSchrijffout('Documenten laden', err);
+      throw err;
+    } finally {
+      eersteLaadKlaar.current = true;
+    }
+  }, { deps: [currentUser.id], focusIntervalMs: DOCUMENT_VERVERS_NA_MS });
+
+  const openDoc = async (doc: UserDocument) => {
+    let url = doc.url;
+    if (!linkNogGeldig(ondertekendOp.current, Date.now())) {
+      // De link is (bijna) verlopen: eerst een verse ophalen, anders geeft
+      // Supabase een rauwe foutpagina in plaats van het document.
+      setBezigId(doc.id);
+      try {
+        const vers = (await haalDocumenten()).find((d) => d.id === doc.id);
+        if (!vers) return notify('Dit document is niet meer beschikbaar.', 'error');
+        url = vers.url;
+      } catch (err) {
+        return meldSchrijffout('Document openen', err);
+      } finally {
+        setBezigId(null);
+      }
+    }
+    if (!url) return notify('Bestand is niet beschikbaar.', 'error');
+    openPdfInNewTab(url);
+    // Leesbevestiging (fire-and-forget), pas nadat het document met een
+    // geldige link geopend is: de planner mag niet "geopend" zien staan bij
+    // iets wat de chauffeur nooit te zien kreeg. Een ongeldig adres opent
+    // openPdfInNewTab niet, dus dan ook geen bevestiging.
+    if (isSafeDocumentUrl(url)) {
+      void apiFetch(`/api/documents/${encodeURIComponent(doc.id)}/opened`, { method: 'POST' }).catch(() => {});
+    }
   };
 
   return (
@@ -144,7 +184,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                     <Td className="tabular-nums whitespace-nowrap">{formatDateHuman(doc.uploadedAt)}</Td>
                     <Td num>{doc.sizeBytes != null ? prettySize(doc.sizeBytes) : <span className="text-slate-400">—</span>}</Td>
                     <Td className="text-right">
-                      <Button variant="secondary" size="sm" onClick={() => openDoc(doc)} aria-label={`Open ${doc.filename}`} icon={<Download size={14} />}>
+                      <Button variant="secondary" size="sm" bezig={bezigId === doc.id} onClick={() => void openDoc(doc)} aria-label={`Open ${doc.filename}`} icon={<Download size={14} />}>
                         Openen
                       </Button>
                     </Td>
@@ -173,7 +213,8 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                 <Button
                   variant="secondary"
                   className="shrink-0"
-                  onClick={() => openDoc(doc)}
+                  bezig={bezigId === doc.id}
+                  onClick={() => void openDoc(doc)}
                   aria-label={`Open ${doc.filename}`}
                   icon={<Download size={16} />}
                 >

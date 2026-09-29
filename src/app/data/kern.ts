@@ -54,6 +54,10 @@ export type PerRecordOpts<T extends { id: string }> = {
   applySaved?: (prev: T[], saved: T) => T[];
   refetch: () => Promise<void> | void;
   successToast?: string;
+  /** Na een geslaagde PUT of POST, met het canonieke record uit het
+   *  antwoord (null als de server er geen meegaf). Voor wie zijn melding uit
+   *  dat record afleidt, zoals het herstel na "Ongedaan maken". */
+  naOpslaan?: (saved: T | null) => void;
   /** Veldfouten van een 400 terug naar het formulier (Field error-prop)
    *  i.p.v. een toast; zonder callback blijft de toast het gedrag. */
   opVeldfouten?: OpVeldfouten;
@@ -335,6 +339,7 @@ export function useDataKern(basis: DataBasis): DataCtx {
         } else {
           const saved = captureRecordRevision<T>(opts.key, data?.[opts.responseKey]);
           if (saved && opts.applySaved) opts.setList((prev) => opts.applySaved!(prev, saved));
+          if (opts.naOpslaan) opts.naOpslaan(saved);
         }
         if (currentUser?.role === 'admin') void fetchActivityLog();
         if (opts.successToast) showToast(opts.successToast, 'success');

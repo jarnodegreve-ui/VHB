@@ -8,6 +8,7 @@ import { isoDate } from '../lib/datum';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
+import { leesAlsDataUrl } from '../lib/dataUrl';
 import { Badge, Button } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Field, Input } from '../components/Field';
@@ -201,12 +202,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
 
     setIsUploading(true);
     try {
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(reader.error ?? new Error('Kon bestand niet lezen.'));
-        reader.readAsDataURL(file);
-      });
+      const dataUrl = await leesAlsDataUrl(file);
 
       const response = await apiFetch('/api/ritblaadje', {
         method: 'POST',

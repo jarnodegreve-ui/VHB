@@ -1,12 +1,8 @@
-import { useRef, useState } from 'react';
 import { MAX_OMLEIDING_BIJLAGEN } from '../../shared/schemas/diversion';
 import type { Diversion } from '../types';
-import { apiFetch } from '../lib/api';
-import { notify } from '../lib/ui';
 import { Card } from './Card';
 import { InfoTip } from './InfoTip';
-import { meldSchrijffout } from '../lib/fouten';
-import { PDF_MAX_TEKST, PdfBijlagenLijst, PdfKiesKnop, leesAlsDataUrl, pdfBestandFout } from './PdfBijlagen';
+import { PDF_MAX_TEKST, PdfBijlagenLijst, PdfKiesKnop, uploadPdfBijlage, usePdfBijlagen } from './PdfBijlagen';
 
 /**
  * PDF's bij een omleiding (Jarno 23-09): hoogstens vijf, bijvoorbeeld het
@@ -27,31 +23,14 @@ import { PDF_MAX_TEKST, PdfBijlagenLijst, PdfKiesKnop, leesAlsDataUrl, pdfBestan
 export async function uploadWachtrij(diversionId: string, wachtrij: File[]): Promise<number> {
   let geslaagd = 0;
   for (const [i, file] of wachtrij.entries()) {
-    const ok = await uploadBijlage(diversionId, i + 1, file);
+    const ok = await uploadPdfBijlage(omleidingPad(diversionId), i + 1, file);
     if (!ok) break;
     geslaagd += 1;
   }
   return geslaagd;
 }
 
-async function uploadBijlage(diversionId: string, slot: number, file: File): Promise<boolean> {
-  try {
-    const dataUrl = await leesAlsDataUrl(file);
-    const response = await apiFetch(`/api/diversions/${encodeURIComponent(diversionId)}/bijlage`, {
-      method: 'POST',
-      body: JSON.stringify({ slot, filename: file.name, dataUrl }),
-    });
-    if (!response.ok) {
-      const detail = await response.json().catch(() => null);
-      meldSchrijffout('Uploaden', { status: response.status, message: detail?.error });
-      return false;
-    }
-    return true;
-  } catch (err) {
-    meldSchrijffout('Uploaden', err);
-    return false;
-  }
-}
+const omleidingPad = (diversionId: string) => `/api/diversions/${encodeURIComponent(diversionId)}`;
 
 export function OmleidingBijlagen({ diversion, wachtrij, onWachtrij, onGewijzigd }: {
   /** De opgeslagen omleiding, of null zolang ze nog toegevoegd moet worden. */
@@ -62,57 +41,18 @@ export function OmleidingBijlagen({ diversion, wachtrij, onWachtrij, onGewijzigd
   /** De server gaf een bijgewerkt record terug: de lijst opnieuw laden. */
   onGewijzigd: () => void;
 }) {
-  const bestandRef = useRef<HTMLInputElement>(null);
-  const [bezig, setBezig] = useState(false);
   const bijlagen = diversion?.bijlagen ?? [];
   const aantal = diversion ? bijlagen.length : wachtrij.length;
   const vol = aantal >= MAX_OMLEIDING_BIJLAGEN;
-
-  const vrijSlot = () => {
-    for (let s = 1; s <= MAX_OMLEIDING_BIJLAGEN; s++) if (!bijlagen.some((b) => b.slot === s)) return s;
-    return null;
-  };
-
-  const kies = async (file: File | undefined) => {
-    if (!file) return;
-    const fout = pdfBestandFout(file);
-    if (fout) { notify(fout, 'error'); return leegmaken(); }
-    if (!diversion) {
-      if (!vol) onWachtrij([...wachtrij, file]);
-      return leegmaken();
-    }
-    const slot = vrijSlot();
-    if (slot === null) return leegmaken();
-    setBezig(true);
-    try {
-      if (await uploadBijlage(diversion.id, slot, file)) {
-        notify('PDF toegevoegd.', 'success');
-        onGewijzigd();
-      }
-    } finally {
-      setBezig(false);
-      leegmaken();
-    }
-  };
-  const leegmaken = () => { if (bestandRef.current) bestandRef.current.value = ''; };
-
-  const verwijder = async (slot: number) => {
-    if (!diversion) return;
-    setBezig(true);
-    try {
-      const response = await apiFetch(`/api/diversions/${encodeURIComponent(diversion.id)}/bijlage/${slot}`, { method: 'DELETE' });
-      if (!response.ok) {
-        const detail = await response.json().catch(() => null);
-        return meldSchrijffout('Verwijderen', { status: response.status, message: detail?.error }, () => void verwijder(slot));
-      }
-      notify('PDF verwijderd.', 'success');
-      onGewijzigd();
-    } catch (err) {
-      meldSchrijffout('Verwijderen', err, () => void verwijder(slot));
-    } finally {
-      setBezig(false);
-    }
-  };
+  // Kiezen, uploaden en verwijderen: gedeeld met de updates. Alleen de
+  // wachtrij van een nieuwe omleiding is van dit scherm.
+  const { bestandRef, bezig, kies, verwijder } = usePdfBijlagen({
+    recordPad: diversion ? omleidingPad(diversion.id) : null,
+    bijlagen,
+    max: MAX_OMLEIDING_BIJLAGEN,
+    onGewijzigd,
+    zonderRecord: (file) => { if (!vol) onWachtrij([...wachtrij, file]); },
+  });
 
   const rijen = diversion
     ? bijlagen.map((b) => ({ sleutel: String(b.slot), filename: b.filename, sizeBytes: b.sizeBytes, url: b.url }))

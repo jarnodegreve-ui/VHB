@@ -9,6 +9,7 @@ import { recordUrl } from "./meldingen.js";
 import { isMissingTableError } from "../deviceGate.js";
 import { invalidateUsersCache } from "../userCache.js";
 import { meldToestelWijziging } from "./deviceCache.js";
+import { VERWIJDERD_ACTIE } from "./bijlagenActies.js";
 import {
   deleteAllDocumentsForUser,
   diffDiversionChanges,
@@ -20,7 +21,6 @@ import {
   revokeAllDevices,
   saveDiversionsData,
   saveUpdatesData,
-  verwijderUpdateBijlagen,
   saveUsersData,
   summarizeDiversionChanges,
   summarizeUpdateChanges,
@@ -246,7 +246,7 @@ export const verwerkDiversionsOpslag = async (
     await logActivity(req, "diversions", "Omleiding gewijzigd", fmtDiversion(d), { type: "diversion", id: d.id });
   }
   for (const d of divDiff.removed) {
-    await logActivity(req, "diversions", "Omleiding verwijderd", fmtDiversion(d), { type: "diversion", id: d.id });
+    await logActivity(req, "diversions", VERWIJDERD_ACTIE.diversion, fmtDiversion(d), { type: "diversion", id: d.id });
   }
 };
 
@@ -281,13 +281,11 @@ export const verwerkUpdatesOpslag = async (
     await logActivity(req, "updates", "Update gewijzigd", fmtUpdate(u), { type: "update", id: u.id });
   }
   for (const u of updDiff.removed) {
-    await logActivity(req, "updates", "Update verwijderd", fmtUpdate(u), { type: "update", id: u.id });
+    await logActivity(req, "updates", VERWIJDERD_ACTIE.update, fmtUpdate(u), { type: "update", id: u.id });
   }
-  // Bestanden van weggehaalde updates mee opruimen: anders blijft er een PDF
-  // in de bucket staan die niemand nog kan bereiken. Best-effort.
-  if (updDiff.removed.length > 0) {
-    await verwijderUpdateBijlagen(updDiff.removed.map((u: any) => String(u.id)));
-  }
+  // De PDF's van een weggehaalde update blijven bewust staan: "Ongedaan
+  // maken" moet ze kunnen terughangen. De nachtcron ruimt ze op zodra het
+  // record een dag weg is (api/_lib/bijlagenOpruim.ts).
 
   // Nieuwe update → push naar alle actieve chauffeurs. Urgente updates mailen
   // al (aparte flow); een push zorgt dat óók gewone updates niet onopgemerkt

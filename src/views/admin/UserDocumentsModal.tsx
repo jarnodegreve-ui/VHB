@@ -5,6 +5,7 @@ import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
 import { notify, openPdfInNewTab } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
+import { leesAlsDataUrl } from '../../lib/dataUrl';
 import { Button, IconButton, MicroLabel } from '../../components/primitives';
 import { Field, Input } from '../../components/Field';
 import { Formulier } from '../../components/Formulier';
@@ -50,12 +51,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
     fouten.wisVeld('bestand');
     setUploading(true);
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(String(r.result));
-        r.onerror = () => reject(new Error('lezen mislukt'));
-        r.readAsDataURL(file);
-      });
+      const dataUrl = await leesAlsDataUrl(file);
       const res = await apiFetch('/api/documents', {
         method: 'POST',
         body: JSON.stringify({ userId: user.id, filename: file.name, category: category.trim() || undefined, dataUrl }),
