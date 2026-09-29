@@ -31,6 +31,7 @@ import { BroadcastDocumentModal } from './BroadcastDocumentModal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { LegeLijst, NietGevonden } from '../../components/illustraties';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
+import { isSysteemAccount } from '../../../shared/toegang';
 
 type UserDraft = User & { password?: string };
 
@@ -200,7 +201,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
 
   // Uitrol-teller: alleen actieve medewerkers tellen mee — een gepauzeerd
   // account zonder meldingen is geen openstaand punt.
-  const actieveUsers = users.filter((u) => u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder');
+  const actieveUsers = users.filter((u) => u.isActive !== false && !isSysteemAccount(u.name));
   const pushTotaal = actieveUsers.length;
   const pushMetAan = actieveUsers.filter((u) => pushUserIds.has(String(u.id))).length;
   // Adoptie-zicht voor de uitrol (idee 47): hoeveel actieve chauffeurs hebben
@@ -224,7 +225,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
 
   // Het technische 'beheerder'-account blijft verborgen tenzij je het zelf bent.
   const zichtbareUsers = users.filter((u) => {
-    const isBeheerder = u.name.toLowerCase() === 'beheerder';
+    const isBeheerder = isSysteemAccount(u.name);
     const isMe = u.id === currentUser.id;
     return !isBeheerder || isMe;
   });
@@ -398,7 +399,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
 
   // --- Bulk-acties: pauzeren/activeren/verwijderen. Beschermd tegen het
   //     raken van jezelf, het 'beheerder'-account of de laatste actieve admin.
-  const isBulkProtected = (u: User) => isProtectedAdmin(u) || u.id === currentUser.id || u.name.toLowerCase() === 'beheerder';
+  const isBulkProtected = (u: User) => isProtectedAdmin(u) || u.id === currentUser.id || isSysteemAccount(u.name);
   const toggleSelect = (id: string) => setSelectedIds((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const selectableIds = filteredUsers.filter((u) => !isBulkProtected(u)).map((u) => u.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));

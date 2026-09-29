@@ -1,4 +1,5 @@
 import type { Service } from '../types';
+import { parseHHMMStrikt } from '../../shared/busvakTijd';
 
 /**
  * Kerncijfers van het dienstoverzicht voor het zijvak (Dienstoverzicht en
@@ -13,17 +14,14 @@ export type DienstStatistiek = {
   kortste: { serviceNumber: string; minuten: number } | null;
 };
 
-const parseMinuten = (t?: string): number | null => {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? '').trim());
-  if (!m) return null;
-  const u = Number(m[1]);
-  const min = Number(m[2]);
-  if (u > 47 || min > 59) return null;
-  return u * 60 + min;
-};
-
 /** Gewerkte minuten van één dienst: som van de delen met geldige tijden;
- *  null als geen enkel deel te lezen is (dan telt de dienst niet mee). */
+ *  null als geen enkel deel te lezen is (dan telt de dienst niet mee).
+ *
+ *  Bewust niet de gedeelde deelMinuten (shared/busvakTijd.ts), want de
+ *  uitkomst verschilt: een deel met het einde vóór de start ("22:00 tot
+ *  06:00") wordt hier overgeslagen en telt daar als nacht (8 uur), en een
+ *  deel met gelijke begin- en eindtijd is hier 0 en daar een etmaal. Welke
+ *  regel juist is, is een productbeslissing (src/dienstMinuten.test.ts). */
 export function dienstMinuten(s: Service): number | null {
   const delen: Array<[string | undefined, string | undefined]> = [
     [s.startTime, s.endTime],
@@ -33,8 +31,8 @@ export function dienstMinuten(s: Service): number | null {
   let totaal = 0;
   let geldig = false;
   for (const [van, tot] of delen) {
-    const a = parseMinuten(van);
-    const b = parseMinuten(tot);
+    const a = parseHHMMStrikt(van);
+    const b = parseHHMMStrikt(tot);
     if (a === null || b === null || b < a) continue;
     totaal += b - a;
     geldig = true;

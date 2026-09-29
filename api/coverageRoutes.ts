@@ -15,6 +15,7 @@ import {
   getUsersData,
   logActivity,
 } from "./storage.js";
+import { isSysteemAccount } from "../shared/toegang.js";
 
 /**
  * Dekking & advies — verhuisd uit api/index.ts (verbeterronde 22-08, nr. 8;
@@ -269,7 +270,7 @@ function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, code: stri
     const venster = dagVenster(segmenten);
 
     const chauffeurs = (users as any[])
-      .filter((u) => u.isActive !== false && u.role === "chauffeur" && String(u.name).toLowerCase() !== "beheerder")
+      .filter((u) => u.isActive !== false && u.role === "chauffeur" && !isSysteemAccount(u.name))
       .map((u) => ({ id: String(u.id), name: String(u.name), sectie: (u.section ?? null) as string | null }));
 
     // Per chauffeur: zijn werkdagen in het venster + de rijen per dag

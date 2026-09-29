@@ -3,7 +3,7 @@ import type { RitbladRij } from '../../shared/dienst/ritblad';
 import type { LoonParameters } from '../../shared/dienst/loonparameters';
 import type { LoonComponent } from '../../shared/dienst/looncomponenten';
 import type { ImportETWaarschuwing } from '../../shared/dienst/importET';
-import { apiFetch } from './api';
+import { json, maakVraag } from './vraag';
 
 /** Datalaag van de dienstopbouw (fase C). Alleen type-imports uit shared. */
 export type { Bevinding, Segment, RitbladRij, LoonParameters, LoonComponent, ImportETWaarschuwing };
@@ -14,17 +14,9 @@ export type SegmentImport = {
 };
 export type DagtypeCode = { code: string; omschrijving: string; periode: string | null; aantalPerJaar: number | null; portaalDagtype: string | null };
 
-async function vraag<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await apiFetch(url, init);
-  if (!res.ok) {
-    let d: { error?: string; details?: string } | null = null;
-    try { d = await res.json(); } catch { /* geen json */ }
-    // Status mee, zodat meldSchrijffout (src/lib/fouten.ts) de vervolgstap kiest.
-    throw Object.assign(new Error(d?.details || d?.error || `Er ging iets mis (code ${res.status}).`), { status: res.status });
-  }
-  return (await res.json()) as T;
-}
-const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+// Status mee, zodat meldSchrijffout (src/lib/fouten.ts) de vervolgstap kiest.
+// Geen veldfouten: de schermen van de dienstopbouw doen daar niets mee.
+const vraag = maakVraag((melding, status) => Object.assign(new Error(melding), { status }));
 
 export const laadImports = () => vraag<SegmentImport[]>('/api/dienstopbouw/imports');
 export const importeerBestand = (bestandBase64: string, filename: string) => vraag<SegmentImport>('/api/dienstopbouw/imports', json('POST', { bestandBase64, filename }));

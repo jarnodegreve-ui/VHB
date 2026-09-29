@@ -65,6 +65,9 @@ export function toFloatingDateTime(date: string, time: string): string {
 }
 
 // "9:00" < "17:00" faalt lexicografisch — vergelijk op minuten.
+// Bewust niet de gedeelde parseHHMM (shared/busvakTijd.ts): de agenda-export
+// verdraagt alles en geeft nooit null (onleesbaar = 0), zodat elke dienst een
+// afspraak in de feed blijft.
 function toMinutes(hhmm: string): number {
   const [h, m] = String(hhmm).split(":");
   return (Number(h) || 0) * 60 + (Number(m) || 0);

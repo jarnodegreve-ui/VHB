@@ -20,7 +20,6 @@ import { DashboardSkelet } from '../components/ui';
 import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
 import { Badge } from '../components/primitives';
-import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { ServiceChip } from '../components/ServiceChip';
 import { DienstBalk } from '../components/DienstBalk';
 import { ActieMenu } from '../components/ActieMenu';
@@ -380,9 +379,6 @@ export function DashboardView({ notes = [],
 
   return (
     <div className="space-y-5">
-      {/* Na een release: één dismissbare kaart met wat er nieuw is (src/app/watIsNieuw.ts). */}
-      <WatIsNieuwKaart rol={user.role} onNavigate={onNavigate} />
-
       {/* === Persoonlijke header ===
           Zelfde kop-raster als PageHeader (flex-wrap, actie rechts via
           ml-auto, zakt onder de kop als hij niet past). */}

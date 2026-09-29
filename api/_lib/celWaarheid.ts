@@ -1,5 +1,6 @@
 import { nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
 import { legRuilenOverMaandbeeld, type OverlayCel, type OverlayRuil } from "./ruilOverlay.js";
+import { isSysteemAccount } from "../../shared/toegang.js";
 
 /**
  * De cel-waarheid van een maand: wat de planning per chauffeur per dag zegt,
@@ -40,7 +41,6 @@ const sectionRank = (s: string) => {
   return i === -1 ? SECTION_ORDER.length : i;
 };
 const seniorityKey = (d: string) => d || "9999-12-31"; // geen startdatum → achteraan
-const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
 
 const LEAVE_CODE: Record<string, string> = { ziekte: "ziek", betaald_verlof: "bv", klein_verlet: "kv" };
 const LEAVE_FALLBACK: Record<string, { kind: string; label: string }> = {
@@ -52,7 +52,7 @@ const LEAVE_FALLBACK: Record<string, { kind: string; label: string }> = {
 /** Actieve chauffeurs in de bordvolgorde: sectie → anciënniteit → naam. */
 export const chauffeursVoorBord = (users: CelWaarheidUser[]): CelWaarheidChauffeur[] =>
   users
-    .filter((u) => u.isActive !== false && u.role === "chauffeur" && norm(u.name) !== "beheerder")
+    .filter((u) => u.isActive !== false && u.role === "chauffeur" && !isSysteemAccount(u.name))
     .map((u) => ({ id: String(u.id), name: u.name, section: String(u.section ?? "").trim(), startDate: String(u.startDate ?? "").trim() }))
     .sort((a, b) =>
       sectionRank(a.section) - sectionRank(b.section)

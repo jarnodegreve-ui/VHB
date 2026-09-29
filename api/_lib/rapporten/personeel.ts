@@ -3,6 +3,7 @@ import { onbekendLabel } from "../../../shared/rapporten/filters.js";
 import { ZONDER_SECTIE } from "../../../shared/rapporten/definities/personeel.js";
 import { VERVAL_STATUS_LABEL, brusselseDag, dagenTussen, isoDagVan, jarenTussen, pastInTermijn, vervalStatus } from "../../../shared/rapporten/peildatum.js";
 import type { RapportBereik, RapportFilters, RapportResultaat, RapportRij } from "../../../shared/rapporten/types.js";
+import { isSysteemAccount } from "../../../shared/toegang.js";
 
 /**
  * De rapporten van het domein Personeel, als pure functies (bron + filters +
@@ -29,7 +30,7 @@ const tekst = (waarde: string | null | undefined): string | null => waarde?.trim
 const rolLabel = (rol: string): string => (ROL_LABELS as Record<string, string>)[rol] ?? rol;
 
 /** Het systeemaccount "beheerder" is geen medewerker. */
-const isMedewerker = (u: RapportMedewerker): boolean => u.name.trim().toLowerCase() !== "beheerder";
+const isMedewerker = (u: RapportMedewerker): boolean => !isSysteemAccount(u.name);
 const isActief = (u: RapportMedewerker): boolean => u.isActive !== false;
 
 /** Rol en sectie; "Zonder sectie" = wie er geen heeft (staf, techniekers). */

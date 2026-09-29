@@ -14,7 +14,6 @@ import { isPushSupported } from '../lib/push';
 import { DashboardSkelet } from '../components/ui';
 import { skeletVoor } from './skeletten';
 import { SchermInloop, Verwissel } from '../components/Verwissel';
-import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { useAppDataContext } from './AppDataContext';
 import type { useRoute } from './router';
 import { LazyActivityLogView, LazyCapacityView, LazyContactsView, LazyCoverageView, LazyDagafsluitingView, LazyDashboardView, LazyDebugView, LazyDesignsysteemView, LazyDevicesView, LazyDienstopbouwView, LazyDiversionsView, LazyDocumentsView, LazyGeleBoekView, LazyInstellingenView, LazyLeaveManagementView, LazyLooncontroleView, LazyManageDiversionsView, LazyManageSchedulesView, LazyManageUpdatesView, LazyManageUsersView, LazyMailsView, LazyMeldingenView, LazyMijnDagView, LazyOcpiDashboardView, LazyPlannerDashboardWidgets, LazyPlanningCodesView, LazyPlanningMatrixView, LazyRapportenView, LazyRitblaadjesView, LazyScheduleView, LazyServicesView, LazySwapRequestsView, LazyUpdatesView, LazyVandaagView, LazyVerlofKalenderView, LazyVervaldataView, LazyVoertuigWerkenView, LazyVoertuigenView, LazyWerkprestatiesView, LazyWerkvoorraadView, LazyZiekteView } from './lazyViews';
@@ -61,7 +60,6 @@ export function SchermInhoud(props: SchermInhoudProps) {
         /* Planner/admin: Operations Center — één operationele cockpit
            i.p.v. een dubbel dashboard. */
         <Suspense fallback={<DashboardSkelet />}>
-        <WatIsNieuwKaart rol={currentUser!.role} onNavigate={setCurrentView} className="mb-5" />
         {/* Data (collecties, ziekmelding, verversen) leest de
             cockpit zelf uit de AppDataContext. */}
         <LazyPlannerDashboardWidgets

@@ -23,6 +23,7 @@ import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./matr
 import { buildPlanningFromMatrix, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { ruilAfwezigheidsFout } from "./ruilRegels.js";
+import { isSysteemAccount } from "../../shared/toegang.js";
 
 // Helper: decode de geüploade Excel-buffer en parse de praktijk-tab.
 const parseMatrixInput = async (body: any) => {
@@ -352,7 +353,7 @@ export function mountPlanningRoutes(app: express.Express) {
       const shifts = shiftChunks.flat().filter((s: any) => s.date >= from && s.date <= to);
 
       const chauffeurs = users
-        .filter((u: any) => u.isActive !== false && u.role === "chauffeur" && String(u.name).toLowerCase() !== "beheerder")
+        .filter((u: any) => u.isActive !== false && u.role === "chauffeur" && !isSysteemAccount(u.name))
         .map((u: any) => ({ id: String(u.id), name: u.name as string }))
         .sort((a, b) => a.name.localeCompare(b.name));
       const chauffeurIds = new Set(chauffeurs.map((c) => c.id));

@@ -34,6 +34,7 @@ import { TableShell, Td, Th } from '../components/TabelBasis';
 import { RecordOnbekend } from '../components/RecordOnbekend';
 import { useRecordLink } from '../app/useRecordLink';
 import { brengRecordInBeeld } from '../lib/recordLink';
+import { isSysteemAccount } from '../../shared/toegang';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
@@ -295,7 +296,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     const base = users
       // Alleen chauffeurs: planner/admin staan niet in de planning-matrix en
       // toonden daardoor altijd "bezet" → doodlopend pad in stap 3.
-      .filter((u) => u.id !== user.id && u.isActive !== false && u.role === 'chauffeur' && u.name.toLowerCase() !== 'beheerder')
+      .filter((u) => u.id !== user.id && u.isActive !== false && u.role === 'chauffeur' && !isSysteemAccount(u.name))
       .sort((a, b) => a.name.localeCompare(b.name));
     if (!freeForDate) return base;
     // Beschikbare collega's eerst (matching), daarna de rest. Beide blijven
@@ -329,7 +330,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     if (!isPlanner && s.targetDriverId && s.targetDriverId !== user.id) return false;
 
     const requester = users.find(u => u.id === s.requesterId);
-    const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+    const isBeheerder = isSysteemAccount(requester?.name);
     if (isBeheerder) return false;
     return true;
   }), { dienstDatum: dienstDatumVan, kijkerId: user.id });
@@ -816,7 +817,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         const actionableSwaps = sorteerRuilen(swaps.filter(s => {
           if (s.status !== 'pending' && s.status !== 'accepted' && s.status !== 'approved') return false;
           const requester = users.find(u => u.id === s.requesterId);
-          const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+          const isBeheerder = isSysteemAccount(requester?.name);
           const isMe = s.requesterId === user.id;
           if (isBeheerder && !isMe) return false;
           return true;

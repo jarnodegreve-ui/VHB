@@ -1,6 +1,7 @@
 import { verlofBalans, type VerlofAanvraagKern } from "../../../shared/verlofSaldo.js";
 import { onbekendLabel } from "../../../shared/rapporten/filters.js";
 import type { RapportFilters, RapportResultaat, RapportRij } from "../../../shared/rapporten/types.js";
+import { isSysteemAccount } from "../../../shared/toegang.js";
 
 /**
  * Rapport Verlofsaldo: per medewerker het betaald verlof van één jaar. Pure
@@ -26,7 +27,7 @@ export type VerlofsaldoBron = {
 const isStaf = (rol: string) => rol === "planner" || rol === "admin";
 /** Wie in het saldo-overzicht staat (zelfde regel als de modal). */
 export const neemtVerlofOp = (u: SaldoGebruiker): boolean =>
-  !isStaf(u.role) && u.isActive !== false && u.name.trim().toLowerCase() !== "beheerder";
+  !isStaf(u.role) && u.isActive !== false && !isSysteemAccount(u.name);
 
 /** Aanvragen die in een saldo meetellen: verlof en klein verlet, lopend of goedgekeurd. */
 const teltMee = (l: VerlofAanvraagKern) =>

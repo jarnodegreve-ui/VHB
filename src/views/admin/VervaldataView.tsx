@@ -21,6 +21,7 @@ import { Badge, Button, FilterChip, TOON_NAAR_BADGE } from '../../components/pri
 import { VERVAL_STATUS } from '../../../shared/status';
 import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../../components/Table';
 import { Tabel, TableShell, Td } from '../../components/TabelBasis';
+import { isSysteemAccount } from '../../../shared/toegang';
 
 /** Uitschakelbare kolommen: één per bewaakt document (Chauffeur en Eerst vervallend blijven altijd). */
 const KOLOMMEN = Object.entries(EXPIRY_SOORT_LABELS).map(([key, label]) => ({ key, label }));
@@ -74,7 +75,7 @@ export function VervaldataView({ users }: { users: User[] }) {
   }, [expiries]);
 
   const alleChauffeurs = useMemo(
-    () => users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder'),
+    () => users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && !isSysteemAccount(u.name)),
     [users],
   );
 

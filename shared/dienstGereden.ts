@@ -12,16 +12,11 @@
  * dienstdag. Alles is kalender- en klokvrij: de aanroeper geeft `vandaag`
  * (ISO, Brussel) en `nuMin` (minuten sinds middernacht, Brussel) mee.
  */
+import { parseHHMM } from './busvakTijd.js';
 
-/** 'HH:MM' → minuten sinds middernacht; busvak-uren tot 47; null bij vuil. */
-export function eindtijdMinuten(t: string): number | null {
-  const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? '').trim());
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 47 || min > 59) return null;
-  return h * 60 + min;
-}
+/** 'HH:MM' → minuten sinds middernacht; busvak-uren tot 47; null bij vuil.
+ *  De gedeelde parser (shared/busvakTijd.ts) onder de naam van deze regel. */
+export const eindtijdMinuten: (t: string) => number | null = parseHHMM;
 
 export function dienstGereden(
   dienst: { date: string; delen: ReadonlyArray<{ endTime: string }> },

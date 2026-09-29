@@ -1,5 +1,5 @@
 import type { Defect, DefectPatch, DefectMeldingBody, Vehicle, VehicleBody, VehicleExpiry, VehicleExpiryBody, VehicleKort, Werkprestatie, WerkprestatieBody } from '../../shared/schemas/techniek';
-import { apiFetch } from './api';
+import { ApiFout, json, maakVraag } from './vraag';
 import { veldfoutenUitAntwoord } from './valideer';
 import { metEenheid } from './format';
 
@@ -13,29 +13,9 @@ import { metEenheid } from './format';
 export type { Defect, DefectPatch, DefectMeldingBody, Vehicle, VehicleBody, VehicleExpiry, VehicleExpiryBody, VehicleKort, Werkprestatie, WerkprestatieBody };
 
 /** Serverfout met eventuele veldfouten (400 uit valideerRecord, 409 bij dubbel busnummer). */
-export class TechniekFout extends Error {
-  veldfouten: Record<string, string> | null;
-  status: number;
-  constructor(message: string, status: number, veldfouten: Record<string, string> | null) {
-    super(message);
-    this.status = status;
-    this.veldfouten = veldfouten;
-  }
-}
+export class TechniekFout extends ApiFout {}
 
-async function vraag<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await apiFetch(url, init);
-  if (!res.ok) {
-    let data: unknown = null;
-    try { data = await res.json(); } catch { /* geen json */ }
-    const d = data as { error?: string; details?: string } | null;
-    throw new TechniekFout(d?.details || d?.error || `Er ging iets mis (code ${res.status}).`, res.status, veldfoutenUitAntwoord(data));
-  }
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
-}
-
-const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+const vraag = maakVraag((melding, status, data) => new TechniekFout(melding, status, veldfoutenUitAntwoord(data)));
 
 // --- Voertuigen ---
 export const laadVoertuigen = (alleenActief = false) => vraag<Vehicle[]>(`/api/vehicles${alleenActief ? '?actief=1' : ''}`);

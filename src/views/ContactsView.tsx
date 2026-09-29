@@ -11,6 +11,7 @@ import { Modal } from '../components/Modal';
 import { notify, telHref } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { LegeLijst, NietGevonden } from '../components/illustraties';
+import { isSysteemAccount } from '../../shared/toegang';
 
 const roleLabel = (role: string) => ROL_LABELS[role as keyof typeof ROL_LABELS] ?? role;
 
@@ -42,7 +43,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
 
   const filteredUsers = users.filter(u => {
     // Hide 'beheerder' from others, but let 'beheerder' see themselves
-    const isBeheerder = u.name.toLowerCase() === 'beheerder';
+    const isBeheerder = isSysteemAccount(u.name);
     const isMe = u.id === currentUser.id;
 
     if (isBeheerder && !isMe) return false;

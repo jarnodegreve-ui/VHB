@@ -1,6 +1,7 @@
 import { isStaf } from '../types';
 import type { LeaveRequest, User } from '../types';
 import { verlofBalans, type LeaveBalance } from './leaveBalance';
+import { isSysteemAccount } from '../../shared/toegang';
 
 /**
  * De rijen van het saldo-overzicht in Verlof (VerlofSaldoModal): iedereen die
@@ -13,5 +14,5 @@ import { verlofBalans, type LeaveBalance } from './leaveBalance';
 export type VerlofSaldoRij = { user: User; balans: LeaveBalance };
 
 export const verlofSaldoRijen = (users: readonly User[], leaveRequests: LeaveRequest[], jaar: number): VerlofSaldoRij[] => users
-  .filter((u) => !isStaf(u.role) && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
+  .filter((u) => !isStaf(u.role) && u.isActive !== false && !isSysteemAccount(u.name))
   .map((u) => ({ user: u, balans: verlofBalans(leaveRequests, u.id, jaar, u.verlofBudget) }));
