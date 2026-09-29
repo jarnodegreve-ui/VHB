@@ -1786,7 +1786,7 @@ export const bestaandeDiversionBijlagen = async (
 // bestaat, en pas na een veilige marge.
 
 /** Eén bestand in een bucket, zoals de opruiming het nodig heeft. */
-export type BijlageBestand = { naam: string; gewijzigdOp: string | null };
+export type BijlageBestand = { naam: string; gewijzigdOp: string | null; sizeBytes?: number };
 
 const BIJLAGE_LIJST_PAGINA = 1000;
 const BIJLAGE_LIJST_MAX_PAGINAS = 20;
@@ -1805,7 +1805,12 @@ export const lijstBijlageBestanden = async (bucket: string): Promise<BijlageBest
     for (const rij of rijen) {
       // Mappen hebben geen id; die slaan we over.
       if (!rij?.id || !rij.name) continue;
-      uit.push({ naam: String(rij.name), gewijzigdOp: rij.updated_at ?? rij.created_at ?? null });
+      const grootte = Number((rij.metadata as { size?: unknown } | null | undefined)?.size);
+      uit.push({
+        naam: String(rij.name),
+        gewijzigdOp: rij.updated_at ?? rij.created_at ?? null,
+        ...(Number.isFinite(grootte) && grootte >= 0 ? { sizeBytes: grootte } : {}),
+      });
     }
     if (rijen.length < BIJLAGE_LIJST_PAGINA) break;
   }

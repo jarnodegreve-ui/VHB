@@ -665,9 +665,11 @@ export const sanitizeDiversionPdfUrl = (value?: string | null): string | null =>
 // LET OP: diversions heeft — anders dan de meeste tabellen — quoted
 // camelCase-kolommen in productie ("startDate"/"endDate"/"pdfUrl", geverifieerd
 // 2026-08-01). De mapper schreef lowercase en dat liet élke omleiding-save
-// falen met 42703. mapCoordinates wordt bewust NIET geschreven: de kolom
-// bestaat live niet en het beheer-formulier heeft er geen veld voor — het
-// veld leeft alleen als defensieve leesroute in toPublicDiversion.
+// falen met 42703. mapCoordinates wordt NIET geschreven en ook niet gelezen:
+// de kolom bestaat live niet (api/schemaProbes.ts), het beheer-formulier
+// heeft er geen veld voor en toPublicDiversion kent het veld niet meer.
+// `bijlagen` staat hier bewust niet bij: die kolom schrijven alleen
+// zetDiversionBijlagen en de bijlage-routes (Storage is de bron).
 export const toDatabaseDiversion = (d: DiversionRecord) => ({
   id: String(d.id),
   line: d.line,
