@@ -183,7 +183,9 @@ describe('elke aanroepplek geeft nog wat haar oude parser gaf', () => {
 
   it('shared/ruilRust.ts dagVenster (start van het venster)', () => {
     for (const t of invoeren) {
-      const verwacht = oudLees(t as string);
+      // 47:59 tot 47:59 heeft gelijke begin- en eindtijd: ongeldig, geen
+      // venster (Jarno 29-09; vroeger een venster van een etmaal vanaf 47:59).
+      const verwacht = t === '47:59' ? null : oudLees(t as string);
       const venster = dagVenster([{ startTime: t as string, endTime: '47:59' }]);
       expect(venster?.start ?? null, naam(t)).toBe(verwacht);
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beoordeelRuilRust, formatRust, type RustPlanningRij } from './ruilRust';
+import { beoordeelRuilRust, dagVenster, formatRust, type RustPlanningRij } from './ruilRust';
 
 const rij = (driverId: string, date: string, line: string, startTime: string, endTime: string): RustPlanningRij => ({ driverId, date, line, startTime, endTime });
 const A = 'a'; // aanvrager
@@ -101,6 +101,42 @@ describe('beoordeelRuilRust', () => {
   it('kapotte tijden geven geen regel in plaats van een verzonnen getal', () => {
     const planning = [rij(A, '2026-10-07', '2101', 'x', '14:00')];
     expect(beoordeelRuilRust({ requesterId: A, targetDriverId: B, status: 'pending', shiftDate: '2026-10-07', shiftLine: '2101' }, planning)).toEqual([]);
+  });
+
+  it('de regel van 29-09 (Jarno): nachtdelen lopen door, 08:00 tot 32:00 is een etmaal, gelijke tijden geven geen regel', () => {
+    // De dienst die B overneemt op 10-07, en B's dienst op 10-08 om 14:00.
+    const naOvername = (startTime: string, endTime: string) => beoordeelRuilRust(
+      { requesterId: A, targetDriverId: B, status: 'pending', shiftDate: '2026-10-07', shiftLine: '2101' },
+      [rij(A, '2026-10-07', '2101', startTime, endTime), rij(B, '2026-10-08', '2105', '14:00', '22:00')],
+    );
+    expect(naOvername('22:00', '06:00')[0]).toMatchObject({ rustNa: 8 * 60, teKort: false }); // tot 06:00 de 8e
+    expect(naOvername('16:00', '00:00')[0]).toMatchObject({ rustNa: 14 * 60, teKort: false }); // tot middernacht
+    expect(naOvername('08:00', '32:00')[0]).toMatchObject({ rustNa: 6 * 60, teKort: true }); // tot 08:00 de 8e
+    // Gelijke begin- en eindtijd: "weet ik niet", geen regel. Vroeger telde het
+    // deel als een etmaal (08:00 tot 08:00 de 8e) en kwam er 6u rust uit.
+    expect(naOvername('08:00', '08:00')).toEqual([]);
+  });
+
+  it('een buurdag met alleen een deel met gelijke tijden legt niets op (geen verzonnen "te kort")', () => {
+    const planning = [
+      rij(A, '2026-10-07', '2101', '06:00', '14:00'),
+      rij(B, '2026-10-06', '2230', '08:00', '08:00'), // ongeldig: vroeger tot 08:00 de 7e, dus -2u rust
+      rij(B, '2026-10-08', '2105', '22:00', '06:00'), // nacht vanaf 22:00 de 8e: 14:00 → 22:00 de dag erna = 32u
+    ];
+    const [regel] = beoordeelRuilRust({ requesterId: A, targetDriverId: B, status: 'pending', shiftDate: '2026-10-07', shiftLine: '2101' }, planning);
+    expect(regel).toMatchObject({ rustVoor: null, rustNa: 32 * 60, teKort: false });
+  });
+});
+
+describe('dagVenster: één deel volgt deelVenster (Jarno 29-09)', () => {
+  it('22:00 tot 06:00 en 16:00 tot 00:00 over middernacht, 08:00 tot 32:00 een etmaal, gelijke tijden geen venster', () => {
+    expect(dagVenster([{ startTime: '22:00', endTime: '06:00' }])).toEqual({ start: 22 * 60, eind: 30 * 60 });
+    expect(dagVenster([{ startTime: '16:00', endTime: '00:00' }])).toEqual({ start: 16 * 60, eind: 24 * 60 });
+    expect(dagVenster([{ startTime: '08:00', endTime: '32:00' }])).toEqual({ start: 8 * 60, eind: 32 * 60 });
+    expect(dagVenster([{ startTime: '08:00', endTime: '08:00' }])).toBeNull();
+    expect(dagVenster([{ startTime: '00:00', endTime: '00:00' }])).toBeNull();
+    // Gesplitst: het ongeldige deel valt weg, het geldige telt.
+    expect(dagVenster([{ startTime: '05:00', endTime: '05:00' }, { startTime: '13:00', endTime: '17:00' }])).toEqual({ start: 13 * 60, eind: 17 * 60 });
   });
 });
 

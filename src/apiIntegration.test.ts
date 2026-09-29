@@ -5234,6 +5234,40 @@ describe('advies openstaande diensten (/api/coverage-advisor)', () => {
     expect(a.rustVoor).toBeNull();
     expect(a.past).toBe(true);
   });
+
+  it('gelijke begin- en eindtijd (Jarno 29-09): zoals een dienst zonder leesbare tijden, geen verzonnen etmaal', async () => {
+    // Dienst 16 heeft alleen een deel van 08:00 tot 08:00. Chauffeur A werkte
+    // de dag ervoor tot 23:30: vroeger telde het deel als een etmaal en kwam
+    // er 8u30 rust uit; nu zijn de tijden onbekend en telt alleen de
+    // 6-dagenregel. Het deel blijft wel als context in het antwoord staan.
+    mem.services = [...mem.services, { id: 'd7', serviceNumber: '16', startTime: '08:00', endTime: '08:00' }];
+    mem.planning = [
+      { id: 'p-a', driverId: '3', date: '2026-09-15', startTime: '15:00', endTime: '23:30', line: '12' },
+      // Chauffeur B had de dag ervoor een ongeldig deel: vroeger -2u rust voor dienst 10.
+      { id: 'p-b', driverId: '4', date: '2026-09-15', startTime: '08:00', endTime: '08:00', line: '14' },
+    ];
+    const ongeldig = await api('GET', `/api/coverage-advisor?date=${DAG}&code=16`, { token: 'tok-planner' });
+    expect(ongeldig.status).toBe(200);
+    expect(ongeldig.json.tijdenOnbekend).toBe(true);
+    expect(ongeldig.json.segmenten).toEqual([{ startTime: '08:00', endTime: '08:00' }]);
+    const a = ongeldig.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
+    expect(a.rustVoor).toBeNull();
+    expect(a.past).toBe(true);
+
+    // Dienst 10 (06:00 tot 14:00) naast B's ongeldige deel: geen rustregel, B past.
+    const tien = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    const b = tien.json.kandidaten.find((k: any) => k.name === 'Chauffeur B');
+    expect(b.rustVoor).toBeNull();
+    expect(b.past).toBe(true);
+
+    // Een nachtdeel in gewone uren telt wel: 22:00 tot 06:00 de dag ervoor
+    // eindigt om 06:00, dus 0u rust voor een dienst om 06:00.
+    mem.planning = [{ id: 'p-n', driverId: '3', date: '2026-09-15', startTime: '22:00', endTime: '06:00', line: '12' }];
+    const nacht = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    const aNacht = nacht.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
+    expect(aNacht.rustVoor).toBe(0);
+    expect(aNacht.past).toBe(false);
+  });
 });
 
 describe('advisor: ketting-voorstellen en collega-samenvatting', () => {

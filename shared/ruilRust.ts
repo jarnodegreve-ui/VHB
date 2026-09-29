@@ -17,7 +17,7 @@
  *   exporteert ze door), zodat beide nooit een andere uitkomst geven.
  */
 
-import { parseHHMM } from './busvakTijd.js';
+import { deelVenster } from './busvakTijd.js';
 
 export const MIN_RUST_UREN = 8;
 
@@ -26,21 +26,21 @@ export type TijdRij = { startTime: string; endTime: string };
 /**
  * Werkvenster van één dag (gesplitste dienst = meerdere rijen): vroegste
  * start t/m laatste einde, in minuten sinds middernacht van de dienstdag.
- * Een impliciete nachtdienst (einde ≤ start met gewone uren, bv.
- * 22:00–06:00) wordt +24u genormaliseerd — zelfde conventie als
- * isShiftActiveAt in src/lib/shiftTime.ts. Rijen met kapotte tijden tellen
- * niet mee; null = geen bruikbare tijden.
+ * Elk deel volgt `deelVenster` (shared/busvakTijd.ts, de regel van het hele
+ * portaal): een einde vóór de start in gewone uren (22:00–06:00) is over
+ * middernacht, busvak-uren gelden zoals ze er staan. Rijen met kapotte tijden
+ * of met gelijke begin- en eindtijd (ongeldig, Jarno 29-09) tellen niet mee;
+ * null = geen bruikbare tijden, en dan legt de rustregel niets op ("weet ik
+ * niet", nooit een verzonnen etmaal).
  */
 export const dagVenster = (rijen: readonly TijdRij[]): { start: number; eind: number } | null => {
   let start: number | null = null;
   let eind: number | null = null;
   for (const rij of rijen) {
-    const s = parseHHMM(rij.startTime);
-    const e = parseHHMM(rij.endTime);
-    if (s === null || e === null) continue;
-    const eNorm = e <= s ? e + 24 * 60 : e;
-    start = start === null ? s : Math.min(start, s);
-    eind = eind === null ? eNorm : Math.max(eind, eNorm);
+    const v = deelVenster(rij.startTime, rij.endTime);
+    if (!v) continue;
+    start = start === null ? v.start : Math.min(start, v.start);
+    eind = eind === null ? v.end : Math.max(eind, v.end);
   }
   return start === null || eind === null ? null : { start, eind };
 };

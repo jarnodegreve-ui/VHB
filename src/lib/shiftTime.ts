@@ -30,22 +30,22 @@ export { deelMinuten, parseHHMM };
  * Is dit dienstsegment op dit moment bezig? Gesplitste diensten zijn aparte
  * segmenten, dus een chauffeur met pauze tussen twee delen telt dan terecht
  * niet mee. Over middernacht kan op twee manieren: expliciet via de busvak-
- * notatie (eindtijd ≥ 24:00, bv. "26:16") of impliciet (eindtijd ≤ starttijd
- * met gewone uren, bv. 22:00–06:00) — beide lopen door tot op de dag na de
- * dienstdatum. Start is inclusief, einde exclusief; ongeldige tijden tellen
- * nooit mee.
+ * notatie (eindtijd ≥ 24:00, bv. "26:16") of impliciet (eindtijd vóór de
+ * starttijd met gewone uren, bv. 22:00–06:00) — beide lopen door tot op de
+ * dag na de dienstdatum. Start is inclusief, einde exclusief; ongeldige
+ * tijden, ook gelijke begin- en eindtijd, tellen nooit mee.
  */
 export const isShiftActiveAt = (
   shift: { date: string; startTime: string; endTime: string },
   now: Date,
 ): boolean => {
-  const start = parseHHMM(shift.startTime);
-  const end = parseHHMM(shift.endTime);
-  if (start === null || end === null || start === end) return false;
-  // Alles in minuten t.o.v. middernacht van de díenstdag: een impliciete
-  // nachtdienst (einde ≤ start, gewone uren) wordt +24u genormaliseerd;
-  // busvak-uren ≥ 24 zijn al volgende-dag.
-  const endNorm = end <= start ? end + 24 * 60 : end;
+  // Alles in minuten t.o.v. middernacht van de díenstdag, met de regel van
+  // het hele portaal (deelVenster): een einde vóór de start in gewone uren
+  // is +24u, busvak-uren ≥ 24 zijn al volgende-dag, gelijke tijden = geen
+  // venster.
+  const venster = deelVenster(shift.startTime, shift.endTime);
+  if (!venster) return false;
+  const { start, end: endNorm } = venster;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   if (shift.date === isoDate(now)) {
     return nowMin >= start && nowMin < endNorm;
@@ -70,9 +70,11 @@ export const hasShiftEnded = (
   const start = parseHHMM(shift.startTime);
   const end = parseHHMM(shift.endTime);
   if (start === null || end === null) return false;
-  // start === eind: isShiftActiveAt behandelt zo'n rij als "nooit actief" —
-  // hier dan "meteen voorbij" op de dienstdag zelf i.p.v. de eind≤start-regel
-  // (+24u), die hem een etmaal ongedempt liet staan.
+  // start === eind is een ongeldig deel (deelVenster geeft null, Jarno 29-09)
+  // en isShiftActiveAt behandelt het als "nooit actief": hier is het "meteen
+  // voorbij" op de dienstdag zelf, zodat het geen etmaal ongedempt blijft
+  // staan. Bewust niet deelVenster, dat zou het als ongeldig "nooit voorbij"
+  // laten staan. Einde vóór de start = volgende dag, zoals in deelVenster.
   const endNorm = end < start ? end + 24 * 60 : end;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const dayDiff = Math.round(
@@ -95,10 +97,9 @@ export const minutesUntilShiftEnd = (
   now: Date,
 ): number | null => {
   if (!isShiftActiveAt(shift, now)) return null;
-  const start = parseHHMM(shift.startTime);
-  const end = parseHHMM(shift.endTime);
-  if (start === null || end === null) return null;
-  const endNorm = end <= start ? end + 24 * 60 : end;
+  const venster = deelVenster(shift.startTime, shift.endTime);
+  if (!venster) return null;
+  const endNorm = venster.end;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const dagVerschil = Math.round(
     (new Date(`${isoDate(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
@@ -159,9 +160,12 @@ export const formatStartsIn = (minuten: number): string => `over ${formatDuratio
 
 /**
  * Start/eind van een dienstblok in minuten t.o.v. middernacht van de
- * dienstdag; eind ≤ start = impliciete nachtdienst (+24u). Eén plek voor de
- * regel die MijnDagView, DashboardView en de dienstbalk vroeger elk zelf
- * hadden (controle-ronde 05-09, dode code 26).
+ * dienstdag, met de regel van deelVenster (shared/busvakTijd.ts): einde vóór
+ * de start = impliciete nachtdienst (+24u), gelijke begin- en eindtijd =
+ * ongeldig (null, het deel valt uit de tijdlijn en de balk zoals een deel
+ * zonder leesbare tijden). Eén plek voor de regel die MijnDagView,
+ * DashboardView en de dienstbalk vroeger elk zelf hadden (controle-ronde
+ * 05-09, dode code 26).
  */
 export const shiftWindowMinutes = (s: { startTime: string; endTime: string }): { start: number; end: number } | null =>
   deelVenster(s.startTime, s.endTime);
