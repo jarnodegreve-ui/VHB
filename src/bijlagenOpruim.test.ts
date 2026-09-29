@@ -103,9 +103,9 @@ vi.mock('../api/db.js', () => {
   return { supabase: client, supabaseAdmin: client, db: client };
 });
 
-const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden, bestaandeRecordIds, logregelsVanEntiteiten } = await import('../api/storage.js');
+const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden, bestaandeRecordIds, logregelsVanEntiteiten, GERICHTE_LEZING_MAX } = await import('../api/storage.js');
 const { laatsteVerwijdering } = await import('../api/_lib/bijlagenActies.js');
-const { kiesWeesBijlagen, mogelijkeEigenaars, ruimWeesBijlagenOp, WEES_MARGE_MS, WEES_MAX_PER_BEURT } = await import('../api/_lib/bijlagenOpruim.js');
+const { begrensBeurt, kandidaatBijlagen, kiesWeesBijlagen, mogelijkeEigenaars, ruimWeesBijlagenOp, WEES_MARGE_MS, WEES_MAX_PER_BEURT } = await import('../api/_lib/bijlagenOpruim.js');
 
 const NU = Date.parse('2026-09-29T02:00:00Z');
 const OUD = '2026-09-01T08:00:00Z';
@@ -224,38 +224,85 @@ describe('gerichte lezingen', () => {
   });
 });
 
-describe('kiesWeesBijlagen', () => {
-  const basis = { bestaandeIds: new Set(['o-2']), verwijderd: new Set(['o-1', 'o']), recentGelogd: new Set<string>(), nu: NU, maxSlot: 5, metOudeSleutel: true };
+describe('kandidaatBijlagen (stap 1: wat komt in aanmerking)', () => {
+  const basis = { bekendeIds: new Set(['o-2']), nu: NU, maxSlot: 5, metOudeSleutel: true };
 
-  it('kiest alleen bestanden waarvan het record weg is', () => {
+  it('kiest alleen bestanden waarvan geen mogelijke eigenaar in de lijst staat', () => {
     const bestanden = [
       { naam: 'o-1-1.pdf', gewijzigdOp: OUD },
       { naam: 'o-2-1.pdf', gewijzigdOp: OUD },
       { naam: 'o-2.pdf', gewijzigdOp: OUD },
+      { naam: 'logo.png', gewijzigdOp: OUD },
     ];
-    expect(kiesWeesBijlagen({ ...basis, bestanden })).toEqual(['o-1-1.pdf']);
+    expect(kandidaatBijlagen({ ...basis, bestanden })).toEqual(['o-1-1.pdf']);
   });
 
-  it('laat staan wat binnen de marge gewijzigd of gelogd is', () => {
+  it('laat staan wat binnen de marge gewijzigd is', () => {
     const net = new Date(NU - WEES_MARGE_MS + 60_000).toISOString();
     const opDeGrens = new Date(NU - WEES_MARGE_MS).toISOString();
-    expect(kiesWeesBijlagen({ ...basis, bestanden: [{ naam: 'o-1-1.pdf', gewijzigdOp: net }] })).toEqual([]);
-    expect(kiesWeesBijlagen({ ...basis, bestanden: [{ naam: 'o-1-1.pdf', gewijzigdOp: opDeGrens }] })).toEqual(['o-1-1.pdf']);
-    // Oud bestand, maar het record is pas zonet verwijderd (staat in het log).
-    expect(kiesWeesBijlagen({ ...basis, recentGelogd: new Set(['o-1']), bestanden: [{ naam: 'o-1-1.pdf', gewijzigdOp: OUD }] })).toEqual([]);
-  });
-
-  it('zonder bewijs in het log dat het record verwijderd is, blijft het bestand staan', () => {
-    const bestanden = [{ naam: 'onbekend-1.pdf', gewijzigdOp: OUD }, { naam: 'oud-plan.pdf', gewijzigdOp: OUD }];
-    expect(kiesWeesBijlagen({ ...basis, bestanden })).toEqual([]);
-    expect(kiesWeesBijlagen({ ...basis, verwijderd: new Set(['onbekend']), bestanden })).toEqual(['onbekend-1.pdf']);
+    expect(kandidaatBijlagen({ ...basis, bestanden: [{ naam: 'o-1-1.pdf', gewijzigdOp: net }] })).toEqual([]);
+    expect(kandidaatBijlagen({ ...basis, bestanden: [{ naam: 'o-1-1.pdf', gewijzigdOp: opDeGrens }] })).toEqual(['o-1-1.pdf']);
   });
 
   it('twijfel is laten staan: geen datum, of een van de mogelijke eigenaars bestaat nog', () => {
-    expect(kiesWeesBijlagen({ ...basis, bestanden: [{ naam: 'o-1-1.pdf', gewijzigdOp: null }, { naam: 'o-1-2.pdf', gewijzigdOp: 'geen datum' }] })).toEqual([]);
+    expect(kandidaatBijlagen({ ...basis, bestanden: [{ naam: 'o-1-1.pdf', gewijzigdOp: null }, { naam: 'o-1-2.pdf', gewijzigdOp: 'geen datum' }] })).toEqual([]);
     // "o-1.pdf" kan de oude sleutel van o-1 zijn (weg) of slot 1 van "o" (bestaat).
-    expect(kiesWeesBijlagen({ ...basis, bestaandeIds: new Set(['o']), bestanden: [{ naam: 'o-1.pdf', gewijzigdOp: OUD }] })).toEqual([]);
-    expect(kiesWeesBijlagen({ ...basis, bestaandeIds: new Set(['o-1']), bestanden: [{ naam: 'o-1.pdf', gewijzigdOp: OUD }] })).toEqual([]);
+    expect(kandidaatBijlagen({ ...basis, bekendeIds: new Set(['o']), bestanden: [{ naam: 'o-1.pdf', gewijzigdOp: OUD }] })).toEqual([]);
+    expect(kandidaatBijlagen({ ...basis, bekendeIds: new Set(['o-1']), bestanden: [{ naam: 'o-1.pdf', gewijzigdOp: OUD }] })).toEqual([]);
+  });
+});
+
+describe('begrensBeurt', () => {
+  it('hoogstens 100 bestanden en hoogstens 100 id\'s om gericht na te kijken', () => {
+    // Bij omleidingen heeft elke naam twee mogelijke eigenaars: 50 bestanden = 100 id's.
+    const namen = Array.from({ length: 120 }, (_, i) => `weg-${String(i).padStart(4, '0')}-1.pdf`);
+    const omleidingen = begrensBeurt(namen, { maxSlot: 5, metOudeSleutel: true });
+    expect(omleidingen.namen).toHaveLength(50);
+    expect(omleidingen.ids).toHaveLength(100);
+    expect(omleidingen.ids.length).toBeLessThanOrEqual(GERICHTE_LEZING_MAX);
+    const updates = begrensBeurt(namen, { maxSlot: 2, metOudeSleutel: false });
+    expect(updates.namen).toHaveLength(WEES_MAX_PER_BEURT);
+    expect(updates.ids).toHaveLength(100);
+  });
+});
+
+describe('kiesWeesBijlagen (stap 2: wat mag echt weg)', () => {
+  const ACTIE = 'Omleiding verwijderd';
+  const regel = (entityId: string, action: string, createdAt: string) => ({ entityId, action, createdAt });
+  const LANG_GELEDEN = '2026-09-20T09:00:00Z';
+  const basis = { bestaandeIds: new Set<string>(), actie: ACTIE, nu: NU, maxSlot: 5, metOudeSleutel: true };
+
+  it('weg mag alleen wat het log als verwijderd kent', () => {
+    const kandidaten = ['onbekend-1.pdf', 'o-1-1.pdf'];
+    expect(kiesWeesBijlagen({ ...basis, kandidaten, regels: [] })).toEqual([]);
+    expect(kiesWeesBijlagen({ ...basis, kandidaten, regels: [regel('o-1', ACTIE, LANG_GELEDEN)] })).toEqual(['o-1-1.pdf']);
+  });
+
+  it('de gerichte lezing wint: bestaat een mogelijke eigenaar toch, dan blijft het bestand', () => {
+    const regels = [regel('o-1', ACTIE, LANG_GELEDEN)];
+    expect(kiesWeesBijlagen({ ...basis, kandidaten: ['o-1-1.pdf'], regels, bestaandeIds: new Set(['o-1']) })).toEqual([]);
+    // o-1-1.pdf kan ook de oude sleutel van een omleiding o-1-1 zijn.
+    expect(kiesWeesBijlagen({ ...basis, kandidaten: ['o-1-1.pdf'], regels, bestaandeIds: new Set(['o-1-1']) })).toEqual([]);
+  });
+
+  it('een verwijdering telt alleen als ze de laatste logregel is', () => {
+    const hersteld = [regel('o-1', ACTIE, LANG_GELEDEN), regel('o-1', 'Omleiding hersteld', '2026-09-20T09:00:04Z'), regel('o-1', 'Bijlagen hersteld', '2026-09-20T09:00:04Z')];
+    expect(kiesWeesBijlagen({ ...basis, kandidaten: ['o-1-1.pdf'], regels: hersteld })).toEqual([]);
+    const opnieuwVerwijderd = [...hersteld, regel('o-1', ACTIE, '2026-09-21T09:00:00Z')];
+    expect(kiesWeesBijlagen({ ...basis, kandidaten: ['o-1-1.pdf'], regels: opnieuwVerwijderd })).toEqual(['o-1-1.pdf']);
+  });
+
+  it('blijft de marge lang van een verse verwijdering af', () => {
+    const vers = [regel('o-1', ACTIE, new Date(NU - WEES_MARGE_MS + 60_000).toISOString())];
+    expect(kiesWeesBijlagen({ ...basis, kandidaten: ['o-1-1.pdf'], regels: vers })).toEqual([]);
+    expect(kiesWeesBijlagen({ ...basis, kandidaten: ['o-1-1.pdf'], regels: vers, nu: NU + 60_000 })).toEqual(['o-1-1.pdf']);
+  });
+
+  it('zegt de laatste regel van de ANDERE mogelijke eigenaar iets anders, dan blijft het bestand', () => {
+    // o-1.pdf: oude sleutel van o-1 (verwijderd), of slot 1 van "o" (pas gewijzigd).
+    const regels = [regel('o-1', ACTIE, LANG_GELEDEN), regel('o', 'Omleiding gewijzigd', '2026-09-22T09:00:00Z')];
+    expect(kiesWeesBijlagen({ ...basis, kandidaten: ['o-1.pdf'], regels })).toEqual([]);
+    expect(kiesWeesBijlagen({ ...basis, kandidaten: ['o-1.pdf'], regels: [regels[0]] })).toEqual(['o-1.pdf']);
   });
 });
 
@@ -344,6 +391,64 @@ describe('ruimWeesBijlagenOp', () => {
     await expect(lijstBijlageBestanden('diversions')).rejects.toBeTruthy();
     expect(await ruimWeesBijlagenOp(NU)).toEqual({ omleidingen: 0, updates: 0, overgeslagen: ['omleidingen: mislukt', 'updates: mislukt'] });
     expect(mem.verwijderd).toEqual([]);
+  });
+
+  // Tegenlezing 29-09, punt 2. Na "Ongedaan maken" blijft de logregel van de
+  // verwijdering nog een jaar staan. Wie naar "ooit verwijderd" kijkt, houdt
+  // voor zo'n record alleen de brede lijst als verdediging over.
+  describe('een bestaand record verliest zijn PDF niet', () => {
+    const veel = (n: number) => Array.from({ length: n }, (_, i) => omleiding(`d-${String(i).padStart(4, '0')}`));
+
+    it('de brede lijst is afgekapt (500 van 700): de gerichte lezing houdt de PDF tegen, er wordt niets gewist', async () => {
+      mem.tabellen.diversions = veel(700);
+      mem.maxRijen = 500;
+      // d-0600 bestaat, maar valt buiten de 500 rijen die de server teruggaf.
+      // Zijn laatste logregel is een oude verwijdering (het record kwam
+      // terug langs een weg die niet logt, zoals een herstel uit back-up).
+      hang('diversions', 'd-0600-1.pdf');
+      log('diversion', 'd-0600', '2026-09-20T09:00:00Z');
+      expect(await ruimWeesBijlagenOp(NU)).toEqual({ omleidingen: 0, updates: 0, overgeslagen: [] });
+      expect(mem.verwijderd).toEqual([]);
+      expect(mem.buckets.diversions.has('d-0600-1.pdf')).toBe(true);
+      // De brede lijst gaf het record niet, de gerichte lezing wel.
+      expect(mem.lezingen).toContainEqual({ tabel: 'diversions', gericht: true });
+    });
+
+    it('ooit verwijderd en hersteld: de oude verwijder-logregel is geen bewijs meer', async () => {
+      // o-5 is verwijderd en vier seconden later hersteld. Het record bestaat,
+      // maar stel dat geen enkele lezing het laat zien: het log alleen volstaat.
+      hang('diversions', 'o-5-1.pdf');
+      log('diversion', 'o-5', '2026-09-20T09:00:00Z');
+      log('diversion', 'o-5', '2026-09-20T09:00:04Z', 'Omleiding hersteld');
+      log('diversion', 'o-5', '2026-09-20T09:00:04Z', 'Bijlagen hersteld');
+      expect(await ruimWeesBijlagenOp(NU)).toEqual({ omleidingen: 0, updates: 0, overgeslagen: [] });
+      expect(mem.buckets.diversions.has('o-5-1.pdf')).toBe(true);
+      // Hetzelfde bij een update.
+      hang('update-bijlagen', 'u-5-1.pdf');
+      log('update', 'u-5', '2026-09-20T09:00:00Z');
+      log('update', 'u-5', '2026-09-20T09:00:04Z', 'Update hersteld');
+      expect(await ruimWeesBijlagenOp(NU)).toEqual({ omleidingen: 0, updates: 0, overgeslagen: [] });
+      expect(mem.verwijderd).toEqual([]);
+    });
+
+    it('de gerichte lezing mislukt: de hele bucket blijft die nacht staan, de andere bucket gaat door', async () => {
+      hang('diversions', 'o-9-1.pdf');
+      log('diversion', 'o-9', '2026-09-20T09:00:00Z');
+      hang('update-bijlagen', 'u-9-1.pdf');
+      log('update', 'u-9', '2026-09-20T09:00:00Z');
+      mem.gerichtFaalt.add('diversions');
+      expect(await ruimWeesBijlagenOp(NU)).toEqual({ omleidingen: 0, updates: 1, overgeslagen: ['omleidingen: mislukt'] });
+      expect(mem.buckets.diversions.has('o-9-1.pdf')).toBe(true);
+      expect(mem.buckets['update-bijlagen'].has('u-9-1.pdf')).toBe(false);
+    });
+
+    it('de gerichte lezing geeft iets terug wat niet gevraagd was: de bucket blijft staan', async () => {
+      hang('diversions', 'o-9-1.pdf');
+      log('diversion', 'o-9', '2026-09-20T09:00:00Z');
+      mem.gerichtVreemd.add('diversions');
+      expect(await ruimWeesBijlagenOp(NU)).toEqual({ omleidingen: 0, updates: 0, overgeslagen: ['omleidingen: mislukt'] });
+      expect(mem.verwijderd).toEqual([]);
+    });
   });
 
   it('ruimt per nacht hoogstens een vast aantal bestanden op', async () => {

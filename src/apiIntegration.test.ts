@@ -497,8 +497,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         oudeSleutel: mem.opslag.has(`diversions/${id}.pdf`),
       };
     },
-    // Uitgestelde opruiming (api/_lib/bijlagenOpruim.ts): de bucket oplijsten,
-    // bestanden weghalen en het log van de laatste dag.
+    // Uitgestelde opruiming (api/_lib/bijlagenOpruim.ts): de bucket oplijsten
+    // en bestanden weghalen. Het log en de gerichte lezing staan hieronder.
     lijstBijlageBestanden: async (bucket: string) =>
       [...mem.opslag]
         .filter((k) => k.startsWith(`${bucket}/`))
@@ -520,10 +520,6 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       const rijen: any[] = tabel === 'diversions' ? mem.diversions : mem.updates;
       return new Set(rijen.map((r) => String(r.id)).filter((id) => ids.includes(id)));
     },
-    verwijderdeEntiteiten: async (type: string, actie: string) =>
-      new Set(mem.activity.filter((a) => a.entityType === type && a.action === actie).map((a) => String(a.entityId))),
-    recentGelogdeEntiteiten: async (type: string, sindsIso: string) =>
-      new Set(mem.activity.filter((a) => a.entityType === type && String(a.gelogdOp) >= sindsIso).map((a) => String(a.entityId))),
     getDiversionsData: async () => mem.diversions,
     // Zoals de echte: een upsert noemt `bijlagen` niet (de route draagt de
     // lijst zelf mee). De bestanden van een verwijderde omleiding blijven
@@ -7285,6 +7281,9 @@ describe('bijlagen bij een update', () => {
     const id = eersteId();
     await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'mee.pdf', dataUrl: PDF } });
     const rev = (await api('GET', '/api/updates', { token: 'tok-planner' })).json.find((u: any) => String(u.id) === id)._rev;
+    // Een seconde na de upload: staat de verwijdering op dezelfde
+    // milliseconde als een andere logregel, dan telt ze niet als bewijs.
+    tik();
     const res = await api('DELETE', `/api/updates/${id}`, { token: 'tok-planner', headers: { 'X-Record-Revision': rev } });
     expect(res.status).toBe(200);
     expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(true);
@@ -7298,6 +7297,22 @@ describe('bijlagen bij een update', () => {
     vi.setSystemTime(new Date('2026-06-16T11:00:00Z'));
     expect((await cron()).json.bijlagen).toEqual({ omleidingen: 0, updates: 1, overgeslagen: [] });
     expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(false);
+  });
+
+  it('een herstelde update houdt haar PDF, ook een dag later en ook als de brede lijst haar niet toont', async () => {
+    const id = eersteId();
+    await api('POST', `/api/updates/${id}/bijlage`, { token: 'tok-planner', body: { slot: 1, filename: 'blijft.pdf', dataUrl: PDF } });
+    const record = (await api('GET', '/api/updates', { token: 'tok-planner' })).json.find((u: any) => String(u.id) === id);
+    tik();
+    await api('DELETE', `/api/updates/${id}`, { token: 'tok-planner', headers: { 'X-Record-Revision': record._rev } });
+    tik();
+    const { _rev, ...zonderRev } = record;
+    expect((await api('POST', '/api/updates/one', { token: 'tok-planner', body: zonderRev, headers: { 'X-Herstel': '1' } })).status).toBe(201);
+
+    vi.setSystemTime(new Date('2026-06-17T11:00:00Z'));
+    const cron = () => api('GET', '/api/cron/backup', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect((await cron()).json.bijlagen).toEqual({ omleidingen: 0, updates: 0, overgeslagen: [] });
+    expect(mem.opslag.has(`update-bijlagen/${id}-1.pdf`)).toBe(true);
   });
 
   describe('ongedaan maken na verwijderen (X-Herstel)', () => {

@@ -1783,7 +1783,8 @@ export const bestaandeDiversionBijlagen = async (
 // Storage. "Ongedaan maken" bracht het record dan terug zonder bijlagen: de
 // bestanden waren al weg. Nu blijven ze staan tot de nachtcron ze opruimt
 // (api/_lib/bijlagenOpruim.ts): alleen bestanden waarvan het record niet meer
-// bestaat, en pas na een veilige marge.
+// bestaat, en pas na een veilige marge. De lezingen waar ze op steunt
+// (bestaandeRecordIds, logregelsVanEntiteiten) staan verderop.
 
 /** Eén bestand in een bucket, zoals de opruiming het nodig heeft. */
 export type BijlageBestand = { naam: string; gewijzigdOp: string | null; sizeBytes?: number };
@@ -1823,49 +1824,6 @@ export const verwijderBijlageBestanden = async (bucket: string, paden: string[])
   if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
   const { error } = await supabaseAdmin.storage.from(bucket).remove(paden);
   if (error && !/not.?found/i.test(String(error.message || ""))) throw error;
-};
-
-/** Id's van omleidingen of updates waarop sinds `sindsIso` iets gelogd is
- *  (verwijderd, hersteld, bijlage gewisseld). De opruiming laat hun bestanden
- *  met rust: een verwijdering van zonet moet nog ongedaan te maken zijn. */
-export const recentGelogdeEntiteiten = async (
-  entityType: "diversion" | "update",
-  sindsIso: string,
-): Promise<Set<string>> => {
-  const client = requireDb();
-  const rows = await paginatedFetch<Pick<ActivityLogRow, "id" | "entity_id">>((from, to) =>
-    client
-      .from("activity_log")
-      .select("id, entity_id")
-      .eq("entity_type", entityType)
-      .gte("created_at", sindsIso)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, to),
-  );
-  return new Set(rows.map((r) => String(r.entity_id ?? "")).filter(Boolean));
-};
-
-/** Id's van omleidingen of updates waarvan het log zegt dat ze via het
- *  portaal verwijderd zijn (`actie` = "Omleiding verwijderd" of "Update
- *  verwijderd"). De opruiming gooit alleen bestanden weg met zo'n bewijs:
- *  een bestand van onbekende herkomst blijft staan. */
-export const verwijderdeEntiteiten = async (
-  entityType: "diversion" | "update",
-  actie: string,
-): Promise<Set<string>> => {
-  const client = requireDb();
-  const rows = await paginatedFetch<Pick<ActivityLogRow, "id" | "entity_id">>((from, to) =>
-    client
-      .from("activity_log")
-      .select("id, entity_id")
-      .eq("entity_type", entityType)
-      .eq("action", actie)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, to),
-  );
-  return new Set(rows.map((r) => String(r.entity_id ?? "")).filter(Boolean));
 };
 
 /** Hoogstens zoveel id's per gerichte lezing (de lijst reist in de URL). */
