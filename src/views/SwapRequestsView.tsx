@@ -24,7 +24,7 @@ import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
 import { maandagVan } from '../lib/roosterUren';
 import { isoWeekOf } from '../lib/week';
-import { formatDateHuman, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
+import { formatDateHuman, formatDatumDMJ, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { sorteerRuilen } from '../lib/ruilVolgorde';
 import { canRespondToSwap } from '../lib/authorization';
@@ -607,8 +607,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
           {mySwaps.length > 0 ? (
             /* Compacte, uitklapbare rijen in een eigen scrollcontainer: deze
-               lijst groeit onbegrensd mee met de historiek (wens Jarno). */
-            <div className="max-h-[420px] overflow-y-auto overscroll-contain -mx-1 px-1">
+               lijst groeit onbegrensd mee met de historiek (wens Jarno).
+               overscroll-contain pas vanaf md: op de telefoon vult dit vak
+               bijna het scherm en staan de ruilen die op antwoord wachten
+               eronder, dus wie aan het einde verder veegt scrolt de pagina
+               door. De scroll-root houdt de overscroll zelf tegen. */
+            <div className="max-h-[420px] overflow-y-auto md:overscroll-contain -mx-1 px-1">
               {/* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
                   in plaats van een stapel losse kaarten, de dag als titel
                   (daaraan herken je de ruil), de dienst eronder. */}
@@ -959,7 +963,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   return (
                     <RecordRij
                       key={swap.id}
-                      titel={<>{naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger && <span className="font-medium text-slate-500"> → {ontvanger}</span>}</>}
+                      // Twee lange namen pasten op een smalle telefoon niet op één
+                      // regel en de ontvanger viel weg: de titel loopt hier door, en
+                      // de ontvanger schuift als geheel naar de volgende regel.
+                      titel={<>{naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger && <>{' '}<span className="inline-block font-medium text-slate-500">→ {ontvanger}</span></>}</>}
+                      titelTerugloop
                       meta={`Dienst ${info.line}${info.date ? ` · ${fmtShort(info.date)}` : ''}`}
                       status={<RuilStatusBadge swap={swap} stil />}
                       voorproef={teWeinigRust ? <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge> : undefined}
@@ -1522,7 +1530,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         onClose={() => setHistorySwap(null)}
         entityType="swap"
         entityId={historySwap?.id ?? ''}
-        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'}, ${shifts.find((s) => s.id === historySwap.shiftId)?.date ?? ''}` : undefined}
+        // Naam en dag van de dienst, dd/mm/jjjj. De dag komt van de ruil zelf
+        // (shiftInfoFor), zoals in de rij waar je op tikte; zonder dag alleen de naam.
+        title={historySwap ? [naamVan(historySwap.requesterId) || 'Onbekend', formatDatumDMJ(shiftInfoFor(historySwap).date)].filter(Boolean).join(', ') : undefined}
       />
     </PageShell>
   );
