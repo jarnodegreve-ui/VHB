@@ -1943,7 +1943,12 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
       body: mem.services.map((s: any, i: number) => ({ ...s, id: `vers-${i}`, ...(i < 2 ? { startTime3: '00:00', endTime3: '00:00' } : {}) })),
     });
     expect(bulk.status).toBe(400);
-    expect(bulk.json.error).toBe('Deel 3 van dienst 10 heeft dezelfde begin- en eindtijd (00:00). Een dienst van een etmaal schrijf je in busvak-uren, bv. 00:00 tot 24:00. Nog 1 deel met dezelfde begin- en eindtijd.');
+    expect(bulk.json.error).toBe('Deel 3 van dienst 10 heeft dezelfde begin- en eindtijd (00:00). Een dienst van een etmaal schrijf je in busvak-uren, bv. 00:00 tot 24:00. Nog 1 deel met een einde dat niet na de start ligt.');
+    expect(mem.services).toBe(voor);
+    // Ook een einde dat na +24 u niet na de start ligt (tegenlezing 29-09).
+    const nacht = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime2: '24:30', endTime2: '00:00' }) });
+    expect(nacht.status).toBe(400);
+    expect(nacht.json.error).toBe('Deel 2 van dienst 12 eindigt niet na de start (24:30 tot 00:00). Begint een deel na middernacht, schrijf dan ook het einde in busvak-uren: 02:15 wordt 26:15.');
     expect(mem.services).toBe(voor);
     expect(automatischLog()).toHaveLength(0);
     // Een etmaal in busvak-uren en een nachtdeel in gewone uren mogen wel.

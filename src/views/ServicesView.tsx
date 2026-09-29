@@ -21,9 +21,9 @@ import { useCollectieStaat } from '../app/collectieStaat';
 import { ROOSTER_MELDING_RUST_MINUTEN } from '../../shared/roosterMelding';
 import { vandaagBrussel } from '../lib/brussel';
 import { DienstTabel, DienstZijvak, useDienstLijst } from '../components/dienstoverzicht/DienstTabel';
-import { dienstenUitRijen, zonderGelijkeTijden } from '../components/dienstoverzicht/dienstImport';
+import { leesDienstenImport, type DienstImport } from '../components/dienstoverzicht/dienstImport';
 import { Callout } from '../components/Callout';
-import { delenMetGelijkeTijden } from '../../shared/gelijkeTijden';
+import { ongeldigeDelen } from '../../shared/gelijkeTijden';
 
 type Opslaan = (s: Service[], opts?: { bulkReplace?: boolean; actie?: string }) => Promise<boolean> | boolean | void;
 
@@ -91,9 +91,10 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
   const [historyService, setHistoryService] = useState<Service | null>(null);
   const [teVerwijderen, setTeVerwijderen] = useState<Service | null>(null);
   const [pendingImportedServices, setPendingImportedServices] = useState<Service[] | null>(null);
-  // Delen met gelijke begin- en eindtijd in het bestand (Jarno 29-09): hun
-  // tijden gaan niet mee, en de bevestiging zegt welke dienst en welk deel.
-  const [importWaarschuwingen, setImportWaarschuwingen] = useState<string[]>([]);
+  // Wat de import leeg maakte (Jarno 29-09): delen zonder venster, lege
+  // Excel-kolommen en diensten die zo geen planning krijgen. De bevestiging
+  // zegt het.
+  const [importMeldingen, setImportMeldingen] = useState<Omit<DienstImport, 'diensten'> | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   // Verborgen file-input voor de Excel-import; het "…"-menu in de kop klikt hem aan.
   const importRef = useRef<HTMLInputElement>(null);
@@ -146,9 +147,9 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
           notify('Het Excel-bestand lijkt leeg te zijn.', 'error');
           return;
         }
-        const { diensten: geimporteerd, waarschuwingen } = zonderGelijkeTijden(dienstenUitRijen(jsonData));
+        const { diensten: geimporteerd, ...meldingen } = leesDienstenImport(jsonData);
         if (geimporteerd.length > 0) {
-          setImportWaarschuwingen(waarschuwingen);
+          setImportMeldingen(meldingen);
           setPendingImportedServices(geimporteerd);
         } else notify('Geen geldige diensten gevonden in het bestand. Controleer de kolommen Dienst, Start en Eind.', 'error');
       } catch (error) {
@@ -188,11 +189,13 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
         }
         cleaned[f] = normalizeTimeString(raw);
       }
-      // Gelijke begin- en eindtijd is ongeldig (Jarno 29-09): een veldfout bij
-      // de eindtijd van dat deel, zoals de server het ook weigert.
-      const [gelijk] = delenMetGelijkeTijden([cleaned]);
-      if (gelijk) {
-        fouten.zet({ [gelijk.einde]: gelijk.melding });
+      // Een deel zonder venster is ongeldig (Jarno 29-09): gelijke begin- en
+      // eindtijd, of een einde dat ook na +24 u niet na de start ligt. Een
+      // veldfout bij de eindtijd van elk zo'n deel tegelijk, zoals de server
+      // het ook weigert.
+      const ongeldig = ongeldigeDelen([cleaned]);
+      if (ongeldig.length > 0) {
+        fouten.zet(Object.fromEntries(ongeldig.map((d) => [d.einde, d.melding])));
         return;
       }
       fouten.wis();
@@ -362,20 +365,14 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
 
       <ConfirmationModal
         open={!!pendingImportedServices}
-        onClose={() => { setPendingImportedServices(null); setImportWaarschuwingen([]); }}
+        onClose={() => { setPendingImportedServices(null); setImportMeldingen(null); }}
         onConfirm={handleConfirmImport}
         title="Diensten importeren"
         message={`Er zijn ${pendingImportedServices?.length ?? 0} diensten gevonden. De huidige lijst wordt vervangen door deze import.`}
         confirmText="Importeren"
         variant="warning"
       >
-        {importWaarschuwingen.length > 0 && (
-          <Callout tone="warning" title={importWaarschuwingen.length === 1 ? 'Eén deel gaat zonder tijden mee' : `${importWaarschuwingen.length} delen gaan zonder tijden mee`}>
-            <ul className="mt-1 list-disc space-y-1 pl-4">
-              {importWaarschuwingen.map((w, i) => <li key={i}>{w}</li>)}
-            </ul>
-          </Callout>
-        )}
+        {importMeldingen && <ImportMeldingen {...importMeldingen} />}
       </ConfirmationModal>
 
       <ConfirmationModal
@@ -394,5 +391,53 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
         title={historyService ? `Dienst ${historyService.serviceNumber}` : undefined}
       />
     </PageShell>
+  );
+}
+
+/** "2118", "2118 en 2119", "2118, 2119 en 2120". */
+const opsomming = (lijst: readonly string[]) =>
+  lijst.length > 1 ? `${lijst.slice(0, -1).join(', ')} en ${lijst[lijst.length - 1]}` : lijst[0] ?? '';
+
+/**
+ * Wat de Excel-import leeg maakte (Jarno 29-09, nummer 28b), in de
+ * bevestiging vóór de import. Compact: de uitleg één keer, dan per deel één
+ * regel. Het vak schuift zelf: ConfirmationModal houdt kop en knoppen vast en
+ * schuift niet mee, dus zonder begrenzing duwde een lange lijst Annuleren en
+ * Importeren uit beeld (tegenlezing 29-09, gemeten vanaf 3 meldingen op een
+ * iPhone 13). Bewust hier en niet in ConfirmationModal: verlof weigeren zet
+ * er een tekstvak in, dat hoort niet in een schuifvak.
+ */
+function ImportMeldingen({ legeDelen, ongeldig, zonderGeldigDeel }: Omit<DienstImport, 'diensten'>) {
+  if (legeDelen === 0 && ongeldig.length === 0 && zonderGeldigDeel.length === 0) return null;
+  const gelijk = ongeldig.some((d) => d.soort === 'gelijk');
+  const geenVenster = ongeldig.some((d) => d.soort === 'geenVenster');
+  return (
+    <div tabIndex={0} role="region" aria-label="Meldingen bij de import" className="max-h-[30dvh] space-y-3 overflow-y-auto overscroll-contain rounded-2xl">
+      {zonderGeldigDeel.length > 0 && (
+        <Callout tone="warning" title={zonderGeldigDeel.length === 1 ? `Dienst ${zonderGeldigDeel[0]} krijgt geen planning` : `${zonderGeldigDeel.length} diensten krijgen geen planning`}>
+          <p>
+            {zonderGeldigDeel.length === 1 ? 'Ze heeft' : `Diensten ${opsomming(zonderGeldigDeel)} hebben`} na de import geen enkel deel met geldige tijden, dus geen planning-rijen.
+            {' '}Rijdt iemand zo'n dienst, dan werkt het portaal de planning niet automatisch bij; bouw je de planning opnieuw op in Beheer planning, dan valt ze uit het rooster.
+          </p>
+        </Callout>
+      )}
+      {ongeldig.length > 0 && (
+        <Callout tone="warning" title={ongeldig.length === 1 ? 'Eén deel gaat zonder tijden mee' : `${ongeldig.length} delen gaan zonder tijden mee`}>
+          <p>
+            Hun tijden en loopnummer worden niet geïmporteerd.
+            {gelijk && ' Dezelfde begin- en eindtijd: een etmaal schrijf je in busvak-uren, bv. 08:00 tot 32:00.'}
+            {geenVenster && ' Einde niet na de start: begint een deel na middernacht, schrijf dan ook het einde in busvak-uren (02:15 wordt 26:15).'}
+          </p>
+          <ul className="mt-1.5 space-y-0.5 tabular-nums">
+            {ongeldig.map((d, i) => <li key={i}>Dienst {d.dienst}, deel {d.deel} ({d.tijden})</li>)}
+          </ul>
+        </Callout>
+      )}
+      {legeDelen > 0 && (
+        <p className="text-body-sm text-slate-500">
+          {legeDelen === 1 ? '1 deel had 0 als begin en einde (een lege kolom in Excel) en is' : `${legeDelen} delen hadden 0 als begin en einde (lege kolommen in Excel) en zijn`} als leeg ingelezen.
+        </p>
+      )}
+    </div>
   );
 }
