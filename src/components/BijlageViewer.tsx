@@ -12,7 +12,7 @@ import { vergeetBijlage, type BijlageSoort } from '../lib/bijlageCache';
 import { BijlageWeg, bronVanBijlage, bronVanDocument, haalVerseBijlage, laadBijlage, linkVerlopen, type LaadBron, type PersoonlijkDocument } from '../lib/bijlageLaden';
 import { aantal } from '../lib/format';
 import { openPdfInNewTab } from '../lib/ui';
-import { isOnlineNu, useOnline } from '../lib/useOnline';
+import { controleerBereik, isOnlineNu, useOnline } from '../lib/useOnline';
 
 /**
  * Een PDF-bijlage van een omleiding of update, in de app (controle-ronde
@@ -112,6 +112,17 @@ export default function BijlageViewer(props: ViewerProps) {
 
   const [staat, setStaat] = useState<Staat>({ soort: 'laden' });
   const [poging, setPoging] = useState(0);
+  // "Opnieuw proberen" bij een persoonlijk document is een uitdrukkelijke
+  // vraag: dan echt ophalen, ook als de bereikstatus nog achterloopt (zie het
+  // effect hieronder), en die status meteen opnieuw laten vaststellen.
+  const uitdrukkelijk = useRef(false);
+  const opnieuwProberen = () => {
+    if (persoonlijk) {
+      uitdrukkelijk.current = true;
+      controleerBereik();
+    }
+    setPoging((n) => n + 1);
+  };
   // De laatst bekende link, voor "Extern openen": synchroon leesbaar in de klik.
   const externUrl = useRef(b?.url ?? '');
   const online = useOnline();
@@ -152,8 +163,13 @@ export default function BijlageViewer(props: ViewerProps) {
     if (!url && !persoonlijk) return;
     externUrl.current = url;
     // Zonder bereik opent een persoonlijk document niet: er staat niets op
-    // het toestel. Geen ophaling, meteen de uitleg.
-    if (persoonlijk && !isOnlineNu()) {
+    // het toestel. Bij het openen dan geen ophaling, meteen de uitleg. Na
+    // "Opnieuw proberen" wel een echte poging: de bereikstatus kan nog
+    // "offline" zeggen terwijl het netwerk er alweer is, en zonder netwerk
+    // faalt de poging gewoon, met dezelfde uitleg.
+    const opnieuw = uitdrukkelijk.current;
+    uitdrukkelijk.current = false;
+    if (persoonlijk && !opnieuw && !isOnlineNu()) {
       setStaat({ soort: 'fout' });
       return;
     }
@@ -265,7 +281,7 @@ export default function BijlageViewer(props: ViewerProps) {
               message={foutTekst}
               action={(
                 <>
-                  <Button variant="primary" icon={<RotateCw size={16} />} onClick={() => setPoging((n) => n + 1)}>Opnieuw proberen</Button>
+                  <Button variant="primary" icon={<RotateCw size={16} />} onClick={opnieuwProberen}>Opnieuw proberen</Button>
                   <Button variant="secondary" icon={<ExternalLink size={16} />} disabled={externUit} onClick={() => openPdfInNewTab(externUrl.current)}>Extern openen</Button>
                 </>
               )}

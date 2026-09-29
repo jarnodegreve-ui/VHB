@@ -9,10 +9,11 @@ import { useState } from 'react';
  * zo is te zien dat er niets op het toestel belandt, ook niet bij het lezen.
  * Alleen pdfjs, de API en de bereikstatus zijn nagebootst.
  */
-const { openPdfMock, getDocumentMock, apiFetchMock, bereik } = vi.hoisted(() => ({
+const { openPdfMock, getDocumentMock, apiFetchMock, controleerMock, bereik } = vi.hoisted(() => ({
   openPdfMock: vi.fn(),
   getDocumentMock: vi.fn(),
   apiFetchMock: vi.fn(),
+  controleerMock: vi.fn(),
   bereik: { online: true },
 }));
 vi.mock('../lib/ui', async (importOriginal) => ({
@@ -29,6 +30,7 @@ vi.mock('../lib/useOnline', async (importOriginal) => ({
   ...await importOriginal<typeof import('../lib/useOnline')>(),
   useOnline: () => bereik.online,
   isOnlineNu: () => bereik.online,
+  controleerBereik: controleerMock,
 }));
 
 import BijlageViewer, { type DocumentViewerProps } from './BijlageViewer';
@@ -87,7 +89,7 @@ beforeEach(() => {
   docs = [];
   opslagAanvragen = [];
   opslag = () => new Response(PDF.slice(), { status: 200, headers: { 'Content-Type': 'application/pdf', 'Cache-Control': 'max-age=3600' } });
-  for (const m of [openPdfMock, getDocumentMock, apiFetchMock]) m.mockReset();
+  for (const m of [openPdfMock, getDocumentMock, apiFetchMock, controleerMock]) m.mockReset();
   getDocumentMock.mockImplementation(() => {
     const doc = maakDoc();
     docs.push(doc);
@@ -214,6 +216,22 @@ describe('BijlageViewer: een persoonlijk document, in de app en niet op het toes
     fireEvent.click(screen.getByRole('button', { name: 'Opnieuw proberen' }));
     await screen.findByText('2 pagina’s');
     expect(onGeopend).toHaveBeenCalledExactlyOnceWith('doc-1');
+  });
+
+  it('Opnieuw proberen haalt het document echt op, ook als de bereikstatus nog "offline" zegt', async () => {
+    bereik.online = false;
+    const onGeopend = vi.fn();
+    render(<Scherm onGeopend={onGeopend} />);
+    expect(await screen.findByText(/Persoonlijke documenten openen alleen met bereik/)).toBeTruthy();
+    expect(opslagAanvragen).toEqual([]);
+    // Het netwerk is er weer, maar de status loopt nog achter (een ping die
+    // net mislukte): de uitdrukkelijke vraag probeert het toch.
+    fireEvent.click(screen.getByRole('button', { name: 'Opnieuw proberen' }));
+    expect(controleerMock).toHaveBeenCalledTimes(1);
+    await screen.findByText('2 pagina’s');
+    expect(opslagAanvragen).toEqual([{ url: LINK, init: { signal: expect.any(AbortSignal), cache: 'no-store' } }]);
+    expect(onGeopend).toHaveBeenCalledExactlyOnceWith('doc-1');
+    expect(aanroepen).toEqual([]);
   });
 
   it('een document dat intussen weg is zegt dat, met de weg terug naar de documenten', async () => {
