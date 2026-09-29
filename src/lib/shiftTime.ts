@@ -1,5 +1,5 @@
 import { addDays, isoDate } from './datum';
-import { deelMinuten, deelVenster, parseHHMM } from '../../shared/busvakTijd';
+import { deelVenster, parseHHMM } from '../../shared/busvakTijd';
 
 /** 'HH:MM' → minuten sinds middernacht van de dienstdag, of null bij een
  *  ongeldige tijd. Uren ≥ 24 zijn geldig: het Dienstoverzicht gebruikt de
@@ -21,10 +21,8 @@ export const normalizeTimeString = (t: string): string => {
 };
 
 /** 'HH:MM' → minuten; busvak-uren tot 47 toegestaan (26:16 = dag erna). null bij vuil.
- *  Eén implementatie met de server (shared/busvakTijd.ts). `deelMinuten` (de
- *  duur van één deel) gaat langs hier voor de schermen, zodat shared/busvakTijd.ts
- *  geen eigen chunk wordt. */
-export { deelMinuten, parseHHMM };
+ *  Eén implementatie met de server (shared/busvakTijd.ts). */
+export { parseHHMM };
 
 /**
  * Is dit dienstsegment op dit moment bezig? Gesplitste diensten zijn aparte

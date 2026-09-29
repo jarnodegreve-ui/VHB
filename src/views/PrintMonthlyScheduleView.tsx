@@ -4,19 +4,24 @@ import type { Shift, User } from '../types';
 import { isoWeekNumber } from '../lib/week';
 import { MONTH_NAMES, serviceNumberOf, tijdvak } from '../lib/format';
 import { apiFetch } from '../lib/api';
-import { deelMinuten } from '../lib/shiftTime';
+import { shiftWindowMinutes } from '../lib/shiftTime';
 import { Button } from '../components/primitives';
 
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
 
-/** Minuten van één planning-rij: de gedeelde regel `deelMinuten` (Jarno
+/** Minuten van één planning-rij: `deelMinuten ?? 0`, de gedeelde regel (Jarno
  *  29-09): 22:00 tot 06:00 is 8 uur (zonder die regel telde de maandprint een
  *  nachtdienst vroeger als 0 uur, controleronde 30/07), busvak-notatie (26:16)
  *  telt zoals ze er staat, en een deel met gelijke begin- en eindtijd of
- *  zonder leesbare tijden telt 0. Via lib/shiftTime: een rechtstreekse import
- *  uit shared/busvakTijd.ts maakte er een eigen chunk van. */
-export const minutesBetween = (start: string, end: string) => deelMinuten(start, end) ?? 0;
+ *  zonder leesbare tijden telt 0. Gerekend via shiftWindowMinutes (dat is
+ *  deelVenster), zoals src/lib/roosterUren.ts: een import uit
+ *  shared/busvakTijd.ts, ook als her-export via lib/shiftTime, maakte van die
+ *  module een eigen chunk in de warmup. */
+export const minutesBetween = (start: string, end: string) => {
+  const v = shiftWindowMinutes({ startTime: start, endTime: end });
+  return v ? v.end - v.start : 0;
+};
 
 const formatHours = (totalMinutes: number) => {
   const h = Math.floor(totalMinutes / 60);
