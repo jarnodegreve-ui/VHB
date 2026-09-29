@@ -84,6 +84,32 @@ describe('ics, events', () => {
     expect(v).toContain('SUMMARY:Verlof');
   });
 
+  it('gelijke begin- en eindtijd (Jarno 29-09): de dienst blijft een afspraak, zonder DTEND, geen blok van 24 uur; geldige delen ongewijzigd', () => {
+    const blok = (startTime: string, endTime: string) => {
+      const regels = buildVevent({ ...base, startTime, endTime }, DTSTAMP);
+      return { start: regels.find((r) => r.startsWith('DTSTART:')), einde: regels.find((r) => r.startsWith('DTEND:')) ?? null };
+    };
+    expect(blok('22:00', '06:00')).toEqual({ start: 'DTSTART:20260703T220000', einde: 'DTEND:20260704T060000' });
+    expect(blok('16:00', '00:00')).toEqual({ start: 'DTSTART:20260703T160000', einde: 'DTEND:20260704T000000' });
+    expect(blok('08:00', '32:00')).toEqual({ start: 'DTSTART:20260703T080000', einde: 'DTEND:20260704T080000' });
+    // Ongeldig deel: nul minuten op het begintijdstip (RFC 5545, 3.6.1).
+    expect(blok('08:00', '08:00')).toEqual({ start: 'DTSTART:20260703T080000', einde: null });
+    expect(blok('00:00', '00:00')).toEqual({ start: 'DTSTART:20260703T000000', einde: null });
+    expect(blok('24:30', '24:30')).toEqual({ start: 'DTSTART:20260704T003000', einde: null });
+    // Een einde dat ook na +24 u niet na de start ligt: evenmin een DTEND
+    // (vroeger DTEND gelijk aan of vóór DTSTART, ongeldig iCalendar).
+    expect(blok('24:00', '00:00')).toEqual({ start: 'DTSTART:20260704T000000', einde: null });
+    expect(blok('30:00', '06:00')).toEqual({ start: 'DTSTART:20260704T060000', einde: null });
+    expect(blok('24:30', '00:00')).toEqual({ start: 'DTSTART:20260704T003000', einde: null });
+    // Gemengde notatie mét venster blijft zoals ze was.
+    expect(blok('24:30', '06:00')).toEqual({ start: 'DTSTART:20260704T003000', einde: 'DTEND:20260704T060000' });
+    // Zichtbaar: de feed houdt één afspraak per dienst, met samenvatting.
+    const ics = buildCalendar([{ ...base, startTime: '08:00', endTime: '08:00' }, base], { calName: 'VHB', dtstamp: DTSTAMP });
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+    expect(ics.match(/SUMMARY:Dienst 4103/g)).toHaveLength(2);
+    expect(ics.match(/^DTEND:/gm)).toHaveLength(1);
+  });
+
   it('buildCalendar: geldige VCALENDAR-omhulling + CRLF', () => {
     const ics = buildCalendar([base], { calName: 'VHB Diensten', dtstamp: DTSTAMP });
     expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);

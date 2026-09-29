@@ -90,7 +90,8 @@ const ISO_DAG = /^\d{4}-\d{2}-\d{2}$/;
  * volgt uit de starttijd binnen dezelfde chauffeur, dag en dienst: een
  * gesplitste dienst (2109 met 06:53-08:23 en 13:10-19:15) is deel 1 en deel 2.
  * De duur is die van dit deel (`dienstMinuten`: einde vóór start = over
- * middernacht).
+ * middernacht; een deel zonder venster, zoals gelijke begin- en eindtijd, is
+ * ongeldig: Duur blijft leeg en de rij blijft staan).
  */
 export function bouwDienstenPerDag(bron: DienstenBron, filters: RapportFilters): RapportResultaat {
   const van = filters.van ?? "";

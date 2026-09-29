@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { dienstMinuten as server } from '../api/helpers';
-import { dienstMinuten as kerncijfers } from './lib/dienstStatistiek';
-import { dienstMinuten as rooster } from './lib/roosterUren';
+import { berekenMaandoverzicht, dienstMinuten as server } from '../api/helpers';
+import { bouwDienstenPerDag } from '../api/_lib/rapporten/planning';
+import { dienstMinuten as kerncijfers, dienstStatistiek } from './lib/dienstStatistiek';
+import { berekenRoosterUren, dienstMinuten as rooster, minutenPerDag } from './lib/roosterUren';
 import { shiftWindowMinutes } from './lib/shiftTime';
 import { minutesBetween as maandprint } from './views/PrintMonthlyScheduleView';
 import { deelMinuten, deelVenster } from '../shared/busvakTijd';
@@ -17,11 +18,20 @@ import { deelMinuten, deelVenster } from '../shared/busvakTijd';
  * | rooster      | src/lib/roosterUren.ts           | Rooster: strook "geplande uren" (staf) en de uren per dag            |
  * | maandprint   | src/views/PrintMonthlyScheduleView | het afgedrukte maandrooster: uren per dag en per maand             |
  *
- * Server en rooster rekenen per deel hetzelfde en steunen sinds deze stap op
- * één regel, `deelVenster` (shared/busvakTijd.ts): de server via
- * `deelMinuten`, het rooster via `shiftWindowMinutes`. De kerncijfers wijken
- * af voor invoer die in de praktijk kan voorkomen en zijn daarom NIET
- * samengevoegd: welke uitkomst juist is, is een beslissing voor Jarno.
+ * Sinds de beslissing van Jarno (29-09, nummer 28a) rekenen ze alle vier per
+ * deel met één regel, `deelVenster` (shared/busvakTijd.ts): een einde vóór de
+ * start is over middernacht (22:00 tot 06:00 = 8 uur), busvak-uren gelden
+ * zoals ze er staan (08:00 tot 32:00 = 24 uur), en een deel zonder venster is
+ * ONGELDIG: gelijke begin- en eindtijd (08:00 tot 08:00), of een einde dat
+ * ook na +24 u niet na de start ligt (24:30 tot 00:00). Zo'n deel telt 0
+ * minuten, zoals een deel zonder leesbare tijden. Wat nog verschilt is
+ * bewust: de kerncijfers keuren strikt (geen seconden), en de server en de
+ * kerncijfers geven null waar het rooster en de maandprint 0 optellen.
+ *
+ * Onafhankelijke referentie: de oude rekenregel zoals ze op main (3926fee)
+ * stond (`oudVenster`, `oudServerDeel`, letterlijk overgenomen). De nieuwe
+ * regel moet voor elk paar tijden hetzelfde geven als de oude, behalve waar
+ * de oude geen echt venster gaf (einde niet na de start); daar is het nu null.
  */
 
 /** src/lib/shiftTime.ts `shiftWindowMinutes` zoals het op main (3926fee) stond. */
@@ -101,32 +111,59 @@ describe('waar de vier varianten hetzelfde geven', () => {
   });
 });
 
-describe('waar ze uiteenlopen (niet samengevoegd, beslissing voor Jarno)', () => {
-  it('over middernacht met gewone uren, 22:00 tot 06:00: de kerncijfers slaan het deel over', () => {
-    expect(meet([['22:00', '06:00']])).toEqual({ server: 480, kerncijfers: null, rooster: 480, maandprint: 480 });
+describe('de regel van 29-09 (Jarno, 28a): één uitkomst op alle vier de plekken', () => {
+  it('over middernacht met gewone uren, 22:00 tot 06:00: 8 uur, ook in de kerncijfers', () => {
+    expect(meet([['22:00', '06:00']])).toEqual({ server: 480, kerncijfers: 480, rooster: 480, maandprint: 480 });
   });
 
-  it('eindigt om 00:00, 16:00 tot 00:00: de kerncijfers slaan het deel over', () => {
-    expect(meet([['16:00', '00:00']])).toEqual({ server: 480, kerncijfers: null, rooster: 480, maandprint: 480 });
+  it('eindigt om 00:00, 16:00 tot 00:00: 8 uur, ook in de kerncijfers', () => {
+    expect(meet([['16:00', '00:00']])).toEqual({ server: 480, kerncijfers: 480, rooster: 480, maandprint: 480 });
   });
 
-  it('gesplitst met een nachtdeel in gewone uren: de kerncijfers tellen alleen het dagdeel', () => {
-    expect(meet([['17:00', '20:00'], ['22:00', '02:30']])).toEqual({ server: 450, kerncijfers: 180, rooster: 450, maandprint: 450 });
+  it('gesplitst met een nachtdeel in gewone uren: beide delen tellen, ook in de kerncijfers', () => {
+    expect(meet([['17:00', '20:00'], ['22:00', '02:30']])).toEqual({ server: 450, kerncijfers: 450, rooster: 450, maandprint: 450 });
   });
 
-  it('gelijke begin- en eindtijd, 08:00 tot 08:00: 24 uur voor server, rooster en maandprint, 0 voor de kerncijfers', () => {
-    expect(meet([['08:00', '08:00']])).toEqual({ server: 1440, kerncijfers: 0, rooster: 1440, maandprint: 1440 });
+  it('een etmaal in busvak-uren, 08:00 tot 32:00: 24 uur; 22:00 tot 30:00: 8 uur', () => {
+    expect(meet([['08:00', '32:00']])).toEqual({ server: 1440, kerncijfers: 1440, rooster: 1440, maandprint: 1440 });
+    expect(meet([['22:00', '30:00']])).toEqual({ server: 480, kerncijfers: 480, rooster: 480, maandprint: 480 });
+    // Tegenover het ongeldige deel hieronder: zelfde begin, nu wel een etmaal.
+    expect(meet([['08:00', '08:00']])).toEqual({ server: null, kerncijfers: null, rooster: 0, maandprint: 0 });
   });
 
-  it('gelijke begin- en eindtijd om middernacht, 00:00 tot 00:00', () => {
-    expect(meet([['00:00', '00:00']])).toEqual({ server: 1440, kerncijfers: 0, rooster: 1440, maandprint: 1440 });
+  it('gelijke begin- en eindtijd, 08:00 tot 08:00: ongeldig, 0 minuten (null op de server en in de kerncijfers)', () => {
+    expect(meet([['08:00', '08:00']])).toEqual({ server: null, kerncijfers: null, rooster: 0, maandprint: 0 });
   });
 
-  it('dagdeel plus een deel met gelijke tijden: een verschil van 24 uur', () => {
-    expect(meet([['06:00', '14:00'], ['15:00', '15:00']])).toEqual({ server: 1920, kerncijfers: 480, rooster: 1920, maandprint: 1920 });
+  it('gelijke begin- en eindtijd om middernacht, 00:00 tot 00:00: ongeldig', () => {
+    expect(meet([['00:00', '00:00']])).toEqual({ server: null, kerncijfers: null, rooster: 0, maandprint: 0 });
   });
 
-  it('tijden met seconden, 06:00:00 tot 14:00:00: de kerncijfers lezen ze niet', () => {
+  it('dagdeel plus een deel met gelijke tijden: alleen het dagdeel telt', () => {
+    expect(meet([['06:00', '14:00'], ['15:00', '15:00']])).toEqual({ server: 480, kerncijfers: 480, rooster: 480, maandprint: 480 });
+  });
+
+  it('een tijd buiten de grenzen, 06:00 tot 48:00: nergens meer een duur (de maandprint rekende 42 uur)', () => {
+    expect(meet([['06:00', '48:00']])).toEqual({ server: null, kerncijfers: null, rooster: 0, maandprint: 0 });
+  });
+
+  it('een einde dat ook na +24 u niet na de start ligt: geen venster, nergens een duur (geen 0 of negatieve minuten)', () => {
+    // Start in busvak-uren, einde in gewone uren: 24:00 tot 00:00 en 30:00 tot
+    // 06:00 zouden 0 minuten zijn, 24:30 tot 00:00 -30, 32:00 tot 06:00 -120,
+    // 47:59 tot 00:00 -1439. Vroeger telden de server en het rooster dat mee.
+    for (const deel of [['24:00', '00:00'], ['30:00', '06:00'], ['24:30', '00:00'], ['32:00', '06:00'], ['47:59', '00:00']] as Deel[]) {
+      expect(meet([deel]), deel.join(' tot ')).toEqual({ server: null, kerncijfers: null, rooster: 0, maandprint: 0 });
+      expect(deelVenster(...deel), deel.join(' tot ')).toBeNull();
+    }
+    // Met een geldig deel ernaast telt alleen dat deel, ook als kortste dienst.
+    expect(meet([['06:00', '14:00'], ['24:30', '00:00']])).toEqual({ server: 480, kerncijfers: 480, rooster: 480, maandprint: 480 });
+    // Gemengde notatie mét venster blijft geldig: 24:30 tot 06:00 is 5 uur 30.
+    expect(meet([['24:30', '06:00']])).toEqual({ server: 330, kerncijfers: 330, rooster: 330, maandprint: 330 });
+  });
+});
+
+describe('waar ze nog uiteenlopen (bewust)', () => {
+  it('tijden met seconden, 06:00:00 tot 14:00:00: de kerncijfers keuren strikt en lezen ze niet', () => {
     expect(meet([['06:00:00', '14:00:00']])).toEqual({ server: 480, kerncijfers: null, rooster: 480, maandprint: 480 });
   });
 
@@ -134,63 +171,134 @@ describe('waar ze uiteenlopen (niet samengevoegd, beslissing voor Jarno)', () =>
     expect(meet([['', '']])).toEqual({ server: null, kerncijfers: null, rooster: 0, maandprint: 0 });
     expect(meet([['x', '08:00']])).toEqual({ server: null, kerncijfers: null, rooster: 0, maandprint: 0 });
   });
+});
 
-  it('een tijd buiten de grenzen, 06:00 tot 48:00: alleen de maandprint rekent door', () => {
-    expect(meet([['06:00', '48:00']])).toEqual({ server: null, kerncijfers: null, rooster: 0, maandprint: 2520 });
+describe('deelVenster en deelMinuten tegenover de oude regel, voor elk paar tijden', () => {
+  const klok = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  /** 00:00 tot 47:55 per vijf minuten, de randen, andere schrijfwijzen en vuil. */
+  const TIJDEN: Array<string | null | undefined> = [
+    ...Array.from({ length: 48 * 12 }, (_, i) => klok(i * 5)),
+    '23:59', '24:01', '47:59', '6:00', ' 06:00 ', '06:00:00', '', 'x', '48:00', '07:60', null, undefined,
+  ];
+  /** Gelijke begin- en eindtijd, gelezen met de oude parser (het begin van
+   *  een oud venster; 47:59 als einde is altijd leesbaar). */
+  const oudeTijd = (t: unknown) => oudVenster({ startTime: t as string, endTime: '47:59' })?.start ?? null;
+  const gelijk = (a: unknown, b: unknown) => oudeTijd(a) !== null && oudeTijd(a) === oudeTijd(b);
+  /** De oude regel, met twee verschillen: gelijke tijden en een venster dat
+   *  na de +24 u leeg of negatief is (einde niet na de start) zijn nu null. */
+  const verwachtVenster = (a: unknown, b: unknown) => {
+    const oud = oudVenster({ startTime: a as string, endTime: b as string });
+    return oud && oud.end > oud.start && !gelijk(a, b) ? oud : null;
+  };
+  const alleParen = (controle: (a: string | null | undefined, b: string | null | undefined) => string | null) => {
+    const fouten: string[] = [];
+    for (const a of TIJDEN) for (const b of TIJDEN) {
+      const fout = controle(a, b);
+      if (fout && fouten.length < 10) fouten.push(`${JSON.stringify(a)} tot ${JSON.stringify(b)}: ${fout}`);
+    }
+    return fouten;
+  };
+  const zelfde = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y);
+
+  it('deelVenster en shiftWindowMinutes = het oude venster, of null waar het einde niet na de start lag', () => {
+    expect(alleParen((a, b) => {
+      const verwacht = verwachtVenster(a, b);
+      if (!zelfde(deelVenster(a, b), verwacht)) return `deelVenster ${JSON.stringify(deelVenster(a, b))}, verwacht ${JSON.stringify(verwacht)}`;
+      const rij = { startTime: a as string, endTime: b as string };
+      if (!zelfde(shiftWindowMinutes(rij), verwacht)) return `shiftWindowMinutes ${JSON.stringify(shiftWindowMinutes(rij))}`;
+      return null;
+    })).toEqual([]);
+  });
+
+  it('deelMinuten, de server, het rooster en de maandprint = de oude duur, of null (0) waar het einde niet na de start lag', () => {
+    expect(alleParen((a, b) => {
+      const oud = oudServerDeel(a, b);
+      const verwacht = verwachtVenster(a, b) ? oud : null;
+      if (deelMinuten(a, b) !== verwacht) return `deelMinuten ${deelMinuten(a, b)}, verwacht ${verwacht}`;
+      if (server({ startTime: a, endTime: b }) !== verwacht) return `server ${server({ startTime: a, endTime: b })}`;
+      if (rooster({ startTime: a as string, endTime: b as string }) !== (verwacht ?? 0)) return `rooster ${rooster({ startTime: a as string, endTime: b as string })}`;
+      if (typeof a === 'string' && typeof b === 'string' && maandprint(a, b) !== (verwacht ?? 0)) return `maandprint ${maandprint(a, b)}`;
+      return null;
+    })).toEqual([]);
+  });
+
+  it('wat verandert tegenover de oude regel is precies: gelijke tijden en lege of negatieve vensters', () => {
+    let veranderd = 0;
+    expect(alleParen((a, b) => {
+      const oud = oudVenster({ startTime: a as string, endTime: b as string });
+      const nieuw = deelVenster(a, b);
+      if (zelfde(nieuw, oud)) return null;
+      veranderd += 1;
+      // Alleen een deel met gelijke tijden of een oud venster zonder echte
+      // duur mag verdwijnen; een geldig venster verandert nooit.
+      return oud && (gelijk(a, b) || oud.end <= oud.start) && nieuw === null ? null : `oud ${JSON.stringify(oud)}, nieuw ${JSON.stringify(nieuw)}`;
+    })).toEqual([]);
+    // Niet leeg (de test toetst echt iets), en een kleine minderheid van alle paren.
+    expect(veranderd).toBeGreaterThan(0);
+    expect(veranderd).toBeLessThan(TIJDEN.length * TIJDEN.length * 0.2);
+  });
+
+  it('de kerncijfers: dezelfde duur voor strikt geschreven tijden, anders null', () => {
+    const strikt = (t: unknown) => typeof t === 'string' && /^\s*\d{1,2}:\d{2}\s*$/.test(t);
+    expect(alleParen((a, b) => {
+      const verwacht = strikt(a) && strikt(b) && verwachtVenster(a, b) ? oudServerDeel(a, b) : null;
+      const kc = kerncijfers(dienst([[a as string, b as string]]));
+      return kc === verwacht ? null : `kerncijfers ${kc}, verwacht ${verwacht}`;
+    })).toEqual([]);
+  });
+
+  it('de server telt de delen op en slaat een onleesbaar of ongeldig deel over', () => {
+    expect(server({ startTime: '06:00', endTime: '09:00', startTime2: '--', endTime2: '--', startTime3: '15:00', endTime3: '18:30' })).toBe(390);
+    expect(server({ startTime: '06:00', endTime: '09:00', startTime2: '12:00', endTime2: '12:00', startTime3: '15:00', endTime3: '18:30' })).toBe(390);
+    expect(server({ startTime: null, endTime: null })).toBeNull();
+    expect(server({})).toBeNull();
   });
 });
 
-describe('deelVenster en deelMinuten: de gedeelde rekenregel van server en rooster', () => {
-  const GEVALLEN: Array<[string | null | undefined, string | null | undefined, number | null]> = [
-    ['06:00', '14:00', 480],
-    ['6:00', '14:00', 480],
-    ['22:00', '26:16', 256],
-    ['22:00', '06:00', 480],
-    ['16:00', '24:00', 480],
-    ['16:00', '00:00', 480],
-    ['08:00', '08:00', 1440],
-    ['00:00', '00:00', 1440],
-    ['24:30', '06:00', 330],
-    ['06:00:00', '14:00:00', 480],
-    [' 06:00 ', '14:00', 480],
-    ['', '', null],
-    ['06:00', '', null],
-    ['x', '08:00', null],
-    ['06:00', '48:00', null],
-    ['06:00', '07:60', null],
-    [null, undefined, null],
+/**
+ * De aanroepers (stap 2 van nummer 28): wie `?? 0` doet telt 0 minuten, maar
+ * een dienst met een ongeldig deel telt nog als dienst en als dag, en blijft
+ * zichtbaar.
+ */
+describe('de aanroepers: een ongeldig deel telt 0 minuten, de dienst telt nog mee', () => {
+  const DAGEN = ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'];
+  const DIENSTEN = [
+    { serviceNumber: 'N1', startTime: '22:00', endTime: '06:00' },
+    { serviceNumber: 'L1', startTime: '08:00', endTime: '08:00' },
+    { serviceNumber: 'E1', startTime: '08:00', endTime: '32:00' },
+    { serviceNumber: 'A1', startTime: '16:00', endTime: '00:00' },
   ];
 
-  it('geeft voor elk deel wat de server vroeger gaf', () => {
-    for (const [a, b, verwacht] of GEVALLEN) {
-      expect(oudServerDeel(a, b), `oud ${a} tot ${b}`).toBe(verwacht);
-      expect(deelMinuten(a, b), `${a} tot ${b}`).toBe(verwacht);
-      expect(server({ startTime: a, endTime: b }), `server ${a} tot ${b}`).toBe(verwacht);
-    }
+  it('Maandoverzicht (berekenMaandoverzicht): 4 diensten op 4 dagen, 40 uur (22:00-06:00 8, 08:00-08:00 0, 08:00-32:00 24, 16:00-00:00 8)', () => {
+    const cells = { c1: Object.fromEntries(DAGEN.map((iso, i) => [iso, { code: DIENSTEN[i].serviceNumber, kind: 'service' }])) };
+    const { rijen, totaal } = berekenMaandoverzicht(DAGEN, [{ id: 'c1', name: 'Chauffeur' }], cells, DIENSTEN, []);
+    expect(rijen[0]).toMatchObject({ diensten: 4, dagen: 4, minuten: 480 + 0 + 1440 + 480 });
+    expect(totaal.minuten).toBe(2400);
+    // Alleen het ongeldige deel: telt als dienst en als dag, met 0 minuten.
+    const alleen = berekenMaandoverzicht(['2026-09-29'], [{ id: 'c1', name: 'Chauffeur' }], { c1: { '2026-09-29': { code: 'L1', kind: 'service' } } }, DIENSTEN, []);
+    expect(alleen.rijen[0]).toMatchObject({ diensten: 1, dagen: 1, minuten: 0 });
   });
 
-  it('shiftWindowMinutes (Mijn dag, dashboard, rooster) geeft voor elk deel het venster van vroeger', () => {
-    for (const [a, b] of GEVALLEN) {
-      const rij = { startTime: a as string, endTime: b as string };
-      const oud = oudVenster(rij);
-      expect(shiftWindowMinutes(rij), `venster ${a} tot ${b}`).toEqual(oud);
-      expect(deelVenster(a, b), `deelVenster ${a} tot ${b}`).toEqual(oud);
-    }
+  it('rapport Diensten per dag (bouwDienstenPerDag): elk deel een rij, Duur leeg bij het ongeldige deel', () => {
+    const planning = DIENSTEN.map((d, i) => ({ id: `p${i}`, date: '2026-09-29', startTime: d.startTime, endTime: d.endTime, line: d.serviceNumber, driverId: '1' }));
+    const uit = bouwDienstenPerDag({ planning, users: [] }, { van: '2026-09-29', tot: '2026-09-29', keuzes: {} } as never);
+    expect(Object.fromEntries(uit.rijen.map((r) => [r.dienst, r.duur]))).toEqual({ N1: 480, L1: null, E1: 1440, A1: 480 });
   });
 
-  it('het rooster geeft voor elk deel wat het vroeger gaf (0 zonder leesbare tijden)', () => {
-    for (const [a, b, verwacht] of GEVALLEN) {
-      const rij = { startTime: a as string, endTime: b as string };
-      const venster = oudVenster(rij);
-      const oud = venster ? venster.end - venster.start : 0;
-      expect(oud, `oud ${a} tot ${b}`).toBe(verwacht ?? 0);
-      expect(rooster(rij), `rooster ${a} tot ${b}`).toBe(oud);
-    }
+  it('rooster (berekenRoosterUren, minutenPerDag): 0 minuten voor het ongeldige deel, de dag telt als dienstdag', () => {
+    const rijen = DIENSTEN.map((d, i) => ({ date: DAGEN[i], startTime: d.startTime, endTime: d.endTime }));
+    expect(berekenRoosterUren(rijen, '2026-09-29')).toEqual({ weekMinuten: 2400, maandMinuten: 480 + 0 + 1440, maandDienstdagen: 3 });
+    expect(Object.fromEntries(minutenPerDag(rijen))).toEqual({ '2026-09-28': 480, '2026-09-29': 0, '2026-09-30': 1440, '2026-10-01': 480 });
   });
 
-  it('de server telt de delen op en slaat een onleesbaar deel over', () => {
-    expect(server({ startTime: '06:00', endTime: '09:00', startTime2: '--', endTime2: '--', startTime3: '15:00', endTime3: '18:30' })).toBe(390);
-    expect(server({ startTime: null, endTime: null })).toBeNull();
-    expect(server({})).toBeNull();
+  it('maandprint (minutesBetween): 8, 0, 24 en 8 uur', () => {
+    expect(DIENSTEN.map((d) => maandprint(d.startTime, d.endTime))).toEqual([480, 0, 1440, 480]);
+  });
+
+  it('kerncijfers (dienstStatistiek): 22:00-06:00 telt als 8 uur, een dienst met alleen een ongeldig deel telt niet mee', () => {
+    const s = dienstStatistiek(DIENSTEN.map((d, i) => ({ id: String(i), ...d })));
+    expect(s.diensten).toBe(4);
+    expect(s.langste).toEqual({ serviceNumber: 'E1', minuten: 1440 });
+    expect(s.kortste).toEqual({ serviceNumber: 'N1', minuten: 480 });
   });
 });

@@ -100,13 +100,25 @@ export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
     // Alles eerst als minuten sinds middernacht van de dienstdag: zo klopt
     // ook gemengde notatie ("24:30 – 06:00" = start busvak, einde gewoon),
     // die anders een DTEND vóór DTSTART opleverde en het event in agenda-
-    // apps liet vallen. Eind <= start betekent altijd "volgende dag".
+    // apps liet vallen. Eind vóór de start betekent "volgende dag".
     const startMin = toMinutes(ev.startTime);
     const rawEndMin = toMinutes(ev.endTime);
-    const endMin = rawEndMin <= startMin ? rawEndMin + 24 * 60 : rawEndMin;
     const start = normalizeDayTime(ev.date, ev.startTime);
-    const end = normalizeDayTime(ev.date, `${Math.floor(endMin / 60)}:${String(endMin % 60).padStart(2, '0')}`);
-    lines.push(`DTSTART:${toFloatingDateTime(start.date, start.time)}`, `DTEND:${toFloatingDateTime(end.date, end.time)}`);
+    lines.push(`DTSTART:${toFloatingDateTime(start.date, start.time)}`);
+    // Alleen een DTEND als het einde (na de +24 u) echt na de start ligt, de
+    // regel van deelVenster in shared/busvakTijd.ts (Jarno 29-09). Gelijke
+    // begin- en eindtijd is geen etmaal maar een ongeldig deel, en een einde
+    // dat ook na +24 u niet na de start ligt (24:30 tot 00:00) evenmin. De
+    // dienst blijft dan een afspraak in de agenda, op haar begintijdstip,
+    // zonder DTEND: volgens RFC 5545 (3.6.1) duurt ze zo nul minuten. Een
+    // DTEND gelijk aan of vóór DTSTART is niet toegestaan (3.8.2.2), en een
+    // blok van 24 uur zou een dienst tonen die niemand gepland heeft.
+    // Geldige delen: ongewijzigd.
+    const endMin = rawEndMin < startMin ? rawEndMin + 24 * 60 : rawEndMin;
+    if (endMin > startMin) {
+      const end = normalizeDayTime(ev.date, `${Math.floor(endMin / 60)}:${String(endMin % 60).padStart(2, '0')}`);
+      lines.push(`DTEND:${toFloatingDateTime(end.date, end.time)}`);
+    }
   }
   lines.push(`SUMMARY:${escapeIcsText(ev.summary)}`);
   if (ev.description) lines.push(`DESCRIPTION:${escapeIcsText(ev.description)}`);

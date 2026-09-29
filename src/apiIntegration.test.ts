@@ -1549,6 +1549,50 @@ describe('dienstruil: autorisatieregels', () => {
   });
 });
 
+describe('dienstruil: "al gereden" volgt deelVenster (Jarno 29-09, 28e)', () => {
+  // In juli is Brussel UTC+2: 05:00Z = 07:00, 18:00Z = 20:00, 07:00Z = 09:00.
+  const DAG = '2026-07-10';
+  const vraagRuil = (shiftId: string) => api('POST', '/api/swaps', {
+    token: 'tok-a',
+    body: [{ id: `s-${shiftId}`, shiftId, requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: `${DAG}T05:00:00Z`, returnDate: '2026-07-12', returnCode: 'VRIJ' }],
+  });
+  beforeEach(() => { mem.swaps = []; });
+
+  it('22:00 tot 06:00 op dag D is om 07:00 op D nog niet gereden: de server aanvaardt de ruil', async () => {
+    vi.setSystemTime(new Date(`${DAG}T05:00:00Z`));
+    mem.planning = [{ id: 'sh-n', driverId: '3', date: DAG, line: '12', startTime: '22:00', endTime: '06:00' }];
+    const res = await vraagRuil('sh-n');
+    expect(res.status).toBe(200);
+    expect(mem.swaps.map((s: any) => s.id)).toEqual(['s-sh-n']);
+  });
+
+  it('16:00 tot 00:00 is om 20:00 op D nog niet gereden; 22:00 tot 30:00 blijft zoals vroeger', async () => {
+    vi.setSystemTime(new Date(`${DAG}T18:00:00Z`));
+    mem.planning = [
+      { id: 'sh-m', driverId: '3', date: DAG, line: '12', startTime: '16:00', endTime: '00:00' },
+      { id: 'sh-b', driverId: '3', date: DAG, line: '13', startTime: '22:00', endTime: '30:00' },
+    ];
+    expect((await vraagRuil('sh-m')).status).toBe(200);
+    mem.swaps = [];
+    expect((await vraagRuil('sh-b')).status).toBe(200);
+  });
+
+  it('een deel met gelijke tijden: gereden zoals vroeger, alleen op de eindtijd; naast een nachtdeel beslist het nachtdeel', async () => {
+    vi.setSystemTime(new Date(`${DAG}T07:00:00Z`)); // 09:00
+    mem.planning = [{ id: 'sh-g', driverId: '3', date: DAG, line: '12', startTime: '08:00', endTime: '08:00' }];
+    const geweigerd = await vraagRuil('sh-g');
+    expect(geweigerd.status).toBe(400);
+    expect(geweigerd.json.error).toBe('Deze dienst is al gereden en kan niet meer geruild worden.');
+    expect(mem.swaps).toEqual([]);
+    // Gesplitste dienst 12: het ongeldige deel en een nachtdeel van 22:00 tot 06:00.
+    mem.planning = [
+      { id: 'sh-g', driverId: '3', date: DAG, line: '12', startTime: '08:00', endTime: '08:00' },
+      { id: 'sh-g2', driverId: '3', date: DAG, line: '12', startTime: '22:00', endTime: '06:00' },
+    ];
+    expect((await vraagRuil('sh-g')).status).toBe(200);
+  });
+});
+
 describe('dienstruil zonder tegenprestatie (overname)', () => {
   // Chauffeur 3 biedt sh-c aan (2026-07-08); chauffeur 4 staat die dag op 'bv'.
   const overname = (extra: Record<string, unknown> = {}) => ({
@@ -1885,6 +1929,51 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(res.json.planning).toMatchObject({ status: 'overgeslagen', reden: 'geen-matrix' });
     expect(mem.planning).toBe(voor);
     expect(automatischLog()).toHaveLength(0);
+  });
+
+  it('(e) een deel met gelijke begin- en eindtijd wordt geweigerd (Jarno 29-09): 400 met dienst en deel, niets opgeslagen', async () => {
+    const voor = mem.services;
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime2: '08:00', endTime2: '08:00' }) });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('Deel 2 van dienst 12 heeft dezelfde begin- en eindtijd (08:00). Een dienst van een etmaal schrijf je in busvak-uren, bv. 08:00 tot 32:00.');
+    expect(mem.services).toBe(voor);
+    // Ook de Excel-import (admin, volledige vervanging), met een telling als er meer zijn.
+    const bulk = await api('POST', '/api/services', {
+      token: 'tok-admin', headers: { 'x-bulk-replace': '1' },
+      body: mem.services.map((s: any, i: number) => ({ ...s, id: `vers-${i}`, ...(i < 2 ? { startTime3: '00:00', endTime3: '00:00' } : {}) })),
+    });
+    expect(bulk.status).toBe(400);
+    expect(bulk.json.error).toBe('Deel 3 van dienst 10 heeft dezelfde begin- en eindtijd (00:00). Een dienst van een etmaal schrijf je in busvak-uren, bv. 00:00 tot 24:00. Nog 1 deel met een einde dat niet na de start ligt.');
+    expect(mem.services).toBe(voor);
+    // Ook een einde dat na +24 u niet na de start ligt (tegenlezing 29-09).
+    const nacht = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime2: '24:30', endTime2: '00:00' }) });
+    expect(nacht.status).toBe(400);
+    expect(nacht.json.error).toBe('Deel 2 van dienst 12 eindigt niet na de start (24:30 tot 00:00). Begint een deel na middernacht, schrijf dan ook het einde in busvak-uren: 02:15 wordt 26:15.');
+    expect(mem.services).toBe(voor);
+    expect(automatischLog()).toHaveLength(0);
+    // Een etmaal in busvak-uren en een nachtdeel in gewone uren mogen wel.
+    const ok = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime2: '22:00', endTime2: '06:00', startTime3: '08:00', endTime3: '32:00' }) });
+    expect(ok.status).toBe(200);
+  });
+
+  it('(e) een dienst van vóór de regel houdt een andere wijziging niet tegen, blijft in de planning en telt als dienst met 0 minuten', async () => {
+    // Rechtstreeks in de database, van vóór 29-09: dienst 12 = 08:00 tot 08:00.
+    mem.services = metDienst12({ startTime: '08:00', endTime: '08:00' });
+    const res = await api('POST', '/api/services', {
+      token: 'tok-planner',
+      body: mem.services.map((s: any) => (s.serviceNumber === '10' ? { ...s, startTime: '05:45' } : s)),
+    });
+    expect(res.status).toBe(200);
+    // De planningsopbouw (getServiceSegments) laat het deel door: de dienst verdwijnt niet uit het rooster.
+    expect((await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' })).status).toBe(200);
+    expect(mem.planning.filter((p: any) => String(p.line) === '12').map((p: any) => [p.date, p.driverId, p.startTime, p.endTime]).sort()).toEqual([
+      ['2026-07-01', '3', '08:00', '08:00'],
+      ['2026-07-08', '3', '08:00', '08:00'],
+    ]);
+    // Het Maandoverzicht telt haar als dienst en als dag, met 0 minuten (vroeger 2 keer 24 uur).
+    const overzicht = await api('GET', '/api/month-planning?month=2026-07&format=summary', { token: 'tok-planner' });
+    expect(overzicht.status).toBe(200);
+    expect(overzicht.json.rijen.find((r: any) => r.driverId === '3')).toMatchObject({ diensten: 2, dagen: 2, minuten: 0 });
   });
 
   it('(c) een databasefout in de heropbouw laat de save niet mislukken', async () => {
@@ -5233,6 +5322,40 @@ describe('advies openstaande diensten (/api/coverage-advisor)', () => {
     const a = res.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
     expect(a.rustVoor).toBeNull();
     expect(a.past).toBe(true);
+  });
+
+  it('gelijke begin- en eindtijd (Jarno 29-09): zoals een dienst zonder leesbare tijden, geen verzonnen etmaal', async () => {
+    // Dienst 16 heeft alleen een deel van 08:00 tot 08:00. Chauffeur A werkte
+    // de dag ervoor tot 23:30: vroeger telde het deel als een etmaal en kwam
+    // er 8u30 rust uit; nu zijn de tijden onbekend en telt alleen de
+    // 6-dagenregel. Het deel blijft wel als context in het antwoord staan.
+    mem.services = [...mem.services, { id: 'd7', serviceNumber: '16', startTime: '08:00', endTime: '08:00' }];
+    mem.planning = [
+      { id: 'p-a', driverId: '3', date: '2026-09-15', startTime: '15:00', endTime: '23:30', line: '12' },
+      // Chauffeur B had de dag ervoor een ongeldig deel: vroeger -2u rust voor dienst 10.
+      { id: 'p-b', driverId: '4', date: '2026-09-15', startTime: '08:00', endTime: '08:00', line: '14' },
+    ];
+    const ongeldig = await api('GET', `/api/coverage-advisor?date=${DAG}&code=16`, { token: 'tok-planner' });
+    expect(ongeldig.status).toBe(200);
+    expect(ongeldig.json.tijdenOnbekend).toBe(true);
+    expect(ongeldig.json.segmenten).toEqual([{ startTime: '08:00', endTime: '08:00' }]);
+    const a = ongeldig.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
+    expect(a.rustVoor).toBeNull();
+    expect(a.past).toBe(true);
+
+    // Dienst 10 (06:00 tot 14:00) naast B's ongeldige deel: geen rustregel, B past.
+    const tien = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    const b = tien.json.kandidaten.find((k: any) => k.name === 'Chauffeur B');
+    expect(b.rustVoor).toBeNull();
+    expect(b.past).toBe(true);
+
+    // Een nachtdeel in gewone uren telt wel: 22:00 tot 06:00 de dag ervoor
+    // eindigt om 06:00, dus 0u rust voor een dienst om 06:00.
+    mem.planning = [{ id: 'p-n', driverId: '3', date: '2026-09-15', startTime: '22:00', endTime: '06:00', line: '12' }];
+    const nacht = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    const aNacht = nacht.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
+    expect(aNacht.rustVoor).toBe(0);
+    expect(aNacht.past).toBe(false);
   });
 });
 

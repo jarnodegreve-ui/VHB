@@ -11,6 +11,8 @@
  * (het beheerscherm toont het plan vóór de bevestiging) en door de maandelijkse
  * restore-proef.
  */
+import { ongeldigeDelen, type DienstTijden } from './gelijkeTijden.js';
+
 export const HERSTEL_LIJSTEN = [
   'users', 'planning', 'services', 'diversions', 'updates', 'planningCodes', 'leave', 'swaps', 'planningMatrixRows',
 ] as const;
@@ -120,6 +122,21 @@ export function bouwHerstelPlan({ backup, live, exportedAt = null, actorId = nul
       collectie: 'coverageExpectations', inBackup: true, overgeslagen: false, backup: sleutels.length, live: liveDekking.length,
       erbij, weg: liveDekking.filter((k) => !sleutels.includes(k)).length, blijft: sleutels.length - erbij,
     });
+  }
+
+  // Een deel met twee leesbare tijden zonder venster (Jarno 29-09: gelijke
+  // begin- en eindtijd, of een einde dat ook na +24 u niet na de start ligt)
+  // weigert de ingang (POST /api/services), maar een oudere back-up kan er een
+  // bevatten. Het herstel zet het terug zoals het was: een herstel is een
+  // noodgreep en zo'n deel breekt niets (het telt in geen enkele berekening
+  // mee, de dienst blijft zichtbaar). Daarom een waarschuwing met dienst en
+  // deel, geen blokkade.
+  if (Array.isArray(backup.services)) {
+    const ongeldig = ongeldigeDelen(backup.services as DienstTijden[]);
+    if (ongeldig.length > 0) {
+      const voorbeeld = ongeldig.slice(0, 3).map((g) => `dienst ${g.dienst} deel ${g.deel}`).join(', ');
+      waarschuwingen.push(`'services': ${ongeldig.length} ${ongeldig.length === 1 ? 'deel heeft een einde' : 'delen hebben een einde'} dat niet na de start ligt (${voorbeeld}${ongeldig.length > 3 ? ', …' : ''}): ze komen zo terug, maar tellen in geen enkele urenberekening mee`);
+    }
   }
 
   // Dezelfde vangrail als de route: zonder admin sluit je jezelf buiten.

@@ -183,7 +183,9 @@ describe('elke aanroepplek geeft nog wat haar oude parser gaf', () => {
 
   it('shared/ruilRust.ts dagVenster (start van het venster)', () => {
     for (const t of invoeren) {
-      const verwacht = oudLees(t as string);
+      // 47:59 tot 47:59 heeft gelijke begin- en eindtijd: ongeldig, geen
+      // venster (Jarno 29-09; vroeger een venster van een etmaal vanaf 47:59).
+      const verwacht = t === '47:59' ? null : oudLees(t as string);
       const venster = dagVenster([{ startTime: t as string, endTime: '47:59' }]);
       expect(venster?.start ?? null, naam(t)).toBe(verwacht);
     }
@@ -192,8 +194,9 @@ describe('elke aanroepplek geeft nog wat haar oude parser gaf', () => {
   it('api/helpers.ts dienstMinuten (einde van één deel dat om 00:00 begint)', () => {
     for (const t of invoeren) {
       const p = oudLees(t as string);
-      // einde ≤ start telt als nacht: 00:00 tot 00:00 is een etmaal.
-      const verwacht = p === null ? null : p === 0 ? 1440 : p;
+      // Gelijke begin- en eindtijd (00:00 tot 00:00) is ongeldig: null (Jarno
+      // 29-09; vroeger telde einde ≤ start als nacht en was het een etmaal).
+      const verwacht = p === null || p === 0 ? null : p;
       expect(dienstMinutenServer({ startTime: '00:00', endTime: t }), naam(t)).toBe(verwacht);
     }
   });
@@ -201,7 +204,10 @@ describe('elke aanroepplek geeft nog wat haar oude parser gaf', () => {
   it('src/lib/dienstStatistiek.ts dienstMinuten (einde van één deel dat om 00:00 begint)', () => {
     for (const t of invoeren) {
       const dienst = { id: 'x', serviceNumber: 'x', startTime: '00:00', endTime: t as string };
-      expect(dienstMinutenStatistiek(dienst), naam(t)).toBe(oudStatistiek(t as string));
+      // De kerncijfers keuren nog strikt (oudStatistiek), maar 00:00 tot 00:00
+      // is sinds 29-09 ongeldig: null in plaats van 0.
+      const p = oudStatistiek(t as string);
+      expect(dienstMinutenStatistiek(dienst), naam(t)).toBe(p === 0 ? null : p);
     }
   });
 
@@ -248,10 +254,16 @@ describe('elke aanroepplek geeft nog wat haar oude parser gaf', () => {
       const ruw = oudIcs(t as string);
       // Een negatief getal ("-1:00") geeft geen geldige DTEND; dat is de bestaande toestand en hoort niet bij deze meting.
       if (ruw < 0) continue;
-      const verwacht = ruw <= 0 ? ruw + 1440 : ruw;
       const regels = buildVevent({ uid: 'u', date: '2026-09-29', startTime: '00:00', endTime: t as string, summary: 's' }, '20260929T000000Z');
-      const dtend = regels.find((r) => r.startsWith('DTEND:'))!;
-      expect(minutenNa(dtend), naam(t)).toBe(verwacht);
+      const dtend = regels.find((r) => r.startsWith('DTEND:'));
+      // Einde gelijk aan de start (00:00): geen blok van een etmaal meer maar
+      // een afspraak zonder DTEND, nul minuten op het begintijdstip (Jarno
+      // 29-09; vroeger DTEND de dag erna om 00:00).
+      if (ruw === 0) {
+        expect(dtend, naam(t)).toBeUndefined();
+        continue;
+      }
+      expect(minutenNa(dtend!), naam(t)).toBe(ruw);
     }
   });
 

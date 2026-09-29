@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import * as XLSX from 'xlsx';
 import { ADMIN, CHAUFFEUR, seed } from './helpers';
 import { TECHNIEKER } from '../scripts/audit-fixtures.mjs';
 import { logIn, zonderSessie } from './deeplinkHulp';
@@ -225,6 +226,130 @@ test.describe('verwijderen (admin, server-confirmed)', () => {
     expect(pad(page)).toBe('/beheer/dienstoverzicht/3');
     await paneel(page, '2515').getByRole('button', { name: 'Annuleren' }).click();
     await expect(zichtbaar(page, '2515').first()).toBeVisible();
+  });
+});
+
+/**
+ * Jarno 29-09 (28b): een deel met twee leesbare tijden zonder venster (gelijke
+ * begin- en eindtijd, of een einde dat ook na +24 u niet na de start ligt)
+ * wordt aan de ingang geweigerd. Het formulier toont een veldfout per deel en
+ * stuurt niets; de Excel-import zegt in de bevestiging welke dienst en welk
+ * deel, en neemt de tijden en het loopnummer van dat deel niet mee (anders
+ * strandt ze op de 400 van de server).
+ */
+test.describe('deel zonder geldige tijden', () => {
+  /** Een .xlsx zoals Excel hem bewaart: drie keer Begin/Einde/Loop. */
+  const excel = (rijen: unknown[][]) => {
+    const blad = XLSX.utils.aoa_to_sheet([['Dienst', 'Begin', 'Einde', 'Loop', 'Begin', 'Einde', 'Loop', 'Begin', 'Einde', 'Loop'], ...rijen]);
+    const boek = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(boek, blad, 'Diensten');
+    return { name: 'diensten.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: XLSX.write(boek, { type: 'buffer', bookType: 'xlsx' }) as Buffer };
+  };
+  /** Vangt de POST van de import op en antwoordt zoals de server. */
+  const vangImport = async (page: Page) => {
+    const vangst: { body: Array<Record<string, string>> | null } = { body: null };
+    await page.route('**/api/services', async (route: Route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      vangst.body = route.request().postDataJSON();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, count: 1, planning: { status: 'niet-nodig' } }) });
+    });
+    return vangst;
+  };
+
+  test('formulier: een veldfout bij elk deel zonder geldige tijden tegelijk, er gaat niets naar de server', async ({ page }) => {
+    let posts = 0;
+    page.on('request', (r) => { if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/services') posts += 1; });
+    await openScherm(page, ADMIN, '/beheer/dienstoverzicht/3');
+    const p = paneel(page, '2515');
+    // Deel 2 dezelfde tijd (15:13), deel 3 een einde dat na +24 u niet na 24:10 ligt.
+    await p.getByLabel('Eindtijd (deel 2)', { exact: true }).fill('15:13');
+    await p.getByLabel('Eindtijd (deel 3)', { exact: true }).fill('00:00');
+    await p.getByRole('button', { name: 'Dienst bijwerken' }).click();
+    await expect(p.getByRole('alert').filter({ hasText: 'Deel 2 van dienst 2515 heeft dezelfde begin- en eindtijd (15:13). Een dienst van een etmaal schrijf je in busvak-uren, bv. 15:13 tot 39:13.' })).toBeVisible();
+    await expect(p.getByRole('alert').filter({ hasText: 'Deel 3 van dienst 2515 eindigt niet na de start (24:10 tot 00:00). Begint een deel na middernacht, schrijf dan ook het einde in busvak-uren: 02:15 wordt 26:15.' })).toBeVisible();
+    await expect(p).toBeVisible();
+    expect(posts).toBe(0);
+    // Gecorrigeerd gaat het wel door.
+    await p.getByLabel('Eindtijd (deel 2)', { exact: true }).fill('21:55');
+    await p.getByLabel('Eindtijd (deel 3)', { exact: true }).fill('25:10');
+    const opslaan = await houdOpslaanVast(page);
+    await p.getByRole('button', { name: 'Dienst bijwerken' }).click();
+    await opslaan.aangevraagd;
+    opslaan.geef({ status: 200, body: { ok: true } });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('Excel-import: 0 in een lege kolom is een leeg deel, één regel in de bevestiging, niets per deel', async ({ page }) => {
+    await openScherm(page, ADMIN);
+    const vangst = await vangImport(page);
+    // Deel 3 van 2115 staat op 0 in een ongebruikte kolom.
+    await page.locator('input[type="file"][accept*="xlsx"]').setInputFiles(excel([
+      ['2115', '06:00', '14:00', '4505', '15:00', '19:00', '4510', 0, 0, '4515'],
+      ['2116', '22:00', '06:00', '4600', '', '', '', '', '', ''],
+    ]));
+    const dialoog = page.getByRole('dialog', { name: 'Diensten importeren' });
+    await expect(dialoog).toBeVisible({ timeout: 15_000 });
+    await expect(dialoog).toContainText('1 deel met 0 als begin en einde (lege kolom in Excel) als leeg ingelezen.');
+    await expect(dialoog).not.toContainText('zonder tijden mee');
+    expect(vangst.body).toBeNull();
+    await dialoog.getByRole('button', { name: 'Importeren', exact: true }).click();
+    await expect.poll(() => vangst.body).not.toBeNull();
+    expect(vangst.body!.map((s) => [s.serviceNumber, s.startTime, s.endTime, s.startTime2, s.endTime2, s.loopnr2, s.startTime3, s.endTime3, s.loopnr3])).toEqual([
+      ['2115', '06:00', '14:00', '15:00', '19:00', '4510', '', '', ''],
+      ['2116', '22:00', '06:00', '', '', '', '', '', ''],
+    ]);
+  });
+
+  test('Excel-import met veel meldingen: compacte lijst die zelf schuift, Annuleren en Importeren blijven in beeld', async ({ page }) => {
+    await openScherm(page, ADMIN);
+    const vangst = await vangImport(page);
+    // Negen delen zonder geldige tijden (tekst, dus geen lege kolom), twee lege
+    // kolommen (0 en 0), en dienst 2209 houdt geen enkel geldig deel over.
+    await page.locator('input[type="file"][accept*="xlsx"]').setInputFiles(excel([
+      ['2201', '06:00', '14:00', '4501', '08:00', '08:00', '4502', 0, 0, ''],
+      ['2202', '06:00', '14:00', '', '09:00', '09:00', '', '', '', ''],
+      ['2203', '05:00', '12:00', '', '24:30', '00:00', '4503', '', '', ''],
+      ['2204', '05:00', '12:00', '', '13:00', '13:00', '', '30:00', '06:00', ''],
+      ['2205', '06:00', '14:00', '', '15:00', '15:00', '', 0, 0, ''],
+      ['2206', '06:00', '14:00', '', '16:00', '16:00', '', '', '', ''],
+      ['2207', '06:00', '14:00', '', '17:00', '17:00', '', '', '', ''],
+      ['2208', '22:00', '06:00', '', '', '', '', '', '', ''],
+      ['2209', '08:00', '08:00', '4509', '', '', '', '', '', ''],
+    ]));
+    const dialoog = page.getByRole('dialog', { name: 'Diensten importeren' });
+    await expect(dialoog).toBeVisible({ timeout: 15_000 });
+    await expect(dialoog).toContainText('9 delen gaan zonder tijden mee');
+    await expect(dialoog).toContainText('Dienst 2209 krijgt geen planning');
+    await expect(dialoog).toContainText('2 delen met 0 als begin en einde (lege kolom in Excel) als leeg ingelezen.');
+    const lijst = dialoog.getByRole('region', { name: 'Meldingen bij de import' });
+    await expect(lijst.getByRole('listitem')).toHaveText([
+      'Dienst 2201, deel 2 (08:00)',
+      'Dienst 2202, deel 2 (09:00)',
+      'Dienst 2203, deel 2 (24:30 tot 00:00)',
+      'Dienst 2204, deel 2 (13:00)',
+      'Dienst 2204, deel 3 (30:00 tot 06:00)',
+      'Dienst 2205, deel 2 (15:00)',
+      'Dienst 2206, deel 2 (16:00)',
+      'Dienst 2207, deel 2 (17:00)',
+      'Dienst 2209, deel 1 (08:00)',
+    ]);
+    // De knoppen staan volledig in beeld, ook als je de lijst tot onderaan schuift.
+    const annuleren = dialoog.getByRole('button', { name: 'Annuleren', exact: true });
+    const importeren = dialoog.getByRole('button', { name: 'Importeren', exact: true });
+    await expect(annuleren).toBeInViewport({ ratio: 1 });
+    await expect(importeren).toBeInViewport({ ratio: 1 });
+    await lijst.getByRole('listitem').last().scrollIntoViewIfNeeded();
+    await expect(lijst.getByRole('listitem').last()).toBeInViewport();
+    await expect(annuleren).toBeInViewport({ ratio: 1 });
+    await expect(importeren).toBeInViewport({ ratio: 1 });
+    await importeren.click();
+    await expect.poll(() => vangst.body).not.toBeNull();
+    // Tijden én loopnummer van de ongeldige delen gaan niet mee.
+    expect(vangst.body!.map((s) => [s.serviceNumber, s.startTime2, s.endTime2, s.loopnr2])).toEqual([
+      ['2201', '', '', ''], ['2202', '', '', ''], ['2203', '', '', ''], ['2204', '', '', ''],
+      ['2205', '', '', ''], ['2206', '', '', ''], ['2207', '', '', ''], ['2208', '', '', ''], ['2209', '', '', ''],
+    ]);
+    expect(vangst.body!.find((s) => s.serviceNumber === '2209')).toMatchObject({ startTime: '', endTime: '', loopnr: '' });
   });
 });
 

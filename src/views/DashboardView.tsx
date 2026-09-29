@@ -100,9 +100,10 @@ export function DashboardView({ notes = [],
     done: hasShiftEnded(p, now),
     active: isShiftActiveAt(p, now),
   }));
-  // Dienstbalk-delen in minuten (eind ≤ start = nachtdienst, +24u) — zelfde
-  // venster-regel als Mijn dag (shiftWindowMinutes); een deel met vuile tijden
-  // valt weg uit de balk.
+  // Dienstbalk-delen in minuten (einde vóór de start = nachtdienst, +24u),
+  // zelfde venster-regel als Mijn dag (shiftWindowMinutes); een deel met vuile
+  // tijden of zonder venster, zoals gelijke begin- en eindtijd (ongeldig,
+  // Jarno 29-09), valt weg uit de balk.
   const balkDelen = todayParts.flatMap((p) => {
     const venster = shiftWindowMinutes(p);
     return venster ? [{ ...venster, loopnr: p.loopnr }] : [];

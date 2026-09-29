@@ -59,6 +59,34 @@ describe('bouwHerstelPlan', () => {
     expect(zonderDatum.exportedAt).toBeNull();
   });
 
+  it('een deel met een einde dat niet na de start ligt in de back-up (Jarno 29-09): een waarschuwing met dienst en deel, geen blokkade', () => {
+    const dienst = (id: string, nr: string, extra: Record<string, string>) => ({ id, serviceNumber: nr, startTime: '06:00', endTime: '14:00', ...extra });
+    const plan = bouwHerstelPlan({
+      backup: {
+        users: [admin],
+        services: [
+          dienst('a', '2115', { startTime2: '08:00', endTime2: '08:00' }),
+          dienst('b', '2116', {}),
+          dienst('c', '2117', { startTime: '00:00', endTime: '00:00', startTime3: '9:00', endTime3: '09:00' }),
+          dienst('d', '2118', { startTime2: '22:00', endTime2: '06:00' }),
+          dienst('e', '2119', { startTime: '16:00', endTime: '16:00' }),
+        ],
+      },
+      live: { users: [admin] },
+      exportedAt: '2026-09-21T02:00:00Z',
+      nu: NU,
+    });
+    expect(plan.blokkades).toEqual([]);
+    expect(plan.waarschuwingen).toEqual([
+      "'services': 4 delen hebben een einde dat niet na de start ligt (dienst 2115 deel 2, dienst 2117 deel 1, dienst 2117 deel 3, …): ze komen zo terug, maar tellen in geen enkele urenberekening mee",
+    ]);
+    const één = bouwHerstelPlan({ backup: { users: [admin], services: [dienst('a', '2115', { endTime: '06:00' })] }, live: { users: [admin] }, exportedAt: '2026-09-21T02:00:00Z', nu: NU });
+    expect(één.waarschuwingen).toEqual(["'services': 1 deel heeft een einde dat niet na de start ligt (dienst 2115 deel 1): ze komen zo terug, maar tellen in geen enkele urenberekening mee"]);
+    // Ook een einde dat na +24 u niet na de start ligt.
+    const nacht = bouwHerstelPlan({ backup: { users: [admin], services: [dienst('a', '2115', { startTime2: '24:30', endTime2: '00:00' })] }, live: { users: [admin] }, exportedAt: '2026-09-21T02:00:00Z', nu: NU });
+    expect(nacht.waarschuwingen).toEqual(["'services': 1 deel heeft een einde dat niet na de start ligt (dienst 2115 deel 2): ze komen zo terug, maar tellen in geen enkele urenberekening mee"]);
+  });
+
   it('dekkingsverwachting telt per dag-type', () => {
     const plan = bouwHerstelPlan({
       backup: { users: [admin], coverageExpectations: { week: ['2101'], zaterdag: [] } },

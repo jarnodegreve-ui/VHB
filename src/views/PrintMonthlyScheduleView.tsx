@@ -4,23 +4,24 @@ import type { Shift, User } from '../types';
 import { isoWeekNumber } from '../lib/week';
 import { MONTH_NAMES, serviceNumberOf, tijdvak } from '../lib/format';
 import { apiFetch } from '../lib/api';
+import { shiftWindowMinutes } from '../lib/shiftTime';
 import { Button } from '../components/primitives';
 
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
 
+/** Minuten van één planning-rij: `deelMinuten ?? 0`, de gedeelde regel (Jarno
+ *  29-09): 22:00 tot 06:00 is 8 uur (zonder die regel telde de maandprint een
+ *  nachtdienst vroeger als 0 uur, controleronde 30/07), busvak-notatie (26:16)
+ *  telt zoals ze er staat, en een deel zonder venster (gelijke begin- en
+ *  eindtijd, of een einde dat ook na +24 u niet na de start ligt) of zonder
+ *  leesbare tijden telt 0. Gerekend via shiftWindowMinutes (dat is
+ *  deelVenster), zoals src/lib/roosterUren.ts: een import uit
+ *  shared/busvakTijd.ts, ook als her-export via lib/shiftTime, maakte van die
+ *  module een eigen chunk in de warmup. */
 export const minutesBetween = (start: string, end: string) => {
-  const s = start.split(':').map(Number);
-  const e = end.split(':').map(Number);
-  if (s.length < 2 || e.length < 2) return 0;
-  const startMin = s[0] * 60 + s[1];
-  let endMin = e[0] * 60 + e[1];
-  // Impliciete nachtdienst (eind ≤ start, bv. 22:00–06:00) = +24u — zelfde
-  // regel als buildVevent/isShiftActiveAt. Zonder dit telde de maandprint
-  // zo'n dienst als 0 uur en klopte geen enkel urenoverzicht van een
-  // nachtchauffeur (controleronde 30/07). Busvak-notatie (26:16) telde al goed.
-  if (endMin <= startMin) endMin += 1440;
-  return endMin - startMin;
+  const v = shiftWindowMinutes({ startTime: start, endTime: end });
+  return v ? v.end - v.start : 0;
 };
 
 const formatHours = (totalMinutes: number) => {
