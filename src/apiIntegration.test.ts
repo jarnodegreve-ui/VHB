@@ -5248,6 +5248,8 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
     api('PATCH', `/api/swaps/${id}`, { token: 'tok-admin', body: { status: 'approved', ifStatus } });
   const keurGoedViaLijst = (id: string) =>
     api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s: any) => (s.id === id ? { ...s, status: 'approved' } : s)) });
+  const wijsToe = (driverId: string, serviceNumber = '15', date = DAG) =>
+    api('POST', '/api/planning/assign-service', { token: 'tok-planner', body: { date, serviceNumber, driverId } });
   const dag = (id: string, date: string, assignments: unknown) => ({ id, source_date: date, day_type: 'week', assignments, raw_row: '' });
   const rij = (id: string, driverId: string, line: string, date = DAG, tijd: [string, string] = ['10:00', '18:00']) =>
     ({ id, driverId, date, line, startTime: tijd[0], endTime: tijd[1] });
@@ -5419,6 +5421,128 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
       const lijst = await api('GET', '/api/swaps', { token: 'tok-planner' });
       expect(JSON.stringify(lijst.json.find((s: any) => s.id === 's-terug')?.rust ?? [])).toContain('"teKort":true');
       expect((await keurGoed('s-terug')).status).toBe(200);
+    });
+  });
+
+  describe('variant 2: een code op het bord die het portaal niet kent', () => {
+    const metCode = (code: string) => {
+      mem.planningMatrix[0] = dag('m-d1', DAG, { 'Chauffeur A': 'EEK6', 'Chauffeur B': code, 'Chauffeur C': '14', 'Chauffeur D': 'vrij' });
+    };
+    const onbekend = (naam: string, datum: string, code: string) =>
+      `${naam} staat op ${datum} op '${code}', en die code staat niet in het dienstoverzicht of de planningscodes. Voeg ze eerst toe in Planningscodes, dan weet het portaal of ${naam} die dag een dienst rijdt.`;
+    const overname = (extra: Record<string, unknown> = {}) => ({
+      id: 's-onb', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'accepted', reason: '',
+      createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '14', ...extra,
+    });
+
+    it('handmatige wissel naar wie op een onbekende code staat: geweigerd, met de code in de melding', async () => {
+      metCode('FD');
+      const voor = stand();
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      // Vóór de invariant: 200, en de code verdween van het bord.
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe(onbekend('Chauffeur B', '24/07/2026', 'FD'));
+      expect(stand()).toBe(voor);
+    });
+
+    it.each(['eek 6', 'EEK-6', 'EEK6/2', 'EEK99'])('een schrijfwijze die het portaal nergens herkent (%s) is een onbekende code', async (code) => {
+      // De import, de heropbouw en het bord zien deze schrijfwijzen ook niet
+      // als EEK6: de normalisatie is bewust niet verruimd.
+      metCode(code);
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe(onbekend('Chauffeur B', '24/07/2026', code));
+      expect(mem.swaps).toHaveLength(0);
+    });
+
+    it.each(['Eek6', ' EEK6 ', 'eek6'])('een schrijfwijze die het portaal wél herkent (%s) is de schoolrit', async (code) => {
+      metCode(code);
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toContain(`Chauffeur B rijdt op 24/07/2026 al dienst ${code.trim()}`);
+    });
+
+    it.each(['', ' ', '-', '...', '?', 'vrij', 'VRIJ', 'bv', 'TK', 'ta'])('een lege cel, leestekens of een overname-code (%j) is nooit bezet', async (code) => {
+      // Ook zonder planningscodes: vrij, bv, tk en ta hoeven er niet in te staan.
+      mem.planningCodes = mem.planningCodes.filter((c: any) => c.category === 'service');
+      metCode(code);
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      expect(res.status).toBe(200);
+      expect(mem.planning.find((r: any) => r.id === 'sh-c14')?.driverId).toBe(B);
+    });
+
+    it('een code die in Planningscodes staat, welke categorie ook, is bekend', async () => {
+      mem.planningCodes = [...mem.planningCodes, { code: 'fd', category: 'unknown', description: 'Feestdag' }];
+      metCode('FD');
+      expect((await wissel({ line: '14', fromDriverId: C, toDriverId: B })).status).toBe(200);
+    });
+
+    it('de melding wijst de weg: na toevoegen in Planningscodes gaat dezelfde wissel door', async () => {
+      metCode('FD');
+      expect((await wissel({ line: '14', fromDriverId: C, toDriverId: B })).status).toBe(409);
+      mem.planningCodes = [...mem.planningCodes, { code: 'fd', category: 'absence', description: 'Feestdag', isDayOff: true }];
+      expect((await wissel({ line: '14', fromDriverId: C, toDriverId: B })).status).toBe(200);
+    });
+
+    it('1-op-1: de gever die op een onbekende code staat krijgt er geen terugdienst bij', async () => {
+      // C rijdt 14 (rijen) maar zijn cel toont een code die het portaal niet kent.
+      mem.planningMatrix[0] = dag('m-d1', DAG, { 'Chauffeur B': '12', 'Chauffeur C': 'FD' });
+      mem.planning = [rij('sh-c14', C, '14'), rij('sh-b12', B, '12')];
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B, returnLine: '12' });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe(onbekend('Chauffeur C', '24/07/2026', 'FD'));
+      expect(mem.planning.map((r: any) => r.driverId)).toEqual([C, B]);
+    });
+
+    it('de afwezigheid komt eerst, ook bij een onbekende code', async () => {
+      metCode('FD');
+      ziek(B);
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe('Chauffeur B is ziek gemeld op 24/07/2026, deze ruil kan niet doorgaan.');
+    });
+
+    it('ruil goedkeuren (PATCH): de collega staat op een onbekende code', async () => {
+      metCode('FD');
+      mem.swaps = [overname()];
+      const voor = stand();
+      const res = await keurGoed('s-onb');
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe(onbekend('Chauffeur B', '24/07/2026', 'FD'));
+      expect(stand()).toBe(voor);
+    });
+
+    it('ruil goedkeuren (lijst): de collega staat op een onbekende code', async () => {
+      metCode('FD');
+      mem.swaps = [overname()];
+      const res = await keurGoedViaLijst('s-onb');
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe(onbekend('Chauffeur B', '24/07/2026', 'FD'));
+      expect(mem.planning.find((r: any) => r.id === 'sh-c14')?.driverId).toBe(C);
+    });
+
+    it('ruil goedkeuren: de aanvrager staat op de terugdag op een onbekende code', async () => {
+      mem.planningMatrix[1] = dag('m-d2', DAG2, { 'Chauffeur B': '12', 'Chauffeur C': 'FD' });
+      mem.swaps = [overname({ swapType: 'ruil', returnDate: DAG2, returnCode: '12' })];
+      const res = await keurGoed('s-onb');
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe(onbekend('Chauffeur C', '25/07/2026', 'FD'));
+    });
+
+    it('overname aanvragen weigerde een onbekende code al, met haar eigen melding (bestaand gedrag)', async () => {
+      metCode('FD');
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [{ id: 's-nieuw', shiftId: 'sh-c14', requesterId: C, targetDriverId: B, status: 'pending', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname' }] });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toContain("Chauffeur B staat op 24/07/2026 ingepland als 'FD'");
+      expect(mem.swaps).toHaveLength(0);
+    });
+
+    it('dienst toewijzen weigerde een onbekende code al, met haar eigen melding (bestaand gedrag)', async () => {
+      metCode('FD');
+      const res = await wijsToe(B);
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toContain("Chauffeur B staat op 2026-07-24 al op 'FD' in de planning");
+      expect(mem.planningMatrix[0].assignments['Chauffeur B']).toBe('FD');
     });
   });
 });

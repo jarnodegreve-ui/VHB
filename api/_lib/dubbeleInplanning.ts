@@ -17,8 +17,13 @@
  * aanvragen en een dienst toewijzen (ook de Telegram-knop). De zin die de
  * planner leest maakt het pad zelf, de regel is overal dezelfde.
  *
+ * Een code op het bord die het portaal niet kent (niet in het dienstoverzicht,
+ * niet in de planningscodes) telt als bezet: ze kan een rit zijn die nog niet
+ * is ingevoerd. De import en de heropbouw weigeren zo'n code al; de planner
+ * zet ze eerst in Planningscodes. Een lege cel, een cel met alleen leestekens
+ * en de overname-codes (vrij, bv, tk, ta) zijn nooit bezet.
  */
-import { DAG_DMJ, toLookupToken } from "../helpers.js";
+import { DAG_DMJ, isTakeoverCode, toLookupToken } from "../helpers.js";
 import { getShiftsOnDate, getSwapsData } from "../storage.js";
 import { dienstOpBord } from "../../shared/bordBezetting.js";
 import { bordOpDag, laadBordVast, type BordVanDag, type BordVast } from "./codeDienst.js";
@@ -74,6 +79,11 @@ export const dubbeleInplanningen = (
     const dienst = dienstOpBord(cel);
     if (dienst && stand.bord.isCodeDienst(dienst) && !telNiet.has(toLookupToken(dienst))) {
       uitBord.push({ driverId: o.driverId, date: o.date, dienst, bron: "bord" });
+    } else if (cel && cel.kind === "unknown" && !cel.hiddenService) {
+      const token = toLookupToken(cel.code);
+      if (token && !isTakeoverCode(cel.code) && !stand.bord.isBekend(cel.code) && !telNiet.has(token)) {
+        uitBord.push({ driverId: o.driverId, date: o.date, dienst: cel.code, bron: "onbekend" });
+      }
     }
   }
   return [...uitRijen, ...uitBord];

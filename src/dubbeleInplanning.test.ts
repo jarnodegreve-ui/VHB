@@ -53,6 +53,16 @@ describe('dubbeleInplanningen', () => {
     expect(toets(s, [krijgt14({ geeftAf: ['12'] })])).toEqual([{ driverId: 'b', date: DAG, dienst: '15', bron: 'rijen' }]);
   });
 
+  it('een code die het portaal niet kent is een conflict; een bekende code en een overname-code niet', () => {
+    expect(toets(stand({ Bert: 'FD' }), [krijgt14()])).toEqual([{ driverId: 'b', date: DAG, dienst: 'FD', bron: 'onbekend' }]);
+    // 'xx' staat in de planningscodes (categorie onbekend): bekend.
+    expect(toets(stand({ Bert: 'xx' }), [krijgt14()])).toEqual([]);
+    // 'bv' en 'tk' staan er niet in, maar zijn overname-codes.
+    expect(toets(stand({ Bert: 'bv' }), [krijgt14()])).toEqual([]);
+    expect(toets(stand({ Bert: 'TK' }), [krijgt14()])).toEqual([]);
+    expect(toets(stand({ Bert: '-' }), [krijgt14()])).toEqual([]);
+  });
+
   it('geldt voor elke ontvangst, op elke dag; rijen gaan vóór het bord', () => {
     const dag1 = stand({ Bert: 'EEK6' });
     const dag2 = stand({ Cis: 'vrij' }, [{ driverId: 'c', line: '13' }], DAG2);
