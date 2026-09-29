@@ -81,6 +81,11 @@
 --   vraagt kort een exclusief slot op tien tabellen (de acht met een policy
 --   uit deel A, plus leave en swaps). Ze duurt zelf minder dan een seconde.
 --
+-- VEREIST
+--   PostgreSQL 17 of hoger (het recht MAINTAIN in de post-conditie van deel
+--   A). Op een oudere versie faalt die post-conditie en rolt alles terug.
+--   Staging en productie draaien op 17.
+--
 -- IDEMPOTENT
 --   revoke, drop policy if exists, create or replace en drop + create van de
 --   twee policies zijn herhaalbaar. Eén transactie: faalt een voorwaarde of
@@ -175,16 +180,19 @@ $$;
 
 -- De leespolicies zelf. drop policy if exists faalt op een ontbrekende tabel,
 -- vandaar de bestaanscheck per tabel.
+-- Volgorde: planning_matrix_rows VÓÓR planning, zoals de import
+-- (replace_planning_and_matrix_periode) ze neemt. Omgekeerd kunnen de
+-- migratie en een lopende import op elkaars slot wachten (SQL-review 29-09).
 do $$
 begin
   if to_regclass('public.users') is not null then
     execute 'drop policy if exists users_select_self_or_staff on public.users';
   end if;
-  if to_regclass('public.planning') is not null then
-    execute 'drop policy if exists "planning_read_authenticated" on public.planning';
-  end if;
   if to_regclass('public.planning_matrix_rows') is not null then
     execute 'drop policy if exists planning_matrix_rows_staff_only on public.planning_matrix_rows';
+  end if;
+  if to_regclass('public.planning') is not null then
+    execute 'drop policy if exists "planning_read_authenticated" on public.planning';
   end if;
   if to_regclass('public.planning_matrix_import_history') is not null then
     execute 'drop policy if exists planning_matrix_import_history_staff_only on public.planning_matrix_import_history';
@@ -294,9 +302,10 @@ begin
     if to_regclass('public.' || t) is null then
       continue;
     end if;
-    if pg_catalog.has_table_privilege('authenticated', 'public.' || quote_ident(t), 'select')
-       or pg_catalog.has_table_privilege('anon', 'public.' || quote_ident(t), 'select') then
-      raise exception 'post-conditie faalt: anon of authenticated kan public.% nog lezen (grant van een andere rol of aan PUBLIC?)', t;
+    -- Een lijst rechten betekent "minstens één ervan": geen enkel recht mag overblijven.
+    if pg_catalog.has_table_privilege('authenticated', 'public.' || quote_ident(t), 'select, insert, update, delete, truncate, references, trigger, maintain')
+       or pg_catalog.has_table_privilege('anon', 'public.' || quote_ident(t), 'select, insert, update, delete, truncate, references, trigger, maintain') then
+      raise exception 'post-conditie faalt: anon of authenticated heeft nog een recht op public.% (grant van een andere rol of aan PUBLIC?)', t;
     end if;
     if not pg_catalog.has_table_privilege('service_role', 'public.' || quote_ident(t), 'select') then
       raise exception 'post-conditie faalt: service_role kan public.% niet lezen, de API zou breken', t;
@@ -354,6 +363,114 @@ begin
   if n <> 2 then
     raise exception 'post-conditie faalt: % van 2 policies eisen de tweede factor', n;
   end if;
+end
+$$;
+
+-- === Ziet de eigenaar van elke hulpfunctie haar tabel? (SQL-review 29-09) ===
+-- De functionele proef hieronder zoekt zelf een staflid met een bevestigde
+-- factor. Ziet de rol die deze migratie draait auth.mfa_factors door RLS
+-- leeg, dan vindt de proef niemand en slaat ze die stap over, terwijl de
+-- hulpfunctie om dezelfde reden altijd waar zou geven. Deze controle leest
+-- alleen catalogi en hangt niet af van testdata: elke hulpfunctie moet
+-- security definer zijn, en haar eigenaar moet de tabel mogen lezen en ze
+-- ook door RLS heen zien. Bewust streng: bij twijfel weigert ze.
+do $$
+declare
+  r record;
+begin
+  for r in
+    select p.oid::regprocedure::text as functie, o.rolname as eigenaar, c.oid::regclass::text as tabel
+    from (values
+      ('public.current_app_user_role()', 'public.users'),
+      ('public.current_app_user_id()',   'public.users'),
+      ('public.current_app_user_mfa_ok()', 'auth.mfa_factors')
+    ) v(functie, tabel)
+    join pg_catalog.pg_proc p on p.oid = pg_catalog.to_regprocedure(v.functie)
+    join pg_catalog.pg_roles o on o.oid = p.proowner
+    join pg_catalog.pg_class c on c.oid = pg_catalog.to_regclass(v.tabel)
+    where not p.prosecdef
+       or not pg_catalog.has_table_privilege(o.oid, c.oid, 'select')
+       or (c.relrowsecurity
+           and not (o.rolsuper or o.rolbypassrls
+                    or (o.oid = c.relowner and not c.relforcerowsecurity)))
+  loop
+    raise exception 'post-conditie faalt: % (eigenaar %) is geen definer of ziet % niet door RLS of rechten; ze zou stil een leeg resultaat geven', r.functie, r.eigenaar, r.tabel;
+  end loop;
+end
+$$;
+
+-- === Functionele proef als de rol authenticated (SQL-review 29-09) ==========
+-- De controles hierboven lezen rechten en catalogi. Dat bewijst niet dat de
+-- tweede factor ook echt afgedwongen wordt: draait de hulpfunctie als een
+-- eigenaar die auth.mfa_factors door RLS leeg ziet, dan geeft ze altijd waar
+-- en blijft alles hierboven groen. Daarom hier het gedrag zelf, met
+-- nagebootste claims, als de rol die de browser gebruikt:
+--   1. een actieve chauffeur krijgt zijn eigen rol en id terug van de
+--      bestaande hulpfuncties (ze lezen users, waar hij zelf niet meer bij
+--      mag) en leest planning_version; zo niet vallen de live-updates stil;
+--   2. een staflid op aal2 krijgt zijn rol terug;
+--   3. een staflid met een bevestigde factor krijgt op aal1 mfa_ok = false.
+-- Is er in deze omgeving geen geschikt account (staging zonder ingeschreven
+-- staflid), dan meldt de proef dat met een notice en slaat ze die stap over.
+-- Er wordt niets geschreven; de claims gelden alleen binnen deze transactie.
+do $$
+declare
+  staf record;
+  chauffeur record;
+  factor_uid uuid;
+  rol text;
+  eigen text;
+  ok boolean;
+  n int;
+begin
+  select u.id, u.role, u.authid into staf from public.users u
+   where u.isactive and u.authid is not null and u.role in ('planner', 'admin') order by u.id limit 1;
+  select u.id, u.role, u.authid into chauffeur from public.users u
+   where u.isactive and u.authid is not null and u.role not in ('planner', 'admin') order by u.id limit 1;
+  select f.user_id into factor_uid from auth.mfa_factors f
+   join public.users u on u.authid = f.user_id
+   where f.status = 'verified' and u.isactive and u.role in ('planner', 'admin') limit 1;
+
+  if chauffeur.authid is not null then
+    perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', chauffeur.authid, 'aal', 'aal1')::text, true);
+    set local role authenticated;
+    select public.current_app_user_role(), public.current_app_user_id() into rol, eigen;
+    select count(*) into n from public.planning_version;
+    reset role;
+    if rol is distinct from chauffeur.role or eigen is distinct from chauffeur.id then
+      raise exception 'post-conditie faalt: hulpfuncties geven als authenticated %/% voor %, live-updates zouden stilvallen', rol, eigen, chauffeur.id;
+    end if;
+    if n = 0 then
+      raise exception 'post-conditie faalt: een actieve chauffeur leest planning_version niet meer';
+    end if;
+  else
+    raise notice 'functionele proef chauffeur overgeslagen: geen actief gekoppeld account';
+  end if;
+
+  if staf.authid is not null then
+    perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', staf.authid, 'aal', 'aal2')::text, true);
+    set local role authenticated;
+    select public.current_app_user_role() into rol;
+    reset role;
+    if rol is distinct from staf.role then
+      raise exception 'post-conditie faalt: current_app_user_role() geeft % voor staflid %', rol, staf.id;
+    end if;
+  else
+    raise notice 'functionele proef staf overgeslagen: geen actief gekoppeld stafaccount';
+  end if;
+
+  if factor_uid is not null then
+    perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', factor_uid, 'aal', 'aal1')::text, true);
+    set local role authenticated;
+    select public.current_app_user_mfa_ok() into ok;
+    reset role;
+    if ok is distinct from false then
+      raise exception 'post-conditie faalt: staflid met bevestigde factor krijgt op aal1 mfa_ok = %, de tweede factor wordt niet afgedwongen', ok;
+    end if;
+  else
+    raise notice 'proef tweede factor overgeslagen: geen staflid met een bevestigde factor in deze omgeving';
+  end if;
+  perform set_config('request.jwt.claims', '', true);
 end
 $$;
 
@@ -463,6 +580,13 @@ commit;
 --     or (select public.current_app_user_role()) in ('planner', 'admin')
 --   );
 --
+-- -- planning_matrix_rows vóór planning, zoals de import ze neemt.
+-- drop policy if exists planning_matrix_rows_staff_only on public.planning_matrix_rows;
+-- create policy planning_matrix_rows_staff_only
+--   on public.planning_matrix_rows for select
+--   to authenticated
+--   using ((select public.current_app_user_role()) in ('planner', 'admin'));
+--
 -- drop policy if exists "planning_read_authenticated" on public.planning;
 -- create policy "planning_read_authenticated"
 --   on public.planning for select
@@ -471,12 +595,6 @@ commit;
 --     (select public.current_app_user_role()) in ('planner', 'admin')
 --     or "driverId" = (select public.current_app_user_id())
 --   );
---
--- drop policy if exists planning_matrix_rows_staff_only on public.planning_matrix_rows;
--- create policy planning_matrix_rows_staff_only
---   on public.planning_matrix_rows for select
---   to authenticated
---   using ((select public.current_app_user_role()) in ('planner', 'admin'));
 --
 -- drop policy if exists planning_matrix_import_history_staff_only on public.planning_matrix_import_history;
 -- create policy planning_matrix_import_history_staff_only
