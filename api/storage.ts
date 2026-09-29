@@ -1790,19 +1790,28 @@ export const bestaandeDiversionBijlagen = async (
 export type BijlageBestand = { naam: string; gewijzigdOp: string | null; sizeBytes?: number };
 
 const BIJLAGE_LIJST_PAGINA = 1000;
-const BIJLAGE_LIJST_MAX_PAGINAS = 20;
+const BIJLAGE_LIJST_MAX_PAGINAS = 200;
 
-/** Alle bestanden in de wortel van een bijlagen-bucket. Gooit bij een fout:
- *  een halve lijst is geen basis om iets weg te gooien. */
-export const lijstBijlageBestanden = async (bucket: string): Promise<BijlageBestand[]> => {
+/**
+ * Alle bestanden in de wortel van een bijlagen-bucket, met de zekerheid dat
+ * het er ook echt allemaal zijn. De lijst loopt door tot een LEGE pagina en
+ * schuift op met het aantal rijen dat echt terugkwam: geeft de server minder
+ * dan gevraagd (een eigen plafond), dan valt er niets tussen de pagina's.
+ * `volledig` is alleen waar als de lijst op zo'n lege pagina eindigde. Gooit
+ * bij een fout: een halve lijst is geen basis om iets weg te gooien.
+ */
+export const lijstBijlageBestandenVolledig = async (bucket: string): Promise<{ bestanden: BijlageBestand[]; volledig: boolean }> => {
   if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
   const uit: BijlageBestand[] = [];
+  let gelezen = 0;
   for (let pagina = 0; pagina < BIJLAGE_LIJST_MAX_PAGINAS; pagina += 1) {
     const { data, error } = await supabaseAdmin.storage
       .from(bucket)
-      .list("", { limit: BIJLAGE_LIJST_PAGINA, offset: pagina * BIJLAGE_LIJST_PAGINA, sortBy: { column: "name", order: "asc" } });
+      .list("", { limit: BIJLAGE_LIJST_PAGINA, offset: gelezen, sortBy: { column: "name", order: "asc" } });
     if (error) throw error;
     const rijen = data ?? [];
+    if (rijen.length === 0) return { bestanden: uit, volledig: true };
+    gelezen += rijen.length;
     for (const rij of rijen) {
       // Mappen hebben geen id; die slaan we over.
       if (!rij?.id || !rij.name) continue;
@@ -1813,9 +1822,22 @@ export const lijstBijlageBestanden = async (bucket: string): Promise<BijlageBest
         ...(Number.isFinite(grootte) && grootte >= 0 ? { sizeBytes: grootte } : {}),
       });
     }
-    if (rijen.length < BIJLAGE_LIJST_PAGINA) break;
   }
-  return uit;
+  return { bestanden: uit, volledig: false };
+};
+
+/** Zoals hierboven, zonder de zekerheid: voor de opruiming, die alleen
+ *  bestanden raakt die ze gezien heeft. */
+export const lijstBijlageBestanden = async (bucket: string): Promise<BijlageBestand[]> =>
+  (await lijstBijlageBestandenVolledig(bucket)).bestanden;
+
+/** Het exacte aantal rijen in een tabel, los van elke paginering. null = de
+ *  server gaf geen telling. */
+export const telRijen = async (tabel: "diversions" | "updates"): Promise<number | null> => {
+  const client = requireDb();
+  const { count, error } = await client.from(tabel).select("id", { count: "exact", head: true });
+  if (error) throw error;
+  return typeof count === "number" && Number.isFinite(count) ? count : null;
 };
 
 /** Bestanden weghalen uit een bijlagen-bucket; "not found" is geen fout. */

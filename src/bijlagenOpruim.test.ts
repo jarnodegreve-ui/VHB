@@ -17,6 +17,9 @@ const mem = vi.hoisted(() => ({
   // true = Storage antwoordt niet meer (de aanroep blijft hangen).
   lijstHangt: false,
   verwijderenHangt: false,
+  // Eigen plafond van Storage: hoogstens zoveel bestanden per lijst-aanroep.
+  lijstPlafond: null as number | null,
+  lijstAanroepen: [] as Array<{ bucket: string; offset: number }>,
   // Zoals max-rows in PostgREST: de server geeft zonder fout hoogstens
   // zoveel rijen per verzoek terug, hoeveel er ook gevraagd zijn.
   maxRijen: null as number | null,
@@ -41,8 +44,9 @@ vi.mock('../api/db.js', () => {
       return 0;
     });
     const begrens = (lijst: any[]) => (mem.maxRijen === null ? lijst : lijst.slice(0, mem.maxRijen));
+    let alleenTellen = false;
     const b: any = {
-      select: () => b,
+      select: (_kolommen?: string, opts?: { count?: string; head?: boolean }) => { if (opts?.head) alleenTellen = true; return b; },
       order: (kolom: string, opts?: { ascending?: boolean }) => { volgorde.push({ kolom, oplopend: opts?.ascending !== false }); return b; },
       eq: (kolom: string, waarde: unknown) => { rijen = rijen.filter((r) => r[kolom] === waarde); return b; },
       gte: (kolom: string, waarde: string) => { rijen = rijen.filter((r) => String(r[kolom]) >= waarde); return b; },
@@ -58,6 +62,8 @@ vi.mock('../api/db.js', () => {
       // Zonder range: de query zelf is het antwoord (gerichte lezing).
       then: (klaar: (antwoord: { data: any[] | null; error: unknown }) => unknown, mis?: (fout: unknown) => unknown) => {
         mem.lezingen.push({ tabel: naam, gericht: gerichtOpId });
+        // Een telling (head + count) kent geen rijen en dus geen max-rows.
+        if (alleenTellen) return Promise.resolve({ data: null, count: rijen.length, error: null }).then(klaar as any, mis);
         const antwoord = gerichtOpId && mem.gerichtFaalt.has(naam)
           ? { data: null, error: { message: 'database onbereikbaar' } }
           : gerichtOpId && mem.gerichtVreemd.has(naam)
@@ -91,8 +97,9 @@ vi.mock('../api/db.js', () => {
           .filter(([name]) => !opts.search || name.toLowerCase().includes(opts.search.toLowerCase()))
           .sort(([a], [b]) => a.localeCompare(b));
         const vanaf = opts.offset ?? 0;
+        mem.lijstAanroepen.push({ bucket, offset: vanaf });
         return {
-          data: alle.slice(vanaf, vanaf + opts.limit).map(([name, m]) => ({ id: `id-${name}`, name, updated_at: m.updated_at, created_at: m.updated_at, metadata: { size: m.size } })),
+          data: alle.slice(vanaf, vanaf + Math.min(opts.limit, mem.lijstPlafond ?? opts.limit)).map(([name, m]) => ({ id: `id-${name}`, name, updated_at: m.updated_at, created_at: m.updated_at, metadata: { size: m.size } })),
           error: null,
         };
       },
@@ -108,7 +115,7 @@ vi.mock('../api/db.js', () => {
   return { supabase: client, supabaseAdmin: client, db: client };
 });
 
-const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden, bestaandeRecordIds, logregelsVanEntiteiten, GERICHTE_LEZING_MAX } = await import('../api/storage.js');
+const { saveDiversionsData, saveUpdatesData, bestaandeDiversionBijlagen, bestaandeUpdateBijlagen, lijstBijlageBestanden, lijstBijlageBestandenVolledig, telRijen, getDiversionsData, bestaandeRecordIds, logregelsVanEntiteiten, GERICHTE_LEZING_MAX } = await import('../api/storage.js');
 const { laatsteVerwijdering } = await import('../api/_lib/bijlagenActies.js');
 const { begrensBeurt, kandidaatBijlagen, kiesWeesBijlagen, mogelijkeEigenaars, opruimBudget, ruimWeesBijlagenOp, WEES_BUDGET_MS, WEES_MARGE_MS, WEES_MAX_PER_BEURT } = await import('../api/_lib/bijlagenOpruim.js');
 
@@ -130,6 +137,8 @@ beforeEach(() => {
   mem.lijstFaalt = false;
   mem.lijstHangt = false;
   mem.verwijderenHangt = false;
+  mem.lijstPlafond = null;
+  mem.lijstAanroepen = [];
   mem.maxRijen = null;
   mem.gerichtFaalt.clear();
   mem.gerichtVreemd.clear();
@@ -516,5 +525,31 @@ describe('tijdsbudget van de opruiming', () => {
     const uit = await ruimWeesBijlagenOp(NU, { budgetMs: 80 });
     expect(uit.omleidingen).toBe(0);
     expect(uit.overgeslagen[0]).toBe('omleidingen: wissen liep uit, uitkomst onbekend');
+  });
+});
+
+// Tegenlezing 29-09, punt 4b: weten of een lijst volledig is.
+describe('een lijst die zonder fout te kort is', () => {
+  it('de bucketlijst loopt door tot een lege pagina, ook als Storage minder geeft dan gevraagd', async () => {
+    for (let i = 0; i < 7; i += 1) hang('diversions', `o-${i}-1.pdf`);
+    mem.lijstPlafond = 3;
+    const lijst = await lijstBijlageBestandenVolledig('diversions');
+    expect(lijst.volledig).toBe(true);
+    expect(lijst.bestanden.map((b) => b.naam)).toEqual(['o-0-1.pdf', 'o-1-1.pdf', 'o-2-1.pdf', 'o-3-1.pdf', 'o-4-1.pdf', 'o-5-1.pdf', 'o-6-1.pdf']);
+    // Opgeschoven met wat echt terugkwam (3, 3, 1), en geëindigd op een lege pagina.
+    expect(mem.lijstAanroepen.map((a) => a.offset)).toEqual([0, 3, 6, 7]);
+    expect(lijst.bestanden[0]).toEqual({ naam: 'o-0-1.pdf', gewijzigdOp: OUD, sizeBytes: 1234 });
+    expect(await lijstBijlageBestanden('diversions')).toEqual(lijst.bestanden);
+  });
+
+  it('een lege bucket is ook volledig gelezen', async () => {
+    expect(await lijstBijlageBestandenVolledig('update-bijlagen')).toEqual({ bestanden: [], volledig: true });
+  });
+
+  it('de telling van de tabel verraadt een afgekapte lijst (500 gelezen, 700 geteld)', async () => {
+    mem.tabellen.diversions = Array.from({ length: 700 }, (_, i) => omleiding(`d-${String(i).padStart(4, '0')}`));
+    mem.maxRijen = 500;
+    expect(await getDiversionsData()).toHaveLength(500);
+    expect(await telRijen('diversions')).toBe(700);
   });
 });

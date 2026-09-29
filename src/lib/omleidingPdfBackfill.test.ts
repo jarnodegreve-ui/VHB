@@ -2,13 +2,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   BLOKKEERT_STAP_2,
+  MAX_SLOT,
   OUDE_PDF_NAAM,
+  leesZekerheid,
+  oordeelStap2,
   planBackfill,
   stap2Veilig,
   telPlan,
   voerBackfillUit,
 } from '../../scripts/omleiding-pdf-backfill-kern.mjs';
 import { LEGACY_OMLEIDING_PDF_NAAM, omleidingBijlagen } from '../../api/helpers';
+import { MAX_OMLEIDING_BIJLAGEN } from '../../shared/schemas/diversion';
 
 /**
  * Kern van scripts/omleiding-pdf-backfill.mjs (controle-ronde 29-09, nr. 30,
@@ -160,5 +164,97 @@ describe('de chauffeur ziet voor en na dezelfde bijlage', () => {
     expect(omleidingBijlagen(oud)).toEqual([{ slot: 1, filename: 'omleiding.pdf', legacy: true }]);
     await voerBackfillUit(planBackfill(w.tabel, w.bestanden()), w);
     expect(omleidingBijlagen(oud)).toEqual([{ slot: 1, filename: 'omleiding.pdf', sizeBytes: 1200 }]);
+  });
+});
+
+// Tegenlezing 29-09, punt 4a: dezelfde dubbelzinnigheid als bij het herstel.
+describe('een bestand dat van twee omleidingen kan zijn blijft onaangeroerd', () => {
+  it('het script kent hetzelfde aantal plaatsen als het portaal', () => {
+    expect(MAX_SLOT).toBe(MAX_OMLEIDING_BIJLAGEN);
+  });
+
+  it('x-1.pdf: de oude PDF van id x-1, of slot 1 van het bestaande id x = conflict, niets verhuisd', async () => {
+    const tabel: Rij[] = [
+      { id: 'x', title: 'Bestaande omleiding', bijlagen: [{ slot: 1, filename: 'plan.pdf' }] },
+      { id: 'x-1', title: 'Met marker', pdfUrl: MARKER },
+    ];
+    const bestanden = [{ naam: 'x-1.pdf', sizeBytes: 500 }];
+    const plan = planBackfill(tabel, bestanden);
+    expect(plan.map((r) => [r.id, r.actie])).toEqual([['x', 'klaar'], ['x-1', 'conflict']]);
+    expect(stap2Veilig(plan)).toBe(false);
+    const aanroepen: string[] = [];
+    const uit = await voerBackfillUit(plan, {
+      verplaats: async (id) => { aanroepen.push(`verplaats ${id}`); },
+      zetLijst: async (id) => { aanroepen.push(`zetLijst ${id}`); },
+    });
+    expect(uit).toEqual({ verhuisd: 0, hersteld: 0, mislukt: [] });
+    expect(aanroepen).toEqual([]);
+  });
+
+  it('ook als het bestaande id zelf geen lijst heeft, en voor elk slot van 1 tot 5', () => {
+    for (let slot = 1; slot <= 5; slot += 1) {
+      const plan = planBackfill([{ id: 'x', title: 'X' }, { id: `x-${slot}`, title: 'Marker', pdfUrl: MARKER }], [{ naam: `x-${slot}.pdf` }]);
+      expect(plan[1].actie, `slot ${slot}`).toBe('conflict');
+    }
+    // Slot 6 bestaat niet: x-6.pdf kan alleen de oude PDF van x-6 zijn.
+    expect(planBackfill([{ id: 'x', title: 'X' }, { id: 'x-6', title: 'Marker', pdfUrl: MARKER }], [{ naam: 'x-6.pdf' }])[1].actie).toBe('verhuizen');
+    // Zonder een bestaand id x is er geen twijfel.
+    expect(planBackfill([{ id: 'x-1', title: 'Marker', pdfUrl: MARKER }], [{ naam: 'x-1.pdf' }])[0].actie).toBe('verhuizen');
+  });
+
+  it('andersom: y-1.pdf hangt er al, maar kan ook de oude PDF van een bestaand id y-1 zijn = conflict', () => {
+    const plan = planBackfill(
+      [{ id: 'y', title: 'Verhuisd zonder lijst', pdfUrl: MARKER }, { id: 'y-1', title: 'Eigen marker', pdfUrl: MARKER }],
+      [{ naam: 'y-1.pdf' }],
+    );
+    expect(plan.map((r) => [r.id, r.actie])).toEqual([['y', 'conflict'], ['y-1', 'conflict']]);
+  });
+});
+
+// Tegenlezing 29-09, punt 4b: "Stap 2 is veilig" alleen met zekerheid.
+describe('zekerheid dat alles gezien is', () => {
+  const schoon = planBackfill([{ id: 'a', title: 'A' }, { id: 'b', title: 'B', bijlagen: [{ slot: 1, filename: 'b.pdf' }] }], [{ naam: 'b-1.pdf' }]);
+  const zeker = { omleidingenGelezen: 2, omleidingenGeteld: 2, bestandenTotLegePagina: true };
+
+  it('gelezen = geteld en de bestandenlijst eindigde op een lege pagina: zeker', () => {
+    expect(leesZekerheid(zeker)).toEqual({ zeker: true, redenen: [] });
+    // Precies 1000 is geen probleem als de telling het bevestigt.
+    expect(leesZekerheid({ omleidingenGelezen: 1000, omleidingenGeteld: 1000, bestandenTotLegePagina: true }).zeker).toBe(true);
+  });
+
+  it('de lijst is zonder fout te kort (500 gelezen, 700 geteld): niet zeker', () => {
+    const z = leesZekerheid({ omleidingenGelezen: 500, omleidingenGeteld: 700, bestandenTotLegePagina: true });
+    expect(z.zeker).toBe(false);
+    expect(z.redenen).toEqual(['500 omleidingen gelezen, maar de database telt er 700: de lijst is niet volledig']);
+  });
+
+  it('geen telling: niet zeker, en een volle pagina wordt bij naam genoemd', () => {
+    expect(leesZekerheid({ omleidingenGelezen: 12, omleidingenGeteld: null, bestandenTotLegePagina: true })).toEqual({
+      zeker: false,
+      redenen: ['de database gaf geen telling van de omleidingen, dus niet na te gaan of de lijst volledig is'],
+    });
+    const vol = leesZekerheid({ omleidingenGelezen: 1000, omleidingenGeteld: null, bestandenTotLegePagina: true });
+    expect(vol.zeker).toBe(false);
+    expect(vol.redenen[0]).toMatch(/^precies 1000 omleidingen gelezen \(een volle pagina\)/);
+  });
+
+  it('de bestandenlijst eindigde niet op een lege pagina: niet zeker', () => {
+    const z = leesZekerheid({ ...zeker, bestandenTotLegePagina: false });
+    expect(z.zeker).toBe(false);
+    expect(z.redenen[0]).toMatch(/lijst van de bestanden in Storage/);
+  });
+
+  it('"Stap 2 is veilig" verschijnt alleen bij een schoon plan EN zekerheid', () => {
+    expect(oordeelStap2(schoon, leesZekerheid(zeker))).toEqual({ veilig: true, tekst: 'Stap 2 is veilig: geen enkele omleiding leunt nog op de oude sleutel.' });
+
+    const onzeker = oordeelStap2(schoon, leesZekerheid({ omleidingenGelezen: 500, omleidingenGeteld: 700, bestandenTotLegePagina: true }));
+    expect(onzeker.veilig).toBe(false);
+    expect(onzeker.tekst).toMatch(/^Stap 2 is NOG NIET veilig: het script is niet zeker dat het alles gezien heeft/);
+    expect(onzeker.tekst).not.toMatch(/Stap 2 is veilig/);
+
+    const w = wereld();
+    const nogWerk = oordeelStap2(planBackfill(w.tabel, w.bestanden()), leesZekerheid({ omleidingenGelezen: w.tabel.length, omleidingenGeteld: w.tabel.length, bestandenTotLegePagina: true }));
+    expect(nogWerk.veilig).toBe(false);
+    expect(nogWerk.tekst).toMatch(/^Stap 2 is NIET veilig/);
   });
 });

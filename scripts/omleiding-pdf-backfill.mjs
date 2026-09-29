@@ -51,15 +51,22 @@
  *     Lijst te herstellen    0
  *     Conflict               0
  *     Ongeldig id            0
- * en de slotregel "Stap 2 is veilig". "Marker zonder bestand" mag boven nul
- * staan: bij die omleidingen hangt er geen PDF meer, ze tonen vandaag ook
- * geen bijlage. Wordt er later een oude back-up teruggezet, draai het script
+ * geen blok "NIET ZEKER dat alles gezien is", en de slotregel "Stap 2 is
+ * veilig". Die slotregel verschijnt alleen als het script zeker is dat het
+ * alle omleidingen (gelezen aantal = exacte telling van de tabel) en alle
+ * bestanden (lijst tot een lege pagina) gezien heeft. Is het dat niet, dan
+ * staat er "Stap 2 is NOG NIET veilig" met de reden, en schrijft --schrijf
+ * niets. "Marker zonder bestand" mag boven nul staan: bij die omleidingen
+ * hangt er geen PDF meer, ze tonen vandaag ook geen bijlage. Een "Conflict"
+ * is ook een bestand dat volgens zijn naam van twee omleidingen kan zijn
+ * (`x-1.pdf`: de oude PDF van id `x-1`, of slot 1 van id `x`): het script
+ * raakt het niet aan. Wordt er later een oude back-up teruggezet, draai het script
  * dan opnieuw: een back-up van vóór de backfill brengt de markers terug.
  *
  * Exitcode: 0 = gelukt, 1 = er mislukte iets bij het schrijven,
  * 2 = verkeerd gebruik of ontbrekende env.
  */
-import { ACTIE_UITLEG, planBackfill, stap2Veilig, telPlan, voerBackfillUit } from './omleiding-pdf-backfill-kern.mjs';
+import { ACTIE_UITLEG, leesZekerheid, oordeelStap2, planBackfill, telPlan, voerBackfillUit } from './omleiding-pdf-backfill-kern.mjs';
 
 const PRODUCTIE_REF = 'nbupdofxuoxvgeiedzkk';
 const GEBRUIK = 'Gebruik: npx tsx scripts/omleiding-pdf-backfill.mjs --omgeving staging|productie [--schrijf]';
@@ -101,7 +108,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = key;
 // script werkt altijd met de service-role-client (db = supabaseAdmin), dus
 // die melding zou hier alleen verwarren.
 process.env.SUPABASE_ANON_KEY ||= key;
-const { DIVERSIONS_BUCKET, getDiversionsData, lijstBijlageBestanden, verplaatsDiversionLegacyBijlage, zetDiversionBijlagen } = await import('../api/storage.ts');
+const { DIVERSIONS_BUCKET, getDiversionsData, lijstBijlageBestandenVolledig, telRijen, verplaatsDiversionLegacyBijlage, zetDiversionBijlagen } = await import('../api/storage.ts');
 
 const host = (() => { try { return new URL(url).host; } catch { return 'onbekende host'; } })();
 console.log(`Omleidings-PDF's naar de bijlagenlijst, ${omgeving} (${host})`);
@@ -109,9 +116,18 @@ console.log(schrijf ? 'SCHRIJFT: bestanden verhuizen en rijen bijwerken.' : 'Dro
 
 const leesStand = async () => {
   // Eén lijst van de hele bucket: gooit bij een fout, dus een storing in
-  // Storage leidt nooit tot "bestand ontbreekt".
-  const [omleidingen, bestanden] = await Promise.all([getDiversionsData(), lijstBijlageBestanden(DIVERSIONS_BUCKET)]);
-  return planBackfill(omleidingen, bestanden);
+  // Storage leidt nooit tot "bestand ontbreekt". De telling staat los van de
+  // paginering: alleen zo valt een lijst op die zonder fout te kort is.
+  const [omleidingen, lijst, geteld] = await Promise.all([
+    getDiversionsData(),
+    lijstBijlageBestandenVolledig(DIVERSIONS_BUCKET),
+    telRijen('diversions').catch(() => null),
+  ]);
+  return {
+    plan: planBackfill(omleidingen, lijst.bestanden),
+    zekerheid: leesZekerheid({ omleidingenGelezen: omleidingen.length, omleidingenGeteld: geteld, bestandenTotLegePagina: lijst.volledig }),
+    bestanden: lijst.bestanden.length,
+  };
 };
 
 const toonTelling = (plan) => {
@@ -134,16 +150,30 @@ const toonRegels = (plan) => {
   for (const r of teTonen) console.log(`  ${r.actie.padEnd(22)} ${r.id}  “${r.titel}”\n    ${ACTIE_UITLEG[r.actie]}`);
 };
 
+const toonStand = (stand) => {
+  toonTelling(stand.plan);
+  console.log(`  ${'Bestanden in Storage'.padEnd(24)} ${String(stand.bestanden).padStart(4)}`);
+  toonRegels(stand.plan);
+  if (!stand.zekerheid.zeker) {
+    console.log('\nNIET ZEKER dat alles gezien is:');
+    for (const reden of stand.zekerheid.redenen) console.log(`  - ${reden}`);
+  }
+};
+
 let exit = 0;
 try {
-  const plan = await leesStand();
-  toonTelling(plan);
-  toonRegels(plan);
+  const stand = await leesStand();
+  const plan = stand.plan;
+  toonStand(stand);
 
   if (!schrijf) {
-    console.log(stap2Veilig(plan)
-      ? '\nStap 2 is veilig: geen enkele omleiding leunt nog op de oude sleutel.'
-      : '\nStap 2 is NIET veilig: er leunen nog omleidingen op de oude sleutel. Draai het script met --schrijf en kijk de conflicten na.');
+    console.log(`\n${oordeelStap2(plan, stand.zekerheid).tekst}`);
+  } else if (!stand.zekerheid.zeker) {
+    // Wie niet alles gezien heeft, kan niet uitsluiten dat een bestand van
+    // een andere omleiding is. Dan wordt er niets verhuisd.
+    console.log('\nEr is NIETS geschreven: het script verhuist alleen als het zeker is dat het alle omleidingen en alle bestanden gezien heeft.');
+    console.log(oordeelStap2(plan, stand.zekerheid).tekst);
+    exit = 1;
   } else {
     console.log('\nUitvoeren:');
     const uit = await voerBackfillUit(plan, {
@@ -157,11 +187,8 @@ try {
     // De stand opnieuw lezen: wat het script zegt is wat er nu echt staat.
     const na = await leesStand();
     console.log('\nStand na de run:');
-    toonTelling(na);
-    toonRegels(na);
-    console.log(stap2Veilig(na)
-      ? '\nStap 2 is veilig: geen enkele omleiding leunt nog op de oude sleutel.'
-      : '\nStap 2 is NIET veilig: zie de regels hierboven.');
+    toonStand(na);
+    console.log(`\n${oordeelStap2(na.plan, na.zekerheid).tekst}`);
   }
 } catch (err) {
   console.error('\nAfgebroken, er is niets (meer) geschreven:', err?.message || err);
