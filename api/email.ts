@@ -175,7 +175,12 @@ const ACTION_CONFIG: Record<LeaveDecisionAction, { subject: string; status: stri
   cancelled: { subject: "Goedgekeurd verlof geannuleerd", status: "Geannuleerd", toon: "neutraal", sentence: "is geannuleerd" },
 };
 
-export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => {
+/** Onderwerp, HTML en tekst van een mail. Elke mail heeft één bouwer; de
+ *  verzendfunctie én het voorbeeld in Beheer › Mails (mailVoorbeelden.ts)
+ *  gebruiken dezelfde, zodat het voorbeeld nooit van de echte mail afwijkt. */
+export type MailTekst = { onderwerp: string; html: string; text: string };
+
+export const bouwVerlofBeslissingMail = (ctx: Omit<LeaveDecisionEmailContext, "to">): MailTekst => {
   const config = ACTION_CONFIG[ctx.action];
   const period = PERIODE_DMJ(ctx.startDate, ctx.endDate);
   // Reden bij een afwijzing (wens Jarno 22-09): als blok onder de feiten,
@@ -199,10 +204,14 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
     ...(reden ? { blok: { kop: "Reden", tekst: reden } } : {}),
     knop: { tekst: "Bekijk in het portaal", url: `${portalUrl()}/verlof` },
   });
+  return { onderwerp: `${config.subject}, ${period}`, html, text };
+};
 
+export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => {
+  const { onderwerp, html, text } = bouwVerlofBeslissingMail(ctx);
   await sendEmail({
     to: [ctx.to],
-    subject: `${config.subject}, ${period}`,
+    subject: onderwerp,
     text,
     html,
     context: `leave:${ctx.action}:${ctx.to}`,
@@ -219,7 +228,7 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
  * instellen; zonder link (bv. als de service-role-key ontbrak) verwijst de
  * mail naar "Wachtwoord vergeten" op het loginscherm — zelfde resultaat.
  */
-export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null; door?: string | null }) => {
+export const bouwWelkomMail = (ctx: { name: string; actionLink?: string | null }): MailTekst => {
   const url = portalUrl();
   const { html, text } = mailOpbouw({
     kicker: "Welkom",
@@ -232,10 +241,14 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
     ...(ctx.actionLink ? { knop: { tekst: "Wachtwoord instellen", url: ctx.actionLink, actie: true } } : {}),
     voet: `Tip: open ${url} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.`,
   });
+  return { onderwerp: "Welkom op het VHB Portaal, stel je wachtwoord in", html, text };
+};
 
+export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null; door?: string | null }) => {
+  const { onderwerp, html, text } = bouwWelkomMail(ctx);
   return sendEmail({
     to: [ctx.to],
-    subject: "Welkom op het VHB Portaal, stel je wachtwoord in",
+    subject: onderwerp,
     text,
     html,
     context: `welcome:${ctx.to}`,
@@ -252,13 +265,7 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
  * heeft — dat zijn er nauwelijks — dus dit is het kanaal dat wél aankomt.
  * De planner ziet de vervaldata sowieso al in het ochtenddigest.
  */
-export const sendExpiryReminderEmail = async (ctx: {
-  to: string;
-  name: string;
-  soortLabel: string;
-  validUntil: string;
-  dagen: number;
-}) => {
+export const bouwVervaldatumMail = (ctx: { name: string; soortLabel: string; validUntil: string; dagen: number }): MailTekst => {
   const wanneer =
     ctx.dagen <= 0
       ? "verloopt vandaag"
@@ -280,10 +287,20 @@ export const sendExpiryReminderEmail = async (ctx: {
     ],
     knop: { tekst: "Open het portaal", url: portalUrl() },
   });
+  return { onderwerp: `Herinnering: je ${soort} ${wanneer}`, html, text };
+};
 
+export const sendExpiryReminderEmail = async (ctx: {
+  to: string;
+  name: string;
+  soortLabel: string;
+  validUntil: string;
+  dagen: number;
+}) => {
+  const { onderwerp, html, text } = bouwVervaldatumMail(ctx);
   return sendEmail({
     to: [ctx.to],
-    subject: `Herinnering: je ${soort} ${wanneer}`,
+    subject: onderwerp,
     text,
     html,
     context: `expiry:${ctx.to}:${ctx.dagen}`,
