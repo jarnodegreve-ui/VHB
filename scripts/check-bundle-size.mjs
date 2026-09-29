@@ -102,7 +102,12 @@ import zlib from 'node:zlib';
 // ±0,3 kB die de CI-runner zwaarder meet en ruimte voor de nummers die nog
 // volgen. De index (75) en de chauffeur-warmup (75) blijven ongewijzigd en
 // zijn de echte bewakers van de start.
-const BUDGET_KB = 686;
+// 29-09 (controle-ronde, akkoord Jarno): 686 → 692. Alle tien de branches van
+// de ronde samen kwamen lokaal op 688 kB; elke branch apart bleef onder 686.
+// Geen nieuwe dependency: de groei is de PDF-viewer voor bijlagen, de
+// rollabels, de mailschermen en de regel tegen dubbele inplanning. Bewust
+// geen bijkomende lazy-loadingrefactor in deze ronde.
+const BUDGET_KB = 692;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -129,7 +134,13 @@ const DEELBUDGET_KB = {
   // dat kost ±0,35 kB in de entry (73,68 → 74,04 lokaal). Onderzocht en
   // getrimd (foutteksten naar de view-hook, geen aparte retry-wrapper); wat
   // rest is het mechanisme zelf, geen polish. Marge blijft ±1 kB.
-  index: 75,
+  // 29-09 (controle-ronde, akkoord Jarno): 75 → 75,5. De tien branches samen
+  // zetten de startbundel lokaal op 74,76 kB en de CI-runner meet ±0,35 kB
+  // zwaarder, dus ±75,1. Groei over de hele ronde ±0,24 kB: het profielmenu
+  // met de rollabels, de lader van het herstel na Ongedaan maken, de mail en
+  // het verversen van de live-verbinding na de 2FA-code. Het herstel zelf
+  // laadt al lui; een bredere lazy-loadingrefactor is bewust uitgesteld.
+  index: 75.5,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
