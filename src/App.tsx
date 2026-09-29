@@ -52,7 +52,7 @@ import { UserMenu } from './components/UserMenu';
 import { MeldingenBel } from './components/MeldingenBel';
 import type { Werkvoorraad } from './lib/werkvoorraad';
 import { LoginView } from './views/LoginView';
-import { useRealtimeSync } from './lib/realtime';
+import { useRealtimeSync, ververRealtimeToken } from './lib/realtime';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { laatSchrijffout } from './lib/foutenLui';
 // Overlays lazy (punt 18, 14-09): wachtwoord wijzigen, agenda-abonnement, de
@@ -1279,6 +1279,8 @@ export default function App() {
           // ophalen en de app alsnog initialiseren.
           const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } };
           const verse = data.session ?? session;
+          // De socket meteen het aal2-token geven (zie ververRealtimeToken).
+          ververRealtimeToken(verse.access_token);
           setSession(verse);
           setTweeStaps(null);
           initializedUserIdRef.current = null;

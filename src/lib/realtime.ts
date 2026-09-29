@@ -80,6 +80,24 @@ const leesPlanningVersie = async (): Promise<string | null> => {
   }
 };
 
+/**
+ * Na de code van de twee-stapsverificatie staat de sessie op aal2, maar de
+ * socket kent nog het token van vóór de code: supabase-js geeft een nieuw
+ * token alleen door bij SIGNED_IN en TOKEN_REFRESHED, niet bij
+ * MFA_CHALLENGE_VERIFIED, en anders pas bij de volgende hartslag (tot 25 s).
+ * Sinds supabase/2026-09-29_rls_tweede_factor.sql leest de staf-tak van
+ * verlof en dienstruil alleen nog met aal2; zonder deze aanroep miste een
+ * planner in dat venster de wijzigingen van collega's. Faalt stil: de
+ * hartslag haalt het in.
+ */
+export const ververRealtimeToken = (token: string): void => {
+  try {
+    void supabase?.realtime.setAuth(token).catch(() => undefined);
+  } catch {
+    // Mock-client of gesloten socket: de hartslag doet het later.
+  }
+};
+
 export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers) {
   // Stable ref naar refetchers zodat we geen subscribe-loop krijgen
   // wanneer een refetcher-identity wijzigt
