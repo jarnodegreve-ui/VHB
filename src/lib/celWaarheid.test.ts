@@ -88,21 +88,21 @@ describe('berekenCelWaarheid, een ruil met iemand die niet meer op het bord staa
     expect(bord([]).cells['5']).toBeUndefined();
   });
 
-  it('1-op-1: het been naar de vertrokken gever wordt overgeslagen, de ontvanger houdt wat hij kreeg', () => {
+  it('1-op-1: ook het been naar de vertrokken gever geldt, de ontvanger houdt alleen wat hij kreeg', () => {
     const uit = bord([ruil({ swapType: 'ruil', returnDate: '2026-09-02', returnCode: '2102' })]);
     expect(uit.cells['2']['2026-09-01']).toMatchObject({ code: '2102', swapFrom: 'Oud Weg' });
-    // De terugdienst staat in de planning op naam van de vertrokken gever; op
-    // het bord blijft ze in de kolom van wie ze afgaf (open punt, zie rapport).
-    expect(uit.cells['2']['2026-09-02']).toMatchObject({ code: '2102' });
-    expect(uit.cells['2']['2026-09-02'].swapId).toBeUndefined();
+    // De terugdienst staat in de planning op naam van de vertrokken gever: An
+    // is die dag vrij (weggeruild), zoals toen Oud Weg nog in dienst was. Tot
+    // optie A (Jarno 29-09) hield An hier ook 2102: twee diensten.
+    expect(uit.cells['2']['2026-09-02']).toMatchObject({ code: 'vrij', swapId: 's1', swapAway: true, swapTo: 'Oud Weg' });
   });
 
-  it('de ONTVANGER is vertrokken: het been naar hem wordt overgeslagen (bestaand gedrag, open punt)', () => {
-    // Jan gaf zijn dienst aan Oud Weg, die daarna uit dienst ging. Het bord
-    // toont de dienst nog in de kolom van Jan, zoals vóór 29-09.
+  it('de ONTVANGER is vertrokken: de gever staat op vrij (weggeruild), zoals in de planning-rijen (open punt opgelost)', () => {
+    // Jan gaf zijn dienst aan Oud Weg, die daarna uit dienst ging. Tot optie A
+    // (Jarno 29-09) toonde het bord de dienst nog in de kolom van Jan.
     const rows = [{ source_date: '2026-09-01', day_type: '21', assignments: { 'Jan Janssen': '2102', 'Oud Weg': 'vrij' } }];
     const uit = berekenCelWaarheid('2026-09', { rows, users: mensen, services, codes, leave: [], swaps: [ruil({ requesterId: '1', targetDriverId: '5' })] as never });
-    expect(uit.cells['1']['2026-09-01']).toEqual({ code: '2102', kind: 'service', label: 'Dienst 2102', segments: ['05:28–12:13 (loop 4600)', '15:28–17:27'] });
+    expect(uit.cells['1']['2026-09-01']).toEqual({ code: 'vrij', kind: 'absence', label: 'Vrij', segments: [], swapId: 's1', swapManual: false, swapDone: false, swapAway: true, swapTo: 'Oud Weg' });
     expect(uit.cells['5']).toBeUndefined();
   });
 
@@ -135,6 +135,108 @@ describe('berekenCelWaarheid, een ruil met iemand die niet meer op het bord staa
     const users = [...mensen, { id: '4', name: 'Els Planner', role: 'planner', isActive: true }];
     const uit = bord([ruil({ requesterId: '4' })], users);
     expect(uit.cells['2']['2026-09-01']).toEqual({ code: 'vrij', kind: 'absence', label: 'Vrij', segments: [] });
+  });
+});
+
+/**
+ * Optie A (Jarno 29-09): met een collega die vertrok gelden beide benen van
+ * een ruil, zodra zijn kolom meegelezen is. Voor wie op het bord staat is het
+ * bord dan hetzelfde als toen hij nog in dienst was. De eerste versie van
+ * 29-09 paste alleen het been VAN hem toe en telde zo bij een 1-op-1 over twee
+ * dagen een dienst te veel. Zonder gelezen kolom (verwijderd account, botsende
+ * naam) valt de ruil weg zoals vroeger.
+ */
+describe('berekenCelWaarheid, optie A: beide benen, ook met wie vertrok', () => {
+  const JAN = { id: '1', name: 'Jan Janssen', role: 'chauffeur', isActive: true, section: 'Reguliere', startDate: '2010-01-01' };
+  const AN = { id: '2', name: 'Peeters An', role: 'chauffeur', isActive: true, section: 'Nacht', startDate: '2012-01-01' };
+  const oudWeg = (isActive: boolean) => ({ id: '5', name: 'Oud Weg', role: 'chauffeur', isActive });
+  const diensten = [...services, { serviceNumber: '2703', startTime: '22:00', endTime: '02:30' }];
+  const rijen = [
+    { source_date: '2026-09-01', day_type: '21', assignments: { 'Jan Janssen': '2102', 'An Peeters': 'vrij', 'Oud Weg': 'vrij' } },
+    { source_date: '2026-09-02', day_type: '22', assignments: { 'Jan Janssen': 'vrij', 'An Peeters': 'vrij', 'Oud Weg': '2703' } },
+  ];
+  /** Met een dag waarop beiden rijden, voor een 1-op-1 op dezelfde dag. */
+  const metDerdeDag = [...rijen, { source_date: '2026-09-03', day_type: '22', assignments: { 'Jan Janssen': '2102', 'An Peeters': 'vrij', 'Oud Weg': '2703' } }];
+  /** Jan gaf 2102 (01/09) aan Oud Weg en kreeg diens 2703 (02/09) terug. */
+  const ruil = (extra: Record<string, unknown> = {}) => ({
+    id: 'r1', requesterId: '1', targetDriverId: '5', status: 'approved', decidedAt: '2026-08-20T10:00:00Z',
+    shiftDate: '2026-09-01', shiftLine: '2102', swapType: 'ruil', returnDate: '2026-09-02', returnCode: '2703', reason: '', ...extra,
+  });
+  const bord = (swaps: unknown[], users: unknown[], rows: unknown[] = rijen) =>
+    berekenCelWaarheid('2026-09', { rows: rows as never, users: users as never, services: diensten, codes, leave: [], swaps: swaps as never });
+  const dienstenVan = (cellen: Record<string, { code: string; kind: string }> | undefined) =>
+    Object.entries(cellen ?? {}).filter(([, c]) => c.kind === 'service').map(([dag, c]) => `${dag} ${c.code}`);
+  const dienst2102 = { code: '2102', kind: 'service', label: 'Dienst 2102', segments: ['05:28–12:13 (loop 4600)', '15:28–17:27'] };
+
+  it('1-op-1 over twee dagen, daarna vertrok de collega: Jan rijdt één dienst, op de juiste dag, zoals toen beiden in dienst waren', () => {
+    const inDienst = bord([ruil()], [JAN, AN, oudWeg(true)]);
+    const vertrokken = bord([ruil()], [JAN, AN, oudWeg(false)]);
+    // Vóór 29-09: alleen 2102 op 01/09 (de verkeerde dag). Eerste versie van 29-09: 2102 én 2703.
+    expect(dienstenVan(vertrokken.cells['1'])).toEqual(['2026-09-02 2703']);
+    expect(vertrokken.cells['1']['2026-09-01']).toMatchObject({ code: 'vrij', swapId: 'r1', swapAway: true, swapTo: 'Oud Weg' });
+    expect(vertrokken.cells['1']['2026-09-02']).toMatchObject({ code: '2703', swapId: 'r1', swapFrom: 'Oud Weg' });
+    expect(vertrokken.cells['1']).toEqual(inDienst.cells['1']);
+    expect(vertrokken.cells['5']).toBeUndefined();
+    expect(vertrokken.chauffeurs.map((c) => c.id)).toEqual(['1', '2']);
+  });
+
+  it.each<[string, Record<string, unknown>, unknown[]?]>([
+    ['een overname van hem', { requesterId: '5', targetDriverId: '2', shiftDate: '2026-09-02', shiftLine: '2703', swapType: 'overname', returnDate: undefined, returnCode: undefined }],
+    ['een overname naar hem', { swapType: 'overname', returnDate: undefined, returnCode: undefined }],
+    ['een 1-op-1 over twee dagen, hij vroeg', { requesterId: '5', targetDriverId: '1', shiftDate: '2026-09-02', shiftLine: '2703', returnDate: '2026-09-01', returnCode: '2102' }],
+    ['een 1-op-1 over twee dagen, Jan vroeg', {}],
+    ['een 1-op-1 op dezelfde dag', { shiftDate: '2026-09-03', returnDate: '2026-09-03' }, metDerdeDag],
+    ['een afgehandelde ruil (completed)', { status: 'completed' }],
+  ])('voor wie op het bord staat is het bord hetzelfde als toen hij nog in dienst was: %s', (_naam, extra, rows = rijen) => {
+    const inDienst = bord([ruil(extra)], [JAN, AN, oudWeg(true)], rows);
+    const vertrokken = bord([ruil(extra)], [JAN, AN, oudWeg(false)], rows);
+    expect({ jan: vertrokken.cells['1'], an: vertrokken.cells['2'] }).toEqual({ jan: inDienst.cells['1'], an: inDienst.cells['2'] });
+    expect(vertrokken.cells['5']).toBeUndefined();
+  });
+
+  it('een verwijderd account (geen user-record) als gever: de ruil doet niets, ook geen merk zonder naam', () => {
+    // De Excel verwerkte de overname al: An staat op 2102.
+    const rows = [{ source_date: '2026-09-01', day_type: '21', assignments: { 'Jan Janssen': 'vrij', 'An Peeters': '2102', 'Weg Account': 'vrij' } }];
+    const uit = bord([ruil({ requesterId: 'weg-1', targetDriverId: '2', swapType: 'overname' })], [JAN, AN], rows);
+    expect(uit.cells['2']['2026-09-01']).toEqual(dienst2102);
+    expect(Object.keys(uit.cells).sort()).toEqual(['1', '2']);
+  });
+
+  it('een verwijderd account als ontvanger: de gever houdt zijn dienst, zoals vroeger (geen "weggeruild" zonder naam)', () => {
+    const rows = [{ source_date: '2026-09-01', day_type: '21', assignments: { 'Jan Janssen': '2102', 'An Peeters': 'vrij' } }];
+    const uit = bord([ruil({ targetDriverId: 'weg-1', swapType: 'overname' })], [JAN, AN], rows);
+    expect(uit.cells['1']['2026-09-01']).toEqual(dienst2102);
+    expect(Object.keys(uit.cells).sort()).toEqual(['1', '2']);
+  });
+
+  it('twee vertrokken accounts met botsende naam ("Oud Weg" en "Weg Oud"): geen kolom gaat naar de verkeerde, de ruil valt weg zoals vroeger', () => {
+    const wegOud = { id: '7', name: 'Weg Oud', role: 'chauffeur', isActive: false };
+    // Weg Oud gaf An op 02/09 dienst 2703. Die staat in de kolom "Oud Weg",
+    // maar is niet van hem: de naamindex laat de botsende sleutel vallen.
+    const vanWegOud = { id: 'r7', requesterId: '7', targetDriverId: '2', status: 'approved', decidedAt: '2026-08-21T10:00:00Z', shiftDate: '2026-09-02', shiftLine: '2703', swapType: 'overname', reason: '' };
+    const mensen = [JAN, AN, oudWeg(false), wegOud];
+    const uit = bord([ruil(), vanWegOud], mensen);
+    const zonderRuilen = bord([], mensen);
+    expect(uit.cells['1']).toEqual(zonderRuilen.cells['1']);
+    expect(uit.cells['2']).toEqual(zonderRuilen.cells['2']);
+    expect(Object.keys(uit.cells).sort()).toEqual(['1', '2']);
+    // Zonder de botsing geldt optie A gewoon.
+    expect(dienstenVan(bord([ruil()], [JAN, AN, oudWeg(false)]).cells['1'])).toEqual(['2026-09-02 2703']);
+  });
+
+  it('beide partijen vertrokken: hun ruil raakt niemand op het bord, en geen van beiden verschijnt', () => {
+    const els = { id: '8', name: 'Els Vertrokken', role: 'chauffeur', isActive: false };
+    const rows = rijen.map((r) => ({ ...r, assignments: { ...r.assignments, 'Els Vertrokken': 'vrij' } }));
+    // Oud Weg gaf Els op 02/09 dienst 2703. Beiden ruilden in augustus ook met
+    // Jan, dus beider kolom wordt meegelezen.
+    const tussenBeiden = { id: 'r8', requesterId: '5', targetDriverId: '8', status: 'approved', decidedAt: '2026-08-22T10:00:00Z', shiftDate: '2026-09-02', shiftLine: '2703', swapType: 'overname', reason: '' };
+    const augustus = ['5', '8'].map((id) => ({ id: `aug-${id}`, requesterId: '1', targetDriverId: id, status: 'approved', decidedAt: '2026-08-01T10:00:00Z', shiftDate: '2026-08-15', shiftLine: '2102', swapType: 'overname', reason: '' }));
+    const mensen = [JAN, AN, oudWeg(false), els];
+    const uit = bord([tussenBeiden, ...augustus], mensen, rows);
+    const zonder = bord(augustus, mensen, rows);
+    expect({ jan: uit.cells['1'], an: uit.cells['2'] }).toEqual({ jan: zonder.cells['1'], an: zonder.cells['2'] });
+    expect(Object.keys(uit.cells).sort()).toEqual(['1', '2']);
+    expect(uit.chauffeurs.map((c) => c.id)).toEqual(['1', '2']);
   });
 });
 
