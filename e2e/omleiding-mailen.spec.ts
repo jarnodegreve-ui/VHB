@@ -168,7 +168,8 @@ test('omleiding mailen: een lange bestandsnaam kapt af binnen het paneel op 320 
     const naamEl = pil.querySelector('span.truncate') as HTMLElement;
     return { links: b.left - p.left, rechts: p.right - b.right, paneel: p.width, afgekapt: naamEl.scrollWidth > naamEl.clientWidth };
   });
-  expect(maten.paneel).toBeLessThanOrEqual(320);
+  // Halve pixel speling: tijdens het inschuiven meet het paneel 320,00003 px.
+  expect(maten.paneel).toBeLessThanOrEqual(320.5);
   expect(maten.links, 'de pil begint binnen het paneel').toBeGreaterThanOrEqual(8);
   expect(maten.rechts, 'de pil eindigt binnen het paneel').toBeGreaterThanOrEqual(8);
   expect(maten.afgekapt, 'de naam is afgekapt, niet afgebroken of uitgelopen').toBe(true);
