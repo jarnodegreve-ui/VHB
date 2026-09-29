@@ -753,3 +753,111 @@ test('chauffeur: wat op zijn antwoord wacht bovenaan, lopende verzoeken boven af
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
+
+test('Mijn verzoeken: het scrollvak blijft, maar aan het einde van de lijst scrolt de pagina door', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'de veeg loopt via het Chrome DevTools Protocol');
+  // Controle 29-09, nr. 18: het vak (max. 420 px) vult op een telefoon bijna
+  // het scherm en hield met overscroll-contain de veeg vast; de ruilen die op
+  // antwoord wachten staan eronder en waren zo alleen naast het vak te bereiken.
+  const pageErrors: string[] = [];
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  await seedSession(page, CHAUFFEUR);
+
+  const nu = new Date().toISOString();
+  // Eén lopend verzoek (staat bovenaan) en dertien afgeronde.
+  const eigen = Array.from({ length: 14 }, (_, i) => ({
+    id: `mv-${i}`, shiftId: `m${i}`, requesterId: CHAUFFEUR.id, targetDriverId: COLLEGA.id,
+    ...(i === 0
+      ? { status: 'pending', shiftDate: dayOffset(12), returnDate: dayOffset(13) }
+      : { status: 'completed', decidedAt: nu, shiftDate: dayOffset(-(i + 2)), returnDate: dayOffset(-(i + 1)) }),
+    createdAt: nu, shiftLine: String(2101 + i), returnCode: 'vrij',
+  }));
+  const aanMij = { id: 'os-antwoord', shiftId: 'o1', requesterId: COLLEGA.id, targetDriverId: CHAUFFEUR.id, status: 'pending', createdAt: nu, shiftDate: dayOffset(9), shiftLine: '2404', returnDate: dayOffset(11), returnCode: 'vrij' };
+
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (path.endsWith('/api/me')) return json(CHAUFFEUR);
+    if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+    if (path.endsWith('/api/users')) return json([CHAUFFEUR, COLLEGA]);
+    if (path.endsWith('/api/swaps') && route.request().method() === 'GET') return json([...eigen, aanMij]);
+    return json([]);
+  });
+
+  await page.goto('/');
+  const lijst = page.getByRole('list', { name: 'Mijn verzoeken' });
+  await expect(lijst).toBeVisible({ timeout: 15_000 });
+  await expect(lijst.locator(':scope > li')).toHaveCount(14);
+  await expect(page.getByText('Jouw antwoord')).toBeAttached();
+
+  // Het scrollvak = de dichtste voorouder van de lijst die zelf schuift.
+  const markeerVak = () => lijst.evaluate((ul) => {
+    let vak = ul.parentElement;
+    while (vak && !['auto', 'scroll'].includes(getComputedStyle(vak).overflowY)) vak = vak.parentElement;
+    if (!vak || vak.hasAttribute('data-scroll-root')) return false;
+    vak.setAttribute('data-test-scrollvak', '');
+    return true;
+  });
+  expect(await markeerVak(), 'Mijn verzoeken staat in een eigen scrollvak').toBe(true);
+  const vak = page.locator('[data-test-scrollvak]');
+  const stand = () => page.evaluate(() => {
+    const v = document.querySelector<HTMLElement>('[data-test-scrollvak]')!;
+    const root = document.querySelector<HTMLElement>('[data-scroll-root]')!;
+    return { vak: Math.round(v.scrollTop), eindeVak: Math.round(v.scrollHeight - v.clientHeight), pagina: Math.round(root.scrollTop) };
+  });
+  // Eén veeg omhoog met de vinger, midden in het vak (echte touch-gesture, geen scrollTo).
+  const cdp = await page.context().newCDPSession(page);
+  const veegOmhoog = async (afstand: number) => {
+    const kader = (await vak.boundingBox())!;
+    await cdp.send('Input.synthesizeScrollGesture', {
+      x: Math.round(kader.x + kader.width / 2),
+      y: Math.round(kader.y + kader.height / 2),
+      yDistance: -afstand,
+      speed: 1200,
+      gestureSourceType: 'touch',
+    });
+  };
+
+  // Het vak bestaat nog en schuift zelf (wens Jarno): de lijst is hoger dan het vak.
+  const begin = await stand();
+  expect(begin.eindeVak, 'de lijst is langer dan het vak').toBeGreaterThan(100);
+  expect(begin).toMatchObject({ vak: 0, pagina: 0 });
+  await veegOmhoog(120);
+  await expect.poll(async () => (await stand()).vak).toBeGreaterThan(0);
+  expect((await stand()).pagina, 'midden in de lijst schuift alleen het vak').toBe(0);
+
+  // Doorvegen tot het einde van de lijst (een veeg die in het vak begon, blijft in het vak).
+  await expect(async () => {
+    await veegOmhoog(400);
+    const s = await stand();
+    expect(s.vak).toBe(s.eindeVak);
+  }).toPass({ timeout: 15_000 });
+  const opEinde = (await stand()).pagina;
+
+  // Aan het einde van de lijst: verder vegen scrolt de pagina door.
+  await expect(async () => {
+    await veegOmhoog(200);
+    expect((await stand()).pagina, 'de pagina scrolt door naar wat onder het vak staat').toBeGreaterThan(opEinde);
+  }).toPass({ timeout: 10_000 });
+
+  // Een overlay vanuit de lijst zet de pagina nog altijd op slot (#637/#638).
+  const rij = lijst.locator(':scope > li').first();
+  await rij.getByRole('button', { name: /Dienst 2101/ }).click();
+  await rij.getByRole('button', { name: 'Aanvraag intrekken' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  expect(await page.evaluate(() => document.body.dataset.scrollLocks ?? '')).not.toBe('');
+  const { vak: vakVoor, pagina: paginaVoor } = await stand();
+  await veegOmhoog(200);
+  expect(await stand(), 'met een overlay open schuift er niets onder').toMatchObject({ vak: vakVoor, pagina: paginaVoor });
+  await page.getByRole('dialog').getByRole('button', { name: 'Annuleren' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.body.dataset.scrollLocks ?? '')).toBe('');
+
+  // Op een breed scherm staan de twee lijsten naast elkaar: daar blijft het vak de veeg vasthouden.
+  expect(await vak.evaluate((v) => getComputedStyle(v).overscrollBehaviorY)).toBe('auto');
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect.poll(() => vak.evaluate((v) => getComputedStyle(v).overscrollBehaviorY)).toBe('contain');
+
+  expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+});

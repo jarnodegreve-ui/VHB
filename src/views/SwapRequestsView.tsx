@@ -607,8 +607,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
           {mySwaps.length > 0 ? (
             /* Compacte, uitklapbare rijen in een eigen scrollcontainer: deze
-               lijst groeit onbegrensd mee met de historiek (wens Jarno). */
-            <div className="max-h-[420px] overflow-y-auto overscroll-contain -mx-1 px-1">
+               lijst groeit onbegrensd mee met de historiek (wens Jarno).
+               overscroll-contain pas vanaf md: op de telefoon vult dit vak
+               bijna het scherm en staan de ruilen die op antwoord wachten
+               eronder, dus wie aan het einde verder veegt scrolt de pagina
+               door. De scroll-root houdt de overscroll zelf tegen. */
+            <div className="max-h-[420px] overflow-y-auto md:overscroll-contain -mx-1 px-1">
               {/* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
                   in plaats van een stapel losse kaarten, de dag als titel
                   (daaraan herken je de ruil), de dienst eronder. */}
