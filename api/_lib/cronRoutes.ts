@@ -218,7 +218,7 @@ export function mountCronRoutes(app: express.Express) {
           const recipients = await systemMailRecipients();
           if (recipients.length > 0) {
             const encrypted = encryptOpensslCompatible(json, passphrase);
-            const { onderwerp, html, text } = bouwBackupWeekkopieMail({ filename, dag: payload.exportedAt.slice(0, 10) });
+            const { onderwerp, html, text } = bouwBackupWeekkopieMail({ filename, exportedAt: payload.exportedAt });
             const result = await sendEmail({
               to: recipients,
               context: "weekly-backup",

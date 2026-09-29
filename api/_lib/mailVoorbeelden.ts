@@ -52,7 +52,7 @@ export const voorbeeldMail = (soort: string): MailTekst | null => {
     case "backup-integriteit":
       return bouwBackupIntegriteitMail({ filename: "vhb-backup-2026-09-25.json", bevindingen: ["collectie users is leeg", "geen admin-account in de export"] });
     case "backup-weekkopie":
-      return bouwBackupWeekkopieMail({ filename: "vhb-backup-2026-09-27.json", dag: "2026-09-27" });
+      return bouwBackupWeekkopieMail({ filename: "vhb-backup-2026-09-27.json", exportedAt: "2026-09-27T01:30:00.000Z" });
     case "restore-proef":
       return bouwRestoreProefMail({ filename: "vhb-backup-2026-09-30.json", bevindingen: ["teruglezen mislukt: Unexpected end of JSON input"] });
     default:

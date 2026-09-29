@@ -1,4 +1,5 @@
 import { mailOpbouw, portalUrl, type MailTekst } from "../email.js";
+import { DAG_DMJ } from "../helpers.js";
 import type { MailStatusToon } from "./mailLayout.js";
 
 /**
@@ -104,13 +105,16 @@ export const bouwBackupIntegriteitMail = (o: { filename: string; bevindingen: st
   return { onderwerp: `Back-up-integriteit: controleer ${o.filename}`, html, text };
 };
 
-/** Wekelijkse off-site kopie, versleuteld als bijlage. `dag` = de dag van de
- *  export zoals hij in de mail staat; de bestandsnaam houdt zijn eigen vorm. */
-export const bouwBackupWeekkopieMail = (o: { filename: string; dag: string }): MailTekst => {
+/** Wekelijkse off-site kopie, versleuteld als bijlage. De dag van de export
+ *  (`exportedAt`, ISO) staat als dd/mm/jjjj in titel en onderwerp (nr. 24:
+ *  "2026-09-27" las Jarno als jaar/maand/dag); de bestandsnaam en het
+ *  commando houden de ISO-vorm, die zijn machineleesbaar. */
+export const bouwBackupWeekkopieMail = (o: { filename: string; exportedAt: string }): MailTekst => {
+  const dag = DAG_DMJ(o.exportedAt);
   const commando = `openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in ${o.filename}.enc -out ${o.filename}`;
   const { html, text } = mailOpbouw({
     kicker: "Back-up",
-    titel: `Wekelijkse back-up ${o.dag}`,
+    titel: `Wekelijkse back-up ${dag}`,
     status: { label: "Versleuteld, bewaar buiten Supabase en Vercel", toon: "neutraal" },
     alineas: [
       "In bijlage de wekelijkse off-site kopie van de portaal-back-up, AES-256-versleuteld. Bewaar deze mail buiten Supabase en Vercel.",
@@ -119,7 +123,7 @@ export const bouwBackupWeekkopieMail = (o: { filename: string; dag: string }): M
       "Zie ook docs/RESTORE.md in de repo.",
     ],
   });
-  return { onderwerp: `Wekelijkse back-up ${o.dag}, versleuteld`, html, text };
+  return { onderwerp: `Wekelijkse back-up ${dag}, versleuteld`, html, text };
 };
 
 /** De maandelijkse restore-proef vond problemen. */

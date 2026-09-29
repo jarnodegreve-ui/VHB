@@ -92,8 +92,16 @@ describe('voorbeelden van de mails', () => {
 });
 
 describe('bouwers', () => {
-  it('de wekelijkse back-up noemt de bestandsnaam ongewijzigd in het commando', () => {
-    const m = bouwBackupWeekkopieMail({ filename: 'vhb-backup-2026-09-27.json', dag: '2026-09-27' });
+  it('de wekelijkse back-up toont de dag als dd/mm/jjjj; bestandsnaam en commando houden de ISO-vorm', () => {
+    const m = bouwBackupWeekkopieMail({ filename: 'vhb-backup-2026-09-27.json', exportedAt: '2026-09-27T01:30:00.000Z' });
+    expect(m.onderwerp).toBe('Wekelijkse back-up 27/09/2026, versleuteld');
+    expect(m.html).toContain('>Wekelijkse back-up 27/09/2026</h1>');
+    expect(m.text).toContain('Wekelijkse back-up 27/09/2026');
+    // Nergens een rauwe ISO-datum in leestekst: alleen nog in de bestandsnaam.
+    expect(m.text.replaceAll('vhb-backup-2026-09-27.json', '')).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(m.onderwerp).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(m.text).toContain('-in vhb-backup-2026-09-27.json.enc -out vhb-backup-2026-09-27.json');
+    // Het voorbeeld in Beheer › Mails volgt vanzelf.
+    expect(voorbeeldMail('backup-weekkopie')!.onderwerp).toBe('Wekelijkse back-up 27/09/2026, versleuteld');
   });
 });
