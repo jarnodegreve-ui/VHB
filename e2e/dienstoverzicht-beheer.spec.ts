@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import * as XLSX from 'xlsx';
 import { ADMIN, CHAUFFEUR, seed } from './helpers';
 import { TECHNIEKER } from '../scripts/audit-fixtures.mjs';
 import { logIn, zonderSessie } from './deeplinkHulp';
@@ -225,6 +226,64 @@ test.describe('verwijderen (admin, server-confirmed)', () => {
     expect(pad(page)).toBe('/beheer/dienstoverzicht/3');
     await paneel(page, '2515').getByRole('button', { name: 'Annuleren' }).click();
     await expect(zichtbaar(page, '2515').first()).toBeVisible();
+  });
+});
+
+/**
+ * Jarno 29-09 (28b): een deel met gelijke begin- en eindtijd wordt aan de
+ * ingang geweigerd. Het formulier toont een veldfout en stuurt niets; de
+ * Excel-import zegt in de bevestiging welke dienst en welk deel, en neemt de
+ * tijden van dat deel niet mee (anders strandt ze op de 400 van de server).
+ */
+test.describe('gelijke begin- en eindtijd', () => {
+  test('formulier: veldfout bij de eindtijd van dat deel, er gaat niets naar de server', async ({ page }) => {
+    let posts = 0;
+    page.on('request', (r) => { if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/services') posts += 1; });
+    await openScherm(page, ADMIN, '/beheer/dienstoverzicht/3');
+    const p = paneel(page, '2515');
+    await p.getByLabel('Eindtijd (deel 2)', { exact: true }).fill('15:13');
+    await p.getByRole('button', { name: 'Dienst bijwerken' }).click();
+    await expect(p.getByRole('alert').filter({ hasText: 'Deel 2 van dienst 2515 heeft dezelfde begin- en eindtijd (15:13). Een dienst van een etmaal schrijf je in busvak-uren, bv. 15:13 tot 39:13.' })).toBeVisible();
+    await expect(p).toBeVisible();
+    expect(posts).toBe(0);
+    // Gecorrigeerd gaat het wel door.
+    await p.getByLabel('Eindtijd (deel 2)', { exact: true }).fill('21:55');
+    const opslaan = await houdOpslaanVast(page);
+    await p.getByRole('button', { name: 'Dienst bijwerken' }).click();
+    await opslaan.aangevraagd;
+    opslaan.geef({ status: 200, body: { ok: true } });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('Excel-import: een waarschuwing per deel in de bevestiging, de tijden van dat deel gaan niet mee', async ({ page }) => {
+    await openScherm(page, ADMIN);
+    // Deel 3 van 2115 staat op 0 in een ongebruikte kolom: dat wordt 00:00 tot 00:00.
+    const blad = XLSX.utils.aoa_to_sheet([
+      ['Dienst', 'Begin', 'Einde', 'Loop', 'Begin', 'Einde', 'Loop', 'Begin', 'Einde', 'Loop'],
+      ['2115', '06:00', '14:00', '4505', '15:00', '19:00', '4510', 0, 0, ''],
+      ['2116', '22:00', '06:00', '4600', '', '', '', '', '', ''],
+    ]);
+    const boek = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(boek, blad, 'Diensten');
+    const buffer = XLSX.write(boek, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    let verstuurd: Array<Record<string, string>> | null = null;
+    await page.route('**/api/services', async (route: Route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      verstuurd = route.request().postDataJSON();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, count: 2, planning: { status: 'niet-nodig' } }) });
+    });
+    await page.locator('input[type="file"][accept*="xlsx"]').setInputFiles({ name: 'diensten.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer });
+    const dialoog = page.getByRole('dialog', { name: 'Diensten importeren' });
+    await expect(dialoog).toBeVisible({ timeout: 15_000 });
+    await expect(dialoog).toContainText('Eén deel gaat zonder tijden mee');
+    await expect(dialoog).toContainText('Deel 3 van dienst 2115 heeft dezelfde begin- en eindtijd (00:00). Een dienst van een etmaal schrijf je in busvak-uren, bv. 00:00 tot 24:00. De tijden van dat deel worden niet geïmporteerd.');
+    expect(verstuurd).toBeNull();
+    await dialoog.getByRole('button', { name: 'Importeren', exact: true }).click();
+    await expect.poll(() => verstuurd).not.toBeNull();
+    expect(verstuurd!.map((s) => [s.serviceNumber, s.startTime, s.endTime, s.startTime2, s.endTime2, s.startTime3, s.endTime3, s.loopnr2])).toEqual([
+      ['2115', '06:00', '14:00', '15:00', '19:00', '', '', '4510'],
+      ['2116', '22:00', '06:00', '', '', '', '', ''],
+    ]);
   });
 });
 

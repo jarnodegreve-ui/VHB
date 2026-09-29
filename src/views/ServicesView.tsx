@@ -21,7 +21,9 @@ import { useCollectieStaat } from '../app/collectieStaat';
 import { ROOSTER_MELDING_RUST_MINUTEN } from '../../shared/roosterMelding';
 import { vandaagBrussel } from '../lib/brussel';
 import { DienstTabel, DienstZijvak, useDienstLijst } from '../components/dienstoverzicht/DienstTabel';
-import { dienstenUitRijen } from '../components/dienstoverzicht/dienstImport';
+import { dienstenUitRijen, zonderGelijkeTijden } from '../components/dienstoverzicht/dienstImport';
+import { Callout } from '../components/Callout';
+import { delenMetGelijkeTijden } from '../../shared/gelijkeTijden';
 
 type Opslaan = (s: Service[], opts?: { bulkReplace?: boolean; actie?: string }) => Promise<boolean> | boolean | void;
 
@@ -89,6 +91,9 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
   const [historyService, setHistoryService] = useState<Service | null>(null);
   const [teVerwijderen, setTeVerwijderen] = useState<Service | null>(null);
   const [pendingImportedServices, setPendingImportedServices] = useState<Service[] | null>(null);
+  // Delen met gelijke begin- en eindtijd in het bestand (Jarno 29-09): hun
+  // tijden gaan niet mee, en de bevestiging zegt welke dienst en welk deel.
+  const [importWaarschuwingen, setImportWaarschuwingen] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   // Verborgen file-input voor de Excel-import; het "…"-menu in de kop klikt hem aan.
   const importRef = useRef<HTMLInputElement>(null);
@@ -141,9 +146,11 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
           notify('Het Excel-bestand lijkt leeg te zijn.', 'error');
           return;
         }
-        const geimporteerd = dienstenUitRijen(jsonData);
-        if (geimporteerd.length > 0) setPendingImportedServices(geimporteerd);
-        else notify('Geen geldige diensten gevonden in het bestand. Controleer de kolommen Dienst, Start en Eind.', 'error');
+        const { diensten: geimporteerd, waarschuwingen } = zonderGelijkeTijden(dienstenUitRijen(jsonData));
+        if (geimporteerd.length > 0) {
+          setImportWaarschuwingen(waarschuwingen);
+          setPendingImportedServices(geimporteerd);
+        } else notify('Geen geldige diensten gevonden in het bestand. Controleer de kolommen Dienst, Start en Eind.', 'error');
       } catch (error) {
         console.error('Error parsing Excel:', error);
         notify('Het Excel-bestand kon niet verwerkt worden. Controleer of het een geldig Excel-bestand is.', 'error');
@@ -180,6 +187,13 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
           return;
         }
         cleaned[f] = normalizeTimeString(raw);
+      }
+      // Gelijke begin- en eindtijd is ongeldig (Jarno 29-09): een veldfout bij
+      // de eindtijd van dat deel, zoals de server het ook weigert.
+      const [gelijk] = delenMetGelijkeTijden([cleaned]);
+      if (gelijk) {
+        fouten.zet({ [gelijk.einde]: gelijk.melding });
+        return;
       }
       fouten.wis();
       const next = bewerkte && !nieuw
@@ -348,13 +362,21 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
 
       <ConfirmationModal
         open={!!pendingImportedServices}
-        onClose={() => setPendingImportedServices(null)}
+        onClose={() => { setPendingImportedServices(null); setImportWaarschuwingen([]); }}
         onConfirm={handleConfirmImport}
         title="Diensten importeren"
         message={`Er zijn ${pendingImportedServices?.length ?? 0} diensten gevonden. De huidige lijst wordt vervangen door deze import.`}
         confirmText="Importeren"
         variant="warning"
-      />
+      >
+        {importWaarschuwingen.length > 0 && (
+          <Callout tone="warning" title={importWaarschuwingen.length === 1 ? 'Eén deel gaat zonder tijden mee' : `${importWaarschuwingen.length} delen gaan zonder tijden mee`}>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              {importWaarschuwingen.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </Callout>
+        )}
+      </ConfirmationModal>
 
       <ConfirmationModal
         open={!!teVerwijderen}

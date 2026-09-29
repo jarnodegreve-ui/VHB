@@ -1,5 +1,6 @@
 import type { Service } from '../../types';
 import { normalizeTimeString } from '../../lib/shiftTime';
+import { delenMetGelijkeTijden } from '../../../shared/gelijkeTijden';
 
 /**
  * Rijen uit het Excel-dienstoverzicht (xlsx `sheet_to_json`, één object per
@@ -71,4 +72,29 @@ export function dienstenUitRijen(rijen: Record<string, unknown>[], nu = Date.now
       loopnr3: tekst(loopnr3),
     };
   }).filter((s) => s.serviceNumber);
+}
+
+/**
+ * Een deel met gelijke begin- en eindtijd is ongeldig (Jarno 29-09) en de
+ * server weigert het met een 400. Bij de import ontstaat het makkelijk: een 0
+ * in een ongebruikte kolom wordt "00:00" (excelTijd), dus 00:00 tot 00:00.
+ * Nooit stil: de tijden van dat deel gaan niet mee (de dienst zelf wel, met
+ * haar andere delen en loopnummers), en per deel komt er een waarschuwing
+ * met dienst en deel, die de bevestiging vóór de import toont. Zo strandt de
+ * import niet op de 400 van de server.
+ */
+export function zonderGelijkeTijden(diensten: Service[]): { diensten: Service[]; waarschuwingen: string[] } {
+  const waarschuwingen: string[] = [];
+  const schoon = diensten.map((s) => {
+    const gelijk = delenMetGelijkeTijden([s]);
+    if (gelijk.length === 0) return s;
+    const kopie: Service = { ...s };
+    for (const g of gelijk) {
+      kopie[g.start] = '';
+      kopie[g.einde] = '';
+      waarschuwingen.push(`${g.melding} De tijden van dat deel worden niet geïmporteerd.`);
+    }
+    return kopie;
+  });
+  return { diensten: schoon, waarschuwingen };
 }

@@ -1887,6 +1887,46 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(automatischLog()).toHaveLength(0);
   });
 
+  it('(e) een deel met gelijke begin- en eindtijd wordt geweigerd (Jarno 29-09): 400 met dienst en deel, niets opgeslagen', async () => {
+    const voor = mem.services;
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime2: '08:00', endTime2: '08:00' }) });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('Deel 2 van dienst 12 heeft dezelfde begin- en eindtijd (08:00). Een dienst van een etmaal schrijf je in busvak-uren, bv. 08:00 tot 32:00.');
+    expect(mem.services).toBe(voor);
+    // Ook de Excel-import (admin, volledige vervanging), met een telling als er meer zijn.
+    const bulk = await api('POST', '/api/services', {
+      token: 'tok-admin', headers: { 'x-bulk-replace': '1' },
+      body: mem.services.map((s: any, i: number) => ({ ...s, id: `vers-${i}`, ...(i < 2 ? { startTime3: '00:00', endTime3: '00:00' } : {}) })),
+    });
+    expect(bulk.status).toBe(400);
+    expect(bulk.json.error).toBe('Deel 3 van dienst 10 heeft dezelfde begin- en eindtijd (00:00). Een dienst van een etmaal schrijf je in busvak-uren, bv. 00:00 tot 24:00. Nog 1 deel met dezelfde begin- en eindtijd.');
+    expect(mem.services).toBe(voor);
+    expect(automatischLog()).toHaveLength(0);
+    // Een etmaal in busvak-uren en een nachtdeel in gewone uren mogen wel.
+    const ok = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime2: '22:00', endTime2: '06:00', startTime3: '08:00', endTime3: '32:00' }) });
+    expect(ok.status).toBe(200);
+  });
+
+  it('(e) een dienst van vóór de regel houdt een andere wijziging niet tegen, blijft in de planning en telt als dienst met 0 minuten', async () => {
+    // Rechtstreeks in de database, van vóór 29-09: dienst 12 = 08:00 tot 08:00.
+    mem.services = metDienst12({ startTime: '08:00', endTime: '08:00' });
+    const res = await api('POST', '/api/services', {
+      token: 'tok-planner',
+      body: mem.services.map((s: any) => (s.serviceNumber === '10' ? { ...s, startTime: '05:45' } : s)),
+    });
+    expect(res.status).toBe(200);
+    // De planningsopbouw (getServiceSegments) laat het deel door: de dienst verdwijnt niet uit het rooster.
+    expect((await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' })).status).toBe(200);
+    expect(mem.planning.filter((p: any) => String(p.line) === '12').map((p: any) => [p.date, p.driverId, p.startTime, p.endTime]).sort()).toEqual([
+      ['2026-07-01', '3', '08:00', '08:00'],
+      ['2026-07-08', '3', '08:00', '08:00'],
+    ]);
+    // Het Maandoverzicht telt haar als dienst en als dag, met 0 minuten (vroeger 2 keer 24 uur).
+    const overzicht = await api('GET', '/api/month-planning?month=2026-07&format=summary', { token: 'tok-planner' });
+    expect(overzicht.status).toBe(200);
+    expect(overzicht.json.rijen.find((r: any) => r.driverId === '3')).toMatchObject({ diensten: 2, dagen: 2, minuten: 0 });
+  });
+
   it('(c) een databasefout in de heropbouw laat de save niet mislukken', async () => {
     mem.planningVervangenFaalt = true;
     const voor = mem.planning;

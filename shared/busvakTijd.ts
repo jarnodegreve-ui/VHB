@@ -17,6 +17,8 @@
  *   van de planning uit het dienstoverzicht, de kerncijfers ervan).
  *
  * Zonder imports: deze module zit in de startbundel (src/lib/shiftTime.ts).
+ * Wat alleen het Dienstoverzicht en de server nodig hebben (de melding bij
+ * gelijke begin- en eindtijd) staat daarom apart, in shared/gelijkeTijden.ts.
  */
 const BEGIN = /^(\d{1,2}):(\d{2})/;
 const GEHEEL = /^(\d{1,2}):(\d{2})$/;

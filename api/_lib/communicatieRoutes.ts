@@ -19,6 +19,7 @@ import { dienstenVerschillenVoorPlanning, heropbouwNaDienstoverzicht, ROOSTER_ME
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { MAX_OMLEIDING_BIJLAGEN, diversionBodySchema, diversionLijstSchema } from "../../shared/schemas/diversion.js";
 import { MAX_UPDATE_BIJLAGEN, updateBodySchema, updateLijstSchema } from "../../shared/schemas/update.js";
+import { delenMetGelijkeTijden } from "../../shared/gelijkeTijden.js";
 import { recordUrl } from "./meldingen.js";
 import { valideerLijst, valideerRecord } from "./valideer.js";
 import { recordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkDiversionsOpslag, verwerkUpdatesOpslag } from "./recordWrites.js";
@@ -398,6 +399,17 @@ export function mountCommunicatieRoutes(app: express.Express) {
           }
           const servicesRemoved = detectMassDelete(previousServices, newData);
           if (servicesRemoved !== null) return massDeleteResponse(res, servicesRemoved, previousServices.length, "diensten");
+        }
+        // Een deel met gelijke begin- en eindtijd is ongeldig (Jarno 29-09,
+        // shared/gelijkeTijden.ts): geweigerd, met dienst en deel in de
+        // melding. Alleen wat deze save toevoegt of wijzigt (bij een import is
+        // dat alles): een ongewijzigde dienst houdt geen andere wijziging tegen.
+        const gelijk = delenMetGelijkeTijden([...diff.added, ...diff.changed]);
+        if (gelijk.length > 0) {
+          const meer = gelijk.length - 1;
+          return res.status(400).json({
+            error: meer > 0 ? `${gelijk[0].melding} Nog ${meer} ${meer === 1 ? "deel" : "delen"} met dezelfde begin- en eindtijd.` : gelijk[0].melding,
+          });
         }
         await saveServicesData(newData);
         // Eén lezing van wat er nu écht staat (genormaliseerd door de opslag):
