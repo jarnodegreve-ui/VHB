@@ -4939,6 +4939,30 @@ describe('dubbele inplanning met een code-dienst: het bord is de waarheid (contr
       expect(mem.swaps.find((s: any) => s.id === 's-over-bord')).toMatchObject({ status: 'pending', swapType: 'overname', shiftDate: DAG, shiftLine: '12' });
     });
 
+    it('de collega heeft die dag al een rij met hetzelfde dienstnummer: geweigerd, zoals altijd', async () => {
+      // Bij het INDIENEN telt elke rij van de collega op die dag, ook een met
+      // het nummer van de aangeboden dienst: er is nog niets doorgevoerd, dus
+      // van een herhaalde doorvoer is geen sprake (tegenlezing 29-09, punt 4).
+      mem.planning = [...mem.planning, { id: 'sh-b12', driverId: B, date: DAG, line: '12', startTime: '17:00', endTime: '21:00' }];
+      const res = await vraagAan(B);
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe('Chauffeur B heeft op 24/07/2026 toch een dienst in de planning staan, ruilen zonder tegenprestatie kan dan niet.');
+      expect(mem.swaps.find((s: any) => s.id === 's-over-bord')).toBeUndefined();
+    });
+
+    it('bij goedkeuren blijft de uitzondering gelden: de aangeboden dienst staat al bij de collega', async () => {
+      // Halve doorvoer van een deel van een gesplitste dienst: één rij staat
+      // al op naam van de collega. Dat is geen dubbele inplanning.
+      mem.planning = [
+        { id: 'sh-a12', driverId: A, date: DAG, line: '12', startTime: '08:00', endTime: '12:00' },
+        { id: 'sh-a12b', driverId: B, date: DAG, line: '12', startTime: '14:00', endTime: '18:00' },
+      ];
+      mem.swaps = [{ id: 's-half-deel', shiftId: 'sh-a12', requesterId: A, targetDriverId: B, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '12' }];
+      const res = await api('PATCH', '/api/swaps/s-half-deel', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+      expect(res.status).toBe(200);
+      expect(mem.planning.map((r: any) => r.driverId)).toEqual([B, B]);
+    });
+
     it('wie zijn schoolrit afgaf mag een dienst overnemen, zoals de takeover-lijst hem toont', async () => {
       expect((await wissel({ line: 'EEK6', fromDriverId: C, toDriverId: B })).status).toBe(200);
       const lijst = await api('GET', `/api/availability?from=${DAG}&to=${DAG}&takeover=1`, { token: 'tok-a' });

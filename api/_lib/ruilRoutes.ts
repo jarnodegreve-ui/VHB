@@ -803,8 +803,11 @@ export function mountRuilRoutes(app: express.Express) {
             // Dubbelcheck op de planning zelf: de matrix is de bron van de
             // codes, maar een handmatig toegevoegde dienst staat er niet in.
             // Volgens DE regel (api/_lib/dubbeleInplanning.ts), op de stand
-            // van die dag die hierboven al gelezen is.
-            if (dubbeleInplanningen(standOp, [{ driverId: targetId, date, krijgt: offeredShift.line }]).length > 0) {
+            // van die dag die hierboven al gelezen is. Bij het indienen telt
+            // élke rij van de collega op die dag, ook een met het nummer van
+            // de aangeboden dienst: de uitzondering voor een herhaalde
+            // doorvoer hoort bij goedkeuren, niet hier.
+            if (dubbeleInplanningen(standOp, [{ driverId: targetId, date, krijgt: offeredShift.line, aanvraag: true }]).length > 0) {
               const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
               return res.status(409).json({ error: `${naam} heeft op ${DAG_DMJ(date)} toch een dienst in de planning staan, ruilen zonder tegenprestatie kan dan niet.` });
             }

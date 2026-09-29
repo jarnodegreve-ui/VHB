@@ -48,6 +48,13 @@ describe('dubbeleInplanningen', () => {
     expect(toets(stand({ Bert: 'EEK6' }), [krijgt14({ krijgt: 'eek6' })])).toEqual([]);
   });
 
+  it('een aanvraag die nog niet is doorgevoerd: ook een dienst met hetzelfde nummer telt', () => {
+    const s = stand({}, [{ driverId: 'b', line: '14' }]);
+    expect(toets(s, [krijgt14()])).toEqual([]);
+    expect(toets(s, [krijgt14({ aanvraag: true })])).toEqual([{ driverId: 'b', date: DAG, dienst: '14', bron: 'rijen' }]);
+    expect(toets(stand({ Bert: 'EEK6' }), [krijgt14({ krijgt: 'EEK6', aanvraag: true })])).toEqual([{ driverId: 'b', date: DAG, dienst: 'EEK6', bron: 'bord' }]);
+  });
+
   it('een andere dienst dan de afgegeven blijft een conflict', () => {
     const s = stand({}, [{ driverId: 'b', line: '12' }, { driverId: 'b', line: '15' }]);
     expect(toets(s, [krijgt14({ geeftAf: ['12'] })])).toEqual([{ driverId: 'b', date: DAG, dienst: '15', bron: 'rijen' }]);

@@ -39,6 +39,10 @@ export type Ontvangst = {
   krijgt: unknown;
   /** Wat hij in dezelfde beweging op die dag afgeeft (1-op-1). */
   geeftAf?: unknown[];
+  /** Een aanvraag die nog niet is doorgevoerd (overname indienen): van een
+   *  herhaalde doorvoer is dan geen sprake, dus ook een dienst met het nummer
+   *  van de aangeboden dienst telt. */
+  aanvraag?: boolean;
 };
 
 /** Wat er op één dag staat: de rijen in de planning en het bord. */
@@ -72,7 +76,7 @@ export const dubbeleInplanningen = (
   for (const o of ontvangsten) {
     const stand = ISO_DAG.test(o.date) && o.driverId && toLookupToken(String(o.krijgt ?? "")) ? standOp(o.date) : undefined;
     if (!stand) continue;
-    const telNiet = new Set([o.krijgt, ...(o.geeftAf ?? [])].map((d) => toLookupToken(String(d ?? ""))).filter(Boolean));
+    const telNiet = new Set([o.aanvraag ? "" : o.krijgt, ...(o.geeftAf ?? [])].map((d) => toLookupToken(String(d ?? ""))).filter(Boolean));
     const rij = stand.rijen.find((r) => String(r.driverId) === o.driverId && !telNiet.has(toLookupToken(String(r.line ?? ""))));
     if (rij) uitRijen.push({ driverId: o.driverId, date: o.date, dienst: String(rij.line), bron: "rijen" });
     const cel = stand.bord.celVan(o.driverId);
