@@ -51,7 +51,11 @@ export const parseHHMMStrikt = (t: unknown): number | null => lees(t, GEHEEL);
  *   expliciete volgende-dagcontext is dat geen etmaal. Het deel blijft wel
  *   zichtbaar (de planningsopbouw, het rooster en de agenda laten het door);
  *   het telt alleen nergens als duur, venster of rustregel. De ingang weigert
- *   het (formulier, Excel-import, POST /api/services).
+ *   het (formulier, Excel-import, POST /api/services);
+ * - evenmin een venster: een einde dat ook na +24 u niet na de start ligt.
+ *   Dat kan alleen met een start in busvak-uren en een einde in gewone uren
+ *   (24:00 tot 00:00 en 30:00 tot 06:00 zijn leeg, 24:30 tot 00:00 zou -30
+ *   minuten zijn). Ook null, en ook geweigerd aan de ingang.
  *
  * Eén regel voor elke plek die de duur of het venster van een deel rekent: de
  * server (Maandoverzicht en rapporten, api/helpers.ts), de app (Mijn dag, het
@@ -66,12 +70,14 @@ export const parseHHMMStrikt = (t: unknown): number | null => lees(t, GEHEEL);
 export const deelVenster = (start: unknown, eind: unknown): { start: number; end: number } | null => {
   const s = parseHHMM(start);
   const e = parseHHMM(eind);
-  if (s === null || e === null || e === s) return null;
-  return { start: s, end: e < s ? e + 1440 : e };
+  if (s === null || e === null) return null;
+  const end = e < s ? e + 1440 : e;
+  return end > s ? { start: s, end } : null;
 };
 
-/** Duur van één dienst-deel in minuten (`deelVenster`); null zonder twee
- *  leesbare tijden of bij gelijke begin- en eindtijd. */
+/** Duur van één dienst-deel in minuten (`deelVenster`), altijd meer dan 0;
+ *  null zonder twee leesbare tijden of zonder venster (gelijke begin- en
+ *  eindtijd, of een einde dat niet na de start ligt). */
 export const deelMinuten = (start: unknown, eind: unknown): number | null => {
   const v = deelVenster(start, eind);
   return v ? v.end - v.start : null;

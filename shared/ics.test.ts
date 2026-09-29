@@ -96,6 +96,13 @@ describe('ics, events', () => {
     expect(blok('08:00', '08:00')).toEqual({ start: 'DTSTART:20260703T080000', einde: null });
     expect(blok('00:00', '00:00')).toEqual({ start: 'DTSTART:20260703T000000', einde: null });
     expect(blok('24:30', '24:30')).toEqual({ start: 'DTSTART:20260704T003000', einde: null });
+    // Een einde dat ook na +24 u niet na de start ligt: evenmin een DTEND
+    // (vroeger DTEND gelijk aan of vóór DTSTART, ongeldig iCalendar).
+    expect(blok('24:00', '00:00')).toEqual({ start: 'DTSTART:20260704T000000', einde: null });
+    expect(blok('30:00', '06:00')).toEqual({ start: 'DTSTART:20260704T060000', einde: null });
+    expect(blok('24:30', '00:00')).toEqual({ start: 'DTSTART:20260704T003000', einde: null });
+    // Gemengde notatie mét venster blijft zoals ze was.
+    expect(blok('24:30', '06:00')).toEqual({ start: 'DTSTART:20260704T003000', einde: 'DTEND:20260704T060000' });
     // Zichtbaar: de feed houdt één afspraak per dienst, met samenvatting.
     const ics = buildCalendar([{ ...base, startTime: '08:00', endTime: '08:00' }, base], { calName: 'VHB', dtstamp: DTSTAMP });
     expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);

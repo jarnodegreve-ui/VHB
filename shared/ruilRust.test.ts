@@ -138,6 +138,14 @@ describe('dagVenster: één deel volgt deelVenster (Jarno 29-09)', () => {
     // Gesplitst: het ongeldige deel valt weg, het geldige telt.
     expect(dagVenster([{ startTime: '05:00', endTime: '05:00' }, { startTime: '13:00', endTime: '17:00' }])).toEqual({ start: 13 * 60, eind: 17 * 60 });
   });
+
+  it('een einde dat ook na +24 u niet na de start ligt, is geen venster (geen negatieve werkdag)', () => {
+    expect(dagVenster([{ startTime: '24:30', endTime: '00:00' }])).toBeNull();
+    expect(dagVenster([{ startTime: '30:00', endTime: '06:00' }])).toBeNull();
+    // Vroeger: start 24:30 en einde 24:00, dus een "venster" dat eindigt vóór het begint.
+    expect(dagVenster([{ startTime: '24:30', endTime: '00:00' }, { startTime: '06:00', endTime: '14:00' }])).toEqual({ start: 6 * 60, eind: 14 * 60 });
+    expect(dagVenster([{ startTime: '24:30', endTime: '06:00' }])).toEqual({ start: 24 * 60 + 30, eind: 30 * 60 });
+  });
 });
 
 describe('formatRust', () => {

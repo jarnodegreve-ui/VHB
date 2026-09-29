@@ -105,14 +105,17 @@ export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
     const rawEndMin = toMinutes(ev.endTime);
     const start = normalizeDayTime(ev.date, ev.startTime);
     lines.push(`DTSTART:${toFloatingDateTime(start.date, start.time)}`);
-    // Gelijke begin- en eindtijd is geen etmaal maar een ongeldig deel (Jarno
-    // 29-09, deelVenster in shared/busvakTijd.ts). De dienst blijft een
-    // afspraak in de agenda, op haar begintijdstip, maar zonder DTEND: dan
-    // duurt ze volgens RFC 5545 (3.6.1) nul minuten. Een DTEND gelijk aan
-    // DTSTART is niet toegestaan (3.8.2.2), en een blok van 24 uur zou een
-    // dienst tonen die niemand gepland heeft. Geldige delen: ongewijzigd.
-    if (rawEndMin !== startMin) {
-      const endMin = rawEndMin < startMin ? rawEndMin + 24 * 60 : rawEndMin;
+    // Alleen een DTEND als het einde (na de +24 u) echt na de start ligt, de
+    // regel van deelVenster in shared/busvakTijd.ts (Jarno 29-09). Gelijke
+    // begin- en eindtijd is geen etmaal maar een ongeldig deel, en een einde
+    // dat ook na +24 u niet na de start ligt (24:30 tot 00:00) evenmin. De
+    // dienst blijft dan een afspraak in de agenda, op haar begintijdstip,
+    // zonder DTEND: volgens RFC 5545 (3.6.1) duurt ze zo nul minuten. Een
+    // DTEND gelijk aan of vóór DTSTART is niet toegestaan (3.8.2.2), en een
+    // blok van 24 uur zou een dienst tonen die niemand gepland heeft.
+    // Geldige delen: ongewijzigd.
+    const endMin = rawEndMin < startMin ? rawEndMin + 24 * 60 : rawEndMin;
+    if (endMin > startMin) {
       const end = normalizeDayTime(ev.date, `${Math.floor(endMin / 60)}:${String(endMin % 60).padStart(2, '0')}`);
       lines.push(`DTEND:${toFloatingDateTime(end.date, end.time)}`);
     }

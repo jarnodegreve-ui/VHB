@@ -45,6 +45,10 @@ describe('dienstGereden (J, 24-09)', () => {
     // Gelijke begin- en eindtijd is ongeldig en telt zoals vroeger alleen met de eindtijd.
     expect(dienstGereden(deel('08:00', '08:00'), vandaag, 8 * 60 - 1)).toBe(false);
     expect(dienstGereden(deel('08:00', '08:00'), vandaag, 8 * 60)).toBe(true);
+    // Een einde dat ook na +24 u niet na de start ligt, evenmin een venster:
+    // 24:30 tot 00:00 telt zoals vroeger alleen met de eindtijd, 00:00.
+    expect(dienstGereden(deel('24:30', '00:00'), vandaag, 0)).toBe(true);
+    expect(dienstGereden(deel('30:00', '06:00'), vandaag, 6 * 60)).toBe(true);
   });
 
   it('gesplitst: een ongeldig deel naast een nachtdeel, het nachtdeel beslist; zonder begintijd telt de eindtijd', () => {
