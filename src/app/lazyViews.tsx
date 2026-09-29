@@ -81,3 +81,11 @@ export const LazyDesignsysteemView = scherm<typeof import('../views/admin/Design
 export const LazyInstellingenView = scherm<typeof import('../views/InstellingenView'), 'InstellingenView'>('instellingen', 'InstellingenView');
 export const LazyPlannerDashboardWidgets = lazyWithRetry(() => import('../views/PlannerDashboardWidgets').then((module) => ({ default: module.PlannerDashboardWidgets })));
 export const LazyServicesView = scherm<typeof import('../views/ServicesView'), 'ServicesView'>('dienstoverzicht', 'ServicesView');
+
+// Geen scherm maar een laag: de viewer voor PDF-bijlagen van omleidingen en
+// updates (29-09). De declaratie staat hier en niet in de drie componenten
+// die hem openen (OmleidingDetail, UpdateBijlagenLezen, PdfBijlagen): elke
+// chunk met een eigen dynamische import draagt de lijst van wat die import
+// meesleept (±0,2 kB gzip), en OmleidingDetail zit in de warmup van elke rol.
+// Hier kost het één bestandsnaam. De viewer zelf en pdfjs blijven lui.
+export const LazyBijlageViewer = lazyWithRetry(() => import('../components/BijlageViewer'));

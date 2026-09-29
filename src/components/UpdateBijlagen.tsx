@@ -56,7 +56,8 @@ export function UpdateBijlagen({ update, tonen, onTonenChange, onGewijzigd }: {
       </div>
 
       <PdfBijlagenLijst
-        rijen={bijlagen.map((b) => ({ sleutel: String(b.slot), filename: b.filename, sizeBytes: b.sizeBytes, url: b.url }))}
+        rijen={bijlagen.map((b) => ({ sleutel: String(b.slot), slot: b.slot, filename: b.filename, sizeBytes: b.sizeBytes, url: b.url }))}
+        bron={update ? { soort: 'update', recordId: update.id } : undefined}
         bezig={bezig}
         onVerwijder={(rij) => void verwijder(Number(rij.sleutel))}
       />

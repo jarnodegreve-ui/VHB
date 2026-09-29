@@ -20,6 +20,13 @@ const BUILD_INFO = {
 // i.p.v. de map, en zonder de .map-bestanden. xlsx blijft bewust buiten de
 // precache (zie public/sw.js).
 const PRECACHE_EXTRA_PATROON = /^assets\/pdf(\.worker)?[.-][^/]*\.js$/;
+// De viewer voor bijlagen van omleidingen en updates (29-09) laadt lui en zit
+// in geen enkele warmup. Zonder precache stond hij na een deploy pas in de
+// cache na één opening met bereik, terwijl de bijlage zelf al op het toestel
+// stond (cache 'vhb-bijlagen-v1'): zonder bereik opende ze dan niet. De chunk
+// gaat daarom mee, met alles wat hij statisch importeert; wat de shell al
+// laadt filtert de service worker er zelf uit (precacheShell).
+const PRECACHE_EXTRA_MODULE = /\/src\/components\/BijlageViewer\.tsx$/;
 
 // Stempelt bij elke build twee placeholders in public/sw.js:
 //  - __VHB_BUILD_ID__ → commit-SHA (Vercel) of buildtijd (lokaal), als
@@ -28,16 +35,24 @@ const PRECACHE_EXTRA_PATROON = /^assets\/pdf(\.worker)?[.-][^/]*\.js$/;
 //    structureel vergeten (14 releases lang).
 //  - __VHB_PRECACHE_EXTRA__ → komma-gescheiden paden van de lazy pdf-chunks,
 //    zodat "Ritblad van vandaag" ook offline werkt zonder eerst één keer
-//    online geopend te zijn (bevinding 15, controle-ronde 05-09).
+//    online geopend te zijn (bevinding 15, controle-ronde 05-09), plus de
+//    viewer voor bijlagen met zijn statische imports (PRECACHE_EXTRA_MODULE).
 const stampServiceWorker = () => {
   let precacheExtra: string[] = [];
   return {
     name: 'vhb-stamp-sw',
     generateBundle(_opties: unknown, bundle: Record<string, unknown>) {
-      precacheExtra = Object.keys(bundle)
-        .filter((naam) => PRECACHE_EXTRA_PATROON.test(naam))
-        .sort()
-        .map((naam) => `/${naam}`);
+      const chunks = bundle as Record<string, { type?: string; facadeModuleId?: string | null; imports?: string[] }>;
+      const extra = new Set(Object.keys(bundle).filter((naam) => PRECACHE_EXTRA_PATROON.test(naam)));
+      const metImports = (naam: string) => {
+        if (extra.has(naam)) return;
+        extra.add(naam);
+        for (const dep of chunks[naam]?.imports ?? []) metImports(dep);
+      };
+      for (const [naam, chunk] of Object.entries(chunks)) {
+        if (chunk.type === 'chunk' && chunk.facadeModuleId && PRECACHE_EXTRA_MODULE.test(chunk.facadeModuleId.replace(/\\/g, '/'))) metImports(naam);
+      }
+      precacheExtra = [...extra].sort().map((naam) => `/${naam}`);
     },
     closeBundle() {
       const swPath = path.resolve(__dirname, 'dist/sw.js');
