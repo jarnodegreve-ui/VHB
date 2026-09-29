@@ -1141,6 +1141,11 @@ export function mountRuilRoutes(app: express.Express) {
       // hun diensten 1-op-1 (Jarno 14-09).
       const returnToken = toLookupToken(returnLine);
       const toRows = dayRows.filter((r) => String(r.driverId) === toDriverId);
+      // Eén zin per conflict, voor de rijen in de planning én voor het bord.
+      const ontvangerBezetFout = (dienst: unknown) =>
+        `${toUser.name} rijdt op ${DAG_DMJ(date)} al dienst ${dienst}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg, kies iemand anders, of wissel de twee diensten 1-op-1.`;
+      const geverBezetFout = (dienst: unknown) =>
+        `${fromUser.name} rijdt op ${DAG_DMJ(date)} ook dienst ${dienst}, de terugdienst zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
       let terugLine: string | null = null;
       let terugOpBord = false;
       if (returnLine) {
@@ -1161,24 +1166,11 @@ export function mountRuilRoutes(app: express.Express) {
         }
         // De gever moet die dag zelf kunnen rijden: op een afwezigheidscel
         // (ziek, verlof) zet je een dienst wég, je haalt er geen bij.
-        // Ook wat de gever volgens het bord nog rijdt telt: hij krijgt er de
-        // terugdienst bij. De dienst die hij afgeeft en de terugdienst zelf
-        // (de Excel kan de wissel al verwerkt hebben) zijn geen conflict.
-        const andereRij = dayRows.find((r) => String(r.driverId) === fromDriverId && toLookupToken(r.line) !== lineToken);
-        const andereVanGever = andereRij ? andereRij.line : bezetOpBord(bord, fromDriverId, [line, returnLine]);
-        if (andereRij || andereVanGever) {
-          return res.status(409).json({ error: `${fromUser.name} rijdt op ${DAG_DMJ(date)} ook dienst ${andereVanGever}, de terugdienst zou een dubbele inplanning geven. Zet die dienst eerst weg.` });
-        }
+        const andereVanGever = dayRows.find((r) => String(r.driverId) === fromDriverId && toLookupToken(r.line) !== lineToken);
+        if (andereVanGever) return res.status(409).json({ error: geverBezetFout(andereVanGever.line) });
       } else {
-        // De rijen in de planning, en anders wat de ontvanger volgens het bord
-        // rijdt: een code-dienst (schoolrit, bureau, garage) heeft geen rijen.
-        // Zonder die tweede blik kreeg hij er stil een dienst bij en schoof het
-        // bord zijn schoolrit door naar de gever (controle 29-09).
         const conflictRow = toRows[0];
-        const conflictDienst = conflictRow ? conflictRow.line : bezetOpBord(bord, toDriverId, [line]);
-        if (conflictRow || conflictDienst) {
-          return res.status(409).json({ error: `${toUser.name} rijdt op ${DAG_DMJ(date)} al dienst ${conflictDienst}, deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg, kies iemand anders, of wissel de twee diensten 1-op-1.` });
-        }
+        if (conflictRow) return res.status(409).json({ error: ontvangerBezetFout(conflictRow.line) });
       }
 
       // Afwezigheid: wie ziek of met verlof gemeld is, krijgt geen dienst
@@ -1189,6 +1181,21 @@ export function mountRuilRoutes(app: express.Express) {
         : { requesterId: fromDriverId, targetDriverId: toDriverId, swapType: "overname", shiftDate: date },
         { leave: bord.leave, users });
       if (afwFout) return res.status(409).json({ error: afwFout });
+
+      // Het bord, ná de afwezigheid (controle 29-09): een code-dienst
+      // (schoolrit, bureau, garage) heeft geen rijen in de planning, dus de
+      // rijencontrole hierboven ziet hem niet. Zonder deze tweede blik kreeg de
+      // ontvanger er stil een dienst bij en schoof het bord zijn schoolrit door
+      // naar de gever. Bewust in deze volgorde, zoals bij goedkeuren en
+      // toewijzen: wie ziek gemeld is met een schoolrit onder zijn afwezigheid
+      // krijgt de melding over zijn afwezigheid, zoals vóór de controle.
+      // Bij een 1-op-1 telt wat de gever volgens het bord nog rijdt, hij krijgt
+      // er de terugdienst bij; de dienst die hij afgeeft en de terugdienst zelf
+      // (de Excel kan de wissel al verwerkt hebben) zijn geen conflict.
+      const opBord = terugLine
+        ? bezetOpBord(bord, fromDriverId, [line, returnLine])
+        : bezetOpBord(bord, toDriverId, [line]);
+      if (opBord) return res.status(409).json({ error: terugLine ? geverBezetFout(opBord) : ontvangerBezetFout(opBord) });
 
       // Een openstaande ruilaanvraag op dezelfde dienst zou door deze wissel
       // stale worden (en bij goedkeuring niets meer verplaatsen) — eerst

@@ -4639,6 +4639,52 @@ describe('dubbele inplanning met een code-dienst: het bord is de waarheid (contr
       expect(mem.swaps).toHaveLength(0);
     });
 
+    it('afwezigheid eerst: een zieke ontvanger met een schoolrit eronder krijgt de afwezigheidsmelding', async () => {
+      // Zoals vóór de controle, en zoals goedkeuren en toewijzen het doen: de
+      // planner leest waarom B niet kan, niet welke dienst hij moet wegzetten.
+      matrix({ 'Chauffeur A': 'vrij', 'Chauffeur B': 'EEK6', 'Chauffeur C': '14' });
+      ziek(B);
+      expect((await bord())[B][DAG]).toMatchObject({ code: 'ziek', hiddenService: 'EEK6' });
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe('Chauffeur B is ziek gemeld op 24/07/2026, deze ruil kan niet doorgaan.');
+      expect(mem.planning.find((r: any) => r.id === 'sh-c14')?.driverId).toBe(C);
+      expect(mem.swaps).toHaveLength(0);
+    });
+
+    it('afwezigheid eerst, ook met verlof: de schoolrit die B via een wissel kreeg verandert de melding niet', async () => {
+      await geefSchoolritAanB();
+      mem.leave = [{ id: 'l-bv-b', userId: B, startDate: DAG, endDate: DAG, type: 'betaald_verlof', status: 'approved', comment: '', createdAt: `${DAG}T05:00:00Z`, decidedAt: `${DAG}T05:00:00Z` }];
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe('Chauffeur B is met verlof op 24/07/2026, deze ruil kan niet doorgaan.');
+      expect(mem.swaps).toHaveLength(1);
+    });
+
+    it('de rijen in de planning blijven vóór de afwezigheid gaan, zoals altijd', async () => {
+      // Bestaand gedrag: een zieke ontvanger met een dienst in de planning
+      // krijgt de melding over die dienst.
+      mem.planning.push({ id: 'sh-b12', driverId: B, date: DAG, line: '12' });
+      ziek(B);
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toContain('Chauffeur B rijdt op 24/07/2026 al dienst 12');
+    });
+
+    it('1-op-1, afwezigheid eerst: een zieke gever met een schoolrit eronder krijgt de afwezigheidsmelding', async () => {
+      // C is ziek, rijdt 14 (rijen) en draagt op het bord nog een schoolrit.
+      matrix({ 'Chauffeur A': 'vrij', 'Chauffeur B': '12', 'Chauffeur C': 'EEK6' });
+      mem.planning = [
+        { id: 'sh-c14', driverId: C, date: DAG, line: '14' },
+        { id: 'sh-b12', driverId: B, date: DAG, line: '12' },
+      ];
+      ziek(C);
+      const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B, returnLine: '12' });
+      expect(res.status).toBe(409);
+      expect(String(res.json?.error)).toBe('Chauffeur C is ziek gemeld op 24/07/2026, deze ruil kan niet doorgaan.');
+      expect(mem.planning.find((r: any) => r.id === 'sh-c14')?.driverId).toBe(C);
+    });
+
     it('het gewone geval blijft werken: 14 van C naar wie vrij is', async () => {
       const res = await wissel({ line: '14', fromDriverId: C, toDriverId: B });
       expect(res.status).toBe(200);
