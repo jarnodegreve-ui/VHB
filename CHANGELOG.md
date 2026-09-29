@@ -1,6 +1,6 @@
 # Changelog
 
-Gemergede pull requests op `main`, nieuwste eerst — gegenereerd met `npm run changelog` (200 PR's, laatste 200). Niet met de hand bewerken; de gebruikersgerichte samenvatting per release staat in `src/app/watIsNieuw.ts`.
+Gemergede pull requests op `main`, nieuwste eerst — gegenereerd met `npm run changelog` (200 PR's, laatste 200). Niet met de hand bewerken.
 
 ## 2026-09-06
 
