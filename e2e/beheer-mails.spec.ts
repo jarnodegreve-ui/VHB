@@ -49,6 +49,9 @@ async function opzet(page: Page, opties: { verstuur?: (body: any) => unknown } =
   return { calls };
 }
 
+/** Het verzendlog: een tabel waar ze past, op de telefoon een lijst (nr. 6). */
+const verzendlog = (page: Page, isMobile: boolean) => page.getByRole(isMobile ? 'list' : 'table', { name: 'Verzendlog' });
+
 /** De inhoud staat links en rechts minstens 16 px van de rand van het venster.
  *  De body van een modal is p-6 = 1,5 rem: 24 px op de telefoon, ±19 px op
  *  desktop (kleinere wortelmaat). Modal zelf draagt geen padding. */
@@ -115,7 +118,7 @@ test('mails: lijst, schakelaar en voorbeeld', async ({ page }) => {
   await expect(dialoog).toHaveCount(0);
 });
 
-test('mails: verzendlijst toevoegen met adrescontrole, en verwijderen', async ({ page }) => {
+test('mails: verzendlijst toevoegen met adrescontrole, en verwijderen', async ({ page, isMobile }) => {
   const { calls } = await opzet(page);
   const kaart = page.getByRole('list', { name: 'Verzendlijsten' });
   await expect(kaart.getByText('De Lijn')).toBeVisible();
@@ -140,8 +143,8 @@ test('mails: verzendlijst toevoegen met adrescontrole, en verwijderen', async ({
   await page.getByRole('button', { name: 'Verwijderen', exact: true }).click();
   await expect.poll(() => calls.length).toBe(2);
   expect(calls[1].body.map((l: any) => l.naam)).toEqual(['Garage']);
-  // Verzendlog toont status en wie.
-  const log = page.getByRole('table', { name: 'Verzendlog' });
+  // Verzendlog toont status en wie (op de telefoon een lijst, nr. 6).
+  const log = verzendlog(page, isMobile);
   await expect(log.getByText('Verstuurd')).toBeVisible();
   await expect(log.getByText('Alleen gelogd')).toBeVisible();
   await expect(log.getByText('Els Goossens')).toBeVisible();
@@ -302,9 +305,9 @@ test('mails: formulieren brengen de focus naar het eerste foute veld, Enter dien
   await expect(paneel.getByLabel('Vrije adressen')).toHaveValue('');
 });
 
-test('mails: in het verzendlog is een fout rood en heeft een onderbroken verzending een eigen toon (nr. 25)', async ({ page }) => {
+test('mails: in het verzendlog is een fout rood en heeft een onderbroken verzending een eigen toon (nr. 25)', async ({ page, isMobile }) => {
   await opzet(page);
-  const log = page.getByRole('table', { name: 'Verzendlog' });
+  const log = verzendlog(page, isMobile);
   const pil = (tekst: string) => log.getByText(tekst, { exact: true });
   // Mislukt: rode pil, met de reden ernaast.
   await expect(pil('Mislukt')).toHaveClass(/text-red-700/);
@@ -318,12 +321,95 @@ test('mails: in het verzendlog is een fout rood en heeft een onderbroken verzend
   await expect(log.getByText(/mogelijk is een deel vertrokken/)).toHaveCount(0);
   // De naam van de mail komt uit de soorten die de server meestuurt, of uit
   // de vaste namen van de twee mails die een mens zelf verstuurt.
-  await expect(log.getByRole('cell', { name: 'Ziekmelding', exact: true })).toBeVisible();
-  await expect(log.getByRole('cell', { name: 'Dringende update', exact: true })).toBeVisible();
-  await expect(log.getByRole('cell', { name: 'Eigen mail', exact: true })).toBeVisible();
-  await expect(log.getByRole('cell', { name: 'Omleiding gemaild', exact: true })).toBeVisible();
+  for (const naam of ['Ziekmelding', 'Dringende update', 'Eigen mail', 'Omleiding gemaild']) {
+    await expect(log.getByText(naam, { exact: true })).toBeVisible();
+  }
   // Rusttoestanden blijven stil: een neutrale pil, geen rood en geen amber vlak.
   for (const stil of ['Uitgeschakeld', 'Alleen gelogd', 'Verstuurd']) {
     await expect(pil(stil)).not.toHaveClass(/text-red-700|bg-red-50|bg-amber-50/);
   }
 });
+
+// --- Nr. 6: het verzendlog was op de telefoon afgeknipt ---
+
+/** Wat er van de mislukte verzending (m-3) te lezen moet zijn. */
+const M3 = { mail: 'Eigen mail', moment: /21 september/, aantal: '40', status: 'Mislukt', reden: '2 van 40 mislukt', door: /Annelies Admin/ };
+
+/** Geen horizontale overloop van de pagina, en het element valt volledig
+ *  binnen het kader van het verzendlog (niets afgeknipt). */
+async function paginaSchuiftNiet(page: Page, waar: string) {
+  const m = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('[data-scroll-root]');
+    return { doc: document.documentElement.scrollWidth, vp: window.innerWidth, root: root ? root.scrollWidth - root.clientWidth : 0 };
+  });
+  expect(m.doc, `${waar}: documentbreedte`).toBeLessThanOrEqual(m.vp);
+  expect(m.root, `${waar}: de pagina schuift horizontaal`).toBeLessThanOrEqual(1);
+}
+async function binnenKader(el: Locator, waar: string) {
+  await expect(el, waar).toBeVisible();
+  const m = await el.evaluate((n) => {
+    const r = n.getBoundingClientRect();
+    const k = n.closest('.surface-table')!.getBoundingClientRect();
+    return { links: r.left - k.left, rechts: k.right - r.right, afgekapt: n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).overflow !== 'visible' };
+  });
+  expect(m.links, `${waar}: begint binnen het kader`).toBeGreaterThanOrEqual(0);
+  expect(m.rechts, `${waar}: eindigt binnen het kader`).toBeGreaterThanOrEqual(0);
+  expect(m.afgekapt, `${waar}: niet afgekapt`).toBe(false);
+}
+
+for (const breedte of [320, 375]) {
+  test(`mails: verzendlog op ${breedte} px toont elke waarde van een verzending, zonder schuiven of afknippen (nr. 6)`, async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'telefoonbreedte');
+    await page.setViewportSize({ width: breedte, height: 740 });
+    await opzet(page);
+    const lijst = page.getByRole('list', { name: 'Verzendlog' });
+    await expect(lijst.getByRole('listitem')).toHaveCount(5);
+    await expect(page.getByRole('table', { name: 'Verzendlog' })).toHaveCount(0);
+    const rij = lijst.getByRole('listitem').filter({ hasText: M3.mail });
+    await rij.scrollIntoViewIfNeeded();
+    await binnenKader(rij.getByText(M3.mail, { exact: true }), 'mail');
+    await binnenKader(rij.getByText(M3.moment), 'moment');
+    await binnenKader(rij.getByText(`${M3.aantal} ontvangers`), 'aantal ontvangers');
+    await binnenKader(rij.getByText(M3.status, { exact: true }), 'status');
+    await binnenKader(rij.getByText(M3.reden, { exact: true }), 'reden van de fout');
+    await binnenKader(rij.getByText(M3.door), 'door wie');
+    // De tonen van nr. 25 gelden ook in de lijst.
+    await expect(rij.getByText(M3.status, { exact: true })).toHaveClass(/text-red-700/);
+    // Ook de onderbroken verzending, met haar uitleg, en een rij zonder reden.
+    const onderbroken = lijst.getByRole('listitem').filter({ hasText: 'Omleiding gemaild' });
+    await binnenKader(onderbroken.getByText('Onderbroken', { exact: true }), 'onderbroken');
+    await binnenKader(onderbroken.getByText('Niet afgerond; onbekend hoeveel er vertrokken zijn.'), 'uitleg');
+    await binnenKader(lijst.getByRole('listitem').filter({ hasText: 'Ziekmelding' }).getByText(/Els Goossens/), 'door wie, eerste rij');
+    await paginaSchuiftNiet(page, `${breedte} px`);
+  });
+}
+
+for (const breedte of [768, 1024]) {
+  test(`mails: verzendlog op ${breedte} px is een tabel die in haar kader past (nr. 6)`, async ({ page, isMobile }) => {
+    test.skip(isMobile, 'desktopbreedtes, in het desktopproject');
+    await page.setViewportSize({ width: breedte, height: 900 });
+    await opzet(page);
+    const tabel = page.getByRole('table', { name: 'Verzendlog' });
+    await expect(tabel).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Verzendlog' })).toHaveCount(0);
+    for (const kop of ['Moment', 'Mail', 'Ontvangers', 'Status', 'Door']) await binnenKader(tabel.getByRole('columnheader', { name: kop, exact: true }), `kolomkop ${kop}`);
+    // De tabel zelf valt binnen haar kader en schuift niet.
+    const m = await tabel.evaluate((t) => {
+      const r = t.getBoundingClientRect();
+      const k = t.closest('.surface-table')!.getBoundingClientRect();
+      const strook = t.parentElement!.parentElement!;
+      return { over: Math.round(r.right - k.right), schuift: strook.scrollWidth - strook.clientWidth };
+    });
+    expect(m.over, 'tabel breder dan haar kader').toBeLessThanOrEqual(1);
+    expect(m.schuift, 'de tabel schuift in haar kader').toBeLessThanOrEqual(1);
+    const rij = tabel.getByRole('row').filter({ hasText: M3.mail });
+    await binnenKader(rij.getByRole('cell', { name: M3.moment }), 'moment');
+    await binnenKader(rij.getByRole('cell', { name: M3.aantal, exact: true }), 'aantal ontvangers');
+    await binnenKader(rij.getByText(M3.status, { exact: true }), 'status');
+    await binnenKader(rij.getByText(M3.reden, { exact: true }), 'reden van de fout');
+    await binnenKader(rij.getByRole('cell', { name: M3.door }), 'door wie');
+    await paginaSchuiftNiet(page, `${breedte} px`);
+    // Geen doos in doos: het tabelkader is zelf de kaart.
+    expect(await tabel.evaluate((t) => t.closest('.surface-table')!.parentElement!.closest('.surface-card, .surface-table') === null)).toBe(true);
+  });
+}

@@ -49,10 +49,13 @@ export const MAIL_SOORT_PER_SLEUTEL: ReadonlyMap<string, MailSoortInfo> = /* @__
 /** Soorten die een admin mag uitzetten. */
 export const UITZETBARE_MAIL_SOORTEN: readonly string[] = /* @__PURE__ */ (() => MAIL_SOORTEN.filter((m) => !m.altijdAan).map((m) => m.soort))();
 
-export const mailInstellingenSchema = z.object({
+// Schema's die alleen de server gebruikt staan in een als zuiver gemarkeerde
+// functie: de bundelaar van het scherm laat ze dan weg in plaats van ze in
+// de lui geladen mailchunk op te bouwen. Voor de server verandert er niets.
+export const mailInstellingenSchema = /* @__PURE__ */ (() => z.object({
   /** Mailsoorten die uit staan; alles wat er niet in staat is aan. */
   uit: z.array(z.string().trim().min(1)).max(50).default([]),
-});
+}))();
 export type MailInstellingen = z.output<typeof mailInstellingenSchema>;
 export const STANDAARD_MAIL_INSTELLINGEN: MailInstellingen = { uit: [] };
 
@@ -85,14 +88,14 @@ export const emailAdres = z
   .regex(EMAIL_RE, 'Dit is geen geldig e-mailadres');
 
 export const VERZENDLIJST_MAX_ADRESSEN = 200;
-export const verzendlijstSchema = z.object({
+export const verzendlijstSchema = /* @__PURE__ */ (() => z.object({
   id: z.string().trim().min(1).max(64),
   naam: z.string({ error: 'Geef de lijst een naam' }).trim().min(1, 'Geef de lijst een naam').max(60, 'Hooguit 60 tekens'),
   adressen: z.array(emailAdres).max(VERZENDLIJST_MAX_ADRESSEN, `Hooguit ${VERZENDLIJST_MAX_ADRESSEN} adressen`),
-});
+}))();
 export type Verzendlijst = z.output<typeof verzendlijstSchema>;
 
-export const verzendlijstenSchema = z.array(verzendlijstSchema).max(50, 'Hooguit 50 lijsten');
+export const verzendlijstenSchema = /* @__PURE__ */ (() => z.array(verzendlijstSchema).max(50, 'Hooguit 50 lijsten'))();
 export type Verzendlijsten = z.output<typeof verzendlijstenSchema>;
 
 /** Onbekende invoer → geldige lijsten (dubbele adressen per lijst weg), anders leeg. */
@@ -169,7 +172,7 @@ export type EigenMailInvoer = z.input<typeof eigenMailSchema>;
 // --- Een omleiding mailen (PR 4, planner en admin) ---
 
 export const OMLEIDING_MAIL_BERICHT_MAX = 2000;
-export const omleidingMailSchema = z.object({
+export const omleidingMailSchema = /* @__PURE__ */ (() => z.object({
   /** Verzendlijst-id's en vrije adressen; geen groepen (dit is extern gericht: De Lijn, garage). */
   ontvangers: z.object({
     lijsten: z.array(z.string().trim().min(1).max(64)).max(50).default([]),
@@ -179,6 +182,6 @@ export const omleidingMailSchema = z.object({
   bericht: z.string().trim().max(OMLEIDING_MAIL_BERICHT_MAX, `Hooguit ${OMLEIDING_MAIL_BERICHT_MAX} tekens`).default(''),
   droog: z.boolean().default(false),
   alleen: alleenAdressen,
-});
+}))();
 export type OmleidingMail = z.output<typeof omleidingMailSchema>;
 export type OmleidingMailInvoer = z.input<typeof omleidingMailSchema>;

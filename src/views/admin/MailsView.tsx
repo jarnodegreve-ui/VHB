@@ -292,22 +292,53 @@ function Verzendlog({ log, soorten }: { log: LogRij[] | null; soorten: Soort[] }
   // De namen komen van de server (dezelfde lijst als hierboven op het scherm),
   // zodat de lijst met mailsoorten niet ook in de bundel van het scherm zit.
   const naamVan = (soort: string) => soorten.find((s) => s.soort === soort)?.naam ?? EXTRA_SOORT_NAMEN[soort] ?? soort;
+  // Eén woordenschat (shared/mailLog.ts). Een fout is rood en een onderbroken
+  // verzending een volle amber pil (nr. 25); vroeger waren Mislukt,
+  // Uitgeschakeld en Alleen gelogd dezelfde stille amber pil.
+  const rijen = (log ?? []).map((r) => {
+    const status = mailLogStatus(r);
+    return {
+      id: r.id,
+      moment: formatDateTimeHuman(r.verzondenOp),
+      mail: naamVan(r.soort),
+      aantal: r.aantal,
+      door: r.door ?? 'Systeem',
+      toelichting: mailLogToelichting(status, r.fout),
+      pil: <Badge tone={TOON_NAAR_BADGE[MAIL_LOG_STATUS[status].toon]} className="shrink-0 whitespace-nowrap" {...(mailLogVraagtAandacht(status) ? { dot: true } : { stil: true })}>{MAIL_LOG_STATUS[status].label}</Badge>,
+    };
+  });
   return (
-    <Card>
-      <CardHeader
-        icon={<ListChecks size={18} />}
-        title="Verzendlog"
-        description="De laatste honderd verzendingen: wat, wanneer, naar hoeveel ontvangers en door wie. Bewust zonder inhoud of adressen."
-        aside={<InfoTip label="Uitleg bij het verzendlog"><p>“Uitgeschakeld” betekent dat de mail zou zijn uitgegaan maar hier uit staat. Zonder SMTP-instellingen wordt elke mail alleen gelogd. “Onderbroken” betekent dat de verzending niet is afgerond: een deel van de mails kan vertrokken zijn.</p></InfoTip>}
-      />
+    // Het tabelkader is zelf de kaart (kop = CardHeader): vroeger stond het
+    // kader in een kaart met dezelfde radius, doos in doos.
+    // Tabel of lijst volgt de breedte van dit kader (container query, bewust
+    // geen md, nr. 6): het kader is op 1024 px, naast de zijbalk, smaller
+    // (43 rem) dan op 768 px (44,5 rem). Gemeten vragen de vijf kolommen met
+    // een lange naam en een reden hoogstens ±40 rem; de tabel verschijnt vanaf
+    // 42 rem, daaronder een lijst met dezelfde gegevens per verzending. Op de
+    // telefoon viel vroeger alles na de tweede kolom weg en was het niet te
+    // bereiken. Bewust zonder `past`: die knipt stil af wat niet past; mocht
+    // een uitzonderlijk lange naam de tabel toch breder maken, dan schuift ze
+    // in haar kader.
+    <TableShell
+      label="Verzendlog"
+      className="@container"
+      kop={(
+        <CardHeader
+          icon={<ListChecks size={18} />}
+          title="Verzendlog"
+          description="De laatste honderd verzendingen: wat, wanneer, naar hoeveel ontvangers en door wie. Bewust zonder inhoud of adressen."
+          aside={<InfoTip label="Uitleg bij het verzendlog"><p>“Uitgeschakeld” betekent dat de mail zou zijn uitgegaan maar hier uit staat. Zonder SMTP-instellingen wordt elke mail alleen gelogd. “Onderbroken” betekent dat de verzending niet is afgerond: een deel van de mails kan vertrokken zijn.</p></InfoTip>}
+        />
+      )}
+    >
       {log === null ? (
-        <p className="mt-4 text-body-sm text-slate-500" role="status">Laden…</p>
+        <p className="px-5 py-4 text-body-sm text-slate-500 md:px-6" role="status">Laden…</p>
       ) : log.length === 0 ? (
-        <div className="mt-4"><EmptyState compact kaal title="Nog niets verstuurd" message="Zodra het portaal een mail verstuurt, staat ze hier." /></div>
+        <div className="p-6"><EmptyState compact kaal title="Nog niets verstuurd" message="Zodra het portaal een mail verstuurt, staat ze hier." /></div>
       ) : (
-        <div className="mt-4">
-          <TableShell label="Verzendlog" past>
-            <Tabel label="Verzendlog">
+        <>
+          <div className="hidden @[42rem]:block">
+            <Tabel>
               <thead>
                 <tr>
                   <Th>Moment</Th>
@@ -318,33 +349,45 @@ function Verzendlog({ log, soorten }: { log: LogRij[] | null; soorten: Soort[] }
                 </tr>
               </thead>
               <tbody>
-                {log.map((r) => {
-                  // Eén woordenschat (shared/mailLog.ts). Een fout is rood en
-                  // een onderbroken verzending een volle amber pil (nr. 25);
-                  // vroeger waren Mislukt, Uitgeschakeld en Alleen gelogd
-                  // dezelfde stille amber pil.
-                  const status = mailLogStatus(r);
-                  const toelichting = mailLogToelichting(status, r.fout);
-                  return (
-                    <tr key={r.id}>
-                      <Td nowrap>{formatDateTimeHuman(r.verzondenOp)}</Td>
-                      <Td>{naamVan(r.soort)}</Td>
-                      <Td num>{r.aantal}</Td>
-                      <Td>
-                        <span className="inline-flex flex-wrap items-center gap-1.5">
-                          <Badge tone={TOON_NAAR_BADGE[MAIL_LOG_STATUS[status].toon]} {...(mailLogVraagtAandacht(status) ? { dot: true } : { stil: true })}>{MAIL_LOG_STATUS[status].label}</Badge>
-                          {toelichting && <span className="text-xs text-slate-500">{toelichting}</span>}
-                        </span>
-                      </Td>
-                      <Td nowrap>{r.door ?? 'Systeem'}</Td>
-                    </tr>
-                  );
-                })}
+                {rijen.map((r) => (
+                  <tr key={r.id}>
+                    <Td nowrap>{r.moment}</Td>
+                    <Td>{r.mail}</Td>
+                    <Td num>{r.aantal}</Td>
+                    <Td>
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        {r.pil}
+                        {r.toelichting && <span className="text-xs text-slate-500">{r.toelichting}</span>}
+                      </span>
+                    </Td>
+                    {/* Mag afbreken: een lange naam duwde de tabel anders uit haar kader. */}
+                    <Td>{r.door}</Td>
+                  </tr>
+                ))}
               </tbody>
             </Tabel>
-          </TableShell>
-        </div>
+          </div>
+          {/* Zelfde maten als de kaartlijsten van Vervaldata en Gebruikers;
+              de rij opent niets, dus geen knop en geen chevron. Niets kapt
+              af: titel en meta breken af op een smalle telefoon (320 px). */}
+          <ul className="divide-y divide-hairline-subtle @[42rem]:hidden" aria-label="Verzendlog">
+            {rijen.map((r) => (
+              <li key={r.id} className="px-5 py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 break-words text-sm font-semibold text-slate-800">{r.mail}</p>
+                  {r.pil}
+                </div>
+                {/* Komma's, geen puntjes: een scheidingsteken blijft dan nooit
+                    alleen achter aan het eind of begin van een regel. */}
+                <p className="mt-1 break-words text-xs font-medium text-slate-500">
+                  <span className="whitespace-nowrap tabular-nums">{r.moment}</span>, <span className="whitespace-nowrap">{tel(r.aantal, 'ontvanger', 'ontvangers')}</span>, <span className="inline-block max-w-full">door {r.door}</span>
+                </p>
+                {r.toelichting && <p className="mt-1 break-words text-xs text-slate-500">{r.toelichting}</p>}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-    </Card>
+    </TableShell>
   );
 }
