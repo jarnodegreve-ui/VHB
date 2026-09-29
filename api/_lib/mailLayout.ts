@@ -69,8 +69,10 @@ export interface MailOpbouw {
   lijsten?: Array<{ kop?: string; items: string[] }>;
   /** Grijs blok met kop, bv. de reden van een afwijzing (regeleinden blijven). */
   blok?: { kop: string; tekst: string };
-  /** Eén knop, donker. */
-  knop?: { tekst: string; url: string };
+  /** Eén knop, donker. `actie`: de knop voert iets uit met een eenmalige link
+   *  (wachtwoord instellen, adres bevestigen) in plaats van een scherm van
+   *  het portaal te openen; de iPhone-regel eronder past zich daaraan aan. */
+  knop?: { tekst: string; url: string; actie?: boolean };
   /** Kleine tekst onder de knop. */
   voet?: string;
   /** Vaste voetregel; standaard "niet beantwoorden". `false` laat de regel weg. */
@@ -78,6 +80,19 @@ export interface MailOpbouw {
   /** Publieke basis-URL van het portaal (voor het logo en de voet). */
   portaalUrl: string;
 }
+
+/**
+ * Onder elke knop, in de stijl van de voetregels (nr. 16): op een iPhone
+ * opent een link uit de mail altijd in Safari, nooit in de app op het
+ * beginscherm, en daar is de gebruiker niet aangemeld. Technisch niet op te
+ * lossen, dus zeggen we het. Een knop met een eenmalige link (`actie`) moet
+ * wél gevolgd worden; daar zegt de regel waar je daarna verder gaat.
+ */
+export const IPHONE_REGEL = {
+  portaal: "Op iPhone open je beter de app op je beginscherm, daar ben je al aangemeld.",
+  actie: "Op iPhone opent deze knop in Safari, ga daarna verder in de app op je beginscherm.",
+} as const;
+const iphoneRegel = (knop: NonNullable<MailOpbouw["knop"]>) => (knop.actie ? IPHONE_REGEL.actie : IPHONE_REGEL.portaal);
 
 /** Binnenmarge van de knop; op de link én (voor Outlook) op de cel. */
 const KNOP_MARGE = "12px 22px";
@@ -129,7 +144,8 @@ ${o.feiten.map((f) => `<tr>
   const knop = o.knop
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 18px;"><tr><td bgcolor="${MAIL_KLEUR.carbon}" style="background-color: ${MAIL_KLEUR.carbon}; border-radius: 8px; mso-padding-alt: ${KNOP_MARGE};">
   <a href="${escapeMailHtml(o.knop.url)}" style="display: inline-block; padding: ${KNOP_MARGE}; mso-padding-alt: 0; font-size: 14px; font-weight: 600; color: ${MAIL_KLEUR.wit}; text-decoration: none;">${escapeMailHtml(o.knop.tekst)}</a>
-</td></tr></table>`
+</td></tr></table>
+  <p style="margin: 0 0 6px; font-size: 12px; line-height: 1.6; color: ${MAIL_KLEUR.gedempt};">${escapeMailHtml(iphoneRegel(o.knop))}</p>`
     : "";
   const voet = o.voet ? `<p style="margin: 0 0 6px; font-size: 12px; line-height: 1.6; color: ${MAIL_KLEUR.gedempt};">${escapeMailHtml(o.voet)}</p>` : "";
   const voetregels = [
@@ -180,7 +196,7 @@ ${o.feiten.map((f) => `<tr>
     o.feiten && o.feiten.length > 0 ? o.feiten.map((f) => `${f.label}: ${f.waarde}`).join("\n") : "",
     ...lijsten.map(lijstTekst),
     o.blok ? `${o.blok.kop}: ${o.blok.tekst}` : "",
-    o.knop ? `${o.knop.tekst}: ${o.knop.url}` : "",
+    o.knop ? `${o.knop.tekst}: ${o.knop.url}\n${iphoneRegel(o.knop)}` : "",
     o.voet ?? "",
     [nietBeantwoorden ? "Automatisch bericht van het VHB Portaal, niet beantwoorden. Vragen? Contacteer de planning." : "", o.portaalUrl].filter(Boolean).join("\n"),
   ];

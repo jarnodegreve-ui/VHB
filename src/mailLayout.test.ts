@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bouwMail } from '../api/_lib/mailLayout';
+import { bouwMail, IPHONE_REGEL } from '../api/_lib/mailLayout';
 
 /**
  * De vaste mail-lay-out (mailtranche PR 2): één opbouw, twee versies. De
@@ -85,6 +85,28 @@ describe('bouwMail', () => {
     expect(cel).toMatch(/<td[^>]*style="[^"]*background-color: #0D0D0F;[^"]*mso-padding-alt: 12px 22px;/);
     // Andere clients: de padding blijft op de link, dus hetzelfde beeld en de hele knop klikbaar.
     expect(cel).toMatch(/<a [^>]*style="display: inline-block; padding: 12px 22px; mso-padding-alt: 0;/);
+  });
+
+  it('onder een knop staat één regel voor iPhone, in HTML en tekst; zonder knop niet', () => {
+    const { html, text } = bouwMail(basis);
+    expect(html).toContain('Op iPhone open je beter de app op je beginscherm, daar ben je al aangemeld.');
+    expect((html.match(/Op iPhone/g) ?? []).length).toBe(1);
+    // In de stijl van de voetregels: klein en gedempt, ná de knop.
+    expect(html.indexOf('Op iPhone')).toBeGreaterThan(html.indexOf('Bekijk in het portaal</a>'));
+    expect(html).toMatch(/<p style="margin: 0 0 6px; font-size: 12px; line-height: 1\.6; color: #6E767F;">Op iPhone/);
+    expect(text).toContain('Bekijk in het portaal: https://vhbportaal.com/verlof\nOp iPhone open je beter de app op je beginscherm, daar ben je al aangemeld.');
+    const zonder = bouwMail({ ...basis, knop: undefined });
+    expect(zonder.html).not.toContain('Op iPhone');
+    expect(zonder.text).not.toContain('Op iPhone');
+  });
+
+  it('een knop met een eenmalige link (actie) zegt waar je daarna verder gaat, niet dat je de link moet overslaan', () => {
+    const { html, text } = bouwMail({ ...basis, knop: { tekst: 'Wachtwoord instellen', url: 'https://x.test/token', actie: true } });
+    expect(html).toContain(IPHONE_REGEL.actie);
+    expect(html).not.toContain(IPHONE_REGEL.portaal);
+    expect(text).toContain(IPHONE_REGEL.actie);
+    expect(IPHONE_REGEL.actie).not.toContain(' — ');
+    expect(IPHONE_REGEL.portaal).not.toContain(' — ');
   });
 
   it('zonder status, feiten, blok of knop blijft de opbouw geldig en leeg waar niets is', () => {

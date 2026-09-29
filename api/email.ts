@@ -229,7 +229,7 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
       "Er is een account voor je aangemaakt op het VHB Portaal. Daar vind je je rooster, verlofaanvragen, dienstruilen en updates van de planning. Je logt in met dit e-mailadres.",
       ...(ctx.actionLink ? [] : [`Stel je wachtwoord in via "Wachtwoord vergeten" op het loginscherm: ${url}`]),
     ],
-    ...(ctx.actionLink ? { knop: { tekst: "Wachtwoord instellen", url: ctx.actionLink } } : {}),
+    ...(ctx.actionLink ? { knop: { tekst: "Wachtwoord instellen", url: ctx.actionLink, actie: true } } : {}),
     voet: `Tip: open ${url} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.`,
   });
 

@@ -15,7 +15,7 @@ export const voorbeeldMail = (soort: string): { onderwerp: string; html: string;
         titel: "Je account op het VHB Portaal",
         aanhef: "Hallo Sofie,",
         alineas: ["Er is een account voor je aangemaakt op het VHB Portaal. Daar vind je je rooster, verlofaanvragen, dienstruilen en updates van de planning. Je logt in met dit e-mailadres."],
-        knop: { tekst: "Wachtwoord instellen", url },
+        knop: { tekst: "Wachtwoord instellen", url, actie: true },
         voet: `Tip: open ${url} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.`,
       });
       return { onderwerp: "Welkom op het VHB Portaal, stel je wachtwoord in", ...m };
@@ -26,7 +26,7 @@ export const voorbeeldMail = (soort: string): { onderwerp: string; html: string;
         titel: "Nieuw wachtwoord instellen",
         aanhef: "Hallo,",
         alineas: ["Je vroeg een nieuw wachtwoord aan voor het VHB Portaal. Kies er hieronder een; je huidige wachtwoord blijft werken tot je dat doet."],
-        knop: { tekst: "Nieuw wachtwoord kiezen", url },
+        knop: { tekst: "Nieuw wachtwoord kiezen", url, actie: true },
         voet: "De link werkt één uur en is eenmalig. Vroeg je dit niet aan? Dan kun je deze mail negeren, er verandert niets aan je account.",
       });
       return { onderwerp: "VHB Portaal: nieuw wachtwoord instellen", ...m };
