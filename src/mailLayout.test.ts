@@ -1,5 +1,7 @@
+import fs from 'node:fs';
+import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
-import { bouwMail } from '../api/_lib/mailLayout';
+import { bouwMail, IPHONE_REGEL } from '../api/_lib/mailLayout';
 
 /**
  * De vaste mail-lay-out (mailtranche PR 2): één opbouw, twee versies. De
@@ -77,6 +79,48 @@ describe('bouwMail', () => {
     expect(text).not.toMatch(/\n{3,}/);
   });
 
+  it('de knop houdt zijn marge in Outlook: marge en achtergrond op de cel, de link blijft volledig aanklikbaar', () => {
+    const { html } = bouwMail(basis);
+    const cel = html.match(/<td[^>]*>\s*<a href="https:\/\/vhbportaal\.com\/verlof"[^>]*>/)?.[0] ?? '';
+    // Outlook (Word-motor) leest de padding van een <a> niet, wel die van de cel.
+    expect(cel).toContain('bgcolor="#0D0D0F"');
+    expect(cel).toMatch(/<td[^>]*style="[^"]*background-color: #0D0D0F;[^"]*mso-padding-alt: 12px 22px;/);
+    // Andere clients: de padding blijft op de link, dus hetzelfde beeld en de hele knop klikbaar.
+    expect(cel).toMatch(/<a [^>]*style="display: inline-block; padding: 12px 22px; mso-padding-alt: 0;/);
+  });
+
+  it('onder een knop staat één regel voor iPhone, in HTML en tekst; zonder knop niet', () => {
+    const { html, text } = bouwMail(basis);
+    expect(html).toContain('Op iPhone open je beter de app op je beginscherm, daar ben je al aangemeld.');
+    expect((html.match(/Op iPhone/g) ?? []).length).toBe(1);
+    // In de stijl van de voetregels: klein en gedempt, ná de knop.
+    expect(html.indexOf('Op iPhone')).toBeGreaterThan(html.indexOf('Bekijk in het portaal</a>'));
+    expect(html).toMatch(/<p style="margin: 0 0 6px; font-size: 12px; line-height: 1\.6; color: #6E767F;">Op iPhone/);
+    expect(text).toContain('Bekijk in het portaal: https://vhbportaal.com/verlof\nOp iPhone open je beter de app op je beginscherm, daar ben je al aangemeld.');
+    const zonder = bouwMail({ ...basis, knop: undefined });
+    expect(zonder.html).not.toContain('Op iPhone');
+    expect(zonder.text).not.toContain('Op iPhone');
+  });
+
+  it('een knop met een eenmalige link (actie) zegt waar je daarna verder gaat, niet dat je de link moet overslaan', () => {
+    const { html, text } = bouwMail({ ...basis, knop: { tekst: 'Wachtwoord instellen', url: 'https://x.test/token', actie: true } });
+    expect(html).toContain(IPHONE_REGEL.actie);
+    expect(html).not.toContain(IPHONE_REGEL.portaal);
+    expect(text).toContain(IPHONE_REGEL.actie);
+    expect(IPHONE_REGEL.actie).not.toContain(' — ');
+    expect(IPHONE_REGEL.portaal).not.toContain(' — ');
+  });
+
+  it('zegt dat de mail licht ontworpen is (color-scheme) en toont het logo op zijn tegel van 200 × 56', () => {
+    const { html } = bouwMail(basis);
+    const head = html.slice(0, html.indexOf('</head>'));
+    expect(head).toContain('<meta name="color-scheme" content="light">');
+    expect(head).toContain('<meta name="supported-color-schemes" content="light">');
+    expect(html).toContain('<img src="https://vhbportaal.com/mail/vhb-logo.png" width="200" height="56"');
+    // 10 px minder marge op de cel dan vroeger (22/32): de tegel brengt er zelf 10 mee.
+    expect(html).toMatch(/<td style="padding: 12px 22px; border-bottom: 1px solid #E5E7EB;">\s*<img/);
+  });
+
   it('zonder status, feiten, blok of knop blijft de opbouw geldig en leeg waar niets is', () => {
     const { html, text } = bouwMail({ portaalUrl: 'https://vhbportaal.com', titel: 'Testmail', nietBeantwoorden: false });
     expect(html).toContain('Testmail');
@@ -84,5 +128,50 @@ describe('bouwMail', () => {
     expect(html).not.toContain('<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 4px 0 18px');
     expect(html).not.toContain('niet beantwoorden');
     expect(text.trim().split('\n')[0]).toBe('Testmail');
+  });
+});
+
+/**
+ * Het logo in de mails (nr. 4): Gmail en Outlook keren in dark mode de
+ * achtergrond om en laten afbeeldingen staan. Een transparant logo met
+ * carbon letters verdween daar; de witte tegel zit daarom in de PNG zelf.
+ */
+describe('public/mail/vhb-logo.png', () => {
+  const lees = (pad: string) => PNG.sync.read(fs.readFileSync(pad));
+  const logo = lees('public/mail/vhb-logo.png');
+  const bron = lees('brand/mail/vhb-logo-transparant.png');
+  const pixel = (p: PNG, x: number, y: number) => [...p.data.subarray((y * p.width + x) * 4, (y * p.width + x) * 4 + 4)];
+
+  it('is 800 × 224 (200 × 56 in de mail) met een dekkende witte tegel achter het logo', () => {
+    expect([logo.width, logo.height]).toEqual([800, 224]);
+    // Rand van de tegel, midden boven en links: dekkend wit.
+    expect(pixel(logo, 400, 4)).toEqual([255, 255, 255, 255]);
+    expect(pixel(logo, 4, 112)).toEqual([255, 255, 255, 255]);
+    // Waar de bron doorzichtig was (tussen merk en naam) staat nu wit, niets doorzichtigs.
+    let doorzichtigInTegel = 0;
+    for (let y = 32; y < logo.height - 32; y += 1) {
+      for (let x = 0; x < logo.width; x += 1) if (pixel(logo, x, y)[3] !== 255) doorzichtigInTegel += 1;
+    }
+    expect(doorzichtigInTegel).toBe(0);
+  });
+
+  it('heeft afgeronde, doorzichtige hoeken', () => {
+    for (const [x, y] of [[0, 0], [799, 0], [0, 223], [799, 223]]) expect(pixel(logo, x, y)[3]).toBe(0);
+  });
+
+  it('laat het logo zelf ongemoeid: elke dekkende pixel van de bron staat er ongewijzigd, ook het goud', () => {
+    let vergeleken = 0;
+    let goud = 0;
+    for (let y = 0; y < bron.height; y += 1) {
+      for (let x = 0; x < bron.width; x += 1) {
+        const b = pixel(bron, x, y);
+        if (b[3] !== 255) continue;
+        vergeleken += 1;
+        if (b[0] === 202 && b[1] === 160 && b[2] === 68) goud += 1;
+        expect(pixel(logo, x + 40, y + 41)).toEqual(b);
+      }
+    }
+    expect(vergeleken).toBeGreaterThan(15_000);
+    expect(goud).toBeGreaterThan(500);
   });
 });

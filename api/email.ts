@@ -27,6 +27,15 @@ interface SendEmailOptions {
   zonderLog?: boolean;
   /** Bijlagen (bv. de wekelijkse backup-JSON, PDF's bij een omleiding) — 1-op-1 doorgegeven aan nodemailer. */
   attachments?: Array<{ filename: string; content: string | Buffer; contentType?: string }>;
+  /** Hergebruikte verbinding voor een reeks (`maakMailTransport`); zonder
+   *  deze optie opent elke mail zijn eigen verbinding, zoals altijd. */
+  transport?: MailTransport | null;
+}
+
+/** Wat sendEmail van een verbinding nodig heeft (nodemailer-transporter). */
+export interface MailTransport {
+  sendMail: (mail: Record<string, unknown>) => Promise<unknown>;
+  close?: () => void;
 }
 
 interface SendEmailResult {
@@ -54,6 +63,40 @@ const getSmtpConfig = () => ({
 
 export const isSmtpConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 
+const laadNodemailer = async () => {
+  // nodemailer lui geladen (ronde 3): alleen wie echt mailt betaalt het
+  // inlezen, niet elke koude start. CJS-pakket: module.exports zit onder
+  // `default`.
+  const mod = await import("nodemailer");
+  return (mod as unknown as { default?: typeof mod }).default ?? mod;
+};
+
+/**
+ * Eén verbinding voor een hele reeks mails (nr. 5): een pool die zijn
+ * SMTP-verbindingen openhoudt, in plaats van per mail opnieuw te verbinden,
+ * TLS op te zetten en aan te melden. `gelijktijdig` verbindingen tegelijk en
+ * hoogstens `perSeconde` mails per seconde (de mailprovider begrenst het
+ * tempo; wie te snel gaat krijgt weigeringen). Korte time-outs, zodat één
+ * hangende verbinding de functie niet tot haar limiet van 60 s ophoudt.
+ * Null zonder SMTP-gegevens: sendEmail logt de mail dan alleen. Sluit de
+ * pool na de reeks met `close()`.
+ */
+export const maakMailTransport = async (o: { gelijktijdig: number; perSeconde: number }): Promise<MailTransport | null> => {
+  if (!isSmtpConfigured()) return null;
+  const nodemailer = await laadNodemailer();
+  return nodemailer.createTransport({
+    ...getSmtpConfig(),
+    pool: true,
+    maxConnections: o.gelijktijdig,
+    maxMessages: Infinity,
+    rateDelta: 1000,
+    rateLimit: o.perSeconde,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  } as Parameters<typeof nodemailer.createTransport>[0]) as unknown as MailTransport;
+};
+
 /**
  * Afzender uit de omgeving (beslissing Jarno 25-09: "VHB Portaal"
  * <noreply@vhbportaal.com> via Resend, domein geverifieerd). MAIL_FROM valt
@@ -67,6 +110,9 @@ export const mailAfzender = () => {
   const replyTo = (process.env.MAIL_REPLY_TO || "").trim() || undefined;
   return { naam, adres, replyTo, from: `"${naam.replace(/"/g, "")}" <${adres}>` };
 };
+
+/** Wat een gebruiker leest als de mailsoort uit staat en er dus niets vertrok. */
+export const MAIL_UIT_MELDING = "Mail staat uit in Beheer › Mails, er is niets verstuurd.";
 
 export const portalUrl = () => process.env.APP_URL || "https://vhbportaal.com";
 
@@ -116,13 +162,7 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
   }
 
   try {
-    const smtp = getSmtpConfig();
-    // nodemailer lui geladen (ronde 3): alleen wie echt mailt betaalt het
-    // inlezen, niet elke koude start. CJS-pakket: module.exports zit onder
-    // `default`.
-    const mod = await import("nodemailer");
-    const nodemailer = (mod as unknown as { default?: typeof mod }).default ?? mod;
-    const transporter = nodemailer.createTransport(smtp);
+    const transporter: MailTransport = opts.transport ?? ((await laadNodemailer()).createTransport(getSmtpConfig()) as unknown as MailTransport);
     const afzender = mailAfzender();
     // BCC bij meerdere ontvangers: met alles in `To:` kreeg elke chauffeur bij
     // een dringende update het volledige adressenbestand van het personeel in
@@ -175,7 +215,12 @@ const ACTION_CONFIG: Record<LeaveDecisionAction, { subject: string; status: stri
   cancelled: { subject: "Goedgekeurd verlof geannuleerd", status: "Geannuleerd", toon: "neutraal", sentence: "is geannuleerd" },
 };
 
-export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => {
+/** Onderwerp, HTML en tekst van een mail. Elke mail heeft één bouwer; de
+ *  verzendfunctie én het voorbeeld in Beheer › Mails (mailVoorbeelden.ts)
+ *  gebruiken dezelfde, zodat het voorbeeld nooit van de echte mail afwijkt. */
+export type MailTekst = { onderwerp: string; html: string; text: string };
+
+export const bouwVerlofBeslissingMail = (ctx: Omit<LeaveDecisionEmailContext, "to">): MailTekst => {
   const config = ACTION_CONFIG[ctx.action];
   const period = PERIODE_DMJ(ctx.startDate, ctx.endDate);
   // Reden bij een afwijzing (wens Jarno 22-09): als blok onder de feiten,
@@ -199,10 +244,14 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
     ...(reden ? { blok: { kop: "Reden", tekst: reden } } : {}),
     knop: { tekst: "Bekijk in het portaal", url: `${portalUrl()}/verlof` },
   });
+  return { onderwerp: `${config.subject}, ${period}`, html, text };
+};
 
+export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => {
+  const { onderwerp, html, text } = bouwVerlofBeslissingMail(ctx);
   await sendEmail({
     to: [ctx.to],
-    subject: `${config.subject}, ${period}`,
+    subject: onderwerp,
     text,
     html,
     context: `leave:${ctx.action}:${ctx.to}`,
@@ -219,7 +268,7 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
  * instellen; zonder link (bv. als de service-role-key ontbrak) verwijst de
  * mail naar "Wachtwoord vergeten" op het loginscherm — zelfde resultaat.
  */
-export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null; door?: string | null }) => {
+export const bouwWelkomMail = (ctx: { name: string; actionLink?: string | null }): MailTekst => {
   const url = portalUrl();
   const { html, text } = mailOpbouw({
     kicker: "Welkom",
@@ -229,13 +278,17 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
       "Er is een account voor je aangemaakt op het VHB Portaal. Daar vind je je rooster, verlofaanvragen, dienstruilen en updates van de planning. Je logt in met dit e-mailadres.",
       ...(ctx.actionLink ? [] : [`Stel je wachtwoord in via "Wachtwoord vergeten" op het loginscherm: ${url}`]),
     ],
-    ...(ctx.actionLink ? { knop: { tekst: "Wachtwoord instellen", url: ctx.actionLink } } : {}),
+    ...(ctx.actionLink ? { knop: { tekst: "Wachtwoord instellen", url: ctx.actionLink, actie: true } } : {}),
     voet: `Tip: open ${url} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.`,
   });
+  return { onderwerp: "Welkom op het VHB Portaal, stel je wachtwoord in", html, text };
+};
 
+export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null; door?: string | null }) => {
+  const { onderwerp, html, text } = bouwWelkomMail(ctx);
   return sendEmail({
     to: [ctx.to],
-    subject: "Welkom op het VHB Portaal, stel je wachtwoord in",
+    subject: onderwerp,
     text,
     html,
     context: `welcome:${ctx.to}`,
@@ -252,13 +305,7 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
  * heeft — dat zijn er nauwelijks — dus dit is het kanaal dat wél aankomt.
  * De planner ziet de vervaldata sowieso al in het ochtenddigest.
  */
-export const sendExpiryReminderEmail = async (ctx: {
-  to: string;
-  name: string;
-  soortLabel: string;
-  validUntil: string;
-  dagen: number;
-}) => {
+export const bouwVervaldatumMail = (ctx: { name: string; soortLabel: string; validUntil: string; dagen: number }): MailTekst => {
   const wanneer =
     ctx.dagen <= 0
       ? "verloopt vandaag"
@@ -280,10 +327,20 @@ export const sendExpiryReminderEmail = async (ctx: {
     ],
     knop: { tekst: "Open het portaal", url: portalUrl() },
   });
+  return { onderwerp: `Herinnering: je ${soort} ${wanneer}`, html, text };
+};
 
+export const sendExpiryReminderEmail = async (ctx: {
+  to: string;
+  name: string;
+  soortLabel: string;
+  validUntil: string;
+  dagen: number;
+}) => {
+  const { onderwerp, html, text } = bouwVervaldatumMail(ctx);
   return sendEmail({
     to: [ctx.to],
-    subject: `Herinnering: je ${soort} ${wanneer}`,
+    subject: onderwerp,
     text,
     html,
     context: `expiry:${ctx.to}:${ctx.dagen}`,

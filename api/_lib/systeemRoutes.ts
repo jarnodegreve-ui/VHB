@@ -10,7 +10,8 @@
 
 import express from "express";
 import { TABLE_PROBES } from "../schemaProbes.js";
-import { sendEmail, isSmtpConfigured, mailAfzender, mailOpbouw } from "../email.js";
+import { sendEmail, isSmtpConfigured, mailAfzender } from "../email.js";
+import { bouwTestMail } from "./mailTeksten.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { db, supabase } from "../db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "../middleware.js";
@@ -119,20 +120,14 @@ export function mountSysteemRoutes(app: express.Express) {
       });
     }
     const afzender = mailAfzender();
-    const { html, text } = mailOpbouw({
-      kicker: "Systeem",
-      titel: "Testmail van het portaal",
-      status: { label: "Mailinstellingen werken", toon: "goed" },
-      alineas: ["Deze testmail bevestigt dat het portaal mails kan versturen. Komt ze in je spam-map terecht, controleer dan de domeinverificatie bij de mailprovider."],
-      feiten: [
-        { label: "Afzender", waarde: afzender.from },
-        { label: "Antwoordadres", waarde: afzender.replyTo ?? "geen (niet beantwoorden)" },
-        { label: "Verstuurd op", waarde: new Date().toLocaleString("nl-BE", { timeZone: "Europe/Brussels" }) },
-      ],
+    const { onderwerp, html, text } = bouwTestMail({
+      afzender: afzender.from,
+      antwoordadres: afzender.replyTo,
+      verstuurdOp: new Date().toLocaleString("nl-BE", { timeZone: "Europe/Brussels" }),
     });
     const result = await sendEmail({
       to: [to],
-      subject: "Testmail van het VHB Portaal",
+      subject: onderwerp,
       text,
       html,
       context: "test-email",

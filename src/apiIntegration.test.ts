@@ -50,6 +50,11 @@ const mem = vi.hoisted(() => ({
   opslag: new Set<string>(),
   // Verzendlog van de mails (mail_log), nieuwste eerst.
   mailLog: [] as any[],
+  // Volgorde van schrijven naar het verzendlog en versturen (nr. 5).
+  mailLogVerloop: [] as string[],
+  mailLogStuk: false,
+  // Hartslagen van de crons (logCronHeartbeat), in volgorde.
+  hartslagen: [] as Array<{ naam: string; details: string }>,
   importHistory: [] as any[],
   snapshots: {} as Record<string, any>,
   historiekFaalt: false,
@@ -298,6 +303,7 @@ vi.mock('../api/email.js', async (importOriginal) => ({
   sendLeaveDecisionEmail: vi.fn(async () => ({ ok: true, mocked: true })),
   sendEmail: vi.fn(async (opts: any) => {
     mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
+    mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
     return { ok: true, mocked: true };
   }),
   sendWelcomeEmail: vi.fn(async (ctx: any) => {
@@ -316,8 +322,27 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   };
   return {
     ...orig,
+    logCronHeartbeat: async (naam: string, details: string) => { mem.hartslagen.push({ naam, details }); },
     getMailLog: async (limit = 200) => mem.mailLog.slice(0, limit),
     logMail: async (regel: any) => { mem.mailLog.unshift({ id: `m-${mem.mailLog.length + 1}`, verzondenOp: new Date().toISOString(), ...regel }); },
+    // Een reeks schrijft haar regel vooraf als "niet afgerond" en werkt hem
+    // na afloop bij (nr. 5). `mailLogStuk` = de tabel is er niet of schrijven
+    // mislukt: dan komt er geen id terug en logt de reeks achteraf.
+    startMailLog: async (regel: any) => {
+      if (mem.mailLogStuk) return null;
+      const id = `m-${mem.mailLog.length + 1}`;
+      mem.mailLog.unshift({ id, verzondenOp: new Date().toISOString(), soort: regel.soort, aantal: regel.aantal, gelukt: false, fout: 'onderbroken: de verzending is niet afgerond, mogelijk is een deel vertrokken', door: regel.door ?? 'Systeem' });
+      mem.mailLogVerloop.push(`start:${regel.soort}`);
+      return id;
+    },
+    rondMailLogAf: async (id: string, uitkomst: any) => {
+      const rij = mem.mailLog.find((r: any) => r.id === id);
+      if (!rij) return false;
+      rij.gelukt = uitkomst.gelukt;
+      rij.fout = uitkomst.fout ?? null;
+      mem.mailLogVerloop.push(`klaar:${rij.soort}`);
+      return true;
+    },
     getAppSetting: async (key: string) => mem.appSettings[key] ?? null,
     setAppSetting: async (key: string, value: unknown) => { mem.appSettings[key] = value; },
     getUsersData: async () => mem.users,
@@ -1742,6 +1767,50 @@ describe('planning-doorvoer van goedgekeurde ruilen', () => {
     // Chauffeur 4 kreeg een nieuwe dienst → push; chauffeur 3 bleef gelijk → stil.
     expect(push?.userIds).toEqual(['4']);
     expect(res.json.notifiedDrivers).toBe(1);
+  });
+});
+
+describe('een uitgeschakelde mail meldt niet dat hij verstuurd is (nr. 13)', () => {
+  const UIT = { ok: true, mocked: false, overgeslagen: true };
+
+  it('dringende update: het antwoord zegt dat de mail uit staat, niet "succesvol verzonden"', async () => {
+    const { sendEmail } = await import('../api/email.js');
+    vi.mocked(sendEmail).mockResolvedValueOnce(UIT);
+    const res = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 'Test', content: 'x' } } });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, overgeslagen: true, message: 'Mail staat uit in Beheer › Mails, er is niets verstuurd.' });
+    expect(JSON.stringify(res.json)).not.toMatch(/verzonden/i);
+  });
+
+  it('weekoverzicht: de hartslag en het antwoord zeggen "niet verstuurd", niet "verstuurd"', async () => {
+    const { sendEmail } = await import('../api/email.js');
+    process.env.ERROR_DIGEST_WEEKDAG = 'elke';
+    mem.hartslagen = [];
+    mem.clientErrors = [];
+    try {
+      vi.mocked(sendEmail).mockResolvedValueOnce(UIT);
+      const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ success: true, alerted: false, reason: 'mail uit' });
+      const hartslag = mem.hartslagen.filter((h) => h.naam === 'error-digest').at(-1)?.details ?? '';
+      expect(hartslag).toContain('Dagoverzicht niet verstuurd (mail staat uit in Beheer › Mails)');
+      expect(hartslag).not.toMatch(/overzicht verstuurd/i);
+
+      // Een mislukte verzending is evenmin "verstuurd".
+      vi.mocked(sendEmail).mockResolvedValueOnce({ ok: false, mocked: false, error: 'ECONNREFUSED' });
+      const mislukt = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(mislukt.json).toMatchObject({ alerted: false, reason: 'verzending mislukt' });
+      expect(mem.hartslagen.at(-1)?.details).toContain('NIET verstuurd (verzending mislukt)');
+
+      // Een echte verzending blijft "verstuurd".
+      vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, mocked: false });
+      const gelukt = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(gelukt.json).toMatchObject({ alerted: true });
+      expect(gelukt.json.reason).toBeUndefined();
+      expect(mem.hartslagen.at(-1)?.details).toContain('Dagoverzicht verstuurd: ');
+    } finally {
+      delete process.env.ERROR_DIGEST_WEEKDAG;
+    }
   });
 });
 
@@ -7701,6 +7770,75 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect(mem.activity.find((a: any) => a.action === 'Eigen mail verstuurd')?.message).toContain('"Nieuwe uniformen" naar 3 ontvangers');
     });
 
+    it('de logregel staat er vóór de eerste mail, als niet afgerond, en wordt daarna bijgewerkt (nr. 5)', async () => {
+      const { sendEmail } = await import('../api/email.js');
+      mem.mailLogVerloop = [];
+      const tijdens: any[] = [];
+      vi.mocked(sendEmail).mockImplementationOnce(async (opts: any) => {
+        // Zou de functie hier afbreken, dan is dit wat er in het verzendlog blijft staan.
+        tijdens.push({ ...mem.mailLog.find((r: any) => r.soort === 'eigen-mail') });
+        mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context });
+        mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
+        return { ok: true, mocked: false };
+      });
+      const res = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { groepen: ['planning'], adressen: ['extern@voorbeeld.be'] } } });
+      expect(res.status).toBe(200);
+      expect(mem.mailLogVerloop[0]).toBe('start:eigen-mail');
+      expect(mem.mailLogVerloop.at(-1)).toBe('klaar:eigen-mail');
+      expect(mem.mailLogVerloop.filter((v: string) => v.startsWith('mail:'))).toHaveLength(3);
+      expect(tijdens[0]).toMatchObject({ soort: 'eigen-mail', aantal: 3, gelukt: false, door: 'Annelies Admin' });
+      expect(tijdens[0].fout).toMatch(/^onderbroken/);
+      // Eén regel, geen tweede erbij, en nooit een adres of de inhoud.
+      expect(mem.mailLog.filter((r: any) => r.soort === 'eigen-mail')).toHaveLength(1);
+      expect(JSON.stringify(mem.mailLog)).not.toMatch(/@|Nieuwe uniformen|Kom passen/);
+    });
+
+    it('deels mislukt: het antwoord noemt wie niet vertrok, en `alleen` stuurt daarna alleen naar hen (nr. 5)', async () => {
+      const { sendEmail } = await import('../api/email.js');
+      vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
+        if (opts.to[0] === 'planner@vhb.be') return { ok: false, mocked: false, error: '450 rate limit' };
+        mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context });
+        return { ok: true, mocked: false };
+      });
+      const keuze = { groepen: ['planning'], adressen: ['extern@voorbeeld.be'] };
+      try {
+        const res = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: keuze } });
+        expect(res.status).toBe(200);
+        expect(res.json).toMatchObject({ droog: false, aantal: 3, gelukt: 2, mislukt: 1, nietGeprobeerd: 0, onzeker: 0, mocked: false, resterend: ['planner@vhb.be'], onzekerAdressen: [] });
+        expect(mem.mailLog.find((r: any) => r.soort === 'eigen-mail')).toMatchObject({ aantal: 3, gelukt: false, fout: '1 van 3 mislukt' });
+        expect(mem.activity.find((a: any) => a.action === 'Eigen mail verstuurd')?.message).toContain('naar 3 ontvangers, 1 mislukt');
+      } finally {
+        vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
+          mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
+          mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
+          return { ok: true, mocked: true };
+        });
+      }
+      // Alleen de rest: dezelfde keuze, met het adres dat niet vertrok.
+      mem.emailsSent = [];
+      const rest = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: keuze, alleen: ['Planner@VHB.be'] } });
+      expect(rest.status).toBe(200);
+      expect(rest.json).toMatchObject({ aantal: 1, gelukt: 1, resterend: [] });
+      expect(mem.emailsSent.map((m) => m.to)).toEqual([['planner@vhb.be']]);
+      // `alleen` is een filter op de keuze, geen extra bron van ontvangers.
+      mem.emailsSent = [];
+      const vreemd = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: keuze, alleen: ['iemand-anders@voorbeeld.be'] } });
+      expect(vreemd.status).toBe(400);
+      expect(mem.emailsSent).toHaveLength(0);
+    });
+
+    it('zonder regel vooraf (tabel ontbreekt) blijft het één regel achteraf', async () => {
+      mem.mailLogStuk = true;
+      try {
+        const res = await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { adressen: ['extern@voorbeeld.be'] } } });
+        expect(res.status).toBe(200);
+        expect(mem.mailLog.filter((r: any) => r.soort === 'eigen-mail')).toHaveLength(1);
+        expect(mem.mailLog.find((r: any) => r.soort === 'eigen-mail')).toMatchObject({ aantal: 1, gelukt: false, fout: 'SMTP niet geconfigureerd, mail alleen gelogd' });
+      } finally {
+        mem.mailLogStuk = false;
+      }
+    });
+
     it('weigert zonder ontvangers, met een ongeldig adres, een onbekende lijst, een leeg onderwerp, en voor niet-admins', async () => {
       expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: {} } })).status).toBe(400);
       expect((await api('POST', '/api/mails/eigen', { token: 'tok-admin', body: { ...basis, ontvangers: { adressen: ['geen-adres'] } } })).status).toBe(400);
@@ -7748,6 +7886,40 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect(mem.mailLog.filter((r: any) => r.soort === 'omleiding-mail')).toHaveLength(1);
       expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')).toMatchObject({ entityType: 'diversion', entityId: 'o-1' });
       expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')?.message).toContain('naar 2 ontvangers met 1 PDF');
+    });
+
+    it('de mail noemt alleen de bijlagen die echt meegaan, en het antwoord zegt welke ontbrak (nr. 11)', async () => {
+      const res = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(res.status).toBe(200);
+      // slot 3 (haltes.pdf) hangt niet in de opslag.
+      expect(res.json).toMatchObject({ bijlagen: 1, ontbrekendeBijlagen: ['haltes.pdf'] });
+      for (const mail of mem.emailsSent) {
+        expect(mail.attachments?.map((a) => a.filename)).toEqual(['plan.pdf']);
+        expect(mail.text).toContain('In bijlage\n- plan.pdf');
+        expect(mail.text).not.toContain('haltes.pdf');
+      }
+      expect(mem.activity.find((a: any) => a.action === 'Omleiding gemaild')?.message).toContain('met 1 PDF (niet meegegaan, bestand niet gevonden: haltes.pdf)');
+      // Hangt geen enkele bijlage meer, dan noemt de mail er ook geen.
+      mem.opslag.clear();
+      mem.emailsSent = [];
+      const zonder = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(zonder.json).toMatchObject({ bijlagen: 0, ontbrekendeBijlagen: ['plan.pdf', 'haltes.pdf'] });
+      expect(mem.emailsSent[0].text).not.toContain('In bijlage');
+      // Alles aanwezig: niets te melden.
+      mem.opslag.add('diversions/o-1-1.pdf');
+      mem.opslag.add('diversions/o-1-3.pdf');
+      const volledig = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-admin', body: { ontvangers: { lijsten: ['l-1'] } } });
+      expect(volledig.json).toMatchObject({ bijlagen: 2, ontbrekendeBijlagen: [] });
+    });
+
+    it('gaat door dezelfde verzendfunctie: regel vooraf, en `alleen` stuurt alleen naar het restant (nr. 5 en 34)', async () => {
+      mem.mailLogVerloop = [];
+      const res = await api('POST', '/api/diversions/o-1/mail', { token: 'tok-planner', body: { ontvangers: { lijsten: ['l-1'], adressen: ['garage@vhb.be'] }, alleen: ['planning@delijn.be'] } });
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ droog: false, aantal: 1, gelukt: 1, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, resterend: [], bijlagen: 1 });
+      expect(mem.emailsSent.map((m) => m.to)).toEqual([['planning@delijn.be']]);
+      expect(mem.mailLogVerloop).toEqual(['start:omleiding-mail', 'mail:planning@delijn.be', 'klaar:omleiding-mail']);
+      expect(mem.mailLog.filter((r: any) => r.soort === 'omleiding-mail')).toHaveLength(1);
     });
 
     it('een PDF van vóór 25-09 (<id>.pdf) gaat mee als omleiding.pdf; zonder einddatum zegt de mail "tot nader bericht"', async () => {

@@ -173,7 +173,7 @@ type Beveiliging = { staf: boolean; mfaVerplicht: boolean; aal: 'aal1' | 'aal2';
  * rustige plek (verbeterronde 07-09, nrs. 5, 8 en 12). Toestellen en
  * sessies staat er als eigen kaart direct onder.
  */
-function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePassword: () => void }) {
+export function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePassword: () => void }) {
   const staf = user.role === 'planner' || user.role === 'admin';
   const [info, setInfo] = useState<Beveiliging | null>(null);
   const [status, setStatus] = useState<TweeStapsStatus | null | undefined>(undefined);
@@ -279,7 +279,7 @@ function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePas
 
       <Modal open={modal === 'inschrijven'} onClose={() => setModal(null)} maxWidth="sm" ariaLabel="Twee-stapsverificatie instellen">
         <ModalHeader title="Twee-stapsverificatie instellen" onClose={() => setModal(null)} />
-        <div className="mt-4">
+        <div className="p-6">
           <TweeStapsInschrijving
             onAnnuleer={() => setModal(null)}
             onKlaar={() => {
@@ -292,9 +292,8 @@ function BeveiligingSectie({ user, onChangePassword }: { user: User; onChangePas
       </Modal>
 
       <Modal open={modal === 'uitschakelen'} onClose={() => setModal(null)} maxWidth="sm" ariaLabel="Twee-stapsverificatie uitschakelen">
-        <ModalHeader title="Twee-stapsverificatie uitschakelen" onClose={() => setModal(null)} />
-        <p className="mt-2 text-body text-slate-600">Daarna is je wachtwoord weer de enige sleutel. Bevestig eerst met een code uit je app.</p>
-        <div className="mt-4">
+        <ModalHeader title="Twee-stapsverificatie uitschakelen" description="Daarna is je wachtwoord weer de enige sleutel. Bevestig eerst met een code uit je app." onClose={() => setModal(null)} />
+        <div className="p-6">
           {status?.factorId && status.huidig !== 'aal2'
             ? <TweeStapsCode factorId={status.factorId} annuleerLabel="Annuleren" onAnnuleer={() => setModal(null)} onKlaar={() => { void laad().then(() => void uitschakelen()); }} />
             : (

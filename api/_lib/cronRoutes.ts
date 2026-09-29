@@ -10,7 +10,8 @@
 
 import { bouwHerstelPlan } from "../../shared/herstelPlan.js";
 import express from "express";
-import { sendEmail, sendExpiryReminderEmail, escapeHtml, mailOpbouw, portalUrl } from "../email.js";
+import { sendEmail, sendExpiryReminderEmail, escapeHtml } from "../email.js";
+import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwOverzichtMail, bouwRestoreProefMail } from "./mailTeksten.js";
 import { sendPushToUsers } from "../push.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { supabaseAdmin } from "../db.js";
@@ -160,6 +161,16 @@ const weekcijfers = async (): Promise<string[]> => {
   ];
 };
 
+/** Wat er met het overzicht gebeurde, in de woorden van de hartslag. Zonder
+ *  SMTP telt de mail als "afgehandeld" (alerted), zoals altijd: dat is de
+ *  bekende stand van een omgeving zonder mailserver. */
+export const overzichtVerzending = (r: { ok: boolean; mocked: boolean; overgeslagen?: boolean }): { woord: string; alerted: boolean; reden?: string } => {
+  if (r.overgeslagen) return { woord: "niet verstuurd (mail staat uit in Beheer › Mails)", alerted: false, reden: "mail uit" };
+  if (r.mocked) return { woord: "alleen gelogd (geen SMTP ingesteld)", alerted: true };
+  if (!r.ok) return { woord: "NIET verstuurd (verzending mislukt)", alerted: false, reden: "verzending mislukt" };
+  return { woord: "verstuurd", alerted: true };
+};
+
 export function mountCronRoutes(app: express.Express) {
   app.get("/api/backup", authenticate, requireRole("admin"), async (_req, res) => {
     try {
@@ -193,14 +204,8 @@ export function mountCronRoutes(app: express.Express) {
         try {
           const alertTo = await systemMailRecipients();
           if (alertTo.length > 0) {
-            const { html, text } = mailOpbouw({
-              kicker: "Back-up",
-              titel: "Back-up faalde de integriteitscheck",
-              status: { label: "Controleer de portaal-data", toon: "fout" },
-              alineas: [`De back-up ${filename} is opgeslagen, maar de integriteitscheck vond problemen. Controleer of de portaal-data compleet is.`],
-              lijst: { kop: "Bevindingen", items: integrity.issues },
-            });
-            await sendEmail({ to: alertTo, context: "backup-integrity", soort: "backup-integriteit", subject: `Back-up-integriteit: controleer ${filename}`, text, html });
+            const { onderwerp, html, text } = bouwBackupIntegriteitMail({ filename, bevindingen: integrity.issues });
+            await sendEmail({ to: alertTo, context: "backup-integrity", soort: "backup-integriteit", subject: onderwerp, text, html });
           }
         } catch (mailErr) {
           console.error("[cron-backup] integriteit-alert mailen mislukt:", mailErr);
@@ -223,23 +228,12 @@ export function mountCronRoutes(app: express.Express) {
           const recipients = await systemMailRecipients();
           if (recipients.length > 0) {
             const encrypted = encryptOpensslCompatible(json, passphrase);
-            const commando = `openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in ${filename}.enc -out ${filename}`;
-            const { html, text } = mailOpbouw({
-              kicker: "Back-up",
-              titel: `Wekelijkse back-up ${payload.exportedAt.slice(0, 10)}`,
-              status: { label: "Versleuteld, bewaar buiten Supabase en Vercel", toon: "neutraal" },
-              alineas: [
-                "In bijlage de wekelijkse off-site kopie van de portaal-back-up, AES-256-versleuteld. Bewaar deze mail buiten Supabase en Vercel.",
-                "Ontsleutelen (vraagt om de wachtwoordzin uit je wachtwoordmanager):",
-                { html: `<pre style="margin: 0 0 14px; padding: 12px 14px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 12px; white-space: pre-wrap;">${commando.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, tekst: `  ${commando}` },
-                "Zie ook docs/RESTORE.md in de repo.",
-              ],
-            });
+            const { onderwerp, html, text } = bouwBackupWeekkopieMail({ filename, exportedAt: payload.exportedAt });
             const result = await sendEmail({
               to: recipients,
               context: "weekly-backup",
               soort: "backup-weekkopie",
-              subject: `Wekelijkse back-up ${payload.exportedAt.slice(0, 10)}, versleuteld`,
+              subject: onderwerp,
               text,
               html,
               attachments: [{ filename: `${filename}.enc`, content: encrypted }],
@@ -337,14 +331,8 @@ export function mountCronRoutes(app: express.Express) {
       if (issues.length > 0) {
         const recipients = await systemMailRecipients();
         if (recipients.length > 0) {
-          const { html, text } = mailOpbouw({
-            kicker: "Back-up",
-            titel: "Restore-proef gefaald",
-            status: { label: "Controleer de back-ups zo snel mogelijk", toon: "fout" },
-            alineas: [`De maandelijkse restore-proef${filename ? ` van ${filename}` : ""} vond problemen. Dit is je herstelpad, dus controleer de back-ups zo snel mogelijk.`],
-            lijst: { kop: "Bevindingen", items: issues },
-          });
-          await sendEmail({ to: recipients, context: "restore-proef", soort: "restore-proef", subject: `Restore-proef gefaald${filename ? `, ${filename}` : ""}`, text, html });
+          const { onderwerp, html, text } = bouwRestoreProefMail({ filename, bevindingen: issues });
+          await sendEmail({ to: recipients, context: "restore-proef", soort: "restore-proef", subject: onderwerp, text, html });
         }
         await logCronHeartbeat("restore-proef", `GEFAALD: ${issues.join("; ")}`);
         return res.json({ success: false, issues });
@@ -694,7 +682,6 @@ export function mountCronRoutes(app: express.Express) {
         ? `${intervalMin / 1440} dagen`
         : intervalMin % 60 === 0 ? `${intervalMin / 60} uur` : `${intervalMin} min`;
       const overzichtNaam = weekdag === "elke" ? "dagoverzicht" : "weekoverzicht";
-      const Overzicht = `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)}`;
 
       // Hoeveel toestellen/gebruikers raakte het? Dát is het signaal, niet het
       // aantal meldingen: 16 meldingen van één toestel is iemand die zit te
@@ -707,8 +694,8 @@ export function mountCronRoutes(app: express.Express) {
 
       // Neutrale toon, bewust zonder waarschuwingsteken (verzoek Jarno, 02-08):
       // dit is een overzicht dat élke week komt, geen alarm. Wat er wél toe
-      // doet, hoeveel mensen geraakt zijn, staat in de onderwerpregel.
-      const subject = `${Overzicht} portaal: ${impact}`;
+      // doet, hoeveel mensen geraakt zijn, staat in de onderwerpregel
+      // (bouwOverzichtMail).
       const inleiding = errors.length === 0
         ? `In de afgelopen ${windowLabel} zijn er geen meldingen binnengekomen.`
         : `In de afgelopen ${windowLabel}: ${errors.length} melding${errors.length === 1 ? "" : "en"} van ${gebruikers.size} ${gebruikers.size === 1 ? "toestel" : "toestellen"} (${sorted.length} unieke soorten).`;
@@ -723,24 +710,26 @@ export function mountCronRoutes(app: express.Express) {
       // g.source/message/lastUrl zijn door de client aangeleverd; de lay-out
       // escapet elke regel, anders is de digest-mail een HTML-injectiekanaal
       // richting de admins.
-      const { html, text } = mailOpbouw({
-        kicker: "Systeem",
-        titel: `${Overzicht} van het portaal`,
-        status: { label: impact, toon: errors.length === 0 ? "goed" : "aandacht" },
+      const { onderwerp, html, text } = bouwOverzichtMail({
+        naam: overzichtNaam,
+        impact,
+        toon: errors.length === 0 ? "goed" : "aandacht",
         alineas: [inleiding, ...(ruisregel ? [ruisregel] : [])],
         lijsten: [
           ...(meldingItems.length > 0 ? [{ kop: "Meldingen", items: meldingItems }] : []),
           ...(week.length > 0 ? [{ kop: "Cijfers van de afgelopen 7 dagen", items: week }] : []),
           ...extraLijsten,
         ],
-        knop: { tekst: "Open Systeemstatus", url: `${portalUrl()}${viewUrl("beheer-debug")}` },
-        voet: "Details staan in het portaal onder Systeemstatus en in de Vercel-logs.",
       });
 
-      const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest", soort: "weekoverzicht" });
-      console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
-      await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} verstuurd: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
-      res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });
+      const result = await sendEmail({ to: recipients, subject: onderwerp, text, html, context: "error-digest", soort: "weekoverzicht" });
+      // De hartslag zegt wat er echt gebeurde (nr. 13): vroeger stond er
+      // "verstuurd", ook als het overzicht uit stond in Beheer › Mails, er
+      // geen SMTP was of de verzending mislukte.
+      const verzonden = overzichtVerzending(result);
+      console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), ${verzonden.woord}`);
+      await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} ${verzonden.woord}: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
+      res.json({ success: true, count: errors.length, alerted: verzonden.alerted, recipients: recipients.length, mocked: result.mocked, ...(verzonden.reden ? { reason: verzonden.reden } : {}) });
     } catch (err: any) {
       console.error("[error-digest] mislukt:", err?.message || err);
       console.error("Digest mislukt", err);

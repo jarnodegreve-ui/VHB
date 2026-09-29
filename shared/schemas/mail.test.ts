@@ -77,3 +77,17 @@ describe('omleiding mailen', () => {
     expect(naamVanSoort('omleiding-mail')).toBe('Omleiding gemaild');
   });
 });
+
+describe('alleen het restant versturen (nr. 5)', () => {
+  it('`alleen` is optioneel, normaliseert adressen en weigert rommel, voor beide mails', () => {
+    const eigen = eigenMailSchema.safeParse({ onderwerp: 'x', tekst: 'y', ontvangers: { groepen: ['chauffeurs'] }, alleen: ['Jan@VHB.be'] });
+    expect(eigen.success && eigen.data.alleen).toEqual(['jan@vhb.be']);
+    const omleiding = omleidingMailSchema.safeParse({ ontvangers: { lijsten: ['l-1'] }, alleen: ['Planning@DeLijn.be'] });
+    expect(omleiding.success && omleiding.data.alleen).toEqual(['planning@delijn.be']);
+    expect(eigenMailSchema.safeParse({ onderwerp: 'x', tekst: 'y', ontvangers: {}, alleen: ['geen adres'] }).success).toBe(false);
+    expect(omleidingMailSchema.safeParse({ ontvangers: {}, alleen: 'jan@vhb.be' }).success).toBe(false);
+    // Zonder `alleen` verandert er niets aan de invoer.
+    const gewoon = eigenMailSchema.safeParse({ onderwerp: 'x', tekst: 'y', ontvangers: {} });
+    expect(gewoon.success && 'alleen' in gewoon.data && gewoon.data.alleen !== undefined).toBe(false);
+  });
+});
