@@ -10,6 +10,10 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import type { AddressInfo } from 'node:net';
+import { gzipSync } from 'node:zlib';
+// De client-hulp van de planning-upload (zuiver, geen app-imports): de tests
+// van de gzip-upload bouwen hun verzoek er precies zoals de browser mee.
+import { PLATFORM_GRENS_BYTES, matrixVerzoek, pakBestandIn } from './lib/bestandInpakken';
 
 // Dynamisch geladen ná de env-set hieronder (statische imports worden
 // gehoist en zouden rateLimit.ts met de default-limiet laden vóór
@@ -4618,6 +4622,212 @@ describe('planning-import, periode-selectie', () => {
     });
     expect(res.status).toBe(400);
     expect(String(res.json.error)).toContain('begindatum ligt na de einddatum');
+  });
+});
+
+describe('planning-import, ingepakt met gzip (413 van het platform, 29-09)', () => {
+  // 29-09: Jarno kon de nieuwe planning niet meer uploaden. Het bestand (.xls,
+  // ±3,5 MB en groeiend) ging als base64 in JSON en werd 4/3 groter: boven de
+  // 4,5 MB request body die een Vercel-functie aanneemt, dus een 413 van het
+  // platform nog vóór de route draaide. De client pakt nu in met gzip
+  // (src/lib/bestandInpakken.ts), de server pakt uit met een grens per soort
+  // (api/_lib/matrixUpload.ts). Alle werkmappen hier zijn synthetisch.
+  const MIB = 1024 * 1024;
+  const CHAUFFEURS = Array.from({ length: 24 }, (_, i) => `Testchauffeur ${String(i + 1).padStart(2, '0')}`);
+  const CODES = ['2101', '2102', '2103', 'V', ''];
+  const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+  const dag = (n: number) => new Date(Date.UTC(2030, 8, 1 + n)).toISOString().slice(0, 10);
+  const RAAD = 'Bewaar een kopie met alleen het tabblad “praktijk” en probeer het opnieuw.';
+
+  const zaai = () => {
+    mem.users.push(...CHAUFFEURS.map((name, i) => ({ id: String(100 + i), name, email: `tc${i}@vhb.be`, role: 'chauffeur', isActive: true })));
+    mem.services = [
+      { id: 'g1', serviceNumber: '2101', startTime: '06:15', endTime: '09:05', startTime2: '12:10', endTime2: '14:30', startTime3: '16:00', endTime3: '18:45', loopnr: '4500', loopnr2: '4611', loopnr3: '4702' },
+      { id: 'g2', serviceNumber: '2102', startTime: '07:00', endTime: '10:00', startTime2: '15:00', endTime2: '19:00', loopnr: '4510', loopnr2: '4620' },
+      { id: 'g3', serviceNumber: '2103', startTime: '05:30', endTime: '13:30', loopnr: '4520' },
+    ];
+    mem.planningCodes = [{ code: 'V', category: 'leave', description: 'Verlof', countsAsShift: false, isPaidAbsence: true, isDayOff: false }];
+    mem.leave = [];
+    mem.swaps = [];
+    leegNaImport();
+  };
+  /** Wat een import schrijft, terug naar leeg (voor een tweede import in dezelfde test). */
+  const leegNaImport = () => {
+    mem.planning = [];
+    mem.planningMatrix = [];
+    mem.importHistory = [];
+    mem.snapshots = {};
+  };
+
+  /** Een werkmap zoals die van de planning: "praktijk" (datum, dagtype, een
+   *  kolom per chauffeur, "aantal") plus vulbladen die de import niet leest.
+   *  Pseudo-willekeurig maar vast, en slechter comprimeerbaar dan de echte
+   *  (±3,6× tegen 6× voor de werkmap van 19-08). */
+  const werkmap = async (o: { dagen: number; vulbladen: number; rijen: number; soort: 'biff8' | 'xlsx' }) => {
+    const XLSX = await import('xlsx');
+    let x = 20260929;
+    const kans = () => { x = (Math.imul(x, 1103515245) + 12345) >>> 0; return x / 2 ** 32; };
+    const kies = <T,>(lijst: T[]) => lijst[Math.floor(kans() * lijst.length)];
+    const praktijk: unknown[][] = [['datum', 'dagtype', ...CHAUFFEURS, 'aantal']];
+    for (let d = 0; d < o.dagen; d++) {
+      const codes = CHAUFFEURS.map(() => kies(CODES));
+      praktijk.push([serial(dag(d)), 'schooldag', ...codes, codes.filter((c) => /^\d/.test(c)).length]);
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(praktijk), 'praktijk');
+    for (let s = 1; s <= o.vulbladen; s++) {
+      const blad: unknown[][] = [Array.from({ length: 20 }, (_, c) => `kolom ${c + 1}`)];
+      for (let r = 0; r < o.rijen; r++) {
+        blad.push(Array.from({ length: 20 }, (_, c) => (c % 3 === 0 ? kies(CODES) : Math.round(kans() * 100000) / 100)));
+      }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(blad), `vulblad ${s}`);
+    }
+    return XLSX.write(wb, { type: 'buffer', bookType: o.soort }) as Buffer;
+  };
+  const KLEIN = { dagen: 60, vulbladen: 2, rijen: 300 } as const;
+
+  /** De ruwe body naar de route sturen, byte voor byte wat de client bouwde. */
+  const stuur = async (pad: string, body: string) => {
+    const res = await fetch(`${baseUrl}${pad}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok-planner', 'X-Device-Token': 'dev-ok' },
+      body,
+    });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  };
+  /** Zoals de browser het verstuurt: dezelfde hulp, dezelfde body. */
+  const alsClient = async (bestand: Buffer, extra?: Record<string, unknown>) => matrixVerzoek(await pakBestandIn(new Blob([bestand])), extra);
+  const gzipVeld = (bestand: Buffer) => JSON.stringify({ xlsxGzipBase64: gzipSync(bestand).toString('base64') });
+  /** Een bestand dat met de handtekening van een soort begint en verder leeg is. */
+  const metKop = (bytes: number, kop: number[]) => { const b = Buffer.alloc(bytes); Buffer.from(kop).copy(b); return b; };
+  const XLS_KOP = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+
+  it('het voorbeeld is met gzip exact hetzelfde als met de oude base64-vorm, voor een .xls en een .xlsx', async () => {
+    zaai();
+    for (const soort of ['biff8', 'xlsx'] as const) {
+      const bestand = await werkmap({ ...KLEIN, soort });
+      const periode = { van: dag(5), tot: dag(40) };
+      const oud = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: bestand.toString('base64'), periode } });
+      const nieuw = await stuur('/api/planning-matrix/preview', await alsClient(bestand, { periode }));
+      expect(oud.status, soort).toBe(200);
+      expect(nieuw.status, soort).toBe(200);
+      expect(nieuw.json, soort).toEqual(oud.json);
+      expect(nieuw.json, soort).toMatchObject({ importedDays: 36, startDate: dag(5), endDate: dag(40), fileStartDate: dag(0), fileEndDate: dag(59), unknownCodes: [], unmatchedDrivers: [] });
+    }
+  });
+
+  it('de import met gzip schrijft hetzelfde als met base64: matrix, planning, historiek en herstelpunt', async () => {
+    zaai();
+    const bestand = await werkmap({ ...KLEIN, soort: 'biff8' });
+    const extra = { filename: 'Dienstregeling test.xls', periode: { van: dag(0), tot: dag(29) } };
+    const stand = () => JSON.parse(JSON.stringify({ matrix: mem.planningMatrix, planning: mem.planning, historiek: mem.importHistory, snapshots: mem.snapshots }));
+
+    mem.planningMatrix = [{ id: 'm-oud', source_date: dag(0), day_type: 'W', assignments: { 'Testchauffeur 01': '2103' }, raw_row: '' }];
+    const oud = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: bestand.toString('base64'), ...extra } });
+    expect(oud.status).toBe(200);
+    const naOud = stand();
+
+    leegNaImport();
+    mem.planningMatrix = [{ id: 'm-oud', source_date: dag(0), day_type: 'W', assignments: { 'Testchauffeur 01': '2103' }, raw_row: '' }];
+    const nieuw = await stuur('/api/planning-matrix/import', await alsClient(bestand, extra));
+    expect(nieuw.status).toBe(200);
+    expect(nieuw.json).toEqual(oud.json);
+    expect(stand()).toEqual(naOud);
+    expect(naOud.matrix).toHaveLength(30);
+    expect(naOud.historiek[0]).toMatchObject({ filename: 'Dienstregeling test.xls', importedDays: 30, periodStart: dag(0), periodEnd: dag(29) });
+  });
+
+  it('regressiebewaker: een .xls van meer dan 4 MB gaat als verzoek ruim onder de 4,5 MB en de server haalt er dezelfde rijen uit', async () => {
+    zaai();
+    // Boven het breekpunt van 29-09 (±3,37 MB): als base64 zou dit verzoek
+    // het platform nooit halen.
+    const bestand = await werkmap({ dagen: 123, vulbladen: 8, rijen: 1500, soort: 'biff8' });
+    expect(bestand.length).toBeGreaterThanOrEqual(4 * MIB);
+    expect(bestand.subarray(0, 4).toString('hex')).toBe('d0cf11e0');
+    expect(JSON.stringify({ xlsxBase64: bestand.toString('base64') }).length).toBeGreaterThan(PLATFORM_GRENS_BYTES);
+
+    // Het verzoek zoals de client het bouwt (matrixVerzoek gooit boven de
+    // eigen grens, dus dat hij iets teruggeeft is al de controle vooraf).
+    const ingepakt = await pakBestandIn(new Blob([bestand]));
+    expect(ingepakt.gzip).toBe(true);
+    const body = matrixVerzoek(ingepakt, { filename: 'Dienstregeling test.xls' });
+    const bytes = new TextEncoder().encode(body).length;
+    expect(bytes).toBeLessThan(PLATFORM_GRENS_BYTES);
+    expect(bytes).toBeLessThan(bestand.length / 2);
+
+    // De server leest er exact de rijen uit die het bestand zelf geeft.
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/_lib/matrixXlsx');
+    const { rows } = await parsePlanningMatrixXlsxMetWaarschuwingen(bestand);
+    expect(rows).toHaveLength(123);
+
+    const voorbeeld = await stuur('/api/planning-matrix/preview', body);
+    expect(voorbeeld.status).toBe(200);
+    expect(voorbeeld.json).toMatchObject({
+      importedDays: 123,
+      detectedDrivers: Object.keys(rows[0].assignments).length,
+      startDate: dag(0),
+      endDate: dag(122),
+      unknownCodes: [],
+      unmatchedDrivers: [],
+    });
+
+    const imp = await stuur('/api/planning-matrix/import', body);
+    expect(imp.status).toBe(200);
+    expect(imp.json).toMatchObject({ success: true, importedDays: 123 });
+    expect(mem.planningMatrix).toEqual(rows);
+    expect(mem.importHistory[0]).toMatchObject({ filename: 'Dienstregeling test.xls', importedDays: 123 });
+  }, 60_000);
+
+  it('een gzip-bom (klein ingepakt, groot uitgepakt) geeft een 413 met leesbare melding, en de server draait door', async () => {
+    zaai();
+    const bom = metKop(64 * MIB, XLS_KOP);
+    const ingepakt = gzipSync(bom);
+    expect(ingepakt.length).toBeLessThan(MIB);
+
+    const res = await stuur('/api/planning-matrix/preview', JSON.stringify({ xlsxGzipBase64: ingepakt.toString('base64') }));
+    expect(res.status).toBe(413);
+    expect(res.json.error).toBe(`Het Excel-bestand is 64 MB, de grens voor een .xls is 15 MB. ${RAAD}`);
+    expect((await stuur('/api/planning-matrix/import', JSON.stringify({ xlsxGzipBase64: ingepakt.toString('base64') }))).status).toBe(413);
+
+    // Een staart die liegt (ISIZE 1000): de rem op het uitpakken houdt hem tegen.
+    const liegt = Buffer.from(ingepakt);
+    liegt.writeUInt32LE(1000, liegt.length - 4);
+    const res2 = await stuur('/api/planning-matrix/preview', JSON.stringify({ xlsxGzipBase64: liegt.toString('base64') }));
+    expect(res2.status).toBe(413);
+    expect(res2.json.error).toBe(`Het Excel-bestand is meer dan 15 MB, de grens voor een .xls is 15 MB. ${RAAD}`);
+
+    // Geen crash: het volgende verzoek werkt gewoon.
+    const daarna = await stuur('/api/planning-matrix/preview', await alsClient(await werkmap({ ...KLEIN, soort: 'biff8' })));
+    expect(daarna.status).toBe(200);
+    expect(daarna.json.importedDays).toBe(60);
+  });
+
+  it('een .xls boven 15 MB en een .xlsx boven 5 MB geven elk een 413 met hun eigen grens', async () => {
+    const xls = await stuur('/api/planning-matrix/preview', gzipVeld(metKop(15 * MIB + 1, XLS_KOP)));
+    expect(xls.status).toBe(413);
+    expect(xls.json.error).toBe(`Het Excel-bestand is 15,1 MB, de grens voor een .xls is 15 MB. ${RAAD}`);
+
+    const xlsx = await stuur('/api/planning-matrix/preview', gzipVeld(metKop(5 * MIB + 1, [0x50, 0x4b, 0x03, 0x04])));
+    expect(xlsx.status).toBe(413);
+    expect(xlsx.json.error).toBe(`Het Excel-bestand is 5,1 MB, de grens voor een .xlsx is 5 MB. ${RAAD}`);
+  });
+
+  it('een onbekend formaat of een beschadigde gzip geeft een nette 400', async () => {
+    const tekst = Buffer.from('datum;dagtype;Testchauffeur 01;aantal\n01/09/2030;W;2101;1\n');
+    const GEEN_WERKMAP = 'Dit is geen Excel-werkmap. Bewaar het bestand in Excel als .xls of .xlsx en probeer het opnieuw.';
+    for (const body of [gzipVeld(tekst), JSON.stringify({ xlsxBase64: tekst.toString('base64') })]) {
+      const res = await stuur('/api/planning-matrix/preview', body);
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe(GEEN_WERKMAP);
+    }
+    const BESCHADIGD = 'Het ingepakte Excel-bestand is beschadigd. Kies het bestand opnieuw.';
+    const geenGzip = await stuur('/api/planning-matrix/preview', JSON.stringify({ xlsxGzipBase64: tekst.toString('base64') }));
+    expect(geenGzip.status).toBe(400);
+    expect(geenGzip.json.error).toBe(BESCHADIGD);
+    const afgebroken = gzipSync(await werkmap({ ...KLEIN, soort: 'biff8' })).subarray(0, 5000);
+    const halve = await stuur('/api/planning-matrix/import', JSON.stringify({ xlsxGzipBase64: afgebroken.toString('base64') }));
+    expect(halve.status).toBe(400);
+    expect(halve.json.error).toBe(BESCHADIGD);
   });
 });
 
