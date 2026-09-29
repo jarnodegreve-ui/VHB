@@ -31,8 +31,12 @@ test('een dienst van vandaag die voorbij is, is gereden: verleden, geen ruilknop
 
 // Jarno 29-09 (28e): het einde van een deel volgt deelVenster. 22:00–06:00
 // van vandaag eindigt morgenvroeg, dus vandaag is ze op elk uur nog komend
-// (vroeger gold ze vanaf 06:00 al als gereden, 16 uur voor ze begon).
-test('een nachtdienst in gewone uren (22:00–06:00) van vandaag loopt tot morgenvroeg: komend, met ruilknop', async ({ page }) => {
+// (vroeger gold ze vanaf 06:00 al als gereden, 16 uur voor ze begon). De klok
+// staat vast op 07:00 (setFixedTime: alleen Date, de timers lopen door, dus
+// het rooster rendert gewoon): zonder die klok slaagde de test vóór 06:00 ook
+// op de oude regel.
+test('een nachtdienst in gewone uren (22:00–06:00) van vandaag loopt tot morgenvroeg: om 07:00 komend, met ruilknop', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(`${dayOffset(0)}T07:00:00`));
   await seed(page, { user: CHAUFFEUR, extra: planning(vandaag('22:00', '06:00')) });
   await page.goto('/rooster');
   await expect(page.getByRole('heading', { name: 'Rooster', level: 1 })).toBeVisible();
