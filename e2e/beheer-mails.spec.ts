@@ -240,3 +240,61 @@ test('mails: geen antwoord van de server biedt geen knop om alles opnieuw te ver
   await expect(paneel.getByLabel('Onderwerp')).toHaveValue('Nieuwe uniformen');
   expect(calls.filter((c) => c.pad === 'eigen' && !c.body.droog)).toHaveLength(0);
 });
+
+test('mails: formulieren brengen de focus naar het eerste foute veld, Enter dient in, en sluiten vraagt bevestiging (nr. 21)', async ({ page }) => {
+  const { calls } = await opzet(page);
+  // Verzendlijst: leeg indienen → focus op Naam; naam ingevuld → focus op Adressen.
+  await page.getByRole('button', { name: 'Nieuwe lijst' }).click();
+  const lijst = page.getByRole('dialog', { name: 'Nieuwe verzendlijst' });
+  await lijst.getByRole('button', { name: 'Toevoegen' }).click();
+  await expect(lijst.getByText('Geef de lijst een naam')).toBeVisible();
+  await expect(lijst.getByLabel('Naam')).toBeFocused();
+  await lijst.getByLabel('Naam').fill('Garage');
+  await lijst.getByLabel('Naam').press('Enter');
+  await expect(lijst.getByText('Vul minstens één adres in')).toBeVisible();
+  await expect(lijst.getByLabel('Adressen')).toBeFocused();
+  // Sluiten met invoer vraagt eerst bevestiging.
+  await page.keyboard.press('Escape');
+  const vraag = page.getByRole('dialog', { name: 'Wijzigingen niet bewaren?' });
+  await expect(vraag).toBeVisible();
+  await vraag.getByRole('button', { name: 'Niet bewaren' }).click();
+  await expect(lijst).toHaveCount(0);
+  expect(calls).toHaveLength(0);
+  // Zonder invoer sluit het venster meteen.
+  await page.getByRole('button', { name: 'Nieuwe lijst' }).click();
+  await expect(lijst.getByLabel('Naam')).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(lijst).toHaveCount(0);
+  await expect(vraag).toHaveCount(0);
+
+  // Eigen mail: leeg indienen → focus op Onderwerp.
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  const paneel = page.getByRole('dialog', { name: 'Mail versturen' });
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  await expect(paneel.getByText('Vul een onderwerp in')).toBeVisible();
+  await expect(paneel.getByLabel('Onderwerp')).toBeFocused();
+  // Alleen de ontvangers ontbreken → focus op het eerste vakje van de ontvangers.
+  await paneel.getByLabel('Onderwerp').fill('Nieuwe uniformen');
+  await paneel.getByLabel('Bericht').fill('Vanaf 1 juli.');
+  await paneel.getByLabel('Onderwerp').press('Enter');
+  await expect(paneel.getByText('Kies minstens één ontvanger')).toBeVisible();
+  await expect(paneel.getByRole('checkbox', { name: 'Alle chauffeurs' })).toBeFocused();
+  expect(calls.filter((c) => c.pad === 'eigen')).toHaveLength(0);
+  // Enter in een veld dient in zodra alles klopt.
+  await paneel.getByLabel('Vrije adressen').fill('extern@voorbeeld.be');
+  await expect(paneel.getByText('Kies minstens één ontvanger')).toHaveCount(0);
+  await paneel.getByLabel('Onderwerp').press('Enter');
+  const bevestiging = page.getByRole('dialog', { name: 'Voorbeeld van je mail' });
+  await expect(bevestiging).toBeVisible();
+  expect(calls.filter((c) => c.pad === 'eigen')).toHaveLength(1);
+  await bevestiging.getByRole('button', { name: 'Terug' }).click();
+  await expect(bevestiging).toHaveCount(0);
+  // Sluiten met invoer vraagt bevestiging; "Niet bewaren" gooit de invoer weg.
+  await paneel.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(vraag).toBeVisible();
+  await vraag.getByRole('button', { name: 'Niet bewaren' }).click();
+  await expect(paneel).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mail versturen' }).click();
+  await expect(paneel.getByLabel('Onderwerp')).toHaveValue('');
+  await expect(paneel.getByLabel('Vrije adressen')).toHaveValue('');
+});

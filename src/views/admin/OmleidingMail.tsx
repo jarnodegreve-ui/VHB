@@ -4,6 +4,8 @@ import type { Diversion, Verzendlijst } from '../../types';
 import { SlideOver } from '../../components/SlideOver';
 import { SluitKnop } from '../../components/Modal';
 import { MailBevestiging } from '../../components/MailBevestiging';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil, type Veldfouten } from '../../lib/formulier';
 import { Foutkaart } from '../../components/ui';
 import { Field, Textarea } from '../../components/Field';
 import { Badge, Button } from '../../components/primitives';
@@ -22,6 +24,7 @@ import { leesAdressen, OMLEIDING_MAIL_BERICHT_MAX, type OmleidingMailInvoer } fr
  * (De Lijn, de garage), niet naar het eigen personeel.
  */
 type Droog = { droog: true; aantal: number; ontvangers: Array<{ adres: string; naam: string }>; onderwerp: string; html: string; bijlagen: Array<{ filename: string; sizeBytes: number | null }> };
+const FORM_ID = 'omleiding-mail-formulier';
 
 export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversion | null; onClose: () => void }) {
   const open = diversion !== null;
@@ -32,7 +35,12 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
   const [lijstIds, setLijstIds] = useState<string[]>([]);
   const [adressenTekst, setAdressenTekst] = useState('');
   const [bericht, setBericht] = useState('');
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  // Veldfouten en onbewaarde invoer via de gedeelde formulierlaag (nr. 21).
+  const veld = useVeldfouten();
+  const fouten = veld.fouten;
+  // Telt elke keer dat het formulier geleegd wordt: useVuil neemt dan een
+  // nieuwe momentopname (zelfde patroon als Beheer omleidingen).
+  const [vulling, setVulling] = useState(0);
   const [bezig, setBezig] = useState(false);
   const [voorbeeld, setVoorbeeld] = useState<Droog | null>(null);
 
@@ -47,22 +55,22 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
   useEffect(() => {
     if (!open) return;
     let actief = true;
-    setLijstIds([]); setAdressenTekst(''); setBericht(''); setFouten({}); setVoorbeeld(null);
+    setLijstIds([]); setAdressenTekst(''); setBericht(''); veld.wis(); setVoorbeeld(null); setVulling((v) => v + 1);
     void laadLijsten(() => actief);
     return () => { actief = false; };
   }, [open, diversion?.id]);
 
   const adressen = useMemo(() => leesAdressen(adressenTekst), [adressenTekst]);
   const ietsGekozen = lijstIds.length + adressen.adressen.length > 0;
-  const vuil = Boolean(bericht || ietsGekozen);
+  const { vuil } = useVuil({ bericht, lijstIds, adressenTekst }, open, vulling);
   const invoer = (droog: boolean, alleen?: string[]): OmleidingMailInvoer => ({ droog, bericht, ontvangers: { lijsten: lijstIds, adressen: adressen.adressen }, ...(alleen ? { alleen } : {}) });
 
   const toonVoorbeeld = async () => {
     if (!diversion) return;
-    const f: Record<string, string> = {};
+    const f: Veldfouten = {};
     if (adressen.fouten.length > 0) f.adressen = `Geen geldig adres: ${adressen.fouten.slice(0, 3).join(', ')}${adressen.fouten.length > 3 ? ', …' : ''}`;
     if (!ietsGekozen) f.ontvangers = 'Kies minstens één verzendlijst of adres';
-    setFouten(f);
+    veld.zet(f);
     if (Object.keys(f).length > 0) return;
     setBezig(true);
     try {
@@ -80,7 +88,10 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
     onClose();
   };
 
-  const wissel = (id: string, aan: boolean) => setLijstIds((x) => (aan ? [...new Set([...x, id])] : x.filter((y) => y !== id)));
+  const wissel = (id: string, aan: boolean) => {
+    veld.wisVeld('ontvangers');
+    setLijstIds((x) => (aan ? [...new Set([...x, id])] : x.filter((y) => y !== id)));
+  };
   const bijlagen = diversion?.bijlagen ?? [];
 
   return (
@@ -95,11 +106,12 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
         footer={(
           <div className="flex items-center gap-2">
             <SluitKnop onClose={onClose} variant="secondary" size="lg" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
-            <Button variant="primary" size="lg" className="flex-1" bezig={bezig} onClick={() => void toonVoorbeeld()}>Voorbeeld en versturen</Button>
+            <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" bezig={bezig}>Voorbeeld en versturen</Button>
           </div>
         )}
       >
-        <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void toonVoorbeeld(); }}>
+        {/* De voetknop staat buiten het formulier en dient in via form={FORM_ID}. */}
+        <Formulier id={FORM_ID} noValidate className="space-y-5" onVerstuur={toonVoorbeeld}>
           <div>
             <p className="text-sm font-semibold text-slate-800">Bijlagen</p>
             {bijlagen.length === 0 ? (
@@ -113,7 +125,8 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
           <Field label="Begeleidend bericht (optioneel)" htmlFor="omleiding-mail-bericht" error={fouten.bericht} hint="Komt bovenaan de mail, vóór de omschrijving van de omleiding.">
             <Textarea id="omleiding-mail-bericht" rows={4} value={bericht} maxLength={OMLEIDING_MAIL_BERICHT_MAX} onChange={(e) => setBericht(e.target.value)} placeholder="bv. Beste, hierbij de omleiding voor volgende week. Graag jullie bevestiging." />
           </Field>
-          <fieldset className="space-y-3">
+          {/* data-fout: zonder ontvangers gaat de focus naar het eerste vakje. */}
+          <fieldset className="space-y-3" data-fout={fouten.ontvangers ? '' : undefined}>
             <legend className="text-sm font-semibold text-slate-800">Ontvangers</legend>
             {fouten.ontvangers && <p className="text-body-sm text-red-700" role="alert">{fouten.ontvangers}</p>}
             {lijstenFout && lijsten === null ? (
@@ -134,10 +147,10 @@ export function OmleidingMailPaneel({ diversion, onClose }: { diversion: Diversi
               </ul>
             )}
             <Field label="Vrije adressen" htmlFor="omleiding-mail-adressen" error={fouten.adressen} hint="Eén per regel of met komma's.">
-              <Textarea id="omleiding-mail-adressen" rows={3} value={adressenTekst} onChange={(e) => { setAdressenTekst(e.target.value); setFouten((f) => ({ ...f, adressen: '' })); }} placeholder="dispatching@delijn.be" />
+              <Textarea id="omleiding-mail-adressen" rows={3} value={adressenTekst} onChange={(e) => { setAdressenTekst(e.target.value); veld.wisVeld('adressen'); veld.wisVeld('ontvangers'); }} placeholder="dispatching@delijn.be" />
             </Field>
           </fieldset>
-        </form>
+        </Formulier>
       </SlideOver>
 
       <MailBevestiging

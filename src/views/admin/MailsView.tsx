@@ -10,6 +10,8 @@ import { InfoTip } from '../../components/InfoTip';
 import { apiJson } from '../../lib/api';
 import { notify } from '../../lib/ui';
 import { meldSchrijffout } from '../../lib/fouten';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil, type Veldfouten } from '../../lib/formulier';
 import { formatDateTimeHuman, aantal as tel } from '../../lib/format';
 import { leesAdressen, naamVanSoort, type MailInstellingen, type MailSoortInfo, type Verzendlijst } from '../../../shared/schemas/mail';
 import type { User } from '../../types';
@@ -240,39 +242,45 @@ function Verzendlijsten({ lijsten, onGewijzigd }: { lijsten: Verzendlijst[] | nu
 function VerzendlijstModal({ lijst, bezig, onClose, onBewaar }: { lijst: Verzendlijst | null; bezig: boolean; onClose: () => void; onBewaar: (l: Verzendlijst) => Promise<void> }) {
   const [naam, setNaam] = useState('');
   const [tekst, setTekst] = useState('');
-  const [fouten, setFouten] = useState<{ naam?: string; adressen?: string }>({});
+  // Veldfouten en onbewaarde invoer via de gedeelde formulierlaag (nr. 21).
+  const veld = useVeldfouten();
+  const fouten = veld.fouten;
+  // Telt elke keer dat het formulier gevuld wordt, zodat useVuil een nieuwe
+  // momentopname neemt (zelfde patroon als Beheer omleidingen).
+  const [vulling, setVulling] = useState(0);
   useEffect(() => {
-    if (lijst) { setNaam(lijst.naam); setTekst(lijst.adressen.join('\n')); setFouten({}); }
+    if (lijst) { setNaam(lijst.naam); setTekst(lijst.adressen.join('\n')); veld.wis(); setVulling((v) => v + 1); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lijst]);
   const gelezen = useMemo(() => leesAdressen(tekst), [tekst]);
   const nieuw = lijst !== null && lijst.naam === '' && lijst.adressen.length === 0;
-  const vuil = lijst !== null && (naam.trim() !== lijst.naam || gelezen.adressen.join('\n') !== lijst.adressen.join('\n'));
+  const { vuil } = useVuil({ naam: naam.trim(), adressen: gelezen.adressen }, lijst !== null, vulling);
 
-  const verstuur = () => {
-    const f: typeof fouten = {};
+  const verstuur = async () => {
+    const f: Veldfouten = {};
     if (!naam.trim()) f.naam = 'Geef de lijst een naam';
     if (gelezen.fouten.length > 0) f.adressen = `Geen geldig adres: ${gelezen.fouten.slice(0, 3).join(', ')}${gelezen.fouten.length > 3 ? ', …' : ''}`;
     else if (gelezen.adressen.length === 0) f.adressen = 'Vul minstens één adres in';
-    setFouten(f);
+    veld.zet(f);
     if (Object.keys(f).length > 0 || !lijst) return;
-    void onBewaar({ id: lijst.id, naam: naam.trim(), adressen: gelezen.adressen });
+    await onBewaar({ id: lijst.id, naam: naam.trim(), adressen: gelezen.adressen });
   };
 
   return (
     <Modal open={lijst !== null} onClose={onClose} vuil={vuil} maxWidth="md" ariaLabel={nieuw ? 'Nieuwe verzendlijst' : 'Verzendlijst bewerken'}>
       <ModalHeader title={nieuw ? 'Nieuwe verzendlijst' : 'Verzendlijst bewerken'} onClose={onClose} />
-      <form className="space-y-4 p-6" onSubmit={(e) => { e.preventDefault(); verstuur(); }}>
+      <Formulier noValidate className="space-y-4 p-6" onVerstuur={verstuur}>
         <Field label="Naam" htmlFor="verzendlijst-naam" error={fouten.naam}>
-          <Input id="verzendlijst-naam" value={naam} maxLength={60} onChange={(e) => { setNaam(e.target.value); setFouten((f) => ({ ...f, naam: undefined })); }} placeholder="bv. De Lijn, dispatching Gent" />
+          <Input id="verzendlijst-naam" value={naam} maxLength={60} onChange={(e) => { setNaam(e.target.value); veld.wisVeld('naam'); }} placeholder="bv. De Lijn, dispatching Gent" />
         </Field>
         <Field label="Adressen" htmlFor="verzendlijst-adressen" error={fouten.adressen} hint={`Eén adres per regel (of gescheiden door een komma). ${tel(gelezen.adressen.length, 'geldig adres', 'geldige adressen')}.`}>
-          <Textarea id="verzendlijst-adressen" rows={6} value={tekst} onChange={(e) => { setTekst(e.target.value); setFouten((f) => ({ ...f, adressen: undefined })); }} placeholder={'planning@voorbeeld.be\ndispatching@voorbeeld.be'} />
+          <Textarea id="verzendlijst-adressen" rows={6} value={tekst} onChange={(e) => { setTekst(e.target.value); veld.wisVeld('adressen'); }} placeholder={'planning@voorbeeld.be\ndispatching@voorbeeld.be'} />
         </Field>
         <div className="flex items-center justify-end gap-2">
           <SluitKnop onClose={onClose} variant="secondary" disabled={bezig}>Annuleren</SluitKnop>
           <Button type="submit" variant="primary" bezig={bezig}>{nieuw ? 'Toevoegen' : 'Opslaan'}</Button>
         </div>
-      </form>
+      </Formulier>
     </Modal>
   );
 }

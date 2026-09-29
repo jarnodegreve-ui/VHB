@@ -4,6 +4,8 @@ import type { User, Verzendlijst } from '../../types';
 import { SlideOver } from '../../components/SlideOver';
 import { SluitKnop } from '../../components/Modal';
 import { MailBevestiging } from '../../components/MailBevestiging';
+import { Formulier } from '../../components/Formulier';
+import { useVeldfouten, useVuil, type Veldfouten } from '../../lib/formulier';
 import { Field, Input, SearchField, Textarea } from '../../components/Field';
 import { Badge, Button } from '../../components/primitives';
 import { Checkbox } from '../../components/Table';
@@ -24,6 +26,7 @@ import { eigenMailSchema, EIGEN_MAIL_ONDERWERP_MAX, EIGEN_MAIL_TEKST_MAX, GROEP_
  * antwoord) zitten in MailBevestiging, gedeeld met de omleidingsmail.
  */
 type Droog = { droog: true; aantal: number; ontvangers: Array<{ adres: string; naam: string }>; onderwerp: string; html: string };
+const FORM_ID = 'eigen-mail-formulier';
 
 export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: {
   open: boolean;
@@ -39,7 +42,10 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
   const [gebruikerIds, setGebruikerIds] = useState<string[]>([]);
   const [adressenTekst, setAdressenTekst] = useState('');
   const [zoek, setZoek] = useState('');
-  const [fouten, setFouten] = useState<Record<string, string>>({});
+  // Veldfouten en onbewaarde invoer via de gedeelde formulierlaag (nr. 21):
+  // na een fout springt de focus naar het eerste foute veld (Formulier).
+  const veld = useVeldfouten();
+  const fouten = veld.fouten;
   const [bezig, setBezig] = useState(false);
   const [voorbeeld, setVoorbeeld] = useState<Droog | null>(null);
 
@@ -50,12 +56,15 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
   }, [kandidaten, zoek]);
   const adressen = useMemo(() => leesAdressen(adressenTekst), [adressenTekst]);
   const ietsGekozen = groepen.length + lijstIds.length + gebruikerIds.length + adressen.adressen.length > 0;
-  const vuil = Boolean(onderwerp || tekst || ietsGekozen);
+  const { vuil } = useVuil({ onderwerp, tekst, groepen, lijstIds, gebruikerIds, adressenTekst }, open);
 
   const wissel = <T,>(lijst: T[], item: T, aan: boolean) => (aan ? [...new Set([...lijst, item])] : lijst.filter((x) => x !== item));
+  const gekozen = () => veld.wisVeld('ontvangers');
 
+  // Leeg na het versturen en na "Niet bewaren": het paneel opent altijd leeg,
+  // dus alles wat er daarna in staat is onbewaarde invoer.
   const reset = () => {
-    setOnderwerp(''); setTekst(''); setGroepen([]); setLijstIds([]); setGebruikerIds([]); setAdressenTekst(''); setZoek(''); setFouten({}); setVoorbeeld(null);
+    setOnderwerp(''); setTekst(''); setGroepen([]); setLijstIds([]); setGebruikerIds([]); setAdressenTekst(''); setZoek(''); veld.wis(); setVoorbeeld(null);
   };
 
   const invoer = (droog: boolean, alleen?: string[]): EigenMailInvoer => ({
@@ -65,12 +74,12 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
   });
 
   const toonVoorbeeld = async () => {
-    const f: Record<string, string> = {};
+    const f: Veldfouten = {};
     if (adressen.fouten.length > 0) f.adressen = `Geen geldig adres: ${adressen.fouten.slice(0, 3).join(', ')}${adressen.fouten.length > 3 ? ', …' : ''}`;
     if (!ietsGekozen) f.ontvangers = 'Kies minstens één ontvanger';
     const check = valideer(eigenMailSchema, invoer(true));
     if (check.ok === false) Object.assign(f, check.fouten);
-    setFouten(f);
+    veld.zet(f);
     if (Object.keys(f).length > 0) return;
     setBezig(true);
     try {
@@ -100,28 +109,31 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
         icon={<Send size={16} />}
         width="lg"
         vuil={vuil}
+        onNietBewaren={reset}
         footer={(
           <div className="flex items-center gap-2">
             <SluitKnop onClose={onClose} variant="secondary" size="lg" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
-            <Button variant="primary" size="lg" className="flex-1" bezig={bezig} onClick={() => void toonVoorbeeld()}>Voorbeeld en versturen</Button>
+            <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" bezig={bezig}>Voorbeeld en versturen</Button>
           </div>
         )}
       >
-        <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void toonVoorbeeld(); }}>
+        {/* De voetknop staat buiten het formulier en dient in via form={FORM_ID}. */}
+        <Formulier id={FORM_ID} noValidate className="space-y-5" onVerstuur={toonVoorbeeld}>
           <Field label="Onderwerp" htmlFor="eigen-onderwerp" error={fouten.onderwerp}>
-            <Input id="eigen-onderwerp" value={onderwerp} maxLength={EIGEN_MAIL_ONDERWERP_MAX} onChange={(e) => { setOnderwerp(e.target.value); setFouten((f) => ({ ...f, onderwerp: '' })); }} placeholder="bv. Nieuwe zomeruniformen vanaf 1 juli" />
+            <Input id="eigen-onderwerp" value={onderwerp} maxLength={EIGEN_MAIL_ONDERWERP_MAX} onChange={(e) => { setOnderwerp(e.target.value); veld.wisVeld('onderwerp'); }} placeholder="bv. Nieuwe zomeruniformen vanaf 1 juli" />
           </Field>
           <Field label="Bericht" htmlFor="eigen-tekst" error={fouten.tekst} hint="Een witregel begint een nieuwe alinea.">
-            <Textarea id="eigen-tekst" rows={8} value={tekst} maxLength={EIGEN_MAIL_TEKST_MAX} onChange={(e) => { setTekst(e.target.value); setFouten((f) => ({ ...f, tekst: '' })); }} placeholder="Schrijf je bericht…" />
+            <Textarea id="eigen-tekst" rows={8} value={tekst} maxLength={EIGEN_MAIL_TEKST_MAX} onChange={(e) => { setTekst(e.target.value); veld.wisVeld('tekst'); }} placeholder="Schrijf je bericht…" />
           </Field>
 
-          <fieldset className="space-y-3">
+          {/* data-fout: zonder ontvangers gaat de focus naar het eerste vakje. */}
+          <fieldset className="space-y-3" data-fout={fouten.ontvangers ? '' : undefined}>
             <legend className="text-sm font-semibold text-slate-800">Ontvangers</legend>
             {fouten.ontvangers && <p className="text-body-sm text-red-700" role="alert">{fouten.ontvangers}</p>}
             <ul className="space-y-1.5" aria-label="Groepen">
               {ONTVANGER_GROEPEN.map((g) => (
                 <li key={g} className="flex items-center gap-2">
-                  <Checkbox checked={groepen.includes(g)} onChange={(aan) => setGroepen((x) => wissel(x, g, aan))} label={GROEP_LABEL[g]} />
+                  <Checkbox checked={groepen.includes(g)} onChange={(aan) => { gekozen(); setGroepen((x) => wissel(x, g, aan)); }} label={GROEP_LABEL[g]} />
                   <span className="text-sm text-slate-700">{GROEP_LABEL[g]}</span>
                 </li>
               ))}
@@ -130,7 +142,7 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
               <ul className="space-y-1.5" aria-label="Verzendlijsten">
                 {lijsten.map((l) => (
                   <li key={l.id} className="flex items-center gap-2">
-                    <Checkbox checked={lijstIds.includes(l.id)} onChange={(aan) => setLijstIds((x) => wissel(x, l.id, aan))} label={`Verzendlijst ${l.naam}`} />
+                    <Checkbox checked={lijstIds.includes(l.id)} onChange={(aan) => { gekozen(); setLijstIds((x) => wissel(x, l.id, aan)); }} label={`Verzendlijst ${l.naam}`} />
                     <span className="text-sm text-slate-700">{l.naam}</span>
                     <Badge tone="slate" kaal>{tel(l.adressen.length, 'adres', 'adressen')}</Badge>
                   </li>
@@ -143,7 +155,7 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
                 {zichtbaar.length === 0 && <li className="px-3 py-2 text-body-sm text-slate-500">Geen gebruiker gevonden.</li>}
                 {zichtbaar.map((u) => (
                   <li key={u.id} className="flex items-center gap-2 px-3 py-1.5">
-                    <Checkbox checked={gebruikerIds.includes(u.id)} onChange={(aan) => setGebruikerIds((x) => wissel(x, u.id, aan))} label={u.name} />
+                    <Checkbox checked={gebruikerIds.includes(u.id)} onChange={(aan) => { gekozen(); setGebruikerIds((x) => wissel(x, u.id, aan)); }} label={u.name} />
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{u.name}</span>
                     <span className="text-xs text-slate-500">{ROL_LABEL[u.role]}</span>
                   </li>
@@ -152,10 +164,10 @@ export function EigenMailPaneel({ open, onClose, users, lijsten, onVerstuurd }: 
               {gebruikerIds.length > 0 && <p className="text-xs text-slate-500">{tel(gebruikerIds.length, 'gebruiker', 'gebruikers')} gekozen.</p>}
             </div>
             <Field label="Vrije adressen" htmlFor="eigen-adressen" error={fouten.adressen} hint="Eén per regel of met komma's; ook buiten het portaal.">
-              <Textarea id="eigen-adressen" rows={3} value={adressenTekst} onChange={(e) => { setAdressenTekst(e.target.value); setFouten((f) => ({ ...f, adressen: '' })); }} placeholder="dispatching@delijn.be" />
+              <Textarea id="eigen-adressen" rows={3} value={adressenTekst} onChange={(e) => { setAdressenTekst(e.target.value); veld.wisVeld('adressen'); gekozen(); }} placeholder="dispatching@delijn.be" />
             </Field>
           </fieldset>
-        </form>
+        </Formulier>
       </SlideOver>
 
       <MailBevestiging

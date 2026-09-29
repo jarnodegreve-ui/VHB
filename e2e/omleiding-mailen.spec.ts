@@ -107,3 +107,40 @@ test('omleiding mailen: deels vertrokken verstuurt daarna alleen de rest (nr. 5 
   await expect(bevestiging).toHaveCount(0);
   await expect(paneel).toHaveCount(0);
 });
+
+test('omleiding mailen: focus naar het eerste foute veld, Enter dient in, sluiten met invoer vraagt bevestiging (nr. 21)', async ({ page, isMobile }) => {
+  const { calls } = await opzet(page);
+  const bewerk = page.getByRole(isMobile ? 'dialog' : 'region', { name: /Omleiding bewerken/ });
+  const open = async () => {
+    await bewerk.getByRole('button', { name: 'Meer acties' }).click();
+    await page.getByRole('menuitem', { name: 'Mailen…' }).click();
+  };
+  await open();
+  const paneel = page.getByRole('dialog', { name: 'Omleiding mailen' });
+  await expect(paneel.getByRole('checkbox', { name: 'Verzendlijst De Lijn' })).toBeAttached();
+  // Net geopend en niets ingevuld: sluiten vraagt niets.
+  await page.keyboard.press('Escape');
+  await expect(paneel).toHaveCount(0);
+  await open();
+  await expect(paneel.getByRole('checkbox', { name: 'Verzendlijst De Lijn' })).toBeAttached();
+  // Zonder ontvangers: de focus gaat naar het eerste vakje van de ontvangers.
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  await expect(paneel.getByText('Kies minstens één verzendlijst of adres')).toBeVisible();
+  await expect(paneel.getByRole('checkbox', { name: 'Verzendlijst De Lijn' })).toBeFocused();
+  // Een fout adres: de focus gaat naar dat veld.
+  await paneel.getByLabel('Vrije adressen').fill('geen adres');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  await expect(paneel.getByText('Geen geldig adres: geen adres')).toBeVisible();
+  await expect(paneel.getByLabel('Vrije adressen')).toBeFocused();
+  expect(calls).toHaveLength(0);
+  // Sluiten met invoer vraagt bevestiging; verder bewerken houdt de invoer.
+  await page.keyboard.press('Escape');
+  const vraag = page.getByRole('dialog', { name: 'Wijzigingen niet bewaren?' });
+  await expect(vraag).toBeVisible();
+  await vraag.getByRole('button', { name: 'Verder bewerken' }).click();
+  await expect(paneel.getByLabel('Vrije adressen')).toHaveValue('geen adres');
+  await paneel.getByLabel('Vrije adressen').fill('garage@vhb.be');
+  await paneel.getByRole('button', { name: 'Voorbeeld en versturen' }).click();
+  await expect(page.getByRole('dialog', { name: 'Voorbeeld van de omleidingsmail' })).toBeVisible();
+  expect(calls).toHaveLength(1);
+});
