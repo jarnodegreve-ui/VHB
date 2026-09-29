@@ -18,7 +18,7 @@ export type BordCel = { code: string; kind: string; hiddenService?: string };
 export const OVERNAME_CODES = ['vrij', 'bv', 'tk', 'ta'] as const;
 
 const token = (v: unknown) =>
-  String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /** De dienst die deze cel draagt: wat de chauffeur zelf rijdt, of wat onder
  *  zijn afwezigheid nog op zijn naam staat. Null = geen dienst. */
