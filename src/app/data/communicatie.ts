@@ -3,7 +3,6 @@ import { apiFetch } from '../../lib/api';
 import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 import { laatSchrijffout } from '../../lib/foutenLui';
 import { metOngedaan } from '../../lib/ongedaan';
-import { herstelMelding } from '../../lib/herstelMelding';
 
 /**
  * Communicatie: updates (nieuws) en omleidingen — collectie- én
@@ -15,12 +14,33 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
   const [updates, setUpdates, zetUpdatesUitAntwoord] = useCollectieState<Update[]>([]);
   const [diversions, setDiversions, zetDiversionsUitAntwoord] = useCollectieState<Diversion[]>([]);
 
-  // Toast na "Ongedaan maken": het record is terug; van de PDF's zegt de
-  // toast eerlijk wat de server nog in Storage vond.
-  const meldHerstel = (soort: 'Omleiding' | 'Update', verwacht: number, terug: number) => {
-    const m = herstelMelding(soort, verwacht, terug);
-    showToast(m.tekst, m.toon);
-  };
+  // Verwijderen gaat meteen (geen bevestigingsmodal); de toast biedt 6 s
+  // "Ongedaan maken" = hetzelfde record (zelfde id) opnieuw POST …/one. De
+  // PDF's blijven bij het verwijderen in Storage staan; de server hangt ze
+  // bij het herstel terug en de melding zegt wat er echt terugkwam.
+  //
+  // Het herstel zelf (src/lib/herstel.ts, met de teksten) zit niet in de
+  // startbundel: het is een zeldzame, bewuste klik, en de index heeft geen
+  // ruimte (scripts/check-bundle-size.mjs, BUITEN_STARTBUNDEL). De module
+  // laadt pas bij die klik; het verwijderen en de toast wachten er nooit op.
+  // Lukt het laden niet (offline, nieuwe release), dan wordt er niets gepost:
+  // het record blijft verwijderd, nooit half hersteld, en metOngedaan meldt
+  // "Ongedaan maken is mislukt" met een vervolgstap.
+  const verwijderMetHerstel = <T extends Diversion | Update>(
+    soort: 'Omleiding' | 'Update',
+    record: T,
+    verwijder: () => Promise<boolean>,
+    post: (record: T, successToast: undefined, opVeldfouten: undefined, naHerstel: (terug: T | null) => void) => Promise<boolean>,
+    ververs: () => Promise<void> | void,
+  ): Promise<boolean> =>
+    metOngedaan({
+      boodschap: `${soort} ‘${record.title}’ verwijderd.`,
+      uitvoeren: verwijder,
+      // perRecord meldt zijn eigen fouten (409/netwerk), het herstel geeft
+      // daarom niets terug.
+      herstellen: () => import('../../lib/herstel').then((m) => m.herstel(soort, record, post, ververs, showToast)),
+      toast: showToast,
+    });
 
   const fetchUpdates = async (accessToken = session?.access_token) => {
     try {
@@ -144,19 +164,17 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById,
       refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding opgeslagen.',
     });
-  const postDiversion = (record: Diversion, successToast: string | undefined, opVeldfouten?: OpVeldfouten, herstel = false): Promise<boolean> =>
+  // `naHerstel` = dit is het herstel na "Ongedaan maken": de header gaat mee
+  // en de functie krijgt het record zoals de server het teruggaf.
+  const postDiversion = (record: Diversion, successToast: string | undefined, opVeldfouten?: OpVeldfouten, naHerstel?: (terug: Diversion | null) => void): Promise<boolean> =>
     ctx.perRecord<Diversion>({
       key: 'diversions', label: 'Deze omleiding', method: 'POST', url: '/api/diversions/one', id: record.id, body: record, opVeldfouten,
-      headers: herstel ? { 'X-Herstel': '1' } : undefined,
+      headers: naHerstel ? { 'X-Herstel': '1' } : undefined,
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => [...withoutId(prev, record.id), record], applySaved: replaceById,
       refetch: () => fetchDiversions(undefined, { silent: true }), successToast,
-      naOpslaan: herstel ? (terug) => meldHerstel('Omleiding', record.bijlagen?.length ?? 0, terug?.bijlagen?.length ?? 0) : undefined,
+      naOpslaan: naHerstel,
     });
   const createDiversion = (record: Diversion, opVeldfouten?: OpVeldfouten): Promise<boolean> => postDiversion(record, 'Omleiding toegevoegd.', opVeldfouten);
-  // Verwijderen gaat meteen (geen bevestigingsmodal); de toast biedt 6 s
-  // "Ongedaan maken" = hetzelfde record (zelfde id) opnieuw POST …/one. De
-  // PDF's blijven bij het verwijderen in Storage staan; de server hangt ze
-  // bij het herstel terug en het antwoord zegt wat er echt terugkwam.
   const deleteDiversion = (id: string): Promise<boolean> => {
     const record = diversions.find((d) => d.id === id);
     const verwijder = () => ctx.perRecord<Diversion>({
@@ -165,15 +183,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       refetch: () => fetchDiversions(undefined, { silent: true }), successToast: record ? undefined : 'Omleiding verwijderd.',
     });
     if (!record) return verwijder();
-    return metOngedaan({
-      boodschap: `Omleiding ‘${record.title}’ verwijderd.`,
-      uitvoeren: verwijder,
-      // perRecord meldt zijn eigen fouten (409/netwerk) — daarom void.
-      herstellen: async () => {
-        if (await postDiversion(record, undefined, undefined, true)) await fetchDiversions(undefined, { silent: true });
-      },
-      toast: showToast,
-    });
+    return verwijderMetHerstel('Omleiding', record, verwijder, postDiversion, () => fetchDiversions(undefined, { silent: true }));
   };
 
   // Updates (planner/admin). Geen success-toast: de view meldt zelf
@@ -183,14 +193,14 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       key: 'updates', label: 'Deze update', method: 'PUT', url: `/api/updates/${encodeURIComponent(record.id)}`, id: record.id, body: record, opVeldfouten,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById, refetch: () => fetchUpdates(),
     });
-  const postUpdate = (record: Update, successToast?: string, opVeldfouten?: OpVeldfouten, herstel = false): Promise<boolean> =>
+  const postUpdate = (record: Update, successToast?: string, opVeldfouten?: OpVeldfouten, naHerstel?: (terug: Update | null) => void): Promise<boolean> =>
     ctx.perRecord<Update>({
       key: 'updates', label: 'Deze update', method: 'POST', url: '/api/updates/one', id: record.id, body: record, opVeldfouten,
       // Herstel = geen tweede push naar alle chauffeurs (controle 05-09).
-      headers: herstel ? { 'X-Herstel': '1' } : undefined,
+      headers: naHerstel ? { 'X-Herstel': '1' } : undefined,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => [record, ...withoutId(prev, record.id)], applySaved: replaceById, refetch: () => fetchUpdates(),
       successToast,
-      naOpslaan: herstel ? (terug) => meldHerstel('Update', record.bijlagen?.length ?? 0, terug?.bijlagen?.length ?? 0) : undefined,
+      naOpslaan: naHerstel,
     });
   const createUpdate = (record: Update, opVeldfouten?: OpVeldfouten): Promise<boolean> => postUpdate(record, undefined, opVeldfouten);
   // Verwijderen gaat meteen; de toast biedt 6 s "Ongedaan maken" (zelfde
@@ -204,14 +214,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       successToast: record ? undefined : 'Update verwijderd.',
     });
     if (!record) return verwijder();
-    return metOngedaan({
-      boodschap: `Update ‘${record.title}’ verwijderd.`,
-      uitvoeren: verwijder,
-      herstellen: async () => {
-        if (await postUpdate(record, undefined, undefined, true)) await fetchUpdates();
-      },
-      toast: showToast,
-    });
+    return verwijderMetHerstel('Update', record, verwijder, postUpdate, () => fetchUpdates());
   };
 
   const resetCommunicatie = () => {

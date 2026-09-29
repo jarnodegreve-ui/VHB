@@ -54,9 +54,9 @@ export type PerRecordOpts<T extends { id: string }> = {
   applySaved?: (prev: T[], saved: T) => T[];
   refetch: () => Promise<void> | void;
   successToast?: string;
-  /** Na een geslaagde save, met het canonieke record uit het antwoord (null
-   *  bij DELETE). Voor wie zijn melding uit dat record afleidt, zoals het
-   *  herstel na "Ongedaan maken". */
+  /** Na een geslaagde PUT of POST, met het canonieke record uit het
+   *  antwoord (null als de server er geen meegaf). Voor wie zijn melding uit
+   *  dat record afleidt, zoals het herstel na "Ongedaan maken". */
   naOpslaan?: (saved: T | null) => void;
   /** Veldfouten van een 400 terug naar het formulier (Field error-prop)
    *  i.p.v. een toast; zonder callback blijft de toast het gedrag. */
@@ -334,17 +334,15 @@ export function useDataKern(basis: DataBasis): DataCtx {
       const data = await response.json().catch(() => ({} as any));
       if (response.ok) {
         captureRevision(opts.key, response);
-        let saved: T | null = null;
         if (opts.method === 'DELETE') {
           forgetRecordRevision(opts.key, opts.id);
         } else {
-          saved = captureRecordRevision<T>(opts.key, data?.[opts.responseKey]);
-          const canoniek = saved;
-          if (canoniek && opts.applySaved) opts.setList((prev) => opts.applySaved!(prev, canoniek));
+          const saved = captureRecordRevision<T>(opts.key, data?.[opts.responseKey]);
+          if (saved && opts.applySaved) opts.setList((prev) => opts.applySaved!(prev, saved));
+          if (opts.naOpslaan) opts.naOpslaan(saved);
         }
         if (currentUser?.role === 'admin') void fetchActivityLog();
         if (opts.successToast) showToast(opts.successToast, 'success');
-        opts.naOpslaan?.(saved);
         return true;
       }
       if (response.status === 409 || response.status === 404) {

@@ -8,8 +8,14 @@ import type { Diversion, Update } from '../../types';
  * ronde 29-09, nr. 12): het herstel stuurt het record mét zijn bijlagen en de
  * herstel-header, en de toast zegt eerlijk wat er terugkwam. De server is
  * hier een nep-API die bijhoudt wat ze ontving.
+ *
+ * Het herstel zelf (src/lib/herstel.ts) zit niet in de startbundel: het laadt
+ * pas bij de klik op "Ongedaan maken". Wat er gebeurt als dat laden mislukt
+ * staat in communicatieHerstelFaalt.test.tsx.
  */
 const net = vi.hoisted(() => ({
+  // Hoe vaak de herstelmodule echt geladen is (de fabriek loopt één keer).
+  herstelGeladen: 0,
   verzoeken: [] as Array<{ url: string; method: string; headers: Record<string, string>; body: any }>,
   antwoord: (_url: string, _method: string, _body: any): { status?: number; body: unknown } => ({ body: {} }),
 }));
@@ -24,6 +30,10 @@ vi.mock('../../lib/api', () => ({
   },
 }));
 vi.mock('../../lib/tik', () => ({ tik: () => {} }));
+vi.mock('../../lib/herstel', async (importOriginal) => {
+  net.herstelGeladen += 1;
+  return importOriginal<typeof import('../../lib/herstel')>();
+});
 
 const { useDataKern } = await import('./kern');
 const { useCommunicatieData } = await import('./communicatie');
@@ -80,12 +90,42 @@ describe('ongedaan maken van een verwijderde omleiding of update', () => {
     el.remove();
   });
 
+  /** Klikt op "Ongedaan maken" en wacht tot het herstel zijn melding gaf en
+   *  de lijst ververst is (het herstel laadt eerst zijn module). */
   const klikOngedaan = async () => {
     const metKnop = toasts.find((t) => t.actie);
     expect(metKnop?.actie?.label).toBe('Ongedaan maken');
-    await act(async () => { metKnop!.actie!.run(); await new Promise((r) => setTimeout(r, 0)); });
-    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    const voor = toasts.length;
+    await act(async () => {
+      metKnop!.actie!.run();
+      await vi.waitFor(() => {
+        expect(toasts.length).toBeGreaterThan(voor);
+        expect(net.verzoeken.at(-1)?.method).toBe('GET');
+      });
+    });
   };
+
+  it('verwijderen toont de toast meteen en wacht niet op de herstelmodule: die laadt pas bij de klik', async () => {
+    const geladenVoor = net.herstelGeladen;
+    await act(async () => { await data!.deleteDiversion('o-1'); });
+    // De toast met de knop staat er zodra de verwijdering gelukt is.
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]).toMatchObject({ tekst: 'Omleiding ‘Werken N70’ verwijderd.', toon: 'success' });
+    expect(toasts[0].actie?.label).toBe('Ongedaan maken');
+    expect(net.verzoeken.map((v) => `${v.method} ${v.url}`)).toEqual(['DELETE /api/diversions/o-1']);
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(net.herstelGeladen).toBe(geladenVoor);
+
+    net.antwoord = (url, method, body) => {
+      if (method === 'POST' && url === '/api/diversions/one') return { status: 201, body: { success: true, diversion: { ...body, _rev: 'rev-nieuw' } } };
+      if (method === 'GET' && url === '/api/diversions') return { body: [{ ...omleiding, _rev: 'rev-nieuw' }] };
+      return { body: {} };
+    };
+    await klikOngedaan();
+    // De fabriek van de module loopt één keer per testbestand.
+    expect(net.herstelGeladen).toBe(1);
+    expect(toasts.at(-1)).toMatchObject({ tekst: 'Omleiding hersteld.', toon: 'success' });
+  });
 
   it('omleiding: post het record met de herstel-header en meldt gewoon "hersteld" als alle PDF’s terug zijn', async () => {
     await act(async () => { await data!.deleteDiversion('o-1'); });
@@ -143,5 +183,18 @@ describe('ongedaan maken van een verwijderde omleiding of update', () => {
     };
     await klikOngedaan();
     expect(toasts.at(-1)).toMatchObject({ tekst: 'Update hersteld.', toon: 'success' });
+  });
+
+  it('mislukt de post van het herstel, dan komt er geen "hersteld" en ververst de lijst', async () => {
+    await act(async () => { await data!.deleteDiversion('o-1'); });
+    net.antwoord = (url, method) => {
+      if (method === 'POST' && url === '/api/diversions/one') return { status: 409, body: { error: 'Er bestaat al een omleiding met dit id.', conflict: 'exists' } };
+      if (method === 'GET' && url === '/api/diversions') return { body: [] };
+      return { body: {} };
+    };
+    await klikOngedaan();
+    expect(toasts.some((t) => /hersteld/.test(t.tekst))).toBe(false);
+    expect(toasts.at(-1)).toMatchObject({ tekst: 'Er bestaat al een omleiding met dit id.', toon: 'info' });
+    expect(data!.diversions).toEqual([]);
   });
 });

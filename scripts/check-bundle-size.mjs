@@ -195,6 +195,16 @@ const DEELBUDGET_KB = {
 // pas na LCP + 2 s en raakt het eerste beeld niet.
 const WARMUP_BUDGET_KB = { chauffeur: 75, staf: 141 };
 
+// Modules die niet in de startbundel horen (bewaker 6, 29-09): ze zijn pas
+// nodig na een bewuste klik of in een lui geladen scherm. De datalaag zit in
+// index-*.js en één statische import volstaat om ze mee te slepen; op de CI
+// stond de index daardoor op 75,09 kB (budget 75).
+//  - herstel + herstelMelding: "Ongedaan maken" van een omleiding of update,
+//    geladen bij het verwijderen (src/app/data/communicatie.ts);
+//  - documentLink: alleen het scherm Documenten;
+//  - dataUrl: alleen de uploadschermen.
+const BUITEN_STARTBUNDEL = ['src/lib/herstel.ts', 'src/lib/herstelMelding.ts', 'src/lib/documentLink.ts', 'src/lib/dataUrl.ts'];
+
 // Schermen waar de app op opent: hun chunk-set blijft zod-vrij (bewaker 5).
 const ZOD_VRIJE_VIEWS = ['views/MijnDagView', 'views/DashboardView', 'views/PlannerDashboardWidgets', 'views/ScheduleView'];
 
@@ -267,6 +277,20 @@ const heeftZodConfig = bestanden.some((f) => f.endsWith('.js') && f !== indexJs 
 if (!heeftZodConfig) {
   fouten.push('De aanroep z.config({ jitless: true }) (shared/schemas/zod.ts) ontbreekt in alle chunks; Rollup heeft hem weggeschud. Controleer treeshake.moduleSideEffects in vite.config.ts.');
 }
+
+// --- 6. modules die buiten de startbundel blijven -----------------------------
+const heeftBron = (lijst, module) => lijst.some((s) => s.replace(/\\/g, '/').endsWith(`/${module}`));
+const startChunks = [indexJs, ...new Set(statischeImports)];
+const alleJs = bestanden.filter((f) => f.endsWith('.js'));
+for (const module of BUITEN_STARTBUNDEL) {
+  const inStart = startChunks.filter((f) => heeftBron(bronnen(f) ?? [], module));
+  if (inStart.length > 0) {
+    fouten.push(`${module} zit in de startbundel (${inStart.join(', ')}). Die module hoort pas te laden wanneer ze nodig is: importeer ze in de datalaag, App of de schil alleen met een dynamische import(), zie BUITEN_STARTBUNDEL.`);
+  } else if (!alleJs.some((f) => heeftBron(bronnen(f) ?? [], module))) {
+    fouten.push(`${module} zit in geen enkele chunk; is de module hernoemd of verwijderd? Pas dan BUITEN_STARTBUNDEL aan.`);
+  }
+}
+console.log(`  buiten start     ${BUITEN_STARTBUNDEL.map((m) => m.replace(/^src\/lib\//, '').replace(/\.tsx?$/, '')).join(', ')}`);
 
 // --- 3. warmup-set -----------------------------------------------------------
 const kaartMatch = indexCode.match(/globalThis\.__VHB_VIEW_CHUNKS__=(\{.*?\});\n/);
