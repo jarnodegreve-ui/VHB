@@ -171,3 +171,82 @@ describe('legRuilenOverMaandbeeld', () => {
     expect(uit.gemarkeerd).toBe(1);
   });
 });
+
+/**
+ * Doorschuiven (controle 29-09). De overlay geeft de gever de oude cel van de
+ * ontvanger zodra die een dienst is, zonder te kijken of de ruil een overname
+ * of een 1-op-1 is. Voor een 1-op-1 op dezelfde dag is dat nodig: het tweede
+ * been vindt de terugdienst dan al bij de gever en merkt haar alleen. Bij een
+ * overname naar iemand die al een dienst had (een dubbele inplanning, die de
+ * server sinds 29-09 weigert) verschijnt de dienst van de ontvanger daardoor
+ * bij de gever. De overlay is bewust NIET aangepast: de andere keuze (de gever
+ * vrij zetten) haalt die dienst helemaal van het bord, en een schoolrit die
+ * nergens meer staat is erger dan een schoolrit op de verkeerde naam. Deze
+ * toetsen leggen het gedrag vast zoals het is.
+ */
+describe('legRuilenOverMaandbeeld, doorschuiven bij een ontvanger met een dienst', () => {
+  const DAG = '2026-09-15';
+  const schoolrit = (code: string) => ({ code, kind: 'service', label: 'Schoolrit', segments: [] as string[] });
+
+  it('overname naar wie al een schoolrit had: de ontvanger toont de nieuwe dienst, de schoolrit schuift naar de gever', () => {
+    const cells: OverlayCellen = { A: { [DAG]: cel('14') }, B: { [DAG]: schoolrit('EEK6') } };
+    const uit = legRuilenOverMaandbeeld(cells, [ruil({ shiftLine: '14' })], opties([DAG]));
+    expect(uit).toEqual({ gewisseld: 1, gemarkeerd: 0, overgeslagen: 0 });
+    expect(cells.B[DAG]).toMatchObject({ code: '14', swapId: 'sw1', swapFrom: 'An' });
+    // De schoolrit blijft op het bord, op naam van de gever en zonder merk.
+    expect(cells.A[DAG]).toEqual(schoolrit('EEK6'));
+  });
+
+  it('de situatie uit de controle: A gaf EEK6 aan B, daarna kreeg B de 14 van C', () => {
+    const cells: OverlayCellen = { A: { [DAG]: schoolrit('EEK6') }, B: { [DAG]: vrij() }, C: { [DAG]: cel('14') } };
+    legRuilenOverMaandbeeld(cells, [
+      ruil({ id: 'sw1', requesterId: 'A', targetDriverId: 'B', shiftLine: 'EEK6', decidedAt: '2026-09-01T10:00:00Z' }),
+      ruil({ id: 'sw2', requesterId: 'C', targetDriverId: 'B', shiftLine: '14', decidedAt: '2026-09-02T10:00:00Z' }),
+    ], opties([DAG]));
+    expect(cells.A[DAG]).toMatchObject({ code: 'vrij', swapAway: true, swapTo: 'Bert' });
+    expect(cells.B[DAG]).toMatchObject({ code: '14', swapId: 'sw2', swapFrom: 'Cis' });
+    // De schoolrit draagt nog het merk van de eerste wissel (van An).
+    expect(cells.C[DAG]).toMatchObject({ code: 'EEK6', swapId: 'sw1', swapFrom: 'An' });
+  });
+
+  it('1-op-1 op dezelfde dag: beide diensten wisselen, elk met zijn merk', () => {
+    const cells: OverlayCellen = { A: { [DAG]: cel('14') }, B: { [DAG]: schoolrit('EEK6') } };
+    const uit = legRuilenOverMaandbeeld(cells, [
+      ruil({ shiftLine: '14', swapType: 'ruil', returnDate: DAG, returnCode: 'EEK6' }),
+    ], opties([DAG]));
+    expect(uit).toEqual({ gewisseld: 1, gemarkeerd: 1, overgeslagen: 0 });
+    expect(cells.B[DAG]).toMatchObject({ code: '14', swapFrom: 'An' });
+    expect(cells.A[DAG]).toMatchObject({ code: 'EEK6', swapFrom: 'Bert' });
+  });
+
+  it('teruggedraaid (geannuleerd of afgewezen): de cellen blijven zoals de matrix ze geeft', () => {
+    for (const status of ['cancelled', 'rejected'] as const) {
+      const cells: OverlayCellen = { A: { [DAG]: cel('14') }, B: { [DAG]: schoolrit('EEK6') } };
+      const kopie = structuredClone(cells);
+      const uit = legRuilenOverMaandbeeld(cells, [ruil({ shiftLine: '14', status })], opties([DAG]));
+      expect(uit).toEqual({ gewisseld: 0, gemarkeerd: 0, overgeslagen: 0 });
+      expect(cells).toEqual(kopie);
+    }
+  });
+
+  it('gemengd: een overname en een 1-op-1 op dezelfde dag, in beslisvolgorde', () => {
+    // Eerst geeft A zijn schoolrit aan de vrije B; daarna ruilt B die rit
+    // 1-op-1 tegen de 14 van C.
+    const cells: OverlayCellen = { A: { [DAG]: schoolrit('EEK6') }, B: { [DAG]: vrij() }, C: { [DAG]: cel('14') } };
+    legRuilenOverMaandbeeld(cells, [
+      ruil({ id: 'sw2', requesterId: 'C', targetDriverId: 'B', shiftLine: '14', swapType: 'ruil', returnDate: DAG, returnCode: 'EEK6', decidedAt: '2026-09-02T10:00:00Z' }),
+      ruil({ id: 'sw1', requesterId: 'A', targetDriverId: 'B', shiftLine: 'EEK6', decidedAt: '2026-09-01T10:00:00Z' }),
+    ], opties([DAG]));
+    expect(cells.A[DAG]).toMatchObject({ code: 'vrij', swapAway: true });
+    expect(cells.B[DAG]).toMatchObject({ code: '14', swapId: 'sw2', swapFrom: 'Cis' });
+    expect(cells.C[DAG]).toMatchObject({ code: 'EEK6', swapId: 'sw2', swapFrom: 'Bert' });
+  });
+
+  it('een afwezigheidscode van de ontvanger schuift nooit door: de gever wordt vrij', () => {
+    const ziek = { code: 'ziek', kind: 'absence', label: 'Ziek', segments: [] as string[] };
+    const cells: OverlayCellen = { A: { [DAG]: cel('14') }, B: { [DAG]: ziek } };
+    legRuilenOverMaandbeeld(cells, [ruil({ shiftLine: '14' })], opties([DAG]));
+    expect(cells.A[DAG]).toMatchObject({ code: 'vrij', swapAway: true, swapTo: 'Bert' });
+  });
+});
+
