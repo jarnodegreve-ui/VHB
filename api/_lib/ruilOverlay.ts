@@ -30,16 +30,17 @@ import type { SwapRecord } from "../types.js";
  *
  * Wie niet op het bord staat (uit dienst, een andere rol) telt mee als de
  * aanroeper hem in `buitenBord` zet, met zijn matrixcellen erbij voor de
- * benen waarin hij geeft, en dan gelden BEIDE benen van de ruil, zoals toen
- * hij nog op het bord stond (Jarno 29-09, optie A). Anders valt de hele ruil
- * weg, zoals altijd. De aanroeper (api/_lib/celWaarheid.ts) beslist wie
- * meedoet, los van het venster: een bestaand account met een eenduidige naam.
- * Een been waarin hij geeft vraagt, zoals elk been, dat zijn cel die dag de
- * dienst toont; is zijn kolom na het vertrek leeggemaakt of op vrij gezet,
- * dan valt dat been weg (bekende beperking). Tot 29-09 viel de
+ * benen waarin hij geeft (Jarno 29-09, optie A). Per ruil beslist de overlay
+ * of beide partijen meedoen; zo niet, dan valt de hele ruil weg, zoals
+ * altijd. Doen ze mee, dan past ze elk been toe waarvan de gever de dienst op
+ * zijn cel draagt, zoals toen hij nog op het bord stond. De aanroeper
+ * (api/_lib/celWaarheid.ts) beslist wie meedoet, los van het venster. Een
+ * been waarin de vertrokken collega geeft vraagt dus dat zijn cel die dag de
+ * dienst toont; staat ze leeg of op vrij, dan valt dat been weg (bekende
+ * beperking, zie celWaarheid.ts). Tot 29-09 viel de
  * ruil altijd weg zodra één van beiden niet op het bord stond: werd de gever
  * uit dienst gezet, dan stond de ontvanger weer als vrij op het bord terwijl
- * hij de dienst nog reed. Beide benen of geen: de eerste versie van 29-09
+ * hij de dienst nog reed. Beide partijen of geen: de eerste versie van 29-09
  * paste alleen het been VAN de vertrokken collega toe, en telde zo bij een
  * 1-op-1 over twee dagen een dienst te veel bij wie op het bord bleef (hij
  * hield wat hij weggaf en kreeg wat hij terugkreeg); dat bord voedt het
@@ -146,9 +147,10 @@ export function legRuilenOverMaandbeeld(
   for (const sw of doorgevoerd) {
     const van = String(sw.requesterId ?? "");
     const naar = String(sw.targetDriverId ?? "");
-    // Beide benen of geen (Jarno 29-09, optie A): wie op het bord staat of in
-    // `buitenBord` zit, geeft én krijgt. Met iemand anders valt de hele ruil
-    // weg; één been alleen gaf een dienst te veel of te weinig.
+    // Beide partijen of geen (Jarno 29-09, optie A): wie op het bord staat of
+    // in `buitenBord` zit, geeft én krijgt. Met iemand anders valt de hele ruil
+    // weg. Daarna wisselt elk been als de gever de dienst op zijn cel draagt, of
+    // krijgt het alleen het merk als de ontvanger hem al heeft (wisselCel).
     const doetMee = (id: string) => opts.chauffeurIds.has(id) || !!opts.buitenBord?.has(id);
     if (!doetMee(van) || !doetMee(naar)) continue;
     const dienstDag = String(sw.shiftDate ?? "");

@@ -139,14 +139,15 @@ describe('berekenCelWaarheid, een ruil met iemand die niet meer op het bord staa
 });
 
 /**
- * Optie A (Jarno 29-09): met een collega die vertrok gelden beide benen van
- * een ruil, als zijn account bestaat en zijn naam over alle accounts
- * eenduidig is. Voor wie op het bord staat is het bord dan hetzelfde als toen
- * hij nog in dienst was. De eerste versie van 29-09 paste alleen het been VAN
- * hem toe en telde zo bij een 1-op-1 over twee dagen een dienst te veel. Zonder
- * account of met een botsende naam valt de ruil weg zoals vroeger. De toets
- * hangt niet af van de dagen die de aanroeper meegeeft: het dagbord van de
- * schrijfpaden en het maandbord tonen hetzelfde.
+ * Optie A (Jarno 29-09): een collega die vertrok doet mee in een ruil als zijn
+ * account bestaat, een van zijn naamsleutels over alle accounts eenduidig is
+ * en zijn naam niet bij een chauffeur op het bord hoort; dan geldt elk been
+ * waarvan de gever de dienst op zijn cel draagt. Voor wie op het bord staat is
+ * het bord dan hetzelfde als toen hij nog in dienst was. De eerste versie van
+ * 29-09 paste alleen het been VAN hem toe en telde zo bij een 1-op-1 over twee
+ * dagen een dienst te veel. Doet hij niet mee, dan valt de ruil weg zoals
+ * vroeger. De toets hangt niet af van de dagen die de aanroeper meegeeft: het
+ * dagbord van de schrijfpaden en het maandbord tonen hetzelfde.
  */
 describe('berekenCelWaarheid, optie A: beide benen, ook met wie vertrok', () => {
   const JAN = { id: '1', name: 'Jan Janssen', role: 'chauffeur', isActive: true, section: 'Reguliere', startDate: '2010-01-01' };

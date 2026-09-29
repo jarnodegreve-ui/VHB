@@ -6040,8 +6040,9 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
       // De eerste versie van optie A liet iemand buiten het bord alleen meedoen
       // als hij in de meegegeven rijen een cel had. De schrijfpaden rekenen het
       // bord van één dag, de maandplanning en de Dagafsluiting dat van de maand:
-      // zo toonden ze iets anders. Nu telt alleen het account (bestaat, naam
-      // eenduidig over alle accounts).
+      // zo toonden ze iets anders. Nu telt alleen het account: het bestaat, een
+      // naamsleutel is eenduidig over alle accounts, en zijn naam hoort niet bij
+      // een chauffeur op het bord (S19).
       /** Haalt een naam uit elke matrixrij, zoals een Excel zonder zijn kolom. */
       const zonderKolom = (naam: string) => {
         mem.planningMatrix = mem.planningMatrix.map((r: any) => ({ ...r, assignments: Object.fromEntries(Object.entries(r.assignments).filter(([n]) => n !== naam)) }));
@@ -6151,15 +6152,39 @@ describe('de invariant: geen chauffeur met twee diensten op één dag (Jarno 29-
         expect(await voorstel(DAG, D)).toBe('EEK6');
       });
 
+      it('S19: vertrokken "D Chauffeur" naast "Chauffeur D" op het bord: zijn kolom hoort bij D, dus valt de 1-op-1 weg zoals vroeger en krijgt C geen dienst te weinig', async () => {
+        // "D Chauffeur" heeft een eigen strikte naamsleutel, maar zijn gesorteerde
+        // naam is die van Chauffeur D op het bord: bij het lezen gaat zijn kolom
+        // naar D. Deed hij toch mee, dan gold alleen het been naar hem en stond C
+        // twee dagen op vrij (0 diensten). Nu valt de ruil weg zoals op main: C
+        // houdt de cellen uit de matrix, één dienst.
+        const DC = '7';
+        mem.users = [...mem.users, { id: DC, name: 'D Chauffeur', email: 'dc@vhb.be', role: 'chauffeur', isActive: true }];
+        mem.planningMatrix = [
+          dag('m-d1', DAG, { 'Chauffeur A': 'EEK6', 'Chauffeur B': 'vrij', 'Chauffeur C': '14', 'Chauffeur D': 'vrij', 'D Chauffeur': 'vrij' }),
+          dag('m-d2', DAG2, { 'Chauffeur A': 'vrij', 'Chauffeur B': 'vrij', 'Chauffeur C': 'vrij', 'Chauffeur D': 'vrij', 'D Chauffeur': '12' }),
+        ];
+        mem.planning = [rij('sh-c14', C, '14'), rij('sh-dc12', DC, '12', DAG2)];
+        // C geeft 14 (dag 1) aan D Chauffeur en krijgt 12 (dag 2) terug.
+        mem.swaps = [{ id: 's-19', shiftId: 'sh-c14', requesterId: C, targetDriverId: DC, status: 'accepted', reason: '', createdAt: '2026-07-20T08:00:00Z', swapType: 'ruil', shiftDate: DAG, shiftLine: '14', returnDate: DAG2, returnCode: '12' }];
+        expect((await keurGoed('s-19')).status).toBe(200);
+        await zetUitDienst(DC);
+        expect(await voorstel(DAG, C)).toBe('14');
+        expect(await voorstel(DAG2, C)).toBe('vrij');
+      });
+
       it.each([
         ['leeggemaakt', () => zonderKolom('Chauffeur B')],
         ['op dag 2 op vrij gezet', () => { mem.planningMatrix[1] = dag('m-d2', DAG2, { 'Chauffeur A': 'vrij', 'Chauffeur B': 'vrij', 'Chauffeur C': 'vrij', 'Chauffeur D': 'vrij' }); }],
       ])('(f) bekende beperking, geen gewenst gedrag: 1-op-1 en de kolom van de vertrokken B is na zijn vertrek %s, dan valt het been waarin hij geeft weg', async (_naam, pasMatrixAan) => {
         // Het been van B naar C (dienst 12 op dag 2) vraagt, zoals elk been, dat
         // de cel van de gever die dag de dienst toont (wisselCel). Toont zijn
-        // kolom daar niets of vrij, dan krijgt C dienst 12 op het bord niet,
-        // terwijl de planning-rijen hem die wel geven. Op main (vóór 29-09) toonde
-        // het bord C op dienst 14 op dag 1: één dienst, maar de verkeerde.
+        // kolom daar niets of vrij, dan krijgt C dienst 12 op het bord niet. De
+        // planning-rijen geven hem die nog wel, maar alleen zolang er geen
+        // heropbouw was: die bouwt de rijen uit de matrix, waar 12 op dag 2 bij
+        // niemand staat, dus dan telt C ook daar een dienst te weinig en toont de
+        // dekking 12 als open. Op main (vóór 29-09) toonde het bord C op dienst
+        // 14 op dag 1: één dienst, maar de verkeerde.
         await eenOpEen();
         await zetUitDienst(B);
         pasMatrixAan();

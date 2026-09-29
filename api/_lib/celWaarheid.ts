@@ -128,9 +128,10 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
   const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
 
   // Wie een ruil deed maar zelf niet (meer) op het bord staat, bv. uit dienst
-  // gezet of met een andere rol (Jarno 29-09), doet mee in de overlay, en dan
-  // gelden beide benen van de ruil (optie A, api/_lib/ruilOverlay.ts). Voor
-  // wie op het bord staat is het bord zo hetzelfde als toen de vertrokken
+  // gezet of met een andere rol (Jarno 29-09), doet mee in de overlay (optie A,
+  // api/_lib/ruilOverlay.ts): per ruil beslist ze of beide partijen meedoen, en
+  // dan past ze elk been toe waarvan de gever de dienst op zijn cel draagt.
+  // Voor wie op het bord staat is het bord zo hetzelfde als toen de vertrokken
   // collega nog in dienst was: wat die weggaf blijft bij de ontvanger, en een
   // gever wiens ontvanger vertrok staat op "vrij (weggeruild)", zoals in de
   // planning-rijen. Wie vertrok verschijnt zelf niet op het bord: zijn cellen
@@ -138,16 +139,18 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
   //
   // Of hij meedoet hangt alleen af van de accounts, nooit van het venster (één
   // dag voor de schrijfpaden, een maand voor de maandplanning, de Dagafsluiting
-  // en de rapporten): zijn account bestaat en zijn naam is over alle accounts
-  // eenduidig. Anders toonden dagbord en maandbord iets anders (tegenlezing
-  // 29-09). Zonder account of met een botsende naam valt de hele ruil weg,
-  // zoals vroeger. Ook een ruil tussen twee mensen buiten het bord telt, zodat
-  // een ketting via twee vertrokken collega's sluit.
+  // en de rapporten): zijn account bestaat, een van zijn naamsleutels is over
+  // alle accounts eenduidig, en zijn naam hoort niet bij een chauffeur op het
+  // bord (dan gaat zijn kolom naar die chauffeur en is ze voor hem nooit
+  // leesbaar, tegenlezing 29-09). Anders toonden dagbord en maandbord iets
+  // anders. Doet hij niet mee, dan valt de hele ruil weg, zoals vroeger. Ook
+  // een ruil tussen twee mensen buiten het bord telt, zodat een ketting via
+  // twee vertrokken collega's sluit.
   const alleNamen = nameIdIndex(users);
   const accountVan = new Map(users.map((u) => [String(u.id), u]));
   const eenduidig = (id: string) => {
     const u = accountVan.get(id);
-    return !!u && (alleNamen.get(toLookupToken(u.name)) === id || alleNamen.get(sortedNameToken(u.name)) === id);
+    return !!u && (alleNamen.get(toLookupToken(u.name)) === id || alleNamen.get(sortedNameToken(u.name)) === id) && !opNaam(idByNameKey, u.name);
   };
   const buitenBord = new Set<string>();
   for (const sw of swaps) {
@@ -156,12 +159,15 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
       if (id && !chauffeurIds.has(id) && eenduidig(id)) buitenBord.add(id);
     }
   }
-  // Zijn matrixkolom dient voor de benen waarin hij geeft. Gelezen met dezelfde
+  // Zijn matrixkolom dient voor de benen waarin hij geeft, gelezen met dezelfde
   // eenduidige namen: een kolom die ook bij een ander account kan horen telt
   // voor niemand, en een kolom op naam van een chauffeur op het bord blijft van
-  // die chauffeur. Bekende beperking: een been waarin hij geeft vraagt dat zijn
-  // eigen cel die dag de dienst toont; is zijn kolom na het vertrek leeggemaakt
-  // of op vrij gezet, dan valt dat been weg (zoals bij een collega op het bord).
+  // die chauffeur. Bekende beperking: staat zijn kolom op de dag dat hij geeft
+  // leeg of op vrij, of stond hij nooit (of onder een andere naam) in de Excel,
+  // dan valt dat been weg. Bij een 1-op-1 telt wie bleef dan een dienst te
+  // weinig, na een heropbouw ook in de planning-rijen (de dekking toont die
+  // dienst dan als open). Dat voorkomen gebeurt bij de bron, bij Uit dienst
+  // eerst de ruilen afhandelen (nummer 92), niet in de overlay.
   if (buitenBord.size > 0) leesMatrix(new Map([...alleNamen].filter(([, id]) => buitenBord.has(id))), idByNameKey);
 
   // Goedgekeurde dienstruilen over het maandbeeld (api/_lib/ruilOverlay.ts).
