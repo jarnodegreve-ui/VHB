@@ -99,22 +99,34 @@ export async function verdeelReeks(
   return { standen: new Map(standen), mocked, overgeslagen };
 }
 
-export interface ReeksOpdracht {
+type MailInhoud = { onderwerp: string; text: string; html: string };
+type ReeksOntvanger = { adres: string; naam: string };
+
+interface ReeksBasis {
   /** Sleutel in het verzendlog (mail_log.soort). */
   soort: string;
   /** Wie de reeks startte (naam), voor het verzendlog. */
   door: string;
   /** Voor de logregel in de Vercel-logs, bv. "eigen-mail:12". */
   context: string;
-  ontvangers: ReadonlyArray<{ adres: string; naam: string }>;
-  onderwerp: string;
-  text: string;
-  html: string;
+  ontvangers: ReadonlyArray<ReeksOntvanger>;
   attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
   replyTo?: string;
   /** Moment waarop het verzoek binnenkwam (ms); het tijdsbudget telt vanaf hier. */
   gestartOp: number;
 }
+
+/**
+ * Dezelfde mail voor iedereen (eigen mail, omleiding), of per persoon een
+ * eigen mail (uitnodiging: elk een eigen link). `perOntvanger` draait pas
+ * als die persoon aan de beurt is, dus wat na het tijdsbudget niet meer
+ * vertrekt, wordt ook niet aangemaakt; gooit hij, dan telt dat als mislukt
+ * en staat het adres bij `resterend`.
+ */
+export type ReeksOpdracht = ReeksBasis & (
+  | (MailInhoud & { perOntvanger?: undefined })
+  | { perOntvanger: (ontvanger: ReeksOntvanger) => Promise<MailInhoud> }
+);
 
 export interface ReeksUitkomst {
   aantal: number;
@@ -154,6 +166,9 @@ const telOp = (adressen: readonly string[], r: Awaited<ReturnType<typeof verdeel
 
 export async function verstuurMailReeks(o: ReeksOpdracht): Promise<ReeksUitkomst> {
   const adressen = o.ontvangers.map((x) => x.adres);
+  const perAdres = new Map(o.ontvangers.map((x): [string, ReeksOntvanger] => [x.adres, x]));
+  const inhoudVoor = async (adres: string): Promise<MailInhoud> =>
+    o.perOntvanger ? o.perOntvanger(perAdres.get(adres) ?? { adres, naam: adres }) : { onderwerp: o.onderwerp, text: o.text, html: o.html };
   // Eerst de logregel: breekt de functie hierna af, dan staat de verzending
   // als "onderbroken" in het verzendlog.
   const logId = await startMailLog({ soort: o.soort, aantal: adressen.length, door: o.door });
@@ -169,7 +184,10 @@ export async function verstuurMailReeks(o: ReeksOpdracht): Promise<ReeksUitkomst
     transport = await maakMailTransport({ gelijktijdig: REEKS.gelijktijdig(), perSeconde: REEKS.perSeconde() });
     const verdeeld = await verdeelReeks(
       adressen,
-      (adres) => sendEmail({ to: [adres], subject: o.onderwerp, text: o.text, html: o.html, attachments: o.attachments, context: o.context, soort: o.soort, door: o.door, replyTo: o.replyTo, zonderLog: true, transport }),
+      async (adres) => {
+        const inhoud = await inhoudVoor(adres);
+        return sendEmail({ to: [adres], subject: inhoud.onderwerp, text: inhoud.text, html: inhoud.html, attachments: o.attachments, context: o.context, soort: o.soort, door: o.door, replyTo: o.replyTo, zonderLog: true, transport });
+      },
       { gelijktijdig: REEKS.gelijktijdig(), stopNa: o.gestartOp + REEKS.budgetMs, uiterste: o.gestartOp + REEKS.uitersteMs },
     );
     const uitkomst = telOp(adressen, verdeeld);
@@ -189,3 +207,21 @@ export async function verstuurMailReeks(o: ReeksOpdracht): Promise<ReeksUitkomst
     }
   }
 }
+
+/** Staart van een logboekregel: wat er naast de geslaagde mails gebeurde. */
+export const reeksStaart = (u: ReeksUitkomst) =>
+  `${u.mislukt ? `, ${u.mislukt} mislukt` : ""}${u.nietGeprobeerd ? `, ${u.nietGeprobeerd} niet verstuurd` : ""}${u.onzeker ? `, ${u.onzeker} onzeker` : ""}${u.mocked ? " (alleen gelogd, geen SMTP)" : ""}`;
+
+/** Het antwoord van een echte verzending, gelijk voor elke route met een reeks. */
+export const reeksAntwoord = (u: ReeksUitkomst) => ({
+  droog: false as const,
+  aantal: u.aantal,
+  gelukt: u.gelukt,
+  mislukt: u.mislukt,
+  nietGeprobeerd: u.nietGeprobeerd,
+  onzeker: u.onzeker,
+  mocked: u.mocked,
+  overgeslagen: u.overgeslagen,
+  resterend: u.resterend,
+  onzekerAdressen: u.onzekerAdressen,
+});

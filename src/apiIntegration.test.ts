@@ -3550,6 +3550,220 @@ describe('wachtwoord resetten door beheer (POST /api/admin/users/reset-password)
   });
 });
 
+// Uitnodigen voor het portaal (30-09): een eigen link van zeven dagen per
+// persoon (hash in de app_metadata van het Auth-account), en bij het openen
+// pas een verse herstel-token. Zie api/_lib/uitnodiging.ts.
+describe('uitnodigen voor het portaal', () => {
+  type Account = { id: string; email: string; app_metadata: Record<string, unknown> };
+  let accounts: Map<string, Account>;
+  let links: string[];
+
+  beforeEach(() => {
+    mem.mailLog = [];
+    // Chauffeurs en planner hebben een aanmelding. De admin gebruikt het
+    // portaal al (en krijgt zijn authId bij zijn eerste verzoek); Chauffeur C
+    // heeft een adres maar geen gekoppelde aanmelding.
+    mem.users = [
+      ...mem.users.map((u: any) => (u.id === '1' ? { ...u, lastLogin: '2026-06-10T08:00:00.000Z' } : { ...u, authId: `auth-${u.id}` })),
+      { id: '5', name: 'Chauffeur C', email: 'c@vhb.be', role: 'chauffeur', isActive: true },
+    ];
+    accounts = new Map(['2', '3', '4'].map((id): [string, Account] => {
+      const u = mem.users.find((x: any) => x.id === id);
+      return [`auth-${id}`, { id: `auth-${id}`, email: u.email, app_metadata: { provider: 'email' } }];
+    }));
+    links = [];
+    mem.supabaseAdmin = {
+      auth: {
+        admin: {
+          listUsers: async () => ({ data: { users: [...accounts.values()] }, error: null }),
+          getUserById: async (id: string) => (accounts.has(id)
+            ? { data: { user: accounts.get(id) }, error: null }
+            : { data: { user: null }, error: { status: 404, message: 'User not found' } }),
+          // Zoals Supabase: app_metadata wordt samengevoegd, null haalt een sleutel weg.
+          updateUserById: async (id: string, velden: { app_metadata?: Record<string, unknown> }) => {
+            const a = accounts.get(id);
+            if (!a) return { data: null, error: { status: 404, message: 'User not found' } };
+            for (const [k, v] of Object.entries(velden.app_metadata ?? {})) {
+              if (v === null) delete a.app_metadata[k];
+              else a.app_metadata[k] = v;
+            }
+            return { data: { user: a }, error: null };
+          },
+          generateLink: async (o: { type: string; email: string }) => {
+            links.push(`${o.type}:${o.email}`);
+            return { data: { properties: { hashed_token: `hash-${links.length}` } }, error: null };
+          },
+        },
+      },
+    };
+  });
+
+  const codeUitMail = (tekst?: string) => {
+    const m = /#uitnodiging=([^\s)"'<>]+)/.exec(tekst ?? '');
+    expect(m, 'link met de uitnodigingscode in de mail').toBeTruthy();
+    return m![1]!;
+  };
+  const nodigUit = (ids: string[], extra: Record<string, unknown> = {}) => api('POST', '/api/users/uitnodigen', { token: 'tok-admin', body: { ids, ...extra } });
+  const open = (code: unknown) => api('POST', '/api/uitnodiging/openen', { body: { code }, device: null });
+
+  it('droog: voorbeeld en ontvangers, wie niet kan met de reden, en er wordt niets aangemaakt of verstuurd', async () => {
+    mem.users.find((u: any) => u.id === '4').lastLogin = '2026-06-01T08:00:00.000Z';
+    const res = await nodigUit(['3', '4', '5', '1', 'bestaat-niet'], { droog: true });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ droog: true, aantal: 1, ontvangers: [{ adres: 'a@vhb.be', naam: 'Chauffeur A' }] });
+    expect(res.json.overgeslagen).toEqual([
+      { id: '4', naam: 'Chauffeur B', reden: 'al-ingelogd' },
+      { id: '5', naam: 'Chauffeur C', reden: 'geen-account' },
+      { id: '1', naam: 'Annelies Admin', reden: 'al-ingelogd' },
+    ]);
+    expect(res.json.html).toContain('Hallo Chauffeur A,');
+    expect(res.json.html).toContain('#uitnodiging=voorbeeld');
+    expect(mem.emailsSent).toHaveLength(0);
+    expect(mem.mailLog).toHaveLength(0);
+    expect(accounts.get('auth-3')!.app_metadata.uitnodiging).toBeUndefined();
+  });
+
+  it('versturen: een eigen mail met een eigen link, alleen de hash bij het account, verzendlog en logboek', async () => {
+    const res = await nodigUit(['3']);
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ droog: false, aantal: 1, gelukt: 1, mislukt: 0, resterend: [], overgeslagen: [] });
+    expect(res.json.uitgenodigd).toEqual([{ userId: '3', op: '2026-06-15T10:00:00.000Z', tot: '2026-06-22T10:00:00.000Z' }]);
+
+    expect(mem.emailsSent).toHaveLength(1);
+    expect(mem.emailsSent[0]).toMatchObject({ to: ['a@vhb.be'], subject: 'Uitnodiging voor het VHB Portaal, kies je wachtwoord' });
+    const code = codeUitMail(mem.emailsSent[0].text);
+    expect(code.startsWith('3.')).toBe(true);
+    const geheim = code.slice(2);
+
+    const meta = accounts.get('auth-3')!.app_metadata as any;
+    expect(meta.provider).toBe('email');
+    expect(meta.uitnodiging).toMatchObject({ email: 'a@vhb.be', op: '2026-06-15T10:00:00.000Z', tot: '2026-06-22T10:00:00.000Z' });
+    expect(meta.uitnodiging.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(meta)).not.toContain(geheim);
+
+    expect(mem.mailLog).toHaveLength(1);
+    expect(mem.mailLog[0]).toMatchObject({ soort: 'uitnodiging', aantal: 1, door: 'Annelies Admin' });
+    expect(JSON.stringify(mem.mailLog)).not.toMatch(/@|uitnodiging=/);
+    const log = mem.activity.filter((a: any) => a.action === 'Uitnodiging verstuurd');
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({ entityType: 'user', entityId: '3' });
+    expect(log[0].message).toContain('Chauffeur A: uitnodiging voor het portaal, link geldig tot 22/06/2026');
+    expect(log[0].message).not.toContain(geheim);
+  });
+
+  it('openen: met de code uit de mail een verse herstel-token; zonder aanmelding, en pas dan een link bij Supabase', async () => {
+    await nodigUit(['3']);
+    expect(links).toEqual([]);
+    const res = await open(codeUitMail(mem.emailsSent[0].text));
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ naam: 'Chauffeur A', email: 'a@vhb.be', tokenHash: 'hash-1' });
+    expect(links).toEqual(['recovery:a@vhb.be']);
+  });
+
+  it('openen weigert een verkeerd geheim, een onbekend id en rommel, altijd met dezelfde reden en zonder link', async () => {
+    await nodigUit(['3']);
+    const code = codeUitMail(mem.emailsSent[0].text);
+    const verkeerd = `${code.slice(0, -4)}${code.endsWith('AAAA') ? 'BBBB' : 'AAAA'}`;
+    for (const c of [verkeerd, code.replace(/^3\./, '4.'), code.replace(/^3\./, '99.'), 'rommel', 42, undefined]) {
+      const res = await open(c);
+      expect(res.status, String(c)).toBe(410);
+      expect(res.json).toMatchObject({ reden: 'ongeldig' });
+      expect(res.json.error).toContain('Vraag de planning om een nieuwe');
+    }
+    expect(links).toEqual([]);
+  });
+
+  it('een nieuwe uitnodiging maakt de vorige link ongeldig', async () => {
+    await nodigUit(['3']);
+    const oud = codeUitMail(mem.emailsSent[0].text);
+    await nodigUit(['3']);
+    const nieuw = codeUitMail(mem.emailsSent[1].text);
+    expect(nieuw).not.toBe(oud);
+    expect((await open(oud)).json.reden).toBe('ongeldig');
+    expect((await open(nieuw)).status).toBe(200);
+  });
+
+  it('werkt niet meer na de eerste aanmelding, na zeven dagen, na een adreswissel of bij een gepauzeerd account', async () => {
+    await nodigUit(['3']);
+    const code = codeUitMail(mem.emailsSent[0].text);
+    const chauffeur = mem.users.find((u: any) => u.id === '3');
+
+    chauffeur.lastLogin = '2026-06-15T11:00:00.000Z';
+    expect((await open(code)).json.reden).toBe('gebruikt');
+    delete chauffeur.lastLogin;
+
+    chauffeur.isActive = false;
+    expect((await open(code)).json.reden).toBe('gepauzeerd');
+    chauffeur.isActive = true;
+
+    vi.setSystemTime(new Date('2026-06-22T10:00:01Z'));
+    expect((await open(code)).json.reden).toBe('verlopen');
+    vi.setSystemTime(new Date('2026-06-22T09:59:00Z'));
+    expect((await open(code)).status).toBe(200);
+
+    // De uitnodiging ging naar het oude adres: na een wissel werkt ze niet meer.
+    chauffeur.email = 'nieuw@vhb.be';
+    accounts.get('auth-3')!.email = 'nieuw@vhb.be';
+    expect((await open(code)).json.reden).toBe('ongeldig');
+  });
+
+  it('mislukt de mail, dan gaat de link weer weg en komt er geen logregel; `alleen` stuurt daarna alleen naar de rest', async () => {
+    const { sendEmail } = await import('../api/email.js');
+    vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
+      if (opts.to[0] === 'b@vhb.be') return { ok: false, mocked: false, error: '450 rate limit' };
+      mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text });
+      return { ok: true, mocked: false };
+    });
+    try {
+      const res = await nodigUit(['3', '4']);
+      expect(res.status).toBe(200);
+      expect(res.json).toMatchObject({ aantal: 2, gelukt: 1, mislukt: 1, resterend: ['b@vhb.be'] });
+      expect(res.json.uitgenodigd.map((u: any) => u.userId)).toEqual(['3']);
+      expect(accounts.get('auth-3')!.app_metadata.uitnodiging).toBeTruthy();
+      expect(accounts.get('auth-4')!.app_metadata.uitnodiging).toBeUndefined();
+      expect(accounts.get('auth-4')!.app_metadata.provider).toBe('email');
+      expect(mem.activity.filter((a: any) => a.action === 'Uitnodiging verstuurd').map((a: any) => a.entityId)).toEqual(['3']);
+    } finally {
+      vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
+        mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
+        mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
+        return { ok: true, mocked: true };
+      });
+    }
+    mem.emailsSent = [];
+    const rest = await nodigUit(['3', '4'], { alleen: ['B@vhb.be'] });
+    expect(rest.status).toBe(200);
+    expect(mem.emailsSent.map((m) => m.to)).toEqual([['b@vhb.be']]);
+    expect(accounts.get('auth-4')!.app_metadata.uitnodiging).toBeTruthy();
+  });
+
+  it('niemand om uit te nodigen = 400 met de reden, er vertrekt niets', async () => {
+    mem.users.find((u: any) => u.id === '3').isActive = false;
+    const res = await nodigUit(['3', '5']);
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('Niemand om uit te nodigen: Chauffeur A (gepauzeerd), Chauffeur C (geen gekoppelde aanmelding).');
+    expect(mem.emailsSent).toHaveLength(0);
+  });
+
+  it('de lijst per gebruiker: alleen lopende uitnodigingen naar het huidige adres', async () => {
+    await nodigUit(['3', '4']);
+    mem.users.find((u: any) => u.id === '4').email = 'ander@vhb.be';
+    const res = await api('GET', '/api/users/uitnodigingen', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ uitnodigingen: [{ userId: '3', op: '2026-06-15T10:00:00.000Z', tot: '2026-06-22T10:00:00.000Z' }] });
+  });
+
+  it('alleen een admin nodigt uit; openen kan zonder aanmelding, maar niet zonder service-role', async () => {
+    expect((await api('POST', '/api/users/uitnodigen', { token: 'tok-planner', body: { ids: ['3'] } })).status).toBe(403);
+    expect((await api('GET', '/api/users/uitnodigingen', { token: 'tok-planner' })).status).toBe(403);
+    expect((await api('POST', '/api/users/uitnodigen', { body: { ids: ['3'] }, device: null })).status).toBe(401);
+    expect((await nodigUit([])).status).toBe(400);
+    mem.supabaseAdmin = null;
+    expect((await open('3.AAAAAAAAAAAAAAAAAAAAAAAA')).status).toBe(503);
+    expect((await nodigUit(['3'])).status).toBe(503);
+  });
+});
+
 describe('documenten per gebruiker', () => {
   it('een chauffeur ziet alleen zijn eigen documenten, ook met een vreemde userId in de query', async () => {
     mem.documents = [

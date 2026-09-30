@@ -1,4 +1,4 @@
-import { bouwVerlofBeslissingMail, bouwVervaldatumMail, bouwWelkomMail, portalUrl, type MailTekst } from "../email.js";
+import { bouwUitnodigingMail, bouwVerlofBeslissingMail, bouwVervaldatumMail, bouwWelkomMail, portalUrl, type MailTekst } from "../email.js";
 import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwDringendeUpdateMail, bouwOverzichtMail, bouwRestoreProefMail, bouwTestMail, bouwWachtwoordMail, bouwZiekmeldingMail } from "./mailTeksten.js";
 
 /**
@@ -13,6 +13,8 @@ export const voorbeeldMail = (soort: string): MailTekst | null => {
   switch (soort) {
     case "welkom":
       return bouwWelkomMail({ name: "Sofie", actionLink: url });
+    case "uitnodiging":
+      return bouwUitnodigingMail({ naam: "Sofie Peeters", email: "sofie.peeters@voorbeeld.be", link: url, geldigTot: "2026-10-07T14:05:00.000Z" });
     case "wachtwoord":
       return bouwWachtwoordMail({ link: url });
     case "verlof-beslissing":

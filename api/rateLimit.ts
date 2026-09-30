@@ -401,6 +401,15 @@ export const urgentEmailRateLimit = createActionRateLimit("urgent-email", num(pr
 // voor een gekaapte sessie die de SMTP als relay wil gebruiken.
 export const eigenMailRateLimit = createActionRateLimit("eigen-mail", num(process.env.RATE_LIMIT_EIGEN_MAIL_MAX, 10));
 export const omleidingMailRateLimit = createActionRateLimit("omleiding-mail", num(process.env.RATE_LIMIT_EIGEN_MAIL_MAX, 10));
+// Uitnodigen (admin, 30-09): voorbeeld en versturen tellen allebei, en een
+// admin nodigt vaak één persoon tegelijk uit vanuit het rijmenu; de
+// ontvangers zijn altijd eigen accounts, dus geen relay-risico zoals bij de
+// eigen mail.
+export const uitnodigenRateLimit = createActionRateLimit("uitnodigen", num(process.env.RATE_LIMIT_UITNODIGEN_MAX, 60));
+// Een uitnodiging openen (publiek, sleutel = IP): raden heeft geen zin (een
+// geheim van 24 bytes), dit remt alleen wie de Auth-API wil laten draaien.
+// Ruim, want chauffeurs op de wifi van het depot delen één IP.
+export const uitnodigingOpenenRateLimit = createActionRateLimit("uitnodiging-openen", num(process.env.RATE_LIMIT_UITNODIGING_OPENEN_MAX, 60));
 
 /** Voor tests: wis alle telstanden zodat testvolgorde geen 429 veroorzaakt. */
 export const resetAllRateLimiters = () => {

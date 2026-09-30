@@ -95,3 +95,14 @@ export const wachtwoordResetSchema = z.object({
   userId: verplichteTekst('Kies een gebruiker'),
   password: tijdelijkWachtwoordSchema,
 });
+
+/** Uitnodigen voor het portaal (30-09, Gebruikers): welke profielen, een
+ *  droge run voor het voorbeeld, en `alleen` = enkel deze adressen (de rest
+ *  na een deels mislukte verzending). Alleen de server valideert hiermee;
+ *  de zuivere markering houdt het schema uit de bundel van het scherm. */
+export const UITNODIGEN_MAX = 200;
+export const uitnodigenSchema = /* @__PURE__ */ (() => z.object({
+  ids: z.array(z.string().trim().min(1).max(100)).min(1, 'Kies minstens één gebruiker').max(UITNODIGEN_MAX, `Hooguit ${UITNODIGEN_MAX} tegelijk`),
+  droog: z.boolean().default(false),
+  alleen: z.array(z.string().trim().toLowerCase().max(254)).max(UITNODIGEN_MAX).optional(),
+}))();

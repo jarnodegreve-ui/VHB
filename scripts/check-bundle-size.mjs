@@ -107,7 +107,12 @@ import zlib from 'node:zlib';
 // Geen nieuwe dependency: de groei is de PDF-viewer voor bijlagen, de
 // rollabels, de mailschermen en de regel tegen dubbele inplanning. Bewust
 // geen bijkomende lazy-loadingrefactor in deze ronde.
-const BUDGET_KB = 692;
+// 30-09 (uitnodigen voor het portaal): 692 → 696. Geen nieuwe dependency:
+// de landing van een uitnodiging (UitnodigingScherm, lui, ±2 kB), uitnodigen
+// in Gebruikers (±1 kB) en MailBevestiging als eigen gedeelde chunk. Gemeten
+// 694 lokaal. De index groeit ±0,3 kB (74,73 → 75,01) voor de hash-controle
+// en de luie grens in App.tsx; index (75,5) en warmup blijven de bewakers.
+const BUDGET_KB = 696;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

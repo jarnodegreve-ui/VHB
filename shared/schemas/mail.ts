@@ -20,7 +20,7 @@ export interface MailSoortInfo {
   /** Er gaat ook een pushmelding uit. */
   push?: boolean;
   /** Kan niet uitgezet worden: zonder deze mail werkt het portaal niet of
-   *  verlies je je vangnet (welkom, wachtwoord, back-up en herstel). */
+   *  verlies je je vangnet (welkom, uitnodiging, wachtwoord, back-up en herstel). */
   altijdAan?: boolean;
   /** Verstuurd door Supabase Auth, niet door de API (alleen ter informatie). */
   viaSupabase?: boolean;
@@ -29,6 +29,7 @@ export interface MailSoortInfo {
 /** Elke mail die het portaal kent, in de volgorde van het beheerscherm. */
 export const MAIL_SOORTEN: readonly MailSoortInfo[] = [
   { soort: 'welkom', naam: 'Welkomstmail', wanneer: 'Bij een nieuw account', ontvangers: 'De nieuwe gebruiker', altijdAan: true },
+  { soort: 'uitnodiging', naam: 'Uitnodiging', wanneer: 'Als een admin iemand uitnodigt vanuit Gebruikers', ontvangers: 'De uitgenodigde medewerker', altijdAan: true },
   { soort: 'wachtwoord', naam: 'Wachtwoord vergeten', wanneer: 'Als iemand een nieuw wachtwoord vraagt', ontvangers: 'Die gebruiker', altijdAan: true, viaSupabase: true },
   { soort: 'verlof-beslissing', naam: 'Verlofbeslissing', wanneer: 'Bij goedkeuren, afwijzen of annuleren van verlof', ontvangers: 'De chauffeur van de aanvraag', push: true },
   { soort: 'ziekmelding', naam: 'Ziekmelding', wanneer: 'Als een planner iemand ziek meldt', ontvangers: 'Planners en admins, elk apart', push: true },

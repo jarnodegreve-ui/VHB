@@ -52,6 +52,7 @@ import { UserMenu } from './components/UserMenu';
 import { MeldingenBel } from './components/MeldingenBel';
 import type { Werkvoorraad } from './lib/werkvoorraad';
 import { LoginView } from './views/LoginView';
+import { UITNODIGING_HASH } from '../shared/uitnodigingHash';
 import { useRealtimeSync, ververRealtimeToken } from './lib/realtime';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { laatSchrijffout } from './lib/foutenLui';
@@ -81,6 +82,7 @@ const LazyWerkvoorraadMenu = lazyWithRetry(() => laadWerkvoorraadMenu().then((m)
 // lazy, net als bij de viewer op Mijn dag.
 const LazyRitbladViewer = lazyWithRetry(() => laadRitbladViewer().then((m) => ({ default: m.RitbladViewer })));
 const LazyTweeStapsScherm = lazyWithRetry(() => import('./app/TweeStapsScherm').then((m) => ({ default: m.TweeStapsScherm })));
+const LazyUitnodiging = lazyWithRetry(() => import('./app/UitnodigingScherm').then((m) => ({ default: m.UitnodigingScherm })));
 // Startbundel-trim (fase 2, 22-09): drie stukken die alleen staf of één
 // klik nodig heeft, uit index-*.js.
 // - De avatar-stapel (staf, desktop) rendert zelf null zolang er niemand
@@ -157,6 +159,15 @@ export default function App() {
   const [previewChauffeur, setPreviewChauffeur] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  // Uitnodiging uit de mail (#uitnodiging=<code>, shared/uitnodiging.ts): de
+  // code meteen uit de adresbalk, zodat herladen of terug haar niet opnieuw
+  // opent. Wie al aangemeld is, laat ze liggen (zie de bootstrap).
+  const [uitnodiging, setUitnodiging] = useState<string | null>(() => {
+    const { hash, pathname, search } = window.location;
+    if (!hash.startsWith(UITNODIGING_HASH)) return null;
+    window.history.replaceState(window.history.state, '', pathname + search);
+    return hash.slice(UITNODIGING_HASH.length) || null;
+  });
   const [showChangePassword, setShowChangePassword] = useState(false);
   // "Meld een probleem" (testfase): vrije tekst → client_errors met bron
   // 'gebruikersmelding', zichtbaar in Systeem Status en de dagoverzicht-mail.
@@ -649,6 +660,8 @@ export default function App() {
 
         setSession(data.session);
         if (data.session) {
+          // Al aangemeld: een uitnodigingslink opent dan gewoon de app.
+          setUitnodiging(null);
           // Chunk van de landingsview alvast ophalen, parallel met /api/me —
           // anders begon die download pas ná het profiel (prestatiebudget
           // 09-2026). Niet op het loginscherm: daar zou hij het kritieke pad
@@ -1255,6 +1268,16 @@ export default function App() {
   }
 
   if (!isSupabaseConfigured || !supabase) return <ConfigOntbreekt />;
+
+  // Vóór het herstelscherm: de landing start zelf een herstelsessie om het
+  // wachtwoord te zetten, en moet dan in beeld blijven.
+  if (uitnodiging) {
+    return (
+      <Suspense fallback={<SessieLaden />}>
+        <LazyUitnodiging code={uitnodiging} onLogin={handleLogin} onKlaar={() => setUitnodiging(null)} />
+      </Suspense>
+    );
+  }
 
   if (isPasswordRecovery) {
     return (

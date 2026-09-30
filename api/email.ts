@@ -1,4 +1,4 @@
-import { DAG_DMJ, PERIODE_DMJ } from "./helpers.js";
+import { DAG_DMJ, PERIODE_DMJ, brusselsDay } from "./helpers.js";
 import { bouwMail, escapeMailHtml, type MailOpbouw } from "./_lib/mailLayout.js";
 import { logMail } from "./storage.js";
 import { mailSoortAan } from "./_lib/mailInstellingen.js";
@@ -295,6 +295,36 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
     soort: "welkom",
     door: ctx.door ?? null,
   });
+};
+
+// --- Uitnodiging voor een bestaand account (30-09) ---
+
+/** "07/10/2026 om 16:05", in Belgische tijd. */
+const momentDmj = (iso: string) =>
+  `${DAG_DMJ(brusselsDay(iso))} om ${new Date(iso).toLocaleTimeString("en-GB", { hour12: false, timeZone: "Europe/Brussels", hour: "2-digit", minute: "2-digit" })}`;
+
+/**
+ * Uitnodiging voor iemand die al een account heeft maar nog nooit aanmeldde
+ * (Gebruikers › Uitnodigen). De link is een eigen code die zeven dagen werkt
+ * (api/_lib/uitnodiging.ts), geen link van Supabase die na een uur vervalt.
+ */
+export const bouwUitnodigingMail = (ctx: { naam: string; email: string; link: string; geldigTot: string }): MailTekst => {
+  const { html, text } = mailOpbouw({
+    kicker: "Uitnodiging",
+    titel: "Je bent uitgenodigd voor het VHB Portaal",
+    aanhef: `Hallo ${ctx.naam},`,
+    alineas: [
+      "Op het VHB Portaal vind je je rooster, verlofaanvragen, dienstruilen en de updates van de planning.",
+      "Kies eerst een eigen wachtwoord met de knop hieronder. Daarna log je in met je e-mailadres en dat wachtwoord.",
+    ],
+    feiten: [
+      { label: "Je e-mailadres", waarde: ctx.email },
+      { label: "Link geldig tot", waarde: momentDmj(ctx.geldigTot) },
+    ],
+    knop: { tekst: "Wachtwoord kiezen", url: ctx.link, actie: true },
+    voet: `Werkt de link niet meer? Vraag de planning om een nieuwe uitnodiging. Tip: open ${portalUrl()} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.`,
+  });
+  return { onderwerp: "Uitnodiging voor het VHB Portaal, kies je wachtwoord", html, text };
 };
 
 // --- Vervaldata-herinnering (Code 95 / medische schifting) ---
