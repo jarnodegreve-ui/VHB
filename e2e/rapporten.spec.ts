@@ -54,7 +54,7 @@ test('catalogus, rapport, filter, leeg en de print-URL', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Gewerkte uren', level: 2 })).toBeVisible();
   await expect(page.getByText('Volgt later')).toBeVisible();
   await expect(page.getByRole('button', { name: /Maandrooster per chauffeur/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Laadpalen/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Laadplein/ })).toBeVisible();
 
   // Zoeken in de catalogus.
   await page.getByPlaceholder('Zoek een rapport…').fill('saldo');

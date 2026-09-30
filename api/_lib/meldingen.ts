@@ -48,7 +48,7 @@ export const PAD_PER_VIEW: Record<string, string> = {
   gebruikers: "beheer/gebruikers",
   toestellen: "beheer/toestellen",
   activiteit: "beheer/activiteit",
-  "ocpi-monitoring": "beheer/laadpalen",
+  "ocpi-monitoring": "beheer/laadplein",
   designsysteem: "beheer/designsysteem",
   "beheer-debug": "beheer/systeemstatus",
   "beheer-mails": "beheer/mails",

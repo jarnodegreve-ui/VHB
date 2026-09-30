@@ -58,7 +58,7 @@ export function RapportenView({ currentUser }: { currentUser: User }) {
   if (!def) {
     return (
       <PageShell breed>
-        <PageHeader view="rapporten" eyebrow="" title="Rapporten" />
+        <PageHeader view="rapporten" title="Rapporten" />
         <EmptyState
           illustratie={<NietGevonden />}
           title="Dit rapport bestaat niet"
@@ -96,7 +96,6 @@ function Catalogus({ isAdmin }: { isAdmin: boolean }) {
     <PageShell breed>
       <PageHeader
         view="rapporten"
-        eyebrow=""
         title="Rapporten"
         description="Alle overzichten op één plek. Kies een rapport, stel de filters in en druk af of exporteer naar CSV."
       />
@@ -134,7 +133,7 @@ function Catalogus({ isAdmin }: { isAdmin: boolean }) {
               ))}
               {laadpalen && (
                 <CatalogusRij
-                  titel="Laadpalen"
+                  titel="Laadplein"
                   omschrijving="Verbruik, sessies en historiek staan op hun eigen scherm."
                   href={padVan('ocpi-monitoring')}
                   onKies={() => navigeer('ocpi-monitoring')}

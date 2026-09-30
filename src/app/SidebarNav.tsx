@@ -26,7 +26,6 @@ export function SidebarNav({
 }) {
   const wie = { role: rol, ookTechnieker };
   const isPlanner = rol === 'planner' || rol === 'admin';
-  const isAdmin = rol === 'admin';
   const item = (r: RouteDef) => {
     const Icoon = r.icoon;
     return (
@@ -43,12 +42,11 @@ export function SidebarNav({
   };
   const algemeen = sidebarRoutes(wie, 'algemeen');
   const planning = sidebarRoutes(wie, 'planning');
-  const mensen = sidebarRoutes(wie, 'mensen');
+  const afwezigheid = sidebarRoutes(wie, 'afwezigheid');
   const communicatie = sidebarRoutes(wie, 'communicatie');
-  const rapporten = sidebarRoutes(wie, 'rapporten');
   const techniek = sidebarRoutes(wie, 'techniek');
   const systeem = sidebarRoutes(wie, 'systeem');
-  const beheer = [...planning, ...mensen, ...communicatie];
+  const beheer = [...planning, ...afwezigheid, ...communicatie];
   return (
     <nav className="flex-1 min-h-0 px-3 py-2 space-y-0.5 overflow-y-auto overscroll-contain" aria-label="Zijbalk">
       {isPlanner && <MicroLabel className="mb-1 px-3 pt-0.5">Algemeen</MicroLabel>}
@@ -57,20 +55,11 @@ export function SidebarNav({
         <NavSection title="Beheer" count={beheer.length} active={beheer.some((r) => r.view === currentView)}>
           <NavSubLabel>Planning</NavSubLabel>
           {planning.map(item)}
-          <NavSubLabel>Personeel</NavSubLabel>
-          {mensen.map(item)}
+          <NavSubLabel>Afwezigheid</NavSubLabel>
+          {afwezigheid.map(item)}
           <NavSubLabel>Communicatie</NavSubLabel>
           {communicatie.map(item)}
         </NavSection>
-      )}
-      {/* Rapporten: één ingang naar de catalogus (de rapporten zelf staan
-          dáár, niet in het menu), dus een los item zoals onder Algemeen en
-          geen uitklapsectie met één regel. */}
-      {rapporten.length > 0 && (
-        <>
-          <MicroLabel className="mb-1 px-3 pt-3">Rapporten</MicroLabel>
-          {rapporten.map(item)}
-        </>
       )}
       {/* Techniek: garagewerk voor de technieker (zijn enige beheerblok), een
           chauffeur met "Ook technieker" en staf (bussen inplannen, opvolgen). */}
@@ -79,7 +68,9 @@ export function SidebarNav({
           {techniek.map(item)}
         </NavSection>
       )}
-      {isAdmin && systeem.length > 0 && (
+      {/* Systeem: de admin-schermen plus Rapporten (30-09, Jarno), dat ook de
+          planner mag; die ziet hier dus alleen Rapporten. */}
+      {systeem.length > 0 && (
         <NavSection title="Systeem" count={systeem.length} active={systeem.some((r) => r.view === currentView)}>
           {systeem.map(item)}
         </NavSection>

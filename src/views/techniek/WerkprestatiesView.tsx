@@ -361,7 +361,7 @@ type KruisRij = { label: string; uren: number; aantal: number; perKwartaal: numb
  * Een kruistabel (per bus, per technieker). Tabel of lijst volgt de breedte
  * van het kader (container query, bewust geen md): op lg staan twee kaarten
  * naast elkaar en is elke kaart op 1280 px smaller dan de zeven kolommen
- * (label + K1-K4 + Uren + Aantal, samen ±30 rem). Onder 32 rem wordt het een
+ * (label + Q1-Q4 + Uren + Aantal, samen ±30 rem). Onder 32 rem wordt het een
  * lijst: label met uren en aantal op regel 1, de vier kwartalen eronder. Zo
  * schuift er op de telefoon niets horizontaal (tranche 3B.2). `past`: de
  * tabel verschijnt pas als ze past, dus geen scrollcontainer.
@@ -377,7 +377,7 @@ function KruisTabel({ titel, rijen }: { titel: string; rijen: KruisRij[] }) {
               <StickyThead>
                 <tr>
                   <Th>{kolom}</Th>
-                  {['K1', 'K2', 'K3', 'K4'].map((k) => <Th key={k} num className="px-3">{k}</Th>)}
+                  {['Q1', 'Q2', 'Q3', 'Q4'].map((k) => <Th key={k} num className="px-3">{k}</Th>)}
                   <Th num className="px-3">Uren</Th>
                   <Th num className="px-3">Aantal</Th>
                 </tr>
@@ -405,7 +405,7 @@ function KruisTabel({ titel, rijen }: { titel: string; rijen: KruisRij[] }) {
                 <dl className="mt-1.5 grid grid-cols-4 gap-2 text-xs">
                   {r.perKwartaal.map((k, i) => (
                     <div key={i} className="flex items-baseline gap-1.5">
-                      <dt className="text-slate-500">K{i + 1}</dt>
+                      <dt className="text-slate-500">Q{i + 1}</dt>
                       <dd className="font-medium text-slate-700">{k ? urenTekst(k) : '—'}</dd>
                     </div>
                   ))}
