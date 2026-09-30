@@ -82,8 +82,20 @@ const MOBIEL_BREEDTE = 640;
 const RAND = 8;
 const AFSTAND = 6;
 
-type Positie = { top: number; left: number; boven: boolean };
+/** `gemeten` = de layout-effect heeft de echte maat van de kiezer gebruikt. */
+type Positie = { top: number; left: number; boven: boolean; gemeten: boolean };
 
+/**
+ * Voorlopige plek bij het openen, vóór de eerste meting: direct onder het
+ * veld (de maat van de kiezer is dan nog onbekend). Nooit (0,0): de kiezer
+ * stond daar één render lang en kreeg er zelfs focus, wat las als een sprong
+ * naar linksboven (Jarno 30-09: Werkprestaties en de planning-upload).
+ */
+const voorlopig = (wortel: HTMLElement | null): Positie | null => {
+  if (!wortel) return null;
+  const r = wortel.getBoundingClientRect();
+  return { top: r.bottom + AFSTAND, left: Math.max(RAND, r.left), boven: false, gemeten: false };
+};
 
 export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function DatePicker({
   value,
@@ -115,7 +127,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   const [maand, setMaand] = useState(() => maandVan(isIsoDag(value) ? value : vandaagIso()));
   const [cursor, setCursor] = useState(() => (isIsoDag(value) ? value : vandaagIso()));
   const [mobiel, setMobiel] = useState(false);
-  const [positie, setPositie] = useState<Positie>({ top: 0, left: 0, boven: false });
+  const [positie, setPositie] = useState<Positie | null>(null);
   const veldRef = useRef<HTMLInputElement | null>(null);
   const wortelRef = useRef<HTMLDivElement | null>(null);
   const knopRef = useRef<HTMLButtonElement | null>(null);
@@ -210,7 +222,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     const start = klemOpBereik(concept.staat === 'geldig' ? concept.iso : geldig || vandaag, min, max);
     setCursor(start);
     setMaand(maandVan(start));
-    setMobiel(typeof window !== 'undefined' && window.innerWidth < MOBIEL_BREEDTE);
+    const smal = typeof window !== 'undefined' && window.innerWidth < MOBIEL_BREEDTE;
+    setMobiel(smal);
+    setPositie(smal ? null : voorlopig(wortelRef.current));
     focusNaarCel.current = true;
     setOpen(true);
   };
@@ -260,7 +274,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
         top = r.top - AFSTAND - hoogte;
         boven = true;
       }
-      setPositie((p) => (p.top === top && p.left === left && p.boven === boven ? p : { top, left, boven }));
+      setPositie((p) => (p?.gemeten && p.top === top && p.left === left && p.boven === boven ? p : { top, left, boven, gemeten: true }));
     };
     plaats();
     window.addEventListener('resize', plaats);
@@ -271,12 +285,17 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
     };
   }, [open, mobiel, maand]);
 
-  // Focus de cursor-cel bij openen en na elke toetsenbord-verplaatsing.
+  // Focus de cursor-cel bij openen en na elke toetsenbord-verplaatsing, pas
+  // als de kiezer gemeten op zijn plek staat (zoals AnkerPopover): de focus
+  // liep vroeger in dezelfde tik als de eerste render, vóór de nieuwe plek
+  // gerenderd was. preventScroll: de kiezer is fixed, een reveal kan alleen
+  // iets erachter verschuiven.
+  const geplaatst = mobiel || positie?.gemeten === true;
   useEffect(() => {
-    if (!open || !focusNaarCel.current) return;
+    if (!open || !geplaatst || !focusNaarCel.current) return;
     focusNaarCel.current = false;
-    dialoogRef.current?.querySelector<HTMLButtonElement>(`[data-iso="${cursor}"]`)?.focus();
-  }, [open, cursor, maand]);
+    dialoogRef.current?.querySelector<HTMLButtonElement>(`[data-iso="${cursor}"]`)?.focus({ preventScroll: true });
+  }, [open, cursor, maand, geplaatst]);
 
   // Maandknoppen: cursor mee naar dezelfde dag in de nieuwe maand, zodat een
   // pijltje daarna niet terugspringt naar de oude maand.
@@ -348,7 +367,9 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   // mee (zoals SlideOver) — anders vallen de randcellen achter de notch-hoek.
   const stijlDialoog: CSSProperties = mobiel
     ? { paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }
-    : { top: positie.top, left: positie.left, transformOrigin: positie.boven ? 'bottom left' : 'top left' };
+    : positie
+      ? { top: positie.top, left: positie.left, transformOrigin: positie.boven ? 'bottom left' : 'top left' }
+      : { top: 0, left: 0 };
 
   const dialoog = (
     <motion.div

@@ -47,6 +47,14 @@ export type MaandInputProps = {
 const MOBIEL_BREEDTE = 640;
 const RAND = 8;
 const AFSTAND = 6;
+/** `gemeten` = de layout-effect heeft de echte maat van de kiezer gebruikt. */
+type Positie = { top: number; left: number; gemeten: boolean };
+/** Voorlopige plek vóór de eerste meting: direct onder het veld, nooit (0,0) (zie DatePicker). */
+const voorlopig = (wortel: HTMLElement | null): Positie | null => {
+  if (!wortel) return null;
+  const r = wortel.getBoundingClientRect();
+  return { top: r.bottom + AFSTAND, left: Math.max(RAND, r.left), gemeten: false };
+};
 const huidigeMaand = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -66,7 +74,7 @@ export function MaandInput({
   const [hersteld, setHersteld] = useState<string | null>(null);
   const [cursor, setCursor] = useState(() => (isMaand(value) ? value : huidigeMaand()));
   const [mobiel, setMobiel] = useState(false);
-  const [positie, setPositie] = useState({ top: 0, left: 0 });
+  const [positie, setPositie] = useState<Positie | null>(null);
   const veldRef = useRef<HTMLInputElement | null>(null);
   const wortelRef = useRef<HTMLDivElement | null>(null);
   const knopRef = useRef<HTMLButtonElement | null>(null);
@@ -135,7 +143,9 @@ export function MaandInput({
     viaKnopRef.current = viaKnop;
     const concept = leesMj(tekst);
     setCursor(klem(concept.staat === 'geldig' ? concept.maand : geldig || huidigeMaand(), min, max));
-    setMobiel(typeof window !== 'undefined' && window.innerWidth < MOBIEL_BREEDTE);
+    const smal = typeof window !== 'undefined' && window.innerWidth < MOBIEL_BREEDTE;
+    setMobiel(smal);
+    setPositie(smal ? null : voorlopig(wortelRef.current));
     focusNaarCel.current = true;
     setOpen(true);
   };
@@ -172,7 +182,7 @@ export function MaandInput({
       const left = Math.max(RAND, Math.min(r.left, window.innerWidth - d.offsetWidth - RAND));
       let top = r.bottom + AFSTAND;
       if (top + d.offsetHeight > window.innerHeight - RAND && r.top - AFSTAND - d.offsetHeight >= RAND) top = r.top - AFSTAND - d.offsetHeight;
-      setPositie((p) => (p.top === top && p.left === left ? p : { top, left }));
+      setPositie((p) => (p?.gemeten && p.top === top && p.left === left ? p : { top, left, gemeten: true }));
     };
     plaats();
     window.addEventListener('resize', plaats);
@@ -183,11 +193,13 @@ export function MaandInput({
     };
   }, [open, mobiel, jaar]);
 
+  // Focus pas als de kiezer gemeten op zijn plek staat (zie DatePicker).
+  const geplaatst = mobiel || positie?.gemeten === true;
   useEffect(() => {
-    if (!open || !focusNaarCel.current) return;
+    if (!open || !geplaatst || !focusNaarCel.current) return;
     focusNaarCel.current = false;
-    dialoogRef.current?.querySelector<HTMLButtonElement>(`[data-maand="${cursor}"]`)?.focus();
-  }, [open, cursor]);
+    dialoogRef.current?.querySelector<HTMLButtonElement>(`[data-maand="${cursor}"]`)?.focus({ preventScroll: true });
+  }, [open, cursor, geplaatst]);
 
   const verplaats = (delta: number) => {
     focusNaarCel.current = true;
@@ -233,7 +245,7 @@ export function MaandInput({
   const volgendJaarUit = !!max && `${jaar}-12` >= max;
   const stijl: CSSProperties = mobiel
     ? { paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }
-    : { top: positie.top, left: positie.left };
+    : positie ? { top: positie.top, left: positie.left } : { top: 0, left: 0 };
 
   const dialoog = (
     <motion.div
