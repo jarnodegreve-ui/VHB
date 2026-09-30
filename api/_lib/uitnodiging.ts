@@ -19,9 +19,9 @@ import {
  *
  * Waarom geen link van Supabase in de mail: die werkt één uur (zie
  * supabase/auth-mails, "De link werkt één uur"), en een chauffeur leest zijn
- * mail niet binnen het uur. Op 30-09 hadden 22 actieve accounts nog nooit
- * ingelogd; twee van hen hadden ooit zo'n link gekregen. Daarom draagt de
- * mail een eigen code die zeven dagen werkt, en maakt de server pas bij het
+ * mail niet binnen het uur. Op 30-09 had een groot deel van de actieve
+ * accounts nog nooit ingelogd, en bijna niemand van hen had ooit zo'n link
+ * gekregen. Daarom draagt de mail een eigen code die zeven dagen werkt, en maakt de server pas bij het
  * openen een verse Supabase-link (POST /api/uitnodiging/openen). Die gebruikt
  * de landing meteen, dus het uur speelt daar geen rol meer.
  *
