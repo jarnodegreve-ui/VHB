@@ -285,6 +285,13 @@ export function useRoute() {
     // entries zonder padwijziging — `sync` vergelijkt en doet dan niets.
     window.addEventListener('popstate', sync);
     window.addEventListener(ROUTE_EVENT, sync);
+    // De eerste render las het pad al; wat daarna en vóór deze luisteraar
+    // wisselde (een terugknop of een test die navigeert terwijl de app nog
+    // opstart) gaf een popstate die niemand hoorde, en het scherm bleef op
+    // het oude pad terwijl de adresbalk het nieuwe toonde (e2e voertuigen,
+    // 30-09). Dus nog één keer lezen, zoals useSyncExternalStore dat doet;
+    // een gelijk pad geeft hetzelfde object terug en dus geen extra render.
+    sync();
     return () => {
       window.removeEventListener('popstate', sync);
       window.removeEventListener(ROUTE_EVENT, sync);
