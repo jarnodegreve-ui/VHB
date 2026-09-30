@@ -15,7 +15,7 @@ import { heeftRol, type Toegang } from '../../shared/toegang';
  * `pad` = de URL zonder leidende slash ('' = dashboard). Parameters komen
  * erachter als extra segmenten (`/bezetting/2026-03`), zie router.ts.
  */
-export type Sectie = 'algemeen' | 'planning' | 'mensen' | 'communicatie' | 'rapporten' | 'techniek' | 'systeem' | 'account';
+export type Sectie = 'algemeen' | 'planning' | 'afwezigheid' | 'communicatie' | 'techniek' | 'systeem' | 'account';
 
 export type RouteDef = {
   view: View;
@@ -75,17 +75,16 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'dagafsluiting', pad: 'beheer/dagadministratie', label: 'Dagadministratie', omschrijving: 'Bevestig per dag wie wat werkelijk reed, met overminuten en premies.', icoon: CalendarCheck2, sectie: 'planning', rollen: STAF },
   { view: 'looncontrole', pad: 'beheer/looncontrole', label: 'Looncontrole', omschrijving: 'Maandstand, looncodes, matricules en de Easypay-export.', icoon: Coins, sectie: 'planning', breed: true, rollen: STAF },
   { view: 'dekking', pad: 'openstaande-diensten', label: 'Openstaande diensten', kort: 'Open diensten', omschrijving: 'Niet-ingevulde diensten per dag t.o.v. het dag-type.', icoon: AlertTriangle, sectie: 'planning', breed: true, rollen: STAF },
-  // — Beheer › Personeel (sectiesleutel blijft 'mensen') —
-  { view: 'verlof-kalender', pad: 'beheer/verlofkalender', label: 'Verlofkalender', omschrijving: 'Maandoverzicht van alle afwezigheden.', icoon: Calendar, sectie: 'mensen', rollen: STAF },
-  { view: 'ziekte', pad: 'beheer/ziekte', label: 'Ziekte', omschrijving: 'Ziekmeldingen en de diensten die daardoor open staan.', icoon: Thermometer, sectie: 'mensen', rollen: STAF },
-  { view: 'vervaldata', pad: 'beheer/vervaldata', label: 'Vervaldata', omschrijving: 'Rijbewijzen, attesten en andere vervaldata.', icoon: IdCard, sectie: 'mensen', rollen: STAF },
+  // 30-09 (Jarno): Vervaldata stond onder Personeel.
+  { view: 'vervaldata', pad: 'beheer/vervaldata', label: 'Vervaldata', omschrijving: 'Rijbewijzen, attesten en andere vervaldata.', icoon: IdCard, sectie: 'planning', rollen: STAF },
+  // — Beheer › Afwezigheid (heette Personeel tot 30-09) —
+  { view: 'verlof-kalender', pad: 'beheer/verlofkalender', label: 'Verlofkalender', omschrijving: 'Maandoverzicht van alle afwezigheden.', icoon: Calendar, sectie: 'afwezigheid', rollen: STAF },
+  { view: 'ziekte', pad: 'beheer/ziekte', label: 'Ziekte', omschrijving: 'Ziekmeldingen en de diensten die daardoor open staan.', icoon: Thermometer, sectie: 'afwezigheid', rollen: STAF },
   // — Beheer › Communicatie —
   { view: 'beheer-updates', pad: 'beheer/updates', label: 'Beheer updates', omschrijving: 'Publiceer updates en dringende meldingen.', icoon: Plus, sectie: 'communicatie', rollen: STAF },
   { view: 'beheer-omleidingen', pad: 'beheer/omleidingen', label: 'Beheer omleidingen', omschrijving: 'Routewijzigingen en bijlagen voor chauffeurs.', icoon: MapIcon, sectie: 'communicatie', rollen: STAF },
-  // — Rapporten (20-09): één plek voor alle overzichten, zoals het rapportenmenu
-  // in Access. Catalogus op /rapporten, één rapport op /rapporten/<domein>/<id>
-  // met de filters in de querystring (register in shared/rapporten). —
-  { view: 'rapporten', pad: 'rapporten', label: 'Rapporten', omschrijving: 'Alle overzichten op één plek: filteren, afdrukken en exporteren.', icoon: FileBarChart, sectie: 'rapporten', breed: true, rollen: STAF },
+  // 30-09 (Jarno): Mails stond onder Systeem; blijft alleen voor de admin.
+  { view: 'beheer-mails', pad: 'beheer/mails', label: 'Mails', omschrijving: 'Welke mails het portaal verstuurt, verzendlijsten en het verzendlog.', icoon: Mail, sectie: 'communicatie', rollen: ADMIN },
   // — Techniek (fase A Access-migratie, 13-09) —
   { view: 'defecten', pad: 'techniek/defecten', label: 'Gele boek', omschrijving: 'Gemelde defecten per bus en hun opvolging.', icoon: Wrench, sectie: 'techniek', rollen: TECHNIEK },
   // 24-09 (B, Jarno): heette Dagadministratie, net als het loonscherm; twee schermen met één naam.
@@ -93,12 +92,17 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'voertuig-werken', pad: 'techniek/werken', label: 'Uitgevoerde werken per bus', kort: 'Per bus', omschrijving: 'De volledige werkgeschiedenis van één bus, wie het deed en hoelang het duurde.', icoon: History, sectie: 'techniek', rollen: TECHNIEK },
   { view: 'voertuigen', pad: 'techniek/voertuigen', label: 'Voertuigen', omschrijving: 'Het wagenpark met keuringen en vervaldata.', icoon: Bus, sectie: 'techniek', rollen: TECHNIEK },
   // — Systeem —
+  // Rapporten (20-09): één plek voor alle overzichten, zoals het rapportenmenu
+  // in Access. Catalogus op /rapporten, één rapport op /rapporten/<domein>/<id>
+  // met de filters in de querystring (register in shared/rapporten). Was een
+  // eigen sectie tot 30-09 (Jarno); blijft ook voor de planner, die onder
+  // Systeem dus alleen Rapporten ziet.
+  { view: 'rapporten', pad: 'rapporten', label: 'Rapporten', omschrijving: 'Alle overzichten op één plek: filteren, afdrukken en exporteren.', icoon: FileBarChart, sectie: 'systeem', breed: true, rollen: STAF },
   { view: 'gebruikers', pad: 'beheer/gebruikers', label: 'Gebruikers', omschrijving: 'Accounts, rollen en toegang.', icoon: Users, sectie: 'systeem', rollen: ADMIN },
   { view: 'toestellen', pad: 'beheer/toestellen', label: 'Toestellen', omschrijving: 'Keur toestellen goed of blokkeer ze.', icoon: Smartphone, sectie: 'systeem', rollen: ADMIN },
   { view: 'activiteit', pad: 'beheer/activiteit', label: 'Activiteit', omschrijving: 'Recente beheeracties en aanmeldingen.', icoon: Activity, sectie: 'systeem', breed: true, rollen: ADMIN },
-  { view: 'ocpi-monitoring', pad: 'beheer/laadpalen', label: 'Laadpalen', kort: 'Laadpalen', omschrijving: 'Live status, maandrapport, historiek en sessies van de laadpalen (ChargEye).', icoon: Zap, sectie: 'systeem', rollen: ADMIN },
+  { view: 'ocpi-monitoring', pad: 'beheer/laadplein', label: 'Laadplein', omschrijving: 'Live status, maandrapport, historiek en sessies van de laadpalen (ChargEye).', icoon: Zap, sectie: 'systeem', rollen: ADMIN },
   { view: 'designsysteem', pad: 'beheer/designsysteem', label: 'Designsysteem', omschrijving: 'Alle bouwstenen, tokens en toestanden op één pagina.', icoon: Palette, sectie: 'systeem', rollen: ADMIN },
-  { view: 'beheer-mails', pad: 'beheer/mails', label: 'Mails', omschrijving: 'Welke mails het portaal verstuurt, verzendlijsten en het verzendlog.', icoon: Mail, sectie: 'systeem', rollen: ADMIN },
   { view: 'beheer-debug', pad: 'beheer/systeemstatus', label: 'Systeemstatus', omschrijving: 'Koppelingen, tabellen en health checks.', icoon: HeartPulse, sectie: 'systeem', rollen: ADMIN },
   // — Account —
   { view: 'instellingen', pad: 'instellingen', label: 'Instellingen', omschrijving: 'Thema, meldingen, wachtwoord en agenda-koppeling.', icoon: Settings, sectie: 'account', rollen: IEDEREEN, verborgen: true },
@@ -118,6 +122,8 @@ const OUDE_PADEN = new Map<string, string>([
   ['beheer/dagafsluiting', 'beheer/dagadministratie'],
   // 23-09 (3D): Dienstoverzicht en Beheer dienstoverzicht samengevoegd.
   ['dienstoverzicht', 'beheer/dienstoverzicht'],
+  // 30-09: Laadpalen heet Laadplein.
+  ['beheer/laadpalen', 'beheer/laadplein'],
 ]);
 
 /** Verdwenen view-sleutels (in `?view=` van oude pushberichten of het
@@ -155,18 +161,15 @@ export const magView = (wie: Wie, view: View): boolean => heeftRol(alsToegang(wi
 export const isBreed = (view: View): boolean => routeVan(view).breed === true;
 
 /** Sectiewoord voor de desktop-topbar: hetzelfde woord als de zijbalk
- *  (Beheer › Planning/Personeel/Communicatie, Techniek, Systeem). 'algemeen'
+ *  (Beheer › Planning/Afwezigheid/Communicatie, Techniek, Systeem). 'algemeen'
  *  heeft er geen: die schermen staan los bovenaan het menu en "Algemeen"
- *  boven een dashboard zegt niets (de scroll-titel doet daar het werk). */
+ *  boven een dashboard zegt niets (de scroll-titel doet daar het werk). Een
+ *  geopend rapport zet zelf "Rapporten · <domein>" boven zijn titel. */
 const SECTIE_LABEL: Record<Sectie, string | null> = {
   algemeen: null,
   planning: 'Beheer · Planning',
-  mensen: 'Beheer · Personeel',
+  afwezigheid: 'Beheer · Afwezigheid',
   communicatie: 'Beheer · Communicatie',
-  // Eén scherm in deze sectie en het heet zelf Rapporten: een sectiewoord zou
-  // "Rapporten" boven "Rapporten" zetten. Een geopend rapport zet zelf
-  // "Rapporten · <domein>" boven zijn titel (subscherm).
-  rapporten: null,
   techniek: 'Techniek',
   systeem: 'Systeem',
   account: 'Account',

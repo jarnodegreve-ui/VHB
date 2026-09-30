@@ -23,7 +23,7 @@ import { DagDetail } from './laadpalen/DagDetail';
  *  - Historiek: alle maanden naast elkaar, jaartotalen, laadpunt × maand.
  *  - Sessies: elke laadsessie met alle details, filterbaar en exporteerbaar.
  *
- * De URL is de bron: /beheer/laadpalen[/maand/2026-08 | /historiek | /sessies].
+ * De URL is de bron: /beheer/laadplein[/maand/2026-08 | /historiek | /sessies].
  * Excel-export (server, api/_lib/ocpiExport.ts) per maand/periode en voor de
  * historiek; CSV per tabel in de tabbladen zelf; dagdetail als dialoog.
  */
@@ -82,7 +82,7 @@ export function OcpiDashboardView() {
     <PageShell>
       <PageHeader
         view="ocpi-monitoring"
-        title="Laadpalen"
+        title="Laadplein"
         actions={(
           <>
             {(tab === 'maand' || tab === 'historiek') && (

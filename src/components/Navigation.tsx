@@ -107,7 +107,7 @@ export function NavSection({ title, count, active = false, children }: { title: 
   );
 }
 
-/** Subgroep-kopje bínnen een NavSection (bv. Planning / Mensen / Communicatie
+/** Subgroep-kopje bínnen een NavSection (bv. Planning / Afwezigheid / Communicatie
  *  in "Beheer"): geen knop, alleen een rustige tussentitel die de lange lijst
  *  in leesbare blokken deelt. */
 export function NavSubLabel({ children }: { children: React.ReactNode }) {
