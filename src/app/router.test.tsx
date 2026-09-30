@@ -173,6 +173,26 @@ describe('navigeren vanuit de mobiele zijbalk', () => {
   });
 });
 
+describe('useRoute: een pad dat wisselt vóór de luisteraar er is', () => {
+  it('volgt het pad dat tussen de eerste render en het aanmelden van de luisteraar wisselde', async () => {
+    // Een broer die ná de schil rendert zet in dezelfde render het pad om,
+    // zoals een test die navigeert terwijl de app nog opstart (e2e
+    // voertuigen, 30-09): de schil las /verlof, en er volgt geen popstate meer.
+    let verschoven = false;
+    function Verschuiver() {
+      if (!verschoven) {
+        verschoven = true;
+        window.history.pushState(null, '', '/techniek/voertuigen');
+      }
+      return null;
+    }
+    const root = await monteer(<><Schil /><Verschuiver /></>);
+    expect(window.location.pathname).toBe('/techniek/voertuigen');
+    expect(zichtbareView()).toBe('voertuigen');
+    await act(async () => { root.unmount(); });
+  });
+});
+
 /** Master-detail-attrap: een lijst die het record in de URL kiest (punt 13). */
 function Lijst({ view }: { view: 'omleidingen' | 'updates' }) {
   const [id, zetId] = useRecordParam(0, { view });
