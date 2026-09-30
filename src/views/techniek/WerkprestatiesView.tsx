@@ -366,8 +366,7 @@ type KruisRij = { label: string; uren: number; aantal: number; perKwartaal: numb
  * schuift er op de telefoon niets horizontaal (tranche 3B.2). `past`: de
  * tabel verschijnt pas als ze past, dus geen scrollcontainer.
  */
-function KruisTabel({ titel, rijen }: { titel: string; rijen: KruisRij[] }) {
-  const kolom = titel.replace('Per ', '');
+function KruisTabel({ titel, kolom, rijen }: { titel: string; kolom: string; rijen: KruisRij[] }) {
   return (
     <TableShell className="@container" label={titel} past kop={<h2 className="text-card-title">{titel}</h2>}>
       {rijen.length === 0 ? <div className="p-5"><EmptyState compact title="Geen prestaties" message="Niets geregistreerd in dit jaar." /></div> : (
@@ -429,8 +428,8 @@ function RapportTab({ rapport, laden, jaar, onJaar }: { rapport: WerkRapport | n
       </div>
       {laden || !rapport ? <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden" aria-busy="true"><SkeletonRow className="px-5 py-4" /><SkeletonRow className="px-5 py-4" /></Card> : (
         <div className={cn('grid gap-4', 'lg:grid-cols-2')}>
-          <KruisTabel titel="Per bus" rijen={rapport.perBus} />
-          <KruisTabel titel="Per technieker" rijen={rapport.perMecanicien} />
+          <KruisTabel titel="Per bus" kolom="Bus" rijen={rapport.perBus} />
+          <KruisTabel titel="Per technieker" kolom="Technieker" rijen={rapport.perMecanicien} />
           {/* Drie kolommen passen ook op 375 px (de omschrijving mag afbreken),
               dus een echte tabel: aantal en uren staan cijfer onder cijfer. */}
           <TableShell className="lg:col-span-2" label="Per werkcode" past kop={<h2 className="text-card-title">Per werkcode</h2>}>
