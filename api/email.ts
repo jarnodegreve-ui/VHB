@@ -209,10 +209,12 @@ interface LeaveDecisionEmailContext {
   reden?: string;
 }
 
-const ACTION_CONFIG: Record<LeaveDecisionAction, { subject: string; status: string; toon: "goed" | "fout" | "neutraal"; sentence: string }> = {
-  approved: { subject: "Verlofaanvraag goedgekeurd", status: "Goedgekeurd", toon: "goed", sentence: "is goedgekeurd" },
-  rejected: { subject: "Verlofaanvraag afgewezen", status: "Afgewezen", toon: "fout", sentence: "is afgewezen" },
-  cancelled: { subject: "Goedgekeurd verlof geannuleerd", status: "Geannuleerd", toon: "neutraal", sentence: "is geannuleerd" },
+// De titel zegt de uitkomst in een zin, de pil ernaast geeft ze kleur; de
+// zin in de mail noemt wie besliste, zodat niets drie keer staat.
+const ACTION_CONFIG: Record<LeaveDecisionAction, { subject: string; titel: string; status: string; toon: "goed" | "fout" | "neutraal"; zin: (door: string) => string }> = {
+  approved: { subject: "Verlofaanvraag goedgekeurd", titel: "Je verlof is goedgekeurd", status: "Goedgekeurd", toon: "goed", zin: (door) => `${door} heeft je aanvraag goedgekeurd.` },
+  rejected: { subject: "Verlofaanvraag afgewezen", titel: "Je verlof is afgewezen", status: "Afgewezen", toon: "fout", zin: (door) => `${door} heeft je aanvraag afgewezen.` },
+  cancelled: { subject: "Goedgekeurd verlof geannuleerd", titel: "Je verlof is geannuleerd", status: "Geannuleerd", toon: "neutraal", zin: (door) => `${door} heeft je goedgekeurde verlof geannuleerd.` },
 };
 
 /** Onderwerp, HTML en tekst van een mail. Elke mail heeft één bouwer; de
@@ -229,20 +231,22 @@ export const bouwVerlofBeslissingMail = (ctx: Omit<LeaveDecisionEmailContext, "t
 
   const { html, text } = mailOpbouw({
     kicker: "Verlof",
-    titel: config.subject,
+    titel: config.titel,
     status: { label: config.status, toon: config.toon },
+    // Bij een afwijzing staat de reden meteen in de inbox.
+    voorbeeld: reden ? `Reden: ${reden}` : config.zin(ctx.decidedByName),
     aanhef: `Hallo ${ctx.recipientName},`,
     alineas: [
-      `Je verlofaanvraag ${config.sentence} door ${ctx.decidedByName}.`,
+      config.zin(ctx.decidedByName),
       ...(ctx.action === "cancelled" ? ["Neem contact op met de planning als hier vragen over zijn."] : []),
     ],
     feiten: [
       { label: "Periode", waarde: period },
       { label: "Type", waarde: ctx.typeLabel },
-      { label: "Beslist door", waarde: ctx.decidedByName },
     ],
     ...(reden ? { blok: { kop: "Reden", tekst: reden } } : {}),
-    knop: { tekst: "Bekijk in het portaal", url: `${portalUrl()}/verlof` },
+    knop: { tekst: "Bekijk je verlof", url: `${portalUrl()}/verlof` },
+    ...(ctx.action === "rejected" ? { voet: "Een andere periode aanvragen? Dat doe je in het portaal onder Verlof." } : {}),
   });
   return { onderwerp: `${config.subject}, ${period}`, html, text };
 };

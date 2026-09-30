@@ -20,14 +20,15 @@ import { heeftRol } from "../../shared/toegang.js";
 const GROEP_ROLLEN: Record<OntvangerGroep, readonly string[]> = { chauffeurs: ["chauffeur"], techniekers: ["technieker"], planning: ["planner", "admin"] };
 
 /** Bouwt de eigen mail van een admin: onderwerp als titel, de tekst in
- *  alinea's (witregel = nieuwe alinea, regeleinde blijft), en wie hem stuurde
- *  in de voet. Geen knop: het is een bericht, geen actie. */
-export const bouwEigenMail = (o: { onderwerp: string; tekst: string; afzenderNaam: string; antwoordAan?: string }) =>
+ *  alinea's (witregel = nieuwe alinea, regeleinde blijft). Geen knop: het is
+ *  een bericht, geen actie. Bewust geen regel over wie hem stuurde of waar
+ *  antwoorden terechtkomen (Jarno 30-09); het antwoordadres (Reply-To) van de
+ *  admin blijft, en dan valt ook "niet beantwoorden" in de voet weg. */
+export const bouwEigenMail = (o: { onderwerp: string; tekst: string; antwoordAan?: string }) =>
   mailOpbouw({
     kicker: "Bericht van VHB",
     titel: o.onderwerp,
     alineas: o.tekst.split(/\n{2,}/).map((a) => a.trim()).filter(Boolean),
-    voet: o.antwoordAan ? `Verstuurd door ${o.afzenderNaam} via het VHB Portaal. Antwoorden komen bij ${o.afzenderNaam} terecht.` : `Verstuurd door ${o.afzenderNaam} via het VHB Portaal.`,
     nietBeantwoorden: !o.antwoordAan,
   });
 
@@ -41,20 +42,26 @@ export const bouwOmleidingMail = (o: {
   inBijlage: string[];
 }) => {
   const periode = PERIODE_DMJ(o.omleiding.startDate, o.omleiding.endDate);
+  const wanneer = o.omleiding.endDate ? periode : `vanaf ${periode}, tot nader bericht`;
+  const lijnen = lijnLabel(o.omleiding.line);
+  // Wat een chauffeur eerst wil weten (welke lijn, wanneer, waar) staat
+  // meteen onder de titel; het bericht van de afzender staat apart, zodat het
+  // niet leest als een deel van de omleiding; de omschrijving daarna.
   const { html, text } = mailOpbouw({
     kicker: "Omleiding",
     titel: o.omleiding.title,
-    alineas: [
-      ...(o.bericht ? [o.bericht] : []),
-      ...String(o.omleiding.description || "").split(/\n{2,}/).map((a) => a.trim()).filter(Boolean),
-    ],
+    voorbeeld: [lijnen, wanneer, o.omleiding.location].filter(Boolean).join(", "),
     feiten: [
-      { label: "Lijn(en)", waarde: lijnLabel(o.omleiding.line) },
+      { label: "Geldt voor", waarde: lijnen },
+      { label: "Periode", waarde: wanneer },
       ...(o.omleiding.location ? [{ label: "Plaats", waarde: o.omleiding.location }] : []),
-      { label: "Periode", waarde: o.omleiding.endDate ? periode : `vanaf ${periode}, tot nader bericht` },
     ],
-    ...(o.inBijlage.length > 0 ? { lijst: { kop: "In bijlage", items: o.inBijlage } } : {}),
-    voet: o.antwoordAan ? `Verstuurd door ${o.afzenderNaam} (VHB). Antwoorden komen bij ${o.afzenderNaam} terecht.` : `Verstuurd door ${o.afzenderNaam} (VHB).`,
+    ...(o.bericht ? { blok: { kop: `Bericht van ${o.afzenderNaam}`, tekst: o.bericht } } : {}),
+    alineas: String(o.omleiding.description || "").split(/\n{2,}/).map((a) => a.trim()).filter(Boolean),
+    ...(o.inBijlage.length > 0 ? { lijst: { kop: "In bijlage", items: o.inBijlage, tag: "PDF" } } : {}),
+    volgorde: ["feiten", "blok", "alineas", "lijsten"],
+    // Geen regel over wie verstuurde of waar antwoorden terechtkomen (Jarno
+    // 30-09); het antwoordadres (Reply-To) van de planner blijft.
     nietBeantwoorden: !o.antwoordAan,
   });
   return { onderwerp: `Omleiding ${lijnLabel(o.omleiding.line).toLowerCase()}: ${o.omleiding.title} (${periode})`, html, text };
@@ -256,7 +263,7 @@ export function mountMailRoutes(app: express.Express) {
 
       const afzenderNaam = req.appUser?.name || "VHB";
       const antwoordAan = String(req.appUser?.email ?? "").trim() || undefined;
-      const { html, text } = bouwEigenMail({ onderwerp: body.onderwerp, tekst: body.tekst, afzenderNaam, antwoordAan });
+      const { html, text } = bouwEigenMail({ onderwerp: body.onderwerp, tekst: body.tekst, antwoordAan });
       if (body.droog) {
         return res.json({ droog: true, aantal: lijst.length, ontvangers: lijst, onderwerp: body.onderwerp, html });
       }

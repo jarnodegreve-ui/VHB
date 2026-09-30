@@ -42,12 +42,15 @@ export const voorbeeldMail = (soort: string): MailTekst | null => {
         naam: "weekoverzicht",
         impact: "3 meldingen, 2 toestellen",
         toon: "aandacht",
-        alineas: ["In de afgelopen 7 dagen: 3 meldingen van 2 toestellen (2 unieke soorten)."],
-        lijsten: [
-          { kop: "Meldingen", items: ["2× [error-toast] Kon planning niet laden (/)", "1× [window.onerror] TypeError: x is undefined (/rooster)"] },
-          { kop: "Cijfers van de afgelopen 7 dagen", items: ["Actieve gebruikers: 31", "Verlof: 4 nieuw, 3 beslist, 2 open", "Dienstruil: 2 nieuw, 1 uitgevoerd, 1 open"] },
-          { kop: "Documenten (binnen 60 dagen)", items: ["Dirk Maes, Code 95 verloopt over 12 dagen (07/10/2026)"] },
+        venster: "7 dagen",
+        cijfers: [
+          { label: "Actieve gebruikers", waarde: "31" },
+          { label: "Verlof", waarde: "4 nieuw, 3 beslist, 2 open" },
+          { label: "Dienstruil", waarde: "2 nieuw, 1 uitgevoerd, 1 open" },
         ],
+        lijsten: [{ kop: "Documenten (binnen 60 dagen)", items: ["Dirk Maes, Code 95 verloopt over 12 dagen (07/10/2026)"] }],
+        meldingen: ["2× [error-toast] Kon planning niet laden (/)", "1× [window.onerror] TypeError: x is undefined (/rooster)"],
+        soorten: 2,
       });
     case "testmail":
       return bouwTestMail({ afzender: "\"VHB Portaal\" <noreply@vhbportaal.com>", verstuurdOp: "25/09/2026 14:02" });

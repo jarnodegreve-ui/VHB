@@ -2993,7 +2993,7 @@ describe('foutmelding-digest (cron)', () => {
     expect(mem.emailsSent[0].subject).toMatch(/^Weekoverzicht portaal: /);
     expect(mem.emailsSent[0].text).toContain('7 dagen');
     // De weekcijfers (vroeger de aparte maandagmail) zitten in dezelfde mail.
-    expect(mem.emailsSent[0].text).toContain('Cijfers van de afgelopen 7 dagen');
+    expect(mem.emailsSent[0].text).toContain('Afgelopen 7 dagen\nActieve gebruikers: ');
     expect(mem.emailsSent[0].text).toMatch(/Verlof: \d+ nieuw, \d+ beslist, \d+ open/);
   });
   const recent = () => new Date().toISOString();
@@ -9975,7 +9975,10 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect(res.json.aantal).toBe(5);
       expect(res.json.html).toContain('Nieuwe uniformen');
       expect(res.json.html).toContain('Kom passen in het depot.');
-      expect(res.json.html).toContain('Verstuurd door Annelies Admin');
+      // Geen regel over wie verstuurde of waar antwoorden terechtkomen (Jarno 30-09);
+      // het antwoordadres blijft (zie de verzending hieronder).
+      expect(res.json.html).not.toContain('Verstuurd door');
+      expect(res.json.html).not.toContain('Antwoorden komen');
       expect(mem.emailsSent).toHaveLength(0);
     });
 
@@ -10091,6 +10094,7 @@ describe('Beheer › Mails (/api/mails)', () => {
       expect(res.json.html).toContain('Haltes Markt en Station vervallen.');
       expect(res.json.html).toContain('Zottegem');
       expect(res.json.html).toContain('In bijlage');
+      expect(res.json.html).not.toContain('Verstuurd door');
       expect(res.json.bijlagen.map((b: any) => b.filename)).toEqual(['plan.pdf', 'haltes.pdf']);
       expect(mem.emailsSent).toHaveLength(0);
     });
@@ -10170,7 +10174,8 @@ describe('Beheer › Mails (/api/mails)', () => {
     expect(res.status).toBe(200);
     expect(res.json.onderwerp).toContain('Verlofaanvraag');
     expect(res.json.html).toContain('/mail/vhb-logo.png');
-    expect(res.json.html).toContain('REDEN');
+    // Het redenblok van de afwijzing (kop in hoofdletters via CSS).
+    expect(res.json.html).toMatch(/text-transform: uppercase;[^"]*">Reden<\/p>/);
     expect((await api('GET', '/api/mails/voorbeeld/bestaat-niet', { token: 'tok-admin' })).status).toBe(404);
     expect((await api('GET', '/api/mails/voorbeeld/welkom', { token: 'tok-planner' })).status).toBe(403);
   });
