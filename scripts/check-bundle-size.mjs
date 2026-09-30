@@ -110,7 +110,7 @@ import zlib from 'node:zlib';
 // 30-09 (uitnodigen voor het portaal): 692 → 696. Geen nieuwe dependency:
 // de landing van een uitnodiging (UitnodigingScherm, lui, ±2 kB), uitnodigen
 // in Gebruikers (±1 kB) en MailBevestiging als eigen gedeelde chunk. Gemeten
-// 694 lokaal. De index groeit ±0,3 kB (74,73 → 75,01) voor de hash-controle
+// 694 lokaal. De index groeit ±0,3 kB (74,73 → 75,05) voor de hash-controle
 // en de luie grens in App.tsx; index (75,5) en warmup blijven de bewakers.
 const BUDGET_KB = 696;
 

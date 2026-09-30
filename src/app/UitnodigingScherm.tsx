@@ -29,7 +29,7 @@ type Stand =
 const TITEL: Record<string, string> = {
   ongeldig: 'Deze link werkt niet',
   verlopen: 'Uitnodiging verlopen',
-  gebruikt: 'Je bent al aangemeld geweest',
+  gebruikt: 'Uitnodiging al gebruikt',
   gepauzeerd: 'Account op pauze',
 };
 
@@ -74,6 +74,12 @@ export function UitnodigingScherm({ code, onLogin, onKlaar }: {
   // De herstel-token is eenmalig: na een geslaagde verifyOtp is er een sessie
   // en mag een tweede poging (ander wachtwoord) hem niet opnieuw gebruiken.
   const sessieGestart = useRef(false);
+
+  // De code staat nog in de adresbalk (App laat haar staan tot hier): weg
+  // ermee, zodat herladen of terug de uitnodiging niet opnieuw opent.
+  useEffect(() => {
+    if (window.location.hash) window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+  }, []);
 
   const laad = async () => {
     setStand({ soort: 'openen' });
@@ -128,6 +134,14 @@ export function UitnodigingScherm({ code, onLogin, onKlaar }: {
         setFout(wachtwoordFout((zetFout as { code?: string }).code));
         return;
       }
+      // Het wachtwoord staat: de link is vanaf nu geen herstellink meer, ook
+      // als het toestel nog op goedkeuring wacht. Best-effort; lukt het niet,
+      // dan vervalt de link bij de eerste aanmelding of na zeven dagen.
+      await fetch('/api/uitnodiging/afronden', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      }).catch(() => undefined);
       await supabase.auth.signOut();
       sessieGestart.current = false;
       const { data, error: aanmeldFout } = await supabase.auth.signInWithPassword({ email, password: wachtwoord });

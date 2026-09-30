@@ -159,14 +159,13 @@ export default function App() {
   const [previewChauffeur, setPreviewChauffeur] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
-  // Uitnodiging uit de mail (#uitnodiging=<code>, shared/uitnodiging.ts): de
-  // code meteen uit de adresbalk, zodat herladen of terug haar niet opnieuw
-  // opent. Wie al aangemeld is, laat ze liggen (zie de bootstrap).
+  // Uitnodiging uit de mail (#uitnodiging=<code>, shared/uitnodiging.ts). De
+  // code blijft in de adresbalk tot de landing geladen is (die haalt haar
+  // weg): herlaadt lazyRetry na een mislukte chunk, dan is ze er nog. Wie al
+  // aangemeld is, laat ze liggen (zie de bootstrap).
   const [uitnodiging, setUitnodiging] = useState<string | null>(() => {
-    const { hash, pathname, search } = window.location;
-    if (!hash.startsWith(UITNODIGING_HASH)) return null;
-    window.history.replaceState(window.history.state, '', pathname + search);
-    return hash.slice(UITNODIGING_HASH.length) || null;
+    const { hash } = window.location;
+    return hash.startsWith(UITNODIGING_HASH) ? hash.slice(UITNODIGING_HASH.length) || null : null;
   });
   const [showChangePassword, setShowChangePassword] = useState(false);
   // "Meld een probleem" (testfase): vrije tekst → client_errors met bron
@@ -660,8 +659,13 @@ export default function App() {
 
         setSession(data.session);
         if (data.session) {
-          // Al aangemeld: een uitnodigingslink opent dan gewoon de app.
-          setUitnodiging(null);
+          // Al aangemeld: een uitnodigingslink opent dan gewoon de app, met
+          // een woord uitleg (op een gedeeld toestel eerst afmelden).
+          if (uitnodiging) {
+            setUitnodiging(null);
+            window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+            showToast('Uitnodiging niet geopend: je bent al aangemeld. Is ze voor iemand anders, meld dan eerst af.', 'info');
+          }
           // Chunk van de landingsview alvast ophalen, parallel met /api/me —
           // anders begon die download pas ná het profiel (prestatiebudget
           // 09-2026). Niet op het loginscherm: daar zou hij het kritieke pad

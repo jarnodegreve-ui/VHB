@@ -26,7 +26,13 @@ const OPEN = { naam: 'Jan Peeters', email: 'jan@vhb.be', tokenHash: 'hash-1' };
 const WACHTWOORD = 'een-goed-wachtwoord';
 
 let antwoorden: Array<() => Response | Promise<Response>>;
-const fetchMock = vi.fn(async () => (antwoorden.shift() ?? (() => Response.json(OPEN)))());
+const fetchMock = vi.fn(async (url: string) => {
+  if (String(url).endsWith('/afronden')) {
+    stappen.push('afronden');
+    return Response.json({ success: true });
+  }
+  return (antwoorden.shift() ?? (() => Response.json(OPEN)))();
+});
 
 beforeEach(() => {
   stappen.length = 0;
@@ -56,7 +62,10 @@ const kies = async (wachtwoord: string) => {
 
 describe('landing van een uitnodiging', () => {
   it('opent de uitnodiging met de code en verwelkomt de persoon met zijn adres', async () => {
+    // App laat de code in de adresbalk tot hier; de landing haalt haar weg.
+    window.history.replaceState(null, '', `/#uitnodiging=${CODE}`);
     toon();
+    expect(window.location.hash).toBe('');
     expect(await screen.findByRole('heading', { name: 'Welkom, Jan Peeters' })).toBeTruthy();
     expect(screen.getByText('jan@vhb.be')).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith('/api/uitnodiging/openen', expect.objectContaining({ method: 'POST', body: JSON.stringify({ code: CODE }) }));
@@ -69,7 +78,9 @@ describe('landing van een uitnodiging', () => {
     await screen.findByRole('heading', { name: 'Welkom, Jan Peeters' });
     await kies(WACHTWOORD);
     await waitFor(() => expect(onKlaar).toHaveBeenCalled());
-    expect(stappen).toEqual(['verify:hash-1', 'wachtwoord', 'afmelden', 'aanmelden:jan@vhb.be', 'app']);
+    // Afronden ná het wachtwoord en vóór het afmelden: de link is dan op.
+    expect(stappen).toEqual(['verify:hash-1', 'wachtwoord', 'afronden', 'afmelden', 'aanmelden:jan@vhb.be', 'app']);
+    expect(fetchMock).toHaveBeenCalledWith('/api/uitnodiging/afronden', expect.objectContaining({ method: 'POST', body: JSON.stringify({ code: CODE }) }));
     expect(auth.updateUser).toHaveBeenCalledWith({ password: WACHTWOORD });
     expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'jan@vhb.be', password: WACHTWOORD });
     expect(onLogin).toHaveBeenCalledWith('tok-nieuw');
@@ -91,7 +102,7 @@ describe('landing van een uitnodiging', () => {
     await kies(WACHTWOORD);
     await waitFor(() => expect(onKlaar).toHaveBeenCalled());
     expect(stappen.slice(0, 3)).toEqual(['verify:hash-1', 'verify:hash-2', 'wachtwoord']);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/uitnodiging/openen')).toHaveLength(2);
   });
 
   it('weigert Supabase het wachtwoord, dan uitleg en bij de tweede poging geen tweede token', async () => {

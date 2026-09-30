@@ -245,10 +245,15 @@ describe('Gebruikers: uitnodigen', () => {
     apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url !== '/api/users/uitnodigen') return new Response('[]', { status: 200 });
       const body = JSON.parse(String(init?.body));
+      // De echte vorm van de server: `overgeslagen` is de vlag van de reeks,
+      // de mensen die niet uitgenodigd worden staan in `nietUitgenodigd`.
       return body.droog
-        ? Response.json({ droog: true, aantal: 1, ontvangers: [{ adres: 'a@vhb.be', naam: CHAUFFEUR.name }], html: '<p>voorbeeld</p>', overgeslagen: [{ id: INGELOGD.id, naam: INGELOGD.name, reden: 'al-ingelogd' }] })
-        : Response.json({ droog: false, aantal: 1, gelukt: 1, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, mocked: false, overgeslagen: false, resterend: [], onzekerAdressen: [], uitgenodigd: [{ userId: CHAUFFEUR.id, op: '2026-09-30T14:00:00.000Z', tot: '2026-10-07T14:00:00.000Z' }] });
+        ? Response.json({ droog: true, aantal: 1, ontvangers: [{ adres: 'a@vhb.be', naam: CHAUFFEUR.name }], html: '<p>voorbeeld</p>', nietUitgenodigd: [{ id: INGELOGD.id, naam: INGELOGD.name, reden: 'al-ingelogd' }] })
+        : Response.json({ droog: false, aantal: 1, gelukt: 1, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, mocked: false, overgeslagen: false, resterend: [], onzekerAdressen: [], uitgenodigd: [{ userId: CHAUFFEUR.id, op: '2026-09-30T14:00:00.000Z', tot: '2026-10-07T14:00:00.000Z' }], nietUitgenodigd: [{ id: INGELOGD.id, naam: INGELOGD.name, reden: 'al-ingelogd' }] });
     });
+    const toasts: Array<{ message: string; tone: string }> = [];
+    const opToast = (e: Event) => { toasts.push((e as CustomEvent).detail); };
+    window.addEventListener('vhb-toast', opToast);
     render(<ManageUsersView currentUser={ADMIN} />);
     const vink = async (u: User) => { await act(async () => { fireEvent.click(screen.getAllByRole('checkbox', { name: `Selecteer ${u.name}` })[0]); }); };
 
@@ -271,5 +276,8 @@ describe('Gebruikers: uitnodigen', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Voorbeeld van de uitnodiging' })).toBeNull());
     // Na een bulkactie is de selectie leeg, zoals bij pauzeren en activeren.
     expect((screen.getAllByRole('checkbox', { name: `Selecteer ${CHAUFFEUR.name}` })[0] as HTMLInputElement).checked).toBe(false);
+    // En de melding zegt dat er verstuurd is, niet "Mail staat uit" (review 30-09).
+    expect(toasts).toContainEqual(expect.objectContaining({ message: 'Uitnodiging verstuurd naar 1 ontvanger.', tone: 'success' }));
+    window.removeEventListener('vhb-toast', opToast);
   });
 });

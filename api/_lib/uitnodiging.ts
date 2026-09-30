@@ -33,26 +33,30 @@ import {
  *
  * Een code werkt zolang (1) het geheim klopt, (2) profiel en aanmelding nog
  * op het adres staan waarnaar de uitnodiging ging, (3) het profiel actief is,
- * (4) de persoon nog nooit in het portaal aanmeldde (lastLogin leeg) en
- * (5) de zeven dagen niet om zijn. Wie het wachtwoordscherm halverwege
- * verlaat, kan de link dus opnieuw openen tot hij echt binnen is.
+ * (4) er met de link nog geen wachtwoord gekozen is (`gebruikt`, gezet door
+ * POST /api/uitnodiging/afronden) en de persoon nog nooit in het portaal
+ * aanmeldde (lastLogin), en (5) de zeven dagen niet om zijn. Wie het
+ * wachtwoordscherm verlaat vóór het opslaan, kan de link dus opnieuw openen;
+ * daarna is hij geen herstellink meer, ook niet als het toestel nog op
+ * goedkeuring wacht (dan blijft lastLogin leeg).
  */
 
 export const UITNODIGING_SOORT = "uitnodiging";
 const META_SLEUTEL = "uitnodiging";
 const GELDIG_MS = UITNODIGING_GELDIG_DAGEN * 24 * 60 * 60 * 1000;
 
-type UitnodigingMeta = { hash: string; email: string; op: string; tot: string };
+/** `gebruikt` = moment waarop met deze link een wachtwoord gekozen werd. */
+type UitnodigingMeta = { hash: string; email: string; op: string; tot: string; gebruikt?: string };
 
 const hashVan = (geheim: string) => createHash("sha256").update(geheim).digest("hex");
 
 const leesMeta = (appMetadata: unknown): UitnodigingMeta | null => {
   const m = (appMetadata as Record<string, unknown> | null | undefined)?.[META_SLEUTEL] as Partial<UitnodigingMeta> | null | undefined;
   if (!m || typeof m !== "object") return null;
-  const { hash, email, op, tot } = m;
+  const { hash, email, op, tot, gebruikt } = m;
   if (typeof hash !== "string" || !/^[0-9a-f]{64}$/.test(hash)) return null;
   if (typeof email !== "string" || typeof op !== "string" || typeof tot !== "string") return null;
-  return { hash, email, op, tot };
+  return { hash, email, op, tot, ...(typeof gebruikt === "string" ? { gebruikt } : {}) };
 };
 
 const vereistAdmin = () => {
@@ -92,26 +96,32 @@ export function kiesOntvangers(users: readonly AppUserIntern[], ids: readonly st
 /**
  * Nieuwe uitnodiging voor één account: de hash van een vers geheim, het adres
  * en de vervaldatum in de app_metadata (Supabase voegt de sleutel samen met
- * wat er al staat). Geeft de link voor in de mail.
+ * wat er al staat). Geeft de link voor in de mail, en in `vorige` wat er
+ * stond: vertrekt de mail niet, dan zet de route dat terug
+ * (`zetUitnodigingTerug`), zodat een eerdere, nog geldige link blijft werken.
  */
-export async function maakUitnodiging(o: { userId: string; authId: string; adres: string }, nu = Date.now()): Promise<{ link: string; op: string; tot: string }> {
+export async function maakUitnodiging(o: { userId: string; authId: string; adres: string }, nu = Date.now()): Promise<{ link: string; op: string; tot: string; vorige: unknown }> {
   const admin = vereistAdmin();
+  const { data: huidig, error: leesFout } = await admin.auth.admin.getUserById(o.authId);
+  if (leesFout) throw leesFout;
+  const vorige = (huidig?.user?.app_metadata as Record<string, unknown> | undefined)?.[META_SLEUTEL] ?? null;
   const geheim = randomBytes(24).toString("base64url");
   const op = new Date(nu).toISOString();
   const tot = new Date(nu + GELDIG_MS).toISOString();
   const meta: UitnodigingMeta = { hash: hashVan(geheim), email: normalizeEmail(o.adres) ?? o.adres, op, tot };
   const { error } = await admin.auth.admin.updateUserById(o.authId, { app_metadata: { [META_SLEUTEL]: meta } });
   if (error) throw error;
-  return { link: `${portalUrl().replace(/\/+$/, "")}/${UITNODIGING_HASH}${maakUitnodigingCode(o.userId, geheim)}`, op, tot };
+  return { link: `${portalUrl().replace(/\/+$/, "")}/${UITNODIGING_HASH}${maakUitnodigingCode(o.userId, geheim)}`, op, tot, vorige };
 }
 
 /**
- * Uitnodiging weghalen, bv. als de mail met de link niet vertrok: dan staat
- * er in Gebruikers geen "Uitgenodigd" bij iemand die niets kreeg. Een
- * sleutel op null laat Supabase weg uit de app_metadata.
+ * Zet de uitnodiging van vóór `maakUitnodiging` terug (null = geen), als de
+ * mail met de nieuwe link niet vertrok: dan staat er in Gebruikers geen
+ * "Uitgenodigd" bij iemand die niets kreeg, en werkt een eerdere link nog.
+ * Een sleutel op null laat Supabase weg uit de app_metadata.
  */
-export async function trekUitnodigingIn(authId: string): Promise<void> {
-  const { error } = await vereistAdmin().auth.admin.updateUserById(authId, { app_metadata: { [META_SLEUTEL]: null } });
+export async function zetUitnodigingTerug(authId: string, vorige: unknown): Promise<void> {
+  const { error } = await vereistAdmin().auth.admin.updateUserById(authId, { app_metadata: { [META_SLEUTEL]: vorige ?? null } });
   if (error) throw error;
 }
 
@@ -122,20 +132,21 @@ export type OpenUitkomst = { ok: true; naam: string; email: string; tokenHash: s
 export const OPEN_REDEN_TEKST: Record<OpenReden, string> = {
   ongeldig: "Deze uitnodiging werkt niet (meer). Vraag de planning om een nieuwe.",
   verlopen: `Deze uitnodiging is verlopen, de link werkt ${UITNODIGING_GELDIG_DAGEN} dagen. Vraag de planning om een nieuwe.`,
-  gebruikt: "Je bent al eens aangemeld met deze uitnodiging. Log in met je e-mailadres en wachtwoord.",
+  gebruikt: "Deze uitnodiging is al gebruikt. Log in met je e-mailadres en je wachtwoord, of kies Wachtwoord vergeten op het inlogscherm.",
   gepauzeerd: "Je account staat op pauze. Neem contact op met de planning.",
 };
 
+type Controle =
+  | { ok: true; user: AppUserIntern; authId: string; adres: string; meta: UitnodigingMeta }
+  | { ok: false; reden: OpenReden };
+
 /**
- * Een uitnodiging openen: controleert de code en geeft een verse
- * herstel-token (hashed_token) terug, waarmee de landing zelf de sessie
- * start (supabase.auth.verifyOtp) en het wachtwoord laat kiezen. Er gaat
- * geen mail uit. Eerst het geheim, dan pas de rest: wie de code niet heeft,
- * leert niets over het account (altijd "ongeldig").
+ * De controle achter openen en afronden. Eerst het geheim, dan pas de rest:
+ * wie de code niet heeft, leert niets over het account (altijd "ongeldig").
  */
-export async function openUitnodiging(code: unknown, users: readonly AppUserIntern[], nu = Date.now()): Promise<OpenUitkomst> {
+async function controleer(code: unknown, users: readonly AppUserIntern[], nu: number): Promise<Controle> {
   const admin = vereistAdmin();
-  const ongeldig: OpenUitkomst = { ok: false, reden: "ongeldig" };
+  const ongeldig: Controle = { ok: false, reden: "ongeldig" };
   const gelezen = leesUitnodigingCode(code);
   if (!gelezen) return ongeldig;
   const user = users.find((u) => String(u.id) === gelezen.userId);
@@ -157,14 +168,40 @@ export async function openUitnodiging(code: unknown, users: readonly AppUserInte
   const adres = normalizeEmail(user.email);
   if (!adres || adres !== meta.email || normalizeEmail(authUser.email) !== adres) return ongeldig;
   if (user.isActive === false) return { ok: false, reden: "gepauzeerd" };
-  if (user.lastLogin) return { ok: false, reden: "gebruikt" };
+  if (meta.gebruikt || user.lastLogin) return { ok: false, reden: "gebruikt" };
   if (!(Date.parse(meta.tot) > nu)) return { ok: false, reden: "verlopen" };
+  return { ok: true, user, authId: user.authId, adres, meta };
+}
 
-  const { data: link, error: linkFout } = await admin.auth.admin.generateLink({ type: "recovery", email: adres });
+/**
+ * Een uitnodiging openen: controleert de code en geeft een verse
+ * herstel-token (hashed_token) terug, waarmee de landing zelf de sessie
+ * start (supabase.auth.verifyOtp) en het wachtwoord laat kiezen. Er gaat
+ * geen mail uit, en er wordt niets verbruikt: een linkscanner die de pagina
+ * opent, laat de uitnodiging heel.
+ */
+export async function openUitnodiging(code: unknown, users: readonly AppUserIntern[], nu = Date.now()): Promise<OpenUitkomst> {
+  const c = await controleer(code, users, nu);
+  if (!c.ok) return c;
+  const { data: link, error: linkFout } = await vereistAdmin().auth.admin.generateLink({ type: "recovery", email: c.adres });
   if (linkFout) throw linkFout;
   const tokenHash = link?.properties?.hashed_token;
   if (!tokenHash) throw new Error("generateLink gaf geen hashed_token terug.");
-  return { ok: true, naam: user.name, email: adres, tokenHash };
+  return { ok: true, naam: c.user.name, email: c.adres, tokenHash };
+}
+
+/**
+ * Afronden, zodra met de link een wachtwoord gekozen is: de uitnodiging telt
+ * als gebruikt en geeft daarna geen herstel-token meer. Dezelfde controle als
+ * openen, dus alleen wie de code heeft kan dit (en die kon het wachtwoord
+ * toch al kiezen).
+ */
+export async function rondUitnodigingAf(code: unknown, users: readonly AppUserIntern[], nu = Date.now()): Promise<{ ok: true } | { ok: false; reden: OpenReden }> {
+  const c = await controleer(code, users, nu);
+  if (!c.ok) return c;
+  const { error } = await vereistAdmin().auth.admin.updateUserById(c.authId, { app_metadata: { [META_SLEUTEL]: { ...c.meta, gebruikt: new Date(nu).toISOString() } } });
+  if (error) throw error;
+  return { ok: true };
 }
 
 /**

@@ -152,6 +152,9 @@ const mem = vi.hoisted(() => ({
   // Service-role-client voor de routes die Supabase Auth beheren; null =
   // niet geconfigureerd (standaard). Een test zet hier een attrap.
   supabaseAdmin: null as any,
+  // true = saveUsersData kan een nieuw profiel niet aan zijn Auth-account
+  // koppelen (koppelAuthIdStil mislukt): geen authId in createdAccounts.
+  koppelMislukt: false,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -416,8 +419,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       // profiel meteen gekoppeld aan dat account (koppelAuthIdStil).
       const beforeEmails = new Set(mem.users.map((u: any) => String(u.email || '').toLowerCase()).filter(Boolean));
       const nieuw = new Set(data.filter((u: any) => u.email && !beforeEmails.has(String(u.email).toLowerCase())));
-      const createdAccounts = [...nieuw].map((u: any) => ({ email: u.email, name: u.name, userId: String(u.id), authId: `auth-nieuw-${u.id}` }));
-      mem.users = data.map((u: any) => (nieuw.has(u) ? { ...u, authId: `auth-nieuw-${u.id}` } : u));
+      const createdAccounts = [...nieuw].map((u: any) => ({ email: u.email, name: u.name, userId: String(u.id), ...(mem.koppelMislukt ? {} : { authId: `auth-nieuw-${u.id}` }) }));
+      mem.users = data.map((u: any) => (nieuw.has(u) && !mem.koppelMislukt ? { ...u, authId: `auth-nieuw-${u.id}` } : u));
       return { createdAccounts };
     },
     // Zelfde contract als de echte: optioneel gefilterd op één gebruiker
@@ -920,6 +923,7 @@ beforeEach(() => {
   invalidateUsersCache();
   invalidateOnderhoudCache();
   mem.supabaseAdmin = null;
+  mem.koppelMislukt = false;
   mem.appSettings = {};
   mem.opslag.clear();
   mem.opslagTijd.clear();
@@ -3612,7 +3616,7 @@ describe('uitnodigen voor het portaal', () => {
     const res = await nodigUit(['3', '4', '5', '1', 'bestaat-niet'], { droog: true });
     expect(res.status).toBe(200);
     expect(res.json).toMatchObject({ droog: true, aantal: 1, ontvangers: [{ adres: 'a@vhb.be', naam: 'Chauffeur A' }] });
-    expect(res.json.overgeslagen).toEqual([
+    expect(res.json.nietUitgenodigd).toEqual([
       { id: '4', naam: 'Chauffeur B', reden: 'al-ingelogd' },
       { id: '5', naam: 'Chauffeur C', reden: 'geen-account' },
       { id: '1', naam: 'Annelies Admin', reden: 'al-ingelogd' },
@@ -3627,7 +3631,9 @@ describe('uitnodigen voor het portaal', () => {
   it('versturen: een eigen mail met een eigen link, alleen de hash bij het account, verzendlog en logboek', async () => {
     const res = await nodigUit(['3']);
     expect(res.status).toBe(200);
-    expect(res.json).toMatchObject({ droog: false, aantal: 1, gelukt: 1, mislukt: 0, resterend: [], overgeslagen: [] });
+    // `overgeslagen` is de vlag van de reeks ("mailsoort staat uit") en moet
+    // false blijven: het scherm leest elke waarheidswaarde als "niets verstuurd".
+    expect(res.json).toMatchObject({ droog: false, aantal: 1, gelukt: 1, mislukt: 0, resterend: [], overgeslagen: false, nietUitgenodigd: [] });
     expect(res.json.uitgenodigd).toEqual([{ userId: '3', op: '2026-06-15T10:00:00.000Z', tot: '2026-06-22T10:00:00.000Z' }]);
 
     expect(mem.emailsSent).toHaveLength(1);
@@ -3757,6 +3763,51 @@ describe('uitnodigen voor het portaal', () => {
     expect(res.status).toBe(201);
     expect(links).toEqual(['recovery:tweede@vhb.be']);
     expect(mem.emailsSent.find((m) => m.context === 'welcome:tweede@vhb.be')).toBeTruthy();
+  });
+
+  it('afronden na het kiezen van het wachtwoord: daarna geen herstel-token meer, ook zonder aanmelding', async () => {
+    await nodigUit(['3']);
+    const code = codeUitMail(mem.emailsSent[0].text);
+    const afronden = (c: unknown) => api('POST', '/api/uitnodiging/afronden', { body: { code: c }, device: null });
+
+    // Zonder het geheim: niets veranderd.
+    const vals = await afronden(code.replace(/.{4}$/, code.endsWith('AAAA') ? 'BBBB' : 'AAAA'));
+    expect(vals.status).toBe(410);
+    expect((accounts.get('auth-3')!.app_metadata.uitnodiging as any).gebruikt).toBeUndefined();
+
+    expect((await afronden(code)).status).toBe(200);
+    expect((accounts.get('auth-3')!.app_metadata.uitnodiging as any).gebruikt).toBe('2026-06-15T10:00:00.000Z');
+    // lastLogin blijft leeg (toestel wacht op goedkeuring), toch is de link op.
+    expect(mem.users.find((u: any) => u.id === '3').lastLogin).toBeUndefined();
+    const res = await open(code);
+    expect(res.status).toBe(410);
+    expect(res.json).toMatchObject({ reden: 'gebruikt' });
+    expect(links).toEqual([]);
+  });
+
+  it('mislukt een nieuwe mail, dan werkt de vorige uitnodiging weer', async () => {
+    await nodigUit(['4']);
+    const vorige = codeUitMail(mem.emailsSent[0].text);
+    const { sendEmail } = await import('../api/email.js');
+    vi.mocked(sendEmail).mockImplementation(async () => ({ ok: false, mocked: false, error: '450 rate limit' }));
+    try {
+      const res = await nodigUit(['4']);
+      expect(res.json).toMatchObject({ gelukt: 0, mislukt: 1, resterend: ['b@vhb.be'] });
+    } finally {
+      vi.mocked(sendEmail).mockImplementation(async (opts: any) => {
+        mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text, attachments: opts.attachments });
+        mem.mailLogVerloop.push(`mail:${opts.to.join(',')}`);
+        return { ok: true, mocked: true };
+      });
+    }
+    expect((await open(vorige)).status).toBe(200);
+  });
+
+  it('kon het nieuwe profiel niet aan zijn account gekoppeld worden, dan de herstellink in de welkomstmail', async () => {
+    mem.koppelMislukt = true;
+    const res = await api('POST', '/api/users/one', { token: 'tok-admin', body: { id: 'n3', name: 'Derde Chauffeur', email: 'derde@vhb.be', role: 'chauffeur', isActive: true, password: 'lang-genoeg' } });
+    expect(res.status).toBe(201);
+    expect(links).toEqual(['recovery:derde@vhb.be']);
   });
 
   it('niemand om uit te nodigen = 400 met de reden, er vertrekt niets', async () => {

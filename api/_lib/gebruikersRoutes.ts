@@ -20,8 +20,9 @@ import { DAG_DMJ, brusselsDay, normalizeEmail, toRoleScopedUser, sanitizeIncomin
 import { bouwUitnodigingMail, portalUrl } from "../email.js";
 import { reeksAntwoord, verstuurMailReeks } from "./mailReeks.js";
 import { uitnodigenRateLimit, uitnodigingOpenenRateLimit } from "../rateLimit.js";
-import { OPEN_REDEN_TEKST, UITNODIGING_SOORT, kiesOntvangers, maakUitnodiging, openUitnodiging, trekUitnodigingIn, uitnodigingenPerGebruiker } from "./uitnodiging.js";
-import { UITNODIGING_GELDIG_DAGEN, UITNODIGING_HASH, beschrijfOvergeslagen } from "../../shared/uitnodiging.js";
+import { OPEN_REDEN_TEKST, UITNODIGING_SOORT, kiesOntvangers, maakUitnodiging, openUitnodiging, rondUitnodigingAf, uitnodigingenPerGebruiker, zetUitnodigingTerug } from "./uitnodiging.js";
+import { UITNODIGING_GELDIG_DAGEN, UITNODIGING_HASH, beschrijfOvergeslagen, leesUitnodigingCode } from "../../shared/uitnodiging.js";
+import { getUsersCached } from "../userCache.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { isIsoDag } from "../../shared/rapporten/periode.js";
 import { getUsersData, EmailInGebruikError, MigratieOntbreektError, logActivity, getUserExpiries, saveUserExpiry, deleteUserExpiry } from "../storage.js";
@@ -70,23 +71,24 @@ export function mountGebruikersRoutes(app: express.Express) {
   // anders per persoon een nieuwe link en een eigen mail, via de gedeelde
   // reeks (verzendlog, tijdsbudget, `alleen` = de rest na een deels mislukte
   // verzending). Wie niet kan (al ingelogd, gepauzeerd, geen adres) staat in
-  // `overgeslagen`.
+  // `nietUitgenodigd`; niet in `overgeslagen`, want dat veld van de reeks
+  // betekent "mailsoort staat uit" en het scherm leest het zo (mailUitkomst.ts).
   app.post("/api/users/uitnodigen", authenticate, requireRole("admin"), uitnodigenRateLimit, async (req: AuthenticatedRequest, res) => {
     const gestartOp = Date.now();
     const body = valideerRecord(res, uitnodigenSchema, req.body ?? {});
     if (!body) return;
     try {
       if (!supabaseAdmin) return res.status(503).json({ error: "Uitnodigen kan niet: de service-role van Supabase ontbreekt." });
-      const { ontvangers, overgeslagen } = kiesOntvangers((await getUsersData()) as AppUserIntern[], body.ids);
+      const { ontvangers, overgeslagen: nietUitgenodigd } = kiesOntvangers((await getUsersData()) as AppUserIntern[], body.ids);
       const alleen = body.alleen ? new Set(body.alleen) : null;
       const lijst = alleen ? ontvangers.filter((o) => alleen.has(o.adres)) : ontvangers;
       if (lijst.length === 0) {
         const waarom = alleen
           ? "Geen van de resterende adressen kan nog uitgenodigd worden; ververs de lijst."
-          : overgeslagen.length > 0
-            ? `Niemand om uit te nodigen: ${beschrijfOvergeslagen(overgeslagen)}.`
+          : nietUitgenodigd.length > 0
+            ? `Niemand om uit te nodigen: ${beschrijfOvergeslagen(nietUitgenodigd)}.`
             : "Deze gebruikers bestaan niet meer; ververs de lijst.";
-        return res.status(400).json({ error: waarom, overgeslagen });
+        return res.status(400).json({ error: waarom, nietUitgenodigd });
       }
       if (body.droog) {
         // De echte bouwer met de eerste ontvanger; de link is een attrap.
@@ -97,11 +99,11 @@ export function mountGebruikersRoutes(app: express.Express) {
           link: `${portalUrl().replace(/\/+$/, "")}/${UITNODIGING_HASH}voorbeeld`,
           geldigTot: new Date(gestartOp + UITNODIGING_GELDIG_DAGEN * 86_400_000).toISOString(),
         });
-        return res.json({ droog: true, aantal: lijst.length, ontvangers: lijst.map(({ adres, naam }) => ({ adres, naam })), html, overgeslagen });
+        return res.json({ droog: true, aantal: lijst.length, ontvangers: lijst.map(({ adres, naam }) => ({ adres, naam })), html, nietUitgenodigd });
       }
 
       const perAdres = new Map(lijst.map((o) => [o.adres, o]));
-      const gemaakt = new Map<string, { op: string; tot: string }>();
+      const gemaakt = new Map<string, { op: string; tot: string; vorige: unknown }>();
       const uitkomst = await verstuurMailReeks({
         soort: UITNODIGING_SOORT,
         door: req.appUser!.name,
@@ -111,33 +113,34 @@ export function mountGebruikersRoutes(app: express.Express) {
         perOntvanger: async ({ adres }) => {
           const o = perAdres.get(adres)!;
           const u = await maakUitnodiging(o);
-          gemaakt.set(o.userId, { op: u.op, tot: u.tot });
+          gemaakt.set(o.userId, { op: u.op, tot: u.tot, vorige: u.vorige });
           return bouwUitnodigingMail({ naam: o.naam, email: o.adres, link: u.link, geldigTot: u.tot });
         },
       });
 
-      // Zeker niet vertrokken: de link weer weghalen, anders staat er
-      // "Uitgenodigd" bij iemand die niets kreeg. Onzeker blijft staan.
+      // Zeker niet vertrokken: de vorige uitnodiging terug (of geen), anders
+      // staat er "Uitgenodigd" bij iemand die niets kreeg en werkt een
+      // eerdere, nog geldige link niet meer. Onzeker blijft staan.
       const resterend = new Set(uitkomst.resterend);
       await Promise.all(lijst
         .filter((o) => resterend.has(o.adres) && gemaakt.has(o.userId))
-        .map((o) => trekUitnodigingIn(o.authId).catch((err) => console.error("Uitnodiging intrekken na een mislukte mail is mislukt.", err))));
+        .map((o) => zetUitnodigingTerug(o.authId, gemaakt.get(o.userId)!.vorige).catch((err) => console.error("Vorige uitnodiging terugzetten na een mislukte mail is mislukt.", err))));
 
+      // Eén logregel per uitgenodigde, tegelijk: na een reeks van tot 52 s
+      // moet het antwoord nog binnen de 60 s van de functie vertrekken.
       const onzeker = new Set(uitkomst.onzekerAdressen);
       const uitgenodigd = lijst.filter((o) => gemaakt.has(o.userId) && !resterend.has(o.adres) && !onzeker.has(o.adres));
-      for (const o of uitgenodigd) {
-        await logActivity(
-          req,
-          "users",
-          "Uitnodiging verstuurd",
-          `${o.naam}: uitnodiging voor het portaal, link geldig tot ${DAG_DMJ(brusselsDay(gemaakt.get(o.userId)!.tot))}${uitkomst.mocked ? " (alleen gelogd, geen SMTP)" : ""}.`,
-          { type: "user", id: o.userId },
-        ).catch((err) => console.error("Logboekregel van de uitnodiging is mislukt.", err));
-      }
+      await Promise.all(uitgenodigd.map((o) => logActivity(
+        req,
+        "users",
+        "Uitnodiging verstuurd",
+        `${o.naam}: uitnodiging voor het portaal, link geldig tot ${DAG_DMJ(brusselsDay(gemaakt.get(o.userId)!.tot))}${uitkomst.mocked ? " (alleen gelogd, geen SMTP)" : ""}.`,
+        { type: "user", id: o.userId },
+      ).catch((err) => console.error("Logboekregel van de uitnodiging is mislukt.", err))));
       res.json({
         ...reeksAntwoord(uitkomst),
-        uitgenodigd: uitgenodigd.map((o) => ({ userId: o.userId, ...gemaakt.get(o.userId)! })),
-        overgeslagen,
+        uitgenodigd: uitgenodigd.map((o) => ({ userId: o.userId, op: gemaakt.get(o.userId)!.op, tot: gemaakt.get(o.userId)!.tot })),
+        nietUitgenodigd,
       });
     } catch (err) {
       console.error("Uitnodigen is mislukt.", err);
@@ -145,18 +148,36 @@ export function mountGebruikersRoutes(app: express.Express) {
     }
   });
 
-  // Een uitnodiging openen vanuit de mail. Publiek: de genodigde heeft nog
-  // geen wachtwoord. Geeft een verse herstel-token; de landing start daarmee
-  // zelf de sessie en laat het wachtwoord kiezen (zie openUitnodiging).
+  // Een uitnodiging openen vanuit de mail, en afronden zodra het wachtwoord
+  // gekozen is. Publiek: de genodigde heeft nog geen wachtwoord; de code is
+  // het bewijs. Eerst de vorm van de code (niets lezen voor rommel), dan de
+  // gecachte gebruikers, zoals de auth-middleware.
+  const ongeldigeCode = (res: express.Response) => res.status(410).json({ reden: "ongeldig", error: OPEN_REDEN_TEKST.ongeldig });
   app.post("/api/uitnodiging/openen", uitnodigingOpenenRateLimit, async (req, res) => {
     try {
       if (!supabaseAdmin) return res.status(503).json({ error: "Uitnodigingen werken nu niet. Probeer het later opnieuw." });
-      const uitkomst = await openUitnodiging(req.body?.code, (await getUsersData()) as AppUserIntern[]);
+      if (!leesUitnodigingCode(req.body?.code)) return ongeldigeCode(res);
+      const uitkomst = await openUitnodiging(req.body.code, (await getUsersCached()) as AppUserIntern[]);
       if (!uitkomst.ok) return res.status(410).json({ reden: uitkomst.reden, error: OPEN_REDEN_TEKST[uitkomst.reden] });
       res.json({ naam: uitkomst.naam, email: uitkomst.email, tokenHash: uitkomst.tokenHash });
     } catch (err) {
       console.error("Uitnodiging openen is mislukt.", err);
       res.status(500).json({ error: "De uitnodiging kon niet geopend worden. Probeer het zo meteen opnieuw." });
+    }
+  });
+
+  // Het wachtwoord is gekozen: de link is vanaf nu geen herstellink meer,
+  // ook als lastLogin leeg blijft (toestel wacht op goedkeuring).
+  app.post("/api/uitnodiging/afronden", uitnodigingOpenenRateLimit, async (req, res) => {
+    try {
+      if (!supabaseAdmin) return res.status(503).json({ error: "Uitnodigingen werken nu niet. Probeer het later opnieuw." });
+      if (!leesUitnodigingCode(req.body?.code)) return ongeldigeCode(res);
+      const uitkomst = await rondUitnodigingAf(req.body.code, (await getUsersCached()) as AppUserIntern[]);
+      if (!uitkomst.ok) return res.status(410).json({ reden: uitkomst.reden, error: OPEN_REDEN_TEKST[uitkomst.reden] });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Uitnodiging afronden is mislukt.", err);
+      res.status(500).json({ error: "Afronden is mislukt." });
     }
   });
 

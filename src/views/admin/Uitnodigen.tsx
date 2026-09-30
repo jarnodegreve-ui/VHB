@@ -16,8 +16,10 @@ import { UITNODIGING_GELDIG_DAGEN, beschrijfOvergeslagen, type UitnodigingBelets
  */
 
 export type Uitnodiging = { op: string; tot: string };
-type Overgeslagen = { id: string; naam: string; reden: UitnodigingBeletsel };
-type Droog = MailVoorbeeld & { overgeslagen: Overgeslagen[] };
+type NietUitgenodigd = { id: string; naam: string; reden: UitnodigingBeletsel };
+/** `nietUitgenodigd`: wie de server overslaat, met de reden. Niet
+ *  `overgeslagen`: dat veld betekent in een mailuitkomst "mailsoort staat uit". */
+type Droog = MailVoorbeeld & { nietUitgenodigd: NietUitgenodigd[] };
 
 /** Lopende uitnodiging per gebruiker; best-effort, zoals de andere kolommen van Gebruikers. */
 export function useUitnodigingen() {
@@ -61,14 +63,14 @@ export function useUitnodigen({ onVerstuurd }: { onVerstuurd: () => void }) {
     return uitkomst;
   };
 
-  const overgeslagen = voorbeeld?.overgeslagen ?? [];
+  const nietUitgenodigd = voorbeeld?.nietUitgenodigd ?? [];
   const venster = (
     <MailBevestiging
       voorbeeld={voorbeeld}
       naam="Voorbeeld van de uitnodiging"
       toon="naam"
       werkwoord="Uitnodiging verstuurd"
-      extra={`Elk met een eigen link om een wachtwoord te kiezen, ${UITNODIGING_GELDIG_DAGEN} dagen geldig.${overgeslagen.length > 0 ? ` Niet uitgenodigd: ${beschrijfOvergeslagen(overgeslagen)}.` : ''}`}
+      extra={`Elk met een eigen link om een wachtwoord te kiezen, ${UITNODIGING_GELDIG_DAGEN} dagen geldig.${nietUitgenodigd.length > 0 ? ` Niet uitgenodigd: ${beschrijfOvergeslagen(nietUitgenodigd)}.` : ''}`}
       logVerwijzing="Het verzendlog staat in Beheer › Mails."
       verstuur={verstuur}
       onTerug={() => setVoorbeeld(null)}

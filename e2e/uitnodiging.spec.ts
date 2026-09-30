@@ -44,10 +44,15 @@ const onderscheptAuth = async (page: Page) => {
 
 test('uitnodiging: welkom, wachtwoord kiezen en meteen in de app', async ({ page }) => {
   const geopend: unknown[] = [];
+  const afgerond: unknown[] = [];
   await page.route('**/api/**', apiFixtures(CHAUFFEUR, (pad: string) => (pad.endsWith('/api/auth/session') ? { ...CHAUFFEUR, lastLogin: new Date().toISOString() } : undefined)));
   await page.route('**/api/uitnodiging/openen', async (route) => {
     geopend.push(route.request().postDataJSON());
     await route.fulfill({ json: { naam: CHAUFFEUR.name, email: CHAUFFEUR.email, tokenHash: 'hash-e2e' } });
+  });
+  await page.route('**/api/uitnodiging/afronden', async (route) => {
+    afgerond.push(route.request().postDataJSON());
+    await route.fulfill({ json: { success: true } });
   });
   const auth = await onderscheptAuth(page);
 
@@ -67,6 +72,8 @@ test('uitnodiging: welkom, wachtwoord kiezen en meteen in de app', async ({ page
   expect(auth.verify).toEqual([expect.objectContaining({ token_hash: 'hash-e2e', type: 'recovery' })]);
   expect(auth.wachtwoord).toEqual([expect.objectContaining({ password: WACHTWOORD })]);
   expect(auth.aanmelden).toEqual([expect.objectContaining({ email: CHAUFFEUR.email, password: WACHTWOORD })]);
+  // Na het wachtwoord is de uitnodiging afgerond: de link is geen herstellink meer.
+  expect(afgerond).toEqual([{ code: CODE }]);
 });
 
 test('verlopen uitnodiging: de uitleg, en "Naar inloggen" toont het gewone loginscherm', async ({ page }) => {
@@ -90,6 +97,7 @@ test('wie al aangemeld is, blijft in de app en de uitnodiging wordt niet geopend
   });
   await page.goto(`/#uitnodiging=${CODE}`);
   await expect(page.locator('[data-scroll-root]')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Uitnodiging niet geopend: je bent al aangemeld/)).toBeVisible();
   expect(new URL(page.url()).hash).toBe('');
   expect(geopend).toBe(0);
 });
