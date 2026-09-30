@@ -1,6 +1,6 @@
 import { mailOpbouw, portalUrl, type MailTekst } from "../email.js";
 import { DAG_DMJ } from "../helpers.js";
-import type { MailStatusToon } from "./mailLayout.js";
+import { MAIL_KLEUR, type MailStatusToon } from "./mailLayout.js";
 
 /**
  * De teksten van de mails die een route of een cron opbouwt (nr. 34, 29-09):
@@ -47,32 +47,52 @@ export const bouwDringendeUpdateMail = (o: { titel: string; inhoud: string; doel
     // Regeleinden uit het bericht blijven alinea's.
     alineas: o.inhoud.split(/\n{2,}/).map((a) => a.trim()).filter(Boolean),
     knop: { tekst: "Open de update", url: `${portalUrl()}${o.doelPad}` },
-    voet: "Bevestig in het portaal met de knop \"Gelezen en begrepen\".",
   });
   return { onderwerp: `Dringende update: ${o.titel}`, html, text };
 };
 
 /** Week- of dagoverzicht (de digest). Neutrale toon, bewust zonder
  *  waarschuwingsteken (verzoek Jarno, 02-08): dit is een overzicht dat élke
- *  week komt, geen alarm. `impact` staat in de onderwerpregel. */
+ *  week komt, geen alarm. `impact` staat in de onderwerpregel en als pil.
+ *  Volgorde naar belang: de cijfers van de week in een vlak, dan wat een
+ *  mens moet doen (documenten, voertuigen, openstaande diensten), de
+ *  technische meldingen onderaan in een vaste letter. */
 export const bouwOverzichtMail = (o: {
   naam: "weekoverzicht" | "dagoverzicht";
   impact: string;
   toon: MailStatusToon;
-  alineas: string[];
+  /** Het venster van de meldingen, bv. "7 dagen". */
+  venster: string;
+  /** Weekcijfers als label en waarde (alleen het weekoverzicht). */
+  cijfers?: Array<{ label: string; waarde: string }>;
+  /** Documenten, voertuigen, openstaande diensten. */
   lijsten: Array<{ kop?: string; items: string[] }>;
+  /** Foutmeldingen van toestellen, gegroepeerd ("2× [bron] bericht"). */
+  meldingen: string[];
+  /** Aantal unieke foutsoorten. */
+  soorten: number;
+  /** Uitleg bij wat niet meetelde (ruis), klein onderaan. */
+  ruis?: string;
 }): MailTekst => {
   const Overzicht = `${o.naam[0].toUpperCase()}${o.naam.slice(1)}`;
+  const cijfers = o.cijfers ?? [];
   const { html, text } = mailOpbouw({
     kicker: "Systeem",
     titel: `${Overzicht} van het portaal`,
     status: { label: o.impact, toon: o.toon },
-    alineas: o.alineas,
-    lijsten: o.lijsten,
+    voorbeeld: cijfers.length > 0 ? cijfers.map((c) => `${c.label}: ${c.waarde}`).join(" · ") : `${o.impact[0].toUpperCase()}${o.impact.slice(1)} in de afgelopen ${o.venster}.`,
+    ...(cijfers.length > 0 ? { feitenKop: `Afgelopen ${o.venster}`, feiten: cijfers } : {}),
+    lijsten: [
+      ...o.lijsten,
+      ...(o.meldingen.length > 0 ? [{ kop: `Meldingen, ${o.soorten} ${o.soorten === 1 ? "soort" : "soorten"}`, items: o.meldingen, technisch: true }] : []),
+    ],
+    alineas: o.meldingen.length === 0 && o.lijsten.length === 0 && cijfers.length === 0 ? [`Geen meldingen in de afgelopen ${o.venster}.`] : [],
+    volgorde: ["feiten", "lijsten", "alineas"],
     // Zelfde vorm als viewUrl("beheer-debug") in collectie.ts; hier
     // uitgeschreven zodat de bouwers niets van de routes hoeven te laden.
     knop: { tekst: "Open Systeemstatus", url: `${portalUrl()}/?view=beheer-debug` },
-    voet: "Details staan in het portaal onder Systeemstatus en in de Vercel-logs.",
+    voet: [o.ruis, "Details staan in het portaal onder Systeemstatus en in de Vercel-logs."].filter(Boolean).join(" "),
+    doelgroep: "beheer",
   });
   return { onderwerp: `${Overzicht} portaal: ${o.impact}`, html, text };
 };
@@ -82,6 +102,7 @@ export const bouwTestMail = (o: { afzender: string; antwoordadres?: string; vers
   const { html, text } = mailOpbouw({
     kicker: "Systeem",
     titel: "Testmail van het portaal",
+    doelgroep: "beheer",
     status: { label: "Mailinstellingen werken", toon: "goed" },
     alineas: ["Deze testmail bevestigt dat het portaal mails kan versturen. Komt ze in je spam-map terecht, controleer dan de domeinverificatie bij de mailprovider."],
     feiten: [
@@ -98,6 +119,7 @@ export const bouwBackupIntegriteitMail = (o: { filename: string; bevindingen: st
   const { html, text } = mailOpbouw({
     kicker: "Back-up",
     titel: "Back-up faalde de integriteitscheck",
+    doelgroep: "beheer",
     status: { label: "Controleer de portaal-data", toon: "fout" },
     alineas: [`De back-up ${o.filename} is opgeslagen, maar de integriteitscheck vond problemen. Controleer of de portaal-data compleet is.`],
     lijst: { kop: "Bevindingen", items: o.bevindingen },
@@ -115,11 +137,12 @@ export const bouwBackupWeekkopieMail = (o: { filename: string; exportedAt: strin
   const { html, text } = mailOpbouw({
     kicker: "Back-up",
     titel: `Wekelijkse back-up ${dag}`,
+    doelgroep: "beheer",
     status: { label: "Versleuteld, bewaar buiten Supabase en Vercel", toon: "neutraal" },
     alineas: [
       "In bijlage de wekelijkse off-site kopie van de portaal-back-up, AES-256-versleuteld. Bewaar deze mail buiten Supabase en Vercel.",
       "Ontsleutelen (vraagt om de wachtwoordzin uit je wachtwoordmanager):",
-      { html: `<pre style="margin: 0 0 14px; padding: 12px 14px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 12px; white-space: pre-wrap;">${commando.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, tekst: `  ${commando}` },
+      { html: `<pre style="margin: 0 0 14px; padding: 12px 14px; background-color: ${MAIL_KLEUR.vlak}; border: 1px solid ${MAIL_KLEUR.hairline}; border-radius: 10px; font-size: 12px; line-height: 18px; color: ${MAIL_KLEUR.inkt}; white-space: pre-wrap;">${commando.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`, tekst: `  ${commando}` },
       "Zie ook docs/RESTORE.md in de repo.",
     ],
   });
@@ -131,6 +154,7 @@ export const bouwRestoreProefMail = (o: { filename: string | null | undefined; b
   const { html, text } = mailOpbouw({
     kicker: "Back-up",
     titel: "Restore-proef gefaald",
+    doelgroep: "beheer",
     status: { label: "Controleer de back-ups zo snel mogelijk", toon: "fout" },
     alineas: [`De maandelijkse restore-proef${o.filename ? ` van ${o.filename}` : ""} vond problemen. Dit is je herstelpad, dus controleer de back-ups zo snel mogelijk.`],
     lijst: { kop: "Bevindingen", items: o.bevindingen },

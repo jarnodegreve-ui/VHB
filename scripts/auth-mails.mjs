@@ -21,7 +21,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { bouwMail } from '../api/_lib/mailLayout.ts';
+import { bouwMail, MAIL_KLEUR } from '../api/_lib/mailLayout.ts';
 
 const UIT = path.resolve('supabase/auth-mails');
 // Supabase vult {{ .SiteURL }} in; dezelfde basis als het logo in de mail.
@@ -36,8 +36,9 @@ const layout = ({ kicker, titel, alinea, knop, code, voet }) =>
     titel,
     aanhef: 'Hallo,',
     alineas: [
-      { html: `<p style="margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: #1F2937;">${alinea}</p>`, tekst: alinea },
-      ...(code ? [{ html: `<p style="margin: 8px 0 18px; font-size: 28px; font-weight: 700; letter-spacing: 0.3em; color: #0D0D0F;">${code}</p>`, tekst: code }] : []),
+      // De tekstversie (en de voorbeeldregel in de inbox) is platte tekst: zonder <strong>.
+      { html: `<p style="margin: 0 0 14px; font-size: 15px; line-height: 24px; color: ${MAIL_KLEUR.tekst};">${alinea}</p>`, tekst: alinea.replace(/<[^>]+>/g, '') },
+      ...(code ? [{ html: `<p style="margin: 8px 0 18px; font-size: 28px; font-weight: 700; letter-spacing: 0.3em; color: ${MAIL_KLEUR.inkt};">${code}</p>`, tekst: code }] : []),
     ],
     // Elke knop hier draagt een eenmalige link van Supabase: die moet gevolgd
     // worden, dus de iPhone-regel zegt waar je daarna verder gaat (nr. 16).

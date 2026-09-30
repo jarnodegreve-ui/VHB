@@ -129,7 +129,7 @@ const systemMailRecipients = async (): Promise<string[]> => {
  * mailtranche een sectie in de weekmail van de digest, zodat er op maandag
  * één mail komt in plaats van twee.
  */
-const weekcijfers = async (): Promise<string[]> => {
+const weekcijfers = async (): Promise<Array<{ label: string; waarde: string }>> => {
   const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const nuIso = new Date().toISOString();
   const [sessies, leave, swaps, ruilUitvoeringen] = await Promise.all([
@@ -156,9 +156,9 @@ const weekcijfers = async (): Promise<string[]> => {
   const openVerlof = leave.filter((l) => l.status === "pending").length;
   const openRuil = swaps.filter((sw) => sw.status === "pending" || sw.status === "accepted").length;
   return [
-    `Actieve gebruikers: ${uniekeGebruikers}`,
-    `Verlof: ${verlofNieuw} nieuw, ${verlofBeslist} beslist, ${openVerlof} open`,
-    `Dienstruil: ${ruilNieuw} nieuw, ${ruilUitvoeringen.length} uitgevoerd, ${openRuil} open`,
+    { label: "Actieve gebruikers", waarde: String(uniekeGebruikers) },
+    { label: "Verlof", waarde: `${verlofNieuw} nieuw, ${verlofBeslist} beslist, ${openVerlof} open` },
+    { label: "Dienstruil", waarde: `${ruilNieuw} nieuw, ${ruilUitvoeringen.length} uitgevoerd, ${openRuil} open` },
   ];
 };
 
@@ -715,18 +715,15 @@ export function mountCronRoutes(app: express.Express) {
 
       // Neutrale toon, bewust zonder waarschuwingsteken (verzoek Jarno, 02-08):
       // dit is een overzicht dat élke week komt, geen alarm. Wat er wél toe
-      // doet, hoeveel mensen geraakt zijn, staat in de onderwerpregel
-      // (bouwOverzichtMail).
-      const inleiding = errors.length === 0
-        ? `In de afgelopen ${windowLabel} zijn er geen meldingen binnengekomen.`
-        : `In de afgelopen ${windowLabel}: ${errors.length} melding${errors.length === 1 ? "" : "en"} van ${gebruikers.size} ${gebruikers.size === 1 ? "toestel" : "toestellen"} (${sorted.length} unieke soorten).`;
+      // doet, hoeveel mensen geraakt zijn, staat in de onderwerpregel en als
+      // pil bovenaan (bouwOverzichtMail).
       const ruisregel = filtered > 0
         ? `${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol, die vangt de app zelf op).`
         : "";
       // De weekcijfers (vroeger de aparte maandagmail) alleen in het weekoverzicht.
       const week = weekdag === "elke" ? [] : await weekcijfers().catch((err) => {
         console.error("[error-digest] weekcijfers mislukt:", err?.message ?? err);
-        return [] as string[];
+        return [] as Array<{ label: string; waarde: string }>;
       });
       // g.source/message/lastUrl zijn door de client aangeleverd; de lay-out
       // escapet elke regel, anders is de digest-mail een HTML-injectiekanaal
@@ -735,12 +732,12 @@ export function mountCronRoutes(app: express.Express) {
         naam: overzichtNaam,
         impact,
         toon: errors.length === 0 ? "goed" : "aandacht",
-        alineas: [inleiding, ...(ruisregel ? [ruisregel] : [])],
-        lijsten: [
-          ...(meldingItems.length > 0 ? [{ kop: "Meldingen", items: meldingItems }] : []),
-          ...(week.length > 0 ? [{ kop: "Cijfers van de afgelopen 7 dagen", items: week }] : []),
-          ...extraLijsten,
-        ],
+        venster: windowLabel,
+        cijfers: week,
+        lijsten: extraLijsten,
+        meldingen: meldingItems,
+        soorten: sorted.length,
+        ...(ruisregel ? { ruis: ruisregel } : {}),
       });
 
       const result = await sendEmail({ to: recipients, subject: onderwerp, text, html, context: "error-digest", soort: "weekoverzicht" });
