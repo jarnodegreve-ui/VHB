@@ -12,7 +12,7 @@ export const voorbeeldMail = (soort: string): MailTekst | null => {
   const url = portalUrl();
   switch (soort) {
     case "welkom":
-      return bouwWelkomMail({ name: "Sofie", actionLink: url });
+      return bouwWelkomMail({ name: "Sofie", actionLink: url, geldigTot: "2026-10-07T14:05:00.000Z" });
     case "uitnodiging":
       return bouwUitnodigingMail({ naam: "Sofie Peeters", email: "sofie.peeters@voorbeeld.be", link: url, geldigTot: "2026-10-07T14:05:00.000Z" });
     case "wachtwoord":

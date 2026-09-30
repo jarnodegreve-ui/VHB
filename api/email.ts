@@ -262,13 +262,18 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
 
 // --- Welkomstmail voor nieuwe accounts ---
 
+/** "07/10/2026 om 16:05", in Belgische tijd. */
+const momentDmj = (iso: string) =>
+  `${DAG_DMJ(brusselsDay(iso))} om ${new Date(iso).toLocaleTimeString("en-GB", { hour12: false, timeZone: "Europe/Brussels", hour: "2-digit", minute: "2-digit" })}`;
+
 /**
- * Welkomstmail voor een net aangemaakt Auth-account. Met `actionLink` (een
- * Supabase-recovery-link) kan de nieuwe gebruiker direct een eigen wachtwoord
- * instellen; zonder link (bv. als de service-role-key ontbrak) verwijst de
- * mail naar "Wachtwoord vergeten" op het loginscherm — zelfde resultaat.
+ * Welkomstmail voor een net aangemaakt Auth-account. Met `actionLink` kiest
+ * de nieuwe gebruiker direct een eigen wachtwoord: sinds 30-09 de link van
+ * een uitnodiging (zeven dagen, `geldigTot`), met de herstellink van Supabase
+ * (één uur) als terugval. Zonder link (bv. als de service-role-key ontbrak)
+ * verwijst de mail naar "Wachtwoord vergeten" op het loginscherm.
  */
-export const bouwWelkomMail = (ctx: { name: string; actionLink?: string | null }): MailTekst => {
+export const bouwWelkomMail = (ctx: { name: string; actionLink?: string | null; geldigTot?: string | null }): MailTekst => {
   const url = portalUrl();
   const { html, text } = mailOpbouw({
     kicker: "Welkom",
@@ -278,13 +283,14 @@ export const bouwWelkomMail = (ctx: { name: string; actionLink?: string | null }
       "Er is een account voor je aangemaakt op het VHB Portaal. Daar vind je je rooster, verlofaanvragen, dienstruilen en updates van de planning. Je logt in met dit e-mailadres.",
       ...(ctx.actionLink ? [] : [`Stel je wachtwoord in via "Wachtwoord vergeten" op het loginscherm: ${url}`]),
     ],
+    ...(ctx.actionLink && ctx.geldigTot ? { feiten: [{ label: "Link geldig tot", waarde: momentDmj(ctx.geldigTot) }] } : {}),
     ...(ctx.actionLink ? { knop: { tekst: "Wachtwoord instellen", url: ctx.actionLink, actie: true } } : {}),
     voet: `Tip: open ${url} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.`,
   });
   return { onderwerp: "Welkom op het VHB Portaal, stel je wachtwoord in", html, text };
 };
 
-export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null; door?: string | null }) => {
+export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null; geldigTot?: string | null; door?: string | null }) => {
   const { onderwerp, html, text } = bouwWelkomMail(ctx);
   return sendEmail({
     to: [ctx.to],
@@ -298,10 +304,6 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
 };
 
 // --- Uitnodiging voor een bestaand account (30-09) ---
-
-/** "07/10/2026 om 16:05", in Belgische tijd. */
-const momentDmj = (iso: string) =>
-  `${DAG_DMJ(brusselsDay(iso))} om ${new Date(iso).toLocaleTimeString("en-GB", { hour12: false, timeZone: "Europe/Brussels", hour: "2-digit", minute: "2-digit" })}`;
 
 /**
  * Uitnodiging voor iemand die al een account heeft maar nog nooit aanmeldde

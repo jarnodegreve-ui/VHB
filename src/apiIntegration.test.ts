@@ -331,7 +331,8 @@ vi.mock('../api/email.js', async (importOriginal) => ({
     return { ok: true, mocked: true };
   }),
   sendWelcomeEmail: vi.fn(async (ctx: any) => {
-    mem.emailsSent.push({ to: [ctx.to], subject: 'Welkom op het VHB Portaal, stel je wachtwoord in', context: `welcome:${ctx.to}` });
+    // text = de link in de mail, zodat een test de uitnodigingscode kan lezen.
+    mem.emailsSent.push({ to: [ctx.to], subject: 'Welkom op het VHB Portaal, stel je wachtwoord in', context: `welcome:${ctx.to}`, text: ctx.actionLink ?? undefined });
     return { ok: true, mocked: true };
   }),
 }));
@@ -411,12 +412,12 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       const bezet = mem.authEmailBezet && data.find((u: any) => String(u.email || '').toLowerCase() === mem.authEmailBezet);
       if (bezet) throw new orig.EmailInGebruikError(bezet.email);
       // Zelfde contract als de echte functie: nieuwe e-mailadressen = nieuw
-      // Auth-account → welkomstmail-kandidaat.
+      // Auth-account → welkomstmail-kandidaat, met profiel- en Auth-id, en het
+      // profiel meteen gekoppeld aan dat account (koppelAuthIdStil).
       const beforeEmails = new Set(mem.users.map((u: any) => String(u.email || '').toLowerCase()).filter(Boolean));
-      const createdAccounts = data
-        .filter((u: any) => u.email && !beforeEmails.has(String(u.email).toLowerCase()))
-        .map((u: any) => ({ email: u.email, name: u.name }));
-      mem.users = data;
+      const nieuw = new Set(data.filter((u: any) => u.email && !beforeEmails.has(String(u.email).toLowerCase())));
+      const createdAccounts = [...nieuw].map((u: any) => ({ email: u.email, name: u.name, userId: String(u.id), authId: `auth-nieuw-${u.id}` }));
+      mem.users = data.map((u: any) => (nieuw.has(u) ? { ...u, authId: `auth-nieuw-${u.id}` } : u));
       return { createdAccounts };
     },
     // Zelfde contract als de echte: optioneel gefilterd op één gebruiker
@@ -3735,6 +3736,27 @@ describe('uitnodigen voor het portaal', () => {
     expect(rest.status).toBe(200);
     expect(mem.emailsSent.map((m) => m.to)).toEqual([['b@vhb.be']]);
     expect(accounts.get('auth-4')!.app_metadata.uitnodiging).toBeTruthy();
+  });
+
+  it('een nieuw account krijgt in de welkomstmail dezelfde link van zeven dagen', async () => {
+    accounts.set('auth-nieuw-n1', { id: 'auth-nieuw-n1', email: 'nieuw@vhb.be', app_metadata: {} });
+    const res = await api('POST', '/api/users/one', { token: 'tok-admin', body: { id: 'n1', name: 'Nieuwe Chauffeur', email: 'nieuw@vhb.be', role: 'chauffeur', isActive: true, password: 'lang-genoeg' } });
+    expect(res.status).toBe(201);
+    const welkom = mem.emailsSent.find((m) => m.context === 'welcome:nieuw@vhb.be');
+    const code = codeUitMail(welkom?.text);
+    expect(code.startsWith('n1.')).toBe(true);
+    expect(accounts.get('auth-nieuw-n1')!.app_metadata.uitnodiging).toMatchObject({ email: 'nieuw@vhb.be', tot: '2026-06-22T10:00:00.000Z' });
+    // Geen herstellink van Supabase meer nodig; die komt pas bij het openen.
+    expect(links).toEqual([]);
+    expect((await open(code)).json).toEqual({ naam: 'Nieuwe Chauffeur', email: 'nieuw@vhb.be', tokenHash: 'hash-1' });
+  });
+
+  it('lukt die link niet, dan krijgt het nieuwe account de herstellink van Supabase zoals vroeger', async () => {
+    // Geen Auth-account 'auth-nieuw-n2' in de attrap: de uitnodiging faalt.
+    const res = await api('POST', '/api/users/one', { token: 'tok-admin', body: { id: 'n2', name: 'Tweede Chauffeur', email: 'tweede@vhb.be', role: 'chauffeur', isActive: true, password: 'lang-genoeg' } });
+    expect(res.status).toBe(201);
+    expect(links).toEqual(['recovery:tweede@vhb.be']);
+    expect(mem.emailsSent.find((m) => m.context === 'welcome:tweede@vhb.be')).toBeTruthy();
   });
 
   it('niemand om uit te nodigen = 400 met de reden, er vertrekt niets', async () => {

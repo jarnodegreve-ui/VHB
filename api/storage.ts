@@ -1377,10 +1377,14 @@ export const getUsersData = async (): Promise<AppUserIntern[]> => {
   return rows.map(toPublicUser);
 };
 
-export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ createdAccounts: Array<{ email: string; name: string }> }> => {
-  // Nieuw aangemaakte Auth-accounts (e-mail + naam) gaan terug naar de route,
-  // die er een welkomstmail met wachtwoord-instel-link voor verstuurt.
-  const createdAccounts: Array<{ email: string; name: string }> = [];
+/** Een net aangemaakt Auth-account: de route stuurt er een welkomstmail
+ *  voor, met een uitnodigingslink op dit profiel en account. */
+export type NieuwAccount = { email: string; name: string; userId: string; authId?: string };
+
+export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ createdAccounts: NieuwAccount[] }> => {
+  // Nieuw aangemaakte Auth-accounts gaan terug naar de route, die er een
+  // welkomstmail met een link om het wachtwoord te kiezen voor verstuurt.
+  const createdAccounts: NieuwAccount[] = [];
   const client = requireDb();
   if (!supabaseAdmin) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt. Gebruikersbeheer vereist een service role key.");
@@ -1519,7 +1523,7 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
       if (data.user?.email) {
         authUsersByEmail.set(normalizeEmail(data.user.email) as string, data.user);
       }
-      createdAccounts.push({ email: currentEmail, name: sanitizedUser.name });
+      createdAccounts.push({ email: currentEmail, name: sanitizedUser.name, userId: String(sanitizedUser.id), authId: data.user?.id });
       if (!sanitizedUser.isActive && data.user) await zetAuthBan(data.user.id, true);
       if (data.user) await koppelAuthIdStil(String(sanitizedUser.id), data.user.id);
       continue;
