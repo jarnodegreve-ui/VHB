@@ -7,7 +7,7 @@ import { lijnLabel } from "../../shared/lijnen.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { EIGEN_MAIL_SOORT, OMLEIDING_MAIL_SOORT, omleidingMailSchema, MAIL_INSTELLINGEN_KEY, MAIL_SOORTEN, MAIL_SOORT_PER_SLEUTEL, eigenMailSchema, isMailAan, mailInstellingenSchema, parseMailInstellingen, verzendlijstenSchema, VERZENDLIJSTEN_KEY, type OntvangerGroep } from "../../shared/schemas/mail.js";
 import { mailOpbouw } from "../email.js";
-import { verstuurMailReeks, type ReeksUitkomst } from "./mailReeks.js";
+import { reeksAntwoord, reeksStaart, verstuurMailReeks } from "./mailReeks.js";
 import { eigenMailRateLimit, omleidingMailRateLimit } from "../rateLimit.js";
 import { valideerRecord } from "./valideer.js";
 import { getMailInstellingen, getVerzendlijsten, meldMailWijziging } from "./mailInstellingen.js";
@@ -110,24 +110,6 @@ export const leidOntvangersAf = (
 };
 
 const GEEN_RESTANT = "Geen van de resterende adressen hoort nog bij deze keuze; maak een nieuw voorbeeld.";
-
-/** Staart van een logboekregel: wat er naast de geslaagde mails gebeurde. */
-const reeksStaart = (u: ReeksUitkomst) =>
-  `${u.mislukt ? `, ${u.mislukt} mislukt` : ""}${u.nietGeprobeerd ? `, ${u.nietGeprobeerd} niet verstuurd` : ""}${u.onzeker ? `, ${u.onzeker} onzeker` : ""}${u.mocked ? " (alleen gelogd, geen SMTP)" : ""}`;
-
-/** Het antwoord van een echte verzending, gelijk voor beide routes. */
-const reeksAntwoord = (u: ReeksUitkomst) => ({
-  droog: false as const,
-  aantal: u.aantal,
-  gelukt: u.gelukt,
-  mislukt: u.mislukt,
-  nietGeprobeerd: u.nietGeprobeerd,
-  onzeker: u.onzeker,
-  mocked: u.mocked,
-  overgeslagen: u.overgeslagen,
-  resterend: u.resterend,
-  onzekerAdressen: u.onzekerAdressen,
-});
 
 export function mountMailRoutes(app: express.Express) {
   // Verzendlijsten voor wie een omleiding mag mailen (planner én admin);

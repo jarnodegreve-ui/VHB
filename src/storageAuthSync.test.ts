@@ -135,7 +135,8 @@ describe('saveUsersData, Auth-koppeling bij e-mailwijzigingen', () => {
 
   it('een nieuw adres zonder Auth-account maakt gewoon een account aan (welkomstmail-kandidaat)', async () => {
     const data = [...invoer(), { id: '9', name: 'Nieuw', role: 'chauffeur', employeeId: 'VHB-9', email: 'vers@vhb.be', isActive: true }];
-    await expect(saveUsersData(data)).resolves.toEqual({ createdAccounts: [{ email: 'vers@vhb.be', name: 'Nieuw' }] });
+    // Met profiel- en Auth-id: de welkomstmail maakt er een uitnodigingslink op (30-09).
+    await expect(saveUsersData(data)).resolves.toEqual({ createdAccounts: [{ email: 'vers@vhb.be', name: 'Nieuw', userId: '9', authId: 'auth-vers@vhb.be' }] });
     expect(mem.createUser).toHaveBeenCalledTimes(1);
   });
 });

@@ -13,7 +13,15 @@ const { apiFetchMock, dataCtx } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
   dataCtx: { users: [] as unknown[] },
 }));
-vi.mock('../../lib/api', () => ({ apiFetch: apiFetchMock }));
+vi.mock('../../lib/api', () => ({
+  apiFetch: apiFetchMock,
+  // Zelfde contract als de echte: niet-ok = gooien, anders de JSON.
+  apiJson: async (url: string, init?: RequestInit) => {
+    const res: Response = await apiFetchMock(url, init);
+    if (!res.ok) throw Object.assign(new Error((await res.json().catch(() => ({})))?.error ?? 'fout'), { status: res.status });
+    return res.json();
+  },
+}));
 vi.mock('../../components/AanwezigOpScherm', () => ({ AanwezigOpScherm: () => null }));
 vi.mock('../../app/AppDataContext', () => ({ useAppDataContext: () => dataCtx }));
 
@@ -109,6 +117,8 @@ describe.each([
       'Verlof- en dienstruilhistoriek',
       'Documenten beheren',
       'Wijzigingsgeschiedenis',
+      // Nog nooit ingelogd, met een adres: uitnodigen kan (30-09).
+      'Uitnodigen voor het portaal',
       'Nieuw tijdelijk wachtwoord',
       'Twee-stapsverificatie resetten',
       'Gebruiker pauzeren',
@@ -191,5 +201,83 @@ describe('Gebruikers: Ook technieker', () => {
     dataCtx.users = [ADMIN, PLANNER, { ...CHAUFFEUR, ookTechnieker: true }, GEPAUZEERD];
     render(<ManageUsersView currentUser={ADMIN} />);
     expect(screen.getAllByText('chauffeur + technieker')).toHaveLength(2);
+  });
+});
+
+// Uitnodigen voor het portaal (30-09): alleen wie nog nooit inlogde, een adres
+// heeft en actief is; wie al uitgenodigd is, krijgt "opnieuw sturen" en een
+// regel onder "Nooit". Het versturen zelf loopt via de gedeelde bevestiging.
+describe('Gebruikers: uitnodigen', () => {
+  const INGELOGD = { id: '5', name: 'Chauffeur Actief', email: 'actief@vhb.be', role: 'chauffeur', isActive: true, lastLogin: '2026-09-20T07:00:00.000Z' } as User;
+  const ZONDER_ADRES = { id: '6', name: 'Chauffeur Zonder Adres', email: '', role: 'chauffeur', isActive: true } as User;
+  const aanroepen = (pad: string) => apiFetchMock.mock.calls.filter(([url]) => url === pad);
+
+  beforeEach(() => {
+    zetBreedte(1280);
+    dataCtx.users = [...USERS, INGELOGD, ZONDER_ADRES];
+  });
+
+  it('staat in het rijmenu bij wie nog nooit inlogde, niet bij wie al inlogde, gepauzeerd is of geen adres heeft', async () => {
+    render(<ManageUsersView currentUser={ADMIN} />);
+    expect(labels((await menusVoor(CHAUFFEUR.name)).desktop)).toContain('Uitnodigen voor het portaal');
+    for (const u of [INGELOGD, GEPAUZEERD, ZONDER_ADRES]) {
+      const { desktop, telefoon } = await menusVoor(u.name);
+      expect(telefoon).toEqual(desktop);
+      expect(labels(desktop).some((l) => l.startsWith('Uitnodig'))).toBe(false);
+    }
+  });
+
+  it('al uitgenodigd: "Uitnodiging opnieuw sturen" en "Uitgenodigd" onder Nooit; verlopen staat er ook', async () => {
+    const nu = Date.now();
+    apiFetchMock.mockImplementation(async (url: string) => (url === '/api/users/uitnodigingen'
+      ? Response.json({ uitnodigingen: [
+          { userId: CHAUFFEUR.id, op: new Date(nu - 86_400_000).toISOString(), tot: new Date(nu + 6 * 86_400_000).toISOString() },
+          { userId: PLANNER.id, op: new Date(nu - 8 * 86_400_000).toISOString(), tot: new Date(nu - 86_400_000).toISOString() },
+        ] })
+      : new Response('[]', { status: 200 })));
+    render(<ManageUsersView currentUser={ADMIN} />);
+    await waitFor(() => expect(screen.getAllByText(/^Uitgenodigd \d{2}\/\d{2}/)).toHaveLength(2));
+    expect(screen.getAllByText('Uitnodiging verlopen')).toHaveLength(2);
+    expect(labels((await menusVoor(CHAUFFEUR.name)).desktop)).toContain('Uitnodiging opnieuw sturen');
+  });
+
+  it('bulkbalk: uit bij een selectie zonder uitnodigbare mensen; anders voorbeeld, versturen en de lijst opnieuw ophalen', async () => {
+    apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url !== '/api/users/uitnodigen') return new Response('[]', { status: 200 });
+      const body = JSON.parse(String(init?.body));
+      // De echte vorm van de server: `overgeslagen` is de vlag van de reeks,
+      // de mensen die niet uitgenodigd worden staan in `nietUitgenodigd`.
+      return body.droog
+        ? Response.json({ droog: true, aantal: 1, ontvangers: [{ adres: 'a@vhb.be', naam: CHAUFFEUR.name }], html: '<p>voorbeeld</p>', nietUitgenodigd: [{ id: INGELOGD.id, naam: INGELOGD.name, reden: 'al-ingelogd' }] })
+        : Response.json({ droog: false, aantal: 1, gelukt: 1, mislukt: 0, nietGeprobeerd: 0, onzeker: 0, mocked: false, overgeslagen: false, resterend: [], onzekerAdressen: [], uitgenodigd: [{ userId: CHAUFFEUR.id, op: '2026-09-30T14:00:00.000Z', tot: '2026-10-07T14:00:00.000Z' }], nietUitgenodigd: [{ id: INGELOGD.id, naam: INGELOGD.name, reden: 'al-ingelogd' }] });
+    });
+    const toasts: Array<{ message: string; tone: string }> = [];
+    const opToast = (e: Event) => { toasts.push((e as CustomEvent).detail); };
+    window.addEventListener('vhb-toast', opToast);
+    render(<ManageUsersView currentUser={ADMIN} />);
+    const vink = async (u: User) => { await act(async () => { fireEvent.click(screen.getAllByRole('checkbox', { name: `Selecteer ${u.name}` })[0]); }); };
+
+    await vink(INGELOGD);
+    const knop = screen.getByRole('button', { name: 'Uitnodigen' }) as HTMLButtonElement;
+    expect(knop.disabled).toBe(true);
+
+    await vink(CHAUFFEUR);
+    expect(knop.disabled).toBe(false);
+    await act(async () => { fireEvent.click(knop); });
+    const venster = await screen.findByRole('dialog', { name: 'Voorbeeld van de uitnodiging' });
+    expect(within(venster).getByText(/Niet uitgenodigd: Chauffeur Actief \(al eens ingelogd\)/)).toBeTruthy();
+    expect(JSON.parse(String(aanroepen('/api/users/uitnodigen')[0][1].body))).toEqual({ ids: [INGELOGD.id, CHAUFFEUR.id], droog: true });
+
+    const voor = aanroepen('/api/users/uitnodigingen').length;
+    await act(async () => { fireEvent.click(within(venster).getByRole('button', { name: 'Versturen naar 1' })); });
+    await waitFor(() => expect(aanroepen('/api/users/uitnodigen')).toHaveLength(2));
+    expect(JSON.parse(String(aanroepen('/api/users/uitnodigen')[1][1].body))).toEqual({ ids: [INGELOGD.id, CHAUFFEUR.id] });
+    await waitFor(() => expect(aanroepen('/api/users/uitnodigingen').length).toBe(voor + 1));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Voorbeeld van de uitnodiging' })).toBeNull());
+    // Na een bulkactie is de selectie leeg, zoals bij pauzeren en activeren.
+    expect((screen.getAllByRole('checkbox', { name: `Selecteer ${CHAUFFEUR.name}` })[0] as HTMLInputElement).checked).toBe(false);
+    // En de melding zegt dat er verstuurd is, niet "Mail staat uit" (review 30-09).
+    expect(toasts).toContainEqual(expect.objectContaining({ message: 'Uitnodiging verstuurd naar 1 ontvanger.', tone: 'success' }));
+    window.removeEventListener('vhb-toast', opToast);
   });
 });

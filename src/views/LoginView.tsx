@@ -39,27 +39,6 @@ export function LoginView({
 }) {
   const [mode, setMode] = useState<Mode>('login');
 
-  // De login stuurt zijn eigen carbon-donkere styling (login-bg-dark e.d.),
-  // los van de globale theme-toggle. We halen html.dark tijdelijk weg zodat
-  // de .dark-overrides van de app hier niet doorheen lekken; op unmount
-  // (na succesvol inloggen) wordt de klasse hersteld.
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const html = document.documentElement;
-    const wasDark = html.classList.contains('dark');
-    html.classList.remove('dark');
-    // Statusbalk mee in carbon zolang de login in beeld is. login-donker
-    // kleurt óók de <html>-achtergrond carbon: Safari tekent zijn status- en
-    // werkbalkzone in de paginakleur, en die was anders wit (01-09).
-    html.classList.add('login-donker');
-    applyThemeColorMeta(true);
-    return () => {
-      if (wasDark) html.classList.add('dark');
-      html.classList.remove('login-donker');
-      applyThemeColorMeta(wasDark);
-    };
-  }, []);
-
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [newPassword, setNewPassword] = useState<string>('');
@@ -181,6 +160,146 @@ export function LoginView({
       ? { title: 'Wachtwoord vergeten', description: 'Vul je e-mail in, we sturen een reset-link.' }
       : { title: 'Inloggen', description: 'Meld je aan om verder te gaan.' };
 
+  return (
+    <LoginSchil>
+      <LoginKop sleutel={`${mode}-${recoveryMode}`} title={headerCopy.title} description={headerCopy.description} />
+
+      {/* Reden van een gedwongen uitlog — blijft staan tot je opnieuw
+          inlogt, in tegenstelling tot de toast die hier voorheen
+          achter dit scherm verdween. Oker (info), niet rood: er is
+          niets stuk, je moet alleen opnieuw inloggen. */}
+      {!recoveryMode && <OnderhoudBanner onderhoud={onderhoud} tone="donker" className="mb-6" />}
+      {uitlogReden && !recoveryMode && (
+        <div className="mb-6 flex items-start gap-2.5 rounded-2xl border border-oker-500/25 bg-oker-500/12 px-4 py-3">
+          <ShieldCheck size={16} className="mt-px shrink-0 text-oker-400" />
+          <p className="text-body-sm font-medium text-oker-100">{uitlogReden}</p>
+        </div>
+      )}
+
+      {recoveryMode ? (
+        <form onSubmit={handleRecovery} className="space-y-4">
+          <FieldInput
+            icon={<Lock size={16} />}
+            label="Nieuw wachtwoord"
+            type="password"
+            value={newPassword}
+            onChange={(v) => {
+              setNewPassword(v);
+              resetFeedback();
+            }}
+            placeholder={WACHTWOORD_HINT}
+            required
+            minLength={WACHTWOORD_MIN}
+            autoFocus
+          />
+          <FeedbackBlock error={error} info={info} />
+          <SubmitButton loading={isSubmitting}>Wachtwoord opslaan</SubmitButton>
+        </form>
+      ) : mode === 'forgot' ? (
+        <form onSubmit={handleForgot} className="space-y-4">
+          <FieldInput
+            icon={<Mail size={16} />}
+            label="E-mailadres"
+            type="email"
+            value={email}
+            onChange={(v) => {
+              setEmail(v);
+              resetFeedback();
+            }}
+            placeholder="naam@bedrijf.be"
+            required
+            autoFocus
+          />
+          <FeedbackBlock error={error} info={info} />
+          <SubmitButton loading={isSubmitting}>Verstuur reset-link</SubmitButton>
+          <LoginTekstKnop
+            onClick={() => {
+              setMode('login');
+              resetFeedback();
+            }}
+          >
+            ← Terug naar inloggen
+          </LoginTekstKnop>
+        </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FieldInput
+            icon={<Mail size={16} />}
+            label="E-mailadres"
+            type="email"
+            value={email}
+            onChange={(v) => {
+              setEmail(v);
+              resetFeedback();
+            }}
+            placeholder="naam@bedrijf.be"
+            required
+            autoComplete="email"
+            autoFocus
+          />
+          <FieldInput
+            icon={<Lock size={16} />}
+            label="Wachtwoord"
+            type="password"
+            value={password}
+            onChange={(v) => {
+              setPassword(v);
+              resetFeedback();
+            }}
+            placeholder="••••••••"
+            required
+            autoComplete="current-password"
+            rightSlot={
+              // rauw: tekstlink naast het veldlabel op de carbon-login (zie
+              // LoginTekstKnop hieronder voor de motivatie).
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('forgot');
+                  resetFeedback();
+                }}
+                className="-my-2 inline-flex min-h-11 items-center text-xs font-medium text-slate-500 transition-colors hover:text-oker-400"
+              >
+                Wachtwoord vergeten?
+              </button>
+            }
+          />
+          <FeedbackBlock error={error} info={info} />
+          <SubmitButton loading={isSubmitting}>Inloggen</SubmitButton>
+        </form>
+      )}
+    </LoginSchil>
+  );
+}
+
+/**
+ * Het carbon kader van het loginscherm: achtergrond, logo, paneel, hulpregel
+ * en voet. Ook de landing van een uitnodiging (UitnodigingScherm) staat erin,
+ * zodat beide schermen er hetzelfde uitzien.
+ *
+ * De login stuurt zijn eigen carbon-donkere styling (login-bg-dark e.d.),
+ * los van de globale theme-toggle. We halen html.dark tijdelijk weg zodat de
+ * .dark-overrides van de app hier niet doorheen lekken; op unmount (na
+ * succesvol inloggen) wordt de klasse hersteld.
+ */
+export function LoginSchil({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const html = document.documentElement;
+    const wasDark = html.classList.contains('dark');
+    html.classList.remove('dark');
+    // Statusbalk mee in carbon zolang de login in beeld is. login-donker
+    // kleurt óók de <html>-achtergrond carbon: Safari tekent zijn status- en
+    // werkbalkzone in de paginakleur, en die was anders wit (01-09).
+    html.classList.add('login-donker');
+    applyThemeColorMeta(true);
+    return () => {
+      if (wasDark) html.classList.add('dark');
+      html.classList.remove('login-donker');
+      applyThemeColorMeta(wasDark);
+    };
+  }, []);
+
   // min-h-dvh i.p.v. 100vh: in Safari (vóór "Zet op beginscherm") stond de
   // absolute footer anders achter de Safari-balk (controle-ronde 27-08, nr. 35).
   return (
@@ -212,132 +331,7 @@ export function LoginView({
           className="w-full max-w-[440px]"
         >
           <div className="panel-login-dark relative w-full rounded-3xl p-7 sm:p-9">
-            <AnimatePresence mode="wait">
-                <motion.div
-                  key={`${mode}-${recoveryMode}`}
-                  initial={{ opacity: 0, x: 6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -6 }}
-                  transition={{ duration: DUR.base, ease: EASE }}
-                  className="mb-7 text-center"
-                >
-                  <h1 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
-                    {headerCopy.title}
-                  </h1>
-                  <p className="mt-2 text-body text-slate-300 font-normal">{headerCopy.description}</p>
-                </motion.div>
-              </AnimatePresence>
-
-              {/* Reden van een gedwongen uitlog — blijft staan tot je opnieuw
-                  inlogt, in tegenstelling tot de toast die hier voorheen
-                  achter dit scherm verdween. Oker (info), niet rood: er is
-                  niets stuk, je moet alleen opnieuw inloggen. */}
-              {!recoveryMode && <OnderhoudBanner onderhoud={onderhoud} tone="donker" className="mb-6" />}
-              {uitlogReden && !recoveryMode && (
-                <div className="mb-6 flex items-start gap-2.5 rounded-2xl border border-oker-500/25 bg-oker-500/12 px-4 py-3">
-                  <ShieldCheck size={16} className="mt-px shrink-0 text-oker-400" />
-                  <p className="text-body-sm font-medium text-oker-100">{uitlogReden}</p>
-                </div>
-              )}
-
-              {recoveryMode ? (
-                <form onSubmit={handleRecovery} className="space-y-4">
-                  <FieldInput
-                    icon={<Lock size={16} />}
-                    label="Nieuw wachtwoord"
-                    type="password"
-                    value={newPassword}
-                    onChange={(v) => {
-                      setNewPassword(v);
-                      resetFeedback();
-                    }}
-                    placeholder={WACHTWOORD_HINT}
-                    required
-                    minLength={WACHTWOORD_MIN}
-                    autoFocus
-                  />
-                  <FeedbackBlock error={error} info={info} />
-                  <SubmitButton loading={isSubmitting}>Wachtwoord opslaan</SubmitButton>
-                </form>
-              ) : mode === 'forgot' ? (
-                <form onSubmit={handleForgot} className="space-y-4">
-                  <FieldInput
-                    icon={<Mail size={16} />}
-                    label="E-mailadres"
-                    type="email"
-                    value={email}
-                    onChange={(v) => {
-                      setEmail(v);
-                      resetFeedback();
-                    }}
-                    placeholder="naam@bedrijf.be"
-                    required
-                    autoFocus
-                  />
-                  <FeedbackBlock error={error} info={info} />
-                  <SubmitButton loading={isSubmitting}>Verstuur reset-link</SubmitButton>
-                  {/* rauw: tekstlink op de carbon-login — Button ghost hovert met een
-                      licht slate-vlak dat hier als vlek zou opvallen. `!`-kleur: .text-micro
-                      staat ná de utilities in de cascade en wint anders van text-slate-400. */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode('login');
-                      resetFeedback();
-                    }}
-                    className={cn(microLabelClass, 'w-full text-center !text-slate-400 hover:!text-white transition-colors pt-2')}
-                  >
-                    ← Terug naar inloggen
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <FieldInput
-                    icon={<Mail size={16} />}
-                    label="E-mailadres"
-                    type="email"
-                    value={email}
-                    onChange={(v) => {
-                      setEmail(v);
-                      resetFeedback();
-                    }}
-                    placeholder="naam@bedrijf.be"
-                    required
-                    autoComplete="email"
-                    autoFocus
-                  />
-                  <FieldInput
-                    icon={<Lock size={16} />}
-                    label="Wachtwoord"
-                    type="password"
-                    value={password}
-                    onChange={(v) => {
-                      setPassword(v);
-                      resetFeedback();
-                    }}
-                    placeholder="••••••••"
-                    required
-                    autoComplete="current-password"
-                    rightSlot={
-                      // rauw: tekstlink naast het veldlabel op de carbon-login (zie de
-                      // "Terug naar inloggen"-knop hieronder voor de motivatie).
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMode('forgot');
-                          resetFeedback();
-                        }}
-                        className="-my-2 inline-flex min-h-11 items-center text-xs font-medium text-slate-500 transition-colors hover:text-oker-400"
-                      >
-                        Wachtwoord vergeten?
-                      </button>
-                    }
-                  />
-                  <FeedbackBlock error={error} info={info} />
-                  <SubmitButton loading={isSubmitting}>Inloggen</SubmitButton>
-                </form>
-              )}
-
+            {children}
           </div>{/* /panel */}
 
           {/* Wie te bellen als het niet lukt — chauffeurs zijn geen
@@ -371,7 +365,44 @@ export function LoginView({
 
 // === Subcomponents ===
 
-function FieldInput({
+/** Kop van het paneel; wisselt met een korte schuif als `sleutel` verandert. */
+export function LoginKop({ sleutel, title, description }: { sleutel: string; title: string; description: React.ReactNode }) {
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={sleutel}
+        initial={{ opacity: 0, x: 6 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -6 }}
+        transition={{ duration: DUR.base, ease: EASE }}
+        className="mb-7 text-center"
+      >
+        <h1 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
+          {title}
+        </h1>
+        <p className="mt-2 text-body text-slate-300 font-normal">{description}</p>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/** Stille tekstlink onder een formulier ("Terug naar inloggen"). */
+export function LoginTekstKnop({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    // rauw: tekstlink op de carbon-login — Button ghost hovert met een
+    // licht slate-vlak dat hier als vlek zou opvallen. `!`-kleur: .text-micro
+    // staat ná de utilities in de cascade en wint anders van text-slate-400.
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(microLabelClass, 'w-full text-center !text-slate-400 hover:!text-white transition-colors pt-2')}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function FieldInput({
   icon,
   label,
   type,
@@ -480,7 +511,7 @@ function FieldInput({
   );
 }
 
-function FeedbackBlock({ error, info }: { error: string; info: string }) {
+export function FeedbackBlock({ error, info }: { error: string; info: string }) {
   return (
     <AnimatePresence>
       {error && (
@@ -510,7 +541,7 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
   );
 }
 
-function SubmitButton({ loading, children }: { loading: boolean; children: React.ReactNode }) {
+export function SubmitButton({ loading, children }: { loading: boolean; children: React.ReactNode }) {
   return (
     // btn-primary (via Button) = VHB Amber met VHB Black-tekst (huisstijl:
     // nooit wit op amber — contrast 2,2:1). Standaard md-maat, op inhouds-

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { nieuweUserFormulierSchema, userFormulierSchema, wachtwoordResetSchema } from '../../../shared/schemas/user';
-import { CalendarOff, FolderOpen, History, Info, LogIn, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
+import { CalendarOff, FolderOpen, History, Info, LogIn, MailPlus, Pause, Play, Plus, RotateCcw, Send, ShieldOff, Trash2, Upload, UserX } from 'lucide-react';
 import { ROLLEN, ROL_LABELS } from '../../../shared/schemas/constanten';
 import { ACCOUNT_STATUS } from '../../../shared/status';
 import type { User } from '../../types';
@@ -31,6 +31,8 @@ import { BroadcastDocumentModal } from './BroadcastDocumentModal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { LegeLijst, NietGevonden } from '../../components/illustraties';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
+import { UitnodigingRegel, useUitnodigen, useUitnodigingen } from './Uitnodigen';
+import { uitnodigingBeletsel } from '../../../shared/uitnodiging';
 
 type UserDraft = User & { password?: string };
 
@@ -405,6 +407,23 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   const toggleSelectAll = () => setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
   const clearSelection = () => setSelectedIds(new Set());
 
+  // Uitnodigen voor het portaal (30-09): één persoon vanuit het rijmenu of de
+  // selectie vanuit de bulkbalk; zie Uitnodigen.tsx en api/_lib/uitnodiging.ts.
+  // Wie nog nooit inlogde en een adres heeft, kan; de rest slaat de server over.
+  const uitnodigingen = useUitnodigingen();
+  const [uitnodigingVanBulk, setUitnodigingVanBulk] = useState(false);
+  const uitnodigen = useUitnodigen({
+    onVerstuurd: () => {
+      void uitnodigingen.laad();
+      if (uitnodigingVanBulk) clearSelection();
+    },
+  });
+  const nodigUit = (ids: string[], vanBulk: boolean) => {
+    setUitnodigingVanBulk(vanBulk);
+    void uitnodigen.start(ids);
+  };
+  const uitnodigbaarGeselecteerd = users.filter((u) => selectedIds.has(u.id) && uitnodigingBeletsel(u) === null).length;
+
   const [bulkBezig, setBulkBezig] = useState<'pauzeren' | 'activeren' | null>(null);
   const bulkSetActive = async (active: boolean) => {
     setBulkBezig(active ? 'activeren' : 'pauzeren');
@@ -692,6 +711,13 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
     { label: 'Verlof- en dienstruilhistoriek', icon: <Info size={16} />, onClick: () => setViewingHistoryUser(u) },
     { label: 'Documenten beheren', icon: <FolderOpen size={16} />, onClick: () => setDocumentsUser(u) },
     { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setViewingChangeLogUser(u) },
+    ...(uitnodigingBeletsel(u) === null
+      ? [{
+          label: uitnodigingen.perUser.has(String(u.id)) ? 'Uitnodiging opnieuw sturen' : 'Uitnodigen voor het portaal',
+          icon: <MailPlus size={16} />,
+          onClick: () => nodigUit([u.id], false),
+        }]
+      : []),
     { label: 'Nieuw tijdelijk wachtwoord', icon: <RotateCcw size={16} />, onClick: () => setConfirmResetUser(u) },
     ...(u.role === 'planner' || u.role === 'admin'
       ? [{ label: 'Twee-stapsverificatie resetten', icon: <ShieldOff size={16} />, onClick: () => setMfaResetUser(u) }]
@@ -810,6 +836,17 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
               )}
             />
             <BulkBar aantal={selectedIds.size} onWis={clearSelection}>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<MailPlus size={14} />}
+                bezig={uitnodigen.bezig}
+                disabled={uitnodigbaarGeselecteerd === 0}
+                title={uitnodigbaarGeselecteerd === 0 ? 'Niemand in deze selectie kan uitgenodigd worden: al eens ingelogd, gepauzeerd of geen e-mailadres.' : undefined}
+                onClick={() => nodigUit([...selectedIds], true)}
+              >
+                Uitnodigen
+              </Button>
               <Button variant="secondary" size="sm" icon={<Pause size={14} />} bezig={bulkBezig === 'pauzeren'} disabled={bulkBezig === 'activeren'} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
               <Button variant="secondary" size="sm" icon={<Play size={14} />} bezig={bulkBezig === 'activeren'} disabled={bulkBezig === 'pauzeren'} onClick={() => bulkSetActive(true)}>Activeren</Button>
               <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
@@ -887,7 +924,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                           : <Badge tone="slate" kaal>Uit</Badge>}
                       </Td>
                     )}
-                    {voorkeur.zichtbaar('laatst') && <Td nowrap>{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-500">Nooit</span>}</Td>}
+                    {voorkeur.zichtbaar('laatst') && <Td nowrap>{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <><span className="text-slate-500">Nooit</span><UitnodigingRegel uitnodiging={uitnodigingen.perUser.get(String(u.id))} /></>}</Td>}
                     {voorkeur.zichtbaar('sessies') && <Td num className={(toestellenPerUser.get(String(u.id)) ?? 0) > 0 ? 'text-slate-800' : 'text-slate-500'}>{toestellenPerUser.get(String(u.id)) ?? 0}</Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
@@ -935,7 +972,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 whitespace-nowrap text-sm font-semibold text-slate-700">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></Card>
+                <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 whitespace-nowrap text-sm font-semibold text-slate-700">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <>Nooit<UitnodigingRegel uitnodiging={uitnodigingen.perUser.get(String(u.id))} /></>}</p></Card>
                 <Card tone="muted" padding="sm"><MicroLabel>Toestellen</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700">{toestellenPerUser.get(String(u.id)) ?? 0}</p></Card>
               </div>
               {/* Zelfde acties als de tabelrij: Bewerken + het rijmenu. De
@@ -969,6 +1006,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
         )}
       </TableShell>
 
+      {uitnodigen.venster}
       <ConfirmationModal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
       <ConfirmationModal open={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)} onConfirm={handleBulkDelete} title="Gebruikers verwijderen" message={`Weet je zeker dat je ${selectedIds.size} geselecteerde gebruiker(s) wilt verwijderen? Beschermde accounts (jezelf, de laatste actieve admin) worden overgeslagen. Dit kan niet ongedaan worden gemaakt.`} confirmText="Verwijderen" variant="warning" />
       <ConfirmationModal open={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />

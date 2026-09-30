@@ -1,4 +1,4 @@
-import { DAG_DMJ, PERIODE_DMJ } from "./helpers.js";
+import { DAG_DMJ, PERIODE_DMJ, brusselsDay } from "./helpers.js";
 import { bouwMail, escapeMailHtml, type MailOpbouw } from "./_lib/mailLayout.js";
 import { logMail } from "./storage.js";
 import { mailSoortAan } from "./_lib/mailInstellingen.js";
@@ -262,13 +262,18 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
 
 // --- Welkomstmail voor nieuwe accounts ---
 
+/** "07/10/2026 om 16:05", in Belgische tijd. */
+const momentDmj = (iso: string) =>
+  `${DAG_DMJ(brusselsDay(iso))} om ${new Date(iso).toLocaleTimeString("en-GB", { hour12: false, timeZone: "Europe/Brussels", hour: "2-digit", minute: "2-digit" })}`;
+
 /**
- * Welkomstmail voor een net aangemaakt Auth-account. Met `actionLink` (een
- * Supabase-recovery-link) kan de nieuwe gebruiker direct een eigen wachtwoord
- * instellen; zonder link (bv. als de service-role-key ontbrak) verwijst de
- * mail naar "Wachtwoord vergeten" op het loginscherm — zelfde resultaat.
+ * Welkomstmail voor een net aangemaakt Auth-account. Met `actionLink` kiest
+ * de nieuwe gebruiker direct een eigen wachtwoord: sinds 30-09 de link van
+ * een uitnodiging (zeven dagen, `geldigTot`), met de herstellink van Supabase
+ * (één uur) als terugval. Zonder link (bv. als de service-role-key ontbrak)
+ * verwijst de mail naar "Wachtwoord vergeten" op het loginscherm.
  */
-export const bouwWelkomMail = (ctx: { name: string; actionLink?: string | null }): MailTekst => {
+export const bouwWelkomMail = (ctx: { name: string; actionLink?: string | null; geldigTot?: string | null }): MailTekst => {
   const url = portalUrl();
   const { html, text } = mailOpbouw({
     kicker: "Welkom",
@@ -278,13 +283,14 @@ export const bouwWelkomMail = (ctx: { name: string; actionLink?: string | null }
       "Er is een account voor je aangemaakt op het VHB Portaal. Daar vind je je rooster, verlofaanvragen, dienstruilen en updates van de planning. Je logt in met dit e-mailadres.",
       ...(ctx.actionLink ? [] : [`Stel je wachtwoord in via "Wachtwoord vergeten" op het loginscherm: ${url}`]),
     ],
+    ...(ctx.actionLink && ctx.geldigTot ? { feiten: [{ label: "Link geldig tot", waarde: momentDmj(ctx.geldigTot) }] } : {}),
     ...(ctx.actionLink ? { knop: { tekst: "Wachtwoord instellen", url: ctx.actionLink, actie: true } } : {}),
     voet: `Tip: open ${url} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.`,
   });
   return { onderwerp: "Welkom op het VHB Portaal, stel je wachtwoord in", html, text };
 };
 
-export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null; door?: string | null }) => {
+export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null; geldigTot?: string | null; door?: string | null }) => {
   const { onderwerp, html, text } = bouwWelkomMail(ctx);
   return sendEmail({
     to: [ctx.to],
@@ -295,6 +301,32 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
     soort: "welkom",
     door: ctx.door ?? null,
   });
+};
+
+// --- Uitnodiging voor een bestaand account (30-09) ---
+
+/**
+ * Uitnodiging voor iemand die al een account heeft maar nog nooit aanmeldde
+ * (Gebruikers › Uitnodigen). De link is een eigen code die zeven dagen werkt
+ * (api/_lib/uitnodiging.ts), geen link van Supabase die na een uur vervalt.
+ */
+export const bouwUitnodigingMail = (ctx: { naam: string; email: string; link: string; geldigTot: string }): MailTekst => {
+  const { html, text } = mailOpbouw({
+    kicker: "Uitnodiging",
+    titel: "Je bent uitgenodigd voor het VHB Portaal",
+    aanhef: `Hallo ${ctx.naam},`,
+    alineas: [
+      "Op het VHB Portaal vind je je rooster, verlofaanvragen, dienstruilen en de updates van de planning.",
+      "Kies eerst een eigen wachtwoord met de knop hieronder. Daarna log je in met je e-mailadres en dat wachtwoord.",
+    ],
+    feiten: [
+      { label: "Je e-mailadres", waarde: ctx.email },
+      { label: "Link geldig tot", waarde: momentDmj(ctx.geldigTot) },
+    ],
+    knop: { tekst: "Wachtwoord kiezen", url: ctx.link, actie: true },
+    voet: `Werkt de link niet meer? Vraag de planning om een nieuwe uitnodiging. Tip: open ${portalUrl()} op je telefoon en kies "Zet op beginscherm", dan werkt het portaal als app.`,
+  });
+  return { onderwerp: "Uitnodiging voor het VHB Portaal, kies je wachtwoord", html, text };
 };
 
 // --- Vervaldata-herinnering (Code 95 / medische schifting) ---

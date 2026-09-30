@@ -61,7 +61,7 @@ export default defineConfig({
       // De mobiele regressies ook in Safari's engine: focus, History API en
       // view-transition-lagen gedragen zich daar anders dan in Chromium.
       name: 'iPhone 13 (webkit)',
-      testMatch: /(mobiele-navigatie|scroll-lock|lagen|panelen|dock-transitie|activiteit-layout|beheer-dienstoverzicht-layout|dienstoverzicht-beheer|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|warmup-verlaten|deeplinks[\w-]*|datumveld[\w-]*|dagadministratie-grens|laadfouten|rooster-gereden|beheer-mails|omleiding-mailen|planning-upload|bijlage-viewer|document-viewer)\.spec\.ts$/,
+      testMatch: /(mobiele-navigatie|scroll-lock|lagen|panelen|dock-transitie|activiteit-layout|beheer-dienstoverzicht-layout|dienstoverzicht-beheer|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|warmup-verlaten|deeplinks[\w-]*|datumveld[\w-]*|dagadministratie-grens|laadfouten|rooster-gereden|beheer-mails|omleiding-mailen|planning-upload|bijlage-viewer|document-viewer|uitnodiging)\.spec\.ts$/,
       use: { ...devices['iPhone 13'], browserName: 'webkit' },
     },
     {

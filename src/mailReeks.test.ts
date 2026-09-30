@@ -153,6 +153,44 @@ describe('verstuurMailReeks', () => {
     expect(nep.verloop.at(-1)).toBe(`klaar:log-1:false:${12 - REEKS.gelijktijdig()} van 12 niet verstuurd (tijd op)`);
   });
 
+  // Uitnodiging (30-09): elk een eigen link, dus per persoon een eigen mail.
+  it('met perOntvanger krijgt elke persoon zijn eigen mail; een bouwer die faalt is mislukt en staat bij de rest', async () => {
+    nep.stuur.mockResolvedValue({ ok: true, mocked: false });
+    const gebouwd: string[] = [];
+    const { onderwerp: _o, text: _t, html: _h, ...basis } = opdracht(3);
+    const u = await verstuurMailReeks({
+      ...basis,
+      ontvangers: adressen(3).map((adres, i) => ({ adres, naam: `Persoon ${i + 1}` })),
+      perOntvanger: async ({ adres, naam }) => {
+        gebouwd.push(adres);
+        if (adres === 'p2@vhb.be') throw new Error('link maken mislukt');
+        return { onderwerp: `Voor ${naam}`, text: `link voor ${adres}`, html: `<p>${adres}</p>` };
+      },
+    });
+    expect(gebouwd.sort()).toEqual(adressen(3));
+    const verstuurd = nep.stuur.mock.calls.map(([o]) => o as { to: string[]; subject: string; text: string });
+    expect(verstuurd.map((o) => [o.to[0], o.subject, o.text]).sort()).toEqual([
+      ['p1@vhb.be', 'Voor Persoon 1', 'link voor p1@vhb.be'],
+      ['p3@vhb.be', 'Voor Persoon 3', 'link voor p3@vhb.be'],
+    ]);
+    expect(u).toMatchObject({ aantal: 3, gelukt: 2, mislukt: 1, resterend: ['p2@vhb.be'] });
+  });
+
+  it('met perOntvanger bouwt hij niets meer voor wie na het tijdsbudget niet aan de beurt komt', async () => {
+    nep.stuur.mockImplementation(async () => { await new Promise((r) => setTimeout(r, 5_000)); return { ok: true, mocked: false }; });
+    const gebouwd: string[] = [];
+    const { onderwerp: _o, text: _t, html: _h, ...basis } = opdracht(12);
+    const klaar = verstuurMailReeks({
+      ...basis,
+      gestartOp: START - 30_000,
+      perOntvanger: async ({ adres }) => { gebouwd.push(adres); return { onderwerp: 'x', text: 'x', html: 'x' }; },
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    const u = await klaar;
+    expect(gebouwd).toHaveLength(REEKS.gelijktijdig());
+    expect(u.nietGeprobeerd).toBe(12 - REEKS.gelijktijdig());
+  });
+
   it('zonder regel vooraf (tabel ontbreekt) komt er achteraf één regel, zoals vroeger', async () => {
     nep.logId = null;
     nep.smtp = false;

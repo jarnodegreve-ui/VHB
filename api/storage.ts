@@ -1377,10 +1377,14 @@ export const getUsersData = async (): Promise<AppUserIntern[]> => {
   return rows.map(toPublicUser);
 };
 
-export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ createdAccounts: Array<{ email: string; name: string }> }> => {
-  // Nieuw aangemaakte Auth-accounts (e-mail + naam) gaan terug naar de route,
-  // die er een welkomstmail met wachtwoord-instel-link voor verstuurt.
-  const createdAccounts: Array<{ email: string; name: string }> = [];
+/** Een net aangemaakt Auth-account: de route stuurt er een welkomstmail
+ *  voor, met een uitnodigingslink op dit profiel en account. */
+export type NieuwAccount = { email: string; name: string; userId: string; authId?: string };
+
+export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ createdAccounts: NieuwAccount[] }> => {
+  // Nieuw aangemaakte Auth-accounts gaan terug naar de route, die er een
+  // welkomstmail met een link om het wachtwoord te kiezen voor verstuurt.
+  const createdAccounts: NieuwAccount[] = [];
   const client = requireDb();
   if (!supabaseAdmin) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt. Gebruikersbeheer vereist een service role key.");
@@ -1519,9 +1523,12 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
       if (data.user?.email) {
         authUsersByEmail.set(normalizeEmail(data.user.email) as string, data.user);
       }
-      createdAccounts.push({ email: currentEmail, name: sanitizedUser.name });
       if (!sanitizedUser.isActive && data.user) await zetAuthBan(data.user.id, true);
-      if (data.user) await koppelAuthIdStil(String(sanitizedUser.id), data.user.id);
+      const gekoppeld = data.user ? await koppelAuthIdStil(String(sanitizedUser.id), data.user.id) : false;
+      // authId alleen als het profiel echt aan het account hangt: de
+      // uitnodigingslink in de welkomstmail zoekt het account via het profiel,
+      // anders valt de mail terug op de herstellink (api/_lib/recordWrites.ts).
+      createdAccounts.push({ email: currentEmail, name: sanitizedUser.name, userId: String(sanitizedUser.id), ...(gekoppeld && data.user ? { authId: data.user.id } : {}) });
       continue;
     }
 
@@ -1592,16 +1599,19 @@ export const koppelAuthId = async (userId: string, authId: string): Promise<void
 };
 
 /** Zelfde, maar best-effort: vóór migratie 2026-09-05_users_authid.sql
- *  bestaat de kolom niet en mag een gebruikers-save daar niet op falen. */
+ *  bestaat de kolom niet en mag een gebruikers-save daar niet op falen.
+ *  Geeft terug of het gelukt is. */
 let koppelStilGemeld = false;
-const koppelAuthIdStil = async (userId: string, authId: string): Promise<void> => {
+const koppelAuthIdStil = async (userId: string, authId: string): Promise<boolean> => {
   try {
     await koppelAuthId(userId, authId);
+    return true;
   } catch (err: any) {
     if (!koppelStilGemeld) {
       koppelStilGemeld = true;
       console.error("[users] authid koppelen mislukt (migratie users.authid gedraaid?):", err?.message ?? err);
     }
+    return false;
   }
 };
 

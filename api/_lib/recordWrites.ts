@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import type { AppUser, AuthenticatedRequest, IncomingUser } from "../types.js";
 import { supabaseAdmin } from "../db.js";
 import { sendWelcomeEmail } from "../email.js";
+import { maakUitnodiging } from "./uitnodiging.js";
 import { deletePushSubscriptionsForUser, sendPushToUsers } from "../push.js";
 import { recordUrl } from "./meldingen.js";
 import { isMissingTableError } from "../deviceGate.js";
@@ -25,6 +26,7 @@ import {
   summarizeDiversionChanges,
   summarizeUpdateChanges,
   summarizeUserChanges,
+  type NieuwAccount,
 } from "../storage.js";
 
 /**
@@ -131,7 +133,7 @@ export const verwerkUsersOpslag = async (
   previousUsers: AppUser[],
   newData: IncomingUser[],
   opts: WriteOpts = {},
-): Promise<{ createdAccounts: Array<{ email: string; name: string }>; ingetrokken: Record<string, ToegangIngetrokken> }> => {
+): Promise<{ createdAccounts: NieuwAccount[]; ingetrokken: Record<string, ToegangIngetrokken> }> => {
   const { createdAccounts } = (await saveUsersData(newData)) ?? { createdAccounts: [] };
   // Auth-cache verversen: rol/isActive/e-mail-wijzigingen moeten meteen
   // doorwerken, niet pas na de TTL.
@@ -193,14 +195,26 @@ export const verwerkUsersOpslag = async (
     }
   }
 
-  // Welkomstmail voor élk nieuw aangemaakt Auth-account: met een
-  // recovery-link stelt de nieuwe collega direct een eigen wachtwoord in
-  // (i.p.v. een doorgefluisterd Excel-wachtwoord). Best-effort — een
-  // mailfout mag de save niet laten falen.
+  // Welkomstmail voor élk nieuw aangemaakt Auth-account: met de link kiest
+  // de nieuwe collega direct een eigen wachtwoord (i.p.v. een doorgefluisterd
+  // Excel-wachtwoord). Sinds 30-09 dezelfde link als een uitnodiging
+  // (api/_lib/uitnodiging.ts), want de herstellink van Supabase werkt maar
+  // een uur; die blijft de terugval. Best-effort: een mailfout mag de save
+  // niet laten falen.
   for (const account of createdAccounts ?? []) {
     try {
       let actionLink: string | null = null;
-      if (supabaseAdmin) {
+      let geldigTot: string | null = null;
+      if (supabaseAdmin && account.authId) {
+        try {
+          const uitnodiging = await maakUitnodiging({ userId: account.userId, authId: account.authId, adres: account.email });
+          actionLink = uitnodiging.link;
+          geldigTot = uitnodiging.tot;
+        } catch (err) {
+          console.error(`[welcome-mail] uitnodigingslink voor ${account.email} mislukt, herstellink als terugval:`, err);
+        }
+      }
+      if (supabaseAdmin && !actionLink) {
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
           type: "recovery",
           email: account.email,
@@ -208,7 +222,7 @@ export const verwerkUsersOpslag = async (
         });
         if (!linkError) actionLink = linkData?.properties?.action_link ?? null;
       }
-      await sendWelcomeEmail({ to: account.email, name: account.name, actionLink });
+      await sendWelcomeEmail({ to: account.email, name: account.name, actionLink, geldigTot });
     } catch (err) {
       console.error(`[welcome-mail] versturen naar ${account.email} mislukt:`, err);
     }
