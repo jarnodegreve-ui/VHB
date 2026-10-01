@@ -48,6 +48,37 @@ describe('bouwHerstelPlan', () => {
     ]);
   });
 
+  // Regressie 01-10: de export van de planningscodes heeft geen id, de code is
+  // de sleutel van de tabel. De droge run nam overal een id aan en blokkeerde
+  // daardoor elke back-up ("18 records zonder id"), en dus ook elk echt herstel.
+  describe('planningscodes', () => {
+    const code = (c: string) => ({ code: c, category: 'leave', description: '', countsAsShift: false, isPaidAbsence: false, isDayOff: false });
+
+    it('worden herkend aan hun code, niet aan een id', () => {
+      const plan = bouwHerstelPlan({
+        backup: { users: [admin], planningCodes: [code('bv'), code('tk'), code('ov')] },
+        live: { users: [admin], planningCodes: [code('bv'), code('tk'), code('ziek')] },
+        exportedAt: '2026-09-21T02:00:00Z',
+        nu: NU,
+      });
+      expect(plan.blokkades).toEqual([]);
+      expect(regel(plan, 'planningCodes')).toMatchObject({ backup: 3, live: 3, erbij: 1, weg: 1, blijft: 2 });
+    });
+
+    it('zonder code of met een dubbele code blokkeren, zoals het herstel ze leest: in kleine letters', () => {
+      const plan = bouwHerstelPlan({
+        backup: { users: [admin], planningCodes: [code('bv'), code(' BV '), code(''), { id: 'x' }] },
+        live: {},
+        exportedAt: '2026-09-21T02:00:00Z',
+        nu: NU,
+      });
+      expect(plan.blokkades).toEqual([
+        "'planningCodes': 2 records zonder code",
+        "'planningCodes': 1 dubbele code (bv)",
+      ]);
+    });
+  });
+
   it('waarschuwt als de admin zelf niet in de back-up staat, en als de back-up oud of ongedateerd is', () => {
     const oud = bouwHerstelPlan({ backup: { users: [admin] }, live: { users: [admin] }, exportedAt: '2026-09-01T02:00:00Z', actorId: '7', nu: NU });
     expect(oud.waarschuwingen).toEqual([

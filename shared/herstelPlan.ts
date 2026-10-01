@@ -48,11 +48,25 @@ export const HERSTEL_VERLIES_DREMPEL = 0.5;
 /** Een back-up ouder dan dit aantal dagen krijgt een waarschuwing. */
 export const HERSTEL_OUD_DAGEN = 7;
 
-const sleutelVan = (rij: unknown): string | null => {
+/**
+ * Het veld waaraan een record herkend wordt. Overal het id, behalve bij de
+ * planningscodes: die tabel heeft geen id, de code zelf is de sleutel, en zo
+ * schrijft het herstel ze ook weg (`savePlanningCodesData`, in kleine letters).
+ * Eén ingang per lijst, zodat een nieuwe collectie zonder sleutel een typefout
+ * is: de droge run nam overal een id aan en blokkeerde daardoor elke back-up
+ * op de planningscodes, en dus ook elk echt herstel (01-10).
+ */
+const SLEUTELVELD: Record<HerstelLijst, 'id' | 'code'> = {
+  users: 'id', planning: 'id', services: 'id', diversions: 'id', updates: 'id',
+  planningCodes: 'code', leave: 'id', swaps: 'id', planningMatrixRows: 'id',
+};
+const SLEUTELWOORD = { id: ['id', 'id’s'], code: ['code', 'codes'] } as const;
+
+const sleutelVan = (rij: unknown, veld: 'id' | 'code' = 'id'): string | null => {
   if (!rij || typeof rij !== 'object') return null;
-  const id = (rij as Record<string, unknown>).id;
-  if (id === undefined || id === null || String(id).trim() === '') return null;
-  return String(id);
+  const waarde = (rij as Record<string, unknown>)[veld];
+  if (waarde === undefined || waarde === null || String(waarde).trim() === '') return null;
+  return veld === 'code' ? String(waarde).trim().toLowerCase() : String(waarde);
 };
 
 export function bouwHerstelPlan({ backup, live, exportedAt = null, actorId = null, nu = new Date() }: {
@@ -70,7 +84,9 @@ export function bouwHerstelPlan({ backup, live, exportedAt = null, actorId = nul
   for (const collectie of HERSTEL_LIJSTEN) {
     const bron = backup[collectie];
     const liveLijst = Array.isArray(live[collectie]) ? (live[collectie] as unknown[]) : [];
-    const liveIds = new Set(liveLijst.map(sleutelVan).filter((id): id is string => id !== null));
+    const veld = SLEUTELVELD[collectie];
+    const [enkel, meer] = SLEUTELWOORD[veld];
+    const liveIds = new Set(liveLijst.map((rij) => sleutelVan(rij, veld)).filter((id): id is string => id !== null));
     if (bron === undefined) {
       regels.push({ collectie, inBackup: false, overgeslagen: false, backup: 0, live: liveLijst.length, erbij: 0, weg: 0, blijft: 0 });
       continue;
@@ -80,9 +96,9 @@ export function bouwHerstelPlan({ backup, live, exportedAt = null, actorId = nul
       regels.push({ collectie, inBackup: true, overgeslagen: true, backup: 0, live: liveLijst.length, erbij: 0, weg: 0, blijft: 0 });
       continue;
     }
-    const ids = bron.map(sleutelVan);
+    const ids = bron.map((rij) => sleutelVan(rij, veld));
     const zonderId = ids.filter((id) => id === null).length;
-    if (zonderId > 0) blokkades.push(`'${collectie}': ${zonderId} ${zonderId === 1 ? 'record' : 'records'} zonder id`);
+    if (zonderId > 0) blokkades.push(`'${collectie}': ${zonderId} ${zonderId === 1 ? 'record' : 'records'} zonder ${enkel}`);
     const gezien = new Set<string>();
     const dubbel = new Set<string>();
     for (const id of ids) {
@@ -92,7 +108,7 @@ export function bouwHerstelPlan({ backup, live, exportedAt = null, actorId = nul
     }
     if (dubbel.size > 0) {
       const voorbeeld = [...dubbel].slice(0, 3).join(', ');
-      blokkades.push(`'${collectie}': ${dubbel.size} dubbele ${dubbel.size === 1 ? 'id' : 'id’s'} (${voorbeeld}${dubbel.size > 3 ? ', …' : ''})`);
+      blokkades.push(`'${collectie}': ${dubbel.size} dubbele ${dubbel.size === 1 ? enkel : meer} (${voorbeeld}${dubbel.size > 3 ? ', …' : ''})`);
     }
     const overgeslagen = collectie === 'planningMatrixRows' && bron.length === 0;
     const erbij = [...gezien].filter((id) => !liveIds.has(id)).length;
