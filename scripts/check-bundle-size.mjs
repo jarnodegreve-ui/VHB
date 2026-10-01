@@ -112,7 +112,13 @@ import zlib from 'node:zlib';
 // in Gebruikers (±1 kB) en MailBevestiging als eigen gedeelde chunk. Gemeten
 // 694 lokaal. De index groeit ±0,3 kB (74,73 → 75,05) voor de hash-controle
 // en de luie grens in App.tsx; index (75,5) en warmup blijven de bewakers.
-const BUDGET_KB = 696;
+// 01-10 (filmnummers): 696 → 704. Geen nieuwe dependency: het scherm
+// Filmnummers (lui, 3,2 kB) en het importvenster van de admin met de lezer
+// voor CSV en Excel (eigen chunk, 4,2 kB, laadt pas als een admin een bestand
+// kiest). Gemeten 701,4 lokaal tegen 693,7 op main; de CI-runner meet de
+// index ±0,35 kB zwaarder. De warmup-sets groeien ±0,1 kB (de knop op Mijn
+// dag en de snelle actie op het dashboard) en blijven binnen hun budget.
+const BUDGET_KB = 704;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -145,7 +151,13 @@ const DEELBUDGET_KB = {
   // met de rollabels, de lader van het herstel na Ongedaan maken, de mail en
   // het verversen van de live-verbinding na de 2FA-code. Het herstel zelf
   // laadt al lui; een bredere lazy-loadingrefactor is bewust uitgesteld.
-  index: 75.5,
+  // 01-10 (filmnummers): 75,5 → 76. Main stond op de CI-runner al op 75,38,
+  // dus op 0,12 kB van de grens: elk nieuw scherm viel erover. Een scherm
+  // kost in de startbundel alleen zijn registratie (routetabel, lader, lazy
+  // declaratie, schermkeuze, chunk-kaart): +0,13 kB voor Filmnummers, lokaal
+  // 75,04 → 75,17 en dus ±75,5 in CI. Het scherm zelf en de import laden lui.
+  // 76 = die meting plus dezelfde ±0,5 kB marge als op 29-09.
+  index: 76,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB

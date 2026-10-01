@@ -8836,6 +8836,84 @@ describe('extra vrije dagen (feestdagen) (10-09)', () => {
   });
 });
 
+describe('filmnummers (01-10)', () => {
+  const GEEN = { code: '1', lijn: '', tekst: 'Geen dienst' };
+  const BRUGGE = { code: '5000', lijn: '50', tekst: 'Brugge Station' };
+  const AALTER = { code: '8714', lijn: '871', tekst: 'Aalter Europalaan' };
+
+  beforeEach(() => {
+    // Een technieker valt onder dezelfde toestel-gate als een chauffeur: met een
+    // goedgekeurd toestel is een 403 hieronder een oordeel over zijn rol.
+    mem.users.push({ id: '5', name: 'Toon Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true });
+    mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    invalidateUsersCache();
+  });
+
+  it('GET geeft elke rol een lege lijst zolang er niets geïmporteerd is; zonder sessie 401', async () => {
+    for (const token of ['tok-a', 'tok-tech', 'tok-planner', 'tok-admin']) {
+      const res = await api('GET', '/api/filmnummers', { token });
+      expect(res.status, token).toBe(200);
+      expect(res.json).toEqual({ items: [], bijgewerktOp: null });
+    }
+    expect((await api('GET', '/api/filmnummers', { device: null })).status).toBe(401);
+  });
+
+  it('admin vervangt de lijst: opgeschoond, elke code één keer, oplopend op nummer, gelogd', async () => {
+    const res = await api('PUT', '/api/filmnummers', {
+      token: 'tok-admin',
+      body: { items: [AALTER, { code: ' 5000 ', lijn: '50', tekst: '  Brugge   Station ' }, { code: '1', tekst: 'Geen dienst' }, { ...BRUGGE, tekst: 'Dubbel' }] },
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.items).toEqual([GEEN, BRUGGE, AALTER]);
+    expect(Number.isNaN(Date.parse(res.json.bijgewerktOp))).toBe(false);
+    expect(mem.appSettings.filmnummers).toEqual(res.json);
+    expect(mem.activity.find((a: any) => a.action === 'Filmnummers bijgewerkt')).toMatchObject({ domain: 'planning', message: '3 filmnummers voor 2 lijnen.' });
+
+    // Een chauffeur leest wat de admin bewaarde.
+    expect((await api('GET', '/api/filmnummers', { token: 'tok-a' })).json.items).toEqual([GEEN, BRUGGE, AALTER]);
+
+    // Een tweede import vervangt de hele lijst en noemt de vorige stand.
+    const tweede = await api('PUT', '/api/filmnummers', { token: 'tok-admin', body: { items: [GEEN] } });
+    expect(tweede.json.items).toEqual([GEEN]);
+    expect(mem.activity.filter((a: any) => a.action === 'Filmnummers bijgewerkt').at(-1)?.message).toBe('1 filmnummer, de vorige lijst telde er 3.');
+  });
+
+  it('planner, chauffeur en technieker mogen niet schrijven (403)', async () => {
+    for (const token of ['tok-planner', 'tok-a', 'tok-tech']) {
+      // Lezen mag wel: de 403 komt van de rol, niet van het toestel.
+      expect((await api('GET', '/api/filmnummers', { token })).status, token).toBe(200);
+      expect((await api('PUT', '/api/filmnummers', { token, body: { items: [GEEN] } })).status, token).toBe(403);
+    }
+    expect(mem.appSettings.filmnummers).toBeUndefined();
+  });
+
+  it('ongeldige invoer geeft 400 met de rij erbij en bewaart niets, ook geen lege lijst', async () => {
+    const letters = await api('PUT', '/api/filmnummers', { token: 'tok-admin', body: { items: [GEEN, { code: '58A', lijn: '50', tekst: 'Brugge' }] } });
+    expect(letters.status).toBe(400);
+    expect(letters.json.details).toBe('Rij 2 (Brugge): code: Een filmnummer bestaat uit 1 tot 6 cijfers');
+    expect((await api('PUT', '/api/filmnummers', { token: 'tok-admin', body: { items: [] } })).status).toBe(400);
+    expect((await api('PUT', '/api/filmnummers', { token: 'tok-admin', body: { items: [{ code: '5', lijn: '', tekst: '  ' }] } })).status).toBe(400);
+    expect((await api('PUT', '/api/filmnummers', { token: 'tok-admin', body: [GEEN] })).status).toBe(400);
+    expect((await api('PUT', '/api/filmnummers', { token: 'tok-admin', body: {} })).status).toBe(400);
+    expect(mem.appSettings.filmnummers).toBeUndefined();
+    expect(mem.activity.some((a: any) => a.action === 'Filmnummers bijgewerkt')).toBe(false);
+  });
+
+  it('een leesfout is een 500, geen lege lijst: het toestel houdt dan zijn kopie', async () => {
+    mem.appSettings = new Proxy({}, { get() { throw new Error('database weg'); } });
+    const res = await api('GET', '/api/filmnummers', { token: 'tok-a' });
+    expect(res.status).toBe(500);
+    expect(res.json).toEqual({ error: 'De filmnummers konden niet laden.' });
+  });
+
+  it('een beschadigde waarde in de database leest als de geldige rijen, niet als fout', async () => {
+    mem.appSettings.filmnummers = { items: [BRUGGE, { code: 'kapot' }, null], bijgewerktOp: 'onzin' };
+    const res = await api('GET', '/api/filmnummers', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ items: [BRUGGE], bijgewerktOp: null });
+  });
+});
+
 describe('/api/me draagt het toestel-oordeel en, voor staf, de beveiligingsstatus (punt 19, 15-09)', () => {
   it('chauffeur op een goedgekeurd toestel: profiel + toestel.approved, geen beveiliging', async () => {
     const res = await api('GET', '/api/me', { token: 'tok-a' });

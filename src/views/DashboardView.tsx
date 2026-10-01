@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
-import { Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users, Wrench } from 'lucide-react';
+import { Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, Signpost, SlidersHorizontal, Users, Wrench } from 'lucide-react';
 import { activeDiversions, lopendeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
 import { OmleidingDetail } from '../components/OmleidingDetail';
 import { isRijdend } from '../types';
@@ -467,9 +467,12 @@ export function DashboardView({ notes = [],
       {/* === Snelle acties (alleen zonder zijbalk: op desktop staan dezelfde
           schermen al links, dus daar zijn ze dubbel) === */}
       {onNavigate && toon('snelle-acties') && (
-        <div className="grid grid-cols-2 gap-3 lg:hidden">
+        // Een oneven laatste tegel spant de volle breedte, zoals de kleine
+        // tegels hierboven: met Filmnummers erbij (01-10) zijn het er zeven.
+        <div className="grid grid-cols-2 gap-3 lg:hidden [&>*:last-child:nth-child(odd)]:col-span-2">
           {isRijdend(user.role) && <QuickAction icon={<Calendar size={16} />} label="Mijn rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />}
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
+          <QuickAction icon={<Signpost size={16} />} label="Filmnummers" sub="Nummer per bestemming" onClick={() => onNavigate('filmnummers')} />
           {isRijdend(user.role) && <QuickAction icon={<Wrench size={16} />} label="Defect melden" sub="Iets mis met de bus?" onClick={() => setDefectMelden(true)} />}
           {isRijdend(user.role) && <QuickAction icon={<RefreshCw size={16} />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />}
           <QuickAction icon={<FileText size={16} />} label="Documenten" sub="Wat de planning klaarzet" onClick={() => onNavigate('documenten')} />

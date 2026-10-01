@@ -28,6 +28,7 @@ export const SKELET_PER_VIEW: Partial<Record<View, SkeletVorm>> = {
   verlof: { beschrijving: true },
   rooster: { beschrijving: true },
   ritblaadjes: { beschrijving: true },
+  filmnummers: { beschrijving: true },
   vandaag: { beschrijving: true },
   werkvoorraad: { soort: 'tabel', kpis: 7, beschrijving: true },
   ziekte: { beschrijving: true, kpis: 3 },

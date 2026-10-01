@@ -31,6 +31,7 @@ const VIEWS: Record<View, { pad: string; laad: Loader }> = {
   rooster: view('views/ScheduleView', () => import('../views/ScheduleView')),
   omleidingen: view('views/DiversionsView', () => import('../views/DiversionsView')),
   ritblaadjes: view('views/RitblaadjesView', () => import('../views/RitblaadjesView')),
+  filmnummers: view('views/FilmnummersView', () => import('../views/FilmnummersView')),
   documenten: view('views/DocumentsView', () => import('../views/DocumentsView')),
   'ruil-verzoeken': view('views/SwapRequestsView', () => import('../views/SwapRequestsView')),
   verlof: view('views/LeaveManagementView', () => import('../views/LeaveManagementView')),

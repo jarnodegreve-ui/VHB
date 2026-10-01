@@ -18,6 +18,7 @@ export const PAD_PER_VIEW: Record<string, string> = {
   rooster: "rooster",
   omleidingen: "omleidingen",
   ritblaadjes: "ritbladen",
+  filmnummers: "filmnummers",
   documenten: "documenten",
   "ruil-verzoeken": "dienstruil",
   verlof: "verlof",

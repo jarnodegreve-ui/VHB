@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, Calendar, FileText, WifiOff, Wrench } from 'lucide-react';
+import { ArrowLeftRight, Calendar, FileText, Signpost, WifiOff, Wrench } from 'lucide-react';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { lopendeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
@@ -280,19 +280,24 @@ export function MijnDagView({
           ook voor morgen zodra het nummer bekend is, zodat je 's avonds al
           kan klaarleggen wat je morgen rijdt. Het blad is altijd de actuele
           bundel. Defect melden schrijft rechtstreeks in het gele boek van de
-          garage (13-09) en staat er ook op een dag zonder dienst. === */}
-      <div className={cn('grid gap-2', delen.length > 0 && 'grid-cols-2')}>
+          garage (13-09) en staat er ook op een dag zonder dienst.
+          Filmnummers (01-10, vraag Jarno): het nummer voor de bestemming zoek
+          je onderweg op, bij elke eindhalte; de knop staat er dus ook op een
+          dag zonder dienst. Op een telefoon krijgt het ritblad de volle
+          breedte en staan de twee gewone knoppen eronder: drie naast elkaar
+          braken er over twee regels. Vanaf sm staan ze op één rij. === */}
+      <div className={cn('grid grid-cols-2 gap-2', delen.length > 0 && 'sm:grid-cols-3')}>
         {delen.length > 0 && (
-          // Op een telefoon brak "Ritblad van vandaag" over twee regels en
-          // trok zo beide knoppen naar 64 px hoog (dichtheidsronde 22-09). De
-          // dag staat al in de kop; het volledige label blijft voor wie meer
-          // breedte heeft en voor schermlezers.
-          <Button variant="primary" size="lg" full icon={<FileText size={18} />} aria-label={`Ritblad van ${dagWoord}`} onClick={() => setRitbladOpen(true)}>
-            <span className="sm:hidden">Ritblad</span>
-            <span className="hidden sm:inline">Ritblad van {dagWoord}</span>
+          <Button variant="primary" size="lg" full className="col-span-2 sm:col-span-1" icon={<FileText size={18} />} onClick={() => setRitbladOpen(true)}>
+            Ritblad van {dagWoord}
           </Button>
         )}
-        <Button variant="secondary" size="lg" full icon={<Wrench size={18} />} onClick={() => setDefectMelden(true)}>
+        {onNavigate && (
+          <Button variant="secondary" size="lg" full icon={<Signpost size={18} />} onClick={() => onNavigate('filmnummers')}>
+            Filmnummers
+          </Button>
+        )}
+        <Button variant="secondary" size="lg" full className={onNavigate ? undefined : 'col-span-2'} icon={<Wrench size={18} />} onClick={() => setDefectMelden(true)}>
           Defect melden
         </Button>
       </div>
