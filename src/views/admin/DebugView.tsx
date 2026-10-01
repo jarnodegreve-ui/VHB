@@ -15,6 +15,7 @@ import { formatDateTimeHuman, formatDatumDMJ, formatMomentDMJ, formatRelatief } 
 import { OcpiCard } from './OcpiCard';
 import { HerstelPlanModal } from '../../components/HerstelPlanModal';
 import type { HerstelPlan } from '../../../shared/herstelPlan';
+import { herstelVerzending, type HerstelBestand } from '../../lib/herstelBestand';
 import { FOUTGROEP_STATUS } from '../../../shared/status';
 import { meldSchrijffout, schrijffout } from '../../lib/fouten';
 import { TableShell, Td, Th } from '../../components/TabelBasis';
@@ -376,7 +377,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
   // Restore-flow: bestand inlezen → preview tonen → bevestigen → toepassen.
   const restoreInputRef = useRef<HTMLInputElement>(null);
-  const [pendingRestore, setPendingRestore] = useState<{ exportedAt?: string; collections: Record<string, any> } | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<HerstelBestand | null>(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   // Droge run van de server: wat het herstel zou doen, vóór de bevestiging.
@@ -397,7 +398,10 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         return;
       }
       setPlanLaden(true);
-      const droog = await apiFetch('/api/restore?droog=1', { method: 'POST', body: JSON.stringify(parsed) });
+      // Alleen wat het herstel terugzet gaat naar de server: zonder het
+      // activiteitenlog past het bestand jaren langer in één verzoek.
+      const verzending = herstelVerzending(parsed);
+      const droog = await apiFetch('/api/restore?droog=1', { method: 'POST', body: JSON.stringify(verzending) });
       if (droog.status === 413) {
         notify('De back-up is te groot om te herstellen via de browser. Neem contact op zodat we hem rechtstreeks kunnen terugzetten.', 'error');
         return;
@@ -408,7 +412,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         return;
       }
       setHerstelPlan(antwoord.plan as HerstelPlan);
-      setPendingRestore(parsed);
+      setPendingRestore(verzending);
       setRestoreConfirmOpen(true);
     } catch {
       notify('Kon het bestand niet lezen, is het een geldig JSON-back-upbestand?', 'error');
