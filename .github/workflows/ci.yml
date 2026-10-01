@@ -88,7 +88,7 @@ jobs:
         run: npm ci
 
       - name: Playwright-browsers-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -240,7 +240,7 @@ jobs:
 
       - name: node_modules-cache
         id: node-modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -250,7 +250,7 @@ jobs:
         run: npm ci
 
       - name: Playwright-browsers-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
