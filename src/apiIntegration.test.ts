@@ -118,6 +118,8 @@ const mem = vi.hoisted(() => ({
   clientErrorStatusTabel: true,
   emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; text?: string; attachments?: Array<{ filename: string; content: unknown; contentType?: string }> }>,
   storedBackups: [] as Array<{ filename: string; size: number }>,
+  // De laatst opgeslagen back-up, zoals de restore-proef hem uit de bucket leest.
+  laatsteBackup: null as { filename: string; body: string } | null,
   pushSubscriptions: [] as any[],
   pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
   documents: [] as any[],
@@ -826,8 +828,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.clientErrors.filter((e) => String(e.createdAt) >= sinceIso),
     storeBackup: async (filename: string, body: string) => {
       mem.storedBackups.push({ filename, size: body.length });
+      mem.laatsteBackup = { filename, body };
       return { removedOld: 0 };
     },
+    getLatestBackup: async () => mem.laatsteBackup,
     restoreFromBackup: async (collections: any) => {
       const summary: Record<string, number> = {};
       for (const key of ['users', 'planning', 'services', 'diversions', 'updates', 'leave', 'swaps', 'planningCodes']) {
@@ -992,6 +996,7 @@ beforeEach(() => {
   mem.clientErrorStatusTabel = true;
   mem.emailsSent = [];
   mem.storedBackups = [];
+  mem.laatsteBackup = null;
   mem.pushSubscriptions = [];
   mem.pushesSent = [];
   mem.importHistory = [];
@@ -2789,6 +2794,12 @@ describe('restore vanuit back-up', () => {
   });
 });
 
+// De vorm die getPlanningCodesData geeft: zes velden, geen id.
+const PLANNINGSCODES_ZOALS_DE_EXPORT = [
+  { code: 'bv', category: 'leave', description: 'Betaald verlof', countsAsShift: false, isPaidAbsence: true, isDayOff: false },
+  { code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true },
+];
+
 describe('droge herstelrun (POST /api/restore?droog=1)', () => {
   const backup = (collections: any) => ({ exportedAt: new Date().toISOString(), version: 2, collections });
 
@@ -2823,6 +2834,53 @@ describe('droge herstelrun (POST /api/restore?droog=1)', () => {
     expect(echt.status).toBe(400);
     expect(echt.json.error).toMatch(/dubbele id/);
     expect(mem.services).toHaveLength(voor);
+  });
+
+  // Regressie 01-10: de planningscodes hebben geen id (de code is de sleutel),
+  // de droge run eiste er een. Elke back-up van het portaal zelf was daardoor
+  // geblokkeerd, in de restore-proef en bij een echt herstel.
+  it('de back-up die het portaal zelf maakt is zonder blokkade terug te zetten, ook de planningscodes', async () => {
+    mem.planningCodes = PLANNINGSCODES_ZOALS_DE_EXPORT;
+    const eigen = await api('GET', '/api/backup', { token: 'tok-admin' });
+    const droog = await api('POST', '/api/restore?droog=1', { token: 'tok-admin', body: eigen.json });
+    expect(droog.json.plan.blokkades).toEqual([]);
+    expect(droog.json.plan.regels.find((r: any) => r.collectie === 'planningCodes')).toMatchObject({ backup: 2, live: 2, erbij: 0, weg: 0, blijft: 2 });
+    const echt = await api('POST', '/api/restore', { token: 'tok-admin', body: eigen.json });
+    expect(echt.status).toBe(200);
+    expect(echt.json.summary.planningCodes).toBe(2);
+  });
+});
+
+describe('maandelijkse restore-proef (cron)', () => {
+  const CRON = { headers: { Authorization: 'Bearer test-cron-secret' } };
+
+  it('slaagt op de back-up van de nachtcron, met planningscodes erin, en mailt dan niets', async () => {
+    mem.planningCodes = PLANNINGSCODES_ZOALS_DE_EXPORT;
+    expect((await api('GET', '/api/cron/backup', CRON)).status).toBe(200);
+    mem.emailsSent = [];
+    const res = await api('GET', '/api/cron/restore-proef', CRON);
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ success: true, filename: mem.laatsteBackup!.filename });
+    expect(mem.emailsSent).toHaveLength(0);
+    expect(mem.hartslagen.at(-1)).toMatchObject({ naam: 'restore-proef' });
+    expect(mem.hartslagen.at(-1)!.details).toContain('droge herstelrun geslaagd');
+  });
+
+  it('alarmeert per mail als de laatste back-up niet te herstellen is', async () => {
+    await api('GET', '/api/cron/backup', CRON);
+    const payload = JSON.parse(mem.laatsteBackup!.body);
+    payload.collections.services = [payload.collections.services[0], payload.collections.services[0]];
+    mem.laatsteBackup = { filename: mem.laatsteBackup!.filename, body: JSON.stringify(payload) };
+    mem.emailsSent = [];
+    const res = await api('GET', '/api/cron/restore-proef', CRON);
+    expect(res.json.success).toBe(false);
+    expect(res.json.issues).toEqual(["droge herstelrun: 'services': 1 dubbele id (d1)"]);
+    expect(mem.emailsSent.filter((e) => e.context === 'restore-proef')).toHaveLength(1);
+    expect(mem.hartslagen.at(-1)!.details).toMatch(/^GEFAALD: /);
+  });
+
+  it('is alleen voor de cron (401 zonder secret)', async () => {
+    expect((await api('GET', '/api/cron/restore-proef')).status).toBe(401);
   });
 });
 

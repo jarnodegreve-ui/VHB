@@ -225,10 +225,7 @@ export const savePlanningData = async (data: any) => {
   const idsToDelete = (existing ?? [])
     .map((row: any) => String(row.id))
     .filter((id) => !incomingIds.has(id));
-  if (idsToDelete.length > 0) {
-    const { error: deleteError } = await client.from('planning').delete().in('id', idsToDelete);
-    if (deleteError) throw deleteError;
-  }
+  await verwijderInStukken(client, 'planning', 'id', idsToDelete);
 };
 
 /**
@@ -479,10 +476,7 @@ export const savePlanningCodesData = async (codes: PlanningCodeRecord[]) => {
   const nextCodeSet = new Set(uniqueCodes.map((code) => code.code));
   const removedCodes = Array.from(currentCodeSet).filter((code) => !nextCodeSet.has(code));
 
-  if (removedCodes.length > 0) {
-    const { error: deleteError } = await client.from('planning_codes').delete().in('code', removedCodes);
-    if (deleteError) throw deleteError;
-  }
+  await verwijderInStukken(client, 'planning_codes', 'code', removedCodes);
 
   if (uniqueCodes.length > 0) {
     const { error } = await client.from('planning_codes').upsert(uniqueCodes.map(toDatabasePlanningCode));
@@ -668,6 +662,27 @@ export const getLatestAuthEventAt = async (userId: string): Promise<string | nul
 const IN_FILTER_MAX = 100;
 const inStukken = <T,>(lijst: readonly T[], grootte: number): T[][] =>
   Array.from({ length: Math.ceil(lijst.length / grootte) }, (_, i) => lijst.slice(i * grootte, (i + 1) * grootte));
+
+/**
+ * Rijen verwijderen op een sleutel, in stukken van IN_FILTER_MAX (01-10). De
+ * replace-saves stuurden álle overtollige id's in één `in.(...)`, en dat
+ * filter staat in de URL: een herstel dat een mislukte maandimport terugdraait
+ * (±600 planning-id's van 40 tekens) strandde daarop, telkens opnieuw, met de
+ * upsert al gedaan en de rest van het herstel niet. Serieel, zodat één
+ * mislukt stuk de volgende tegenhoudt. `verfijn` zet een extra voorwaarde op
+ * elk stuk (het alleenPending-pad van verlof en ruilen).
+ */
+const verwijderInStukken = async (
+  client: ReturnType<typeof requireDb>, tabel: string, kolom: string, waarden: readonly string[],
+  verfijn?: (q: any) => any,
+) => {
+  for (const stuk of inStukken(waarden, IN_FILTER_MAX)) {
+    let q: any = client.from(tabel).delete().in(kolom, stuk);
+    if (verfijn) q = verfijn(q);
+    const { error } = await q;
+    if (error) throw error;
+  }
+};
 
 /** Activiteitenlog van een reeks dienstruilen, oudste eerst — het verloop
  *  dat het weekoverzicht per wissel afdrukt. Eén query i.p.v. één per wissel:
@@ -1458,10 +1473,7 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
   // database vooraf te schrijven faalt een DB-fout vóór er ook maar één
   // Auth-account is aangemaakt of verwijderd (geen weeskonten / verweesde
   // profielen door een halverwege gefaalde write).
-  if (removedUserIds.length > 0) {
-    const { error } = await client.from('users').delete().in('id', removedUserIds);
-    if (error) throw error;
-  }
+  await verwijderInStukken(client, 'users', 'id', removedUserIds);
   // Bestaande rijen zónder de sessie-kolommen upserten, zodat een login die
   // tussen het lezen hierboven en dit schrijven in valt niet alsnog
   // overschreven wordt; nieuwe rijen mét (schone) sessie-kolommen. Twee
@@ -1963,12 +1975,9 @@ export const saveDiversionsData = async (data: any) => {
     if (upsertError) throw upsertError;
   }
 
-  if (idsToDelete.length > 0) {
-    const { error: deleteError } = await client.from('diversions').delete().in('id', idsToDelete);
-    if (deleteError) throw deleteError;
-    // De PDF's blijven bewust staan: "Ongedaan maken" moet ze kunnen
-    // terughangen. De nachtcron ruimt ze op (api/_lib/bijlagenOpruim.ts).
-  }
+  // De PDF's blijven bewust staan: "Ongedaan maken" moet ze kunnen
+  // terughangen. De nachtcron ruimt ze op (api/_lib/bijlagenOpruim.ts).
+  await verwijderInStukken(client, 'diversions', 'id', idsToDelete);
 };
 
 // --- Services ---
@@ -2000,10 +2009,7 @@ export const saveServicesData = async (data: any) => {
   const idsToDelete = (existing ?? [])
     .map((row: any) => String(row.id))
     .filter((id) => !incomingIds.has(id));
-  if (idsToDelete.length > 0) {
-    const { error: deleteError } = await client.from('services').delete().in('id', idsToDelete);
-    if (deleteError) throw deleteError;
-  }
+  await verwijderInStukken(client, 'services', 'id', idsToDelete);
 };
 
 // --- Back-ups (Supabase Storage) ---
@@ -2807,10 +2813,7 @@ export const saveUpdatesData = async (data: any) => {
     if (error) throw error;
   }
 
-  if (idsToDelete.length > 0) {
-    const { error: deleteError } = await client.from('updates').delete().in('id', idsToDelete);
-    if (deleteError) throw deleteError;
-  }
+  await verwijderInStukken(client, 'updates', 'id', idsToDelete);
 
   // Best-effort: persist the urgent flag only when the production schema supports it.
   if (normalizedData.some((update) => Boolean(update.isUrgent))) {
@@ -3172,12 +3175,7 @@ export const saveSwapsData = async (data: any, idsToDelete: string[] = [], optie
   }
   // Intrekkingen: gevalideerd door de handler (zie POST /api/swaps).
   // alleenPending (chauffeur-pad): zelfde race-afdichting als saveLeaveData.
-  if (idsToDelete.length > 0) {
-    let q = client.from('swaps').delete().in('id', idsToDelete.map(String));
-    if (opties.alleenPending) q = q.eq('status', 'pending');
-    const { error } = await q;
-    if (error) throw error;
-  }
+  await verwijderInStukken(client, 'swaps', 'id', idsToDelete.map(String), opties.alleenPending ? (q) => q.eq('status', 'pending') : undefined);
 };
 
 /**
@@ -3394,12 +3392,7 @@ export const saveLeaveData = async (data: any, idsToDelete: string[] = [], optie
   // snapshot; keurt een planner de aanvraag tussen die read en deze delete
   // goed, dan mag de intrekking hem niet meer raken. De voorwaarde zit
   // daarom in dezelfde databaseoperatie (security-audit 07-09, bevinding 7).
-  if (idsToDelete.length > 0) {
-    let q = client.from('leave').delete().in('id', idsToDelete.map(String));
-    if (opties.alleenPending) q = q.eq('status', 'pending');
-    const { error } = await q;
-    if (error) throw error;
-  }
+  await verwijderInStukken(client, 'leave', 'id', idsToDelete.map(String), opties.alleenPending ? (q) => q.eq('status', 'pending') : undefined);
 };
 
 // --- Coverage expectations (verwachte diensten per dag-type) ---
@@ -3451,10 +3444,7 @@ export const saveCoverageExpectations = async (map: Record<string, string[]>) =>
   const { data: existing, error: selectError } = await client.from('coverage_expectations').select('day_type');
   if (selectError) throw selectError;
   const toDelete = (existing ?? []).map((r: any) => String(r.day_type)).filter((dt) => !keep.has(dt));
-  if (toDelete.length > 0) {
-    const { error: deleteError } = await client.from('coverage_expectations').delete().in('day_type', toDelete);
-    if (deleteError) throw deleteError;
-  }
+  await verwijderInStukken(client, 'coverage_expectations', 'day_type', toDelete);
 };
 
 // --- Restore vanuit een back-up-bestand ---

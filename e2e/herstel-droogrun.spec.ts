@@ -6,10 +6,16 @@ import { ADMIN, seed } from './helpers';
  * server eerst wat een herstel ZOU doen en toont dat plan vóór de bevestiging.
  * De rekenregels zitten in shared/herstelPlan.test.ts.
  */
+// Met een activiteitenlog erin, zoals de echte back-up: dat blijft thuis.
 const BESTAND = {
   name: 'vhb-backup.json',
   mimeType: 'application/json',
-  buffer: Buffer.from(JSON.stringify({ exportedAt: new Date().toISOString(), version: 2, collections: { users: [{ id: '1', role: 'admin' }], services: [{ id: 'a' }] } })),
+  buffer: Buffer.from(JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    version: 2,
+    collections: { users: [{ id: '1', role: 'admin' }], services: [{ id: 'a' }], activityLog: [{ id: 'log-1', action: 'Aangemeld' }] },
+    authUsers: [{ id: '1', email: 'admin@vhb.test' }],
+  })),
 };
 const regel = (collectie: string, over: Record<string, unknown> = {}) =>
   ({ collectie, inBackup: true, overgeslagen: false, backup: 0, live: 0, erbij: 0, weg: 0, blijft: 0, ...over });
@@ -24,6 +30,7 @@ const plan = (over: Record<string, unknown> = {}) => ({
 
 test('herstel toont eerst de droge run, en schrijft pas na de bevestiging', async ({ page }) => {
   const aanroepen: string[] = [];
+  const verstuurd: string[][] = [];
   await seed(page, {
     user: ADMIN,
     view: 'beheer-debug',
@@ -31,6 +38,8 @@ test('herstel toont eerst de droge run, en schrijft pas na de bevestiging', asyn
       if (!pad.endsWith('/api/restore')) return undefined;
       const droog = new URL(request.url()).searchParams.get('droog') === '1';
       aanroepen.push(droog ? 'droog' : 'echt');
+      const body = request.postDataJSON() as { collections: Record<string, unknown> };
+      verstuurd.push(Object.keys(body.collections));
       return droog ? { droog: true, plan: plan() } : { success: true, summary: { users: 1, services: 1 } };
     },
   });
@@ -47,6 +56,9 @@ test('herstel toont eerst de droge run, en schrijft pas na de bevestiging', asyn
 
   await dialoog.getByRole('button', { name: 'Terugzetten', exact: true }).click();
   await expect.poll(() => aanroepen).toEqual(['droog', 'echt']);
+  // Beide verzoeken dragen alleen wat het herstel terugzet: het
+  // activiteitenlog (driekwart van een echte back-up) blijft thuis.
+  expect(verstuurd).toEqual([['users', 'services'], ['users', 'services']]);
 });
 
 test('een blokkade in de droge run zet het herstel op slot', async ({ page }) => {
