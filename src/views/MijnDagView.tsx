@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, Calendar, FileText, Signpost, WifiOff, Wrench } from 'lucide-react';
+import { ArrowLeftRight, BusFront, Calendar, FileText, WifiOff, Wrench } from 'lucide-react';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { lopendeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
@@ -294,7 +294,7 @@ export function MijnDagView({
           </Button>
         )}
         {onNavigate && (
-          <Button variant="secondary" size="lg" full icon={<Signpost size={18} />} onClick={() => onNavigate('filmnummers')}>
+          <Button variant="secondary" size="lg" full icon={<BusFront size={18} />} onClick={() => onNavigate('filmnummers')}>
             Filmnummers
           </Button>
         )}
