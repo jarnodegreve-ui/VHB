@@ -86,4 +86,53 @@ describe('FilmnummerImport', () => {
     expect(onKlaar).not.toHaveBeenCalled();
     expect(onSluit).not.toHaveBeenCalled();
   });
+
+  it('een 200 zonder lijst is geen bevestiging: het venster blijft open en de lijst wordt niet gewist', async () => {
+    for (const body of ['<html>Meld je aan op dit netwerk</html>', '', JSON.stringify({ ok: true })]) {
+      apiFetchMock.mockReset();
+      notifyMock.mockReset();
+      apiFetchMock.mockResolvedValue(new Response(body, { status: 200 }));
+      const onKlaar = vi.fn();
+      const onSluit = vi.fn();
+      const { unmount } = render(<FilmnummerImport bestand={bestand(CSV)} huidig={[]} onKlaar={onKlaar} onSluit={onSluit} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Lijst importeren' }));
+      await waitFor(() => expect(notifyMock).toHaveBeenCalled());
+      expect(String(notifyMock.mock.calls[0][0])).toContain('Importeren is mislukt.');
+      expect(notifyMock.mock.calls[0][1]).toBe('error');
+      expect(onKlaar, body).not.toHaveBeenCalled();
+      expect(onSluit, body).not.toHaveBeenCalled();
+      // De knop is weer vrij voor een nieuwe poging.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Lijst importeren' }).getAttribute('aria-busy')).not.toBe('true'));
+      unmount();
+    }
+  });
+
+  it('waarschuwt als meer dan de helft van de lijst verdwijnt, en vraagt dan een bewuste bevestiging', async () => {
+    const huidig = [...GELEZEN, f('8716', '871', 'Deinze Station'), f('8830', '883', 'Tielt Station'), f('9070', '907', 'Mariakerke VISO-AHS')];
+    apiFetchMock.mockResolvedValue(new Response(JSON.stringify({ items: [f('1', '', 'Geen dienst'), f('94', '', 'Stelplaats')], bijgewerktOp: '2026-10-02T08:00:00.000Z' })));
+    const onKlaar = vi.fn();
+    render(<FilmnummerImport bestand={bestand('1;Geen dienst\r\n94;Stelplaats')} huidig={huidig} onKlaar={onKlaar} onSluit={vi.fn()} />);
+    const dialoog = await screen.findByRole('dialog', { name: 'Filmnummers importeren' });
+    await waitFor(() => expect(dialoog.textContent).toContain('6 verdwijnen'));
+    expect(dialoog.textContent).toContain('Meer dan de helft van de lijst verdwijnt');
+    expect(dialoog.textContent).toContain('De lijst telt nu 8 nummers; na deze import blijven er 2 over.');
+    expect(screen.queryByRole('button', { name: 'Lijst vervangen' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Toch vervangen' }));
+    await waitFor(() => expect(onKlaar).toHaveBeenCalled());
+  });
+
+  it('zegt hoe het bestand gelezen is, ook als er iets in een derde kolom staat', async () => {
+    render(<FilmnummerImport bestand={bestand('1;Geen dienst\r\n5000;50 Brugge Station;altijd bij uitrukken')} huidig={[]} onKlaar={vi.fn()} onSluit={vi.fn()} />);
+    const dialoog = await screen.findByRole('dialog', { name: 'Filmnummers importeren' });
+    await waitFor(() => expect(dialoog.textContent).toContain('2 filmnummers gevonden: 1 bestemming op 1 lijn en 1 algemene boodschap.'));
+    expect(dialoog.textContent).toContain('Kolom 1 is het nummer, kolom 2 de tekst van de film. Bij een nummer van vier cijfers of meer is het begin van de tekst de lijn (5000: 50 Brugge Station).');
+    expect(dialoog.textContent).toContain('Bij 1 regel staat ook iets in een derde kolom; dat is niet gelezen.');
+  });
+
+  it('een bestand van meer dan 2 MB wordt niet gelezen', async () => {
+    const groot = new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'groot.csv', { type: 'text/csv' });
+    render(<FilmnummerImport bestand={groot} huidig={[]} onKlaar={vi.fn()} onSluit={vi.fn()} />);
+    expect((await screen.findByRole('alert')).textContent).toContain('Dit bestand is groter dan 2 MB');
+    expect(screen.queryByRole('button', { name: /Lijst (vervangen|importeren)/ })).toBeNull();
+  });
 });

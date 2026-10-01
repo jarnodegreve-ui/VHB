@@ -682,3 +682,54 @@ test.describe('pwa: persoonlijke documenten, niets op het toestel', () => {
     await metBereik(context);
   });
 });
+
+/**
+ * Filmnummers zonder bereik (01-10). Het scherm is er voor onderweg, maar zit
+ * in geen warmup: zonder de precache (PRECACHE_EXTRA_MODULE in vite.config.ts)
+ * opende het zonder bereik alleen als het in deze versie al eens mét bereik
+ * geopend was, en de mislukte import eindigde in de herlaad van lazyRetry, die
+ * zonder bereik de hele app wegnam (tegenlezing 01-10). De lijst zelf staat op
+ * het toestel door de stille ophaling na de start (warmFilmnummers).
+ */
+test.describe('pwa: filmnummers zonder bereik', () => {
+  test.describe.configure({ timeout: 90_000 });
+
+  test('het scherm opent uit de precache met de lijst van de stille ophaling, ook als het nog nooit geopend is', async ({ page, context }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    await seedContext(context, page);
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+    await wachtOpControle(page);
+
+    // De service worker zette het scherm bij zijn installatie klaar, en de
+    // app haalde de lijst na de start stil op. Het scherm zelf is nooit geopend.
+    await expect.poll(() => page.evaluate(async () => {
+      for (const naam of await caches.keys()) {
+        const sleutels = await (await caches.open(naam)).keys();
+        if (sleutels.some((r) => /\/assets\/FilmnummersView-/.test(r.url))) return true;
+      }
+      return false;
+    }), { timeout: 20_000, message: 'het scherm Filmnummers in de precache' }).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('vhb-filmnummers') !== null), { timeout: 30_000, message: 'de lijst op het toestel (stille ophaling na de start)' }).toBe(true);
+
+    await zonderBereik(context);
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+    const inhoud = page.locator('#hoofdinhoud');
+    await inhoud.getByRole('button', { name: 'Filmnummers', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Filmnummers' })).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(/\/filmnummers$/);
+    const bestemmingen = page.getByRole('list', { name: 'Bestemmingen' }).getByRole('listitem');
+    await expect(bestemmingen).toHaveCount(13);
+    // Geen bereik is hier geen fout: de lijst staat er, met het stille label.
+    await expect(inhoud.getByText('Offline', { exact: true })).toBeVisible();
+    await expect(inhoud.getByRole('alert')).toHaveCount(0);
+
+    // Bereik terug: de lijst ververst stil en er verschijnt geen foutkaart.
+    await metBereik(context);
+    await expect(inhoud.getByText('Offline', { exact: true })).toHaveCount(0, { timeout: 15_000 });
+    await expect(inhoud.getByRole('alert')).toHaveCount(0);
+    await expect(bestemmingen).toHaveCount(13);
+    expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+});

@@ -28,6 +28,21 @@ const GEEN_NUMMERS = 'In dit bestand staan geen filmnummers. Verwacht: een kolom
 const TE_GROOT = 'Dit bestand is groter dan 2 MB; een lijst met filmnummers is veel kleiner. Kies het juiste bestand.';
 const ONLEESBAAR = 'Het bestand kon niet gelezen worden. Kies een CSV- of Excel-bestand.';
 
+/** Hoe het bestand gelezen is, in gewone woorden: zo ziet de admin of de kolommen juist begrepen zijn. */
+const leesUitleg = (g: FilmImport['gelezen']): string => {
+  const delen = [
+    g.kopregel
+      ? 'Gelezen volgens de kopregel van het bestand.'
+      : g.lijnKolom
+        ? 'Geen kopregel gevonden: kolom 1 is het nummer, kolom 2 de lijn, kolom 3 de tekst.'
+        : 'Kolom 1 is het nummer, kolom 2 de tekst van de film.',
+  ];
+  if (g.lijnKolomOngebruikt) delen.push('De kolom Lijn hoort niet bij elk blok en is niet gebruikt.');
+  if (!g.lijnKolom || g.lijnKolomOngebruikt) delen.push('Bij een nummer van vier cijfers of meer is het begin van de tekst de lijn (5000: 50 Brugge Station).');
+  if (g.extraCellen > 0) delen.push(`Bij ${aantal(g.extraCellen, 'regel', 'regels')} staat ook iets in een derde kolom; dat is niet gelezen.`);
+  return delen.join(' ');
+};
+
 /** "5001 Maldegem, 5002 Maldegem en 3 andere": genoeg om te herkennen wat er wijzigt. */
 const opsomming = (items: readonly Filmnummer[], max = 4): string => {
   const eerste = items.slice(0, max).map((f) => `${f.code} ${f.tekst}`).join(', ');
@@ -71,6 +86,9 @@ export default function FilmnummerImport({ bestand, huidig, onKlaar, onSluit }: 
   const gelijk = huidig.length > 0 && verschil.nieuw.length === 0 && verschil.gewijzigd.length === 0 && verschil.weg.length === 0;
   // Een bestand dat niets verandert valt niet op te slaan: alleen Sluiten.
   const kanOpslaan = leesbaar && !gelijk;
+  // Rem vóór de bevestiging: een verkeerd bestand of verkeerd gelezen kolommen
+  // holt de lijst uit. De admin beslist, maar ziet het eerst.
+  const holtUit = kanOpslaan && verschil.weg.length * 2 > huidig.length;
 
   const opslaan = async () => {
     if (bezig || !kanOpslaan) return;
@@ -84,7 +102,15 @@ export default function FilmnummerImport({ bestand, huidig, onKlaar, onSluit }: 
         meldSchrijffout('Importeren', { status: res.status, message: a?.details || a?.error }, () => void opslaan());
         return;
       }
-      onKlaar(parseFilmnummerLijst(antwoord));
+      const bewaard = parseFilmnummerLijst(antwoord);
+      // De server antwoordt met de bewaarde lijst. Een 200 zonder lijst (de
+      // aanmeldpagina van een wifi-netwerk, een lege body) bewijst niet dat er
+      // iets bewaard is, en mag de lijst op het scherm en het toestel niet wissen.
+      if (bewaard.items.length === 0) {
+        meldSchrijffout('Importeren', undefined, () => void opslaan());
+        return;
+      }
+      onKlaar(bewaard);
       onSluit();
     } catch (err) {
       meldSchrijffout('Importeren', err, () => void opslaan());
@@ -112,13 +138,7 @@ export default function FilmnummerImport({ bestand, huidig, onKlaar, onSluit }: 
                   {indeling.bestemmingen.length === 0 && indeling.algemeen.length > 0 && ': '}
                   {indeling.algemeen.length > 0 && aantal(indeling.algemeen.length, 'algemene boodschap', 'algemene boodschappen')}.
                 </p>
-                <p className="text-body-sm text-slate-500">
-                  {uit.gelezen.kopregel
-                    ? 'Gelezen volgens de kopregel van het bestand.'
-                    : uit.gelezen.lijnKolom
-                      ? 'Geen kopregel gevonden: kolom 1 is het nummer, kolom 2 de lijn, kolom 3 de tekst.'
-                      : 'Kolom 1 is het nummer, kolom 2 de tekst van de film. Begint die tekst met een lijn (50 Brugge Station), dan staat het nummer onder die lijn.'}
-                </p>
+                <p className="text-body-sm text-slate-500">{leesUitleg(uit.gelezen)}</p>
               </div>
             ) : (
               <Callout tone="danger" role="alert" title="Niets om te importeren">Geen enkele regel van dit bestand is een geldig filmnummer.</Callout>
@@ -159,6 +179,12 @@ export default function FilmnummerImport({ bestand, huidig, onKlaar, onSluit }: 
                   </ul>
                 )}
               </div>
+            )}
+
+            {holtUit && (
+              <Callout tone="warning" role="alert" title="Meer dan de helft van de lijst verdwijnt">
+                De lijst telt nu {aantal(huidig.length, 'nummer', 'nummers')}; na deze import {items.length === 1 ? 'blijft er 1 over' : `blijven er ${items.length} over`}. Kijk na of dit het juiste bestand is.
+              </Callout>
             )}
 
             {uit.overgeslagen.length > 0 && (
@@ -210,7 +236,7 @@ export default function FilmnummerImport({ bestand, huidig, onKlaar, onSluit }: 
         <SluitKnop onClose={onSluit} variant="secondary" size="lg" disabled={bezig}>{kanOpslaan ? 'Annuleren' : 'Sluiten'}</SluitKnop>
         {kanOpslaan && (
           <Button variant="primary" size="lg" bezig={bezig} onClick={() => void opslaan()}>
-            {huidig.length === 0 ? 'Lijst importeren' : 'Lijst vervangen'}
+            {huidig.length === 0 ? 'Lijst importeren' : holtUit ? 'Toch vervangen' : 'Lijst vervangen'}
           </Button>
         )}
       </div>

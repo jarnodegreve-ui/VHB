@@ -285,10 +285,11 @@ export function MijnDagView({
           je onderweg op, bij elke eindhalte; de knop staat er dus ook op een
           dag zonder dienst. Op een telefoon krijgt het ritblad de volle
           breedte en staan de twee gewone knoppen eronder: drie naast elkaar
-          braken er over twee regels. Vanaf sm staan ze op één rij. === */}
-      <div className={cn('grid grid-cols-2 gap-2', delen.length > 0 && 'sm:grid-cols-3')}>
+          braken er over twee regels. Vanaf md (de kolom is dan 672 px breed)
+          staan ze op één rij. === */}
+      <div className={cn('grid grid-cols-2 gap-2', delen.length > 0 && 'md:grid-cols-3')}>
         {delen.length > 0 && (
-          <Button variant="primary" size="lg" full className="col-span-2 sm:col-span-1" icon={<FileText size={18} />} onClick={() => setRitbladOpen(true)}>
+          <Button variant="primary" size="lg" full className="col-span-2 md:col-span-1" icon={<FileText size={18} />} onClick={() => setRitbladOpen(true)}>
             Ritblad van {dagWoord}
           </Button>
         )}

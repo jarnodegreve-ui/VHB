@@ -1,7 +1,7 @@
 import { Suspense, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Upload } from 'lucide-react';
 import { verdeelFilmnummers, zoekFilmnummers, type Filmnummer, type FilmnummerLijst } from '../../shared/filmnummers';
-import { bewaarFilmnummersLokaal, haalFilmnummers, leesFilmnummersLokaal } from '../lib/filmnummers';
+import { haalFilmnummers, leesFilmnummersLokaal, noteerFilmnummerImport } from '../lib/filmnummers';
 import { aantal, formatMomentDMJ } from '../lib/format';
 import { lazyWithRetry } from '../lib/lazyRetry';
 import { notify } from '../lib/ui';
@@ -69,8 +69,10 @@ export function FilmnummersView({ magBeheren }: { magBeheren: boolean }) {
     if (bestand) setImportBestand(bestand);
   };
   const naImport = (nieuw: FilmnummerLijst) => {
+    // Ook voor een verversing die nog onderweg is: die vertrok vóór de import
+    // en zou het scherm en de kopie anders terugzetten op de oude lijst.
+    noteerFilmnummerImport(nieuw);
     setLijst(nieuw);
-    bewaarFilmnummersLokaal(nieuw);
     wisFilters();
     notify(`Filmnummers bijgewerkt: ${aantal(nieuw.items.length, 'nummer', 'nummers')}.`, 'success');
   };

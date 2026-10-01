@@ -104,10 +104,11 @@ const plat = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').t
 /**
  * Zoeken op lijn, bestemming of nummer; elk woord moet ergens raken. Een
  * woord van cijfers raakt een code alleen vanaf het begin ("58" vindt 5800,
- * niet 8358), een lijn of bestemming ook middenin ("58" vindt lijn 858).
+ * niet 8358), een lijn of bestemming ook middenin ("58" vindt lijn 858). Het
+ * woord "lijn" zelf telt niet mee: "lijn 50" zoekt 50.
  */
 export function zoekFilmnummers(items: readonly Filmnummer[], zoek: string): Filmnummer[] {
-  const woorden = plat(zoek).split(/\s+/).filter(Boolean);
+  const woorden = plat(zoek).split(/\s+/).filter((w) => w && w !== 'lijn');
   if (woorden.length === 0) return [...items];
   return items.filter((f) => {
     const lijn = plat(f.lijn);

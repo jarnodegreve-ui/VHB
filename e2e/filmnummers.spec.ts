@@ -55,20 +55,62 @@ test('een chauffeur vindt het nummer van zijn bestemming: zoeken, één lijn, al
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
 
-test('zonder bereik staat de lijst er nog: de kopie op het toestel', async ({ page }) => {
-  let bereik = true;
+test('valt de server uit terwijl er bereik is, dan blijft de kopie staan en zegt een kleine kaart dat bijwerken niet lukte', async ({ page }) => {
+  let serverOk = true;
   await seed(page, { user: CHAUFFEUR, view: 'filmnummers' });
-  // Na de seed gezet, dus eerst aan de beurt: zonder bereik faalt alleen deze call.
-  await page.route('**/api/filmnummers', (route) => (bereik ? route.fallback() : route.abort('internetdisconnected')));
+  // Na de seed gezet, dus eerst aan de beurt: alleen deze call faalt.
+  await page.route('**/api/filmnummers', (route) => (serverOk
+    ? route.fallback()
+    : route.fulfill({ status: 500, json: { error: 'De filmnummers konden niet laden.' } })));
   await page.goto('/filmnummers');
-  await expect(page.getByRole('list', { name: 'Bestemmingen' }).getByRole('listitem')).toHaveCount(13, { timeout: 15_000 });
+  const bestemmingen = page.getByRole('list', { name: 'Bestemmingen' }).getByRole('listitem');
+  await expect(bestemmingen).toHaveCount(13, { timeout: 15_000 });
 
-  bereik = false;
+  serverOk = false;
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: 'Filmnummers' })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('list', { name: 'Bestemmingen' }).getByRole('listitem')).toHaveCount(13);
-  await expect(page.getByText('Dit kon niet laden')).toHaveCount(0);
+  // De lijst staat er meteen uit de kopie; de mislukte verversing is een kleine kaart, geen lege staat.
+  await expect(bestemmingen).toHaveCount(13);
+  await expect(page.getByText('Bijwerken is niet gelukt')).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText('Nog geen filmnummers')).toHaveCount(0);
+
+  serverOk = true;
+  await page.locator('#hoofdinhoud').getByRole('button', { name: 'Opnieuw proberen' }).click();
+  await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
+  await expect(bestemmingen).toHaveCount(13);
+});
+
+test('zonder bereik staat de lijst er, zonder foutkaart; komt het bereik terug, dan verschijnt er ook geen', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Offline zetten is alleen in Chromium betrouwbaar.');
+  let bereik = true;
+  await seed(page, { user: CHAUFFEUR, view: 'mijn-dag' });
+  // Playwright vervult routes vóór de netwerkemulatie: zonder bereik breken de API-calls hier zelf af.
+  await page.route('**/api/**', (route) => (bereik ? route.fallback() : route.abort('internetdisconnected')));
+  await page.goto('/mijn-dag');
+  const inhoud = page.locator('#hoofdinhoud');
+  const knop = inhoud.getByRole('button', { name: 'Filmnummers', exact: true });
+  const bestemmingen = page.getByRole('list', { name: 'Bestemmingen' }).getByRole('listitem');
+  await knop.click();
+  await expect(bestemmingen).toHaveCount(13, { timeout: 15_000 });
+
+  // Bereik weg, en het scherm opnieuw openen: de laad mislukt nu, de kopie op het toestel niet.
+  bereik = false;
+  await context.setOffline(true);
+  await page.goBack();
+  await knop.click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Filmnummers' })).toBeVisible({ timeout: 15_000 });
+  await expect(bestemmingen).toHaveCount(13);
+  await expect(inhoud.getByText('Offline', { exact: true })).toBeVisible();
+  await expect(inhoud.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
+
+  // Bereik terug: de stille verversing slaagt en laat geen foutkaart achter (tegenlezing 01-10).
+  bereik = true;
+  await context.setOffline(false);
+  await expect(inhoud.getByText('Offline', { exact: true })).toHaveCount(0, { timeout: 15_000 });
+  await expect(inhoud.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByText('Bijwerken is niet gelukt')).toHaveCount(0);
+  await expect(bestemmingen).toHaveCount(13);
 });
 
 test('Mijn dag heeft een knop naar de filmnummers', async ({ page }) => {
@@ -118,9 +160,12 @@ test('een admin vervangt de lijst met een bestand: voorbeeld, verschillen, beves
   await expect(dialoog).toContainText('14 verdwijnen');
   await expect(dialoog).toContainText('1 regel overgeslagen');
   await expect(dialoog).toContainText('Regel 5 (ABC · Geen nummer): het nummer bestaat niet uit 1 tot 6 cijfers.');
+  // Meer dan de helft verdwijnt: het venster zegt het en vraagt een bewuste bevestiging.
+  await expect(dialoog).toContainText('Meer dan de helft van de lijst verdwijnt');
+  await expect(dialoog).toContainText('De lijst telt nu 17 nummers; na deze import blijven er 4 over.');
   expect(verstuurd, 'nog niets verstuurd vóór de bevestiging').toBeNull();
 
-  await dialoog.getByRole('button', { name: 'Lijst vervangen' }).click();
+  await dialoog.getByRole('button', { name: 'Toch vervangen' }).click();
   await expect(dialoog).toHaveCount(0);
   expect(verstuurd).toEqual({
     items: [

@@ -8912,6 +8912,21 @@ describe('filmnummers (01-10)', () => {
     expect(res.status).toBe(200);
     expect(res.json).toEqual({ items: [BRUGGE], bijgewerktOp: null });
   });
+
+  it('staat er iets dat geen lijst met filmnummers is, dan is dat een leesfout en geen lege lijst; een nieuwe import herstelt het', async () => {
+    // Een lege lijst zou op elk toestel de kopie wissen; de PUT bewaart er nooit een.
+    for (const kapot of [[], 'tekst', 42, { items: 'nee' }, { items: [] }, { items: [{ code: 'kapot' }, null] }]) {
+      mem.appSettings.filmnummers = kapot;
+      const res = await api('GET', '/api/filmnummers', { token: 'tok-a' });
+      expect(res.status, JSON.stringify(kapot)).toBe(500);
+      expect(res.json).toEqual({ error: 'De filmnummers konden niet laden.' });
+    }
+    const herstel = await api('PUT', '/api/filmnummers', { token: 'tok-admin', body: { items: [GEEN, BRUGGE] } });
+    expect(herstel.status).toBe(200);
+    expect((await api('GET', '/api/filmnummers', { token: 'tok-a' })).json.items).toEqual([GEEN, BRUGGE]);
+    // De vorige waarde was onleesbaar: het logboek noemt dan geen vorige stand.
+    expect(mem.activity.filter((a: any) => a.action === 'Filmnummers bijgewerkt').at(-1)?.message).toBe('2 filmnummers voor 1 lijn.');
+  });
 });
 
 describe('/api/me draagt het toestel-oordeel en, voor staf, de beveiligingsstatus (punt 19, 15-09)', () => {

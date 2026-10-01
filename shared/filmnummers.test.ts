@@ -64,6 +64,12 @@ describe('filmnummers, indeling en zoeken', () => {
     expect(verdeelFilmnummers([])).toEqual({ lijnen: [], bestemmingen: [], algemeen: [] });
   });
 
+  it('sorteert de lijnen op hun getal, niet als tekst: 9 vóór 50, G5 vóór G12', () => {
+    const v = verdeelFilmnummers([f('5000', '50', 'a'), f('1200', 'G12', 'b'), f('9000', '9', 'c'), f('1050', 'G5', 'd'), f('8580', '858', 'e')]);
+    expect(v.lijnen).toEqual(['9', '50', '858', 'G5', 'G12']);
+    expect(v.bestemmingen.map((x) => x.code)).toEqual(['9000', '5000', '8580', '1050', '1200']);
+  });
+
   it('zoekt op lijn, bestemming of nummer; elk woord moet raken, accenten en hoofdletters tellen niet', () => {
     const codes = (zoek: string) => zoekFilmnummers(LIJST, zoek).map((x) => x.code);
     expect(codes('')).toHaveLength(LIJST.length);
@@ -77,11 +83,23 @@ describe('filmnummers, indeling en zoeken', () => {
   });
 
   it('een nummer raakt een code alleen vanaf het begin, een lijn ook middenin', () => {
-    const codes = (zoek: string) => zoekFilmnummers(LIJST, zoek).map((x) => x.code);
-    // "58": lijn 858 (middenin), geen code die toevallig 58 bevat (8580 begint met 85).
+    // 158 heeft "58" middenin de code en geen lijn of tekst die het vangt.
+    const metMidden = [...LIJST, f('158', '', 'Schoolrit')];
+    const codes = (zoek: string) => zoekFilmnummers(metMidden, zoek).map((x) => x.code);
+    // "58": lijn 858 (middenin), niet de code 158.
     expect(codes('58')).toEqual(['8580']);
+    expect(codes('15')).toEqual(['158']);
     // "50": het algemene nummer 50, de codes 50xx en de lijnen 50 en G50.
     expect(codes('50')).toEqual(['50', '5000', '5004', '5056']);
+  });
+
+  it('het woord "lijn" in de zoekterm telt niet mee: "lijn 50" zoekt 50', () => {
+    const codes = (zoek: string) => zoekFilmnummers(LIJST, zoek).map((x) => x.code);
+    expect(codes('lijn 871')).toEqual(codes('871'));
+    expect(codes('Lijn 871')).toEqual(['8714']);
+    expect(codes('lijn 50')).toEqual(codes('50'));
+    // Alleen het woord, nog geen nummer: de hele lijst blijft staan.
+    expect(codes('lijn ')).toHaveLength(LIJST.length);
   });
 
   it('telt nummers en lijnen in woorden', () => {

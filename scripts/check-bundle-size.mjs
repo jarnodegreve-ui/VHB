@@ -29,6 +29,10 @@
  *     uit shared/schemas/* (behalve constanten.ts of `import type`) zet
  *     zod-vendor (85 kB) terug in het eerste scherm.
  *
+ *  6. modules die buiten de startbundel blijven (`BUITEN_STARTBUNDEL`, 29-09);
+ *  7. wat zonder bereik moet openen staat in de precache van de service
+ *     worker (`IN_PRECACHE`, 01-10).
+ *
  * Budget verhogen? Mag, maar doe het expliciet hier, met een reden erbij.
  */
 import fs from 'node:fs';
@@ -113,11 +117,13 @@ import zlib from 'node:zlib';
 // 694 lokaal. De index groeit ±0,3 kB (74,73 → 75,05) voor de hash-controle
 // en de luie grens in App.tsx; index (75,5) en warmup blijven de bewakers.
 // 01-10 (filmnummers): 696 → 704. Geen nieuwe dependency: het scherm
-// Filmnummers (lui, 3,2 kB) en het importvenster van de admin met de lezer
-// voor CSV en Excel (eigen chunk, 4,2 kB, laadt pas als een admin een bestand
-// kiest). Gemeten 701,4 lokaal tegen 693,7 op main; de CI-runner meet de
-// index ±0,35 kB zwaarder. De warmup-sets groeien ±0,1 kB (de knop op Mijn
-// dag en de snelle actie op het dashboard) en blijven binnen hun budget.
+// Filmnummers (lui, 2,4 kB), de lijst op het toestel (eigen chunk, 1,3 kB,
+// ook geladen door de stille ophaling na de start) en het importvenster van
+// de admin met de lezer voor CSV en Excel (eigen chunk, 4,7 kB, laadt pas als
+// een admin een bestand kiest). Gemeten 702,7 lokaal tegen 693,7 op main; de
+// CI-runner meet het totaal ±0,5 kB zwaarder. De warmup-sets groeien ±0,1 kB
+// (de knop op Mijn dag en de snelle actie op het dashboard) en blijven binnen
+// hun budget.
 const BUDGET_KB = 704;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
@@ -154,9 +160,10 @@ const DEELBUDGET_KB = {
   // 01-10 (filmnummers): 75,5 → 76. Main stond op de CI-runner al op 75,38,
   // dus op 0,12 kB van de grens: elk nieuw scherm viel erover. Een scherm
   // kost in de startbundel alleen zijn registratie (routetabel, lader, lazy
-  // declaratie, schermkeuze, chunk-kaart): +0,13 kB voor Filmnummers, lokaal
-  // 75,04 → 75,17 en dus ±75,5 in CI. Het scherm zelf en de import laden lui.
-  // 76 = die meting plus dezelfde ±0,5 kB marge als op 29-09.
+  // declaratie, schermkeuze, chunk-kaart) en hier één regel in de warmup die
+  // de lijst na de start op het toestel zet: +0,22 kB voor Filmnummers, lokaal
+  // 75,04 → 75,26 en dus ±75,6 in CI. Het scherm zelf en de import laden lui.
+  // 76 = die meting plus een marge van ±0,4 kB.
   index: 76,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
@@ -384,6 +391,27 @@ if (!kaartMatch) {
     console.log(`  warmup ${rol.padEnd(9)} ${Math.round(kb).toString().padStart(4)} kB  (${set.size} bestanden, budget ${WARMUP_BUDGET_KB[rol]})`);
     if (kb > WARMUP_BUDGET_KB[rol]) fouten.push(`Warmup-set ${rol} is ${Math.round(kb)} kB gzip, budget ${WARMUP_BUDGET_KB[rol]} kB. Nieuwe zware import in een van de warmup-views (${views.join(', ')})?`);
   }
+}
+
+// --- 7. wat zonder bereik moet openen staat in de precache --------------------
+// De service worker zet deze lui geladen onderdelen bij zijn installatie klaar
+// (PRECACHE_EXTRA_MODULE in vite.config.ts). Valt er één uit de lijst, dan
+// opent het zonder bereik pas na één opening mét bereik in dezelfde versie, en
+// de mislukte import eindigt in de herlaad van lazyRetry. De e2e zonder
+// service worker merkt dat niet; op 01-10 stond het scherm Filmnummers zo
+// buiten de precache.
+const IN_PRECACHE = ['src/components/BijlageViewer.tsx', 'src/views/FilmnummersView.tsx'];
+if (!fs.existsSync('dist/sw.js')) {
+  fouten.push('dist/sw.js ontbreekt; de precache van de service worker is niet te controleren.');
+} else {
+  const lijst = fs.readFileSync('dist/sw.js', 'utf8').match(/const PRECACHE_EXTRA_RAW = '([^']*)'/)?.[1] ?? '';
+  const precache = lijst.split(',').filter(Boolean).map((p) => p.replace(/^\/assets\//, ''));
+  for (const module of IN_PRECACHE) {
+    if (!precache.some((f) => heeftBron(bronnen(f) ?? [], module))) {
+      fouten.push(`${module} staat niet in de precache van de service worker (dist/sw.js): zonder bereik opent het dan niet. Zie PRECACHE_EXTRA_MODULE in vite.config.ts.`);
+    }
+  }
+  console.log(`  precache         ${IN_PRECACHE.map((m) => m.replace(/^.*\//, '').replace(/\.tsx?$/, '')).join(', ')} (${precache.length} bestanden)`);
 }
 
 if (fouten.length > 0) {

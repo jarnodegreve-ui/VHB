@@ -16,7 +16,13 @@ import { valideerLijst } from "./valideer.js";
 export function mountFilmnummerRoutes(app: express.Express) {
   app.get("/api/filmnummers", authenticate, async (_req, res) => {
     try {
-      res.json(parseFilmnummerLijst(await getAppSetting(FILMNUMMERS_KEY)));
+      const bewaard = await getAppSetting(FILMNUMMERS_KEY);
+      if (bewaard === null) return res.json(LEGE_FILMNUMMERLIJST);
+      const lijst = parseFilmnummerLijst(bewaard);
+      // Er staat iets, maar het is geen lijst met filmnummers (de PUT bewaart
+      // nooit een lege): een laadfout, zodat de toestellen hun kopie houden.
+      if (lijst.items.length === 0) throw new Error("De opgeslagen filmnummers zijn onleesbaar.");
+      res.json(lijst);
     } catch (err) {
       // Zonder instellingen-tabel bestaat er geen lijst. Elke andere fout is
       // een laadfout en geen lege lijst: het scherm houdt dan zijn kopie op het
