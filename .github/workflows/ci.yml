@@ -68,9 +68,16 @@ jobs:
   # elkaar en bepaalt de traagste de doorlooptijd (±7 min). Playwright
   # verdeelt de tests zelf over de shards, over alle projecten heen
   # (`fullyParallel` staat aan in playwright.config.ts).
+  # 01-10: tijdslimiet 15 → 25 min. Shard 1 (vooral WebKit) rekent op main 9
+  # tot 12,5 min, en `playwright install --with-deps` haalt eerst 125 MB
+  # systeembibliotheken van de apt-spiegel van de runner. Was die traag
+  # (01-10: 292 kB/s, 7 min, en twee keer langer dan een kwartier), dan brak
+  # de job af vóór of midden in de tests: vier afgebroken shards op één dag,
+  # zonder dat er één test faalde. 25 = de traagste shard plus een trage
+  # installatie; een job die echt hangt stopt nog altijd vanzelf.
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
