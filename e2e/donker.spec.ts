@@ -55,7 +55,7 @@ const witteVlakken = (page: Page) =>
 // plus de beheerschermen met veel oppervlakken. Bewust niet: de printviews
 // (die zijn per definitie wit, A4) en het inlogscherm (altijd carbon).
 const SCHERMEN = [
-  'dashboard', 'mijn-dag', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten',
+  'dashboard', 'mijn-dag', 'rooster', 'omleidingen', 'ritblaadjes', 'filmnummers', 'documenten',
   'contacten', 'updates', 'ruil-verzoeken', 'verlof', 'bezetting',
   'dekking', 'verlof-kalender', 'dienstoverzicht', 'planning-codes',
   'vervaldata', 'gebruikers', 'toestellen', 'activiteit', 'vandaag',
@@ -73,6 +73,7 @@ for (const view of SCHERMEN) {
       if (path.endsWith('/api/users')) return json([ADMIN, CHAUFFEUR]);
       if (path.endsWith('/api/user-expiries')) return json([{ userId: '2', soort: 'code95', validUntil: '2027-05-01' }]);
       if (path.endsWith('/api/push/subscribers')) return json({ userIds: ['2'] });
+      if (path.endsWith('/api/filmnummers')) return json({ bijgewerktOp: '2026-10-01T13:30:00.000Z', items: [{ code: '1', lijn: '', tekst: 'Geen dienst' }, { code: '94', lijn: '', tekst: 'Stelplaats' }, { code: '5000', lijn: '50', tekst: 'Brugge Station' }, { code: '8714', lijn: '871', tekst: 'Aalter Europalaan' }, { code: '5056', lijn: 'G50', tekst: 'Eeklo Markt via Mariakerke P' }] });
       return json([]);
     });
 

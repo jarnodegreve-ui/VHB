@@ -75,6 +75,7 @@ export const LazyUpdatesView = scherm<typeof import('../views/UpdatesView'), 'Up
 export const LazyMeldingenView = scherm<typeof import('../views/MeldingenView'), 'MeldingenView'>('meldingen', 'MeldingenView');
 export const LazySwapRequestsView = scherm<typeof import('../views/SwapRequestsView'), 'SwapRequestsView'>('ruil-verzoeken', 'SwapRequestsView');
 export const LazyRitblaadjesView = scherm<typeof import('../views/RitblaadjesView'), 'RitblaadjesView'>('ritblaadjes', 'RitblaadjesView');
+export const LazyFilmnummersView = scherm<typeof import('../views/FilmnummersView'), 'FilmnummersView'>('filmnummers', 'FilmnummersView');
 export const LazyDocumentsView = scherm<typeof import('../views/DocumentsView'), 'DocumentsView'>('documenten', 'DocumentsView');
 export const LazyCapacityView = scherm<typeof import('../views/CapacityView'), 'CapacityView'>('bezetting', 'CapacityView');
 export const LazyDesignsysteemView = scherm<typeof import('../views/admin/DesignsysteemView'), 'DesignsysteemView'>('designsysteem', 'DesignsysteemView');

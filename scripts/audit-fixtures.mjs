@@ -57,6 +57,29 @@ export const MAILS = {
     { id: 'm-2', verzondenOp: '2026-09-14T06:00:00Z', soort: 'weekoverzicht', aantal: 1, gelukt: false, fout: 'SMTP niet geconfigureerd, mail alleen gelogd', door: 'Systeem' },
   ],
 };
+/** Filmnummers (01-10): een stuk van de echte lijst, met bestemmingen per lijn en algemene boodschappen. */
+export const FILMNUMMERS = {
+  bijgewerktOp: '2026-10-01T13:30:00.000Z',
+  items: [
+    { code: '1', lijn: '', tekst: 'Geen dienst' },
+    { code: '2', lijn: '', tekst: 'Even pauze' },
+    { code: '16', lijn: '', tekst: 'Schooldienst' },
+    { code: '94', lijn: '', tekst: 'Stelplaats' },
+    { code: '5000', lijn: '50', tekst: 'Brugge Station' },
+    { code: '5001', lijn: '50', tekst: 'Maldegem' },
+    { code: '5004', lijn: '50', tekst: 'Eeklo Station' },
+    { code: '5006', lijn: '50', tekst: 'Gent Sint-Pieters' },
+    { code: '5007', lijn: '50', tekst: 'Zwijnaarde Technologiepark' },
+    { code: '5056', lijn: 'G50', tekst: 'Eeklo Markt via Mariakerke P' },
+    { code: '8580', lijn: '858', tekst: 'Aalter Station via Nevele' },
+    { code: '8581', lijn: '858', tekst: 'Deinze Station via Nevele' },
+    { code: '8711', lijn: '871', tekst: 'Maldegem via Knesselare' },
+    { code: '8713', lijn: '871', tekst: 'Aalter Station' },
+    { code: '8714', lijn: '871', tekst: 'Aalter Europalaan' },
+    { code: '8830', lijn: '883', tekst: 'Tielt Station via Lotenhulle' },
+    { code: '8841', lijn: '884', tekst: 'Aalter Station' },
+  ],
+};
 export const UPDATES = [
   { id: 'u1', title: 'Nieuwe zomeruniformen beschikbaar', content: 'Vanaf volgende week liggen de nieuwe zomeruniformen klaar in het depot. Kom langs tijdens de kantooruren om jouw maat te passen.\n\nGraag ophalen vóór eind augustus.', date: '2026-07-20', isUrgent: false, category: 'algemeen' },
   { id: 'u2', title: 'Onderhoud aan boordcomputers', content: 'Alle bussen krijgen dit weekend een software-update.', date: '2026-07-27', isUrgent: true, category: 'technisch' },
@@ -407,6 +430,7 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/activity/presence')) return json({ days: 14, sessies: PRESENCE });
     if (p.endsWith('/api/activity')) return json(ACTIVITY);
     if (p.endsWith('/api/ritblaadje')) return json(null);
+    if (p.endsWith('/api/filmnummers')) return json(FILMNUMMERS);
     // Techniek (13-09): voertuigen, gele boek, werkprestaties, vervaldata.
     if (p.endsWith('/werken') && p.includes('/api/vehicles/')) {
       const id = p.split('/api/vehicles/')[1].split('/')[0];

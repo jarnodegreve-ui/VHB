@@ -102,6 +102,23 @@ describe('useZelfLadend', () => {
     expect(result.current.laatstGeladen).toBe(tijd);
   });
 
+  it('een geslaagde stille verversing wist de fout van een eerdere laad (bereik weg en weer terug)', async () => {
+    online = false;
+    const laad = vi.fn().mockRejectedValueOnce(new Error('geen bereik')).mockResolvedValue(undefined);
+    const { result, rerender } = renderHook(() => useZelfLadend(laad, { boodschap: 'Kon de lijst niet laden.' }));
+    await flush();
+    expect(result.current.fout).toBe('Kon de lijst niet laden.');
+
+    // Verbinding terug: de stille verversing slaagt, de data is vers, dus de
+    // fout hoort weg (anders bleef de foutkaart boven een verse lijst staan).
+    online = true;
+    rerender();
+    await flush();
+    expect(laad).toHaveBeenCalledTimes(2);
+    expect(result.current.fout).toBeNull();
+    expect(result.current.laatstGeladen).toBe(Date.now());
+  });
+
   it('stille verversing die mislukt zet geen fout', async () => {
     const laad = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('kapot'));
     const { result } = renderHook(() => useZelfLadend(laad));

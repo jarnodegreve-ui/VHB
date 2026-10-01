@@ -15,7 +15,7 @@ import { formatSyncedTime } from './format';
  * - `opnieuw()` = dezelfde zichtbare laad, voor de knop op de Foutkaart.
  * - `ververs()` = stil (geen skelet, bestaande data blijft staan); een
  *   mislukte stille verversing laat `fout` met rust, alleen `laatstGeladen`
- *   blijft dan oud.
+ *   blijft dan oud. Een geslaagde wist een fout van een eerdere laad.
  * - Focus-refresh: bij terugkeer naar het tabblad (visibilitychange/focus)
  *   stil verversen, hooguit één keer per `focusIntervalMs` (60 s), en niet
  *   zolang het toestel offline is (useOnline). Komt de verbinding terug,
@@ -47,7 +47,8 @@ export type ZelfLadend = {
   laden: boolean;
   /** Stille verversing bezig. */
   verversen: boolean;
-  /** Laadfout van de laatste zichtbare laad, null als die lukte. */
+  /** Laadfout van de laatste zichtbare laad; null als die lukte of als een
+   *  latere laad (ook een stille) slaagde. */
   fout: string | null;
   /** Epoch-ms van de laatste geslaagde laad. */
   laatstGeladen: number | null;
@@ -107,7 +108,10 @@ export function useZelfLadend(laad: () => Promise<void>, opties: ZelfLadendOptie
       await laadRef.current();
       if (!isActueel()) return;
       setLaatstGeladen(Date.now());
-      if (!stil) setFout(null);
+      // Ook na een stille laad: de data is nu vers, dus een fout van een
+      // eerdere laad (bereik weg, daarna terug) klopt niet meer. Zonder dit
+      // bleef "Bijwerken is niet gelukt" staan boven een net bijgewerkte lijst.
+      setFout(null);
     } catch (e) {
       if (!isActueel()) return;
       // Stil: bestaande data blijft staan, geen foutkaart over een gevulde
@@ -149,8 +153,8 @@ export function useZelfLadend(laad: () => Promise<void>, opties: ZelfLadendOptie
   }, [focusRefresh, focusIntervalMs, voer]);
 
   // Verbinding terug: één stille verversing (ook als de laatste laad faalde
-  // door het wegvallen ervan; de Foutkaart blijft tot die slaagt en de
-  // aanroeper "Opnieuw" doet, of de stille laad de data vult).
+  // door het wegvallen ervan; de Foutkaart blijft tot die slaagt of de
+  // aanroeper "Opnieuw" doet).
   const wasOffline = useRef(false);
   useEffect(() => {
     if (!online) { wasOffline.current = true; return; }

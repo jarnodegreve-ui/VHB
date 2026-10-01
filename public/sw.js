@@ -129,7 +129,7 @@ async function precacheShell() {
 async function precacheAsset(cache, pad) {
   try {
     if (self.VHB_RITBLADEN.isOnveranderlijkAsset(pad)) {
-      const bestaand = await caches.match(pad);
+      const bestaand = await caches.match(pad, { ignoreVary: true });
       // Nooit een HTML-antwoord onder een asset-URL meenemen (SPA-rewrite).
       if (self.VHB_RITBLADEN.bruikbaarUitCache(bestaand)) return await cache.put(pad, bestaand);
     }
@@ -361,8 +361,13 @@ self.addEventListener('fetch', (event) => {
   // SPA-rewrite beantwoordt onbestaande paden met 200 + index.html, en
   // cache-first zou die vergissing voor eeuwig vastzetten (JS-URL die HTML
   // serveert = blijvend kapotte app tot een cache-bump).
+  // `ignoreVary`: een asset is voor elke aanvrager hetzelfde bestand. Stuurt
+  // de server `Vary: Origin` mee (de previewserver van de e2e doet dat,
+  // Vercel vandaag niet), dan vond de import van een lui scherm (met een
+  // Origin-header) zijn chunk uit de precache (zonder) niet terug, en opende
+  // dat scherm zonder bereik niet (01-10).
   event.respondWith(
-    caches.match(req).then((cached) => {
+    caches.match(req, { ignoreVary: true }).then((cached) => {
       if (cached) return cached;
       return fetch(req).then((res) => {
         const contentType = res.headers.get('content-type') || '';

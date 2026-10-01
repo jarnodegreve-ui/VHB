@@ -26,7 +26,14 @@ const PRECACHE_EXTRA_PATROON = /^assets\/pdf(\.worker)?[.-][^/]*\.js$/;
 // stond (cache 'vhb-bijlagen-v1'): zonder bereik opende ze dan niet. De chunk
 // gaat daarom mee, met alles wat hij statisch importeert; wat de shell al
 // laadt filtert de service worker er zelf uit (precacheShell).
-const PRECACHE_EXTRA_MODULE = /\/src\/components\/BijlageViewer\.tsx$/;
+// Filmnummers (01-10) om dezelfde reden: het scherm is er juist voor onderweg
+// en zit in geen warmup. Zonder precache opende het zonder bereik alleen als
+// het in deze versie al eens mét bereik geopend was, en de mislukte import
+// eindigde in de herlaad van lazyRetry, die zonder bereik de hele app wegnam.
+// Het importvenster van de admin (eigen chunk) gaat niet mee.
+// scripts/check-bundle-size.mjs (bewaker 7) faalt als een van beide uit de
+// precache verdwijnt.
+const PRECACHE_EXTRA_MODULE = /\/src\/(components\/BijlageViewer|views\/FilmnummersView)\.tsx$/;
 
 // Stempelt bij elke build twee placeholders in public/sw.js:
 //  - __VHB_BUILD_ID__ → commit-SHA (Vercel) of buildtijd (lokaal), als
@@ -36,21 +43,26 @@ const PRECACHE_EXTRA_MODULE = /\/src\/components\/BijlageViewer\.tsx$/;
 //  - __VHB_PRECACHE_EXTRA__ → komma-gescheiden paden van de lazy pdf-chunks,
 //    zodat "Ritblad van vandaag" ook offline werkt zonder eerst één keer
 //    online geopend te zijn (bevinding 15, controle-ronde 05-09), plus de
-//    viewer voor bijlagen met zijn statische imports (PRECACHE_EXTRA_MODULE).
+//    viewer voor bijlagen en het scherm Filmnummers met hun statische imports
+//    (PRECACHE_EXTRA_MODULE).
 const stampServiceWorker = () => {
   let precacheExtra: string[] = [];
   return {
     name: 'vhb-stamp-sw',
     generateBundle(_opties: unknown, bundle: Record<string, unknown>) {
-      const chunks = bundle as Record<string, { type?: string; facadeModuleId?: string | null; imports?: string[] }>;
+      const chunks = bundle as Record<string, { type?: string; moduleIds?: string[]; imports?: string[] }>;
       const extra = new Set(Object.keys(bundle).filter((naam) => PRECACHE_EXTRA_PATROON.test(naam)));
       const metImports = (naam: string) => {
         if (extra.has(naam)) return;
         extra.add(naam);
         for (const dep of chunks[naam]?.imports ?? []) metImports(dep);
       };
+      // Op de modules in de chunk, niet op `facadeModuleId`: die is null zodra
+      // een andere chunk iets uit deze chunk importeert (het importvenster van
+      // de filmnummers leest uit de chunk van het scherm), en dan viel het
+      // scherm stil uit de precache.
       for (const [naam, chunk] of Object.entries(chunks)) {
-        if (chunk.type === 'chunk' && chunk.facadeModuleId && PRECACHE_EXTRA_MODULE.test(chunk.facadeModuleId.replace(/\\/g, '/'))) metImports(naam);
+        if (chunk.type === 'chunk' && (chunk.moduleIds ?? []).some((id) => PRECACHE_EXTRA_MODULE.test(id.replace(/\\/g, '/')))) metImports(naam);
       }
       precacheExtra = [...extra].sort().map((naam) => `/${naam}`);
     },

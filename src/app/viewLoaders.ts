@@ -31,6 +31,7 @@ const VIEWS: Record<View, { pad: string; laad: Loader }> = {
   rooster: view('views/ScheduleView', () => import('../views/ScheduleView')),
   omleidingen: view('views/DiversionsView', () => import('../views/DiversionsView')),
   ritblaadjes: view('views/RitblaadjesView', () => import('../views/RitblaadjesView')),
+  filmnummers: view('views/FilmnummersView', () => import('../views/FilmnummersView')),
   documenten: view('views/DocumentsView', () => import('../views/DocumentsView')),
   'ruil-verzoeken': view('views/SwapRequestsView', () => import('../views/SwapRequestsView')),
   verlof: view('views/LeaveManagementView', () => import('../views/LeaveManagementView')),
@@ -247,6 +248,12 @@ export function warmViews(views: readonly View[]): () => void {
         prefetchView(v);
       }
     }
+    // Na de schermen de lijst die onderweg zonder bereik moet werken: de
+    // filmnummers op het toestel (src/lib/filmnummers.ts, hooguit één keer
+    // per halve dag). Lui, zodat de startbundel alleen deze regel draagt, en
+    // afgewacht, zodat de aanvraag net als de chunks hierboven afbreekt
+    // wanneer de pagina verlaten wordt.
+    if (!gestopt) await import('../lib/filmnummers').then((m) => m.warmFilmnummers(afbreker?.signal)).catch(() => {});
   };
 
   const start = (marge: number) => {
