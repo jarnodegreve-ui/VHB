@@ -16,7 +16,7 @@ import { isStafRol, authenticate, requireRole } from "../middleware.js";
 import { uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from "./ruilUitvoeringen.js";
 import { DAG_KORT, meldRuilTerValidatieTelegram } from "../telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { RUIL_BEKEKEN_ACTIE, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
+import { RUIL_BEKEKEN_ACTIE, regelsVanRuil, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
 import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoorRust, type RustPlanningRij } from "../../shared/ruilRust.js";
 import { addDagenIso, DAG_DMJ, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
 import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
@@ -53,7 +53,7 @@ const metRuilVerloop = async <T extends { id: string }>(
     : swaps.map((s) => ("reason" in s ? { ...s, reason: redenVoorChauffeur((s as { reason?: unknown }).reason) } : s));
   try {
     const perSwap = await (regels ?? getSwapVerloopRegels(uit.map((s) => String(s.id))));
-    return uit.map((s) => ({ ...s, verloop: verloopUitLog(perSwap[String(s.id)] ?? [], { metStafNaam: staf }) }));
+    return uit.map((s) => ({ ...s, verloop: verloopUitLog(regelsVanRuil(perSwap, String(s.id)), { metStafNaam: staf }) }));
   } catch (err) {
     console.error("Verloop van de dienstruilen laden is mislukt.", err);
     return uit;
@@ -397,7 +397,7 @@ export function mountRuilRoutes(app: express.Express) {
             uitgevoerdDoor: regel.actorName,
             uitgevoerdDoorRol: regel.actorRole,
             handmatig: regel.action !== "Dienstruil goedgekeurd",
-            verloop: verloopPerSwap[String(regel.entityId ?? "")] ?? [],
+            verloop: regelsVanRuil(verloopPerSwap, String(regel.entityId ?? "")),
           };
         })
         .filter(Boolean);
@@ -1369,7 +1369,7 @@ export function mountRuilRoutes(app: express.Express) {
       if (swap.status !== "pending") {
         return res.status(409).json({ error: "Deze dienstruil wacht niet meer op een antwoord.", currentStatus: swap.status });
       }
-      const regels = (await getSwapVerloopRegels([id]))[id] ?? [];
+      const regels = regelsVanRuil(await getSwapVerloopRegels([id]), id);
       if (regels.some((r) => r.action === RUIL_BEKEKEN_ACTIE)) {
         return res.json({ success: true, nieuw: false });
       }

@@ -17,23 +17,27 @@ import { microLabelClass } from './primitives';
  * periode), en één tab-stop (roving tabindex) i.p.v. een tab-stop per dag.
  * Toetsen: ← → per dag, ↑ ↓ per week, PageUp/PageDown per maand, Home/End
  * naar het begin of einde van de week; wie de maand uit loopt, bladert mee.
- * Dagen vóór `min` (een eigen aanvraag in het verleden) zijn uitgeschakeld
- * en de cursor komt er niet.
+ * Dagen vóór `min` (een eigen aanvraag in het verleden) en na `max` (de
+ * uiterste einddatum van verlof) zijn uitgeschakeld en de cursor komt er niet.
  */
-export function VerlofBereikRaster({ maand, start, eind, min, vandaag, onKies, onNaarMaand, verledenTitel }: {
+export function VerlofBereikRaster({ maand, start, eind, min, max, vandaag, onKies, onNaarMaand, verledenTitel, laterTitel }: {
   /** 'YYYY-MM' van de getoonde maand. */
   maand: string;
   start: string;
   eind: string;
   /** Vroegste kiesbare dag (ISO) of undefined. */
   min?: string;
+  /** Laatste kiesbare dag (ISO) of undefined. */
+  max?: string;
   vandaag: string;
   onKies: (iso: string) => void;
   onNaarMaand: (maand: string) => void;
-  /** Uitleg bij een uitgeschakelde dag (title). */
+  /** Uitleg bij een uitgeschakelde dag vóór `min` (title). */
   verledenTitel?: string;
+  /** Uitleg bij een uitgeschakelde dag na `max` (title). */
+  laterTitel?: string;
 }) {
-  const klem = (iso: string) => (min && iso < min ? min : iso);
+  const klem = (iso: string) => (min && iso < min ? min : max && iso > max ? max : iso);
   const beginVanMaand = () => klem(`${maand}-01`);
   const [cursor, setCursor] = useState(() => klem(start && maandVan(start) === maand ? start : maandVan(vandaag) === maand ? vandaag : `${maand}-01`));
   const focusNaarCel = useRef(false);
@@ -96,7 +100,8 @@ export function VerlofBereikRaster({ maand, start, eind, min, vandaag, onKies, o
         <div key={w} role="row" className="grid grid-cols-7 gap-1">
           {week.map((iso, k) => {
             if (!iso) return <div key={`leeg-${w}-${k}`} role="gridcell" aria-hidden="true" />;
-            const uit = !!min && iso < min;
+            const teVroeg = !!min && iso < min;
+            const uit = teVroeg || (!!max && iso > max);
             const isStart = iso === start;
             const isEind = !!eind && iso === eind;
             const edge = isStart || isEind;
@@ -113,7 +118,7 @@ export function VerlofBereikRaster({ maand, start, eind, min, vandaag, onKies, o
                 aria-label={`${formatDatumKiezer(iso)}${rol}`}
                 aria-selected={inRange || undefined}
                 aria-current={isVandaag ? 'date' : undefined}
-                title={uit ? verledenTitel : undefined}
+                title={teVroeg ? verledenTitel : uit ? laterTitel : undefined}
                 tabIndex={iso === cursor ? 0 : -1}
                 disabled={uit}
                 onClick={() => { setCursor(iso); onKies(iso); }}

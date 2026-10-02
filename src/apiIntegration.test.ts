@@ -1421,6 +1421,44 @@ describe('PII-scoping voor chauffeurs', () => {
       expect(stap.naam).toBeUndefined();
     });
   });
+
+  // Beveiligingsscan 01-10: het id van een ruil kiest de aanvrager zelf, en
+  // RECORD_ID_RE laat ook namen toe die elk gewoon object al kent. Bij zo'n
+  // id gaf `perSwap[id]` een functie terug in plaats van "geen regels": het
+  // verloop van álle ruilen viel weg (de fout werd gevangen en de lijst kwam
+  // zonder verloop terug). De groepering in de opslag zelf: src/storageRuilVerloop.test.ts.
+  describe('een ruil-id dat een objectnaam is (constructor, toString, __proto__)', () => {
+    const logRegel = (entityId: string, action: string, actorName: string, actorRole: string, message: string, gelogdOp: string) =>
+      ({ domain: 'swaps', action, message, entityType: 'swap', entityId, actorName, actorRole, gelogdOp });
+    const vreemd = (id: string) => ({ id, shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-10T08:00:00Z', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' });
+    beforeEach(() => {
+      mem.activity = [
+        logRegel('s-1', 'Dienstruil aangevraagd', 'Chauffeur A', 'chauffeur', 'Chauffeur A bood een dienst aan voor ruil.', '2026-06-01T08:00:02Z'),
+        logRegel('s-2', 'Dienstruil aangevraagd', 'Chauffeur B', 'chauffeur', 'Chauffeur B bood een dienst aan voor ruil.', '2026-06-01T09:00:02Z'),
+      ];
+    });
+
+    it.each(['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'])('%s zonder logregels: staf en chauffeur houden het verloop van de andere ruilen', async (id) => {
+      mem.swaps = [...mem.swaps, vreemd(id)];
+      const staf = await api('GET', '/api/swaps', { token: 'tok-planner' });
+      expect(staf.status).toBe(200);
+      expect(staf.json.find((s: any) => s.id === 's-1').verloop).toEqual([{ soort: 'aangevraagd', op: '2026-06-01T08:00:02Z', door: 'aanvrager' }]);
+      expect(staf.json.find((s: any) => s.id === 's-2').verloop).toHaveLength(1);
+      expect(staf.json.find((s: any) => s.id === id).verloop).toEqual([]);
+      const chauffeur = await api('GET', '/api/swaps', { token: 'tok-a' });
+      expect(chauffeur.status).toBe(200);
+      expect(chauffeur.json.find((s: any) => s.id === 's-1').verloop).toHaveLength(1);
+      expect(chauffeur.json.find((s: any) => s.id === id).verloop).toEqual([]);
+    });
+
+    it.each(['constructor', 'toString', '__proto__'])('%s: de collega kan de aanvraag als bekeken melden (geen 500)', async (id) => {
+      mem.swaps = [...mem.swaps, vreemd(id)];
+      const res = await api('POST', `/api/swaps/${id}/bekeken`, { token: 'tok-b' });
+      expect(res.status).toBe(200);
+      expect(res.json).toEqual({ success: true, nieuw: true });
+      expect(mem.activity.filter((a: any) => a.action === 'Dienstruil bekeken' && a.entityId === id)).toHaveLength(1);
+    });
+  });
 });
 
 describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
@@ -1564,6 +1602,186 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
     expect(res.status).toBe(200);
     expect(mem.leave.find((l) => l.id === 'l-a1')?.status).toBe('approved');
     expect(mem.leave.find((l) => l.id === 'l-b1')).toBeFalsy();
+  });
+});
+
+// Beveiligingsscan 01-10 + regel Jarno 02-10. De einddatum werd alleen op het
+// patroon getoetst: 9999-12-31 en 9999-99-99 werden bewaard, en elk rapport of
+// paneel dat de dagen van zo'n periode telt liep daarna duizenden jaren af.
+// De klok van deze tests staat op 15/06/2026, de grens dus op 31/12/2027.
+describe('verlof: invoergrenzen (einde uiterlijk 31/12 van volgend jaar, echte kalenderdagen, hoogstens vijf nieuwe)', () => {
+  const GRENS_2027 = 'Verlof aanvragen kan tot en met 31/12/2027.';
+  const eigen = () => mem.leave.filter((l: any) => l.userId === '3');
+  const aanvraag = (over: Record<string, unknown> = {}) => ({ id: 'l-nieuw', userId: '3', startDate: '2027-12-20', endDate: '2027-12-31', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-06-15T08:00:00Z', ...over });
+  const registratie = (over: Record<string, unknown> = {}) => aanvraag({ status: 'approved', decidedAt: '2026-06-15T08:00:00Z', ...over });
+
+  describe('de uiterste einddatum', () => {
+    it('een chauffeur kan tot en met 31 december van volgend jaar aanvragen', async () => {
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag()] });
+      expect(res.status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toMatchObject({ endDate: '2027-12-31', status: 'pending' });
+    });
+
+    it.each(['2028-01-01', '2030-07-15', '9999-12-31'])('een einde op %s wordt geweigerd met de tekst van het formulier, er wordt niets bewaard of gemeld', async (endDate) => {
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ endDate })] });
+      expect(res.status).toBe(400);
+      expect(res.json).toEqual({ error: GRENS_2027 });
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeFalsy();
+      expect(mem.pushesSent).toEqual([]);
+      expect(mem.activity).toEqual([]);
+    });
+
+    it('geldt voor iedereen: ook een planner of admin die verlof voor een chauffeur vastlegt, of voor zichzelf aanvraagt', async () => {
+      for (const token of ['tok-planner', 'tok-admin']) {
+        const namens = await api('POST', '/api/leave', { token, body: [...mem.leave, registratie({ endDate: '2028-01-01' })] });
+        expect(namens.status, token).toBe(400);
+        expect(namens.json.error, token).toBe(GRENS_2027);
+      }
+      const zelf = await api('POST', '/api/leave', { token: 'tok-admin', body: [...mem.leave, aanvraag({ userId: '1', endDate: '2028-01-01' })] });
+      expect(zelf.status).toBe(400);
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeFalsy();
+      // Binnen de grens blijft de registratie werken.
+      const goed = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, registratie()] });
+      expect(goed.status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toMatchObject({ status: 'approved', endDate: '2027-12-31' });
+    });
+
+    it('het lopende jaar is het Brusselse: op 31/12 om 23:30 nog 2026, een uur later 2027', async () => {
+      // 22:30 UTC = 23:30 in Brussel, nog 2026: de grens is 31/12/2027.
+      vi.setSystemTime(new Date('2026-12-31T22:30:00Z'));
+      const voor = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ startDate: '2027-12-20', endDate: '2028-01-01' })] });
+      expect(voor.status).toBe(400);
+      expect(voor.json.error).toBe(GRENS_2027);
+      // 23:30 UTC = 00:30 in Brussel op 01/01/2027, terwijl UTC nog 2026 zegt: de grens is 31/12/2028.
+      vi.setSystemTime(new Date('2026-12-31T23:30:00Z'));
+      const na = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ startDate: '2028-12-20', endDate: '2028-12-31' })] });
+      expect(na.status).toBe(200);
+      const teLaat = await api('POST', '/api/leave', { token: 'tok-a', body: [...mem.leave.filter((l: any) => l.userId === '3'), aanvraag({ id: 'l-nieuw-2', startDate: '2028-12-20', endDate: '2029-01-01' })] });
+      expect(teLaat.status).toBe(400);
+      expect(teLaat.json.error).toBe('Verlof aanvragen kan tot en met 31/12/2028.');
+    });
+  });
+
+  describe('echte kalenderdagen', () => {
+    it.each([
+      ['endDate', '9999-99-99'],
+      ['endDate', '2027-02-30'],
+      ['endDate', '2027-13-01'],
+      ['startDate', '2027-02-29'],
+      ['startDate', '2027-00-10'],
+    ])('%s = %s past in het patroon maar bestaat niet: geweigerd', async (veld, datum) => {
+      const body = [...eigen(), aanvraag({ startDate: '2027-02-01', endDate: '2027-03-15', [veld]: datum })];
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body });
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Ongeldige datum in de aanvraag.');
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeFalsy();
+      const staf = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, registratie({ startDate: '2027-02-01', endDate: '2027-03-15', [veld]: datum })] });
+      expect(staf.status).toBe(400);
+    });
+
+    it('29 februari in een schrikkeljaar bestaat wel', async () => {
+      vi.setSystemTime(new Date('2027-06-15T10:00:00Z'));
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ startDate: '2028-02-29', endDate: '2028-02-29' })] });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe('bestaande records waarvan de datums niet wijzigen blijven passeren', () => {
+    beforeEach(() => {
+      mem.leave = [
+        ...mem.leave,
+        // Wat er vóór deze grens al in kon staan.
+        { id: 'l-eeuwig', userId: '4', startDate: '2026-09-01', endDate: '9999-12-31', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-05-01T08:00:00Z', decidedAt: '2026-05-01T08:00:00Z' },
+        { id: 'l-onbestaand', userId: '4', startDate: '2026-02-30', endDate: '9999-99-99', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-05-01T08:00:00Z' },
+      ];
+    });
+
+    it('een save van de planner die iets anders beslist gaat door', async () => {
+      const payload = mem.leave.map((l: any) => (l.id === 'l-a1' ? { ...l, status: 'approved', decidedAt: '2026-06-15T09:00:00Z' } : l));
+      const res = await api('POST', '/api/leave', { token: 'tok-planner', body: payload });
+      expect(res.status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-a1')?.status).toBe('approved');
+      expect(mem.leave.find((l: any) => l.id === 'l-eeuwig')?.endDate).toBe('9999-12-31');
+    });
+
+    it('zo\'n record zelf afwijzen, annuleren of van type wijzigen kan (zo ruim je het op)', async () => {
+      const afwijzen = mem.leave.map((l: any) => (l.id === 'l-onbestaand' ? { ...l, status: 'rejected', decidedAt: '2026-06-15T09:00:00Z' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: afwijzen })).status).toBe(200);
+      const annuleren = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, status: 'cancelled' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: annuleren })).status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-eeuwig')?.status).toBe('cancelled');
+      const anderType = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, type: 'betaald_verlof' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: anderType })).status).toBe(200);
+    });
+
+    it('het einde inkorten tot binnen de grens kan, verzetten naar een andere te late dag niet', async () => {
+      const teLaat = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, endDate: '2099-12-31' } : l));
+      const fout = await api('POST', '/api/leave', { token: 'tok-planner', body: teLaat });
+      expect(fout.status).toBe(400);
+      expect(fout.json.error).toBe(GRENS_2027);
+      expect(mem.leave.find((l: any) => l.id === 'l-eeuwig')?.endDate).toBe('9999-12-31');
+      const ingekort = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, endDate: '2026-09-30' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: ingekort })).status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-eeuwig')?.endDate).toBe('2026-09-30');
+    });
+
+    it('alleen de start verzetten van een record met een te laat einde toetst de start, niet het oude einde', async () => {
+      const start = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, startDate: '2026-09-02' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: start })).status).toBe(200);
+      const kapot = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, startDate: '2026-09-31' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: kapot })).status).toBe(400);
+    });
+  });
+
+  describe('hoogstens vijf nieuwe aanvragen per verzoek voor wie geen staf is', () => {
+    const reeks = (aantal: number) => Array.from({ length: aantal }, (_, i) => aanvraag({ id: `l-reeks-${i}`, startDate: `2027-0${i + 1}-10`, endDate: `2027-0${i + 1}-11` }));
+
+    it('vijf tegelijk gaat door (het formulier stuurt er één)', async () => {
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), ...reeks(5)] });
+      expect(res.status).toBe(200);
+      expect(mem.leave.filter((l: any) => String(l.id).startsWith('l-reeks-'))).toHaveLength(5);
+    });
+
+    it('zes tegelijk wordt geweigerd: niets bewaard, geen enkele melding naar de planners', async () => {
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), ...reeks(6)] });
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Je kan hoogstens 5 verlofaanvragen tegelijk indienen.');
+      expect(mem.leave.filter((l: any) => String(l.id).startsWith('l-reeks-'))).toHaveLength(0);
+      expect(mem.pushesSent).toEqual([]);
+      // De echo van de eigen bestaande records telt niet mee.
+      const metEcho = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), ...eigen(), ...reeks(5)] });
+      expect(metEcho.status).toBe(200);
+    });
+
+    it('een planner die de papieren lijst overzet is niet begrensd', async () => {
+      const res = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, ...reeks(8).map((r) => ({ ...r, status: 'approved', decidedAt: '2026-06-15T08:00:00Z' }))] });
+      expect(res.status).toBe(200);
+      expect(mem.leave.filter((l: any) => String(l.id).startsWith('l-reeks-'))).toHaveLength(8);
+    });
+  });
+
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty', 'onbekend', ''])('een verloftype "%s" is geen bekend type, ook niet als elk object die naam kent', async (type) => {
+    const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ type })] });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('Ongeldig verloftype.');
+    expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeFalsy();
+  });
+
+  describe('de ziekmelding volgt dezelfde uiterste einddatum', () => {
+    it('een einde na 31/12 van volgend jaar wordt geweigerd, ook als de periode zelf korter dan een jaar is', async () => {
+      const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2027-12-30', endDate: '2028-01-02' } });
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Een ziekmelding kan tot en met 31/12/2027 lopen.');
+      const ver = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '9999-01-01', endDate: '9999-01-05' } });
+      expect(ver.status).toBe(400);
+      expect(mem.leave.some((l: any) => l.type === 'ziekte')).toBe(false);
+    });
+
+    it('tot en met die dag blijft een lange ziekte kunnen', async () => {
+      const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2027-01-10', endDate: '2027-12-31' } });
+      expect(res.status).toBe(200);
+      expect(res.json.leave).toMatchObject({ type: 'ziekte', endDate: '2027-12-31' });
+    });
   });
 });
 
@@ -4231,6 +4449,66 @@ describe('planning-horizon (x-planning-tot)', () => {
     expect(res.status).toBe(200);
     const laatste = mem.planning.map((r: any) => String(r.date ?? '')).sort().pop();
     expect(res.headers.get('x-planning-tot')).toBe(laatste);
+  });
+});
+
+// Beveiligingsscan 01-10: deze route schreef de rijen ongezien weg, en een
+// tijd als "Infinity:00" liet daarna de agenda-feed van die chauffeur hangen.
+// De regel zelf (alle vormen) staat in src/planningTijden.test.ts.
+describe('handmatige planning-save: tijden (POST /api/planning)', () => {
+  const nieuweRij = (over: Record<string, unknown> = {}) => ({ id: 'sh-nieuw', driverId: '3', date: '2026-07-09', line: '4103', startTime: '05:11', endTime: '13:11', ...over });
+  let bewaard: any[] | null = null;
+  const spionnen: Array<{ mockRestore: () => void }> = [];
+  beforeEach(async () => {
+    bewaard = null;
+    // De mock kent geen planning-tabel; hier vangen we alleen op wat de route
+    // zou wegschrijven.
+    const storage = await import('../api/storage.js');
+    spionnen.push(vi.spyOn(storage, 'savePlanningData').mockImplementation(async (data: any) => { bewaard = data; }));
+  });
+  afterEach(() => { for (const spion of spionnen.splice(0)) spion.mockRestore(); });
+
+  it.each([
+    ['tok-admin', 'endTime', 'Infinity:00'],
+    ['tok-planner', 'startTime', '1e300:00'],
+    ['tok-admin', 'startTime', '99999999:00'],
+    ['tok-planner', 'endTime', '48:00'],
+    ['tok-admin', 'endTime', 800],
+  ])('%s: een nieuwe rij met %s = %s wordt geweigerd (400), er wordt niets geschreven', async (token, veld, tijd) => {
+    const res = await api('POST', '/api/planning', { token, body: [...mem.planning, nieuweRij({ [veld]: tijd })] });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('Ongeldige tijd in de planning bij dienst 4103: gebruik uu:mm, van 00:00 tot en met 47:59.');
+    expect(bewaard).toBeNull();
+    expect(mem.activity.some((a: any) => a.action === 'Planning opgeslagen')).toBe(false);
+  });
+
+  it('geldige tijden (ook busvak-notatie tot 47:59) en rijen zonder tijden gaan door', async () => {
+    const body = [...mem.planning, nieuweRij(), nieuweRij({ id: 'sh-nacht', startTime: '15:41', endTime: '26:16' }), nieuweRij({ id: 'sh-laat', startTime: '24:00', endTime: '47:59' }), nieuweRij({ id: 'sh-leeg', startTime: '', endTime: '' })];
+    const res = await api('POST', '/api/planning', { token: 'tok-admin', body });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, count: body.length });
+    expect(bewaard).toEqual(body);
+  });
+
+  it('wat de debugpagina doet (de hele lijst met één testdienst erbij) blijft werken, ook met een oude rij die al zo opgeslagen staat', async () => {
+    mem.planning = [...mem.planning, { id: 'sh-oud', driverId: '4', date: '2026-07-03', line: '14', startTime: '08:00:00', endTime: '16:00:00' }];
+    const body = [...mem.planning, nieuweRij({ id: 'test-shift-1' })];
+    const res = await api('POST', '/api/planning', { token: 'tok-admin', body });
+    expect(res.status).toBe(200);
+    expect(bewaard).toEqual(body);
+    // Dezelfde oude rij met een andere foute tijd is een wijziging: geweigerd.
+    const gewijzigd = await api('POST', '/api/planning', { token: 'tok-admin', body: body.map((r: any) => (r.id === 'sh-oud' ? { ...r, endTime: '99:00' } : r)) });
+    expect(gewijzigd.status).toBe(400);
+  });
+
+  it('de lege lijst blijft de wis-actie van de admin, zonder tijdcontrole', async () => {
+    const storage = await import('../api/storage.js');
+    const wis = vi.spyOn(storage, 'clearPlanningData').mockImplementation(async () => undefined as never);
+    spionnen.push(wis);
+    const res = await api('POST', '/api/planning', { token: 'tok-admin', body: [] });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, count: 0 });
+    expect(wis).toHaveBeenCalledTimes(1);
   });
 });
 

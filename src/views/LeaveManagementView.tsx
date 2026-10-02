@@ -36,6 +36,8 @@ import { apiJson } from '../lib/api';
 import { bulkUitvoeren, meldBulkResultaat } from '../lib/bulk';
 import { VerlofLimietenModal } from '../components/VerlofLimietenModal';
 import { limietVoorDag, parseVerlofLimieten, STANDAARD_VERLOF_LIMIETEN, type VerlofLimieten } from '../../shared/schemas/verlofLimieten';
+import { uitersteVerlofdag, verlofGrensMelding } from '../../shared/verlofGrens';
+import { vandaagBrussel } from '../lib/brussel';
 import { BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, VerlofBeoordeling } from '../components/VerlofBeoordeling';
 
 
@@ -217,6 +219,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   }, [isPlanner, formData.startDate, formData.endDate, laadBezetting]);
   // Lokale dag i.p.v. UTC (toISOString gaf 's nachts in BE de vorige dag).
   const today = isoDate(new Date());
+  // Verlof eindigt uiterlijk op 31 december van volgend jaar (regel Jarno
+  // 02-10; het jaar is het Brusselse). Zelfde grens en tekst als de server:
+  // shared/verlofGrens.ts. Geldt ook voor wie verlof voor een chauffeur vastlegt.
+  const uitersteDag = uitersteVerlofdag(vandaagBrussel());
+  const grensMelding = verlofGrensMelding(vandaagBrussel());
   // Ziekte hoort niet bij verlof (Jarno 08-09): ziekmeldingen staan in
   // dezelfde tabel (type 'ziekte') maar tellen hier nergens mee: niet in de
   // kalender, niet in de dekking bij een beoordeling, niet in de eigen lijst.
@@ -286,6 +293,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     // niet.
     if (formData.startDate < today && !namensIemandAnders) {
       fouten.zet({ periode: 'Je kan geen verlof aanvragen in het verleden.' });
+      return;
+    }
+    if (formData.endDate > uitersteDag) {
+      fouten.zet({ periode: grensMelding });
       return;
     }
     fouten.wis();
@@ -984,10 +995,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     start={formData.startDate}
                     eind={formData.endDate}
                     min={magVerleden ? undefined : today}
+                    max={uitersteDag}
                     vandaag={today}
                     onKies={handleCalendarDateClick}
                     onNaarMaand={naarMaand}
                     verledenTitel={VERLEDEN_MELDING}
+                    laterTitel={grensMelding}
                   />
                 </Card>
                 {/* Gekozen periode als selectieweergave, geen (nep-)invoervelden:
@@ -1012,7 +1025,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       elk datumveld; de namen "Startdatum"/"Einddatum" +
                       data-datum blijven het contract met e2e/verlof.spec.ts. Een
                       eigen aanvraag start niet in het verleden (ook de server
-                      weigert dat, #623), het einde niet vóór de start. */}
+                      weigert dat, #623), het einde niet vóór de start en niet
+                      na 31 december van volgend jaar (shared/verlofGrens.ts). */}
                   <div role="group" aria-label="Gekozen periode" aria-describedby={periodeFout ? 'verlof-periode-fout' : undefined} className="grid grid-cols-2 gap-3">
                     <Field label="Van" htmlFor="verlof-van">
                       <DateInput
@@ -1023,7 +1037,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         value={formData.startDate}
                         min={magVerleden ? undefined : today}
                         minMelding={magVerleden ? undefined : VERLEDEN_MELDING}
-                        max={formData.endDate || undefined}
+                        max={formData.endDate || uitersteDag}
+                        maxMelding={formData.endDate ? undefined : grensMelding}
                         onChange={(v) => {
                           fouten.wisVeld('periode');
                           setFormData((current) => ({ ...current, startDate: v }));
@@ -1040,6 +1055,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         value={formData.endDate}
                         min={formData.startDate || (magVerleden ? undefined : today)}
                         minMelding={!formData.startDate && !magVerleden ? VERLEDEN_MELDING : undefined}
+                        max={uitersteDag}
+                        maxMelding={grensMelding}
                         onChange={(v) => {
                           fouten.wisVeld('periode');
                           setFormData((current) => ({ ...current, endDate: v }));

@@ -20,13 +20,25 @@ import { stuurTelegram, telegramGeconfigureerd, meldVerlofAanvraagTelegram } fro
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../../shared/schemas/verlofLimieten.js";
 import { bezettingPerDag } from "../../shared/verlofbezettingPerDag.js";
+import { uitersteVerlofdag, verlofGrensFout } from "../../shared/verlofGrens.js";
+import { isIsoDag } from "../../shared/rapporten/periode.js";
 import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, verlofFeestdagenSchema } from "../../shared/schemas/verlofFeestdagen.js";
 import { valideerRecord } from "./valideer.js";
-import { brusselsDay, PERIODE_DMJ, LEAVE_TYPE_LABEL, isActieveStaf } from "../helpers.js";
+import { brusselsDay, DAG_DMJ, PERIODE_DMJ, LEAVE_TYPE_LABEL, isActieveStaf } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { getLeaveData, getPlanningData, getUsersData, logActivity, saveLeaveData, getAppSetting, setAppSetting } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
+
+/**
+ * Zoveel nieuwe aanvragen mag een niet-stafgebruiker in één verzoek indienen
+ * (beveiligingsscan 01-10). Het formulier stuurt er altijd precies één (de
+ * eigen lijst plus de nieuwe aanvraag; er is geen bulkinvoer en geen
+ * wachtrij die aanvragen opspaart). Vijf laat wat marge en houdt een
+ * nagemaakt verzoek klein: elke nieuwe aanvraag is een logregel, een push
+ * naar alle planners en een Telegram-bericht.
+ */
+const MAX_NIEUWE_AANVRAGEN_PER_VERZOEK = 5;
 
 // Ziekmelding: aparte, directe flow (géén goedkeuring — de chauffeur ís al
 // ziek). Maakt een reeds-goedgekeurd 'ziekte'-verlofrecord zodat de dag
@@ -74,6 +86,11 @@ export async function registreerZiekmeldingIntern(
     const spanDagen = Math.round((new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime()) / 86400000);
     if (spanDagen > 366) {
       return { fout: { status: 400, error: "Ziekteperiode is langer dan een jaar, controleer de datums (tikfout in het jaartal?)." } };
+    }
+    // Zelfde uiterste einddatum als elk verlof (regel Jarno 02-10): tot en met
+    // 31 december van volgend jaar. Langer ziek = later verlengen.
+    if (endDate > uitersteVerlofdag(todayLocal)) {
+      return { fout: { status: 400, error: `Een ziekmelding kan tot en met ${DAG_DMJ(uitersteVerlofdag(todayLocal))} lopen.` } };
     }
     const comment = String(invoer.comment ?? "").slice(0, 1000);
 
@@ -496,7 +513,10 @@ export function mountVerlofRoutes(app: express.Express) {
       const previousById = new Map(previousLeave.map((r) => [r.id, r]));
       const users = await getUsersData();
       const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
-      const formatLeaveType = (t: string) => LEAVE_TYPE_LABEL[t] ?? t;
+      // Alleen eigen sleutels: `LEAVE_TYPE_LABEL["constructor"]` is een functie
+      // van Object, geen label (zie de typecontrole verderop).
+      const kentVerloftype = (t: unknown) => Object.hasOwn(LEAVE_TYPE_LABEL, String(t ?? ""));
+      const formatLeaveType = (t: string) => (kentVerloftype(t) ? LEAVE_TYPE_LABEL[t] : t);
 
       // Server-side autorisatie: chauffeurs kunnen alleen eigen pending-aanvragen
       // toevoegen of intrekken. Status-overgangen en bewerken van anderen vereist
@@ -548,6 +568,9 @@ export function mountVerlofRoutes(app: express.Express) {
           }
           // De weigerreden is van de beslisser, nooit van de aanvrager.
           chauffeurWrites.push({ ...next, beslisReden: undefined });
+          if (chauffeurWrites.length > MAX_NIEUWE_AANVRAGEN_PER_VERZOEK) {
+            return res.status(400).json({ error: `Je kan hoogstens ${MAX_NIEUWE_AANVRAGEN_PER_VERZOEK} verlofaanvragen tegelijk indienen.` });
+          }
         }
         recordsToWrite = chauffeurWrites;
       } else {
@@ -578,7 +601,15 @@ export function mountVerlofRoutes(app: express.Express) {
       // zodat een planner-save de periode van bestaand verlof onbewaakt kon
       // verzetten. Ongewijzigde records overslaan blijft (idempotente echo's,
       // en oude records met een verouderd formaat mogen niet retro-falen).
+      //
+      // Invoergrenzen (beveiligingsscan 01-10, regel Jarno 02-10), voor elke
+      // rol en alleen voor een datum die in dit verzoek nieuw is of wijzigt:
+      // het moet een echte kalenderdag zijn (het patroon liet 9999-99-99 door),
+      // en het einde ligt uiterlijk op 31 december van volgend jaar (Brussels
+      // jaar). Een bestaand record waarvan de datums niet veranderen blijft
+      // passeren, wat er ook in staat.
       const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+      const vandaag = brusselsDay(new Date().toISOString());
       const ongewijzigd = (a: any, b: any) =>
         a && String(a.startDate) === String(b.startDate) &&
         String(a.endDate) === String(b.endDate) &&
@@ -588,11 +619,17 @@ export function mountVerlofRoutes(app: express.Express) {
         if (prev && ongewijzigd(prev, next)) continue;
         const start = String(next.startDate ?? "");
         const end = String(next.endDate ?? "");
-        if (!ISO_DAY.test(start) || !ISO_DAY.test(end)) {
+        const startVerschoven = !prev || String(prev.startDate) !== start;
+        const eindVerschoven = !prev || String(prev.endDate) !== end;
+        if (!ISO_DAY.test(start) || !ISO_DAY.test(end) || (startVerschoven && !isIsoDag(start)) || (eindVerschoven && !isIsoDag(end))) {
           return res.status(400).json({ error: "Ongeldige datum in de aanvraag." });
         }
         if (end < start) {
           return res.status(400).json({ error: "De einddatum ligt vóór de startdatum." });
+        }
+        const grensFout = eindVerschoven ? verlofGrensFout(end, vandaag) : null;
+        if (grensFout) {
+          return res.status(400).json({ error: grensFout });
         }
         // Een eigen aanvraag (voor jezelf, elke rol, ook een admin) kan niet in
         // het verleden starten: dezelfde regel als het formulier, nu ook op de
@@ -602,11 +639,10 @@ export function mountVerlofRoutes(app: express.Express) {
         // belde het vorige week door") valt hier buiten; een nieuwe uitzondering
         // voor retroactief eigen verlof hoort in een aparte beheerflow.
         const eigen = String(next.userId ?? "") === String(req.appUser!.id);
-        const startVerschoven = !prev || String(prev.startDate) !== start;
-        if (eigen && startVerschoven && start < brusselsDay(new Date().toISOString())) {
+        if (eigen && startVerschoven && start < vandaag) {
           return res.status(400).json({ error: "Je kan geen verlof aanvragen in het verleden." });
         }
-        if (!LEAVE_TYPE_LABEL[String(next.type ?? "")]) {
+        if (!kentVerloftype(next.type)) {
           return res.status(400).json({ error: "Ongeldig verloftype." });
         }
       }

@@ -46,15 +46,20 @@ export function foldIcsLine(line: string): string {
   return out.join('\r\n');
 }
 
-/** 'YYYY-MM-DD' → volgende dag (UTC-veilig, puur op de datum). */
-export function addOneDay(date: string): string {
+/** 'YYYY-MM-DD' + een aantal dagen (UTC-veilig, puur op de datum). */
+function addDays(date: string, dagen: number): string {
   const [y, m, d] = date.split('-').map(Number);
   const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
-  dt.setUTCDate(dt.getUTCDate() + 1);
+  dt.setUTCDate(dt.getUTCDate() + dagen);
   const yy = dt.getUTCFullYear();
   const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(dt.getUTCDate()).padStart(2, '0');
   return `${yy}-${mm}-${dd}`;
+}
+
+/** 'YYYY-MM-DD' → volgende dag (UTC-veilig, puur op de datum). */
+export function addOneDay(date: string): string {
+  return addDays(date, 1);
 }
 
 /** 'YYYY-MM-DD' + 'HH:MM' → floating datetime 'YYYYMMDDTHHMMSS'. */
@@ -64,28 +69,41 @@ export function toFloatingDateTime(date: string, time: string): string {
   return `${compactDate}T${h.padStart(2, '0')}${min.padStart(2, '0')}00`;
 }
 
-// "9:00" < "17:00" faalt lexicografisch — vergelijk op minuten.
-function toMinutes(hhmm: string): number {
-  const [h, m] = String(hhmm).split(":");
-  return (Number(h) || 0) * 60 + (Number(m) || 0);
+const DAG_MINUTEN = 24 * 60;
+
+/**
+ * Een opgeslagen tijd als minuten sinds middernacht van de dienstdag, of null
+ * als het geen tijd onder 48:00 is. Zelfde regel als de planning (uur 0–47
+ * voor de busvak-notatie, minuten 0–59); een uur zonder minuten, minuten met
+ * één cijfer en een secondendeel blijven gelden, want die schreef de feed
+ * altijd al goed uit. "9:00" < "17:00" faalt lexicografisch, vandaar minuten.
+ *
+ * Alleen cijfers (beveiligingsscan 01-10): `Number()` las ook "Infinity:00"
+ * en "1e300:00", en de dag werd toen per stap een dag verder gezet. Zo'n
+ * waarde liet de agenda-feed eindeloos lopen, "99999999:00" seconden lang.
+ */
+export function dienstMinuten(tijd: string): number | null {
+  const m = /^(\d{1,2})(?::(\d{1,2}))?(?::\d{1,2})?$/.exec(String(tijd ?? '').trim());
+  if (!m) return null;
+  const uur = Number(m[1]);
+  const minuten = Number(m[2] ?? 0);
+  return uur <= 47 && minuten <= 59 ? uur * 60 + minuten : null;
 }
 
-/** Busvak-notatie ("26:16" = 02:16 de volgende nacht) → dag-offset + gewone
- *  wandkloktijd. Zonder deze normalisatie zou een 26:xx-eindtijd als
- *  'T261600' in de feed belanden — ongeldig iCalendar, agenda-apps laten
- *  het event dan vallen of tonen het fout. */
-function normalizeDayTime(date: string, time: string): { date: string; time: string } {
-  const total = toMinutes(time);
-  if (total < 24 * 60) return { date, time };
-  const rest = total % (24 * 60);
-  let day = date;
-  for (let i = Math.floor(total / (24 * 60)); i > 0; i--) day = addOneDay(day);
-  return {
-    date: day,
-    time: `${String(Math.floor(rest / 60)).padStart(2, '0')}:${String(rest % 60).padStart(2, '0')}`,
-  };
+/** Minuten sinds middernacht van `date` → floating datetime. Busvak-notatie
+ *  ("26:16" = 02:16 de volgende nacht) wordt een gewone wandkloktijd op een
+ *  latere dag; 'T261600' is ongeldig iCalendar en agenda-apps laten zo'n
+ *  event vallen of tonen het fout. De dag-offset is een deling, geen lus. */
+function momentOp(date: string, minuten: number): string {
+  const dagen = Math.floor(minuten / DAG_MINUTEN);
+  const rest = minuten % DAG_MINUTEN;
+  const tijd = `${String(Math.floor(rest / 60)).padStart(2, '0')}:${String(rest % 60).padStart(2, '0')}`;
+  return toFloatingDateTime(dagen > 0 ? addDays(date, dagen) : date, tijd);
 }
 
+/** De regels van één gebeurtenis; leeg als de start of het einde geen tijd
+ *  onder 48:00 is (zo'n rij slaat de feed over in plaats van erop te hangen
+ *  of een ongeldige regel te schrijven). */
 export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
   const lines = ['BEGIN:VEVENT', `UID:${ev.uid}`, `DTSTAMP:${dtstamp}`];
   if (ev.allDay) {
@@ -98,12 +116,11 @@ export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
     // ook gemengde notatie ("24:30 – 06:00" = start busvak, einde gewoon),
     // die anders een DTEND vóór DTSTART opleverde en het event in agenda-
     // apps liet vallen. Eind <= start betekent altijd "volgende dag".
-    const startMin = toMinutes(ev.startTime);
-    const rawEndMin = toMinutes(ev.endTime);
-    const endMin = rawEndMin <= startMin ? rawEndMin + 24 * 60 : rawEndMin;
-    const start = normalizeDayTime(ev.date, ev.startTime);
-    const end = normalizeDayTime(ev.date, `${Math.floor(endMin / 60)}:${String(endMin % 60).padStart(2, '0')}`);
-    lines.push(`DTSTART:${toFloatingDateTime(start.date, start.time)}`, `DTEND:${toFloatingDateTime(end.date, end.time)}`);
+    const startMin = dienstMinuten(ev.startTime);
+    const rawEndMin = dienstMinuten(ev.endTime);
+    if (startMin === null || rawEndMin === null) return [];
+    const endMin = rawEndMin <= startMin ? rawEndMin + DAG_MINUTEN : rawEndMin;
+    lines.push(`DTSTART:${momentOp(ev.date, startMin)}`, `DTEND:${momentOp(ev.date, endMin)}`);
   }
   lines.push(`SUMMARY:${escapeIcsText(ev.summary)}`);
   if (ev.description) lines.push(`DESCRIPTION:${escapeIcsText(ev.description)}`);

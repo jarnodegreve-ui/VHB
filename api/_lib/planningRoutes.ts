@@ -27,6 +27,7 @@ import { ruilAfwezigheidsFout } from "./ruilRegels.js";
 import { vrijOpBord } from "../../shared/bordBezetting.js";
 import { bordCellenVoor, bordVanDag } from "./codeDienst.js";
 import { dubbeleInplanningen, onbekendeCodeFout } from "./dubbeleInplanning.js";
+import { planningTijdFout } from "./planningTijden.js";
 
 // Helper: haal de geüploade Excel uit de body (gzip of base64, met de
 // grenzen per soort, zie api/_lib/matrixUpload.ts) en parse de praktijk-tab.
@@ -297,6 +298,8 @@ export function mountPlanningRoutes(app: express.Express) {
         { const rp = revisionCheck(req, previousPlanning); if (rp) return revisionProbleemResponse(res, "De planning", rp); }
         const shiftsRemoved = detectMassDelete(previousPlanning, newData);
         if (shiftsRemoved !== null) return massDeleteResponse(res, shiftsRemoved, previousPlanning.length, "diensten");
+        const tijdFout = planningTijdFout(newData, previousPlanning);
+        if (tijdFout) return res.status(400).json({ error: tijdFout });
         await savePlanningData(newData);
         await logActivity(
           req,

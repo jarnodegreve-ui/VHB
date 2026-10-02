@@ -2,7 +2,7 @@ import { KEUZE_ALLE } from "../../../shared/rapporten/definities/verlof.js";
 import { COLLEGA_ANTWOORD_LABEL, RUIL_SOORT_LABEL, RUIL_STAND_LABEL, type RuilSoort } from "../../../shared/rapporten/definities/ruilen.js";
 import { dagenTussen } from "../../../shared/rapporten/peildatum.js";
 import type { RapportBereik, RapportFilters, RapportResultaat, RapportRij } from "../../../shared/rapporten/types.js";
-import { isHandmatigeRuil, verloopUitLog, type RuilLogRegel, type RuilVoorVerloop } from "../../../shared/ruilVerloop.js";
+import { isHandmatigeRuil, regelsVanRuil, verloopUitLog, type RuilLogRegel, type RuilVoorVerloop } from "../../../shared/ruilVerloop.js";
 import { collegaAntwoord, ruilBeslissing, ruilStand } from "../../../shared/ruilUitkomst.js";
 import { brusselseDagVan, uitvoeringenOpDagen } from "../ruilUitvoeringen.js";
 import { persoonZoeker, type RapportGebruiker } from "./gedeeld.js";
@@ -46,7 +46,7 @@ const soortVan = (swap: RuilRij): RuilSoort => (isHandmatigeRuil(swap) ? "handma
 /** De ruil met zijn verloop erin, zoals staf het leest (met de naam van de planner). */
 const metVerloop = (swap: RuilRij, bron: RuilBron): RuilVoorVerloop => ({
   ...swap,
-  verloop: verloopUitLog(bron.logPerRuil[swap.id] ?? [], { metStafNaam: true }),
+  verloop: verloopUitLog(regelsVanRuil(bron.logPerRuil, swap.id), { metStafNaam: true }),
 });
 
 const betrokken = (swap: RuilRij, chauffeur: string | undefined): boolean =>

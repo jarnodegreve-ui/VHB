@@ -684,6 +684,16 @@ const verwijderInStukken = async (
   }
 };
 
+/**
+ * Lege groepering per ruil-id, zonder prototype (beveiligingsscan 01-10). Het
+ * id van een ruil kiest de aanvrager zelf (`RECORD_ID_RE` laat ook
+ * `constructor`, `toString` en `__proto__` door). In een gewoon object is
+ * `perSwap["constructor"]` de functie Object: `??= []` slaat dan niets op en
+ * `.push` gooit, voor elke lezer van elke ruil. Zonder prototype bestaat er
+ * alleen wat hier zelf in gezet is.
+ */
+const perRuilId = <T,>(): Record<string, T[]> => Object.create(null) as Record<string, T[]>;
+
 /** Activiteitenlog van een reeks dienstruilen, oudste eerst — het verloop
  *  dat het weekoverzicht per wissel afdrukt. Eén query i.p.v. één per wissel:
  *  een drukke week telt al snel 20 wissels. Zonder "Dienstruil bekeken": het
@@ -692,7 +702,7 @@ export const getSwapHistories = async (
   swapIds: string[],
 ): Promise<Record<string, ActivityLogRecord[]>> => {
   const ids = [...new Set(swapIds.map((id) => String(id)).filter(Boolean))];
-  if (ids.length === 0) return {};
+  if (ids.length === 0) return perRuilId<ActivityLogRecord>();
   const client = requireDb();
   // In stukken van 100 id's: PostgREST zet `in.(...)` in de querystring, en
   // sinds het overzicht een jaar mag beslaan (rapportgrens) past een drukke
@@ -710,7 +720,8 @@ export const getSwapHistories = async (
         .range(from, to),
     deel.length * 40)));
   const rows = stukken.flat();
-  const perSwap: Record<string, ActivityLogRecord[]> = Object.fromEntries(ids.map((id) => [id, []]));
+  const perSwap = perRuilId<ActivityLogRecord>();
+  for (const id of ids) perSwap[id] = [];
   for (const row of rows) {
     const entry = toPublicActivityLog(row);
     const id = String(entry.entityId ?? "");
@@ -734,7 +745,7 @@ export type SwapVerloopLogRegel = Pick<ActivityLogRecord, "createdAt" | "action"
  */
 export const getSwapVerloopRegels = async (swapIds?: string[]): Promise<Record<string, SwapVerloopLogRegel[]>> => {
   const ids = swapIds ? [...new Set(swapIds.map((id) => String(id)).filter(Boolean))] : null;
-  if (ids && ids.length === 0) return {};
+  if (ids && ids.length === 0) return perRuilId<SwapVerloopLogRegel>();
   const metFilter = !!ids && ids.length <= VERLOOP_ID_FILTER_MAX;
   const client = requireDb();
   type Rij = Pick<ActivityLogRow, "id" | "created_at" | "action" | "actor_role" | "actor_name" | "details" | "entity_id">;
@@ -749,7 +760,7 @@ export const getSwapVerloopRegels = async (swapIds?: string[]): Promise<Record<s
     return q.order("created_at", { ascending: true }).order("id", { ascending: true }).range(from, to);
   });
   const gevraagd = ids ? new Set(ids) : null;
-  const perSwap: Record<string, SwapVerloopLogRegel[]> = {};
+  const perSwap = perRuilId<SwapVerloopLogRegel>();
   for (const row of rows) {
     const id = String(row.entity_id ?? "");
     if (!id || (gevraagd && !gevraagd.has(id))) continue;
@@ -1157,7 +1168,7 @@ export const summarizeUpdateChanges = (previousUpdates: any[], nextUpdates: any[
 // Zelfde regels als de gedeelde client-validator (shiftTime.isValidBusvakTime):
 // uur 0–47 (busvak), minuten 0–59. De oude regex accepteerde "08:75"/"99:00",
 // die vervolgens per component anders geïnterpreteerd werden.
-const isValidHHMM = (v?: string) => {
+export const isValidHHMM = (v?: string) => {
   if (!v) return false;
   const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
   if (!m) return false;
