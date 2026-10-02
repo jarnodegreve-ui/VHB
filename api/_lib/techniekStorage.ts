@@ -170,10 +170,25 @@ export const createDefect = async (d: DefectMeldingBody & { gemeldDoor: string }
   return toDefect(data);
 };
 
-export const patchDefect = async (id: string, p: DefectPatch & { uitgevoerdDoor?: string | null }): Promise<Defect | null> => {
+/**
+ * `als`: de voorwaarde waaronder de wijziging mag doorgaan, in dezelfde query
+ * als de wijziging zelf (01-10). Een chauffeur mag alleen zijn eigen open
+ * melding annuleren; de route controleerde dat op een eerdere lezing en
+ * schreef daarna onvoorwaardelijk, zodat een annulering die de afhandeling van
+ * de technieker kruiste die afhandeling overschreef. Null = geen rij geraakt:
+ * de melding bestaat niet (meer) of voldoet niet (meer) aan de voorwaarde.
+ */
+export const patchDefect = async (
+  id: string,
+  p: DefectPatch & { uitgevoerdDoor?: string | null },
+  als?: { status?: Defect["status"]; gemeldDoor?: string },
+): Promise<Defect | null> => {
   const patch = toDatabaseDefectPatch(p);
   if (Object.keys(patch).length === 0) return getDefect(id);
-  const { data, error } = await requireDb().from("vehicle_defects").update(patch).eq("id", id).select(DEFECT_SELECT).maybeSingle();
+  let q = requireDb().from("vehicle_defects").update(patch).eq("id", id);
+  if (als?.status) q = q.eq("status", als.status);
+  if (als?.gemeldDoor) q = q.eq("gemeld_door", als.gemeldDoor);
+  const { data, error } = await q.select(DEFECT_SELECT).maybeSingle();
   if (error) throw error;
   return data ? toDefect(data) : null;
 };

@@ -11,15 +11,17 @@
  */
 
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { DAG_DMJ, afwezigOp, normalizeSwapType } from "../helpers.js";
+import { DAG_DMJ, afwezigOp, normalizeSwapType, toLookupToken } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getLeaveData, getUsersData, getShiftById } from "../storage.js";
+import { getLeaveData, getUsersData, getShiftById, swapHasReturnShift } from "../storage.js";
 import { ISO_DAY_RE } from "./collectie.js";
 import type { BordVast } from "./codeDienst.js";
 import { dubbeleInplanningen, laadDagStanden, onbekendeCodeFout, type Ontvangst } from "./dubbeleInplanning.js";
+import { RUIL_EINDSTATUSSEN } from "../../shared/ruilOvergangen.js";
 
-// Afgehandelde ruil-statussen: hieruit is geen overgang meer toegestaan.
-export const TERMINAL_SWAP_STATES = new Set(["rejected", "cancelled", "completed"]);
+// Afgehandelde ruil-statussen: hieruit is geen overgang meer toegestaan. Eén
+// lijst, die van de overgangstabel (shared/ruilOvergangen.ts).
+export const TERMINAL_SWAP_STATES = RUIL_EINDSTATUSSEN;
 
 /** Leesbare activity-log-melding van een planning-doorvoer. `r` = resultaat
  *  van applySwapToPlanning/revertSwapFromPlanning; null = geen dienst-info op
@@ -151,6 +153,46 @@ export const dubbeleInplanningFout = async (swap: {
   return conflict.bron === "onbekend"
     ? onbekendeCodeFout(naam, conflict)
     : `${naam} rijdt op ${DAG_DMJ(conflict.date)} al dienst ${conflict.dienst}, deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
+};
+
+/**
+ * Welke benen van een ruil het bord zelf al toont zoals de ruil ze zou zetten:
+ * de aangeboden dienst in de cel van de collega op de dienstdag, de terugdienst
+ * in de cel van de aanvrager op de terugdag (`terug` is null zonder dienst als
+ * tegenprestatie).
+ *
+ * Het bord is hier de matrixcel met de doorgevoerde ruilen erover, zonder de
+ * afwezigheden. Een ruil die nog niet goedgekeurd is ligt er niet over, dus
+ * toont het bord zijn been toch al, dan staat de dienst daar door de Excel
+ * (de planner verwerkte de ruil al in de import) of door een andere
+ * doorgevoerde ruil, en niet door een halve doorvoer van deze aanvraag. Wie
+ * zo'n ruil afwijst, mag dat been dus niet terugzetten: dat zou de Excel
+ * tegenspreken (01-10).
+ *
+ * Vergeleken wordt de code in de cel, los van haar soort: ook als het
+ * dienstoverzicht leeg terugkwam blijft "de Excel geeft deze dienst aan deze
+ * chauffeur" een feit. Geen matrixrij voor die dag, of een chauffeur die niet
+ * op het bord staat = niet getoond, en dan blijft het oude gedrag gelden.
+ */
+export const bordToontRuilAl = async (swap: {
+  requesterId?: unknown; targetDriverId?: unknown; shiftDate?: unknown; shiftLine?: unknown;
+  returnDate?: unknown; returnCode?: unknown; swapType?: unknown;
+}, vooraf?: { swaps?: any[]; vast?: BordVast }): Promise<{ aangeboden: boolean; terug: boolean | null }> => {
+  const targetId = String(swap.targetDriverId ?? "").trim();
+  const requesterId = String(swap.requesterId ?? "").trim();
+  const dienstDag = String(swap.shiftDate ?? "").trim();
+  const terugDag = String(swap.returnDate ?? "").trim();
+  const metTerug = swapHasReturnShift(swap as any);
+  const { standOp } = await laadDagStanden(metTerug ? [dienstDag, terugDag] : [dienstDag], vooraf);
+  const toont = (dag: string, driverId: string, code: unknown): boolean => {
+    const token = toLookupToken(String(code ?? ""));
+    const cel = driverId ? standOp(dag)?.bord.celVan(driverId) : undefined;
+    return !!token && !!cel && toLookupToken(cel.code) === token;
+  };
+  return {
+    aangeboden: toont(dienstDag, targetId, swap.shiftLine),
+    terug: metTerug ? toont(terugDag, requesterId, swap.returnCode) : null,
+  };
 };
 
 /**

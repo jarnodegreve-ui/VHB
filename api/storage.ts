@@ -3179,6 +3179,43 @@ export const saveSwapsData = async (data: any, idsToDelete: string[] = [], optie
 };
 
 /**
+ * Statuswissel van één ruil als compare-and-set (01-10): de rij wordt alleen
+ * geschreven als ze nog de status heeft die de handler las. `false` = geen rij
+ * geraakt, dus iemand anders besliste intussen (of trok de aanvraag in); de
+ * rij blijft dan zoals ze is.
+ *
+ * Tot 01-10 schreven beide ruilroutes de hele rij met een onvoorwaardelijke
+ * upsert, ná hun controle op een eerder gelezen momentopname. Twee beslissingen
+ * die elkaar kruisten (de chauffeur trekt in terwijl de planner goedkeurt)
+ * konden zo eindigen op `cancelled` met een verplaatste dienst.
+ *
+ * `target_seen_at` schrijft dit pad nooit: die kolom is van `markSwapTargetSeen`,
+ * en een bevestiging die net binnenkwam mag niet door de momentopname van een
+ * beslissing overschreven worden.
+ */
+export const schrijfSwapAlsStatus = async (swap: any, verwachteStatus: string): Promise<boolean> => {
+  const client = requireDb();
+  const { id, target_seen_at: _vanDeOntvanger, ...rij } = toDatabaseSwap(toPublicSwap(swap));
+  const { data, error } = await client
+    .from('swaps')
+    .update(rij)
+    .eq('id', id)
+    .eq('status', String(verwachteStatus))
+    .select('id');
+  if (error) throw error;
+  return (data ?? []).length > 0;
+};
+
+/** Nieuwe ruilen: een insert, geen upsert. Bestaat het id intussen al, dan
+ *  gooit de database (23505) in plaats van de bestaande rij te overschrijven. */
+export const voegSwapsToe = async (swaps: any[]): Promise<void> => {
+  if (swaps.length === 0) return;
+  const client = requireDb();
+  const { error } = await client.from('swaps').insert(swaps.map(toPublicSwap).map(toDatabaseSwap));
+  if (error) throw error;
+};
+
+/**
  * Gezien-bevestiging van de ontvangende chauffeur op een doorgevoerde wissel.
  * Directe kolom-update (niet via saveSwapsData): het bevestig-endpoint is de
  * enige schrijver en de array-route behoudt altijd de opgeslagen waarde.
@@ -3204,7 +3241,7 @@ export const markSwapTargetSeen = async (swapId: string, seenAtIso: string): Pro
 export type SwapCarryFields = Pick<SwapRecord, 'requesterId' | 'targetDriverId' | 'swapType' | 'returnDate' | 'returnCode' | 'shiftDate' | 'shiftLine'>;
 
 /** Heeft deze ruil een dienst als tegenprestatie (1-op-1, geen vrije dag)? */
-const swapHasReturnShift = (swap: SwapCarryFields) =>
+export const swapHasReturnShift = (swap: SwapCarryFields) =>
   swap.swapType !== 'overname' &&
   !!swap.returnDate &&
   !!swap.returnCode &&
@@ -3305,26 +3342,41 @@ export type SwapCarryResult = {
   returnMoved: number | null; // null = geen dienst-tegenprestatie (overname of vrije dag)
 };
 
-/** Goedgekeurde ruil doorvoeren in de planning. */
-export const applySwapToPlanning = async (swap: SwapCarryFields): Promise<SwapCarryResult | null> => {
+/** De benen van een ruil: de aangeboden dienst en, bij een 1-op-1 met een
+ *  dienst als tegenprestatie, de terugdienst. */
+export type SwapBenen = { aangeboden: boolean; terug: boolean };
+
+/** Goedgekeurde ruil doorvoeren in de planning. `benen`: alleen die benen
+ *  (01-10, om precies terug te zetten wat een verloren beslissing verplaatste);
+ *  een overgeslagen been telt als 0 verplaatste rijen. Zonder = beide. */
+export const applySwapToPlanning = async (swap: SwapCarryFields, benen?: SwapBenen): Promise<SwapCarryResult | null> => {
   const target = String(swap.targetDriverId ?? '');
   if (!swap.shiftDate || !swap.shiftLine || !target) return null;
-  const offeredMoved = await movePlanningRows(swap.shiftDate, String(swap.shiftLine), String(swap.requesterId), target);
+  const offeredMoved = benen && !benen.aangeboden
+    ? 0
+    : await movePlanningRows(swap.shiftDate, String(swap.shiftLine), String(swap.requesterId), target);
   let returnMoved: number | null = null;
   if (swapHasReturnShift(swap)) {
-    returnMoved = await movePlanningRows(String(swap.returnDate), String(swap.returnCode), target, String(swap.requesterId));
+    returnMoved = benen && !benen.terug
+      ? 0
+      : await movePlanningRows(String(swap.returnDate), String(swap.returnCode), target, String(swap.requesterId));
   }
   return { offeredMoved, returnMoved };
 };
 
-/** Geannuleerde (eerder goedgekeurde) ruil terugdraaien in de planning. */
-export const revertSwapFromPlanning = async (swap: SwapCarryFields): Promise<SwapCarryResult | null> => {
+/** Geannuleerde (eerder goedgekeurde) ruil terugdraaien in de planning.
+ *  `benen`: zie applySwapToPlanning. */
+export const revertSwapFromPlanning = async (swap: SwapCarryFields, benen?: SwapBenen): Promise<SwapCarryResult | null> => {
   const target = String(swap.targetDriverId ?? '');
   if (!swap.shiftDate || !swap.shiftLine || !target) return null;
-  const offeredMoved = await movePlanningRows(swap.shiftDate, String(swap.shiftLine), target, String(swap.requesterId));
+  const offeredMoved = benen && !benen.aangeboden
+    ? 0
+    : await movePlanningRows(swap.shiftDate, String(swap.shiftLine), target, String(swap.requesterId));
   let returnMoved: number | null = null;
   if (swapHasReturnShift(swap)) {
-    returnMoved = await movePlanningRows(String(swap.returnDate), String(swap.returnCode), String(swap.requesterId), target);
+    returnMoved = benen && !benen.terug
+      ? 0
+      : await movePlanningRows(String(swap.returnDate), String(swap.returnCode), String(swap.requesterId), target);
   }
   return { offeredMoved, returnMoved };
 };
