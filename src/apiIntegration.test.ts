@@ -936,6 +936,17 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => {
     server = app.listen(0, '127.0.0.1', () => resolve());
   });
+  // De testserver sluit zelf nooit een verbinding die stilligt (02-10).
+  // Standaard doet Node dat 6 s na het laatste antwoord (keepAliveTimeout 5 s
+  // plus 1 s buffer), met een timer. Server en fetch delen hier één event
+  // loop: rekent een test synchroon over dat moment heen (de werkmap van 4 MB
+  // in de gzip-regressiebewaker, op een CI-runner 5 tot 9 s bouwen en parsen),
+  // dan loopt die timer pas af na het rekenwerk. fetch heeft de POST dan al op
+  // de oude verbinding gezet, de server sluit die zonder de POST te lezen en
+  // de test faalt met "fetch failed, read ECONNRESET": 8 van de 39 CI-runs op
+  // Node 22.23.3. Met 0 sluit alleen de client nog een stille verbinding, en
+  // die weet dat zelf: het volgende verzoek krijgt gewoon een nieuwe.
+  server.keepAliveTimeout = 0;
   const { port } = server.address() as AddressInfo;
   baseUrl = `http://127.0.0.1:${port}`;
 });
@@ -7651,6 +7662,10 @@ describe('planning-import, ingepakt met gzip (413 van het platform, 29-09)', () 
     expect(imp.json).toMatchObject({ success: true, importedDays: 123 });
     expect(mem.planningMatrix).toEqual(rows);
     expect(mem.importHistory[0]).toMatchObject({ filename: 'Dienstregeling test.xls', importedDays: 123 });
+    // Tijdslimiet 60 s, niet de standaard 5 s: de werkmap van 4,4 MB bouwen en
+    // drie keer lezen (hier, in het voorbeeld, in de import) duurt ±2 s op een
+    // laptop en 7 tot 12 s op een CI-runner (62 runs, 29-09 tot 02-10). 60 s
+    // is vijf keer de traagste daarvan.
   }, 60_000);
 
   it('een gzip-bom (klein ingepakt, groot uitgepakt) geeft een 413 met leesbare melding, en de server draait door', async () => {
