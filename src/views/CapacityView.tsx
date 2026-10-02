@@ -27,6 +27,7 @@ import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 import { DUR, EASE_SPRING } from '../lib/motion';
 import { useRecordParam, useRouteParam } from '../app/router';
 import { Td, Th, Tabel, TableShell } from '../components/TabelBasis';
+import { eersteZichtbareDag } from '../../shared/maandplanningTerugblik';
 
 
 /** Sectiekop in het grid en de daglijst ("Chauffeurs", "Flexi/invallers",
@@ -92,9 +93,25 @@ const OVERZICHT_KOLOMMEN = [
 export function CapacityView({ currentUser }: { currentUser: User }) {
   const ownId = String(currentUser?.id ?? '');
   const [maandParam, zetMaandParam] = useRouteParam(0);
+  // Gekozen dag van de mobiele dag-weergave in de URL (segment ná de maand:
+  // /maandplanning/2026-09/2026-09-15), zie het state-blok "Mobiel:
+  // dag-weergave" verderop. Alleen een tik schrijft; de automatische keuze
+  // (vandaag / eerste dag) blijft buiten de URL.
+  const [dagParam, zetDagParam] = useRecordParam(1, { view: 'bezetting' });
+  // De maand waarop het scherm opent: die uit de URL. Wie geen staf is ziet
+  // niets van vóór de maandag van deze week (shared/maandplanningTerugblik.ts);
+  // een oude link naar een vroegere maand of dag telt voor hem dus niet en
+  // het bord opent op nu, in plaats van leeg. De maand-naar-URL-spiegel
+  // hieronder zet de adresbalk daarna recht, met replace.
+  const [startMaand] = useState(() => {
+    const uitUrl = maandUitParam(maandParam);
+    if (!uitUrl || isStaf(currentUser.role)) return uitUrl;
+    const vanaf = eersteZichtbareDag();
+    return maandNaarParam(uitUrl) < monthOf(vanaf) || (!!dagParam && dagParam < vanaf) ? null : uitUrl;
+  });
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
-    return maandUitParam(maandParam) ?? new Date(now.getFullYear(), now.getMonth(), 1);
+    return startMaand ?? new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [data, setData] = useState<MonthPlanning | null>(null);
   const [selected, setSelected] = useState<{ driverName: string; driverId: string; iso: string; cell: MonthCell } | null>(null);
@@ -106,7 +123,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // wordt er dan stil bij geladen (extraData).
   const [windowStart, setWindowStart] = useState(() => {
     const dezeMaandag = mondayOf(isoDate(new Date()));
-    const uitUrl = maandUitParam(maandParam);
+    const uitUrl = startMaand;
     if (!uitUrl) return dezeMaandag;
     // Maand uit de URL: valt de huidige week (ma–zo) erin, dan blijft het
     // venster op deze week staan; anders start het op de eerste maandag
@@ -325,12 +342,6 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const monthParam = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
   const todayIso = isoDate(new Date());
 
-  // Gekozen dag van de mobiele dag-weergave in de URL (segment ná de maand:
-  // /maandplanning/2026-09/2026-09-15), zie het state-blok "Mobiel:
-  // dag-weergave" verderop. Alleen een tik schrijft; de automatische keuze
-  // (vandaag / eerste dag) blijft buiten de URL.
-  const [dagParam, zetDagParam] = useRecordParam(1, { view: 'bezetting' });
-
   // Hoofdmaand → URL (replace, geen extra history-entry); de state blijft de
   // bron. De huidige maand geeft een schone URL zonder parameter, behalve
   // als er een dag in de URL staat: die kan niet zonder maand ervoor.
@@ -460,6 +471,27 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const geimporteerd = data?.geimporteerd ?? extraData?.geimporteerd ?? null;
   const eersteDag = geimporteerd?.eerste ?? null;
   const laatsteDag = geimporteerd?.laatste ?? null;
+  // Wie geen staf is krijgt het bord vanaf de maandag van deze week; de server
+  // legt `eerste` dan op die dag (`zichtbaarVanaf`), zodat dezelfde grens de
+  // knoppen hieronder stuurt. Alleen de uitleg bij de knop verschilt.
+  const terugGrens = data?.zichtbaarVanaf ?? extraData?.zichtbaarVanaf ?? null;
+  const beginUitleg = terugGrens && eersteDag === terugGrens
+    ? `Je ziet de planning vanaf deze week (${formatDatumDMJ(eersteDag)})`
+    : `De planning begint op ${formatDatumDMJ(eersteDag)}`;
+  // Die grens schuift elke maandag op. Stond het scherm open over de
+  // weekwissel (of loopt de klok van het toestel achter), dan ligt het venster
+  // ineens vóór wat de server nog geeft, en een lege week leest als "er reed
+  // niemand". Het venster springt dan mee naar de grens; een maand die
+  // helemaal voorbij is wordt de maand van dat venster. Staf heeft geen grens.
+  const maandVoorbij = !!terugGrens && monthParam < monthOf(terugGrens);
+  useEffect(() => {
+    if (!terugGrens) return;
+    if (windowStart < terugGrens) setWindowStart(terugGrens);
+    if (maandVoorbij) {
+      const midden = new Date(`${addDaysIso(terugGrens, 7)}T00:00:00`);
+      setViewMonth(new Date(midden.getFullYear(), midden.getMonth(), 1));
+    }
+  }, [terugGrens, windowStart, maandVoorbij]);
   // Het vórige venster eindigt de dag vóór dit venster; het vólgende begint
   // twee weken later. Een venster dat helemaal buiten de import valt heeft
   // niets te tonen.
@@ -701,7 +733,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             <div className="hidden md:flex items-center gap-2">
               <IconButton
                 label="Vorige 2 weken"
-                title={kanTerug ? 'Vorige 2 weken' : `De planning begint op ${formatDatumDMJ(eersteDag)}`}
+                title={kanTerug ? 'Vorige 2 weken' : beginUitleg}
                 variant="secondary"
                 size="sm"
                 disabled={!kanTerug}
@@ -748,8 +780,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
       {zl.fout ? (
         <Foutkaart boodschap={zl.fout} offline={!zl.online} onOpnieuw={zl.opnieuw} bezig={zl.laden} />
-      ) : zl.laden ? (
-        /* Skeleton i.p.v. spinner — zelfde shimmer als de rest van de app. */
+      ) : zl.laden || maandVoorbij ? (
+        /* Skeleton i.p.v. spinner — zelfde shimmer als de rest van de app.
+           Ook het ogenblik waarin een voorbije maand plaatsmaakt voor nu. */
         <Card padding="none" className="overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i}>
@@ -941,7 +974,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <div className="flex items-center justify-between gap-2 px-1 pb-1">
                 <IconButton
                   label="Vorige maand"
-                  title={kanMaandTerug ? 'Vorige maand' : `De planning begint op ${formatDatumDMJ(eersteDag)}`}
+                  title={kanMaandTerug ? 'Vorige maand' : beginUitleg}
                   variant="ghost"
                   size="md"
                   className="text-slate-400"

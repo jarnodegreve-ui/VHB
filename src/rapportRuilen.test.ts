@@ -129,6 +129,45 @@ describe('de kern onder weekblad en rapport (api/_lib/ruilUitvoeringen.ts)', () 
   });
 });
 
+// Beveiligingsscan 01-10: het id van een ruil kiest de aanvrager zelf. Bij een
+// id dat elk gewoon object al kent gaf `logPerRuil[id]` een functie terug in
+// plaats van "geen regels", en gaven de drie rapporten een 500.
+describe('een ruil-id dat een objectnaam is (constructor, __proto__, toString)', () => {
+  const NAMEN = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'];
+  const vreemd: RuilRij[] = NAMEN.map((id, i) => ({
+    id, requesterId: '10', targetDriverId: '11', status: 'pending', createdAt: `2026-09-2${i}T08:00:00.000Z`, swapType: 'ruil', shiftDate: '2026-10-10', shiftLine: `99${i}`, returnDate: '2026-10-11', returnCode: '2104',
+  }));
+
+  it('zonder logregels (een gewoon object als groepering): de drie rapporten antwoorden, met de ruil erin', () => {
+    const metVreemd: RuilBron = { ...bron, swaps: [...swaps, ...vreemd] };
+    expect(() => bouwUitgevoerdeWissels(metVreemd, filters(...SEPTEMBER))).not.toThrow();
+    expect(bouwUitgevoerdeWissels(metVreemd, filters(...SEPTEMBER)).rijen).toEqual(bouwUitgevoerdeWissels(bron, filters(...SEPTEMBER)).rijen);
+    const aanvragen = bouwRuilaanvragen(metVreemd, filters(...SEPTEMBER), '2026-10-02');
+    expect(aanvragen.rijen.filter((r) => String(r.dienst).startsWith('99')).map((r) => r.dienst).sort()).toEqual(['990', '991', '992', '993', '994']);
+    const perChauffeur = bouwRuilenPerChauffeur(metVreemd, filters(...SEPTEMBER));
+    const zonder = bouwRuilenPerChauffeur(bron, filters(...SEPTEMBER));
+    const anna = (uit: typeof perChauffeur) => uit.rijen.find((r) => r.naam === 'Anna Aerts')!;
+    expect(Number(anna(perChauffeur).aangevraagd)).toBe(Number(anna(zonder).aangevraagd) + NAMEN.length);
+  });
+
+  it('met logregels (de groepering uit de opslag, zonder prototype): de doorvoer staat in Uitgevoerde wissels', () => {
+    const groepering: Record<string, RuilLogRegel[]> = Object.assign(Object.create(null), logPerRuil);
+    for (const [i, id] of NAMEN.entries()) {
+      groepering[id] = [
+        regel(`2026-09-2${i}T08:00:00.000Z`, 'Dienstruil aangevraagd', 'chauffeur', 'Anna Aerts'),
+        regel(`2026-09-2${i}T09:00:00.000Z`, 'Dienstruil goedgekeurd', 'planner', 'Petra Planner', 'Anna Aerts, dienstruil (pending → approved).'),
+      ];
+    }
+    const metVreemd: RuilBron = { ...bron, swaps: [...swaps, ...vreemd.map((s) => ({ ...s, status: 'approved' }))], logPerRuil: groepering };
+    const uit = bouwUitgevoerdeWissels(metVreemd, filters(...SEPTEMBER));
+    expect(uit.rijen.filter((r) => String(r.dienst).startsWith('99')).map((r) => [r.uitgevoerdOp, r.dienst, r.door])).toEqual(
+      NAMEN.map((_, i) => [`2026-09-2${i}`, `99${i}`, 'Petra Planner']),
+    );
+    expect(bouwRuilaanvragen(metVreemd, filters(...SEPTEMBER), '2026-10-02').rijen.filter((r) => String(r.dienst).startsWith('99'))).toHaveLength(NAMEN.length);
+    expect(() => bouwRuilenPerChauffeur(metVreemd, filters(...SEPTEMBER))).not.toThrow();
+  });
+});
+
 describe('Uitgevoerde wissels', () => {
   it('september: de goedkeuring van 00:30 telt op 01/09, niet in augustus; de verwijderde ruil valt weg', () => {
     const uit = bouwUitgevoerdeWissels(bron, filters(...SEPTEMBER));

@@ -151,6 +151,24 @@ const mem = vi.hoisted(() => ({
   planningVersieTeller: 0,
   // true = replace_planning faalt (databasefout midden in de heropbouw).
   planningVervangenFaalt: false,
+  // Gelijktijdige beslissingen over een ruil (01-10). De haak loopt één keer,
+  // vlak vóór de voorwaardelijke statuswissel van een ruil: het venster tussen
+  // de lezing van de handler (en zijn planning-doorvoer) en zijn schrijfactie.
+  // Een test laat daar een tweede, echt verzoek landen.
+  voorSwapStatusWissel: null as null | ((swapId: string) => Promise<void> | void),
+  // Hoeveel voorwaardelijke statuswissels er liepen, en met welke verwachte
+  // status: bewijst dat een ongewijzigd record niet geschreven wordt.
+  swapStatusWissels: [] as Array<{ id: string; verwacht: string; naar: string; geraakt: boolean }>,
+  // 'terugdraaien' / 'doorvoeren' = die verplaatsing in de planning faalt
+  // (databasefout), zoals de echte functies dan gooien.
+  planningVerplaatsenFaalt: null as null | 'terugdraaien' | 'doorvoeren',
+  // Zelfde haak vóór de insert van een nieuwe ruil, en het aantal keren dat
+  // een ruilroute in de planning keek of een wissel er al staat
+  // (swapToestandInPlanning): een chauffeur doet dat nooit.
+  voorSwapToevoegen: null as null | (() => Promise<void> | void),
+  planningToestandLezingen: 0,
+  // true = de gerichte lezing van een ruil (getSwapsByIds) faalt.
+  swapHerlezingFaalt: false,
   // Service-role-client voor de routes die Supabase Auth beheren; null =
   // niet geconfigureerd (standaard). Een test zet hier een attrap.
   supabaseAdmin: null as any,
@@ -439,14 +457,58 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       const id = filters?.betrokkenUserId;
       return id ? mem.swaps.filter((s: any) => String(s.requesterId) === String(id) || String(s.targetDriverId ?? '') === String(id)) : mem.swaps;
     },
-    saveSwapsData: async (data: any[], idsToDelete: string[] = []) => {
-      mem.swaps = replaceById(mem.swaps, data, idsToDelete);
+    // Zoals de echte: een upsert van `data`, daarna de verwijderingen; met
+    // alleenPending gaat een rij alleen weg als ze nog 'pending' is.
+    saveSwapsData: async (data: any[], idsToDelete: string[] = [], opties: { alleenPending?: boolean } = {}) => {
+      const weg = opties.alleenPending
+        ? idsToDelete.filter((id) => mem.swaps.find((s: any) => String(s.id) === String(id))?.status === 'pending')
+        : idsToDelete;
+      mem.swaps = replaceById(mem.swaps, data, weg);
+    },
+    // Zoals de echte: `update ... where id = ? and status = ?`. De rij wordt
+    // alleen geschreven als ze nog de verwachte status heeft; anders raakt de
+    // schrijfactie niets en komt er false terug. target_seen_at schrijft dit
+    // pad nooit: de opgeslagen waarde blijft. Een nieuwe array per
+    // schrijfactie, zodat de momentopname van een lopende handler blijft wat
+    // ze was.
+    schrijfSwapAlsStatus: async (swap: any, verwachteStatus: string) => {
+      const haak = mem.voorSwapStatusWissel;
+      if (haak) {
+        mem.voorSwapStatusWissel = null;
+        await haak(String(swap.id));
+      }
+      const rij = mem.swaps.find((s: any) => String(s.id) === String(swap.id));
+      const geraakt = !!rij && String(rij.status) === String(verwachteStatus);
+      mem.swapStatusWissels.push({ id: String(swap.id), verwacht: String(verwachteStatus), naar: String(swap.status), geraakt });
+      if (!geraakt) return false;
+      const { targetSeenAt: _nooit, ...velden } = swap;
+      mem.swaps = mem.swaps.map((s: any) => (s === rij ? { ...velden, ...(rij.targetSeenAt ? { targetSeenAt: rij.targetSeenAt } : {}) } : s));
+      return true;
+    },
+    // Zoals de echte: een insert. Een id dat al bestaat is een unieke-sleutel-
+    // fout (23505), geen overschrijving.
+    voegSwapsToe: async (swaps: any[]) => {
+      if (swaps.length === 0) return;
+      const haak = mem.voorSwapToevoegen;
+      if (haak) {
+        mem.voorSwapToevoegen = null;
+        await haak();
+      }
+      if (swaps.some((n: any) => mem.swaps.some((s: any) => String(s.id) === String(n.id)))) {
+        throw Object.assign(new Error('duplicate key value violates unique constraint "swaps_pkey"'), { code: '23505' });
+      }
+      mem.swaps = [...mem.swaps, ...swaps];
+    },
+    getSwapsByIds: async (ids: string[]) => {
+      if (mem.swapHerlezingFaalt) throw new Error('swaps: connection failure');
+      return mem.swaps.filter((s: any) => ids.map(String).includes(String(s.id)));
     },
     markSwapTargetSeen: async (id: string, seenAtIso: string) => {
       const sw = mem.swaps.find((s: any) => String(s.id) === String(id));
       if (sw) sw.targetSeenAt = seenAtIso;
     },
     swapToestandInPlanning: async (swap: any) => {
+      mem.planningToestandLezingen += 1;
       if (!swap.shiftDate || !swap.shiftLine || !swap.targetDriverId) return 'onbekend';
       const chauffeurs = new Set(mem.planning.filter((r: any) => r.date === swap.shiftDate && String(r.line) === String(swap.shiftLine)).map((r: any) => String(r.driverId)));
       if (chauffeurs.has(String(swap.requesterId))) return 'niet_doorgevoerd';
@@ -462,8 +524,11 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     // Planning-doorvoer: zelfde semantiek als de echte DB-functies, maar op
     // mem.planning — zodat de integratietests het effect van approve/cancel
     // op de planning kunnen asserten.
-    applySwapToPlanning: async (swap: any) => {
+    // `benen` (01-10): alleen die benen, een overgeslagen been telt als 0
+    // verplaatste rijen, zoals de echte.
+    applySwapToPlanning: async (swap: any, benen?: { aangeboden: boolean; terug: boolean }) => {
       if (!swap.shiftDate || !swap.shiftLine || !swap.targetDriverId) return null;
+      if (mem.planningVerplaatsenFaalt === 'doorvoeren') throw new Error('planning: connection failure');
       const move = (date: string, line: string, from: string, to: string) => {
         let n = 0;
         for (const row of mem.planning) {
@@ -471,13 +536,14 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         }
         return n;
       };
-      const offeredMoved = move(swap.shiftDate, swap.shiftLine, swap.requesterId, swap.targetDriverId);
+      const offeredMoved = benen && !benen.aangeboden ? 0 : move(swap.shiftDate, swap.shiftLine, swap.requesterId, swap.targetDriverId);
       const hasReturn = swap.swapType !== 'overname' && swap.returnDate && swap.returnCode && String(swap.returnCode).toLowerCase() !== 'vrij';
-      const returnMoved = hasReturn ? move(swap.returnDate, swap.returnCode, swap.targetDriverId, swap.requesterId) : null;
+      const returnMoved = hasReturn ? (benen && !benen.terug ? 0 : move(swap.returnDate, swap.returnCode, swap.targetDriverId, swap.requesterId)) : null;
       return { offeredMoved, returnMoved };
     },
-    revertSwapFromPlanning: async (swap: any) => {
+    revertSwapFromPlanning: async (swap: any, benen?: { aangeboden: boolean; terug: boolean }) => {
       if (!swap.shiftDate || !swap.shiftLine || !swap.targetDriverId) return null;
+      if (mem.planningVerplaatsenFaalt === 'terugdraaien') throw new Error('planning: connection failure');
       const move = (date: string, line: string, from: string, to: string) => {
         let n = 0;
         for (const row of mem.planning) {
@@ -485,9 +551,9 @@ vi.mock('../api/storage.js', async (importOriginal) => {
         }
         return n;
       };
-      const offeredMoved = move(swap.shiftDate, swap.shiftLine, swap.targetDriverId, swap.requesterId);
+      const offeredMoved = benen && !benen.aangeboden ? 0 : move(swap.shiftDate, swap.shiftLine, swap.targetDriverId, swap.requesterId);
       const hasReturn = swap.swapType !== 'overname' && swap.returnDate && swap.returnCode && String(swap.returnCode).toLowerCase() !== 'vrij';
-      const returnMoved = hasReturn ? move(swap.returnDate, swap.returnCode, swap.requesterId, swap.targetDriverId) : null;
+      const returnMoved = hasReturn ? (benen && !benen.terug ? 0 : move(swap.returnDate, swap.returnCode, swap.requesterId, swap.targetDriverId)) : null;
       return { offeredMoved, returnMoved };
     },
     // Horizon: matrix wint, anders de opgebouwde planning (zoals de echte).
@@ -1015,6 +1081,12 @@ beforeEach(() => {
   mem.planningVersies = null;
   mem.planningVersieTeller = 0;
   mem.planningVervangenFaalt = false;
+  mem.voorSwapStatusWissel = null;
+  mem.swapStatusWissels = [];
+  mem.planningVerplaatsenFaalt = null;
+  mem.voorSwapToevoegen = null;
+  mem.planningToestandLezingen = 0;
+  mem.swapHerlezingFaalt = false;
   mem.devices = [
     { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
     { userId: '4', deviceToken: 'dev-ok', name: 'Android · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
@@ -1421,6 +1493,44 @@ describe('PII-scoping voor chauffeurs', () => {
       expect(stap.naam).toBeUndefined();
     });
   });
+
+  // Beveiligingsscan 01-10: het id van een ruil kiest de aanvrager zelf, en
+  // RECORD_ID_RE laat ook namen toe die elk gewoon object al kent. Bij zo'n
+  // id gaf `perSwap[id]` een functie terug in plaats van "geen regels": het
+  // verloop van álle ruilen viel weg (de fout werd gevangen en de lijst kwam
+  // zonder verloop terug). De groepering in de opslag zelf: src/storageRuilVerloop.test.ts.
+  describe('een ruil-id dat een objectnaam is (constructor, toString, __proto__)', () => {
+    const logRegel = (entityId: string, action: string, actorName: string, actorRole: string, message: string, gelogdOp: string) =>
+      ({ domain: 'swaps', action, message, entityType: 'swap', entityId, actorName, actorRole, gelogdOp });
+    const vreemd = (id: string) => ({ id, shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-10T08:00:00Z', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' });
+    beforeEach(() => {
+      mem.activity = [
+        logRegel('s-1', 'Dienstruil aangevraagd', 'Chauffeur A', 'chauffeur', 'Chauffeur A bood een dienst aan voor ruil.', '2026-06-01T08:00:02Z'),
+        logRegel('s-2', 'Dienstruil aangevraagd', 'Chauffeur B', 'chauffeur', 'Chauffeur B bood een dienst aan voor ruil.', '2026-06-01T09:00:02Z'),
+      ];
+    });
+
+    it.each(['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'])('%s zonder logregels: staf en chauffeur houden het verloop van de andere ruilen', async (id) => {
+      mem.swaps = [...mem.swaps, vreemd(id)];
+      const staf = await api('GET', '/api/swaps', { token: 'tok-planner' });
+      expect(staf.status).toBe(200);
+      expect(staf.json.find((s: any) => s.id === 's-1').verloop).toEqual([{ soort: 'aangevraagd', op: '2026-06-01T08:00:02Z', door: 'aanvrager' }]);
+      expect(staf.json.find((s: any) => s.id === 's-2').verloop).toHaveLength(1);
+      expect(staf.json.find((s: any) => s.id === id).verloop).toEqual([]);
+      const chauffeur = await api('GET', '/api/swaps', { token: 'tok-a' });
+      expect(chauffeur.status).toBe(200);
+      expect(chauffeur.json.find((s: any) => s.id === 's-1').verloop).toHaveLength(1);
+      expect(chauffeur.json.find((s: any) => s.id === id).verloop).toEqual([]);
+    });
+
+    it.each(['constructor', 'toString', '__proto__'])('%s: de collega kan de aanvraag als bekeken melden (geen 500)', async (id) => {
+      mem.swaps = [...mem.swaps, vreemd(id)];
+      const res = await api('POST', `/api/swaps/${id}/bekeken`, { token: 'tok-b' });
+      expect(res.status).toBe(200);
+      expect(res.json).toEqual({ success: true, nieuw: true });
+      expect(mem.activity.filter((a: any) => a.action === 'Dienstruil bekeken' && a.entityId === id)).toHaveLength(1);
+    });
+  });
 });
 
 describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
@@ -1567,6 +1677,186 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
   });
 });
 
+// Beveiligingsscan 01-10 + regel Jarno 02-10. De einddatum werd alleen op het
+// patroon getoetst: 9999-12-31 en 9999-99-99 werden bewaard, en elk rapport of
+// paneel dat de dagen van zo'n periode telt liep daarna duizenden jaren af.
+// De klok van deze tests staat op 15/06/2026, de grens dus op 31/12/2027.
+describe('verlof: invoergrenzen (einde uiterlijk 31/12 van volgend jaar, echte kalenderdagen, hoogstens vijf nieuwe)', () => {
+  const GRENS_2027 = 'Verlof aanvragen kan tot en met 31/12/2027.';
+  const eigen = () => mem.leave.filter((l: any) => l.userId === '3');
+  const aanvraag = (over: Record<string, unknown> = {}) => ({ id: 'l-nieuw', userId: '3', startDate: '2027-12-20', endDate: '2027-12-31', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-06-15T08:00:00Z', ...over });
+  const registratie = (over: Record<string, unknown> = {}) => aanvraag({ status: 'approved', decidedAt: '2026-06-15T08:00:00Z', ...over });
+
+  describe('de uiterste einddatum', () => {
+    it('een chauffeur kan tot en met 31 december van volgend jaar aanvragen', async () => {
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag()] });
+      expect(res.status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toMatchObject({ endDate: '2027-12-31', status: 'pending' });
+    });
+
+    it.each(['2028-01-01', '2030-07-15', '9999-12-31'])('een einde op %s wordt geweigerd met de tekst van het formulier, er wordt niets bewaard of gemeld', async (endDate) => {
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ endDate })] });
+      expect(res.status).toBe(400);
+      expect(res.json).toEqual({ error: GRENS_2027 });
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeFalsy();
+      expect(mem.pushesSent).toEqual([]);
+      expect(mem.activity).toEqual([]);
+    });
+
+    it('geldt voor iedereen: ook een planner of admin die verlof voor een chauffeur vastlegt, of voor zichzelf aanvraagt', async () => {
+      for (const token of ['tok-planner', 'tok-admin']) {
+        const namens = await api('POST', '/api/leave', { token, body: [...mem.leave, registratie({ endDate: '2028-01-01' })] });
+        expect(namens.status, token).toBe(400);
+        expect(namens.json.error, token).toBe(GRENS_2027);
+      }
+      const zelf = await api('POST', '/api/leave', { token: 'tok-admin', body: [...mem.leave, aanvraag({ userId: '1', endDate: '2028-01-01' })] });
+      expect(zelf.status).toBe(400);
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeFalsy();
+      // Binnen de grens blijft de registratie werken.
+      const goed = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, registratie()] });
+      expect(goed.status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toMatchObject({ status: 'approved', endDate: '2027-12-31' });
+    });
+
+    it('het lopende jaar is het Brusselse: op 31/12 om 23:30 nog 2026, een uur later 2027', async () => {
+      // 22:30 UTC = 23:30 in Brussel, nog 2026: de grens is 31/12/2027.
+      vi.setSystemTime(new Date('2026-12-31T22:30:00Z'));
+      const voor = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ startDate: '2027-12-20', endDate: '2028-01-01' })] });
+      expect(voor.status).toBe(400);
+      expect(voor.json.error).toBe(GRENS_2027);
+      // 23:30 UTC = 00:30 in Brussel op 01/01/2027, terwijl UTC nog 2026 zegt: de grens is 31/12/2028.
+      vi.setSystemTime(new Date('2026-12-31T23:30:00Z'));
+      const na = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ startDate: '2028-12-20', endDate: '2028-12-31' })] });
+      expect(na.status).toBe(200);
+      const teLaat = await api('POST', '/api/leave', { token: 'tok-a', body: [...mem.leave.filter((l: any) => l.userId === '3'), aanvraag({ id: 'l-nieuw-2', startDate: '2028-12-20', endDate: '2029-01-01' })] });
+      expect(teLaat.status).toBe(400);
+      expect(teLaat.json.error).toBe('Verlof aanvragen kan tot en met 31/12/2028.');
+    });
+  });
+
+  describe('echte kalenderdagen', () => {
+    it.each([
+      ['endDate', '9999-99-99'],
+      ['endDate', '2027-02-30'],
+      ['endDate', '2027-13-01'],
+      ['startDate', '2027-02-29'],
+      ['startDate', '2027-00-10'],
+    ])('%s = %s past in het patroon maar bestaat niet: geweigerd', async (veld, datum) => {
+      const body = [...eigen(), aanvraag({ startDate: '2027-02-01', endDate: '2027-03-15', [veld]: datum })];
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body });
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Ongeldige datum in de aanvraag.');
+      expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeFalsy();
+      const staf = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, registratie({ startDate: '2027-02-01', endDate: '2027-03-15', [veld]: datum })] });
+      expect(staf.status).toBe(400);
+    });
+
+    it('29 februari in een schrikkeljaar bestaat wel', async () => {
+      vi.setSystemTime(new Date('2027-06-15T10:00:00Z'));
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ startDate: '2028-02-29', endDate: '2028-02-29' })] });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe('bestaande records waarvan de datums niet wijzigen blijven passeren', () => {
+    beforeEach(() => {
+      mem.leave = [
+        ...mem.leave,
+        // Wat er vóór deze grens al in kon staan.
+        { id: 'l-eeuwig', userId: '4', startDate: '2026-09-01', endDate: '9999-12-31', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-05-01T08:00:00Z', decidedAt: '2026-05-01T08:00:00Z' },
+        { id: 'l-onbestaand', userId: '4', startDate: '2026-02-30', endDate: '9999-99-99', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-05-01T08:00:00Z' },
+      ];
+    });
+
+    it('een save van de planner die iets anders beslist gaat door', async () => {
+      const payload = mem.leave.map((l: any) => (l.id === 'l-a1' ? { ...l, status: 'approved', decidedAt: '2026-06-15T09:00:00Z' } : l));
+      const res = await api('POST', '/api/leave', { token: 'tok-planner', body: payload });
+      expect(res.status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-a1')?.status).toBe('approved');
+      expect(mem.leave.find((l: any) => l.id === 'l-eeuwig')?.endDate).toBe('9999-12-31');
+    });
+
+    it('zo\'n record zelf afwijzen, annuleren of van type wijzigen kan (zo ruim je het op)', async () => {
+      const afwijzen = mem.leave.map((l: any) => (l.id === 'l-onbestaand' ? { ...l, status: 'rejected', decidedAt: '2026-06-15T09:00:00Z' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: afwijzen })).status).toBe(200);
+      const annuleren = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, status: 'cancelled' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: annuleren })).status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-eeuwig')?.status).toBe('cancelled');
+      const anderType = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, type: 'betaald_verlof' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: anderType })).status).toBe(200);
+    });
+
+    it('het einde inkorten tot binnen de grens kan, verzetten naar een andere te late dag niet', async () => {
+      const teLaat = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, endDate: '2099-12-31' } : l));
+      const fout = await api('POST', '/api/leave', { token: 'tok-planner', body: teLaat });
+      expect(fout.status).toBe(400);
+      expect(fout.json.error).toBe(GRENS_2027);
+      expect(mem.leave.find((l: any) => l.id === 'l-eeuwig')?.endDate).toBe('9999-12-31');
+      const ingekort = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, endDate: '2026-09-30' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: ingekort })).status).toBe(200);
+      expect(mem.leave.find((l: any) => l.id === 'l-eeuwig')?.endDate).toBe('2026-09-30');
+    });
+
+    it('alleen de start verzetten van een record met een te laat einde toetst de start, niet het oude einde', async () => {
+      const start = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, startDate: '2026-09-02' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: start })).status).toBe(200);
+      const kapot = mem.leave.map((l: any) => (l.id === 'l-eeuwig' ? { ...l, startDate: '2026-09-31' } : l));
+      expect((await api('POST', '/api/leave', { token: 'tok-planner', body: kapot })).status).toBe(400);
+    });
+  });
+
+  describe('hoogstens vijf nieuwe aanvragen per verzoek voor wie geen staf is', () => {
+    const reeks = (aantal: number) => Array.from({ length: aantal }, (_, i) => aanvraag({ id: `l-reeks-${i}`, startDate: `2027-0${i + 1}-10`, endDate: `2027-0${i + 1}-11` }));
+
+    it('vijf tegelijk gaat door (het formulier stuurt er één)', async () => {
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), ...reeks(5)] });
+      expect(res.status).toBe(200);
+      expect(mem.leave.filter((l: any) => String(l.id).startsWith('l-reeks-'))).toHaveLength(5);
+    });
+
+    it('zes tegelijk wordt geweigerd: niets bewaard, geen enkele melding naar de planners', async () => {
+      const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), ...reeks(6)] });
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Je kan hoogstens 5 verlofaanvragen tegelijk indienen.');
+      expect(mem.leave.filter((l: any) => String(l.id).startsWith('l-reeks-'))).toHaveLength(0);
+      expect(mem.pushesSent).toEqual([]);
+      // De echo van de eigen bestaande records telt niet mee.
+      const metEcho = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), ...eigen(), ...reeks(5)] });
+      expect(metEcho.status).toBe(200);
+    });
+
+    it('een planner die de papieren lijst overzet is niet begrensd', async () => {
+      const res = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, ...reeks(8).map((r) => ({ ...r, status: 'approved', decidedAt: '2026-06-15T08:00:00Z' }))] });
+      expect(res.status).toBe(200);
+      expect(mem.leave.filter((l: any) => String(l.id).startsWith('l-reeks-'))).toHaveLength(8);
+    });
+  });
+
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty', 'onbekend', ''])('een verloftype "%s" is geen bekend type, ook niet als elk object die naam kent', async (type) => {
+    const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...eigen(), aanvraag({ type })] });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('Ongeldig verloftype.');
+    expect(mem.leave.find((l: any) => l.id === 'l-nieuw')).toBeFalsy();
+  });
+
+  describe('de ziekmelding volgt dezelfde uiterste einddatum', () => {
+    it('een einde na 31/12 van volgend jaar wordt geweigerd, ook als de periode zelf korter dan een jaar is', async () => {
+      const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2027-12-30', endDate: '2028-01-02' } });
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Een ziekmelding kan tot en met 31/12/2027 lopen.');
+      const ver = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '9999-01-01', endDate: '9999-01-05' } });
+      expect(ver.status).toBe(400);
+      expect(mem.leave.some((l: any) => l.type === 'ziekte')).toBe(false);
+    });
+
+    it('tot en met die dag blijft een lange ziekte kunnen', async () => {
+      const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2027-01-10', endDate: '2027-12-31' } });
+      expect(res.status).toBe(200);
+      expect(res.json.leave).toMatchObject({ type: 'ziekte', endDate: '2027-12-31' });
+    });
+  });
+});
+
 describe('dienstruil: autorisatieregels', () => {
   it('weigert force-approve (pending → approved) door een planner, staat het toe voor admin', async () => {
     const approve = (rows: any[]) => rows.map((s) => (s.id === 's-1' ? { ...s, status: 'approved', decidedAt: '2026-06-12T09:00:00Z' } : s));
@@ -1684,6 +1974,205 @@ describe('dienstruil: autorisatieregels', () => {
     const res = await api('PATCH', '/api/swaps/s-r', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'rejected' } });
     expect(res.status).toBe(409);
     expect(mem.swaps.find((s) => s.id === 's-r')?.status).toBe('rejected');
+  });
+});
+
+// Scan 01-10, punt 4 (Jarno: "aanpassen naar enkel admin"). Een planner kon
+// een ruil van 'pending' of 'accepted' rechtstreeks op 'completed' zetten. De
+// controles en de doorvoer liepen alleen bij 'approved', dus zeiden het bord en
+// de loonadministratie daarna dat de collega reed terwijl de rijen in de
+// planning nog op de aanvrager stonden. Nu: een planner handelt alleen af wat
+// goedgekeurd is; een admin mag een open ruil rechtstreeks afhandelen, en dat
+// is dan een echte goedkeuring gevolgd door de afhandeling.
+describe('dienstruil: rechtstreeks afhandelen kan alleen een admin, en dan als echte goedkeuring (01-10)', () => {
+  const DAG = '2026-07-08';
+  // A (3) geeft dienst 12 van 08/07 (sh-c) aan B (4), die dag op bv.
+  const zaai = (status: string, extra: Record<string, unknown> = {}) => {
+    mem.swaps = [{
+      id: 's-d', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status, reason: '',
+      createdAt: '2026-06-12T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '12', ...extra,
+    }];
+  };
+  const handelAf = (weg: 'PATCH' | 'POST', token: string) => {
+    const nu = mem.swaps.find((s: any) => s.id === 's-d')!;
+    return weg === 'PATCH'
+      ? api('PATCH', '/api/swaps/s-d', { token, body: { status: 'completed', ifStatus: nu.status } })
+      : api('POST', '/api/swaps', { token, body: mem.swaps.map((s: any) => (s.id === 's-d' ? { ...s, status: 'completed' } : s)) });
+  };
+  const ruil = () => mem.swaps.find((s: any) => s.id === 's-d')!;
+  const eigenaar = () => mem.planning.find((p: any) => p.id === 'sh-c')?.driverId;
+  const acties = () => mem.activity.filter((a: any) => a.entityId === 's-d').map((a: any) => a.action);
+
+  for (const weg of ['PATCH', 'POST'] as const) {
+    for (const van of ['pending', 'accepted']) {
+      it(`${weg}: een planner kan een ruil op '${van}' niet afhandelen (403), er wijzigt niets`, async () => {
+        zaai(van);
+        const res = await handelAf(weg, 'tok-planner');
+        expect(res.status).toBe(403);
+        expect(String(res.json?.error)).toBe('Niet toegestaan: een ruil die nog niet goedgekeurd is kan alleen een admin rechtstreeks afhandelen. Keur de ruil eerst goed.');
+        expect(ruil().status).toBe(van);
+        expect(eigenaar()).toBe('3');
+        expect(acties()).toEqual([]);
+        expect(mem.pushesSent).toEqual([]);
+      });
+
+      it(`${weg}: een admin handelt een ruil op '${van}' rechtstreeks af: controles, doorvoer, beslismoment, log en melding van een goedkeuring`, async () => {
+        zaai(van);
+        const res = await handelAf(weg, 'tok-admin');
+        expect(res.status).toBe(200);
+        expect(ruil().status).toBe('completed');
+        // De wissel staat in de planning en heeft een beslismoment: zo spelen
+        // bord, cel-waarheid en heropbouw hem af.
+        expect(eigenaar()).toBe('4');
+        expect(ruil().decidedAt).toBe(KLOK_ISO);
+        // Twee logregels: de goedkeuring (met de doorvoer) en de afhandeling.
+        expect(acties()).toEqual(['Dienstruil goedgekeurd', 'Dienstruil voltooid']);
+        const [goedgekeurd, voltooid] = mem.activity.filter((a: any) => a.entityId === 's-d');
+        expect(goedgekeurd.message).toContain(`(${van} → approved)`);
+        expect(goedgekeurd.message).toContain('dienst 12 op 08/07/2026: 1 rij(en) doorgevoerd');
+        expect(voltooid.message).toContain('(approved → completed)');
+        expect(voltooid.message).not.toContain('doorgevoerd');
+        // De melding van een goedkeuring naar beide chauffeurs, geen tweede voor de afhandeling.
+        expect(mem.pushesSent.map((p) => [p.payload.title, [...p.userIds].sort()])).toEqual([['Dienstruil goedgekeurd', ['3', '4']]]);
+        expect(mem.pushesSent[0].payload.body).toContain(`${van} → approved`);
+      });
+    }
+
+    it(`${weg}: een planner handelt een goedgekeurde ruil gewoon af, zonder nieuwe doorvoer of nieuw beslismoment`, async () => {
+      zaai('approved', { decidedAt: '2026-06-13T08:00:00Z' });
+      mem.planning = mem.planning.map((p: any) => (p.id === 'sh-c' ? { ...p, driverId: '4' } : p));
+      const res = await handelAf(weg, 'tok-planner');
+      expect(res.status).toBe(200);
+      expect(ruil().status).toBe('completed');
+      expect(ruil().decidedAt).toBe('2026-06-13T08:00:00Z');
+      expect(eigenaar()).toBe('4');
+      expect(acties()).toEqual(['Dienstruil voltooid']);
+      expect(mem.pushesSent).toEqual([]);
+    });
+
+    // Elke controle van een goedkeuring houdt ook het rechtstreeks afhandelen
+    // tegen: er wordt niets verplaatst en de status blijft staan.
+    const CONTROLES: Array<{ naam: string; zet: () => void; tekst: string }> = [
+      {
+        naam: 'de dienst is niet meer van de aanvrager',
+        zet: () => { mem.planning = mem.planning.map((p: any) => (p.id === 'sh-c' ? { ...p, driverId: '9' } : p)); },
+        tekst: 'niet meer op naam van de aanvrager',
+      },
+      {
+        naam: 'de collega is intussen ziek gemeld',
+        zet: () => { mem.leave.push({ id: 'l-ziek', userId: '4', startDate: DAG, endDate: DAG, type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-06-14T08:00:00Z' }); },
+        tekst: 'ziek gemeld',
+      },
+      {
+        naam: 'de collega kreeg intussen zelf een dienst',
+        zet: () => { mem.planning.push({ id: 'sh-extra', driverId: '4', date: DAG, line: '15' }); },
+        tekst: 'dubbele inplanning',
+      },
+    ];
+    for (const controle of CONTROLES) {
+      it(`${weg}: rechtstreeks afhandelen door een admin wordt geweigerd als ${controle.naam} (409)`, async () => {
+        zaai('accepted');
+        controle.zet();
+        const voor = JSON.stringify(mem.planning);
+        const res = await handelAf(weg, 'tok-admin');
+        expect(res.status).toBe(409);
+        expect(String(res.json?.error)).toContain(controle.tekst);
+        expect(ruil().status).toBe('accepted');
+        expect(ruil().decidedAt).toBeUndefined();
+        expect(JSON.stringify(mem.planning)).toBe(voor);
+        expect(acties()).toEqual([]);
+      });
+    }
+  }
+
+  it('PATCH: het antwoord draagt het verloop van beide stappen', async () => {
+    zaai('accepted');
+    const res = await handelAf('PATCH', 'tok-admin');
+    expect(res.status).toBe(200);
+    expect(res.json.swap.verloop.map((s: any) => s.soort)).toEqual(['goedgekeurd', 'afgehandeld']);
+    expect(res.json.swap.verloop[0].van).toBe('accepted');
+  });
+
+  it('na rechtstreeks afhandelen houdt een heropbouw de dienst bij de collega', async () => {
+    zaai('pending');
+    mem.planningCodes = [{ code: 'bv', category: 'absence', description: 'Betaald verlof', countsAsShift: false, isPaidAbsence: true, isDayOff: true }];
+    mem.planningMatrix = [{ id: 'm-1', source_date: DAG, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'bv' }, raw_row: '' }];
+    expect((await handelAf('PATCH', 'tok-admin')).status).toBe(200);
+    const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    const rijen = mem.planning.filter((p: any) => p.date === DAG && String(p.line) === '12');
+    expect(rijen.length).toBeGreaterThan(0);
+    for (const rij of rijen) expect(rij.driverId).toBe('4');
+  });
+
+  // De laatste weg naar 'completed' zonder doorvoer (tweede lezing 01-10): een
+  // admin kon via de lijst een NIEUW record meteen als 'approved' aanmaken. Dat
+  // werd opgeslagen zonder verplaatsing, en een planner kon het daarna
+  // afhandelen. Een nieuw record start nu altijd als 'pending', voor elke rol,
+  // met dezelfde 403 en dezelfde zin als die voor niet-admins al gold.
+  describe("lijst: een nieuw record start altijd als 'pending'", () => {
+    const nieuw = (status: string) => ({ id: 's-nieuw', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status, reason: '', createdAt: '2026-06-12T08:00:00Z', swapType: 'overname' });
+
+    for (const [rol, token] of [['admin', 'tok-admin'], ['planner', 'tok-planner'], ['chauffeur', 'tok-a']] as const) {
+      for (const status of ['accepted', 'approved', 'rejected', 'cancelled', 'completed']) {
+        it(`${rol}: nieuw record als '${status}' wordt geweigerd (403), er wordt niets opgeslagen of verplaatst`, async () => {
+          mem.swaps = [];
+          const res = await api('POST', '/api/swaps', { token, body: [nieuw(status)] });
+          expect(res.status).toBe(403);
+          expect(String(res.json?.error)).toBe("Niet toegestaan: nieuwe wisselverzoeken starten als 'pending'.");
+          expect(mem.swaps).toEqual([]);
+          expect(eigenaar()).toBe('3');
+          expect(mem.activity.filter((a: any) => a.entityId === 's-nieuw')).toEqual([]);
+        });
+      }
+    }
+
+    it('de keten is dicht: wat een admin niet als approved kan aanmaken, kan een planner niet afhandelen', async () => {
+      mem.swaps = [];
+      expect((await api('POST', '/api/swaps', { token: 'tok-admin', body: [nieuw('approved')] })).status).toBe(403);
+      const af = await api('PATCH', '/api/swaps/s-nieuw', { token: 'tok-planner', body: { status: 'completed', ifStatus: 'approved' } });
+      expect(af.status).toBe(404);
+      expect(eigenaar()).toBe('3');
+    });
+
+    it("een admin maakt een aanvraag gewoon aan als 'pending'", async () => {
+      mem.swaps = [];
+      const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: [nieuw('pending')] });
+      expect(res.status).toBe(200);
+      expect(mem.swaps.map((x: any) => [x.id, x.status])).toEqual([['s-nieuw', 'pending']]);
+      expect(mem.activity.filter((a: any) => a.entityId === 's-nieuw').map((a: any) => a.action)).toEqual(['Dienstruil aangevraagd']);
+    });
+  });
+
+  // 1-op-1 (tweede lezing 01-10): rechtstreeks afhandelen verplaatst beide
+  // benen, net als een goedkeuring.
+  for (const weg of ['PATCH', 'POST'] as const) {
+    it(`${weg}: een admin handelt een 1-op-1 rechtstreeks af: beide benen verhuizen, beslismoment en twee logregels`, async () => {
+      zaai('accepted', { swapType: 'ruil', returnDate: '2026-07-02', returnCode: '14' });
+      const res = await handelAf(weg, 'tok-admin');
+      expect(res.status).toBe(200);
+      expect(ruil().status).toBe('completed');
+      expect(ruil().decidedAt).toBe(KLOK_ISO);
+      // Dienst 12 van 08/07 naar B, dienst 14 van 02/07 naar A.
+      expect(eigenaar()).toBe('4');
+      expect(mem.planning.find((p: any) => p.id === 'sh-b')?.driverId).toBe('3');
+      expect(acties()).toEqual(['Dienstruil goedgekeurd', 'Dienstruil voltooid']);
+      const [goedgekeurd, voltooid] = mem.activity.filter((a: any) => a.entityId === 's-d');
+      expect(goedgekeurd.message).toContain('(accepted → approved)');
+      expect(goedgekeurd.message).toContain('dienst 12 op 08/07/2026: 1 rij(en) doorgevoerd; terugruil 14 op 02/07/2026: 1 rij(en) doorgevoerd');
+      expect(voltooid.message).toContain('(approved → completed)');
+      expect(mem.pushesSent.map((p) => [p.payload.title, [...p.userIds].sort()])).toEqual([['Dienstruil goedgekeurd', ['3', '4']]]);
+    });
+  }
+
+  it('de halve doorvoer blijft herkend: stond de wissel al in de rijen, dan handelt de admin af zonder tweede verplaatsing', async () => {
+    zaai('accepted');
+    mem.planning = mem.planning.map((p: any) => (p.id === 'sh-c' ? { ...p, driverId: '4' } : p));
+    const res = await handelAf('PATCH', 'tok-admin');
+    expect(res.status).toBe(200);
+    expect(ruil().status).toBe('completed');
+    expect(eigenaar()).toBe('4');
+    expect(mem.activity.find((a: any) => a.action === 'Dienstruil goedgekeurd')?.message).toContain('wissel stond al in de planning');
   });
 });
 
@@ -2713,15 +3202,15 @@ describe('push-notificaties', () => {
   });
 
   it('registreert en verwijdert een abonnement', async () => {
-    const sub = { endpoint: 'https://push.example/abc', keys: { p256dh: 'pk', auth: 'au' } };
+    const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'pk', auth: 'au' } };
     const res = await api('POST', '/api/push/subscribe', { token: 'tok-a', body: sub });
     expect(res.status).toBe(200);
-    expect(mem.pushSubscriptions).toEqual([{ userId: '3', endpoint: 'https://push.example/abc', p256dh: 'pk', auth: 'au' }]);
+    expect(mem.pushSubscriptions).toEqual([{ userId: '3', endpoint: 'https://fcm.googleapis.com/fcm/send/abc', p256dh: 'pk', auth: 'au' }]);
 
     const ongeldid = await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: '' } });
     expect(ongeldid.status).toBe(400);
 
-    const del = await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/abc' } });
+    const del = await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/abc' } });
     expect(del.status).toBe(200);
     expect(mem.pushSubscriptions).toHaveLength(0);
   });
@@ -2754,6 +3243,51 @@ describe('push-notificaties', () => {
     const validatiePush = mem.pushesSent.find((p) => p.payload.title === 'Dienstruil wacht op validatie');
     expect(validatiePush).toBeTruthy();
     expect(validatiePush!.userIds.sort()).toEqual(['1', '2']);
+  });
+});
+
+// Beveiligingsscan 01-10, keuze 10: een abonnement mag alleen naar een echte
+// pushdienst wijzen (api/_lib/pushBestemming.ts; de volledige tabel staat in
+// src/pushBestemming.test.ts). Vroeger passeerde elke publieke https-host.
+describe('push-abonnement: alleen naar een echte pushdienst (scan 01-10, keuze 10)', () => {
+  const abonneer = (endpoint: string) => api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint, keys: { p256dh: 'pk', auth: 'au' } } });
+
+  it.each([
+    'https://push.aanvaller.tld/geheim-pad',
+    'https://fcm.googleapis.com.aanvaller.tld/fcm/send/geheim-pad',
+    'https://evil-fcm.googleapis.com/fcm/send/geheim-pad',
+    'https://intern.vhb.example/geheim-pad',
+    'https://fcm.googleapis.com:8443/fcm/send/geheim-pad',
+    'https://gebruiker:wachtwoord@fcm.googleapis.com/fcm/send/geheim-pad',
+    'https://203.0.113.10/geheim-pad',
+  ])('weigert %s met 400 en bewaart niets', async (endpoint) => {
+    const stil = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const res = await abonneer(endpoint);
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Meldingen konden voor deze browser niet worden ingeschakeld. De pushdienst van deze browser wordt niet ondersteund.');
+      expect(mem.pushSubscriptions).toHaveLength(0);
+      // Het logboek krijgt de hostnaam, nooit het pad (het endpoint is een geheime URL).
+      const regels = stil.mock.calls.map((c) => c.join(' ')).filter((r) => r.includes('Push-abonnement geweigerd'));
+      expect(regels).toHaveLength(1);
+      expect(regels[0]).toContain(new URL(endpoint).hostname);
+      expect(regels[0]).not.toContain('geheim-pad');
+      expect(regels[0]).not.toContain('wachtwoord');
+    } finally {
+      stil.mockRestore();
+    }
+  });
+
+  it.each([
+    'https://fcm.googleapis.com/fcm/send/abc:DEF_-123',
+    'https://jmt17.google.com/fcm/send/abc',
+    'https://updates.push.services.mozilla.com/wpush/v2/gAAAAABabc',
+    'https://web.push.apple.com/QGuQyavXutnMH',
+    'https://wns2-par02p.notify.windows.com/w/?token=BQYAAAD%2bxyz%3d',
+  ])('laat %s door', async (endpoint) => {
+    const res = await abonneer(endpoint);
+    expect(res.status).toBe(200);
+    expect(mem.pushSubscriptions).toEqual([{ userId: '3', endpoint, p256dh: 'pk', auth: 'au' }]);
   });
 });
 
@@ -3291,14 +3825,14 @@ describe('concurrency & IDOR (middel-fixes)', () => {
   });
 
   it('push-unsubscribe verwijdert niet het abonnement van een ándere gebruiker (geen IDOR)', async () => {
-    await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/owned-by-3', keys: { p256dh: 'pk', auth: 'au' } } });
+    await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/owned-by-3', keys: { p256dh: 'pk', auth: 'au' } } });
     // Gebruiker 4 probeert het endpoint van gebruiker 3 af te melden → geen effect.
-    const idor = await api('POST', '/api/push/unsubscribe', { token: 'tok-b', body: { endpoint: 'https://push.example/owned-by-3' } });
+    const idor = await api('POST', '/api/push/unsubscribe', { token: 'tok-b', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/owned-by-3' } });
     expect(idor.status).toBe(200);
-    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://push.example/owned-by-3')).toBe(true);
+    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://fcm.googleapis.com/fcm/send/owned-by-3')).toBe(true);
     // De eigenaar zelf kan het wél afmelden.
-    await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/owned-by-3' } });
-    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://push.example/owned-by-3')).toBe(false);
+    await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/owned-by-3' } });
+    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://fcm.googleapis.com/fcm/send/owned-by-3')).toBe(false);
   });
 });
 
@@ -4189,6 +4723,66 @@ describe('planning-horizon (x-planning-tot)', () => {
   });
 });
 
+// Beveiligingsscan 01-10: deze route schreef de rijen ongezien weg, en een
+// tijd als "Infinity:00" liet daarna de agenda-feed van die chauffeur hangen.
+// De regel zelf (alle vormen) staat in src/planningTijden.test.ts.
+describe('handmatige planning-save: tijden (POST /api/planning)', () => {
+  const nieuweRij = (over: Record<string, unknown> = {}) => ({ id: 'sh-nieuw', driverId: '3', date: '2026-07-09', line: '4103', startTime: '05:11', endTime: '13:11', ...over });
+  let bewaard: any[] | null = null;
+  const spionnen: Array<{ mockRestore: () => void }> = [];
+  beforeEach(async () => {
+    bewaard = null;
+    // De mock kent geen planning-tabel; hier vangen we alleen op wat de route
+    // zou wegschrijven.
+    const storage = await import('../api/storage.js');
+    spionnen.push(vi.spyOn(storage, 'savePlanningData').mockImplementation(async (data: any) => { bewaard = data; }));
+  });
+  afterEach(() => { for (const spion of spionnen.splice(0)) spion.mockRestore(); });
+
+  it.each([
+    ['tok-admin', 'endTime', 'Infinity:00'],
+    ['tok-planner', 'startTime', '1e300:00'],
+    ['tok-admin', 'startTime', '99999999:00'],
+    ['tok-planner', 'endTime', '48:00'],
+    ['tok-admin', 'endTime', 800],
+  ])('%s: een nieuwe rij met %s = %s wordt geweigerd (400), er wordt niets geschreven', async (token, veld, tijd) => {
+    const res = await api('POST', '/api/planning', { token, body: [...mem.planning, nieuweRij({ [veld]: tijd })] });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe('Ongeldige tijd in de planning bij dienst 4103: gebruik uu:mm, van 00:00 tot en met 47:59.');
+    expect(bewaard).toBeNull();
+    expect(mem.activity.some((a: any) => a.action === 'Planning opgeslagen')).toBe(false);
+  });
+
+  it('geldige tijden (ook busvak-notatie tot 47:59) en rijen zonder tijden gaan door', async () => {
+    const body = [...mem.planning, nieuweRij(), nieuweRij({ id: 'sh-nacht', startTime: '15:41', endTime: '26:16' }), nieuweRij({ id: 'sh-laat', startTime: '24:00', endTime: '47:59' }), nieuweRij({ id: 'sh-leeg', startTime: '', endTime: '' })];
+    const res = await api('POST', '/api/planning', { token: 'tok-admin', body });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, count: body.length });
+    expect(bewaard).toEqual(body);
+  });
+
+  it('wat de debugpagina doet (de hele lijst met één testdienst erbij) blijft werken, ook met een oude rij die al zo opgeslagen staat', async () => {
+    mem.planning = [...mem.planning, { id: 'sh-oud', driverId: '4', date: '2026-07-03', line: '14', startTime: '08:00:00', endTime: '16:00:00' }];
+    const body = [...mem.planning, nieuweRij({ id: 'test-shift-1' })];
+    const res = await api('POST', '/api/planning', { token: 'tok-admin', body });
+    expect(res.status).toBe(200);
+    expect(bewaard).toEqual(body);
+    // Dezelfde oude rij met een andere foute tijd is een wijziging: geweigerd.
+    const gewijzigd = await api('POST', '/api/planning', { token: 'tok-admin', body: body.map((r: any) => (r.id === 'sh-oud' ? { ...r, endTime: '99:00' } : r)) });
+    expect(gewijzigd.status).toBe(400);
+  });
+
+  it('de lege lijst blijft de wis-actie van de admin, zonder tijdcontrole', async () => {
+    const storage = await import('../api/storage.js');
+    const wis = vi.spyOn(storage, 'clearPlanningData').mockImplementation(async () => undefined as never);
+    spionnen.push(wis);
+    const res = await api('POST', '/api/planning', { token: 'tok-admin', body: [] });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, count: 0 });
+    expect(wis).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('dienstnotities (planning_notes)', () => {
   it('planner plaatst een notitie; de chauffeur ziet alleen zijn eigen', async () => {
     const put = await api('PUT', '/api/planning-notes', { token: 'tok-planner', body: { driverId: '3', date: '2026-08-05', note: 'Neem bus 412' } });
@@ -4366,6 +4960,133 @@ describe('maandplanning, afwezigheidscodes zijn voor iedereen zichtbaar', () => 
       const res = await api('GET', '/api/month-planning?month=2026-07', { token });
       expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', label: 'Ziek' });
       expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: 'ziek', label: 'Ziek' });
+    }
+  });
+});
+
+describe('maandplanning, wie geen staf is kijkt niet verder terug dan de maandag van deze week (Jarno 02-10)', () => {
+  // Een chauffeur ziet de lopende week (ook de dagen die al voorbij zijn) en
+  // wat daarna komt, niet wat collega's vroeger reden. De server knipt, het
+  // scherm alleen volgt: een kale fetch op een oude maand mag niets teruggeven.
+  // Vrijdag 02/10/2026, 11:00 in Brussel: de grens is maandag 28/09, dus de
+  // week loopt over de maandgrens en september is de maand die ervoor begint
+  // en erna eindigt.
+  const DAGEN = ['2026-08-31', '2026-09-14', '2026-09-27', '2026-09-28', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-12', '2026-11-03'];
+  const NIET_STAF = [
+    ['chauffeur', 'tok-a'],
+    ['technieker', 'tok-tech'],
+    ['chauffeur met "Ook technieker"', 'tok-b'],
+  ] as const;
+  const STAF = [['planner', 'tok-planner'], ['admin', 'tok-admin']] as const;
+  const maand = (m: string, token: string) => api('GET', `/api/month-planning?month=${m}`, { token });
+  const dagenIn = (m: string) => DAGEN.filter((d) => d.startsWith(m));
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-10-02T09:00:00Z'));
+    mem.users = [
+      ...mem.users.map((u: any) => (u.id === '4' ? { ...u, ookTechnieker: true } : u)),
+      { id: '5', name: 'Toon Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true },
+    ];
+    // Een technieker valt onder dezelfde toestel-gate als een chauffeur.
+    mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    invalidateUsersCache();
+    mem.planningMatrix = DAGEN.map((dag, i) => ({
+      id: `m-${i}`, source_date: dag, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '',
+    }));
+    // Een doorgevoerde ruil en een ziekte van vóór de grens: ook die sporen
+    // (wie nam over, wie was ziek) horen bij het verleden.
+    mem.swaps = [{
+      id: 's-oud', shiftId: 'sh-oud', requesterId: '3', targetDriverId: '4', status: 'approved', reason: 'Ruil',
+      createdAt: '2026-09-10T08:00:00Z', decidedAt: '2026-09-11T08:00:00Z', shiftDate: '2026-09-14', shiftLine: '12', swapType: 'overname',
+    }];
+    mem.leave = [
+      { id: 'l-oud', userId: '4', startDate: '2026-09-27', endDate: '2026-09-27', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-09-27T05:00:00Z', decidedAt: '2026-09-27T05:00:00Z' },
+    ];
+    mem.planningCodes = [{ id: 'pc-ziek', code: 'ziek', description: 'Ziek', category: 'absence' }];
+  });
+
+  for (const [wie, token] of NIET_STAF) {
+    it(`${wie}: een maand die helemaal voorbij is geeft dezelfde vorm zonder dagen of cellen, geen fout`, async () => {
+      const res = await maand('2026-08', token);
+      expect(res.status).toBe(200);
+      expect(res.json.month).toBe('2026-08');
+      expect(res.json.dates).toEqual([]);
+      expect(res.json.cells).toEqual({});
+      expect(res.json.zichtbaarVanaf).toBe('2026-09-28');
+      // De lijst chauffeurs zegt niets over wie wanneer reed en blijft.
+      expect(res.json.drivers.map((d: any) => d.id)).toEqual(['3', '4']);
+    });
+
+    it(`${wie}: de maand waarin de grens valt begint op de maandag van deze week`, async () => {
+      const res = await maand('2026-09', token);
+      expect(res.status).toBe(200);
+      expect(res.json.dates).toEqual(['2026-09-28', '2026-09-30']);
+      for (const id of ['3', '4']) expect(Object.keys(res.json.cells[id]).sort()).toEqual(['2026-09-28', '2026-09-30']);
+      // Niets van vóór de grens in het hele antwoord: geen dag, geen cel,
+      // geen spoor van de ruil van 14/09 of de ziekte van 27/09.
+      const alles = JSON.stringify(res.json);
+      for (const oud of ['2026-09-14', '2026-09-27', 's-oud', 'ziek']) expect(alles).not.toContain(oud);
+    });
+
+    it(`${wie}: de lopende week blijft volledig, ook de dagen die al voorbij zijn, en de toekomst ook`, async () => {
+      const okt = await maand('2026-10', token);
+      // Donderdag 01/10 is voorbij maar hoort bij de lopende week.
+      expect(okt.json.dates).toEqual(['2026-10-01', '2026-10-02', '2026-10-12']);
+      expect(okt.json.cells['4']['2026-10-01']).toMatchObject({ code: '14', kind: 'service' });
+      const nov = await maand('2026-11', token);
+      expect(nov.json.dates).toEqual(['2026-11-03']);
+      expect(nov.json.cells['3']['2026-11-03']).toMatchObject({ code: '12' });
+      expect(nov.json.zichtbaarVanaf).toBe('2026-09-28');
+    });
+
+    it(`${wie}: het begin van de import ligt op de grens, zodat het bord daar stopt met bladeren`, async () => {
+      for (const m of ['2026-08', '2026-09', '2026-10']) {
+        expect((await maand(m, token)).json.geimporteerd).toEqual({ eerste: '2026-09-28', laatste: '2026-11-03' });
+      }
+    });
+  }
+
+  for (const [wie, token] of STAF) {
+    it(`${wie} ziet alles zoals voorheen, zonder grens in het antwoord`, async () => {
+      for (const m of ['2026-08', '2026-09', '2026-10', '2026-11']) {
+        const res = await maand(m, token);
+        expect(res.status).toBe(200);
+        expect(res.json.dates).toEqual(dagenIn(m));
+        expect(res.json).not.toHaveProperty('zichtbaarVanaf');
+        expect(res.json.geimporteerd).toEqual({ eerste: '2026-08-31', laatste: '2026-11-03' });
+        expect(Object.keys(res.json).sort()).toEqual(['cells', 'dates', 'drivers', 'geimporteerd', 'month']);
+      }
+      const sep = await maand('2026-09', token);
+      // De ruil van 14/09 en de ziekte van 27/09 staan er voor staf gewoon in.
+      expect(sep.json.cells['4']['2026-09-14']).toMatchObject({ code: '12', swapId: 's-oud', swapFrom: 'Chauffeur A' });
+      expect(sep.json.cells['4']['2026-09-27']).toMatchObject({ code: 'ziek', hiddenService: '14' });
+    });
+  }
+
+  it('de week wisselt om middernacht in Brussel: zondagavond telt de voorbije week nog, maandag 00:30 niet meer', async () => {
+    // Zondag 04/10, 23:30 in Brussel.
+    vi.setSystemTime(new Date('2026-10-04T21:30:00Z'));
+    const zondag = await maand('2026-10', 'tok-a');
+    expect(zondag.json.zichtbaarVanaf).toBe('2026-09-28');
+    expect(zondag.json.dates).toEqual(['2026-10-01', '2026-10-02', '2026-10-12']);
+    // Maandag 05/10, 00:30 in Brussel; de klok van de server (UTC) staat nog op zondag.
+    vi.setSystemTime(new Date('2026-10-04T22:30:00Z'));
+    const maandag = await maand('2026-10', 'tok-a');
+    expect(maandag.json.zichtbaarVanaf).toBe('2026-10-05');
+    expect(maandag.json.dates).toEqual(['2026-10-12']);
+    expect(maandag.json.geimporteerd.eerste).toBe('2026-10-05');
+    expect(JSON.stringify(maandag.json.cells)).not.toContain('2026-10-02');
+    // September is nu helemaal voorbij.
+    expect((await maand('2026-09', 'tok-a')).json).toMatchObject({ dates: [], cells: {} });
+  });
+
+  it('de twee staf-formaten blijven dicht voor wie geen staf is', async () => {
+    for (const [, token] of NIET_STAF) {
+      for (const formaat of ['summary', 'xlsx']) {
+        const res = await api('GET', `/api/month-planning?month=2026-09&format=${formaat}`, { token });
+        expect(res.status).toBe(403);
+        expect(JSON.stringify(res.json)).not.toContain('2026-09');
+      }
     }
   });
 });
@@ -4834,6 +5555,216 @@ describe('dienstruil, terugdraaien, bevriezen en tegenprestatie-validatie', () =
     const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, geldig] });
     expect(res.status).toBe(200);
     expect(mem.swaps.find((s: any) => s.id === 's-ok')).toBeTruthy();
+  });
+});
+
+// Scan 01-10, punt 1. 'rejected' is twee dingen: de planner die afwijst, en de
+// aangezochte collega die op Weigeren tikt. Het herstel van een halve doorvoer
+// ("staat de dienst al bij de collega, zet ze dan terug") keek alleen naar de
+// planning, niet naar wie besliste. Had de planner de collega intussen zelf op
+// de dienst gezet via de Excel, dan schoof de weigering van die collega de
+// dienst stil terug naar de aanvrager, tegen de Excel in.
+describe('dienstruil: een weigering of afwijzing zet de planning niet terug tegen de Excel in (01-10)', () => {
+  const DAG = '2026-07-08';
+  const TERUGDAG = '2026-07-02';
+  // A (3) vraagt B (4) om dienst 12 van 08/07 over te nemen.
+  const overname = (extra: Record<string, unknown> = {}) => ({
+    id: 's-o', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '',
+    createdAt: '2026-06-12T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '12', ...extra,
+  });
+  // 1-op-1: dienst 12 van 08/07 naar B, dienst 14 van 02/07 naar A.
+  const ruil = (extra: Record<string, unknown> = {}) => ({
+    id: 's-r', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '',
+    createdAt: '2026-06-12T08:00:00Z', swapType: 'ruil', shiftDate: DAG, shiftLine: '12', returnDate: TERUGDAG, returnCode: '14', ...extra,
+  });
+  const matrixRij = (dag: string, a: string, b: string) => ({ id: `m-${dag}`, source_date: dag, day_type: 'week', assignments: { 'Chauffeur A': a, 'Chauffeur B': b }, raw_row: '' });
+  /** De planner verwerkte de overname al in de Excel: matrix en rijen geven
+   *  dienst 12 aan B. De rij draagt het id dat de opbouw haar dan geeft. */
+  const excelGeeftDienstAanCollega = () => {
+    mem.planningMatrix = [matrixRij(DAG, 'vrij', '12')];
+    mem.planning = [{ id: `${DAG}-4-12-1`, driverId: '4', date: DAG, line: '12' }];
+  };
+  const rijdt = (dag: string, line: string) => [...new Set(mem.planning.filter((p: any) => p.date === dag && String(p.line) === line).map((p: any) => String(p.driverId)))];
+  const logVan = (id: string, actie: string) => mem.activity.filter((a: any) => a.entityId === id && a.action === actie);
+
+  describe('de aangezochte collega weigert', () => {
+    it('PATCH: de dienst die de Excel hem al gaf blijft bij hem, de planning wordt niet gelezen', async () => {
+      excelGeeftDienstAanCollega();
+      mem.swaps = [overname()];
+      const res = await api('PATCH', '/api/swaps/s-o', { token: 'tok-b', body: { status: 'rejected', ifStatus: 'pending' } });
+      expect(res.status).toBe(200);
+      expect(mem.swaps[0].status).toBe('rejected');
+      expect(rijdt(DAG, '12')).toEqual(['4']);
+      expect(mem.planningToestandLezingen).toBe(0);
+      expect(logVan('s-o', 'Dienstruil afgewezen')[0].message).not.toMatch(/teruggedraaid/);
+    });
+
+    it('lijst (POST): idem', async () => {
+      excelGeeftDienstAanCollega();
+      mem.swaps = [overname()];
+      const res = await api('POST', '/api/swaps', { token: 'tok-b', body: [{ ...overname(), status: 'rejected' }] });
+      expect(res.status).toBe(200);
+      expect(mem.swaps[0].status).toBe('rejected');
+      expect(rijdt(DAG, '12')).toEqual(['4']);
+      expect(mem.planningToestandLezingen).toBe(0);
+      expect(logVan('s-o', 'Dienstruil afgewezen')[0].message).not.toMatch(/teruggedraaid/);
+    });
+
+    it('ook als de Excel de dienst nog bij de aanvrager toont (kruisende ruil, halve doorvoer): een chauffeur verplaatst niets', async () => {
+      // Matrix uit de fixture: A rijdt 12, B staat op bv. De rijen zeggen B.
+      mem.planning = [{ id: 'sh-c', driverId: '4', date: DAG, line: '12' }];
+      for (const weg of ['PATCH', 'POST'] as const) {
+        mem.swaps = [overname()];
+        const res = weg === 'PATCH'
+          ? await api('PATCH', '/api/swaps/s-o', { token: 'tok-b', body: { status: 'rejected', ifStatus: 'pending' } })
+          : await api('POST', '/api/swaps', { token: 'tok-b', body: [{ ...overname(), status: 'rejected' }] });
+        expect(res.status).toBe(200);
+        expect(mem.swaps[0].status).toBe('rejected');
+        expect(rijdt(DAG, '12')).toEqual(['4']);
+      }
+      expect(mem.planningToestandLezingen).toBe(0);
+    });
+
+    it('1-op-1 met beide benen al gewisseld: geen van beide gaat terug', async () => {
+      mem.planning = [
+        { id: 'sh-c', driverId: '4', date: DAG, line: '12' },
+        { id: 'sh-b', driverId: '3', date: TERUGDAG, line: '14' },
+      ];
+      mem.swaps = [ruil({ status: 'pending' })];
+      const res = await api('PATCH', '/api/swaps/s-r', { token: 'tok-b', body: { status: 'rejected', ifStatus: 'pending' } });
+      expect(res.status).toBe(200);
+      expect(rijdt(DAG, '12')).toEqual(['4']);
+      expect(rijdt(TERUGDAG, '14')).toEqual(['3']);
+    });
+
+    it('de aanvrager die intrekt raakt de planning evenmin', async () => {
+      excelGeeftDienstAanCollega();
+      mem.swaps = [overname({ status: 'accepted' })];
+      const res = await api('PATCH', '/api/swaps/s-o', { token: 'tok-a', body: { status: 'cancelled', ifStatus: 'accepted' } });
+      expect(res.status).toBe(200);
+      expect(rijdt(DAG, '12')).toEqual(['4']);
+      expect(mem.planningToestandLezingen).toBe(0);
+    });
+  });
+
+  // De planner die afwijst mag een halve doorvoer nog steeds terugzetten, maar
+  // niet wat de Excel (of een andere doorgevoerde ruil) zelf al zo toont. Het
+  // bord onderscheidt de twee, been per been.
+  describe('de planner wijst af', () => {
+    const wijsAf = (weg: 'PATCH' | 'POST', swap: any) => (weg === 'PATCH'
+      ? api('PATCH', `/api/swaps/${swap.id}`, { token: 'tok-planner', body: { status: 'rejected', ifStatus: swap.status } })
+      : api('POST', '/api/swaps', { token: 'tok-planner', body: mem.swaps.map((s: any) => (s.id === swap.id ? { ...s, status: 'rejected' } : s)) }));
+
+    for (const weg of ['PATCH', 'POST'] as const) {
+      it(`${weg}: wat de Excel al aan de collega gaf, gaat niet terug, en het log zegt waarom`, async () => {
+        excelGeeftDienstAanCollega();
+        const swap = overname({ status: 'accepted' });
+        mem.swaps = [swap];
+        const res = await wijsAf(weg, swap);
+        expect(res.status).toBe(200);
+        expect(mem.swaps[0].status).toBe('rejected');
+        expect(rijdt(DAG, '12')).toEqual(['4']);
+        expect(logVan('s-o', 'Dienstruil afgewezen')[0].message).toContain('Planning niet teruggedraaid');
+      });
+
+      it(`${weg}: een halve doorvoer (de Excel toont de dienst nog bij de aanvrager) gaat wel terug`, async () => {
+        // Matrix uit de fixture: A rijdt 12, B staat op bv.
+        mem.planning = [{ id: 'sh-c', driverId: '4', date: DAG, line: '12' }];
+        const swap = overname({ status: 'accepted' });
+        mem.swaps = [swap];
+        const res = await wijsAf(weg, swap);
+        expect(res.status).toBe(200);
+        expect(rijdt(DAG, '12')).toEqual(['3']);
+        expect(logVan('s-o', 'Dienstruil afgewezen')[0].message).toContain('1 rij(en) teruggedraaid');
+      });
+
+      it(`${weg}: een andere doorgevoerde ruil zette de dienst bij de collega, die gaat niet terug`, async () => {
+        // De Excel kent geen van beide ruilen; het bord legt de goedgekeurde erover.
+        mem.planningMatrix = [matrixRij(DAG, '12', 'vrij')];
+        mem.planning = [{ id: 'sh-c', driverId: '4', date: DAG, line: '12' }];
+        const swap = overname({ status: 'accepted' });
+        mem.swaps = [
+          swap,
+          { id: 's-eerder', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'approved', reason: '', createdAt: '2026-06-10T08:00:00Z', decidedAt: '2026-06-11T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '12' },
+        ];
+        const res = await wijsAf(weg, swap);
+        expect(res.status).toBe(200);
+        expect(rijdt(DAG, '12')).toEqual(['4']);
+      });
+
+      it(`${weg}: 1-op-1, de Excel toont alleen de aangeboden dienst al bij de collega: alleen de terugdienst gaat terug`, async () => {
+        mem.planningMatrix = [matrixRij(DAG, 'vrij', '12'), matrixRij(TERUGDAG, 'vrij', '14')];
+        mem.planning = [
+          { id: `${DAG}-4-12-1`, driverId: '4', date: DAG, line: '12' },
+          { id: 'sh-b', driverId: '3', date: TERUGDAG, line: '14' },
+        ];
+        const swap = ruil();
+        mem.swaps = [swap];
+        const res = await wijsAf(weg, swap);
+        expect(res.status).toBe(200);
+        expect(rijdt(DAG, '12')).toEqual(['4']);
+        expect(rijdt(TERUGDAG, '14')).toEqual(['4']);
+        const regel = logVan('s-r', 'Dienstruil afgewezen')[0].message;
+        expect(regel).toContain('terugruil 14 op 02/07/2026: 1 rij(en) teruggedraaid');
+        expect(regel).toContain('Niet teruggedraaid: dienst 12 op 08/07/2026');
+      });
+
+      it(`${weg}: 1-op-1, de Excel toont alleen de terugdienst al bij de aanvrager: alleen de aangeboden dienst gaat terug`, async () => {
+        mem.planningMatrix = [matrixRij(DAG, '12', 'vrij'), matrixRij(TERUGDAG, '14', 'vrij')];
+        mem.planning = [
+          { id: 'sh-c', driverId: '4', date: DAG, line: '12' },
+          { id: `${TERUGDAG}-3-14-1`, driverId: '3', date: TERUGDAG, line: '14' },
+        ];
+        const swap = ruil();
+        mem.swaps = [swap];
+        const res = await wijsAf(weg, swap);
+        expect(res.status).toBe(200);
+        expect(rijdt(DAG, '12')).toEqual(['3']);
+        expect(rijdt(TERUGDAG, '14')).toEqual(['3']);
+      });
+
+      it(`${weg}: 1-op-1 die de Excel helemaal al toont: niets gaat terug`, async () => {
+        mem.planningMatrix = [matrixRij(DAG, 'vrij', '12'), matrixRij(TERUGDAG, '14', 'vrij')];
+        mem.planning = [
+          { id: `${DAG}-4-12-1`, driverId: '4', date: DAG, line: '12' },
+          { id: `${TERUGDAG}-3-14-1`, driverId: '3', date: TERUGDAG, line: '14' },
+        ];
+        const swap = ruil();
+        mem.swaps = [swap];
+        const res = await wijsAf(weg, swap);
+        expect(res.status).toBe(200);
+        expect(rijdt(DAG, '12')).toEqual(['4']);
+        expect(rijdt(TERUGDAG, '14')).toEqual(['3']);
+      });
+    }
+
+    it('een goedgekeurde ruil afwijzen draait altijd terug, wat de Excel ook toont', async () => {
+      excelGeeftDienstAanCollega();
+      const swap = overname({ status: 'approved', decidedAt: '2026-06-13T08:00:00Z' });
+      mem.swaps = [swap];
+      const res = await wijsAf('PATCH', swap);
+      expect(res.status).toBe(200);
+      expect(rijdt(DAG, '12')).toEqual(['3']);
+    });
+
+    it('lijst: meer dan één afwijzing leest dienstoverzicht en planningscodes samen één keer', async () => {
+      excelGeeftDienstAanCollega();
+      mem.planning.push({ id: `2026-07-01-4-12-1`, driverId: '4', date: '2026-07-01', line: '12' });
+      mem.planningMatrix.push(matrixRij('2026-07-01', 'vrij', '12'));
+      mem.swaps = [
+        overname({ status: 'accepted' }),
+        overname({ id: 's-o2', shiftId: 'sh-a', status: 'accepted', shiftDate: '2026-07-01' }),
+      ];
+      mem.servicesLezingen = 0;
+      mem.codesLezingen = 0;
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: mem.swaps.map((s: any) => ({ ...s, status: 'rejected' })) });
+      expect(res.status).toBe(200);
+      expect(mem.swaps.map((s: any) => s.status)).toEqual(['rejected', 'rejected']);
+      expect(rijdt(DAG, '12')).toEqual(['4']);
+      expect(rijdt('2026-07-01', '12')).toEqual(['4']);
+      expect(mem.servicesLezingen).toBe(1);
+      expect(mem.codesLezingen).toBe(1);
+    });
   });
 });
 
@@ -6740,6 +7671,519 @@ describe('dienstruil, concurrency-vangnet bij goedkeuren', () => {
   });
 });
 
+// Tweede lezing 01-10. Bij een 1-op-1 weigerde de doorvoer terecht (409) als de
+// aangeboden dienst geen rij verplaatste, maar de terugdienst was dan al naar
+// de aanvrager verhuisd en bleef daar: status nog 'accepted', geen logregel,
+// en afwijzen draaide niets terug omdat de planning als "onbekend" las. De
+// doorvoer loopt nu been per been en raakt de terugdienst niet aan als de
+// aangeboden dienst niet verhuisde.
+describe('dienstruil: een geweigerde doorvoer laat de terugdienst waar ze stond (01-10)', () => {
+  const DAG = '2026-07-08';
+  const TERUGDAG = '2026-07-02';
+  // A (3) ruilt dienst 12 van 08/07 tegen dienst 14 van B (4) op 02/07. De rij
+  // van dienst 12 is intussen aan een derde chauffeur gegeven: een nieuwe rij
+  // met een nieuw id (zo doet de opbouw dat), dus de controle op de rij-id
+  // ziet niets en het vangnet bij de doorvoer moet het opvangen.
+  beforeEach(() => {
+    mem.planning = [
+      { id: `${DAG}-9-12-1`, driverId: '9', date: DAG, line: '12' },
+      { id: 'sh-b', driverId: '4', date: TERUGDAG, line: '14' },
+    ];
+    mem.swaps = [{
+      id: 's-half', shiftId: 'sh-weg', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '',
+      createdAt: '2026-06-12T08:00:00Z', swapType: 'ruil', shiftDate: DAG, shiftLine: '12', returnDate: TERUGDAG, returnCode: '14',
+    }];
+  });
+  const beslis = (weg: 'PATCH' | 'POST', token: string, status: string) => (weg === 'PATCH'
+    ? api('PATCH', '/api/swaps/s-half', { token, body: { status, ifStatus: 'accepted' } })
+    : api('POST', '/api/swaps', { token, body: mem.swaps.map((s: any) => ({ ...s, status })) }));
+
+  for (const weg of ['PATCH', 'POST'] as const) {
+    for (const [wie, token, status] of [['de planner keurt goed', 'tok-planner', 'approved'], ['de admin handelt rechtstreeks af', 'tok-admin', 'completed']] as const) {
+      it(`${weg}, ${wie}: 409 en elke rij in de planning staat precies zoals ervoor`, async () => {
+        const voor = JSON.stringify(mem.planning);
+        const res = await beslis(weg, token, status);
+        expect(res.status).toBe(409);
+        expect(String(res.json?.error)).toBe('De planning is intussen gewijzigd, de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw.');
+        expect(JSON.stringify(mem.planning)).toBe(voor);
+        expect(mem.swaps[0].status).toBe('accepted');
+        expect(mem.swaps[0].decidedAt).toBeUndefined();
+        expect(mem.activity.filter((a: any) => a.entityId === 's-half')).toEqual([]);
+        expect(mem.pushesSent).toEqual([]);
+        // Een tweede poging geeft hetzelfde eerlijke antwoord, geen "herstel".
+        const opnieuw = await beslis(weg, token, status);
+        expect(opnieuw.status).toBe(409);
+        expect(JSON.stringify(mem.planning)).toBe(voor);
+        expect(mem.swaps[0].status).toBe('accepted');
+      });
+    }
+  }
+
+  it('afwijzen na de geweigerde doorvoer: de ruil gaat dicht en de planning is nog altijd onaangeroerd', async () => {
+    const voor = JSON.stringify(mem.planning);
+    expect((await beslis('PATCH', 'tok-planner', 'approved')).status).toBe(409);
+    const af = await beslis('PATCH', 'tok-planner', 'rejected');
+    expect(af.status).toBe(200);
+    expect(mem.swaps[0].status).toBe('rejected');
+    expect(JSON.stringify(mem.planning)).toBe(voor);
+  });
+
+  it('het gewone geval blijft: staat de aangeboden dienst bij de aanvrager, dan verhuizen beide benen', async () => {
+    mem.planning[0] = { id: 'sh-weg', driverId: '3', date: DAG, line: '12' };
+    const res = await beslis('PATCH', 'tok-planner', 'approved');
+    expect(res.status).toBe(200);
+    expect(mem.planning.map((p: any) => p.driverId)).toEqual(['4', '3']);
+    expect(mem.activity.find((a: any) => a.entityId === 's-half')?.message).toContain('dienst 12 op 08/07/2026: 1 rij(en) doorgevoerd; terugruil 14 op 02/07/2026: 1 rij(en) doorgevoerd');
+  });
+
+  it('de terugdienst die de planning niet (meer) kent blijft een waarschuwing in het log, geen weigering', async () => {
+    mem.planning = [{ id: 'sh-weg', driverId: '3', date: DAG, line: '12' }];
+    const res = await beslis('PATCH', 'tok-planner', 'approved');
+    expect(res.status).toBe(200);
+    expect(mem.planning[0].driverId).toBe('4');
+    expect(mem.activity.find((a: any) => a.entityId === 's-half')?.message).toContain('LET OP: terugruil 14 op 02/07/2026 niet gevonden');
+  });
+});
+
+// Scan 01-10, punt 11 (Jarno: "belangrijk"). Beide ruilroutes controleerden op
+// een momentopname, verplaatsten (bij goedkeuren) de planning en schreven dan
+// de hele rij met een onvoorwaardelijke upsert. Twee verzoeken die elkaar
+// kruisten konden eindigen op 'cancelled' met een verplaatste dienst, of op
+// 'completed' met een teruggedraaide planning: een eindstatus, niet te
+// herstellen vanuit het scherm.
+//
+// Hier landt het tweede verzoek echt in het venster van het eerste: de haak
+// `mem.voorSwapStatusWissel` loopt vlak vóór de voorwaardelijke schrijfactie
+// van het eerste verzoek, dus ná zijn lezing, zijn controles en zijn
+// planning-doorvoer. Beide verzoeken gaan door de echte handlers.
+describe('dienstruil: twee beslissingen op hetzelfde moment overschrijven elkaar niet (01-10)', () => {
+  const DAG = '2026-07-08';
+  const TERUGDAG = '2026-07-02';
+  // A (3) geeft dienst 12 van 08/07 (sh-c) aan B (4), die dag op bv.
+  const overname = (status: string, extra: Record<string, unknown> = {}) => ({
+    id: 's-c', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status, reason: '',
+    createdAt: '2026-06-12T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '12', ...extra,
+  });
+  const ruil = () => mem.swaps.find((s: any) => s.id === 's-c')!;
+  const eigenaar = (id = 'sh-c') => mem.planning.find((p: any) => p.id === id)?.driverId;
+  const acties = (id = 's-c') => mem.activity.filter((a: any) => a.entityId === id).map((a: any) => a.action);
+  const patch = (token: string, status: string, ifStatus: string, id = 's-c') =>
+    api('PATCH', `/api/swaps/${id}`, { token, body: { status, ifStatus } });
+  /** Laat `tweede` landen in het venster van het eerstvolgende verzoek. */
+  const inHetVenster = (tweede: () => Promise<{ status: number; json: any }>) => {
+    const uit: { res?: { status: number; json: any } } = {};
+    mem.voorSwapStatusWissel = async () => { uit.res = await tweede(); };
+    return uit;
+  };
+  const naarB = () => { mem.planning = mem.planning.map((p: any) => (p.id === 'sh-c' ? { ...p, driverId: '4' } : p)); };
+
+  describe('de aanvrager trekt in terwijl de planner goedkeurt', () => {
+    it('de intrekking landt eerst: de planner krijgt 409, de dienst staat weer bij de aanvrager', async () => {
+      mem.swaps = [overname('accepted')];
+      const tweede = inHetVenster(() => patch('tok-a', 'cancelled', 'accepted'));
+      const res = await patch('tok-planner', 'approved', 'accepted');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('cancelled');
+      expect(String(res.json.error)).toBe("Deze ruil is intussen al 'cancelled', de lijst is ververst.");
+      expect(ruil().status).toBe('cancelled');
+      expect(eigenaar()).toBe('3');
+      // De verliezer logt en meldt niets: er is niets goedgekeurd.
+      expect(acties()).toEqual(['Dienstruil geannuleerd']);
+      expect(mem.pushesSent.map((p) => p.payload.title)).toEqual(['Dienstruil geannuleerd']);
+    });
+
+    it('de goedkeuring landt eerst: de aanvrager krijgt 409, de dienst staat bij de collega', async () => {
+      mem.swaps = [overname('accepted')];
+      const tweede = inHetVenster(() => patch('tok-planner', 'approved', 'accepted'));
+      const res = await patch('tok-a', 'cancelled', 'accepted');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('approved');
+      expect(ruil().status).toBe('approved');
+      expect(eigenaar()).toBe('4');
+      expect(acties()).toEqual(['Dienstruil goedgekeurd']);
+    });
+
+    it('1-op-1: beide benen die de planner verplaatste gaan terug', async () => {
+      mem.swaps = [overname('accepted', { swapType: 'ruil', returnDate: TERUGDAG, returnCode: '14' })];
+      const tweede = inHetVenster(() => patch('tok-a', 'cancelled', 'accepted'));
+      const res = await patch('tok-planner', 'approved', 'accepted');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(ruil().status).toBe('cancelled');
+      expect(eigenaar('sh-c')).toBe('3');
+      expect(eigenaar('sh-b')).toBe('4');
+    });
+
+    it('de aanvrager trekt in via de lijst (verwijderen): de planner krijgt 404, de dienst staat weer bij de aanvrager', async () => {
+      mem.swaps = [overname('pending')];
+      const tweede = inHetVenster(() => api('POST', '/api/swaps', { token: 'tok-a', body: [] }));
+      const res = await patch('tok-admin', 'approved', 'pending');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(404);
+      expect(mem.swaps).toEqual([]);
+      expect(eigenaar()).toBe('3');
+    });
+  });
+
+  describe('de collega weigert terwijl een admin zonder zijn antwoord goedkeurt', () => {
+    it('de weigering landt eerst: de admin krijgt 409, de dienst staat weer bij de aanvrager', async () => {
+      mem.swaps = [overname('pending')];
+      const tweede = inHetVenster(() => patch('tok-b', 'rejected', 'pending'));
+      const res = await patch('tok-admin', 'approved', 'pending');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('rejected');
+      expect(ruil().status).toBe('rejected');
+      expect(eigenaar()).toBe('3');
+      expect(acties()).toEqual(['Dienstruil afgewezen']);
+    });
+
+    it('de goedkeuring landt eerst: de collega krijgt 409 en zijn weigering zet niets terug', async () => {
+      mem.swaps = [overname('pending')];
+      const tweede = inHetVenster(() => patch('tok-admin', 'approved', 'pending'));
+      const res = await patch('tok-b', 'rejected', 'pending');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('approved');
+      expect(ruil().status).toBe('approved');
+      expect(eigenaar()).toBe('4');
+    });
+
+    it('zelfde kruising met de rechtstreekse afhandeling van een admin', async () => {
+      mem.swaps = [overname('pending')];
+      const tweede = inHetVenster(() => patch('tok-b', 'rejected', 'pending'));
+      const res = await patch('tok-admin', 'completed', 'pending');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(ruil().status).toBe('rejected');
+      expect(eigenaar()).toBe('3');
+      expect(acties()).toEqual(['Dienstruil afgewezen']);
+    });
+  });
+
+  describe('afhandelen terwijl een ander annuleert', () => {
+    const goedgekeurd = () => { mem.swaps = [overname('approved', { decidedAt: '2026-06-13T08:00:00Z' })]; naarB(); };
+
+    it('de afhandeling landt eerst: de annulering krijgt 409 en wat ze terugdraaide staat weer bij de collega', async () => {
+      goedgekeurd();
+      const tweede = inHetVenster(() => patch('tok-admin', 'completed', 'approved'));
+      const res = await patch('tok-planner', 'cancelled', 'approved');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('completed');
+      expect(ruil().status).toBe('completed');
+      expect(ruil().decidedAt).toBe('2026-06-13T08:00:00Z');
+      expect(eigenaar()).toBe('4');
+      expect(acties()).toEqual(['Dienstruil voltooid']);
+    });
+
+    it('de annulering landt eerst: de afhandeling krijgt 409, de dienst staat weer bij de aanvrager', async () => {
+      goedgekeurd();
+      const tweede = inHetVenster(() => patch('tok-planner', 'cancelled', 'approved'));
+      const res = await patch('tok-admin', 'completed', 'approved');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('cancelled');
+      expect(ruil().status).toBe('cancelled');
+      expect(eigenaar()).toBe('3');
+      expect(acties()).toEqual(['Dienstruil geannuleerd']);
+    });
+
+    it('twee annuleringen tegelijk: één wint, de dienst gaat één keer terug', async () => {
+      goedgekeurd();
+      const tweede = inHetVenster(() => patch('tok-admin', 'cancelled', 'approved'));
+      const res = await patch('tok-planner', 'cancelled', 'approved');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(ruil().status).toBe('cancelled');
+      expect(eigenaar()).toBe('3');
+      expect(acties()).toEqual(['Dienstruil geannuleerd']);
+    });
+  });
+
+  describe('de planning volgt de werkelijke status, niet de verliezer', () => {
+    it('twee goedkeuringen tegelijk: de tweede herkent de doorvoer van de eerste, de verliezer laat ze staan', async () => {
+      // De admin leest de rijen ná de doorvoer van de planner, ziet de wissel
+      // al staan en schrijft 'approved'. De planner verliest daarna, maar zijn
+      // verplaatsing is precies wat bij 'approved' hoort.
+      mem.swaps = [overname('accepted')];
+      const tweede = inHetVenster(() => patch('tok-admin', 'approved', 'accepted'));
+      const res = await patch('tok-planner', 'approved', 'accepted');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('approved');
+      expect(ruil().status).toBe('approved');
+      expect(eigenaar()).toBe('4');
+      expect(acties()).toEqual(['Dienstruil goedgekeurd']);
+    });
+
+    it('de planner wijst af terwijl een goedkeuring loopt: wie ook wint, status en planning kloppen', async () => {
+      // De afwijzing ziet de rijen al bij de collega (de lopende goedkeuring),
+      // het bord niet: ze draait terug en schrijft 'rejected'. De goedkeuring
+      // verliest en vindt niets meer om terug te zetten.
+      mem.swaps = [overname('accepted')];
+      const tweede = inHetVenster(() => patch('tok-planner', 'rejected', 'accepted'));
+      const res = await patch('tok-admin', 'approved', 'accepted');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(ruil().status).toBe('rejected');
+      expect(eigenaar()).toBe('3');
+    });
+
+    it('de afwijzing van een halve doorvoer verliest van een goedkeuring: de dienst staat bij de collega', async () => {
+      // De rijen staan al bij de collega (halve doorvoer). De planner wijst af
+      // en zet ze terug; in zijn venster keurt de admin goed, mét doorvoer.
+      mem.swaps = [overname('accepted')];
+      naarB();
+      const tweede = inHetVenster(() => patch('tok-admin', 'approved', 'accepted'));
+      const res = await patch('tok-planner', 'rejected', 'accepted');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('approved');
+      expect(ruil().status).toBe('approved');
+      expect(eigenaar()).toBe('4');
+      expect(acties()).toEqual(['Dienstruil goedgekeurd']);
+    });
+
+    it('de bevestiging van de nieuwe rijder die tijdens het afhandelen binnenkomt blijft staan', async () => {
+      mem.swaps = [overname('approved', { decidedAt: '2026-06-13T08:00:00Z' })];
+      naarB();
+      const tweede = inHetVenster(() => api('POST', '/api/swaps/s-c/gezien', { token: 'tok-b' }));
+      const res = await patch('tok-planner', 'completed', 'approved');
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(200);
+      expect(ruil().status).toBe('completed');
+      expect(ruil().targetSeenAt).toBeTruthy();
+    });
+  });
+
+  describe('het rechtzetten zelf mislukt', () => {
+    it('gaat nooit stil voorbij: logregel, serverlog en een melding die zegt wat na te kijken', async () => {
+      const fout = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        mem.swaps = [overname('accepted')];
+        const tweede = inHetVenster(async () => {
+          const uit = await patch('tok-a', 'cancelled', 'accepted');
+          mem.planningVerplaatsenFaalt = 'terugdraaien';
+          return uit;
+        });
+        const res = await patch('tok-planner', 'approved', 'accepted');
+        expect(tweede.res?.status).toBe(200);
+        expect(res.status).toBe(409);
+        expect(String(res.json.error)).toBe('Deze ruil is intussen door iemand anders beslist, en de planning kon daarna niet rechtgezet worden. Controleer dienst 12 op 08/07/2026 in de planning en zet ze zo nodig handmatig recht.');
+        expect(String(res.json.error).length).toBeLessThan(240);
+        // De rij is niet overschreven; de planning staat (aantoonbaar) nog scheef.
+        expect(ruil().status).toBe('cancelled');
+        expect(eigenaar()).toBe('4');
+        const regel = mem.activity.find((a: any) => a.action === 'Planning niet rechtgezet na dienstruil');
+        expect(regel?.entityId).toBe('s-c');
+        expect(regel?.message).toContain('Controleer de planning van die dag handmatig');
+        expect(fout.mock.calls.some((c) => String(c[0]).includes('LET OP, dienstruil s-c'))).toBe(true);
+        expect(acties()).not.toContain('Dienstruil goedgekeurd');
+      } finally {
+        fout.mockRestore();
+      }
+    });
+  });
+
+  describe('het rechtzetten mislukt op een andere plek', () => {
+    const NIET_RECHTGEZET = 'Deze ruil is intussen door iemand anders beslist, en de planning kon daarna niet rechtgezet worden. Controleer dienst 12 op 08/07/2026 in de planning en zet ze zo nodig handmatig recht.';
+    const stil = () => vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    it('de werkelijke status is niet te lezen nadat de planning al verplaatst was: dezelfde luide melding', async () => {
+      const fout = stil();
+      try {
+        mem.swaps = [overname('accepted')];
+        const tweede = inHetVenster(async () => {
+          const uit = await patch('tok-a', 'cancelled', 'accepted');
+          mem.swapHerlezingFaalt = true;
+          return uit;
+        });
+        const res = await patch('tok-planner', 'approved', 'accepted');
+        expect(tweede.res?.status).toBe(200);
+        expect(res.status).toBe(409);
+        expect(String(res.json.error)).toBe(NIET_RECHTGEZET);
+        expect(ruil().status).toBe('cancelled');
+        expect(mem.activity.some((a: any) => a.action === 'Planning niet rechtgezet na dienstruil' && a.entityId === 's-c')).toBe(true);
+        expect(fout.mock.calls.some((c) => String(c[0]).includes('LET OP, dienstruil s-c'))).toBe(true);
+      } finally {
+        fout.mockRestore();
+      }
+    });
+
+    it('een annulering verliest van een afhandeling en kan de dienst niet opnieuw doorvoeren: luide melding', async () => {
+      const fout = stil();
+      try {
+        mem.swaps = [overname('approved', { decidedAt: '2026-06-13T08:00:00Z' })];
+        naarB();
+        const tweede = inHetVenster(async () => {
+          const uit = await patch('tok-admin', 'completed', 'approved');
+          mem.planningVerplaatsenFaalt = 'doorvoeren';
+          return uit;
+        });
+        const res = await patch('tok-planner', 'cancelled', 'approved');
+        expect(tweede.res?.status).toBe(200);
+        expect(res.status).toBe(409);
+        expect(String(res.json.error)).toBe(NIET_RECHTGEZET);
+        expect(ruil().status).toBe('completed');
+        const regel = mem.activity.find((a: any) => a.action === 'Planning niet rechtgezet na dienstruil');
+        expect(regel?.message).toContain('teruggedraaid kon niet rechtgezet worden');
+        expect(acties()).not.toContain('Dienstruil geannuleerd');
+      } finally {
+        fout.mockRestore();
+      }
+    });
+
+    it('alleen de herlezing mislukt en er was niets verplaatst (de collega weigert): 409 zonder alarm over de planning', async () => {
+      const fout = stil();
+      try {
+        mem.swaps = [overname('pending')];
+        const tweede = inHetVenster(async () => {
+          const uit = await patch('tok-admin', 'approved', 'pending');
+          mem.swapHerlezingFaalt = true;
+          return uit;
+        });
+        const res = await patch('tok-b', 'rejected', 'pending');
+        expect(tweede.res?.status).toBe(200);
+        expect(res.status).toBe(409);
+        expect(String(res.json.error)).toBe('Deze ruil is intussen door iemand anders gewijzigd, de lijst is ververst.');
+        expect(ruil().status).toBe('approved');
+        expect(eigenaar()).toBe('4');
+        expect(mem.activity.some((a: any) => a.action === 'Planning niet rechtgezet na dienstruil')).toBe(false);
+      } finally {
+        fout.mockRestore();
+      }
+    });
+  });
+
+  describe('de lijstroute (POST /api/swaps)', () => {
+    it('goedkeuren via de lijst terwijl de aanvrager intrekt: 409, de dienst staat weer bij de aanvrager', async () => {
+      mem.swaps = [overname('accepted')];
+      const tweede = inHetVenster(() => patch('tok-a', 'cancelled', 'accepted'));
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [{ ...overname('accepted'), status: 'approved' }] });
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('cancelled');
+      expect(ruil().status).toBe('cancelled');
+      expect(eigenaar()).toBe('3');
+      expect(acties()).toEqual(['Dienstruil geannuleerd']);
+    });
+
+    it('de collega antwoordt via de lijst terwijl een admin goedkeurt: zijn antwoord overschrijft de goedkeuring niet', async () => {
+      mem.swaps = [overname('pending')];
+      const tweede = inHetVenster(() => patch('tok-admin', 'approved', 'pending'));
+      const res = await api('POST', '/api/swaps', { token: 'tok-b', body: [{ ...overname('pending'), status: 'rejected' }] });
+      expect(tweede.res?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(ruil().status).toBe('approved');
+      expect(eigenaar()).toBe('4');
+    });
+
+    it('twee goedkeuringen in één lijst, de tweede verliest: de eerste is volledig geschreven en gelogd, het antwoord is geen succes', async () => {
+      mem.planning.push({ id: 'sh-d', driverId: '3', date: '2026-07-09', line: '13' });
+      mem.planningMatrix.push({ id: 'm-9', source_date: '2026-07-09', day_type: 'week', assignments: { 'Chauffeur A': '13', 'Chauffeur B': 'bv' }, raw_row: '' });
+      mem.swaps = [
+        overname('accepted', { id: 's-een' }),
+        overname('accepted', { id: 's-twee', shiftId: 'sh-d', shiftDate: '2026-07-09', shiftLine: '13' }),
+      ];
+      const body = mem.swaps.map((s: any) => ({ ...s, status: 'approved' }));
+      // De aanvrager trekt de TWEEDE ruil in, in het venster van diens schrijfactie.
+      let tweede: { status: number } | undefined;
+      const haak = async (id: string) => {
+        if (id !== 's-twee') { mem.voorSwapStatusWissel = haak; return; }
+        tweede = await patch('tok-a', 'cancelled', 'accepted', 's-twee');
+      };
+      mem.voorSwapStatusWissel = haak;
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body });
+      expect(tweede?.status).toBe(200);
+      expect(res.status).toBe(409);
+      expect(res.json.success).toBeUndefined();
+      // De eerste: status, planning en log horen bij elkaar.
+      expect(mem.swaps.find((s: any) => s.id === 's-een')?.status).toBe('approved');
+      expect(eigenaar('sh-c')).toBe('4');
+      expect(acties('s-een')).toEqual(['Dienstruil goedgekeurd']);
+      // De tweede: ingetrokken, en wat de lijst al verplaatste staat terug.
+      expect(mem.swaps.find((s: any) => s.id === 's-twee')?.status).toBe('cancelled');
+      expect(eigenaar('sh-d')).toBe('3');
+      expect(acties('s-twee')).toEqual(['Dienstruil geannuleerd']);
+    });
+
+    // Twee keer hetzelfde id in één lijst (tweede lezing 01-10): de tweede
+    // wissel draagt dezelfde verwachte status als de eerste, verliest dus van
+    // de eerste, en de planning volgt de status die er echt staat.
+    it('zelfde id twee keer, eerst annuleren dan goedkeuren: 409, geannuleerd en beide benen terug bij hun eigenaar', async () => {
+      const swap = overname('accepted', { swapType: 'ruil', returnDate: TERUGDAG, returnCode: '14' });
+      mem.swaps = [swap];
+      const voor = JSON.stringify(mem.planning);
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [{ ...swap, status: 'cancelled' }, { ...swap, status: 'approved' }] });
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('cancelled');
+      expect(res.json.success).toBeUndefined();
+      expect(mem.swaps).toHaveLength(1);
+      expect(ruil().status).toBe('cancelled');
+      expect(JSON.stringify(mem.planning)).toBe(voor);
+      expect(acties()).toEqual(['Dienstruil geannuleerd']);
+      expect(mem.swapStatusWissels.map((w) => [w.naar, w.verwacht, w.geraakt])).toEqual([['cancelled', 'accepted', true], ['approved', 'accepted', false]]);
+    });
+
+    it('zelfde id twee keer, eerst goedkeuren dan annuleren: 409, goedgekeurd en beide benen verhuisd', async () => {
+      const swap = overname('accepted', { swapType: 'ruil', returnDate: TERUGDAG, returnCode: '14' });
+      mem.swaps = [swap];
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [{ ...swap, status: 'approved' }, { ...swap, status: 'cancelled' }] });
+      expect(res.status).toBe(409);
+      expect(res.json.currentStatus).toBe('approved');
+      expect(mem.swaps).toHaveLength(1);
+      expect(ruil().status).toBe('approved');
+      expect(eigenaar('sh-c')).toBe('4');
+      expect(eigenaar('sh-b')).toBe('3');
+      expect(acties()).toEqual(['Dienstruil goedgekeurd']);
+      expect(mem.swapStatusWissels.map((w) => [w.naar, w.verwacht, w.geraakt])).toEqual([['approved', 'accepted', true], ['cancelled', 'accepted', false]]);
+    });
+
+    it('een record waarvan de status niet wisselt wordt niet geschreven: een echo overschrijft niets', async () => {
+      // De planner dient een nieuwe aanvraag in met een lijst waarin s-c een
+      // verouderde inhoud draagt. Vroeger ging s-c mee in de upsert (een ruil
+      // op 'pending' is nog niet bevroren) en was de opgeslagen rij overschreven.
+      mem.swaps = [overname('pending', { reason: 'zoals opgeslagen' })];
+      const nieuw = { id: 's-nieuw', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-14T08:00:00Z', returnDate: '2026-07-02', returnCode: '14' };
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [{ ...overname('pending'), reason: 'verouderde echo' }, nieuw] });
+      expect(res.status).toBe(200);
+      expect(mem.swapStatusWissels).toEqual([]);
+      expect(ruil().reason).toBe('zoals opgeslagen');
+      expect(mem.swaps.map((s: any) => s.id)).toEqual(['s-c', 's-nieuw']);
+    });
+
+    it('elke statuswissel draagt de status die de handler las als voorwaarde', async () => {
+      mem.swaps = [overname('accepted')];
+      const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [{ ...overname('accepted'), status: 'approved' }] });
+      expect(res.status).toBe(200);
+      expect(mem.swapStatusWissels).toEqual([{ id: 's-c', verwacht: 'accepted', naar: 'approved', geraakt: true }]);
+    });
+
+    it('een nieuwe aanvraag is een insert: bestaat het id intussen al, dan 409 en geen overschrijving', async () => {
+      mem.swaps = [];
+      const nieuw = { id: 's-dubbel', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending', reason: 'tweede', createdAt: '2026-06-14T08:00:00Z', returnDate: '2026-07-02', returnCode: '14' };
+      // Dezelfde aanvraag kwam net via een ander verzoek binnen.
+      mem.voorSwapToevoegen = () => { mem.swaps = [{ ...nieuw, reason: 'eerste', shiftDate: '2026-07-01', shiftLine: '12' }]; };
+      const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [nieuw] });
+      expect(res.status).toBe(409);
+      expect(mem.swaps).toHaveLength(1);
+      expect(mem.swaps[0].reason).toBe('eerste');
+      expect(mem.activity.filter((a: any) => a.action === 'Dienstruil aangevraagd')).toEqual([]);
+    });
+  });
+
+  it('PATCH schrijft met de gelezen status als voorwaarde, en alleen die ene rij', async () => {
+    mem.swaps = [overname('accepted'), overname('pending', { id: 's-ander' })];
+    const res = await patch('tok-planner', 'approved', 'accepted');
+    expect(res.status).toBe(200);
+    expect(mem.swapStatusWissels).toEqual([{ id: 's-c', verwacht: 'accepted', naar: 'approved', geraakt: true }]);
+    expect(mem.swaps.find((s: any) => s.id === 's-ander')?.status).toBe('pending');
+  });
+});
+
 describe('dienstruil, verwijderen laat een auditspoor na', () => {
   it('logt een verwijderde ruil in het activiteitenlog', async () => {
     const voor = mem.activity.length;
@@ -6756,7 +8200,7 @@ describe('push-abonnees (wie kan meldingen ontvangen)', () => {
   it('planner ziet de ids, chauffeur krijgt 403', async () => {
     await api('POST', '/api/push/subscribe', {
       token: 'tok-a',
-      body: { endpoint: 'https://push.test/abc', keys: { p256dh: 'p', auth: 'a' } },
+      body: { endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/abc', keys: { p256dh: 'p', auth: 'a' } },
     });
     const alsPlanner = await api('GET', '/api/push/subscribers', { token: 'tok-planner' });
     expect(alsPlanner.status).toBe(200);
@@ -7622,6 +9066,22 @@ describe('telegram-webhook, secret, koppeling en commando\'s', () => {
     await webhook({ callback_query: { id: 'cb-rl2', data: 'rl2|s-tg|approved', message: { chat: { id: 777 } } } }, 'test-secret');
     expect(verzonden[0].tekst).toContain('Dienstruil goedgekeurd');
     expect(mem.planning.map((r: any) => r.driverId)).toEqual(['4', '5']);
+  });
+
+  it('ruil-afwijsknop loopt door dezelfde kern: wat de Excel al aan de collega gaf gaat niet terug (01-10)', async () => {
+    const DAG = '2030-08-03';
+    mem.planningMatrix = [{ id: 'm-t1', source_date: DAG, day_type: 'W', assignments: { 'Chauffeur A': 'vrij', 'Chauffeur B': '12' }, raw_row: '' }];
+    mem.planning = [{ id: `${DAG}-4-12-1`, driverId: '4', date: DAG, line: '12' }];
+    mem.swaps = [{ id: 's-tg-af', shiftId: 'p-a12', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2030-07-20T08:00:00Z', swapType: 'overname', shiftDate: DAG, shiftLine: '12' }];
+    await webhook({ callback_query: { id: 'cb-af', data: 'rl2|s-tg-af|rejected', message: { chat: { id: 777 } } } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Dienstruil afgewezen');
+    expect(mem.swaps[0].status).toBe('rejected');
+    expect(mem.planning[0].driverId).toBe('4');
+    // De knoppen kennen alleen goedkeuren en afwijzen: afhandelen is geen
+    // Telegram-beslissing, ook niet met een zelfgemaakte knop.
+    mem.swaps = [{ ...mem.swaps[0], id: 's-tg-klaar', status: 'accepted' }];
+    await webhook({ callback_query: { id: 'cb-klaar', data: 'rl2|s-tg-klaar|completed', message: { chat: { id: 777 } } } }, 'test-secret');
+    expect(mem.swaps[0].status).toBe('accepted');
   });
 
   it('toewijzen-knop: dezelfde invariant, een schoolrit via een wissel (Jarno 29-09)', async () => {
@@ -8567,6 +10027,90 @@ describe('twee-stapsverificatie voor staf (MFA_STAF=aan, verbeterronde 07-09 nr.
     expect((await api('GET', '/api/users', { token: 'tok-planner' })).status).toBe(200);
     const bev = await api('GET', '/api/me/beveiliging', { token: 'tok-planner' });
     expect(bev.json.mfaVerplicht).toBe(false);
+  });
+});
+
+// Beveiligingsscan 01-10, keuze 3: met MFA_STAF uit (de standaard) eist de
+// API geen aal2. Een sessie die alleen het wachtwoord van een admin doorliep
+// kon zo de factor van datzelfde account wissen, en dan was de tweede stap
+// niets meer waard voor wie het wachtwoord had gestolen.
+describe('eigen twee-stapsverificatie resetten vraagt een bevestigde sessie (scan 01-10, keuze 3)', () => {
+  const vorige = process.env.MFA_STAF;
+  beforeEach(() => { delete process.env.MFA_STAF; });
+  afterEach(() => { if (vorige === undefined) delete process.env.MFA_STAF; else process.env.MFA_STAF = vorige; });
+
+  const mfaAttrap = () => {
+    const gewist: Array<{ id: string; userId: string }> = [];
+    const gelezen: string[] = [];
+    mem.supabaseAdmin = {
+      auth: {
+        admin: {
+          mfa: {
+            listFactors: async ({ userId }: { userId: string }) => { gelezen.push(userId); return { data: { factors: [{ id: `f-${userId}` }] }, error: null }; },
+            deleteFactor: async (arg: { id: string; userId: string }) => { gewist.push(arg); return { data: {}, error: null }; },
+          },
+        },
+      },
+    };
+    // De aanmelding achter elk stafaccount (zoals de koppeling bij het inloggen ze zet).
+    mem.users = mem.users.map((u: any) => (u.id === '1' ? { ...u, authId: 'auth-tok-admin' } : u.id === '2' ? { ...u, authId: 'auth-tok-planner' } : u));
+    return { gewist, gelezen };
+  };
+  const gelogd = () => mem.activity.filter((a) => a.action === 'Twee-stapsverificatie gereset');
+
+  it('admin met alleen het wachtwoord (aal1) kan de eigen factor niet wissen: 403, niets gelezen of gewist', async () => {
+    const { gewist, gelezen } = mfaAttrap();
+    const res = await api('POST', '/api/admin/users/1/mfa-reset', { token: 'tok-admin' });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toBe('Je eigen twee-stapsverificatie resetten kan alleen na bevestiging met de code. Meld je aan met de code uit je authenticator-app en probeer het dan opnieuw.');
+    // Geen mfa_required: dat stuurt de app naar het codescherm, en dit is een
+    // gewone weigering van één actie.
+    expect(res.json.code).toBeUndefined();
+    expect(gelezen).toEqual([]);
+    expect(gewist).toEqual([]);
+    expect(gelogd()).toHaveLength(0);
+  });
+
+  it('de weigering komt als leesbare melding in beeld, zonder "geen rechten" erachter', async () => {
+    mfaAttrap();
+    const res = await api('POST', '/api/admin/users/1/mfa-reset', { token: 'tok-admin' });
+    // Zoals de client: apiFetch gooit bij een 403 een fout met de servertekst
+    // en de status, het scherm Gebruikers geeft die aan schrijffout.
+    const { schrijffout } = await import('./lib/fouten');
+    expect(schrijffout('Twee-stapsverificatie resetten', Object.assign(new Error(res.json.error), { status: 403 }))).toBe(
+      'Twee-stapsverificatie resetten is mislukt. Je eigen twee-stapsverificatie resetten kan alleen na bevestiging met de code. Meld je aan met de code uit je authenticator-app en probeer het dan opnieuw.',
+    );
+  });
+
+  it('dezelfde admin met een bevestigde sessie (aal2) kan de eigen factor wel resetten', async () => {
+    const { gewist, gelezen } = mfaAttrap();
+    const res = await api('POST', '/api/admin/users/1/mfa-reset', { token: 'tok-admin-2fa' });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, verwijderd: 1 });
+    expect(gelezen).toEqual(['auth-tok-admin']);
+    expect(gewist).toEqual([{ id: 'f-auth-tok-admin', userId: 'auth-tok-admin' }]);
+    expect(gelogd()).toHaveLength(1);
+  });
+
+  it('een collega resetten blijft werken vanuit een aal1-sessie', async () => {
+    const { gewist } = mfaAttrap();
+    const res = await api('POST', '/api/admin/users/2/mfa-reset', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(gewist).toEqual([{ id: 'f-auth-tok-planner', userId: 'auth-tok-planner' }]);
+    expect(gelogd()).toHaveLength(1);
+  });
+
+  it('een ander portaalaccount met de aanmelding van de admin zelf telt ook als eigen account', async () => {
+    const { gewist, gelezen } = mfaAttrap();
+    // Twee records op dezelfde aanmelding hoort niet te bestaan, maar de
+    // factoren hangen aan de aanmelding: via record 2 zou de admin anders
+    // alsnog de eigen factor wissen.
+    mem.users = mem.users.map((u: any) => (u.id === '2' ? { ...u, authId: 'auth-tok-admin' } : u));
+    const res = await api('POST', '/api/admin/users/2/mfa-reset', { token: 'tok-admin' });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toMatch(/^Je eigen twee-stapsverificatie resetten kan alleen na bevestiging met de code\./);
+    expect(gelezen).toEqual([]);
+    expect(gewist).toEqual([]);
   });
 });
 

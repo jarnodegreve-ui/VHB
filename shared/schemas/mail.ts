@@ -80,11 +80,23 @@ export const isMailAan = (instellingen: MailInstellingen, soort: string): boolea
 // --- Verzendlijsten ---
 
 /** Bewust eenvoudig: iets vóór en iets ná een @, met een punt in het domein.
- *  De mailserver beslist verder; dit vangt tikfouten zoals een vergeten @. */
-export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+ *  De mailserver beslist verder; dit vangt tikfouten zoals een vergeten @.
+ *  Lineair (beveiligingsscan 01-10): de delen van het domein sluiten de punt
+ *  uit, zodat er maar één manier is om een adres te lezen. De vorige vorm
+ *  (`[^\s@]+\.[^\s@]+`) liet de punt aan beide kanten toe en probeerde bij
+ *  "a@" + 350.000 punten + "@" elke verdeling: 58 seconden in de functie.
+ *  Een lege domeinnaam (a@b..c, a@.b.c, a@b.c.) valt hiermee ook af. */
+export const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
+/** Langste e-mailadres dat een mailserver aanneemt (RFC 5321). */
+export const EMAIL_MAX_TEKENS = 254;
+/** Vrije tekst → is dit een adres? De lengte eerst, de uitdrukking pas daarna. */
+const isEmailAdres = (adres: string): boolean => adres.length <= EMAIL_MAX_TEKENS && EMAIL_RE.test(adres);
 export const emailAdres = z
   .string({ error: 'Vul een e-mailadres in' })
   .trim()
+  // `abort`: zonder die optie loopt zod 4 na een te lange tekst gewoon door
+  // naar de uitdrukking hieronder (gemeten), en dan beschermt de grens niets.
+  .max(EMAIL_MAX_TEKENS, { error: 'Dit is geen geldig e-mailadres', abort: true })
   .toLowerCase()
   .regex(EMAIL_RE, 'Dit is geen geldig e-mailadres');
 
@@ -114,7 +126,7 @@ export const leesAdressen = (tekst: string): { adressen: string[]; fouten: strin
   for (const stuk of tekst.split(/[\n,;]+/)) {
     const a = stuk.trim().toLowerCase();
     if (!a) continue;
-    if (EMAIL_RE.test(a)) { if (!adressen.includes(a)) adressen.push(a); } else fouten.push(stuk.trim());
+    if (isEmailAdres(a)) { if (!adressen.includes(a)) adressen.push(a); } else fouten.push(stuk.trim());
   }
   return { adressen, fouten };
 };

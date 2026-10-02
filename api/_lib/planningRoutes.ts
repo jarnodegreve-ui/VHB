@@ -25,8 +25,10 @@ import { buildPlanningFromMatrix, getPlanningMatrixGrenzen, getLeaveData, getPla
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { ruilAfwezigheidsFout } from "./ruilRegels.js";
 import { vrijOpBord } from "../../shared/bordBezetting.js";
+import { begrensMaandbord, eersteZichtbareDag } from "../../shared/maandplanningTerugblik.js";
 import { bordCellenVoor, bordVanDag } from "./codeDienst.js";
 import { dubbeleInplanningen, onbekendeCodeFout } from "./dubbeleInplanning.js";
+import { planningTijdFout } from "./planningTijden.js";
 
 // Helper: haal de geüploade Excel uit de body (gzip of base64, met de
 // grenzen per soort, zie api/_lib/matrixUpload.ts) en parse de praktijk-tab.
@@ -297,6 +299,8 @@ export function mountPlanningRoutes(app: express.Express) {
         { const rp = revisionCheck(req, previousPlanning); if (rp) return revisionProbleemResponse(res, "De planning", rp); }
         const shiftsRemoved = detectMassDelete(previousPlanning, newData);
         if (shiftsRemoved !== null) return massDeleteResponse(res, shiftsRemoved, previousPlanning.length, "diensten");
+        const tijdFout = planningTijdFout(newData, previousPlanning);
+        if (tijdFout) return res.status(400).json({ error: tijdFout });
         await savePlanningData(newData);
         await logActivity(
           req,
@@ -512,13 +516,21 @@ export function mountPlanningRoutes(app: express.Express) {
         return res.send(buffer);
       }
 
-      res.json({
+      const bord = {
         month,
         dates,
         drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name, section: c.section || null })),
         cells,
         geimporteerd: grenzen,
-      });
+      };
+      // Terugblik (Jarno 02-10): wie geen staf is ziet het bord vanaf de
+      // maandag van de lopende week (Brusselse tijd), niet wat collega's
+      // vroeger reden. Hier geknipt en niet alleen in het scherm: een kale
+      // fetch op een oude maand geeft dezelfde lege vorm, geen fout. De maat
+      // is de rol, zoals bij de twee staf-formaten hierboven: een technieker
+      // en een chauffeur met "Ook technieker" zijn geen staf. Het eigen
+      // rooster (/api/planning, eigen rijen) blijft terugkijken.
+      res.json(isStafRol(req.appUser!.role) ? bord : begrensMaandbord(bord, eersteZichtbareDag()));
     } catch (err: any) {
       console.error("Error computing month planning:", err);
       res.status(500).json({ error: "Kon maandplanning niet berekenen." });

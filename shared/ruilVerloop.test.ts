@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { BEKEKEN_BIJGEHOUDEN_SINDS, RUIL_BEKEKEN_ACTIE, RUIL_LOG_ACTIES, afwijzerVan, persoonsVerloop, verloopUitLog, type RuilLogRegel, type RuilVoorVerloop, type VerloopRegel } from './ruilVerloop';
+import { BEKEKEN_BIJGEHOUDEN_SINDS, RUIL_BEKEKEN_ACTIE, RUIL_LOG_ACTIES, afwijzerVan, persoonsVerloop, regelsVanRuil, verloopUitLog, type RuilLogRegel, type RuilVoorVerloop, type VerloopRegel } from './ruilVerloop';
 import { HANDMATIGE_WISSEL_PREFIX } from './schemas/constanten';
 
 // Zone-loze momenten: de afleiding geeft de strings door en sorteert ze als
@@ -102,6 +102,30 @@ describe('verloopUitLog', () => {
       aangevraagd,
     ], { metStafNaam: false });
     expect(stappen.map((s) => s.soort)).toEqual(['aangevraagd', 'geaccepteerd', 'goedgekeurd']);
+  });
+});
+
+describe('regelsVanRuil: de regels van één ruil uit de groepering per id', () => {
+  const r1 = { createdAt: '2026-09-01T08:00:00Z', action: 'Dienstruil aangevraagd' };
+
+  it('geeft de regels van die ruil, en een lege lijst als de ruil er niet in staat', () => {
+    expect(regelsVanRuil({ s1: [r1] }, 's1')).toEqual([r1]);
+    expect(regelsVanRuil({ s1: [r1] }, 's2')).toEqual([]);
+    expect(regelsVanRuil({}, 's1')).toEqual([]);
+  });
+
+  it('een id dat elk object al kent is gewoon "niet aanwezig", nooit een functie van Object', () => {
+    for (const id of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__', 'isPrototypeOf', '__defineGetter__']) {
+      expect(regelsVanRuil({ s1: [r1] }, id), id).toEqual([]);
+      expect(verloopUitLog(regelsVanRuil({ s1: [r1] }, id), { metStafNaam: true }), id).toEqual([]);
+    }
+  });
+
+  it('staat zo\'n id er wél in (groepering zonder prototype, zoals de opslag ze geeft), dan komen zijn regels terug', () => {
+    const groepering: Record<string, typeof r1[]> = Object.create(null);
+    for (const id of ['constructor', '__proto__', 'toString']) groepering[id] = [r1];
+    for (const id of ['constructor', '__proto__', 'toString']) expect(regelsVanRuil(groepering, id), id).toEqual([r1]);
+    expect(regelsVanRuil(groepering, 'valueOf')).toEqual([]);
   });
 });
 

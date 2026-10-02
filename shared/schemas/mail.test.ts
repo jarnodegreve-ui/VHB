@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { eigenMailSchema, omleidingMailSchema, isMailAan, leesAdressen, MAIL_SOORTEN, naamVanSoort, parseMailInstellingen, parseVerzendlijsten, UITZETBARE_MAIL_SOORTEN, verzendlijstenSchema } from './mail';
+import { describe, expect, it, vi } from 'vitest';
+import { emailSchema } from './user';
+import { EMAIL_MAX_TEKENS, EMAIL_RE, emailAdres, eigenMailSchema, omleidingMailSchema, isMailAan, leesAdressen, MAIL_SOORTEN, naamVanSoort, parseMailInstellingen, parseVerzendlijsten, UITZETBARE_MAIL_SOORTEN, verzendlijstenSchema } from './mail';
 
 describe('mailinstellingen', () => {
   it('kent elke mailsoort één keer en markeert welkom, wachtwoord, back-up en herstel als altijd aan', () => {
@@ -47,6 +48,73 @@ describe('verzendlijsten', () => {
     const r = leesAdressen('a@b.be\nB@c.be, c@d.be; geen adres\n\n a@b.be ');
     expect(r.adressen).toEqual(['a@b.be', 'b@c.be', 'c@d.be']);
     expect(r.fouten).toEqual(['geen adres']);
+  });
+});
+
+// Beveiligingsscan 01-10: de vorige uitdrukking liet de punt aan beide kanten
+// van het domein toe en probeerde bij een rij punten elke verdeling
+// (kwadratisch: 20.000 punten = 0,4 s, 350.000 = 58 s in de functie).
+describe('e-mailadres: lineair en begrensd', () => {
+  const bewijs = (punten: number) => `a@${'.'.repeat(punten)}@`;
+  const duur = (werk: () => unknown): number => { const start = performance.now(); werk(); return performance.now() - start; };
+
+  it('de uitdrukking zelf blijft snel op de bewijsreeks (100 kB en 4 MB)', () => {
+    expect(duur(() => expect(EMAIL_RE.test(bewijs(100_000))).toBe(false))).toBeLessThan(100);
+    expect(duur(() => expect(EMAIL_RE.test(bewijs(4_000_000))).toBe(false))).toBeLessThan(500);
+    // Ook de andere vormen die een uitdrukking laten terugkrabbelen.
+    for (const tekst of ['a'.repeat(100_000), `${'a.'.repeat(50_000)}@`, `a@${'a.'.repeat(50_000)}`, `a@${'a.'.repeat(50_000)}@`, `${'a@'.repeat(50_000)}b.c`]) {
+      expect(duur(() => EMAIL_RE.test(tekst)), tekst.slice(0, 12)).toBeLessThan(100);
+    }
+  });
+
+  it('het adres van een gebruiker (z.email in shared/schemas/user.ts) heeft die vorm niet', () => {
+    for (const tekst of [bewijs(100_000), 'a'.repeat(100_000), `${'a.'.repeat(50_000)}@`, `a@${'a-'.repeat(50_000)}`, `a@${'a.'.repeat(50_000)}1`]) {
+      expect(duur(() => expect(emailSchema.safeParse(tekst).success).toBe(false)), tekst.slice(0, 12)).toBeLessThan(100);
+    }
+  });
+
+  it('het schema weigert de bewijsreeks van 100 kB ruim binnen 100 ms, ook in een lijst en via leesAdressen', () => {
+    expect(duur(() => expect(emailAdres.safeParse(bewijs(100_000)).success).toBe(false))).toBeLessThan(100);
+    expect(duur(() => expect(verzendlijstenSchema.safeParse([{ id: 'l1', naam: 'x', adressen: [bewijs(100_000)] }]).success).toBe(false))).toBeLessThan(100);
+    expect(duur(() => expect(eigenMailSchema.safeParse({ onderwerp: 'x', tekst: 'y', ontvangers: { adressen: [bewijs(100_000)] }, alleen: [bewijs(100_000)] }).success).toBe(false))).toBeLessThan(100);
+    expect(duur(() => expect(leesAdressen(bewijs(100_000))).toEqual({ adressen: [], fouten: [bewijs(100_000)] }))).toBeLessThan(100);
+  });
+
+  it('een te lang adres bereikt de uitdrukking niet: de lengtegrens breekt af (zod 4 loopt anders door)', () => {
+    const test = vi.spyOn(EMAIL_RE, 'test');
+    try {
+      const lang = `${'a'.repeat(EMAIL_MAX_TEKENS)}@b.be`;
+      const r = emailAdres.safeParse(lang);
+      expect(r.success).toBe(false);
+      expect(r.success ? [] : r.error.issues.map((i) => i.message)).toEqual(['Dit is geen geldig e-mailadres']);
+      expect(test).not.toHaveBeenCalled();
+      expect(leesAdressen(lang)).toEqual({ adressen: [], fouten: [lang] });
+      expect(test).not.toHaveBeenCalled();
+      // Een gewoon adres loopt wel door de uitdrukking.
+      expect(emailAdres.safeParse('a@b.be').success).toBe(true);
+      expect(test).toHaveBeenCalledTimes(1);
+    } finally {
+      test.mockRestore();
+    }
+  });
+
+  it(`de grens ligt op ${EMAIL_MAX_TEKENS} tekens, geteld na het wegknippen van de spaties`, () => {
+    const precies = `${'a'.repeat(EMAIL_MAX_TEKENS - 5)}@b.be`;
+    expect(precies).toHaveLength(EMAIL_MAX_TEKENS);
+    expect(emailAdres.safeParse(`  ${precies}  `).success).toBe(true);
+    expect(emailAdres.safeParse(`a${precies}`).success).toBe(false);
+    expect(leesAdressen(`${precies}\na${precies}`)).toEqual({ adressen: [precies], fouten: [`a${precies}`] });
+  });
+
+  it('gewone adressen blijven geldig; een lege domeinnaam, een spatie of een tweede @ niet', () => {
+    for (const goed of ['a@b.c', 'jan.peeters@vhb.be', 'Dispatching@DeLijn.be', "o'neil+test@sub.domein.co.uk", 'a_b-c@x-y.be', '.a.@b.be']) {
+      expect(emailAdres.safeParse(goed).success, goed).toBe(true);
+      expect(leesAdressen(goed).adressen, goed).toEqual([goed.toLowerCase()]);
+    }
+    for (const fout of ['a@b..c', 'a@.b.c', 'a@b.c.', 'a@b', '@b.be', 'a@', 'a b@c.be', 'a@b@c.be', 'geen-adres', '']) {
+      expect(emailAdres.safeParse(fout).success, fout).toBe(false);
+      expect(leesAdressen(fout).adressen, fout).toEqual([]);
+    }
   });
 });
 

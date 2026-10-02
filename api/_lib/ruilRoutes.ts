@@ -16,16 +16,17 @@ import { isStafRol, authenticate, requireRole } from "../middleware.js";
 import { uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from "./ruilUitvoeringen.js";
 import { DAG_KORT, meldRuilTerValidatieTelegram } from "../telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { RUIL_BEKEKEN_ACTIE, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
+import { RUIL_BEKEKEN_ACTIE, regelsVanRuil, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
 import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoorRust, type RustPlanningRij } from "../../shared/ruilRust.js";
 import { addDagenIso, DAG_DMJ, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
 import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData } from "../storage.js";
+import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen, type SwapCarryResult } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
-import { TERMINAL_SWAP_STATES, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
-import { bordBenenVan, bordOpDag, dienstOpCel, laadBordVast } from "./codeDienst.js";
+import { TERMINAL_SWAP_STATES, bordToontRuilAl, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
+import { RUIL_WEIGERING, STAF_BESLIS_STATUSSEN, beoordeelStafOvergang, isRuilDoorgevoerd, magRuilOvergang, ruilLogStappen, ruilVoertDoor } from "../../shared/ruilOvergangen.js";
+import { bordBenenVan, bordOpDag, dienstOpCel, laadBordVast, type BordVast } from "./codeDienst.js";
 import { dubbeleInplanningen, laadDagStanden, onbekendeCodeFout, type DubbeleInplanning, type Ontvangst } from "./dubbeleInplanning.js";
 
 /**
@@ -53,7 +54,7 @@ const metRuilVerloop = async <T extends { id: string }>(
     : swaps.map((s) => ("reason" in s ? { ...s, reason: redenVoorChauffeur((s as { reason?: unknown }).reason) } : s));
   try {
     const perSwap = await (regels ?? getSwapVerloopRegels(uit.map((s) => String(s.id))));
-    return uit.map((s) => ({ ...s, verloop: verloopUitLog(perSwap[String(s.id)] ?? [], { metStafNaam: staf }) }));
+    return uit.map((s) => ({ ...s, verloop: verloopUitLog(regelsVanRuil(perSwap, String(s.id)), { metStafNaam: staf }) }));
   } catch (err) {
     console.error("Verloop van de dienstruilen laden is mislukt.", err);
     return uit;
@@ -120,6 +121,152 @@ const stripSwapAliassen = (record: any): any => {
   return schoon;
 };
 
+// --- Planning en status blijven samen kloppen (01-10) ------------------------
+//
+// Een beslissing verplaatst eerst de rijen in de planning en schrijft daarna
+// de status, als compare-and-set op de status die de handler las
+// (`schrijfSwapAlsStatus`). Verliest die schrijfactie van een gelijktijdige
+// beslissing, dan staat de planning nog zoals deze handler ze zette. Wat hij
+// verplaatste houdt hij daarom been per been bij, om het recht te zetten.
+
+/** Wat een beslissing in de planning verplaatste: de richting en de benen
+ *  waarvan echt rijen verhuisden. Een been met 0 rijen hoort er niet bij: dat
+ *  stond al zo, door iets anders dan deze beslissing. */
+type PlanningBeweging = { richting: "doorgevoerd" | "teruggedraaid"; benen: SwapBenen };
+
+const bewegingVan = (
+  richting: PlanningBeweging["richting"],
+  r: { offeredMoved: number; returnMoved: number | null } | null,
+): PlanningBeweging | null => {
+  if (!r) return null;
+  const benen = { aangeboden: r.offeredMoved > 0, terug: (r.returnMoved ?? 0) > 0 };
+  return benen.aangeboden || benen.terug ? { richting, benen } : null;
+};
+
+/**
+ * De doorvoer van een goedkeuring, been per been: eerst de aangeboden dienst,
+ * de terugdienst pas als die echt verhuisde (01-10, tweede lezing).
+ *
+ * `applySwapToPlanning` verplaatst beide benen in één aanroep. Verhuisde de
+ * aangeboden dienst geen enkele rij (ze staat niet meer op naam van de
+ * aanvrager), dan weigerden de routes terecht met een 409, maar de terugdienst
+ * was dan al naar de aanvrager verhuisd en niemand zette ze terug: status nog
+ * 'accepted', de terugdienst bij de aanvrager, geen logregel, en afwijzen
+ * draaide niets terug omdat de planning als "onbekend" las.
+ *
+ * Bewust niet eerst verplaatsen en dan terugzetten. Twee goedkeuringen die
+ * elkaar kruisen verdelen de benen soms onder elkaar (de ene verplaatst de
+ * aangeboden dienst, de andere de terugdienst): zette de verliezer zijn been
+ * terug, dan stond de ruil van de winnaar op 'approved' met een terugdienst
+ * die niet verhuisd is. Wat nooit verplaatst is hoeft niemand terug te zetten,
+ * en een terugzetting die kan mislukken is er niet.
+ *
+ * `aangebodenNietGevonden`: 0 rijen mét dienst-info, de route weigert. `r` is
+ * null bij een oude ruil zonder dienst-info (dan verhuist er niets, zoals
+ * voorheen).
+ */
+const voerRuilDoor = async (swap: any): Promise<{ r: SwapCarryResult | null; aangebodenNietGevonden: boolean }> => {
+  const aangeboden = await applySwapToPlanning(swap, { aangeboden: true, terug: false });
+  if (!aangeboden) return { r: null, aangebodenNietGevonden: false };
+  if (aangeboden.offeredMoved === 0) return { r: aangeboden, aangebodenNietGevonden: true };
+  // returnMoved null = geen dienst als tegenprestatie (overname of vrije dag).
+  if (aangeboden.returnMoved === null) return { r: aangeboden, aangebodenNietGevonden: false };
+  const terug = await applySwapToPlanning(swap, { aangeboden: false, terug: true });
+  return { r: { offeredMoved: aangeboden.offeredMoved, returnMoved: terug?.returnMoved ?? 0 }, aangebodenNietGevonden: false };
+};
+
+type RuilFout = { status: number; error: string; currentStatus?: string };
+
+/**
+ * De statuswissel raakte geen rij: iemand anders besliste intussen (of trok de
+ * aanvraag in). De rij blijft zoals ze is; deze beslissing vervalt met een 409
+ * in de vorm van de `ifStatus`-controle (of 404 als de ruil weg is).
+ *
+ * Had deze beslissing de planning al verplaatst, dan gaan precies die benen
+ * naar de stand die bij de WERKELIJKE status hoort: doorgevoerd bij `approved`
+ * en `completed`, anders niet. Niet blind terugdraaien: een goedkeuring die
+ * de rijen al bij de collega vond (halve doorvoer herkend) kan net op déze
+ * verplaatsing steunen. De verplaatsing filtert op de huidige eigenaar en is
+ * dus veilig te herhalen.
+ *
+ * Mislukt dat rechtzetten, dan staat de planning mogelijk anders dan de
+ * status zegt. Dat gaat nooit stil voorbij: een regel in het activiteitenlog,
+ * een fout in de serverlog, en de beslisser leest wat hij moet nakijken.
+ */
+const naVerlorenStatuswissel = async (opts: { swap: any; beweging: PlanningBeweging | null; logReq: AuthenticatedRequest }): Promise<RuilFout> => {
+  const { swap, beweging, logReq } = opts;
+  const id = String(swap.id);
+  let werkelijk: string | null;
+  try {
+    const [nu] = await getSwapsByIds([id]);
+    werkelijk = nu ? String(nu.status) : null;
+    if (beweging) {
+      const hoortDoorgevoerd = isRuilDoorgevoerd(werkelijk);
+      if (beweging.richting === "doorgevoerd" && !hoortDoorgevoerd) await revertSwapFromPlanning(swap, beweging.benen);
+      else if (beweging.richting === "teruggedraaid" && hoortDoorgevoerd) await applySwapToPlanning(swap, beweging.benen);
+    }
+  } catch (err) {
+    if (!beweging) {
+      // Alleen de herlezing mislukte; de planning is door deze beslissing niet geraakt.
+      console.error(`Dienstruil ${id}: de status na een gelijktijdige beslissing was niet te lezen.`, err);
+      return { status: 409, error: "Deze ruil is intussen door iemand anders gewijzigd, de lijst is ververst." };
+    }
+    const dienst = `dienst ${String(swap.shiftLine ?? "").slice(0, 30)} op ${DAG_DMJ(String(swap.shiftDate ?? ""))}`;
+    console.error(`LET OP, dienstruil ${id}: de statuswissel verloor van een gelijktijdige beslissing en de planning (${beweging.richting}: ${JSON.stringify(beweging.benen)}) kon niet rechtgezet worden. Planning en status kunnen elkaar tegenspreken.`, err);
+    try {
+      await logActivity(
+        logReq,
+        "swaps",
+        "Planning niet rechtgezet na dienstruil",
+        `LET OP: een beslissing over ${dienst} verloor van een gelijktijdige beslissing, en wat ze in de planning al had ${beweging.richting} kon niet rechtgezet worden. Controleer de planning van die dag handmatig.`,
+        { type: "swap", id },
+      );
+    } catch (logErr) {
+      console.error(`Dienstruil ${id}: ook de logregel over de niet rechtgezette planning mislukte.`, logErr);
+    }
+    return { status: 409, error: `Deze ruil is intussen door iemand anders beslist, en de planning kon daarna niet rechtgezet worden. Controleer ${dienst} in de planning en zet ze zo nodig handmatig recht.` };
+  }
+  if (werkelijk === null) return { status: 404, error: "Deze dienstruil bestaat niet (meer), mogelijk net ingetrokken." };
+  if (beweging) console.warn(`Dienstruil ${id}: de statuswissel verloor van een gelijktijdige beslissing (nu '${werkelijk}'), de planning is daarop afgestemd.`);
+  return { status: 409, error: `Deze ruil is intussen al '${werkelijk}', de lijst is ververst.`, currentStatus: werkelijk };
+};
+
+/**
+ * De planning wijst een ruil af die nog niet goedgekeurd is, terwijl de rijen
+ * in de planning de wissel al tonen. Hetzelfde beeld heeft twee oorzaken:
+ *
+ *  - een halve doorvoer: de rijen verhuisden bij een goedkeuring, de status
+ *    raakte nooit opgeslagen (controle-ronde 27-08, bevinding 8). Afwijzen
+ *    zet de rijen terug;
+ *  - de planner verwerkte de ruil al in de Excel, of een andere doorgevoerde
+ *    ruil zette de dienst bij de collega. Dan is er niets terug te zetten:
+ *    terugdraaien zou de Excel tegenspreken (01-10).
+ *
+ * Het bord onderscheidt ze, been per been (`bordToontRuilAl`): alleen een been
+ * dat het bord NIET zelf zo toont gaat terug. Toont het bord geen enkel been,
+ * dan is dit de halve doorvoer van vroeger, met dezelfde logtekst.
+ */
+const draaiHalveDoorvoerTerug = async (swap: any, vooraf: { swaps: any[]; vast?: BordVast }): Promise<{ carry: string; beweging: PlanningBeweging | null }> => {
+  const opBord = await bordToontRuilAl(swap, vooraf);
+  if (!opBord.aangeboden && opBord.terug !== true) {
+    const r = await revertSwapFromPlanning(swap);
+    return { carry: describeSwapCarry(swap, r, "teruggedraaid", await bordBenenVan(swap, r)), beweging: bewegingVan("teruggedraaid", r) };
+  }
+  const dienst = `dienst ${swap.shiftLine} op ${DAG_DMJ(swap.shiftDate)}`;
+  const terugruil = `terugruil ${swap.returnCode} op ${DAG_DMJ(swap.returnDate)}`;
+  const blijft = [opBord.aangeboden ? dienst : "", opBord.terug === true ? terugruil : ""].filter(Boolean).join(" en ");
+  const benen: SwapBenen = { aangeboden: !opBord.aangeboden, terug: opBord.terug === false };
+  if (!benen.aangeboden && !benen.terug) {
+    return { carry: `Planning niet teruggedraaid: de maandplanning (de Excel of een andere doorgevoerde ruil) toont ${blijft} zelf al zo.`, beweging: null };
+  }
+  const r = await revertSwapFromPlanning(swap, benen);
+  const terug = benen.aangeboden ? `${dienst}: ${r?.offeredMoved ?? 0} rij(en) teruggedraaid` : `${terugruil}: ${r?.returnMoved ?? 0} rij(en) teruggedraaid`;
+  return {
+    carry: `Planning teruggedraaid: ${terug}. Niet teruggedraaid: ${blijft}, de maandplanning (de Excel of een andere doorgevoerde ruil) toont dat zelf al zo.`,
+    beweging: bewegingVan("teruggedraaid", r),
+  };
+};
+
 // Delta-endpoint voor beslissingen: één record, met optimistic-concurrency
 // via ifStatus. Twee planners die tegelijk beoordelen kunnen elkaars
 // beslissing zo niet meer stilletjes overschrijven (de whole-array-POST kon
@@ -140,40 +287,41 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       return { fout: { status: 409, error: `Deze ruil is intussen al '${current.status}', de lijst is ververst.`, currentStatus: String(current.status) } };
     }
 
+    // Wie welke overgang mag: één tabel per partij (shared/ruilOvergangen.ts),
+    // dezelfde als de lijstroute.
     const role = actor.role;
     const selfId = String(actor.id);
-    if (!isStafRol(role)) {
+    const staf = isStafRol(role);
+    if (!staf) {
       // Alleen de aangezochte collega mag een openstaande ruil accepteren
       // of weigeren — zelfde regels als de array-route. Daarnaast mag de
       // AANVRAGER zijn eigen ruil intrekken zolang die nog open staat
       // (pending of accepted-maar-nog-niet-goedgekeurd): verlof kon dat al,
       // dienstruil dwong een belletje naar de planner af.
       const isTarget = String(current.targetDriverId ?? "") === selfId && String(current.requesterId) !== selfId;
-      const targetTransition = isTarget && current.status === "pending" && (status === "accepted" || status === "rejected");
       const isRequester = String(current.requesterId) === selfId;
-      const withdrawTransition = isRequester && status === "cancelled" && (current.status === "pending" || current.status === "accepted");
-      if (!targetTransition && !withdrawTransition) {
+      const toegestaan = (isTarget && magRuilOvergang("collega", current.status, status))
+        || (isRequester && magRuilOvergang("aanvrager", current.status, status));
+      if (!toegestaan) {
         return { fout: { status: 403, error: "Niet toegestaan: je mag een aan jou gerichte, openstaande ruil accepteren of weigeren, of je eigen openstaande aanvraag intrekken." } };
       }
-    } else {
-      // 'accepted' ís de instemming van de aangezochte collega — alleen die
-      // collega mag hem schrijven, geen enkele stafrol. Zonder deze regel
-      // blokkeerde alleen de sprong pending → approved en kon een planner in
-      // twee stappen (pending → accepted → approved) instemming vervalsen,
-      // inclusief de push "<collega> accepteerde de ruil" naar de aanvrager.
-      // Een admin die zonder bevestiging wil goedkeuren gebruikt de bestaande
-      // directe pending → approved-weg hieronder.
-      if (status === "accepted" && current.status !== "accepted") {
-        return { fout: { status: 403, error: "Niet toegestaan: alleen de aangezochte collega kan een ruil accepteren." } };
-      }
-      const allowed = ["accepted", "approved", "rejected", "cancelled", "completed"];
-      if (!allowed.includes(status)) {
-        return { fout: { status: 400, error: "Ongeldige status." } };
-      }
-      // Force-approve vanuit pending blijft admin-only (zelfde beleid als POST).
-      if (role !== "admin" && current.status === "pending" && status === "approved") {
-        return { fout: { status: 403, error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." } };
-      }
+    } else if (status !== String(current.status)) {
+      // De redenen van een weigering, in de volgorde van vóór de tabel:
+      //  - 'accepted' ís de instemming van de aangezochte collega: geen enkele
+      //    stafrol schrijft hem. Zonder die regel kon een planner in twee
+      //    stappen (pending → accepted → approved) instemming vervalsen,
+      //    inclusief de push "<collega> accepteerde de ruil" naar de aanvrager;
+      //  - goedkeuren zonder de instemming van de collega mag alleen een admin;
+      //  - uit een afgehandelde status is geen overgang meer toegestaan;
+      //  - afhandelen kan een planner alleen wat goedgekeurd is (01-10). Een
+      //    admin mag een open ruil rechtstreeks afhandelen, en dat loopt dan
+      //    als een echte goedkeuring (zie `voertDoor` hieronder).
+      const oordeel = beoordeelStafOvergang(role === "admin" ? "admin" : "planner", current.status, status);
+      if (!oordeel.ok) return { fout: { status: oordeel.status, error: oordeel.error } };
+    } else if (!STAF_BESLIS_STATUSSEN.includes(status)) {
+      // Geen wissel (zelfde status): deze route liet dat altijd door, behalve
+      // voor een status die geen beslissing is.
+      return { fout: { status: 400, error: RUIL_WEIGERING.ongeldig } };
     }
 
     // State-machine: uit een afgehandelde status (geweigerd/geannuleerd/
@@ -187,16 +335,29 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
     // tussen de twee writes): de checks hieronder zagen de dienst dan bij de
     // collega en gaven 409 op élke nieuwe poging, terwijl afwijzen niets
     // terugdraaide (controle-ronde 27-08, bevinding 8). Eén blik op de
-    // planning maakt goedkeuren idempotent en afwijzen herstellend. Alleen
-    // bij goedkeuren/afwijzen (stafbeslissingen); een chauffeur die zijn
-    // eigen aanvraag intrekt raakt de planning niet.
-    const alDoorgevoerd = (status === "approved" || status === "rejected") && current.status !== "approved"
+    // planning maakt goedkeuren idempotent en afwijzen herstellend.
+    //
+    // Alleen voor een beslissing van de planning (01-10). Een chauffeur leest
+    // en raakt de planning nooit: 'rejected' is ook wat de aangezochte collega
+    // stuurt met de knop Weigeren, en stond de dienst intussen al bij hem
+    // (de planner zette ze er via de import, of een andere ruil werd
+    // goedgekeurd), dan schoof zijn weigering ze stil terug naar de aanvrager,
+    // tegen de Excel in.
+    //
+    // `voertDoor`: de overgang die de wissel in de planning zet. Goedkeuren,
+    // en het rechtstreeks afhandelen van een open ruil door een admin: dat is
+    // een goedkeuring gevolgd door een afhandeling, met dezelfde controles,
+    // dezelfde doorvoer, hetzelfde beslismoment, dezelfde logregel en dezelfde
+    // melding. Geen enkele weg schrijft 'completed' zonder die doorvoer.
+    const voertDoor = ruilVoertDoor(current.status, status);
+    const stafWijstAf = staf && status === "rejected" && current.status !== "approved";
+    const alDoorgevoerd = staf && (voertDoor || stafWijstAf)
       ? (await swapToestandInPlanning(current)) === "doorgevoerd"
       : false;
 
     // Exclusiviteit: de aanvrager moet de dienst nog hebben (zie ook
     // staleApprovalError bij POST /api/swaps).
-    if (status === "approved" && current.status !== "approved" && !alDoorgevoerd) {
+    if (voertDoor && !alDoorgevoerd) {
       const stale = await staleApprovalError(current, all);
       if (stale) return { fout: { status: 409, error: stale } };
       // Zelfde afwezigheids-hercheck als de array-route: wie ziek gemeld is
@@ -219,23 +380,36 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
     // want dat betekent juist dat hij is uitgevoerd. Stond hier eerst enkel
     // 'cancelled', waardoor approved → rejected de dienst bij de collega liet
     // staan terwijl de replay hem bij de volgende import weer terugzette.
+    //
+    // `beweging`: wat deze beslissing zelf verplaatste, voor als de
+    // statuswissel hieronder verliest van een gelijktijdige beslissing.
     let carry: string | undefined;
-    if (status === "approved" && current.status !== "approved") {
+    let beweging: PlanningBeweging | null = null;
+    if (voertDoor) {
       if (alDoorgevoerd) {
         carry = "wissel stond al in de planning (herstel na een eerdere halve doorvoer)";
       } else {
-        const r = await applySwapToPlanning(current);
+        const { r, aangebodenNietGevonden } = await voerRuilDoor(current);
         // Zelfde concurrency-vangnet als de array-route: 0 verplaatste rijen
         // mét dienst-info = planning wijzigde tussen check en doorvoer → 409
-        // i.p.v. half goedkeuren met een logwaarschuwing.
-        if (r && r.offeredMoved === 0) {
+        // i.p.v. half goedkeuren met een logwaarschuwing. De terugdienst is
+        // dan niet aangeraakt (voerRuilDoor): de planning staat zoals ervoor.
+        if (aangebodenNietGevonden) {
           return { fout: { status: 409, error: "De planning is intussen gewijzigd, de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." } };
         }
         carry = describeSwapCarry(current, r, "doorgevoerd", await bordBenenVan(current, r));
+        beweging = bewegingVan("doorgevoerd", r);
       }
-    } else if ((current.status === "approved" || alDoorgevoerd) && (status === "cancelled" || status === "rejected")) {
-      const r = await revertSwapFromPlanning(current);
-      carry = describeSwapCarry(current, r, "teruggedraaid", await bordBenenVan(current, r));
+    } else if (staf && (status === "cancelled" || status === "rejected")) {
+      if (current.status === "approved") {
+        const r = await revertSwapFromPlanning(current);
+        carry = describeSwapCarry(current, r, "teruggedraaid", await bordBenenVan(current, r));
+        beweging = bewegingVan("teruggedraaid", r);
+      } else if (alDoorgevoerd) {
+        // Afwijzen van een ruil die nooit goedgekeurd raakte maar al in de
+        // rijen staat: alleen wat het bord niet zelf zo toont gaat terug.
+        ({ carry, beweging } = await draaiHalveDoorvoerTerug(current, { swaps: all }));
+      }
     }
 
     // 'accepted' is een tussenstap (collega akkoord), nog géén beslismoment —
@@ -250,12 +424,20 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
     // overschreven moment zette de eerste schakel van een doorgeefketting
     // (A → B, daarna B → C) achteraan, waardoor de dienst na een heropbouw
     // terugviel op B. Het afhandelmoment zelf staat in het activiteitenlog
-    // ("Dienstruil voltooid").
-    const behoudtBeslismoment = status === "accepted" || status === "completed";
+    // ("Dienstruil voltooid"). Een admin die een open ruil rechtstreeks
+    // afhandelt keurt in dezelfde beweging goed: dat is wél een beslismoment.
+    const behoudtBeslismoment = status === "accepted" || (status === "completed" && !voertDoor);
     const updated = behoudtBeslismoment
       ? { ...current, status }
       : { ...current, status, decidedAt: new Date().toISOString() };
-    await saveSwapsData([updated], []);
+    // Compare-and-set op de status die deze handler las (01-10): besliste
+    // iemand anders intussen, dan raakt de schrijfactie geen rij, blijft de
+    // rij zoals ze is en gaat de planning terug naar wat bij de werkelijke
+    // status hoort. De `ifStatus`-controle hierboven zag alleen de
+    // momentopname van het begin.
+    if (!(await schrijfSwapAlsStatus(updated, String(current.status)))) {
+      return { fout: await naVerlorenStatuswissel({ swap: current, beweging, logReq: actorReq(actor) }) };
+    }
 
     const usersForLog = await getUsersData();
     const userName = (uid: string) => usersForLog.find((u) => String(u.id) === String(uid))?.name || `Onbekende gebruiker (${uid})`;
@@ -266,22 +448,27 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       cancelled: "Dienstruil geannuleerd",
       completed: "Dienstruil voltooid",
     };
-    const action = actionLabels[status] ?? "Dienstruil bijgewerkt";
-    await logActivity(actorReq(actor), "swaps", action, `${userName(String(current.requesterId))}, dienstruil (${current.status} → ${status}).${carry ? ` ${carry}` : ""}`, { type: "swap", id });
+    // Eén stap per overgang; rechtstreeks afhandelen zet er twee (goedkeuring,
+    // daarna afhandeling), zie ruilLogStappen. De doorvoer hoort bij de eerste.
+    let action = "Dienstruil bijgewerkt";
+    for (const [i, stap] of ruilLogStappen(String(current.status), status).entries()) {
+      action = actionLabels[stap.naar] ?? "Dienstruil bijgewerkt";
+      await logActivity(actorReq(actor), "swaps", action, `${userName(String(current.requesterId))}, dienstruil (${stap.van} → ${stap.naar}).${carry && i === 0 ? ` ${carry}` : ""}`, { type: "swap", id });
 
-    // 'completed' = de planning zet een doorgevoerde wissel administratief weg
-    // (knop Afhandelen, Jarno 17-09). Voor de chauffeurs verandert er niets,
-    // dus geen melding: dat zou een tweede "ruil goedgekeurd"-bericht zijn.
-    const betrokkenen = status === "completed" ? [] : [String(current.requesterId), String(current.targetDriverId ?? "")]
-      .filter((uid) => uid && uid !== selfId);
-    await sendPushToUsers(betrokkenen, {
-      title: action,
-      soort: "ruil",
-      body: status === "accepted"
-        ? `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil, wacht op goedkeuring van de planner.`
-        : `Dienstruil van ${userName(String(current.requesterId))}: ${current.status} → ${status}.`,
-      url: recordUrl("ruil-verzoeken", current.id),
-    });
+      // 'completed' = de planning zet een doorgevoerde wissel administratief weg
+      // (knop Afhandelen, Jarno 17-09). Voor de chauffeurs verandert er niets,
+      // dus geen melding: dat zou een tweede "ruil goedgekeurd"-bericht zijn.
+      const betrokkenen = stap.naar === "completed" ? [] : [String(current.requesterId), String(current.targetDriverId ?? "")]
+        .filter((uid) => uid && uid !== selfId);
+      await sendPushToUsers(betrokkenen, {
+        title: action,
+        soort: "ruil",
+        body: stap.naar === "accepted"
+          ? `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil, wacht op goedkeuring van de planner.`
+          : `Dienstruil van ${userName(String(current.requesterId))}: ${stap.van} → ${stap.naar}.`,
+        url: recordUrl("ruil-verzoeken", current.id),
+      });
+    }
     // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route)
     // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
     if (status === "accepted") {
@@ -397,7 +584,7 @@ export function mountRuilRoutes(app: express.Express) {
             uitgevoerdDoor: regel.actorName,
             uitgevoerdDoorRol: regel.actorRole,
             handmatig: regel.action !== "Dienstruil goedgekeurd",
-            verloop: verloopPerSwap[String(regel.entityId ?? "")] ?? [],
+            verloop: regelsVanRuil(verloopPerSwap, String(regel.entityId ?? "")),
           };
         })
         .filter(Boolean);
@@ -576,8 +763,7 @@ export function mountRuilRoutes(app: express.Express) {
             const selfIsRequester = String(prev.requesterId) === selfId;
             const isColleagueResponse =
               selfIsTarget && !selfIsRequester &&
-              prev.status === "pending" &&
-              (next.status === "accepted" || next.status === "rejected");
+              magRuilOvergang("collega", prev.status, next.status);
 
             if (isColleagueResponse) {
               // Enkel status (+ decidedAt bij weigeren) mag wijzigen; de rest niet.
@@ -623,12 +809,19 @@ export function mountRuilRoutes(app: express.Express) {
           if (prev && prev.status === "pending" && next.status === "approved") {
             return res.status(403).json({ error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." });
           }
-          // Bypass-gat: zonder deze check kon een planner het pending-record
-          // onder een NIEUW id met status 'approved' insturen en zo dezelfde
-          // regel omzeilen. Nieuwe records starten dus altijd als 'pending'.
-          if (!prev && next.status !== "pending") {
-            return res.status(403).json({ error: "Niet toegestaan: nieuwe wisselverzoeken starten als 'pending'." });
-          }
+        }
+      }
+      // Nieuwe records starten altijd als 'pending', voor elke rol. Eerst gold
+      // dit alleen voor wie geen admin is (het bypass-gat: een planner stuurde
+      // het pending-record onder een NIEUW id met status 'approved' in). Een
+      // admin kon zo nog een record meteen als 'approved' aanmaken: dat werd
+      // opgeslagen zonder doorvoer in de planning, en een planner kon het
+      // daarna afhandelen, de laatste weg naar 'completed' zonder doorvoer
+      // (01-10, tweede lezing). De app maakt via deze route alleen aanvragen
+      // aan; een wissel door de planning zelf loopt via /api/admin/shift-swap.
+      for (const next of newData) {
+        if (!previousById.has(String(next.id)) && next.status !== "pending") {
+          return res.status(403).json({ error: "Niet toegestaan: nieuwe wisselverzoeken starten als 'pending'." });
         }
       }
 
@@ -644,6 +837,25 @@ export function mountRuilRoutes(app: express.Express) {
           if (String(next.status) === "accepted" && String(prev?.status ?? "") !== "accepted") {
             return res.status(403).json({ error: "Niet toegestaan: alleen de aangezochte collega kan een ruil accepteren." });
           }
+        }
+      }
+
+      // Statuswissels door de planning: dezelfde tabel als PATCH /api/swaps/:id
+      // (shared/ruilOvergangen.ts). Nieuw sinds 01-10: afhandelen ('completed')
+      // kan een planner alleen vanuit 'approved'; een admin mag een open ruil
+      // rechtstreeks afhandelen, en dat loopt hieronder als een goedkeuring
+      // (controles, doorvoer, beslismoment, log en melding).
+      //
+      // Bewust NIET door de tabel: een record dat van status wisselt naar iets
+      // wat geen beslissing is (terug naar 'pending', of een onbekende status).
+      // Deze route liet dat altijd toe en PATCH niet; dat verschil blijft staan.
+      if (isStafRol(req.appUser!.role)) {
+        const partij = req.appUser!.role === "admin" ? "admin" : "planner";
+        for (const next of newData) {
+          const prev = previousById.get(String(next.id));
+          if (!prev || String(prev.status) === String(next.status) || !STAF_BESLIS_STATUSSEN.includes(String(next.status))) continue;
+          const oordeel = beoordeelStafOvergang(partij, prev.status, next.status);
+          if (!oordeel.ok) return res.status(oordeel.status).json({ error: oordeel.error });
         }
       }
 
@@ -670,11 +882,12 @@ export function mountRuilRoutes(app: express.Express) {
       // Halve doorvoer herkennen (zie beslisRuilIntern): staat de wissel al in
       // de planning, dan slaan de checks én de doorvoer over en wordt alleen
       // de status alsnog opgeslagen.
+      //
+      // "Goedgekeurd" is hier elke overgang die de wissel in de planning zet
+      // (ruilVoertDoor): goedkeuren, en het rechtstreeks afhandelen van een
+      // open ruil door een admin. Die tweede weg loopt dezelfde controles af.
       const alDoorgevoerdIds = new Set<string>();
-      const wordtGoedgekeurd = (next: any) => {
-        const prev = previousById.get(String(next.id));
-        return next.status === "approved" && (!prev || prev.status !== "approved");
-      };
+      const wordtGoedgekeurd = (next: any) => ruilVoertDoor(previousById.get(String(next.id))?.status, next.status);
       // Gebruikers, dienstoverzicht en planningscodes voor de bordcontrole:
       // één keer vóór de lus, en alleen als er iets goed te keuren valt. Per
       // ruil blijft dan alleen de matrixrij van zijn dag te lezen.
@@ -902,53 +1115,157 @@ export function mountRuilRoutes(app: express.Express) {
         });
       }
 
-      // Planning-doorvoer VÓÓR de save — zelfde reden als bij PATCH /api/swaps/:id:
-      // movePlanningRows filtert op de huidige eigenaar en is dus idempotent, dus
-      // een herhaalde poging is ongevaarlijk. Faalt de doorvoer halverwege, dan
-      // is de status nog niet gewijzigd en kan de planner het gewoon opnieuw
-      // proberen — voorheen bleef er een halve wissel achter bij een ruil die al
-      // op 'approved' stond. Blijft best-effort: 0 verplaatste rijen (dienst
-      // handmatig verlegd) blokkeert de beslissing niet, maar komt in de log.
+      // --- Schrijven (01-10): niets gaat nog als hele lijst naar de database ---
       //
-      // Terugdraaien bij annuleren én afwijzen; 'completed' laat de wissel staan.
-      const carryLogById = new Map<string, string>();
+      // Tot 01-10 ging elk record uit de payload in één onvoorwaardelijke
+      // upsert mee, ook wat niet wijzigde: een echo van een verouderde lijst
+      // overschreef zo een beslissing die er net tussen kwam, en twee
+      // beslissingen die elkaar kruisten eindigden met een status die de
+      // planning tegensprak. Nu:
+      //  - een bestaand record wordt alleen geschreven als zijn STATUS wisselt,
+      //    als compare-and-set op de status die deze handler las;
+      //  - een nieuw record is een insert;
+      //  - al het andere (ongewijzigde status) wordt niet geschreven.
+      //
+      // Per statuswissel: eerst de planning, dan de status, dan het log. De
+      // planning vóór de status om dezelfde reden als bij PATCH /api/swaps/:id:
+      // movePlanningRows filtert op de huidige eigenaar en is dus idempotent,
+      // en faalt de doorvoer halverwege, dan is de status nog niet gewijzigd en
+      // kan de planner het gewoon opnieuw proberen. Het log meteen erna, zodat
+      // een latere fout in dezelfde aanvraag geen geschreven beslissing zonder
+      // spoor achterlaat.
+      //
+      // Een chauffeur raakt de planning hier nooit (01-10): de weigering van de
+      // aangezochte collega is ook 'rejected', en las vroeger de planning.
+      // Terugdraaien is voor de planning: bij annuleren en afwijzen van een
+      // goedgekeurde ruil, en bij afwijzen van een halve doorvoer.
+      // 'completed' laat de wissel staan.
+      const staf = isStafRol(req.appUser!.role);
+      const actorId = String(req.appUser?.id ?? "");
+      const usersForLog = await getUsersData();
+      const userName = (id: string) => usersForLog.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
+      const ACTIE_PER_STATUS: Record<string, string> = {
+        accepted: "Dienstruil geaccepteerd",
+        approved: "Dienstruil goedgekeurd",
+        rejected: "Dienstruil afgewezen",
+        cancelled: "Dienstruil geannuleerd",
+        completed: "Dienstruil voltooid",
+      };
+      /** Log en meldingen van één geschreven statuswissel. Rechtstreeks
+       *  afhandelen zet twee stappen (goedkeuring, daarna afhandeling), zie
+       *  ruilLogStappen; de doorvoer hoort bij de eerste. */
+      const logStatusWissel = async (prev: any, next: any, carry?: string) => {
+        if (next.status === "pending") return;
+        for (const [i, stap] of ruilLogStappen(String(prev.status), String(next.status)).entries()) {
+          // Alleen een gekende status krijgt een logregel (eigen sleutels: de
+          // status komt uit de payload).
+          if (!Object.hasOwn(ACTIE_PER_STATUS, stap.naar)) continue;
+          const action = ACTIE_PER_STATUS[stap.naar];
+          await logActivity(req, "swaps", action, `${userName(next.requesterId)}, dienstruil (${stap.van} → ${stap.naar}).${carry && i === 0 ? ` ${carry}` : ""}`, { type: "swap", id: next.id });
+          // Push naar de betrokkenen, behalve degene die de actie deed. Een
+          // afhandeling ('completed') is boekhouding van de planning en gaat
+          // stil, zie de delta-route.
+          const betrokkenen = stap.naar === "completed" ? [] : [String(prev.requesterId), String(prev.targetDriverId ?? "")]
+            .filter((id) => id && id !== actorId);
+          await sendPushToUsers(betrokkenen, {
+            title: action,
+            soort: "ruil",
+            body: stap.naar === "accepted"
+              ? `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil, wacht op goedkeuring van de planner.`
+              : `Dienstruil van ${userName(next.requesterId)}: ${stap.van} → ${stap.naar}.`,
+            url: recordUrl("ruil-verzoeken", next.id),
+          });
+          // Geaccepteerd = er wacht een validatie op de planner, die kreeg
+          // hier tot nu toe geen seintje van. Beslissers pushen (behalve de
+          // actor zelf, als die toevallig planner/admin is).
+          if (stap.naar === "accepted") {
+            const beslissers = usersForLog
+              .filter((u) => isActieveStaf(u) && String(u.id) !== actorId)
+              .map((u) => String(u.id));
+            await sendPushToUsers(beslissers, {
+              title: "Dienstruil wacht op validatie",
+              soort: "ruil",
+              body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}, rij- en rusttijden checken.`,
+              url: recordUrl("ruil-verzoeken", next.id),
+            });
+            await meldRuilTerValidatieTelegram({
+              id: String(next.id),
+              omschrijving: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}${next.shiftLine ? `, dienst ${next.shiftLine} op ${next.shiftDate ? DAG_KORT(String(next.shiftDate)) : "?"}` : ""}.`,
+            });
+          }
+        }
+      };
+
+      // Gebruikers, dienstoverzicht en planningscodes voor het bord: hoogstens
+      // één keer, ook als meer dan één afwijzing het bord nodig heeft.
+      let vastLui: Promise<BordVast> | undefined = bordVast ? Promise.resolve(bordVast) : undefined;
+      const laadVast = () => (vastLui ??= laadBordVast());
+
+      // Eén statuswissel die niet doorgaat stopt de rest: wat ervóór kwam is
+      // volledig geschreven en gelogd, wat erna komt is niet aangeraakt, en
+      // het antwoord is nooit "gelukt".
+      let afgebroken: RuilFout | null = null;
       for (const next of finalRecords) {
         const prev = previousById.get(String(next.id));
         if (!prev || prev.status === next.status) continue;
-        if (next.status === "approved") {
+        let carry: string | undefined;
+        let beweging: PlanningBeweging | null = null;
+        if (staf && ruilVoertDoor(prev.status, next.status)) {
           if (alDoorgevoerdIds.has(String(next.id))) {
-            carryLogById.set(String(next.id), "wissel stond al in de planning (herstel na een eerdere halve doorvoer)");
-            continue;
+            carry = "wissel stond al in de planning (herstel na een eerdere halve doorvoer)";
+          } else {
+            const { r, aangebodenNietGevonden } = await voerRuilDoor(next);
+            // Concurrency-vangnet: 0 verplaatste rijen mét dienst-info betekent
+            // dat de planning tussen de hercheck en de doorvoer nog wijzigde
+            // (bv. een gelijktijdige admin-wissel). Dan NIET half goedkeuren met
+            // enkel een logwaarschuwing: weigeren, zodat de planner met verse
+            // data opnieuw beoordeelt. De terugdienst is dan niet aangeraakt
+            // (voerRuilDoor). r === null (legacy zonder dienst-info) houdt het
+            // oude waarschuw-gedrag.
+            if (aangebodenNietGevonden) {
+              afgebroken = { status: 409, error: "De planning is intussen gewijzigd, de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." };
+              break;
+            }
+            carry = describeSwapCarry(next, r, "doorgevoerd", await bordBenenVan(next, r));
+            beweging = bewegingVan("doorgevoerd", r);
           }
-          const r = await applySwapToPlanning(next);
-          // Concurrency-vangnet: 0 verplaatste rijen mét dienst-info betekent
-          // dat de planning tussen de hercheck en de doorvoer nog wijzigde
-          // (bv. een gelijktijdige admin-wissel). Dan NIET half goedkeuren met
-          // enkel een logwaarschuwing — weigeren, zodat de planner met verse
-          // data opnieuw beoordeelt. r === null (legacy zonder dienst-info)
-          // houdt het oude waarschuw-gedrag.
-          if (r && r.offeredMoved === 0) {
-            return res.status(409).json({ error: "De planning is intussen gewijzigd, de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." });
-          }
-          carryLogById.set(String(next.id), describeSwapCarry(next, r, "doorgevoerd", await bordBenenVan(next, r)));
-        } else if (next.status === "cancelled" || next.status === "rejected") {
-          // Terugdraaien vanuit 'approved', en bij afwijzen ook een halve
-          // doorvoer (planning gewisseld zonder opgeslagen status).
-          const terug = prev.status === "approved"
-            || (next.status === "rejected" && (await swapToestandInPlanning(prev)) === "doorgevoerd");
-          if (terug) {
+        } else if (staf && (next.status === "cancelled" || next.status === "rejected")) {
+          if (prev.status === "approved") {
             const r = await revertSwapFromPlanning(next);
-            carryLogById.set(String(next.id), describeSwapCarry(next, r, "teruggedraaid", await bordBenenVan(next, r)));
+            carry = describeSwapCarry(next, r, "teruggedraaid", await bordBenenVan(next, r));
+            beweging = bewegingVan("teruggedraaid", r);
+          } else if (next.status === "rejected" && (await swapToestandInPlanning(prev)) === "doorgevoerd") {
+            // Afwijzen van een ruil die nooit goedgekeurd raakte maar al in de
+            // rijen staat: alleen wat het bord niet zelf zo toont gaat terug.
+            ({ carry, beweging } = await draaiHalveDoorvoerTerug(next, { swaps: previousSwaps, vast: await laadVast() }));
           }
         }
+        if (!(await schrijfSwapAlsStatus(next, String(prev.status)))) {
+          afgebroken = await naVerlorenStatuswissel({ swap: next, beweging, logReq: req });
+          break;
+        }
+        await logStatusWissel(prev, next, carry);
+      }
+      if (afgebroken) {
+        return res.status(afgebroken.status).json({ error: afgebroken.error, ...(afgebroken.currentStatus ? { currentStatus: afgebroken.currentStatus } : {}) });
       }
 
-      await saveSwapsData(finalRecords, swapIdsToDelete, { alleenPending: !isStafRol(req.appUser!.role) });
+      // Nieuwe aanvragen: een insert. Bestaat het id intussen al (dezelfde
+      // aanvraag twee keer tegelijk verstuurd), dan wordt de bestaande rij
+      // niet overschreven.
+      const nieuweRecords = finalRecords.filter((n) => !previousById.has(String(n.id)));
+      try {
+        await voegSwapsToe(nieuweRecords);
+      } catch (err: any) {
+        if (String(err?.code ?? "") === "23505") {
+          return res.status(409).json({ error: "Deze aanvraag bestaat intussen al, de lijst is ververst." });
+        }
+        throw err;
+      }
 
-      // Activity log: detecteer state-overgangen en nieuwe aanvragen. Over
-      // recordsToWrite zodat een niet-weggeschreven echo geen spookmelding geeft.
-      const usersForLog = await getUsersData();
-      const userName = (id: string) => usersForLog.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
+      // Intrekkingen en verwijderingen: gevalideerd hierboven. alleenPending
+      // (chauffeur-pad): de rij gaat alleen weg als ze nog 'pending' is.
+      await saveSwapsData([], swapIdsToDelete, { alleenPending: !staf });
 
       // Verwijderde ruilen laten anders geen enkel spoor na: een intrekking door
       // de aanvrager is legitiem, maar een staflid dat een geaccepteerde aanvraag
@@ -964,75 +1281,27 @@ export function mountRuilRoutes(app: express.Express) {
           { type: "swap", id: String(id) },
         );
       }
-      for (const next of finalRecords) {
-        const prev = previousById.get(String(next.id));
-        if (!prev) {
-          const isTakeover = normalizeSwapType(next.swapType) === "overname";
-          await logActivity(
-            req,
-            "swaps",
-            "Dienstruil aangevraagd",
-            isTakeover
-              ? `${userName(next.requesterId)} bood een dienst aan ter overname (zonder tegenprestatie).`
-              : `${userName(next.requesterId)} bood een dienst aan voor ruil.`,
-            { type: "swap", id: next.id },
-          );
-          // De aangezochte collega krijgt direct een seintje.
-          if (next.targetDriverId) {
-            await sendPushToUsers([String(next.targetDriverId)], {
-              title: isTakeover ? "Vraag om een dienst over te nemen" : "Nieuwe dienstruil-aanvraag",
-              soort: "ruil",
-              body: isTakeover
-                ? `${userName(next.requesterId)} vraagt of je een dienst wil overnemen, zonder tegenprestatie.`
-                : `${userName(next.requesterId)} wil een dienst met je ruilen.`,
-              url: recordUrl("ruil-verzoeken", next.id),
-            });
-          }
-          continue;
-        }
-        if (prev.status !== next.status && next.status !== "pending") {
-          let action: string | null = null;
-          if (next.status === "accepted") action = "Dienstruil geaccepteerd";
-          else if (next.status === "approved") action = "Dienstruil goedgekeurd";
-          else if (next.status === "rejected") action = "Dienstruil afgewezen";
-          else if (next.status === "cancelled") action = "Dienstruil geannuleerd";
-          else if (next.status === "completed") action = "Dienstruil voltooid";
-          if (action) {
-            const carry = carryLogById.get(String(next.id));
-            await logActivity(req, "swaps", action, `${userName(next.requesterId)}, dienstruil (${prev.status} → ${next.status}).${carry ? ` ${carry}` : ""}`, { type: "swap", id: next.id });
-            // Push naar de betrokkenen, behalve degene die de actie deed. Een
-            // afhandeling ('completed') is boekhouding van de planning en gaat
-            // stil, zie de delta-route.
-            const actorId = String(req.appUser?.id ?? "");
-            const betrokkenen = next.status === "completed" ? [] : [String(prev.requesterId), String(prev.targetDriverId ?? "")]
-              .filter((id) => id && id !== actorId);
-            await sendPushToUsers(betrokkenen, {
-              title: action,
-              soort: "ruil",
-              body: next.status === "accepted"
-                ? `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil, wacht op goedkeuring van de planner.`
-                : `Dienstruil van ${userName(next.requesterId)}: ${prev.status} → ${next.status}.`,
-              url: recordUrl("ruil-verzoeken", next.id),
-            });
-            // Geaccepteerd = er wacht een validatie op de planner — die kreeg
-            // hier tot nu toe geen seintje van. Beslissers pushen (behalve de
-            // actor zelf, als die toevallig planner/admin is).
-            if (next.status === "accepted") {
-              const beslissers = usersForLog
-                .filter((u) => isActieveStaf(u) && String(u.id) !== actorId)
-                .map((u) => String(u.id));
-              await sendPushToUsers(beslissers, {
-                title: "Dienstruil wacht op validatie",
-                soort: "ruil",
-                body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}, rij- en rusttijden checken.`,
-                url: recordUrl("ruil-verzoeken", next.id),
-              });
-              await meldRuilTerValidatieTelegram({
-                id: String(next.id),
-                omschrijving: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}${next.shiftLine ? `, dienst ${next.shiftLine} op ${next.shiftDate ? DAG_KORT(String(next.shiftDate)) : "?"}` : ""}.`,
-              });
-            }
-          }
+      for (const next of nieuweRecords) {
+        const isTakeover = normalizeSwapType(next.swapType) === "overname";
+        await logActivity(
+          req,
+          "swaps",
+          "Dienstruil aangevraagd",
+          isTakeover
+            ? `${userName(next.requesterId)} bood een dienst aan ter overname (zonder tegenprestatie).`
+            : `${userName(next.requesterId)} bood een dienst aan voor ruil.`,
+          { type: "swap", id: next.id },
+        );
+        // De aangezochte collega krijgt direct een seintje.
+        if (next.targetDriverId) {
+          await sendPushToUsers([String(next.targetDriverId)], {
+            title: isTakeover ? "Vraag om een dienst over te nemen" : "Nieuwe dienstruil-aanvraag",
+            soort: "ruil",
+            body: isTakeover
+              ? `${userName(next.requesterId)} vraagt of je een dienst wil overnemen, zonder tegenprestatie.`
+              : `${userName(next.requesterId)} wil een dienst met je ruilen.`,
+            url: recordUrl("ruil-verzoeken", next.id),
+          });
         }
       }
 
@@ -1369,7 +1638,7 @@ export function mountRuilRoutes(app: express.Express) {
       if (swap.status !== "pending") {
         return res.status(409).json({ error: "Deze dienstruil wacht niet meer op een antwoord.", currentStatus: swap.status });
       }
-      const regels = (await getSwapVerloopRegels([id]))[id] ?? [];
+      const regels = regelsVanRuil(await getSwapVerloopRegels([id]), id);
       if (regels.some((r) => r.action === RUIL_BEKEKEN_ACTIE)) {
         return res.json({ success: true, nieuw: false });
       }

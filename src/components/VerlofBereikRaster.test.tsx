@@ -12,12 +12,12 @@ const toets = (el: Element, key: string) => el.dispatchEvent(new KeyboardEvent('
 const cel = (iso: string) => document.querySelector<HTMLButtonElement>(`[data-iso="${iso}"]`);
 const tabStops = () => [...document.querySelectorAll<HTMLButtonElement>('[role="gridcell"][tabindex="0"]')];
 
-function Harnas({ start = '', eind = '', min, onKies = () => {} }: { start?: string; eind?: string; min?: string; onKies?: (iso: string) => void }) {
+function Harnas({ start = '', eind = '', min, max, onKies = () => {} }: { start?: string; eind?: string; min?: string; max?: string; onKies?: (iso: string) => void }) {
   const [maand, setMaand] = useState('2026-09');
   return (
     <>
       <span id="maand">{maand}</span>
-      <VerlofBereikRaster maand={maand} start={start} eind={eind} min={min} vandaag="2026-09-23" onKies={onKies} onNaarMaand={setMaand} verledenTitel="Verleden" />
+      <VerlofBereikRaster maand={maand} start={start} eind={eind} min={min} max={max} vandaag="2026-09-23" onKies={onKies} onNaarMaand={setMaand} verledenTitel="Verleden" laterTitel="Te laat" />
     </>
   );
 }
@@ -77,6 +77,38 @@ describe('VerlofBereikRaster', () => {
     expect(document.activeElement).toBe(cel('2026-09-23'));
     await act(async () => { cel('2026-09-22')!.click(); });
     expect(onKies).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
+  });
+
+  it('dagen na max zijn uitgeschakeld met hun eigen uitleg, en de cursor komt er niet (uiterste einddatum van verlof)', async () => {
+    const onKies = vi.fn();
+    const { root, container } = await monteer(<Harnas min="2026-09-10" max="2026-09-25" onKies={onKies} />);
+    expect(cel('2026-09-25')!.disabled).toBe(false);
+    expect(cel('2026-09-25')!.getAttribute('title')).toBeNull();
+    expect(cel('2026-09-26')!.disabled).toBe(true);
+    expect(cel('2026-09-26')!.getAttribute('title')).toBe('Te laat');
+    // Vóór min blijft de uitleg die van het verleden.
+    expect(cel('2026-09-09')!.getAttribute('title')).toBe('Verleden');
+    const grid = container.querySelector('[role="grid"]')!;
+    await act(async () => { cel('2026-09-25')!.focus(); });
+    await act(async () => { toets(grid, 'ArrowRight'); });
+    expect(document.activeElement).toBe(cel('2026-09-25'));
+    await act(async () => { toets(grid, 'ArrowDown'); });
+    expect(document.activeElement).toBe(cel('2026-09-25'));
+    // PageDown zou de maand uit lopen: de cursor blijft op de laatste kiesbare dag, de maand wisselt niet.
+    await act(async () => { toets(grid, 'PageDown'); });
+    expect(container.querySelector('#maand')!.textContent).toBe('2026-09');
+    expect(document.activeElement).toBe(cel('2026-09-25'));
+    await act(async () => { cel('2026-09-26')!.click(); });
+    expect(onKies).not.toHaveBeenCalled();
+    await act(async () => { cel('2026-09-25')!.click(); });
+    expect(onKies).toHaveBeenCalledWith('2026-09-25');
+    await act(async () => { root.unmount(); });
+  });
+
+  it('zonder max blijft elke latere dag kiesbaar', async () => {
+    const { root } = await monteer(<Harnas min="2026-09-10" />);
+    expect(cel('2026-09-30')!.disabled).toBe(false);
     await act(async () => { root.unmount(); });
   });
 

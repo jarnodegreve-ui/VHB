@@ -244,7 +244,8 @@ export function mountTechniekRoutes(app: express.Express) {
       const bestaand = await getDefect(String(req.params.id));
       if (!bestaand) return res.status(404).json({ error: "Melding niet gevonden." });
       const eigenId = String(req.appUser!.id);
-      if (!magTechniek(req.appUser!)) {
+      const techniek = magTechniek(req.appUser!);
+      if (!techniek) {
         // Chauffeur: alleen de eigen open melding annuleren, niets anders.
         const alleenAnnuleren = body.status === "geannuleerd" && Object.keys(body).every((k) => k === "status");
         if (bestaand.gemeldDoor !== eigenId || bestaand.status !== "open" || !alleenAnnuleren) {
@@ -260,8 +261,21 @@ export function mountTechniekRoutes(app: express.Express) {
         patch.uitgevoerdDoor = null;
         patch.uitgevoerdOp = null;
       }
-      const d = await patchDefect(bestaand.id, patch);
-      if (!d) return res.status(404).json({ error: "Melding niet gevonden." });
+      // De annulering van een chauffeur is voorwaardelijk (01-10): de melding
+      // moet op het moment van schrijven nog open zijn en van hem. De controle
+      // hierboven zag alleen de lezing van daarnet; handelde de technieker de
+      // melding intussen af, dan raakt de annulering geen rij en blijft zijn
+      // afhandeling staan. Wat techniek en staf doen is ongewijzigd.
+      const d = techniek
+        ? await patchDefect(bestaand.id, patch)
+        : await patchDefect(bestaand.id, patch, { status: "open", gemeldDoor: eigenId });
+      if (!d) {
+        const nu = techniek ? null : await getDefect(bestaand.id);
+        if (nu) {
+          return res.status(409).json({ error: "Deze melding is intussen al behandeld, annuleren kan niet meer. Vernieuw de lijst.", currentStatus: nu.status });
+        }
+        return res.status(404).json({ error: "Melding niet gevonden." });
+      }
       const users = await getUsersData();
       const naam = voertuigNaam(d);
       if (body.status && body.status !== bestaand.status) {

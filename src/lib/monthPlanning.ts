@@ -46,6 +46,11 @@ export type MonthPlanning = {
   /** Eerste en laatste dag waarvoor er planning geïmporteerd is; het bord
    *  bladert niet voorbij deze grenzen. null = nog niets geïmporteerd. */
   geimporteerd?: { eerste: string | null; laatste: string | null };
+  /** Alleen voor wie geen staf is: de eerste dag die hij ziet (de maandag van
+   *  de lopende week, shared/maandplanningTerugblik.ts). De server stuurt geen
+   *  dag of cel van vroeger mee en `geimporteerd.eerste` ligt nooit vóór deze
+   *  dag. Bij staf ontbreekt het veld. */
+  zichtbaarVanaf?: string;
 };
 
 export function fetchMonthPlanning(month: string): Promise<MonthPlanning> {
