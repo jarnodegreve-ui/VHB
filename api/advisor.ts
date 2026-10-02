@@ -14,6 +14,7 @@
  */
 
 import { addDagenIso } from "./helpers.js";
+import { MAX_PERIODE_DAGEN, dagenInPeriode, isIsoDag } from "../shared/rapporten/periode.js";
 
 // De rekenkern van de rustregel (dagVenster, rust t.o.v. de dag ervoor en
 // erna, het minimum) woont sinds 22-09 in shared/ruilRust.ts, zodat de
@@ -49,6 +50,101 @@ export const maandagVan = (iso: string): string => {
   const d = new Date(`${iso}T00:00:00Z`);
   return addDagenIso(iso, -((d.getUTCDay() + 6) % 7));
 };
+
+// --- Bereik van één advies-aanvraag (beveiligingsscan 01-10, punt 7) --------
+// Het advies laadt de planning per maand voor het venster rond elke gevraagde
+// dag. Zonder grens liet één batch met een dag in 2026 en een dag in 9999
+// bijna 96.000 maanden tegelijk ophalen, en liep de maandlus bij december
+// 9999 door tot voorbij een miljoen ("10000-01" sorteert als tekst vóór
+// "9999-12"). Twee sloten, los van elkaar: de dagen moeten bestaan en het
+// venster mag niet breder zijn dan MAX_ADVIES_DAGEN, en de maandlus rekent op
+// maandnummers met een vast plafond, zodat ook een aanroeper die de eerste
+// controle overslaat niet kan ontsporen.
+
+/**
+ * Breedste venster (eerste tot en met laatste dag) dat één advies-aanvraag
+ * mag laden: een jaar, dezelfde maat als de rapporten en de ziekteperiode.
+ * Wat het scherm echt vraagt blijft daar ruim onder: één dag is hoogstens 37
+ * dagen venster, en de herverdeel-wizard stuurt hoogstens 40 diensten van één
+ * afwezige. Wie vijf dagen per week rijdt haalt daarmee 8 weken, wie maar één
+ * dag per week rijdt 40 weken: 274 dagen, plus hoogstens een maand venster
+ * aan elke kant is 334. De grens van 120 dagen van /api/availability zou die
+ * laatste (en al wie twee dagen per week rijdt, 140 dagen) weigeren.
+ */
+export const MAX_ADVIES_DAGEN = MAX_PERIODE_DAGEN;
+
+/** Meer kalendermaanden raakt een venster van MAX_ADVIES_DAGEN dagen nooit
+ *  (een 14e maand vraagt 1 + 365 + 1 dagen): het plafond van de maandlus. */
+export const MAX_ADVIES_MAANDEN = 13;
+
+/**
+ * Een advies-aanvraag die niet kan: een dag die niet bestaat, of diensten die
+ * te ver uit elkaar liggen. De routes maken er een 400 met deze tekst van; de
+ * digest en de Telegram-bot vangen hem per gat op en melden dat het advies
+ * niet berekend kon worden.
+ */
+export class AdviesBereikFout extends Error {
+  readonly status = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "AdviesBereikFout";
+  }
+}
+
+const ADVIES_DAG_ONGELDIG = "Die datum bestaat niet of valt buiten de kalender van het portaal. Controleer de datum en probeer opnieuw.";
+const ADVIES_TE_BREED = "Deze diensten liggen meer dan een jaar uit elkaar, dat is te veel voor één advies. Controleer de datums of vraag het advies per dienst op.";
+
+/** Datavenster voor één advies-datum: ±6 dagen (6-dagenregel + rustcheck met
+ *  de buurdagen), opgerekt tot de volledige week (ma–zo) én kalendermaand van
+ *  de dag — de sortering telt sinds 19-08 gewerkte dagen per week en maand.
+ *  Gooit een AdviesBereikFout als de dag niet bestaat of als het venster
+ *  buiten de kalender valt (december 9999: de maand erna heeft geen
+ *  JJJJ-MM-DD meer). */
+export function adviesVenster(date: string): { vanaf: string; tot: string } {
+  if (!isIsoDag(date)) throw new AdviesBereikFout(ADVIES_DAG_ONGELDIG);
+  const maandStart = `${date.slice(0, 7)}-01`;
+  // Laatste dag van de maand = de dag vóór de 1e van de volgende maand
+  // (dag 28 + 7 valt gegarandeerd in de volgende maand).
+  const volgendeMaandStart = `${addDagenIso(`${date.slice(0, 7)}-28`, 7).slice(0, 7)}-01`;
+  if (!isIsoDag(volgendeMaandStart)) throw new AdviesBereikFout(ADVIES_DAG_ONGELDIG);
+  const maandEind = addDagenIso(volgendeMaandStart, -1);
+  const weekStart = maandagVan(date);
+  const begin = [addDagenIso(date, -6), maandStart, weekStart];
+  const einde = [addDagenIso(date, 6), maandEind, addDagenIso(weekStart, 6)];
+  if (![...begin, ...einde].every(isIsoDag)) throw new AdviesBereikFout(ADVIES_DAG_ONGELDIG);
+  const vanaf = begin.sort()[0];
+  const tot = einde.sort().slice(-1)[0];
+  return { vanaf, tot };
+}
+
+/**
+ * De controle waar elke advies-aanvraag langs moet, vóór er iets geladen
+ * wordt: [vanaf, tot] bestaat uit twee echte kalenderdagen in de juiste
+ * volgorde en is hoogstens MAX_ADVIES_DAGEN dagen breed.
+ */
+export function controleerAdviesBereik(vanaf: string, tot: string): void {
+  if (!isIsoDag(vanaf) || !isIsoDag(tot) || tot < vanaf) throw new AdviesBereikFout(ADVIES_DAG_ONGELDIG);
+  if (dagenInPeriode({ van: vanaf, tot }) > MAX_ADVIES_DAGEN) throw new AdviesBereikFout(ADVIES_TE_BREED);
+}
+
+/**
+ * De maanden ('JJJJ-MM') die [vanaf, tot] raakt, in volgorde. Rekent op
+ * maandnummers (jaar × 12 + maand), nooit op een vergelijking van tekst, en
+ * telt eerst: meer dan MAX_ADVIES_MAANDEN maanden is een fout, geen lange
+ * lus. Elke sleutel heeft de vorm JJJJ-MM, de enige die de maandfilter van
+ * getPlanningData toepast (een andere vorm leest de hele planning).
+ */
+export function adviesMaanden(vanaf: string, tot: string): string[] {
+  if (!isIsoDag(vanaf) || !isIsoDag(tot) || tot < vanaf) throw new AdviesBereikFout(ADVIES_DAG_ONGELDIG);
+  const maandNummer = (iso: string) => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
+  const eerste = maandNummer(vanaf);
+  const aantal = maandNummer(tot) - eerste + 1;
+  if (!Number.isInteger(aantal) || aantal < 1 || aantal > MAX_ADVIES_MAANDEN) throw new AdviesBereikFout(ADVIES_TE_BREED);
+  return Array.from({ length: aantal }, (_, i) => {
+    const nummer = eerste + i;
+    return `${String(Math.floor(nummer / 12)).padStart(4, "0")}-${String((nummer % 12) + 1).padStart(2, "0")}`;
+  });
+}
 
 /** Gewerkte dagen in de week (ma–zo) van `datum`, de dag zelf niet meegeteld
  *  — die is voor iedere kandidaat dezelfde toevoeging en zou alleen ruis geven. */

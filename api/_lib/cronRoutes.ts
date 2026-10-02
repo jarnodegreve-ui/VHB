@@ -619,7 +619,11 @@ export function mountCronRoutes(app: express.Express) {
             try {
               const advies = await berekenCoverageAdvies(gat.date, gat.code);
               regels.push(`${DAG_KORT(gat.date)}, dienst ${gat.code}: ${advies.samenvatting}`);
-            } catch {
+            } catch (err: any) {
+              // Ook een geweigerd venster (AdviesBereikFout: een dag die niet
+              // bestaat) komt hier uit: het gat blijft in de mail staan, de
+              // reden in het log, de rest van het dagoverzicht gaat door.
+              console.error(`[error-digest] advies voor ${gat.date}, dienst ${gat.code} mislukt:`, err?.message ?? err);
               regels.push(`${DAG_KORT(gat.date)}, dienst ${gat.code}: advies kon niet berekend worden.`);
             }
           }

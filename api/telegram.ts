@@ -489,7 +489,10 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
             await antwoord(formatAdvies(String(date ?? ""), String(code ?? ""), advies), {
               knoppen: adviesKnoppen(String(date ?? ""), String(code ?? ""), advies),
             });
-          } catch {
+          } catch (err: any) {
+            // Ook een geweigerde dag (AdviesBereikFout) komt hier uit: de chat
+            // krijgt een antwoord, de reden staat in het log.
+            console.error("[telegram] advies mislukt:", err?.message ?? err);
             await antwoord(`Advies voor dienst ${escapeHtml(String(code ?? ""))} kon niet berekend worden.`);
           }
         } else if ((data.startsWith("lv|") || data.startsWith("rl|") || data.startsWith("lv2|") || data.startsWith("rl2|")) && !isBeslisCallback(data)) {
