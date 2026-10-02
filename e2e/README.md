@@ -64,7 +64,10 @@ dist via `vite preview` op poort 4173.
   SIGNED_OUT van elders (met de uitleg op het inlogscherm), een laat antwoord
   van de eerste gebruiker dat niet bij de tweede belandt, de privé-caches weg
   en de schil niet, en waar níét herladen wordt: koude start, start met een
-  verlopen sessie, uitnodiging, wachtwoordherstel, afmelden zonder bereik. Ook:
+  verlopen sessie, uitnodiging, wachtwoordherstel, afmelden zonder bereik (met
+  het `offline`-event, niet met `context.setOffline`: met een echt afgesloten
+  netwerk mislukt het voorladen bij het accountmenu en herlaadt lazyRetry de
+  pagina 0,8 s later, wat op Linux WebKit de volgende aanmelding brak). Ook:
   afmelden met een verlopen token terwijl de aanmeldserver onbereikbaar is (de
   sessie gaat toch uit de opslag; `page.clock` slaat de herkansingen van
   Supabase over). De service-worker-kant (afmelden zonder bereik uit de schil,

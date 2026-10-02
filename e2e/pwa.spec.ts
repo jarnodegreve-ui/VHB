@@ -780,6 +780,20 @@ test.describe('pwa: afmelden op een gedeeld toestel', () => {
   test('afmelden zonder bereik: het inlogscherm komt uit de schil, de privé-cache is weg', async ({ page, context }) => {
     await startMetCache(context, page);
     await merk(page);
+    // Het accountmenu laadt bij aanwijzer of focus zijn overlays voor, onder
+    // meer de agenda-export via lazyRetry. Staat die chunk niet in de cache,
+    // dan mislukt dat zonder bereik en herlaadt lazyRetry de pagina 0,8 s
+    // later, na eerst de schil te wissen (bestaand gedrag, los van het
+    // afmelden). Hier staat hij er al, zoals op een toestel na de warmup; zo
+    // hangt de test niet af van wie die 0,8 s wint.
+    await page.getByRole('button', { name: 'Accountmenu' }).focus();
+    await expect.poll(() => page.evaluate(async () => {
+      for (const naam of await caches.keys()) {
+        const sleutels = await (await caches.open(naam)).keys();
+        if (sleutels.some((r) => /\/assets\/roosterIcs-/.test(r.url))) return true;
+      }
+      return false;
+    }), { timeout: 20_000, message: 'de agenda-export in de cache van de service worker' }).toBe(true);
 
     await context.route('**/api/**', geenNetwerk);
     await context.setOffline(true);

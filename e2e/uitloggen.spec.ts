@@ -253,7 +253,7 @@ test.describe('afmelden op een gedeeld toestel', () => {
     void staat;
   });
 
-  test('afmelden zonder bereik en zonder service worker: het inlogscherm komt op zijn plaats, geen foutpagina, en niets van A voor wie daarna aanmeldt', async ({ page, context }) => {
+  test('het portaal weet zich zonder bereik en er is geen service worker: het inlogscherm komt op zijn plaats, zonder herlaad, en niets van A voor wie daarna aanmeldt', async ({ page }) => {
     const staat = await zetOp(page);
     await page.goto('/');
     await logIn(page);
@@ -266,26 +266,43 @@ test.describe('afmelden op een gedeeld toestel', () => {
     })));
     await expect(page.getByText('"back-up van A.json" is klaar.')).toBeVisible();
 
-    await context.setOffline(true);
-    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
-    await page.waitForTimeout(300);
+    // Het portaal hoort van de browser dat het bereik weg is (het offline-event
+    // zet de online-store van de app om). Bewust niet met context.setOffline:
+    // wat hier getest wordt is de beslissing van de afronding (geen bereik en
+    // geen service worker = niet herladen), niet de netwerkemulatie van de
+    // browser. Met een echt afgesloten netwerk mislukt bovendien het voorladen
+    // van de account-overlays zodra het accountmenu opent, en dan herlaadt
+    // lazyRetry de pagina 0,8 s later (bestaand gedrag, los van het afmelden):
+    // op de Linux-runner viel die herlaad in WebKit midden in de aanmelding
+    // van B.
+    // De bereikproef van de app (HEAD /api/health) mislukt zolang dit duurt:
+    // mocht iets de store opnieuw laten kijken, dan blijft het antwoord nee.
+    const geenBereik = (route: Route) => route.abort('internetdisconnected');
+    await page.route('**/api/health**', geenBereik);
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')));
     staat.volgende = 'b';
     await meldAf(page);
     await expect(loginKnop(page)).toBeVisible({ timeout: 15_000 });
-    // Herladen zou hier op de foutpagina van de browser eindigen.
+    // Ook even later nog dezelfde pagina: er staat geen herlaad meer klaar.
+    await page.waitForTimeout(1500);
+    await expect(loginKnop(page)).toBeVisible();
     expect(await gemerkt(page), 'niet herladen').toBe(true);
     expect(staat.geladen).toBe(1);
     await expect(page.getByText(NOTITIE_A)).toHaveCount(0);
+    // Wel gewist, ook zonder herlaad.
+    expect(await page.evaluate(() => window.localStorage.getItem('vhb-last-auth-id'))).toBe('-');
 
     // Het bereik is terug en B meldt aan, in dezelfde pagina: de toast van A
     // is weg, en B krijgt zijn eigen, lege stand.
-    await context.setOffline(false);
+    await page.unroute('**/api/health**', geenBereik);
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
     await logIn(page);
     await expect(begroeting(page, B)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('"back-up van A.json" is klaar.')).toHaveCount(0);
     await expect(page.getByText(NOTITIE_A)).toHaveCount(0);
     await expect(bel(page, /ongelezen/)).toHaveCount(0);
     expect(await gemerkt(page), 'niet herladen').toBe(true);
+    expect(staat.geladen).toBe(1);
   });
 });
 
