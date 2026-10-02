@@ -210,9 +210,13 @@ export function useAppData({
   const refreshAll = () =>
     currentUser && session?.access_token ? loadAppData(currentUser, session.access_token, { wachtOpAlles: true }) : Promise.resolve();
 
-  /** Alles leegmaken bij uitloggen (sessie verlopen / afgemeld). */
+  /** Alles leegmaken bij uitloggen (sessie verlopen / afgemeld). De poort
+   *  gaat weer dicht: wie zich daarna in dezelfde pagina aanmeldt (afmelden
+   *  zonder herlaad, src/lib/afmelden.ts), ziet skeletten tot zijn eigen
+   *  gegevens binnen zijn, geen lege of vreemde lijsten. */
   const resetAll = () => {
     laadbeurtRef.current = null;
+    setIsInitialLoad(true);
     ctx.clearLoadedCollections();
     mensen.resetMensen();
     planning.resetPlanning();

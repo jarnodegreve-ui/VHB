@@ -248,20 +248,6 @@ export function onthoudEffectiefThema(thema: 'light' | 'dark') {
   }
 }
 
-/** Cache Storage leegmaken (rooster, ritblad-PDF, shell): bij uitloggen,
- *  gebruikerswissel op een gedeeld toestel én zodra een toestel geblokkeerd
- *  of ingetrokken is — anders bleef de laatste ritbladbundel offline
- *  beschikbaar tot de volgende deploy (controle 05-09, nr. 46). Best-effort. */
-export async function wisOfflineCaches(): Promise<void> {
-  try {
-    if (typeof window === 'undefined' || !('caches' in window)) return;
-    const keys = await caches.keys();
-    await Promise.all(keys.map((k) => caches.delete(k)));
-  } catch {
-    // cache-API geblokkeerd — geen blocker
-  }
-}
-
 /** Rol-standaardthema is per gebruiker, niet per toestel: bij uitloggen
  *  vergeten, zodat een chauffeur na een planner op hetzelfde toestel niet
  *  donker start (controle 05-09, nr. 34). Een expliciete keuze (vhb-theme)

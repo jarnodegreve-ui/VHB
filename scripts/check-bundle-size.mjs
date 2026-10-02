@@ -124,7 +124,14 @@ import zlib from 'node:zlib';
 // CI-runner meet het totaal ±0,5 kB zwaarder. De warmup-sets groeien ±0,1 kB
 // (de knop op Mijn dag en de snelle actie op het dashboard) en blijven binnen
 // hun budget.
-const BUDGET_KB = 704;
+// 02-10 (beveiligingsscan, akkoord Jarno): 704 → 708. Geen nieuwe dependency.
+// De vijf PR's van de scan samen (#686 tot #690) meten lokaal 704: de grens
+// van de Maandplanning voor chauffeurs (+0,2 kB), de verlofgrens in het
+// formulier en de kalender (+0,2 kB) en het afmelden op een gedeeld toestel
+// (+0,3 kB). De CI-runner meet het totaal ±0,5 kB zwaarder en kwam dus over
+// 704. 708 = die meting plus ±0,5 % marge; de deelbudgetten blijven de
+// bewakers van de start.
+const BUDGET_KB = 708;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -164,7 +171,14 @@ const DEELBUDGET_KB = {
   // de lijst na de start op het toestel zet: +0,22 kB voor Filmnummers, lokaal
   // 75,04 → 75,26 en dus ±75,6 in CI. Het scherm zelf en de import laden lui.
   // 76 = die meting plus een marge van ±0,4 kB.
-  index: 76,
+  // 02-10 (afmelden op een gedeeld toestel, akkoord Jarno): 76 → 76,5. De
+  // afmeldroutine en de controle "wie is dit?" bij de start (src/lib/afmelden.ts
+  // en de aanroepen in App.tsx) kosten ±0,37 kB: lokaal 75,26 → 75,63, op de
+  // CI-runner 76,04. Dat kan niet lui laden: afmelden en starten zonder bereik
+  // mogen niet afhangen van een chunk die er dan misschien niet is. Onderzocht:
+  // `downloadBlob` uit de startbundel halen geeft 0,24 kB terug, maar zet de
+  // chauffeur-warmup over zijn eigen budget. 76,5 = de CI-meting plus ±0,45 kB.
+  index: 76.5,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB

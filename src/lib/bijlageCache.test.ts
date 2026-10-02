@@ -3,7 +3,7 @@ import {
   BIJLAGEN_CACHE, KOP_GEBRUIKT, KOP_SOORT, KOP_VERSIE, MAX_BIJLAGEN, MAX_BIJLAGEN_BYTES,
   bewaarBijlage, bijlageSleutel, bijlageVersie, leesBijlage, teSnoeien, vergeetBijlage,
 } from './bijlageCache';
-import { wisOfflineCaches } from './ui';
+import { wisPriveCaches } from './afmelden';
 import { bronVanBijlage } from './bijlageLaden';
 
 /** Nep-Cache Storage met meerdere caches, zoals de browser ze heeft. */
@@ -179,7 +179,7 @@ describe('bijlageCache: lezen en bewaren', () => {
     await bewaarBijlage(PLAN, 'omleiding', 'v', bytes(3));
     await (await nep.api.open('vhb-ritbladen')).put('https://x/ritblaadjes/b.pdf', new Response('x'));
     expect(await nep.api.has(BIJLAGEN_CACHE)).toBe(true);
-    await wisOfflineCaches();
+    await wisPriveCaches();
     expect(await nep.api.keys()).toEqual([]);
     expect(await leesBijlage(PLAN, 'v')).toBeNull();
   });

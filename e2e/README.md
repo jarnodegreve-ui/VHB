@@ -55,6 +55,26 @@ dist via `vite preview` op poort 4173.
   viewer met no-store haalt, staat in `pwa.spec.ts` (mét service worker), net
   als de vervanging van een bijlage met dezelfde naam en grootte (uploadmoment).
 
+- **`uitloggen.spec.ts`** (02-10): afmelden op een gedeeld toestel, in Chromium
+  en WebKit. Twee gebruikers met een eigen auth-id en token; aanmelden gaat via
+  het echte formulier, want afmelden herlaadt de pagina en een init-script dat
+  de sessie bij elke laadbeurt zet, meldt dan meteen weer aan (voor specs met
+  een sessie vooraf: `sessieInitScript` met `eenmalig`). Wat erin staat: de
+  herlaad na de knop, na een gedwongen uitlog, na inactiviteit en na een
+  SIGNED_OUT van elders (met de uitleg op het inlogscherm), een laat antwoord
+  van de eerste gebruiker dat niet bij de tweede belandt, de privé-caches weg
+  en de schil niet, en waar níét herladen wordt: koude start, start met een
+  verlopen sessie, uitnodiging, wachtwoordherstel, afmelden zonder bereik (met
+  het `offline`-event, niet met `context.setOffline`: met een echt afgesloten
+  netwerk mislukt het voorladen bij het accountmenu en herlaadt lazyRetry de
+  pagina 0,8 s later, wat op Linux WebKit de volgende aanmelding brak). Ook:
+  afmelden met een verlopen token terwijl de aanmeldserver onbereikbaar is (de
+  sessie gaat toch uit de opslag; `page.clock` slaat de herkansingen van
+  Supabase over). De service-worker-kant (afmelden zonder bereik uit de schil,
+  een laat antwoord dat de cache niet opnieuw vult, geen profiel van de vorige
+  uit de cache, en het toestel van vóór deze regel dat zonder bereik gewoon
+  Mijn dag opent) staat in `pwa.spec.ts`.
+
 - **Mobiele specs** (`smoke`, `dashboard`, `verlof`, `ruil`, `sessie`, `dock`,
   `donker`): elk met eigen, kleine fixtures — ze testen één schrijfpad en
   willen precies weten wat er in de POST/PATCH zit.
