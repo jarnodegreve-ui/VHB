@@ -21,7 +21,7 @@ import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoo
 import { addDagenIso, DAG_DMJ, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
 import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen } from "../storage.js";
+import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen, type SwapCarryResult } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, bordToontRuilAl, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
@@ -141,6 +141,38 @@ const bewegingVan = (
   if (!r) return null;
   const benen = { aangeboden: r.offeredMoved > 0, terug: (r.returnMoved ?? 0) > 0 };
   return benen.aangeboden || benen.terug ? { richting, benen } : null;
+};
+
+/**
+ * De doorvoer van een goedkeuring, been per been: eerst de aangeboden dienst,
+ * de terugdienst pas als die echt verhuisde (01-10, tweede lezing).
+ *
+ * `applySwapToPlanning` verplaatst beide benen in één aanroep. Verhuisde de
+ * aangeboden dienst geen enkele rij (ze staat niet meer op naam van de
+ * aanvrager), dan weigerden de routes terecht met een 409, maar de terugdienst
+ * was dan al naar de aanvrager verhuisd en niemand zette ze terug: status nog
+ * 'accepted', de terugdienst bij de aanvrager, geen logregel, en afwijzen
+ * draaide niets terug omdat de planning als "onbekend" las.
+ *
+ * Bewust niet eerst verplaatsen en dan terugzetten. Twee goedkeuringen die
+ * elkaar kruisen verdelen de benen soms onder elkaar (de ene verplaatst de
+ * aangeboden dienst, de andere de terugdienst): zette de verliezer zijn been
+ * terug, dan stond de ruil van de winnaar op 'approved' met een terugdienst
+ * die niet verhuisd is. Wat nooit verplaatst is hoeft niemand terug te zetten,
+ * en een terugzetting die kan mislukken is er niet.
+ *
+ * `aangebodenNietGevonden`: 0 rijen mét dienst-info, de route weigert. `r` is
+ * null bij een oude ruil zonder dienst-info (dan verhuist er niets, zoals
+ * voorheen).
+ */
+const voerRuilDoor = async (swap: any): Promise<{ r: SwapCarryResult | null; aangebodenNietGevonden: boolean }> => {
+  const aangeboden = await applySwapToPlanning(swap, { aangeboden: true, terug: false });
+  if (!aangeboden) return { r: null, aangebodenNietGevonden: false };
+  if (aangeboden.offeredMoved === 0) return { r: aangeboden, aangebodenNietGevonden: true };
+  // returnMoved null = geen dienst als tegenprestatie (overname of vrije dag).
+  if (aangeboden.returnMoved === null) return { r: aangeboden, aangebodenNietGevonden: false };
+  const terug = await applySwapToPlanning(swap, { aangeboden: false, terug: true });
+  return { r: { offeredMoved: aangeboden.offeredMoved, returnMoved: terug?.returnMoved ?? 0 }, aangebodenNietGevonden: false };
 };
 
 type RuilFout = { status: number; error: string; currentStatus?: string };
@@ -357,11 +389,12 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
       if (alDoorgevoerd) {
         carry = "wissel stond al in de planning (herstel na een eerdere halve doorvoer)";
       } else {
-        const r = await applySwapToPlanning(current);
+        const { r, aangebodenNietGevonden } = await voerRuilDoor(current);
         // Zelfde concurrency-vangnet als de array-route: 0 verplaatste rijen
         // mét dienst-info = planning wijzigde tussen check en doorvoer → 409
-        // i.p.v. half goedkeuren met een logwaarschuwing.
-        if (r && r.offeredMoved === 0) {
+        // i.p.v. half goedkeuren met een logwaarschuwing. De terugdienst is
+        // dan niet aangeraakt (voerRuilDoor): de planning staat zoals ervoor.
+        if (aangebodenNietGevonden) {
           return { fout: { status: 409, error: "De planning is intussen gewijzigd, de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." } };
         }
         carry = describeSwapCarry(current, r, "doorgevoerd", await bordBenenVan(current, r));
@@ -776,12 +809,19 @@ export function mountRuilRoutes(app: express.Express) {
           if (prev && prev.status === "pending" && next.status === "approved") {
             return res.status(403).json({ error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." });
           }
-          // Bypass-gat: zonder deze check kon een planner het pending-record
-          // onder een NIEUW id met status 'approved' insturen en zo dezelfde
-          // regel omzeilen. Nieuwe records starten dus altijd als 'pending'.
-          if (!prev && next.status !== "pending") {
-            return res.status(403).json({ error: "Niet toegestaan: nieuwe wisselverzoeken starten als 'pending'." });
-          }
+        }
+      }
+      // Nieuwe records starten altijd als 'pending', voor elke rol. Eerst gold
+      // dit alleen voor wie geen admin is (het bypass-gat: een planner stuurde
+      // het pending-record onder een NIEUW id met status 'approved' in). Een
+      // admin kon zo nog een record meteen als 'approved' aanmaken: dat werd
+      // opgeslagen zonder doorvoer in de planning, en een planner kon het
+      // daarna afhandelen, de laatste weg naar 'completed' zonder doorvoer
+      // (01-10, tweede lezing). De app maakt via deze route alleen aanvragen
+      // aan; een wissel door de planning zelf loopt via /api/admin/shift-swap.
+      for (const next of newData) {
+        if (!previousById.has(String(next.id)) && next.status !== "pending") {
+          return res.status(403).json({ error: "Niet toegestaan: nieuwe wisselverzoeken starten als 'pending'." });
         }
       }
 
@@ -804,8 +844,7 @@ export function mountRuilRoutes(app: express.Express) {
       // (shared/ruilOvergangen.ts). Nieuw sinds 01-10: afhandelen ('completed')
       // kan een planner alleen vanuit 'approved'; een admin mag een open ruil
       // rechtstreeks afhandelen, en dat loopt hieronder als een goedkeuring
-      // (controles, doorvoer, beslismoment, log en melding). Een nieuw record
-      // kan nooit meteen afgehandeld zijn: daar is niets doorgevoerd.
+      // (controles, doorvoer, beslismoment, log en melding).
       //
       // Bewust NIET door de tabel: een record dat van status wisselt naar iets
       // wat geen beslissing is (terug naar 'pending', of een onbekende status).
@@ -814,13 +853,7 @@ export function mountRuilRoutes(app: express.Express) {
         const partij = req.appUser!.role === "admin" ? "admin" : "planner";
         for (const next of newData) {
           const prev = previousById.get(String(next.id));
-          if (!prev) {
-            if (String(next.status) === "completed") {
-              return res.status(400).json({ error: "Een nieuwe aanvraag kan niet meteen afgehandeld zijn. Dien ze in als aanvraag en keur ze daarna goed." });
-            }
-            continue;
-          }
-          if (String(prev.status) === String(next.status) || !STAF_BESLIS_STATUSSEN.includes(String(next.status))) continue;
+          if (!prev || String(prev.status) === String(next.status) || !STAF_BESLIS_STATUSSEN.includes(String(next.status))) continue;
           const oordeel = beoordeelStafOvergang(partij, prev.status, next.status);
           if (!oordeel.ok) return res.status(oordeel.status).json({ error: oordeel.error });
         }
@@ -1181,14 +1214,15 @@ export function mountRuilRoutes(app: express.Express) {
           if (alDoorgevoerdIds.has(String(next.id))) {
             carry = "wissel stond al in de planning (herstel na een eerdere halve doorvoer)";
           } else {
-            const r = await applySwapToPlanning(next);
+            const { r, aangebodenNietGevonden } = await voerRuilDoor(next);
             // Concurrency-vangnet: 0 verplaatste rijen mét dienst-info betekent
             // dat de planning tussen de hercheck en de doorvoer nog wijzigde
             // (bv. een gelijktijdige admin-wissel). Dan NIET half goedkeuren met
             // enkel een logwaarschuwing: weigeren, zodat de planner met verse
-            // data opnieuw beoordeelt. r === null (legacy zonder dienst-info)
-            // houdt het oude waarschuw-gedrag.
-            if (r && r.offeredMoved === 0) {
+            // data opnieuw beoordeelt. De terugdienst is dan niet aangeraakt
+            // (voerRuilDoor). r === null (legacy zonder dienst-info) houdt het
+            // oude waarschuw-gedrag.
+            if (aangebodenNietGevonden) {
               afgebroken = { status: 409, error: "De planning is intussen gewijzigd, de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." };
               break;
             }

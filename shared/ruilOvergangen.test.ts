@@ -90,7 +90,7 @@ describe('wat een overgang in de planning doet', () => {
     expect(ruilVoertDoor('completed', 'completed')).toBe(false);
     expect(ruilVoertDoor('accepted', 'rejected')).toBe(false);
     expect(ruilVoertDoor('approved', 'cancelled')).toBe(false);
-    // Een nieuw record (geen vorige status) dat goedgekeurd binnenkomt.
+    // Zonder vorige status telt de doelstatus (de lijstroute weigert zo'n nieuw record al eerder).
     expect(ruilVoertDoor(undefined, 'approved')).toBe(true);
   });
 
