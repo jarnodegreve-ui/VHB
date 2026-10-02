@@ -127,6 +127,17 @@ const doorVoor = (soort: RuilVerloopSoort, regel: RuilLogRegel, van: string | un
 };
 
 /**
+ * De logregels van één ruil uit de groepering per ruil-id; leeg als die ruil
+ * er niet in staat. Alleen eigen sleutels (beveiligingsscan 01-10): een
+ * chauffeur kiest het id van zijn aanvraag zelf, en bij een id als
+ * `constructor` of `toString` gaf `perRuil[id]` de gelijknamige functie van
+ * elk object terug in plaats van "geen regels". Daarop viel het verloop van
+ * álle ruilen weg en gaven de drie ruilrapporten een 500.
+ */
+export const regelsVanRuil = <T>(perRuil: Readonly<Record<string, readonly T[]>>, ruilId: string): readonly T[] =>
+  Object.hasOwn(perRuil, ruilId) ? perRuil[ruilId] : [];
+
+/**
  * Logregels van ÉÉN ruil → stappen, oudste eerst. `metStafNaam` alleen voor
  * staf: de naam van de planner hoort niet bij een chauffeur terecht te komen.
  * Namen van chauffeurs gaan nooit mee, de client kent hen via hun id.

@@ -63,12 +63,70 @@ test('regels bij typen: verleden, einde vóór start, onbestaande dag en schrikk
   await tot(modal).fill('30/02/2030');
   await tot(modal).blur();
   await expect(modal.getByText('Die dag bestaat niet.')).toBeVisible();
+});
 
+// Regel Jarno 02-10: verlof eindigt uiterlijk op 31 december van volgend jaar
+// (shared/verlofGrens.ts, de server weigert het ook). Met een vaste klok in
+// 2027 is de grens 31/12/2028, en valt de schrikkeldag van 2028 erbinnen.
+test('uiterste einddatum en schrikkeldag: typen, raster en indienen (vaste klok)', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2027-10-01T08:00:00Z'));
+  const GRENS = 'Verlof aanvragen kan tot en met 31/12/2028.';
+  const { modal, posts } = await openAanvraag(page);
+
+  // De schrikkeldag bestaat en ligt binnen de grens.
   await van(modal).fill('28/02/2028');
   await van(modal).blur();
   await tot(modal).fill('29/02/2028');
   await tot(modal).blur();
   await expect(tot(modal)).toHaveAttribute('data-datum', '2028-02-29');
+
+  // Een einde na 31/12 van volgend jaar: de regel bij het veld, de oude waarde blijft, er vertrekt niets.
+  await tot(modal).fill('01/01/2029');
+  await tot(modal).blur();
+  await expect(modal.getByText(GRENS)).toBeVisible();
+  await expect(tot(modal)).toHaveAttribute('data-datum', '2028-02-29');
+
+  // De laatste dag zelf mag, in het veld en in het raster; de dag erna is in het raster uitgeschakeld.
+  await van(modal).fill('30/12/2028');
+  await van(modal).blur();
+  await tot(modal).fill('31/12/2028');
+  await tot(modal).blur();
+  await expect(modal.getByText(GRENS)).toHaveCount(0);
+  await expect(tot(modal)).toHaveAttribute('data-datum', '2028-12-31');
+  const grid = modal.getByRole('grid');
+  await expect(grid.locator('[data-iso="2028-12-31"]')).toBeEnabled();
+  await modal.getByRole('button', { name: 'Volgende maand' }).click();
+  await expect(grid.locator('[data-iso="2029-01-01"]')).toBeDisabled();
+  await expect(grid.locator('[data-iso="2029-01-01"]')).toHaveAttribute('title', GRENS);
+
+  // Ook een start na de grens (zonder einde) krijgt de regel, niet "Uiterlijk …".
+  await modal.getByRole('button', { name: 'Periode wissen' }).click();
+  await van(modal).fill('05/01/2029');
+  await van(modal).blur();
+  await expect(modal.getByText(GRENS)).toBeVisible();
+  await expect(van(modal)).not.toHaveAttribute('data-datum', /.+/);
+
+  await van(modal).fill('30/12/2028');
+  await van(modal).blur();
+  await tot(modal).fill('31/12/2028');
+  await tot(modal).blur();
+  await modal.getByRole('button', { name: 'Aanvraag indienen' }).click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0].at(-1)).toMatchObject({ startDate: '2028-12-30', endDate: '2028-12-31', status: 'pending' });
+});
+
+test('de uiterste einddatum geldt ook als staf verlof voor een chauffeur vastlegt (vaste klok)', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2027-10-01T08:00:00Z'));
+  const { modal, posts } = await openAanvraag(page, ADMIN, /Verlof registreren/);
+  await modal.getByLabel(/Chauffeur/).selectOption({ label: 'Test Chauffeur' });
+  await van(modal).fill('20/12/2028');
+  await van(modal).blur();
+  await tot(modal).fill('02/01/2029');
+  await tot(modal).blur();
+  await expect(modal.getByText('Verlof aanvragen kan tot en met 31/12/2028.')).toBeVisible();
+  await expect(tot(modal)).not.toHaveAttribute('data-datum', /.+/);
+  await expect(modal.getByRole('button', { name: 'Vastleggen' })).toBeDisabled();
+  expect(posts).toHaveLength(0);
 });
 
 test('toetsenbord: één tab-stop in het raster, pijlen en Enter kiezen begin en einde', async ({ page }) => {
