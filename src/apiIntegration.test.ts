@@ -4964,6 +4964,133 @@ describe('maandplanning, afwezigheidscodes zijn voor iedereen zichtbaar', () => 
   });
 });
 
+describe('maandplanning, wie geen staf is kijkt niet verder terug dan de maandag van deze week (Jarno 02-10)', () => {
+  // Een chauffeur ziet de lopende week (ook de dagen die al voorbij zijn) en
+  // wat daarna komt, niet wat collega's vroeger reden. De server knipt, het
+  // scherm alleen volgt: een kale fetch op een oude maand mag niets teruggeven.
+  // Vrijdag 02/10/2026, 11:00 in Brussel: de grens is maandag 28/09, dus de
+  // week loopt over de maandgrens en september is de maand die ervoor begint
+  // en erna eindigt.
+  const DAGEN = ['2026-08-31', '2026-09-14', '2026-09-27', '2026-09-28', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-12', '2026-11-03'];
+  const NIET_STAF = [
+    ['chauffeur', 'tok-a'],
+    ['technieker', 'tok-tech'],
+    ['chauffeur met "Ook technieker"', 'tok-b'],
+  ] as const;
+  const STAF = [['planner', 'tok-planner'], ['admin', 'tok-admin']] as const;
+  const maand = (m: string, token: string) => api('GET', `/api/month-planning?month=${m}`, { token });
+  const dagenIn = (m: string) => DAGEN.filter((d) => d.startsWith(m));
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-10-02T09:00:00Z'));
+    mem.users = [
+      ...mem.users.map((u: any) => (u.id === '4' ? { ...u, ookTechnieker: true } : u)),
+      { id: '5', name: 'Toon Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true },
+    ];
+    // Een technieker valt onder dezelfde toestel-gate als een chauffeur.
+    mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    invalidateUsersCache();
+    mem.planningMatrix = DAGEN.map((dag, i) => ({
+      id: `m-${i}`, source_date: dag, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '',
+    }));
+    // Een doorgevoerde ruil en een ziekte van vóór de grens: ook die sporen
+    // (wie nam over, wie was ziek) horen bij het verleden.
+    mem.swaps = [{
+      id: 's-oud', shiftId: 'sh-oud', requesterId: '3', targetDriverId: '4', status: 'approved', reason: 'Ruil',
+      createdAt: '2026-09-10T08:00:00Z', decidedAt: '2026-09-11T08:00:00Z', shiftDate: '2026-09-14', shiftLine: '12', swapType: 'overname',
+    }];
+    mem.leave = [
+      { id: 'l-oud', userId: '4', startDate: '2026-09-27', endDate: '2026-09-27', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-09-27T05:00:00Z', decidedAt: '2026-09-27T05:00:00Z' },
+    ];
+    mem.planningCodes = [{ id: 'pc-ziek', code: 'ziek', description: 'Ziek', category: 'absence' }];
+  });
+
+  for (const [wie, token] of NIET_STAF) {
+    it(`${wie}: een maand die helemaal voorbij is geeft dezelfde vorm zonder dagen of cellen, geen fout`, async () => {
+      const res = await maand('2026-08', token);
+      expect(res.status).toBe(200);
+      expect(res.json.month).toBe('2026-08');
+      expect(res.json.dates).toEqual([]);
+      expect(res.json.cells).toEqual({});
+      expect(res.json.zichtbaarVanaf).toBe('2026-09-28');
+      // De lijst chauffeurs zegt niets over wie wanneer reed en blijft.
+      expect(res.json.drivers.map((d: any) => d.id)).toEqual(['3', '4']);
+    });
+
+    it(`${wie}: de maand waarin de grens valt begint op de maandag van deze week`, async () => {
+      const res = await maand('2026-09', token);
+      expect(res.status).toBe(200);
+      expect(res.json.dates).toEqual(['2026-09-28', '2026-09-30']);
+      for (const id of ['3', '4']) expect(Object.keys(res.json.cells[id]).sort()).toEqual(['2026-09-28', '2026-09-30']);
+      // Niets van vóór de grens in het hele antwoord: geen dag, geen cel,
+      // geen spoor van de ruil van 14/09 of de ziekte van 27/09.
+      const alles = JSON.stringify(res.json);
+      for (const oud of ['2026-09-14', '2026-09-27', 's-oud', 'ziek']) expect(alles).not.toContain(oud);
+    });
+
+    it(`${wie}: de lopende week blijft volledig, ook de dagen die al voorbij zijn, en de toekomst ook`, async () => {
+      const okt = await maand('2026-10', token);
+      // Donderdag 01/10 is voorbij maar hoort bij de lopende week.
+      expect(okt.json.dates).toEqual(['2026-10-01', '2026-10-02', '2026-10-12']);
+      expect(okt.json.cells['4']['2026-10-01']).toMatchObject({ code: '14', kind: 'service' });
+      const nov = await maand('2026-11', token);
+      expect(nov.json.dates).toEqual(['2026-11-03']);
+      expect(nov.json.cells['3']['2026-11-03']).toMatchObject({ code: '12' });
+      expect(nov.json.zichtbaarVanaf).toBe('2026-09-28');
+    });
+
+    it(`${wie}: het begin van de import ligt op de grens, zodat het bord daar stopt met bladeren`, async () => {
+      for (const m of ['2026-08', '2026-09', '2026-10']) {
+        expect((await maand(m, token)).json.geimporteerd).toEqual({ eerste: '2026-09-28', laatste: '2026-11-03' });
+      }
+    });
+  }
+
+  for (const [wie, token] of STAF) {
+    it(`${wie} ziet alles zoals voorheen, zonder grens in het antwoord`, async () => {
+      for (const m of ['2026-08', '2026-09', '2026-10', '2026-11']) {
+        const res = await maand(m, token);
+        expect(res.status).toBe(200);
+        expect(res.json.dates).toEqual(dagenIn(m));
+        expect(res.json).not.toHaveProperty('zichtbaarVanaf');
+        expect(res.json.geimporteerd).toEqual({ eerste: '2026-08-31', laatste: '2026-11-03' });
+        expect(Object.keys(res.json).sort()).toEqual(['cells', 'dates', 'drivers', 'geimporteerd', 'month']);
+      }
+      const sep = await maand('2026-09', token);
+      // De ruil van 14/09 en de ziekte van 27/09 staan er voor staf gewoon in.
+      expect(sep.json.cells['4']['2026-09-14']).toMatchObject({ code: '12', swapId: 's-oud', swapFrom: 'Chauffeur A' });
+      expect(sep.json.cells['4']['2026-09-27']).toMatchObject({ code: 'ziek', hiddenService: '14' });
+    });
+  }
+
+  it('de week wisselt om middernacht in Brussel: zondagavond telt de voorbije week nog, maandag 00:30 niet meer', async () => {
+    // Zondag 04/10, 23:30 in Brussel.
+    vi.setSystemTime(new Date('2026-10-04T21:30:00Z'));
+    const zondag = await maand('2026-10', 'tok-a');
+    expect(zondag.json.zichtbaarVanaf).toBe('2026-09-28');
+    expect(zondag.json.dates).toEqual(['2026-10-01', '2026-10-02', '2026-10-12']);
+    // Maandag 05/10, 00:30 in Brussel; de klok van de server (UTC) staat nog op zondag.
+    vi.setSystemTime(new Date('2026-10-04T22:30:00Z'));
+    const maandag = await maand('2026-10', 'tok-a');
+    expect(maandag.json.zichtbaarVanaf).toBe('2026-10-05');
+    expect(maandag.json.dates).toEqual(['2026-10-12']);
+    expect(maandag.json.geimporteerd.eerste).toBe('2026-10-05');
+    expect(JSON.stringify(maandag.json.cells)).not.toContain('2026-10-02');
+    // September is nu helemaal voorbij.
+    expect((await maand('2026-09', 'tok-a')).json).toMatchObject({ dates: [], cells: {} });
+  });
+
+  it('de twee staf-formaten blijven dicht voor wie geen staf is', async () => {
+    for (const [, token] of NIET_STAF) {
+      for (const formaat of ['summary', 'xlsx']) {
+        const res = await api('GET', `/api/month-planning?month=2026-09&format=${formaat}`, { token });
+        expect(res.status).toBe(403);
+        expect(JSON.stringify(res.json)).not.toContain('2026-09');
+      }
+    }
+  });
+});
+
 describe('ziekte werkt door in maandplanning en dekking', () => {
   // De Excel-import is een momentopname: wie dáárna ziek gemeld wordt, stond
   // in het maandrooster nog op zijn dienst en zijn dienst telde in de dekking
