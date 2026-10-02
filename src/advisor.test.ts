@@ -16,6 +16,12 @@ import {
   formatUren,
   MIN_RUST_UREN,
   MAX_WERKDAGEN_NA_ELKAAR,
+  adviesVenster,
+  adviesMaanden,
+  controleerAdviesBereik,
+  AdviesBereikFout,
+  MAX_ADVIES_DAGEN,
+  MAX_ADVIES_MAANDEN,
   type KandidaatAdvies,
   type KettingPersoon,
   type KettingWerkende,
@@ -333,5 +339,162 @@ describe('adviesSamenvatting: de collega-zin', () => {
 
   it('zegt het eerlijk als er die dag helemaal niemand vrij is', () => {
     expect(adviesSamenvatting({ code: '2603', kandidaten: [], kettingen: [] })).toContain('Niemand is vrij op deze dag');
+  });
+});
+
+describe('bereik van één advies-aanvraag (beveiligingsscan 01-10, punt 7)', () => {
+  const dagen = (van: string, tot: string) => Math.round((Date.parse(`${tot}T00:00:00Z`) - Date.parse(`${van}T00:00:00Z`)) / 86400000) + 1;
+  /** Het verenigde venster van een reeks dagen, zoals de batch-route het bouwt. */
+  const unie = (datums: string[]) => {
+    const vensters = datums.map(adviesVenster);
+    return { vanaf: vensters.map((v) => v.vanaf).sort()[0], tot: vensters.map((v) => v.tot).sort().slice(-1)[0] };
+  };
+  const fout = (fn: () => unknown): AdviesBereikFout => {
+    try { fn(); } catch (e) { return e as AdviesBereikFout; }
+    throw new Error('verwachtte een AdviesBereikFout');
+  };
+
+  describe('adviesVenster: het venster rond één dag is ongewijzigd', () => {
+    it('±6 dagen, opgerekt tot de volle week en de volle kalendermaand', () => {
+      // Woensdag midden in de maand: de maand wint aan beide kanten.
+      expect(adviesVenster('2026-09-16')).toEqual({ vanaf: '2026-09-01', tot: '2026-09-30' });
+      // De 1e van de maand: zes dagen terug ligt in de vorige maand.
+      expect(adviesVenster('2026-10-01')).toEqual({ vanaf: '2026-09-25', tot: '2026-10-31' });
+      // Maandag 31/08: de week (en de zes dagen erna) loopt de volgende maand in.
+      expect(adviesVenster('2026-08-31')).toEqual({ vanaf: '2026-08-01', tot: '2026-09-06' });
+      // Schrikkeldag en jaarwissel.
+      expect(adviesVenster('2028-02-29')).toEqual({ vanaf: '2028-02-01', tot: '2028-03-06' });
+      expect(adviesVenster('2026-12-31')).toEqual({ vanaf: '2026-12-01', tot: '2027-01-06' });
+    });
+
+    it('is voor elke dag hoogstens 37 dagen breed en raakt hoogstens twee maanden', () => {
+      let breedste = 0;
+      for (let dag = '2026-01-01'; dag <= '2028-12-31'; dag = addDagenIso(dag, 1)) {
+        const { vanaf, tot } = adviesVenster(dag);
+        expect(vanaf <= dag && dag <= tot).toBe(true);
+        breedste = Math.max(breedste, dagen(vanaf, tot));
+        expect(adviesMaanden(vanaf, tot).length).toBeLessThanOrEqual(2);
+      }
+      expect(breedste).toBe(37);
+    });
+
+    it('weigert een dag die niet bestaat, met een tekst die zegt wat te doen', () => {
+      for (const kapot of ['2026-02-30', '2026-13-01', '2026-00-10', '16-09-2026', '2026-9-16', '', 'morgen', '10000-01-01']) {
+        const e = fout(() => adviesVenster(kapot));
+        expect(e).toBeInstanceOf(AdviesBereikFout);
+        expect(e.status).toBe(400);
+        expect(e.message).toContain('Controleer de datum');
+        expect(e.message.length).toBeLessThan(240);
+        expect(e.message).not.toContain('—');
+      }
+    });
+
+    it('weigert december 9999: de maand erna valt buiten de kalender', () => {
+      for (const dag of ['9999-12-01', '9999-12-15', '9999-12-31']) {
+        expect(fout(() => adviesVenster(dag))).toBeInstanceOf(AdviesBereikFout);
+      }
+      // November 9999 is een gewone maand, klein en ongevaarlijk.
+      expect(adviesVenster('9999-11-15')).toEqual({ vanaf: '9999-11-01', tot: '9999-11-30' });
+    });
+  });
+
+  describe('controleerAdviesBereik: hoogstens een jaar', () => {
+    it('laat precies MAX_ADVIES_DAGEN dagen door en weigert één dag meer', () => {
+      expect(MAX_ADVIES_DAGEN).toBe(366);
+      expect(dagen('2028-01-01', '2028-12-31')).toBe(366);
+      expect(() => controleerAdviesBereik('2028-01-01', '2028-12-31')).not.toThrow();
+      expect(dagen('2027-01-01', '2028-01-02')).toBe(367);
+      const e = fout(() => controleerAdviesBereik('2027-01-01', '2028-01-02'));
+      expect(e).toBeInstanceOf(AdviesBereikFout);
+      expect(e.status).toBe(400);
+      expect(e.message).toContain('meer dan een jaar uit elkaar');
+      expect(e.message).toMatch(/vraag het advies per dienst op\.$/);
+      expect(e.message.length).toBeLessThan(240);
+      expect(e.message).not.toContain('—');
+    });
+
+    it('weigert de gemeten aanvraag (2026 samen met 9999), een omgekeerd bereik en rommel', () => {
+      expect(fout(() => controleerAdviesBereik('2026-09-25', '9999-11-30')).message).toContain('meer dan een jaar');
+      expect(fout(() => controleerAdviesBereik('2026-10-31', '2026-09-25')).message).toContain('Controleer de datum');
+      for (const [van, tot] of [['', ''], ['2026-09-25', '+010000-01'], ['2026-02-30', '2026-03-05'], ['10000-01', '10000-02']]) {
+        expect(fout(() => controleerAdviesBereik(van, tot))).toBeInstanceOf(AdviesBereikFout);
+      }
+    });
+
+    it('weigert nooit wat de herverdeel-wizard kan sturen: 40 diensten van één afwezige, tot één per week', () => {
+      // De wizard stuurt hoogstens 40 diensten (MAX_BATCH), gesorteerd vanaf
+      // vandaag. Hoe minder dagen per week iemand rijdt, hoe breder het
+      // venster; één dag per week is 40 weken. Vanaf elke startdag van een
+      // jaar blijft dat onder de grens, met de breedste uitkomst 334 dagen.
+      let breedste = 0;
+      for (let start = '2026-01-01'; start <= '2026-12-31'; start = addDagenIso(start, 1)) {
+        for (const stapDagen of [1, 2, 7]) {
+          const { vanaf, tot } = unie(Array.from({ length: 40 }, (_, i) => addDagenIso(start, i * stapDagen)));
+          expect(() => controleerAdviesBereik(vanaf, tot)).not.toThrow();
+          expect(adviesMaanden(vanaf, tot).length).toBeLessThanOrEqual(MAX_ADVIES_MAANDEN);
+          breedste = Math.max(breedste, dagen(vanaf, tot));
+        }
+      }
+      expect(breedste).toBeLessThanOrEqual(334);
+      expect(breedste).toBeGreaterThan(300);
+      // De grens van /api/availability (120 dagen) zou hier te klein zijn: twee
+      // diensten per week over 20 weken is al breder.
+      const halftijds = unie(Array.from({ length: 40 }, (_, i) => addDagenIso('2026-09-07', Math.floor(i / 2) * 7 + (i % 2) * 2)));
+      expect(dagen(halftijds.vanaf, halftijds.tot)).toBeGreaterThan(120);
+      expect(() => controleerAdviesBereik(halftijds.vanaf, halftijds.tot)).not.toThrow();
+    });
+  });
+
+  describe('adviesMaanden: de maandlus kan niet ontsporen', () => {
+    const MAAND = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+    it('geeft de maanden die het venster raakt, in volgorde, ook over de jaarwissel', () => {
+      expect(adviesMaanden('2026-09-16', '2026-09-16')).toEqual(['2026-09']);
+      expect(adviesMaanden('2026-09-25', '2026-10-31')).toEqual(['2026-09', '2026-10']);
+      expect(adviesMaanden('2026-11-30', '2027-02-01')).toEqual(['2026-11', '2026-12', '2027-01', '2027-02']);
+      expect(adviesMaanden('2028-01-01', '2028-12-31')).toHaveLength(12);
+      expect(adviesMaanden('2027-01-31', '2028-01-31')).toHaveLength(13);
+    });
+
+    it('december 9999 is één maand, geen miljoen (de tekstvergelijking liep hier door tot jaar 99990)', () => {
+      expect(adviesMaanden('9999-12-01', '9999-12-31')).toEqual(['9999-12']);
+      expect(adviesMaanden('9999-11-25', '9999-12-31')).toEqual(['9999-11', '9999-12']);
+    });
+
+    it('gooit bij vijandige invoer in plaats van te lussen, ook zonder de controle ervoor', () => {
+      const vijandig: Array<[string, string]> = [
+        ['2026-09-25', '9999-11-30'], // gemeten: 95.679 maanden
+        ['0100-01-01', '9999-12-31'],
+        ['2026-01-01', '2027-02-01'], // 14 maanden: één te veel
+        ['2026-10-31', '2026-09-25'], // omgekeerd
+        ['9999-12-01', '10000-01-31'], // geen JJJJ-MM-DD meer
+        ['9999-12-01', '+010000-01'],
+        ['2026-02-30', '2026-03-05'],
+        ['', ''],
+        ['abc', 'def'],
+      ];
+      const start = performance.now();
+      for (const [van, tot] of vijandig) {
+        expect(fout(() => adviesMaanden(van, tot))).toBeInstanceOf(AdviesBereikFout);
+      }
+      // Negen weigeringen zonder één lusronde: ruim binnen een seconde, ook op een drukke machine.
+      expect(performance.now() - start).toBeLessThan(1000);
+    });
+
+    it('geeft nooit meer dan MAX_ADVIES_MAANDEN sleutels, elk in de vorm JJJJ-MM', () => {
+      expect(MAX_ADVIES_MAANDEN).toBe(13);
+      // Elk venster van precies een jaar, vanaf elke startdag van twee jaar
+      // (met een schrikkeljaar): past in de lus, dus de twee grenzen kloppen
+      // met elkaar en de dagcontrole laat niets door wat de lus weigert.
+      for (let van = '2027-01-01'; van <= '2028-12-31'; van = addDagenIso(van, 1)) {
+        const tot = addDagenIso(van, MAX_ADVIES_DAGEN - 1);
+        expect(() => controleerAdviesBereik(van, tot)).not.toThrow();
+        const maanden = adviesMaanden(van, tot);
+        expect(maanden.length).toBeLessThanOrEqual(MAX_ADVIES_MAANDEN);
+        expect(maanden.every((m) => MAAND.test(m))).toBe(true);
+        expect(maanden[0]).toBe(van.slice(0, 7));
+        expect(maanden[maanden.length - 1]).toBe(tot.slice(0, 7));
+      }
+    });
   });
 });

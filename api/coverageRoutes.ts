@@ -1,7 +1,7 @@
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
 import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../shared/coverageGaps.js";
-import { beoordeelKandidaat, sorteerKandidaten, dagVenster, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
+import { beoordeelKandidaat, sorteerKandidaten, dagVenster, zoekKettingen, adviesSamenvatting, adviesVenster, adviesMaanden, controleerAdviesBereik, AdviesBereikFout, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 import { addDagenIso, brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
 import {
   getCoverageExpectations,
@@ -18,6 +18,7 @@ import {
 } from "./storage.js";
 import { bordCellenVoor } from "./_lib/codeDienst.js";
 import { vrijOpBord } from "../shared/bordBezetting.js";
+import { isIsoDag } from "../shared/rapporten/periode.js";
 
 /**
  * Dekking & advies — verhuisd uit api/index.ts (verbeterronde 22-08, nr. 8;
@@ -216,32 +217,20 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
 // mag bewust overrulen, maar moet zien wát hij overrult.
 /** Volledig advies voor één openstaande dienst — gedeeld door
  *  GET /api/coverage-advisor en de dagelijkse digest. */
-/** Datavenster voor één advies-datum: ±6 dagen (6-dagenregel + rustcheck met
- *  de buurdagen), opgerekt tot de volledige week (ma–zo) én kalendermaand van
- *  de dag — de sortering telt sinds 19-08 gewerkte dagen per week en maand. */
-function adviesVenster(date: string): { vanaf: string; tot: string } {
-  const maandStart = `${date.slice(0, 7)}-01`;
-  // Laatste dag van de maand = de dag vóór de 1e van de volgende maand
-  // (dag 28 + 7 valt gegarandeerd in de volgende maand).
-  const volgendeMaandStart = `${addDagenIso(`${date.slice(0, 7)}-28`, 7).slice(0, 7)}-01`;
-  const maandEind = addDagenIso(volgendeMaandStart, -1);
-  const weekStart = maandagVan(date);
-  const vanaf = [addDagenIso(date, -6), maandStart, weekStart].sort()[0];
-  const tot = [addDagenIso(date, 6), maandEind, addDagenIso(weekStart, 6)].sort().slice(-1)[0];
-  return { vanaf, tot };
-}
+// Het datavenster per advies-datum (adviesVenster) en de grenzen van één
+// aanvraag wonen in api/advisor.ts, zonder storage en dus los te testen.
 
 type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; services: any[]; swaps: any[]; shifts: any[]; matrixRows: any[]; codes: any[] };
 
 /** Eén dataload voor [vanaf, tot] — gedeeld door het losse advies en de
- *  batch (herverdeel-wizard): 17 gaten hoeven niet 17× alles op te halen. */
+ *  batch (herverdeel-wizard): 17 gaten hoeven niet 17× alles op te halen.
+ *  Elke aanroeper (de twee routes, de digest, de Telegram-bot) komt hier
+ *  langs, dus hier staat de grens: twee echte kalenderdagen, hoogstens een
+ *  jaar breed. Een aanvraag die dat niet haalt gooit een AdviesBereikFout
+ *  vóór er iets geladen wordt (beveiligingsscan 01-10, punt 7). */
 async function laadAdviesBron(vanaf: string, tot: string): Promise<AdviesBron> {
-  const months: string[] = [];
-  for (let m = vanaf.slice(0, 7); m <= tot.slice(0, 7); ) {
-    months.push(m);
-    const [jr, mnd] = m.split("-").map(Number);
-    m = mnd === 12 ? `${jr + 1}-01` : `${jr}-${String(mnd + 1).padStart(2, "0")}`;
-  }
+  controleerAdviesBereik(vanaf, tot);
+  const months = adviesMaanden(vanaf, tot);
   // De planningscodes gaan mee voor het bord (controle 29-09): zonder weet
   // de cel-waarheid niet dat een schoolrit een dienst is.
   const [users, leave, services, swaps, matrixRows, codes, ...planningChunks] = await Promise.all([
@@ -569,11 +558,14 @@ export function mountCoverageRoutes(app: express.Express) {
     try {
       const date = typeof req.query.date === "string" ? req.query.date : "";
       const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
-      if (!ISO_DAG_RE.test(date) || !code) {
+      // Een echte kalenderdag, niet alleen het patroon: "2026-02-30" past in
+      // de regex maar bestaat niet.
+      if (!isIsoDag(date) || !code) {
         return res.status(400).json({ error: "Geef een geldige datum (YYYY-MM-DD) en dienstcode mee." });
       }
       res.json(await berekenCoverageAdvies(date, code));
     } catch (err) {
+      if (err instanceof AdviesBereikFout) return res.status(err.status).json({ error: err.message });
       console.error("Error computing coverage advisor:", err);
       res.status(500).json({ error: "Kon het advies niet berekenen." });
     }
@@ -587,7 +579,7 @@ export function mountCoverageRoutes(app: express.Express) {
       const ruw = Array.isArray(req.body?.items) ? req.body.items : [];
       const items = ruw
         .map((i: any) => ({ date: String(i?.date ?? ""), code: String(i?.code ?? "").trim() }))
-        .filter((i: { date: string; code: string }) => ISO_DAG_RE.test(i.date) && i.code);
+        .filter((i: { date: string; code: string }) => isIsoDag(i.date) && i.code);
       if (items.length === 0) {
         return res.status(400).json({ error: "Geef items mee als [{ date, code }]." });
       }
@@ -618,6 +610,9 @@ export function mountCoverageRoutes(app: express.Express) {
       });
       res.json({ items: resultaten });
     } catch (err) {
+      // Dagen die te ver uit elkaar liggen (of buiten de kalender vallen):
+      // een 400 met de reden, er is dan nog niets geladen.
+      if (err instanceof AdviesBereikFout) return res.status(err.status).json({ error: err.message });
       console.error("Error computing coverage advisor batch:", err);
       res.status(500).json({ error: "Kon het batch-advies niet berekenen." });
     }

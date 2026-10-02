@@ -94,6 +94,10 @@ const mem = vi.hoisted(() => ({
   // (null = volledige matrix). Bewijst dat maand-gebonden routes niet
   // stilletjes de hele historiek ophalen.
   matrixMaandFilters: [] as Array<string | null>,
+  // De maand waarmee elke getPlanningData-lezing begrensd werd (null = geen
+  // maandfilter). Bewijst dat het advies en de beschikbaarheid alleen de
+  // maanden van hun venster ophalen, en bij een weigering niets.
+  planningMaandFilters: [] as Array<string | null>,
   // Filters waarmee getLeaveData/getSwapsData aangeroepen werden: bewijst dat
   // niet-staf in de query filtert i.p.v. de hele tabel te lezen.
   leaveFilters: [] as any[],
@@ -562,10 +566,12 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       if (uitMatrix) return uitMatrix;
       return mem.planning.map((r: any) => String(r.date ?? '')).filter((d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().pop() ?? null;
     },
-    getPlanningData: async (f?: { driverId?: string; monthIso?: string }) =>
-      mem.planning.filter((s: any) =>
+    getPlanningData: async (f?: { driverId?: string; monthIso?: string }) => {
+      mem.planningMaandFilters.push(f?.monthIso ?? null);
+      return mem.planning.filter((s: any) =>
         (!f?.driverId || String(s.driverId) === String(f.driverId)) &&
-        (!f?.monthIso || String(s.date ?? '').startsWith(`${f.monthIso}-`))),
+        (!f?.monthIso || String(s.date ?? '').startsWith(`${f.monthIso}-`)));
+    },
     getServicesData: async () => {
       mem.servicesLezingen += 1;
       if (mem.servicesFaalt) throw new Error('services: connection failure');
@@ -1049,6 +1055,7 @@ beforeEach(() => {
   mem.presenceSchrijf = [];
   mem.presenceTabel = true;
   mem.matrixMaandFilters = [];
+  mem.planningMaandFilters = [];
   mem.leaveFilters = [];
   mem.swapFilters = [];
   mem.servicesLezingen = 0;
@@ -2264,6 +2271,150 @@ describe('dienstruil zonder tegenprestatie (overname)', () => {
     const res = await api('GET', '/api/availability?from=2026-07-08&to=2026-07-08', { token: 'tok-a' });
     expect(res.status).toBe(200);
     expect(res.json.days[0].takeover).toBeUndefined();
+  });
+});
+
+describe('beschikbaarheid, wie geen staf is krijgt geen dag van vóór de maandag van deze week (Jarno 02-10)', () => {
+  // Zelfde terugblikregel als de Maandplanning: /api/availability gaf elke
+  // ingelogde gebruiker per dag wie reed en met welke dienst, ook voor een
+  // periode die al lang voorbij is. De wizard van de dienstruil vraagt alleen
+  // vandaag en later; een kale fetch op een oude periode mag niets teruggeven.
+  // Vrijdag 02/10/2026, 11:00 in Brussel: de grens is maandag 28/09.
+  const GRENS = '2026-09-28';
+  const NIET_STAF = [
+    ['chauffeur', 'tok-a'],
+    ['technieker', 'tok-tech'],
+    ['chauffeur met "Ook technieker"', 'tok-b'],
+  ] as const;
+  const STAF = [['planner', 'tok-planner'], ['admin', 'tok-admin']] as const;
+  const bereik = (from: string, to: string, token: string, extra = '') =>
+    api('GET', `/api/availability?from=${from}&to=${to}${extra}`, { token });
+  const dagenVan = (res: { json: any }) => res.json.days.map((d: any) => d.date);
+  const reeks = (van: string, aantal: number) => Array.from({ length: aantal }, (_, i) => {
+    const d = new Date(`${van}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-10-02T09:00:00Z'));
+    mem.users = [
+      ...mem.users.map((u: any) => (u.id === '4' ? { ...u, ookTechnieker: true } : u)),
+      { id: '5', name: 'Toon Technieker', email: 'tech@vhb.be', role: 'technieker', isActive: true },
+    ];
+    // Een technieker valt onder dezelfde toestel-gate als een chauffeur.
+    mem.devices.push({ userId: '5', deviceToken: 'dev-ok', name: 'Windows-pc · browser', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    invalidateUsersCache();
+    mem.planning = [
+      { id: 'v-1', driverId: '3', date: '2026-09-14', line: '12' },
+      { id: 'v-2', driverId: '4', date: '2026-09-27', line: '14' },
+      { id: 'v-3', driverId: '3', date: '2026-09-28', line: '12' },
+      { id: 'v-4', driverId: '4', date: '2026-10-01', line: '14' },
+      { id: 'v-5', driverId: '3', date: '2026-10-05', line: '12' },
+    ];
+    // 14/09: B staat op bv (een overname kon die dag); 05/10 ook.
+    mem.planningMatrix = [
+      { id: 'm-oud', source_date: '2026-09-14', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'bv' }, raw_row: '' },
+      { id: 'm-nieuw', source_date: '2026-10-05', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'bv' }, raw_row: '' },
+    ];
+    // Verlof van vóór de grens: ook wie afwezig was hoort bij het verleden.
+    mem.leave = [
+      { id: 'l-oud', userId: '4', startDate: '2026-09-21', endDate: '2026-09-22', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-09-01T08:00:00Z', decidedAt: '2026-09-02T08:00:00Z' },
+    ];
+    mem.swaps = [];
+  });
+
+  for (const [wie, token] of NIET_STAF) {
+    it(`${wie}: een bereik dat helemaal voorbij is geeft dezelfde vorm zonder dagen, geen fout, en laadt niets`, async () => {
+      const res = await bereik('2026-09-01', '2026-09-27', token);
+      expect(res.status).toBe(200);
+      expect(res.json).toEqual({ from: '2026-09-01', to: '2026-09-27', drivers: [], days: [], zichtbaarVanaf: GRENS });
+      // Ook de dag vlak vóór de grens, en met de overname-vlag erbij.
+      const zondag = await bereik('2026-09-27', '2026-09-27', token, '&takeover=1');
+      expect(zondag.status).toBe(200);
+      expect(zondag.json.days).toEqual([]);
+      const oud = await bereik('2026-09-14', '2026-09-14', token, '&takeover=1');
+      expect(oud.json.days).toEqual([]);
+      // Geen planning en geen matrix opgehaald voor een antwoord zonder dagen.
+      expect(mem.planningMaandFilters).toEqual([]);
+      expect(mem.matrixMaandFilters).toEqual([]);
+    });
+
+    it(`${wie}: een bereik over de grens begint op de maandag van deze week`, async () => {
+      const res = await bereik('2026-09-14', '2026-10-05', token, '&takeover=1');
+      expect(res.status).toBe(200);
+      expect(dagenVan(res)).toEqual(reeks(GRENS, 8));
+      expect(res.json.zichtbaarVanaf).toBe(GRENS);
+      // Niets van vóór de grens: geen dag, geen dienst, geen verlof, geen overname.
+      const dagen = JSON.stringify(res.json.days);
+      for (const oud of ['2026-09-14', '2026-09-21', '2026-09-22', '2026-09-27']) expect(dagen).not.toContain(oud);
+      expect(res.json.days.every((d: any) => d.leave.length === 0)).toBe(true);
+      // De dagen erna zijn volledig, zoals voorheen.
+      expect(res.json.days[0]).toMatchObject({ date: GRENS, working: ['3'], lines: { '3': '12' } });
+      expect(res.json.days[7]).toMatchObject({ date: '2026-10-05', working: ['3'], lines: { '3': '12' }, takeover: { '4': 'bv' } });
+      expect(res.json.drivers.map((d: any) => d.id)).toEqual(['3', '4']);
+      // De planning van september wordt nog gelezen (28/09 tot 30/09 hoort erbij),
+      // maar alleen de rijen vanaf de grens komen in het antwoord.
+      expect([...mem.planningMaandFilters].sort()).toEqual(['2026-09', '2026-10']);
+    });
+
+    it(`${wie}: de lopende week blijft volledig, ook de dagen die al voorbij zijn, en de toekomst ook`, async () => {
+      const week = await bereik(GRENS, '2026-10-04', token);
+      expect(dagenVan(week)).toEqual(reeks(GRENS, 7));
+      // Donderdag 01/10 is voorbij maar hoort bij de lopende week.
+      expect(week.json.days[3]).toMatchObject({ date: '2026-10-01', working: ['4'], lines: { '4': '14' } });
+      // Wat de wizard echt vraagt: vandaag tot en met 56 dagen verder.
+      const wizard = await bereik('2026-10-02', '2026-11-27', token);
+      expect(wizard.status).toBe(200);
+      expect(dagenVan(wizard)).toEqual(reeks('2026-10-02', 57));
+      expect(wizard.json.days[3]).toMatchObject({ date: '2026-10-05', working: ['3'], lines: { '3': '12' }, free: ['4'] });
+    });
+  }
+
+  for (const [wie, token] of STAF) {
+    it(`${wie} ziet alles zoals voorheen, zonder grens in het antwoord`, async () => {
+      const voor = await bereik('2026-09-01', '2026-09-27', token);
+      expect(voor.status).toBe(200);
+      expect(dagenVan(voor)).toEqual(reeks('2026-09-01', 27));
+      expect(Object.keys(voor.json).sort()).toEqual(['days', 'drivers', 'from', 'to']);
+      expect(voor.json.days[13]).toMatchObject({ date: '2026-09-14', working: ['3'], lines: { '3': '12' } });
+      expect(voor.json.days[20]).toMatchObject({ date: '2026-09-21', leave: ['4'] });
+      expect(voor.json.days[26]).toMatchObject({ date: '2026-09-27', working: ['4'], lines: { '4': '14' } });
+
+      const over = await bereik('2026-09-14', '2026-10-05', token, '&takeover=1');
+      expect(dagenVan(over)).toEqual(reeks('2026-09-14', 22));
+      expect(over.json.days[0]).toMatchObject({ date: '2026-09-14', working: ['3'], takeover: { '4': 'bv' } });
+      expect(over.json).not.toHaveProperty('zichtbaarVanaf');
+
+      const na = await bereik('2026-10-05', '2026-10-06', token);
+      expect(dagenVan(na)).toEqual(['2026-10-05', '2026-10-06']);
+    });
+  }
+
+  it('de week wisselt om middernacht in Brussel: zondagavond telt de voorbije week nog, maandag 00:30 niet meer', async () => {
+    // Zondag 04/10, 23:30 in Brussel.
+    vi.setSystemTime(new Date('2026-10-04T21:30:00Z'));
+    const zondag = await bereik('2026-09-25', '2026-10-06', 'tok-a');
+    expect(zondag.json.zichtbaarVanaf).toBe(GRENS);
+    expect(dagenVan(zondag)).toEqual(reeks(GRENS, 9));
+    // Maandag 05/10, 00:30 in Brussel; de klok van de server (UTC) staat nog op zondag.
+    vi.setSystemTime(new Date('2026-10-04T22:30:00Z'));
+    const maandag = await bereik('2026-09-25', '2026-10-06', 'tok-a');
+    expect(maandag.json.zichtbaarVanaf).toBe('2026-10-05');
+    expect(dagenVan(maandag)).toEqual(['2026-10-05', '2026-10-06']);
+    expect(JSON.stringify(maandag.json.days)).not.toContain('2026-10-01');
+    // De week die net voorbij is geeft nu niets meer.
+    expect((await bereik(GRENS, '2026-10-04', 'tok-a')).json.days).toEqual([]);
+  });
+
+  it('de grens van 120 dagen en de datumcontrole gelden vóór de knip, voor iedereen', async () => {
+    for (const token of ['tok-a', 'tok-planner']) {
+      const teBreed = await bereik('2026-06-01', '2026-10-05', token);
+      expect(teBreed.status).toBe(400);
+      expect(teBreed.json.error).toContain('maximaal 120 dagen');
+      expect((await bereik('2026-10-05', '2026-10-01', token)).status).toBe(400);
+    }
+    expect(mem.planningMaandFilters).toEqual([]);
   });
 });
 
@@ -8686,6 +8837,174 @@ describe('advies openstaande diensten (/api/coverage-advisor)', () => {
     const a = res.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
     expect(a.rustVoor).toBeNull();
     expect(a.past).toBe(true);
+  });
+});
+
+describe('advies openstaande diensten, het venster van één aanvraag is begrensd (beveiligingsscan 01-10, punt 7)', () => {
+  // Het advies laadt de planning per maand voor het venster rond elke
+  // gevraagde dag. Zonder grens haalde één batch met een dag in 2026 en een
+  // dag in 9999 bijna 96.000 maanden tegelijk op, en liep de maandlus bij
+  // december 9999 door tot voorbij een miljoen. Nu: echte kalenderdagen,
+  // hoogstens een jaar breed, en geweigerd vóór er iets geladen wordt.
+  const batch = (items: Array<{ date: string; code: string }>) =>
+    api('POST', '/api/coverage-advisor/batch', { token: 'tok-planner', body: { items } });
+  const los = (date: string) => api('GET', `/api/coverage-advisor?date=${date}&code=10`, { token: 'tok-planner' });
+  const dagNa = (iso: string, n: number) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  /** Geen planning en geen matrix opgehaald: de weigering kwam vóór de dataload. */
+  const nietsGeladen = () => {
+    expect(mem.planningMaandFilters).toEqual([]);
+    expect(mem.matrixMaandFilters).toEqual([]);
+  };
+  const nette400 = (res: { status: number; json: any }, stuk: string) => {
+    expect(res.status).toBe(400);
+    expect(res.json.error).toContain(stuk);
+    expect(res.json.error.length).toBeLessThan(240);
+    expect(res.json.error).not.toContain('—');
+  };
+
+  it('gemeten 1: een dag in 2026 samen met een dag in 9999 (95.679 maanden) is een 400 met uitleg', async () => {
+    const start = performance.now();
+    const res = await batch([{ date: '2026-10-01', code: '10' }, { date: '9999-11-15', code: '10' }]);
+    nette400(res, 'meer dan een jaar uit elkaar');
+    expect(res.json.error).toMatch(/vraag het advies per dienst op\.$/);
+    nietsGeladen();
+    expect(performance.now() - start).toBeLessThan(2000);
+  });
+
+  it('gemeten 2 en 3: één dag in december 9999 (1.079.881 maanden) wordt geweigerd, los en in een batch', async () => {
+    const start = performance.now();
+    for (const dag of ['9999-12-01', '9999-12-15', '9999-12-31']) {
+      nette400(await los(dag), 'Controleer de datum');
+      nette400(await batch([{ date: dag, code: '10' }]), 'Controleer de datum');
+    }
+    nietsGeladen();
+    expect(performance.now() - start).toBeLessThan(2000);
+  });
+
+  it('een dag die niet bestaat: los een 400, in een batch valt hij weg zoals elke kapotte datum', async () => {
+    for (const kapot of ['2026-02-30', '2026-13-01', '2026-00-10']) {
+      expect((await los(kapot)).status).toBe(400);
+      expect((await batch([{ date: kapot, code: '10' }])).status).toBe(400);
+    }
+    nietsGeladen();
+    const gemengd = await batch([{ date: '2026-02-30', code: '10' }, { date: '2030-09-02', code: '11' }]);
+    expect(gemengd.status).toBe(200);
+    expect(gemengd.json.items.map((i: any) => i.date)).toEqual(['2030-09-02']);
+  });
+
+  it('net boven een jaar wordt geweigerd, een vol jaar niet', async () => {
+    // 15/01/2027 en 27/12/2027: de vensters samen lopen van 01/01/2027 tot en
+    // met 02/01/2028, 367 dagen (13 maanden: de maandlus alleen liet dit door).
+    nette400(await batch([{ date: '2027-01-15', code: '10' }, { date: '2027-12-27', code: '10' }]), 'meer dan een jaar uit elkaar');
+    nietsGeladen();
+    // 15/01/2028 en 15/12/2028: 01/01 tot en met 31/12 van een schrikkeljaar, precies 366 dagen.
+    const jaar = await batch([{ date: '2028-01-15', code: '10' }, { date: '2028-12-15', code: '10' }]);
+    expect(jaar.status).toBe(200);
+    expect(jaar.json.items).toHaveLength(2);
+    expect([...mem.planningMaandFilters].sort()).toEqual(Array.from({ length: 12 }, (_, i) => `2028-${String(i + 1).padStart(2, '0')}`));
+  });
+
+  it('de herverdeel-wizard blijft werken: 40 diensten van een langdurig afwezige, acht weken lang', async () => {
+    // Vijf dagen per week vanaf maandag 02/09/2030: 40 werkdagen, tot en met vrijdag 25/10.
+    const werkdagen = Array.from({ length: 56 }, (_, i) => dagNa('2030-09-02', i))
+      .filter((dag) => ![0, 6].includes(new Date(`${dag}T00:00:00Z`).getUTCDay()));
+    expect(werkdagen).toHaveLength(40);
+    expect(werkdagen[39]).toBe('2030-10-25');
+    // Chauffeur A rijdt de eerste dag zelf dienst 12, Chauffeur B is vrij.
+    mem.planning = [{ id: 'w-1', driverId: '3', date: '2030-09-02', line: '12', startTime: '08:00', endTime: '16:00' }];
+    const res = await batch(werkdagen.map((date) => ({ date, code: '11' })));
+    expect(res.status).toBe(200);
+    expect(res.json.items.map((i: any) => i.date)).toEqual(werkdagen);
+    expect(res.json.items[0].passend.map((k: any) => k.name)).toEqual(['Chauffeur B']);
+    expect(res.json.items[39].passend.map((k: any) => k.name)).toContain('Chauffeur A');
+    // Precies de maanden van het verenigde venster (27/08 tot en met 31/10),
+    // elk één keer en elk met een maandfilter: nooit de hele planning.
+    expect([...mem.planningMaandFilters].sort()).toEqual(['2030-08', '2030-09', '2030-10']);
+  });
+
+  it('ook wie maar één dag per week rijdt past: 40 diensten over 40 weken', async () => {
+    const weken = Array.from({ length: 40 }, (_, i) => dagNa('2030-09-02', i * 7));
+    expect(weken[39]).toBe('2031-06-02');
+    const res = await batch(weken.map((date) => ({ date, code: '11' })));
+    expect(res.status).toBe(200);
+    expect(res.json.items).toHaveLength(40);
+    expect([...mem.planningMaandFilters].sort()).toEqual([
+      '2030-08', '2030-09', '2030-10', '2030-11', '2030-12', '2031-01', '2031-02', '2031-03', '2031-04', '2031-05', '2031-06',
+    ]);
+  });
+
+  it('het losse advies laadt de maanden van zijn eigen venster, niet meer', async () => {
+    expect((await los('2026-09-16')).status).toBe(200);
+    expect(mem.planningMaandFilters).toEqual(['2026-09']);
+    mem.planningMaandFilters = [];
+    // De 1e van de maand: zes dagen terug ligt in september.
+    expect((await los('2026-10-01')).status).toBe(200);
+    expect(mem.planningMaandFilters).toEqual(['2026-09', '2026-10']);
+  });
+
+  it('digest: een matrixrij met een dag die niet bestaat breekt het dagoverzicht niet, het gat blijft erin staan', async () => {
+    // Vrijdag 26/02/2027: het venster van zeven dagen loopt tot 04/03, en
+    // "2027-02-30" sorteert daar als tekst middenin. Zo'n rij kan alleen uit
+    // een kapotte import komen; het advies weigert de dag, de cron gaat door.
+    process.env.ERROR_DIGEST_WEEKDAG = 'elke';
+    vi.setSystemTime(new Date('2027-02-26T10:00:00Z'));
+    mem.planningMatrix = [
+      { id: 'm-kapot', source_date: '2027-02-30', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+      { id: 'm-goed', source_date: '2027-03-01', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11'] };
+    mem.planning = [];
+    const fouten = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200);
+      const tekst = mem.emailsSent.find((m) => m.context === 'error-digest')?.text ?? '';
+      expect(tekst).toContain('Openstaande diensten (komende 7 dagen)');
+      const regels = tekst.split('\n').filter((r) => r.includes('dienst 11'));
+      expect(regels).toHaveLength(2);
+      // Het gat op de dag die niet bestaat: zichtbaar in de mail, zonder advies.
+      expect(regels[0]).toContain('advies kon niet berekend worden');
+      // Het echte gat erna krijgt gewoon zijn advies.
+      expect(regels[1]).toContain('Ik zou');
+      // En de reden staat in het log.
+      expect(fouten.mock.calls.some((c) => String(c[0]).includes('advies voor 2027-02-30, dienst 11 mislukt') && String(c[1]).includes('Controleer de datum'))).toBe(true);
+    } finally {
+      fouten.mockRestore();
+      delete process.env.ERROR_DIGEST_WEEKDAG;
+    }
+  });
+
+  it('Telegram: een knop met een dag die niet kan krijgt een antwoord in de chat, geen crash en geen dataload', async () => {
+    const { zetTelegramVerzenderVoorTests } = await import('../api/telegram');
+    const verzonden: Array<{ tekst: string }> = [];
+    zetTelegramVerzenderVoorTests(async (v: any) => { verzonden.push(v); return true; });
+    process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
+    process.env.TELEGRAM_CHAT_ID = '777';
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    const fouten = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      for (const dag of ['9999-12-15', '2026-02-30', '']) {
+        verzonden.length = 0;
+        const res = await api('POST', '/api/telegram/webhook', {
+          body: { callback_query: { id: 'cb-x', data: `adv|${dag}|11`, message: { chat: { id: 777 } } } },
+          headers: { 'X-Telegram-Bot-Api-Secret-Token': 'test-secret' },
+        });
+        expect(res.status).toBe(200);
+        expect(verzonden).toHaveLength(1);
+        expect(verzonden[0].tekst).toBe('Advies voor dienst 11 kon niet berekend worden.');
+      }
+      nietsGeladen();
+      expect(fouten.mock.calls.filter((c) => String(c[0]).includes('[telegram] advies mislukt'))).toHaveLength(3);
+    } finally {
+      fouten.mockRestore();
+      zetTelegramVerzenderVoorTests(null);
+      delete process.env.TELEGRAM_WEBHOOK_SECRET;
+      delete process.env.TELEGRAM_CHAT_ID;
+    }
   });
 });
 

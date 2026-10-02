@@ -326,7 +326,11 @@ export function mountPlanningRoutes(app: express.Express) {
   // vrij) zodat ook chauffeurs (die normaal enkel hun eigen shifts zien)
   // kunnen zien wie er vrij is om mee te ruilen. Geen shift-details, enkel
   // driver-ids + namen. Toegankelijk voor alle ingelogde gebruikers.
-  app.get("/api/availability", authenticate, async (req, res) => {
+  // Terugblik (Jarno 02-10): wie geen staf is krijgt geen dag van vóór de
+  // maandag van de lopende week, dezelfde regel als de Maandplanning
+  // (shared/maandplanningTerugblik.ts). Zonder die knip gaf een kale fetch op
+  // een oude periode per dag terug wie reed en met welke dienst.
+  app.get("/api/availability", authenticate, async (req: AuthenticatedRequest, res) => {
     try {
       const from = typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from) ? req.query.from : undefined;
       const to = typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to) ? req.query.to : undefined;
@@ -340,10 +344,21 @@ export function mountPlanningRoutes(app: express.Express) {
         return res.status(400).json({ error: "Bereik te groot: maximaal 120 dagen per aanvraag." });
       }
 
-      // Datums in [from, to] enumereren (guard van 120 dagen tegen runaway).
+      // De maat is de rol, zoals bij de Maandplanning: een technieker en een
+      // chauffeur met "Ook technieker" zijn geen staf. Een bereik dat vroeger
+      // begint start op de grens; ligt het er helemaal voor, dan blijft de
+      // vorm gelijk maar zonder dagen (geen fout, en er wordt niets geladen).
+      // `zichtbaarVanaf` zegt erbij dat het de terugblikregel is, zodat een
+      // korter antwoord niet voor een volledig doorgaat. De wizard van de
+      // dienstruil vraagt alleen vandaag en later, die merkt hier niets van.
+      const zichtbaarVanaf = isStafRol(req.appUser!.role) ? null : eersteZichtbareDag();
+      const eersteDag = zichtbaarVanaf && zichtbaarVanaf > from ? zichtbaarVanaf : from;
+      const terugblik = zichtbaarVanaf ? { zichtbaarVanaf } : {};
+
+      // Datums in [eersteDag, to] enumereren (guard van 120 dagen tegen runaway).
       const dates: string[] = [];
       {
-        const cursor = new Date(`${from}T00:00:00Z`);
+        const cursor = new Date(`${eersteDag}T00:00:00Z`);
         const end = new Date(`${to}T00:00:00Z`);
         let guard = 0;
         while (cursor <= end && guard < 120) {
@@ -352,7 +367,7 @@ export function mountPlanningRoutes(app: express.Express) {
           guard++;
         }
       }
-      if (dates.length === 0) return res.json({ from, to, drivers: [], days: [] });
+      if (dates.length === 0) return res.json({ from, to, drivers: [], days: [], ...terugblik });
 
       const wantTakeover = req.query.takeover === "1" || req.query.takeover === "true";
 
@@ -372,7 +387,7 @@ export function mountPlanningRoutes(app: express.Express) {
         getSwapsData(),
       ]);
       const shiftChunks = await Promise.all(months.map((m) => getPlanningData({ monthIso: m })));
-      const shifts = shiftChunks.flat().filter((s: any) => s.date >= from && s.date <= to);
+      const shifts = shiftChunks.flat().filter((s: any) => s.date >= eersteDag && s.date <= to);
 
       const chauffeurs = users
         .filter((u: any) => u.isActive !== false && u.role === "chauffeur" && String(u.name).toLowerCase() !== "beheerder")
@@ -435,7 +450,7 @@ export function mountPlanningRoutes(app: express.Express) {
         return day;
       });
 
-      res.json({ from, to, drivers: chauffeurs, days });
+      res.json({ from, to, drivers: chauffeurs, days, ...terugblik });
     } catch (err: any) {
       console.error("Error computing availability:", err);
       res.status(500).json({ error: "Kon beschikbaarheid niet berekenen." });
