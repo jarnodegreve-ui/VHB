@@ -190,6 +190,17 @@ export function mountGebruikersRoutes(app: express.Express) {
       const id = String(req.params.id ?? "");
       const target = ((await getUsersData()) as AppUserIntern[]).find((u) => String(u.id) === id);
       if (!target) return res.status(404).json({ error: "Gebruiker niet gevonden." });
+      // De eigen tweede stap wissen mag alleen vanuit een sessie die die stap
+      // al doorliep (aal2). De API eist aal2 pas met MFA_STAF=aan; staat dat
+      // uit, dan kon wie alleen het wachtwoord van een admin had de factor van
+      // dat account wissen, en was de tweede stap niets meer waard
+      // (beveiligingsscan 01-10, keuze 3). Vergeleken op het portaalaccount én
+      // op de aanmelding erachter, want de factoren hangen aan de aanmelding.
+      // Een collega resetten blijft zoals het was: daar is deze route voor.
+      const eigenAccount = String(req.appUser!.id) === id || (!!target.authId && target.authId === req.authUser?.id);
+      if (eigenAccount && req.aal !== "aal2") {
+        return res.status(403).json({ error: "Je eigen twee-stapsverificatie resetten kan alleen na bevestiging met de code. Meld je aan met de code uit je authenticator-app en probeer het dan opnieuw." });
+      }
       if (!target.authId) return res.status(409).json({ error: "Deze gebruiker heeft nog geen gekoppelde aanmelding." });
       const { data, error } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId: target.authId });
       if (error) throw error;

@@ -2713,15 +2713,15 @@ describe('push-notificaties', () => {
   });
 
   it('registreert en verwijdert een abonnement', async () => {
-    const sub = { endpoint: 'https://push.example/abc', keys: { p256dh: 'pk', auth: 'au' } };
+    const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'pk', auth: 'au' } };
     const res = await api('POST', '/api/push/subscribe', { token: 'tok-a', body: sub });
     expect(res.status).toBe(200);
-    expect(mem.pushSubscriptions).toEqual([{ userId: '3', endpoint: 'https://push.example/abc', p256dh: 'pk', auth: 'au' }]);
+    expect(mem.pushSubscriptions).toEqual([{ userId: '3', endpoint: 'https://fcm.googleapis.com/fcm/send/abc', p256dh: 'pk', auth: 'au' }]);
 
     const ongeldid = await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: '' } });
     expect(ongeldid.status).toBe(400);
 
-    const del = await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/abc' } });
+    const del = await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/abc' } });
     expect(del.status).toBe(200);
     expect(mem.pushSubscriptions).toHaveLength(0);
   });
@@ -2754,6 +2754,51 @@ describe('push-notificaties', () => {
     const validatiePush = mem.pushesSent.find((p) => p.payload.title === 'Dienstruil wacht op validatie');
     expect(validatiePush).toBeTruthy();
     expect(validatiePush!.userIds.sort()).toEqual(['1', '2']);
+  });
+});
+
+// Beveiligingsscan 01-10, keuze 10: een abonnement mag alleen naar een echte
+// pushdienst wijzen (api/_lib/pushBestemming.ts; de volledige tabel staat in
+// src/pushBestemming.test.ts). Vroeger passeerde elke publieke https-host.
+describe('push-abonnement: alleen naar een echte pushdienst (scan 01-10, keuze 10)', () => {
+  const abonneer = (endpoint: string) => api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint, keys: { p256dh: 'pk', auth: 'au' } } });
+
+  it.each([
+    'https://push.aanvaller.tld/geheim-pad',
+    'https://fcm.googleapis.com.aanvaller.tld/fcm/send/geheim-pad',
+    'https://evil-fcm.googleapis.com/fcm/send/geheim-pad',
+    'https://intern.vhb.example/geheim-pad',
+    'https://fcm.googleapis.com:8443/fcm/send/geheim-pad',
+    'https://gebruiker:wachtwoord@fcm.googleapis.com/fcm/send/geheim-pad',
+    'https://203.0.113.10/geheim-pad',
+  ])('weigert %s met 400 en bewaart niets', async (endpoint) => {
+    const stil = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const res = await abonneer(endpoint);
+      expect(res.status).toBe(400);
+      expect(res.json.error).toBe('Meldingen konden voor deze browser niet worden ingeschakeld. De pushdienst van deze browser wordt niet ondersteund.');
+      expect(mem.pushSubscriptions).toHaveLength(0);
+      // Het logboek krijgt de hostnaam, nooit het pad (het endpoint is een geheime URL).
+      const regels = stil.mock.calls.map((c) => c.join(' ')).filter((r) => r.includes('Push-abonnement geweigerd'));
+      expect(regels).toHaveLength(1);
+      expect(regels[0]).toContain(new URL(endpoint).hostname);
+      expect(regels[0]).not.toContain('geheim-pad');
+      expect(regels[0]).not.toContain('wachtwoord');
+    } finally {
+      stil.mockRestore();
+    }
+  });
+
+  it.each([
+    'https://fcm.googleapis.com/fcm/send/abc:DEF_-123',
+    'https://jmt17.google.com/fcm/send/abc',
+    'https://updates.push.services.mozilla.com/wpush/v2/gAAAAABabc',
+    'https://web.push.apple.com/QGuQyavXutnMH',
+    'https://wns2-par02p.notify.windows.com/w/?token=BQYAAAD%2bxyz%3d',
+  ])('laat %s door', async (endpoint) => {
+    const res = await abonneer(endpoint);
+    expect(res.status).toBe(200);
+    expect(mem.pushSubscriptions).toEqual([{ userId: '3', endpoint, p256dh: 'pk', auth: 'au' }]);
   });
 });
 
@@ -3291,14 +3336,14 @@ describe('concurrency & IDOR (middel-fixes)', () => {
   });
 
   it('push-unsubscribe verwijdert niet het abonnement van een ándere gebruiker (geen IDOR)', async () => {
-    await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/owned-by-3', keys: { p256dh: 'pk', auth: 'au' } } });
+    await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/owned-by-3', keys: { p256dh: 'pk', auth: 'au' } } });
     // Gebruiker 4 probeert het endpoint van gebruiker 3 af te melden → geen effect.
-    const idor = await api('POST', '/api/push/unsubscribe', { token: 'tok-b', body: { endpoint: 'https://push.example/owned-by-3' } });
+    const idor = await api('POST', '/api/push/unsubscribe', { token: 'tok-b', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/owned-by-3' } });
     expect(idor.status).toBe(200);
-    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://push.example/owned-by-3')).toBe(true);
+    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://fcm.googleapis.com/fcm/send/owned-by-3')).toBe(true);
     // De eigenaar zelf kan het wél afmelden.
-    await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/owned-by-3' } });
-    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://push.example/owned-by-3')).toBe(false);
+    await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/owned-by-3' } });
+    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://fcm.googleapis.com/fcm/send/owned-by-3')).toBe(false);
   });
 });
 
@@ -6756,7 +6801,7 @@ describe('push-abonnees (wie kan meldingen ontvangen)', () => {
   it('planner ziet de ids, chauffeur krijgt 403', async () => {
     await api('POST', '/api/push/subscribe', {
       token: 'tok-a',
-      body: { endpoint: 'https://push.test/abc', keys: { p256dh: 'p', auth: 'a' } },
+      body: { endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/abc', keys: { p256dh: 'p', auth: 'a' } },
     });
     const alsPlanner = await api('GET', '/api/push/subscribers', { token: 'tok-planner' });
     expect(alsPlanner.status).toBe(200);
@@ -8567,6 +8612,90 @@ describe('twee-stapsverificatie voor staf (MFA_STAF=aan, verbeterronde 07-09 nr.
     expect((await api('GET', '/api/users', { token: 'tok-planner' })).status).toBe(200);
     const bev = await api('GET', '/api/me/beveiliging', { token: 'tok-planner' });
     expect(bev.json.mfaVerplicht).toBe(false);
+  });
+});
+
+// Beveiligingsscan 01-10, keuze 3: met MFA_STAF uit (de standaard) eist de
+// API geen aal2. Een sessie die alleen het wachtwoord van een admin doorliep
+// kon zo de factor van datzelfde account wissen, en dan was de tweede stap
+// niets meer waard voor wie het wachtwoord had gestolen.
+describe('eigen twee-stapsverificatie resetten vraagt een bevestigde sessie (scan 01-10, keuze 3)', () => {
+  const vorige = process.env.MFA_STAF;
+  beforeEach(() => { delete process.env.MFA_STAF; });
+  afterEach(() => { if (vorige === undefined) delete process.env.MFA_STAF; else process.env.MFA_STAF = vorige; });
+
+  const mfaAttrap = () => {
+    const gewist: Array<{ id: string; userId: string }> = [];
+    const gelezen: string[] = [];
+    mem.supabaseAdmin = {
+      auth: {
+        admin: {
+          mfa: {
+            listFactors: async ({ userId }: { userId: string }) => { gelezen.push(userId); return { data: { factors: [{ id: `f-${userId}` }] }, error: null }; },
+            deleteFactor: async (arg: { id: string; userId: string }) => { gewist.push(arg); return { data: {}, error: null }; },
+          },
+        },
+      },
+    };
+    // De aanmelding achter elk stafaccount (zoals de koppeling bij het inloggen ze zet).
+    mem.users = mem.users.map((u: any) => (u.id === '1' ? { ...u, authId: 'auth-tok-admin' } : u.id === '2' ? { ...u, authId: 'auth-tok-planner' } : u));
+    return { gewist, gelezen };
+  };
+  const gelogd = () => mem.activity.filter((a) => a.action === 'Twee-stapsverificatie gereset');
+
+  it('admin met alleen het wachtwoord (aal1) kan de eigen factor niet wissen: 403, niets gelezen of gewist', async () => {
+    const { gewist, gelezen } = mfaAttrap();
+    const res = await api('POST', '/api/admin/users/1/mfa-reset', { token: 'tok-admin' });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toBe('Je eigen twee-stapsverificatie resetten kan alleen na bevestiging met de code. Meld je aan met de code uit je authenticator-app en probeer het dan opnieuw.');
+    // Geen mfa_required: dat stuurt de app naar het codescherm, en dit is een
+    // gewone weigering van één actie.
+    expect(res.json.code).toBeUndefined();
+    expect(gelezen).toEqual([]);
+    expect(gewist).toEqual([]);
+    expect(gelogd()).toHaveLength(0);
+  });
+
+  it('de weigering komt als leesbare melding in beeld, zonder "geen rechten" erachter', async () => {
+    mfaAttrap();
+    const res = await api('POST', '/api/admin/users/1/mfa-reset', { token: 'tok-admin' });
+    // Zoals de client: apiFetch gooit bij een 403 een fout met de servertekst
+    // en de status, het scherm Gebruikers geeft die aan schrijffout.
+    const { schrijffout } = await import('./lib/fouten');
+    expect(schrijffout('Twee-stapsverificatie resetten', Object.assign(new Error(res.json.error), { status: 403 }))).toBe(
+      'Twee-stapsverificatie resetten is mislukt. Je eigen twee-stapsverificatie resetten kan alleen na bevestiging met de code. Meld je aan met de code uit je authenticator-app en probeer het dan opnieuw.',
+    );
+  });
+
+  it('dezelfde admin met een bevestigde sessie (aal2) kan de eigen factor wel resetten', async () => {
+    const { gewist, gelezen } = mfaAttrap();
+    const res = await api('POST', '/api/admin/users/1/mfa-reset', { token: 'tok-admin-2fa' });
+    expect(res.status).toBe(200);
+    expect(res.json).toEqual({ success: true, verwijderd: 1 });
+    expect(gelezen).toEqual(['auth-tok-admin']);
+    expect(gewist).toEqual([{ id: 'f-auth-tok-admin', userId: 'auth-tok-admin' }]);
+    expect(gelogd()).toHaveLength(1);
+  });
+
+  it('een collega resetten blijft werken vanuit een aal1-sessie', async () => {
+    const { gewist } = mfaAttrap();
+    const res = await api('POST', '/api/admin/users/2/mfa-reset', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(gewist).toEqual([{ id: 'f-auth-tok-planner', userId: 'auth-tok-planner' }]);
+    expect(gelogd()).toHaveLength(1);
+  });
+
+  it('een ander portaalaccount met de aanmelding van de admin zelf telt ook als eigen account', async () => {
+    const { gewist, gelezen } = mfaAttrap();
+    // Twee records op dezelfde aanmelding hoort niet te bestaan, maar de
+    // factoren hangen aan de aanmelding: via record 2 zou de admin anders
+    // alsnog de eigen factor wissen.
+    mem.users = mem.users.map((u: any) => (u.id === '2' ? { ...u, authId: 'auth-tok-admin' } : u));
+    const res = await api('POST', '/api/admin/users/2/mfa-reset', { token: 'tok-admin' });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toMatch(/^Je eigen twee-stapsverificatie resetten kan alleen na bevestiging met de code\./);
+    expect(gelezen).toEqual([]);
+    expect(gewist).toEqual([]);
   });
 });
 

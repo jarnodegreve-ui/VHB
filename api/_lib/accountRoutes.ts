@@ -15,7 +15,7 @@ import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser,
 import type { AppUser, AuthenticatedRequest } from "../types.js";
 import { isStafRol, mfaStafVerplicht, authenticate, requireRole, isDeviceGateEnabled, DEVICE_TOKEN_HEADER } from "../middleware.js";
 import { isMissingTableError } from "../deviceGate.js";
-import { isSafeExternalHttpsUrl } from "../ocpi.js";
+import { beoordeelPushBestemming } from "./pushBestemming.js";
 import { getDeviceCached } from "./deviceCache.js";
 import { invalidateUsersCache } from "../userCache.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
@@ -332,13 +332,16 @@ export function mountAccountRoutes(app: express.Express) {
       if (!endpoint || !p256dh || !auth) {
         return res.status(400).json({ error: "Ongeldig push-abonnement." });
       }
-      // Het endpoint wordt later server-side aangeroepen door webpush.sendNotification
-      // (en de digest-cron). Zonder deze check kon een geauthenticeerde gebruiker
-      // een intern/loopback/metadata-adres opslaan en de server dat laten fetchen
-      // (blinde SSRF). Alleen https naar een publieke host toestaan — een echt
-      // push-endpoint (FCM/Mozilla/WNS/Apple) voldoet daar altijd aan.
-      if (!isSafeExternalHttpsUrl(endpoint)) {
-        return res.status(400).json({ error: "Ongeldig push-endpoint." });
+      // Het endpoint wordt later door de server zelf aangeroepen
+      // (sendPushToUsers). Alleen de pushdiensten van de browsers mogen erin
+      // (api/_lib/pushBestemming.ts): een eigen server van de gebruiker of een
+      // hostnaam die naar een intern adres wijst komt de tabel niet in. De
+      // hostnaam gaat in het logboek, zodat een echte dienst die op de lijst
+      // ontbreekt opvalt; nooit het hele endpoint, dat is een geheime URL.
+      const bestemming = beoordeelPushBestemming(endpoint);
+      if (!bestemming.toegestaan) {
+        console.warn(`Push-abonnement geweigerd: ${(bestemming.host || "geen geldige URL").slice(0, 100)} is geen bekende pushdienst (api/_lib/pushBestemming.ts).`);
+        return res.status(400).json({ error: "Meldingen konden voor deze browser niet worden ingeschakeld. De pushdienst van deze browser wordt niet ondersteund." });
       }
       await savePushSubscription({ userId: String(req.appUser!.id), endpoint, p256dh, auth });
       res.json({ success: true });
