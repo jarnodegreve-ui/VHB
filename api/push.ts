@@ -3,6 +3,7 @@ import type { MeldingSoort } from "../shared/schemas/meldingen.js";
 import { filterPushOntvangers } from "../shared/schemas/dashboardVoorkeuren.js";
 import { meldingUitPayload } from "./_lib/meldingen.js";
 import { bewaarMeldingen } from "./storage.js";
+import { beoordeelPushBestemming } from "./_lib/pushBestemming.js";
 
 /**
  * Web-push notificaties. Volledig optioneel: zonder de drie VAPID env-vars
@@ -151,7 +152,7 @@ const getVoorkeurenVoorUsers = async (userIds: string[]): Promise<Map<string, un
   return kaart;
 };
 
-const getSubscriptionsForUsers = async (userIds: string[]): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>> => {
+const getSubscriptionsForUsers = async (userIds: string[]): Promise<PushAbonnement[]> => {
   if (!db || userIds.length === 0) return [];
   const { data, error } = await db
     .from("push_subscriptions")
@@ -174,6 +175,41 @@ export type PushPayload = {
 };
 
 let meldingFoutGemeld = false;
+
+type PushAbonnement = { endpoint: string; p256dh: string; auth: string };
+/** Hooguit zoveel hostnamen in de logregel van één verzending. */
+const MAX_HOSTS_IN_LOG = 5;
+
+/**
+ * Scheidt de abonnementen die naar een echte pushdienst wijzen van de rest
+ * (beveiligingsscan 01-10, keuze 10). De controle bij het abonneren dekt
+ * alleen nieuwe rijen; wat al in de tabel stond, of er buiten de API om in
+ * kwam, wordt hier bij elke verzending opnieuw getoetst. Een overgeslagen rij
+ * wordt niet aangeroepen en niet gewist: de lijst in
+ * api/_lib/pushBestemming.ts kan een echte dienst missen, en die mag zijn
+ * abonnementen dan niet stil kwijtraken.
+ */
+export const kiesPushDoelen = (abonnementen: PushAbonnement[]): {
+  doelen: Array<PushAbonnement & { url: string }>;
+  overgeslagen: { aantal: number; hosts: string[] };
+} => {
+  const doelen: Array<PushAbonnement & { url: string }> = [];
+  const hosts = new Set<string>();
+  let aantal = 0;
+  for (const sub of abonnementen) {
+    const bestemming = beoordeelPushBestemming(sub.endpoint);
+    if (bestemming.toegestaan) {
+      doelen.push({ ...sub, url: bestemming.url });
+    } else {
+      aantal += 1;
+      hosts.add((bestemming.host || "geen geldige URL").slice(0, 100));
+    }
+  }
+  const lijst = [...hosts].sort();
+  const getoond = lijst.slice(0, MAX_HOSTS_IN_LOG);
+  if (lijst.length > getoond.length) getoond.push(`en ${lijst.length - getoond.length} andere`);
+  return { doelen, overgeslagen: { aantal, hosts: getoond } };
+};
 
 /** Socket-timeout voor één push-aanroep (web-push `timeout`-optie). */
 export const PUSH_TIMEOUT_MS = 5_000;
@@ -222,7 +258,14 @@ export const sendPushToUsers = async (userIds: string[], payload: PushPayload): 
   if (!vapidEnv()) return;
   const pushOntvangers = filterPushOntvangers(ontvangers, await getVoorkeurenVoorUsers(ontvangers), melding.soort);
   if (pushOntvangers.length === 0) return;
-  const subscriptions = await getSubscriptionsForUsers(pushOntvangers);
+  const { doelen: subscriptions, overgeslagen } = kiesPushDoelen(await getSubscriptionsForUsers(pushOntvangers));
+  if (overgeslagen.aantal > 0) {
+    // Eén regel per verzending, met alleen de hostnaam: het endpoint zelf is
+    // een geheime URL. De rijen blijven staan: staat hier een echte
+    // pushdienst, dan hoort die op de lijst in api/_lib/pushBestemming.ts en
+    // werken de abonnementen daarna weer.
+    console.warn(`Push overgeslagen voor ${overgeslagen.aantal} ${overgeslagen.aantal === 1 ? "abonnement" : "abonnementen"}, geen bekende pushdienst: ${overgeslagen.hosts.join(", ")}.`);
+  }
   if (subscriptions.length === 0) return;
 
   // Pas hier, wanneer er echt iets te versturen valt, de bibliotheek laden.
@@ -232,14 +275,15 @@ export const sendPushToUsers = async (userIds: string[], payload: PushPayload): 
   await Promise.all(
     subscriptions.map(async (sub) => {
       try {
-        // Het endpoint is door de gebruiker gekozen (elke publieke https-host
-        // passeert de subscribe-check). Zonder deadline hield één traag of
-        // eindeloos antwoordend endpoint de hele hoofdactie (verlofbeslissing,
+        // Ook een echte pushdienst kan traag of eindeloos antwoorden. Zonder
+        // deadline hield één zo'n aanroep de hele hoofdactie (verlofbeslissing,
         // ruil) vast tot de Vercel-limiet. Socket-timeout in web-push plus een
         // harde deadline op de await (security-audit 07-09, bevinding 3).
         await metDeadline(
           webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            // `url` = de genormaliseerde vorm uit de bestemmingscontrole, zie
+            // kiesPushDoelen; opruimen hieronder gebeurt op de bewaarde tekst.
+            { endpoint: sub.url, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             body,
             { timeout: PUSH_TIMEOUT_MS },
           ),
