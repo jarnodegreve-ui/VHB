@@ -25,7 +25,7 @@ import type { Session } from '@supabase/supabase-js';
 import { View, User, isStaf } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, LOGIN_MELDING_KEY, vergeetEffectiefThema, type ToastEventDetail } from './lib/ui';
-import { borgGebruiker, kanHerladen, magProfiel, onthoudGebruiker, wisPriveCaches } from './lib/afmelden';
+import { AFGEMELD, bevestigGebruiker, borgGebruiker, kanHerladen, magProfiel, meldAfBijSupabase, onthoudGebruiker, wisPriveCaches } from './lib/afmelden';
 import { apiFetch, isToestelGeblokkeerd, vernieuwSessie } from './lib/api';
 import { laadfoutOnderdrukt } from './app/laadfout';
 import { lazyWithRetry, metRetry } from './lib/lazyRetry';
@@ -938,6 +938,9 @@ export default function App() {
     wisAccountStaat();
     setToasts([]);
     vergeetEffectiefThema();
+    // De privé-caches gaan weg en zijn van niemand meer: wie hierna start,
+    // doorloopt de volledige controle (zie AFGEMELD).
+    onthoudGebruiker(AFGEMELD);
     // Het lokale push-abonnement moet weg zijn vóór de herlaad het afbreekt.
     await Promise.all([wisPriveCaches(), isPushSupported() ? unsubscribeFromPush({}).catch(() => {}) : null]);
     if (herlaad && await kanHerladen(isOnlineNu())) {
@@ -962,7 +965,8 @@ export default function App() {
         await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
       }
     } catch { /* best-effort */ }
-    try { await supabase?.auth.signOut(); } catch { /* de afronding wist de state sowieso */ }
+    // Ook als signOut faalt, is de sessie hierna uit de opslag.
+    await meldAfBijSupabase(supabase?.auth);
     // signOut vuurt SIGNED_OUT en de listener rondt al af; faalt signOut
     // zelf, dan blijft dat event uit en doet deze aanroep het werk.
     await rondAfmeldingAf();
@@ -978,13 +982,14 @@ export default function App() {
    *  /api/me/beveiliging. */
   type ProfielBeveiliging = { mfaVerplicht?: boolean; aal?: 'aal1' | 'aal2' };
 
-  const fetchCurrentUser = async (accessToken: string, zelfdeGebruiker: boolean): Promise<{ appUser: User; beveiliging: ProfielBeveiliging | null }> => {
+  const fetchCurrentUser = async (accessToken: string, cacheMag: boolean): Promise<{ appUser: User; beveiliging: ProfielBeveiliging | null; uitCache: boolean }> => {
     const response = await apiFetch('/api/me', { accessToken });
+    const uitCache = antwoordUitCache(response);
     // Zonder deze checks werd een JSON-errorbody ({error: ...}) als
     // gebruiker gezet → crash op currentUser.name verderop. Een profiel uit
-    // de cache van de service worker telt alleen voor wie hier ook de vorige
-    // keer aangemeld was: anders is het het profiel van iemand anders.
-    if (!response.ok || !magProfiel(antwoordUitCache(response), zelfdeGebruiker)) {
+    // de cache van de service worker telt niet voor iemand anders dan de
+    // vorige gebruiker van dit toestel: dan is het het profiel van die vorige.
+    if (!response.ok || !magProfiel(uitCache, cacheMag)) {
       throw new Error('Profiel kon niet geladen worden.');
     }
     const data = await response.json();
@@ -998,7 +1003,7 @@ export default function App() {
     profielGeladenRef.current = true;
     setMonitoringUser(String(appUser.id), appUser.role);
     forceSignOutRef.current = false; // geldige sessie → her-arm de auto-logout
-    return { appUser, beveiliging: beveiliging && typeof beveiliging === 'object' ? beveiliging : null };
+    return { appUser, beveiliging: beveiliging && typeof beveiliging === 'object' ? beveiliging : null, uitCache };
   };
 
 
@@ -1033,11 +1038,11 @@ export default function App() {
     // vrijwel gelijktijdige tweede aanroeper meteen terugkeert.
     if (authUserId) initializingUserIdRef.current = authUserId;
     try {
-      // Gedeeld toestel: is dit iemand anders dan de vorige keer (of is dat
-      // niet te zeggen), dan gaan de privé-caches eerst weg en telt een
-      // profiel uit de cache niet. Vergeleken op het auth-id van de sessie,
-      // vóór het profiel: het id in een profiel uit de cache bewijst niets.
-      const zelfde = await borgGebruiker(authUserId);
+      // Gedeeld toestel: is dit iemand anders dan de vorige keer, dan gaan de
+      // privé-caches eerst weg en telt een profiel uit de cache niet.
+      // Vergeleken op het auth-id van de sessie, vóór het profiel: het id in
+      // een profiel uit de cache bewijst niets.
+      const cacheMag = await borgGebruiker(authUserId);
       // Toestelregistratie en profiel tegelijk (punt 19, 15-09). Vroeger
       // serieel: register → /api/me → (staf) beveiliging → data, drie
       // roundtrips vóór de eerste inhoud. De server-gate op /api/me blijft
@@ -1064,7 +1069,7 @@ export default function App() {
       const vroegeTweeStaps = rolHint === 'chauffeur' || rolHint === 'technieker' ? null : leesTweeStapsStatus();
       let profiel: Awaited<ReturnType<typeof fetchCurrentUser>>;
       try {
-        profiel = await fetchCurrentUser(accessToken, zelfde);
+        profiel = await fetchCurrentUser(accessToken, cacheMag);
       } catch (eersteFout) {
         const deviceStatus = await registratie;
         // De toestel-403 van apiFetch draagt de servermelding ("Dit toestel
@@ -1083,12 +1088,12 @@ export default function App() {
         // algemene foutafhandeling hieronder. Met 'approved' (zojuist als
         // eerste toestel goedgekeurd) één herkansing.
         if (deviceStatus === null) throw eersteFout;
-        profiel = await fetchCurrentUser(accessToken, zelfde);
+        profiel = await fetchCurrentUser(accessToken, cacheMag);
       } finally {
         registratieRef.current = null;
       }
       setDeviceBlocked(null);
-      const { appUser, beveiliging } = profiel;
+      const { appUser, beveiliging, uitCache } = profiel;
       // Twee-stapsverificatie (staf): ingeschreven maar nog geen code in deze
       // sessie = codescherm; geen authenticator terwijl de server hem eist =
       // inschrijfscherm. Chauffeurs slaan dit over. Fail-open: lukt de status
@@ -1112,9 +1117,9 @@ export default function App() {
         }
       }
       setTweeStaps(null);
-      // Vanaf hier zijn de privé-caches van deze gebruiker (borgGebruiker
-      // hierboven wiste ze als het iemand anders was).
-      onthoudGebruiker(authUserId);
+      // Een profiel van de server: vanaf hier zijn de privé-caches van deze
+      // gebruiker (borgGebruiker hierboven wiste ze als het iemand anders was).
+      if (!uitCache) await bevestigGebruiker(authUserId, String(appUser.id));
       try {
         window.localStorage.setItem(LAST_ROLE_KEY, appUser.role);
       } catch {

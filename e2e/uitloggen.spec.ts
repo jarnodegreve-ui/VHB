@@ -216,6 +216,43 @@ test.describe('afmelden op een gedeeld toestel', () => {
     expect(staat.geladen).toBe(2);
   });
 
+  test('verlopen token en de aanmeldserver onbereikbaar: afmelden haalt de sessie toch uit de opslag', async ({ page }) => {
+    const staat = await zetOp(page);
+    await page.clock.install();
+    await page.goto('/');
+    await logIn(page);
+    await expect(bel(page, 'Meldingen (2 ongelezen)')).toBeVisible({ timeout: 15_000 });
+    await merk(page);
+
+    // Het token is verlopen en verversen lukt niet (geen verbinding met de
+    // aanmeldserver): signOut kan de sessie dan niet lezen en laat ze staan.
+    await page.evaluate((key) => {
+      const sessie = JSON.parse(window.localStorage.getItem(key)!);
+      window.localStorage.setItem(key, JSON.stringify({ ...sessie, expires_at: Math.floor(Date.now() / 1000) - 60 }));
+    }, SESSION_KEY);
+    const geenAuth = (route: Route) => route.abort('connectionfailed');
+    await page.route('**/auth/v1/**', geenAuth);
+
+    await meldAf(page);
+    // Supabase probeert het verversen een halve minuut opnieuw, met oplopende
+    // pauzes: de klok vooruit tot het inlogscherm er staat.
+    await expect(async () => {
+      await page.clock.fastForward(35_000);
+      await expect(loginKnop(page)).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 40_000 });
+    expect(await gemerkt(page), 'de pagina is herladen').toBe(false);
+    expect(await page.evaluate((key) => window.localStorage.getItem(key), SESSION_KEY), 'geen sessie meer in de opslag').toBeNull();
+
+    // De aanmeldserver is terug: herladen brengt de vorige gebruiker niet terug.
+    await page.unroute('**/auth/v1/**', geenAuth);
+    await page.reload();
+    await expect(loginKnop(page)).toBeVisible({ timeout: 15_000 });
+    await page.clock.fastForward(5_000);
+    await expect(loginKnop(page)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Accountmenu' })).toHaveCount(0);
+    void staat;
+  });
+
   test('afmelden zonder bereik en zonder service worker: het inlogscherm komt op zijn plaats, geen foutpagina, en niets van A voor wie daarna aanmeldt', async ({ page, context }) => {
     const staat = await zetOp(page);
     await page.goto('/');

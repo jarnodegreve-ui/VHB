@@ -749,7 +749,11 @@ test.describe('pwa: filmnummers zonder bereik', () => {
  *  - de schil blijft staan: afmelden zonder bereik herlaadt naar het
  *    inlogscherm uit de schil-cache, geen foutpagina van de browser;
  *  - wie zich aanmeldt terwijl /api/me het netwerk niet haalt, start nooit
- *    met het profiel van de vorige gebruiker uit de cache.
+ *    met het profiel van de vorige gebruiker uit de cache, ook niet na een
+ *    afmelding op een toestel dat nog geen auth-id bewaard had;
+ *  - een toestel van vóór deze regel (caches gevuld, geen auth-id bewaard)
+ *    opent Mijn dag zonder bereik uit de cache zoals altijd, en verliest
+ *    niets.
  */
 test.describe('pwa: afmelden op een gedeeld toestel', () => {
   test.describe.configure({ timeout: 90_000 });
@@ -860,6 +864,77 @@ test.describe('pwa: afmelden op een gedeeld toestel', () => {
     await expect(page.getByText(CHAUFFEUR.name)).toHaveCount(0);
     // En zijn rooster is uit de cache: dat ging weg vóór het profiel werd gevraagd.
     expect(await gecachtePaden(page)).not.toContain('/api/planning');
+    await context.setOffline(false);
+  });
+
+  /** Het toestel zoals main het achterliet: caches gevuld, het profiel-id van
+   *  de vorige gebruiker in het oude kenmerk, nog geen auth-id bewaard. */
+  const alsVoorDezeRegel = (page: Page) => page.evaluate((profielId) => {
+    window.localStorage.removeItem('vhb-last-auth-id');
+    window.localStorage.setItem('vhb-last-user-id', profielId);
+  }, CHAUFFEUR.id);
+  const bewaardAuthId = (page: Page) => page.evaluate(() => window.localStorage.getItem('vhb-last-auth-id'));
+
+  test('toestel van vóór deze regel: koude start zonder bereik opent Mijn dag uit de cache, en niets wordt gewist', async ({ page, context }) => {
+    await startMetCache(context, page);
+    expect(await bewaardAuthId(page), 'een profiel van de server bewaart het auth-id').toBe('auth-e2e');
+    await alsVoorDezeRegel(page);
+    // Een merkteken in de privé-cache: staat het er straks nog, dan is er niet gewist.
+    await page.evaluate(async (naam) => { await (await caches.open(naam)).put('/api/e2e-merkteken', new Response('x')); }, RITBLADEN_CACHE);
+
+    // De eerste start op de nieuwe versie valt in een dode zone.
+    await context.route('**/api/**', geenNetwerk);
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('2101').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Offline · (gegevens van \d{2}:\d{2}|opgeslagen gegevens)/)).toBeVisible();
+    expect(await gecachtePaden(page)).toEqual(expect.arrayContaining(['/api/me', '/api/planning', '/api/e2e-merkteken']));
+    // Een profiel uit de cache bewijst niet wie dit is: nog geen auth-id.
+    expect(await bewaardAuthId(page)).toBeNull();
+
+    // Weer bereik: het profiel komt van de server, het auth-id wordt bewaard
+    // en de caches van dezelfde gebruiker blijven.
+    await context.setOffline(false);
+    await context.unroute('**/api/**', geenNetwerk);
+    await page.reload();
+    await expect(page.getByText('2101').first()).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => bewaardAuthId(page), { timeout: 10_000 }).toBe('auth-e2e');
+    expect(await gecachtePaden(page)).toContain('/api/e2e-merkteken');
+  });
+
+  test('afmelden op een toestel zonder bewaard id: daarna start niemand met het profiel van de vorige uit de cache', async ({ page, context }) => {
+    await startMetCache(context, page);
+    const profielVanA = await page.evaluate(async (naam) => (await (await caches.open(naam)).match('/api/me'))!.text(), RITBLADEN_CACHE);
+    await alsVoorDezeRegel(page);
+
+    await meldAf(page);
+    await expect(loginKnop(page)).toBeVisible({ timeout: 20_000 });
+    // De afmelding laat het toestel niet op "geen id bewaard" staan.
+    expect(await bewaardAuthId(page)).toBe('-');
+
+    // Iemand anders heeft een sessie, /api/me haalt het netwerk niet, en het
+    // profiel van de vorige staat (weer) in de cache.
+    await page.evaluate((key) => {
+      const straks = Math.floor(Date.now() / 1000) + 3600;
+      window.localStorage.setItem(key, JSON.stringify({ access_token: 'tok-b', refresh_token: 'r-b', token_type: 'bearer', expires_in: 3600, expires_at: straks, user: { id: 'auth-b', email: 'alex@vhb.be', aud: 'authenticated' } }));
+    }, SESSION_KEY);
+    let profielGevraagd = 0;
+    await context.route('**/api/**', geenNetwerk);
+    await context.route('**/api/me', async (route) => {
+      profielGevraagd += 1;
+      await page.evaluate(async ({ naam, body }) => {
+        await (await caches.open(naam)).put('/api/me', new Response(body, { headers: { 'content-type': 'application/json' } }));
+      }, { naam: RITBLADEN_CACHE, body: profielVanA }).catch(() => undefined);
+      await route.abort('internetdisconnected');
+    });
+    await context.setOffline(true);
+    await page.reload();
+
+    await expect.poll(() => profielGevraagd, { timeout: 20_000 }).toBeGreaterThan(0);
+    await expect(page.getByText(/Dit duurt langer dan normaal/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(0);
+    await expect(page.getByText(CHAUFFEUR.name)).toHaveCount(0);
     await context.setOffline(false);
   });
 });

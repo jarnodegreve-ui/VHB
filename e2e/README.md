@@ -64,10 +64,13 @@ dist via `vite preview` op poort 4173.
   SIGNED_OUT van elders (met de uitleg op het inlogscherm), een laat antwoord
   van de eerste gebruiker dat niet bij de tweede belandt, de privé-caches weg
   en de schil niet, en waar níét herladen wordt: koude start, start met een
-  verlopen sessie, uitnodiging, wachtwoordherstel, afmelden zonder bereik. De
-  service-worker-kant (afmelden zonder bereik uit de schil, een laat antwoord
-  dat de cache niet opnieuw vult, geen profiel van de vorige uit de cache)
-  staat in `pwa.spec.ts`.
+  verlopen sessie, uitnodiging, wachtwoordherstel, afmelden zonder bereik. Ook:
+  afmelden met een verlopen token terwijl de aanmeldserver onbereikbaar is (de
+  sessie gaat toch uit de opslag; `page.clock` slaat de herkansingen van
+  Supabase over). De service-worker-kant (afmelden zonder bereik uit de schil,
+  een laat antwoord dat de cache niet opnieuw vult, geen profiel van de vorige
+  uit de cache, en het toestel van vóór deze regel dat zonder bereik gewoon
+  Mijn dag opent) staat in `pwa.spec.ts`.
 
 - **Mobiele specs** (`smoke`, `dashboard`, `verlof`, `ruil`, `sessie`, `dock`,
   `donker`): elk met eigen, kleine fixtures — ze testen één schrijfpad en
