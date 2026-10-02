@@ -12,10 +12,11 @@ import { bepaalTweeStapsStap, leesTweeStapsStatus } from './lib/tweeStaps';
 import { GEDEELD_TOESTEL_EVENT, isGedeeldToestel, useInactiviteitsUitlog } from './lib/inactiviteit';
 import { AppSkeleton, heeftOpgeslagenSessie } from './app/AppSkeleton';
 import { useAppData } from './app/useAppData';
+import { antwoordUitCache } from './app/data/kern';
 import { AppDataProvider } from './app/AppDataContext';
 import { ViewFout } from './app/ViewFout';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { useLaag } from './lib/lagen';
+import { naOpruimen, useLaag } from './lib/lagen';
 import { RITBLAD_BUNDEL_EVENT } from './lib/ritblad';
 import { Eye, Menu, RefreshCw, WifiOff, X } from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
@@ -23,7 +24,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, isStaf } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { cn, LOGIN_MELDING_KEY, vergeetEffectiefThema, wisOfflineCaches, type ToastEventDetail } from './lib/ui';
+import { cn, LOGIN_MELDING_KEY, vergeetEffectiefThema, type ToastEventDetail } from './lib/ui';
+import { borgGebruiker, kanHerladen, magProfiel, onthoudGebruiker, wisPriveCaches } from './lib/afmelden';
 import { apiFetch, isToestelGeblokkeerd, vernieuwSessie } from './lib/api';
 import { laadfoutOnderdrukt } from './app/laadfout';
 import { lazyWithRetry, metRetry } from './lib/lazyRetry';
@@ -276,6 +278,14 @@ export default function App() {
   // Lopende toestelregistratie tijdens de parallelle start (punt 19): de
   // 403-listener wacht hierop i.p.v. meteen het wachtscherm te tonen.
   const registratieRef = useRef<Promise<'approved' | 'pending' | 'revoked' | null> | null>(null);
+  // Is er in deze pagina een profiel geladen? Alleen dan herlaadt een
+  // afmelding de pagina (zie rondAfmeldingAf): zonder profiel is er niets van
+  // een account in het geheugen, en zo kan een herlaad nooit de volgende
+  // uitlokken.
+  const profielGeladenRef = useRef(false);
+  // De lopende afronding van een afmelding: knop, gedwongen uitlog en het
+  // SIGNED_OUT-event komen bij dezelfde afmelding alle drie langs.
+  const afmeldingRef = useRef<Promise<void> | null>(null);
   const setRecoveryMode = (v: boolean) => {
     isPasswordRecoveryRef.current = v;
     setIsPasswordRecovery(v);
@@ -686,7 +696,9 @@ export default function App() {
     // fenomeen met meerdere open tabbladen), forceer dan na 8s een render
     // zodat de gebruiker kan inloggen i.p.v. naar een spinner te staren.
     const watchdog = window.setTimeout(() => {
-      if (isMounted) setAuthReady(true);
+      // Niet tijdens de afronding van een afmelding: die houdt het
+      // laadscherm zelf vast tot de herlaad (en heeft haar eigen vangnet).
+      if (isMounted && !afmeldingRef.current) setAuthReady(true);
     }, 8000);
 
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, nextSession) => {
@@ -725,27 +737,30 @@ export default function App() {
         sessieBeeindigdRef.current = false;
         forceSignOutRef.current = false;
         await initializeAuthenticatedApp(nextSession.access_token, nextSession.user.id);
-      } else {
-        setRecoveryMode(false);
-        setCurrentUser(null);
-        setMonitoringUser(null);
-        // Reactief uitloggen (sessie verlopen/elders afgemeld): zet het
-        // browser-push-abonnement uit zodat een volgende gebruiker op dit
-        // toestel geen meldingen van het vorige account erft. Best-effort —
-        // de server-cleanup kan zonder geldig token mislukken (gedicht in
-        // handleLogout), de lokale unsubscribe werkt sowieso.
+      } else if (event === 'INITIAL_SESSION') {
+        // Koude start zonder sessie: geen afmelding, dus niets wissen en
+        // nooit herladen. De URL blijft staan (een link naar /verlof/<id>
+        // blijft dus ook na een herlaad van het inlogscherm bewaard) en
+        // handleLogin gaat er na het inloggen heen (tranche 3C, 23-09). Het
+        // browser-push-abonnement gaat wel uit: liep de sessie af terwijl de
+        // app dicht was, dan erft een volgende gebruiker op dit toestel geen
+        // meldingen van het vorige account.
         if (isPushSupported()) void unsubscribeFromPush({}).catch(() => {});
-        setPushEnabled(false);
-        setDeviceBlocked(null);
-        setTweeStaps(null);
-        initializedUserIdRef.current = null;
-        initializingUserIdRef.current = null;
-        resetAll();
-        // Koude start zonder sessie: de URL blijft staan (een link naar
-        // /verlof/<id> blijft dus ook na een herlaad van het inlogscherm
-        // bewaard) en handleLogin gaat er na het inloggen heen. Alleen een
-        // echte afmelding gaat terug naar het dashboard (tranche 3C, 23-09).
-        if (event !== 'INITIAL_SESSION') setCurrentView('dashboard');
+        wisAccountStaat();
+      } else {
+        // Een echte afmelding, ook als Supabase ze zelf afkondigt (sessie
+        // verlopen, elders afgemeld): zelfde afronding als de knop. Terug naar
+        // het dashboard, zodat de volgende gebruiker daar start. Kwam ze niet
+        // van de knop of van een gedwongen uitlog en volgt er een herlaad, dan
+        // is dit het moment om de uitleg klaar te zetten: de 401 die er
+        // vroeger voor zorgde, komt na de herlaad niet meer aan.
+        setCurrentView('dashboard');
+        if (!forceSignOutRef.current && magHerladen()) {
+          forceSignOutRef.current = true;
+          noteerUitlogReden('sessie');
+        }
+        void rondAfmeldingAf();
+        return;
       }
       setAuthReady(true);
     });
@@ -791,17 +806,14 @@ export default function App() {
   // geblokkeerd toestel komt via window-events hierheen; één plek voor álle
   // API-calls, ook die van App zelf.
   useEffect(() => {
-    const onExpired = (event: Event) => {
-      const reden = (event as CustomEvent<{ reden?: 'sessie' | 'account' }>).detail?.reden;
-      void forceSignOut(reden === 'account'
-        ? 'Je account is gedeactiveerd. Neem contact op met de planning.'
-        : 'Je sessie is verlopen. Log opnieuw in.');
-    };
+    // De uitleg staat op het inlogscherm (reden 'sessie'). De reden uit het
+    // event ging hier al niet mee naar forceSignOut; dat is zo gelaten.
+    const onExpired = () => { void forceSignOut(); };
     const onDeviceBlocked = (event: Event) => {
       const code = (event as CustomEvent<{ code?: string }>).detail?.code;
       const blokkeer = (status: 'pending' | 'revoked') => {
         setDeviceBlocked(status);
-        void wisOfflineCaches(); // ingetrokken/wachtend toestel: geen offline rooster of ritblad meer
+        void wisPriveCaches(); // ingetrokken/wachtend toestel: geen offline rooster of ritblad meer
       };
       // Parallelle start (punt 19): /api/me en de toestelregistratie lopen
       // tegelijk. Op een gloednieuw toestel geeft /api/me dan 403
@@ -857,44 +869,103 @@ export default function App() {
   // gedeactiveerd account). Eén keer per sessie: onAuthStateChange(SIGNED_OUT)
   // wist verder alle state en toont LoginView.
   const forceSignOutRef = useRef(false);
-  const forceSignOut = async (msg: string, reden: 'sessie' | 'account' | 'inactief' = 'sessie') => {
+  const forceSignOut = async (reden: 'sessie' | 'inactief' = 'sessie') => {
     if (forceSignOutRef.current) return;
     forceSignOutRef.current = true;
     // Vanaf hier is élke lopende fetch gedoemd: hun catch-blokken mogen geen
     // eigen fout-toast meer tonen (dat waren er vijf tegelijk) en ook niets
     // meer naar de foutenlog sturen. showToast leest deze vlag.
     sessieBeeindigdRef.current = true;
-    // De melding hoort thuis op het inlogscherm, niet in een toast die
-    // meteen daarna achter LoginView verdwijnt. Via state (LoginView kan al
-    // gemonteerd zijn) én sessionStorage (overleeft een herlaadbeurt).
+    noteerUitlogReden(reden);
+    await meldAf();
+  };
+
+  /** De melding hoort thuis op het inlogscherm, niet in een toast die meteen
+   *  daarna achter LoginView verdwijnt. Via state (LoginView kan al
+   *  gemonteerd zijn) én sessionStorage (overleeft de herlaad). */
+  const noteerUitlogReden = (reden: 'sessie' | 'inactief') => {
     setUitlogMelding(reden);
     try { sessionStorage.setItem(LOGIN_MELDING_KEY, reden); } catch { /* privémodus */ }
-    if (reden === 'account') showToast(msg, 'error');
-    // Gedeeld toestel (depot-tablet): net als bij de gewone uitlog mag de
-    // stale-while-revalidate-cache (rooster, profiel, ritblad-PDF) en het
-    // push-abonnement van deze gebruiker niet achterblijven na een gedwongen
-    // uitlog (verlopen sessie / gedeactiveerd account). Vóór signOut, want de
-    // push-afmelding heeft nog een geldig token nodig; alles best-effort zodat
-    // het uitloggen nooit ophoudt.
-    await wisOfflineCaches();
+  };
+
+  /** Herlaadt een afmelding de pagina? Alleen als er in deze pagina een
+   *  profiel geladen was, en niet tijdens een wachtwoordherstel: dat scherm
+   *  meldt zelf af en gaat door op zijn plaats. */
+  const magHerladen = () => profielGeladenRef.current && !isPasswordRecoveryRef.current;
+
+  /** Wat er van het account in de React-state staat, weg. Op zijn plaats:
+   *  dit is ook de terugval wanneer herladen niet kan. */
+  const wisAccountStaat = () => {
+    setRecoveryMode(false);
+    setSession(null);
+    setCurrentUser(null);
+    setMonitoringUser(null);
+    setPushEnabled(false);
+    setDeviceBlocked(null);
+    setTweeStaps(null);
+    initializedUserIdRef.current = null;
+    initializingUserIdRef.current = null;
+    resetAll();
+  };
+
+  /**
+   * Eén afronding voor elke afmelding (beveiligingsscan 01-10): de knop, de
+   * gedwongen uitlog en de sessie die Supabase zelf beëindigt. Daarna staat er
+   * niets van het vorige account meer in het geheugen of in de privé-caches
+   * (src/lib/afmelden.ts).
+   *
+   *  1. State en toasts weg (een toast kan een gedownload bestand vasthouden).
+   *  2. De privé-caches weg. Dit loopt ná de laatste netwerkaanroep van de
+   *     afmelding (signOut roept de listener pas na zijn eigen verzoek), zodat
+   *     een laat antwoord ze niet opnieuw vult.
+   *  3. De pagina herladen: alleen dat haalt lopende verzoeken en hun
+   *     closures echt weg. Alleen als er in deze pagina een profiel geladen
+   *     was, niet tijdens een wachtwoordherstel (dat scherm meldt zelf af en
+   *     gaat door), en alleen als de schil er daarna nog is (`kanHerladen`).
+   *     Tot de herlaad staat het laadscherm er, niet het inlogscherm: dat
+   *     zou anders de melding uit sessionStorage al verbruiken, en wat iemand
+   *     er intikt ging met de herlaad verloren.
+   *
+   * Geen lus: herladen vraagt een profiel dat in déze pagina geladen is. Na
+   * de herlaad is er geen sessie meer (signOut haalde ze uit de opslag), dus
+   * ook geen profiel; een start zonder profiel herlaadt nooit.
+   */
+  const rondAfmeldingAf = (): Promise<void> => (afmeldingRef.current ??= (async () => {
+    const herlaad = magHerladen();
+    // Wat nog onderweg is, strandt: geen fout-toasts meer.
+    sessieBeeindigdRef.current = true;
+    setAuthReady(!herlaad);
+    wisAccountStaat();
+    setToasts([]);
     vergeetEffectiefThema();
+    // Het lokale push-abonnement moet weg zijn vóór de herlaad het afbreekt.
+    await Promise.all([wisPriveCaches(), isPushSupported() ? unsubscribeFromPush({}).catch(() => {}) : null]);
+    if (herlaad && await kanHerladen(isOnlineNu())) {
+      // Via de lagenstapel: stond er een menu, paneel of venster open, dan
+      // ruimt dat bij het sluiten zijn stap in de historiek op, en zo'n
+      // terugstap breekt een herlaad die al onderweg is weer af.
+      naOpruimen(() => window.location.reload());
+      // Vangnet: blijft de herlaad uit, dan komt het inlogscherm alsnog op
+      // zijn plaats; bij een herlaad sterft deze wachttijd met de pagina.
+      await new Promise((klaar) => window.setTimeout(klaar, 5000));
+    }
+    afmeldingRef.current = null;
+    setAuthReady(true);
+  })());
+
+  /** Afmelden bij Supabase, daarna de afronding. De push-afmelding gaat
+   *  voor: die heeft nog een geldig token nodig. Alles best-effort, het
+   *  afmelden mag nooit blijven hangen. */
+  const meldAf = async () => {
     try {
       if (session?.access_token && isPushSupported()) {
         await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
       }
     } catch { /* best-effort */ }
-    setPushEnabled(false);
-    try { await supabase?.auth.signOut(); } catch { /* val sowieso terug op login */ }
-    // Zelf de sessie-state wissen i.p.v. te wachten op SIGNED_OUT: als de
-    // signOut-call zelf faalt (offline, of de auth-server geeft een fout)
-    // blijft dat event uit en bleef de app op "Profiel laden…" hangen met
-    // een sessie die nergens meer geldig is. De listener doet hetzelfde werk
-    // idempotent zodra hij alsnog binnenkomt.
-    setSession(null);
-    setCurrentUser(null);
-    setAuthReady(true);
-    initializedUserIdRef.current = null;
-    initializingUserIdRef.current = null;
+    try { await supabase?.auth.signOut(); } catch { /* de afronding wist de state sowieso */ }
+    // signOut vuurt SIGNED_OUT en de listener rondt al af; faalt signOut
+    // zelf, dan blijft dat event uit en doet deze aanroep het werk.
+    await rondAfmeldingAf();
   };
 
   // apiFetch + vernieuwSessie staan in src/lib/api.ts: één implementatie voor
@@ -907,11 +978,13 @@ export default function App() {
    *  /api/me/beveiliging. */
   type ProfielBeveiliging = { mfaVerplicht?: boolean; aal?: 'aal1' | 'aal2' };
 
-  const fetchCurrentUser = async (accessToken = session?.access_token): Promise<{ appUser: User; beveiliging: ProfielBeveiliging | null }> => {
+  const fetchCurrentUser = async (accessToken: string, zelfdeGebruiker: boolean): Promise<{ appUser: User; beveiliging: ProfielBeveiliging | null }> => {
     const response = await apiFetch('/api/me', { accessToken });
     // Zonder deze checks werd een JSON-errorbody ({error: ...}) als
-    // gebruiker gezet → crash op currentUser.name verderop.
-    if (!response.ok) {
+    // gebruiker gezet → crash op currentUser.name verderop. Een profiel uit
+    // de cache van de service worker telt alleen voor wie hier ook de vorige
+    // keer aangemeld was: anders is het het profiel van iemand anders.
+    if (!response.ok || !magProfiel(antwoordUitCache(response), zelfdeGebruiker)) {
       throw new Error('Profiel kon niet geladen worden.');
     }
     const data = await response.json();
@@ -922,6 +995,7 @@ export default function App() {
     // en, voor staf, `beveiliging`; die horen niet in het User-object.
     const { toestel: _toestel, beveiliging, ...appUser } = data as User & { toestel?: unknown; beveiliging?: ProfielBeveiliging };
     setCurrentUser(appUser);
+    profielGeladenRef.current = true;
     setMonitoringUser(String(appUser.id), appUser.role);
     forceSignOutRef.current = false; // geldige sessie → her-arm de auto-logout
     return { appUser, beveiliging: beveiliging && typeof beveiliging === 'object' ? beveiliging : null };
@@ -959,6 +1033,11 @@ export default function App() {
     // vrijwel gelijktijdige tweede aanroeper meteen terugkeert.
     if (authUserId) initializingUserIdRef.current = authUserId;
     try {
+      // Gedeeld toestel: is dit iemand anders dan de vorige keer (of is dat
+      // niet te zeggen), dan gaan de privé-caches eerst weg en telt een
+      // profiel uit de cache niet. Vergeleken op het auth-id van de sessie,
+      // vóór het profiel: het id in een profiel uit de cache bewijst niets.
+      const zelfde = await borgGebruiker(authUserId);
       // Toestelregistratie en profiel tegelijk (punt 19, 15-09). Vroeger
       // serieel: register → /api/me → (staf) beveiliging → data, drie
       // roundtrips vóór de eerste inhoud. De server-gate op /api/me blijft
@@ -985,7 +1064,7 @@ export default function App() {
       const vroegeTweeStaps = rolHint === 'chauffeur' || rolHint === 'technieker' ? null : leesTweeStapsStatus();
       let profiel: Awaited<ReturnType<typeof fetchCurrentUser>>;
       try {
-        profiel = await fetchCurrentUser(accessToken);
+        profiel = await fetchCurrentUser(accessToken, zelfde);
       } catch (eersteFout) {
         const deviceStatus = await registratie;
         // De toestel-403 van apiFetch draagt de servermelding ("Dit toestel
@@ -995,7 +1074,7 @@ export default function App() {
           // Registratie mislukt (null) terwijl /api/me een toestelreden gaf:
           // dezelfde uitkomst als vroeger, het wachtscherm met "Opnieuw controleren".
           setDeviceBlocked(deviceStatus === 'revoked' ? 'revoked' : 'pending');
-          void wisOfflineCaches();
+          void wisPriveCaches();
           setIsInitialLoad(false);
           initializingUserIdRef.current = null; // "Opnieuw controleren" moet opnieuw kunnen initialiseren
           return; // dedup-vlag (initialized) bewust niet zetten
@@ -1004,7 +1083,7 @@ export default function App() {
         // algemene foutafhandeling hieronder. Met 'approved' (zojuist als
         // eerste toestel goedgekeurd) één herkansing.
         if (deviceStatus === null) throw eersteFout;
-        profiel = await fetchCurrentUser(accessToken);
+        profiel = await fetchCurrentUser(accessToken, zelfde);
       } finally {
         registratieRef.current = null;
       }
@@ -1033,19 +1112,13 @@ export default function App() {
         }
       }
       setTweeStaps(null);
-      // Gedeeld toestel (depot-tablet): logt er een ándere gebruiker in dan
-      // de vorige keer, wis dan Cache Storage. Uitloggen doet dat al, maar
-      // een sessie die verlóópt niet — en dan kon de offline-fallback van de
-      // service worker het profiel/rooster van de vorige gebruiker tonen.
+      // Vanaf hier zijn de privé-caches van deze gebruiker (borgGebruiker
+      // hierboven wiste ze als het iemand anders was).
+      onthoudGebruiker(authUserId);
       try {
-        const LAST_USER_KEY = 'vhb-last-user-id';
-        const previous = window.localStorage.getItem(LAST_USER_KEY);
-        const current = String(appUser.id);
-        if (previous && previous !== current) await wisOfflineCaches();
-        window.localStorage.setItem(LAST_USER_KEY, current);
         window.localStorage.setItem(LAST_ROLE_KEY, appUser.role);
       } catch {
-        // localStorage/Cache API geblokkeerd — geen blocker voor de boot
+        // localStorage geblokkeerd, geen blocker voor de boot
       }
       // Pas NA een geslaagd profiel de dedup-vlag zetten — anders blijft de
       // gebruiker bij een transiente /api/me-fout vasthangen op 'Profiel
@@ -1205,11 +1278,16 @@ export default function App() {
     const ruwDoel = neemStartDoel();
     const terug = ruwDoel ? await import('./app/terugNaLogin').then((m) => m.naarStartDoel(ruwDoel), () => false) : false;
     setCurrentUser(user);
+    profielGeladenRef.current = true;
     await fetchUsers(token);
     if (!terug) setCurrentView('dashboard');
   };
 
   const handleLogout = async () => {
+    // Een eigen afmelding is geen verlopen sessie: wat intussen een 401
+    // krijgt, mag die uitleg niet op het inlogscherm zetten.
+    forceSignOutRef.current = true;
+    sessieBeeindigdRef.current = true;
     try {
       if (session?.access_token) {
         await apiFetch('/api/auth/session', {
@@ -1219,30 +1297,10 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error ending session:', error);
-    } finally {
-      // Gedeeld toestel (depot-tablet): het stale-while-revalidate-rooster
-      // van deze gebruiker mag niet in Cache Storage achterblijven.
-      await wisOfflineCaches();
-      vergeetEffectiefThema();
-      // Push-abonnement opruimen vóór signOut (vereist nog een geldig token):
-      // op een gedeeld toestel mag de vorige gebruiker geen meldingen blijven
-      // krijgen, en de DB-koppeling endpoint→user moet weg.
-      try {
-        if (session?.access_token && isPushSupported()) {
-          await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
-        }
-      } catch {
-        // best-effort — nooit het uitloggen blokkeren
-      }
-      setPushEnabled(false);
-      setDeviceBlocked(null);
-      await supabase?.auth.signOut();
-      setSession(null);
-      setCurrentUser(null);
-      setMonitoringUser(null);
-      initializedUserIdRef.current = null;
-      initializingUserIdRef.current = null;
     }
+    // Push-abonnement, Supabase en de afronding (privé-caches, herlaad):
+    // dezelfde weg als de gedwongen uitlog.
+    await meldAf();
   };
 
   // Gedeeld toestel: na 30 minuten zonder aanraking terug naar het
@@ -1253,12 +1311,14 @@ export default function App() {
   const geenPrintblad = useCallback(() => setPrintGeweigerdVoor(currentUser?.id ?? null), [currentUser?.id]);
 
   useInactiviteitsUitlog(gedeeldToestel && !!currentUser, () => {
-    void forceSignOut('Automatisch afgemeld na een half uur zonder activiteit.', 'inactief');
+    void forceSignOut('inactief');
   });
 
   // Warme start (opgeslagen sessie): meteen de skeleton-schil; koude start: het
-  // carbon laadscherm — dat wordt zo het inlogscherm.
-  if (!authReady) return warmeStart ? <AppSkeleton /> : <SessieLaden />;
+  // carbon laadscherm — dat wordt zo het inlogscherm. Ook tijdens de afronding
+  // van een afmelding (profiel was geladen): daarna volgt de herlaad naar het
+  // inlogscherm, niet de app.
+  if (!authReady) return warmeStart && !profielGeladenRef.current ? <AppSkeleton /> : <SessieLaden />;
 
   // Print-modus (?print-…=): een kaal blad zonder schil. Zie app/PrintModus.tsx.
   // Alleen met een ingelogde gebruiker (elk blad vraagt er een); weigert de

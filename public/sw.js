@@ -87,6 +87,15 @@ const PRECACHE_EXTRA_RAW = '__VHB_PRECACHE_EXTRA__';
 const PRECACHE_EXTRA = PRECACHE_EXTRA_RAW.startsWith('__') ? [] : PRECACHE_EXTRA_RAW.split(',').filter(Boolean);
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
+// Afmelden of een andere gebruiker op hetzelfde toestel (02-10): de pagina
+// stuurt 'wis-prive' (src/lib/afmelden.ts). Elk API-verzoek onthoudt de
+// generatie van zijn start; is die bij het antwoord verhoogd, dan was het
+// een verzoek van de vorige gebruiker en gaat het antwoord niet meer in de
+// cache. Zonder dit kon een traag antwoord de pas gewiste cache opnieuw
+// vullen, op een URL die de volgende gebruiker ook opvraagt (/api/me,
+// /api/meldingen). In het geheugen van deze worker: stopt de browser hem,
+// dan zijn de lopende verzoeken ook weg.
+let priveGeneratie = 0;
 const ME_API = '/api/me';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
@@ -177,6 +186,15 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'cache-ritbladen') {
     const bewaar = cacheRitbladen(self.VHB_RITBLADEN.ritbladUrlsUitBericht(event.data)).catch(() => {});
     if (typeof event.waitUntil === 'function') event.waitUntil(bewaar);
+  }
+  // Afmelding of gebruikerswissel: eerst de generatie omhoog (synchroon, zodat
+  // geen lopend antwoord er nog tussen glipt), dan de privé-caches weg. De
+  // pagina wist ze zelf ook; de schil (CACHE_NAME) blijft, daarmee opent het
+  // inlogscherm ook zonder bereik.
+  if (event.data && event.data.type === 'wis-prive') {
+    priveGeneratie += 1;
+    const wis = Promise.all([caches.delete(RITBLADEN_CACHE), caches.delete(self.VHB_BIJLAGEN.BIJLAGEN_CACHE)]).catch(() => {});
+    if (typeof event.waitUntil === 'function') event.waitUntil(wis);
   }
 });
 
@@ -292,19 +310,23 @@ self.addEventListener('fetch', (event) => {
   // de lijst, en dat gaf bij een koude offline start één rode toast met zes
   // bronnen en een lege ruil-badge. De lijst staat in sw-ritbladen.js
   // (OFFLINE_API). De sleutel is de volledige URL (incl. ?driverId=&month= /
-  // ?from=&to=), dus per gebruiker/venster apart; uitloggen wist alle
-  // caches (ui.ts). Een antwoord uit de cache draagt `X-VHB-Bron: cache`
+  // ?from=&to=), zonder gebruiker erin: uitloggen en een gebruikerswissel
+  // wissen deze cache (src/lib/afmelden.ts), en een antwoord dat pas daarna
+  // binnenkomt gaat er niet meer in (priveGeneratie). Een antwoord uit de
+  // cache draagt `X-VHB-Bron: cache`
   // (markeerUitCache), zodat de app de versheid niet op "nu" zet.
   // Ritblad-metadata volgt dezelfde strategie: de PDF-link is tijdelijk,
   // dus iedere online opening krijgt een vers ondertekende URL. Offline
   // blijft de PDF beschikbaar onder zijn query-loze cache-sleutel.
   if (url.pathname === ME_API || url.pathname === PLANNING_API || self.VHB_RITBLADEN.isOfflineApi(url.pathname)) {
+    const generatie = priveGeneratie;
     event.respondWith(
       fetch(req)
         .then((res) => {
-          if (res && res.ok) {
+          if (res && res.ok && generatie === priveGeneratie) {
             const copy = res.clone();
-            caches.open(RITBLADEN_CACHE).then((cache) => cache.put(req, copy));
+            // Nog eens bij het schrijven: het openen van de cache is zelf een stap.
+            caches.open(RITBLADEN_CACHE).then((cache) => (generatie === priveGeneratie ? cache.put(req, copy) : undefined));
             // Bijlagen opruimen op deze verse lijst (zie ruimBijlagenOp).
             // Zonder querystring: een gefilterde lijst zou bijlagen "missen"
             // die er gewoon nog zijn. Best-effort, het antwoord wacht er niet op.

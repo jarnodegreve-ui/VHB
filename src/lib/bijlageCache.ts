@@ -17,7 +17,8 @@
  *   in totaal, de langst niet geopende eerst weg (`teSnoeien`).
  * - **Opruimen** bij verwijderen en vervangen doet de service worker op een
  *   verse lijst van de server (public/sw-bijlagen.js); uitloggen en een
- *   gebruikerswissel wissen alle caches (`wisOfflineCaches` in ui.ts).
+ *   gebruikerswissel wissen de privé-caches, deze dus ook (`wisPriveCaches`
+ *   in afmelden.ts).
  *
  * Bewust alleen deze PDF-bestanden: geen API-antwoorden, geen persoonlijke
  * documenten (loonbrieven, attesten). Alles hier is best-effort: zonder Cache

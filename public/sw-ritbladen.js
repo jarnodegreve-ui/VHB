@@ -22,8 +22,9 @@
   var RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
   var CACHE_BRON_HEADER = 'X-VHB-Bron';
   // Zelfde paden als de fetch-handler in sw.js; alleen GET, exact pad (geen
-  // subpaden zoals /api/planning/assign-service). Per gebruiker gesleuteld
-  // op de volledige URL; uitloggen/gebruikerswissel wist alle caches (ui.ts).
+  // subpaden zoals /api/planning/assign-service). Gesleuteld op de volledige
+  // URL, zonder gebruiker erin; uitloggen en een gebruikerswissel wissen deze
+  // cache (src/lib/afmelden.ts).
   // /api/users zit erbij: de lijst is klein (±100 rijen, tientallen kB) en
   // voedt de contacten en de ruil-badge ("Geruild met X").
   var OFFLINE_API = [

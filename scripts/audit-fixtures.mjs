@@ -495,8 +495,16 @@ export function apiFixtures(user, extra) {
  * view (de router herstelt die op `/`) en optioneel een expliciet thema.
  * Zonder `thema` volgt de app de rol-standaard (planner/admin = donker).
  * Gebruik: `page.addInitScript(sessieInitScript, { key, user, view, thema })`.
+ *
+ * `eenmalig`: alleen bij de eerste laadbeurt van het tabblad. Voor specs die
+ * afmelden: de app herlaadt daarna de pagina, en een init-script dat de sessie
+ * dan opnieuw zet, meldt de gebruiker meteen weer aan.
  */
-export function sessieInitScript({ key, user, view, thema }) {
+export function sessieInitScript({ key, user, view, thema, eenmalig = false }) {
+  if (eenmalig) {
+    if (window.sessionStorage.getItem('e2e-sessie-gezet')) return;
+    window.sessionStorage.setItem('e2e-sessie-gezet', '1');
+  }
   const inAnHour = Math.floor(Date.now() / 1000) + 3600;
   window.localStorage.setItem(key, JSON.stringify({ access_token: 'e2e', refresh_token: 'e2e', token_type: 'bearer', expires_in: 3600, expires_at: inAnHour, user: { id: 'auth-e2e', email: user.email, aud: 'authenticated' } }));
   if (view) window.localStorage.setItem('vhb-current-view', view);

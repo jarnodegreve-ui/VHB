@@ -34,11 +34,14 @@ export const fetchPushPublicKey = async (authHeaders: Record<string, string>): P
   }
 };
 
-export const getExistingSubscription = async (): Promise<PushSubscription | null> => {
+/** `wachtOpWorker: false` (afmelden): zonder registratie is er geen
+ *  abonnement, en wachten op `ready` eindigt nooit als de service worker er
+ *  niet komt (geblokkeerd, registratie mislukt); het afmelden bleef dan hangen. */
+export const getExistingSubscription = async (wachtOpWorker = true): Promise<PushSubscription | null> => {
   if (!isPushSupported()) return null;
   try {
-    const registration = await getRegistration();
-    return await registration.pushManager.getSubscription();
+    const registration = wachtOpWorker ? await getRegistration() : await navigator.serviceWorker.getRegistration();
+    return (await registration?.pushManager.getSubscription()) ?? null;
   } catch {
     return null;
   }
@@ -136,16 +139,18 @@ export const subscribeToPush = async (publicKey: string, authHeaders: Record<str
 };
 
 export const unsubscribeFromPush = async (authHeaders: Record<string, string>): Promise<boolean> => {
-  const subscription = await getExistingSubscription();
+  const subscription = await getExistingSubscription(false);
   if (!subscription) return true;
   const endpoint = subscription.endpoint;
   const ok = await subscription.unsubscribe().catch(() => false);
   schrijfStempel(null);
-  // Server-registratie ook opruimen (best-effort).
+  // Server-registratie ook opruimen (best-effort). `keepalive`: het afmelden
+  // herlaadt de pagina kort hierna en mag dit verzoek niet afbreken.
   void fetch('/api/push/unsubscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify({ endpoint }),
+    keepalive: true,
   }).catch(() => {});
   return ok;
 };
