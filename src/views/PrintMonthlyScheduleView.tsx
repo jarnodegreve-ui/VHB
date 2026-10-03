@@ -4,8 +4,7 @@ import type { Shift, User } from '../types';
 import { isoWeekNumber } from '../lib/week';
 import { MONTH_NAMES, serviceNumberOf, tijdvak } from '../lib/format';
 import { apiFetch } from '../lib/api';
-import { Button } from '../components/primitives';
-
+import { PrintBlad } from '../components/PrintBlad';
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
 
@@ -32,18 +31,21 @@ const formatHours = (totalMinutes: number) => {
 type Absence = { date: string; code: string; label: string };
 
 /**
- * Print-friendly maandrooster. Wordt geopend in een nieuw tabblad via
- * query-params en triggert automatisch window.print(). Twee standen: één
- * chauffeur (`driver`) of álle chauffeurs in één stapel (`drivers`, met een
- * paginawissel per chauffeur — verbeterronde 30/07: geen 39 losse
- * print-tabs meer). Layout per blad is identiek: A4, weekgroepering,
- * weektotalen, categorie-badge per dienst, handtekeningstrook.
+ * Maandrooster op papier. Wordt geopend in een nieuw tabblad via
+ * query-params (`?print-driver=&print-month=`); kop, printdialoog en
+ * paginavoet zijn van `PrintBlad` (sinds 03-10, daarvoor eigen opmaak). Twee
+ * standen: één chauffeur (`driver`) of álle chauffeurs in één stapel
+ * (`drivers`, met een paginawissel per chauffeur, verbeterronde 30/07: geen
+ * 39 losse print-tabs meer). De inhoud per vel is identiek: weekgroepering,
+ * weektotalen, afwezigheidscode per dag. Geen handtekeningstrook meer: het
+ * blad is ter info, niet om te ondertekenen (Jarno 03-10).
  */
 export function PrintMonthlyScheduleView({
   driver,
   drivers,
   monthIso, // 'YYYY-MM'
   shifts,
+  door,
 }: {
   driver?: User | null;
   /** Bulk-stand: overschrijft `driver`; chauffeurs zonder diensten én zonder
@@ -51,6 +53,8 @@ export function PrintMonthlyScheduleView({
   drivers?: User[];
   monthIso: string;
   shifts: Shift[];
+  /** Naam van wie afdrukt (voor de regel "Afgedrukt op … door …"). */
+  door: string;
 }) {
   const bulk = Array.isArray(drivers);
   const targets = useMemo(
@@ -91,15 +95,8 @@ export function PrintMonthlyScheduleView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthIso, targetIds]);
 
-  // Print pas nadat de afwezigheden geladen zijn (of de fetch faalde), zodat
-  // ze mee in de PDF staan.
-  useEffect(() => {
-    if (!ready) return;
-    const t = window.setTimeout(() => window.print(), 400);
-    return () => window.clearTimeout(t);
-  }, [ready]);
-
   const [yearStr, monthStr] = monthIso.split('-');
+  const maandNaam = `${(MONTH_NAMES[parseInt(monthStr, 10) - 1] || monthStr).toLowerCase()} ${yearStr}`;
 
   // Bulk: een chauffeur zonder één dienst of afwezigheid levert een leeg blad
   // op — overslaan, met het aantal zichtbaar in de werkbalk (geen stille
@@ -122,56 +119,43 @@ export function PrintMonthlyScheduleView({
     );
   }
 
+  const chauffeurWoord = bulk ? 'Chauffeur: alle' : `Chauffeur: ${targets[0].name}`;
+
   return (
-    <div className="min-h-screen bg-surface-white text-slate-900 print:bg-white">
-      <style>{`
-        @media print {
-          @page { size: A4; margin: 14mm 14mm 18mm; }
-          body { background: white; }
-          .no-print { display: none !important; }
-          .print-card, .print-week { break-inside: avoid; page-break-inside: avoid; }
-          .print-week + .print-week { margin-top: 8mm; }
-          .print-keep-with-next { break-after: avoid; }
-          .print-new-sheet { break-before: page; page-break-before: always; }
-        }
-      `}</style>
-
-      <div className="max-w-3xl mx-auto p-8 md:p-10">
-        <div className="no-print flex items-center justify-end gap-4 mb-4">
-          {bulk && ready && (
-            <p className="text-xs font-medium text-slate-400">
-              {printable.length} {printable.length === 1 ? 'chauffeur' : 'chauffeurs'}
-              {skipped > 0 ? ` · ${skipped} zonder diensten of afwezigheden overgeslagen` : ''}
-            </p>
-          )}
-          <Button variant="primary" onClick={() => window.print()}>
-            Print / Opslaan als PDF
-          </Button>
-        </div>
-
-        {bulk && ready && printable.length === 0 ? (
-          <p className="text-center py-16 text-slate-400 italic">
-            Geen enkele chauffeur heeft diensten of afwezigheden in deze maand.
-          </p>
-        ) : (
-          printable.map((t, i) => (
-            <div key={t.id}>
-              <DriverMonthSheet
-                driver={t}
-                monthIso={monthIso}
-                shifts={shifts}
-                absences={absencesByDriver[t.id] ?? []}
-                newSheet={i > 0}
-              />
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+    // `klaar` pas nadat de afwezigheden geladen zijn (of de fetch faalde),
+    // zodat ze mee in de PDF staan.
+    <PrintBlad
+      titel="Maandrooster"
+      filters={[chauffeurWoord, `Maand: ${maandNaam}`]}
+      door={door}
+      tabbladTitel={`VHB Maandrooster ${bulk ? 'alle chauffeurs' : targets[0].name} ${maandNaam}`}
+      balk={bulk && ready
+        ? `${printable.length} ${printable.length === 1 ? 'chauffeur' : 'chauffeurs'}${skipped > 0 ? `, ${skipped} zonder diensten of afwezigheden overgeslagen` : ''}`
+        : undefined}
+      klaar={ready}
+    >
+      {bulk && ready && printable.length === 0 ? (
+        <p className="text-center py-16 text-slate-400 italic">
+          Geen enkele chauffeur heeft diensten of afwezigheden in deze maand.
+        </p>
+      ) : (
+        printable.map((t, i) => (
+          <DriverMonthSheet
+            key={t.id}
+            driver={t}
+            monthIso={monthIso}
+            shifts={shifts}
+            absences={absencesByDriver[t.id] ?? []}
+            newSheet={i > 0}
+          />
+        ))
+      )}
+    </PrintBlad>
   );
 }
 
-/** Eén A4-blad voor één chauffeur: header, weken, handtekening, footer. */
+/** Eén vel voor één chauffeur: koptitel met totalen, dan de weken. In een
+ *  stapel begint elk volgend vel op een nieuwe pagina (`printblad-nieuw-vel`). */
 function DriverMonthSheet({
   driver,
   monthIso,
@@ -265,15 +249,12 @@ function DriverMonthSheet({
 
 
   return (
-    <div className={newSheet ? 'print-new-sheet mt-16 print:mt-0' : undefined}>
-      {/* Header */}
-      <header className="border-b-2 border-slate-900 pb-5 mb-7">
-        <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">
-          VHB · Maldegem · Maandrooster
-        </p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+    <div className={newSheet ? 'printblad-nieuw-vel' : 'mt-6'}>
+      {/* Koptitel van het vel: naam en maand, met de totalen als strip met hairline-scheiders. */}
+      <header className="printblad-bij-volgende border-b-2 border-slate-900 pb-4 mb-6">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
           <div>
-            <h1 className="text-3xl font-black tracking-tight">{driver.name}</h1>
+            <h2 className="text-3xl font-black tracking-tight">{driver.name}</h2>
             <p className="mt-1 text-lg font-bold text-slate-600">{monthName} {year}</p>
             {driver.employeeId && (
               <p className="mt-1.5 text-xs font-medium text-slate-400">
@@ -281,7 +262,6 @@ function DriverMonthSheet({
               </p>
             )}
           </div>
-          {/* Lichte stat-strip: hairline-scheiders, geen kaders */}
           <div className="flex items-stretch divide-x divide-hairline">
             <div className="pr-5">
               <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Diensten</p>
@@ -297,8 +277,8 @@ function DriverMonthSheet({
             </div>
             {absences.length > 0 && (
               <div className="pl-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-oker-700">Afwezig</p>
-                <p className="mt-1 text-xl font-black text-oker-700 tabular-nums leading-none">{absences.length}</p>
+                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Afwezig</p>
+                <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{absences.length}</p>
               </div>
             )}
           </div>
@@ -312,12 +292,12 @@ function DriverMonthSheet({
       ) : (
         <div className="space-y-5">
           {weeks.map((week) => (
-            <section key={week.weekNumber} className="print-week">
+            <section key={week.weekNumber} className="printblad-bijeen">
               {/* Week-header */}
-              <div className="print-keep-with-next flex items-center justify-between gap-3 mb-2 pb-1.5 border-b border-slate-300">
-                <h2 className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
+              <div className="printblad-bij-volgende flex items-center justify-between gap-3 mb-2 pb-1.5 border-b border-slate-300">
+                <h3 className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
                   Week {week.weekNumber}
-                </h2>
+                </h3>
                 <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500">
                   <span>{week.totalDays} {week.totalDays === 1 ? 'dag' : 'dagen'}</span>
                   <span className="inline-block h-3 w-px bg-slate-300" />
@@ -325,7 +305,8 @@ function DriverMonthSheet({
                 </div>
               </div>
 
-              {/* Dagen */}
+              {/* Dagen: een weekenddag staat op een zacht vlak met de dagnaam in zwart, een
+                  afwezigheid als omlijnde code; lijnen en gewicht, geen kleur (het blad is vaak zwart-wit). */}
               <div className="space-y-2">
                 {week.days.map(({ date, shifts: dayShifts, minutes, absence }) => {
                   const d = new Date(`${date}T00:00:00`);
@@ -336,13 +317,13 @@ function DriverMonthSheet({
                   return (
                     <div
                       key={date}
-                      className={`print-card grid grid-cols-[6rem_minmax(0,1fr)_4.5rem] items-start gap-4 rounded-lg border border-slate-200 px-4 py-3 ${
+                      className={`printblad-bijeen grid grid-cols-[6rem_minmax(0,1fr)_4.5rem] items-start gap-4 rounded-lg border border-slate-200 px-4 py-3 ${
                         isWeekend ? 'bg-surface-soft' : ''
                       }`}
                     >
                       {/* Datum */}
                       <div>
-                        <p className={`text-xs font-black uppercase tracking-[0.08em] ${isWeekend ? 'text-oker-700' : 'text-slate-400'}`}>
+                        <p className={`text-xs font-black uppercase tracking-[0.08em] ${isWeekend ? 'text-slate-900' : 'text-slate-400'}`}>
                           {dayName.slice(0, 3)}
                         </p>
                         <p className="mt-0.5 text-sm font-black text-slate-900 tabular-nums">{dayLabel}</p>
@@ -352,7 +333,7 @@ function DriverMonthSheet({
                       <div className="space-y-1">
                         {absence ? (
                           <div className="flex items-baseline gap-2">
-                            <span className="inline-block rounded border border-oker-200 bg-oker-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-oker-700">
+                            <span className="inline-block rounded border border-slate-900 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-slate-900">
                               {absence.code.toUpperCase()}
                             </span>
                             <span className="text-sm font-bold text-slate-700">{absence.label}</span>
@@ -386,32 +367,6 @@ function DriverMonthSheet({
           ))}
         </div>
       )}
-
-      {/* Handtekening */}
-      {(monthShifts.length > 0 || absences.length > 0) && (
-        <section className="print-card mt-10 pt-6 border-t border-slate-200">
-          <div className="grid grid-cols-2 gap-12">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 mb-8">
-                Voor akkoord, chauffeur
-              </p>
-              <div className="border-b border-slate-400 h-10" />
-              <p className="mt-1 text-[10px] font-medium text-slate-400">Datum en handtekening</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 mb-8">
-                Voor akkoord, planner
-              </p>
-              <div className="border-b border-slate-400 h-10" />
-              <p className="mt-1 text-[10px] font-medium text-slate-400">Datum en handtekening</p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <footer className="mt-10 pt-4 border-t border-slate-200 text-[10px] font-medium text-slate-400 text-center">
-        Gegenereerd op {new Date().toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })} via VHB Portaal
-      </footer>
     </div>
   );
 }

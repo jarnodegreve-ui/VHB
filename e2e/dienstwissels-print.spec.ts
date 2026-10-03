@@ -34,7 +34,11 @@ test('planning print het weekoverzicht van de uitgevoerde dienstwissels', async 
   await page.goto(`/?ruiloverzicht-week=${uitgevoerdOp.slice(0, 10)}`);
 
   await expect(page.getByRole('heading', { name: 'Ruiloverzicht', level: 1 })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('button', { name: 'Print / Opslaan als PDF' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Afdrukken' })).toBeVisible();
+  // Kop van PrintBlad: de week in woorden en wie afdrukt; geen paraafstrook meer.
+  await expect(page.getByText(/^Week \d{1,2} · \d{2}\/\d{2}\/\d{4} t\/m \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
+  await expect(page.getByText(/Afgedrukt op \d{2}\/\d{2}\/\d{4} \d{2}:\d{2} door Jarno De Greve/)).toBeVisible();
+  await expect(page.getByText('Paraaf planning')).toHaveCount(0);
   await expect(page.getByText('Alex Du Priez').first()).toBeVisible();
   await expect(page.getByText('Test Planning')).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Dienstruil aangevraagd' })).toBeVisible();
