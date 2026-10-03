@@ -1,6 +1,7 @@
 /**
  * Print-modus: `?print-…=` in de URL toont een kaal blad zonder zijbalk of
- * topbar, in plaats van de app. Stond tot 21-09 als blok van 90 regels in
+ * topbar, in plaats van de app. Elk blad staat op `PrintBlad` (sinds 03-10
+ * ook de vier oudere) en krijgt `door` = de naam van wie afdrukt. Stond tot 21-09 als blok van 90 regels in
  * App.tsx, tussen de sessie-opbouw en het inlogscherm (G1). De takken zijn
  * ongewijzigd verplaatst; `printScherm` geeft het blad terug, of null als de
  * URL geen printblad vraagt (of de rol het niet mag).
@@ -45,14 +46,14 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
         .sort((a, b) => a.name.localeCompare(b.name));
       return (
         <Suspense fallback={<PrintLaden />}>
-          <LazyPrintMonthlyScheduleView drivers={bulkDrivers} monthIso={printMonth} shifts={shifts} />
+          <LazyPrintMonthlyScheduleView drivers={bulkDrivers} monthIso={printMonth} shifts={shifts} door={currentUser.name} />
         </Suspense>
       );
     }
     const driver = users.find((u) => String(u.id) === String(printDriverId)) || null;
     return (
       <Suspense fallback={<PrintLaden />}>
-        <LazyPrintMonthlyScheduleView driver={driver} monthIso={printMonth} shifts={shifts} />
+        <LazyPrintMonthlyScheduleView driver={driver} monthIso={printMonth} shifts={shifts} door={currentUser.name} />
       </Suspense>
     );
   }
@@ -66,7 +67,7 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
   if ((printGeleBoek === 'open' || printGeleBoek === 'alles') && currentUser && magView(currentUser, 'defecten')) {
     return (
       <Suspense fallback={<PrintLaden />}>
-        <LazyPrintGeleBoekView filter={printGeleBoek} />
+        <LazyPrintGeleBoekView filter={printGeleBoek} door={currentUser.name} />
       </Suspense>
     );
   }
@@ -81,7 +82,7 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
     }
     return (
       <Suspense fallback={<PrintLaden />}>
-        <LazyPrintDienstwisselsView dag={printRuilWeek} shifts={shifts} />
+        <LazyPrintDienstwisselsView dag={printRuilWeek} shifts={shifts} door={currentUser.name} />
       </Suspense>
     );
   }
@@ -116,7 +117,7 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
       const driver = isSelf ? currentUser : users.find((u) => String(u.id) === String(printVerlofDriverId)) || null;
       return (
         <Suspense fallback={<PrintLaden />}>
-          <LazyPrintLeaveYearView driver={driver} year={printVerlofJaar} leaves={leaveRequests} />
+          <LazyPrintLeaveYearView driver={driver} year={printVerlofJaar} leaves={leaveRequests} door={currentUser.name} />
         </Suspense>
       );
     }

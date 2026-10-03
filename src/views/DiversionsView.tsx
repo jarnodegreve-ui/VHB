@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Calendar, Check, ChevronDown, ChevronRight, FileText, Search, X } from 'lucide-react';
+import { Calendar, Check, ChevronDown, ChevronRight, FileText, X } from 'lucide-react';
 import { LijnTegel } from '../components/LijnTegel';
 import { isAlleLijnen, lijnLabel, lijnenVan, raaktLijn } from '../../shared/lijnen';
 import { groepeerOmleidingen, isRecentGenoeg, omleidingsFase, omleidingsPeriode, omleidingsTijdshint, type OmleidingsFase, pdfLabel } from '../lib/diversions';
@@ -9,12 +9,12 @@ import { cn } from '../lib/ui';
 import { kiesRecord } from '../lib/overgang';
 import { useRecordParam } from '../app/router';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, IconButton, MicroLabel, TOON_NAAR_BADGE } from '../components/primitives';
+import { Badge, Button, MicroLabel, TOON_NAAR_BADGE } from '../components/primitives';
 import { OMLEIDING_FASE } from '../../shared/status';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
 import { OmleidingDetail } from '../components/OmleidingDetail';
-import { Input, Select } from '../components/Field';
+import { SearchField, Select } from '../components/Field';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
 import { LegeLijst, NietGevonden } from '../components/illustraties';
 
@@ -154,30 +154,13 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
       {toonFilters ? (
       <Card padding="sm" className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="relative min-w-0 flex-1 group">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
-            </div>
-            <Input
-              type="text"
-              placeholder="Zoek op plaats, titel of lijn…"
-              aria-label="Zoek in omleidingen"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={cn('pl-9', searchQuery && 'pr-11')}
-            />
-            {searchQuery && (
-              <IconButton
-                label="Wis zoekopdracht"
-                variant="ghost"
-                size="sm"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
-              >
-                <X size={16} />
-              </IconButton>
-            )}
-          </div>
+          <SearchField
+            placeholder="Zoek op plaats, titel of lijn…"
+            label="Zoek in omleidingen"
+            value={searchQuery}
+            onChange={setSearchQuery}
+            className="flex-1"
+          />
           <Select
             value={selectedLine}
             onChange={(e) => setSelectedLine(e.target.value)}

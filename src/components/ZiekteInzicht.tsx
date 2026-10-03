@@ -4,7 +4,7 @@ import { formatUpdateDate, MONTH_NAMES } from '../lib/format';
 import { beschikbareZiekteJaren, berekenZiekteInzicht } from '../lib/ziekteInzicht';
 import { Avatar } from './Avatar';
 import { Card, CardHeader } from './Card';
-import { Field, Input, Select } from './Field';
+import { Field, SearchField, Select } from './Field';
 import { InfoTip } from './InfoTip';
 import { Paginering } from './Table';
 import { TableShell, Td, Th } from './TabelBasis';
@@ -116,7 +116,7 @@ export function ZiekteInzicht({ leaveRequests, users, vandaag }: {
               <p className="mt-1 text-xs text-slate-500">Alfabetisch op naam</p>
             </div>
             <Field label="Zoek chauffeur" className="w-full sm:max-w-xs">
-              {({ id }) => <Input id={id} type="search" value={zoek} onChange={(event) => { setZoek(event.target.value); setPagina(1); }} placeholder="Naam…" />}
+              {({ id }) => <SearchField id={id} value={zoek} onChange={(waarde) => { setZoek(waarde); setPagina(1); }} placeholder="Naam…" label="Zoek chauffeur" />}
             </Field>
           </div>
 
