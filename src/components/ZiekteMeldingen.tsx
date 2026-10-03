@@ -1,12 +1,12 @@
 import { useId, useState } from 'react';
-import { CalendarDays, ChevronRight, Search } from 'lucide-react';
+import { CalendarDays, ChevronRight } from 'lucide-react';
 import type { LeaveRequest, User } from '../types';
 import { daysBetween } from '../lib/leaveBalance';
 import { formatDatumDMJ, formatShortDay } from '../lib/format';
 import { cn } from '../lib/ui';
 import { Avatar } from './Avatar';
 import { Card, CardHeader } from './Card';
-import { Input, Select } from './Field';
+import { SearchField, Select } from './Field';
 import { Badge, Button, FilterChip, Segmented } from './primitives';
 import { Paginering } from './Table';
 import { EmptyState } from './ui';
@@ -68,16 +68,13 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-[1_1_15rem]">
-              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input
-                aria-label={historiek ? 'Zoek in ziektehistoriek' : 'Zoek actuele ziekmeldingen'}
-                placeholder="Zoek op chauffeur…"
-                value={zoek}
-                onChange={(e) => { setZoek(e.target.value); setPagina(1); }}
-                className="pl-9"
-              />
-            </div>
+            <SearchField
+              label={historiek ? 'Zoek in ziektehistoriek' : 'Zoek actuele ziekmeldingen'}
+              placeholder="Zoek op chauffeur…"
+              value={zoek}
+              onChange={(waarde) => { setZoek(waarde); setPagina(1); }}
+              className="flex-[1_1_15rem]"
+            />
             {historiek ? (
               <Select aria-label="Status ziektehistoriek" value={status} onChange={(e) => { setStatus(e.target.value); setPagina(1); }} className="w-full sm:w-44">
                 <option value="alle">Alle registraties</option>
