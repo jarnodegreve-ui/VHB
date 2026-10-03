@@ -147,7 +147,7 @@ test('ziekte: actuele filters, zoeken en diensten op naam blijven bruikbaar', as
   await expect(actueel.getByRole('button', { name: /^Bekijk ziekmelding/ })).toHaveCount(2);
   await metDiensten.click();
   await expect(actueel.getByRole('button', { name: /^Bekijk ziekmelding/ })).toHaveCount(3);
-  const zoek = actueel.getByRole('textbox', { name: 'Zoek actuele ziekmeldingen' });
+  const zoek = actueel.getByRole('searchbox', { name: 'Zoek actuele ziekmeldingen' });
   await zoek.fill('Bossche-Verstraeten');
   await expect(actueel.getByRole('button', { name: /^Bekijk ziekmelding/ })).toHaveCount(1);
   await expect(rij(actueel, 0, '2026-09-14')).toBeVisible();
@@ -169,7 +169,7 @@ test('ziekte: volledige historiek blijft bereikbaar via paginering, zoeken en st
   await expect(volgende).toBeDisabled();
   await expect(rij(historiek, 3, '2026-08-01')).toBeVisible();
 
-  const zoek = historiek.getByRole('textbox', { name: 'Zoek in ziektehistoriek' });
+  const zoek = historiek.getByRole('searchbox', { name: 'Zoek in ziektehistoriek' });
   await zoek.fill('Dina Goossens');
   await expect(rijen).toHaveCount(2);
   const status = historiek.getByRole('combobox', { name: 'Status ziektehistoriek' });
@@ -272,8 +272,8 @@ test('ziekte: op 320px blijven overzicht, filters en historiek binnen beeld', as
   await openZiekte(page);
   await pastBinnenScherm(page);
   for (const veld of [
-    page.getByRole('textbox', { name: 'Zoek actuele ziekmeldingen' }),
-    page.getByRole('textbox', { name: 'Zoek in ziektehistoriek' }),
+    page.getByRole('searchbox', { name: 'Zoek actuele ziekmeldingen' }),
+    page.getByRole('searchbox', { name: 'Zoek in ziektehistoriek' }),
     page.getByRole('combobox', { name: 'Status ziektehistoriek' }),
   ]) {
     const rect = await veld.boundingBox();

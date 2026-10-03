@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Download, Search } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { Modal } from './Modal';
 import { ModalHeader } from './ui';
 import { Button } from './primitives';
 import { SortTh, useSort } from './Table';
 import { TableShell, Td, Th } from './TabelBasis';
-import { Input } from './Field';
+import { SearchField } from './Field';
 import { Avatar } from './Avatar';
 import { downloadBlob, cn } from '../lib/ui';
 import { csvTekst } from '../lib/csv';
@@ -72,10 +72,7 @@ export function VerlofSaldoModal({ open, onClose, users, leaveRequests }: {
       />
       <div className="flex-1 space-y-4 overflow-y-auto p-6 md:p-8">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-64">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"><Search size={16} className="text-slate-400" /></div>
-            <Input type="search" value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek medewerker…" aria-label="Zoek medewerker" className="pl-9" />
-          </div>
+          <SearchField value={zoek} onChange={setZoek} placeholder="Zoek medewerker…" label="Zoek medewerker" className="w-full sm:w-64" />
           <div className="flex items-center gap-1">
             <Button variant="secondary" size="sm" onClick={() => setJaar((j) => j - 1)} aria-label="Vorig jaar">‹</Button>
             <span className="min-w-14 text-center text-sm font-semibold text-slate-800">{jaar}</span>

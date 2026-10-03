@@ -77,7 +77,7 @@ test('omleidingen: lange titels, alle lijnnummers en filters blijven bruikbaar',
   await expect(page.getByRole('button', { name: /Nachtelijke werken/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Marktplein tijdelijk/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Brugwerken aan/ })).toHaveCount(0);
-  const zoek = page.getByRole('textbox', { name: 'Zoek in omleidingen' });
+  const zoek = page.getByRole('searchbox', { name: 'Zoek in omleidingen' });
   await zoek.fill('stationsomgeving');
   await expect(langeRij).toBeVisible();
   await expect(page.getByRole('button', { name: /Nachtelijke werken|Marktplein tijdelijk/ })).toHaveCount(0);
@@ -192,7 +192,7 @@ for (const viewport of [{ width: 320, height: 800 }, { width: 844, height: 390 }
     await page.setViewportSize(viewport);
     await openOmleidingen(page, baseURL!);
     await pastZonderHorizontaleScroll(page);
-    for (const veld of [page.getByRole('textbox', { name: 'Zoek in omleidingen' }), page.getByRole('combobox', { name: 'Filter op lijn' })]) {
+    for (const veld of [page.getByRole('searchbox', { name: 'Zoek in omleidingen' }), page.getByRole('combobox', { name: 'Filter op lijn' })]) {
       const rect = await veld.boundingBox();
       expect(rect!.x).toBeGreaterThanOrEqual(0);
       expect(rect!.x + rect!.width).toBeLessThanOrEqual(viewport.width + 1);
