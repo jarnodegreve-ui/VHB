@@ -6,7 +6,10 @@ import { isRijdend } from '../types';
 import { telDienstdagen } from '../lib/dienstTelling';
 import { LijnTegel } from '../components/LijnTegel';
 import { lijnLabel } from '../../shared/lijnen';
-import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
+import type { Diversion, LeaveRequest, Shift, SwapRequest, User, View } from '../types';
+import { navigeer } from '../app/router';
+import { ruilenDieOpMijWachten } from '../lib/ruilWachtOpMij';
+import { ruilWachtRegels } from '../lib/ruilWachtRegels';
 import { getDaypartGreeting } from '../lib/interactive';
 import { cn } from '../lib/ui';
 import { formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
@@ -43,6 +46,9 @@ export function DashboardView({ notes = [],
   shifts,
   diversions,
   leaveRequests = [],
+  swaps = [],
+  users = [],
+  ruilDataKlaar = false,
   isInitialLoad = false,
   onNavigate,
 }: {
@@ -51,6 +57,11 @@ export function DashboardView({ notes = [],
   diversions: Diversion[];
   notes?: Array<{ date: string; note: string }>;
   leaveRequests?: LeaveRequest[];
+  /** Ruilen en namen voor het paneel "Wacht op jouw antwoord"; beide laden
+   *  voor een chauffeur ná de poort, dus pas tonen als `ruilDataKlaar`. */
+  swaps?: SwapRequest[];
+  users?: User[];
+  ruilDataKlaar?: boolean;
   isInitialLoad?: boolean;
   onNavigate?: (view: View) => void;
 }) {
@@ -180,6 +191,12 @@ export function DashboardView({ notes = [],
   // behandeling (amber) of alles rustig (emerald).
   const pendingLeaveMine = leaveRequests.filter((l) => l.userId === user.id && l.status === 'pending');
   const needsAttention = pendingLeaveMine.length > 0;
+
+  // Ruilen die op deze chauffeur wachten (lib/ruilWachtOpMij, dezelfde regel
+  // als het getal op Meer en het nav-item Dienstruil). Alleen voor een
+  // chauffeur, en pas zodra ruilen én namen geladen zijn: leeg mag nooit
+  // "nog niet geladen" betekenen, dus tot dan geen paneel.
+  const wachtOpMij = user.role === 'chauffeur' && ruilDataKlaar ? ruilenDieOpMijWachten(swaps, user.id) : [];
 
   // --- Dashboard op maat: tegels op id, in de volgorde van de voorkeuren ---
   // Catalogus per rol: een technieker heeft geen diensten, dus die tegels
@@ -439,6 +456,41 @@ export function DashboardView({ notes = [],
           />
         </div>
       </div>
+
+      {/* === Wacht op jouw antwoord (chauffeur) ===
+          Alleen zichtbaar als er een ruil op hem wacht; niet in te stellen via
+          Dashboard aanpassen, want het is een vraag van een collega, geen
+          tegel. Amber = vraagt een beslissing; de bevestiging van een
+          goedgekeurde ruil is rustiger (slate). Een rij opent de ruil zelf
+          (/dienstruil/<id>), waar de knoppen staan; hier wordt niets
+          geschreven, zoals op Vandaag. */}
+      {wachtOpMij.length > 0 && (
+        <OpsPanel
+          icon={<RefreshCw size={16} />}
+          title="Wacht op jouw antwoord"
+          aside={`${wachtOpMij.length} ${wachtOpMij.length === 1 ? 'ruil' : 'ruilen'}`}
+          onSeeAll={() => navigeer('ruil-verzoeken')}
+          seeAllLabel="Dienstruil"
+        >
+          <div className="space-y-1.5" data-testid="ruil-wacht-op-mij">
+            {wachtOpMij.map((item) => {
+              const regels = ruilWachtRegels(item, users);
+              return (
+                <Fragment key={item.ruil.id}>
+                  <OpsRow
+                    tone={item.soort === 'antwoord' ? 'amber' : 'slate'}
+                    icon={<RefreshCw size={16} />}
+                    primary={regels.primary}
+                    secondary={regels.secondary}
+                    trailing={item.ruil.shiftLine ? <ServiceChip serviceNumber={item.ruil.shiftLine} /> : undefined}
+                    onClick={() => navigeer('ruil-verzoeken', { params: [item.ruil.id] })}
+                  />
+                </Fragment>
+              );
+            })}
+          </div>
+        </OpsPanel>
+      )}
 
       {/* === Status-strip ===
           Zelfde raster als het Operations Center: mobiel 2 kolommen, breed

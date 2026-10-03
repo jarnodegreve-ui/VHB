@@ -35,7 +35,7 @@ export function BottomNav({
   pendingLeaveCount = 0,
   pendingSwapsCount = 0,
   onMore,
-  moreDot = false,
+  moreBadge = 0,
   hidden = false,
 }: {
   currentView: View;
@@ -50,9 +50,10 @@ export function BottomNav({
   /** Opent het "Meer"-menu (de volledige sidebar-sheet) op de telefoon,
    *  zodat de bottom-nav het enige nav-systeem is (geen aparte hamburger). */
   onMore?: () => void;
-  /** Attentie-dot op de "Meer"-tab: er wacht iets in een view achter het
-   *  menu (bv. een aan jou gerichte dienstruil). */
-  moreDot?: boolean;
+  /** Getal op de "Meer"-tab: hoeveel er wacht in een scherm achter het menu
+   *  (voor een chauffeur de ruilen die op zijn antwoord wachten). Was tot
+   *  03-10 een stip; het getal zegt ook hoevéél, zoals op de andere tabs. */
+  moreBadge?: number;
   /** Verberg de balk wanneer er bv. een sidebar/sheet open is, zodat
    *  hij niet onder de overlay door piept. */
   hidden?: boolean;
@@ -163,13 +164,15 @@ export function BottomNav({
           <li className="flex-auto min-w-0">
             <button
               onClick={onMore}
-              aria-label="Meer"
+              aria-label={moreBadge > 0 ? `Meer, ${moreBadge} ${moreBadge === 1 ? 'ruil wacht' : 'ruilen wachten'} op jouw antwoord` : 'Meer'}
               className="tikbaar relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg text-slate-500 pointer-fine:hover:text-slate-700"
             >
               <span className="relative z-10">
                 <Menu size={18} />
-                {moreDot && (
-                  <span className="absolute -top-0.5 -right-1.5 h-2 w-2 rounded-full bg-oker-500" aria-label="Nieuwe melding in het menu" />
+                {moreBadge > 0 && (
+                  <span className="absolute -top-1.5 -right-3 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
+                    <CountUp value={moreBadge} badge format={(n) => (n > 9 ? '9+' : n)} />
+                  </span>
                 )}
               </span>
               <span className="relative z-10 max-[339px]:sr-only text-2xs font-semibold leading-tight truncate max-w-full px-0.5">Meer</span>

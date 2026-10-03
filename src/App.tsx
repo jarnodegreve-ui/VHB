@@ -17,6 +17,7 @@ import { AppDataProvider } from './app/AppDataContext';
 import { ViewFout } from './app/ViewFout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { naOpruimen, useLaag } from './lib/lagen';
+import { telRuilenDieOpMijWachten } from './lib/ruilWachtOpMij';
 import { RITBLAD_BUNDEL_EVENT } from './lib/ritblad';
 import { Eye, Menu, RefreshCw, WifiOff, X } from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
@@ -1171,8 +1172,10 @@ export default function App() {
   const pendingSwapsCount = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted').length;
   // Voor chauffeurs: ruilen die op míjn antwoord wachten (badge op het
   // nav-item + dot op de "Meer"-tab, anders mist de collega het verzoek).
+  // Zelfde regel als het paneel "Wacht op jouw antwoord" op het dashboard
+  // (lib/ruilWachtOpMij): ook een goedgekeurde ruil die hij nog moet bevestigen.
   const targetedSwapsCount = currentUser && currentUser.role === 'chauffeur'
-    ? swaps.filter((s) => s.status === 'pending' && s.targetDriverId === currentUser.id).length
+    ? telRuilenDieOpMijWachten(swaps, currentUser.id)
     : 0;
 
   // Werkvoorraad van de planner — gedeelde berekening (lib/werkvoorraad) voor
@@ -1812,7 +1815,7 @@ export default function App() {
         pendingLeaveCount={pendingLeaveCount}
         pendingSwapsCount={pendingSwapsCount}
         onMore={() => setIsSidebarOpen(true)}
-        moreDot={isPlanner ? false : targetedSwapsCount > 0}
+        moreBadge={isPlanner ? 0 : targetedSwapsCount}
         hidden={isSidebarOpen}
       />
 
