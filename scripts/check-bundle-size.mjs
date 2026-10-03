@@ -356,6 +356,14 @@ if (!kaartMatch) {
   // zes open PR's wijzigden die regel al (staf 140 → 141) en zouden anders
   // elk op main botsen. Bij de volgende budgetwijziging daar samenvoegen.
   WARMUP_BUDGET_KB.chauffeur = 75.5;
+  // 03-10 (verbeterronde, punt 1): chauffeur 75,5 → 76,5 en staf 141 → 142,5.
+  // Het paneel "Wacht op jouw antwoord" op het chauffeursdashboard
+  // (DashboardView + ruilWachtRegels, in beide warmup-sets) weegt ±0,5 kB
+  // gzip; de CI-runner meet ±0,5 kB zwaarder dan lokaal (chauffeur 76 tegen
+  // 75,5, staf 141,x tegen 141) en de weekstrook op Vandaag (#697, staf
+  // +0,55) komt er samen mee op main. Geen nieuwe import.
+  WARMUP_BUDGET_KB.chauffeur = 76.5;
+  WARMUP_BUDGET_KB.staf = 142.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {
