@@ -1,15 +1,16 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { LeaveRequest, User } from '../types';
 import { daysBetween, verlofBalans, verlofDagen } from '../lib/leaveBalance';
-import { formatLeaveType, formatShortDay, MONTH_NAMES } from '../lib/format';
-import { Button } from '../components/primitives';
+import { formatLeaveType, formatShortDay } from '../lib/format';
+import { PrintBlad } from '../components/PrintBlad';
 
 /**
- * Print-vriendelijk verlof-jaaroverzicht voor één chauffeur: saldo,
- * alle opgenomen periodes chronologisch mét saldoverloop, en wat nog
- * op een beslissing wacht. Voor eindejaarsgesprekken en saldo-discussies —
- * één blad met de hele feitenbasis. Zelfde opzet als het print-maandrooster:
- * nieuw tabblad via query-params, automatische window.print().
+ * Verlof-jaaroverzicht van één chauffeur op papier: saldo, alle opgenomen
+ * periodes chronologisch mét saldoverloop, en wat nog op een beslissing
+ * wacht. Voor eindejaarsgesprekken en saldo-discussies, één blad met de hele
+ * feitenbasis. Nieuw tabblad via `?print-verlof-driver=&print-verlof-jaar=`;
+ * kop, printdialoog en paginavoet zijn van `PrintBlad` (sinds 03-10). Geen
+ * handtekeningstrook meer: het blad is ter info (Jarno 03-10).
  */
 
 const clipToYear = (iso: string, year: number, fallback: 'start' | 'end') => {
@@ -21,21 +22,19 @@ const clipToYear = (iso: string, year: number, fallback: 'start' | 'end') => {
   return iso;
 };
 
-/** "ma 3 feb" zonder jaar — het jaar staat al groot in de kop. */
+/** Datums als "ma 3 feb" zonder jaar: het jaar staat al in de kop. */
 export function PrintLeaveYearView({
   driver,
   year,
   leaves,
+  door,
 }: {
   driver: User | null;
   year: number;
   leaves: LeaveRequest[];
+  /** Naam van wie afdrukt (voor de regel "Afgedrukt op … door …"). */
+  door: string;
 }) {
-  useEffect(() => {
-    const t = window.setTimeout(() => window.print(), 400);
-    return () => window.clearTimeout(t);
-  }, []);
-
   const balans = useMemo(
     () => verlofBalans(leaves, driver?.id ?? '', year, driver?.verlofBudget),
     [leaves, driver, year],
@@ -83,162 +82,114 @@ export function PrintLeaveYearView({
   }
 
   return (
-    <div className="min-h-screen bg-surface-white text-slate-900 print:bg-white">
-      <style>{`
-        @media print {
-          @page { size: A4; margin: 14mm 14mm 18mm; }
-          body { background: white; }
-          .no-print { display: none !important; }
-          .print-card { break-inside: avoid; page-break-inside: avoid; }
-        }
-      `}</style>
-
-      <div className="max-w-3xl mx-auto p-8 md:p-10">
-        <div className="no-print flex justify-end mb-4">
-          <Button variant="primary" onClick={() => window.print()}>
-            Print / Opslaan als PDF
-          </Button>
+    <PrintBlad
+      titel="Verlofjaar"
+      filters={[`Chauffeur: ${driver.name}`, `Jaar ${year}`]}
+      door={door}
+      tabbladTitel={`VHB Verlofjaar ${driver.name} ${year}`}
+    >
+      {/* Koptitel van het vel: naam en jaar, met het saldo als strip met hairline-scheiders. */}
+      <header className="printblad-bij-volgende mt-6 border-b-2 border-slate-900 pb-4 mb-6">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div>
+            <h2 className="text-3xl font-black tracking-tight">{driver.name}</h2>
+            <p className="mt-1 text-lg font-bold text-slate-600">{year}</p>
+            {driver.employeeId && (
+              <p className="mt-1.5 text-xs font-medium text-slate-400">
+                Personeelsnummer: {driver.employeeId}
+              </p>
+            )}
+          </div>
+          <div className="flex items-stretch divide-x divide-hairline">
+            <div className="pr-5">
+              <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Budget</p>
+              <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{balans.betaaldBudget}</p>
+            </div>
+            <div className="px-5">
+              <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Opgenomen</p>
+              <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{balans.betaaldGebruikt}</p>
+            </div>
+            <div className="px-5">
+              <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Resterend</p>
+              <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{balans.betaaldResterend}</p>
+            </div>
+            <div className="px-5">
+              <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Klein verlet</p>
+              <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{balans.kleinVerletDagen}</p>
+            </div>
+            {ziekteDagen > 0 && (
+              <div className="pl-5">
+                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Ziekte</p>
+                <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{ziekteDagen}</p>
+              </div>
+            )}
+          </div>
         </div>
+      </header>
 
-        {/* Header */}
-        <header className="border-b-2 border-slate-900 pb-5 mb-7">
-          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">
-            VHB · Maldegem · Verlof-jaaroverzicht
-          </p>
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">{driver.name}</h1>
-              <p className="mt-1 text-lg font-bold text-slate-600">{year}</p>
-              {driver.employeeId && (
-                <p className="mt-1.5 text-xs font-medium text-slate-400">
-                  Personeelsnummer: {driver.employeeId}
-                </p>
-              )}
-            </div>
-            <div className="flex items-stretch divide-x divide-hairline">
-              <div className="pr-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Budget</p>
-                <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{balans.betaaldBudget}</p>
-              </div>
-              <div className="px-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Opgenomen</p>
-                <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{balans.betaaldGebruikt}</p>
-              </div>
-              <div className="px-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-oker-700">Resterend</p>
-                <p className="mt-1 text-xl font-black text-oker-700 tabular-nums leading-none">{balans.betaaldResterend}</p>
-              </div>
-              <div className="px-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Klein verlet</p>
-                <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{balans.kleinVerletDagen}</p>
-              </div>
-              {ziekteDagen > 0 && (
-                <div className="pl-5">
-                  <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Ziekte</p>
-                  <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{ziekteDagen}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-
-        {approved.length === 0 ? (
-          <p className="text-center py-16 text-slate-400 italic">
-            Geen goedgekeurd verlof geregistreerd in {year}.
-          </p>
-        ) : (
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b-2 border-slate-300 text-left">
-                <th className="py-2 pr-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Periode</th>
-                <th className="py-2 pr-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Type</th>
-                <th className="py-2 pr-3 text-right text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Dagen</th>
-                <th className="py-2 text-right text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Saldo betaald</th>
-              </tr>
-            </thead>
-            <tbody>
-              {approved.map((l) => (
-                <tr key={l.id} className="print-card border-b border-slate-100">
-                  <td className="py-2.5 pr-3 font-bold text-slate-900">
-                    {l.startDate === l.endDate
-                      ? formatShortDay(l.startDate)
-                      : `${formatShortDay(l.startDate)} – ${formatShortDay(l.endDate)}`}
-                    {(l.startDate < `${year}-01-01` || l.endDate > `${year}-12-31`) && (
-                      <span className="ml-1.5 text-[10px] font-semibold text-slate-400">(deel in {year})</span>
-                    )}
-                  </td>
-                  <td className="py-2.5 pr-3">
-                    <span
-                      className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${
-                        l.type === 'betaald_verlof'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          : l.type === 'ziekte'
-                            ? 'border-rose-200 bg-rose-50 text-rose-700'
-                            : 'border-blue-200 bg-blue-50 text-blue-700'
-                      }`}
-                    >
-                      {formatLeaveType(l.type)}
-                    </span>
-                  </td>
-                  <td className="py-2.5 pr-3 text-right font-black tabular-nums">{l.dagenInJaar}</td>
-                  <td className={`py-2.5 text-right font-bold tabular-nums ${l.saldoNa !== null && l.saldoNa < 0 ? 'text-red-700' : 'text-slate-600'}`}>
-                    {l.saldoNa === null
-                      ? '—'
-                      : l.saldoNa < 0
-                        ? `${Math.abs(l.saldoNa)} boven budget (${balans.betaaldBudget})`
-                        : `${l.saldoNa} van ${balans.betaaldBudget}`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {pending.length > 0 && (
-          <section className="print-card mt-8">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 border-b border-amber-200 pb-1.5 mb-2">
-              Nog niet beslist (telt niet mee in het saldo)
-            </h2>
-            <ul className="space-y-1 text-sm">
-              {pending.map((l) => (
-                <li key={l.id} className="flex items-baseline justify-between gap-3">
-                  <span className="font-bold text-slate-700">
-                    {l.startDate === l.endDate ? formatShortDay(l.startDate) : `${formatShortDay(l.startDate)} – ${formatShortDay(l.endDate)}`}
-                    <span className="ml-2 font-medium text-slate-400">{formatLeaveType(l.type)}</span>
+      {approved.length === 0 ? (
+        <p className="text-center py-16 text-slate-400 italic">
+          Geen goedgekeurd verlof geregistreerd in {year}.
+        </p>
+      ) : (
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b-2 border-slate-300 text-left">
+              <th className="py-2 pr-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Periode</th>
+              <th className="py-2 pr-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Type</th>
+              <th className="py-2 pr-3 text-right text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Dagen</th>
+              <th className="py-2 text-right text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Saldo betaald</th>
+            </tr>
+          </thead>
+          <tbody>
+            {approved.map((l) => (
+              <tr key={l.id} className="printblad-bijeen border-b border-slate-100">
+                <td className="py-2.5 pr-3 font-bold text-slate-900">
+                  {l.startDate === l.endDate
+                    ? formatShortDay(l.startDate)
+                    : `${formatShortDay(l.startDate)} – ${formatShortDay(l.endDate)}`}
+                  {(l.startDate < `${year}-01-01` || l.endDate > `${year}-12-31`) && (
+                    <span className="ml-1.5 text-[10px] font-semibold text-slate-400">(deel in {year})</span>
+                  )}
+                </td>
+                <td className="py-2.5 pr-3">
+                  {/* Het type als omlijnd label: de tekst draagt de betekenis, geen kleur (zwart-wit leesbaar). */}
+                  <span className="inline-block rounded border border-slate-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-slate-900">
+                    {formatLeaveType(l.type)}
                   </span>
-                  <span className="font-black tabular-nums">{l.dagenInJaar} {l.dagenInJaar === 1 ? 'dag' : 'dagen'}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+                </td>
+                <td className="py-2.5 pr-3 text-right font-black tabular-nums">{l.dagenInJaar}</td>
+                <td className={`py-2.5 text-right tabular-nums ${l.saldoNa !== null && l.saldoNa < 0 ? 'font-black text-slate-900' : 'font-bold text-slate-600'}`}>
+                  {l.saldoNa === null
+                    ? '—'
+                    : l.saldoNa < 0
+                      ? `${Math.abs(l.saldoNa)} boven budget (${balans.betaaldBudget})`
+                      : `${l.saldoNa} van ${balans.betaaldBudget}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
-        {/* Handtekening — zelfde strook als het maandrooster, voor het
-            eindejaarsgesprek. */}
-        <section className="print-card mt-10 pt-6 border-t border-slate-200">
-          <div className="grid grid-cols-2 gap-12">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 mb-8">
-                Voor gezien, chauffeur
-              </p>
-              <div className="border-b border-slate-400 h-10" />
-              <p className="mt-1 text-[10px] font-medium text-slate-400">Datum en handtekening</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 mb-8">
-                Voor gezien, planner
-              </p>
-              <div className="border-b border-slate-400 h-10" />
-              <p className="mt-1 text-[10px] font-medium text-slate-400">Datum en handtekening</p>
-            </div>
-          </div>
+      {pending.length > 0 && (
+        <section className="printblad-bijeen mt-8">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-700 border-b border-slate-900 pb-1.5 mb-2">
+            Nog niet beslist (telt niet mee in het saldo)
+          </h3>
+          <ul className="space-y-1 text-sm">
+            {pending.map((l) => (
+              <li key={l.id} className="flex items-baseline justify-between gap-3">
+                <span className="font-bold text-slate-700">
+                  {l.startDate === l.endDate ? formatShortDay(l.startDate) : `${formatShortDay(l.startDate)} – ${formatShortDay(l.endDate)}`}
+                  <span className="ml-2 font-medium text-slate-400">{formatLeaveType(l.type)}</span>
+                </span>
+                <span className="font-black tabular-nums">{l.dagenInJaar} {l.dagenInJaar === 1 ? 'dag' : 'dagen'}</span>
+              </li>
+            ))}
+          </ul>
         </section>
-
-        <footer className="mt-10 pt-4 border-t border-slate-200 text-[10px] font-medium text-slate-400 text-center">
-          Stand van {MONTH_NAMES[new Date().getMonth()].toLowerCase()} {new Date().getFullYear()} · gegenereerd op{' '}
-          {new Date().toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })} via VHB Portaal
-        </footer>
-      </div>
-    </div>
+      )}
+    </PrintBlad>
   );
 }

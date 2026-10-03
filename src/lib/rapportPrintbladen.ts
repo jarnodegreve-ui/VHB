@@ -5,7 +5,7 @@ import type { RapportDomein } from '../../shared/rapporten/types';
  * de catalogus tussen de rapporten van hun domein, maar blijven wat ze waren:
  * een eigen printscherm achter een eigen URL-parameter (App.tsx). De catalogus
  * vraagt alleen hun parameters en opent die URL; ze zijn bewust NIET omgebouwd
- * naar het register.
+ * naar het register (wel staan ze sinds 03-10 op dezelfde `PrintBlad`-kop).
  */
 export type PrintbladParameter = 'maand' | 'chauffeur' | 'chauffeur-of-alle' | 'jaar' | 'week' | 'omvang';
 

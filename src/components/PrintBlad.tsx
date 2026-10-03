@@ -28,6 +28,18 @@ import { Button } from './primitives';
  * tabelkop op elke pagina, totaalrij onderaan, en bij nul rijen de zin "Geen
  * gegevens voor deze periode" (een leeg blad is soms net het bewijsstuk).
  *
+ * Sinds 03-10 staan ook de vier oudere bladen (maandrooster, verlofjaar, gele
+ * boek, ruiloverzicht) op dit blad; hun inhoud is eigen opmaak. Daarvoor zijn
+ * er drie klassen voor de pagina-afbreking, zodat geen enkel blad nog eigen
+ * `@media print`-CSS hoeft te dragen:
+ *  - `printblad-nieuw-vel`: begint op een nieuwe pagina (een stapel met één
+ *    vel per chauffeur; op het scherm een ruime marge erboven);
+ *  - `printblad-bijeen`: blijft op één pagina (een dagkaart, een wissel);
+ *  - `printblad-bij-volgende`: een kopje dat niet onderaan een pagina mag
+ *    blijven hangen, los van wat eronder komt.
+ * Een blad met meer dan één vel krijgt één kop bovenaan (logo, titel,
+ * filters); elk volgend vel draagt zijn eigen koptitel in de inhoud.
+ *
  * De opmaak staat als CSS in dit bestand (punten en millimeters zijn de maat
  * van papier, niet de schermladder); kleuren komen uit de tokens.
  */
@@ -43,6 +55,7 @@ const bladCss = (richting: 'staand' | 'liggend', voet: string) => `
   .printblad-vel { margin: 0 auto; padding: 2rem 1.25rem 3rem; max-width: ${richting === 'liggend' ? '297mm' : '210mm'}; }
   .printblad-balk { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1.5rem; }
   .printblad-balk p { margin: 0; font-size: 13px; color: var(--color-slate-500); }
+  .printblad-balk-rechts { display: flex; align-items: center; gap: 1rem; margin-left: auto; }
   .printblad-kop { display: flex; align-items: flex-start; justify-content: space-between; gap: 8mm; padding-bottom: 4mm; border-bottom: 1.5pt solid var(--color-slate-900); }
   .printblad-logo { width: 38mm; height: auto; flex: none; }
   .printblad-titel { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 17pt; line-height: 1.15; letter-spacing: -0.01em; text-align: right; }
@@ -60,6 +73,9 @@ const bladCss = (richting: 'staand' | 'liggend', voet: string) => `
   .printblad-tabel td.nadruk { font-weight: 700; white-space: nowrap; }
   .printblad-tabel tr.totaal td { border-top: 0.75pt solid var(--color-slate-900); border-bottom: 1.5pt solid var(--color-slate-900); font-weight: 700; }
   .printblad-tabel td:first-child { white-space: nowrap; }
+  .printblad-nieuw-vel { margin-top: 4rem; }
+  .printblad-bijeen { break-inside: avoid; page-break-inside: avoid; }
+  .printblad-bij-volgende { break-after: avoid; page-break-after: avoid; }
   @media print {
     @page {
       size: A4 ${richting === 'liggend' ? 'landscape' : 'portrait'};
@@ -72,10 +88,11 @@ const bladCss = (richting: 'staand' | 'liggend', voet: string) => `
     .printblad-vel { max-width: none; padding: 0; }
     .printblad-balk { display: none !important; }
     .printblad-tabelkader { overflow: visible; }
+    .printblad-nieuw-vel { margin-top: 0; break-before: page; page-break-before: always; }
   }
 `;
 
-export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTitel, opmerking, klaar = true, children }: {
+export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTitel, opmerking, balk, klaar = true, children }: {
   titel: string;
   /** De gekozen filters in woorden, één per stuk ("Jaar 2026", "Medewerker: alle"). */
   filters: readonly string[];
@@ -86,6 +103,9 @@ export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTi
   tabbladTitel?: string;
   /** Regel boven de inhoud, bv. dat de gegevens pas vanaf een datum beginnen. */
   opmerking?: ReactNode;
+  /** Extra tekst in de schermbalk naast de knop Afdrukken (niet op papier), bv.
+   *  hoeveel vellen een stapel telt. */
+  balk?: ReactNode;
   /** Pas afdrukken als de inhoud er staat (de printdialoog opent dan vanzelf). */
   klaar?: boolean;
   children: ReactNode;
@@ -122,7 +142,10 @@ export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTi
       <div className="printblad-vel">
         <div className="printblad-balk">
           <p>Voorbeeld van het blad. Kies in het printvenster “Opslaan als PDF” voor een bestand.</p>
-          <Button variant="primary" icon={<Printer size={16} />} onClick={() => window.print()}>Afdrukken</Button>
+          <div className="printblad-balk-rechts">
+            {balk ? <p>{balk}</p> : null}
+            <Button variant="primary" icon={<Printer size={16} />} onClick={() => window.print()}>Afdrukken</Button>
+          </div>
         </div>
         <header className="printblad-kop">
           <BrandLogo tone="licht" variant="horizontaal" className="printblad-logo" />

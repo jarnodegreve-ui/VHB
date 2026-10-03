@@ -85,12 +85,15 @@ test('technieker print het gele boek voor de ISO-map', async ({ page }) => {
   page.on('pageerror', (err) => pageErrors.push(err.message));
   await seed(page, { user: TECHNIEKER, view: 'defecten' });
   // Printscherm in een eigen tabblad (?print-gele-boek=open|alles): zelf-ladend,
+  // op PrintBlad (kop met logo, filters in woorden, wie afdrukt), de tabel in de
   // opmaak van het Access-rapport (per werktype gegroepeerd), met de knop als
   // vangnet naast de automatische window.print().
   await page.goto('/?print-gele-boek=alles');
 
   await expect(page.getByRole('heading', { name: 'Aangevraagde werken', level: 1 })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('button', { name: 'Print / Opslaan als PDF' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Afdrukken' })).toBeVisible();
+  await expect(page.getByText(/Alle werken, ook uitgevoerde · Peildatum \d{2}\/\d{2}\/\d{4}/)).toBeVisible();
+  await expect(page.getByText(/Afgedrukt op \d{2}\/\d{2}\/\d{4} \d{2}:\d{2} door Jelle Technieker/)).toBeVisible();
   const rijen = page.getByRole('row');
   // Kopregel + één groepskop per werktype + één rij per melding.
   const groepen = new Set(DEFECTEN.map((d) => d.werktype)).size;
