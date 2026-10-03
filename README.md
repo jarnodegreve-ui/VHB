@@ -42,6 +42,9 @@ Eenmalig inrichten:
    # optioneel, staging:
    gh secret set STAGING_SUPABASE_URL
    gh secret set STAGING_SERVICE_ROLE_KEY
+   # staging wakker houden (gratis laag pauzeert na 7 dagen zonder verzoeken;
+   # publieke publishable-sleutel, Supabase › Project Settings › API Keys):
+   gh secret set STAGING_SUPABASE_ANON_KEY
    ```
    Zonder de productie-secrets slaat de job over met een melding (geen fout).
 3. Eerste snapshot maken en committen:
