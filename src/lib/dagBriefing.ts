@@ -126,7 +126,46 @@ export function bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, dive
 }
 
 /** "3 punten vragen nog een beslissing" / "Alles geregeld". */
-export function briefingKop(b: DagBriefing, dagWoord: 'vandaag' | 'morgen'): string {
+export function briefingKop(b: DagBriefing, dagWoord: string): string {
   if (b.aandacht === 0) return b.openDiensten === null ? `Dekking voor ${dagWoord} nog niet geladen` : `Alles geregeld voor ${dagWoord}`;
   return `${b.aandacht} ${b.aandacht === 1 ? 'punt vraagt' : 'punten vragen'} nog een beslissing`;
+}
+
+/**
+ * De weekstrook boven de briefing (verbeterronde 03-10, punt 3): zeven dagen
+ * vanaf vandaag, elk met het aantal punten dat die dag nog een beslissing
+ * vraagt, dezelfde telling als `aandacht` van de dag zelf. Zeven dagen omdat
+ * de dekking (`coverageDays`) precies dat venster laadt; verder kijken is
+ * Openstaande diensten. `onbekend` = de dekking van die dag is nog niet
+ * geladen, dus het cijfer kan te laag zijn (de strook toont dan geen 0).
+ */
+export const WEEKSTROOK_DAGEN = 7;
+
+export type WeekDagPunt = {
+  dag: string;
+  aandacht: number;
+  onbekend: boolean;
+};
+
+export function bouwWeekPunten(bron: Omit<Parameters<typeof bouwDagBriefing>[0], 'dag'> & { vandaag: string }): WeekDagPunt[] {
+  const start = new Date(`${bron.vandaag}T00:00:00`);
+  const uit: WeekDagPunt[] = [];
+  for (let i = 0; i < WEEKSTROOK_DAGEN; i += 1) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const dag = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const b = bouwDagBriefing({ ...bron, dag });
+    uit.push({ dag, aandacht: b.aandacht, onbekend: b.openDiensten === null });
+  }
+  return uit;
+}
+
+/** Het woord voor de dag in de kop: vandaag, morgen, anders de weekdag ("donderdag"). */
+export function dagWoordVoor(dag: string, vandaag: string): string {
+  if (dag === vandaag) return 'vandaag';
+  const morgen = new Date(`${vandaag}T00:00:00`);
+  morgen.setDate(morgen.getDate() + 1);
+  const morgenIso = `${morgen.getFullYear()}-${String(morgen.getMonth() + 1).padStart(2, '0')}-${String(morgen.getDate()).padStart(2, '0')}`;
+  if (dag === morgenIso) return 'morgen';
+  return new Date(`${dag}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long' });
 }

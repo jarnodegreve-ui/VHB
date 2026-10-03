@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useRouteParam } from '../app/router';
 import { AlertTriangle, ChevronRight, MapPin, Phone, Repeat, UserX } from 'lucide-react';
 import type { LeaveRequest, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { addDays, isoDate } from '../lib/availability';
-import { bouwDagBriefing, briefingKop, type BriefingAfwezige, type BriefingRuil } from '../lib/dagBriefing';
-import { formatDatumDMJ, formatDayLong } from '../lib/format';
+import { WEEKSTROOK_DAGEN, bouwDagBriefing, bouwWeekPunten, briefingKop, dagWoordVoor, type BriefingAfwezige, type BriefingRuil, type WeekDagPunt } from '../lib/dagBriefing';
+import { WEEKDAY_SHORT_MON, formatDatumDMJ, formatDayLong } from '../lib/format';
+import { cn } from '../lib/ui';
 import { telHref } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { AllesGedaan } from '../components/illustraties';
 import { Avatar } from '../components/Avatar';
 import { LijnTegel } from '../components/LijnTegel';
 import { OpsPanel, OpsRow } from '../components/ops';
-import { Badge, Button, Pressable, Segmented } from '../components/primitives';
+import { Badge, Button, Pressable } from '../components/primitives';
+import { Card } from '../components/Card';
 import { ServiceChip } from '../components/ServiceChip';
 
 /**
@@ -25,6 +28,13 @@ import { ServiceChip } from '../components/ServiceChip';
  * Het Overzicht toont dezelfde taken over alle dagen heen; de rekenkern
  * (src/lib/dagBriefing.ts) deelt zijn regels met de werkvoorraad, dus een
  * dienst van een zieke telt ook hier niet dubbel als open dienst.
+ *
+ * Boven de panelen staat de weekstrook (03-10): de zeven dagen vanaf vandaag
+ * met per dag het aantal punten dat nog een beslissing vraagt, en een tik op
+ * een dag toont die dag. Ze verving de schakelaar Vandaag|Morgen: voor de rest
+ * van de week moest je naar Openstaande diensten. De gekozen dag staat in de
+ * URL (`/vandaag/<yyyy-mm-dd>`, vandaag zonder segment), zodat terugkeren uit
+ * een ruil of verlofaanvraag op dezelfde dag landt.
  */
 const AFWEZIG_WOORD: Record<LeaveRequest['type'], string> = { ziekte: 'Ziek', betaald_verlof: 'Verlof', klein_verlet: 'Klein verlet' };
 
@@ -35,21 +45,86 @@ function Stil({ children }: { children: ReactNode }) {
   return <p className="px-1 py-1 text-body-sm text-slate-500">{children}</p>;
 }
 
+/**
+ * De weekstrook: zeven dagen vanaf vandaag, elk een knop. Goud alleen voor
+ * vandaag (= "nu", zoals de dagstrip van de Maandplanning), de gekozen dag is
+ * neutraal (`bg-surface-muted` + hairline). Het cijfer is het aantal punten
+ * dat die dag nog een beslissing vraagt: amber als het er zijn, stil als het
+ * nul is, een streepje zolang de dekking van die dag niet geladen is (nul mag
+ * nooit "nog niet geladen" betekenen).
+ */
+function Weekstrook({ week, vandaag, gekozen, onKies }: {
+  week: WeekDagPunt[];
+  vandaag: string;
+  gekozen: string;
+  onKies: (dag: string) => void;
+}) {
+  return (
+    <Card padding="none" className="overflow-hidden">
+      <div role="group" aria-label="Dag kiezen" className="grid grid-cols-7 divide-x divide-hairline-subtle">
+        {week.map((punt) => {
+          const d = new Date(`${punt.dag}T00:00:00`);
+          const isVandaag = punt.dag === vandaag;
+          const actief = punt.dag === gekozen;
+          const woord = hoofdletter(dagWoordVoor(punt.dag, vandaag));
+          const telling = punt.onbekend
+            ? 'dekking nog niet geladen'
+            : punt.aandacht === 0 ? 'niets te beslissen' : `${punt.aandacht} ${punt.aandacht === 1 ? 'punt vraagt' : 'punten vragen'} een beslissing`;
+          return (
+            <Pressable
+              key={punt.dag}
+              onClick={() => onKies(punt.dag)}
+              aria-pressed={actief}
+              aria-label={`${woord}, ${formatDayLong(punt.dag)}: ${telling}`}
+              className={cn(
+                'flex min-h-16 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-center',
+                actief && 'bg-surface-muted ring-1 ring-inset ring-hairline',
+              )}
+            >
+              <span aria-hidden="true" className="text-micro">{WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}</span>
+              <span aria-hidden="true" className={cn('text-sm font-bold tabular-nums leading-tight', isVandaag ? 'text-oker-800' : 'text-slate-800')}>
+                {d.getDate()}
+              </span>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'mt-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-2xs font-bold tabular-nums leading-none',
+                  punt.onbekend ? 'text-slate-400' : punt.aandacht > 0 ? 'bg-amber-500/15 text-amber-700' : 'text-slate-400',
+                )}
+              >
+                {punt.onbekend ? '–' : punt.aandacht}
+              </span>
+            </Pressable>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: string[]) => void }) {
   const { users, shifts, leaveRequests, swaps, diversions, coverageDays } = useAppDataContext();
-  const [dagOffset, setDagOffset] = useState<0 | 1>(0);
   // De dag verspringt om middernacht; een tik per minuut volstaat.
   const [vandaag, setVandaag] = useState(() => isoDate(new Date()));
   useEffect(() => {
     const timer = setInterval(() => setVandaag(isoDate(new Date())), 60000);
     return () => clearInterval(timer);
   }, []);
-  const dag = dagOffset === 0 ? vandaag : isoDate(addDays(new Date(`${vandaag}T00:00:00`), 1));
-  const dagWoord = dagOffset === 0 ? 'vandaag' : 'morgen';
+  // Gekozen dag uit de URL; alleen een dag binnen de week vanaf vandaag telt,
+  // al de rest (ongeldig, verleden, verder weg) is vandaag.
+  const [dagParam, zetDagParam] = useRouteParam(0);
+  const laatsteDag = isoDate(addDays(new Date(`${vandaag}T00:00:00`), WEEKSTROOK_DAGEN - 1));
+  const dag = dagParam && /^\d{4}-\d{2}-\d{2}$/.test(dagParam) && dagParam >= vandaag && dagParam <= laatsteDag ? dagParam : vandaag;
+  const dagWoord = dagWoordVoor(dag, vandaag);
+  const kiesDag = (d: string) => zetDagParam(d === vandaag ? null : d);
 
   const briefing = useMemo(
     () => bouwDagBriefing({ dag, users, shifts, leaveRequests, swaps, diversions, coverageDays }),
     [dag, users, shifts, leaveRequests, swaps, diversions, coverageDays],
+  );
+  const week = useMemo(
+    () => bouwWeekPunten({ vandaag, users, shifts, leaveRequests, swaps, diversions, coverageDays }),
+    [vandaag, users, shifts, leaveRequests, swaps, diversions, coverageDays],
   );
   const naamVan = (id: string | null) => (id ? users.find((u) => String(u.id) === id)?.name ?? `Onbekend (${id})` : 'nog geen collega');
 
@@ -71,16 +146,9 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
         view="vandaag"
         title={hoofdletter(dagWoord)}
         description={`${hoofdletter(formatDayLong(dag))} · ${briefingKop(briefing, dagWoord)}`}
-        actions={
-          <Segmented
-            label="Dag kiezen"
-            itemClassName="min-h-11 sm:pointer-fine:min-h-8"
-            waarde={dagOffset}
-            opties={[{ waarde: 0 as const, label: 'Vandaag' }, { waarde: 1 as const, label: 'Morgen' }]}
-            onChange={setDagOffset}
-          />
-        }
       />
+
+      <Weekstrook week={week} vandaag={vandaag} gekozen={dag} onKies={kiesDag} />
 
       {helemaalLeeg ? (
         <EmptyState
