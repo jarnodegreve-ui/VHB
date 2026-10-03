@@ -9941,6 +9941,51 @@ describe('per-record API (PUT / POST one / DELETE), gebruikers, omleidingen, upd
       expect(mem.activity.find((a) => a.action === 'Omleidingen opgeslagen')).toBeFalsy();
     });
 
+    it('POST one pusht "Nieuwe omleiding" naar de actieve chauffeurs (niet naar staf), soort omleiding, naar /omleidingen/<id>', async () => {
+      mem.users = [...mem.users, { id: '9', name: 'Gepauzeerde Chauffeur', email: 'pauze@vhb.be', role: 'chauffeur', isActive: false }];
+      const res = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '12', title: 'Werken Stationsstraat', description: 'x', startDate: '2026-09-10', endDate: '2026-09-20' } });
+      expect(res.status).toBe(201);
+      const pushes = mem.pushesSent.filter((p) => p.payload.title === 'Nieuwe omleiding');
+      expect(pushes).toHaveLength(1);
+      expect(pushes[0].userIds.sort()).toEqual(['3', '4']); // de twee actieve chauffeurs, geen admin, planner of gepauzeerd account
+      expect(pushes[0].payload.soort).toBe('omleiding');
+      // Titel, lijn en periode in dd/mm/jjjj, nooit ISO.
+      expect(pushes[0].payload.body).toBe('Werken Stationsstraat (lijn 12), 10/09/2026 t/m 20/09/2026');
+      expect(pushes[0].payload.url).toBe(`/omleidingen/${encodeURIComponent(res.json.diversion.id)}`);
+    });
+
+    it('een nieuwe omleiding via de lijst-POST pusht ook; wijzigen en verwijderen pushen niet', async () => {
+      const nieuw = { id: 'o-3', line: 'Alle', title: 'Wegenwerken ring', description: 'x', startDate: '2026-10-01' };
+      const bulk = await api('POST', '/api/diversions', { token: 'tok-admin', body: [...mem.diversions, nieuw] });
+      expect(bulk.status).toBe(200);
+      const push = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe omleiding');
+      expect(push?.userIds.sort()).toEqual(['3', '4']);
+      expect(push?.payload.body).toBe('Wegenwerken ring (alle lijnen), 01/10/2026');
+      expect(push?.payload.url).toBe('/omleidingen/o-3');
+
+      mem.pushesSent = [];
+      const rev = await revVan('/api/diversions', 'tok-planner', 'o-1');
+      const put = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...mem.diversions[0], endDate: '2026-08-15' }, headers: { [REV]: rev } });
+      expect(put.status).toBe(200);
+      expect(mem.pushesSent).toEqual([]);
+
+      const revWeg = await revVan('/api/diversions', 'tok-planner', 'o-2');
+      expect((await api('DELETE', '/api/diversions/o-2', { token: 'tok-planner', headers: { [REV]: revWeg } })).status).toBe(200);
+      expect(mem.pushesSent).toEqual([]);
+    });
+
+    it('herstel na "Ongedaan maken" (X-Herstel: 1) logt "hersteld" en pusht niet', async () => {
+      const res = await api('POST', '/api/diversions/one', { token: 'tok-planner', headers: { 'X-Herstel': '1' }, body: { id: 'o-2', line: '14', title: 'Kermis', description: 'Centrum afgesloten', startDate: '2026-08-01' } });
+      // o-2 bestaat nog: eerst weg, dan terug.
+      expect(res.status).toBe(409);
+      const rev = await revVan('/api/diversions', 'tok-planner', 'o-2');
+      expect((await api('DELETE', '/api/diversions/o-2', { token: 'tok-planner', headers: { [REV]: rev } })).status).toBe(200);
+      const terug = await api('POST', '/api/diversions/one', { token: 'tok-planner', headers: { 'X-Herstel': '1' }, body: { id: 'o-2', line: '14', title: 'Kermis', description: 'Centrum afgesloten', startDate: '2026-08-01' } });
+      expect(terug.status).toBe(201);
+      expect(mem.activity.find((a) => a.action === 'Omleiding hersteld' && a.entityId === 'o-2')).toBeTruthy();
+      expect(mem.pushesSent.filter((p) => p.payload.title === 'Nieuwe omleiding')).toEqual([]);
+    });
+
     it('bijlagen komen uit Storage, nooit van de client: een meegestuurde lijst of oude pdfUrl wordt genegeerd bij POST one, PUT, bulk én GET (controle 05-09, nr. 28)', async () => {
       const nep = [{ slot: 1, filename: 'nep.pdf' }];
       const extern = 'https://kwaad.example/nep.pdf';

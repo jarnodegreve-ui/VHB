@@ -235,6 +235,13 @@ export const verwerkUsersOpslag = async (
 
 const fmtDiversion = (d: any) => `${d.title} (${lijnLabel(d.line).toLowerCase()}), ${PERIODE_DMJ(d.startDate, d.endDate)}.`;
 
+/** Tekst van de push bij een nieuwe omleiding: titel, lijn en periode (dd/mm/jjjj),
+ *  zonder slotpunt en hoogstens 180 tekens, want de titel heeft geen maximum. */
+export const pushTekstOmleiding = (d: any): string => {
+  const tekst = `${String(d.title ?? "").trim()} (${lijnLabel(d.line).toLowerCase()}), ${PERIODE_DMJ(d.startDate, d.endDate)}`;
+  return tekst.length > 180 ? `${tekst.slice(0, 179).trimEnd()}…` : tekst;
+};
+
 export const verwerkDiversionsOpslag = async (
   req: AuthenticatedRequest,
   previousDiversions: any[],
@@ -261,6 +268,26 @@ export const verwerkDiversionsOpslag = async (
   }
   for (const d of divDiff.removed) {
     await logActivity(req, "diversions", VERWIJDERD_ACTIE.diversion, fmtDiversion(d), { type: "diversion", id: d.id });
+  }
+
+  // Nieuwe omleiding → push naar alle actieve chauffeurs, zoals bij een nieuwe
+  // update. Alleen bij toevoegen: een wijziging of verwijdering pusht niet, en
+  // "Ongedaan maken" (opts.herstel) is geen nieuwe omleiding. Wie de soort
+  // omleiding uitzette in zijn voorkeuren wordt in sendPushToUsers gefilterd.
+  // Bewust aanvaard: de client maakt het record eerst aan en uploadt de PDF's
+  // daarna (uploadWachtrij), dus de push vertrekt vóór de bijlagen er hangen;
+  // de melding landt op het record zelf en toont ze zodra ze er zijn.
+  if (divDiff.added.length > 0 && !opts.herstel) {
+    const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
+    for (const d of divDiff.added) {
+      await sendPushToUsers(chauffeurIds, {
+        title: "Nieuwe omleiding",
+        soort: "omleiding",
+        body: pushTekstOmleiding(d),
+        // Naar de omleiding zelf (/omleidingen/<id>), niet naar het scherm.
+        url: recordUrl("omleidingen", d.id),
+      });
+    }
   }
 };
 
