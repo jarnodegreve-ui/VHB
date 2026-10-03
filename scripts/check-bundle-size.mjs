@@ -356,6 +356,12 @@ if (!kaartMatch) {
   // zes open PR's wijzigden die regel al (staf 140 → 141) en zouden anders
   // elk op main botsen. Bij de volgende budgetwijziging daar samenvoegen.
   WARMUP_BUDGET_KB.chauffeur = 75.5;
+  // 03-10 (verbeterronde, punt 3): staf-warmup 141 → 141,5. De weekstrook op
+  // Vandaag (zeven dagen met per dag het aantal punten, de dag in de URL)
+  // maakt VandaagView ±0,55 kB gzip zwaarder: de set stond lokaal op 140,97
+  // en de CI-runner meet ±0,4 kB zwaarder. Geen nieuwe import. Zelfde stap
+  // en zelfde plek als de chauffeur-warmup hierboven.
+  WARMUP_BUDGET_KB.staf = 141.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

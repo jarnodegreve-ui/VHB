@@ -61,8 +61,35 @@ test('Morgen zonder iets te melden toont één rustige lege staat', async ({ pag
   await seed(page, { user: ADMIN, view: 'vandaag', extra: (pad) => (pad.endsWith('/api/diversions') ? [] : pad.endsWith('/api/coverage-gaps') ? { days: [] } : extra(pad)) });
   await page.goto('/vandaag');
   await expect(page.getByRole('heading', { level: 1, name: 'Vandaag' })).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('group', { name: 'Dag kiezen' }).getByRole('button', { name: 'Morgen' }).click();
+  await page.getByRole('group', { name: 'Dag kiezen' }).getByRole('button', { name: /^Morgen,/ }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Morgen' })).toBeVisible();
   // Morgen is EEN nog ziek, maar zonder dienst: geen punt dat een beslissing vraagt.
   await expect(page.getByText('Alles geregeld voor morgen')).toBeVisible();
+  // De dag staat in de URL en overleeft een herlaad; terug naar vandaag maakt de URL weer kaal.
+  await expect(page).toHaveURL(new RegExp(`/vandaag/${dag(1)}$`));
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name: 'Morgen' })).toBeVisible();
+  await page.getByRole('group', { name: 'Dag kiezen' }).getByRole('button', { name: /^Vandaag,/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Vandaag' })).toBeVisible();
+  await expect(page).toHaveURL(/\/vandaag$/);
+});
+
+test('De weekstrook telt per dag wat nog een beslissing vraagt en opent een dag verderop', async ({ page }) => {
+  const dekking = { days: [{ date: dag(0), missing: ['2101', '4407'] }, { date: dag(4), missing: ['3301', '3302', '3303'] }] };
+  await seed(page, { user: ADMIN, view: 'vandaag', extra: (pad) => (pad.endsWith('/api/coverage-gaps') ? dekking : extra(pad)) });
+  await page.goto('/vandaag');
+  const strook = page.getByRole('group', { name: 'Dag kiezen' });
+  await expect(strook.getByRole('button')).toHaveCount(7);
+  await expect(strook.getByRole('button').nth(0)).toHaveAccessibleName(/^Vandaag, .*: 3 punten vragen een beslissing$/);
+  await expect(strook.getByRole('button').nth(1)).toHaveAccessibleName(/^Morgen, .*: niets te beslissen$/);
+  await expect(strook.getByRole('button').nth(4)).toHaveAccessibleName(/: 3 punten vragen een beslissing$/);
+  await expect(strook.getByRole('button').nth(0)).toHaveAttribute('aria-pressed', 'true');
+  await strook.getByRole('button').nth(4).click();
+  await expect(strook.getByRole('button').nth(4)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page).toHaveURL(new RegExp(`/vandaag/${dag(4)}$`));
+  const open = page.getByRole('list', { name: 'Diensten zonder chauffeur' });
+  await expect(open.getByRole('listitem')).toHaveCount(3);
+  // Een dag buiten de week in de URL valt terug op vandaag.
+  await page.goto(`/vandaag/${dag(12)}`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Vandaag' })).toBeVisible();
 });

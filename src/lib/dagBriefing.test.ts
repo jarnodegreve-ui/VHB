@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bouwDagBriefing, briefingKop } from './dagBriefing';
+import { bouwDagBriefing, bouwWeekPunten, briefingKop, dagWoordVoor } from './dagBriefing';
 import type { Diversion, LeaveRequest, Shift, SwapRequest, User } from '../types';
 
 const DAG = '2026-09-22';
@@ -99,5 +99,39 @@ describe('bouwDagBriefing › omleidingen en kop', () => {
     expect(briefingKop(bouwDagBriefing(leeg), 'vandaag')).toBe('Alles geregeld voor vandaag');
     expect(briefingKop(bouwDagBriefing({ ...leeg, coverageDays: null }), 'morgen')).toBe('Dekking voor morgen nog niet geladen');
     expect(briefingKop(bouwDagBriefing({ ...leeg, coverageDays: [{ date: DAG, missing: ['2101'] }] as never }), 'vandaag')).toBe('1 punt vraagt nog een beslissing');
+  });
+});
+
+describe('bouwWeekPunten › de weekstrook', () => {
+  const bron = {
+    ...leeg,
+    shifts: [dienst('s1', '4', '2026-09-24', '2101')],
+    leaveRequests: [verlof('l1', '4', 'ziekte', '2026-09-24', '2026-09-24')],
+    swaps: [ruil({ status: 'pending', shiftDate: '2026-09-28', shiftLine: '2230' })],
+    coverageDays: [{ date: DAG, missing: ['4407', '4408'] }, { date: '2026-09-24', missing: ['2101'] }] as never,
+  };
+
+  it('zeven dagen vanaf vandaag, met per dag dezelfde telling als de briefing van die dag', () => {
+    const week = bouwWeekPunten({ ...bron, vandaag: DAG });
+    expect(week.map((w) => w.dag)).toEqual(['2026-09-22', '2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27', '2026-09-28']);
+    // 22: twee open diensten; 24: één te herverdelen (2101 telt niet dubbel als open); 28: één open ruil.
+    expect(week.map((w) => w.aandacht)).toEqual([2, 0, 1, 0, 0, 0, 1]);
+    expect(week.every((w) => !w.onbekend)).toBe(true);
+    for (const w of week) expect(w.aandacht).toBe(bouwDagBriefing({ ...bron, dag: w.dag }).aandacht);
+  });
+
+  it('zonder dekking is elke dag onbekend, over een maandgrens heen blijven het zeven dagen', () => {
+    const week = bouwWeekPunten({ ...leeg, vandaag: '2026-09-28', coverageDays: null });
+    expect(week.map((w) => w.dag)).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']);
+    expect(week.every((w) => w.onbekend && w.aandacht === 0)).toBe(true);
+  });
+});
+
+describe('dagWoordVoor', () => {
+  it('vandaag, morgen, daarna de weekdag', () => {
+    expect(dagWoordVoor('2026-09-22', '2026-09-22')).toBe('vandaag');
+    expect(dagWoordVoor('2026-09-23', '2026-09-22')).toBe('morgen');
+    expect(dagWoordVoor('2026-09-24', '2026-09-22')).toBe('donderdag');
+    expect(dagWoordVoor('2026-10-01', '2026-09-30')).toBe('morgen');
   });
 });
