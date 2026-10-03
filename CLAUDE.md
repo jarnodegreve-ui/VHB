@@ -1,11 +1,10 @@
 # PlanX — VHB-personeelsportaal
 
-Portaal voor het busbedrijf (GitHub-repo `jarnodegreve-ui/VHB`). Vite + React + TS + Tailwind (`src/`), serverless API (`api/`), Supabase. Prod = Vercel-project `vhb` → vhb-five.vercel.app (Pro). **`vhb-planner` is een ánder Vercel-project** (rostering) — nooit daarheen deployen.
+Portaal voor het busbedrijf (GitHub-repo `jarnodegreve-ui/VHB`). Vite + React + TS + Tailwind (`src/`), serverless API (`api/`), Supabase. Prod = Vercel-project `vhb` → vhb-five.vercel.app (Pro).
 
 ## Git & sessies
-- **Nooit `git add -A`** — parallelle sessies delen deze working tree (rostering/, losse WIP). Stage expliciete paden; voor gedeelde bestanden (api/index.ts, vercel.json): aparte git-worktree vanaf origin/main.
+- **Nooit `git add -A`** — parallelle sessies delen deze working tree (losse WIP). Stage expliciete paden; voor gedeelde bestanden (api/index.ts, vercel.json): aparte git-worktree vanaf origin/main.
 - Features landen via feature-branch + PR, niet rechtstreeks op main.
-- `rostering/` = geneste eigen repo (CP-SAT-solver, eigen memory) — niet aanraken tenzij gevraagd.
 
 ## API & deploy
 - **Elk bestand in `api/` wordt een aparte Vercel-functie.** Gedeelde modules → `api/_lib/` (underscore bouwt niet als functie). vercel.json rewrites sturen alles naar api/index.ts.
