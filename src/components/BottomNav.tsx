@@ -164,15 +164,22 @@ export function BottomNav({
           <li className="flex-auto min-w-0">
             <button
               onClick={onMore}
-              aria-label={moreBadge > 0 ? `Meer, ${moreBadge} ${moreBadge === 1 ? 'ruil wacht' : 'ruilen wachten'} op jouw antwoord` : 'Meer'}
+              aria-label="Meer"
+              // Het getal als beschrijving, niet in de naam: de naam blijft
+              // "Meer" (specs en schermlezers zoeken erop), de beschrijving
+              // zegt wat er wacht.
+              aria-describedby={moreBadge > 0 ? 'dock-meer-wacht' : undefined}
               className="tikbaar relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg text-slate-500 pointer-fine:hover:text-slate-700"
             >
               <span className="relative z-10">
                 <Menu size={18} />
                 {moreBadge > 0 && (
-                  <span className="absolute -top-1.5 -right-3 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
-                    <CountUp value={moreBadge} badge format={(n) => (n > 9 ? '9+' : n)} />
-                  </span>
+                  <>
+                    <span aria-hidden="true" className="absolute -top-1.5 -right-3 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
+                      <CountUp value={moreBadge} badge format={(n) => (n > 9 ? '9+' : n)} />
+                    </span>
+                    <span id="dock-meer-wacht" className="sr-only">{`${moreBadge} ${moreBadge === 1 ? 'ruil wacht' : 'ruilen wachten'} op jouw antwoord`}</span>
+                  </>
                 )}
               </span>
               <span className="relative z-10 max-[339px]:sr-only text-2xs font-semibold leading-tight truncate max-w-full px-0.5">Meer</span>

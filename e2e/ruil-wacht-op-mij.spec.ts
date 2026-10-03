@@ -23,7 +23,7 @@ const met = (ruilen: unknown[]): Extra => (p) => (p.endsWith('/api/swaps') ? rui
 const sw1 = { ...SWAPS[0], shiftDate: vandaagIso(1), shiftLine: '2104' };
 
 const paneel = (page: Page) => page.getByRole('heading', { name: 'Wacht op jouw antwoord' });
-const meer = (page: Page) => page.getByRole('navigation', { name: 'Hoofdnavigatie' }).getByRole('button', { name: /^Meer/ });
+const meer = (page: Page) => page.getByRole('navigation', { name: 'Hoofdnavigatie' }).getByRole('button', { name: 'Meer', exact: true });
 
 test.describe('wacht op jouw antwoord', () => {
   test('chauffeur: paneel met de vraag van de collega en de te bevestigen ruil, rij opent de ruil', async ({ page }) => {
@@ -46,7 +46,8 @@ test.describe('wacht op jouw antwoord', () => {
     test.skip(!isMobile, 'de Meer-tab bestaat alleen in het dock op de telefoon');
     await seed(page, { user: CHAUFFEUR, extra: met([sw1, SW5, SW6]) });
     await page.goto('/');
-    await expect(meer(page)).toHaveAccessibleName('Meer, 2 ruilen wachten op jouw antwoord');
+    await expect(meer(page)).toHaveAccessibleName('Meer');
+    await expect(meer(page)).toHaveAccessibleDescription('2 ruilen wachten op jouw antwoord');
     await expect(meer(page)).toContainText('2');
   });
 
@@ -55,7 +56,7 @@ test.describe('wacht op jouw antwoord', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Komende diensten' })).toBeVisible();
     await expect(paneel(page)).toHaveCount(0);
-    if (isMobile) await expect(meer(page)).toHaveAccessibleName('Meer');
+    if (isMobile) await expect(meer(page)).toHaveAccessibleDescription('');
   });
 
   test('staf ziet het paneel niet, ook niet met open ruilen', async ({ page }) => {
