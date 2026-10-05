@@ -2,7 +2,7 @@
 /**
  * De voorwaardelijke schrijfacties van 01-10 (twee beslissingen op hetzelfde
  * moment overschrijven elkaar niet), op de échte opslagfuncties: welke query
- * er naar PostgREST gaat. De integratietests (src/apiIntegration.test.ts)
+ * er naar PostgREST gaat. De integratietests (src/apiIntegratie/)
  * bootsen deze functies na; hier staat dat de nabootsing klopt met wat de
  * echte functie vraagt. Zelfde nepclient als storageVerwijderStukken.test.ts.
  */
