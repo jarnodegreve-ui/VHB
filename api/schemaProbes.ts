@@ -89,6 +89,19 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "planning_matrix_import_history", columns: "id,created_at,imported_days,detected_drivers,generated_shifts,matched_services,skipped_absences,unknown_codes,unmatched_drivers,filename,imported_by,period_start,period_end,file_start,file_end,snapshot_path" },
 ];
 
+/**
+ * De databasefuncties die de code aanroept, met null-args. Bestaat de functie,
+ * dan weigert ze de null-input met een eigen exception (≠ ontbreekt);
+ * PGRST202 = ontbreekt. Gedeeld door GET /api/health/schema en de
+ * databasetest dbtests/schema.test.ts.
+ */
+export const RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
+  { name: "replace_planning", args: { rows: null } },
+  { name: "replace_planning_matrix_rows", args: { rows: null } },
+  { name: "replace_planning_and_matrix_periode", args: { matrix_rows: null, shifts: null } },
+  { name: "bump_active_sessions", args: { uid: "__schema_probe__", delta: 0 } },
+];
+
 export const probeColumns = (table: string): string[] => {
   const probe = TABLE_PROBES.find((p) => p.table === table);
   return probe ? probe.columns.split(",") : [];

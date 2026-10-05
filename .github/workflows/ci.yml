@@ -53,6 +53,11 @@ jobs:
       - name: Design-lint
         run: npm run lint:design
 
+      # Elke migratie staat in supabase/volgorde.json (05-10): een .sql-bestand
+      # dat daar niet in staat, wordt nergens opgebouwd en nergens getest.
+      - name: Migratie-manifest
+        run: npm run db:controle
+
       - name: Unit-tests
         run: npm test
 
@@ -196,6 +201,36 @@ jobs:
           # tenzij dit aanstaat; zonder was er bij een gefaalde assert nooit
           # een rapport om in te kijken (07-09).
           include-hidden-files: true
+
+  # Database (05-10, audit punt 1 en 4): een lege lokale Supabase, alle
+  # migraties uit supabase/volgorde.json er twee keer overheen (de tweede keer
+  # bewijst dat elk bestand idempotent is), en dan de databasetests
+  # (dbtests/): de code tegen een echte database in plaats van tegen
+  # nagebootste antwoorden. Aanleiding: op 28-09 brak Omleidingen op een
+  # niet-gedraaide migratie, en herstel uit een back-up was van 21-09 tot
+  # 01-10 stuk zonder dat één test het zag. Geen secrets: alles is lokaal.
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencies
+        run: npm ci
+
+      - name: Lokale Supabase starten
+        run: npm run db:start
+
+      - name: Schema opbouwen (twee keer)
+        run: npm run db:opbouwen
+
+      - name: Databasetests
+        run: npm run db:test
 
   # Secret-scanner (verbeterronde 01-09, nr. 5): de repo is publiek en er is
   # al eens een bot-token gelekt (via een transcript, niet de repo — maar het

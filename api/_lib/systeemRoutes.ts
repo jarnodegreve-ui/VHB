@@ -9,7 +9,7 @@
  */
 
 import express from "express";
-import { TABLE_PROBES } from "../schemaProbes.js";
+import { RPC_PROBES, TABLE_PROBES } from "../schemaProbes.js";
 import { sendEmail, isSmtpConfigured, mailAfzender } from "../email.js";
 import { bouwTestMail } from "./mailTeksten.js";
 import type { AuthenticatedRequest } from "../types.js";
@@ -34,14 +34,7 @@ const runSchemaCheck = async (res: express.Response) => {
     if (error) missing.push(`${probe.table}: ${error.message}`);
   }
 
-  // RPC's: een probe met null-args. Bestaat de functie, dan weigert ze de
-  // null-input met een eigen exception (≠ ontbreekt); PGRST202 = ontbreekt.
-  const RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
-    { name: "replace_planning", args: { rows: null } },
-    { name: "replace_planning_matrix_rows", args: { rows: null } },
-    { name: "replace_planning_and_matrix_periode", args: { matrix_rows: null, shifts: null } },
-    { name: "bump_active_sessions", args: { uid: "__schema_probe__", delta: 0 } },
-  ];
+  // RPC's: zie RPC_PROBES in api/schemaProbes.ts. PGRST202 = ontbreekt.
   for (const probe of RPC_PROBES) {
     const { error } = await db.rpc(probe.name, probe.args);
     if (error && isMissingDbFunction(error)) missing.push(`rpc ${probe.name}: ontbreekt (migratie niet gedraaid?)`);
