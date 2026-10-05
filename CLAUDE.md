@@ -5,7 +5,7 @@ Portaal voor het busbedrijf (GitHub-repo `jarnodegreve-ui/VHB`). Vite + React + 
 ## Git & sessies
 - **Nooit `git add -A`** — parallelle sessies delen deze working tree (losse WIP). Stage expliciete paden; voor gedeelde bestanden (api/index.ts, vercel.json): aparte git-worktree vanaf origin/main.
 - Features landen via feature-branch + PR, niet rechtstreeks op main.
-- **`main` is beschermd** (05-10): een PR kan pas mergen wanneer `checks`, de drie e2e-shards, `lighthouse` en `gitleaks` groen zijn én de branch de nieuwste main bevat. Na elke merge moet een volgende PR dus eerst bijwerken (`gh pr update-branch <nr>`) en opnieuw door CI; reken in een keten op één CI-ronde per PR. Niet omzeilen met `--admin`: twee PR's die elk apart groen waren, maakten main vier keer rood in september. Komt er een CI-job bij of verandert een jobnaam, pas dan ook de verplichte checks aan (GitHub › Settings › Branches).
+- **`main` is beschermd** (05-10): een PR kan pas mergen wanneer `checks`, `database`, de drie e2e-shards, `lighthouse` en `gitleaks` groen zijn én de branch de nieuwste main bevat. Na elke merge moet een volgende PR dus eerst bijwerken (`gh pr update-branch <nr>`) en opnieuw door CI; reken in een keten op één CI-ronde per PR. Niet omzeilen met `--admin`: twee PR's die elk apart groen waren, maakten main vier keer rood in september. Komt er een CI-job bij of verandert een jobnaam, pas dan ook de verplichte checks aan (GitHub › Settings › Branches).
 - **PR-grootte**: richtgrens 600 gewijzigde regels zonder tests en fixtures. Groter mag alleen wanneer het één mechanische beweging is (verplaatsen, hernoemen) en dan zonder gedragswijziging in dezelfde PR.
 
 ## API & deploy
