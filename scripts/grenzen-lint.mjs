@@ -5,8 +5,9 @@
  * CI-job `checks`. Zonder dependencies, zoals design-lint.
  *
  *  1. shared/ staat op zichzelf: geen import uit src/ of api/.
- *  2. src/ (de browser) importeert niets uit api/ (de server). Tests mogen wel.
+ *  2. src/ (de browser) importeert niets uit api/ (de server).
  *  3. api/ importeert niets uit src/.
+ *     Tests mogen bij 1 tot 3 wel oversteken: ze vergelijken lagen juist.
  *  4. De opslaglaag (api/_lib/opslag/) is alleen bereikbaar via api/storage.ts.
  *     De integratietests bootsen dat ene bestand na; een route die een
  *     domeinbestand rechtstreeks importeert, valt daar stil buiten.
@@ -18,9 +19,9 @@ const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const IS_TEST = /\.(test|spec)\.tsx?$|\/__fixtures__\//;
 
 const REGELS = [
-  { naam: 'shared/ importeert uit src/ of api/', map: 'shared', verboden: /^(src|api)\//, tests: true },
+  { naam: 'shared/ importeert uit src/ of api/', map: 'shared', verboden: /^(src|api)\//, tests: false },
   { naam: 'src/ importeert uit api/ (server-code in de browser)', map: 'src', verboden: /^api\//, tests: false },
-  { naam: 'api/ importeert uit src/', map: 'api', verboden: /^src\//, tests: true },
+  { naam: 'api/ importeert uit src/', map: 'api', verboden: /^src\//, tests: false },
   {
     naam: 'api/_lib/opslag/ rechtstreeks geïmporteerd (ga via api/storage.ts)',
     map: 'api', verboden: /^api\/_lib\/opslag\//, tests: true,
