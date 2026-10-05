@@ -82,6 +82,29 @@ for (let ronde = 1; ronde <= rondes; ronde += 1) {
   console.log(`Ronde ${ronde}: ${volgorde.length} bestanden zonder fout.`);
 }
 
+// Het register (supabase/2026-10-05_schema_migraties.sql): elk bestand uit de
+// lijst moet er na het draaien in staan. Een nieuwe migratie die zichzelf niet
+// inschrijft, zou op productie nooit als "nog te draaien" opvallen.
+const register = spawnSync(
+  'docker',
+  ['exec', CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-At', '-c', 'select bestand from public.schema_migraties'],
+  { encoding: 'utf8' },
+);
+if (register.status !== 0) {
+  console.error(`Het register public.schema_migraties is niet te lezen:\n${register.stderr.trim()}`);
+  process.exit(1);
+}
+const ingeschreven = new Set(register.stdout.split('\n').filter(Boolean));
+const nietIngeschreven = volgorde.map((f) => f.replace(/^supabase\//, '')).filter((f) => !ingeschreven.has(f));
+if (nietIngeschreven.length > 0) {
+  console.error(
+    `Deze migraties schrijven zichzelf niet in het register in:\n  ${nietIngeschreven.join('\n  ')}\n` +
+    "Zet vóór de commit van elk bestand:\n  insert into public.schema_migraties (bestand) values ('<bestandsnaam>') on conflict (bestand) do nothing;",
+  );
+  process.exit(1);
+}
+console.log(`Register: ${ingeschreven.size} migraties ingeschreven.`);
+
 // De REST-laag leest het schema uit een cache: zonder dit ziet ze de tabellen
 // van daarnet nog niet wanneer de tests meteen hierna starten.
 spawnSync('docker', ['exec', CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-q', '-c', "notify pgrst, 'reload schema';"]);

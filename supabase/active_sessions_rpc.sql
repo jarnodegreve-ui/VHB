@@ -14,3 +14,16 @@ as $$
   set activesessions = greatest(0, coalesce(activesessions, 0) + delta)
   where id = uid;
 $$;
+
+-- Inschrijven in het register (2026-10-05_schema_migraties.sql). Op een lege
+-- database draait dit bestand vóór het register bestaat: dan schrijft de
+-- basislijn van het register het in.
+do $$
+begin
+  if to_regclass('public.schema_migraties') is not null then
+    insert into public.schema_migraties (bestand)
+    values ('active_sessions_rpc.sql')
+    on conflict (bestand) do nothing;
+  end if;
+end
+$$;

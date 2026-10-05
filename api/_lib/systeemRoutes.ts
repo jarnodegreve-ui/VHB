@@ -10,6 +10,7 @@
 
 import express from "express";
 import { RPC_PROBES, TABLE_PROBES } from "../schemaProbes.js";
+import { ontbrekendeMigraties } from "./migratieLijst.js";
 import { sendEmail, isSmtpConfigured, mailAfzender } from "../email.js";
 import { bouwTestMail } from "./mailTeksten.js";
 import type { AuthenticatedRequest } from "../types.js";
@@ -38,6 +39,17 @@ const runSchemaCheck = async (res: express.Response) => {
   for (const probe of RPC_PROBES) {
     const { error } = await db.rpc(probe.name, probe.args);
     if (error && isMissingDbFunction(error)) missing.push(`rpc ${probe.name}: ontbreekt (migratie niet gedraaid?)`);
+  }
+
+  // Migraties: wat de code verwacht (api/_lib/migratieLijst.ts) tegenover wat
+  // deze omgeving in haar register heeft (2026-10-05_schema_migraties.sql).
+  const { data: gedraaid, error: registerFout } = await db.from("schema_migraties").select("bestand");
+  if (registerFout) {
+    missing.push(`schema_migraties: ${registerFout.message}`);
+  } else {
+    for (const bestand of ontbrekendeMigraties((gedraaid ?? []).map((r: { bestand: string }) => r.bestand))) {
+      missing.push(`migratie ${bestand}: nog niet gedraaid op deze omgeving`);
+    }
   }
 
   // Cron-heartbeats: stale = ouder dan 2× het verwachte interval.

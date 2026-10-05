@@ -25,3 +25,12 @@ describe('schema uit de migraties', () => {
     expect(error ? isMissingDbFunction(error) : false).toBe(false);
   });
 });
+
+describe('register van migraties', () => {
+  it('elke migratie die de code verwacht, staat ingeschreven', async () => {
+    const { ontbrekendeMigraties } = await import('../api/_lib/migratieLijst');
+    const { data, error } = await db!.from('schema_migraties').select('bestand');
+    expect(error?.message ?? null).toBeNull();
+    expect(ontbrekendeMigraties((data ?? []).map((r: { bestand: string }) => r.bestand))).toEqual([]);
+  });
+});
