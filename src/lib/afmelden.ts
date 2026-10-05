@@ -139,12 +139,29 @@ export async function bevestigGebruiker(authId: string | undefined, profielId: s
  * ook een netwerkaanroep). Op een gedeeld toestel was de vorige gebruiker dan
  * terug zodra het bereik er weer was. Geeft `signOut` een fout of gooit hij,
  * dan gaat de sessie weg onder de sleutel die de client zelf gebruikt.
+ *
+ * `bereik` (05-10): `'local'` beëindigt alleen de sessie van dit toestel,
+ * `'global'` elke sessie van het account. Tot 05-10 was het altijd `'global'`
+ * (de standaard van supabase-js): wie zich op een computer afmeldde, was ook
+ * op zijn telefoon afgemeld en moest daar zijn wachtwoord opnieuw kennen. De
+ * knop Afmelden vraagt nu `'local'`; een gedeeld toestel en de gedwongen
+ * uitlog blijven `'global'` (zie `bereikVanAfmelding`). Ook `'local'` trekt
+ * de sessie van dit toestel op de server in: een gekopieerd token is daarna
+ * niets meer waard. Alle andere toestellen afmelden kan in Instellingen.
  */
-export async function meldAfBijSupabase(auth: { signOut: () => Promise<{ error: unknown }> } | null | undefined): Promise<void> {
+export type AfmeldBereik = 'local' | 'global';
+
+/** De knop Afmelden: alleen dit toestel, behalve op een gedeeld toestel. */
+export const bereikVanAfmelding = (gedeeldToestel: boolean): AfmeldBereik => (gedeeldToestel ? 'global' : 'local');
+
+export async function meldAfBijSupabase(
+  auth: { signOut: (opties?: { scope?: AfmeldBereik }) => Promise<{ error: unknown }> } | null | undefined,
+  bereik: AfmeldBereik = 'global',
+): Promise<void> {
   if (!auth) return;
   let fout: unknown = true;
   try {
-    fout = (await auth.signOut()).error;
+    fout = (await auth.signOut({ scope: bereik })).error;
   } catch {
     // telt als mislukt
   }
