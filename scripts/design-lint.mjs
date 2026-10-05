@@ -195,7 +195,8 @@ function loop(dir) {
   for (const naam of fs.readdirSync(dir)) {
     const p = path.join(dir, naam);
     if (fs.statSync(p).isDirectory()) { loop(p); continue; }
-    if (!/\.(tsx|ts)$/.test(p) || /\.test\.tsx?$/.test(p)) continue;
+    // Tests en hun gedeelde harnas (src/apiIntegratie/harnas.ts) zijn geen UI.
+    if (!/\.(tsx|ts)$/.test(p) || /\.test\.tsx?$/.test(p) || /apiIntegratie[\\/]harnas\.ts$/.test(p)) continue;
     const rel = path.relative(ROOT, p);
     const bron = fs.readFileSync(p, 'utf8');
     for (const regel of REGELS) {
