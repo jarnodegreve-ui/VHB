@@ -1478,6 +1478,48 @@
       "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
+      "tabel": "schema_migraties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "schema_migraties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "schema_migraties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "schema_migraties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "schema_migraties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "schema_migraties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "schema_migraties"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
       "tabel": "service_loops"
     },
     {
@@ -2464,6 +2506,11 @@
       "force_rls": false,
       "rls": true,
       "tabel": "ritblaadje"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "schema_migraties"
     },
     {
       "force_rls": false,
