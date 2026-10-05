@@ -1,0 +1,96 @@
+/**
+ * De migraties die de code verwacht, in de volgorde van supabase/volgorde.json
+ * (zonder het voorvoegsel `supabase/`). GET /api/health/schema vergelijkt deze
+ * lijst met het register `public.schema_migraties` en meldt wat op die
+ * omgeving nog moet draaien.
+ *
+ * Een kopie, omdat een Vercel-functie het JSON-manifest niet meekrijgt.
+ * src/migratieLijst.test.ts houdt beide gelijk: een nieuwe migratie komt in
+ * supabase/volgorde.json én hier, anders faalt CI.
+ */
+export const VERWACHTE_MIGRATIES: readonly string[] = [
+  "setup_security.sql",
+  "add_show_in_contacts.sql",
+  "add_user_section.sql",
+  "add_user_start_date.sql",
+  "users_verlofbudget.sql",
+  "active_sessions_rpc.sql",
+  "planning_matrix_schema.sql",
+  "planning_matrix_history.sql",
+  "planning_code_mapping.sql",
+  "transactional_replace.sql",
+  "replace_planning_and_matrix.sql",
+  "activity_log.sql",
+  "activity_log_entity_columns.sql",
+  "activity_log_system_category.sql",
+  "swaps_decided_at.sql",
+  "swaps_swap_type.sql",
+  "leave_decided_at.sql",
+  "diversions_bucket.sql",
+  "diversions_drop_severity_notnull.sql",
+  "ritblaadje.sql",
+  "ritblaadje_private.sql",
+  "update_reads.sql",
+  "user_documents.sql",
+  "user_devices.sql",
+  "ocpi_registration.sql",
+  "ocpi_data.sql",
+  "staging/000_tabellen_buiten_repo.sql",
+  "enable_rls_gaps.sql",
+  "2026-07-26_diversions_private.sql",
+  "2026-07-26_rls_hardening.sql",
+  "2026-07-26_services_loopnr.sql",
+  "2026-07-29_wantssystemmail.sql",
+  "2026-07-30_app_settings.sql",
+  "2026-07-30_planning_notes.sql",
+  "2026-07-30_rls_initplan.sql",
+  "2026-07-30_user_documents_opened.sql",
+  "2026-07-31_matrix_staff_only.sql",
+  "2026-08-01_current_app_user_role_definer.sql",
+  "2026-08-01_swaps_shift_info.sql",
+  "2026-08-02_anon_rechten_intrekken.sql",
+  "2026-08-02_drop_subscriptions.sql",
+  "2026-08-02_planning_version.sql",
+  "2026-08-02_realtime_publicatie.sql",
+  "2026-08-05_ocpi_power_snapshots.sql",
+  "2026-08-06_ocpi_power_snapshots_revoke.sql",
+  "2026-08-07_user_expiries.sql",
+  "2026-08-08_lastlogin_iso.sql",
+  "2026-08-16_swaps_target_seen.sql",
+  "2026-08-19_periode_import.sql",
+  "2026-08-20_import_historiek.sql",
+  "2026-08-22_drop_dubbele_import_history_policy.sql",
+  "2026-08-28_rls_inactieve_gebruikers.sql",
+  "2026-09-05_users_authid.sql",
+  "2026-09-06_client_errors_groepen.sql",
+  "2026-09-06_meldingen.sql",
+  "2026-09-07_planning_rls_eigen_chauffeur.sql",
+  "2026-09-07_realtime_presence_private.sql",
+  "2026-09-08_security_snapshot.sql",
+  "2026-09-08_ocpi_dagpieken.sql",
+  "2026-09-09_rol_technieker.sql",
+  "2026-09-10_diversions_location.sql",
+  "2026-09-13_techniek_voertuigen.sql",
+  "2026-09-13_loon_dagafsluiting.sql",
+  "2026-09-13_service_segments.sql",
+  "2026-09-13_vehicles_categorie.sql",
+  "2026-09-16_rls_loops_voertuigen_oud.sql",
+  "2026-09-18_user_presence.sql",
+  "2026-09-20_swaps_beslismoment_herstel.sql",
+  "2026-09-09_user_devices_sessie.sql",
+  "2026-09-20_user_presence_locatie.sql",
+  "2026-09-21_updates_bijlagen.sql",
+  "2026-09-22_leave_beslisreden.sql",
+  "2026-09-25_diversions_bijlagen.sql",
+  "2026-09-25_mail_log.sql",
+  "2026-09-28_users_ook_technieker.sql",
+  "2026-09-29_rls_tweede_factor.sql",
+  "2026-09-29_users_password_weg.sql",
+  "2026-10-05_schema_migraties.sql",
+];
+
+/** Wat de code verwacht en niet in het register van de omgeving staat. */
+export const ontbrekendeMigraties = (gedraaid: readonly string[]): string[] => {
+  const set = new Set(gedraaid);
+  return VERWACHTE_MIGRATIES.filter((bestand) => !set.has(bestand));
+};
