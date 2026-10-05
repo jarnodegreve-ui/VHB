@@ -29,6 +29,11 @@ iets fout, dan rolt dat bestand terug en kan je het na de fix opnieuw
 draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
 `supabase/postgres:17`-instantie (alle 53 bestanden + seed 2×, plus de schema-probes uit `api/schemaProbes.ts`).
 
+> **De volgorde die telt staat in `supabase/volgorde.json`** (05-10). De
+> CI-job `database` bouwt daarmee bij elke PR een lege database op; de lijst
+> hieronder is de toelichting per bestand en kan achterlopen. Zo ontbrak
+> `supabase/2026-09-09_rol_technieker.sql` hier (hoort na nummer 59).
+
 **Basis (setup en de ongedateerde migraties, in afhankelijkheidsvolgorde)**
 
 1. `supabase/setup_security.sql` — users, planning, diversions, services, updates, swaps, leave, RLS, `set_updated_at()`, `current_app_user_role()`

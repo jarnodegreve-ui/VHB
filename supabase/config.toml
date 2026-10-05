@@ -1,0 +1,32 @@
+# Lokale Supabase voor de databasetests (CI-job `database`, lokaal via
+# `npm run db:lokaal`). Alleen wat de tests nodig hebben: Postgres, de
+# REST-laag, auth en opslag. Het schema komt niet uit supabase/migrations
+# maar uit supabase/volgorde.json (scripts/db-opbouwen.mjs): de migraties
+# blijven losse, idempotente bestanden die met de hand in de SQL Editor
+# draaien.
+project_id = "vhb-portaal-lokaal"
+
+# Eigen poorten (545xx): de standaardpoorten zijn op een ontwikkelmachine vaak
+# al bezet door de lokale Supabase van een ander project.
+[api]
+port = 54521
+
+[db]
+port = 54522
+shadow_port = 54520
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
