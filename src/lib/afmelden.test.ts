@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AFGEMELD, LAATSTE_AUTH_KEY, SCHIL_CACHE_PREFIX, WIS_PRIVE_BERICHT,
-  bevestigGebruiker, borgGebruiker, isAndereGebruiker, isPriveCache, kanHerladen, magProfiel, meldAfBijSupabase, onthoudGebruiker, wisPriveCaches,
+  bereikVanAfmelding, bevestigGebruiker, borgGebruiker, isAndereGebruiker, isPriveCache, kanHerladen, magProfiel, meldAfBijSupabase, onthoudGebruiker, wisPriveCaches,
 } from './afmelden';
 import { BIJLAGEN_CACHE } from './bijlageCache';
 
@@ -214,6 +214,37 @@ describe('wie is dit: iemand anders dan de vorige op dit toestel?', () => {
     onthoudGebruiker(AFGEMELD);
     expect(window.localStorage.getItem(LAATSTE_AUTH_KEY)).toBe(AFGEMELD);
     expect(AFGEMELD).not.toBe('');
+  });
+});
+
+describe('bereik van een afmelding (05-10)', () => {
+  const metSpion = () => {
+    const signOut = vi.fn(async (_opties?: { scope?: 'local' | 'global' }) => ({ error: null }));
+    return { signOut, client: { signOut, storageKey: 'sb-project-auth-token' } };
+  };
+
+  it('de knop Afmelden op een eigen toestel: alleen dit toestel', async () => {
+    const { signOut, client } = metSpion();
+    await meldAfBijSupabase(client, bereikVanAfmelding(false));
+    expect(signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('de knop Afmelden op een gedeeld toestel: elke sessie van het account', async () => {
+    const { signOut, client } = metSpion();
+    await meldAfBijSupabase(client, bereikVanAfmelding(true));
+    expect(signOut).toHaveBeenCalledWith({ scope: 'global' });
+  });
+
+  it('zonder bereik (de gedwongen uitlog): elke sessie, zoals altijd', async () => {
+    const { signOut, client } = metSpion();
+    await meldAfBijSupabase(client);
+    expect(signOut).toHaveBeenCalledWith({ scope: 'global' });
+  });
+
+  it('ook met alleen dit toestel gaat een sessie die signOut liet staan uit de opslag', async () => {
+    window.localStorage.setItem('sb-project-auth-token', '{"access_token":"verlopen"}');
+    await meldAfBijSupabase({ signOut: async () => ({ error: new Error('refresh mislukt') }), storageKey: 'sb-project-auth-token' } as never, 'local');
+    expect(window.localStorage.getItem('sb-project-auth-token')).toBeNull();
   });
 });
 

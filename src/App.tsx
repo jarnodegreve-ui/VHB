@@ -19,7 +19,7 @@ import type { Session } from '@supabase/supabase-js';
 import { View, User, isStaf } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { LOGIN_MELDING_KEY, vergeetEffectiefThema, type ToastEventDetail } from './lib/ui';
-import { AFGEMELD, bevestigGebruiker, borgGebruiker, kanHerladen, magProfiel, meldAfBijSupabase, onthoudGebruiker, wisPriveCaches } from './lib/afmelden';
+import { AFGEMELD, type AfmeldBereik, bereikVanAfmelding, bevestigGebruiker, borgGebruiker, kanHerladen, magProfiel, meldAfBijSupabase, onthoudGebruiker, wisPriveCaches } from './lib/afmelden';
 import { apiFetch, isToestelGeblokkeerd, vernieuwSessie } from './lib/api';
 import { laadfoutOnderdrukt } from './app/laadfout';
 import { lazyWithRetry, metRetry } from './lib/lazyRetry';
@@ -896,15 +896,17 @@ export default function App() {
 
   /** Afmelden bij Supabase, daarna de afronding. De push-afmelding gaat
    *  voor: die heeft nog een geldig token nodig. Alles best-effort, het
-   *  afmelden mag nooit blijven hangen. */
-  const meldAf = async () => {
+   *  afmelden mag nooit blijven hangen. `bereik`: alleen dit toestel of elke
+   *  sessie van het account (src/lib/afmelden.ts); de gedwongen uitlog blijft
+   *  bij elke sessie. */
+  const meldAf = async (bereik: AfmeldBereik = 'global') => {
     try {
       if (session?.access_token && isPushSupported()) {
         await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
       }
     } catch { /* best-effort */ }
     // Ook als signOut faalt, is de sessie hierna uit de opslag.
-    await meldAfBijSupabase(supabase?.auth);
+    await meldAfBijSupabase(supabase?.auth, bereik);
     // signOut vuurt SIGNED_OUT en de listener rondt al af; faalt signOut
     // zelf, dan blijft dat event uit en doet deze aanroep het werk.
     await rondAfmeldingAf();
@@ -1244,8 +1246,10 @@ export default function App() {
       console.error('Error ending session:', error);
     }
     // Push-abonnement, Supabase en de afronding (privé-caches, herlaad):
-    // dezelfde weg als de gedwongen uitlog.
-    await meldAf();
+    // dezelfde weg als de gedwongen uitlog. Alleen dit toestel, behalve op
+    // een gedeeld toestel (05-10): afmelden op de computer liet tot dan ook de
+    // eigen telefoon zonder sessie achter.
+    await meldAf(bereikVanAfmelding(gedeeldToestel));
   };
 
   // Gedeeld toestel: na 30 minuten zonder aanraking terug naar het

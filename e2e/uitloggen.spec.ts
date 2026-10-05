@@ -149,6 +149,31 @@ test.describe('afmelden op een gedeeld toestel', () => {
     await expect(page.getByText(NOTITIE_A)).toHaveCount(0);
   });
 
+  // 05-10: tot dan meldde de knop elke sessie van het account af, dus wie zich
+  // op een computer afmeldde, was ook op zijn telefoon afgemeld.
+  test('de knop Uitloggen meldt alleen dit toestel af', async ({ page }) => {
+    await zetOp(page);
+    await page.goto('/');
+    await logIn(page);
+    await expect(bel(page, 'Meldingen (2 ongelezen)')).toBeVisible({ timeout: 15_000 });
+    const afmelding = page.waitForRequest('**/auth/v1/logout**');
+    await meldAf(page);
+    expect(new URL((await afmelding).url()).searchParams.get('scope')).toBe('local');
+    await expect(loginKnop(page)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('op een gedeeld toestel meldt de knop Uitloggen elke sessie van het account af', async ({ page }) => {
+    await zetOp(page);
+    await page.addInitScript(() => window.localStorage.setItem('vhb-gedeeld-toestel', '1'));
+    await page.goto('/');
+    await logIn(page);
+    await expect(bel(page, 'Meldingen (2 ongelezen)')).toBeVisible({ timeout: 15_000 });
+    const afmelding = page.waitForRequest('**/auth/v1/logout**');
+    await meldAf(page);
+    expect(new URL((await afmelding).url()).searchParams.get('scope')).toBe('global');
+    await expect(loginKnop(page)).toBeVisible({ timeout: 15_000 });
+  });
+
   test('de sessie eindigt elders: privé-caches weg, de schil blijft, en de pagina herlaadt naar het inlogscherm', async ({ page }) => {
     const staat = await zetOp(page);
     await page.goto('/');
