@@ -9,7 +9,7 @@ import { ADMIN, seed } from './helpers';
  * een Vercel-functie aanneemt, en het platform weigerde met een 413 zonder
  * JSON ("Maak het bestand kleiner"). De browser pakt het bestand nu in met
  * gzip (src/lib/bestandInpakken.ts). De API is hier nagebootst; de server-kant
- * staat in src/apiIntegration.test.ts (planning-import, ingepakt met gzip).
+ * staat in src/apiIntegratie/ (planning-import, ingepakt met gzip).
  */
 
 const MB = ' MB';

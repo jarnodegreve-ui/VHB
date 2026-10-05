@@ -4,7 +4,7 @@
  * laders, en de periodevalidatie (hooguit 366 dagen). Verlofsaldo heeft geen
  * periodefilter, dus hier krijgt het register één testrapport mét periode
  * erbij; de volledige keten (auth, rollen, echte cijfers) zit in
- * src/apiIntegration.test.ts.
+ * src/apiIntegratie/.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AddressInfo } from 'node:net';

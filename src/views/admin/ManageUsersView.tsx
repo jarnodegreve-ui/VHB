@@ -523,7 +523,7 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
   // Uit dienst is idempotent op de server (POST /api/users/:id/uitdienst):
   // nogmaals op een al gedeactiveerde gebruiker geeft 200 met nullen, zonder
   // meldingen, alleen een extra auditregel "was al gedeactiveerd"
-  // (src/apiIntegration.test.ts). Daarom mag de fouttoast "Opnieuw proberen"
+  // (src/apiIntegratie/). Daarom mag de fouttoast "Opnieuw proberen"
   // tonen; de poging onthoudt gebruiker en reden, ook als de modal intussen dicht is.
   const uitDienstBezig = useRef(false);
   const openUitDienstId = useRef<string | null>(null);

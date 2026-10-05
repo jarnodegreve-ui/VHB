@@ -2,7 +2,7 @@
 /**
  * De query-filters van getSwapsData/getLeaveData (ronde 3): niet-staf leest
  * niet langer de hele tabel. Hier alleen de vorm van de query; dat de routes
- * het filter meegeven (en het JS-vangnet behouden) zit in apiIntegration.
+ * het filter meegeven (en het JS-vangnet behouden) zit in src/apiIntegratie/.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

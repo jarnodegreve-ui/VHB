@@ -4,7 +4,7 @@
  * (413 zonder JSON, melding "Maak het bestand kleiner"). Deze suite bewaakt de
  * client-kant: inpakken met gzip (en terugvallen zonder CompressionStream),
  * de controle vooraf op de platformgrens, en een melding die grootte en grens
- * noemt. De keten met de echte routes staat in src/apiIntegration.test.ts
+ * noemt. De keten met de echte routes staat in src/apiIntegratie/
  * (planning-import, grote werkmap).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
