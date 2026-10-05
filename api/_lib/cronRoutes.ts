@@ -35,7 +35,7 @@ import { viewUrl } from "./collectie.js";
 import { opruimBudget, ruimWeesBijlagenOp } from "./bijlagenOpruim.js";
 
 // --- Back-up: alle collecties als één JSON ---
-const buildBackupPayload = async () => {
+export const buildBackupPayload = async () => {
   const [users, planning, services, diversions, updates, leave, swaps, planningCodes, planningMatrixRows, coverageExpectations, activityLog] = await Promise.all([
     getUsersData(),
     getPlanningData(),
