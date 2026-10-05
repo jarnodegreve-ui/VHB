@@ -58,6 +58,11 @@ jobs:
       - name: Migratie-manifest
         run: npm run db:controle
 
+      # Lagen uit elkaar (05-10): shared op zichzelf, geen server-code in de
+      # browser, de opslaglaag alleen via api/storage.ts. Zie het script.
+      - name: Grenzen-lint
+        run: npm run lint:grenzen
+
       - name: Unit-tests
         run: npm test
 
