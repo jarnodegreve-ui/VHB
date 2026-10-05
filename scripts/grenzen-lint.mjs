@@ -16,7 +16,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
-const IS_TEST = /\.(test|spec)\.tsx?$|\/__fixtures__\//;
+// Ook het gedeelde harnas van de API-integratietests telt als test.
+const IS_TEST = /\.(test|spec)\.tsx?$|\/__fixtures__\/|^src\/apiIntegratie\/harnas\.ts$/;
 
 const REGELS = [
   { naam: 'shared/ importeert uit src/ of api/', map: 'shared', verboden: /^(src|api)\//, tests: false },
