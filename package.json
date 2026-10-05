@@ -11,6 +11,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "lint:design": "node scripts/design-lint.mjs",
+    "lint:grenzen": "node scripts/grenzen-lint.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
