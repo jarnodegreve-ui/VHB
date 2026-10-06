@@ -197,7 +197,10 @@ export async function registreerZiekmeldingIntern(
     // er tegen adressenlekken bij bulk naar alle chauffeurs; voor een handvol
     // planners die elkaars adres kennen is los versturen veiliger én leest de
     // mail normaal. Volgorde: één voor één, fouten loggen maar niet blokkeren.
-    const recipients = planningRollen.filter((u) => u.email).map((u) => u.email as string);
+    // Alleen admins krijgen de mail (Jarno 06-10: "ziektemelding mag
+    // algemeen uitstaan, behalve voor admin"); planners houden de push en
+    // het Telegram-bericht. De mailsoort moet in Beheer › Mails aanstaan.
+    const recipients = planningRollen.filter((u) => u.role === "admin" && u.email).map((u) => u.email as string);
     // Openstaande diensten in de mail (zelfde term als het scherm): "do 6 aug, 4407". Geen diensten in
     // de periode (ziek op vrije dagen) → dat óók gewoon zeggen, dan hoeft de
     // planner het rooster niet open te doen om niets te vinden.
