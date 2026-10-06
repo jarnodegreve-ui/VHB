@@ -21,17 +21,16 @@ import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { LOGIN_MELDING_KEY, vergeetEffectiefThema, type ToastEventDetail } from './lib/ui';
 import { AFGEMELD, type AfmeldBereik, bereikVanAfmelding, bevestigGebruiker, borgGebruiker, kanHerladen, magProfiel, meldAfBijSupabase, onthoudGebruiker, wisPriveCaches } from './lib/afmelden';
 import { apiFetch, isToestelGeblokkeerd, vernieuwSessie } from './lib/api';
-import { laadfoutOnderdrukt } from './app/laadfout';
+import { useToasts } from './app/useToasts';
 import { lazyWithRetry, metRetry } from './lib/lazyRetry';
 import { WARMUP_VIEWS, prefetchView, warmViews } from './app/viewLoaders';
-import { addBreadcrumb, reportHandledError, setMonitoringUser } from './lib/monitoring';
+import { addBreadcrumb, setMonitoringUser } from './lib/monitoring';
 import { useAanwezigheid } from './lib/presence';
 import { meldLive } from './lib/liveSignaal';
 import { fetchPushPublicKey, getExistingSubscription, hersyncPushSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { useThema } from './app/useThema';
-import { Toast, ToastOpties } from './components/ToastStack';
 import { abonneerOnline, isOnlineNu, useOnline } from './lib/useOnline';
 import { useOnderhoud } from './app/useOnderhoud';
 import type { Werkvoorraad } from './lib/werkvoorraad';
@@ -97,7 +96,6 @@ export default function App() {
   // Admin-only preview: toont het portaal (nav + dashboard) zoals een chauffeur
   // het ziet. Puur visueel — rechten/data blijven admin. Reset bij herladen.
   const [previewChauffeur, setPreviewChauffeur] = useState(false);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   // Uitnodiging uit de mail (#uitnodiging=<code>, shared/uitnodiging.ts). De
   // code blijft in de adresbalk tot de landing geladen is (die haalt haar
@@ -170,9 +168,6 @@ export default function App() {
     fetchUsers, fetchPlanning, fetchDiversions,
     fetchMeldingen, ongelezenMeldingen, markeerMeldingenGelezenVoorScherm,
   } = appData;
-  // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
-  // verwijderde dan twee meldingen tegelijk).
-  const toastIdRef = useRef(0);
   // Staat de sessie op uitloggen? Dan zijn alle lopende calls gedoemd en
   // onderdrukken we hun individuele fout-toasts (zie showToast/forceSignOut).
   const sessieBeeindigdRef = useRef(false);
@@ -180,11 +175,13 @@ export default function App() {
   // call met een toestel-403 en is dat scherm de melding: geen laadfout- of
   // fout-toasts die zich opstapelen en na de goedkeuring verschijnen.
   const toestelGeblokkeerdRef = useRef(false);
-  // Laadfouten van gelijktijdige calls verzamelen: bij een hik (netwerk,
-  // uitrol) faalt de hele reeks tegelijk en kreeg je vier losse rode
-  // meldingen. We bundelen ze tot één melding mét "Opnieuw proberen".
-  const laadfoutenRef = useRef<Set<string>>(new Set());
-  const laadfoutTimerRef = useRef<number | null>(null);
+  // Toasts en de gebundelde laadfout (src/app/useToasts.ts). De twee vlaggen
+  // hierboven blijven van de sessie; de hook leest ze alleen.
+  const { toasts, showToast, dismissToast, meldLaadfout, meldOnderhoud, wisFouten, wisToasts } = useToasts({
+    sessieBeeindigdRef,
+    toestelGeblokkeerdRef,
+    opnieuwLaden: () => { void refreshAll(); },
+  });
   // Toestel-whitelist: 'pending'/'revoked' → geblokkeerd-scherm i.p.v. de app.
   const [deviceBlocked, zetDeviceBlockedState] = useState<'pending' | 'revoked' | null>(null);
   // Eén setter voor state én ref (de ref lezen showToast/meldLaadfout
@@ -192,14 +189,7 @@ export default function App() {
   // al aan laadfouten klaarstond.
   const setDeviceBlocked = (status: 'pending' | 'revoked' | null) => {
     toestelGeblokkeerdRef.current = status !== null;
-    if (status !== null) {
-      laadfoutenRef.current.clear();
-      if (laadfoutTimerRef.current !== null) {
-        window.clearTimeout(laadfoutTimerRef.current);
-        laadfoutTimerRef.current = null;
-      }
-      setToasts((current) => current.filter((t) => t.tone !== 'error'));
-    }
+    if (status !== null) wisFouten();
     zetDeviceBlockedState(status);
   };
   // Reden van een gedwongen uitlog, door te geven aan het inlogscherm.
@@ -510,80 +500,9 @@ export default function App() {
     }
   };
 
-  const dismissToast = (id: number) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id));
-  };
-
   // Onderhoudsmodus (src/app/useOnderhoud.ts): banner boven de inhoud zolang
   // actief; bij een geblokkeerde schrijfactie één info-toast.
-  const onderhoudMeldingRef = useRef(0);
-  const onderhoud = useOnderhoud(Boolean(currentUser), (tekst) => {
-    onderhoudMeldingRef.current = Date.now();
-    showToast(tekst, 'info');
-  });
-
-  const showToast = (message: string, tone: Toast['tone'] = 'info', action?: Toast['action'], opties?: ToastOpties) => {
-    // Sessie loopt af: de catch-blokken van alle lopende calls komen hier
-    // tegelijk binnen ("Kon de verlofaanvragen niet laden", "…de dienstruilen
-    // niet laden", …). Dat waren vijf rode toasts én vijf regels in de
-    // foutenlog voor één oorzaak — 142 meldingen in twee weken, waarvan het
-    // leeuwendeel afgeleid. De sessie zelf is al gemeld op het inlogscherm.
-    if (tone === 'error' && (sessieBeeindigdRef.current || toestelGeblokkeerdRef.current)) return;
-    // Schrijfblok van de onderhoudsmodus: de info-toast uit useOnderhoud is
-    // de melding; de rode toast die de aanroeper vlak daarna toont (en het
-    // foutrapport dat daaraan hangt) is geen fout van de app.
-    if (tone === 'error' && Date.now() - onderhoudMeldingRef.current < 3000) return;
-    // Elke fout-toast is een gebroken flow — meld die ook aan de monitoring,
-    // anders blijven afgehandelde fouten (catch-blokken) onzichtbaar.
-    if (tone === 'error') reportHandledError(message);
-    const id = ++toastIdRef.current;
-    const ongedaan = opties?.ongedaan === true;
-    setToasts((current) => {
-      // Dezelfde melding niet stapelen: twee schermen die dezelfde bron
-      // ophalen gaven anders twee identieke toasts onder elkaar. Ongedaan-
-      // toasts wél: twee snel na elkaar verwijderde items hebben elk hun
-      // eigen weg terug nodig.
-      if (!ongedaan && current.some((t) => t.message === message && t.tone === tone)) return current;
-      return [...current, { id, message, tone, action, ongedaan, duurMs: opties?.duurMs }];
-    });
-    // Ongedaan-toasts tellen zelf af in ToastStack (pauze bij hover/focus).
-    if (ongedaan) return;
-    // Fout-toasts bevatten vaak instructies ("probeer opnieuw") — die moeten
-    // lang genoeg blijven staan om rustig te lezen. Succes/info mag snel weg.
-    window.setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, opties?.duurMs ?? (tone === 'error' ? 10000 : 4200));
-  };
-
-  /**
-   * Eén melding voor alles wat tegelijk misging. De app haalt bij het openen
-   * (en bij elke verversing) een stuk of acht bronnen parallel op; bij een
-   * netwerkhik of tijdens een uitrol faalt die hele reeks, en dan kreeg je
-   * vier tot vijf losse rode toasts voor één oorzaak — gemeten op 07-08.
-   * We verzamelen de namen kort en tonen daarna één melding met een knop die
-   * alles opnieuw ophaalt, i.p.v. de gebruiker naar 'vernieuw de pagina' te
-   * sturen.
-   */
-  const laadfoutStaat = () => ({ sessieBeeindigd: sessieBeeindigdRef.current, toestelGeblokkeerd: toestelGeblokkeerdRef.current });
-  const meldLaadfout = (bron: string, fout?: unknown) => {
-    if (laadfoutOnderdrukt(laadfoutStaat(), fout)) return;
-    laadfoutenRef.current.add(bron);
-    if (laadfoutTimerRef.current !== null) return;
-    laadfoutTimerRef.current = window.setTimeout(() => {
-      laadfoutTimerRef.current = null;
-      const bronnen = [...laadfoutenRef.current];
-      laadfoutenRef.current.clear();
-      if (bronnen.length === 0 || laadfoutOnderdrukt(laadfoutStaat())) return;
-      const opsomming = bronnen.length === 1
-        ? bronnen[0]
-        : `${bronnen.slice(0, -1).join(', ')} en ${bronnen[bronnen.length - 1]}`;
-      showToast(
-        `Kon ${opsomming} niet laden. Controleer je verbinding.`,
-        'error',
-        { label: 'Opnieuw proberen', run: () => { void refreshAll(); } },
-      );
-    }, 400);
-  };
+  const onderhoud = useOnderhoud(Boolean(currentUser), (tekst) => meldOnderhoud(tekst));
 
   useEffect(() => {
     let isMounted = true;
@@ -877,7 +796,7 @@ export default function App() {
     sessieBeeindigdRef.current = true;
     setAuthReady(!herlaad);
     wisAccountStaat();
-    setToasts([]);
+    wisToasts();
     vergeetEffectiefThema();
     // De privé-caches gaan weg en zijn van niemand meer: wie hierna start,
     // doorloopt de volledige controle (zie AFGEMELD).
