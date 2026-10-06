@@ -850,3 +850,99 @@ describe('rapporten ziekte en verlof (GET /api/rapporten/:id)', () => {
     expect(perType.json.totalen).toEqual({ type_betaald_verlof: 3, totaal: 3 });
   });
 });
+
+describe('ziekte is geen verlof (Jarno 06-10): geen mail of push naar de chauffeur, eigen logregels', () => {
+  const ziek = { id: 'z-b1', userId: '4', startDate: '2026-08-25', endDate: '2026-09-30', type: 'ziekte', status: 'approved', comment: 'griep', createdAt: '2026-08-25T08:00:00Z', decidedAt: '2026-08-25T08:00:00Z' };
+  const verlofMails = () => mem.emailsSent.filter((m) => (m.context ?? '').startsWith('leave:'));
+  const pushesNaarChauffeurB = () => mem.pushesSent.filter((p) => p.userIds.includes('4'));
+  const beslisMails = async () => vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mock.calls.length;
+
+  beforeEach(async () => {
+    mem.leave = [...mem.leave, ziek];
+    vi.mocked((await import('../../api/email.js')).sendLeaveDecisionEmail).mockClear();
+  });
+
+  it('intrekken in Beheer › Ziekte (POST, status cancelled): "Ziekmelding ingetrokken", geen "Verlof geannuleerd", geen mail, geen push', async () => {
+    const res = await api('POST', '/api/leave', { token: 'tok-admin', body: mem.leave.map((l: any) => (l.id === 'z-b1' ? { ...l, status: 'cancelled' } : l)) });
+    expect(res.status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'z-b1')?.status).toBe('cancelled');
+    const log = mem.activity.find((a: any) => a.entityId === 'z-b1');
+    expect(log?.action).toBe('Ziekmelding ingetrokken');
+    expect(log?.message).toContain('Chauffeur B');
+    expect(mem.activity.some((a: any) => a.action === 'Verlof geannuleerd')).toBe(false);
+    expect(await beslisMails()).toBe(0);
+    expect(verlofMails()).toHaveLength(0);
+    expect(pushesNaarChauffeurB()).toHaveLength(0);
+  });
+
+  it('einddatum bijstellen: "Ziekmelding aangepast" met de oude en de nieuwe periode, geen mail of push', async () => {
+    const res = await api('POST', '/api/leave', { token: 'tok-planner', body: mem.leave.map((l: any) => (l.id === 'z-b1' ? { ...l, endDate: '2026-09-15' } : l)) });
+    expect(res.status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'z-b1')?.endDate).toBe('2026-09-15');
+    const log = mem.activity.find((a: any) => a.entityId === 'z-b1');
+    expect(log?.action).toBe('Ziekmelding aangepast');
+    expect(log?.message).toContain('25/08/2026 t/m 30/09/2026');
+    expect(log?.message).toContain('25/08/2026 t/m 15/09/2026');
+    expect(await beslisMails()).toBe(0);
+    expect(verlofMails()).toHaveLength(0);
+    expect(pushesNaarChauffeurB()).toHaveLength(0);
+  });
+
+  it('een ongewijzigde echo van een ziekmelding geeft geen logregel', async () => {
+    const res = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave] });
+    expect(res.status).toBe(200);
+    expect(mem.activity.find((a: any) => a.entityId === 'z-b1')).toBeUndefined();
+  });
+
+  it('een planner die een ziekte via de verloflijst vastlegt: "Ziekmelding geregistreerd", niet "Verlof geregistreerd", geen mail of push', async () => {
+    const nieuw = { id: 'z-b2', userId: '4', startDate: '2026-10-01', endDate: '2026-10-02', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-10-06T08:00:00Z', decidedAt: '2026-10-06T08:00:00Z' };
+    const res = await api('POST', '/api/leave', { token: 'tok-planner', body: [...mem.leave, nieuw] });
+    expect(res.status).toBe(200);
+    const log = mem.activity.find((a: any) => a.entityId === 'z-b2');
+    expect(log?.action).toBe('Ziekmelding geregistreerd');
+    expect(log?.message).toContain('Pieter Planner');
+    expect(await beslisMails()).toBe(0);
+    expect(verlofMails()).toHaveLength(0);
+    expect(pushesNaarChauffeurB()).toHaveLength(0);
+  });
+
+  it('een verwijderde ziekmelding heet in het log "Ziekmelding verwijderd", niet "Verlof ingetrokken"', async () => {
+    const res = await api('POST', '/api/leave', { token: 'tok-admin', body: mem.leave.filter((l: any) => l.id !== 'z-b1') });
+    expect(res.status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'z-b1')).toBeUndefined();
+    expect(mem.activity.find((a: any) => a.action === 'Ziekmelding verwijderd')?.message).toBe('1 ziekmelding verwijderd.');
+    expect(mem.activity.some((a: any) => a.action === 'Verlof ingetrokken')).toBe(false);
+  });
+
+  it('een chauffeur kan zichzelf niet ziek melden via een verlofaanvraag (403)', async () => {
+    const own = mem.leave.filter((l: any) => l.userId === '3');
+    const poging = { id: 'z-a1', userId: '3', startDate: '2026-11-02', endDate: '2026-11-03', type: 'ziekte', status: 'pending', comment: '', createdAt: '2026-10-06T08:00:00Z' };
+    const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, poging] });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toContain('via de planning');
+    expect(mem.leave.find((l: any) => l.id === 'z-a1')).toBeUndefined();
+  });
+
+  it('PATCH op een ziekmelding: goedkeuren of afwijzen is 400, intrekken kan en stuurt niets naar de chauffeur', async () => {
+    expect((await api('PATCH', '/api/leave/z-b1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'approved' } })).status).toBe(400);
+    const afwijzen = await api('PATCH', '/api/leave/z-b1', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'approved', reden: 'nee' } });
+    expect(afwijzen.status).toBe(400);
+    expect(afwijzen.json.error).toContain('Beheer › Ziekte');
+    expect(mem.leave.find((l: any) => l.id === 'z-b1')?.status).toBe('approved');
+
+    const res = await api('PATCH', '/api/leave/z-b1', { token: 'tok-planner', body: { status: 'cancelled', ifStatus: 'approved' } });
+    expect(res.status).toBe(200);
+    expect(mem.leave.find((l: any) => l.id === 'z-b1')?.status).toBe('cancelled');
+    expect(mem.activity.find((a: any) => a.entityId === 'z-b1')?.action).toBe('Ziekmelding ingetrokken');
+    expect(await beslisMails()).toBe(0);
+    expect(verlofMails()).toHaveLength(0);
+    expect(pushesNaarChauffeurB()).toHaveLength(0);
+  });
+
+  it('gewoon verlof blijft gewoon verlof: een goedkeuring stuurt nog altijd mail en push naar de aanvrager', async () => {
+    const res = await api('PATCH', '/api/leave/l-b1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending' } });
+    expect(res.status).toBe(200);
+    expect(await beslisMails()).toBe(1);
+    expect(mem.pushesSent.find((p) => p.payload.title === 'Verlof goedgekeurd')?.userIds).toEqual(['4']);
+  });
+});

@@ -43,6 +43,8 @@ describe('apiFetch, stil', () => {
     // `stil` is een optie van apiFetch, geen fetch-optie.
     expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('stil');
     await apiFetch('/api/swaps/w1/gezien', { method: 'POST' });
-    expect(markeerEigenSchrijfactie).toHaveBeenCalledTimes(1);
+    // Twee keer: bij het vertrek (de realtime-echo van de schrijfactie kan
+    // vóór het antwoord binnenkomen) en na het antwoord.
+    expect(markeerEigenSchrijfactie).toHaveBeenCalledTimes(2);
   });
 });

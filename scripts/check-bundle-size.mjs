@@ -178,7 +178,14 @@ const DEELBUDGET_KB = {
   // mogen niet afhangen van een chunk die er dan misschien niet is. Onderzocht:
   // `downloadBlob` uit de startbundel halen geeft 0,24 kB terug, maar zet de
   // chauffeur-warmup over zijn eigen budget. 76,5 = de CI-meting plus ±0,45 kB.
-  index: 76.5,
+  // 06-10 (ziekte is geen verlof, #711): 76,5 → 77. Geen nieuwe dependency.
+  // Het onderscheid ziekte/verlof in de startbundel (verlofbadge zonder
+  // ziekte in App.tsx, de toast in de datalaag, het type uit het
+  // realtime-event voor het live-signaal, de vroege markering van een eigen
+  // schrijfactie in apiFetch) kost ±0,2 kB: lokaal 76,32, op de CI-runner
+  // 76,61 (die meet de index ±0,3 kB zwaarder). Dat kan niet lui laden: het
+  // zijn de startschermen zelf. 77 = de CI-meting plus ±0,4 kB.
+  index: 77,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB

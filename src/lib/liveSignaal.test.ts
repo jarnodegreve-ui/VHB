@@ -44,3 +44,16 @@ describe('liveSignaal', () => {
     expect(toasts).toHaveLength(1);
   });
 });
+
+describe('liveSignaal, ziekte', () => {
+  it('heeft een eigen label, los van verlof, en een eigen throttle', () => {
+    resetLiveSignaal();
+    const { toasts, stop } = vang();
+    const t0 = 12_000_000;
+    expect(meldLive('ziekte', t0)).toBe(true);
+    expect(meldLive('verlof', t0 + 10)).toBe(true);
+    expect(meldLive('ziekte', t0 + 20)).toBe(false);
+    expect(toasts.map((t) => t.message)).toEqual(['Ziekmelding bijgewerkt', 'Verlof bijgewerkt']);
+    stop();
+  });
+});

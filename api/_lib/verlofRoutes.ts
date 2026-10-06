@@ -106,14 +106,14 @@ export async function registreerZiekmeldingIntern(
     const previousLeave = await getLeaveData();
     // Duplicaat-/overlapcheck: een tweede ziekmelding over (deels) dezelfde
     // periode maakt geen extra record maar verwijst naar het bestaande —
-    // verlengen of corrigeren gaat via Verlofbeheer.
+    // verlengen of corrigeren gaat via Beheer › Ziekte.
     const overlappend = previousLeave.find((l: any) =>
       l?.status === "approved" && l?.type === "ziekte" && String(l.userId) === forUserId &&
       String(l.startDate) <= endDate && startDate <= String(l.endDate),
     );
     if (overlappend) {
       const p = PERIODE_DMJ(overlappend.startDate, overlappend.endDate);
-      return { fout: { status: 409, error: `${target.name} staat al ziek gemeld voor ${p}. Pas die melding aan via Verlofbeheer.` } };
+      return { fout: { status: 409, error: `${target.name} staat al ziek gemeld voor ${p}. Pas die melding aan via Beheer › Ziekte.` } };
     }
 
     const record = {
@@ -197,7 +197,10 @@ export async function registreerZiekmeldingIntern(
     // er tegen adressenlekken bij bulk naar alle chauffeurs; voor een handvol
     // planners die elkaars adres kennen is los versturen veiliger én leest de
     // mail normaal. Volgorde: één voor één, fouten loggen maar niet blokkeren.
-    const recipients = planningRollen.filter((u) => u.email).map((u) => u.email as string);
+    // Alleen admins krijgen de mail (Jarno 06-10: "ziektemelding mag
+    // algemeen uitstaan, behalve voor admin"); planners houden de push en
+    // het Telegram-bericht. De mailsoort moet in Beheer › Mails aanstaan.
+    const recipients = planningRollen.filter((u) => u.role === "admin" && u.email).map((u) => u.email as string);
     // Openstaande diensten in de mail (zelfde term als het scherm): "do 6 aug, 4407". Geen diensten in
     // de periode (ziek op vrije dagen) → dat óók gewoon zeggen, dan hoeft de
     // planner het rooster niet open te doen om niets te vinden.
@@ -276,6 +279,13 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
     if (status !== current.status && ["rejected", "cancelled"].includes(String(current.status))) {
       return { fout: { status: 409, error: "Deze verlofaanvraag is al afgehandeld en kan niet meer van status veranderen." } };
     }
+    // Ziekte is geen verlof (Jarno 06-10): een ziekmelding wordt niet
+    // goedgekeurd of afgewezen, hoogstens ingetrokken, en de chauffeur krijgt
+    // er nooit een mail of push over.
+    const isZiekte = String(current.type) === "ziekte";
+    if (isZiekte && status !== "cancelled") {
+      return { fout: { status: 400, error: "Een ziekmelding wordt niet goedgekeurd of afgewezen. Bijstellen of intrekken kan via Beheer › Ziekte." } };
+    }
 
     const decidedAt = new Date().toISOString();
     const updated = { ...current, status, decidedAt, ...(reden ? { beslisReden: reden } : {}) };
@@ -301,13 +311,22 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
       rejected: "Verlof afgewezen",
       cancelled: "Verlof geannuleerd",
     };
-    const action = actionLabels[status]!;
+    const action = isZiekte ? "Ziekmelding ingetrokken" : actionLabels[status]!;
     // De reden mee in het log: zo staat hij ook in de wijzigingsgeschiedenis
     // van de aanvraag, niet alleen op het record zelf.
-    await logActivity(actorReq(actor), "leave", action, `${requesterName}, ${typeLabel} (${period}).${reden ? ` Reden: ${reden}` : ""}`, { type: "leave", id });
+    await logActivity(
+      actorReq(actor),
+      "leave",
+      action,
+      isZiekte
+        ? `${requesterName}, ziek (${period}), ingetrokken door ${actor.name || "Planning"}.`
+        : `${requesterName}, ${typeLabel} (${period}).${reden ? ` Reden: ${reden}` : ""}`,
+      { type: "leave", id },
+    );
 
-    // E-mail + push naar de aanvrager — niet de actor zelf.
-    if (String(actor.id) !== String(current.userId)) {
+    // E-mail + push naar de aanvrager — niet de actor zelf, en nooit over
+    // ziekte (zie hierboven).
+    if (!isZiekte && String(actor.id) !== String(current.userId)) {
       if (requester?.email) {
         await sendLeaveDecisionEmail({
           to: requester.email,
@@ -560,6 +579,11 @@ export function mountVerlofRoutes(app: express.Express) {
           if (next.status !== "pending") {
             return res.status(403).json({ error: "Niet toegestaan: nieuwe verlofaanvragen starten als 'pending'." });
           }
+          // Ziekte is geen aanvraag (Jarno 06-10): een chauffeur meldt zich
+          // telefonisch ziek bij de planning, die registreert het.
+          if (String(next.type) === "ziekte") {
+            return res.status(403).json({ error: "Ziek melden gaat via de planning, niet via een verlofaanvraag." });
+          }
           if (!RECORD_ID_RE.test(String(next.id ?? ""))) {
             return res.status(400).json({ error: "Ongeldig aanvraag-id." });
           }
@@ -656,19 +680,50 @@ export function mountVerlofRoutes(app: express.Express) {
       });
       await saveLeaveData(recordsToWrite, leaveIdsToDelete, { alleenPending: !isStafRol(req.appUser!.role) });
 
-      if (leaveIdsToDelete.length > 0) {
+      // Ziekte apart tellen: een verwijderde ziekmelding is geen ingetrokken
+      // verlofaanvraag.
+      const verwijderdeZiekmeldingen = leaveIdsToDelete.filter((id) => String(previousById.get(id)?.type) === "ziekte").length;
+      const verwijderdVerlof = leaveIdsToDelete.length - verwijderdeZiekmeldingen;
+      if (verwijderdVerlof > 0) {
         await logActivity(
           req,
           "leave",
           "Verlof ingetrokken",
-          `${leaveIdsToDelete.length} verlofaanvra${leaveIdsToDelete.length === 1 ? "ag" : "gen"} ingetrokken/verwijderd.`,
+          `${verwijderdVerlof} verlofaanvra${verwijderdVerlof === 1 ? "ag" : "gen"} ingetrokken/verwijderd.`,
+        );
+      }
+      if (verwijderdeZiekmeldingen > 0) {
+        await logActivity(
+          req,
+          "leave",
+          "Ziekmelding verwijderd",
+          `${verwijderdeZiekmeldingen} ziekmelding${verwijderdeZiekmeldingen === 1 ? "" : "en"} verwijderd.`,
         );
       }
 
+      const actorNaam = req.appUser?.name || "Planning";
       for (const next of recordsToWrite) {
         const prev = previousById.get(next.id);
         const period = PERIODE_DMJ(next.startDate, next.endDate);
         const typeLabel = formatLeaveType(next.type);
+
+        // Ziekte is geen verlof (Jarno 06-10): een ziekmelding wordt niet
+        // goedgekeurd, afgewezen of geannuleerd, ze wordt geregistreerd,
+        // bijgesteld of ingetrokken. De chauffeur krijgt er nooit een mail of
+        // push over (gezondheidsgegevens, en hij weet zelf dat hij ziek is);
+        // de planning is bij de registratie al verwittigd (sick-report).
+        // Alleen het activiteitenlog houdt de wijziging bij.
+        if (String(next.type) === "ziekte" || String(prev?.type) === "ziekte") {
+          const naam = userName(next.userId);
+          if (!prev) {
+            await logActivity(req, "leave", "Ziekmelding geregistreerd", `${naam} ziek gemeld voor ${period} (door ${actorNaam}).`, { type: "leave", id: next.id });
+          } else if (String(prev.status) !== String(next.status) && String(next.status) === "cancelled") {
+            await logActivity(req, "leave", "Ziekmelding ingetrokken", `${naam}, ziek (${period}), ingetrokken door ${actorNaam}.`, { type: "leave", id: next.id });
+          } else if (String(prev.startDate) !== String(next.startDate) || String(prev.endDate) !== String(next.endDate)) {
+            await logActivity(req, "leave", "Ziekmelding aangepast", `${naam}: ziek ${PERIODE_DMJ(prev.startDate, prev.endDate)} wordt ${period} (door ${actorNaam}).`, { type: "leave", id: next.id });
+          }
+          continue;
+        }
 
         if (!prev) {
           // Planner/admin die verlof namens een chauffeur vastlegt (mondeling

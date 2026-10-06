@@ -17,8 +17,17 @@ import { supabase } from './supabase';
  * Debouncing: meerdere events binnen 400ms triggeren één refetch per
  * tabel, niet één per event (anders bij bulk-approve = N refetches).
  */
+/** Welke collectie een event op `leave` raakt: ziekte of verlof. Realtime
+ *  geeft de rij mee (de browser heeft SELECT op `leave`); bij een DELETE
+ *  alleen de sleutel, dan weten we het niet en geldt verlof. */
+export type LeaveSoort = 'verlof' | 'ziekte';
+export const leaveSoortUitEvent = (payload: unknown): LeaveSoort => {
+  const rij = payload as { new?: { type?: unknown }; old?: { type?: unknown } } | null | undefined;
+  return (rij?.new?.type ?? rij?.old?.type) === 'ziekte' ? 'ziekte' : 'verlof';
+};
+
 type RealtimeRefetchers = {
-  refetchLeave: () => void | Promise<void>;
+  refetchLeave: (soort?: LeaveSoort) => void | Promise<void>;
   refetchSwaps: () => void | Promise<void>;
   refetchDiversions: () => void | Promise<void>;
   refetchUpdates: () => void | Promise<void>;
@@ -164,7 +173,12 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'leave' },
-        () => debounce('leave', () => refRef.current.refetchLeave?.()),
+        (payload) => {
+          // Meerdere events in het venster = één refetch; de laatste zegt om
+          // welke collectie het ging.
+          const soort = leaveSoortUitEvent(payload);
+          debounce('leave', () => refRef.current.refetchLeave?.(soort));
+        },
       );
     // Meldingencentrum: alleen de eigen rijen (server-filter op user_id;
     // RLS laat toch niets anders door). Eén event = één refetch van de lijst.
