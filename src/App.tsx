@@ -274,11 +274,8 @@ export default function App() {
     refetchLeave: (soort) => {
       // Ziekte is geen verlof: een gewijzigde ziekmelding meldt zich bij staf
       // als "Ziekmelding bijgewerkt" en bij een chauffeur helemaal niet.
-      if (soort === 'ziekte') {
-        if (currentUser && isStaf(currentUser.role)) meldLive('ziekte');
-      } else {
-        meldLive('verlof');
-      }
+      if (soort !== 'ziekte') meldLive('verlof');
+      else if (currentUser && isStaf(currentUser.role)) meldLive('ziekte');
       // Verlof stuurt de dekking (afwezige = gat): voor staf meteen mee
       // verversen, anders liepen dashboard en topbar-badge achter.
       if (currentUser && isStaf(currentUser.role)) refreshCoverageGaps();

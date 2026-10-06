@@ -23,8 +23,7 @@ import { supabase } from './supabase';
 export type LeaveSoort = 'verlof' | 'ziekte';
 export const leaveSoortUitEvent = (payload: unknown): LeaveSoort => {
   const rij = payload as { new?: { type?: unknown }; old?: { type?: unknown } } | null | undefined;
-  const type = rij?.new?.type ?? rij?.old?.type;
-  return type === 'ziekte' ? 'ziekte' : 'verlof';
+  return (rij?.new?.type ?? rij?.old?.type) === 'ziekte' ? 'ziekte' : 'verlof';
 };
 
 type RealtimeRefetchers = {
