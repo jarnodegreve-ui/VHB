@@ -29,3 +29,14 @@ describe('kiesCatchUp', () => {
     expect(kiesCatchUp(90_000, 90_000)).toBe('licht');
   });
 });
+
+describe('leaveSoortUitEvent', () => {
+  it('leest het type uit de nieuwe of oude rij; zonder rij geldt verlof', async () => {
+    const { leaveSoortUitEvent } = await import('./realtime');
+    expect(leaveSoortUitEvent({ new: { type: 'ziekte' } })).toBe('ziekte');
+    expect(leaveSoortUitEvent({ new: { type: 'betaald_verlof' } })).toBe('verlof');
+    expect(leaveSoortUitEvent({ old: { type: 'ziekte' } })).toBe('ziekte');
+    expect(leaveSoortUitEvent({ old: { id: 'x' } })).toBe('verlof');
+    expect(leaveSoortUitEvent(undefined)).toBe('verlof');
+  });
+});

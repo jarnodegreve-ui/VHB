@@ -45,6 +45,17 @@ export const TOESTEL_GEBLOKKEERD = 'toestel_geblokkeerd';
 export const isToestelGeblokkeerd = (err: unknown): boolean =>
   !!err && typeof err === 'object' && (err as { code?: unknown }).code === TOESTEL_GEBLOKKEERD;
 
+/** Code op de Error die apiFetch gooit bij 403 mfa_required (staf zonder
+ *  code in deze sessie). */
+export const TWEE_STAPS_VEREIST = 'twee_staps_vereist';
+
+/** Faalde deze call omdat de tweede stap nog ontbreekt? Dan is het codescherm
+ *  de melding en hoort er geen laadfout-toast bij (06-10: bij elke aanmelding
+ *  van staf vroeg de app al gegevens op vóór de code, en elke 403 werd
+ *  "Kon … niet laden. Controleer je verbinding."). */
+export const isTweeStapsVereist = (err: unknown): boolean =>
+  !!err && typeof err === 'object' && (err as { code?: unknown }).code === TWEE_STAPS_VEREIST;
+
 export type ApiFetchInit = RequestInit & {
   /** Expliciet token i.p.v. de huidige sessie (bv. direct na inloggen). */
   accessToken?: string;
@@ -155,6 +166,12 @@ async function verstuur(
   }
 
   const isLezen = !init.method || init.method.toUpperCase() === 'GET';
+  // Eigen schrijfactie al bij het vertrek markeren (06-10): de realtime-echo
+  // van de databaseschrijfactie komt binnen vóór het antwoord wanneer de
+  // route na het schrijven nog mails verstuurt (ziekmelding: één per
+  // planner), en gaf dan "Verlof bijgewerkt" op je eigen klik. Na het
+  // antwoord nog eens, zodat het venster vanaf het einde loopt.
+  if (!isLezen && !stil) markeerEigenSchrijfactie();
   let response: Response;
   try {
     response = await fetch(input, { ...init, headers });
@@ -185,8 +202,11 @@ async function verstuur(
     // Toestel-whitelist: het toestel is (intussen) niet meer goedgekeurd →
     // App toont het geblokkeerd-scherm i.p.v. losse fout-toasts per call.
     if (body?.code === 'mfa_required') {
-      // Staf zonder code in deze sessie: App toont het codescherm.
+      // Staf zonder code in deze sessie: App toont het codescherm. Met een
+      // code op de fout, zodat de laadpaden (laadfoutOnderdrukt) zwijgen:
+      // het codescherm is de melding, niet "controleer je verbinding".
       meld('vhb-mfa-required', { code: body.code });
+      throw Object.assign(new Error(detail || 'Twee-stapsverificatie is vereist voor dit account.'), { code: TWEE_STAPS_VEREIST, status: 403 });
     } else if (body?.code === 'device_pending' || body?.code === 'device_unknown' || body?.code === 'device_revoked') {
       meld('vhb-device-blocked', { code: body.code });
       // Met een code: laadpaden herkennen hem (isToestelGeblokkeerd) en tonen

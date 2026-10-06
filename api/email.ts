@@ -1,4 +1,4 @@
-import { DAG_DMJ, PERIODE_DMJ, brusselsDay } from "./helpers.js";
+import { DAG_DMJ, LEAVE_TYPE_LABEL, PERIODE_DMJ, brusselsDay } from "./helpers.js";
 import { bouwMail, escapeMailHtml, type MailOpbouw } from "./_lib/mailLayout.js";
 import { logMail } from "./storage.js";
 import { mailSoortAan } from "./_lib/mailInstellingen.js";
@@ -251,9 +251,13 @@ export const bouwVerlofBeslissingMail = (ctx: Omit<LeaveDecisionEmailContext, "t
   return { onderwerp: `${config.subject}, ${period}`, html, text };
 };
 
-export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => {
+export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext): Promise<SendEmailResult> => {
+  // Vangrail (Jarno 06-10): over ziekte gaat nooit een verlofmail naar de
+  // chauffeur, welke route hier ook langskomt. De routes slaan ziekte zelf
+  // al over; dit vangt een toekomstige aanroeper die het vergeet.
+  if (ctx.typeLabel === LEAVE_TYPE_LABEL.ziekte) return { ok: true, mocked: false, overgeslagen: true };
   const { onderwerp, html, text } = bouwVerlofBeslissingMail(ctx);
-  await sendEmail({
+  return sendEmail({
     to: [ctx.to],
     subject: onderwerp,
     text,

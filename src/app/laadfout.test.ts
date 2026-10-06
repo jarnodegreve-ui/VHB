@@ -4,7 +4,7 @@ vi.mock('../lib/supabase', () => ({ supabase: null }));
 vi.mock('../lib/device', () => ({ deviceHeaders: () => ({}) }));
 vi.mock('../lib/liveSignaal', () => ({ markeerEigenSchrijfactie: () => {} }));
 
-import { apiFetch, isToestelGeblokkeerd, TOESTEL_GEBLOKKEERD } from '../lib/api';
+import { apiFetch, isToestelGeblokkeerd, isTweeStapsVereist, TOESTEL_GEBLOKKEERD, TWEE_STAPS_VEREIST } from '../lib/api';
 import { laadfoutOnderdrukt } from './laadfout';
 
 const vrij = { sessieBeeindigd: false, toestelGeblokkeerd: false };
@@ -43,5 +43,34 @@ describe('laadfout bij een geblokkeerd toestel', () => {
     expect(laadfoutOnderdrukt(vrij, Object.assign(new Error('Dit toestel wacht op goedkeuring.'), { code: TOESTEL_GEBLOKKEERD }))).toBe(true);
     expect(laadfoutOnderdrukt({ ...vrij, toestelGeblokkeerd: true }, new TypeError('Failed to fetch'))).toBe(true);
     expect(laadfoutOnderdrukt({ ...vrij, sessieBeeindigd: true })).toBe(true);
+  });
+});
+
+/**
+ * Staf krijgt na het wachtwoord en vóór de code op elke call 403
+ * mfa_required (06-10, elke aanmelding van een planner of admin): het
+ * codescherm is de melding, niet "Controleer je verbinding".
+ */
+describe('laadfout vóór de tweede stap', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('apiFetch gooit bij 403 mfa_required een fout met de code en meldt het codescherm', async () => {
+    const events: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Twee-stapsverificatie is vereist voor dit account.', code: 'mfa_required' }), { status: 403, headers: { 'Content-Type': 'application/json' } })));
+    vi.stubGlobal('window', { dispatchEvent: (e: Event) => { events.push(e.type); return true; } });
+    const fout = await apiFetch('/api/users').catch((e: unknown) => e);
+    expect(isTweeStapsVereist(fout)).toBe(true);
+    expect((fout as { code?: string; status?: number }).code).toBe(TWEE_STAPS_VEREIST);
+    expect((fout as { status?: number }).status).toBe(403);
+    expect((fout as Error).message).toContain('Twee-stapsverificatie');
+    expect(events).toContain('vhb-mfa-required');
+    expect(isToestelGeblokkeerd(fout)).toBe(false);
+  });
+
+  it('de laadpaden zwijgen over die fout, een gewone 403 blijft een laadfout', () => {
+    expect(laadfoutOnderdrukt(vrij, Object.assign(new Error('Twee-stapsverificatie is vereist voor dit account.'), { code: TWEE_STAPS_VEREIST, status: 403 }))).toBe(true);
+    expect(laadfoutOnderdrukt(vrij, Object.assign(new Error('Geen toegang.'), { status: 403 }))).toBe(false);
+    expect(isTweeStapsVereist(new TypeError('Failed to fetch'))).toBe(false);
+    expect(isTweeStapsVereist(undefined)).toBe(false);
   });
 });

@@ -213,12 +213,12 @@ describe('PII-scoping voor chauffeurs', () => {
     // Push naar de rest van de planning (behalve de melder = planner, id 2)…
     const sickPush = mem.pushesSent.find((p) => p.payload.title === 'Ziekmelding');
     expect(sickPush?.userIds).toEqual(['1']);
-    // …maar de mail gaat naar álle planner/admin-adressen, de melder incluis
-    // (verzoek Jarno 04-08) — en PER PERSOON een eigen mail, rechtstreeks in
-    // de To-regel. De eerdere BCC-batch werd door Microsoft 365 stilletjes
-    // weggefilterd terwijl de directe testmail wél aankwam (04-08).
+    // …maar de mail gaat alleen naar de admins (Jarno 06-10; tot dan alle
+    // planner/admin-adressen, verzoek 04-08), PER PERSOON een eigen mail,
+    // rechtstreeks in de To-regel. De eerdere BCC-batch werd door Microsoft
+    // 365 stilletjes weggefilterd terwijl de directe testmail wél aankwam.
     const sickMails = mem.emailsSent.filter((m) => (m.context ?? '').startsWith('sick:'));
-    expect(sickMails.map((m) => m.to).sort()).toEqual([['admin@vhb.be'], ['planner@vhb.be']]);
+    expect(sickMails.map((m) => m.to)).toEqual([['admin@vhb.be']]);
     // De opengevallen diensten staan in de mail: per dag het nummer, de
     // gesplitste dienst één keer, de dienst van de collega niet.
     const body = sickMails[0]?.text ?? '';
