@@ -271,8 +271,14 @@ export default function App() {
   useRealtimeSync(!!session && !!currentUser && !deviceBlocked, {
     // meldLive: stille "… bijgewerkt"-toast (max één per 10 s per collectie,
     // niet na een eigen schrijfactie) — src/lib/liveSignaal.ts.
-    refetchLeave: () => {
-      meldLive('verlof');
+    refetchLeave: (soort) => {
+      // Ziekte is geen verlof: een gewijzigde ziekmelding meldt zich bij staf
+      // als "Ziekmelding bijgewerkt" en bij een chauffeur helemaal niet.
+      if (soort === 'ziekte') {
+        if (currentUser && isStaf(currentUser.role)) meldLive('ziekte');
+      } else {
+        meldLive('verlof');
+      }
       // Verlof stuurt de dekking (afwezige = gat): voor staf meteen mee
       // verversen, anders liepen dashboard en topbar-badge achter.
       if (currentUser && isStaf(currentUser.role)) refreshCoverageGaps();
@@ -1087,9 +1093,13 @@ export default function App() {
   };
 
 
+  // Ziekte telt niet mee (Jarno 06-10): een ziekmelding is geen beslissing
+  // over een aanvraag, en het Verlof-scherm toont ze niet, dus kon de
+  // chauffeur het cijfer nooit wegkrijgen.
   const unseenLeaveDecisionCount = currentUser
     ? leaveRequests.filter((r) =>
         r.userId === currentUser.id &&
+        r.type !== 'ziekte' &&
         !!r.decidedAt &&
         r.status !== 'pending' &&
         (!lastSeenLeaveDecisionAt || r.decidedAt > lastSeenLeaveDecisionAt),

@@ -155,6 +155,12 @@ async function verstuur(
   }
 
   const isLezen = !init.method || init.method.toUpperCase() === 'GET';
+  // Eigen schrijfactie al bij het vertrek markeren (06-10): de realtime-echo
+  // van de databaseschrijfactie komt binnen vóór het antwoord wanneer de
+  // route na het schrijven nog mails verstuurt (ziekmelding: één per
+  // planner), en gaf dan "Verlof bijgewerkt" op je eigen klik. Na het
+  // antwoord nog eens, zodat het venster vanaf het einde loopt.
+  if (!isLezen && !stil) markeerEigenSchrijfactie();
   let response: Response;
   try {
     response = await fetch(input, { ...init, headers });

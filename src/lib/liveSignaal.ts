@@ -13,11 +13,13 @@ import { notify } from './ui';
  * Bewust een los module'tje: realtime.ts blijft ongemoeid, App.tsx roept
  * `meldLive` aan in de refetchers.
  */
-export type LiveCollectie = 'planning' | 'verlof' | 'ruil' | 'omleidingen' | 'updates';
+export type LiveCollectie = 'planning' | 'verlof' | 'ziekte' | 'ruil' | 'omleidingen' | 'updates';
 
 const LABEL: Record<LiveCollectie, string> = {
   planning: 'Planning bijgewerkt',
   verlof: 'Verlof bijgewerkt',
+  // Ziekte deelt de tabel met verlof maar is geen verlof (Jarno 06-10).
+  ziekte: 'Ziekmelding bijgewerkt',
   ruil: 'Dienstruil bijgewerkt',
   omleidingen: 'Omleidingen bijgewerkt',
   updates: 'Updates bijgewerkt',

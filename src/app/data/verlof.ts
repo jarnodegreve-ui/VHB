@@ -56,7 +56,15 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         // Logboek stil op de achtergrond: de overlay wacht er niet op.
         if (currentUser?.role === 'admin') void fetchActivityLog();
         const isNewRequest = newLeave.some((r) => !leaveRequests.some((p) => p.id === r.id));
-        showToast(isNewRequest ? 'Aanvraag ingediend, de planner beoordeelt ze.' : 'Verlofaanvraag bijgewerkt.', 'success');
+        // Ziekte is geen verlof (Jarno 06-10): raakt de wijziging alleen
+        // ziekmeldingen (einddatum bijstellen of intrekken in Beheer ›
+        // Ziekte), dan zegt de toast dat ook.
+        const gewijzigd = newLeave.filter((r) => {
+          const vorige = leaveRequests.find((p) => p.id === r.id);
+          return !vorige || vorige.status !== r.status || vorige.startDate !== r.startDate || vorige.endDate !== r.endDate;
+        });
+        const alleenZiekte = gewijzigd.length > 0 && gewijzigd.every((r) => r.type === 'ziekte');
+        showToast(alleenZiekte ? 'Ziekmelding bijgewerkt.' : isNewRequest ? 'Aanvraag ingediend, de planner beoordeelt ze.' : 'Verlofaanvraag bijgewerkt.', 'success');
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
