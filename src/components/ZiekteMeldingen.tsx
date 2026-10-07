@@ -6,7 +6,7 @@ import { formatDatumDMJ, formatShortDay } from '../lib/format';
 import { cn } from '../lib/ui';
 import { Avatar } from './Avatar';
 import { Card, CardHeader } from './Card';
-import { SearchField, Select } from './Field';
+import { SearchField } from './Field';
 import { Badge, Button, FilterChip, Segmented } from './primitives';
 import { Paginering } from './Table';
 import { EmptyState } from './ui';
@@ -25,7 +25,6 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
 }) {
   const [zoek, setZoek] = useState('');
   const [filter, setFilter] = useState<ZiekteFilter>('nu');
-  const [status, setStatus] = useState('alle');
   const [metDiensten, setMetDiensten] = useState(false);
   const [pagina, setPagina] = useState(1);
   const namen = new Map(users.map((u) => [String(u.id), u.name]));
@@ -34,7 +33,7 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
   const query = zoek.trim().toLocaleLowerCase('nl');
   const resultaat = meldingen.filter((r) => {
     if (query && !naamVan(r.userId).toLocaleLowerCase('nl').includes(query)) return false;
-    if (historiek) return status === 'alle' || (status === 'ingetrokken' ? r.status === 'cancelled' : r.status === 'approved');
+    if (historiek) return true;
     if (filter === 'nu' && r.startDate > vandaag) return false;
     return !metDiensten || dienstenVan(r) > 0;
   }).sort((a, b) => historiek
@@ -43,13 +42,13 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
   const huidigePagina = Math.min(pagina, Math.max(1, Math.ceil(resultaat.length / PER_PAGINA)));
   const zichtbaar = resultaat.slice((huidigePagina - 1) * PER_PAGINA, huidigePagina * PER_PAGINA);
   const titel = historiek ? 'Historiek' : 'Actueel';
-  const wisFilters = () => { setZoek(''); setFilter('alles'); setStatus('alle'); setMetDiensten(false); setPagina(1); };
+  const wisFilters = () => { setZoek(''); setFilter('alles'); setMetDiensten(false); setPagina(1); };
 
   return (
     <section aria-label={titel} className="space-y-4">
       <CardHeader
         title={titel}
-        description={historiek ? 'Afgelopen en ingetrokken registraties, van nieuw naar oud.' : undefined}
+        description={historiek ? 'Afgelopen registraties, van nieuw naar oud.' : undefined}
         aside={<span className="text-xs text-slate-500">{resultaat.length} {resultaat.length === 1 ? 'melding' : 'meldingen'}</span>}
       />
       <Card padding="none" className="@container overflow-hidden">
@@ -75,13 +74,7 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
               onChange={(waarde) => { setZoek(waarde); setPagina(1); }}
               className="flex-[1_1_15rem]"
             />
-            {historiek ? (
-              <Select aria-label="Status ziektehistoriek" value={status} onChange={(e) => { setStatus(e.target.value); setPagina(1); }} className="w-full sm:w-44">
-                <option value="alle">Alle registraties</option>
-                <option value="afgelopen">Afgelopen</option>
-                <option value="ingetrokken">Ingetrokken</option>
-              </Select>
-            ) : (
+            {!historiek && (
               <FilterChip active={metDiensten} onClick={() => { setMetDiensten((v) => !v); setPagina(1); }}>Met diensten op naam</FilterChip>
             )}
           </div>
@@ -92,7 +85,7 @@ export function ZiekteMeldingen({ meldingen, users, vandaag, dienstenVan, onOpen
             <EmptyState
               kaal
               title={historiek ? 'Geen meldingen gevonden' : 'Geen meldingen in deze selectie'}
-              message={historiek ? 'Pas de zoekopdracht of het statusfilter aan.' : 'Kies een ander filter om de overige registraties te bekijken.'}
+ message={historiek ? 'Pas de zoekopdracht aan.' : 'Kies een ander filter om de overige registraties te bekijken.'}
               action={meldingen.length > 0 ? <Button size="sm" onClick={wisFilters}>Toon alle meldingen</Button> : undefined}
             />
           </div>
@@ -143,7 +136,7 @@ function ZiekteRij({ melding: r, naam, vandaag, diensten, historiek, onOpen }: {
           <span className="block text-xs text-slate-500">{historiek || komend ? 'geregistreerd' : 't/m vandaag'}</span>
         </span>
         <span id={`${beschrijvingId}-status`} className="flex min-w-0 flex-col items-end gap-1.5 @[46rem]:col-start-4 @[46rem]:row-start-1 @[46rem]:items-start">
-          {historiek ? <Badge tone="slate">{r.status === 'cancelled' ? 'Ingetrokken' : 'Afgelopen'}</Badge> : (
+          {historiek ? <Badge tone="slate">Afgelopen</Badge> : (
             <>
               {diensten > 0 ? <Badge tone="amber">{diensten} {diensten === 1 ? 'dienst' : 'diensten'} op naam</Badge> : <span className="text-xs text-slate-500">Geen diensten op naam</span>}
               <span className={cn('text-xs', r.endDate === vandaag ? 'font-semibold text-amber-800' : 'text-slate-500')}>

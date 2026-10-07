@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOptioneleAppData } from '../../app/AppDataContext';
 import { AlertTriangle, CalendarDays, Mail, Plus, Thermometer, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
@@ -28,6 +28,7 @@ import { ZiekteMeldingen } from '../../components/ZiekteMeldingen';
 import { openZiekteDiensten } from '../../lib/ziekteInzicht';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 import { meldSchrijffout } from '../../lib/fouten';
+import { metOngedaan } from '../../lib/ongedaan';
 
 /**
  * Ziekte — eigen blad, bewust gescheiden van het verlofbeheer (keuze Jarno
@@ -79,7 +80,7 @@ export function ZiekteView({
     .filter((r) => r.status === 'approved' && r.startDate <= today && r.endDate >= today)
     .sort((a, b) => a.endDate.localeCompare(b.endDate));
   const historiek = ziektes
-    .filter((r) => (r.status === 'approved' && r.endDate < today) || r.status === 'cancelled')
+    .filter((r) => r.status === 'approved' && r.endDate < today)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
   const actueleMeldingen = ziektes.filter((r) => r.status === 'approved' && r.endDate >= today);
@@ -265,11 +266,22 @@ export function ZiekteView({
       .finally(() => setIsOpslaan(false));
     if (ok) setDetail(null);
   };
-  const trekIn = async () => {
+  // Verkeerd ingegeven = weg (Jarno 07-10): geen tussenstatus "ingetrokken"
+  // die de historiek vult. Meteen verwijderen met een weg terug (ongedaan-
+  // toast, src/lib/ongedaan.ts); het activiteitenlog houdt het spoor bij.
+  // De verse lijst via een ref: het herstel loopt na de nieuwe render.
+  const leaveRef = useRef(leaveRequests);
+  leaveRef.current = leaveRequests;
+  const verwijder = async () => {
     if (!detail || isOpslaan) return;
+    const record = detail;
     setIsOpslaan(true);
-    const ok = await Promise.resolve(onSave(leaveRequests.map((r) => (r.id === detail.id ? { ...r, status: 'cancelled' as const } : r))))
-      .finally(() => setIsOpslaan(false));
+    const ok = await metOngedaan({
+      boodschap: `Ziekmelding van ${naamVan(record.userId)} verwijderd.`,
+      uitvoeren: () => Promise.resolve(onSave(leaveRef.current.filter((r) => r.id !== record.id))),
+      herstellen: () => Promise.resolve(onSave([...leaveRef.current.filter((r) => r.id !== record.id), record])),
+      toast: (message, tone, action, opties) => notify(message, tone, { action, opties }),
+    }).finally(() => setIsOpslaan(false));
     if (ok) setDetail(null);
   };
 
@@ -403,7 +415,7 @@ export function ZiekteView({
         open={!!detail}
         onClose={() => setDetail(null)}
         // Onbewaarde einddatum (tranche 3A): sluiten vraagt eerst bevestiging.
-        vuil={!!detail && detail.status !== 'cancelled' && !!nieuwEinde && nieuwEinde !== detail.endDate}
+        vuil={!!detail && !!nieuwEinde && nieuwEinde !== detail.endDate}
         maxWidth="md"
         className="flex max-h-overlay flex-col !overflow-hidden !p-0">
         {detail && (
@@ -416,139 +428,133 @@ export function ZiekteView({
             />
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-6">
               {detail.comment && <Card tone="muted" padding="sm"><MicroLabel>Opmerking</MicroLabel><p className="mt-2 whitespace-pre-wrap text-body-sm text-slate-600 [overflow-wrap:anywhere]">{detail.comment}</p></Card>}
-              {detail.status === 'cancelled' ? (
-                <p className="rounded-2xl bg-surface-soft px-3.5 py-3 text-sm font-medium text-slate-500">Deze melding is ingetrokken.</p>
-              ) : (
-                <>
-                  {/* Formulier: Enter op het veld of de knop bewaart (tranche 3A). */}
-                  <Formulier onVerstuur={() => bewaarEinde(nieuwEinde)} noValidate>
-                    <Field
-                      label="Ziek tot en met"
-                      hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug."
-                      error={nieuwEinde && nieuwEinde < detail.startDate ? `De einddatum ligt vóór de startdatum (${formatShortDay(detail.startDate)}).` : undefined}
-                    >
-                      {({ id, describedBy, invalid }) => (
-                        <div className="flex gap-2">
-                          <DateInput
-                            id={id}
-                            aria-describedby={describedBy}
-                            invalid={invalid}
-                            value={nieuwEinde}
-                            min={detail.startDate}
-                            onChange={(v) => setNieuwEinde(v)}
-                            className="min-w-0 flex-1"
-                          />
-                          <Button type="submit" variant="primary" size="md" disabled={isOpslaan || !nieuwEinde || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate}>
-                            Opslaan
-                          </Button>
-                        </div>
-                      )}
-                    </Field>
-                  </Formulier>
-                  {detail.endDate >= today && detail.startDate <= today && (
-                    <Button variant="secondary" size="md" full icon={<Thermometer size={14} />} disabled={isOpslaan} onClick={() => void bewaarEinde(today)}>
-                      Hersteld, vandaag was de laatste ziektedag
-                    </Button>
-                  )}
-                  {/* Diensten die in deze periode nog op naam staan: meteen
-                      herverdelen (admin), zonder omweg via de Maandplanning. */}
-                  {openDienstenLijst(detail).length > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <MicroLabel className="ml-1 tabular-nums">
-                          Nog op naam ({openDienstenLijst(detail).length})
-                        </MicroLabel>
-                        {/* Wizard: batch-advies vult per gat de beste passende
-                            kandidaat voor; "Verdeel alles" voert de gekozen
-                            wissels in één keer door (met bevestiging). */}
-                        {/* Planner zonder adminrecht: één mail naar de admins
-                            met de open diensten en hun deeplink (punt 17). */}
-                        {!isAdmin && (() => {
-                          const open = openDienstenLijst(detail);
-                          const href = open.length ? adminMailto(users, `Diensten overzetten na ziekmelding ${naamVan(detail.userId)}`, ziekmeldMailTekst(naamVan(detail.userId), open.map((d) => ({ date: d.date, nummer: serviceNumberOf(d) })), window.location.origin)) : undefined;
-                          return href ? (
-                            <Button variant="secondary" size="sm" className="shrink-0" icon={<Mail size={16} />} onClick={() => { window.location.href = href; }}>Vraag een admin</Button>
-                          ) : null;
-                        })()}
-                        {isAdmin && (openDienstenLijst(detail).length > 1 || verdeelBezig) && (() => {
-                          const teVerdelen = openDienstenLijst(detail).filter((d) => vervangerPerDienst[d.id]).length;
-                          return (
-                            <div className="flex shrink-0 flex-wrap gap-2">
-                              <Button variant="secondary" size="sm" disabled={batchLaden || verdeelBezig} onClick={() => void haalKandidatenVoorstel(detail)}>
-                                {batchLaden ? 'Advies berekenen…' : 'Stel kandidaten voor'}
-                              </Button>
-                              {/* Secundair: de enige gouden knop in dit detail is "Opslaan"
-                                  bij de einddatum (afwerking 04-09, nr. 5). */}
-                              <Button variant="secondary" size="sm" disabled={verdeelBezig || batchLaden || teVerdelen === 0} onClick={() => setVerdeelConfirm(true)}>
-                                {verdeelBezig ? 'Bezig…' : `Verdeel alles (${teVerdelen})`}
-                              </Button>
-                            </div>
-                          );
-                        })()}
+                {/* Formulier: Enter op het veld of de knop bewaart (tranche 3A). */}
+                <Formulier onVerstuur={() => bewaarEinde(nieuwEinde)} noValidate>
+                  <Field
+                    label="Ziek tot en met"
+                    hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug."
+                    error={nieuwEinde && nieuwEinde < detail.startDate ? `De einddatum ligt vóór de startdatum (${formatShortDay(detail.startDate)}).` : undefined}
+                  >
+                    {({ id, describedBy, invalid }) => (
+                      <div className="flex gap-2">
+                        <DateInput
+                          id={id}
+                          aria-describedby={describedBy}
+                          invalid={invalid}
+                          value={nieuwEinde}
+                          min={detail.startDate}
+                          onChange={(v) => setNieuwEinde(v)}
+                          className="min-w-0 flex-1"
+                        />
+                        <Button type="submit" variant="primary" size="md" disabled={isOpslaan || !nieuwEinde || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate}>
+                          Opslaan
+                        </Button>
                       </div>
-                      <div className="space-y-2.5">
-                        {openDienstenLijst(detail).map((dienst) => {
-                          return (
-                            <Card key={dienst.id} tone="muted" padding="none" className="px-3.5 py-3 space-y-2.5">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <span className="text-sm font-semibold text-slate-800 tabular-nums">Dienst {serviceNumberOf(dienst)}</span>
-                                <span className="flex flex-wrap items-center gap-2">
-                                  <span className={cn(microLabelClass, 'tabular-nums')}>{formatShortDay(dienst.date)}</span>
-                                  {/* Admin: rechtstreeks naar die dag in de Maandplanning. */}
-                                  {isAdmin && (
-                                    <Button variant="ghost" size="sm" icon={<CalendarDays size={14} />} onClick={() => { setDetail(null); navigeer('bezetting', { params: maandplanningParams(dienst.date) }); }}>
-                                      Maandplanning
-                                    </Button>
-                                  )}
-                                </span>
-                              </div>
-                              {isAdmin ? (
-                                <>
-                                {batchAdvies[adviesSleutelVan(dienst)]?.samenvatting && (
-                                  <p className="text-xs font-medium text-slate-500">{batchAdvies[adviesSleutelVan(dienst)].samenvatting}</p>
-                                )}
-                                {verdeelFouten[dienst.id] && (
-                                  // red, niet rose: rose is hier de zíekte-statuskleur;
-                                  // dit is een fout en hoort de fouttaal te spreken.
-                                  <p role="alert" className="text-xs font-semibold text-red-700">{verdeelFouten[dienst.id]}</p>
-                                )}
-                                <div className="flex flex-col gap-2 sm:flex-row">
-                                  <Select
-                                    aria-label={`Vervanger voor dienst ${serviceNumberOf(dienst)} op ${formatDatumDMJ(dienst.date)}`}
-                                    value={vervangerPerDienst[dienst.id] ?? ''}
-                                    onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [dienst.id]: e.target.value }))}
-                                    className="min-w-0 flex-1"
-                                    disabled={!lijstKlaar(dienst.date)}
-                                  >
-                                    {/* Zonder matrix en bord geen kandidaten: een
-                                        afwezige stond anders even als vrij in de lijst. */}
-                                    <option value="">{lijstKlaar(dienst.date) ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
-                                    {lijstKlaar(dienst.date) && rangschikKandidaten(
-                                      users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId)),
-                                      vrijOpDatum(shifts, dienst.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, dienst.date), bordVan(dienst.date)),
-                                      werkdagen,
-                                      dienst.date,
-                                    ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
-                                  </Select>
-                                  <Button variant="secondary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id || verdeelBezig} onClick={() => void zetOver(detail, dienst)}>
-                                    {wisselBezig === dienst.id ? 'Bezig…' : 'Zet over'}
-                                  </Button>
-                                </div>
-                                </>
-                              ) : (
-                                <p className="text-xs font-medium text-slate-500">Nog niet herverdeeld, een admin kan deze dienst overzetten.</p>
-                              )}
-                            </Card>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <Button variant="danger" size="md" full disabled={isOpslaan} onClick={() => void trekIn()}>
-                    Melding intrekken (foutief geregistreerd)
+                    )}
+                  </Field>
+                </Formulier>
+                {detail.endDate >= today && detail.startDate <= today && (
+                  <Button variant="secondary" size="md" full icon={<Thermometer size={14} />} disabled={isOpslaan} onClick={() => void bewaarEinde(today)}>
+                    Hersteld, vandaag was de laatste ziektedag
                   </Button>
-                </>
-              )}
+                )}
+                {/* Diensten die in deze periode nog op naam staan: meteen
+                    herverdelen (admin), zonder omweg via de Maandplanning. */}
+                {openDienstenLijst(detail).length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <MicroLabel className="ml-1 tabular-nums">
+                        Nog op naam ({openDienstenLijst(detail).length})
+                      </MicroLabel>
+                      {/* Wizard: batch-advies vult per gat de beste passende
+                          kandidaat voor; "Verdeel alles" voert de gekozen
+                          wissels in één keer door (met bevestiging). */}
+                      {/* Planner zonder adminrecht: één mail naar de admins
+                          met de open diensten en hun deeplink (punt 17). */}
+                      {!isAdmin && (() => {
+                        const open = openDienstenLijst(detail);
+                        const href = open.length ? adminMailto(users, `Diensten overzetten na ziekmelding ${naamVan(detail.userId)}`, ziekmeldMailTekst(naamVan(detail.userId), open.map((d) => ({ date: d.date, nummer: serviceNumberOf(d) })), window.location.origin)) : undefined;
+                        return href ? (
+                          <Button variant="secondary" size="sm" className="shrink-0" icon={<Mail size={16} />} onClick={() => { window.location.href = href; }}>Vraag een admin</Button>
+                        ) : null;
+                      })()}
+                      {isAdmin && (openDienstenLijst(detail).length > 1 || verdeelBezig) && (() => {
+                        const teVerdelen = openDienstenLijst(detail).filter((d) => vervangerPerDienst[d.id]).length;
+                        return (
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            <Button variant="secondary" size="sm" disabled={batchLaden || verdeelBezig} onClick={() => void haalKandidatenVoorstel(detail)}>
+                              {batchLaden ? 'Advies berekenen…' : 'Stel kandidaten voor'}
+                            </Button>
+                            {/* Secundair: de enige gouden knop in dit detail is "Opslaan"
+                                bij de einddatum (afwerking 04-09, nr. 5). */}
+                            <Button variant="secondary" size="sm" disabled={verdeelBezig || batchLaden || teVerdelen === 0} onClick={() => setVerdeelConfirm(true)}>
+                              {verdeelBezig ? 'Bezig…' : `Verdeel alles (${teVerdelen})`}
+                            </Button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div className="space-y-2.5">
+                      {openDienstenLijst(detail).map((dienst) => {
+                        return (
+                          <Card key={dienst.id} tone="muted" padding="none" className="px-3.5 py-3 space-y-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <span className="text-sm font-semibold text-slate-800 tabular-nums">Dienst {serviceNumberOf(dienst)}</span>
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className={cn(microLabelClass, 'tabular-nums')}>{formatShortDay(dienst.date)}</span>
+                                {/* Admin: rechtstreeks naar die dag in de Maandplanning. */}
+                                {isAdmin && (
+                                  <Button variant="ghost" size="sm" icon={<CalendarDays size={14} />} onClick={() => { setDetail(null); navigeer('bezetting', { params: maandplanningParams(dienst.date) }); }}>
+                                    Maandplanning
+                                  </Button>
+                                )}
+                              </span>
+                            </div>
+                            {isAdmin ? (
+                              <>
+                              {batchAdvies[adviesSleutelVan(dienst)]?.samenvatting && (
+                                <p className="text-xs font-medium text-slate-500">{batchAdvies[adviesSleutelVan(dienst)].samenvatting}</p>
+                              )}
+                              {verdeelFouten[dienst.id] && (
+                                // red, niet rose: rose is hier de zíekte-statuskleur;
+                                // dit is een fout en hoort de fouttaal te spreken.
+                                <p role="alert" className="text-xs font-semibold text-red-700">{verdeelFouten[dienst.id]}</p>
+                              )}
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <Select
+                                  aria-label={`Vervanger voor dienst ${serviceNumberOf(dienst)} op ${formatDatumDMJ(dienst.date)}`}
+                                  value={vervangerPerDienst[dienst.id] ?? ''}
+                                  onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [dienst.id]: e.target.value }))}
+                                  className="min-w-0 flex-1"
+                                  disabled={!lijstKlaar(dienst.date)}
+                                >
+                                  {/* Zonder matrix en bord geen kandidaten: een
+                                      afwezige stond anders even als vrij in de lijst. */}
+                                  <option value="">{lijstKlaar(dienst.date) ? 'Kies een chauffeur…' : 'Kandidaten laden…'}</option>
+                                  {lijstKlaar(dienst.date) && rangschikKandidaten(
+                                    users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId)),
+                                    vrijOpDatum(shifts, dienst.date, nietBeschikbaarUitMatrix(planningMatrixRows, users, dienst.date), bordVan(dienst.date)),
+                                    werkdagen,
+                                    dienst.date,
+                                  ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
+                                </Select>
+                                <Button variant="secondary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id || verdeelBezig} onClick={() => void zetOver(detail, dienst)}>
+                                  {wisselBezig === dienst.id ? 'Bezig…' : 'Zet over'}
+                                </Button>
+                              </div>
+                              </>
+                            ) : (
+                              <p className="text-xs font-medium text-slate-500">Nog niet herverdeeld, een admin kan deze dienst overzetten.</p>
+                            )}
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <Button variant="danger" size="md" full disabled={isOpslaan} onClick={() => void verwijder()}>
+                  Melding verwijderen (foutief geregistreerd)
+                </Button>
             </div>
           </>
         )}

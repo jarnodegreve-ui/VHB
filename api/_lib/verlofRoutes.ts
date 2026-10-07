@@ -284,7 +284,7 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
     // er nooit een mail of push over.
     const isZiekte = String(current.type) === "ziekte";
     if (isZiekte && status !== "cancelled") {
-      return { fout: { status: 400, error: "Een ziekmelding wordt niet goedgekeurd of afgewezen. Bijstellen of intrekken kan via Beheer › Ziekte." } };
+      return { fout: { status: 400, error: "Een ziekmelding wordt niet goedgekeurd of afgewezen. Bijstellen of verwijderen kan via Beheer › Ziekte." } };
     }
 
     const decidedAt = new Date().toISOString();

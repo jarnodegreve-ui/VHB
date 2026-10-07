@@ -158,36 +158,54 @@ test('ziekte: actuele filters, zoeken en diensten op naam blijven bruikbaar', as
   await pastBinnenScherm(page);
 });
 
-test('ziekte: volledige historiek blijft bereikbaar via paginering, zoeken en status', async ({ page }) => {
+test('ziekte: volledige historiek blijft bereikbaar via paginering en zoeken; ingetrokken registraties staan er niet in', async ({ page }) => {
   await openZiekte(page);
   const historiek = page.getByRole('region', { name: 'Historiek', exact: true });
   const rijen = historiek.getByRole('button', { name: /^Bekijk ziekmelding/ });
   await expect(rijen).toHaveCount(10);
   const volgende = historiek.getByRole('button', { name: 'Volgende pagina', exact: true });
   for (let i = 0; i < 3; i++) await volgende.click();
-  await expect(rijen).toHaveCount(3);
+  // 31 afgelopen registraties; de twee met status cancelled (oude data van
+  // vóór 07-10) horen niet in de historiek en hebben geen filter meer.
+  await expect(rijen).toHaveCount(1);
   await expect(volgende).toBeDisabled();
   await expect(rij(historiek, 3, '2026-08-01')).toBeVisible();
+  await expect(historiek.getByRole('combobox', { name: 'Status ziektehistoriek' })).toHaveCount(0);
 
   const zoek = historiek.getByRole('searchbox', { name: 'Zoek in ziektehistoriek' });
   await zoek.fill('Dina Goossens');
-  await expect(rijen).toHaveCount(2);
-  const status = historiek.getByRole('combobox', { name: 'Status ziektehistoriek' });
-  await status.selectOption({ label: 'Afgelopen' });
   await expect(rijen).toHaveCount(1);
   await expect(rij(historiek, 3, '2026-08-01')).toBeVisible();
-  await zoek.fill('');
-  await status.selectOption({ label: 'Ingetrokken' });
-  await expect(rijen).toHaveCount(2);
-  await expect(rij(historiek, 2, '2026-09-10')).toBeVisible();
-  await expect(rij(historiek, 3, '2026-09-08')).toBeVisible();
-  await rij(historiek, 2, '2026-09-10').click();
-  const detail = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[2].name, exact: true }) });
-  await expect(detail.getByText('Deze melding is ingetrokken.', { exact: true })).toBeVisible();
-  await expect(detail.getByRole('button', { name: 'Opslaan', exact: true })).toHaveCount(0);
-  await detail.getByRole('button', { name: 'Sluiten', exact: true }).click();
-  await expect(detail).toHaveCount(0);
+  await expect(rij(historiek, 3, '2026-09-08')).toHaveCount(0);
+  await zoek.fill('Cem');
+  await expect(rij(historiek, 2, '2026-09-10')).toHaveCount(0);
+  await expect(rijen).toHaveCount(0);
   await pastBinnenScherm(page);
+});
+
+test('ziekte: een foutief geregistreerde melding verwijderen is meteen weg, met ongedaan maken', async ({ page }) => {
+  const { wijzigingen } = await openZiekte(page);
+  const historiek = page.getByRole('region', { name: 'Historiek', exact: true });
+  const zoek = historiek.getByRole('searchbox', { name: 'Zoek in ziektehistoriek' });
+  await zoek.fill('Dina Goossens');
+  await rij(historiek, 3, '2026-08-01').click();
+  const detail = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: CHAUFFEURS[3].name, exact: true }) });
+  await expect(detail.getByText('Oudste registratie na telefonische melding.', { exact: true })).toBeVisible();
+  // Geen tussenstatus: de knop verwijdert het record (Jarno 07-10).
+  await expect(detail.getByRole('button', { name: /intrekken/ })).toHaveCount(0);
+  await detail.getByRole('button', { name: 'Melding verwijderen (foutief geregistreerd)', exact: true }).click();
+  await expect(detail).toHaveCount(0);
+  await expect(rij(historiek, 3, '2026-08-01')).toHaveCount(0);
+  expect(wijzigingen.at(-1)?.some((r) => r.id === 'historiek-1')).toBe(false);
+  expect(wijzigingen.at(-1)?.length).toBe(MELDINGEN.length - 1);
+
+  // Ongedaan maken zet precies dat record terug.
+  const toast = page.getByRole('status').filter({ hasText: `Ziekmelding van ${CHAUFFEURS[3].name} verwijderd.` });
+  await expect(toast).toBeVisible();
+  await toast.getByRole('button', { name: 'Ongedaan maken', exact: true }).click();
+  await expect(rij(historiek, 3, '2026-08-01')).toBeVisible();
+  expect(wijzigingen.at(-1)?.some((r) => r.id === 'historiek-1')).toBe(true);
+  expect(wijzigingen.at(-1)?.length).toBe(MELDINGEN.length);
 });
 
 test('ziekte: registreren verstuurt de gekozen chauffeur en verschijnt direct in actueel', async ({ page }) => {
@@ -274,7 +292,6 @@ test('ziekte: op 320px blijven overzicht, filters en historiek binnen beeld', as
   for (const veld of [
     page.getByRole('searchbox', { name: 'Zoek actuele ziekmeldingen' }),
     page.getByRole('searchbox', { name: 'Zoek in ziektehistoriek' }),
-    page.getByRole('combobox', { name: 'Status ziektehistoriek' }),
   ]) {
     const rect = await veld.boundingBox();
     expect(rect!.x).toBeGreaterThanOrEqual(0);
