@@ -98,6 +98,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // "dienst 2104" toont i.p.v. een kaal "bezet" — bij een 1-op-1 ruil op
   // dezelfde dag is dat net de collega die je zoekt.
   const [linesForDate, setLinesForDate] = useState<Record<string, string>>({});
+  // Reden per collega die die dag niet kiesbaar is (verlof, ziek, opleiding…),
+  // van de server; stap 2 toont ze onder de naam in plaats van "Bezet".
+  const [redenForDate, setRedenForDate] = useState<Record<string, string>>({});
   // Ruil zonder tegenprestatie: per collega-id de planningcode ('vrij', 'bv',
   // 'tk', 'ta') waarop hij/zij de dienst die dag mag overnemen. Komt van de
   // server; alleen wie hierin staat, kan als overname aangeduid worden.
@@ -130,6 +133,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       setFreeForDate(null);
       setTakeoverForDate(null);
       setLinesForDate({});
+      setRedenForDate({});
       return;
     }
     let cancelled = false;
@@ -141,6 +145,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         setFreeForDate(new Set(day?.free ?? []));
         setTakeoverForDate(day?.takeover ?? {});
         setLinesForDate(day?.lines ?? {});
+        setRedenForDate(day?.reden ?? {});
       })
       .catch(() => { if (!cancelled) { setFreeForDate(null); setTakeoverForDate(null); } })
       .finally(() => { if (!cancelled) setMatchLoading(false); });
@@ -291,22 +296,44 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   const takeoverCodeFor = (driverId: string) => takeoverForDate?.[driverId];
   const isAvailableOnShiftDate = (driverId: string) =>
     !!freeForDate?.has(driverId) || !!takeoverForDate?.[driverId];
-  const eligibleTargetDrivers = useMemo(() => {
-    const base = users
-      // Alleen chauffeurs: planner/admin staan niet in de planning-matrix en
-      // toonden daardoor altijd "bezet" → doodlopend pad in stap 3.
-      .filter((u) => u.id !== user.id && u.isActive !== false && u.role === 'chauffeur' && u.name.toLowerCase() !== 'beheerder')
-      .sort((a, b) => a.name.localeCompare(b.name));
-    if (!freeForDate) return base;
-    // Beschikbare collega's eerst (matching), daarna de rest. Beide blijven
-    // kiesbaar — de planner kan altijd overschrijven.
-    return [...base].sort((a, b) => {
-      const af = freeForDate.has(a.id) || takeoverForDate?.[a.id] ? 0 : 1;
-      const bf = freeForDate.has(b.id) || takeoverForDate?.[b.id] ? 0 : 1;
-      return af - bf || a.name.localeCompare(b.name);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [users, user.id, freeForDate, takeoverForDate]);
+  /** Keuzekaart van stap 2: naam + één korte contextregel + chevron. */
+  const collegaKnop = (u: User, context: string | null) => (
+    /* rauw: wizard-keuzekaart (naam + korte contextcode + chevron), eigen layout via cnCard */
+    <button
+      key={u.id}
+      type="button"
+      onClick={() => {
+        setSelectedTargetDriver(u.id);
+        setReturnPick('');
+        wizardFouten.wis();
+        setShowAllReturns(false);
+        // Terug naar de standaardvorm als deze collega geen overname toelaat.
+        if (!takeoverCodeFor(u.id)) setSwapType('ruil');
+        setWizardStep(3);
+      }}
+      className={cnCard(selectedTargetDriver === u.id)}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-md font-semibold text-slate-900">{u.name}</span>
+        {context && <span className="mt-0.5 block text-xs font-medium text-slate-500">{context}</span>}
+      </span>
+      <ChevronRight size={16} className="shrink-0 text-slate-300" aria-hidden="true" />
+    </button>
+  );
+  // Alle collega's alfabetisch (Jarno 07-10: niet langer "vrije eerst", de
+  // naam is waarop je zoekt). Alleen chauffeurs: planner/admin staan niet in
+  // de planning-matrix en toonden daardoor altijd "bezet" → doodlopend pad in
+  // stap 3.
+  const eligibleTargetDrivers = useMemo(() => users
+    .filter((u) => u.id !== user.id && u.isActive !== false && u.role === 'chauffeur' && u.name.toLowerCase() !== 'beheerder')
+    .sort((a, b) => a.name.localeCompare(b.name)), [users, user.id]);
+  // Wie die dag niet kiesbaar is als vrije collega (verlof, ziek, opleiding…)
+  // staat apart onder de lijst, met de reden van de server. Zonder
+  // beschikbaarheid (laden mislukt) blijft het één lijst. Iedereen blijft
+  // kiesbaar: de planner kan altijd overschrijven.
+  const nietBeschikbaarOpShiftDate = (driverId: string) => !!freeForDate && !isAvailableOnShiftDate(driverId) && !linesForDate[driverId];
+  const kiesbareCollegas = eligibleTargetDrivers.filter((u) => !nietBeschikbaarOpShiftDate(u.id));
+  const nietBeschikbareCollegas = eligibleTargetDrivers.filter((u) => nietBeschikbaarOpShiftDate(u.id));
   const freeCount = freeForDate
     ? eligibleTargetDrivers.filter((u) => isAvailableOnShiftDate(u.id)).length
     : null;
@@ -1189,48 +1216,32 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <>
                         <div className="space-y-2" data-fout={wizardFouten.fouten.collega ? '' : undefined}>
                           {wizardFouten.fouten.collega && <p role="alert" className="text-xs font-medium text-red-700">{wizardFouten.fouten.collega}</p>}
-                          {eligibleTargetDrivers
-                            .map((u) => {
-                              const free = freeForDate?.has(u.id);
-                              // Planningcode ('bv', 'tk', 'ta') leest preciezer dan
-                              // "vrij" — en zegt meteen of een overname kan.
-                              const code = takeoverCodeFor(u.id);
-                              // Bezette collega: toon zijn dienst — bij een 1-op-1
-                              // ruil op dezelfde dag is dát de collega die je zoekt.
-                              const rijdt = linesForDate[u.id];
-                              // Eén korte contextcode onder de naam (Jarno 23-09): BV/TK/TA,
-                              // Vrij, of het dienstnummer; geen badge of kleur, de naam
-                              // is waaraan je kiest.
-                              const context = !freeForDate ? null
-                                : code && code !== 'vrij' ? code.toUpperCase()
-                                  : free || code ? 'Vrij'
-                                    : rijdt ? `Dienst ${rijdt}` : 'Bezet';
-                              return (
-                                /* rauw: wizard-keuzekaart (naam + korte contextcode + chevron), eigen layout via cnCard */
-                                <button
-                                  key={u.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedTargetDriver(u.id);
-                                    setReturnPick('');
-                                    wizardFouten.wis();
-                                    setShowAllReturns(false);
-                                    // Terug naar de standaardvorm als deze collega
-                                    // geen overname toelaat.
-                                    if (!takeoverCodeFor(u.id)) setSwapType('ruil');
-                                    setWizardStep(3);
-                                  }}
-                                  className={cnCard(selectedTargetDriver === u.id)}
-                                >
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block truncate text-md font-semibold text-slate-900">{u.name}</span>
-                                    {context && <span className="mt-0.5 block text-xs font-medium text-slate-500">{context}</span>}
-                                  </span>
-                                  <ChevronRight size={16} className="shrink-0 text-slate-300" aria-hidden="true" />
-                                </button>
-                              );
-                            })}
+                          {kiesbareCollegas.map((u) => {
+                            const free = freeForDate?.has(u.id);
+                            // Planningcode ('bv', 'tk', 'ta') leest preciezer dan
+                            // "vrij" — en zegt meteen of een overname kan.
+                            const code = takeoverCodeFor(u.id);
+                            // Collega met een dienst: toon ze — bij een 1-op-1
+                            // ruil op dezelfde dag is dát de collega die je zoekt.
+                            const rijdt = linesForDate[u.id];
+                            // Eén korte contextcode onder de naam (Jarno 23-09): BV/TK/TA,
+                            // Vrij, of het dienstnummer; geen badge of kleur, de naam
+                            // is waaraan je kiest.
+                            const context = !freeForDate ? null
+                              : code && code !== 'vrij' ? code.toUpperCase()
+                                : free || code ? 'Vrij'
+                                  : rijdt ? `Dienst ${rijdt}` : 'Niet beschikbaar';
+                            return collegaKnop(u, context);
+                          })}
                         </div>
+                        {nietBeschikbareCollegas.length > 0 && (
+                          // Apart onder de lijst (Jarno 07-10), met de reden van de
+                          // server (verlof, ziek, opleiding…) in plaats van "Bezet".
+                          <div className="space-y-2">
+                            <MicroLabel className="ml-1 pt-2">Niet beschikbaar op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}</MicroLabel>
+                            {nietBeschikbareCollegas.map((u) => collegaKnop(u, redenForDate[u.id] ?? 'Niet beschikbaar'))}
+                          </div>
+                        )}
                         {freeForDate && freeCount === 0 && (
                           <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)}, je kan wel met een collega die rijdt 1-op-1 ruilen.</p>
                         )}

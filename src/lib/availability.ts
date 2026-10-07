@@ -27,6 +27,13 @@ export type AvailabilityDay = {
    * alleen (en de server valideert opnieuw bij het indienen).
    */
   takeover?: Record<string, string>;
+  /**
+   * Enkel met `takeover: true` opgevraagd: per chauffeur die die dag niet
+   * rijdt en niet vrij is, waarom niet ('Verlof', 'Ziek', 'Klein verlet', of de
+   * bordcode met haar omschrijving, bv. 'Opleiding'). De ruilwizard toont dat
+   * onder de naam in plaats van een kaal "Bezet" (Jarno 07-10).
+   */
+  reden?: Record<string, string>;
 };
 
 export type AvailabilityResponse = {

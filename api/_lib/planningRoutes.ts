@@ -24,7 +24,7 @@ import { leesMatrixUpload } from "./matrixUpload.js";
 import { buildPlanningFromMatrix, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { ruilAfwezigheidsFout } from "./ruilRegels.js";
-import { vrijOpBord } from "../../shared/bordBezetting.js";
+import { afwezigheidsReden, vrijOpBord } from "../../shared/bordBezetting.js";
 import { begrensMaandbord, eersteZichtbareDag } from "../../shared/maandplanningTerugblik.js";
 import { bordCellenVoor, bordVanDag } from "./codeDienst.js";
 import { dubbeleInplanningen, onbekendeCodeFout } from "./dubbeleInplanning.js";
@@ -446,6 +446,21 @@ export function mountPlanningRoutes(app: express.Express) {
             if (isTakeoverCode(cel.code)) takeover[driverId] = cel.code.toLowerCase();
           }
           day.takeover = takeover;
+          // Waarom iemand die dag niet kiesbaar is als vrije collega (wizard
+          // stap 2, Jarno 07-10: "Bezet" zegt niets, de reden wel): portaal-
+          // verlof op soort, anders de bordcel; regels in shared/bordBezetting.
+          // Alleen voor wie niet rijdt en niet vrij is.
+          const reden: Record<string, string> = {};
+          const vrij = new Set(free);
+          for (const c of chauffeurs) {
+            if (working.has(c.id) || vrij.has(c.id)) continue;
+            const verlofSoorten = approvedLeave
+              .filter((l: any) => String(l.userId) === c.id && String(l.startDate) <= date && date <= String(l.endDate))
+              .map((l: any) => String(l.type));
+            const r = afwezigheidsReden(verlofSoorten, bordCellen.get(c.id));
+            if (r) reden[c.id] = r;
+          }
+          day.reden = reden;
         }
         return day;
       });
