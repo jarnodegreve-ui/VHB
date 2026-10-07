@@ -86,6 +86,19 @@ describe('landing van een uitnodiging', () => {
     expect(onLogin).toHaveBeenCalledWith('tok-nieuw');
   });
 
+  it('de wachtwoordregel staat onder het veld en volgt het typen', async () => {
+    toon();
+    await screen.findByRole('heading', { name: 'Welkom, Jan Peeters' });
+    const veld = screen.getByLabelText('Kies een wachtwoord');
+    // Leeg: de regel zelf, als beschrijving van het veld (niet alleen de placeholder).
+    expect(veld.getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByText(/Minstens \d+ tekens\. Hoofdletters, cijfers of leestekens hoeven niet\./)).toBeTruthy();
+    fireEvent.change(veld, { target: { value: 'kort' } });
+    expect(screen.getByText(/^Nog \d+ tekens\.$/)).toBeTruthy();
+    fireEvent.change(veld, { target: { value: WACHTWOORD } });
+    expect(screen.getByText(/^Lang genoeg/)).toBeTruthy();
+  });
+
   it('een te kort wachtwoord: uitleg bij het veld, niets naar Supabase', async () => {
     toon();
     await screen.findByRole('heading', { name: 'Welkom, Jan Peeters' });

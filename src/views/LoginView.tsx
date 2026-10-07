@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useState } from 'react';
-import { WACHTWOORD_HINT, WACHTWOORD_MIN } from '../lib/wachtwoord';
+import { WACHTWOORD_HINT, WACHTWOORD_MIN, wachtwoordVoortgang } from '../lib/wachtwoord';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { Button, IconButton, microLabelClass } from '../components/primitives';
@@ -154,6 +154,7 @@ export function LoginView({
     setIsSubmitting(false);
   };
 
+  const voortgang = wachtwoordVoortgang(newPassword);
   const headerCopy = recoveryMode
     ? { title: 'Nieuw wachtwoord', description: 'Kies een nieuw wachtwoord voor je account.' }
     : mode === 'forgot'
@@ -190,7 +191,10 @@ export function LoginView({
             placeholder={WACHTWOORD_HINT}
             required
             minLength={WACHTWOORD_MIN}
+            autoComplete="new-password"
             autoFocus
+            hint={voortgang.tekst}
+            hintKlaar={voortgang.klaar}
           />
           <FeedbackBlock error={error} info={info} />
           <SubmitButton loading={isSubmitting}>Wachtwoord opslaan</SubmitButton>
@@ -414,6 +418,8 @@ export function FieldInput({
   autoComplete,
   autoFocus,
   rightSlot,
+  hint,
+  hintKlaar,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -426,10 +432,16 @@ export function FieldInput({
   autoComplete?: string;
   autoFocus?: boolean;
   rightSlot?: React.ReactNode;
+  /** Regel onder het veld die blijft staan terwijl je typt (de placeholder
+   *  verdwijnt dan): de wachtwoordregel. `hintKlaar` kleurt ze groen met een
+   *  vinkje zodra aan de regel voldaan is. */
+  hint?: React.ReactNode;
+  hintKlaar?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   // Label en veld gekoppeld (tranche 3A): het label noemde het veld niet.
   const id = useId();
+  const hintId = hint ? `${id}-hint` : undefined;
   const isPassword = type === 'password';
   const [revealed, setRevealed] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
@@ -489,6 +501,7 @@ export function FieldInput({
           minLength={minLength}
           autoComplete={autoComplete}
           autoFocus={autoFocus}
+          aria-describedby={hintId}
           className={`control-input-dark w-full pl-11 py-3.5 rounded-2xl font-medium text-white transition-colors ${
             isPassword ? 'pr-12' : 'pr-4'
           }`}
@@ -507,6 +520,15 @@ export function FieldInput({
           </IconButton>
         )}
       </div>
+      {hint && (
+        <p
+          id={hintId}
+          className={cn('flex items-center gap-1.5 px-1 text-xs', hintKlaar ? 'text-emerald-300' : 'text-slate-300')}
+        >
+          {hintKlaar && <CheckCircle size={12} className="shrink-0" aria-hidden="true" />}
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

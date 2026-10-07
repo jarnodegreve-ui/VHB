@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { WACHTWOORD_HINT, WACHTWOORD_MIN } from '../lib/wachtwoord';
+import { WACHTWOORD_HINT, WACHTWOORD_MIN, wachtwoordVoortgang } from '../lib/wachtwoord';
+import { wachtwoordZwakFout } from '../lib/wachtwoordFout';
 import { FeedbackBlock, FieldInput, LoginKop, LoginSchil, LoginTekstKnop, SubmitButton } from '../views/LoginView';
 
 /**
@@ -53,12 +54,10 @@ async function openUitnodiging(code: string): Promise<Open | { fout: Fout }> {
 }
 
 /** Foutcodes van Supabase bij het zetten van het wachtwoord → wat de genodigde kan doen. */
-const wachtwoordFout = (code: string | undefined) =>
-  code === 'same_password'
+const wachtwoordFout = (fout: { code?: string }) =>
+  fout.code === 'same_password'
     ? 'Kies een ander wachtwoord dan je vorige.'
-    : code === 'weak_password'
-      ? `Dit wachtwoord is te zwak. Kies er een van minstens ${WACHTWOORD_MIN} tekens.`
-      : 'Je wachtwoord opslaan lukte niet. Probeer opnieuw.';
+    : wachtwoordZwakFout(fout) ?? 'Je wachtwoord opslaan lukte niet. Probeer opnieuw.';
 
 export function UitnodigingScherm({ code, onLogin, onKlaar }: {
   code: string;
@@ -131,7 +130,7 @@ export function UitnodigingScherm({ code, onLogin, onKlaar }: {
       }
       const { error: zetFout } = await supabase.auth.updateUser({ password: wachtwoord });
       if (zetFout) {
-        setFout(wachtwoordFout((zetFout as { code?: string }).code));
+        setFout(wachtwoordFout(zetFout as { code?: string }));
         return;
       }
       // Het wachtwoord staat: de link is vanaf nu geen herstellink meer, ook
@@ -197,6 +196,7 @@ export function UitnodigingScherm({ code, onLogin, onKlaar }: {
   }
 
   const { naam, email } = stand.open;
+  const voortgang = wachtwoordVoortgang(wachtwoord);
   return (
     <LoginSchil>
       <LoginKop
@@ -219,6 +219,8 @@ export function UitnodigingScherm({ code, onLogin, onKlaar }: {
           minLength={WACHTWOORD_MIN}
           autoComplete="new-password"
           autoFocus
+          hint={voortgang.tekst}
+          hintKlaar={voortgang.klaar}
         />
         <FeedbackBlock error={fout} info="" />
         <SubmitButton loading={bezig}>Wachtwoord opslaan</SubmitButton>
