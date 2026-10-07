@@ -185,7 +185,13 @@ const DEELBUDGET_KB = {
   // schrijfactie in apiFetch) kost ±0,2 kB: lokaal 76,32, op de CI-runner
   // 76,61 (die meet de index ±0,3 kB zwaarder). Dat kan niet lui laden: het
   // zijn de startschermen zelf. 77 = de CI-meting plus ±0,4 kB.
-  index: 77,
+  // 07-10 (splitsing van App.tsx, #713, #714 en stap 5-6): 77 → 77,5. Geen
+  // nieuwe dependency. Elke stap zet een stuk van App in een eigen module
+  // (hooks met een eigen export, niet langer in één sluiting), en dat kost
+  // per stap ±0,1 tot 0,2 kB gzip: lokaal 76,40 → 76,60 → 76,90, op de
+  // CI-runner 76,71 → 76,87 → ±77,2. Dezelfde code, anders verdeeld; de
+  // trede van Lighthouse ligt al achter ons. 77,5 = de CI-meting plus ±0,3.
+  index: 77.5,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
