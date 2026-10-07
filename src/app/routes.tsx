@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity, AlertTriangle, Bell, Bus, BusFront, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
-  Hash, HeartPulse, History, IdCard, Inbox, LayoutDashboard, ListChecks, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
+  Activity, AlertTriangle, ArrowLeftRight, Bell, Bus, BusFront, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
+  Hash, HeartPulse, History, IdCard, Inbox, LayoutDashboard, ListChecks, Map as MapIcon, MapPin, Palette, Phone, Plus, Settings, Smartphone,
   Sun, Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route, FileBarChart, Mail } from 'lucide-react';
 import type { Role, View } from '../types';
 import { heeftRol, type Toegang } from '../../shared/toegang';
@@ -60,7 +60,7 @@ export const ROUTES: readonly RouteDef[] = [
   // wegwijzer las niet op de maat van het menu). Bewust een andere bus dan Voertuigen (zijkant).
   { view: 'filmnummers', pad: 'filmnummers', label: 'Filmnummers', omschrijving: 'Het nummer dat je intoetst per bestemming.', icoon: BusFront, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'documenten', pad: 'documenten', label: 'Documenten', omschrijving: 'Documenten die de planning voor jou klaarzet.', icoon: FolderOpen, sectie: 'algemeen', rollen: ['chauffeur', 'technieker'] },
-  { view: 'ruil-verzoeken', pad: 'dienstruil', label: 'Dienstruil', omschrijving: 'Ruil een dienst met een collega.', icoon: RotateCcw, sectie: 'algemeen', rollen: RIJDEND_EN_STAF },
+  { view: 'ruil-verzoeken', pad: 'dienstruil', label: 'Dienstruil', omschrijving: 'Ruil een dienst met een collega.', icoon: ArrowLeftRight, sectie: 'algemeen', rollen: RIJDEND_EN_STAF },
   { view: 'verlof', pad: 'verlof', label: 'Verlof', omschrijving: 'Vraag verlof aan en volg je aanvragen op.', icoon: CalendarCheck, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'updates', pad: 'updates', label: 'Updates', omschrijving: 'Nieuws en mededelingen.', icoon: Bell, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'meldingen', pad: 'meldingen', label: 'Meldingen', omschrijving: 'Wat er voor jou binnenkwam: planning, verlof, ruil en updates.', icoon: Inbox, sectie: 'algemeen', rollen: IEDEREEN },

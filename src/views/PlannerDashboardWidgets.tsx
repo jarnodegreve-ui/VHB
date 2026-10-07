@@ -15,7 +15,6 @@ import {
   MapPin,
   Phone,
   Plus,
-  Repeat,
   Settings,
   CheckCircle2,
   UserCheck,
@@ -23,6 +22,7 @@ import {
   Users,
   Smartphone,
 } from 'lucide-react';
+import { RuilIcoon } from '../components/RuilIcoon';
 import { EXPIRY_SOORT_LABELS, formatDatumDMJ, formatDayLong, formatPeriodeDMJ, formatShortDay, serviceNumberOf } from '../lib/format';
 import type { ActivityLogEntry, LeaveRequest, Shift, User, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
@@ -768,7 +768,7 @@ export function PlannerDashboardWidgets({
           <Fragment key={swap.id}>
           <OpsRow
             tone="blue"
-            icon={<Repeat size={16} />}
+            icon={<RuilIcoon overname={swap.swapType === 'overname'} />}
             primary={`${swap.swapType === 'overname' ? 'Overname' : 'Dienstruil'} · ${swap.targetDriverId
               ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
               : userNameById(swap.requesterId)}`}
@@ -1480,7 +1480,7 @@ const FEED_ICONS: Partial<Record<ActivityLogEntry['category'], ReactNode>> = {
   updates: <Bell size={14} />,
   auth: <KeyRound size={14} />,
   leave: <CalendarDays size={14} />,
-  swaps: <Repeat size={14} />,
+  swaps: <RuilIcoon size={14} />,
 };
 
 /** Activiteit-feedregel: wie deed wat, hoelang geleden. */

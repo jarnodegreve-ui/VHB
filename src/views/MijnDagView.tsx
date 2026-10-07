@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, BusFront, Calendar, FileText, WifiOff, Wrench } from 'lucide-react';
+import { BusFront, Calendar, FileText, WifiOff, Wrench } from 'lucide-react';
+import { RuilIcoon } from '../components/RuilIcoon';
 import { useOptioneleAppData } from '../app/AppDataContext';
 import { lopendeDiversions } from '../lib/diversions';
 import { addDays, isoDate } from '../lib/availability';
@@ -263,7 +264,7 @@ export function MijnDagView({
               {delen.length > 1 ? `${delen.length} delen · tot ${delen[delen.length - 1].endTime}` : `${delen[0].startTime}–${delen[delen.length - 1].endTime}`}
             </p>
             {ruilBadges.map((b) => (
-              <Badge key={b.swapId} tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(b)}</Badge>
+              <Badge key={b.swapId} tone="amber" stil icon={<RuilIcoon size={12} overname={b.soort === 'overname'} />}>{ruilBadgeLabel(b)}</Badge>
             ))}
           </div>
         )}

@@ -1,4 +1,5 @@
-import { ArrowUpRight, Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, RotateCcw, Wrench, X } from 'lucide-react';
+import { ArrowUpRight, Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, Wrench, X } from 'lucide-react';
+import { RuilIcoon } from './RuilIcoon';
 import { useAppDataContext } from '../app/AppDataContext';
 import { openDoel } from '../app/openDoel';
 import { datumsLeesbaar, tijdVan } from '../lib/meldingen';
@@ -22,7 +23,7 @@ import { MenuItem, Popover, PopoverKop, PopoverVoet } from './Popover';
 const ICOON_PER_SOORT: Record<MeldingSoort, ReturnType<typeof Bell>> = {
   planning: <Calendar size={16} />,
   verlof: <Plane size={16} />,
-  ruil: <RotateCcw size={16} />,
+  ruil: <RuilIcoon />,
   update: <Bell size={16} />,
   omleiding: <MapPin size={16} />,
   document: <FolderOpen size={16} />,

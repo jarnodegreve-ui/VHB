@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, FileText, Phone } from 'lucide-react';
+import { RuilIcoon } from '../components/RuilIcoon';
 import { isStaf, type LeaveRequest, type Shift, type SwapRequest, type User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
@@ -603,10 +604,10 @@ function MonthCalendar({
                   <Badge tone="red" icon={<AlertTriangle size={12} />}>Verlof-conflict</Badge>
                 )}
                 {g.openSwap && (
-                  <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
+                  <Badge tone={openSwapTone(g.openSwap)} stil icon={<RuilIcoon size={12} overname={g.openSwap.swapType === 'overname'} />}>{openSwapLabel(g.openSwap)}</Badge>
                 )}
                 {g.geruild && (
-                  <Badge tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(g.geruild)}</Badge>
+                  <Badge tone="amber" stil icon={<RuilIcoon size={12} overname={g.geruild.soort === 'overname'} />}>{ruilBadgeLabel(g.geruild)}</Badge>
                 )}
               </div>
               <div className="mt-1.5 space-y-1.5 pl-1">
@@ -694,10 +695,10 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                           </span>
                         )}
                         {g.openSwap && (
-                          <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
+                          <Badge tone={openSwapTone(g.openSwap)} stil icon={<RuilIcoon size={12} overname={g.openSwap.swapType === 'overname'} />}>{openSwapLabel(g.openSwap)}</Badge>
                         )}
                         {g.geruild && (
-                          <Badge tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(g.geruild)}</Badge>
+                          <Badge tone="amber" stil icon={<RuilIcoon size={12} overname={g.geruild.soort === 'overname'} />}>{ruilBadgeLabel(g.geruild)}</Badge>
                         )}
                       </div>
                       {g.hasConflict && (
@@ -783,12 +784,12 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                   )}
                   {g.openSwap && (
                     <div className="mt-1">
-                      <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
+                      <Badge tone={openSwapTone(g.openSwap)} stil icon={<RuilIcoon size={12} overname={g.openSwap.swapType === 'overname'} />}>{openSwapLabel(g.openSwap)}</Badge>
                     </div>
                   )}
                   {g.geruild && (
                     <div className="mt-1">
-                      <Badge tone="amber" stil icon={<ArrowLeftRight size={12} />}>{ruilBadgeLabel(g.geruild)}</Badge>
+                      <Badge tone="amber" stil icon={<RuilIcoon size={12} overname={g.geruild.soort === 'overname'} />}>{ruilBadgeLabel(g.geruild)}</Badge>
                     </div>
                   )}
                 </div>
