@@ -411,10 +411,35 @@ describe('dienstruil zonder tegenprestatie (overname)', () => {
     expect(res.json.days[0].takeover).toEqual({ '4': 'bv' });
   });
 
-  it('laat de takeover-lijst weg zonder de expliciete vlag', async () => {
+  it('laat de takeover-lijst en de redenen weg zonder de expliciete vlag', async () => {
     const res = await api('GET', '/api/availability?from=2026-07-08&to=2026-07-08', { token: 'tok-a' });
     expect(res.status).toBe(200);
     expect(res.json.days[0].takeover).toBeUndefined();
+    expect(res.json.days[0].reden).toBeUndefined();
+  });
+
+  it('geeft met takeover=1 per niet-beschikbare collega de reden: de bordcode met omschrijving, of het portaalverlof (ziekte wint)', async () => {
+    // Chauffeur B staat die dag op OPL (bord) zonder portaalverlof; A rijdt.
+    mem.planningMatrix = [{ id: 'm-1', source_date: '2026-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'opl' }, raw_row: '' }];
+    mem.planningCodes = [{ code: 'OPL', category: 'training', description: 'Opleiding' }];
+    const lees = async () => (await api('GET', '/api/availability?from=2026-07-08&to=2026-07-08&takeover=1', { token: 'tok-a' })).json.days[0];
+    const bord = await lees();
+    expect(bord.free).toEqual([]);
+    expect(bord.takeover).toEqual({});
+    expect(bord.reden).toEqual({ '4': 'Opleiding' });
+    // Goedgekeurd portaalverlof gaat voor op het bord.
+    mem.leave = [...mem.leave, { id: 'l-b8', userId: '4', startDate: '2026-07-08', endDate: '2026-07-08', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-06-01T08:00:00Z' }];
+    expect((await lees()).reden).toEqual({ '4': 'Verlof' });
+    // Ziekte wint bij overlap, zoals op het bord.
+    mem.leave = [...mem.leave, { id: 'l-b9', userId: '4', startDate: '2026-07-08', endDate: '2026-07-08', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-06-01T08:00:00Z' }];
+    const ziek = await lees();
+    expect(ziek.reden).toEqual({ '4': 'Ziek' });
+    // Wie rijdt (A) staat er niet in; wie vrij is evenmin.
+    mem.planningMatrix = [{ id: 'm-1', source_date: '2026-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'bv' }, raw_row: '' }];
+    mem.leave = mem.leave.filter((l) => l.id !== 'l-b8' && l.id !== 'l-b9');
+    const vrij = await lees();
+    expect(vrij.takeover).toEqual({ '4': 'bv' });
+    expect(vrij.reden).toEqual({});
   });
 });
 

@@ -140,7 +140,7 @@ test('chauffeur stelt een ruil voor via de 3-staps wizard', async ({ page }) => 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });
 
-test('stap 2: naam eerst, daaronder één korte code; vrij eerst, binnen elke groep alfabetisch', async ({ page }) => {
+test('stap 2: alfabetisch, wie niet beschikbaar is apart met de reden', async ({ page }) => {
   await seedSession(page, CHAUFFEUR);
   const collega = (id: string, name: string) => ({ ...COLLEGA, id, name, email: `${id}@vhb.be`, employeeId: `VHB-0000${id}` });
   const ZOE = collega('81', 'Zoë Verhaeghe');
@@ -150,8 +150,8 @@ test('stap 2: naam eerst, daaronder één korte code; vrij eerst, binnen elke gr
   const eigenDienst = { id: 's1', date: dayOffset(3), startTime: '08:00', endTime: '16:00', line: '2101', busNumber: '', driverId: CHAUFFEUR.id };
   const availability = {
     days: [{
-      date: dayOffset(3), working: [CHAUFFEUR.id, BERT.id], leave: [ANNA.id, CARL.id], free: [ZOE.id],
-      lines: { [CHAUFFEUR.id]: '2101', [BERT.id]: '2303' }, takeover: { [ANNA.id]: 'bv' },
+      date: dayOffset(3), working: [CHAUFFEUR.id, BERT.id], leave: [CARL.id], free: [ZOE.id],
+      lines: { [CHAUFFEUR.id]: '2101', [BERT.id]: '2303' }, takeover: { [ANNA.id]: 'bv' }, reden: { [CARL.id]: 'Verlof' },
     }],
   };
   await page.route('**/api/**', async (route) => {
@@ -170,14 +170,21 @@ test('stap 2: naam eerst, daaronder één korte code; vrij eerst, binnen elke gr
   await page.getByRole('button', { name: /Dienst 2101/ }).click();
   await expect(page.getByText('Stap 2 van 3')).toBeVisible();
 
-  const opties = page.getByRole('dialog').getByRole('button', { name: /Verhaeghe|Baert|Claeys|Dhondt/ });
-  // Vrij (en BV/TK/TA) eerst, dan wie die dag een dienst heeft of bezet is; telkens alfabetisch.
+  const wizard = page.getByRole('dialog');
+  const opties = wizard.getByRole('button', { name: /Verhaeghe|Baert|Claeys|Dhondt/ });
+  // Eén alfabetische lijst van wie kiesbaar is (BV/TK/TA, vrij, of met een
+  // dienst voor een 1-op-1), daaronder apart wie niet beschikbaar is, met de
+  // reden van de server in plaats van "Bezet" (Jarno 07-10).
   await expect(opties).toHaveText([
     /^Anna Baert\s*BV$/,
-    /^Zoë Verhaeghe\s*Vrij$/,
     /^Bert Claeys\s*Dienst 2303$/,
-    /^Carl Dhondt\s*Bezet$/,
+    /^Zoë Verhaeghe\s*Vrij$/,
+    /^Carl Dhondt\s*Verlof$/,
   ]);
+  await expect(wizard.getByText(/^Niet beschikbaar op /)).toBeVisible();
+  // Wie niet beschikbaar is blijft kiesbaar (1-op-1 op een andere dag).
+  await opties.last().click();
+  await expect(page.getByText('Stap 3 van 3')).toBeVisible();
 });
 
 test('een dienst met een lopende ruil is niet opnieuw aanvraagbaar', async ({ page }) => {

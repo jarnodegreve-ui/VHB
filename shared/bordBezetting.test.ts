@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { OVERNAME_CODES, dienstOpBord, vrijOpBord } from './bordBezetting';
+import { OVERNAME_CODES, afwezigheidsReden, dienstOpBord, vrijOpBord } from './bordBezetting';
 import { TAKEOVER_CODES, isTakeoverCode, toLookupToken } from '../api/helpers.js';
 
 /**
@@ -64,5 +64,32 @@ describe('drift met de server', () => {
       if (!toLookupToken(code)) continue;
       expect(vrijOpBord(afwezig(code)), code).toBe(isTakeoverCode(code));
     }
+  });
+});
+
+describe('afwezigheidsReden (ruilwizard stap 2, Jarno 07-10: de reden i.p.v. "Bezet")', () => {
+  it('portaalverlof gaat voor op het bord, ziekte wint bij overlap', () => {
+    expect(afwezigheidsReden(['betaald_verlof'], afwezig('opl'))).toBe('Verlof');
+    expect(afwezigheidsReden(['klein_verlet'], undefined)).toBe('Klein verlet');
+    expect(afwezigheidsReden(['betaald_verlof', 'ziekte'], afwezig('opl'))).toBe('Ziek');
+    expect(afwezigheidsReden(['onbekend_type'], null)).toBe('Verlof');
+  });
+
+  it('zonder portaalverlof: de omschrijving van de bordcode, anders de code in hoofdletters', () => {
+    expect(afwezigheidsReden([], { code: 'opl', kind: 'training', label: 'Opleiding' })).toBe('Opleiding');
+    expect(afwezigheidsReden([], { code: 'ziek', kind: 'absence' })).toBe('ZIEK');
+  });
+
+  it('een dienst die alleen op het bord leeft (schoolrit, of onder een vrije code) heet "Dienst X"', () => {
+    expect(afwezigheidsReden([], dienst('EEK6'))).toBe('Dienst EEK6');
+    expect(afwezigheidsReden([], { ...dienst('2101'), label: 'Dienst 2101' })).toBe('Dienst 2101');
+    expect(afwezigheidsReden([], afwezig('vrij', 'EEK6'))).toBe('Dienst EEK6');
+  });
+
+  it('vrij volgens het bord en zonder verlof: geen reden', () => {
+    expect(afwezigheidsReden([], afwezig('vrij'))).toBeNull();
+    expect(afwezigheidsReden([], afwezig('bv'))).toBeNull();
+    expect(afwezigheidsReden([], { code: '', kind: 'unknown' })).toBeNull();
+    expect(afwezigheidsReden([], null)).toBeNull();
   });
 });
