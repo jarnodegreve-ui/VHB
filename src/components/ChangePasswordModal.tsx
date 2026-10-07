@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { WACHTWOORD_MIN, WACHTWOORD_HINT } from '../lib/wachtwoord';
+import { WACHTWOORD_MIN, WACHTWOORD_HINT, wachtwoordVoortgang } from '../lib/wachtwoord';
+import { wachtwoordZwakFout } from '../lib/wachtwoordFout';
 import { motion } from 'motion/react';
 import { CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -94,8 +95,11 @@ export function ChangePasswordModal({
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
 
     if (updateError) {
-      // Alleen de status: de Supabase-melding zelf is Engels.
-      meldSchrijffout('Wachtwoord wijzigen', { status: updateError.status });
+      // Een te zwak wachtwoord hoort bij het veld; de rest alleen op status,
+      // want de Supabase-melding zelf is Engels.
+      const zwak = wachtwoordZwakFout(updateError);
+      if (zwak) fouten.zet({ nieuw: zwak });
+      else meldSchrijffout('Wachtwoord wijzigen', { status: updateError.status });
       setIsSubmitting(false);
       return;
     }
@@ -125,7 +129,7 @@ export function ChangePasswordModal({
             />
           </Field>
 
-          <Field label="Nieuw wachtwoord" htmlFor="cpm-new-password" error={fouten.fouten.nieuw}>
+          <Field label="Nieuw wachtwoord" htmlFor="cpm-new-password" error={fouten.fouten.nieuw} hint={wachtwoordVoortgang(newPassword).tekst}>
             <Input
               id="cpm-new-password"
               type="password"

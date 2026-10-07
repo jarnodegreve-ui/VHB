@@ -191,7 +191,16 @@ const DEELBUDGET_KB = {
   // per stap ±0,1 tot 0,2 kB gzip: lokaal 76,40 → 76,60 → 76,90, op de
   // CI-runner 76,71 → 76,87 → ±77,2. Dezelfde code, anders verdeeld; de
   // trede van Lighthouse ligt al achter ons. 77,5 = de CI-meting plus ±0,3.
-  index: 77.5,
+  // 07-10 (wachtwoordregel onder het veld): 77,5 → 78,3. Geen nieuwe
+  // dependency. Genodigden zagen bij het kiezen van een wachtwoord alleen de
+  // placeholder "Minstens 10 tekens", die verdwijnt zodra je typt, en zochten
+  // hoofdletters en cijfers die niet gevraagd worden. De regel staat nu als
+  // zin onder het veld en telt mee tijdens het typen (`wachtwoordVoortgang`,
+  // `hint` op FieldInput); het loginscherm zit in de startbundel, dus dat
+  // kost ±0,3 kB: lokaal 77,42 → 77,69. De vertaling van de Supabase-reden
+  // (`wachtwoordFout.ts`) laadt alleen in de luie schermen. 78,3 = de
+  // verwachte CI-meting (±78,0) plus ±0,3.
+  index: 78.3,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
