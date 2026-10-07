@@ -22,12 +22,14 @@ import { LOGIN_MELDING_KEY, vergeetEffectiefThema, type ToastEventDetail } from 
 import { AFGEMELD, type AfmeldBereik, bereikVanAfmelding, bevestigGebruiker, borgGebruiker, kanHerladen, magProfiel, meldAfBijSupabase, onthoudGebruiker, wisPriveCaches } from './lib/afmelden';
 import { apiFetch, isToestelGeblokkeerd, vernieuwSessie } from './lib/api';
 import { useToasts } from './app/useToasts';
+import { useLiveUpdates } from './app/useLiveUpdates';
+import { useNieuweVersie } from './app/useNieuweVersie';
+import { useMeldingNavigatie, usePush } from './app/usePush';
 import { lazyWithRetry, metRetry } from './lib/lazyRetry';
 import { WARMUP_VIEWS, prefetchView, warmViews } from './app/viewLoaders';
 import { addBreadcrumb, setMonitoringUser } from './lib/monitoring';
 import { useAanwezigheid } from './lib/presence';
-import { meldLive } from './lib/liveSignaal';
-import { fetchPushPublicKey, getExistingSubscription, hersyncPushSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
+import { isPushSupported, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { useThema } from './app/useThema';
@@ -36,8 +38,7 @@ import { useOnderhoud } from './app/useOnderhoud';
 import type { Werkvoorraad } from './lib/werkvoorraad';
 import { LoginView } from './views/LoginView';
 import { UITNODIGING_HASH } from '../shared/uitnodigingHash';
-import { useRealtimeSync, ververRealtimeToken } from './lib/realtime';
-import { laatSchrijffout } from './lib/foutenLui';
+import { ververRealtimeToken } from './lib/realtime';
 import { AppSchil, laadWerkvoorraadMenu, laadAccountOverlays } from './app/AppSchil';
 // Print-modus (?print-…=) lui: zelden gebruikt, dus niet in de startbundel (P5).
 const LazyPrintModus = lazyWithRetry(() => import('./app/PrintModus'));
@@ -126,20 +127,8 @@ export default function App() {
   const setCurrentView = useCallback((next: View) => {
     navigeer(next);
   }, [navigeer]);
-  // Deeplink terwijl het portaal al open staat: de service worker stuurt bij
-  // een tik op een melding een NAVIGATE-bericht i.p.v. het venster te
-  // herladen (zie sw.js notificationclick) — een open formulier blijft zo
-  // staan. Onbekende views negeren; de rol-guard doet de rest.
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-    const onMessage = (event: MessageEvent) => {
-      if (event.data?.type !== 'NAVIGATE') return;
-      const route = routeUitUrl(String(event.data.url ?? ''));
-      if (route) navigeer(route.view, { params: route.params });
-    };
-    navigator.serviceWorker.addEventListener('message', onMessage);
-    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
-  }, [navigeer]);
+  // Tik op een melding terwijl het portaal open staat (src/app/usePush.ts).
+  useMeldingNavigatie(navigeer);
   const ptrIndicatorRef = useRef<HTMLDivElement>(null);
   // Ruil starten vanuit het rooster: de gekozen dienst wordt in de ruil-wizard
   // voorgeselecteerd.
@@ -253,98 +242,11 @@ export default function App() {
   // Geen eigen history-entry: de Modal van de RitbladViewer is zelf een laag.
   // Een tweede entry hier liet na het kruisje een dode terugstap achter.
 
-  // Supabase Realtime: live sync van leave/swaps/diversions/updates/planning.
-  // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
-  // gebeurt er niets.
-  // Niet zolang het toestel-wachtscherm staat: elke refetch zou alleen een
-  // toestel-403 opleveren.
-  useRealtimeSync(!!session && !!currentUser && !deviceBlocked, {
-    // meldLive: stille "… bijgewerkt"-toast (max één per 10 s per collectie,
-    // niet na een eigen schrijfactie) — src/lib/liveSignaal.ts.
-    refetchLeave: (soort) => {
-      // Ziekte is geen verlof: een gewijzigde ziekmelding meldt zich bij staf
-      // als "Ziekmelding bijgewerkt" en bij een chauffeur helemaal niet.
-      if (soort !== 'ziekte') meldLive('verlof');
-      else if (currentUser && isStaf(currentUser.role)) meldLive('ziekte');
-      // Verlof stuurt de dekking (afwezige = gat): voor staf meteen mee
-      // verversen, anders liepen dashboard en topbar-badge achter.
-      if (currentUser && isStaf(currentUser.role)) refreshCoverageGaps();
-      return fetchLeave();
-    },
-    refetchSwaps: () => { meldLive('ruil'); return fetchSwaps(); },
-    refetchDiversions: () => { meldLive('omleidingen'); return fetchDiversions(undefined, { silent: true }); },
-    refetchUpdates: () => { meldLive('updates'); return fetchUpdates(); },
-    refetchNotes: () => fetchMyNotes(),
-    // Meldingencentrum: eigen rijen → bel + badge live.
-    refetchMeldingen: () => fetchMeldingen(),
-    meldingenUserId: currentUser ? String(currentUser.id) : undefined,
-    refetchPlanning: () => {
-      meldLive('planning');
-      // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
-      const planningFilter = currentUser && !isStaf(currentUser.role)
-        ? { driverId: String(currentUser.id) }
-        : undefined;
-      fetchPlanning(undefined, planningFilter, { silent: true });
-      // Maandplanning haalt haar eigen data (/api/month-planning); dit event
-      // laat een open Maandplanning-scherm stil meeverversen zodra een
-      // collega een wissel doorvoert of de planning herbouwt.
-      window.dispatchEvent(new Event('vhb-planning-changed'));
-      // Dekking beweegt mee met de planning (Operations Center).
-      if (currentUser && isStaf(currentUser.role)) {
-        refreshCoverageGaps();
-      }
-    },
-    refetchMatrix: () => {
-      // Alleen planner/admin gebruiken het Planning-overzicht; chauffeurs
-      // hebben deze data niet.
-      if (currentUser && isStaf(currentUser.role)) {
-        void fetchPlanningMatrix();
-        void fetchPlanningMatrixHistory();
-      }
-    },
-    refetchAll: () => {
-      void fetchMyNotes();
-      void fetchMeldingen();
-      // Catch-up na reconnect/heropenen: stil alles verversen — gemiste
-      // realtime-events zijn definitief weg, dus opnieuw ophalen is de
-      // enige manier om zeker in sync te komen.
-      void fetchLeave();
-      void fetchSwaps();
-      void fetchDiversions(undefined, { silent: true });
-      void fetchUpdates();
-      const planningFilter = currentUser && !isStaf(currentUser.role)
-        ? { driverId: String(currentUser.id) }
-        : undefined;
-      void fetchPlanning(undefined, planningFilter, { silent: true });
-      if (currentUser && isStaf(currentUser.role)) {
-        refreshCoverageGaps();
-        void fetchPlanningMatrix();
-        void fetchPlanningMatrixHistory();
-        // Sessie-metadata (lastLogin) verandert zonder realtime-event; zonder
-        // deze refetch liep "Laatst actief" achter in een openstaand tabblad.
-        void fetchUsers();
-      }
-    },
-    // Lichte catch-up (tabblad terug binnen 5 min na de laatste volledige
-    // ronde, src/lib/realtime.ts): alleen wat vaak wijzigt. De planning hoort
-    // er alleen bij als planning_version wijzigde (of niet te lezen was), en
-    // dan stil: een wijziging die via de socket binnenkwam gaf haar toast al.
-    refetchLicht: ({ planning }) => {
-      void fetchMeldingen();
-      void fetchLeave();
-      void fetchSwaps();
-      if (!planning) return;
-      const planningFilter = currentUser && !isStaf(currentUser.role)
-        ? { driverId: String(currentUser.id) }
-        : undefined;
-      void fetchPlanning(undefined, planningFilter, { silent: true });
-      window.dispatchEvent(new Event('vhb-planning-changed'));
-      if (currentUser && isStaf(currentUser.role)) {
-        refreshCoverageGaps();
-        void fetchPlanningMatrix();
-        void fetchPlanningMatrixHistory();
-      }
-    },
+  // Live-updates via Supabase Realtime (src/app/useLiveUpdates.ts): de
+  // refetchers per collectie; niet zolang het toestel-wachtscherm staat.
+  useLiveUpdates(!!session && !!currentUser && !deviceBlocked, currentUser, {
+    fetchLeave, fetchSwaps, fetchDiversions, fetchUpdates, fetchMyNotes, fetchMeldingen,
+    fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchUsers,
   });
 
   // Terug online (offline-banner verdwijnt): zelfde catch-up als realtime —
@@ -368,137 +270,16 @@ export default function App() {
     });
   };
 
-  // Nieuwe versie klaar: de SW blijft wachten (geen auto-skipWaiting meer,
-  // zie public/sw.js) — wij melden het met een "Vernieuw"-actie. Pas na die
-  // klik activeert de nieuwe SW en herlaadt index.html de app; een deploy
-  // gooit dus nooit meer een half ingevuld formulier weg.
-  //
-  // Eén melding per wachtende versie (melding Jarno 09-09): de toast kwam
-  // terug bij élke terugkeer naar de app zolang je niet op "Vernieuw" klikte,
-  // dus wie hem wegklikte kreeg hem bij elke app-wissel opnieuw en het leek
-  // alsof er telkens een nieuwe versie was. We onthouden welke wachtende
-  // worker we al aanboden; een échte nieuwe deploy is een ander object en
-  // wordt dus wél opnieuw gemeld.
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    let gestopt = false;
-    let alGemeld: ServiceWorker | null = null;
-    const meldUpdate = (reg: ServiceWorkerRegistration) => {
-      const wachtend = reg.waiting;
-      // Alleen bij een échte vervanging: zonder controller is dit de eerste
-      // installatie en valt er niets te vernieuwen.
-      if (!wachtend || !navigator.serviceWorker.controller || gestopt) return;
-      if (wachtend === alGemeld) return;
-      // Niet aanbieden zonder netwerk: "Vernieuw" activeert de nieuwe SW en
-      // herlaadt; offline was dat een wit scherm zodra de nieuwe cache leeg
-      // bleek (controle-ronde 27-08, bevinding 6). Zodra het netwerk terug is,
-      // meldt de online-listener hieronder het alsnog. Op de échte status
-      // (online-store, met ping): `navigator.onLine` is op bus-wifi zonder
-      // internet true en bood de toast dan tóch aan.
-      if (!isOnlineNu()) return;
-      alGemeld = wachtend;
-      showToast('Er staat een nieuwe versie van het portaal klaar.', 'info', {
-        label: 'Vernieuw',
-        run: () => wachtend.postMessage({ type: 'SKIP_WAITING' }),
-      });
-    };
-    let registratie: ServiceWorkerRegistration | null = null;
-    const bijZichtbaar = () => {
-      if (document.visibilityState === 'visible' && registratie) meldUpdate(registratie);
-    };
-    // Terug online (store-overgang false → true): het uitgestelde aanbod alsnog doen.
-    let wasOnline = isOnlineNu();
-    const stopOnline = abonneerOnline(() => {
-      const nu = isOnlineNu();
-      if (nu && !wasOnline && registratie) meldUpdate(registratie);
-      wasOnline = nu;
-    });
-    navigator.serviceWorker.getRegistration().then((reg) => {
-      if (!reg || gestopt) return;
-      registratie = reg;
-      meldUpdate(reg);
-      reg.addEventListener('updatefound', () => {
-        const nieuwe = reg.installing;
-        nieuwe?.addEventListener('statechange', () => {
-          if (nieuwe.state === 'installed') meldUpdate(reg);
-        });
-      });
-      document.addEventListener('visibilitychange', bijZichtbaar);
-    });
-    return () => {
-      gestopt = true;
-      document.removeEventListener('visibilitychange', bijZichtbaar);
-      stopOnline();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Nieuwe versie van het portaal klaar (src/app/useNieuweVersie.ts).
+  useNieuweVersie(showToast);
 
-  // Push-notificaties: key=null betekent dat de server geen VAPID-keys heeft
-  // (feature uit) — de knop verschijnt dan niet.
-  const [pushPublicKey, setPushPublicKey] = useState<string | null>(null);
-  const [pushEnabled, setPushEnabled] = useState(false);
+  // Push-notificaties (src/app/usePush.ts): sleutel, schakelaar en abonnement.
+  const { pushPublicKey, pushEnabled, togglePush, resetPush } = usePush({ currentUser, session, showToast });
   // Twee-stapsverificatie (staf): tussenscherm vóór de app, zie initializeAuthenticatedApp.
   const [tweeStaps, setTweeStaps] = useState<{ stap: 'code' | 'inschrijven'; factorId: string | null } | null>(null);
   // Gedeeld toestel (Instellingen › Beveiliging): automatisch afmelden na een half uur stilte.
   const [gedeeldToestel, setGedeeldToestel] = useState<boolean>(() => (typeof window !== 'undefined' ? isGedeeldToestel() : false));
 
-  useEffect(() => {
-    if (!currentUser || !session?.access_token || !isPushSupported()) return;
-    let cancelled = false;
-    const headers = { Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() };
-    (async () => {
-      const key = await fetchPushPublicKey(headers);
-      if (cancelled) return;
-      setPushPublicKey(key);
-      if (key) {
-        const existing = await getExistingSubscription();
-        if (cancelled) return;
-        // Geen abonnement meer terwijl de schakelaar aan stond (push-service
-        // of iOS ruimde het op) → de schakelaar toont eerlijk "uit".
-        setPushEnabled(Boolean(existing));
-        // Wél een abonnement: hooguit 1× per 24 u opnieuw registreren, zodat
-        // een rij die de server na een 410 wiste terugkomt (nr. 8).
-        if (existing) void hersyncPushSubscription(existing, headers);
-      }
-    })();
-    // De service worker meldt een vervangen abonnement (pushsubscriptionchange
-    // in sw.js); hij heeft zelf geen token, dus de app registreert het.
-    const onBericht = (event: MessageEvent) => {
-      if (event.data?.type !== 'PUSH_SUBSCRIPTION_CHANGED') return;
-      const sub = event.data.subscription as PushSubscriptionJSON | null;
-      if (!sub?.endpoint) {
-        setPushEnabled(false);
-        return;
-      }
-      void hersyncPushSubscription(sub, headers, { force: true }).then((ok) => { if (ok) setPushEnabled(true); });
-    };
-    const sw = 'serviceWorker' in navigator ? navigator.serviceWorker : null;
-    sw?.addEventListener('message', onBericht);
-    return () => {
-      cancelled = true;
-      sw?.removeEventListener('message', onBericht);
-    };
-  }, [currentUser?.id, session?.access_token]);
-
-  const togglePush = async () => {
-    if (!pushPublicKey || !session?.access_token) return;
-    const headers = { Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() };
-    if (pushEnabled) {
-      await unsubscribeFromPush(headers);
-      setPushEnabled(false);
-      showToast('Meldingen uitgeschakeld.', 'info');
-      return;
-    }
-    const result = await subscribeToPush(pushPublicKey, headers);
-    if (result === 'subscribed') {
-      setPushEnabled(true);
-      showToast('Meldingen ingeschakeld, je krijgt voortaan een seintje bij planning, verlof en dienstruil.', 'success');
-    } else if (result === 'denied') {
-      showToast('Meldingen geweigerd, sta notificaties toe in je browserinstellingen en probeer opnieuw.', 'info');
-    } else {
-      laatSchrijffout('Meldingen inschakelen', undefined, (tekst) => showToast(tekst, 'error', { label: 'Opnieuw proberen', run: () => void togglePush() }));
-    }
-  };
 
   // Onderhoudsmodus (src/app/useOnderhoud.ts): banner boven de inhoud zolang
   // actief; bij een geblokkeerde schrijfactie één info-toast.
@@ -760,7 +541,7 @@ export default function App() {
     setSession(null);
     setCurrentUser(null);
     setMonitoringUser(null);
-    setPushEnabled(false);
+    resetPush();
     setDeviceBlocked(null);
     setTweeStaps(null);
     initializedUserIdRef.current = null;

@@ -191,8 +191,15 @@ staging-project = die host daar vervangen.
 **Stand 07-09:** de Vercel-Preview-omgeving wijst naar staging (VITE_SUPABASE_URL,
 SUPABASE_URL, VITE_SUPABASE_ANON_KEY, SUPABASE_ANON_KEY, VITE_OMGEVING, APP_URL,
 CALENDAR_FEED_SECRET als aparte Preview-records; CRON_SECRET gedeeld met productie).
-Alleen `SUPABASE_SERVICE_ROLE_KEY` voor Preview moet nog handmatig uit het
-staging-dashboard gezet worden (Project Settings › API keys › service_role).
+**Stand 06-10:** ook `SUPABASE_SERVICE_ROLE_KEY` staat voor Preview (gevoelige
+variabele, gezet met `cd ~/VHB/portaal && vercel env add SUPABASE_SERVICE_ROLE_KEY preview`;
+een deploy van vóór het zetten heeft de sleutel niet, `vercel redeploy <preview-url>`
+bouwt opnieuw). Getest op een herdeployde preview: `/api/me` met een staging-token geeft
+het staging-profiel, `/api/health/schema` meldt geen ontbrekende migraties. Previews
+staan achter Vercel Authentication (302 naar vercel.com/sso-api); vanuit de terminal
+testen kan met een tijdelijk Protection-Bypass-geheim
+(`vercel api -X PATCH /v1/projects/<projectId>/protection-bypass --input '{"generate":{}}'`,
+header `x-vercel-protection-bypass`, daarna intrekken met `{"revoke":{"secret":"…"}}`).
 
 ## 6. Een preview herkennen
 
