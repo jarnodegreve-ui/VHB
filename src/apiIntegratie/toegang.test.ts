@@ -1306,6 +1306,19 @@ describe('twee-stapsverificatie voor staf (MFA_STAF=aan, verbeterronde 07-09 nr.
     expect((await api('GET', '/api/leave', { token: 'tok-a' })).status).toBe(200);
   });
 
+  it('de sessiestart zegt staf meteen of de code nog moet komen (niets laden vóór aal2, 07-10)', async () => {
+    const aal1 = await api('POST', '/api/auth/session', { token: 'tok-planner', body: { action: 'start' } });
+    expect(aal1.status).toBe(200);
+    expect(aal1.json.beveiliging).toEqual({ mfaVerplicht: true, aal: 'aal1' });
+    const aal2 = await api('POST', '/api/auth/session', { token: 'tok-planner-2fa', body: { action: 'start' } });
+    expect(aal2.status).toBe(200);
+    expect(aal2.json.beveiliging).toEqual({ mfaVerplicht: true, aal: 'aal2' });
+    // Een chauffeur heeft geen tweede stap en krijgt het veld niet.
+    const chauffeur = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'start' } });
+    expect(chauffeur.status).toBe(200);
+    expect(chauffeur.json.beveiliging).toBeUndefined();
+  });
+
   it('zonder MFA_STAF=aan is aal1 voor staf gewoon toegestaan', async () => {
     process.env.MFA_STAF = 'uit';
     expect((await api('GET', '/api/users', { token: 'tok-planner' })).status).toBe(200);

@@ -214,7 +214,13 @@ export function mountAccountRoutes(app: express.Express) {
           ? (currentUser.activeSessions || 0) + 1
           : Math.max(0, (currentUser.activeSessions || 1) - 1),
       };
-      res.json(nextUser);
+      // Tweede stap vóór alles (07-10, "niets laden vóór aal2"): op dit
+      // antwoord beslist de client na het wachtwoord of eerst de code moet
+      // komen, zonder tweede roundtrip; dezelfde vorm als bij /api/me.
+      res.json({
+        ...nextUser,
+        ...(isStafRol(currentUser.role) ? { beveiliging: { mfaVerplicht: mfaStafVerplicht(), aal: req.aal ?? "aal1" } } : {}),
+      });
     } catch (error: any) {
       console.error("Kon sessie niet bijwerken.", error);
       res.status(500).json({ error: "Kon sessie niet bijwerken." });

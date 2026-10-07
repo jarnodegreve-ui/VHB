@@ -42,3 +42,26 @@ export const leesTweeStapsStatus = async (): Promise<TweeStapsStatus | null> => 
     return null;
   }
 };
+
+/** Wat de server over de sessie zegt: `beveiliging` bij /api/me en bij de sessiestart. */
+export type Beveiliging = { mfaVerplicht?: boolean; aal?: 'aal1' | 'aal2' } | null;
+
+export type TweeStapsBesluit = { stap: TweeStapsStap; factorId: string | null; onzeker: boolean };
+
+/**
+ * Eén besluit over de tweede stap uit twee bronnen (07-10, "niets laden vóór
+ * aal2"): de status van de client (factor en niveau uit de sessie) en wat de
+ * server over de sessie zegt. Is de status leesbaar, dan beslist die zoals
+ * altijd. Is ze niet leesbaar terwijl de server de code eist en de sessie nog
+ * aal1 is, dan is de stap zeker nodig maar is onbekend of er al een
+ * authenticator is: `onzeker`, en het codescherm leest de status dan zelf
+ * (TweeStapsScherm). Vroeger gold dan "geen stap" en vertrok de hele
+ * laadronde met het aal1-token, die de server verzoek voor verzoek weigerde.
+ * Zonder serverinformatie blijft het fail-open: de 403 van de server vangt het.
+ */
+export const beslisTweeStaps = (status: TweeStapsStatus | null, beveiliging: Beveiliging): TweeStapsBesluit => {
+  const verplicht = !!beveiliging?.mfaVerplicht;
+  if (status) return { stap: bepaalTweeStapsStap(status, verplicht), factorId: status.factorId, onzeker: false };
+  if (verplicht && beveiliging?.aal === 'aal1') return { stap: 'code', factorId: null, onzeker: true };
+  return { stap: 'geen', factorId: null, onzeker: false };
+};

@@ -8,7 +8,7 @@ import { heeftOpgeslagenSessie } from './AppSkeleton';
 import { neemStartDoel } from './router';
 import { prefetchView } from './viewLoaders';
 import { antwoordUitCache } from './data/kern';
-import { bepaalTweeStapsStap, leesTweeStapsStatus } from '../lib/tweeStaps';
+import { beslisTweeStaps, leesTweeStapsStatus, type TweeStapsStatus } from '../lib/tweeStaps';
 import { GEDEELD_TOESTEL_EVENT, isGedeeldToestel, useInactiviteitsUitlog } from '../lib/inactiviteit';
 import { naOpruimen } from '../lib/lagen';
 import { LOGIN_MELDING_KEY, vergeetEffectiefThema } from '../lib/ui';
@@ -450,6 +450,19 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
    *  /api/me/beveiliging. */
   type ProfielBeveiliging = { mfaVerplicht?: boolean; aal?: 'aal1' | 'aal2' };
 
+  // Eén statuslezing van de tweede stap per token (07-10): bij een aanmelding
+  // lopen handleLogin en de init via het auth-event tegelijk en lazen ze de
+  // status elk apart (twee keer twee calls naar de aanmelddienst). `vers`
+  // dwingt een nieuwe lezing af (de herkansing bij een onleesbare status).
+  const tweeStapsLezingRef = useRef<{ token: string; belofte: Promise<TweeStapsStatus | null> } | null>(null);
+  const leesStatusGedeeld = (token: string, vers = false): Promise<TweeStapsStatus | null> => {
+    const lopend = tweeStapsLezingRef.current;
+    if (!vers && lopend && lopend.token === token) return lopend.belofte;
+    const belofte = leesTweeStapsStatus();
+    tweeStapsLezingRef.current = { token, belofte };
+    return belofte;
+  };
+
   const fetchCurrentUser = async (accessToken: string, cacheMag: boolean): Promise<{ appUser: User; beveiliging: ProfielBeveiliging | null; uitCache: boolean }> => {
     const response = await apiFetch('/api/me', { accessToken });
     const uitCache = antwoordUitCache(response);
@@ -467,7 +480,9 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
     // /api/me draagt sinds punt 19 ook `toestel` (oordeel over dit toestel)
     // en, voor staf, `beveiliging`; die horen niet in het User-object.
     const { toestel: _toestel, beveiliging, ...appUser } = data as User & { toestel?: unknown; beveiliging?: ProfielBeveiliging };
-    setCurrentUser(appUser);
+    // De gebruiker komt pas in de state ná de poort van de tweede stap
+    // (initializeAuthenticatedApp): de datalaag en de hooks laden zodra er een
+    // gebruiker is, en dat mag niet vóór aal2 (07-10).
     profielGeladenRef.current = true;
     setMonitoringUser(String(appUser.id), appUser.role);
     forceSignOutRef.current = false; // geldige sessie → her-arm de auto-logout
@@ -528,7 +543,7 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
       // (leesTweeStapsStatus vangt zelf af), dus een ongelezen belofte is veilig.
       let rolHint: string | null = null;
       try { rolHint = window.localStorage.getItem(LAST_ROLE_KEY); } catch { /* opslag geblokkeerd */ }
-      const vroegeTweeStaps = rolHint === 'chauffeur' || rolHint === 'technieker' ? null : leesTweeStapsStatus();
+      const vroegeTweeStaps = rolHint === 'chauffeur' || rolHint === 'technieker' ? null : leesStatusGedeeld(accessToken);
       let profiel: Awaited<ReturnType<typeof fetchCurrentUser>>;
       try {
         profiel = await fetchCurrentUser(accessToken, cacheMag);
@@ -563,22 +578,30 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
       // vangt de 403 mfa_required van de server het alsnog. `mfaVerplicht`
       // komt sinds punt 19 mee in /api/me (geen aparte roundtrip meer);
       // alleen een oudere server zonder dat veld vraagt het nog apart.
+      // Niets laden vóór aal2 (07-10): de server zegt in `beveiliging` ook
+      // op welk niveau de sessie staat. Eist hij de code terwijl de status
+      // van de client niet leesbaar is, dan was dat vroeger "geen stap" en
+      // vertrok de hele laadronde met het aal1-token (verzoek voor verzoek
+      // geweigerd); nu is de stap zeker en leest het codescherm de status
+      // zelf, na één herkansing hier (beslisTweeStaps).
       if (appUser.role === 'planner' || appUser.role === 'admin') {
-        const [status, mfaVerplicht] = await Promise.all([
-          vroegeTweeStaps ?? leesTweeStapsStatus(),
+        const [status, bev] = await Promise.all([
+          vroegeTweeStaps ?? leesStatusGedeeld(accessToken),
           beveiliging
-            ? Promise.resolve(!!beveiliging.mfaVerplicht)
-            : (apiFetch('/api/me/beveiliging', { accessToken }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as Promise<{ mfaVerplicht?: boolean } | null>).then((b) => !!b?.mfaVerplicht),
+            ? Promise.resolve(beveiliging)
+            : (apiFetch('/api/me/beveiliging', { accessToken }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as Promise<ProfielBeveiliging | null>),
         ]);
-        const stap = bepaalTweeStapsStap(status, mfaVerplicht);
-        if (stap !== 'geen') {
-          setTweeStaps({ stap, factorId: status?.factorId ?? null });
+        let besluit = beslisTweeStaps(status, bev);
+        if (besluit.onzeker) besluit = beslisTweeStaps(await leesStatusGedeeld(accessToken, true), bev);
+        if (besluit.stap !== 'geen') {
+          setTweeStaps({ stap: besluit.stap, factorId: besluit.factorId });
           setIsInitialLoad(false);
           initializingUserIdRef.current = null; // na de code opnieuw initialiseren
           return;
         }
       }
       setTweeStaps(null);
+      setCurrentUser(appUser);
       // Een profiel van de server: vanaf hier zijn de privé-caches van deze
       // gebruiker (borgGebruiker hierboven wiste ze als het iemand anders was).
       if (!uitCache) await bevestigGebruiker(authUserId, String(appUser.id));
@@ -632,8 +655,27 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
     // het echte doel. Geen (geldig) doel = het dashboard zoals vroeger.
     const ruwDoel = neemStartDoel();
     const terug = ruwDoel ? await import('./terugNaLogin').then((m) => m.naarStartDoel(ruwDoel), () => false) : false;
-    setCurrentUser(user);
+    // `beveiliging` hoort niet in het User-object (zie fetchCurrentUser).
+    const { beveiliging, ...profiel } = user as User & { beveiliging?: ProfielBeveiliging };
     profielGeladenRef.current = true;
+    // Tweede stap vóór alles (07-10, "niets laden vóór aal2"): een planner of
+    // admin die de code nog moet geven krijgt eerst het codescherm, en de
+    // gebruiker komt pas in de state ná de code (via de init met de
+    // aal2-sessie, naTweeStaps), want de datalaag en de hooks laden zodra er
+    // een gebruiker is. Vroeger stond de gebruiker hier al en vertrok
+    // /api/users met het aal1-token, dat de server weigerde (laadfout-toast
+    // tot #712).
+    if (profiel.role === 'planner' || profiel.role === 'admin') {
+      const bev = beveiliging ?? null;
+      let besluit = beslisTweeStaps(await leesStatusGedeeld(token), bev);
+      if (besluit.onzeker) besluit = beslisTweeStaps(await leesStatusGedeeld(token, true), bev);
+      if (besluit.stap !== 'geen') {
+        setTweeStaps({ stap: besluit.stap, factorId: besluit.factorId });
+        if (!terug) setCurrentView('dashboard');
+        return;
+      }
+    }
+    setCurrentUser(profiel);
     await fetchUsers(token);
     if (!terug) setCurrentView('dashboard');
   };
@@ -696,7 +738,7 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
 
   // Gedeeld toestel: na 30 minuten zonder aanraking terug naar het
   // loginscherm, met uitleg (verbeterronde 07-09, nr. 12).
-  useInactiviteitsUitlog(gedeeldToestel && !!currentUser, () => {
+  useInactiviteitsUitlog(gedeeldToestel && (!!currentUser || !!tweeStaps), () => {
     void forceSignOut('inactief');
   });
 
