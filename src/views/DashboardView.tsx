@@ -1,5 +1,6 @@
 import { Fragment, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
-import { BusFront, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, SlidersHorizontal, Users, Wrench } from 'lucide-react';
+import { BusFront, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, SlidersHorizontal, Users, Wrench } from 'lucide-react';
+import { RuilIcoon } from '../components/RuilIcoon';
 import { activeDiversions, lopendeDiversions, omleidingsPeriode, omleidingsTijdshint, sorteerOmleidingen } from '../lib/diversions';
 import { OmleidingDetail } from '../components/OmleidingDetail';
 import { isRijdend } from '../types';
@@ -466,7 +467,7 @@ export function DashboardView({ notes = [],
           geschreven, zoals op Vandaag. */}
       {wachtOpMij.length > 0 && (
         <OpsPanel
-          icon={<RefreshCw size={16} />}
+          icon={<RuilIcoon />}
           title="Wacht op jouw antwoord"
           aside={`${wachtOpMij.length} ${wachtOpMij.length === 1 ? 'ruil' : 'ruilen'}`}
           onSeeAll={() => navigeer('ruil-verzoeken')}
@@ -479,7 +480,7 @@ export function DashboardView({ notes = [],
                 <Fragment key={item.ruil.id}>
                   <OpsRow
                     tone={item.soort === 'antwoord' ? 'amber' : 'slate'}
-                    icon={<RefreshCw size={16} />}
+                    icon={<RuilIcoon overname={item.ruil.swapType === 'overname'} />}
                     primary={regels.primary}
                     secondary={regels.secondary}
                     trailing={item.ruil.shiftLine ? <ServiceChip serviceNumber={item.ruil.shiftLine} /> : undefined}
@@ -526,7 +527,7 @@ export function DashboardView({ notes = [],
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
           <QuickAction icon={<BusFront size={16} />} label="Filmnummers" sub="Nummer per bestemming" onClick={() => onNavigate('filmnummers')} />
           {isRijdend(user.role) && <QuickAction icon={<Wrench size={16} />} label="Defect melden" sub="Iets mis met de bus?" onClick={() => setDefectMelden(true)} />}
-          {isRijdend(user.role) && <QuickAction icon={<RefreshCw size={16} />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />}
+          {isRijdend(user.role) && <QuickAction icon={<RuilIcoon />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />}
           <QuickAction icon={<FileText size={16} />} label="Documenten" sub="Wat de planning klaarzet" onClick={() => onNavigate('documenten')} />
           {isRijdend(user.role) && <QuickAction icon={<Users size={16} />} label="Maandplanning" sub="Wie rijdt wanneer" onClick={() => onNavigate('bezetting')} />}
         </div>

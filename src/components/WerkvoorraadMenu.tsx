@@ -1,4 +1,5 @@
-import { AlertTriangle, ArrowUpRight, CalendarClock, CalendarDays, CheckCircle2, IdCard, ListChecks, Repeat, Smartphone, UserX } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, CalendarClock, CalendarDays, CheckCircle2, IdCard, ListChecks, Smartphone, UserX } from 'lucide-react';
+import { RuilIcoon } from './RuilIcoon';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
 import type { Werkvoorraad } from '../lib/werkvoorraad';
@@ -109,7 +110,7 @@ export function WerkvoorraadMenu({
   if (wv.pendingSwaps.length > 0) {
     rijen.push({
       key: 'ruil',
-      icon: <Repeat size={16} />,
+      icon: <RuilIcoon />,
       tone: 'blue',
       label: enkelvoud(wv.pendingSwaps.length, 'ruilverzoek', 'ruilverzoeken'),
       sub: somOp(wv.pendingSwaps.map((s) => userNaam(s.requesterId))),

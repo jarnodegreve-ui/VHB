@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, CalendarClock, CalendarDays, IdCard, Repeat, ShieldCheck, Smartphone, UserX } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CalendarDays, IdCard, ShieldCheck, Smartphone, UserX } from 'lucide-react';
+import { RuilIcoon } from '../components/RuilIcoon';
 import type { User, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import {
@@ -33,7 +34,7 @@ import { meldSchrijffout } from '../lib/fouten';
 type SoortIcoon = Record<WerkSoort, ReactNode>;
 const ICOON: SoortIcoon = {
   verlof: <CalendarDays size={16} />,
-  ruil: <Repeat size={16} />,
+  ruil: <RuilIcoon />,
   herverdelen: <UserX size={16} />,
   dekking: <AlertTriangle size={16} />,
   toestellen: <Smartphone size={16} />,
