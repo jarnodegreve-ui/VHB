@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouteParam } from '../app/router';
-import { AlertTriangle, ChevronRight, MapPin, Phone, Repeat, UserX } from 'lucide-react';
+import { AlertTriangle, ChevronRight, MapPin, Phone, UserX } from 'lucide-react';
+import { RuilIcoon } from '../components/RuilIcoon';
 import type { LeaveRequest, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { addDays, isoDate } from '../lib/availability';
@@ -248,7 +249,7 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
           </OpsPanel>
 
           <OpsPanel
-            icon={<Repeat size={16} />}
+            icon={<RuilIcoon />}
             title="Dienstruilen"
             aside={briefing.ruilen.length > 0 ? `${briefing.ruilen.length} op deze dag` : undefined}
           >
@@ -262,7 +263,7 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
                     <OpsRow
                       key={`${r.swap.id}-${r.kant}`}
                       tone={teKort ? 'amber' : 'blue'}
-                      icon={<Repeat size={16} />}
+                      icon={<RuilIcoon overname={r.swap.swapType === 'overname'} />}
                       primary={ruilTekst(r)}
                       secondary={[
                         `Dienst ${r.dienst}`,
