@@ -34,7 +34,12 @@ export default function App() {
   // leest ze pas op het moment van gebruik.
   const koppelingen = useRef<SessieKoppelingen | null>(null);
   const sessie = useSessie(koppelingen);
-  const { session, currentUser, deviceBlocked, sessieBeeindigdRef, toestelGeblokkeerdRef, handleLogout } = sessie;
+  const { session, currentUser, deviceBlocked, tweeStaps, sessieBeeindigdRef, toestelGeblokkeerdRef, handleLogout } = sessie;
+  // Niets laden vóór aal2 (07-10): zolang het codescherm van de tweede stap
+  // of het toestel-wachtscherm staat, praat geen enkele hook met de API. Een
+  // nieuwe hook die de API aanspreekt hangt aan `dataKlaar`, niet aan
+  // `currentUser` alleen.
+  const dataKlaar = !!session && !!currentUser && !deviceBlocked && !tweeStaps;
   // Waar we zijn = de URL (src/app/router.ts): terugknop, deeplinks en
   // refresh-op-dezelfde-plek werken daardoor vanzelf.
   const { view: currentView, navigeer } = useRoute();
@@ -162,7 +167,7 @@ export default function App() {
 
   // Live-updates via Supabase Realtime (src/app/useLiveUpdates.ts): de
   // refetchers per collectie; niet zolang het toestel-wachtscherm staat.
-  useLiveUpdates(!!session && !!currentUser && !deviceBlocked, currentUser, {
+  useLiveUpdates(dataKlaar, currentUser, {
     fetchLeave, fetchSwaps, fetchDiversions, fetchUpdates, fetchMyNotes, fetchMeldingen,
     fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchUsers,
   });
@@ -171,7 +176,7 @@ export default function App() {
   // gemiste events zijn definitief weg — en daarna de sync-tijd verversen,
   // zodat "gegevens van HH:MM" bij een volgende uitval klopt.
   onlineCatchUpRef.current = () => {
-    if (!currentUser || toestelGeblokkeerdRef.current) return;
+    if (!currentUser || toestelGeblokkeerdRef.current || tweeStaps) return;
     const planningFilter = isStaf(currentUser.role) ? undefined : { driverId: String(currentUser.id) };
     void Promise.allSettled([
       fetchMyNotes(),
@@ -192,7 +197,7 @@ export default function App() {
   useNieuweVersie(showToast);
 
   // Push-notificaties (src/app/usePush.ts): sleutel, schakelaar en abonnement.
-  const { pushPublicKey, pushEnabled, togglePush, resetPush } = usePush({ currentUser, session, showToast });
+  const { pushPublicKey, pushEnabled, togglePush, resetPush } = usePush({ currentUser: dataKlaar ? currentUser : null, session, showToast });
   // De koppelingen van de sessiehook (zie useSessie): elke render de verse
   // functies, gelezen op het moment van gebruik.
   koppelingen.current = { showToast, wisToasts, wisFouten, resetPush, resetAll, setIsInitialLoad, loadAppData, fetchUsers, setCurrentView, currentView };
@@ -200,7 +205,7 @@ export default function App() {
 
   // Onderhoudsmodus (src/app/useOnderhoud.ts): banner boven de inhoud zolang
   // actief; bij een geblokkeerde schrijfactie één info-toast.
-  const onderhoud = useOnderhoud(Boolean(currentUser), (tekst) => meldOnderhoud(tekst));
+  const onderhoud = useOnderhoud(dataKlaar, (tekst) => meldOnderhoud(tekst));
 
 
   useEffect(() => {
