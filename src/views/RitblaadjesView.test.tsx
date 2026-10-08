@@ -8,6 +8,9 @@ const { apiFetchMock, openPdfMock, notifyMock } = vi.hoisted(() => ({
   notifyMock: vi.fn(),
 }));
 vi.mock('../lib/api', () => ({ apiFetch: apiFetchMock }));
+// De mededelingstrook haalt zelf /api/mededeling op; buiten beeld houden, anders
+// snoept ze het eerste antwoord uit de reeks van apiFetchMock weg.
+vi.mock('../lib/mededeling', () => ({ useMededeling: () => null }));
 vi.mock('../lib/ui', async (importOriginal) => ({
   ...await importOriginal<typeof import('../lib/ui')>(),
   openPdfInNewTab: openPdfMock,

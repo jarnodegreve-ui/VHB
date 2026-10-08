@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileText, Search, Trash2, Upload } from 'lucide-react';
 import { isStaf, type User } from '../types';
 import { notify } from '../lib/ui';
@@ -16,6 +16,12 @@ import { RitbladViewer } from '../components/RitbladViewer';
 import { Skeleton } from '../components/Skeleton';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import { meldSchrijffout } from '../lib/fouten';
+import { MededelingStrook } from '../components/MededelingStrook';
+import { lazyWithRetry } from '../lib/lazyRetry';
+
+// Alleen voor de admin, lui: het beheerblok brengt het zod-schema mee en
+// hoort niet in wat elke chauffeur voor Ritbladen binnenhaalt.
+const LazyMededelingBeheer = lazyWithRetry(() => import('../components/MededelingBeheer'));
 
 type RitblaadjeMeta = {
   filename: string;
@@ -315,6 +321,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         ) : undefined}
       />
 
+      <MededelingStrook />
+
       {isLoading ? (
         <Card className="space-y-4">
           <div className="flex items-center gap-3">
@@ -418,6 +426,11 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         title="Ritblad verwijderen"
         message="Weet je zeker dat je het huidige ritblad wilt verwijderen? Chauffeurs zien daarna geen bestand meer tot een nieuwe PDF is geüpload."
       />
+      {canEdit && (
+        <Suspense fallback={null}>
+          <LazyMededelingBeheer />
+        </Suspense>
+      )}
     </PageShell>
   );
 }

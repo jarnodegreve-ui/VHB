@@ -29,6 +29,7 @@ import { ServiceChip } from '../components/ServiceChip';
 import { DienstBalk } from '../components/DienstBalk';
 import { ActieMenu } from '../components/ActieMenu';
 import { DashboardAanpassen } from '../components/DashboardAanpassen';
+import { MededelingStrook } from '../components/MededelingStrook';
 import { kleineTegelSpan, pasVoorkeurenToe, tegelsVoorRol, useDashboardVoorkeuren } from '../lib/dashboardVoorkeuren';
 
 // Techniek (13-09): de defectmelding en de gele-boek-tegel laden pas bij
@@ -400,6 +401,9 @@ export function DashboardView({ notes = [],
     <div className="space-y-5">
       {/* Na een release: één dismissbare kaart met wat er nieuw is (src/app/watIsNieuw.ts). */}
       <WatIsNieuwKaart rol={user.role} onNavigate={onNavigate} />
+
+      {/* Geheugensteuntje van de beheerder (08-10): dezelfde strook als op Mijn dag en Ritbladen. */}
+      <MededelingStrook />
 
       {/* === Persoonlijke header ===
           Zelfde kop-raster als PageHeader (flex-wrap, actie rechts via

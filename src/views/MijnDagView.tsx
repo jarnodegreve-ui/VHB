@@ -23,6 +23,7 @@ import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { DienstBalk } from '../components/DienstBalk';
 import { RitbladViewer } from '../components/RitbladViewer';
+import { MededelingStrook } from '../components/MededelingStrook';
 import { MijnWeek } from '../components/MijnWeek';
 import { MIJN_WEEK_DAGEN, bouwMijnWeek } from '../lib/mijnWeek';
 
@@ -269,6 +270,9 @@ export function MijnDagView({
           </div>
         )}
       </header>
+
+      {/* Geheugensteuntje van de beheerder (08-10), rustig en pas als er iets is. */}
+      <MededelingStrook />
 
       {/* Alles wat van de gekozen dag afhangt wisselt met richting (opacity +
           4 px, stil tijdens een view transition en bij reduced motion). */}
