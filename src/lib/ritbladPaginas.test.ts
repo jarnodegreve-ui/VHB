@@ -166,12 +166,20 @@ describe('zoekPaginasVoorDienstGecached', () => {
     expect(doc.getPage).not.toHaveBeenCalled();
   });
 
-  it('bewaart ook een leeg resultaat, zodat niet elke keer opnieuw gezocht wordt', async () => {
+  it('bewaart een leeg resultaat niet: de volgende keer wordt opnieuw gezocht (melding chauffeurs 07-10)', async () => {
     const doc = maakDoc([['Dienst', '2117']]);
     await expect(zoekPaginasVoorDienstGecached(doc, '2116', 'v1')).resolves.toEqual([]);
+    expect(window.localStorage.getItem(PAGINAS_CACHE_KEY)).toBeNull();
     doc.getPage.mockClear();
     await expect(zoekPaginasVoorDienstGecached(doc, '2116', 'v1')).resolves.toEqual([]);
-    expect(doc.getPage).not.toHaveBeenCalled();
+    expect(doc.getPage).toHaveBeenCalled();
+  });
+
+  it('telt een eerder bewaard leeg resultaat (oudere versie) niet als treffer', async () => {
+    window.localStorage.setItem(PAGINAS_CACHE_KEY, JSON.stringify({ uploadedAt: 'v1', paginas: { '2116': [] } }));
+    const doc = maakDoc([['Dienst', '2116']]);
+    await expect(zoekPaginasVoorDienstGecached(doc, '2116', 'v1')).resolves.toEqual([1]);
+    expect(JSON.parse(window.localStorage.getItem(PAGINAS_CACHE_KEY)!).paginas).toEqual({ '2116': [1] });
   });
 
   it('zoekt opnieuw bij een nieuwe bundel (andere uploadedAt) en gooit de oude cache weg', async () => {
@@ -208,7 +216,7 @@ describe('zoekPaginasVoorDienstGecached', () => {
     expect(JSON.parse(window.localStorage.getItem(PAGINAS_CACHE_KEY)!).paginas).toEqual({ '2116': [1, 2] });
   });
 
-  it('bewaart een leeg resultaat mét leesfout evenmin (een scan zonder tekst wél, die is compleet gelezen)', async () => {
+  it('bewaart een leeg resultaat mét leesfout evenmin, en een scan zonder tekst ook niet', async () => {
     const kapot = maakDoc([['Dienst', '2117']]);
     kapot.getPage.mockImplementationOnce(async () => { throw new Error('tijdelijk'); });
     await expect(zoekPaginasVoorDienstGecached(kapot, '2116', 'v1')).resolves.toEqual([]);
@@ -216,7 +224,7 @@ describe('zoekPaginasVoorDienstGecached', () => {
 
     const scan = maakDoc([[], []]);
     await expect(zoekPaginasVoorDienstGecached(scan, '2116', 'v1')).resolves.toEqual([]);
-    expect(JSON.parse(window.localStorage.getItem(PAGINAS_CACHE_KEY)!).paginas).toEqual({ '2116': [] });
+    expect(window.localStorage.getItem(PAGINAS_CACHE_KEY)).toBeNull();
   });
 
   it('overleeft een kapotte cache-waarde', async () => {

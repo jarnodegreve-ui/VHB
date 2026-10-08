@@ -72,7 +72,16 @@ function meldVastgelopenVersie(): void {
  * dan een melding. Los van React, zodat de tests hem rechtstreeks kunnen
  * aanroepen (ze grepen vroeger in het privéveld `_payload` van React.lazy).
  */
-export function metRetry<M>(factory: () => Promise<M>): () => Promise<M> {
+export function metRetry<M>(
+  factory: () => Promise<M>,
+  opties: {
+    /** Mag het vangnet de verse shell ophalen en herladen? Zonder bereik
+     *  neemt een herlaad de hele app weg (de shell-cache gaat eerst weg), en
+     *  een lui onderdeel zoals de pdf-lezer laat zich dan beter met een
+     *  gewone foutstaat afhandelen. Standaard altijd. */
+    magHerladen?: () => boolean;
+  } = {},
+): () => Promise<M> {
   return async () => {
     try {
       const mod = await factory();
@@ -85,6 +94,7 @@ export function metRetry<M>(factory: () => Promise<M>): () => Promise<M> {
         sessionStorage.removeItem(RELOAD_FLAG);
         return mod;
       } catch {
+        if (opties.magHerladen && !opties.magHerladen()) throw err;
         if (!sessionStorage.getItem(RELOAD_FLAG)) {
           sessionStorage.setItem(RELOAD_FLAG, '1');
           await forceerVerseShell();
