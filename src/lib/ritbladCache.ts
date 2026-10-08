@@ -63,5 +63,19 @@ export async function isRitbladOpgeslagen(url: string): Promise<boolean> {
   }
 }
 
+/** De bewaarde bundel onder deze URL uit de ritbladen-cache halen (query-loze
+ *  sleutel, zoals de SW hem bewaart). Voor de viewer wanneer het document
+ *  niet opent: de volgende fetch gaat dan langs de SW opnieuw naar de storage
+ *  i.p.v. nog eens hetzelfde exemplaar te geven. true = er stond iets. */
+export async function verwijderRitbladUitCache(url: string): Promise<boolean> {
+  try {
+    if (typeof window === 'undefined' || !('caches' in window)) return false;
+    const cache = await caches.open(RITBLADEN_CACHE);
+    return await cache.delete(ritbladCacheKey(url));
+  } catch {
+    return false;
+  }
+}
+
 /** Alleen voor tests: throttle terugzetten. */
 export const _resetRitbladWarm = () => { laatstGewarmd = 0; };

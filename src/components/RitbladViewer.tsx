@@ -7,7 +7,8 @@ import { Button, IconButton } from './primitives';
 import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
 import { openHuidigRitbladExtern } from '../lib/ritblad';
-import { isRitbladOpgeslagen } from '../lib/ritbladCache';
+import { isRitbladOpgeslagen, verwijderRitbladUitCache } from '../lib/ritbladCache';
+import { reportHandledError } from '../lib/monitoring';
 import { useOnline } from '../lib/useOnline';
 import { haalRitbladMeta, laadPdfjs, laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbladPaginas';
 import { knijpNaarZoomStap, vingerAfstand } from '../lib/ritbladZoom';
@@ -63,6 +64,12 @@ const formatBundelDatum = (iso: string | undefined): string => {
   } catch {
     return '';
   }
+};
+
+/** Naam en melding van een fout voor het foutrapport ("TypeError: Load failed"). */
+const beschrijfFout = (err: unknown): string => {
+  if (err instanceof Error) return `${err.name}: ${err.message}`;
+  return String(err);
 };
 
 /** "pagina 12" · "pagina's 12–13" · "pagina's 12, 15". */
@@ -273,6 +280,7 @@ export function RitbladViewer({
 }) {
   const nummers = nummerLijst(dienstnummer);
   const nummerSleutel = nummers.join('/');
+  const nummerTekst = nummers.length > 1 ? `diensten ${nummers.join(' / ')}` : `dienst ${nummers[0] ?? '--'}`;
   // Binnen de viewer kan de chauffeur alsnog naar de volledige bundel; dat
   // blijft in de app en dus in de service-worker-cache (controle 16-09,
   // nr. 10). De prop is de beginstand.
@@ -307,7 +315,19 @@ export function RitbladViewer({
         return;
       }
       // Verlopen signed URL (storage-fout) → één keer verse metadata en opnieuw.
-      const geladen = await laadRitbladDocument(meta.url, async () => (await haalRitbladMeta())?.url ?? null);
+      const versUrl = async () => (await haalRitbladMeta())?.url ?? null;
+      let geladen: PDFDocumentProxy;
+      try {
+        geladen = await laadRitbladDocument(meta.url, versUrl);
+      } catch (err) {
+        // Het document opent niet (exemplaar in de ritbladen-cache onleesbaar,
+        // hapering onderweg): één keer het bewaarde exemplaar weggooien en de
+        // bundel vers ophalen (melding chauffeurs 07-10). Zonder bereik heeft
+        // dat geen zin, en stond er niets bewaard, dan was de cache het niet.
+        if (signal.aborted || (typeof navigator !== 'undefined' && navigator.onLine === false)) throw err;
+        if (!(await verwijderRitbladUitCache(meta.url))) throw err;
+        geladen = await laadRitbladDocument((await versUrl()) ?? meta.url, versUrl);
+      }
       if (signal.aborted) {
         geladen.loadingTask.destroy().catch(() => undefined);
         return;
@@ -329,10 +349,19 @@ export function RitbladViewer({
         paginas = [...gevonden].sort((a, b) => a - b);
       }
       const basis = { url: meta.url, totaal: doc.numPages, bundelDatum: formatBundelDatum(meta.uploadedAt) };
+      // Geen blad gevonden hoort een uitzondering te zijn: melden als
+      // foutgroep (Systeemstatus › Fouten), met bundel en omvang erbij, zodat
+      // een scan zonder tekst of een ander nummerformaat opvalt vóór de
+      // chauffeurs het melden.
+      if (!paginas.length) reportHandledError(`Ritblad: geen apart blad gevonden voor ${nummerTekst} (bundel van ${basis.bundelDatum || 'onbekende datum'}, ${doc.numPages} pagina's)`);
       setStaat(paginas.length ? { soort: 'klaar', doc, paginas, ...basis } : { soort: 'niets', ...basis });
     })().catch((err: unknown) => {
       if (signal.aborted) return; // sluiten is geen fout
       console.warn('Ritblad laden mislukte:', err);
+      // Als foutgroep melden, mét de reden: tot 07-10 bleef dit bij een
+      // console.warn op het toestel van de chauffeur en wist niemand waarom
+      // "Ritblad van vandaag" bij hem niet opende.
+      reportHandledError(`Ritblad laden mislukte voor ${nummerTekst}: ${beschrijfFout(err)}`);
       setStaat({ soort: 'fout' });
     });
     return () => {
@@ -347,7 +376,6 @@ export function RitbladViewer({
   const titel = alleBladen
     ? 'Ritblad · volledige bundel'
     : nummers.length > 1 ? `Ritblad · diensten ${nummers.join(' / ')}` : `Ritblad · dienst ${nummers[0] ?? '--'}`;
-  const nummerTekst = nummers.length > 1 ? `diensten ${nummers.join(' / ')}` : `dienst ${nummers[0] ?? '--'}`;
 
   const opgeslagenLabel = !online && opgeslagen ? ' · opgeslagen exemplaar' : '';
   const subregel = (() => {
