@@ -21,6 +21,7 @@ import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
 import { mountLoonRoutes } from "./_lib/loonRoutes.js";
 import { mountDienstRoutes } from "./_lib/dienstRoutes.js";
 import { mountDienstregelingRoutes } from "./_lib/dienstregelingRoutes.js";
+import { mountMededelingRoutes } from "./_lib/mededelingRoutes.js";
 import { mountRapportRoutes } from "./_lib/rapportRoutes.js";
 import { mountTelegramRoutes } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenCoverageAdvies } from "./coverageRoutes.js";
@@ -167,6 +168,8 @@ mountLoonRoutes(app);
 mountDienstRoutes(app);
 // Dienstregelingversies (08-10): versies van het dienstoverzicht met een geldig-vanaf-datum.
 mountDienstregelingRoutes(app);
+// Mededeling voor de chauffeurs (08-10): het geheugensteuntje op Ritbladen, Mijn dag en het dashboard.
+mountMededelingRoutes(app);
 
 // Rapporten: GET /api/rapporten/:id (register in shared/rapporten). Zie api/_lib/rapportRoutes.ts.
 mountRapportRoutes(app);

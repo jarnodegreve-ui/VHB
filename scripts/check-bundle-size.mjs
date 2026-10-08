@@ -392,6 +392,14 @@ if (!kaartMatch) {
   // stap en zelfde plek als de chauffeur-warmup hierboven.
   WARMUP_BUDGET_KB.chauffeur = 76.5;
   WARMUP_BUDGET_KB.staf = 142.5;
+  // 08-10 (mededeling voor de chauffeurs, akkoord Jarno): chauffeur 76,5 → 77,5
+  // en staf 142,5 → 143,5. De strook (MededelingStrook op Card, zonder Callout
+  // en zijn vijf iconen) en de lezer (src/lib/mededeling.ts) staan op Mijn dag
+  // en het dashboard, dus in beide warmup-sets: ±0,9 kB gzip samen, lokaal
+  // 76,96 en 142,98. Geen nieuwe dependency; het beheerblok met het schema
+  // laadt lui op Ritbladen. Budget = de meting plus ±0,5 kB voor de CI-runner.
+  WARMUP_BUDGET_KB.chauffeur = 77.5;
+  WARMUP_BUDGET_KB.staf = 143.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

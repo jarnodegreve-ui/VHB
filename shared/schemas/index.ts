@@ -13,3 +13,4 @@ export * from './techniek.js';
 export * from './loon.js';
 export * from './dienst.js';
 export * from './dienstregeling.js';
+export * from './mededeling.js';
