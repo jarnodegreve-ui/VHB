@@ -115,6 +115,17 @@ export {
 export {
   getServicesData,
   saveServicesData,
+  getServicesAlle,
+  getServicesPerVersie,
+  getDienstregelingen,
+  createDienstregeling,
+  updateDienstregeling,
+  deleteDienstregeling,
+  herstelDienstregelingen,
+  DienstregelingOnbekend,
+  DIENSTREGELING_MIGRATIE,
+  type DienstregelingRecord,
+  type VersieKeuze,
   getCoverageExpectations,
   saveCoverageExpectations,
 } from "./_lib/opslag/diensten.js";

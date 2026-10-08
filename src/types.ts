@@ -180,6 +180,22 @@ export interface Service {
   loopnr?: string;
   loopnr2?: string;
   loopnr3?: string;
+  /** Versie van de dienstregeling waar de dienst bij hoort (08-10); leeg = de oudste. */
+  dienstregelingId?: string;
+}
+
+/** Een versie van het dienstoverzicht met haar geldig-vanaf-datum (GET /api/dienstregelingen). */
+export interface Dienstregeling {
+  id: string;
+  naam: string | null;
+  geldigVanaf: string;
+  opmerking: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  aantalDiensten: number;
+  status: 'verlopen' | 'huidig' | 'toekomstig';
+  /** De dag vóór de volgende versie; null als dit de laatste is. */
+  geldigTot: string | null;
 }
 
 export interface PlanningMatrixRow {

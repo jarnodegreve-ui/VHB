@@ -16,16 +16,17 @@ import type { AuthenticatedRequest } from "../types.js";
 import { authenticate, requireRole } from "../middleware.js";
 import { isMissingColumnError } from "../deviceGate.js";
 import { urgentEmailRateLimit } from "../rateLimit.js";
-import { dienstenVerschillenVoorPlanning, heropbouwNaDienstoverzicht, ROOSTER_MELDING_RUST_MINUTEN } from "./planningHeropbouw.js";
+import { dienstenVerschillenVoorPlanning, heropbouwNaDienstoverzicht, planningUitkomstVoorAntwoord } from "./planningHeropbouw.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { MAX_OMLEIDING_BIJLAGEN, diversionBodySchema, diversionLijstSchema } from "../../shared/schemas/diversion.js";
 import { MAX_UPDATE_BIJLAGEN, updateBodySchema, updateLijstSchema } from "../../shared/schemas/update.js";
+import { versieLabel } from "../../shared/dienstregeling.js";
 import { recordUrl } from "./meldingen.js";
 import { valideerLijst, valideerRecord } from "./valideer.js";
 import { recordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkDiversionsOpslag, verwerkUpdatesOpslag } from "./recordWrites.js";
 import { bijlagenUitKolom, omleidingBijlagen } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlage, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
+import { DienstregelingOnbekend, getDienstregelingen, getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlage, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { herstelBewezen, herstelOmleidingBijlagen, herstelUpdateBijlagen } from "./bijlagenHerstel.js";
 
@@ -134,25 +135,6 @@ const diversionResponseRecord = async (id: string) => {
   return withRecordRevision(signed, recordRevisionOf(raw));
 };
 
-/** Wat POST /api/services over de automatische heropbouw terugmeldt: genoeg
- *  voor een toast die zegt wat er gebeurde, zonder de volledige samenvatting. */
-const planningUitkomstVoorAntwoord = (uit: Awaited<ReturnType<typeof heropbouwNaDienstoverzicht>>) => {
-  if (uit.status === "bijgewerkt") {
-    return {
-      status: uit.status,
-      generatedShifts: uit.summary.generatedShifts,
-      gewijzigdeChauffeurs: uit.gewijzigdeChauffeurs,
-      meldingUitgesteld: uit.meldingUitgesteld,
-      meldingNaMinuten: ROOSTER_MELDING_RUST_MINUTEN,
-    };
-  }
-  if (uit.status === "ongewijzigd") return { status: uit.status };
-  if (uit.status === "geblokkeerd") {
-    return { status: uit.status, reden: uit.reden, melding: uit.melding, unknownCodes: uit.unknownCodes, unmatchedDrivers: uit.unmatchedDrivers };
-  }
-  if (uit.status === "overgeslagen") return { status: uit.status, reden: uit.reden, melding: uit.melding };
-  return { status: uit.status, melding: uit.melding };
-};
 
 // --- PDF-bijlagen bij een update (2026-09-21_updates_bijlagen.sql) ---
 // Zelfde afspraak als bij de omleidingen: het bestand staat in een privé
@@ -189,6 +171,19 @@ const updateResponseRecord = async (id: string) => {
 // PDF bij een update zetten: een base64 data-URL in de body, een strak id
 // (de sleutel in de bucket) en upsert, zodat opnieuw uploaden het vorige
 // bestand vervangt. Zelfde vorm als bij de omleidingen (leesPdfUpload).
+
+/** `?versie=<id>` op /api/services: de gevraagde dienstregelingversie, of undefined (vandaag). */
+const versieUitQuery = (req: express.Request): string | undefined => String(req.query.versie ?? "").trim() || undefined;
+
+/** " (versie vanaf 14/11/2026)" voor de logregel; leeg als de versie onbekend is. */
+const versieOmschrijving = async (versieId: string): Promise<string> => {
+  try {
+    const versie = (await getDienstregelingen()).find((v) => v.id === versieId);
+    return versie ? ` (${versieLabel(versie).replace(/^Vanaf /, "versie vanaf ")})` : "";
+  } catch {
+    return "";
+  }
+};
 
 export function mountCommunicatieRoutes(app: express.Express) {
   app.get("/api/diversions", authenticate, async (_req, res) => {
@@ -378,12 +373,15 @@ export function mountCommunicatieRoutes(app: express.Express) {
   // Alleen planner en admin (23-09, Jarno): het leesrecht voor elke rol was
   // een overblijfsel van toen chauffeurs het Dienstoverzicht nog zagen (tot
   // 26-04); geen chauffeur- of techniekerscherm vraagt deze lijst op.
-  app.get("/api/services", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  // `?versie=<id>`: het dienstoverzicht van die dienstregelingversie (08-10);
+  // zonder parameter de versie die vandaag geldt, zoals elk ander scherm ze ziet.
+  app.get("/api/services", authenticate, requireRole("planner", "admin"), async (req, res) => {
     try {
-      const data = await getServicesData();
+      const data = await getServicesData({ versieId: versieUitQuery(req) });
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
       res.json(data);
     } catch (err) {
+      if (err instanceof DienstregelingOnbekend) return res.status(404).json({ error: "Deze versie van de dienstregeling bestaat niet (meer)." });
       console.error("Error reading services data:", err);
       res.status(500).json({ error: "Gegevens laden is mislukt." });
     }
@@ -393,7 +391,8 @@ export function mountCommunicatieRoutes(app: express.Express) {
     try {
       const newData = req.body;
       if (Array.isArray(newData)) {
-        const previousServices = await getServicesData();
+        const versieId = versieUitQuery(req);
+        const previousServices = await getServicesData({ versieId });
         // De import-flow in dienstoverzicht-beheer vervangt legitiem de hele
         // collectie (verse ids per upload) en meldt dat expliciet via header.
         const isBulkReplace = req.headers["x-bulk-replace"] === "1";
@@ -420,17 +419,19 @@ export function mountCommunicatieRoutes(app: express.Express) {
           const servicesRemoved = detectMassDelete(previousServices, newData);
           if (servicesRemoved !== null) return massDeleteResponse(res, servicesRemoved, previousServices.length, "diensten");
         }
-        await saveServicesData(newData);
+        await saveServicesData(newData, { versieId });
         // Eén lezing van wat er nu écht staat (genormaliseerd door de opslag):
         // voor de revisie-header én om te beslissen of de planning mee moet.
-        const opgeslagen = await getServicesData();
+        const opgeslagen = await getServicesData({ versieId });
 
-        // Global summary entry (zoals voorheen)
+        // Global summary entry (zoals voorheen), met de versie erbij als die
+        // niet de huidige is.
+        const versieTekst = versieId ? await versieOmschrijving(versieId) : "";
         await logActivity(
           req,
           "services",
           "Diensten opgeslagen",
-          `${newData.length} diensten opgeslagen. ${summarizeServiceChanges(previousServices, newData)}.`,
+          `${newData.length} diensten opgeslagen${versieTekst}. ${summarizeServiceChanges(previousServices, newData)}.`,
         );
 
         // Per-service entries voor per-entity wijzigingsgeschiedenis
@@ -461,6 +462,7 @@ export function mountCommunicatieRoutes(app: express.Express) {
         res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
       }
     } catch (err: any) {
+      if (err instanceof DienstregelingOnbekend) return res.status(404).json({ error: "Deze versie van de dienstregeling bestaat niet (meer)." });
       const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
       console.error("Error saving services data:", errorMessage);
       console.error("Opslaan is mislukt.", errorMessage);

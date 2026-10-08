@@ -131,7 +131,12 @@ import zlib from 'node:zlib';
 // (+0,3 kB). De CI-runner meet het totaal ±0,5 kB zwaarder en kwam dus over
 // 704. 708 = die meting plus ±0,5 % marge; de deelbudgetten blijven de
 // bewakers van de start.
-const BUDGET_KB = 708;
+// 08-10 (dienstregelingversies, fase 1 van het plan van 08-10, akkoord Jarno):
+// 708 → 715. Geen nieuwe dependency: de versiebalk, het versieformulier en de
+// vergelijking in het luie Dienstoverzicht-chunk (+3 kB gzip), buiten de
+// startbundel en buiten beide warmups. Lokaal 711; 715 = die meting plus de
+// ±0,5 kB van de CI-runner en ±0,5 % marge.
+const BUDGET_KB = 715;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

@@ -87,6 +87,7 @@ export const VERWACHTE_MIGRATIES: readonly string[] = [
   "2026-09-29_rls_tweede_factor.sql",
   "2026-09-29_users_password_weg.sql",
   "2026-10-05_schema_migraties.sql",
+  "2026-10-08_dienstregelingen.sql",
 ];
 
 /** Wat de code verwacht en niet in het register van de omgeving staat. */

@@ -1,6 +1,7 @@
 import type { AppUser, PlanningCodeRecord, PlanningMatrixRow, ServiceRecord, ShiftRecord } from "../../types.js";
 import { sortedNameToken, toLookupToken } from "../../helpers.js";
-import { getServicesData } from "./diensten.js";
+import { versieVoorDatum } from "../../../shared/dienstregeling.js";
+import { getServicesPerVersie } from "./diensten.js";
 import { getUsersData } from "./gebruikers.js";
 import { getPlanningCodesData, getPlanningMatrixRows } from "./planning.js";
 
@@ -33,14 +34,17 @@ export const getServiceSegments = (service: ServiceRecord) => (
 );
 
 export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) => {
-  const [users, services, planningCodes] = await Promise.all([
+  const [users, perVersie, planningCodes] = await Promise.all([
     getUsersData(),
-    getServicesData(),
+    getServicesPerVersie(),
     getPlanningCodesData(),
   ]);
   const rows = inputRows ?? await getPlanningMatrixRows();
-  return bouwPlanningUitMatrix({ rows, users, services: services as ServiceRecord[], planningCodes });
+  return bouwPlanningUitMatrix({ rows, users, services: perVersie.services, versies: perVersie.versies, planningCodes });
 };
+
+/** Eén dienstregelingversie met haar diensten, voor de opbouw per datum. */
+export type OpbouwVersie = { id: string; geldigVanaf: string; services: ServiceRecord[] };
 
 /**
  * Pure kern van de planning-opbouw (matrix × dienstoverzicht × codes →
@@ -49,11 +53,16 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
  * keten-bugs (wegvallende chauffeurs, segmenten, absences) zaten hier, niet
  * in de fetches.
  */
-export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes }: {
+export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes, versies }: {
   rows: PlanningMatrixRow[];
   users: AppUser[];
+  /** Het dienstoverzicht zonder versies, of de terugval wanneer `versies` leeg is. */
   services: ServiceRecord[];
   planningCodes: PlanningCodeRecord[];
+  /** Dienstregelingversies (08-10): per matrixdag telt de versie die op die
+   *  dag geldt (versieVoorDatum), zodat een nieuwe dienstregeling alleen de
+   *  dagen vanaf haar datum raakt en het verleden zijn toenmalige tijden houdt. */
+  versies?: OpbouwVersie[];
 }) => {
   // Botsings-detectie: twee verschillende gebruikers die op dezelfde
   // naam-sleutel uitkomen (zelfde naam, of "Jan Karel" vs "Karel Jan" via de
@@ -76,9 +85,16 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes }: 
     addNameKey(toLookupToken(u.name), u);
     addNameKey(sortedNameToken(u.name), u);
   }
-  const servicesByNumber = new Map(
-    (services as ServiceRecord[]).map((service): [string, ServiceRecord] => [toLookupToken(service.serviceNumber), service]),
+  const indexVan = (lijst: ServiceRecord[]) => new Map(
+    lijst.map((service): [string, ServiceRecord] => [toLookupToken(service.serviceNumber), service]),
   );
+  const standaardIndex = indexVan(services as ServiceRecord[]);
+  const indexPerVersie = new Map((versies ?? []).map((v) => [v.id, indexVan(v.services)] as const));
+  const servicesOpDag = (datum: string): Map<string, ServiceRecord> => {
+    if (!versies || versies.length === 0) return standaardIndex;
+    const versie = versieVoorDatum(versies, datum);
+    return (versie && indexPerVersie.get(versie.id)) ?? standaardIndex;
+  };
   const planningCodesByCode = new Map(planningCodes.map((code): [string, PlanningCodeRecord] => [toLookupToken(code.code), code]));
 
   const generatedShifts: ShiftRecord[] = [];
@@ -122,6 +138,7 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes }: 
   let skippedAbsences = 0;
 
   for (const row of rows) {
+    const servicesByNumber = servicesOpDag(String(row.source_date ?? ""));
     for (const [driverName, rawCode] of Object.entries(row.assignments || {}) as Array<[string, string]>) {
       const nameKey = toLookupToken(driverName);
       const sortedKey = sortedNameToken(driverName);

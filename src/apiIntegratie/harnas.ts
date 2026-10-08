@@ -35,6 +35,8 @@ const mem = vi.hoisted(() => ({
   leave: [] as any[],
   swaps: [] as any[],
   services: [] as any[],
+  // Dienstregelingversies (08-10): leeg = geen versies, dan is services de hele lijst.
+  dienstregelingen: [] as any[],
   updates: [] as any[],
   diversions: [] as any[],
   planning: [] as any[],
@@ -358,6 +360,30 @@ vi.mock('../../api/email.js', async (importOriginal) => ({
 
 vi.mock('../../api/storage.js', async (importOriginal) => {
   const orig = await importOriginal<any>();
+  // Dienstregelingversies op de mem-store, met dezelfde regels als de echte
+  // opslag (shared/dienstregeling.ts): een dienst zonder versie telt als de
+  // oudste, zonder versies is mem.services de hele lijst.
+  const dr = await import('../../shared/dienstregeling');
+  const vandaagMock = () => new Date().toISOString().slice(0, 10);
+  const versiesGesorteerd = () => [...mem.dienstregelingen].sort((a: any, b: any) => String(a.geldigVanaf).localeCompare(String(b.geldigVanaf)));
+  const oudsteId = () => dr.oudsteVersie(mem.dienstregelingen as any[])?.id ?? null;
+  const kiesVersieMock = (keuze: { versieId?: string; datum?: string } = {}) => {
+    if (mem.dienstregelingen.length === 0) return null;
+    if (keuze.versieId) {
+      const v = mem.dienstregelingen.find((x: any) => x.id === keuze.versieId);
+      if (!v) throw new orig.DienstregelingOnbekend(keuze.versieId);
+      return v;
+    }
+    return dr.versieVoorDatum(mem.dienstregelingen as any[], keuze.datum ?? vandaagMock());
+  };
+  const servicesVanVersie = (versieId: string) => mem.services.filter((s: any) => dr.hoortBijVersie(s, versieId, oudsteId()));
+  const servicesPerVersieMock = async () => {
+    if (mem.servicesFaalt) throw new Error('services: connection failure');
+    const versies = versiesGesorteerd().map((v: any) => ({ ...v, services: servicesVanVersie(v.id) }));
+    if (versies.length === 0) return { versies: [], services: mem.services };
+    const huidig = dr.versieVoorDatum(versies, vandaagMock());
+    return { versies, services: huidig?.services ?? [] };
+  };
   const replaceById = (current: any[], incoming: any[], idsToDelete: string[] = []) => {
     const byId = new Map(current.map((r: any) => [String(r.id), r]));
     for (const r of incoming) byId.set(String(r.id), r);
@@ -564,12 +590,46 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
         (!f?.driverId || String(s.driverId) === String(f.driverId)) &&
         (!f?.monthIso || String(s.date ?? '').startsWith(`${f.monthIso}-`)));
     },
-    getServicesData: async () => {
+    getServicesData: async (keuze: { versieId?: string; datum?: string; alleVersies?: boolean } = {}) => {
       mem.servicesLezingen += 1;
       if (mem.servicesFaalt) throw new Error('services: connection failure');
-      return mem.services;
+      if (keuze.alleVersies) return mem.services;
+      const versie = kiesVersieMock(keuze);
+      return versie ? servicesVanVersie(versie.id) : mem.services;
     },
-    saveServicesData: async (data: any[]) => { mem.services = data; },
+    getServicesAlle: async () => mem.services,
+    getServicesPerVersie: servicesPerVersieMock,
+    getDienstregelingen: async () => versiesGesorteerd(),
+    saveServicesData: async (data: any[], keuze: { versieId?: string; datum?: string; alleVersies?: boolean } = {}) => {
+      const versie = keuze.alleVersies ? null : kiesVersieMock(keuze);
+      if (!versie) { mem.services = data; return; }
+      const rest = mem.services.filter((s: any) => !dr.hoortBijVersie(s, versie.id, oudsteId()));
+      mem.services = [...rest, ...data.map((s: any) => ({ ...s, dienstregelingId: versie.id }))];
+    },
+    createDienstregeling: async (invoer: any) => {
+      const versie = { id: `dr-${mem.dienstregelingen.length + 1}`, naam: invoer.naam ?? null, geldigVanaf: invoer.geldigVanaf, opmerking: invoer.opmerking ?? null, createdAt: new Date().toISOString(), createdBy: invoer.createdBy ?? null };
+      mem.dienstregelingen.push(versie);
+      if (invoer.kopieVanId) {
+        const bron = servicesVanVersie(invoer.kopieVanId);
+        mem.services = [...mem.services, ...bron.map((s: any, i: number) => ({ ...s, id: `${versie.id}-${i + 1}`, dienstregelingId: versie.id }))];
+      }
+      return versie;
+    },
+    updateDienstregeling: async (id: string, patch: any) => {
+      const v = mem.dienstregelingen.find((x: any) => x.id === id);
+      if (!v) return null;
+      if (patch.naam !== undefined) v.naam = patch.naam;
+      if (patch.opmerking !== undefined) v.opmerking = patch.opmerking;
+      if (patch.geldigVanaf !== undefined) v.geldigVanaf = patch.geldigVanaf;
+      return { ...v };
+    },
+    deleteDienstregeling: async (id: string) => {
+      const was = mem.dienstregelingen.length;
+      mem.dienstregelingen = mem.dienstregelingen.filter((x: any) => x.id !== id);
+      mem.services = mem.services.filter((s: any) => s.dienstregelingId !== id);
+      return mem.dienstregelingen.length < was;
+    },
+    herstelDienstregelingen: async (versies: any[]) => { mem.dienstregelingen = [...versies]; return versies.length; },
     getUpdatesData: async () => mem.updates,
     // Zoals de echte: een upsert noemt alleen de eigen kolommen, dus
     // `bijlagen` van een bestaande rij blijft staan en een meegestuurde lijst
@@ -772,13 +832,16 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     // opbouw-kern (bouwPlanningUitMatrix, pure functie) op de mem-store —
     // een mini-mock verstopte precies de keten-bugs die deze tests moeten
     // vangen (segmenten, absences, unknown codes, naam-botsingen).
-    buildPlanningFromMatrix: async (inputRows?: any[]) =>
-      orig.bouwPlanningUitMatrix({
+    buildPlanningFromMatrix: async (inputRows?: any[]) => {
+      const perVersie = await servicesPerVersieMock();
+      return orig.bouwPlanningUitMatrix({
         rows: inputRows ?? mem.planningMatrix,
         users: mem.users,
-        services: mem.services,
+        services: perVersie.services,
+        versies: perVersie.versies,
         planningCodes: mem.planningCodes,
-      }),
+      });
+    },
     replacePlanningData: async (shifts: any[]) => {
       if (mem.planningVervangenFaalt) throw new Error('replace_planning: connection failure');
       mem.planning = shifts;
@@ -898,7 +961,7 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     getLatestBackup: async () => mem.laatsteBackup,
     restoreFromBackup: async (collections: any) => {
       const summary: Record<string, number> = {};
-      for (const key of ['users', 'planning', 'services', 'diversions', 'updates', 'leave', 'swaps', 'planningCodes']) {
+      for (const key of ['users', 'planning', 'dienstregelingen', 'services', 'diversions', 'updates', 'leave', 'swaps', 'planningCodes']) {
         if (Array.isArray(collections[key])) {
           (mem as any)[key] = collections[key];
           summary[key] = collections[key].length;
@@ -1036,6 +1099,10 @@ beforeEach(() => {
   mem.planningMatrix = [
     { id: 'm-1', source_date: '2026-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'bv' }, raw_row: '' },
     { id: 'm-2', source_date: '2026-07-01', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
+  ];
+  // Eén versie die op de testklok (2026-06-15) geldt: de stand na de migratie van 08-10.
+  mem.dienstregelingen = [
+    { id: 'dr-sep', naam: null, geldigVanaf: '2026-01-01', opmerking: null, createdAt: '2026-01-01T00:00:00Z', createdBy: null },
   ];
   mem.services = [
     { id: 'd1', serviceNumber: '10', startTime: '06:00', endTime: '14:00' },

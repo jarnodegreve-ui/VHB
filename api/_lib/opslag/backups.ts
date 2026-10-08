@@ -1,6 +1,6 @@
 import type { PlanningCodeRecord, PlanningMatrixRow } from "../../types.js";
 import { supabaseAdmin } from "../../db.js";
-import { saveCoverageExpectations, saveServicesData } from "./diensten.js";
+import { herstelDienstregelingen, saveCoverageExpectations, saveServicesData } from "./diensten.js";
 import { saveUsersData } from "./gebruikers.js";
 import { saveDiversionsData } from "./omleidingen.js";
 import { clearPlanningData, savePlanningCodesData, savePlanningData, savePlanningMatrixRows } from "./planning.js";
@@ -61,6 +61,8 @@ export type RestorableCollections = {
   users?: any[];
   planning?: any[];
   services?: any[];
+  /** Dienstregelingversies (08-10); een oudere back-up heeft ze niet. */
+  dienstregelingen?: any[];
   diversions?: any[];
   updates?: any[];
   leave?: any[];
@@ -137,8 +139,14 @@ export const restoreFromBackup = async (collections: RestorableCollections): Pro
     else await clearPlanningData();
     summary.planning = collections.planning.length;
   }
+  // Versies vóór de diensten (de diensten verwijzen ernaar); een back-up van
+  // vóór 08-10 heeft geen versies en haar diensten zonder versie tellen als
+  // de oudste.
+  if (Array.isArray(collections.dienstregelingen)) {
+    summary.dienstregelingen = await herstelDienstregelingen(collections.dienstregelingen);
+  }
   if (Array.isArray(collections.services)) {
-    await saveServicesData(collections.services);
+    await saveServicesData(collections.services, { alleVersies: true });
     summary.services = collections.services.length;
   }
   if (Array.isArray(collections.diversions)) {
