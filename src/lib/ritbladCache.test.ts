@@ -8,7 +8,7 @@ vi.mock('./ritbladPaginas', () => ({
   }),
 }));
 
-import { _resetRitbladWarm, isRitbladOpgeslagen, meldRitbladenAanSw, ritbladCacheKey, warmRitbladCache } from './ritbladCache';
+import { _resetRitbladWarm, isRitbladOpgeslagen, meldRitbladenAanSw, ritbladCacheKey, verwijderRitbladUitCache, warmRitbladCache } from './ritbladCache';
 
 const PDF = 'https://x.supabase.co/storage/v1/object/sign/ritblaadjes/bundel.pdf?token=abc';
 
@@ -55,6 +55,24 @@ describe('ritbladCache (client → service worker)', () => {
     // @ts-expect-error geen controller
     navigator.serviceWorker.controller = null;
     expect(meldRitbladenAanSw([PDF])).toBe(false);
+  });
+
+  it('verwijderRitbladUitCache haalt het exemplaar op de query-loze sleutel weg en zegt of er iets stond', async () => {
+    const gewist: string[] = [];
+    vi.stubGlobal('caches', {
+      open: async (naam: string) => {
+        expect(naam).toBe('vhb-ritbladen');
+        return { delete: async (key: string) => { gewist.push(key); return key.endsWith('bundel.pdf'); } };
+      },
+    });
+    expect(await verwijderRitbladUitCache(PDF)).toBe(true);
+    expect(gewist).toEqual(['https://x.supabase.co/storage/v1/object/sign/ritblaadjes/bundel.pdf']);
+    expect(await verwijderRitbladUitCache('https://x.supabase.co/ritblaadjes/ander.pdf?x=1')).toBe(false);
+    vi.unstubAllGlobals();
+    // Zonder Cache API (privémodus): false, geen fout.
+    vi.stubGlobal('caches', undefined);
+    expect(await verwijderRitbladUitCache(PDF)).toBe(false);
+    vi.unstubAllGlobals();
   });
 
   it('isRitbladOpgeslagen kijkt in de ritbladen-cache op de query-loze sleutel', async () => {

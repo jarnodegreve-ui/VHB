@@ -80,6 +80,17 @@ describe('lazyWithRetry', () => {
     expect(sessionStorage.getItem('vhb-chunk-reload')).toBe('1');
   });
 
+  it('herlaadt niet als de aanroeper dat verbiedt (pdf-lezer zonder bereik): gewoon de fout', async () => {
+    const { herlaad } = opzet();
+    const metRetry = await laadModule();
+    const toasts: CustomEvent[] = [];
+    window.addEventListener('vhb-toast', (e) => toasts.push(e as CustomEvent));
+    await expect(draaiFactory(metRetry(async () => { throw new Error('stuk'); }, { magHerladen: () => false }))).rejects.toThrow('stuk');
+    expect(herlaad).not.toHaveBeenCalled();
+    expect(toasts).toHaveLength(0);
+    expect(sessionStorage.getItem('vhb-chunk-reload')).toBeNull();
+  });
+
   it('herlaadt niet twee keer, maar meldt het met een Vernieuwen-knop', async () => {
     const { herlaad } = opzet();
     sessionStorage.setItem('vhb-chunk-reload', '1');

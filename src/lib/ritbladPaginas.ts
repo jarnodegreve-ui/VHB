@@ -14,6 +14,7 @@
  */
 
 import { apiFetch } from './api';
+import { metRetry } from './lazyRetry';
 
 // Minimale vorm van wat we van pdfjs gebruiken — zo blijven de tests vrij
 // van een echte PDF én van de pdfjs-import (die in jsdom geen worker heeft).
@@ -145,7 +146,9 @@ export const leesPaginasUitCache = (uploadedAt: string, dienstnummer: string): n
   const cache = leesCache();
   if (!cache || cache.uploadedAt !== uploadedAt) return null;
   const paginas = cache.paginas[dienstnummer.trim()];
-  return Array.isArray(paginas) ? paginas : null;
+  // Een leeg resultaat telt niet als bewaard (zie zoekPaginasVoorDienstGecached);
+  // een ouder opgeslagen leeg resultaat wordt zo ook opnieuw gezocht.
+  return Array.isArray(paginas) && paginas.length > 0 ? paginas : null;
 };
 
 export const schrijfPaginasNaarCache = (uploadedAt: string, dienstnummer: string, paginas: number[]): void => {
@@ -161,10 +164,14 @@ export const schrijfPaginasNaarCache = (uploadedAt: string, dienstnummer: string
 };
 
 /** Zoeken met cache per bundel: het lezen van de tekstlaag gebeurt maar
- *  één keer per bundel + dienstnummer (ook een leeg resultaat wordt bewaard).
- *  Kon een pagina niet gelezen worden (tijdelijke getTextContent-fout, zwak
- *  toestel), dan wordt het resultaat wél getoond maar níét bewaard: anders
- *  stond "geen blad gevonden" voor de rest van de bundel vast. */
+ *  één keer per bundel + dienstnummer. Kon een pagina niet gelezen worden
+ *  (tijdelijke getTextContent-fout, zwak toestel), dan wordt het resultaat
+ *  wél getoond maar níét bewaard: anders stond "geen blad gevonden" voor de
+ *  rest van de bundel vast. Een leeg resultaat wordt om dezelfde reden niet
+ *  bewaard (melding chauffeurs 07-10): "geen blad gevonden" is de uitzondering,
+ *  en zou ze door een eenmalige hapering (lege tekstlaag uit de pdf-worker)
+ *  op dat toestel voor de hele bundel vast staan, terwijl opnieuw zoeken in
+ *  die zeldzame situatie maar een paar seconden kost. */
 export async function zoekPaginasVoorDienstGecached(
   doc: RitbladDocument,
   dienstnummer: string,
@@ -175,7 +182,7 @@ export async function zoekPaginasVoorDienstGecached(
   if (gecached) return gecached;
   const { paginas, fouten } = await zoekPaginasMetStatus(doc, dienstnummer, signal);
   controleerAfgebroken(signal); // nooit een afgebroken zoektocht bewaren
-  if (fouten === 0) schrijfPaginasNaarCache(uploadedAt, dienstnummer, paginas);
+  if (fouten === 0 && paginas.length > 0) schrijfPaginasNaarCache(uploadedAt, dienstnummer, paginas);
   return paginas;
 }
 
@@ -228,10 +235,21 @@ export function laadPdfjs(): Promise<Pdfjs> {
     // een object i.p.v. een string ("Invalid `workerSrc` type"). Eén
     // gedeelde worker per sessie via workerPort; pdfjs beëindigt die niet
     // bij loadingTask.destroy() — bewust, de volgende opening is dan sneller.
-    pdfjsPromise = Promise.all([
-      import('pdfjs-dist'),
-      import('pdfjs-dist/build/pdf.worker.min.mjs?worker'),
-    ]).then(([pdfjs, worker]) => {
+    //
+    // Met hetzelfde vangnet als de luie schermen (metRetry): één stille
+    // herkansing bij een hapering, en zit deze shell op een oudere versie
+    // waarvan de pdf-chunks niet meer bestaan (de SPA-rewrite geeft dan
+    // HTML, de import klapt op het parsen), dan de verse shell ophalen en
+    // herladen. Alleen met bereik: zonder bereik neemt een herlaad de hele
+    // app weg, en de viewer toont dan zijn gewone "geen bereik"-foutstaat.
+    const importeer = metRetry(
+      () => Promise.all([
+        import('pdfjs-dist'),
+        import('pdfjs-dist/build/pdf.worker.min.mjs?worker'),
+      ]),
+      { magHerladen: () => typeof navigator === 'undefined' || navigator.onLine !== false },
+    );
+    pdfjsPromise = importeer().then(([pdfjs, worker]) => {
       pdfjs.GlobalWorkerOptions.workerPort = new worker.default();
       return pdfjs;
     }).catch((err) => {
