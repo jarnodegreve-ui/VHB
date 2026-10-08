@@ -242,6 +242,8 @@ export interface ServiceRecord {
   loopnr?: string;
   loopnr2?: string;
   loopnr3?: string;
+  /** Versie van de dienstregeling waar de dienst bij hoort (2026-10-08); leeg = de oudste. */
+  dienstregelingId?: string;
 }
 
 export interface ShiftRecord {

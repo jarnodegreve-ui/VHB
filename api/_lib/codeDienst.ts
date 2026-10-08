@@ -113,7 +113,8 @@ export const bordOpDag = async (
 ) => {
   const [rows, services, codes, leave, swaps] = await Promise.all([
     getPlanningMatrixRows({ van: date, tot: date }),
-    opts?.services ?? getServicesData(),
+    // De versie van het dienstoverzicht die op deze dag geldt (08-10).
+    opts?.services ?? getServicesData({ datum: date }),
     opts?.codes ?? getPlanningCodesData(),
     opts?.zonderAfwezigheid ? [] : getLeaveData({ endOnOrAfter: date }),
     opts?.swaps ?? getSwapsData(),

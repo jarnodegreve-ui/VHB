@@ -437,3 +437,23 @@ export const heropbouwNaDienstoverzicht = async (req: AuthenticatedRequest): Pro
     return { status: "mislukt", melding };
   }
 };
+
+/** Wat POST /api/services over de automatische heropbouw terugmeldt: genoeg
+ *  voor een toast die zegt wat er gebeurde, zonder de volledige samenvatting. */
+export const planningUitkomstVoorAntwoord = (uit: AutoHeropbouwUitkomst) => {
+  if (uit.status === "bijgewerkt") {
+    return {
+      status: uit.status,
+      generatedShifts: uit.summary.generatedShifts,
+      gewijzigdeChauffeurs: uit.gewijzigdeChauffeurs,
+      meldingUitgesteld: uit.meldingUitgesteld,
+      meldingNaMinuten: ROOSTER_MELDING_RUST_MINUTEN,
+    };
+  }
+  if (uit.status === "ongewijzigd") return { status: uit.status };
+  if (uit.status === "geblokkeerd") {
+    return { status: uit.status, reden: uit.reden, melding: uit.melding, unknownCodes: uit.unknownCodes, unmatchedDrivers: uit.unmatchedDrivers };
+  }
+  if (uit.status === "overgeslagen") return { status: uit.status, reden: uit.reden, melding: uit.melding };
+  return { status: uit.status, melding: uit.melding };
+};

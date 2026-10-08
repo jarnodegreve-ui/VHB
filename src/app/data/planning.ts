@@ -123,25 +123,34 @@ export function usePlanningData(ctx: DataCtx) {
   // Promise<boolean> zodat het beheerformulier pas sluit/wist ná succes —
   // dit was de enige mutatie-view die fire-and-forget opsloeg (controleronde).
   // `actie` = hoe een mislukking heet in de foutmelding ("Verwijderen van dienst 2515").
-  const saveServices = async (newServices: Service[], opts?: { bulkReplace?: boolean; actie?: string }): Promise<boolean> => {
-    if (!ctx.guardCollectionLoaded('services', 'Het dienstoverzicht is')) return false;
+  // `versie` (08-10): een andere dienstregelingversie dan die van vandaag
+  // opslaan. Die lijst is geen collectie van de app (het scherm laadt ze
+  // apart, mét haar revisie), dus de app-state blijft hier onaangeroerd en
+  // het scherm laadt de versie na afloop opnieuw.
+  const saveServices = async (newServices: Service[], opts?: { bulkReplace?: boolean; actie?: string; versie?: { id: string; revisie: string | null } }): Promise<boolean> => {
+    const versie = opts?.versie;
+    if (!versie && !ctx.guardCollectionLoaded('services', 'Het dienstoverzicht is')) return false;
     try {
-      const response = await apiFetch('/api/services', {
+      const response = await apiFetch(versie ? `/api/services?versie=${encodeURIComponent(versie.id)}` : '/api/services', {
         method: 'POST',
         // Import vervangt legitiem de hele collectie; de header laat de
         // server z'n bulk-wipe-vangrail voor deze save overslaan. Bij een
         // gewone bewerking sturen we de revisie mee voor conflictdetectie.
-        headers: opts?.bulkReplace ? { 'x-bulk-replace': '1' } : ctx.revisionHeader('services'),
+        headers: opts?.bulkReplace
+          ? { 'x-bulk-replace': '1' }
+          : versie ? (versie.revisie ? { 'x-collection-revision': versie.revisie } : {}) : ctx.revisionHeader('services'),
         body: JSON.stringify(newServices),
       });
       if (response.status === 409 || response.status === 428) {
         showToast('Het dienstoverzicht is intussen door iemand anders gewijzigd, ik ververs het, probeer je wijziging opnieuw.', 'info');
-        await fetchServices();
+        if (!versie) await fetchServices();
         return false;
       }
       if (response.ok) {
-        setServices(newServices);
-        ctx.captureRevision('services', response);
+        if (!versie) {
+          setServices(newServices);
+          ctx.captureRevision('services', response);
+        }
         // Logboek stil op de achtergrond: de overlay wacht er niet op.
         if (currentUser?.role === 'admin') void fetchActivityLog();
         // De server werkt de planning zelf bij na een inhoudelijke wijziging

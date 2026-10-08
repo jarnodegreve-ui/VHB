@@ -20,10 +20,19 @@ import { useRecordLink } from '../app/useRecordLink';
 import { useCollectieStaat } from '../app/collectieStaat';
 import { ROOSTER_MELDING_RUST_MINUTEN } from '../../shared/roosterMelding';
 import { vandaagBrussel } from '../lib/brussel';
+import { formatDatumDMJ } from '../lib/format';
 import { DienstTabel, DienstZijvak, useDienstLijst } from '../components/dienstoverzicht/DienstTabel';
 import { dienstenUitRijen } from '../components/dienstoverzicht/dienstImport';
+import { useDienstregelingen } from '../components/dienstoverzicht/useDienstregelingen';
+import { VersieBalk } from '../components/dienstoverzicht/VersieBalk';
+import { VersieFormulier } from '../components/dienstoverzicht/VersieFormulier';
+import { VersieVergelijking } from '../components/dienstoverzicht/VersieVergelijking';
+import { verwijderDienstregeling } from '../lib/dienstregelingen';
+import { dienstoverzichtToast, type PlanningNaDienstoverzicht } from '../lib/dienstoverzichtToast';
+import { versieLabel } from '../../shared/dienstregeling';
+import type { Dienstregeling } from '../types';
 
-type Opslaan = (s: Service[], opts?: { bulkReplace?: boolean; actie?: string }) => Promise<boolean> | boolean | void;
+type Opslaan = (s: Service[], opts?: { bulkReplace?: boolean; actie?: string; versie?: { id: string; revisie: string | null } }) => Promise<boolean> | boolean | void;
 
 const LEEG_FORMULIER = {
   serviceNumber: '', startTime: '', endTime: '',
@@ -61,7 +70,28 @@ const TIJD_TITEL = 'UU:MM, na middernacht als 24:00+ (bv. 26:16)';
  * Verwijderen is een expliciete bevestiging die wacht op de server: geen
  * optimistische verwijdering en geen ongedaan maken.
  */
-export function ServicesView({ services, onSave, canAdminOverride }: { services: Service[]; onSave: Opslaan; canAdminOverride: boolean }) {
+export function ServicesView({ services: huidigeServices, onSave, canAdminOverride }: { services: Service[]; onSave: Opslaan; canAdminOverride: boolean }) {
+  // Dienstregelingversies (fase 1, 08-10): de versie van vandaag is de
+  // collectie van de app; een andere versie laadt de hook apart, mét haar
+  // revisie. Alles hieronder werkt op `services` en `opslaan` van de
+  // gekozen versie, zodat bewerken, importeren en verwijderen per versie gaan.
+  const versies = useDienstregelingen();
+  const gekozenVersie = versies.gekozen;
+  const andereVersie = !versies.isHuidig && gekozenVersie ? gekozenVersie : null;
+  const services: Service[] = andereVersie ? (versies.versieDiensten?.services ?? []) : huidigeServices;
+  const alleenLezen = gekozenVersie?.status === 'verlopen';
+  const opslaan = async (lijstNieuw: Service[], opts?: Parameters<Opslaan>[1]): Promise<boolean | void> => {
+    if (alleenLezen) { notify('Deze versie is verlopen en alleen te lezen.', 'error'); return false; }
+    if (!andereVersie) return onSave(lijstNieuw, opts);
+    const ok = await onSave(lijstNieuw, { ...opts, versie: { id: andereVersie.id, revisie: versies.versieDiensten?.revisie ?? null } });
+    // Hoe het ook afliep: de versie vers ophalen (na een conflict staat er iets anders).
+    await Promise.all([versies.herlaadDiensten(), versies.laadVersies()]);
+    return ok;
+  };
+  const [versieFormulier, setVersieFormulier] = useState<{ open: boolean; bewerk: Dienstregeling | null }>({ open: false, bewerk: null });
+  const [vergelijkOpen, setVergelijkOpen] = useState(false);
+  const [versieWeg, setVersieWeg] = useState<Dienstregeling | null>(null);
+
   const lijst = useDienstLijst(services);
   const link = useRecordLink('dienstoverzicht', services);
   // Laadstaat van de collectie (release-safety, 24-09): een mislukte eerste
@@ -97,6 +127,32 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
   const openNieuw = () => { fouten.wis(); setFormVoor(null); setNieuw(true); link.sluit(); };
   const sluitPaneel = () => { setNieuw(false); setFormVoor(null); link.sluit(); };
 
+  const kiesVersie = (id: string) => { sluitPaneel(); versies.kies(id); };
+  const planningMelding = (planning: PlanningNaDienstoverzicht | undefined) =>
+    planning && planning.status !== 'niet-nodig' ? dienstoverzichtToast(planning) : null;
+  const naVersieSave = async (versie: Dienstregeling, planning?: PlanningNaDienstoverzicht) => {
+    await versies.laadVersies();
+    versies.kies(versie.id);
+    const melding = planningMelding(planning);
+    if (melding) notify(melding.tekst, melding.toon);
+    else notify(`Versie ${versieLabel(versie)} bewaard.`, 'success');
+  };
+  const bevestigVersieWeg = async () => {
+    const doel = versieWeg;
+    if (!doel) return;
+    try {
+      const uit = await verwijderDienstregeling(doel.id);
+      setVersieWeg(null);
+      sluitPaneel();
+      versies.kies(versies.huidig?.id ?? '');
+      await versies.laadVersies();
+      const melding = planningMelding(uit.planning);
+      notify(melding ? `Versie ${versieLabel(doel)} verwijderd. ${melding.tekst}` : `Versie ${versieLabel(doel)} verwijderd.`, melding?.toon === 'error' ? 'error' : 'success');
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Verwijderen is mislukt.', 'error');
+    }
+  };
+
   const handleDelete = (s: Service) => {
     if (!canAdminOverride) {
       notify('Diensten verwijderen is alleen beschikbaar voor admins.', 'error');
@@ -112,9 +168,9 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
       size="sm"
       label={`Acties voor dienst ${s.serviceNumber}`}
       items={[
-        { label: 'Bewerken', icon: <Pencil size={16} />, onClick: () => openDienst(s) },
+        { label: alleenLezen ? 'Bekijken' : 'Bewerken', icon: <Pencil size={16} />, onClick: () => openDienst(s) },
         { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setHistoryService(s) },
-        ...(canAdminOverride ? [{ label: 'Verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, onClick: () => handleDelete(s) }] : []),
+        ...(canAdminOverride && !alleenLezen ? [{ label: 'Verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, onClick: () => handleDelete(s) }] : []),
       ]}
     />
   );
@@ -159,7 +215,7 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
     const blob = new Blob([dienstoverzichtCsv(services)], { type: 'text/csv;charset=utf-8;' });
     // downloadBlob i.p.v. een handmatige <a download>: dezelfde iOS-share-
     // route en revokeObjectURL als de andere exports.
-    void downloadBlob(`dienstoverzicht_${vandaagBrussel()}.csv`, blob);
+    void downloadBlob(andereVersie ? `dienstoverzicht_vanaf_${andereVersie.geldigVanaf}.csv` : `dienstoverzicht_${vandaagBrussel()}.csv`, blob);
   };
 
   const handleSubmit = async () => {
@@ -185,7 +241,7 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
       const next = bewerkte && !nieuw
         ? services.map((s) => (s.id === bewerkte.id ? { ...s, ...cleaned } : s))
         : [...services, { id: Date.now().toString(), ...cleaned }];
-      const ok = await onSave(next);
+      const ok = await opslaan(next);
       if (ok === false) return;
       sluitPaneel();
     } finally {
@@ -200,7 +256,7 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
   const handleConfirmDelete = async () => {
     const doel = teVerwijderen;
     if (!doel) return;
-    const ok = await onSave(services.filter((s) => s.id !== doel.id), { actie: `Verwijderen van dienst ${doel.serviceNumber}` });
+    const ok = await opslaan(services.filter((s) => s.id !== doel.id), { actie: `Verwijderen van dienst ${doel.serviceNumber}` });
     if (ok !== false && bewerkte?.id === doel.id) sluitPaneel();
   };
 
@@ -213,7 +269,7 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
     if (!pendingImportedServices) return;
     // Bewuste volledige vervanging (bevestigd in de dialoog): meld dat aan
     // de server zodat de bulk-wipe-vangrail niet blokkeert.
-    return Promise.resolve(onSave(pendingImportedServices, { bulkReplace: true }));
+    return Promise.resolve(opslaan(pendingImportedServices, { bulkReplace: true }));
   };
 
   const zijvak = (
@@ -266,17 +322,32 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
               label="Meer acties"
               align="left"
               items={[
-                ...(canAdminOverride ? [{ label: isImporting ? 'Bezig met importeren…' : 'Excel importeren', icon: <Upload size={16} />, disabled: isImporting || laad.foutZonderData, onClick: () => importRef.current?.click() }] : []),
+                ...(canAdminOverride && !alleenLezen ? [{ label: isImporting ? 'Bezig met importeren…' : 'Excel importeren', icon: <Upload size={16} />, disabled: isImporting || laad.foutZonderData, onClick: () => importRef.current?.click() }] : []),
                 { label: 'CSV downloaden', icon: <Download size={16} />, disabled: services.length === 0, onClick: downloadCSV },
               ]}
             />
-            {!laad.foutZonderData && <Button variant="primary" icon={<Plus size={16} />} onClick={openNieuw}>Nieuwe dienst</Button>}
+            {!laad.foutZonderData && !alleenLezen && <Button variant="primary" icon={<Plus size={16} />} onClick={openNieuw}>Nieuwe dienst</Button>}
           </>
         )}
       />
 
+      {versies.versies && versies.versies.length > 0 && gekozenVersie && (
+        <VersieBalk
+          versies={versies.versies}
+          gekozen={gekozenVersie}
+          onKies={kiesVersie}
+          onNieuw={() => setVersieFormulier({ open: true, bewerk: null })}
+          onBewerk={() => setVersieFormulier({ open: true, bewerk: gekozenVersie })}
+          onVergelijk={() => setVergelijkOpen(true)}
+          onVerwijder={() => setVersieWeg(gekozenVersie)}
+          magVerwijderen={canAdminOverride}
+          magVergelijken={!!versies.vorige}
+        />
+      )}
       {laad.foutZonderData ? (
         <Foutkaart boodschap={laad.fout ?? 'Het dienstoverzicht kon niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />
+      ) : andereVersie && versies.fout ? (
+        <Foutkaart boodschap={versies.fout} onOpnieuw={() => void versies.herlaadDiensten()} bezig={versies.laden} />
       ) : (<>
       {laad.fout && <Foutkaart compact boodschap={laad.fout} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />}
       <DienstTabel
@@ -286,8 +357,8 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
         onKies={openDienst}
         gekozenId={bewerkte?.id ?? null}
         boven={link.staat === 'onbekend' ? <RecordOnbekend soort="dienst" onSluit={link.sluit} /> : undefined}
-        leegTekst="Voeg handmatig een dienst toe of importeer een Excel-bestand."
-        leegActie={<Button variant="secondary" icon={<Plus size={16} />} onClick={openNieuw}>Nieuwe dienst</Button>}
+        leegTekst={andereVersie && versies.laden ? 'De versie wordt geladen…' : 'Voeg handmatig een dienst toe of importeer een Excel-bestand.'}
+        leegActie={alleenLezen || (andereVersie && versies.laden) ? undefined : <Button variant="secondary" icon={<Plus size={16} />} onClick={openNieuw}>Nieuwe dienst</Button>}
         zijvak={zijvak}
       />
       </>)}
@@ -300,26 +371,29 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
         onClose={sluitPaneel}
         vuil={vuil}
         title={nieuw || !bewerkte ? 'Nieuwe dienst' : `Dienst ${bewerkte.serviceNumber}`}
-        subtitle={nieuw || !bewerkte ? 'Tijden en loopnummers per deel.' : 'Bekijk of bewerk de tijden en loopnummers.'}
+        subtitle={alleenLezen ? `Verlopen versie ${gekozenVersie ? versieLabel(gekozenVersie) : ''}, alleen lezen.` : andereVersie ? `Versie ${versieLabel(andereVersie)}: tijden en loopnummers per deel.` : nieuw || !bewerkte ? 'Tijden en loopnummers per deel.' : 'Bekijk of bewerk de tijden en loopnummers.'}
         width="lg"
         footer={(
           <div className="flex gap-3">
             <SluitKnop onClose={sluitPaneel} variant="secondary" size="lg" className="flex-1" disabled={isSaving}>Annuleren</SluitKnop>
-            <Button type="submit" form="dienst-formulier" variant="primary" size="lg" className="flex-1" bezig={isSaving}>
-              {nieuw || !bewerkte ? 'Dienst toevoegen' : 'Dienst bijwerken'}
-            </Button>
+            {!alleenLezen && (
+              <Button type="submit" form="dienst-formulier" variant="primary" size="lg" className="flex-1" bezig={isSaving}>
+                {nieuw || !bewerkte ? 'Dienst toevoegen' : 'Dienst bijwerken'}
+              </Button>
+            )}
           </div>
         )}
       >
         {bewerkte && !nieuw && (
           <div className="mb-5 flex items-center justify-end gap-1">
             <IconButton label="Wijzigingsgeschiedenis" size="sm" onClick={() => setHistoryService(bewerkte)}><History size={16} /></IconButton>
-            {canAdminOverride && (
+            {canAdminOverride && !alleenLezen && (
               <IconButton label={`Dienst ${bewerkte.serviceNumber} verwijderen`} size="sm" variant="danger" onClick={() => handleDelete(bewerkte)}><Trash2 size={16} /></IconButton>
             )}
           </div>
         )}
         <Formulier id="dienst-formulier" onVerstuur={handleSubmit} className="space-y-5">
+          <fieldset disabled={alleenLezen} className="min-w-0 space-y-5">
           <Field label="Dienstnummer" htmlFor="dienst-nummer">
             <Input
               id="dienst-nummer"
@@ -343,6 +417,7 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
             {tijdVeld('endTime3', 'dienst-eind3', 'Eindtijd (deel 3)', { placeholder: '—' })}
             {loopVeld('loopnr3', 'dienst-loop3', 'Loopnummer (deel 3)')}
           </div>
+          </fieldset>
         </Formulier>
       </SlideOver>
 
@@ -351,7 +426,7 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
         onClose={() => setPendingImportedServices(null)}
         onConfirm={handleConfirmImport}
         title="Diensten importeren"
-        message={`Er zijn ${pendingImportedServices?.length ?? 0} diensten gevonden. De huidige lijst wordt vervangen door deze import.`}
+        message={`Er zijn ${pendingImportedServices?.length ?? 0} diensten gevonden. ${andereVersie ? `De lijst van versie ${versieLabel(andereVersie)}` : 'De huidige lijst'} wordt vervangen door deze import.`}
         confirmText="Importeren"
         variant="warning"
       />
@@ -362,6 +437,31 @@ export function ServicesView({ services, onSave, canAdminOverride }: { services:
         onConfirm={handleConfirmDelete}
         title={teVerwijderen ? `Dienst ${teVerwijderen.serviceNumber} verwijderen` : 'Dienst verwijderen'}
         message="De dienst verdwijnt uit het dienstoverzicht en de planning wordt bijgewerkt. Dit kan niet ongedaan worden gemaakt."
+      />
+
+      <VersieFormulier
+        open={versieFormulier.open}
+        onClose={() => setVersieFormulier({ open: false, bewerk: null })}
+        versies={versies.versies ?? []}
+        vandaag={versies.vandaag}
+        bewerk={versieFormulier.bewerk}
+        onKlaar={naVersieSave}
+      />
+      {gekozenVersie && versies.vorige && (
+        <VersieVergelijking
+          open={vergelijkOpen}
+          onClose={() => setVergelijkOpen(false)}
+          gekozen={gekozenVersie}
+          vorige={versies.vorige}
+          gekozenDiensten={services}
+        />
+      )}
+      <ConfirmationModal
+        open={!!versieWeg}
+        onClose={() => setVersieWeg(null)}
+        onConfirm={bevestigVersieWeg}
+        title={versieWeg ? `Versie ${versieLabel(versieWeg)} verwijderen` : 'Versie verwijderen'}
+        message={`De versie en haar ${versieWeg?.aantalDiensten ?? 0} diensten verdwijnen; de dagen vanaf ${versieWeg ? formatDatumDMJ(versieWeg.geldigVanaf) : ''} vallen terug op de vorige versie en de planning wordt bijgewerkt. Dit kan niet ongedaan worden gemaakt.`}
       />
 
       <EntityHistoryModal

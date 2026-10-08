@@ -71,6 +71,9 @@ export const VELD_LABELS: Record<string, string> = {
   nummerplaat: 'nummerplaat',
   datum: 'datum',
   validUntil: 'vervaldatum',
+  geldigVanaf: 'geldig vanaf',
+  naam: 'naam',
+  kopieVan: 'kopie van',
 };
 
 /** 'e-mailadres: Vul een geldig e-mailadres in' — voor toasts en logregels. */

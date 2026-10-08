@@ -701,6 +701,9 @@ export const toPublicService = (s: any) => ({
   loopnr: s.loopnr ?? undefined,
   loopnr2: s.loopnr2 ?? undefined,
   loopnr3: s.loopnr3 ?? undefined,
+  // Versie van de dienstregeling (08-10); de opslaglaag schrijft de kolom,
+  // toDatabaseService niet (tot de migratie gedraaid is, kent de tabel ze niet).
+  dienstregelingId: s.dienstregelingId ?? s.dienstregelingid ?? undefined,
 });
 
 // Supabase heeft de services-tabel met *quoted camelCase* kolommen aangemaakt

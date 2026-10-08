@@ -145,7 +145,8 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
     // de bordcontrole verderop); in dezelfde beweging, dus geen extra ronde.
     const [users, services, matrixRows, dayRows, codes, swaps] = await Promise.all([
       getUsersData(),
-      getServicesData(),
+      // Het dienstoverzicht zoals het op díe dag geldt (versies, 08-10).
+      getServicesData({ datum: date }),
       getPlanningMatrixRows(),
       getShiftsOnDate(date),
       getPlanningCodesData(),

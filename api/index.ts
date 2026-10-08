@@ -20,6 +20,7 @@ import { serverTiming } from "./_lib/serverTiming.js";
 import { mountTechniekRoutes } from "./_lib/techniekRoutes.js";
 import { mountLoonRoutes } from "./_lib/loonRoutes.js";
 import { mountDienstRoutes } from "./_lib/dienstRoutes.js";
+import { mountDienstregelingRoutes } from "./_lib/dienstregelingRoutes.js";
 import { mountRapportRoutes } from "./_lib/rapportRoutes.js";
 import { mountTelegramRoutes } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenCoverageAdvies } from "./coverageRoutes.js";
@@ -164,6 +165,8 @@ mountLoonRoutes(app);
 
 // Dienstopbouw op rit-niveau (fase C Access-migratie, 13-09). Zie api/_lib/dienstRoutes.ts.
 mountDienstRoutes(app);
+// Dienstregelingversies (08-10): versies van het dienstoverzicht met een geldig-vanaf-datum.
+mountDienstregelingRoutes(app);
 
 // Rapporten: GET /api/rapporten/:id (register in shared/rapporten). Zie api/_lib/rapportRoutes.ts.
 mountRapportRoutes(app);
