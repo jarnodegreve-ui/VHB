@@ -143,7 +143,14 @@ import zlib from 'node:zlib';
 // CI-runner ook 716 op takken die de bundel niet raken (#724, #726: main
 // stond daar op de afronding van 715), dus de grens van 715 lag op de trede;
 // 719 = 716 plus de ±0,5 kB van de runner en ±0,3 % marge.
-const BUDGET_KB = 719;
+// 10-10 (dagtypes en afwijkende tijden per dagtype, deel 1, keuze Jarno):
+// 719 → 722. Geen nieuwe dependency: shared/dagtype.ts (de lijst, de
+// afleiding en tijdenOpDag) komt via shared/dienstregeling.ts in het luie
+// ServicesView-chunk (11,9 kB gzip), buiten de startbundel en buiten beide
+// warmups (index 77,67, chauffeur 77, staf 145: ongewijzigd). Lokaal 719,04,
+// precies op de trede: de CI-runner meet ±0,5 kB zwaarder en rondde naar 720.
+// 722 = 719,04 plus de ±0,5 kB van de runner en ±0,3 % marge.
+const BUDGET_KB = 722;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
