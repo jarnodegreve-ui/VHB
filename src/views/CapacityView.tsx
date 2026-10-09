@@ -1,51 +1,47 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Download, Table2, TriangleAlert } from 'lucide-react';
-import { cn, downloadBlob, notify } from '../lib/ui';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, Download, Table2 } from 'lucide-react';
+import { downloadBlob, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
 import { useZelfLadend } from '../lib/zelfLadend';
 import { ActieMenu } from '../components/ActieMenu';
 import { apiFetch } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
-import { Button, Chip, IconButton, MicroLabel, microLabelClass } from '../components/primitives';
+import { Button, IconButton } from '../components/primitives';
 import { Card } from '../components/Card';
-import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { SearchField } from '../components/Field';
 import { meldSchrijffout } from '../lib/fouten';
-import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
-import { fetchMonthPlanning, type MonthPlanning } from '../lib/monthPlanning';
-import { KIND_CLS, celChipClass } from '../lib/planningKind';
+import { fetchMonthPlanning, type MonthCell, type MonthPlanning } from '../lib/monthPlanning';
 import { isStaf } from '../types';
 import type { User } from '../types';
-import { formatDatumDMJ, formatDayLong, hoofdletter, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../lib/format';
-import { DUR, EASE_SPRING } from '../lib/motion';
+import { formatDatumDMJ, hoofdletter, MONTH_NAMES } from '../lib/format';
 import { useRecordParam, useRouteParam } from '../app/router';
 import { eersteZichtbareDag } from '../../shared/maandplanningTerugblik';
 import {
   addDaysIso, berekenCodeLegend, bouwDagRijen, formatDayMonth, groepeerPerSectie, maandNaarParam, maandUitParam,
-  mondayOf, monthOf, noteKey, PLANNING_SALVO_MS, sectieLabel, voegCellenSamen, voegChauffeursSamen,
+  mondayOf, monthOf, noteKey, PLANNING_SALVO_MS, voegCellenSamen, voegChauffeursSamen,
   werkdagenUitCellen, WISSEL_REDENEN, wisselOverzichtSortering,
-  type GekozenCel, type MaandOverzicht, type OverzichtRij, type OverzichtSortering,
+  type Chauffeur, type GekozenCel, type MaandOverzicht, type OverzichtRij, type OverzichtSortering,
 } from '../lib/maandplanning';
-import { SECTIE_BAND, SECTIE_KOP, SECTIE_STREEP } from '../components/maandplanning/sectiekop';
 import { DesktopRaster } from '../components/maandplanning/DesktopRaster';
 import { Legende } from '../components/maandplanning/Legende';
 import { CelDetailModal } from '../components/maandplanning/CelDetailModal';
 import { MaandoverzichtModal } from '../components/maandplanning/MaandoverzichtModal';
+import { DagWeergave } from '../components/maandplanning/DagWeergave';
 
 /**
  * Maandplanning — read-only weergave van de planning-matrix (chauffeur ×
  * datum met codes), zoals het overzicht dat in het chauffeurslokaal hangt.
  * Zichtbaar voor iedereen zodat collega's wissels kunnen vinden.
  *
- * Sinds 09-10 (stap 1 van de splitsing, zoals App.tsx): de pure helpers
+ * Sinds 09-10 (stap 1 en 2 van de splitsing, zoals App.tsx): de pure helpers
  * (datums, URL-maand, samenvoegen van twee maanden, dagrijen, legende,
  * maandoverzicht) staan in src/lib/maandplanning.ts; het desktopraster, de
- * legende, het celdetail met de dienstwissel en het maandoverzicht-venster
- * in src/components/maandplanning/. Alle toestand en elke schrijfactie
- * blijven hier; de componenten krijgen ze als props.
+ * legende, het celdetail met de dienstwissel, het maandoverzicht-venster en
+ * de mobiele dagweergave (datumstrip + daglijst) in
+ * src/components/maandplanning/. Alle toestand en elke schrijfactie blijven
+ * hier; de componenten krijgen ze als props.
  */
 export function CapacityView({ currentUser }: { currentUser: User }) {
   const ownId = String(currentUser?.id ?? '');
@@ -433,8 +429,6 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   const windowLabel = `${weekRangeLabel(visibleDates)} · ${formatDayMonth(visibleDates[0])} – ${formatDayMonth(visibleDates[visibleDates.length - 1])} ${visibleDates[visibleDates.length - 1].slice(0, 4)}`;
 
-  const formatDateLong = formatDayLong;
-
   // Ook een venster dat alleen in de extra maand planning heeft telt als data.
   const hasData = (dates.length > 0 || (extraData?.dates?.length ?? 0) > 0) && drivers.length > 0;
 
@@ -475,27 +469,6 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     if (!maandParam) zetMaandParam(monthParam);
     zetDagParam(iso);
   };
-
-  // De gekozen dag in de strip in beeld houden (bv. na "Vandaag" of een
-  // maandwissel). Bewust NIET scrollIntoView bij elke tik: die sprong hard
-  // (geen smooth) en verschoof de strip ook als de dag al gewoon in beeld
-  // stond — dan gleed de hele rij onder je vinger weg (melding Jarno 15-08).
-  // Nu: alleen scrollen als de gekozen dag (deels) buiten beeld staat, zacht,
-  // en via de container zelf zodat de pagina nooit verticaal meespringt.
-  const reduceMotion = useReducedMotion();
-  const stripDagRef = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    const el = stripDagRef.current;
-    const container = el?.parentElement;
-    if (!el || !container) return;
-    const elRect = el.getBoundingClientRect();
-    const cRect = container.getBoundingClientRect();
-    if (elRect.left >= cRect.left && elRect.right <= cRect.right) return;
-    container.scrollTo({
-      left: el.offsetLeft - container.clientWidth / 2 + el.clientWidth / 2,
-      behavior: reduceMotion ? 'auto' : 'smooth',
-    });
-  }, [mobielDag, reduceMotion]);
 
   // Zoeken op chauffeur óf dienstnummer: bij 39 namen scroll je anders het
   // halve scherm door, en "wie rijdt 4102?" is de omgekeerde vraag die je
@@ -540,6 +513,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // Legende: de codes die in de héle maand voorkomen, elk met hun betekenis,
   // data-gedreven uit de cellen (berekenCodeLegend in src/lib/maandplanning.ts).
   const codeLegend = useMemo(() => berekenCodeLegend(cells), [cells]);
+
+  // Tik op een cel (desktopraster of daglijst): het detailvenster open, met
+  // de bestaande notitie van die chauffeur en dag als concept.
+  const onCel = (drv: Chauffeur, iso: string, cell: MonthCell) => {
+    setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell });
+    setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? '');
+  };
 
   return (
     <PageShell breed>
@@ -638,240 +618,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             cells={cells}
             ownId={ownId}
             notes={notes}
-            onCel={(drv, iso, cell) => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
+            onCel={onCel}
           />
 
-          {/* Mobile: dag-weergave — datumstrip + alle chauffeurs van één dag
-              in één kolom (per sectie, op dienstnummer). De cel-modal met
-              details/notitie/dienstwissel blijft dezelfde. */}
-          <div className="md:hidden space-y-3">
-            <Card padding="none" className="p-2">
-              {/* Maandwissel hoort hier bij de dagen — de venster-pijlen in de
-                  kop zijn op mobiel verborgen. */}
-              <div className="flex items-center justify-between gap-2 px-1 pb-1">
-                <IconButton
-                  label="Vorige maand"
-                  title={kanMaandTerug ? 'Vorige maand' : beginUitleg}
-                  variant="ghost"
-                  size="md"
-                  className="text-slate-400"
-                  disabled={!kanMaandTerug}
-                  onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
-                >
-                  <ChevronLeft size={16} />
-                </IconButton>
-                <span className="text-sm font-semibold text-slate-800 tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
-                <div className="flex items-center">
-                  {/* Spring naar de eerstvolgende dag met een nog niet
-                      herverdeelde dienst — scheelt dag voor dag vegen. */}
-                  {aandachtDagen.length > 0 && (
-                    <IconButton
-                      label="Naar de volgende dag met een openstaande dienst"
-                      title="Volgende dag met een openstaande dienst"
-                      variant="ghost"
-                      size="md"
-                      className="text-amber-700"
-                      onClick={springNaarAandacht}
-                    >
-                      <TriangleAlert size={16} />
-                    </IconButton>
-                  )}
-                  <IconButton
-                    label="Volgende maand"
-                    title={kanMaandVooruit ? 'Volgende maand' : `De planning is geïmporteerd tot ${formatDatumDMJ(laatsteDag)}`}
-                    variant="ghost"
-                    size="md"
-                    className="text-slate-400"
-                    disabled={!kanMaandVooruit}
-                    onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
-                  >
-                    <ChevronRight size={16} />
-                  </IconButton>
-                </div>
-              </div>
-              <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Kies een dag">
-                {dates.map((iso) => {
-                  const d = new Date(`${iso}T00:00:00`);
-                  const gekozen = iso === mobielDag;
-                  const vandaag = iso === todayIso;
-                  const td = typedagLabel(iso);
-                  return (
-                    // rauw: dag-tab in de datumstrip (kalender-dagcel met schuivende motion-pil)
-                    <button
-                      key={iso}
-                      ref={gekozen ? stripDagRef : undefined}
-                      type="button"
-                      role="tab"
-                      aria-selected={gekozen}
-                      onClick={() => kiesDag(iso)}
-                      className={cn(
-                        // Kleuren via transition-colors; de keuzepil zelf is
-                        // een motion-span met layoutId die tussen de dagen
-                        // schúíft (zelfde patroon als de dock-tabs) i.p.v. per
-                        // knop hard aan/uit te wippen.
-                        'ios-pressable relative flex min-h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 transition-colors',
-                        gekozen ? 'text-slate-900' : 'text-slate-500',
-                        // Vandaag: zachte oker hairline (inset, 35%) + het oker
-                        // cijfer. De eerdere 60%-ring las als een lege tweede
-                        // pil; op verzoek Jarno tóch een omlijsting, maar
-                        // duidelijk stiller dan de gevulde selectie-pil.
-                        !gekozen && vandaag && 'ring-1 ring-inset ring-oker-500/35',
-                      )}
-                    >
-                      {gekozen && (
-                        <motion.span
-                          layoutId="dagstrip-actief"
-                          // Zelfde veer als sidebar-rail, dock-tab en Segmented-pil
-                          // (EASE_SPRING op DUR.fast, golf 2 punt 9).
-                          transition={reduceMotion ? { duration: 0 } : { duration: DUR.fast, ease: EASE_SPRING }}
-                          // Selectie = neutraal, zoals het actieve dock-item (tranche 3B, 23-09):
-                          // goud is voor actie, focus en "nu"; vandaag houdt zijn oker cijfer.
-                          className="absolute inset-0 rounded-xl bg-surface-muted ring-1 ring-hairline"
-                        />
-                      )}
-                      <span className={cn(microLabelClass, 'relative z-10 transition-colors', gekozen ? 'text-slate-700' : 'text-slate-500')}>
-                        {WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}
-                      </span>
-                      {/* Vandaag (niet gekozen) = oker dagcijfer — hetzelfde
-                          stille signaal als de oude daglabels en het desktop-
-                          grid. Een ring om de hele knop las als een tweede,
-                          lege pil naast de gevulde selectie (melding Jarno). */}
-                      {/* Het oker cijfer blijft ook als vandaag gekozen is: de keuzepil is neutraal, het "nu"-signaal niet. */}
-                      <span className={cn('relative z-10 text-sm font-bold tabular-nums leading-tight transition-colors', vandaag && 'text-oker-700')}>
-                        {d.getDate()}
-                      </span>
-                      {/* Feestdag (F) — zelfde signaal als de desktop-dagkop.
-                          De V van schoolvakantie is eruit (Jarno 17-09). De
-                          maand staat hier niet onder elke dag: de strip loopt
-                          binnen één maand en die staat in de kop erboven. */}
-                      {/* 2xs: matrixcel, typedagletter in een vaste 3 px-hoge strook */}
-                      <span className="relative z-10 h-3 text-2xs font-bold leading-3 text-slate-900">
-                        {td?.kort === 'F' ? 'F' : ''}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Card>
-
-            {mobielDag && (
-              /* key per dag + korte opacity-fade: de kolom wisselt anders in
-                 één harde klap van inhoud. Alleen opacity (composited) — geen
-                 transform/hoogte-animatie, dat jankt op oudere toestellen. */
-              <motion.div
-                key={mobielDag}
-                initial={reduceMotion ? false : { opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: DUR.fast, ease: 'easeOut' }}
-              >
-                <Card padding="none" className="overflow-hidden">
-                <div className="flex items-baseline justify-between gap-3 border-b border-hairline px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-800">{hoofdletter(formatDateLong(mobielDag))}</span>
-                  <MicroLabel className="tabular-nums">
-                    {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0)} {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0) === 1 ? 'dienst' : 'diensten'}
-                  </MicroLabel>
-                </div>
-
-                {dagRijen.secties.length === 0 ? (
-                  <p className="px-4 py-6 text-sm font-medium text-slate-500">
-                    {zoekTerm ? 'Geen chauffeurs gevonden voor deze zoekterm.' : 'Geen diensten op deze dag.'}
-                  </p>
-                ) : dagRijen.secties.map((sectie) => (
-                  <Fragment key={sectie.naam}>
-                    {showSections && (
-                      <div className={cn(SECTIE_BAND, 'flex h-9 items-center px-4', SECTIE_KOP)}>{SECTIE_STREEP}{sectieLabel(sectie.naam)}</div>
-                    )}
-                    {sectie.rijen.map(({ drv, cell }) => {
-                      if (!cell) return null;
-                      const isOwn = ownId && drv.id === ownId;
-                      return (
-                        // rauw: klikbare dagrij (code-chip + naam + uren) — kaart-als-knop met eigen layout
-                        <button
-                          key={drv.id}
-                          type="button"
-                          onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0 active:bg-surface-soft-hover transition-colors"
-                        >
-                          <Chip mono={false} className={cn(
-                            'min-w-[46px] justify-center ring-1 ring-hairline',
-                            celChipClass(cell),
-                          )}>{cell.code}</Chip>
-                          {/* Eigen rij: neutrale stip en vet, geen gouden vlak (tranche 3B). */}
-                          <span className={cn('min-w-0 flex-1 truncate text-sm text-slate-800', isOwn ? 'font-bold' : 'font-semibold')}>
-                            {isOwn && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-slate-700 align-middle" aria-hidden="true" />}
-                            {drv.name}
-                            {isOwn && <span className="sr-only"> (jij)</span>}
-                          </span>
-                          {/* Uren compact rechts; bij een open dienst de melding. */}
-                          <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">
-                            {cell.hiddenService ? `dienst ${cell.hiddenService} open` : (cell.segments[0] ?? '')}
-                          </span>
-                          {cell.hiddenService && (
-                            <TriangleAlert size={14} className="shrink-0 text-amber-700" aria-label="dienst nog niet herverdeeld" />
-                          )}
-                          {notes.has(noteKey(String(drv.id), mobielDag)) && (
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-600" aria-label="notitie aanwezig" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </Fragment>
-                ))}
-
-                {dagRijen.rust.length > 0 && (
-                  <>
-                    {/* rauw: uitklapband over de volle breedte (micro-label + chevron), geen knopvorm */}
-                    <button
-                      type="button"
-                      onClick={() => setToonRust((v) => !v)}
-                      aria-expanded={toonRust}
-                      className={cn('w-full flex items-center justify-between gap-3 px-4 py-2.5 min-h-11 active:bg-surface-soft-hover transition-colors', SECTIE_BAND, SECTIE_KOP)}
-                    >
-                      <span>Vrij / afwezig · {dagRijen.rust.length}</span>
-                      <ChevronRight size={14} className={uitklapChevron(toonRust, 90)} />
-                    </button>
-                    <Uitklap open={toonRust}>
-                    <div>
-                    {dagRijen.rust.map(({ drv, cell }) => {
-                      const isOwn = ownId && drv.id === ownId;
-                      const inhoud = (
-                        <>
-                          <Chip mono={false} className={cn(
-                            'min-w-[46px] justify-center',
-                            cell ? cn('ring-1 ring-hairline', KIND_CLS[cell.kind]) : 'bg-transparent text-slate-300',
-                          )}>{cell?.code ?? '—'}</Chip>
-                          <span className={cn('min-w-0 flex-1 truncate text-sm', isOwn ? 'font-bold text-slate-800' : 'font-medium text-slate-600')}>
-                            {isOwn && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-slate-700 align-middle" aria-hidden="true" />}
-                            {drv.name}
-                            {isOwn && <span className="sr-only"> (jij)</span>}
-                          </span>
-                          <span className="shrink-0 text-xs font-medium text-slate-500">{cell?.label ?? ''}</span>
-                        </>
-                      );
-                      const rijCls = 'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-hairline-subtle last:border-b-0';
-                      // Zonder cel valt er niets te openen — dan geen knop.
-                      // rauw: klikbare dagrij (zie hierboven) — kaart-als-knop met eigen layout
-                      return cell ? (
-                        <button
-                          key={drv.id}
-                          type="button"
-                          onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
-                          className={cn(rijCls, 'active:bg-surface-soft-hover transition-colors')}
-                        >
-                          {inhoud}
-                        </button>
-                      ) : (
-                        <div key={drv.id} className={rijCls}>{inhoud}</div>
-                      );
-                    })}
-                    </div>
-                    </Uitklap>
-                  </>
-                )}
-                </Card>
-              </motion.div>
-            )}
-          </div>
+          {/* Mobiel: dag-weergave (datumstrip + alle chauffeurs van één dag in
+              één kolom), sinds 09-10 in src/components/maandplanning/DagWeergave.tsx.
+              De cel-modal met details/notitie/dienstwissel blijft dezelfde. */}
+          <DagWeergave
+            dag={{ dates, mobielDag, todayIso, dagRijen, showSections, ownId, notes, zoekTerm, toonRust, year, monthIndex, kanMaandTerug, kanMaandVooruit, beginUitleg, laatsteDag, heeftAandacht: aandachtDagen.length > 0 }}
+            acties={{ kiesDag, springNaarAandacht, setViewMonth, setToonRust, onCel }}
+          />
 
           {/* Legende: codes en markeringen van deze maand (src/components/maandplanning/Legende.tsx). */}
           <Legende legend={codeLegend} />

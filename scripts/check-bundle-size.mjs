@@ -417,6 +417,15 @@ if (!kaartMatch) {
   // en raakt het eerste beeld niet. Budget = de meting plus ±0,5 kB voor de
   // CI-runner, zelfde stap als hierboven.
   WARMUP_BUDGET_KB.staf = 144.5;
+  // 09-10 (splitsing CapacityView stap 2): staf 144,5 → 145. De mobiele
+  // dagweergave (datumstrip + daglijst) staat nu in DagWeergave.tsx en krijgt
+  // haar gegevens en handlers als twee objecten; de sleutels daarvan kosten
+  // het CapacityView-chunk 11,30 → 11,55 kB gzip en de staf-warmup lokaal
+  // 144,04 → 144,32 (vlakke props gemeten: 144,28, geen verschil van belang).
+  // Geen nieuwe import, zelfde chunk. De warmup start pas na LCP + 2 s en
+  // raakt het eerste beeld niet. Budget = de meting plus ±0,5 kB voor de
+  // CI-runner, zelfde stap als hierboven.
+  WARMUP_BUDGET_KB.staf = 145;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {
