@@ -50,6 +50,19 @@ describe('dienstregelingversies: lezen en aanmaken', () => {
   it('een onbekende versie op /api/services geeft 404', async () => {
     expect((await api('GET', '/api/services?versie=nope', { token: 'tok-planner' })).status).toBe(404);
   });
+
+  it('aanmaken meldt de actieve chauffeurs vanaf welke dag de nieuwe dienstregeling geldt, tenzij melden uitstaat (09-10)', async () => {
+    mem.users = mem.users.map((u: any) => (u.id === '4' ? { ...u, isActive: false } : u));
+    mem.pushesSent = [];
+    expect((await maak({ geldigVanaf: '2026-11-14', naam: 'November' })).status).toBe(201);
+    const push = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe dienstregeling');
+    expect(push?.userIds).toEqual(['3']);
+    expect(push?.payload).toMatchObject({ soort: 'planning', url: '/?view=dienstoverzicht', body: 'Vanaf 14/11/2026 geldt een nieuwe dienstregeling (November). Bekijk het dienstoverzicht.' });
+
+    mem.pushesSent = [];
+    expect((await maak({ geldigVanaf: '2027-01-01', melden: false })).status).toBe(201);
+    expect(mem.pushesSent.filter((p) => p.payload.title === 'Nieuwe dienstregeling')).toEqual([]);
+  });
 });
 
 describe('dienstregelingversies: de planning volgt per dag de juiste versie', () => {

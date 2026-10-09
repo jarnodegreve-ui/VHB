@@ -349,6 +349,35 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(mem.planning.find((p: any) => p.date === '2026-07-01' && String(p.line) === '12')).toMatchObject({ driverId: '3', startTime: '08:30' });
   });
 
+  it('de knop meldt alleen wie iets ziet veranderen, met de dagen erbij (09-10)', async () => {
+    // Dienst 12 (chauffeur A, 01/07 en 08/07) krijgt een andere starttijd;
+    // dienst 14 (chauffeur B) blijft gelijk.
+    mem.services = metDienst12({ startTime: '08:45' });
+    const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json.notifiedDrivers).toBe(1);
+    expect(roosterPushes()).toHaveLength(1);
+    expect(roosterPushes()[0].userIds).toEqual(['3']);
+    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd op 01/07/2026 en 08/07/2026. Bekijk je diensten.');
+    // Niets gewijzigd = niemand een melding.
+    mem.pushesSent = [];
+    await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' });
+    expect(roosterPushes()).toHaveLength(0);
+  });
+
+  it('een wachtrij van vóór 09-10 (één afdruk per chauffeur) meldt nog, zonder dagen', async () => {
+    mem.appSettings[WACHTRIJ] = { laatsteWijziging: new Date(Date.now() - 11 * 60 * 1000).toISOString(), basis: { '3': 'afdruk-van-vroeger', '4': 'ook-oud' } };
+    // Chauffeur B wordt tegen de oude afdruk vergeleken: die kan nooit gelijk
+    // zijn aan een verzonnen tekst, dus ook hij hoort het. Dat is de prijs van
+    // één overgang; daarna draagt elke wachtrij dag-afdrukken.
+    const rijp = await api('GET', '/api/cron/rooster-meldingen', CRON);
+    expect(rijp.json).toMatchObject({ status: 'verstuurd', ontvangers: 2 });
+    expect(roosterPushes()).toHaveLength(1);
+    expect(roosterPushes()[0].userIds.sort()).toEqual(['3', '4']);
+    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd, bekijk je diensten.');
+    expect(mem.appSettings[WACHTRIJ]).toEqual({ laatsteWijziging: null, basis: {} });
+  });
+
   it('geen salvo: drie saves na elkaar geven na de rust één melding per chauffeur', async () => {
     for (const startTime of ['08:10', '08:20', '08:30']) {
       const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime }) });
@@ -365,7 +394,8 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     expect(rijp.json).toMatchObject({ status: 'verstuurd', ontvangers: 1 });
     expect(roosterPushes()).toHaveLength(1);
     expect(roosterPushes()[0].userIds).toEqual(['3']);
-    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd, bekijk je diensten.');
+    // Met de dagen erbij (09-10): chauffeur A rijdt dienst 12 op 01/07 en 08/07.
+    expect(roosterPushes()[0].payload.body).toBe('Je rooster is gewijzigd op 01/07/2026 en 08/07/2026. Bekijk je diensten.');
     // Wachtrij leeg: een volgende beurt verstuurt niets meer.
     const daarna = await api('GET', '/api/cron/rooster-meldingen', CRON);
     expect(daarna.json).toMatchObject({ status: 'leeg' });
@@ -2488,6 +2518,49 @@ describe('Excel-terugexport van de maandplanning', () => {
     expect(String(dag[colB])).toBe('12');
     // Chauffeur A gaf de dienst weg (overname) → geen dienstcode meer.
     expect(String(dag[colA] ?? '')).not.toBe('12');
+  });
+});
+
+describe('matrix-import: de melding noemt de dagen en gaat alleen naar wie iets ziet veranderen (09-10)', () => {
+  const bouwXlsx = async (aoa: unknown[][]) => {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'praktijk');
+    return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+  };
+  const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+  const importeer = async (aoa: unknown[][]) => {
+    mem.pushesSent = [];
+    const res = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: await bouwXlsx(aoa) } });
+    expect(res.status).toBe(200);
+    return mem.pushesSent.filter((p) => p.payload.title === 'Planning bijgewerkt');
+  };
+  const KOP = ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur B', 'aantal'];
+
+  beforeEach(() => {
+    mem.leave = [];
+    mem.swaps = [];
+    mem.planning = [];
+    mem.planningMatrix = [];
+  });
+
+  it('een verse periode: wie er diensten in krijgt hoort dat zijn planning klaarstaat', async () => {
+    const pushes = await importeer([KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '12', '14', 2]]);
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0].userIds.sort()).toEqual(['3', '4']);
+    expect(pushes[0].payload.body).toBe('Je planning van 03/08/2030 t/m 04/08/2030 staat klaar. Bekijk je rooster.');
+    expect(pushes[0].payload.url).toBe('/?view=rooster');
+  });
+
+  it('dezelfde Excel nog eens: niemand een melding; één gewijzigde dag: alleen die chauffeur, met de dag', async () => {
+    const basis = [KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '12', '14', 2]];
+    await importeer(basis);
+    expect(await importeer(basis)).toEqual([]);
+    // Chauffeur B rijdt op 04/08 voortaan dienst 15; A verandert niet.
+    const pushes = await importeer([KOP, [serial('2030-08-03'), 'W', '12', '14', 2], [serial('2030-08-04'), 'W', '12', '15', 2]]);
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0].userIds).toEqual(['4']);
+    expect(pushes[0].payload.body).toBe('Je rooster is gewijzigd op 04/08/2030. Bekijk je diensten.');
   });
 });
 
