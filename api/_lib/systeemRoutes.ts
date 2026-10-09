@@ -26,31 +26,36 @@ import { getActivityLog, getAanwezigheid, getLoginActivity, getEntityHistory, ge
 
 const runSchemaCheck = async (res: express.Response) => {
   if (!db) return res.status(503).json({ ok: false, error: "Database niet geconfigureerd." });
-  const missing: string[] = [];
+  // `probes` = kolommen en RPC's die ontbreken; `migraties` = wat het register
+  // nog mist. `missing` blijft de platte lijst van allebei, voor de post-deploy
+  // curl; Systeemstatus leest de twee gestructureerde velden.
+  const probes: string[] = [];
 
   // Kolomlijsten gedeeld met de contracttest (src/schemaContract.test.ts):
   // zie api/schemaProbes.ts.
   for (const probe of TABLE_PROBES) {
     const { error } = await db.from(probe.table).select(probe.columns).limit(0);
-    if (error) missing.push(`${probe.table}: ${error.message}`);
+    if (error) probes.push(`${probe.table}: ${error.message}`);
   }
 
   // RPC's: zie RPC_PROBES in api/schemaProbes.ts. PGRST202 = ontbreekt.
   for (const probe of RPC_PROBES) {
     const { error } = await db.rpc(probe.name, probe.args);
-    if (error && isMissingDbFunction(error)) missing.push(`rpc ${probe.name}: ontbreekt (migratie niet gedraaid?)`);
+    if (error && isMissingDbFunction(error)) probes.push(`rpc ${probe.name}: ontbreekt (migratie niet gedraaid?)`);
   }
 
   // Migraties: wat de code verwacht (api/_lib/migratieLijst.ts) tegenover wat
   // deze omgeving in haar register heeft (2026-10-05_schema_migraties.sql).
   const { data: gedraaid, error: registerFout } = await db.from("schema_migraties").select("bestand");
-  if (registerFout) {
-    missing.push(`schema_migraties: ${registerFout.message}`);
-  } else {
-    for (const bestand of ontbrekendeMigraties((gedraaid ?? []).map((r: { bestand: string }) => r.bestand))) {
-      missing.push(`migratie ${bestand}: nog niet gedraaid op deze omgeving`);
-    }
-  }
+  const migraties = {
+    ontbrekend: registerFout ? [] : ontbrekendeMigraties((gedraaid ?? []).map((r: { bestand: string }) => r.bestand)),
+    registerFout: registerFout ? registerFout.message : null,
+  };
+  const missing = [
+    ...probes,
+    ...(migraties.registerFout ? [`schema_migraties: ${migraties.registerFout}`] : []),
+    ...migraties.ontbrekend.map((bestand) => `migratie ${bestand}: nog niet gedraaid op deze omgeving`),
+  ];
 
   // Cron-heartbeats: stale = ouder dan 2× het verwachte interval.
   const now = Date.now();
@@ -63,7 +68,7 @@ const runSchemaCheck = async (res: express.Response) => {
     }),
   );
 
-  res.json({ ok: missing.length === 0, missing, crons, time: new Date().toISOString() });
+  res.json({ ok: missing.length === 0, missing, probes, migraties, crons, time: new Date().toISOString() });
 };
 
 export function mountSysteemRoutes(app: express.Express) {

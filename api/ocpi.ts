@@ -17,7 +17,7 @@ import { busVoorLaadpunt } from "../shared/laadplein.js";
  *
  * Stap 1 (dit bestand): de credentials-handshake (Token A → Token C) plus de
  * OCPI-endpoints die wij zelf moeten hosten zodat de CPO ons kan ontdekken.
- * De data-sync (locations/sessions/cdrs) komt in een latere stap; die leest
+ * De data-sync (locations/sessions) komt in een latere stap; die leest
  * de hier opgeslagen Token C + endpoint-URL's uit ocpi_registration.
  *
  * Veldnamen volgen exact de OCPI 2.2.1-spec (Versions, Credentials modules).
@@ -248,7 +248,7 @@ const registerWithCpo = async (): Promise<{ version: string; cpoPartyId: string 
   if (!tokenC) throw new Error("ChargEye gaf geen Token C terug in de credentials-respons.");
   const cpoRole = Array.isArray(cpoCreds?.roles) ? cpoCreds.roles[0] : undefined;
 
-  // 4) Met Token C de definitieve endpoints ophalen (Sender: locations/sessions/cdrs).
+  // 4) Met Token C de definitieve endpoints ophalen (Sender: locations/sessions).
   const detailsC = await ocpiFetch(assertSafeOcpiUrl(chosen.url, "version-details-URL"), tokenC);
   const alleEndpoints: Array<{ identifier: string; role?: string; url: string }> = detailsC?.data?.endpoints ?? [];
   // Al bij het opslaan filteren: anders blijven onveilige URL's in
@@ -339,22 +339,6 @@ export interface OcpiSession {
   last_updated?: string;
   [k: string]: unknown;
 }
-export interface OcpiCdr {
-  country_code: string;
-  party_id: string;
-  id: string;
-  session_id?: string;
-  start_date_time?: string;
-  end_date_time?: string;
-  total_energy?: number;
-  total_time?: number;
-  total_cost?: OcpiPrice;
-  currency?: string;
-  auth_method?: string;
-  cdr_location?: { evse_uid?: string; connector_id?: string; [k: string]: unknown };
-  last_updated?: string;
-  [k: string]: unknown;
-}
 
 /** Parseer de OCPI-paginatie: de URL bij rel="next" in de Link-header. */
 export const parseNextLink = (linkHeader: string | null): string | null => {
@@ -422,7 +406,7 @@ const requireRegistration = async (): Promise<OcpiRegistration> => {
   return reg;
 };
 
-/** Zoek de Sender-endpoint-URL van de CPO voor een module (locations/sessions/cdrs). */
+/** Zoek de Sender-endpoint-URL van de CPO voor een module (locations/sessions). */
 const resolveSenderEndpoint = (reg: OcpiRegistration, identifier: string): string | null => {
   const eps = reg.cpo_endpoints ?? [];
   const sender = eps.find((e) => e.identifier === identifier && (e.role ?? "").toUpperCase() === "SENDER");
@@ -446,13 +430,6 @@ const fetchSessions = async (opts: { dateFrom?: string; dateTo?: string } = {}):
   return ocpiGetAll<OcpiSession>(withParams(url, { date_from: opts.dateFrom, date_to: opts.dateTo }), reg.cpo_token_c!);
 };
 
-const fetchCdrs = async (opts: { dateFrom?: string; dateTo?: string } = {}): Promise<OcpiCdr[]> => {
-  const reg = await requireRegistration();
-  const url = resolveSenderEndpoint(reg, "cdrs");
-  if (!url) throw new Error("OCPI: geen 'cdrs' Sender-endpoint bij de CPO.");
-  return ocpiGetAll<OcpiCdr>(withParams(url, { date_from: opts.dateFrom, date_to: opts.dateTo }), reg.cpo_token_c!);
-};
-
 // ============================================================================
 // Stap 4 — sync-laag: client → upsert naar Supabase. Per-module foutafhandeling
 // zodat één fout de rest niet meesleurt; idempotent via upsert op de PK's.
@@ -463,7 +440,6 @@ type OcpiSyncSummary = {
   evses: number;
   connectors: number;
   sessions: number;
-  cdrs: number;
   errors: string[];
 };
 
@@ -536,28 +512,15 @@ const syncSessions = async (summary: OcpiSyncSummary, opts: { dateFrom?: string 
   summary.sessions += await upsertChunked("ocpi_sessions", rows, "country_code,party_id,id");
 };
 
-const syncCdrs = async (summary: OcpiSyncSummary, opts: { dateFrom?: string } = {}): Promise<void> => {
-  const dateFrom = opts.dateFrom ?? new Date(Date.now() - 35 * 24 * 3600 * 1000).toISOString();
-  const cdrs = await fetchCdrs({ dateFrom });
-  const rows = cdrs.map((c) => {
-    const loc = (c.cdr_location ?? {}) as { id?: string; evse_uid?: string; connector_id?: string };
-    return {
-      country_code: c.country_code, party_id: c.party_id, id: c.id, session_id: c.session_id ?? null,
-      start_date_time: toTs(c.start_date_time), end_date_time: toTs(c.end_date_time),
-      total_energy: toNum(c.total_energy), total_time: toNum(c.total_time),
-      total_cost_excl_vat: toNum(c.total_cost?.excl_vat), total_cost_incl_vat: toNum(c.total_cost?.incl_vat),
-      currency: c.currency ?? null, auth_method: c.auth_method ?? null,
-      location_id: loc.id ?? null, evse_uid: loc.evse_uid ?? null, connector_id: loc.connector_id ?? null,
-      last_updated: toTs(c.last_updated), raw: c, synced_at: nowIso(),
-    };
-  });
-  summary.cdrs += await upsertChunked("ocpi_cdrs", rows, "country_code,party_id,id");
-};
-
 /**
  * Draai de OCPI-sync. Elke module heeft eigen foutafhandeling: een fout (bv. een
  * onbereikbare pal of een DB-hapering) wordt in `errors` gezet maar laat de
  * andere modules gewoon doorlopen. Niet-geregistreerd → vroege, nette return.
+ *
+ * Twee modules: locations en sessions. De CDR's (factuurrecords) haalt de sync
+ * sinds 10-2026 niet meer op: bij depotladen zonder tarieven bleven ze altijd
+ * leeg, en niets in het portaal las ze. De tabel ocpi_cdrs staat nog in de
+ * database; of ze weg mag is een keuze over data, niet over code.
  */
 // Actueel vermogen + SoC uit de laatste charging_period van een sessie.
 // POWER is volgens OCPI in kW; mocht een CPO toch watt sturen, normaliseren we
@@ -679,9 +642,9 @@ const schrijfVermogensSnapshot = async (): Promise<void> => {
 };
 
 const runOcpiSync = async (
-  parts: { locations?: boolean; sessions?: boolean; cdrs?: boolean } = { locations: true, sessions: true, cdrs: true },
+  parts: { locations?: boolean; sessions?: boolean } = { locations: true, sessions: true },
 ): Promise<OcpiSyncSummary> => {
-  const summary: OcpiSyncSummary = { locations: 0, evses: 0, connectors: 0, sessions: 0, cdrs: 0, errors: [] };
+  const summary: OcpiSyncSummary = { locations: 0, evses: 0, connectors: 0, sessions: 0, errors: [] };
   const reg = await getOcpiRegistration();
   if (!reg?.cpo_token_c) {
     summary.errors.push("OCPI nog niet geregistreerd (geen Token C).");
@@ -694,18 +657,16 @@ const runOcpiSync = async (
     try { await syncSessions(summary); } catch (e: any) { summary.errors.push(`sessions: ${e?.message ?? e}`); }
     try { await schrijfVermogensSnapshot(); } catch (e: any) { console.error("[ocpi] vermogens-snapshot mislukt:", e?.message ?? e); }
   }
-  if (parts.cdrs) {
-    try { await syncCdrs(summary); } catch (e: any) { summary.errors.push(`cdrs: ${e?.message ?? e}`); }
-  }
   return summary;
 };
 
 // ============================================================================
 // Verbruik per laadpunt (verzoek Jarno 27-08; vrije periode erbij diezelfde
 // avond): hoeveel kWh elk laadpunt in een periode van kalenderdagen — of een
-// hele maand — geleverd heeft. Bron = ocpi_sessions.kwh; de CDR's blijven bij
-// depotladen zonder tarieven leeg (zie de sync). Een sessie telt mee op de
-// dag waarop hij STARTTE, Brusselse tijd: depotladen begint 's avonds laat,
+// hele maand — geleverd heeft. Bron = ocpi_sessions.kwh; de CDR's van de CPO
+// blijven bij depotladen zonder tarieven leeg en worden niet meer opgehaald
+// (zie de sync). Een sessie telt mee op de dag waarop hij STARTTE, Brusselse
+// tijd: depotladen begint 's avonds laat,
 // dus op UTC bucketen zou een deel van de avond naar de volgende dag
 // schuiven — én het is dezelfde regel als de dag-grafiek, zodat "vandaag
 // geladen" en deze tabel op elkaar aansluiten. INVALID-sessies (door ChargEye
@@ -994,7 +955,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
   });
 
   // Version-details: welke modules wij hosten. Als pull-only eMSP volstaat
-  // 'credentials' (we pollen zelf locations/sessions/cdrs bij de CPO).
+  // 'credentials' (we pollen zelf locations/sessions bij de CPO).
   app.get("/api/ocpi/2.2.1", ocpiAuth, (_req, res) => {
     res.json(ocpiEnvelope({
       version: "2.2.1",
@@ -1092,16 +1053,13 @@ export const mountOcpiRoutes = (app: express.Express) => {
     });
   });
 
-  // Beheer: handmatig synchroniseren (knop in de OCPI-kaart). Standaard alles.
+  // Beheer: handmatig synchroniseren (knop in de OCPI-kaart). Standaard alles
+  // (locations + sessions); een body met één van beide op true beperkt de sync.
   app.post("/api/ocpi/sync", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
     try {
-      // CDR's bewust NIET standaard: het zijn factuurrecords die bij
-      // depotladen zonder tarieven altijd leeg blijven — de keten draaide
-      // maandenlang 48×/dag voor 0 rijen. Wie ze toch wil, vraagt er
-      // expliciet om (body.cdrs / ?parts=cdrs).
-      const body = (req.body ?? {}) as { locations?: boolean; sessions?: boolean; cdrs?: boolean };
-      const parts = (body.locations || body.sessions || body.cdrs)
-        ? body
+      const body = (req.body ?? {}) as { locations?: boolean; sessions?: boolean };
+      const parts = (body.locations || body.sessions)
+        ? { locations: Boolean(body.locations), sessions: Boolean(body.sessions) }
         : { locations: true, sessions: true };
       const summary = await runOcpiSync(parts);
       res.json({ success: summary.errors.length === 0, ...summary });
@@ -1112,17 +1070,16 @@ export const mountOcpiRoutes = (app: express.Express) => {
   });
 
   // Cron-route (Vercel stuurt Authorization: Bearer ${CRON_SECRET} mee).
-  // ?parts=locations|sessions|cdrs|all bepaalt wat er gesynct wordt, zodat
+  // ?parts=locations|sessions|all bepaalt wat er gesynct wordt, zodat
   // verschillende schema's verschillende frequenties kunnen hebben.
   app.get("/api/cron/ocpi-sync", async (req, res) => {
     if (!isCronAuthorized(req)) {
       return res.status(401).json({ error: "Niet toegestaan." });
     }
     const which = String(req.query.parts ?? "all");
-    // "all" slaat CDR's bewust over — zie de toelichting bij de handmatige sync.
     const parts = which === "all"
       ? { locations: true, sessions: true }
-      : { locations: which === "locations", sessions: which === "sessions", cdrs: which === "cdrs" };
+      : { locations: which === "locations", sessions: which === "sessions" };
     try {
       const summary = await runOcpiSync(parts);
       if (summary.errors.length) console.warn(`[cron-ocpi:${which}] ${summary.errors.length} fout(en):`, summary.errors.join(" | "));
@@ -1379,9 +1336,9 @@ export const mountOcpiRoutes = (app: express.Express) => {
         // raw meelezen: daar zitten de charging_periods met de POWER- en
         // STATE_OF_CHARGE-dimensies in (actueel vermogen + batterij% van de bus).
         db.from("ocpi_sessions").select("id,evse_uid,location_id,status,start_date_time,kwh,raw").eq("status", "ACTIVE").order("start_date_time", { ascending: false }),
-        // Verbruik per dag uit de sessies zelf — CDR's zijn factuurrecords en
-        // blijven bij depotladen zonder tarieven voorgoed leeg, waardoor de
-        // 30-dagen-grafiek anders nooit iets toont. Gepagineerd: een maand kan
+        // Verbruik per dag uit de sessies zelf: de CDR's van de CPO zijn
+        // factuurrecords die bij depotladen zonder tarieven leeg blijven, en
+        // de sync haalt ze niet meer op. Gepagineerd: een maand kan
         // over de 1.000-rijen-cap van PostgREST heen. Status mee: INVALID
         // moet er hieronder uit, net als in de dagdetails.
         selectAlles((van, tot) => db!.from("ocpi_sessions").select("start_date_time,kwh,status").gte("start_date_time", since30).order("start_date_time", { ascending: true }).range(van, tot)),

@@ -485,6 +485,7 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/ocpi/historiek')) return json(OCPI_HISTORIEK());
     if (p.endsWith('/api/ocpi/sessies')) return json(OCPI_SESSIES(url.searchParams.get('van') || undefined, url.searchParams.get('tot') || undefined));
     if (p.endsWith('/api/ocpi/dag')) return json(OCPI_DAG(url.searchParams.get('dag') || undefined));
+    if (p.includes('/api/health/schema')) return json({ ok: true, missing: [], probes: [], migraties: { ontbrekend: [], registerFout: null }, crons: {}, time: new Date().toISOString() });
     if (p.includes('/api/health')) return json({ status: 'ok', supabase: 'configured', tables: {}, smtp: { status: 'configured', from: 'noreply@vhbportaal.com', host: 'smtp.resend.com' }, env: 'e2e', time: new Date().toISOString() });
     return json([]);
   };
