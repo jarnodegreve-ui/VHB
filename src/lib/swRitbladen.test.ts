@@ -14,7 +14,7 @@ type Api = {
   CACHE_BRON_HEADER: string;
   isRitbladUrl: (url: string) => boolean;
   ritbladCacheKey: (url: string) => string;
-  isOfflineApi: (pathname: string) => boolean;
+  isOfflineApi: (pathname: string, search?: string) => boolean;
   markeerUitCache: (response: Response | null | undefined) => Response | null;
   snoeiSleutels: (keys: Array<string | { url: string }>, max?: number) => string[];
   ritbladUrlsUitBericht: (data: unknown) => Array<{ url: string; key: string }>;
@@ -40,13 +40,22 @@ describe('sw-ritbladen.js', () => {
     for (const p of ['/api/me', '/api/planning', '/api/diversions', '/api/planning-notes', '/api/ritblaadje']) expect(api.isOfflineApi(p)).toBe(true);
     // Punt 19 (15-09): de bronnen van loadAppData die een chauffeur offline nodig heeft.
     for (const p of ['/api/users', '/api/updates', '/api/swaps', '/api/leave', '/api/meldingen']) expect(api.isOfflineApi(p)).toBe(true);
+    // Punt 12 (09-10): Maandplanning en de beschikbaarheid van de ruilwizard,
+    // met hun querystring (de sleutel is de volledige URL).
+    expect(api.isOfflineApi('/api/month-planning', '?month=2026-10')).toBe(true);
+    expect(api.isOfflineApi('/api/availability', '?from=2026-10-09&to=2026-12-04')).toBe(true);
+    expect(api.isOfflineApi('/api/availability', '?from=2026-10-09&to=2026-10-09&takeover=1')).toBe(true);
+    // De Excel-export en het maandoverzicht van de staf zijn geen scherm: nooit in de cache.
+    expect(api.isOfflineApi('/api/month-planning', '?month=2026-10&format=xlsx')).toBe(false);
+    expect(api.isOfflineApi('/api/month-planning', '?month=2026-10&format=summary')).toBe(false);
     // Exact pad: subroutes en schrijfpaden blijven buiten de cache.
     expect(api.isOfflineApi('/api/planning/assign-service')).toBe(false);
     expect(api.isOfflineApi('/api/meldingen/gelezen')).toBe(false);
     expect(api.isOfflineApi('/api/leave/sick-report')).toBe(false);
     expect(api.isOfflineApi('/api/documents')).toBe(false);
     expect(api.isOfflineApi('/api/services')).toBe(false);
-    expect(api.OFFLINE_API).toHaveLength(10);
+    expect(api.isOfflineApi('/api/month-planning-aanroepen')).toBe(false);
+    expect(api.OFFLINE_API).toHaveLength(12);
   });
 
   it('herkent ritblad-URL\'s en sleutelt zonder query', () => {

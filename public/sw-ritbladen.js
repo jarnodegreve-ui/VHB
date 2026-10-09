@@ -23,13 +23,22 @@
   var CACHE_BRON_HEADER = 'X-VHB-Bron';
   // Zelfde paden als de fetch-handler in sw.js; alleen GET, exact pad (geen
   // subpaden zoals /api/planning/assign-service). Gesleuteld op de volledige
-  // URL, zonder gebruiker erin; uitloggen en een gebruikerswissel wissen deze
-  // cache (src/lib/afmelden.ts).
+  // URL mét querystring (?month=, ?from=&to=), zonder gebruiker erin: een
+  // chauffeur krijgt dus alleen terug wat hij zelf al eens opvroeg, en
+  // uitloggen en een gebruikerswissel wissen deze cache (src/lib/afmelden.ts).
   // /api/users zit erbij: de lijst is klein (±100 rijen, tientallen kB) en
   // voedt de contacten en de ruil-badge ("Geruild met X").
+  // Sinds 09-10 (punt 12) ook de Maandplanning (/api/month-planning?month=,
+  // één antwoord per bekeken maand) en de beschikbaarheid van de ruilwizard
+  // (/api/availability?from=&to=, één antwoord per opgevraagd venster): die
+  // schermen haalden hun gegevens buiten de datalaag om en openden zonder
+  // bereik dus leeg, terwijl het rooster ernaast wél uit de cache kwam.
+  // Antwoorden met een querystring stapelen zich op (geen snoei, zoals bij
+  // /api/planning?month=); een afmelding ruimt alles op.
   var OFFLINE_API = [
     '/api/me', '/api/planning', '/api/diversions', '/api/planning-notes', '/api/ritblaadje',
     '/api/users', '/api/updates', '/api/swaps', '/api/leave', '/api/meldingen',
+    '/api/month-planning', '/api/availability',
   ];
 
   /** Is dit de (ondertekende) storage-URL van een ritblad-bundel? */
@@ -48,9 +57,17 @@
     return u.origin + u.pathname;
   }
 
-  /** Same-origin API-pad dat offline uit de cache mag komen? */
-  function isOfflineApi(pathname) {
-    return OFFLINE_API.indexOf(pathname) !== -1;
+  /**
+   * Same-origin API-pad dat offline uit de cache mag komen? `search` is de
+   * querystring: de Excel-export en het maandoverzicht van de staf
+   * (/api/month-planning?…&format=xlsx|summary) zijn geen scherm dat zonder
+   * bereik moet openen en blijven buiten de cache (de export is bovendien
+   * een binair bestand van honderden kB).
+   */
+  function isOfflineApi(pathname, search) {
+    if (OFFLINE_API.indexOf(pathname) === -1) return false;
+    if (pathname === '/api/month-planning' && /[?&]format=/.test(String(search || ''))) return false;
+    return true;
   }
 
   /**

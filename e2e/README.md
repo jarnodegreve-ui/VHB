@@ -28,14 +28,15 @@ dist via `vite preview` op poort 4173.
 | `pwa` | iPhone 13, **service worker aan** | alleen `pwa.spec.ts`; apart via `npm run test:e2e:pwa` |
 
 - **`pwa.spec.ts`** (golf 4): de enige spec mét service worker. Registratie +
-  `GET_VERSION`, koude offline start van Mijn dag uit de cache `vhb-ritbladen`
-  (met het stille offline-label) en de update-flow (nieuwe worker →
-  "Vernieuw"-toast → `SKIP_WAITING` → herlaad). Mocks via `context.route`, want
-  fetches van de SW zelf horen bij de context, niet bij de pagina. In CI
-  niet-blokkerend (`continue-on-error`, stap "E2E PWA"). Wat niet e2e te
-  testen is (échte nieuwe build, ritblad-PDF uit storage, push, trage-netwerk-
-  timeout, iOS-standalone) staat in de kop van de spec; dat blijft de
-  handmatige PWA-checklist + `src/lib/swRitbladen.test.ts`.
+  `GET_VERSION`, koude offline start van Mijn dag, Rooster en Maandplanning
+  uit de cache `vhb-ritbladen` (met het stille offline-label op Mijn dag) en
+  de update-flow (nieuwe worker → "Vernieuw"-toast → `SKIP_WAITING` →
+  herlaad). Mocks via `context.route`, want fetches van de SW zelf horen bij
+  de context, niet bij de pagina. In CI een eigen stap ("E2E PWA") van de
+  verplichte job e2e (1/3), blokkerend sinds 09-10. Wat niet e2e te testen is
+  (échte nieuwe build, ritblad-PDF uit storage, push, trage-netwerk-timeout,
+  iOS-standalone) staat in de kop van de spec; dat blijft de handmatige
+  PWA-checklist + `src/lib/swRitbladen.test.ts`.
 - Poort: `E2E_PORT=4201 npx playwright test --project=pwa` voor een parallelle
   sessie; alle specs (ook `dock.spec.ts` met zijn eigen contexts) volgen de
   poort uit de config.
