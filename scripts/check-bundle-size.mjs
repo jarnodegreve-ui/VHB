@@ -407,6 +407,16 @@ if (!kaartMatch) {
   // laadt lui op Ritbladen. Budget = de meting plus ±0,5 kB voor de CI-runner.
   WARMUP_BUDGET_KB.chauffeur = 77.5;
   WARMUP_BUDGET_KB.staf = 143.5;
+  // 09-10 (splitsing CapacityView stap 1, verbeterpunt 14): staf 143,5 → 144,5.
+  // Het raster, de legende, het celdetail en het maandoverzicht van de
+  // Maandplanning staan nu als componenten in src/components/maandplanning/
+  // en krijgen hun toestand als props (zoals AppSchil bij App.tsx). Zelfde
+  // chunk, geen nieuwe import, maar propnamen zijn objectsleutels die de
+  // minifier niet inkort: het CapacityView-chunk groeide 10,88 → 11,60 kB gzip
+  // en de staf-warmup lokaal 143,35 → 144,00. De warmup start pas na LCP + 2 s
+  // en raakt het eerste beeld niet. Budget = de meting plus ±0,5 kB voor de
+  // CI-runner, zelfde stap als hierboven.
+  WARMUP_BUDGET_KB.staf = 144.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

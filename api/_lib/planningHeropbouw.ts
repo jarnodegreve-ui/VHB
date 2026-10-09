@@ -1,8 +1,9 @@
-import crypto from "node:crypto";
 import type { AuthenticatedRequest } from "../types.js";
 import { DAG_DMJ, toLookupToken } from "../helpers.js";
-import { sendPushToUsers } from "../push.js";
 import { ROOSTER_MELDING_RUST_MINUTEN } from "../../shared/roosterMelding.js";
+import {
+  type DagAfdrukken, gewijzigdeDagen, gewijzigdeDagenPerChauffeur, roosterAfdrukken, roosterDagAfdrukken, verstuurRoosterPushes,
+} from "./roosterMelding.js";
 import {
   applySwapsToPlanningRows, buildPlanningFromMatrix, getAppSetting, getPlanningCodesData, getPlanningData, getPlanningVersion,
   getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningData, setAppSetting, summarizeTokens, swapRaaktBereik,
@@ -70,14 +71,6 @@ export type HeropbouwUitkomst =
 /** Uitkomst voor het antwoord van POST /api/services. */
 export type AutoHeropbouwUitkomst = HeropbouwUitkomst | { status: "mislukt"; melding: string };
 
-const ROOSTER_URL = "/?view=rooster";
-const ROOSTER_PUSH = {
-  title: "Rooster bijgewerkt",
-  soort: "planning" as const,
-  body: "Je rooster is gewijzigd, bekijk je diensten.",
-  url: ROOSTER_URL,
-};
-
 /** Heropbouw-replay: goedgekeurde ruilen opnieuw toepassen op een vers
  *  gegenereerde planning. De matrix (Excel) kent de ruilen immers niet —
  *  zonder deze stap veegde elke import/heropbouw alle doorgevoerde wissels
@@ -143,28 +136,11 @@ export const dienstenVerschillenVoorPlanning = (
 const tekst = (v: unknown) => String(v ?? "");
 const dienstSleutel = (r: PlanningRij) =>
   `${tekst(r.date)}|${tekst(r.startTime)}|${tekst(r.endTime)}|${tekst(r.line)}|${tekst(r.loopnr)}|${tekst(r.busNumber)}`;
-const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex").slice(0, 32);
 
-/**
- * Per chauffeur één afdruk van zijn volledige rooster. Twee gelijke afdrukken
- * = voor die chauffeur is er niets gewijzigd. Dit is de push-diff van de
- * heropbouw ("alleen wie echt iets ziet veranderen krijgt een melding") én de
- * basis van de meldingswachtrij hieronder.
- */
-export const roosterAfdrukken = (rows: ReadonlyArray<PlanningRij>): Map<string, string> => {
-  const lijsten = new Map<string, string[]>();
-  for (const r of rows) {
-    const id = tekst(r.driverId);
-    if (!id) continue;
-    const lijst = lijsten.get(id) ?? [];
-    lijst.push(dienstSleutel(r));
-    lijsten.set(id, lijst);
-  }
-  return new Map([...lijsten].map(([id, sleutels]) => [id, hash(sleutels.sort().join("\n"))] as const));
-};
-
-const gewijzigdeChauffeurs = (oud: Map<string, string>, nieuw: Map<string, string>) =>
-  [...new Set([...oud.keys(), ...nieuw.keys()])].filter((id) => oud.get(id) !== nieuw.get(id));
+// De push-diff (wie ziet welke dag veranderen) staat sinds 09-10 in
+// ./roosterMelding.ts: per chauffeur per dag een afdruk, en de melding noemt de
+// dagen. Hier blijven alleen de afdrukken die de vangrails van de automatische
+// weg nodig hebben.
 
 /** Wie rijdt welke dienst op welke dag, los van tijden, delen en loopnummers. */
 const toewijzingen = (rows: ReadonlyArray<PlanningRij>) =>
@@ -200,14 +176,29 @@ export const ROOSTER_MELDING_WACHTRIJ_KEY = "rooster_melding_wachtrij";
 export const ROOSTER_MELDING_RUST_MS = ROOSTER_MELDING_RUST_MINUTEN * 60 * 1000;
 export { ROOSTER_MELDING_RUST_MINUTEN };
 
+/**
+ * Basis van één chauffeur in de wachtrij: zijn dag-afdrukken van vóór de
+ * eerste wijziging ({} = had geen diensten). Een wachtrij van vóór 09-10 draagt
+ * per chauffeur nog één tekst (de afdruk van het hele rooster); die wordt nog
+ * één keer op de oude manier vergeleken en meldt dan zonder dagen.
+ */
+type Basis = DagAfdrukken | string;
+
 type Wachtrij = {
   /** ISO-moment van de laatste automatische heropbouw die iets wijzigde. */
   laatsteWijziging: string;
-  /** Per chauffeur: afdruk van zijn rooster vóór de eerste wijziging ("" = had geen diensten). */
-  basis: Record<string, string>;
+  /** Per chauffeur zijn basis. */
+  basis: Record<string, Basis>;
 };
 
 const LEGE_WACHTRIJ = { laatsteWijziging: null, basis: {} };
+
+const leesBasis = (ruw: unknown): Basis => {
+  if (ruw && typeof ruw === "object" && !Array.isArray(ruw)) {
+    return Object.fromEntries(Object.entries(ruw as Record<string, unknown>).map(([dag, afdruk]) => [dag, tekst(afdruk)]));
+  }
+  return tekst(ruw);
+};
 
 const leesWachtrij = async (): Promise<Wachtrij | null> => {
   const ruw = await getAppSetting<{ laatsteWijziging?: unknown; basis?: unknown }>(ROOSTER_MELDING_WACHTRIJ_KEY);
@@ -215,7 +206,7 @@ const leesWachtrij = async (): Promise<Wachtrij | null> => {
   const basis = ruw.basis && typeof ruw.basis === "object" && !Array.isArray(ruw.basis) ? ruw.basis as Record<string, unknown> : {};
   const laatsteWijziging = typeof ruw.laatsteWijziging === "string" ? ruw.laatsteWijziging : "";
   if (!laatsteWijziging || Object.keys(basis).length === 0) return null;
-  return { laatsteWijziging, basis: Object.fromEntries(Object.entries(basis).map(([id, afdruk]) => [id, tekst(afdruk)])) };
+  return { laatsteWijziging, basis: Object.fromEntries(Object.entries(basis).map(([id, b]) => [id, leesBasis(b)])) };
 };
 
 const isRijp = (wachtrij: Wachtrij, nu: number) => {
@@ -223,9 +214,27 @@ const isRijp = (wachtrij: Wachtrij, nu: number) => {
   return !Number.isFinite(sinds) || nu - sinds >= ROOSTER_MELDING_RUST_MS;
 };
 
-/** Wie uit de wachtrij heeft nu een ander rooster dan zijn basis? */
-const teMeldenUitWachtrij = (wachtrij: Wachtrij, huidig: Map<string, string>) =>
-  Object.keys(wachtrij.basis).filter((id) => wachtrij.basis[id] !== (huidig.get(id) ?? ""));
+/** De huidige stand waartegen een wachtrij vergeleken wordt: dag-afdrukken, en de oude afdruk alleen als een basis die nog nodig heeft. */
+type Stand = { dagen: ReadonlyMap<string, DagAfdrukken>; rijen: ReadonlyArray<PlanningRij> };
+
+/**
+ * Wie uit de wachtrij heeft nu een ander rooster dan zijn basis, en op welke
+ * dagen? Een oude basis (één tekst) geeft de chauffeur zonder dagen terug.
+ */
+const teMeldenUitWachtrij = (wachtrij: Wachtrij, stand: Stand): Map<string, string[]> => {
+  const uit = new Map<string, string[]>();
+  let oudeAfdrukken: Map<string, string> | null = null;
+  for (const [id, basis] of Object.entries(wachtrij.basis)) {
+    if (typeof basis === "string") {
+      oudeAfdrukken ??= roosterAfdrukken(stand.rijen);
+      if (basis !== (oudeAfdrukken.get(id) ?? "")) uit.set(id, []);
+      continue;
+    }
+    const dagen = gewijzigdeDagen(basis, stand.dagen.get(id));
+    if (dagen.length > 0) uit.set(id, dagen);
+  }
+  return uit;
+};
 
 /**
  * Automatische weg, ná het vervangen: de geraakte chauffeurs in de wachtrij
@@ -233,15 +242,14 @@ const teMeldenUitWachtrij = (wachtrij: Wachtrij, huidig: Map<string, string>) =>
  * in deze omgeving) hoort bij de VORIGE reeks: die gaat eerst de deur uit,
  * tegen de stand van vóór deze heropbouw.
  */
-const zetInWachtrij = async (gewijzigd: string[], oud: Map<string, string>, nu: number) => {
+const zetInWachtrij = async (gewijzigd: readonly string[], oud: Stand, nu: number) => {
   let wachtrij = await leesWachtrij();
   if (wachtrij && isRijp(wachtrij, nu)) {
-    const ontvangers = teMeldenUitWachtrij(wachtrij, oud);
-    if (ontvangers.length > 0) await sendPushToUsers(ontvangers, ROOSTER_PUSH);
+    await verstuurRoosterPushes(teMeldenUitWachtrij(wachtrij, oud));
     wachtrij = null;
   }
-  const basis = { ...(wachtrij?.basis ?? {}) };
-  for (const id of gewijzigd) if (!(id in basis)) basis[id] = oud.get(id) ?? "";
+  const basis: Record<string, Basis> = { ...(wachtrij?.basis ?? {}) };
+  for (const id of gewijzigd) if (!(id in basis)) basis[id] = oud.dagen.get(id) ?? {};
   await setAppSetting(ROOSTER_MELDING_WACHTRIJ_KEY, { laatsteWijziging: new Date(nu).toISOString(), basis });
 };
 
@@ -255,18 +263,18 @@ export const verstuurRoosterMeldingen = async (nu = Date.now()): Promise<{ statu
   const wachtrij = await leesWachtrij();
   if (!wachtrij) return { status: "leeg", ontvangers: 0 };
   if (!isRijp(wachtrij, nu)) return { status: "wacht", ontvangers: 0 };
-  const huidig = roosterAfdrukken(await getPlanningData() as PlanningRij[]);
-  const ontvangers = teMeldenUitWachtrij(wachtrij, huidig);
-  if (ontvangers.length > 0) await sendPushToUsers(ontvangers, ROOSTER_PUSH);
+  const rijen = await getPlanningData() as PlanningRij[];
+  const huidig: Stand = { dagen: roosterDagAfdrukken(rijen), rijen };
+  const ontvangers = await verstuurRoosterPushes(teMeldenUitWachtrij(wachtrij, huidig));
   const later = await leesWachtrij();
   if (later && later.laatsteWijziging !== wachtrij.laatsteWijziging) {
-    const basis = { ...later.basis };
-    for (const id of Object.keys(wachtrij.basis)) basis[id] = huidig.get(id) ?? "";
+    const basis: Record<string, Basis> = { ...later.basis };
+    for (const id of Object.keys(wachtrij.basis)) basis[id] = huidig.dagen.get(id) ?? {};
     await setAppSetting(ROOSTER_MELDING_WACHTRIJ_KEY, { laatsteWijziging: later.laatsteWijziging, basis });
   } else {
     await setAppSetting(ROOSTER_MELDING_WACHTRIJ_KEY, LEGE_WACHTRIJ);
   }
-  return { status: "verstuurd", ontvangers: ontvangers.length };
+  return { status: "verstuurd", ontvangers };
 };
 
 // --- De kern ------------------------------------------------------------------
@@ -367,11 +375,13 @@ export const heropbouwPlanning = async (
     }
 
     // Diff vóór het vervangen: alleen chauffeurs van wie het rooster écht
-    // wijzigt krijgen een push. Iedereen elke keer pingen traint mensen om
-    // meldingen te negeren, en dan mist iemand de wijziging die wél telt.
-    const oud = roosterAfdrukken(vorigePlanning as PlanningRij[]);
-    const nieuw = roosterAfdrukken(shifts); // ruilen zijn in-place toegepast
-    const gewijzigd = gewijzigdeChauffeurs(oud, nieuw);
+    // wijzigt krijgen een push, en de melding noemt de dagen. Iedereen elke
+    // keer pingen traint mensen om meldingen te negeren, en dan mist iemand de
+    // wijziging die wél telt.
+    const oud: Stand = { dagen: roosterDagAfdrukken(vorigePlanning as PlanningRij[]), rijen: vorigePlanning as PlanningRij[] };
+    const nieuw: Stand = { dagen: roosterDagAfdrukken(shifts), rijen: shifts }; // ruilen zijn in-place toegepast
+    const gewijzigdDagen = gewijzigdeDagenPerChauffeur(oud.dagen, nieuw.dagen);
+    const gewijzigd = [...gewijzigdDagen.keys()];
 
     const versieNu = await getPlanningVersion();
     if (versieVoor !== null && versieNu !== null && versieVoor !== versieNu) continue;
@@ -400,7 +410,7 @@ export const heropbouwPlanning = async (
         } catch (err) {
           console.error("Meldingswachtrij bijwerken mislukt, de melding gaat nu meteen uit.", err);
           uitgesteld = false;
-          try { await sendPushToUsers(gewijzigd, ROOSTER_PUSH); } catch (pushErr) { console.error("Rooster-melding versturen mislukt.", pushErr); }
+          try { await verstuurRoosterPushes(gewijzigdDagen); } catch (pushErr) { console.error("Rooster-melding versturen mislukt.", pushErr); }
         }
       }
       return {
@@ -419,21 +429,21 @@ export const heropbouwPlanning = async (
     // hem proactief, maar alleen bij wie er iets veranderde. Wie nog in de
     // wachtrij van de automatische weg stond, wordt tegen zíjn basis
     // beoordeeld en gaat nu mee: daarna is de wachtrij leeg.
-    let ontvangers = gewijzigd;
+    let ontvangers = gewijzigdDagen;
     try {
       const wachtrij = await leesWachtrij();
       if (wachtrij) {
-        ontvangers = [...new Set([
-          ...gewijzigd.filter((id) => !(id in wachtrij.basis)),
+        ontvangers = new Map([
+          ...[...gewijzigdDagen].filter(([id]) => !(id in wachtrij.basis)),
           ...teMeldenUitWachtrij(wachtrij, nieuw),
-        ])];
+        ]);
         await setAppSetting(ROOSTER_MELDING_WACHTRIJ_KEY, LEGE_WACHTRIJ);
       }
     } catch (err) {
       console.error("Meldingswachtrij lezen mislukt, de knop meldt alleen zijn eigen wijzigingen.", err);
     }
-    if (ontvangers.length > 0) await sendPushToUsers(ontvangers, ROOSTER_PUSH);
-    return { status: "bijgewerkt", summary, reapplied, gewijzigdeChauffeurs: gewijzigd.length, gemeld: ontvangers.length, meldingUitgesteld: false };
+    const gemeld = await verstuurRoosterPushes(ontvangers);
+    return { status: "bijgewerkt", summary, reapplied, gewijzigdeChauffeurs: gewijzigd.length, gemeld, meldingUitgesteld: false };
   }
 
   const melding = automatisch

@@ -35,7 +35,7 @@ export async function haalVersieDiensten(versieId: string): Promise<VersieDienst
   return { services, revisie: response.headers.get('x-collection-revision') };
 }
 
-export type NieuweVersie = { geldigVanaf: string; naam?: string; opmerking?: string; kopieVan?: string };
+export type NieuweVersie = { geldigVanaf: string; naam?: string; opmerking?: string; kopieVan?: string; melden?: boolean };
 
 export async function maakDienstregeling(body: NieuweVersie): Promise<Dienstregeling> {
   return antwoordOfFout(await apiFetch('/api/dienstregelingen', { method: 'POST', body: JSON.stringify(body) }));
