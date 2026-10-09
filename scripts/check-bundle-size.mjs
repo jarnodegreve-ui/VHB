@@ -426,6 +426,19 @@ if (!kaartMatch) {
   // raakt het eerste beeld niet. Budget = de meting plus ±0,5 kB voor de
   // CI-runner, zelfde stap als hierboven.
   WARMUP_BUDGET_KB.staf = 145;
+  // 09-10 (splitsing CapacityView stap 3): staf 145 → 145,5. De toestand van
+  // het celdetail, de dienstwissel en het tweewekenvenster staat nu in hooks
+  // (useCelDetail, useDienstwissel, useTweewekenVenster) en CelDetailModal
+  // krijgt twee objecten in plaats van 33 props. Zelfde chunk, geen nieuwe
+  // import; de hooks geven objecten terug en krijgen objecten als argument,
+  // en die sleutels kort de minifier niet in: het CapacityView-chunk groeide
+  // 11,55 → 11,98 kB gzip en de staf-warmup lokaal 144,31 → 144,74. Lichtere
+  // vorm gemeten (positionele argumenten voor de vijf hooks): 144,56, dus
+  // 0,18 kB minder, maar met de ±0,5 kB van de CI-runner nog altijd boven
+  // 145, en acht positionele argumenten lezen slechter; de objectvorm blijft.
+  // De warmup start pas na LCP + 2 s en raakt het eerste beeld niet. Budget
+  // = de meting plus ±0,5 kB voor de CI-runner, zelfde stap als hierboven.
+  WARMUP_BUDGET_KB.staf = 145.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

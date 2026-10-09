@@ -8,63 +8,44 @@ import { Field, Input, Select, Textarea } from '../Field';
 import { KIND_LABEL, celChipClass } from '../../lib/planningKind';
 import { formatDayLong } from '../../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../../lib/vervangers';
-import { WISSEL_REDENEN, noteKey, type Cellen, type Chauffeur, type GekozenCel } from '../../lib/maandplanning';
+import { WISSEL_REDENEN, noteKey, type Cellen, type Chauffeur } from '../../lib/maandplanning';
+import type { CelDetail } from './useCelDetail';
+import type { Dienstwissel } from './useDienstwissel';
 
 /**
  * Detailvenster van één cel van de Maandplanning: de code, de herkomst
  * (ruil of wissel, met terugdraaien voor staf), de dienstnotitie, de uren
  * en de handmatige dienstwissel voor een admin, plus de twee bevestigingen
- * (wissel doorvoeren, wissel terugdraaien). De view houdt alle toestand en
- * de schrijfacties; dit venster tekent ze alleen. Verplaatst uit
- * CapacityView.tsx op 09-10 (stap 1 van de splitsing), bewust met veel
- * props: een verplaatsing, geen herontwerp.
+ * (wissel doorvoeren, wissel terugdraaien). Verplaatst uit CapacityView.tsx
+ * op 09-10 (stap 1 van de splitsing); sinds stap 3 komt de toestand als
+ * twee objecten binnen: `cel` is wat useCelDetail teruggeeft (de cel, de
+ * notities) en `wissel` wat useDienstwissel teruggeeft (dienstwissel en
+ * terugdraaien), elk aangevuld met wat de view erbij weet. Dit venster
+ * tekent ze alleen.
  */
 type Props = {
-  selected: GekozenCel | null;
-  onClose: () => void;
-  /** Onbewaarde notitie of begonnen wissel: sluiten vraagt eerst bevestiging. */
-  vuil: boolean;
-  canEditNotes: boolean;
-  isAdmin: boolean;
-  notes: Map<string, string>;
-  noteDraft: string;
-  setNoteDraft: (v: string) => void;
-  isSavingNote: boolean;
-  saveNote: () => Promise<void>;
-  terugdraaien: boolean;
-  setTerugdraaien: (v: boolean) => void;
-  isTerugdraaien: boolean;
-  uitvoerenTerugdraai: () => Promise<void>;
-  wisselDienst: string | null;
-  wisselNaAfwezigheid: boolean;
-  wisselNaar: string;
-  setWisselNaar: (v: string) => void;
-  wisselReden: string;
-  setWisselReden: (v: string) => void;
-  wisselToelichting: string;
-  setWisselToelichting: (v: string) => void;
-  wisselTerug: string | null;
-  wisselNaarNaam: string;
-  wisselKlaar: boolean;
-  wisselRedenTekst: string;
-  isWisselen: boolean;
-  wisselBevestigen: boolean;
-  setWisselBevestigen: (v: boolean) => void;
-  uitvoerenWissel: () => Promise<void>;
-  drivers: Chauffeur[];
-  cells: Cellen;
-  werkdagenPerChauffeur: Map<string, Set<string>>;
+  cel: CelDetail & {
+    /** Onbewaarde notitie of begonnen wissel: sluiten vraagt eerst bevestiging. */
+    vuil: boolean;
+    canEditNotes: boolean;
+  };
+  wissel: Dienstwissel & {
+    isAdmin: boolean;
+    drivers: Chauffeur[];
+    cells: Cellen;
+    werkdagenPerChauffeur: Map<string, Set<string>>;
+  };
 };
 
-export function CelDetailModal({
-  selected, onClose, vuil, canEditNotes, isAdmin,
-  notes, noteDraft, setNoteDraft, isSavingNote, saveNote,
-  terugdraaien, setTerugdraaien, isTerugdraaien, uitvoerenTerugdraai,
-  wisselDienst, wisselNaAfwezigheid, wisselNaar, setWisselNaar, wisselReden, setWisselReden,
-  wisselToelichting, setWisselToelichting, wisselTerug, wisselNaarNaam, wisselKlaar, wisselRedenTekst,
-  isWisselen, wisselBevestigen, setWisselBevestigen, uitvoerenWissel,
-  drivers, cells, werkdagenPerChauffeur,
-}: Props) {
+export function CelDetailModal({ cel, wissel }: Props) {
+  const { selected, sluit: onClose, vuil, canEditNotes, notes, noteDraft, setNoteDraft, isSavingNote, saveNote } = cel;
+  const {
+    isAdmin, terugdraaien, setTerugdraaien, isTerugdraaien, uitvoerenTerugdraai,
+    wisselDienst, wisselNaAfwezigheid, wisselNaar, setWisselNaar, wisselReden, setWisselReden,
+    wisselToelichting, setWisselToelichting, wisselTerug, wisselNaarNaam, wisselKlaar, wisselRedenTekst,
+    isWisselen, wisselBevestigen, setWisselBevestigen, uitvoerenWissel,
+    drivers, cells, werkdagenPerChauffeur,
+  } = wissel;
   return (
     <>
       <Modal open={!!selected} onClose={onClose} vuil={vuil} maxWidth="sm" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
