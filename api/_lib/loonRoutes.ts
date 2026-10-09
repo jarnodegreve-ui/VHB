@@ -2,7 +2,7 @@ import type express from "express";
 import { authenticate, requireRole } from "../middleware.js";
 import { isMissingTableError } from "../deviceGate.js";
 import {
-  getAppSetting, getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, setAppSetting,
+  getAppSetting, getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, laadDagtypeKalender, logActivity, setAppSetting,
 } from "../storage.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { DAG_DMJ, brusselsDay, nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
@@ -46,10 +46,10 @@ const laatsteDagVan = (maand: string) => {
 /** De cel-waarheid van één dag: per actieve chauffeur de planningscode (null = niet in de planning). */
 const planningVanDag = async (datum: string) => {
   const maand = maandVan(datum);
-  const [rows, users, services, codes, leave, swaps] = await Promise.all([
-    getPlanningMatrixRows({ month: maand }), getUsersData(), getServicesData({ datum }), getPlanningCodesData(), getLeaveData({ endOnOrAfter: `${maand}-01` }), getSwapsData(),
+  const [rows, users, services, codes, leave, swaps, kalender] = await Promise.all([
+    getPlanningMatrixRows({ month: maand }), getUsersData(), getServicesData({ datum }), getPlanningCodesData(), getLeaveData({ endOnOrAfter: `${maand}-01` }), getSwapsData(), laadDagtypeKalender(),
   ]);
-  const uit = berekenCelWaarheid(maand, { rows: rows as any[], users: users as any[], services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[] });
+  const uit = berekenCelWaarheid(maand, { rows: rows as any[], users: users as any[], services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[], kalender });
   const inPlanning = uit.dates.includes(datum);
   return {
     inPlanning,

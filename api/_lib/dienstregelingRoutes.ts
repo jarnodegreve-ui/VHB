@@ -7,7 +7,7 @@ import { dienstregelingBodySchema, dienstregelingPatchSchema } from "../../share
 import { dagVoor, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum } from "../../shared/dienstregeling.js";
 import { valideerRecord } from "./valideer.js";
 import {
-  DIENSTREGELING_MIGRATIE, createDienstregeling, deleteDienstregeling, getDienstregelingen, getServicesPerVersie, getUsersData, logActivity, updateDienstregeling,
+  DIENSTREGELING_MIGRATIE, MigratieOntbreektError, createDienstregeling, deleteDienstregeling, getDienstregelingen, getServicesPerVersie, getUsersData, logActivity, updateDienstregeling,
 } from "../storage.js";
 import { sendPushToUsers } from "../push.js";
 import { viewUrl } from "./collectie.js";
@@ -104,6 +104,8 @@ export function mountDienstregelingRoutes(app: express.Express) {
       res.status(201).json(versie);
     } catch (err) {
       if (String((err as { code?: unknown })?.code ?? "") === "23505") return res.status(409).json({ error: `Er bestaat al een versie vanaf ${DAG_DMJ(body.geldigVanaf)}.` });
+      // Kopie van een versie met afwijkingen per dagtype zonder de kolom (10-10): de versie is al weer weg, zeg welke migratie.
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       fout(res, err, "Kon de versie niet aanmaken.");
     }
   });

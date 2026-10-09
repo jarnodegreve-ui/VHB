@@ -1,3 +1,4 @@
+import { tijdenOpDag, variantenSchoon, type DienstVariant } from "../shared/dagtype.js";
 import { randomBytes } from "node:crypto";
 import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
@@ -255,8 +256,11 @@ export const berekenMaandoverzicht = (
   dates: string[],
   chauffeurs: Array<{ id: string; name: string }>,
   cells: Record<string, Record<string, { code: string; kind: string }>>,
-  services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null }>,
+  services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null; varianten?: DienstVariant[] | null }>,
   planningCodes: Array<{ code: string; countsAsShift?: boolean; isPaidAbsence?: boolean; isDayOff?: boolean }>,
+  /** Per dag de De Lijn-dagtypecode (berekenCelWaarheid.dagtypes): de uren
+   *  volgen de afwijking van dat dagtype. Zonder: overal de gewone tijden. */
+  dagtypes?: Record<string, string | null>,
 ): { rijen: MaandoverzichtRij[]; totaal: Omit<MaandoverzichtRij, "driverId" | "naam" | "overig"> & { overig: number } } => {
   const serviceByNorm = new Map(services.map((s) => [toLookupToken(String(s.serviceNumber ?? "")), s]));
   const codeByNorm = new Map(planningCodes.map((c) => [toLookupToken(c.code), c]));
@@ -273,7 +277,7 @@ export const berekenMaandoverzicht = (
       const svc = serviceByNorm.get(n);
       if (svc) {
         rij.diensten += 1;
-        rij.minuten += dienstMinuten(svc) ?? 0;
+        rij.minuten += dienstMinuten(tijdenOpDag(svc, dagtypes?.[iso] ?? null)) ?? 0;
         continue;
       }
       if (n === "ziek") {
@@ -350,10 +354,11 @@ export const bouwMaandoverzichtAoa = (
   dates: string[],
   chauffeurs: Array<{ id: string; name: string }>,
   cells: Record<string, Record<string, { code: string; kind: string }>>,
-  services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null }>,
+  services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null; varianten?: DienstVariant[] | null }>,
   planningCodes: Array<{ code: string; countsAsShift?: boolean; isPaidAbsence?: boolean; isDayOff?: boolean }>,
+  dagtypes?: Record<string, string | null>,
 ): unknown[][] => {
-  const { rijen, totaal } = berekenMaandoverzicht(dates, chauffeurs, cells, services, planningCodes);
+  const { rijen, totaal } = berekenMaandoverzicht(dates, chauffeurs, cells, services, planningCodes, dagtypes);
   const aoa: unknown[][] = [
     [`Maandoverzicht ${month}`],
     [`Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (${dates.length} dagen). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.`],
@@ -710,6 +715,9 @@ export const toPublicService = (s: any) => ({
   // Versie van de dienstregeling (08-10); de opslaglaag schrijft de kolom,
   // toDatabaseService niet (tot de migratie gedraaid is, kent de tabel ze niet).
   dienstregelingId: s.dienstregelingId ?? s.dienstregelingid ?? undefined,
+  // Afwijkende tijden per dagtype (10-10): genormaliseerd, zodat API, back-up
+  // en vergelijking dezelfde vorm zien; de opslaglaag schrijft de kolom.
+  varianten: variantenSchoon(s.varianten),
 });
 
 // Supabase heeft de services-tabel met *quoted camelCase* kolommen aangemaakt

@@ -1,7 +1,8 @@
 import type { AppUser, PlanningCodeRecord, PlanningMatrixRow, ServiceRecord, ShiftRecord } from "../../types.js";
 import { sortedNameToken, toLookupToken } from "../../helpers.js";
 import { versieVoorDatum } from "../../../shared/dienstregeling.js";
-import { getServicesPerVersie } from "./diensten.js";
+import { dagtypeVanDag, tijdenOpDag, type DagtypeKalender } from "../../../shared/dagtype.js";
+import { getServicesPerVersie, laadDagtypeKalender } from "./diensten.js";
 import { getUsersData } from "./gebruikers.js";
 import { getPlanningCodesData, getPlanningMatrixRows } from "./planning.js";
 
@@ -21,26 +22,30 @@ const validSegment = (start: string | undefined, end: string | undefined, segmen
     ? { startTime: start as string, endTime: end as string, segment }
     : null;
 
-export const getServiceSegments = (service: ServiceRecord) => (
-  [
-    { seg: validSegment(service.startTime, service.endTime, 1), loopnr: service.loopnr },
-    { seg: validSegment(service.startTime2, service.endTime2, 2), loopnr: service.loopnr2 },
-    { seg: validSegment(service.startTime3, service.endTime3, 3), loopnr: service.loopnr3 },
+/** De tijdsblokken van een dienst op een dagtype (10-10): de afwijking van dat
+ *  dagtype als er een is, anders de gewone tijden (shared/dagtype.ts). */
+export const getServiceSegments = (service: ServiceRecord, dagtype?: string | null) => {
+  const t = tijdenOpDag(service, dagtype);
+  return [
+    { seg: validSegment(t.startTime ?? undefined, t.endTime ?? undefined, 1), loopnr: t.loopnr },
+    { seg: validSegment(t.startTime2 ?? undefined, t.endTime2 ?? undefined, 2), loopnr: t.loopnr2 },
+    { seg: validSegment(t.startTime3 ?? undefined, t.endTime3 ?? undefined, 3), loopnr: t.loopnr3 },
   ]
     .filter((x) => x.seg !== null)
     // Loopnummer hoort bij het blok: een loop is het deel van de dienst waar
     // bepaalde ritten onder vallen, dus het reist mee naar de planning-rij.
-    .map((x) => ({ ...(x.seg as { startTime: string; endTime: string; segment: number }), loopnr: String(x.loopnr ?? '').trim() }))
-);
+    .map((x) => ({ ...(x.seg as { startTime: string; endTime: string; segment: number }), loopnr: String(x.loopnr ?? '').trim() }));
+};
 
 export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) => {
-  const [users, perVersie, planningCodes] = await Promise.all([
+  const [users, perVersie, planningCodes, kalender] = await Promise.all([
     getUsersData(),
     getServicesPerVersie(),
     getPlanningCodesData(),
+    laadDagtypeKalender(),
   ]);
   const rows = inputRows ?? await getPlanningMatrixRows();
-  return bouwPlanningUitMatrix({ rows, users, services: perVersie.services, versies: perVersie.versies, planningCodes });
+  return bouwPlanningUitMatrix({ rows, users, services: perVersie.services, versies: perVersie.versies, planningCodes, kalender });
 };
 
 /** Eén dienstregelingversie met haar diensten, voor de opbouw per datum. */
@@ -53,7 +58,7 @@ export type OpbouwVersie = { id: string; geldigVanaf: string; services: ServiceR
  * keten-bugs (wegvallende chauffeurs, segmenten, absences) zaten hier, niet
  * in de fetches.
  */
-export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes, versies }: {
+export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes, versies, kalender }: {
   rows: PlanningMatrixRow[];
   users: AppUser[];
   /** Het dienstoverzicht zonder versies, of de terugval wanneer `versies` leeg is. */
@@ -63,6 +68,11 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes, ve
    *  dag geldt (versieVoorDatum), zodat een nieuwe dienstregeling alleen de
    *  dagen vanaf haar datum raakt en het verleden zijn toenmalige tijden houdt. */
   versies?: OpbouwVersie[];
+  /** Dagtypekalender (10-10): per matrixdag het De Lijn-dagtype (kolom
+   *  day_type, anders afgeleid), zodat een dienst met een afwijking per
+   *  dagtype op die dag háár tijden krijgt. Zonder kalender: alleen de
+   *  Excel-code, anders weekdag als schooldag. */
+  kalender?: DagtypeKalender | null;
 }) => {
   // Botsings-detectie: twee verschillende gebruikers die op dezelfde
   // naam-sleutel uitkomen (zelfde naam, of "Jan Karel" vs "Karel Jan" via de
@@ -139,6 +149,7 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes, ve
 
   for (const row of rows) {
     const servicesByNumber = servicesOpDag(String(row.source_date ?? ""));
+    const dagtype = dagtypeVanDag(String(row.source_date ?? ""), row.day_type, kalender).code;
     for (const [driverName, rawCode] of Object.entries(row.assignments || {}) as Array<[string, string]>) {
       const nameKey = toLookupToken(driverName);
       const sortedKey = sortedNameToken(driverName);
@@ -158,7 +169,7 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes, ve
       const normalizedCode = toLookupToken(rawCode);
       const matchedService = servicesByNumber.get(normalizedCode);
       if (matchedService) {
-        const segments = getServiceSegments(matchedService);
+        const segments = getServiceSegments(matchedService, dagtype);
         if (segments.length === 0) {
           // Service-nummer matcht maar bevat geen HH:MM-segmenten. Niet
           // stil voorbij laten gaan: vlag voor de preview-waarschuwing.

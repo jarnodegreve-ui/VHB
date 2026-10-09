@@ -10,7 +10,8 @@
  * intussen gewijzigd", terwijl er niets gewijzigd was.
  */
 import { toLookupToken } from "../helpers.js";
-import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData } from "../storage.js";
+import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, laadDagtypeKalender } from "../storage.js";
+import type { DagtypeKalender } from "../../shared/dagtype.js";
 import { berekenCelWaarheid, type CelWaarheidUser } from "./celWaarheid.js";
 import type { OverlayCel } from "./ruilOverlay.js";
 
@@ -41,7 +42,7 @@ export const dienstOpCel = (cel: OverlayCel | undefined, line: unknown): string 
 };
 
 /** Alles waaruit het bord van een dag (of maand) berekend wordt. */
-export type BordBron = { rows: any[]; users: CelWaarheidUser[]; services: any[]; codes: any[]; leave: any[]; swaps: any[] };
+export type BordBron = { rows: any[]; users: CelWaarheidUser[]; services: any[]; codes: any[]; leave: any[]; swaps: any[]; kalender?: DagtypeKalender | null };
 
 /** Welke lijst leeg terugkwam. Dan kent het portaal geen enkele code van die
  *  soort en is elke cel "onbekend": een lege lijst is geen bewijs dat een
@@ -60,7 +61,7 @@ const bronLeegVan = (services: unknown[], codes: unknown[]): BronLeeg | null => 
  *  heeft er geen tweede lezing voor. */
 export const bordVanDag = (date: string, bron: BordBron) => {
   const { cells, chauffeurs } = berekenCelWaarheid(date.slice(0, 7), {
-    rows: bron.rows, users: bron.users, services: bron.services, codes: bron.codes, leave: bron.leave, swaps: bron.swaps,
+    rows: bron.rows, users: bron.users, services: bron.services, codes: bron.codes, leave: bron.leave, swaps: bron.swaps, kalender: bron.kalender,
   });
   const opBord = new Set(chauffeurs.map((c) => c.id));
   const bekend = new Set([
@@ -90,11 +91,11 @@ export type BordVanDag = ReturnType<typeof bordVanDag>;
  *  planningscodes. Een route die het bord van meer dan één dag nodig heeft
  *  (een lijst ruilen goedkeuren, meerdere overnames indienen) leest dit één
  *  keer vóór haar lus en geeft het mee; per dag blijft alleen de matrixrij. */
-export type BordVast = { users: CelWaarheidUser[]; services: any[]; codes: any[] };
+export type BordVast = { users: CelWaarheidUser[]; services: any[]; codes: any[]; kalender: DagtypeKalender };
 
 export const laadBordVast = async (): Promise<BordVast> => {
-  const [users, services, codes] = await Promise.all([getUsersData(), getServicesData(), getPlanningCodesData()]);
-  return { users: users as any[], services: services as any[], codes: codes as any[] };
+  const [users, services, codes, kalender] = await Promise.all([getUsersData(), getServicesData(), getPlanningCodesData(), laadDagtypeKalender()]);
+  return { users: users as any[], services: services as any[], codes: codes as any[], kalender };
 };
 
 /**
@@ -109,17 +110,18 @@ export const laadBordVast = async (): Promise<BordVast> => {
 export const bordOpDag = async (
   date: string,
   users: CelWaarheidUser[],
-  opts?: { zonderAfwezigheid?: boolean; swaps?: any[]; services?: any[]; codes?: any[] },
+  opts?: { zonderAfwezigheid?: boolean; swaps?: any[]; services?: any[]; codes?: any[]; kalender?: DagtypeKalender | null },
 ) => {
-  const [rows, services, codes, leave, swaps] = await Promise.all([
+  const [rows, services, codes, leave, swaps, kalender] = await Promise.all([
     getPlanningMatrixRows({ van: date, tot: date }),
     // De versie van het dienstoverzicht die op deze dag geldt (08-10).
     opts?.services ?? getServicesData({ datum: date }),
     opts?.codes ?? getPlanningCodesData(),
     opts?.zonderAfwezigheid ? [] : getLeaveData({ endOnOrAfter: date }),
     opts?.swaps ?? getSwapsData(),
+    opts?.kalender ?? laadDagtypeKalender(),
   ]);
-  return bordVanDag(date, { rows: rows as any[], users, services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[] });
+  return bordVanDag(date, { rows: rows as any[], users, services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[], kalender });
 };
 
 /**

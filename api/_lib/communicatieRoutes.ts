@@ -8,6 +8,7 @@
  * domeinen in dezelfde volgorde als voorheen.
  */
 
+import { variantenTekst } from "../../shared/dagtype.js";
 import express from "express";
 import { sendEmail, MAIL_UIT_MELDING } from "../email.js";
 import { bouwDringendeUpdateMail } from "./mailTeksten.js";
@@ -26,7 +27,7 @@ import { valideerLijst, valideerRecord } from "./valideer.js";
 import { recordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkDiversionsOpslag, verwerkUpdatesOpslag } from "./recordWrites.js";
 import { bijlagenUitKolom, omleidingBijlagen } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { DienstregelingOnbekend, getDienstregelingen, getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlage, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
+import { DienstregelingOnbekend, MigratieOntbreektError, getDienstregelingen, getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlage, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { herstelBewezen, herstelOmleidingBijlagen, herstelUpdateBijlagen } from "./bijlagenHerstel.js";
 
@@ -435,8 +436,10 @@ export function mountCommunicatieRoutes(app: express.Express) {
         );
 
         // Per-service entries voor per-entity wijzigingsgeschiedenis
-        const formatService = (s: typeof newData[number]) =>
-          `Dienst ${s.serviceNumber} (${s.startTime}–${s.endTime}${s.startTime2 ? `, ${s.startTime2}–${s.endTime2}` : ''}${s.startTime3 ? `, ${s.startTime3}–${s.endTime3}` : ''}).`;
+        const formatService = (s: typeof newData[number]) => {
+          const anders = variantenTekst(s.varianten);
+          return `Dienst ${s.serviceNumber} (${s.startTime}–${s.endTime}${s.startTime2 ? `, ${s.startTime2}–${s.endTime2}` : ''}${s.startTime3 ? `, ${s.startTime3}–${s.endTime3}` : ''}).${anders ? ` Anders op ${anders}.` : ''}`;
+        };
         for (const s of diff.added) {
           await logActivity(req, "services", "Dienst toegevoegd", formatService(s), { type: "service", id: s.id });
         }
@@ -463,6 +466,8 @@ export function mountCommunicatieRoutes(app: express.Express) {
       }
     } catch (err: any) {
       if (err instanceof DienstregelingOnbekend) return res.status(404).json({ error: "Deze versie van de dienstregeling bestaat niet (meer)." });
+      // Afwijking per dagtype opgeslagen terwijl de kolom er nog niet is (10-10).
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
       console.error("Error saving services data:", errorMessage);
       console.error("Opslaan is mislukt.", errorMessage);

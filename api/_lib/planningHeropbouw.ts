@@ -1,3 +1,4 @@
+import { variantenAfdruk } from "../../shared/dagtype.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { DAG_DMJ, toLookupToken } from "../helpers.js";
 import { ROOSTER_MELDING_RUST_MINUTEN } from "../../shared/roosterMelding.js";
@@ -120,7 +121,9 @@ export const dienstenAfdruk = (services: ReadonlyArray<Record<string, unknown>>)
   const perNummer = new Map<string, string>();
   for (const s of services) {
     const nummer = String(s?.serviceNumber ?? "").trim();
-    perNummer.set(toLookupToken(nummer), [nummer, ...DIENST_VELDEN.map((veld) => String(s?.[veld] ?? "").trim())].join("|"));
+    // De afwijkingen per dagtype tellen mee (10-10): een gewijzigde
+    // woensdagtijd moet de planning net zo goed bijwerken.
+    perNummer.set(toLookupToken(nummer), [nummer, ...DIENST_VELDEN.map((veld) => String(s?.[veld] ?? "").trim()), variantenAfdruk(s?.varianten)].join("|"));
   }
   return [...perNummer].sort(([a], [b]) => a.localeCompare(b)).map(([sleutel, waarde]) => `${sleutel}=${waarde}`).join("\n");
 };

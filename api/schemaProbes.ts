@@ -26,7 +26,8 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "planning_codes", columns: "code,category,description,counts_as_shift,is_paid_absence,is_day_off" },
   // dienstregelingId: de versie van de dienstregeling waar de dienst bij hoort
   // (2026-10-08_dienstregelingen.sql); null = de oudste versie.
-  { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3,loopnr,loopnr2,loopnr3,dienstregelingId" },
+  // varianten: afwijkende tijden per De Lijn-dagtype (2026-10-10_services_varianten.sql), jsonb, null = geen.
+  { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3,loopnr,loopnr2,loopnr3,dienstregelingId,varianten" },
   { table: "dienstregelingen", columns: "id,naam,geldig_vanaf,opmerking,created_at,created_by" },
   // severity bestaat live nog (nullable) maar wordt niet meer geschreven;
   // mapCoordinates bestaat live NIET en is uit de schrijfmapper gehaald.

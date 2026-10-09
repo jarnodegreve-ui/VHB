@@ -5,10 +5,10 @@ import { EmptyState } from '../ui';
 import { Chip, MicroLabel } from '../primitives';
 import { BrandSpinner } from '../BrandSpinner';
 import { haalVersieDiensten } from '../../lib/dienstregelingen';
-import { DIENST_VELD_LABEL, vergelijkDiensten, versieLabel, type DienstKern, type DienstVerschil } from '../../../shared/dienstregeling';
+import { DIENST_VELD_LABEL, dienstVeldTekst, vergelijkDiensten, versieLabel, type DienstKern, type DienstVerschil } from '../../../shared/dienstregeling';
 import { cn } from '../../lib/ui';
 
-const tekst = (d: DienstKern | null, veld: keyof typeof DIENST_VELD_LABEL): string => String(d?.[veld] ?? '').trim() || 'leeg';
+const tekst = (d: DienstKern | null, veld: keyof typeof DIENST_VELD_LABEL): string => (d ? dienstVeldTekst(d, veld) : '') || 'leeg';
 
 function Deel({ d }: { d: DienstKern }) {
   const delen = [
