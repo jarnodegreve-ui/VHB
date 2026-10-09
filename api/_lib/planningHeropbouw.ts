@@ -5,9 +5,10 @@ import { sendPushToUsers } from "../push.js";
 import { ROOSTER_MELDING_RUST_MINUTEN } from "../../shared/roosterMelding.js";
 import {
   applySwapsToPlanningRows, buildPlanningFromMatrix, getAppSetting, getPlanningCodesData, getPlanningData, getPlanningVersion,
-  getServicesData, getSwapsData, logActivity, replacePlanningData, setAppSetting, summarizeTokens, swapRaaktBereik,
+  getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningData, setAppSetting, summarizeTokens, swapRaaktBereik,
 } from "../storage.js";
 import { maakCodeDienstToets } from "./codeDienst.js";
+import { type HeropbouwPlan, bouwHeropbouwPlan } from "../../shared/heropbouwPlan.js";
 
 /**
  * Planning heropbouwen uit de opgeslagen matrix: de ENE kern achter
@@ -62,7 +63,9 @@ export type HeropbouwUitkomst =
     unmatchedDrivers: string[];
   }
   /** De planning werd twee keer op rij tijdens het rekenen door iemand anders gewijzigd. */
-  | { status: "bezet"; melding: string };
+  | { status: "bezet"; melding: string }
+  /** Alleen handmatig met `droog`: niets geschreven, dit is wat de heropbouw zou doen. */
+  | { status: "droog"; plan: HeropbouwPlan };
 
 /** Uitkomst voor het antwoord van POST /api/services. */
 export type AutoHeropbouwUitkomst = HeropbouwUitkomst | { status: "mislukt"; melding: string };
@@ -280,7 +283,11 @@ const NAAR_DE_KNOP = "Controleer dit en bouw de planning zelf opnieuw op in Behe
  * dienstoverzicht. Gooit bij een technische fout; de aanroeper beslist wat
  * dat betekent (de knop: 500, de automatische weg: nooit de save laten falen).
  */
-export const heropbouwPlanning = async (req: AuthenticatedRequest, bron: HeropbouwBron): Promise<HeropbouwUitkomst> => {
+export const heropbouwPlanning = async (
+  req: AuthenticatedRequest,
+  bron: HeropbouwBron,
+  opties: { /** Droge run (09-10): alleen tonen wat er zou veranderen, niets schrijven. */ droog?: boolean } = {},
+): Promise<HeropbouwUitkomst> => {
   const automatisch = bron === "dienstoverzicht";
   // Hooguit twee pogingen: schreef iemand anders (import, ruil-doorvoer)
   // tijdens het rekenen in planning of matrix, dan is de verse set al
@@ -313,6 +320,24 @@ export const heropbouwPlanning = async (req: AuthenticatedRequest, bron: Heropbo
       };
       if (automatisch) await logNietBijgewerkt(req, uitkomst.melding);
       return uitkomst;
+    }
+
+    // Droge run vóór de knop (09-10, keuze Jarno): dezelfde opbouw en replay,
+    // maar niets schrijven, loggen of pushen. Het plan zegt per chauffeur welke
+    // dagen veranderen en wat hij nu heeft, zodat handmatige wijzigingen die
+    // verdwijnen zichtbaar zijn vóór de bevestiging.
+    if (opties.droog && !automatisch) {
+      const namen = new Map((await getUsersData()).map((u) => [String(u.id), String(u.name ?? "")] as const));
+      const dagen = shifts.map((s) => tekst(s.date)).filter(Boolean).sort();
+      const plan = bouwHeropbouwPlan({
+        vorige: vorigePlanning as PlanningRij[],
+        nieuw: shifts,
+        namen,
+        dagenInMatrix: summary.importedDays,
+        periode: { van: dagen[0] ?? null, tot: dagen[dagen.length - 1] ?? null },
+        ruilen: { toegepast: reapplied.applied, nietToepasbaar: reapplied.skipped },
+      });
+      return { status: "droog", plan };
     }
 
     if (automatisch) {
@@ -455,5 +480,7 @@ export const planningUitkomstVoorAntwoord = (uit: AutoHeropbouwUitkomst) => {
     return { status: uit.status, reden: uit.reden, melding: uit.melding, unknownCodes: uit.unknownCodes, unmatchedDrivers: uit.unmatchedDrivers };
   }
   if (uit.status === "overgeslagen") return { status: uit.status, reden: uit.reden, melding: uit.melding };
+  // De automatische weg draait nooit droog; de knop beantwoordt dat zelf.
+  if (uit.status === "droog") return { status: uit.status };
   return { status: uit.status, melding: uit.melding };
 };
