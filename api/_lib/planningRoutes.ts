@@ -1007,13 +1007,17 @@ export function mountPlanningRoutes(app: express.Express) {
   // De knop "Planning opnieuw opbouwen". De kern (opbouw, ruil-replay, vangrails,
   // log, push-diff) staat in api/_lib/planningHeropbouw.ts en wordt gedeeld met
   // het automatisch bijwerken na een save van het dienstoverzicht.
+  // `?droog=1` (09-10) schrijft niets en geeft het plan terug: per chauffeur
+  // de dagen die zouden veranderen. Het scherm toont dat vóór de bevestiging.
   app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
     try {
-      const uit = await heropbouwPlanning(req, "handmatig");
+      const droog = String(req.query.droog ?? "") === "1";
+      const uit = await heropbouwPlanning(req, "handmatig", { droog });
       if (uit.status === "geblokkeerd") {
         return res.status(400).json({ error: uit.melding, unknownCodes: uit.unknownCodes, unmatchedDrivers: uit.unmatchedDrivers, blocked: true });
       }
       if (uit.status === "bezet") return res.status(409).json({ error: uit.melding });
+      if (uit.status === "droog") return res.json({ droog: true, plan: uit.plan });
       // "ongewijzigd" en "overgeslagen" bestaan alleen op de automatische weg.
       if (uit.status !== "bijgewerkt") return res.status(500).json({ error: "Planning opnieuw opbouwen is mislukt." });
       res.json({ success: true, ...uit.summary, notifiedDrivers: uit.gemeld });

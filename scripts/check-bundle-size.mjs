@@ -136,7 +136,14 @@ import zlib from 'node:zlib';
 // vergelijking in het luie Dienstoverzicht-chunk (+3 kB gzip), buiten de
 // startbundel en buiten beide warmups. Lokaal 711; 715 = die meting plus de
 // ±0,5 kB van de CI-runner en ±0,5 % marge.
-const BUDGET_KB = 715;
+// 09-10 (droge run vóór "Planning opnieuw opbouwen", verbeterronde punt 10,
+// keuze Jarno): 715 → 719. Geen nieuwe dependency: HeropbouwPlanModal en de
+// plan-lezer in het luie Beheer-planning-chunk (+1 kB gzip), buiten de
+// startbundel en buiten beide warmups. Lokaal 716. Dezelfde dag mat de
+// CI-runner ook 716 op takken die de bundel niet raken (#724, #726: main
+// stond daar op de afronding van 715), dus de grens van 715 lag op de trede;
+// 719 = 716 plus de ±0,5 kB van de runner en ±0,3 % marge.
+const BUDGET_KB = 719;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

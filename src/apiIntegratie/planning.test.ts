@@ -183,6 +183,32 @@ describe('planning automatisch bijwerken na het dienstoverzicht', () => {
     mem.appSettings = {};
   });
 
+  it('de knop met ?droog=1 schrijft niets en geeft per chauffeur de dagen die zouden veranderen (09-10)', async () => {
+    // Dienst 12 (chauffeur A, 01/07 en 08/07) krijgt een andere starttijd in
+    // het dienstoverzicht; de planning is nog niet bijgewerkt.
+    mem.services = metDienst12({ startTime: '08:45' });
+    const voor = JSON.stringify(mem.planning);
+    const res = await api('POST', '/api/planning/sync-from-matrix?droog=1', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json.droog).toBe(true);
+    expect(res.json.plan.totaal).toEqual({ chauffeurs: 1, dagen: 2, erbij: 0, weg: 0, gewijzigd: 2 });
+    expect(res.json.plan.chauffeurs).toHaveLength(1);
+    expect(res.json.plan.chauffeurs[0]).toMatchObject({ id: '3', naam: 'Chauffeur A' });
+    expect(res.json.plan.chauffeurs[0].dagen.map((d: any) => d.dag)).toEqual(['2026-07-01', '2026-07-08']);
+    expect(res.json.plan.chauffeurs[0].dagen[0].was[0]).toContain('dienst 12');
+    expect(res.json.plan.chauffeurs[0].dagen[0].wordt[0]).toContain('08:45');
+    expect(res.json.plan.diensten).toBeGreaterThan(0);
+    // Niets geschreven, gelogd of gemeld.
+    expect(JSON.stringify(mem.planning)).toBe(voor);
+    expect(mem.activity.filter((a: any) => a.action === 'Planning opnieuw opgebouwd')).toEqual([]);
+    expect(roosterPushes()).toHaveLength(0);
+    // Na de echte heropbouw is er niets meer te doen.
+    expect((await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-admin' })).status).toBe(200);
+    const leeg = await api('POST', '/api/planning/sync-from-matrix?droog=1', { token: 'tok-admin' });
+    expect(leeg.json.plan.totaal.chauffeurs).toBe(0);
+    expect(leeg.json.plan.chauffeurs).toEqual([]);
+  });
+
   it('(a) een gewijzigde dienst herbouwt de planning, logt de automatische bron en stelt de melding uit', async () => {
     const res = await api('POST', '/api/services', { token: 'tok-planner', body: metDienst12({ startTime: '08:30', endTime: '16:30' }) });
     expect(res.status).toBe(200);
