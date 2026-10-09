@@ -4,6 +4,7 @@ import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
 import { MAX_UPDATE_BIJLAGEN } from "../shared/schemas/update.js";
 import { MAX_OMLEIDING_BIJLAGEN } from "../shared/schemas/diversion.js";
 import { uploadMoment } from "./_lib/bijlagenActies.js";
+import { verlofBudgettenSchoon } from "../shared/verlofSaldo.js";
 import type {
   AppUser,
   DiversionRecord,
@@ -32,6 +33,7 @@ export const toPublicUser = (user: any): AppUserIntern => ({
   verlofBudget: typeof (user.verlofBudget ?? user.verlofbudget) === 'number'
     ? (user.verlofBudget ?? user.verlofbudget)
     : undefined,
+  verlofBudgetten: verlofBudgettenSchoon(user.verlofBudgetten ?? user.verlofbudgetten),
   showInContacts: (user.showInContacts ?? user.showincontacts) !== false,
   // Alleen relevant voor admins: ontvangt deze persoon de systeemmails
   // (foutendigest, back-ups)? Default true; opt-out per account.
@@ -94,6 +96,7 @@ export const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
   phone: user.phone?.trim() || undefined,
   email: normalizeEmail(user.email),
   verlofBudget: typeof user.verlofBudget === 'number' && user.verlofBudget >= 0 ? user.verlofBudget : undefined,
+  verlofBudgetten: verlofBudgettenSchoon(user.verlofBudgetten),
   showInContacts: user.showInContacts !== false,
   wantsSystemMail: user.wantsSystemMail !== false,
   section: user.section?.trim() || undefined,
@@ -114,6 +117,9 @@ export const toDatabaseUser = (user: AppUser) => ({
   phone: user.phone,
   email: normalizeEmail(user.email),
   verlofbudget: typeof user.verlofBudget === 'number' && user.verlofBudget >= 0 ? user.verlofBudget : null,
+  // Elke rij draagt de kolom (zie ooktechnieker hieronder); saveUsersData valt
+  // terug op een upsert zonder, zolang de migratie van 2026-10-09 ontbreekt.
+  verlofbudgetten: verlofBudgettenSchoon(user.verlofBudgetten) ?? null,
   showincontacts: user.showInContacts !== false,
   wantssystemmail: user.wantsSystemMail !== false,
   section: user.section?.trim() || null,

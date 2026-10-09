@@ -79,7 +79,8 @@
     "supabase/2026-09-29_rls_tweede_factor.sql",
     "supabase/2026-09-29_users_password_weg.sql",
     "supabase/2026-10-05_schema_migraties.sql",
-    "supabase/2026-10-08_dienstregelingen.sql"
+    "supabase/2026-10-08_dienstregelingen.sql",
+    "supabase/2026-10-09_users_verlofbudgetten.sql"
   ],
   "overgeslagen": {
     "supabase/consolidate_users_columns.sql": "Leest camelCase-kolommen die alleen het historische productieschema had; faalt op een verse database.",

@@ -36,7 +36,7 @@ export function PrintLeaveYearView({
   door: string;
 }) {
   const balans = useMemo(
-    () => verlofBalans(leaves, driver?.id ?? '', year, driver?.verlofBudget),
+    () => verlofBalans(leaves, driver?.id ?? '', year, driver),
     [leaves, driver, year],
   );
 

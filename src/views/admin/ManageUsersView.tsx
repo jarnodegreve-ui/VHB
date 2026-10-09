@@ -36,6 +36,12 @@ import { uitnodigingBeletsel } from '../../../shared/uitnodiging';
 
 type UserDraft = User & { password?: string };
 
+/** De jaren met een veld in het formulier: dit jaar, volgend jaar en elk jaar dat al een afwijkend budget heeft. */
+const budgetJaren = (budgetten?: Record<string, number>): string[] => {
+  const dit = new Date().getFullYear();
+  return [...new Set([String(dit), String(dit + 1), ...Object.keys(budgetten ?? {})])].sort();
+};
+
 /** Rol als metaregel in de lijst; een chauffeur met "Ook technieker" toont beide. */
 const rolRegel = (u: User) => (u.role === 'chauffeur' && u.ookTechnieker ? 'chauffeur + technieker' : u.role);
 
@@ -1077,6 +1083,35 @@ export function ManageUsersView({ title = 'Gebruikers', currentUser }: {
                     placeholder="Leeg = standaard (24 dagen)"
                   />
                 </Field>
+                {/* Afwijkend budget per jaar (09-10): het veld hierboven blijft
+                    het standaardbudget; wie in januari een ander recht krijgt,
+                    houdt zo het saldo van het vorige jaar. */}
+                <fieldset className="space-y-1.5 sm:col-span-2">
+                  <legend className="text-label mb-1.5">Afwijkend budget per jaar</legend>
+                  <p className="text-body-sm text-slate-500">Leeg = het verlofbudget hierboven. Alleen de jaren die afwijken invullen.</p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {budgetJaren(editingUser.verlofBudgetten).map((jaar) => (
+                      <Field key={jaar} label={jaar} htmlFor={`bewerk-verlofbudget-${jaar}`}>
+                        <Input
+                          id={`bewerk-verlofbudget-${jaar}`}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          value={editingUser.verlofBudgetten?.[jaar] ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            const volgende = { ...(editingUser.verlofBudgetten ?? {}) };
+                            if (v === '') delete volgende[jaar];
+                            else volgende[jaar] = Math.max(0, parseInt(v, 10) || 0);
+                            setEditingUser({ ...editingUser, verlofBudgetten: Object.keys(volgende).length > 0 ? volgende : undefined });
+                            bewerkF.wisVeld('verlofBudgetten');
+                          }}
+                          placeholder="Standaard"
+                        />
+                      </Field>
+                    ))}
+                  </div>
+                </fieldset>
                 {editingUser.role === 'chauffeur' && (
                   <fieldset className="space-y-1.5 sm:col-span-2">
                     <legend className="text-label mb-1.5">Documenten geldig tot</legend>

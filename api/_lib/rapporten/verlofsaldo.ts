@@ -14,7 +14,7 @@ import type { RapportFilters, RapportResultaat, RapportRij } from "../../../shar
  * bewaakt dat.
  */
 
-type SaldoGebruiker = { id: string | number; name: string; role: string; isActive?: boolean; section?: string; verlofBudget?: number };
+type SaldoGebruiker = { id: string | number; name: string; role: string; isActive?: boolean; section?: string; verlofBudget?: number; verlofBudgetten?: Record<string, number> };
 
 export type VerlofsaldoBron = {
   users: readonly SaldoGebruiker[];
@@ -46,7 +46,7 @@ export function bouwVerlofsaldo(bron: VerlofsaldoBron, filters: RapportFilters):
   }
 
   const rijen: RapportRij[] = personen.map((u) => {
-    const b = verlofBalans(bron.leave, String(u.id), jaar, u.verlofBudget, bron.extraFeestdagen);
+    const b = verlofBalans(bron.leave, String(u.id), jaar, u, bron.extraFeestdagen);
     return {
       id: String(u.id),
       naam: u.isActive === false ? `${u.name} (uit dienst)` : u.name,

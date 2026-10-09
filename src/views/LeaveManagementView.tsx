@@ -353,7 +353,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     // planner naar zijn eigen saldo terwijl hij verlof van een chauffeur
     // invoert.
     const doelUser = users.find((u) => String(u.id) === aanvraagVoorId) ?? user;
-    const currentBalance = verlofBalans(leaveRequests, aanvraagVoorId, requestedYear, doelUser.verlofBudget);
+    const currentBalance = verlofBalans(leaveRequests, aanvraagVoorId, requestedYear, doelUser);
     const wouldExceed =
       formData.type === 'betaald_verlof' &&
       currentBalance.betaaldGebruikt + requestedDays > currentBalance.betaaldBudget;
@@ -791,7 +791,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
         <div className="min-w-0 lg:col-span-5 space-y-8">
           <div className="space-y-2">
-            <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)} year={new Date().getFullYear()} compact />
+            <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user)} year={new Date().getFullYear()} compact />
             {/* Nieuw tabblad: de print-modus rendert een kale pagina in plaats
                 van de app (zelfde patroon als het maandrooster). Via
                 openPdfInNewTab, niet via rauwe window.open — die geeft in
@@ -1157,7 +1157,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 {registratie && voorWie && (() => {
                   const jaar = viewMonth.getFullYear();
                   const doel = users.find((u) => String(u.id) === voorWie);
-                  const balans = verlofBalans(leaveRequests, voorWie, jaar, doel?.verlofBudget);
+                  const balans = verlofBalans(leaveRequests, voorWie, jaar, doel);
                   const vast = verlofRequests
                     .filter((r) => String(r.userId) === voorWie && r.status === 'approved' && r.startDate <= `${jaar}-12-31` && r.endDate >= `${jaar}-01-01`)
                     .sort((a, b) => a.startDate.localeCompare(b.startDate));

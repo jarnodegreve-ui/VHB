@@ -2,6 +2,7 @@ import { z } from './zod.js';
 import { isoDatum, leegNaarUndefined, optioneel, verplichteTekst } from './basis.js';
 import { ROLLEN, WACHTWOORD_MIN } from './constanten.js';
 import { dashboardVoorkeurenSchema } from './dashboardVoorkeuren.js';
+import { verlofBudgettenGeldig } from '../verlofSaldo.js';
 
 /**
  * Gebruiker — spiegel van `AppUser`/`IncomingUser` (api/types.ts) en
@@ -51,6 +52,12 @@ const userVelden = {
   email: optioneel(emailSchema),
   verlofBudget: optioneel(
     z.number({ error: 'Vul een getal in' }).int('Vul een geheel aantal dagen in').min(0, 'Verlofbudget kan niet negatief zijn'),
+  ),
+  /** Afwijkend budget per jaar (09-10): sleutel = jaar van vier cijfers, waarde = dagen.
+   *  Bewust `z.custom` en geen `z.record`: dat laatste trok 1,2 kB gzip zod-code
+   *  in de zod-vendor-chunk van de staf-warmup; de regel staat in shared/verlofSaldo.ts. */
+  verlofBudgetten: optioneel(
+    z.custom<Record<string, number>>(verlofBudgettenGeldig, 'Elk jaar vier cijfers en een geheel aantal dagen van nul of meer'),
   ),
   showInContacts: optioneel(z.boolean()),
   wantsSystemMail: optioneel(z.boolean()),

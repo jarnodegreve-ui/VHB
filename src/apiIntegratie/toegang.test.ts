@@ -1583,6 +1583,21 @@ describe('Ook technieker', () => {
     expect(regel?.message).toContain('ook technieker: uit→aan');
   });
 
+  it('verlofbudget per jaar (09-10): een admin bewaart een afwijkend jaar, het komt terug en het log noemt het; een ongeldig jaar is een 400', async () => {
+    const res = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], verlofBudget: 20, verlofBudgetten: { '2027': 18 } }, headers: { [REV]: await revVan('3') } });
+    expect(res.status).toBe(200);
+    expect(res.json.user).toMatchObject({ verlofBudget: 20, verlofBudgetten: { '2027': 18 } });
+    const lijst = await api('GET', '/api/users', { token: 'tok-admin' });
+    expect(lijst.json.find((u: any) => String(u.id) === '3').verlofBudgetten).toEqual({ '2027': 18 });
+    const regel = mem.activity.find((a) => a.action === 'Gebruiker gewijzigd' && a.entityId === '3');
+    expect(regel?.message).toContain('verlofbudget per jaar: geen→2027: 18');
+
+    const fout = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], verlofBudgetten: { '27': 18 } }, headers: { [REV]: await revVan('3') } });
+    expect(fout.status).toBe(400);
+    const negatief = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], verlofBudgetten: { '2027': -1 } }, headers: { [REV]: await revVan('3') } });
+    expect(negatief.status).toBe(400);
+  });
+
   it('de chauffeur kan hem niet zelf aanzetten', async () => {
     const put = await api('PUT', '/api/users/3', { token: 'tok-a', body: { ...mem.users[2], ookTechnieker: true }, headers: { [REV]: 'x' } });
     expect(put.status).toBe(403);
