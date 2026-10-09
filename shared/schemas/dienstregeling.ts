@@ -18,6 +18,8 @@ export const dienstregelingBodySchema = z.object({
   opmerking,
   /** Versie waarvan de diensten gekopieerd worden; leeg = de versie die op de dag ervoor geldt. */
   kopieVan: optioneel(z.string().trim().max(80)),
+  /** Chauffeurs een melding sturen dat er vanaf die dag een nieuwe dienstregeling geldt (standaard wel). */
+  melden: optioneel(z.boolean()),
 });
 export type DienstregelingBody = z.output<typeof dienstregelingBodySchema>;
 

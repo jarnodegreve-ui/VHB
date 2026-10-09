@@ -15,6 +15,7 @@ import { isStafRol, authenticate, requireRole } from "../middleware.js";
 import { isMissingTableError } from "../deviceGate.js";
 import { berekenCelWaarheid } from "./celWaarheid.js";
 import { heropbouwPlanning, reapplyApprovedSwaps, replayTekst } from "./planningHeropbouw.js";
+import { gewijzigdeDagenPerChauffeur, importPushTekst, roosterDagAfdrukken, verstuurRoosterPushes } from "./roosterMelding.js";
 import { berekenVerwachtingsCheck } from "../coverageRoutes.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNameToken, isTakeoverCode, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, normalizeSwapType } from "../helpers.js";
@@ -722,9 +723,12 @@ export function mountPlanningRoutes(app: express.Express) {
       // backups-bucket. Best-effort — een falend herstelpunt mag de import
       // niet tegenhouden, maar zonder pad verschijnt er ook geen
       // terugzet-knop bij deze import in de historiek.
+      // De stand van vóór de import: het herstelpunt hieronder en de push-diff
+      // na het vervangen lezen allebei dezelfde lijst.
+      const planningVoor = await getPlanningData();
       let snapshotPath: string | null = null;
       try {
-        const [matrixVoor, planningVoor] = await Promise.all([getPlanningMatrixRows(), getPlanningData()]);
+        const matrixVoor = await getPlanningMatrixRows();
         snapshotPath = await storeImportSnapshot({
           createdAt: new Date().toISOString(),
           matrixRows: matrixVoor,
@@ -773,13 +777,15 @@ export function mountPlanningRoutes(app: express.Express) {
         `${rows.length} dagen verwerkt (periode ${rows.length ? PERIODE_DMJ(String(rows[0].source_date), String(rows[rows.length - 1].source_date)) : "?"} vervangen; planning daarbuiten onaangetast${fileStartDate !== startDate || fileEndDate !== endDate ? `; selectie uit bestand ${PERIODE_DMJ(fileStartDate, fileEndDate)}` : ""}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${replayTekst(reapplied)}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
       );
 
-      // Chauffeurs met diensten in deze import krijgen een seintje.
-      const affectedDriverIds = [...new Set(generatedPlanning.shifts.map((s: any) => String(s.driverId)))];
-      await sendPushToUsers(affectedDriverIds, {
-        title: "Planning bijgewerkt",
-        soort: "planning",
-        body: `Nieuwe planning geïmporteerd (${rows[0]?.source_date ? DAG_DMJ(String(rows[0].source_date)) : "?"} t/m ${rows[rows.length - 1]?.source_date ? DAG_DMJ(String(rows[rows.length - 1].source_date)) : "?"}). Bekijk je rooster.`,
-        url: viewUrl("rooster"),
+      // Alleen chauffeurs van wie het rooster in de geïmporteerde periode
+      // écht verschilt krijgen een seintje, met de dagen erbij (09-10, keuze
+      // Jarno: "Planning bijgewerkt" naar iedereen riep vragen op). Wie in die
+      // periode nog niets had, hoort dat zijn planning klaarstaat.
+      const inPeriode = (planningVoor as any[]).filter((p) => startDate && endDate && String(p.date) >= startDate && String(p.date) <= endDate);
+      const oudDagen = roosterDagAfdrukken(inPeriode);
+      await verstuurRoosterPushes(gewijzigdeDagenPerChauffeur(oudDagen, roosterDagAfdrukken(generatedPlanning.shifts)), {
+        titel: "Planning bijgewerkt",
+        tekst: (id, dagen) => importPushTekst({ hadDiensten: oudDagen.has(id), dagen, van: startDate, tot: endDate }),
       });
 
       res.json({

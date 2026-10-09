@@ -136,6 +136,22 @@ export function mountDocumentRoutes(app: express.Express) {
 
       await logActivity(req, "planning", "Ritblaadje vervangen", `${filename} (${Math.round(buffer.length / 1024)} KB) geüpload.`);
 
+      // Nieuwe bundel = seintje naar de actieve chauffeurs (09-10, keuze
+      // Jarno): zonder melding ontdekte niemand nieuwe ritbladen vóór 14/11.
+      // Best-effort: de upload is al geslaagd, een mislukte push mag dat niet
+      // in een fout veranderen.
+      try {
+        const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
+        await sendPushToUsers(chauffeurIds, {
+          title: "Nieuwe ritbladen",
+          soort: "planning",
+          body: "De ritbladbundel is vervangen. Open Ritbladen voor het blad van je dienst.",
+          url: viewUrl("ritbladen"),
+        });
+      } catch (pushErr) {
+        console.error("Push over de nieuwe ritbladbundel versturen mislukt.", pushErr);
+      }
+
       const { data: signedData, error: signedError } = await supabaseAdmin.storage
         .from(RITBLAADJE_BUCKET)
         .createSignedUrl(storagePath, RITBLAADJE_URL_TTL_SEC);
