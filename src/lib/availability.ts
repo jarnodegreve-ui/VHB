@@ -43,6 +43,11 @@ export type AvailabilityResponse = {
   days: AvailabilityDay[];
 };
 
+/**
+ * Zonder bereik komt het antwoord uit de cache van de service worker (sinds
+ * 09-10 in OFFLINE_API, public/sw-ritbladen.js), gesleuteld op de volledige
+ * URL: alleen een venster dat met bereik al eens opgevraagd is, komt terug.
+ */
 export function fetchAvailability(
   from: string,
   to: string,

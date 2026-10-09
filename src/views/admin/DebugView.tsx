@@ -36,6 +36,26 @@ const COLLECTION_LABELS: Record<string, string> = {
 
 const TEST_SHIFT_ID_PREFIX = 'test-shift-';
 
+// Schema-controle (GET /api/health/schema): kolommen en RPC's waar de code op
+// rekent, plus de migraties uit api/_lib/migratieLijst.ts die het register
+// public.schema_migraties van deze omgeving nog niet kent. Een mislukte
+// aanroep is een eigen toestand: de rest van de status blijft dan gewoon staan.
+type SchemaStatus =
+  | { ok: boolean; probes: string[]; migraties: { ontbrekend: string[]; registerFout: string | null } }
+  | { fout: string };
+
+const leesSchemaStatus = async (): Promise<SchemaStatus> => {
+  try {
+    const response = await apiFetch('/api/health/schema');
+    if (!response.ok) return { fout: `HTTP ${response.status}` };
+    const data = await response.json();
+    if (!data || typeof data !== 'object' || !data.migraties) return { fout: 'onverwacht antwoord' };
+    return { ok: Boolean(data.ok), probes: data.probes ?? [], migraties: data.migraties };
+  } catch {
+    return { fout: 'geen antwoord' };
+  }
+};
+
 // --- Fouten: gegroepeerd per oorzaak (GET /api/client-errors?groepeer=1) ---
 
 type FoutStatus = 'open' | 'opgelost' | 'genegeerd';
@@ -362,12 +382,67 @@ function StatusRij({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+// Twee rijen onder de tabellen: de schema-controle (kolommen en RPC's) en de
+// migraties die deze omgeving nog niet draaide. Stille pil als alles klopt;
+// een ontbrekende migratie is amber (de app werkt meestal nog, maar er is
+// werk), een kapotte controle of een onleesbaar register is rood.
+function SchemaStatusRijen({ status }: { status: SchemaStatus }) {
+  if ('fout' in status) {
+    return (
+      <div className="flex flex-col gap-1 border-t border-hairline pt-3">
+        <StatusRij label="Schema-controle">
+          <Badge tone="red" dot>Mislukt</Badge>
+        </StatusRij>
+        <p className="mt-1 break-all rounded-lg bg-red-50 p-2 font-mono text-xs text-red-700">/api/health/schema: {status.fout}</p>
+      </div>
+    );
+  }
+  const { probes, migraties } = status;
+  const nogTeDraaien = migraties.ontbrekend;
+  return (
+    <>
+      <div className="flex flex-col gap-1 border-t border-hairline pt-3">
+        <StatusRij label="Schema-controle">
+          <Badge tone={probes.length === 0 ? 'emerald' : 'red'} dot stil={probes.length === 0}>
+            {probes.length === 0 ? 'In orde' : `${probes.length} ${probes.length === 1 ? 'afwijking' : 'afwijkingen'}`}
+          </Badge>
+        </StatusRij>
+        {probes.map((regel) => (
+          <p key={regel} className="mt-1 break-all rounded-lg bg-red-50 p-2 font-mono text-xs text-red-700">{regel}</p>
+        ))}
+      </div>
+      <div className="flex flex-col gap-1">
+        <StatusRij label="Migraties">
+          {migraties.registerFout ? (
+            <Badge tone="red" dot>Register onleesbaar</Badge>
+          ) : (
+            <Badge tone={nogTeDraaien.length === 0 ? 'emerald' : 'amber'} dot stil={nogTeDraaien.length === 0}>
+              {nogTeDraaien.length === 0 ? 'Alles gedraaid' : `${nogTeDraaien.length} nog te draaien`}
+            </Badge>
+          )}
+        </StatusRij>
+        {migraties.registerFout && (
+          <p className="mt-1 break-all rounded-lg bg-red-50 p-2 font-mono text-xs text-red-700">schema_migraties: {migraties.registerFout}</p>
+        )}
+        {nogTeDraaien.length > 0 && (
+          <ul className="mt-1 flex flex-wrap gap-1.5">
+            {nogTeDraaien.map((bestand) => (
+              <li key={bestand}><Chip tone="amber">supabase/{bestand}</Chip></li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
+  );
+}
+
 // onSaveShifts geeft in de praktijk savePlanning door, en dat is een
 // Promise<boolean> (false = de save is afgewezen). Het type stond op
 // Promise<void> en verzweeg dat — zichtbaar geworden toen de React-types
 // eindelijk meededen. Zelfde vorm als onSave elders in de app.
 export function DebugView({ currentUser, shifts, services, onSaveShifts }: { currentUser: User; shifts: Shift[]; services: Service[]; onSaveShifts: (s: Shift[]) => void | boolean | Promise<void | boolean> }) {
   const [healthData, setHealthData] = useState<any>(null);
+  const [schemaStatus, setSchemaStatus] = useState<SchemaStatus | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -503,9 +578,12 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     // Het publieke /api/health is bewust kaal (alleen status+tijd, geen
     // info-disclosure); de config-/tabelstatussen zitten in het admin-only
     // details-endpoint.
-    const response = await apiFetch('/api/health/details');
+    // De schema-controle (tabellen, RPC's, migraties) loopt ernaast: hij doet
+    // tientallen probes en mag de rest van het scherm niet meenemen als hij faalt.
+    const [response, schema] = await Promise.all([apiFetch('/api/health/details'), leesSchemaStatus()]);
     if (!response.ok) throw new Error(String(response.status));
     setHealthData(await response.json());
+    setSchemaStatus(schema);
   }, { boodschap: 'Kon de systeemstatus niet laden.' });
 
   const testWrite = async () => {
@@ -713,10 +791,10 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
             <Card>
               <CardHeader
-                title="Tabellen"
+                title="Tabellen en migraties"
                 aside={(
                   <InfoTip label="Hulp bij problemen" align="right">
-                    Staat een tabel op "Fout", dan bestaat ze waarschijnlijk nog niet in Supabase of staan de rechten niet goed. Het volledige verwachte schema staat in <Chip>supabase/</Chip> in de repo (setup + migraties).
+                    Staat een tabel op "Fout", dan bestaat ze waarschijnlijk nog niet in Supabase of staan de rechten niet goed. Het volledige verwachte schema staat in <Chip>supabase/</Chip> in de repo (setup + migraties). Een migratie die hier "nog te draaien" staat, draai je in de SQL Editor van deze omgeving; ze schrijft zichzelf in het register.
                   </InfoTip>
                 )}
               />
@@ -731,6 +809,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                     {status !== 'OK' && <p className="mt-1 break-all rounded-lg bg-red-50 p-2 font-mono text-xs text-red-700">{status}</p>}
                   </div>
                 ))}
+                {schemaStatus && <SchemaStatusRijen status={schemaStatus} />}
               </div>
             </Card>
 

@@ -123,18 +123,20 @@ jobs:
         run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
 
       # PWA-e2e (golf 4, punt 20): het project `pwa` draait mét service
-      # worker: registratie + GET_VERSION, koude offline start van Mijn dag
-      # uit de SW-cache met het offline-label, en de update-flow (nieuwe
-      # worker → "Vernieuw"-toast → SKIP_WAITING → herlaad). Niet-blokkerend
-      # zolang niet bewezen is dat SW-gedrag in headless Chromium op een
-      # gedeelde runner stabiel is: rood hier is een signaal voor de reviewer.
-      # TODO: continue-on-error weghalen zodra hij een paar weken groen is.
+      # worker: registratie + GET_VERSION, koude offline start van Mijn dag,
+      # Rooster en Maandplanning uit de SW-cache, bijlagen en documenten
+      # zonder bereik, afmelden op een gedeeld toestel, en de update-flow
+      # (nieuwe worker → "Vernieuw"-toast → SKIP_WAITING → herlaad).
+      # Blokkerend sinds 09-10: de stap stond van 15-09 tot 09-10 op
+      # continue-on-error (uit voorzorg, niet na een waargenomen fout) en was
+      # in die tijd op elke run van main groen (40 van 40 tussen 01-10 en
+      # 08-10). Hij zit in deze job, dus de verplichte check e2e (1/3) dekt
+      # hem zonder wijziging aan de branchbeveiliging.
       # E2E_SKIP_BUILD hergebruikt de dist die de smoke hierboven net met
       # dezelfde dummy-env bouwde (geen tweede build).
       # Alleen in de eerste shard: het is één klein project.
-      - name: E2E PWA (service worker, niet-blokkerend)
+      - name: E2E PWA (service worker)
         if: matrix.shard == 1
-        continue-on-error: true
         env:
           E2E_SKIP_BUILD: "1"
         run: npm run test:e2e:pwa

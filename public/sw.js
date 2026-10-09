@@ -308,17 +308,19 @@ self.addEventListener('fetch', (event) => {
   // Sinds 15-09 (punt 19) ook /api/users, /api/updates, /api/swaps,
   // /api/leave en /api/meldingen: de startlading haalde die óók op, buiten
   // de lijst, en dat gaf bij een koude offline start één rode toast met zes
-  // bronnen en een lege ruil-badge. De lijst staat in sw-ritbladen.js
-  // (OFFLINE_API). De sleutel is de volledige URL (incl. ?driverId=&month= /
-  // ?from=&to=), zonder gebruiker erin: uitloggen en een gebruikerswissel
-  // wissen deze cache (src/lib/afmelden.ts), en een antwoord dat pas daarna
-  // binnenkomt gaat er niet meer in (priveGeneratie). Een antwoord uit de
-  // cache draagt `X-VHB-Bron: cache`
-  // (markeerUitCache), zodat de app de versheid niet op "nu" zet.
+  // bronnen en een lege ruil-badge. Sinds 09-10 (punt 12) ook
+  // /api/month-planning en /api/availability: Maandplanning en ruilwizard
+  // halen hun gegevens zelf op en openden zonder bereik leeg. De lijst staat
+  // in sw-ritbladen.js (OFFLINE_API). De sleutel is de volledige URL (incl.
+  // ?driverId=&month= / ?from=&to=), zonder gebruiker erin: uitloggen en een
+  // gebruikerswissel wissen deze cache (src/lib/afmelden.ts), en een antwoord
+  // dat pas daarna binnenkomt gaat er niet meer in (priveGeneratie). Een
+  // antwoord uit de cache draagt `X-VHB-Bron: cache` (markeerUitCache),
+  // zodat de app de versheid niet op "nu" zet.
   // Ritblad-metadata volgt dezelfde strategie: de PDF-link is tijdelijk,
   // dus iedere online opening krijgt een vers ondertekende URL. Offline
   // blijft de PDF beschikbaar onder zijn query-loze cache-sleutel.
-  if (url.pathname === ME_API || url.pathname === PLANNING_API || self.VHB_RITBLADEN.isOfflineApi(url.pathname)) {
+  if (url.pathname === ME_API || url.pathname === PLANNING_API || self.VHB_RITBLADEN.isOfflineApi(url.pathname, url.search)) {
     const generatie = priveGeneratie;
     event.respondWith(
       fetch(req)

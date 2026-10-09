@@ -11,10 +11,11 @@ import { defineConfig, devices } from '@playwright/test';
  * master-detail, tabellen, paginering). a11y.spec.ts draait op beide.
  *
  * Het project `pwa` (alleen e2e/pwa.spec.ts, `npm run test:e2e:pwa`) laat de
- * service worker wél toe: registratie, koude offline start van Mijn dag uit
- * de SW-cache en de update-flow met de "Vernieuw"-toast. Het draait apart en
- * in CI niet-blokkerend (zie ci.yml), omdat SW-gedrag in headless Chromium
- * op een gedeelde runner nog niet bewezen stabiel is.
+ * service worker wél toe: registratie, koude offline start van Mijn dag,
+ * Rooster en Maandplanning uit de SW-cache en de update-flow met de
+ * "Vernieuw"-toast. Het draait apart van de smoke (eigen stap in de job
+ * e2e (1/3), zie ci.yml) en is sinds 09-10 blokkerend: drie weken
+ * continue-on-error lieten geen enkele rode run op main zien.
  *
  * Eenmalig lokaal: `npx playwright install chromium webkit`.
  */
@@ -88,8 +89,9 @@ export default defineConfig({
     },
     {
       // PWA: dezelfde iPhone-emulatie, maar mét service worker. Alleen
-      // pwa.spec.ts; niet in `npm run test:e2e` (zie package.json) zodat
-      // een flaky SW-run de gewone smoke niet rood kleurt.
+      // pwa.spec.ts; niet in `npm run test:e2e` (zie package.json): een
+      // eigen stap in CI houdt de uitslag van de service worker los van de
+      // smoke, zodat een rode run meteen zegt waar het zit.
       name: 'pwa',
       testMatch: PWA_SPEC,
       use: {

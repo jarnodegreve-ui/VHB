@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Dienstregeling } from '../../types';
-import { Button } from '../primitives';
+import { Button, Switch } from '../primitives';
 import { SluitKnop } from '../Modal';
 import { SlideOver } from '../SlideOver';
 import { Formulier } from '../Formulier';
@@ -13,7 +13,7 @@ import { dienstregelingBodySchema, dienstregelingPatchSchema } from '../../../sh
 import { dagVoor, versieLabel, versieVoorDatum } from '../../../shared/dienstregeling';
 import { formatDatumDMJ } from '../../lib/format';
 
-type Data = { geldigVanaf: string; naam: string; opmerking: string; kopieVan: string };
+type Data = { geldigVanaf: string; naam: string; opmerking: string; kopieVan: string; melden: boolean };
 
 /**
  * Nieuwe versie van de dienstregeling klaarzetten, of naam, opmerking en
@@ -33,8 +33,8 @@ export function VersieFormulier({ open, onClose, versies, vandaag, bewerk, onKla
 }) {
   const nieuw = !bewerk;
   const begin: Data = bewerk
-    ? { geldigVanaf: bewerk.geldigVanaf, naam: bewerk.naam ?? '', opmerking: bewerk.opmerking ?? '', kopieVan: '' }
-    : { geldigVanaf: '', naam: '', opmerking: '', kopieVan: '' };
+    ? { geldigVanaf: bewerk.geldigVanaf, naam: bewerk.naam ?? '', opmerking: bewerk.opmerking ?? '', kopieVan: '', melden: false }
+    : { geldigVanaf: '', naam: '', opmerking: '', kopieVan: '', melden: true };
   const [sleutel, setSleutel] = useState<string | null>(null);
   const [data, setData] = useState<Data>(begin);
   const gewenst = open ? (bewerk?.id ?? 'nieuw') : null;
@@ -50,7 +50,7 @@ export function VersieFormulier({ open, onClose, versies, vandaag, bewerk, onKla
   const verstuur = async () => {
     if (bezig) return;
     const body = nieuw
-      ? { geldigVanaf: data.geldigVanaf, naam: data.naam, opmerking: data.opmerking, kopieVan: data.kopieVan || undefined }
+      ? { geldigVanaf: data.geldigVanaf, naam: data.naam, opmerking: data.opmerking, kopieVan: data.kopieVan || undefined, melden: data.melden }
       : { ...(datumVast ? {} : { geldigVanaf: data.geldigVanaf }), naam: data.naam, opmerking: data.opmerking };
     const uit = valideer(nieuw ? dienstregelingBodySchema : dienstregelingPatchSchema, body);
     if (!uit.ok) { fouten.zet(uit.fouten); return; }
@@ -108,6 +108,15 @@ export function VersieFormulier({ open, onClose, versies, vandaag, bewerk, onKla
         <Field label="Opmerking" htmlFor="versie-opmerking" error={fouten.fouten.opmerking}>
           <Textarea id="versie-opmerking" rows={3} value={data.opmerking} maxLength={300} onChange={(e) => { setData({ ...data, opmerking: e.target.value }); fouten.wisVeld('opmerking'); }} />
         </Field>
+        {nieuw && (
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-label">Chauffeurs verwittigen</p>
+              <p className="text-body-sm text-slate-500">Eén melding: vanaf welke dag de nieuwe dienstregeling geldt.</p>
+            </div>
+            <Switch checked={data.melden} onChange={(v) => setData({ ...data, melden: v })} label="Chauffeurs verwittigen" />
+          </div>
+        )}
       </Formulier>
     </SlideOver>
   );
