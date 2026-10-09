@@ -53,6 +53,11 @@ export type MonthPlanning = {
   zichtbaarVanaf?: string;
 };
 
+/**
+ * Zonder bereik komt het antwoord uit de cache van de service worker (sinds
+ * 09-10 in OFFLINE_API, public/sw-ritbladen.js), gesleuteld op deze URL mét
+ * `?month=`: elke maand die met bereik bekeken is, opent daarna ook zonder.
+ */
 export function fetchMonthPlanning(month: string): Promise<MonthPlanning> {
   return apiJson<MonthPlanning>(`/api/month-planning?month=${month}`);
 }
