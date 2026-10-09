@@ -7,8 +7,10 @@ import { dienstregelingBodySchema, dienstregelingPatchSchema } from "../../share
 import { dagVoor, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum } from "../../shared/dienstregeling.js";
 import { valideerRecord } from "./valideer.js";
 import {
-  DIENSTREGELING_MIGRATIE, createDienstregeling, deleteDienstregeling, getDienstregelingen, getServicesPerVersie, logActivity, updateDienstregeling,
+  DIENSTREGELING_MIGRATIE, createDienstregeling, deleteDienstregeling, getDienstregelingen, getServicesPerVersie, getUsersData, logActivity, updateDienstregeling,
 } from "../storage.js";
+import { sendPushToUsers } from "../push.js";
+import { viewUrl } from "./collectie.js";
 import { heropbouwNaDienstoverzicht, planningUitkomstVoorAntwoord } from "./planningHeropbouw.js";
 
 /**
@@ -84,6 +86,21 @@ export function mountDienstregelingRoutes(app: express.Express) {
         kopieVanId: kopieVan?.id ?? null,
       });
       await logActivity(req, "services", "Dienstregelingversie aangemaakt", `${versieLabel(versie)}, geldig vanaf ${DAG_DMJ(versie.geldigVanaf)}${kopieVan ? `, kopie van ${versieLabel(kopieVan)}` : ", zonder diensten"}.`);
+      // Seintje naar de actieve chauffeurs (09-10, keuze Jarno), tenzij het
+      // formulier het uitzet. Best-effort: de versie bestaat al.
+      if (body.melden !== false) {
+        try {
+          const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
+          await sendPushToUsers(chauffeurIds, {
+            title: "Nieuwe dienstregeling",
+            soort: "planning",
+            body: `Vanaf ${DAG_DMJ(versie.geldigVanaf)} geldt een nieuwe dienstregeling${versie.naam ? ` (${versie.naam})` : ""}. Bekijk het dienstoverzicht.`,
+            url: viewUrl("dienstoverzicht"),
+          });
+        } catch (pushErr) {
+          console.error("Push over de nieuwe dienstregelingversie versturen mislukt.", pushErr);
+        }
+      }
       res.status(201).json(versie);
     } catch (err) {
       if (String((err as { code?: unknown })?.code ?? "") === "23505") return res.status(409).json({ error: `Er bestaat al een versie vanaf ${DAG_DMJ(body.geldigVanaf)}.` });

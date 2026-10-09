@@ -1,21 +1,27 @@
-import { test, expect, type BrowserContext, type Page, type Route } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
-import { CHAUFFEUR, SESSION_KEY, apiFixtures, sessieInitScript } from '../scripts/audit-fixtures.mjs';
+import { CHAUFFEUR, SESSION_KEY, USERS, apiFixtures, dayOffset, PLANNING, sessieInitScript } from '../scripts/audit-fixtures.mjs';
+import { begrensMaandbord, eersteZichtbareDag } from '../shared/maandplanningTerugblik';
 
 /**
  * PWA-gedrag mét service worker (golf 4, punt 20). Alleen in het project
  * `pwa` (playwright.config.ts, `serviceWorkers: 'allow'`), los van de smoke:
- * `npm run test:e2e:pwa`, in CI niet-blokkerend.
+ * `npm run test:e2e:pwa`. In CI een stap van de verplichte job e2e (1/3),
+ * sinds 09-10 blokkerend (daarvoor drie weken `continue-on-error`, in die
+ * tijd nooit rood op main).
  *
  * Wat hier wél end-to-end loopt:
  *  1. eerste laad: /sw.js registreert, wordt actief en neemt de controle
  *     (clients.claim); de shell staat in de build-gestempelde app-cache en
  *     GET_VERSION via een MessageChannel antwoordt met die cachenaam;
  *  2. koude offline start: na een tweede laad dóór de SW staan de Mijn-dag-
- *     API's (network-first met cache-fallback, lijst MIJN_DAG_API in
+ *     API's (network-first met cache-fallback, lijst OFFLINE_API in
  *     public/sw-ritbladen.js) in de build-onafhankelijke cache
  *     'vhb-ritbladen'; met het netwerk uit toont Mijn dag de gecachte
  *     dienst met het stille offline-label;
+ *  2a. Rooster en Maandplanning zonder bereik (09-10, punt 12): dezelfde
+ *     koude start, maar op die twee schermen; de Maandplanning haalt
+ *     /api/month-planning?month= zelf op en staat sinds 09-10 in de lijst;
  *  2b. bijlagen van omleidingen (29-09, onderaan deze spec): na één opening
  *     met bereik opent de bijlage zonder bereik, ook na een koude start; een
  *     vervangen bijlage toont de nieuwe; een verwijderde bijlage gaat uit de
@@ -56,9 +62,13 @@ import { CHAUFFEUR, SESSION_KEY, apiFixtures, sessieInitScript } from '../script
 
 const RITBLADEN_CACHE = 'vhb-ritbladen';
 
-async function seedContext(context: BrowserContext, page: Page, opties: { eenmalig?: boolean } = {}) {
-  await page.addInitScript(sessieInitScript, { key: SESSION_KEY, user: CHAUFFEUR, view: 'mijn-dag', thema: 'light', eenmalig: opties.eenmalig === true });
-  await context.route('**/api/**', apiFixtures(CHAUFFEUR));
+/** Eén collectie anders beantwoorden dan de vaste fixtures (zoals `extra` in e2e/helpers.ts). */
+type Extra = (pad: string, request: Request) => unknown;
+
+/** Sessie van de chauffeur plus de API-fixtures op de context; `view` = het scherm waarop de app opent (standaard Mijn dag). */
+async function seedContext(context: BrowserContext, page: Page, opties: { eenmalig?: boolean; view?: string; extra?: Extra } = {}) {
+  await page.addInitScript(sessieInitScript, { key: SESSION_KEY, user: CHAUFFEUR, view: opties.view ?? 'mijn-dag', thema: 'light', eenmalig: opties.eenmalig === true });
+  await context.route('**/api/**', apiFixtures(CHAUFFEUR, opties.extra));
 }
 
 /** Wacht tot de SW actief is én deze pagina controleert (clients.claim). */
@@ -173,6 +183,99 @@ test.describe('pwa: service worker', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('2101').first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/Offline · (gegevens van \d{2}:\d{2}|opgeslagen gegevens)/)).toBeVisible();
+
+    await context.setOffline(false);
+  });
+
+  /**
+   * Rooster en Maandplanning zonder bereik (09-10, punt 12), naar het model
+   * van de koude start van Mijn dag hierboven: eerst mét bereik door de
+   * service worker, dan het netwerk weg en herladen, en de inhoud staat er
+   * nog. Rooster leest /api/planning uit de datalaag (al in de lijst, maar
+   * had geen eigen test); de Maandplanning haalt /api/month-planning?month=
+   * zelf op en opende zonder bereik leeg tot die URL in de lijst stond.
+   */
+  test('rooster: koude start zonder bereik toont de komende dienst uit de cache', async ({ page, context }) => {
+    // Een dienst van morgen, zodat hij op elk uur van de dag "komend" is: de
+    // fixture-diensten van vandaag zijn na hun eindtijd gereden en klappen
+    // dan onder "Toon verleden" (e2e/rooster-gereden.spec.ts).
+    const morgen = { id: 't-morgen', date: dayOffset(1), startTime: '06:12', endTime: '09:30', line: '2102', busNumber: '', loopnr: '4500', driverId: '42' };
+    await seedContext(context, page, { view: 'rooster', extra: (pad) => (pad.endsWith('/api/planning') ? [...PLANNING, morgen] : undefined) });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Rooster' })).toBeVisible({ timeout: 15_000 });
+    await wachtOpControle(page);
+
+    // De lijst staat twee keer in de DOM (tabel voor desktop, kaarten voor de
+    // telefoon); alleen de zichtbare telt.
+    const inBeeld = (tekst: string) => page.locator('#hoofdinhoud').getByText(tekst, { exact: true }).filter({ visible: true }).first();
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Rooster' })).toBeVisible({ timeout: 15_000 });
+    await expect(inBeeld('2102')).toBeVisible();
+    await expect(inBeeld('06:12–09:30')).toBeVisible();
+    await expect.poll(() => gecachtePaden(page), { timeout: 10_000, message: 'de planning in vhb-ritbladen' })
+      .toEqual(expect.arrayContaining(['/api/me', '/api/planning']));
+
+    await context.unroute('**/api/**');
+    await context.route('**/api/**', (route) => route.abort('internetdisconnected'));
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Rooster' })).toBeVisible({ timeout: 20_000 });
+    await expect(inBeeld('2102')).toBeVisible({ timeout: 10_000 });
+    await expect(inBeeld('06:12–09:30')).toBeVisible();
+    await expect(page.getByText('Nog geen diensten gepland')).toHaveCount(0);
+
+    await context.setOffline(false);
+  });
+
+  test('maandplanning: koude start zonder bereik toont het bord van de maand uit de cache', async ({ page, context }) => {
+    // Het bord zoals de server het voor een chauffeur geeft: drie collega's
+    // rijden elke dag, geknipt op de lopende week (shared/maandplanningTerugblik).
+    const rijders = USERS.filter((u: { role: string }) => u.role === 'chauffeur').slice(0, 3);
+    const dagenVan = (maand: string) => {
+      const [jaar, m] = maand.split('-').map(Number);
+      return Array.from({ length: new Date(jaar, m, 0).getDate() }, (_, i) => `${maand}-${String(i + 1).padStart(2, '0')}`);
+    };
+    const bord = (maand: string) => begrensMaandbord({
+      month: maand,
+      dates: dagenVan(maand),
+      drivers: rijders.map((u: { id: string | number; name: string }) => ({ id: String(u.id), name: u.name, section: null })),
+      cells: Object.fromEntries(rijders.map((u: { id: string | number }, i: number) => [
+        String(u.id),
+        Object.fromEntries(dagenVan(maand).map((d) => [d, { code: `210${i + 1}`, kind: 'service', label: `Dienst 210${i + 1}`, segments: ['05:30 - 13:45'] }])),
+      ])),
+      geimporteerd: { eerste: '2026-01-01', laatste: '2099-12-31' },
+    }, eersteZichtbareDag(new Date()));
+    await seedContext(context, page, {
+      view: 'bezetting',
+      extra: (pad, request) => (pad.endsWith('/api/month-planning') ? bord(new URL(request.url()).searchParams.get('month') ?? '') : undefined),
+    });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Maandplanning' })).toBeVisible({ timeout: 15_000 });
+    await wachtOpControle(page);
+
+    // De eigen rij in de dagkaart van de telefoon: code, naam en uren in één knop.
+    const eigenRij = page.getByRole('button', { name: /^2101 Test Chauffeur/ });
+    // Tweede laad door de SW: het antwoord van deze maand gaat in de cache,
+    // op de volledige URL (met ?month=).
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Maandplanning' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('3 diensten')).toBeVisible({ timeout: 15_000 });
+    await expect(eigenRij).toBeVisible();
+    await expect.poll(() => gecachtePaden(page), { timeout: 10_000, message: 'de maandplanning in vhb-ritbladen' })
+      .toEqual(expect.arrayContaining(['/api/me', '/api/month-planning']));
+    const maandSleutels = await page.evaluate(async (naam) => (await (await caches.open(naam)).keys()).map((r) => new URL(r.url).search).filter((s) => s.includes('month=')), RITBLADEN_CACHE);
+    expect(maandSleutels.length, 'de sleutel draagt de maand').toBeGreaterThan(0);
+
+    await context.unroute('**/api/**');
+    await context.route('**/api/**', (route) => route.abort('internetdisconnected'));
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Maandplanning' })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('3 diensten')).toBeVisible({ timeout: 15_000 });
+    await expect(eigenRij).toBeVisible();
+    // Geen foutkaart en geen leeg bord: het antwoord kwam uit de cache.
+    await expect(page.getByRole('button', { name: 'Opnieuw proberen' })).toHaveCount(0);
+    await expect(page.getByText(/^Geen planning voor/)).toHaveCount(0);
 
     await context.setOffline(false);
   });
