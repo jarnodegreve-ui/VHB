@@ -10,6 +10,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { apiFetch } from '../../lib/api';
 import { matrixVerzoek, pakBestandIn, teGrootFout, type IngepaktBestand } from '../../lib/bestandInpakken';
 import { Modal } from '../../components/Modal';
+import { HeropbouwPlanModal, type HeropbouwPlanStand } from '../../components/HeropbouwPlanModal';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { Uitklap, uitklapChevron } from '../../components/Uitklap';
 import { Callout } from '../../components/Callout';
@@ -58,7 +59,9 @@ function InklapSectie({ title, aantal, tone, defaultOpen, children }: {
 }
 
 export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | boolean | Promise<void | boolean>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
-  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
+  // De bevestiging van "Planning opnieuw opbouwen" toont eerst de droge run
+  // (09-10); null = dicht.
+  const [planStand, setPlanStand] = useState<HeropbouwPlanStand | null>(null);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [isMatrixImporting, setIsMatrixImporting] = useState(false);
   const [matrixPreviewOpen, setMatrixPreviewOpen] = useState(false);
@@ -384,6 +387,29 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     }
   };
 
+  // Droge run vóór de bevestiging: dezelfde route met ?droog=1 schrijft niets
+  // en geeft per chauffeur de dagen die zouden veranderen.
+  const openPlan = async () => {
+    if (!canAdminOverride) {
+      notify('Deze synchronisatie is alleen beschikbaar voor admins.', 'error');
+      return;
+    }
+    setPlanStand({ status: 'laden' });
+    try {
+      const response = await apiFetch('/api/planning/sync-from-matrix?droog=1', { method: 'POST' });
+      const data = await response.json().catch(() => null);
+      if (response.ok && data?.plan) {
+        setPlanStand({ status: 'klaar', plan: data.plan });
+      } else if (response.status === 400 && data?.blocked) {
+        setPlanStand({ status: 'geblokkeerd', melding: String(data.error ?? ''), unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [], unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [] });
+      } else {
+        setPlanStand({ status: 'fout', melding: String(data?.error ?? `De server antwoordde met ${response.status}.`) });
+      }
+    } catch (error) {
+      setPlanStand({ status: 'fout', melding: error instanceof Error && error.message ? error.message : 'Geen verbinding met de server.' });
+    }
+  };
+
   const handleSync = async () => {
     if (!canAdminOverride) {
       notify('Deze synchronisatie is alleen beschikbaar voor admins.', 'error');
@@ -635,8 +661,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             <Button
               variant="secondary"
               className="w-full sm:w-auto"
-              onClick={() => setConfirmSyncOpen(true)}
-              disabled={isSyncing}
+              onClick={() => void openPlan()}
+              disabled={isSyncing || planStand !== null}
               icon={<RotateCcw size={16} className={isSyncing ? 'animate-spin' : ''} />}
             >
               {isSyncing ? 'Opnieuw opbouwen…' : 'Planning opnieuw opbouwen'}
@@ -838,14 +864,13 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       </Card>
 
       {canAdminOverride ? (
-        <ConfirmationModal
-          open={confirmSyncOpen}
-          onClose={() => setConfirmSyncOpen(false)}
-          onConfirm={handleSync}
-          title="Planning opnieuw opbouwen"
-          message="De actieve planning wordt vervangen door een verse opbouw uit de laatst geïmporteerde matrix, met de huidige tijden en loopnummers uit het Dienstoverzicht. Handmatige wijzigingen in de planning gaan hierbij verloren."
-          confirmText="Opnieuw opbouwen"
-          variant="warning"
+        <HeropbouwPlanModal
+          open={planStand !== null}
+          stand={planStand}
+          bezig={isSyncing}
+          onClose={() => { if (!isSyncing) setPlanStand(null); }}
+          onOpnieuw={() => void openPlan()}
+          onBevestig={async () => { await handleSync(); setPlanStand(null); }}
         />
       ) : null}
 
