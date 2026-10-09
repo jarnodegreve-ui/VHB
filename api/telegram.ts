@@ -1,3 +1,4 @@
+import { variantTekst, variantenSchoon } from "../shared/dagtype.js";
 import type express from "express";
 import { timingSafeEqual } from "node:crypto";
 import { escapeHtml } from "./email.js";
@@ -238,7 +239,9 @@ const formatDienst = async (code: string): Promise<string> => {
   const svc = (services as any[]).find((s) => toLookupToken(String(s.serviceNumber ?? "")) === toLookupToken(code));
   if (svc) {
     const seg = dienstSegmenten(svc);
-    return `🚌 <b>Dienst ${escapeHtml(String(svc.serviceNumber))}</b>\n${seg.length > 0 ? seg.map((x) => `• ${escapeHtml(x)}`).join("\n") : "Geen tijden in het Dienstoverzicht."}`;
+    // Afwijkende tijden per dagtype (10-10), onder de gewone.
+    const anders = (variantenSchoon(svc.varianten) ?? []).map((v) => `• ${escapeHtml(variantTekst(v))}`);
+    return `🚌 <b>Dienst ${escapeHtml(String(svc.serviceNumber))}</b>\n${seg.length > 0 ? seg.map((x) => `• ${escapeHtml(x)}`).join("\n") : "Geen tijden in het Dienstoverzicht."}${anders.length > 0 ? `\nAnders op:\n${anders.join("\n")}` : ""}`;
   }
   const pc = (codes as any[]).find((c) => toLookupToken(String(c.code ?? "")) === toLookupToken(code));
   if (pc) return `ℹ️ ${escapeHtml(code)} is geen dienst maar een planningscode: ${escapeHtml(String(pc.description || pc.code))}.`;

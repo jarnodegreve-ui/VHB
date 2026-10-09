@@ -114,7 +114,7 @@ export const laadDagStanden = async (dagen: unknown[], vooraf?: { swaps?: any[];
     Promise.all(uniek.map(async (dag): Promise<[string, DagStand]> => {
       const [rijen, bord] = await Promise.all([
         getShiftsOnDate(dag),
-        bron.then(([v, swaps]) => bordOpDag(dag, v.users, { zonderAfwezigheid: true, swaps: swaps as any[], services: v.services, codes: v.codes })),
+        bron.then(([v, swaps]) => bordOpDag(dag, v.users, { zonderAfwezigheid: true, swaps: swaps as any[], services: v.services, codes: v.codes, kalender: v.kalender })),
       ]);
       return [dag, { rijen, bord }];
     })),

@@ -13,6 +13,8 @@ const TE_LEGEN: Array<[tabel: string, kolom: string]> = [
   ['planning', 'id'],
   ['planning_matrix_rows', 'id'],
   ['services', 'id'],
+  // Na services (FK met cascade): de dienstregelingversies van dbtests/diensten.test.ts.
+  ['dienstregelingen', 'id'],
   ['diversions', 'id'],
   ['updates', 'id'],
   ['planning_codes', 'code'],

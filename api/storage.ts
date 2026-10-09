@@ -124,6 +124,8 @@ export {
   herstelDienstregelingen,
   DienstregelingOnbekend,
   DIENSTREGELING_MIGRATIE,
+  VARIANTEN_MIGRATIE,
+  laadDagtypeKalender,
   type DienstregelingRecord,
   type VersieKeuze,
   getCoverageExpectations,

@@ -1,3 +1,4 @@
+import { variantenAfdruk } from "../../../shared/dagtype.js";
 import type { AppUser, IncomingUser, PlanningCodeRecord, ServiceRecord } from "../../types.js";
 import { sanitizeIncomingUser, toLookupToken } from "../../helpers.js";
 
@@ -111,7 +112,8 @@ export const diffServiceChanges = (
       previous.endTime3 !== service.endTime3 ||
       previous.loopnr !== service.loopnr ||
       previous.loopnr2 !== service.loopnr2 ||
-      previous.loopnr3 !== service.loopnr3
+      previous.loopnr3 !== service.loopnr3 ||
+      variantenAfdruk(previous.varianten) !== variantenAfdruk(service.varianten)
     );
   });
 
@@ -119,25 +121,12 @@ export const diffServiceChanges = (
 };
 
 export const summarizeServiceChanges = (previousServices: ServiceRecord[], nextServices: ServiceRecord[]) => {
-  const previousById = new Map(previousServices.map((service): [string, ServiceRecord] => [String(service.id), service]));
-  const nextById = new Map(nextServices.map((service): [string, ServiceRecord] => [String(service.id), service]));
-
-  const added = nextServices.filter((service) => !previousById.has(String(service.id))).map((service) => service.serviceNumber);
-  const removed = previousServices.filter((service) => !nextById.has(String(service.id))).map((service) => service.serviceNumber);
-  const changed = nextServices
-    .filter((service) => {
-      const previous = previousById.get(String(service.id));
-      return previous && (
-        previous.serviceNumber !== service.serviceNumber ||
-        previous.startTime !== service.startTime ||
-        previous.endTime !== service.endTime ||
-        previous.startTime2 !== service.startTime2 ||
-        previous.endTime2 !== service.endTime2 ||
-        previous.startTime3 !== service.startTime3 ||
-        previous.endTime3 !== service.endTime3
-      );
-    })
-    .map((service) => service.serviceNumber);
+  // Dezelfde diff als de per-dienst-logregels (loopnummers en afwijkingen per
+  // dagtype tellen dus ook hier mee).
+  const diff = diffServiceChanges(previousServices, nextServices);
+  const added = diff.added.map((service) => service.serviceNumber);
+  const removed = diff.removed.map((service) => service.serviceNumber);
+  const changed = diff.changed.map((service) => service.serviceNumber);
 
   return [
     `toegevoegd: ${summarizeTokens(added)}`,

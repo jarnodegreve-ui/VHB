@@ -30,8 +30,8 @@ type PlanningCode = { code: string; countsAsShift?: boolean; isPaidAbsence?: boo
  * test is en geen belofte.
  */
 export const maandoverzichtVan = (maand: string, bron: CelWaarheidInvoer): Maandoverzicht => {
-  const { dates, chauffeurs, cells } = berekenCelWaarheid(maand, bron);
-  return berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, bron.services, bron.codes as PlanningCode[]);
+  const { dates, chauffeurs, cells, dagtypes } = berekenCelWaarheid(maand, bron);
+  return berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, bron.services, bron.codes as PlanningCode[], dagtypes);
 };
 
 /**

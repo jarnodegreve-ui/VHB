@@ -50,6 +50,8 @@ vi.mock('../api/storage.js', async (origineel) => ({
     return [{ source_date: '2026-09-21', assignments: { 'Bert Buschauffeur': '2109', 'Dirk Nacht': 'vrij' } }];
   },
   getPlanningMatrixGrenzen: async () => ({ eerste: '2026-07-01', laatste: '2099-12-31' }),
+  // De dagtypekalender (10-10): zonder dekkingsconfig de standaard weekdagen.
+  laadDagtypeKalender: async () => ({ weekdays: [], perioden: [], overrides: [] }),
   getServicesData: async () => [{ serviceNumber: '2109', startTime: '06:53', endTime: '08:23', startTime2: '13:10', endTime2: '19:15' }],
   getPlanningCodesData: async () => [{ code: 'vrij', category: 'absence', description: 'Vrij', isDayOff: true }],
   getLeaveData: async () => [],

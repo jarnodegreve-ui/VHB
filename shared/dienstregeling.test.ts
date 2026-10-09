@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  dagVoor, hoortBijVersie, oudsteVersie, vergelijkDiensten, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum,
+  DIENST_VELD_LABEL, dagVoor, dienstVeldTekst, hoortBijVersie, oudsteVersie, vergelijkDiensten, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum,
 } from './dienstregeling';
 
 const V = [
@@ -84,5 +84,29 @@ describe('vergelijkDiensten', () => {
   it('sorteert op dienstnummer, numeriek', () => {
     const v = vergelijkDiensten([], [{ serviceNumber: '2110' }, { serviceNumber: '2103' }, { serviceNumber: '999' }]);
     expect(v.nieuw.map((d) => d.nummer)).toEqual(['999', '2103', '2110']);
+  });
+});
+
+describe('vergelijkDiensten met afwijkingen per dagtype (10-10)', () => {
+  const basis = { serviceNumber: 'EEK6', startTime: '07:10', endTime: '08:40', startTime2: '15:20', endTime2: '16:50' };
+  const wo = { dagtypes: ['23'], startTime: '07:10', endTime: '08:40', startTime2: '11:50', endTime2: '13:20' };
+
+  it('ziet een nieuwe, gewijzigde of verdwenen afwijking als wijziging in het veld varianten', () => {
+    expect(vergelijkDiensten([basis], [{ ...basis, varianten: [wo] }]).gewijzigd.map((d) => d.velden)).toEqual([['varianten']]);
+    expect(vergelijkDiensten([{ ...basis, varianten: [wo] }], [{ ...basis, varianten: [{ ...wo, endTime2: '13:30' }] }]).gewijzigd.map((d) => d.velden)).toEqual([['varianten']]);
+    expect(vergelijkDiensten([{ ...basis, varianten: [wo] }], [basis]).gewijzigd.map((d) => d.velden)).toEqual([['varianten']]);
+  });
+
+  it('dezelfde afwijkingen in een andere volgorde of met een lege lijst zijn geen wijziging', () => {
+    const do_ = { dagtypes: ['24'], startTime: '07:10', endTime: '08:40' };
+    expect(vergelijkDiensten([{ ...basis, varianten: [wo, do_] }], [{ ...basis, varianten: [do_, wo] }]).ongewijzigd).toBe(1);
+    expect(vergelijkDiensten([basis], [{ ...basis, varianten: [] }]).ongewijzigd).toBe(1);
+  });
+
+  it('dienstVeldTekst schrijft de afwijkingen leesbaar uit', () => {
+    expect(dienstVeldTekst({ ...basis, varianten: [wo] }, 'varianten')).toBe('Woensdag schooldag: 07:10–08:40, 11:50–13:20');
+    expect(dienstVeldTekst(basis, 'varianten')).toBe('');
+    expect(dienstVeldTekst(basis, 'startTime2')).toBe('15:20');
+    expect(DIENST_VELD_LABEL.varianten).toBe('per dagtype');
   });
 });

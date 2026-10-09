@@ -22,12 +22,13 @@ import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNa
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./matrixXlsx.js";
 import { leesMatrixUpload } from "./matrixUpload.js";
-import { buildPlanningFromMatrix, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
+import { buildPlanningFromMatrix, laadDagtypeKalender, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { ruilAfwezigheidsFout } from "./ruilRegels.js";
 import { afwezigheidsReden, vrijOpBord } from "../../shared/bordBezetting.js";
 import { begrensMaandbord, eersteZichtbareDag } from "../../shared/maandplanningTerugblik.js";
 import { bordCellenVoor, bordVanDag } from "./codeDienst.js";
+import { dagtypeVanDag } from "../../shared/dagtype.js";
 import { dubbeleInplanningen, onbekendeCodeFout } from "./dubbeleInplanning.js";
 import { planningTijdFout } from "./planningTijden.js";
 
@@ -144,7 +145,7 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
 
     // De planningscodes en de ruilen gaan mee voor het bord van die dag (zie
     // de bordcontrole verderop); in dezelfde beweging, dus geen extra ronde.
-    const [users, services, matrixRows, dayRows, codes, swaps] = await Promise.all([
+    const [users, services, matrixRows, dayRows, codes, swaps, kalender] = await Promise.all([
       getUsersData(),
       // Het dienstoverzicht zoals het op díe dag geldt (versies, 08-10).
       getServicesData({ datum: date }),
@@ -152,14 +153,17 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
       getShiftsOnDate(date),
       getPlanningCodesData(),
       getSwapsData(),
+      laadDagtypeKalender(),
     ]);
+    const matrixRow = (matrixRows as any[]).find((r) => String(r.source_date) === date);
     const driver = users.find((u) => String(u.id) === driverId);
     if (!driver || driver.isActive === false) return { fout: { status: 400, error: "De gekozen chauffeur bestaat niet (meer) of is inactief." } };
 
     const dienstToken = toLookupToken(serviceNumber);
     const service = (services as any[]).find((s) => toLookupToken(s.serviceNumber) === dienstToken);
     if (!service) return { fout: { status: 400, error: `Dienst ${serviceNumber} staat niet in het dienstoverzicht.` } };
-    const segments = getServiceSegments(service);
+    // De tijden van dát dagtype (10-10): een afwijking per dagtype geldt ook hier.
+    const segments = getServiceSegments(service, dagtypeVanDag(date, matrixRow?.day_type, kalender).code);
     if (segments.length === 0) return { fout: { status: 400, error: `Dienst ${service.serviceNumber} heeft geen tijdsblokken in het dienstoverzicht, vul die eerst aan.` } };
 
     // De dienst moet écht onbemand zijn (tussen openen en klikken kan een
@@ -172,8 +176,7 @@ export async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber
     // DE regel (api/_lib/dubbeleInplanning.ts): wie een dienst krijgt, mag die
     // dag geen andere hebben. Eerst wat in de planning-rijen staat, dan de
     // afwezigheid, dan de matrixcel en wat alleen het bord toont (zie verderop).
-    const matrixRow = (matrixRows as any[]).find((r) => String(r.source_date) === date);
-    const bord = bordVanDag(date, { rows: matrixRow ? [matrixRow] : [], users: users as any[], services: services as any[], codes: codes as any[], leave: [], swaps: swaps as any[] });
+    const bord = bordVanDag(date, { rows: matrixRow ? [matrixRow] : [], users: users as any[], services: services as any[], codes: codes as any[], leave: [], swaps: swaps as any[], kalender });
     const conflicten = dubbeleInplanningen(() => ({ rijen: dayRows, bord }), [{ driverId, date, krijgt: service.serviceNumber }]);
     const heeftAl = conflicten.find((c) => c.bron === "rijen");
     if (heeftAl) return { fout: { status: 409, error: `${driver.name} rijdt op ${DAG_DMJ(date)} al dienst ${heeftAl.dienst}, dubbele inplanning kan niet.` } };
@@ -380,13 +383,14 @@ export function mountPlanningRoutes(app: express.Express) {
       // Diensten, planningscodes en ruilen erbij (controle 29-09): de
       // beschikbaarheid leest de cel van het bord, de matrixcel met de
       // doorgevoerde ruilen erover, niet langer de rauwe matrixcel.
-      const [users, leave, matrixRows, services, codes, swaps] = await Promise.all([
+      const [users, leave, matrixRows, services, codes, swaps, kalender] = await Promise.all([
         getUsersData(),
         getLeaveData(),
         getPlanningMatrixRows(),
         getServicesData(),
         getPlanningCodesData(),
         getSwapsData(),
+        laadDagtypeKalender(),
       ]);
       const shiftChunks = await Promise.all(months.map((m) => getPlanningData({ monthIso: m })));
       const shifts = shiftChunks.flat().filter((s: any) => s.date >= eersteDag && s.date <= to);
@@ -401,7 +405,7 @@ export function mountPlanningRoutes(app: express.Express) {
       // wissel een schoolrit kreeg is niet vrij, wie zijn dienst afgaf is dat
       // wel, ook al toont de matrix zijn oude code nog. Het verlof uit het
       // portaal telt hierboven al apart (approvedLeave).
-      const bordOp = bordCellenVoor(dates, { rows: matrixRows as any[], users: users as any[], services: services as any[], codes: codes as any[], swaps: swaps as any[] });
+      const bordOp = bordCellenVoor(dates, { rows: matrixRows as any[], users: users as any[], services: services as any[], codes: codes as any[], swaps: swaps as any[], kalender });
 
       const days = dates.map((date) => {
         const working = new Set<string>();
@@ -483,7 +487,7 @@ export function mountPlanningRoutes(app: express.Express) {
       const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
       if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
 
-      const [rows, users, services, codes, leave, swaps, grenzen] = await Promise.all([
+      const [rows, users, services, codes, leave, swaps, grenzen, kalender] = await Promise.all([
         // Alleen de matrixrijen van deze maand: berekenCelWaarheid gooit de rest
         // toch weg (monthRows), maar ze reisden wel eerst mee uit Supabase.
         getPlanningMatrixRows({ month }),
@@ -497,6 +501,8 @@ export function mountPlanningRoutes(app: express.Express) {
         // Grenzen van de geïmporteerde planning, zodat het bord niet verder
         // bladert dan er data is (Jarno 18-09).
         getPlanningMatrixGrenzen(),
+        // Het dagtype per dag, voor diensten met een afwijking per dagtype (10-10).
+        laadDagtypeKalender(),
       ]);
 
       // De cel-waarheid (matrix + goedgekeurde ruilen + afwezigheden) is sinds
@@ -513,8 +519,8 @@ export function mountPlanningRoutes(app: express.Express) {
       // het later opnieuw. Voer het tot die tijd NIET opnieuw op als bevinding.
       // De maskering terugzetten is klein werk: commit f2a9b33 (helpers:
       // HEALTH_CODES / isHealthCode, plus één ternary op de cel).
-      const { monthRows, dates, chauffeurs, cells } = berekenCelWaarheid(month, {
-        rows: rows as any[], users: users as any[], services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[],
+      const { monthRows, dates, chauffeurs, cells, dagtypes } = berekenCelWaarheid(month, {
+        rows: rows as any[], users: users as any[], services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[], kalender,
       });
 
       // Excel-terugexport (planner/admin): de ACTUELE cel-waarheid — wissels,
@@ -529,7 +535,7 @@ export function mountPlanningRoutes(app: express.Express) {
         if (!isStafRol(req.appUser!.role)) {
           return res.status(403).json({ error: "Onvoldoende rechten." });
         }
-        const overzicht = berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[]);
+        const overzicht = berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes);
         return res.json({ month, dagen: dates.length, ...overzicht });
       }
 
@@ -541,7 +547,7 @@ export function mountPlanningRoutes(app: express.Express) {
         // Tweede tabblad "maandoverzicht": per-chauffeur maandtelling (diensten,
         // uren, ziekte, verlof, vrij) op dezelfde cel-waarheid — opstap naar de
         // loonadministratie zonder aparte export.
-        const overzicht = bouwMaandoverzichtAoa(month, dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[]);
+        const overzicht = bouwMaandoverzichtAoa(month, dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes);
         const buffer = await bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="planning-${month}.xlsx"`);

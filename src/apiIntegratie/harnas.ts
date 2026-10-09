@@ -364,6 +364,9 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
   // opslag (shared/dienstregeling.ts): een dienst zonder versie telt als de
   // oudste, zonder versies is mem.services de hele lijst.
   const dr = await import('../../shared/dienstregeling');
+  const dt = await import('../../shared/dagtype');
+  // De dagtypekalender uit de dekkingsconfig van de mem-store (10-10).
+  const kalenderMock = () => dt.kalenderUitDekking(mem.coverageExpectations ?? {});
   const vandaagMock = () => new Date().toISOString().slice(0, 10);
   const versiesGesorteerd = () => [...mem.dienstregelingen].sort((a: any, b: any) => String(a.geldigVanaf).localeCompare(String(b.geldigVanaf)));
   const oudsteId = () => dr.oudsteVersie(mem.dienstregelingen as any[])?.id ?? null;
@@ -600,7 +603,9 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     getServicesAlle: async () => mem.services,
     getServicesPerVersie: servicesPerVersieMock,
     getDienstregelingen: async () => versiesGesorteerd(),
-    saveServicesData: async (data: any[], keuze: { versieId?: string; datum?: string; alleVersies?: boolean } = {}) => {
+    saveServicesData: async (rauw: any[], keuze: { versieId?: string; datum?: string; alleVersies?: boolean } = {}) => {
+      // Zoals toPublicService: de afwijkingen per dagtype genormaliseerd bewaren (10-10).
+      const data = rauw.map((s: any) => ({ ...s, varianten: dt.variantenSchoon(s.varianten) }));
       const versie = keuze.alleVersies ? null : kiesVersieMock(keuze);
       if (!versie) { mem.services = data; return; }
       const rest = mem.services.filter((s: any) => !dr.hoortBijVersie(s, versie.id, oudsteId()));
@@ -840,6 +845,7 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
         services: perVersie.services,
         versies: perVersie.versies,
         planningCodes: mem.planningCodes,
+        kalender: kalenderMock(),
       });
     },
     replacePlanningData: async (shifts: any[]) => {
@@ -873,11 +879,14 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       mem.planningMatrix = mem.planningMatrix.map((r: any) => (String(r.id) === String(rowId) ? { ...r, assignments } : r));
     },
     insertPlanningRows: async (rows: any[]) => { mem.planning = [...mem.planning, ...rows]; },
-    getServiceSegments: (service: any) => {
+    getServiceSegments: (service: any, dagtype?: string | null) => {
+      // Zelfde dagtype-keuze als de echte (shared/dagtype.ts); bewust alleen deel 1, zoals vanouds.
+      const t = dt.tijdenOpDag(service, dagtype);
       const segs = [];
-      if (service.startTime && service.endTime) segs.push({ startTime: service.startTime, endTime: service.endTime, segment: 1, loopnr: String(service.loopnr ?? '') });
+      if (t.startTime && t.endTime) segs.push({ startTime: t.startTime, endTime: t.endTime, segment: 1, loopnr: String(t.loopnr ?? '') });
       return segs;
     },
+    laadDagtypeKalender: async () => kalenderMock(),
     getCoverageExpectations: async () => mem.coverageExpectations ?? {},
     saveCoverageExpectations: async (map: any) => { mem.coverageExpectations = map; },
     listUserDocuments: async (userId?: string) =>

@@ -1,4 +1,5 @@
 import { nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
+import { dagtypeVanDag, tijdenOpDag, type DagtypeKalender, type DienstVariant } from "../../shared/dagtype.js";
 import { legRuilenOverMaandbeeld, type OverlayCel, type OverlayRuil } from "./ruilOverlay.js";
 
 /**
@@ -12,7 +13,7 @@ import { legRuilenOverMaandbeeld, type OverlayCel, type OverlayRuil } from "./ru
 
 export type CelWaarheidMatrixRij = { source_date: string; day_type?: string; assignments: unknown };
 export type CelWaarheidUser = { id: string | number; name: string; role?: string; isActive?: boolean; section?: string | null; startDate?: string | null };
-export type CelWaarheidService = { serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null; loopnr?: unknown; loopnr2?: unknown; loopnr3?: unknown };
+export type CelWaarheidService = { serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null; loopnr?: string | null; loopnr2?: string | null; loopnr3?: string | null; varianten?: DienstVariant[] | null };
 export type CelWaarheidCode = { code: string; category?: string; description?: string | null };
 export type CelWaarheidLeave = { userId?: unknown; startDate?: unknown; endDate?: unknown; status?: unknown; type?: unknown };
 
@@ -23,6 +24,10 @@ export type CelWaarheidInvoer = {
   codes: CelWaarheidCode[];
   leave: CelWaarheidLeave[];
   swaps: OverlayRuil[];
+  /** Dagtypekalender (10-10): het De Lijn-dagtype per dag, voor diensten met
+   *  een afwijking per dagtype. Zonder kalender telt alleen de Excel-code,
+   *  anders de weekdag als schooldag (shared/dagtype.ts). */
+  kalender?: DagtypeKalender | null;
 };
 
 export type CelWaarheidChauffeur = { id: string; name: string; section: string; startDate: string };
@@ -32,6 +37,8 @@ export type CelWaarheidUitkomst = {
   monthRows: CelWaarheidMatrixRij[];
   chauffeurs: CelWaarheidChauffeur[];
   cells: Record<string, Record<string, OverlayCel>>;
+  /** Per dag van de maand de De Lijn-dagtypecode (uit de matrix, anders afgeleid; null = onbekend). */
+  dagtypes: Record<string, string | null>;
 };
 
 const SECTION_ORDER = ["Reguliere", "Nacht", "Flexi", "Schoolvervoer"];
@@ -83,16 +90,21 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
     const loop = String(loopnr ?? "").trim();
     return loop ? `${times} (loop ${loop})` : times;
   };
-  const segmentsOf = (s: CelWaarheidService): string[] => [
-    s.startTime && s.endTime ? withLoop(`${s.startTime}–${s.endTime}`, s.loopnr) : "",
-    s.startTime2 && s.endTime2 ? withLoop(`${s.startTime2}–${s.endTime2}`, s.loopnr2) : "",
-    s.startTime3 && s.endTime3 ? withLoop(`${s.startTime3}–${s.endTime3}`, s.loopnr3) : "",
-  ].filter(Boolean);
-  const resolve = (code: string): { kind: string; label: string; segments: string[] } | null => {
+  // De tijden van de dag: de afwijking van het dagtype als de dienst er een
+  // heeft, anders de gewone (shared/dagtype.ts, 10-10).
+  const segmentsOf = (svc: CelWaarheidService, dagtype: string | null): string[] => {
+    const s = tijdenOpDag(svc, dagtype);
+    return [
+      s.startTime && s.endTime ? withLoop(`${s.startTime}–${s.endTime}`, s.loopnr) : "",
+      s.startTime2 && s.endTime2 ? withLoop(`${s.startTime2}–${s.endTime2}`, s.loopnr2) : "",
+      s.startTime3 && s.endTime3 ? withLoop(`${s.startTime3}–${s.endTime3}`, s.loopnr3) : "",
+    ].filter(Boolean);
+  };
+  const resolve = (code: string, dagtype: string | null = null): { kind: string; label: string; segments: string[] } | null => {
     const n = toLookupToken(code);
     if (!n) return null;
     const svc = serviceByNorm.get(n);
-    if (svc) return { kind: "service", label: `Dienst ${svc.serviceNumber}`, segments: segmentsOf(svc) };
+    if (svc) return { kind: "service", label: `Dienst ${svc.serviceNumber}`, segments: segmentsOf(svc, dagtype) };
     const pc = codeByNorm.get(n);
     if (pc) return { kind: String(pc.category), label: pc.description || String(pc.code).toUpperCase(), segments: [] };
     return { kind: "unknown", label: "Onbekende code", segments: [] };
@@ -103,15 +115,18 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
   // de toelichting bij de route (api/_lib/planningRoutes.ts) en commit f2a9b33 voor de
   // maskering mocht die ooit terug moeten.
   const cells: Record<string, Record<string, OverlayCel>> = {};
+  const dagtypes: Record<string, string | null> = {};
   for (const row of monthRows) {
     const date = String(row.source_date);
+    const dagtype = dagtypeVanDag(date, row.day_type, invoer.kalender).code;
+    dagtypes[date] = dagtype;
     const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? (row.assignments as Record<string, unknown>) : {};
     for (const [driverName, rawCode] of Object.entries(assignments)) {
       const id = idByNameKey.get(toLookupToken(driverName)) ?? idByNameKey.get(sortedNameToken(driverName));
       if (!id) continue;
       const code = String(rawCode ?? "").trim();
       if (!code) continue;
-      const r = resolve(code);
+      const r = resolve(code, dagtype);
       if (!r) continue;
       if (!cells[id]) cells[id] = {};
       cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
@@ -158,5 +173,5 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
     }
   }
 
-  return { month, dates, monthRows, chauffeurs, cells };
+  return { month, dates, monthRows, chauffeurs, cells, dagtypes };
 }

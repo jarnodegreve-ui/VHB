@@ -30,7 +30,7 @@ import { invalidateUsersCache } from "../userCache.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { addDagenIso, brusselsDay, DAG_DMJ, isDigestRuis, SWAP_UITVOERING_ACTIES, EXPIRY_SOORT_LABEL, isActieveStaf } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesAlle, getDienstregelingen, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "../storage.js";
+import { MigratieOntbreektError, getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesAlle, getDienstregelingen, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "../storage.js";
 import { viewUrl } from "./collectie.js";
 import { opruimBudget, ruimWeesBijlagenOp } from "./bijlagenOpruim.js";
 
@@ -823,6 +823,8 @@ export function mountCronRoutes(app: express.Express) {
         } catch { /* logging mag de foutrespons niet blokkeren */ }
       }
       console.error("Herstellen is mislukt", err);
+      // Een back-up met afwijkingen per dagtype op een database zonder de kolom (10-10): zeg welke migratie.
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message, appliedSoFar });
       res.status(500).json({ error: "Herstellen is mislukt", appliedSoFar });
     }
   });

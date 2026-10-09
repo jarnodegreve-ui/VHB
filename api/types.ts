@@ -2,6 +2,7 @@ import type express from "express";
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { DashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import type { MeldingSoort } from "../shared/schemas/meldingen.js";
+import type { DienstVariant } from "../shared/dagtype.js";
 
 export type Role = "chauffeur" | "technieker" | "planner" | "admin";
 
@@ -246,6 +247,8 @@ export interface ServiceRecord {
   loopnr3?: string;
   /** Versie van de dienstregeling waar de dienst bij hoort (2026-10-08); leeg = de oudste. */
   dienstregelingId?: string;
+  /** Afwijkende tijden per dagtype (kolom `varianten`, 2026-10-10); leeg = overal de gewone tijden. */
+  varianten?: DienstVariant[];
 }
 
 export interface ShiftRecord {

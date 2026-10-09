@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { berekenCelWaarheid } from '../../api/_lib/celWaarheid';
+import { kalenderUitDekking } from '../../shared/dagtype';
 
 /**
  * Karakterisatietest van de cel-waarheid (fase B, 13-09): de logica is
@@ -53,5 +54,35 @@ describe('berekenCelWaarheid', () => {
     expect(uit.cells['1']['2026-09-01']).toEqual({ code: 'ziek', kind: 'absence', label: 'Ziek', segments: [], hiddenService: '2102' });
     expect(uit.cells['3']['2026-09-02'].code).toBe('xx');
     expect(uit.cells['2']['2026-09-02'].code).toBe('2102');
+  });
+});
+
+describe('berekenCelWaarheid met afwijkingen per dagtype (10-10)', () => {
+  const school = [{ id: '7', name: 'Jelle School', role: 'chauffeur', isActive: true, section: 'Schoolvervoer', startDate: '2019-01-01' }];
+  const eek6 = {
+    serviceNumber: 'EEK6', startTime: '07:10', endTime: '08:40', startTime2: '15:20', endTime2: '16:50',
+    varianten: [{ dagtypes: ['23'], startTime: '07:10', endTime: '08:40', startTime2: '11:50', endTime2: '13:20', loopnr2: 'W' }],
+  };
+  const matrix = [
+    { source_date: '2026-10-13', day_type: '22', assignments: { 'Jelle School': 'EEK6' } },
+    { source_date: '2026-10-14', day_type: '', assignments: { 'Jelle School': 'EEK6' } },
+    { source_date: '2026-10-15', day_type: '24', assignments: { 'Jelle School': 'EEK6' } },
+  ];
+
+  it('toont per dag de tijden van dat dagtype en geeft het dagtype per dag mee', () => {
+    const uit = berekenCelWaarheid('2026-10', { rows: matrix, users: school, services: [eek6], codes: [], leave: [], swaps: [] });
+    expect(uit.dagtypes).toEqual({ '2026-10-13': '22', '2026-10-14': '23', '2026-10-15': '24' });
+    expect(uit.cells['7']['2026-10-13'].segments).toEqual(['07:10–08:40', '15:20–16:50']);
+    expect(uit.cells['7']['2026-10-14'].segments).toEqual(['07:10–08:40', '11:50–13:20 (loop W)']);
+    expect(uit.cells['7']['2026-10-15'].segments).toEqual(['07:10–08:40', '15:20–16:50']);
+  });
+
+  it('de kalender maakt van een lege matrixdag een vakantiedag, en dan geldt de afwijking niet', () => {
+    const kalender = kalenderUitDekking({ __uitzonderingen__: ['2026-10-12..2026-10-16|vakantie'] });
+    const uit = berekenCelWaarheid('2026-10', { rows: matrix, users: school, services: [eek6], codes: [], leave: [], swaps: [], kalender });
+    expect(uit.dagtypes['2026-10-14']).toBe('33');
+    expect(uit.cells['7']['2026-10-14'].segments).toEqual(['07:10–08:40', '15:20–16:50']);
+    // De Excel-code wint van de kalender.
+    expect(uit.dagtypes['2026-10-13']).toBe('22');
   });
 });

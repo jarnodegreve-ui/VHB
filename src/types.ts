@@ -2,6 +2,7 @@ import type { DashboardVoorkeuren } from '../shared/schemas/dashboardVoorkeuren'
 import type { Melding, MeldingSoort } from '../shared/schemas/meldingen';
 import type { RuilVerloopStap } from '../shared/ruilVerloop';
 import type { RuilRustRegel } from '../shared/ruilRust';
+import type { DienstVariant } from '../shared/dagtype';
 
 export type Role = 'chauffeur' | 'technieker' | 'planner' | 'admin';
 
@@ -184,6 +185,8 @@ export interface Service {
   loopnr3?: string;
   /** Versie van de dienstregeling waar de dienst bij hoort (08-10); leeg = de oudste. */
   dienstregelingId?: string;
+  /** Afwijkende tijden per De Lijn-dagtype (10-10, shared/dagtype.ts); leeg = overal de gewone tijden. */
+  varianten?: DienstVariant[];
 }
 
 /** Een versie van het dienstoverzicht met haar geldig-vanaf-datum (GET /api/dienstregelingen). */

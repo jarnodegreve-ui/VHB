@@ -6,6 +6,8 @@
  * scherm, de vergelijking) delen. Zuiver: geen zod, geen I/O.
  */
 
+import { DIENST_TIJD_VELDEN, variantenAfdruk, variantenTekst, type DienstVariant } from './dagtype.js';
+
 export type VersieKern = { id: string; geldigVanaf: string };
 
 const opDatum = <V extends VersieKern>(versies: readonly V[]): V[] =>
@@ -67,21 +69,25 @@ export const versieLabel = (v: { naam?: string | null; geldigVanaf: string }): s
 
 // --- Vergelijking van twee versies --------------------------------------------
 
-/** De velden van een dienst waar de planning-opbouw naar kijkt. */
-export const DIENST_VELDEN = [
-  'startTime', 'endTime', 'loopnr',
-  'startTime2', 'endTime2', 'loopnr2',
-  'startTime3', 'endTime3', 'loopnr3',
-] as const;
+/** De velden van een dienst waar de planning-opbouw naar kijkt: de tijden
+ *  per deel (shared/dagtype.ts) en de afwijkingen per dagtype (10-10). */
+export const DIENST_VELDEN = [...DIENST_TIJD_VELDEN, 'varianten'] as const;
 export type DienstVeld = (typeof DIENST_VELDEN)[number];
 
 export const DIENST_VELD_LABEL: Record<DienstVeld, string> = {
   startTime: 'start deel 1', endTime: 'einde deel 1', loopnr: 'loop deel 1',
   startTime2: 'start deel 2', endTime2: 'einde deel 2', loopnr2: 'loop deel 2',
   startTime3: 'start deel 3', endTime3: 'einde deel 3', loopnr3: 'loop deel 3',
+  varianten: 'per dagtype',
 };
 
-export type DienstKern = { serviceNumber: string } & Partial<Record<DienstVeld, string | null | undefined>>;
+export type DienstKern = { serviceNumber: string; varianten?: DienstVariant[] | null }
+  & Partial<Record<Exclude<DienstVeld, 'varianten'>, string | null | undefined>>;
+
+/** De waarde van een veld als tekst, voor de vergelijking en het scherm:
+ *  de varianten als leesbare opsomming, de rest zoals ze er staan. */
+export const dienstVeldTekst = (d: DienstKern, veld: DienstVeld): string =>
+  veld === 'varianten' ? variantenTekst(d.varianten) : String(d[veld] ?? '').trim();
 
 export type DienstVerschil = {
   nummer: string;
@@ -103,7 +109,8 @@ export type Vergelijking = {
 /** Dienstnummer als sleutel: spaties en hoofdletters tellen niet ('2101 ' = '2101'). */
 export const dienstSleutel = (nummer: string | null | undefined): string => String(nummer ?? '').trim().toLowerCase();
 
-const waarde = (d: DienstKern, veld: DienstVeld): string => String(d[veld] ?? '').trim();
+const waarde = (d: DienstKern, veld: DienstVeld): string =>
+  veld === 'varianten' ? variantenAfdruk(d.varianten) : String(d[veld] ?? '').trim();
 
 const perNummer = (diensten: readonly DienstKern[]): Map<string, DienstKern> => {
   const m = new Map<string, DienstKern>();

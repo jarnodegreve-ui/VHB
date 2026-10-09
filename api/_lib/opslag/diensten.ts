@@ -2,8 +2,11 @@ import { randomUUID } from "node:crypto";
 import { brusselsDay, toDatabaseService, toPublicService } from "../../helpers.js";
 import type { ServiceRecord } from "../../types.js";
 import { hoortBijVersie, oudsteVersie, versieVoorDatum } from "../../../shared/dienstregeling.js";
+import { kalenderUitDekking, variantenSchoon, type DagtypeKalender } from "../../../shared/dagtype.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
+import { isMissingColumnError } from "./fouten.js";
+import { MigratieOntbreektError } from "./gebruikers.js";
 
 // --- Dienstregelingversies (fase 1, 08-10) -----------------------------------
 //
@@ -14,6 +17,29 @@ import { paginatedFetch, requireDb } from "./basis.js";
 // zich als voorheen: één lijst, de hele tabel.
 
 export const DIENSTREGELING_MIGRATIE = "supabase/2026-10-08_dienstregelingen.sql";
+
+// Afwijkende tijden per dagtype (10-10): kolom services.varianten (jsonb).
+// Zonder de kolom gaat een save zonder varianten door en geeft een save mét
+// varianten een duidelijke fout (zelfde regel als users.verlofbudgetten).
+export const VARIANTEN_MIGRATIE = "supabase/2026-10-10_services_varianten.sql";
+
+const zonderVarianten = (rows: Array<Record<string, unknown>>) => rows.map(({ varianten: _weg, ...rest }) => rest);
+
+/** Schrijft rijen mét de kolom `varianten`; ontbreekt die (migratie niet
+ *  gedraaid), dan zonder, tenzij een rij er écht een heeft. */
+const schrijfMetVarianten = async (
+  rows: Array<Record<string, unknown>>,
+  schrijf: (rows: Array<Record<string, unknown>>) => PromiseLike<{ error: unknown }>,
+) => {
+  let { error } = await schrijf(rows);
+  // Alleen als het écht om deze kolom gaat; een andere ontbrekende kolom
+  // (half gedraaide migratie) blijft zijn eigen fout.
+  if (error && isMissingColumnError(error) && /varianten/i.test(String((error as { message?: unknown }).message ?? ""))) {
+    if (rows.some((r) => r.varianten != null)) throw new MigratieOntbreektError("services.varianten", VARIANTEN_MIGRATIE);
+    ({ error } = await schrijf(zonderVarianten(rows)));
+  }
+  if (error) throw error;
+};
 
 export type DienstregelingRecord = {
   id: string;
@@ -139,11 +165,12 @@ export const saveServicesData = async (data: any, keuze: VersieKeuze = {}) => {
   const versie = keuze.alleVersies ? null : kiesVersie(versies, keuze);
   const oudste = oudsteVersie(versies)?.id ?? null;
   const metVersie = versies.length > 0;
-  const rows = normalized.map((s) => ({
+  const rows: Array<Record<string, unknown>> = normalized.map((s) => ({
     ...toDatabaseService(s),
     // De kolom alleen schrijven wanneer er versies zijn: tot de migratie
     // gedraaid is, kent de tabel haar niet.
     ...(metVersie ? { dienstregelingId: versie ? versie.id : (s.dienstregelingId ?? null) } : {}),
+    varianten: variantenSchoon(s.varianten) ?? null,
   }));
   // Replace-semantiek zónder leeg-tabel-venster: eerst upserten, daarna pas
   // de ontbrekende rijen verwijderen. Het oude delete-alles-dan-insert kon
@@ -153,10 +180,7 @@ export const saveServicesData = async (data: any, keuze: VersieKeuze = {}) => {
   const existing = await paginatedFetch((from, to) =>
     client.from('services').select(metVersie ? 'id,dienstregelingId' : 'id').order('id', { ascending: true }).range(from, to),
   );
-  if (rows.length > 0) {
-    const { error: upsertError } = await client.from('services').upsert(rows);
-    if (upsertError) throw upsertError;
-  }
+  if (rows.length > 0) await schrijfMetVarianten(rows, (r) => client.from('services').upsert(r));
   const idsToDelete = (existing ?? [])
     .filter((row: any) => !incomingIds.has(String(row.id)))
     // Eén versie vervangen: alleen háár rijen opruimen.
@@ -184,10 +208,11 @@ export const createDienstregeling = async (invoer: {
   if (invoer.kopieVanId) {
     try {
       const bron = await getServicesData({ versieId: invoer.kopieVanId });
-      const rows = bron.map((s) => ({ ...toDatabaseService({ ...s, id: randomUUID() }), dienstregelingId: versie.id }));
+      const rows: Array<Record<string, unknown>> = bron.map((s) => ({
+        ...toDatabaseService({ ...s, id: randomUUID() }), dienstregelingId: versie.id, varianten: variantenSchoon(s.varianten) ?? null,
+      }));
       for (let n = 0; n < rows.length; n += 500) {
-        const { error: e2 } = await client.from("services").insert(rows.slice(n, n + 500));
-        if (e2) throw e2;
+        await schrijfMetVarianten(rows.slice(n, n + 500), (r) => client.from("services").insert(r));
       }
     } catch (err) {
       await client.from("dienstregelingen").delete().eq("id", versie.id);
@@ -287,4 +312,20 @@ export const saveCoverageExpectations = async (map: Record<string, string[]>) =>
   if (selectError) throw selectError;
   const toDelete = (existing ?? []).map((r: any) => String(r.day_type)).filter((dt) => !keep.has(dt));
   await verwijderInStukken(client, 'coverage_expectations', 'day_type', toDelete);
+};
+
+// --- Dagtypekalender ----------------------------------------------------------
+
+/** De kalender waarmee `dagtypeVanDag` (shared/dagtype.ts) het De Lijn-dagtype
+ *  van een dag afleidt als de planningsmatrix het niet meegeeft: de
+ *  weekdag-toewijzing, de periodes en de uitzonderingen van de dekking. */
+export const laadDagtypeKalender = async (): Promise<DagtypeKalender> => {
+  try {
+    return kalenderUitDekking(await getCoverageExpectations());
+  } catch (err) {
+    // De kalender verfijnt alleen het dagtype van dagen zonder matrixcode; een
+    // leesfout op de dekking mag het bord, de opbouw of een ruil niet laten vallen.
+    console.warn("Dagtypekalender niet gelezen, standaard weekdagen gebruikt:", (err as { message?: unknown })?.message ?? err);
+    return kalenderUitDekking({});
+  }
 };
