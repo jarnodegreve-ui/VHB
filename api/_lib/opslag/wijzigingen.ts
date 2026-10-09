@@ -206,6 +206,7 @@ export const diffUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUse
         anders(previous.phone, user.phone) ||
         anders(previous.email, user.email) ||
         previous.verlofBudget !== user.verlofBudget ||
+        JSON.stringify(previous.verlofBudgetten ?? null) !== JSON.stringify(user.verlofBudgetten ?? null) ||
         Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true) ||
         Boolean(previous.ookTechnieker) !== Boolean(user.ookTechnieker)
       );
@@ -219,6 +220,10 @@ export const diffUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUse
       if (anders(previous.phone, user.phone)) fields.push(`telefoon`);
       if (anders(previous.email, user.email)) fields.push(`email`);
       if (previous.verlofBudget !== user.verlofBudget) fields.push(`verlofBudget: ${previous.verlofBudget ?? 'standaard'}→${user.verlofBudget ?? 'standaard'}`);
+      if (JSON.stringify(previous.verlofBudgetten ?? null) !== JSON.stringify(user.verlofBudgetten ?? null)) {
+        const tekst = (b?: Record<string, number>) => (b && Object.keys(b).length > 0 ? Object.entries(b).sort().map(([jaar, dagen]) => `${jaar}: ${dagen}`).join(', ') : 'geen');
+        fields.push(`verlofbudget per jaar: ${tekst(previous.verlofBudgetten)}→${tekst(user.verlofBudgetten)}`);
+      }
       if (Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true)) {
         fields.push(`status: ${previous.isActive === false ? 'inactief' : 'actief'}→${user.isActive === false ? 'inactief' : 'actief'}`);
       }

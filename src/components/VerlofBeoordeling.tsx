@@ -117,7 +117,7 @@ export function VerlofBeoordelingInhoud({ aanvraag, users, shifts, leaveRequests
   // verlofdagen, en dat moet de beoordelaar ook zo zien.
   const dayCount = verlofDagen(reviewLeave.startDate, reviewLeave.endDate);
   const requestYear = parseInt(reviewLeave.startDate.slice(0, 4), 10);
-  const balance = verlofBalans(leaveRequests, reviewLeave.userId, requestYear, requester?.verlofBudget);
+  const balance = verlofBalans(leaveRequests, reviewLeave.userId, requestYear, requester);
   const exceeds = reviewLeave.type === 'betaald_verlof'
     && balance.betaaldGebruikt + dayCount > balance.betaaldBudget;
   return (

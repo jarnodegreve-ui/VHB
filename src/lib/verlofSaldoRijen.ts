@@ -14,4 +14,4 @@ export type VerlofSaldoRij = { user: User; balans: LeaveBalance };
 
 export const verlofSaldoRijen = (users: readonly User[], leaveRequests: LeaveRequest[], jaar: number): VerlofSaldoRij[] => users
   .filter((u) => !isStaf(u.role) && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
-  .map((u) => ({ user: u, balans: verlofBalans(leaveRequests, u.id, jaar, u.verlofBudget) }));
+  .map((u) => ({ user: u, balans: verlofBalans(leaveRequests, u.id, jaar, u) }));

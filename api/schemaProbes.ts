@@ -19,7 +19,8 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // dashboardvoorkeuren (jsonb): 2026-09-06_meldingen.sql — alleen via
   // PATCH /api/me/voorkeuren geschreven (niet door toDatabaseUser).
   // ooktechnieker: 2026-09-28_users_ook_technieker.sql (schakelaar "Ook technieker").
-  { table: "users", columns: "id,name,role,employeeid,lastlogin,activesessions,isactive,phone,email,verlofbudget,showincontacts,section,startdate,wantssystemmail,authid,dashboardvoorkeuren,ooktechnieker" },
+  // verlofbudgetten: 2026-10-09_users_verlofbudgetten.sql (afwijkend budget per jaar).
+  { table: "users", columns: "id,name,role,employeeid,lastlogin,activesessions,isactive,phone,email,verlofbudget,verlofbudgetten,showincontacts,section,startdate,wantssystemmail,authid,dashboardvoorkeuren,ooktechnieker" },
   { table: "planning", columns: "id,date,startTime,endTime,line,busNumber,loopnr,driverId" },
   { table: "planning_matrix_rows", columns: "id,source_date,day_type,assignments,raw_row,created_at" },
   { table: "planning_codes", columns: "code,category,description,counts_as_shift,is_paid_absence,is_day_off" },

@@ -29,6 +29,7 @@ export class EmailInGebruikError extends Error {
 }
 
 export const OOK_TECHNIEKER_MIGRATIE = "supabase/2026-09-28_users_ook_technieker.sql";
+export const VERLOFBUDGETTEN_MIGRATIE = "supabase/2026-10-09_users_verlofbudgetten.sql";
 
 /** Een save zet een waarde in een kolom waarvan de migratie nog niet gedraaid
  *  is. De routes geven een 503 met deze tekst; de app herkent het .sql-bestand
@@ -151,7 +152,11 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
     // lambda onthouden: dat overleefde daar de migratie.
     if (error && isMissingColumnError(error)) {
       if (rijen.some((rij) => rij.ooktechnieker === true)) throw new MigratieOntbreektError("users.ooktechnieker", OOK_TECHNIEKER_MIGRATIE);
-      ({ error } = await client.from('users').upsert(rijen.map(({ ooktechnieker: _weg, ...rest }) => rest)));
+      // Zelfde regel voor het verlofbudget per jaar (2026-10-09): zonder de
+      // kolom gaat een save zonder afwijkende jaren door, een save mét een
+      // afwijkend jaar geeft een duidelijke fout.
+      if (rijen.some((rij) => rij.verlofbudgetten != null)) throw new MigratieOntbreektError("users.verlofbudgetten", VERLOFBUDGETTEN_MIGRATIE);
+      ({ error } = await client.from('users').upsert(rijen.map(({ ooktechnieker: _weg, verlofbudgetten: _ookWeg, ...rest }) => rest)));
     }
     if (error) throw error;
   }

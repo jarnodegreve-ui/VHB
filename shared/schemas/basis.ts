@@ -52,6 +52,7 @@ export const VELD_LABELS: Record<string, string> = {
   phone: 'GSM-nummer',
   password: 'wachtwoord',
   verlofBudget: 'verlofbudget',
+  verlofBudgetten: 'verlofbudget per jaar',
   section: 'sectie',
   startDate: 'startdatum',
   endDate: 'einddatum',

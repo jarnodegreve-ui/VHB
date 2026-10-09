@@ -138,3 +138,14 @@ describe('gelijk aan het saldo-overzicht in Verlof (VerlofSaldoModal)', () => {
     });
   }
 });
+
+describe('verlofbudget per jaar (09-10)', () => {
+  it('een afwijkend budget voor 2027 verandert het rapport van 2026 niet', () => {
+    const els = gebruiker('20', 'Els Perjaar', 'chauffeur', { verlofBudget: 20, verlofBudgetten: { '2027': 18 } });
+    const eigenBron: VerlofsaldoBron = { users: [els], leave: [verlof('20', '2026-03-02', '2026-03-03', 'betaald_verlof', 'approved')], extraFeestdagen: new Set() };
+    expect(bouwVerlofsaldo(eigenBron, { jaar: 2026, keuzes: {} }).rijen[0]).toMatchObject({ budget: 20, opgenomen: 2, vrij: 18 });
+    expect(bouwVerlofsaldo(eigenBron, { jaar: 2027, keuzes: {} }).rijen[0]).toMatchObject({ budget: 18, opgenomen: 0, vrij: 18 });
+    // Zelfde cijfers als het saldo-overzicht in Verlof.
+    expect(verlofSaldoRijen([els], eigenBron.leave as LeaveRequest[], 2027)[0].balans.betaaldBudget).toBe(18);
+  });
+});

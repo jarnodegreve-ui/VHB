@@ -24,6 +24,43 @@ export type VerlofAanvraagKern = {
 // deeltijdse contracten, etc.).
 export const BETAALD_VERLOF_BUDGET = 24;
 
+/**
+ * Verlofbudget per jaar (09-10): `verlofBudget` is het standaardbudget van de
+ * persoon, `verlofBudgetten` een afwijking per jaar ({ "2027": 22 }). Zo
+ * verandert een aanpassing in januari het saldo van het vorige jaar niet meer.
+ */
+export type VerlofBudgetBron = {
+  verlofBudget?: number;
+  verlofBudgetten?: Record<string, number>;
+};
+
+const geldigBudget = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+
+/** Het budget van één jaar: het jaar zelf, anders het standaardbudget, anders 24. */
+export const verlofBudgetVoorJaar = (bron: VerlofBudgetBron | null | undefined, jaar: number): number => {
+  const perJaar = bron?.verlofBudgetten?.[String(jaar)];
+  if (geldigBudget(perJaar)) return perJaar;
+  return geldigBudget(bron?.verlofBudget) ? bron.verlofBudget : BETAALD_VERLOF_BUDGET;
+};
+
+/** Geldige invoer: een object met alleen jaren van vier cijfers en een geheel aantal dagen van nul of meer (leeg mag). */
+export const verlofBudgettenGeldig = (ruw: unknown): ruw is Record<string, number> =>
+  !!ruw && typeof ruw === 'object' && !Array.isArray(ruw)
+  && Object.entries(ruw as Record<string, unknown>).every(([jaar, dagen]) => /^\d{4}$/.test(jaar) && geldigBudget(dagen));
+
+/**
+ * Alleen jaren van vier cijfers met een geheel aantal dagen van nul of meer
+ * blijven over; leeg wordt undefined, zodat de kolom null blijft.
+ */
+export const verlofBudgettenSchoon = (ruw: unknown): Record<string, number> | undefined => {
+  if (!ruw || typeof ruw !== 'object' || Array.isArray(ruw)) return undefined;
+  const uit: Record<string, number> = {};
+  for (const [jaar, dagen] of Object.entries(ruw as Record<string, unknown>)) {
+    if (/^\d{4}$/.test(jaar) && geldigBudget(dagen)) uit[jaar] = dagen;
+  }
+  return Object.keys(uit).length > 0 ? uit : undefined;
+};
+
 export const daysBetween = (startIso: string, endIso: string): number => {
   if (!startIso || !endIso) return 0;
   // UTC-rekenen i.p.v. lokale tijd: een lokale dag is bij de overgang naar
@@ -103,10 +140,19 @@ export interface LeaveBalance {
   kleinVerletDagen: number;
 }
 
-export function verlofBalans(leaves: readonly VerlofAanvraagKern[], userId: string, year: number, customBudget?: number, extraFeestdagen: ReadonlySet<string> = extraFeestdagenStandaard): LeaveBalance {
+export function verlofBalans(
+  leaves: readonly VerlofAanvraagKern[],
+  userId: string,
+  year: number,
+  /** De persoon (budget per jaar, sinds 09-10) of een los budget (oudere aanroepers en tests). */
+  budgetBron?: number | VerlofBudgetBron | null,
+  extraFeestdagen: ReadonlySet<string> = extraFeestdagenStandaard,
+): LeaveBalance {
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
-  const budget = typeof customBudget === 'number' && customBudget >= 0 ? customBudget : BETAALD_VERLOF_BUDGET;
+  const budget = typeof budgetBron === 'number'
+    ? (budgetBron >= 0 ? budgetBron : BETAALD_VERLOF_BUDGET)
+    : verlofBudgetVoorJaar(budgetBron, year);
 
   const inJaar = leaves.filter((l) => l.userId === userId && l.startDate <= yearEnd && l.endDate >= yearStart);
   const relevant = inJaar.filter((l) => l.status === 'approved');

@@ -162,7 +162,7 @@ export function DashboardView({ notes = [],
   const newestDiversions = sorteerOmleidingen(liveDiversions).slice(0, 3);
 
   // Verlofsaldo + 'deze maand' voor de extra dashboard-kaarten.
-  const balans = verlofBalans(leaveRequests, user.id, now.getFullYear(), user.verlofBudget);
+  const balans = verlofBalans(leaveRequests, user.id, now.getFullYear(), user);
   const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   // Dagen met dienst, niet rijen: een gesplitste dienst is twee rijen
   // (melding Jarno 14-09: "27 diensten" waar het 15 dagen waren).

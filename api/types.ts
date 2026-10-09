@@ -23,6 +23,8 @@ export interface AppUser {
   phone?: string;
   email?: string;
   verlofBudget?: number;
+  /** Afwijkend verlofbudget per jaar ({ "2027": 22 }); zie shared/verlofSaldo.ts, verlofBudgetVoorJaar. */
+  verlofBudgetten?: Record<string, number>;
   showInContacts?: boolean;
   /** Admins: ontvangt systeemmails (foutendigest, back-ups). Default true. */
   wantsSystemMail?: boolean;
