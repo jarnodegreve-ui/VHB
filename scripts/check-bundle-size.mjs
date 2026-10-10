@@ -150,7 +150,13 @@ import zlib from 'node:zlib';
 // warmups (index 77,67, chauffeur 77, staf 145: ongewijzigd). Lokaal 719,04,
 // precies op de trede: de CI-runner meet ±0,5 kB zwaarder en rondde naar 720.
 // 722 = 719,04 plus de ±0,5 kB van de runner en ±0,3 % marge.
-const BUDGET_KB = 722;
+// 10-10 (dagtypes deel 2, het scherm, keuze Jarno): 722 → 725. Geen nieuwe
+// dependency: het blok "Afwijkingen per dagtype" met de keuzelijst in het
+// luie ServicesView-chunk (11,9 → 14,3 kB gzip) en het dagtype in het
+// celdetail (CapacityView +0,1 kB), buiten de startbundel en buiten beide
+// warmups (index 77,67, chauffeur 77, staf 145: ongewijzigd). Lokaal 721,48;
+// 725 = die meting plus de ±0,5 kB van de runner en ±0,3 % marge.
+const BUDGET_KB = 725;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {

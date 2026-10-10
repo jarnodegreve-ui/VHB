@@ -43,6 +43,10 @@ export type MonthPlanning = {
   drivers: { id: string; name: string; section?: string | null }[];
   /** cells[driverId][date] = { code, kind } — alleen niet-lege cellen */
   cells: Record<string, Record<string, MonthCell>>;
+  /** Per dag het De Lijn-dagtype (10-10): de code (bv. "23"), het volledige
+   *  label ("Woensdag schooldag") en de periode als woord ("schooldag");
+   *  null = onbekend. Ouder cachemateriaal mist dit veld. */
+  dagtypes?: Record<string, { code: string; label: string; periode: string } | null>;
   /** Eerste en laatste dag waarvoor er planning geïmporteerd is; het bord
    *  bladert niet voorbij deze grenzen. null = nog niets geïmporteerd. */
   geimporteerd?: { eerste: string | null; laatste: string | null };

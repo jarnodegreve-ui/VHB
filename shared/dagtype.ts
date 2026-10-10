@@ -47,6 +47,46 @@ export const DAGTYPES: readonly Dagtype[] = [
 
 const LABEL_PER_CODE: Readonly<Record<string, string>> = Object.fromEntries(DAGTYPES.map((d) => [d.code, d.label]));
 
+/** De dagtypes per groep, in de volgorde van de keuzelijst (het scherm). */
+export const DAGTYPE_GROEPEN: ReadonlyArray<{ groep: DagtypeGroep; dagtypes: readonly Dagtype[] }> = (
+  ['Schooldag', 'Schoolvakantie', 'Juli en augustus', 'Examen', 'Weekend en feestdag'] as const
+).map((groep) => ({ groep, dagtypes: DAGTYPES.filter((d) => d.groep === groep) }));
+
+/** Korte vorm voor chips en kolommen: "wo", "za", "zo", "feest"; onbekend = de code. */
+export const dagtypeKort = (code: string): string => {
+  if (code === '26') return 'za';
+  if (code === '27') return 'zo';
+  if (code === '28') return 'feest';
+  const dag = Number(code[1]);
+  return isDagtypeCode(code) && dag >= 1 && dag <= 5 ? WEEKDAG_KORT[dag] : code;
+};
+
+/** De periode van een code als woord, zonder de weekdag: "schooldag",
+ *  "schoolvakantie", "juli-augustus", "examen", "zaterdag", "zondag", "feestdag". */
+export const dagtypePeriode = (code: string): string => {
+  if (!isDagtypeCode(code)) return '';
+  if (code === '26') return 'zaterdag';
+  if (code === '27') return 'zondag';
+  if (code === '28') return 'feestdag';
+  return PERIODES.find((p) => p.cijfer === code[0])?.achtervoegsel ?? '';
+};
+
+/** Korte tekst van een lijstje codes, per periode gegroepeerd: "wo",
+ *  "wo, do", "vakantie ma, di", "examen vr", "za, zo, feest". Schooldagen
+ *  krijgen geen voorvoegsel: dat is de gewone week. */
+export const dagtypesKort = (codes: readonly string[]): string => {
+  const per = new Map<string, string[]>();
+  for (const code of [...codes].sort()) {
+    const periode = code === '26' || code === '27' || code === '28' ? 'weekend' : code[0];
+    per.set(periode, [...(per.get(periode) ?? []), dagtypeKort(code)]);
+  }
+  const VOORVOEGSEL: Record<string, string> = { '2': '', '3': 'vakantie ', '4': 'juli-aug ', '5': 'examen ', weekend: '' };
+  return ['2', '3', '4', '5', 'weekend']
+    .filter((periode) => per.has(periode))
+    .map((periode) => `${VOORVOEGSEL[periode]}${per.get(periode)!.join(', ')}`)
+    .join(' · ');
+};
+
 export const isDagtypeCode = (v: unknown): v is string => typeof v === 'string' && LABEL_PER_CODE[v] !== undefined;
 
 /** "Woensdag schooldag", of "Dagtype 99" voor een onbekende code. */

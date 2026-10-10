@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DAGTYPES, dagtypeLabel, dagtypeVanDag, delenTekst, isDagtypeCode, kalenderUitDekking, tijdenOpDag,
+  DAGTYPE_GROEPEN, DAGTYPES, dagtypeKort, dagtypeLabel, dagtypePeriode, dagtypeVanDag, dagtypesKort, delenTekst, isDagtypeCode, kalenderUitDekking, tijdenOpDag,
   variantTekst, variantenAfdruk, variantenSchoon, variantVoor,
 } from './dagtype';
 
@@ -169,5 +169,23 @@ describe('variantenAfdruk en tekst', () => {
     expect(delenTekst({ startTime: '07:10', endTime: '08:40', startTime2: '12:05', endTime2: '13:10', loopnr2: '4612' })).toBe('07:10–08:40, 12:05–13:10 (loop 4612)');
     expect(variantTekst({ dagtypes: ['23'], startTime: '07:10', endTime: '08:40' })).toBe('Woensdag schooldag: 07:10–08:40');
     expect(variantTekst({ dagtypes: ['31', '32'] })).toBe('Maandag schoolvakantie, Dinsdag schoolvakantie: geen tijden');
+  });
+});
+
+describe('korte vormen voor het scherm', () => {
+  it('groepeert de lijst per periode in de volgorde van de keuzelijst', () => {
+    expect(DAGTYPE_GROEPEN.map((g) => `${g.groep}: ${g.dagtypes.map((d) => d.code).join(',')}`)).toEqual([
+      'Schooldag: 21,22,23,24,25', 'Schoolvakantie: 31,32,33,34,35', 'Juli en augustus: 41,42,43,44,45', 'Examen: 51,52,53,54,55', 'Weekend en feestdag: 26,27,28',
+    ]);
+  });
+
+  it('dagtypeKort, dagtypePeriode en dagtypesKort', () => {
+    expect(['21', '23', '35', '44', '26', '27', '28', '99'].map(dagtypeKort)).toEqual(['ma', 'wo', 'vr', 'do', 'za', 'zo', 'feest', '99']);
+    expect(['23', '33', '43', '53', '26', '27', '28', 'x'].map(dagtypePeriode)).toEqual(['schooldag', 'schoolvakantie', 'juli-augustus', 'examen', 'zaterdag', 'zondag', 'feestdag', '']);
+    expect(dagtypesKort(['23'])).toBe('wo');
+    expect(dagtypesKort(['24', '23'])).toBe('wo, do');
+    expect(dagtypesKort(['31', '32', '23'])).toBe('wo · vakantie ma, di');
+    expect(dagtypesKort(['55', '28', '26'])).toBe('examen vr · za, feest');
+    expect(dagtypesKort([])).toBe('');
   });
 });
