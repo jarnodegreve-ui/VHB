@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Clock } from 'lucide-react';
 import type { Service } from '../../types';
 import { EmptyState } from '../ui';
-import { Button, MicroLabel } from '../primitives';
+import { Button, Chip, MicroLabel } from '../primitives';
+import { dagtypesKort, delenTekst, variantTekst, variantenSchoon } from '../../../shared/dagtype';
 import { CelKnop, SortTh, StickyThead, TableToolbar, rijKlik, useSort, useTabelVoorkeur } from '../Table';
 import { Tabel, TableShell, Td, Th } from '../TabelBasis';
 import { LegeLijst, NietGevonden } from '../illustraties';
@@ -52,6 +53,18 @@ export function DienstTabel({ services, lijst, rijActies, onKies, gekozenId, lee
   const nummer = (s: Service, className?: string) => onKies
     ? <CelKnop onClick={() => onKies(s)} label={`Dienst ${s.serviceNumber} openen`} className={className}>{s.serviceNumber}</CelKnop>
     : <span className={className}>{s.serviceNumber}</span>;
+  // Afwijkingen per dagtype (10-10): in de tabel een chip per afwijking naast
+  // het nummer ("wo"), de volledige tekst als title; de kaart schrijft ze uit.
+  const afwijkingChips = (s: Service) => (variantenSchoon(s.varianten) ?? []).map((v, i) => (
+    <Chip key={i} mono={false} title={variantTekst(v)}>
+      {dagtypesKort(v.dagtypes)}<span className="sr-only">: {delenTekst(v)}</span>
+    </Chip>
+  ));
+  // Nummer en chips op één regel (de celknop is een blok; zonder flex zakte de chip eronder).
+  const nummerMetChips = (s: Service) => {
+    const chips = afwijkingChips(s);
+    return chips.length > 0 ? <span className="inline-flex items-center gap-1.5">{nummer(s)}{chips}</span> : nummer(s);
+  };
 
   return (
     // Acht kolommen hebben voorrang op het zijvak: op een laptop staat het
@@ -110,7 +123,7 @@ export function DienstTabel({ services, lijst, rijActies, onKies, gekozenId, lee
                       >
                         {/* px-3 i.p.v. px-4: acht kolommen moeten vanaf 42rem
                             naast elkaar passen. Nummers en tijdvakken breken nooit af. */}
-                        <Td nowrap className="px-3 font-semibold text-slate-800">{nummer(s)}</Td>
+                        <Td nowrap className="px-3 font-semibold text-slate-800">{nummerMetChips(s)}</Td>
                         <Td nowrap className="px-3 font-semibold text-slate-700">{s.loopnr || leeg}</Td>
                         <Td nowrap className="px-3">{tijdvak(s.startTime, s.endTime)}</Td>
                         <Td nowrap className="px-3 font-semibold text-slate-700">{deel2 && s.loopnr2 ? s.loopnr2 : leeg}</Td>
@@ -151,6 +164,16 @@ export function DienstTabel({ services, lijst, rijActies, onKies, gekozenId, lee
                     </div>
                   ))}
                 </div>
+                {(variantenSchoon(s.varianten) ?? []).length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <MicroLabel>Anders op</MicroLabel>
+                    {(variantenSchoon(s.varianten) ?? []).map((v, i) => (
+                      <div key={i} className="text-sm text-slate-700 tabular-nums">
+                        <span className="font-semibold">{dagtypesKort(v.dagtypes)}</span> · {delenTekst(v)}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -1,5 +1,6 @@
 import type { Service } from '../../types';
 import { normalizeTimeString } from '../../lib/shiftTime';
+import { variantenSchoon } from '../../../shared/dagtype';
 
 /**
  * Rijen uit het Excel-dienstoverzicht (xlsx `sheet_to_json`, één object per
@@ -71,4 +72,41 @@ export function dienstenUitRijen(rijen: Record<string, unknown>[], nu = Date.now
       loopnr3: tekst(loopnr3),
     };
   }).filter((s) => s.serviceNumber);
+}
+
+const nummerSleutel = (nummer: unknown): string => String(nummer ?? '').trim().toLowerCase();
+
+/**
+ * De Excel van De Lijn kent geen afwijkingen per dagtype (10-10). Een import
+ * vervangt de hele lijst, dus zonder deze stap waren de afwijkingen na elke
+ * import weg. Diensten uit het bestand met hetzelfde nummer als een dienst
+ * van nu nemen háár afwijkingen over; diensten mét afwijkingen die niet in
+ * het bestand staan, verdwijnen wél (de bevestiging zegt welke).
+ */
+export function neemVariantenOver(geimporteerd: Service[], huidig: Service[]): {
+  diensten: Service[];
+  /** Hoeveel diensten hun afwijkingen meekregen. */
+  overgenomen: number;
+  /** Dienstnummers met afwijkingen die niet in het bestand staan. */
+  nietInBestand: string[];
+} {
+  const metVarianten = new Map<string, NonNullable<Service['varianten']>>();
+  for (const s of huidig) {
+    const v = variantenSchoon(s.varianten);
+    if (v) metVarianten.set(nummerSleutel(s.serviceNumber), v);
+  }
+  let overgenomen = 0;
+  const inBestand = new Set<string>();
+  const diensten = geimporteerd.map((s) => {
+    const k = nummerSleutel(s.serviceNumber);
+    inBestand.add(k);
+    const v = metVarianten.get(k);
+    if (!v) return s;
+    overgenomen += 1;
+    return { ...s, varianten: v.map((x) => ({ ...x, dagtypes: [...x.dagtypes] })) };
+  });
+  const nietInBestand = huidig
+    .filter((s) => metVarianten.has(nummerSleutel(s.serviceNumber)) && !inBestand.has(nummerSleutel(s.serviceNumber)))
+    .map((s) => s.serviceNumber.trim());
+  return { diensten, overgenomen, nietInBestand };
 }

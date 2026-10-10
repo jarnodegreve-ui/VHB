@@ -391,7 +391,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           sinds 09-10 in src/components/maandplanning/. Het celdetail krijgt
           wat de twee hooks teruggeven, plus wat alleen de view weet. */}
       <CelDetailModal
-        cel={{ ...cel, vuil: celVuil, canEditNotes }}
+        cel={{ ...cel, vuil: celVuil, canEditNotes, dagtype: selected ? (data?.dagtypes?.[selected.iso] ?? extraData?.dagtypes?.[selected.iso])?.periode : undefined }}
         wissel={{ ...wissel, isAdmin, drivers, cells, werkdagenPerChauffeur }}
       />
 

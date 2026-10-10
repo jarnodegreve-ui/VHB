@@ -22,7 +22,9 @@ import { ROOSTER_MELDING_RUST_MINUTEN } from '../../shared/roosterMelding';
 import { vandaagBrussel } from '../lib/brussel';
 import { formatDatumDMJ } from '../lib/format';
 import { DienstTabel, DienstZijvak, useDienstLijst } from '../components/dienstoverzicht/DienstTabel';
-import { dienstenUitRijen } from '../components/dienstoverzicht/dienstImport';
+import { dienstenUitRijen, neemVariantenOver } from '../components/dienstoverzicht/dienstImport';
+import { DienstVariantenVelden } from '../components/dienstoverzicht/DienstVariantenVelden';
+import { tijdenUitFormulier, valideerVarianten, variantenNaarFormulier, type VariantFormulier } from '../components/dienstoverzicht/dienstVarianten';
 import { useDienstregelingen } from '../components/dienstoverzicht/useDienstregelingen';
 import { VersieBalk } from '../components/dienstoverzicht/VersieBalk';
 import { VersieFormulier } from '../components/dienstoverzicht/VersieFormulier';
@@ -38,6 +40,8 @@ const LEEG_FORMULIER = {
   serviceNumber: '', startTime: '', endTime: '',
   startTime2: '', endTime2: '', startTime3: '', endTime3: '',
   loopnr: '', loopnr2: '', loopnr3: '',
+  /** Afwijkingen per dagtype (10-10), in formuliervorm. */
+  varianten: [] as VariantFormulier[],
 };
 type DienstFormulierData = typeof LEEG_FORMULIER;
 
@@ -52,6 +56,7 @@ const formulierVan = (s: Service): DienstFormulierData => ({
   loopnr: s.loopnr || '',
   loopnr2: s.loopnr2 || '',
   loopnr3: s.loopnr3 || '',
+  varianten: variantenNaarFormulier(s.varianten),
 });
 
 const TIJD_TITEL = 'UU:MM, na middernacht als 24:00+ (bv. 26:16)';
@@ -119,6 +124,9 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
   const [historyService, setHistoryService] = useState<Service | null>(null);
   const [teVerwijderen, setTeVerwijderen] = useState<Service | null>(null);
   const [pendingImportedServices, setPendingImportedServices] = useState<Service[] | null>(null);
+  // Wat de import met de afwijkingen per dagtype doet (10-10): overgenomen
+  // voor dezelfde nummers, en welke diensten mét afwijkingen verdwijnen.
+  const [importAfwijkingen, setImportAfwijkingen] = useState<{ overgenomen: number; nietInBestand: string[] } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   // Verborgen file-input voor de Excel-import; het "…"-menu in de kop klikt hem aan.
   const importRef = useRef<HTMLInputElement>(null);
@@ -198,8 +206,13 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
           return;
         }
         const geimporteerd = dienstenUitRijen(jsonData);
-        if (geimporteerd.length > 0) setPendingImportedServices(geimporteerd);
-        else notify('Geen geldige diensten gevonden in het bestand. Controleer de kolommen Dienst, Start en Eind.', 'error');
+        if (geimporteerd.length > 0) {
+          // De Excel van De Lijn kent geen afwijkingen per dagtype: die van de
+          // diensten van nu reizen mee op dienstnummer (neemVariantenOver).
+          const { diensten, overgenomen, nietInBestand } = neemVariantenOver(geimporteerd, services);
+          setImportAfwijkingen({ overgenomen, nietInBestand });
+          setPendingImportedServices(diensten);
+        } else notify('Geen geldige diensten gevonden in het bestand. Controleer de kolommen Dienst, Start en Eind.', 'error');
       } catch (error) {
         console.error('Error parsing Excel:', error);
         notify('Het Excel-bestand kon niet verwerkt worden. Controleer of het een geldig Excel-bestand is.', 'error');
@@ -237,10 +250,16 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
         }
         cleaned[f] = normalizeTimeString(raw);
       }
+      // De afwijkingen per dagtype (10-10): zelfde tijdregels, elke fout bij
+      // haar veld; opgeslagen als volledige set per afwijking, leeg = geen.
+      const controle = valideerVarianten(cleaned.varianten);
+      if (!controle.ok) { fouten.zet(controle.fouten); return; }
       fouten.wis();
+      const { varianten: _formulier, ...velden } = cleaned;
+      const record = { ...velden, varianten: controle.varianten };
       const next = bewerkte && !nieuw
-        ? services.map((s) => (s.id === bewerkte.id ? { ...s, ...cleaned } : s))
-        : [...services, { id: Date.now().toString(), ...cleaned }];
+        ? services.map((s) => (s.id === bewerkte.id ? { ...s, ...record } : s))
+        : [...services, { id: Date.now().toString(), ...record }];
       const ok = await opslaan(next);
       if (ok === false) return;
       sluitPaneel();
@@ -269,6 +288,7 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
     if (!pendingImportedServices) return;
     // Bewuste volledige vervanging (bevestigd in de dialoog): meld dat aan
     // de server zodat de bulk-wipe-vangrail niet blokkeert.
+    setImportAfwijkingen(null);
     return Promise.resolve(opslaan(pendingImportedServices, { bulkReplace: true }));
   };
 
@@ -286,7 +306,7 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
     />
   );
 
-  const tijdVeld = (veld: keyof DienstFormulierData, id: string, label: string, opts: { verplicht?: boolean; placeholder: string }) => (
+  const tijdVeld = (veld: Exclude<keyof DienstFormulierData, 'varianten'>, id: string, label: string, opts: { verplicht?: boolean; placeholder: string }) => (
     <Field label={label} htmlFor={id} error={fouten.fouten[veld]}>
       <Input
         id={id}
@@ -417,16 +437,28 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
             {tijdVeld('endTime3', 'dienst-eind3', 'Eindtijd (deel 3)', { placeholder: '—' })}
             {loopVeld('loopnr3', 'dienst-loop3', 'Loopnummer (deel 3)')}
           </div>
+          <DienstVariantenVelden
+            varianten={formData.varianten}
+            basis={tijdenUitFormulier(formData)}
+            onChange={(varianten) => setFormData({ ...formData, varianten })}
+            fouten={fouten.fouten}
+            wisVeld={fouten.wisVeld}
+            disabled={alleenLezen}
+          />
           </fieldset>
         </Formulier>
       </SlideOver>
 
       <ConfirmationModal
         open={!!pendingImportedServices}
-        onClose={() => setPendingImportedServices(null)}
+        onClose={() => { setPendingImportedServices(null); setImportAfwijkingen(null); }}
         onConfirm={handleConfirmImport}
         title="Diensten importeren"
-        message={`Er zijn ${pendingImportedServices?.length ?? 0} diensten gevonden. ${andereVersie ? `De lijst van versie ${versieLabel(andereVersie)}` : 'De huidige lijst'} wordt vervangen door deze import.`}
+        message={[
+          `Er zijn ${pendingImportedServices?.length ?? 0} diensten gevonden. ${andereVersie ? `De lijst van versie ${versieLabel(andereVersie)}` : 'De huidige lijst'} wordt vervangen door deze import.`,
+          importAfwijkingen && importAfwijkingen.overgenomen > 0 ? `${importAfwijkingen.overgenomen === 1 ? 'Eén dienst houdt haar' : `${importAfwijkingen.overgenomen} diensten houden hun`} afwijkingen per dagtype.` : '',
+          importAfwijkingen && importAfwijkingen.nietInBestand.length > 0 ? `Let op: ${importAfwijkingen.nietInBestand.join(', ')} ${importAfwijkingen.nietInBestand.length === 1 ? 'heeft' : 'hebben'} afwijkingen per dagtype maar ${importAfwijkingen.nietInBestand.length === 1 ? 'staat' : 'staan'} niet in het bestand en ${importAfwijkingen.nietInBestand.length === 1 ? 'verdwijnt' : 'verdwijnen'}.` : '',
+        ].filter(Boolean).join(' ')}
         confirmText="Importeren"
         variant="warning"
       />

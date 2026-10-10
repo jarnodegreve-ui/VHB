@@ -161,6 +161,50 @@ test.describe('paneel en navigatie', () => {
   });
 });
 
+test.describe('afwijkingen per dagtype (10-10)', () => {
+  test('een afwijking toevoegen: dagtype kiezen, deel 2 aanpassen, opslaan stuurt varianten mee en de tabel toont de chip', async ({ page }) => {
+    await openScherm(page, ADMIN, '/beheer/dienstoverzicht/3');
+    const p = paneel(page, '2515');
+    await p.getByRole('button', { name: 'Afwijking toevoegen' }).click();
+    const blok = p.getByRole('group', { name: 'Afwijking 1' });
+    await expect(blok).toBeVisible();
+    // Vooraf gevuld met de gewone tijden van de dienst.
+    await expect(blok.getByLabel('Starttijd (deel 1)', { exact: true })).toHaveValue('07:08');
+    // Zonder dagtype weigert het formulier, met de fout bij de keuzelijst.
+    await p.getByRole('button', { name: 'Dienst bijwerken' }).click();
+    await expect(blok.getByRole('alert')).toHaveText(/minstens één dagtype/);
+    await blok.getByRole('button', { name: 'Woensdag schooldag', exact: true }).click();
+    await expect(blok.getByRole('button', { name: 'Woensdag schooldag', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(blok.getByRole('alert')).toHaveCount(0);
+    await blok.getByLabel('Starttijd (deel 2)', { exact: true }).fill('12:00');
+    await blok.getByLabel('Eindtijd (deel 2)', { exact: true }).fill('14:00');
+    const opslaan = await houdOpslaanVast(page);
+    const verzoek = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/services' && r.method() === 'POST');
+    await p.getByRole('button', { name: 'Dienst bijwerken' }).click();
+    const body = (await verzoek).postDataJSON() as Array<Record<string, unknown>>;
+    const dienst = body.find((d) => d.serviceNumber === '2515')!;
+    expect(dienst.varianten).toEqual([{ dagtypes: ['23'], startTime: '07:08', endTime: '08:34', loopnr: '4505', startTime2: '12:00', endTime2: '14:00', loopnr2: '4510', startTime3: '24:10', endTime3: '25:10', loopnr3: '4515' }]);
+    opslaan.geef({ status: 200, body: { ok: true } });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // Tabel (breed): de chip met de volledige tekst als title; kaart (smal): uitgeschreven onder "Anders op".
+    await expect(page.getByTitle(/^Woensdag schooldag: 07:08–08:34/).or(page.getByText(/^wo · 07:08–08:34/)).filter({ visible: true }).first()).toBeVisible();
+  });
+
+  test('een tweede afwijking kan hetzelfde dagtype niet kiezen; verwijderen geeft het weer vrij', async ({ page }) => {
+    await openScherm(page, ADMIN, '/beheer/dienstoverzicht/3');
+    const p = paneel(page, '2515');
+    await p.getByRole('button', { name: 'Afwijking toevoegen' }).click();
+    await p.getByRole('group', { name: 'Afwijking 1' }).getByRole('button', { name: 'Woensdag schooldag', exact: true }).click();
+    await p.getByRole('button', { name: 'Afwijking toevoegen' }).click();
+    const tweede = p.getByRole('group', { name: 'Afwijking 2' });
+    await expect(tweede.getByRole('button', { name: 'Woensdag schooldag', exact: true })).toBeDisabled();
+    await expect(tweede.getByRole('button', { name: 'Donderdag schooldag', exact: true })).toBeEnabled();
+    await p.getByRole('button', { name: 'Afwijking 1 verwijderen' }).click();
+    await expect(p.getByRole('group', { name: 'Afwijking 2' })).toHaveCount(0);
+    await expect(p.getByRole('group', { name: 'Afwijking 1' }).getByRole('button', { name: 'Woensdag schooldag', exact: true })).toBeEnabled();
+  });
+});
+
 test.describe('rechten per rol', () => {
   test('planner: Nieuwe dienst, Bewerken en geschiedenis; geen Excel-import en geen Verwijderen', async ({ page }) => {
     await openScherm(page, PLANNER);

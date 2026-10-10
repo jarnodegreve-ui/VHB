@@ -28,6 +28,8 @@ type Props = {
     /** Onbewaarde notitie of begonnen wissel: sluiten vraagt eerst bevestiging. */
     vuil: boolean;
     canEditNotes: boolean;
+    /** Het dagtype van de gekozen dag als woord ("schooldag", "schoolvakantie"), van de server; leeg = onbekend. */
+    dagtype?: string;
   };
   wissel: Dienstwissel & {
     isAdmin: boolean;
@@ -38,7 +40,7 @@ type Props = {
 };
 
 export function CelDetailModal({ cel, wissel }: Props) {
-  const { selected, sluit: onClose, vuil, canEditNotes, notes, noteDraft, setNoteDraft, isSavingNote, saveNote } = cel;
+  const { selected, sluit: onClose, vuil, canEditNotes, dagtype, notes, noteDraft, setNoteDraft, isSavingNote, saveNote } = cel;
   const {
     isAdmin, terugdraaien, setTerugdraaien, isTerugdraaien, uitvoerenTerugdraai,
     wisselDienst, wisselNaAfwezigheid, wisselNaar, setWisselNaar, wisselReden, setWisselReden,
@@ -52,7 +54,9 @@ export function CelDetailModal({ cel, wissel }: Props) {
         {selected && (
           <>
           <ModalHeader
-            eyebrow={formatDayLong(selected.iso)}
+            // Het dagtype erbij (10-10): een dienst met een afwijking per dagtype
+            // toont hieronder de uren van déze dag, en dit zegt waarom.
+            eyebrow={dagtype ? `${formatDayLong(selected.iso)} · ${dagtype}` : formatDayLong(selected.iso)}
             title={selected.driverName}
             onClose={onClose}
           />

@@ -33,6 +33,8 @@ type Maandbord = {
   dates: string[];
   cells: Record<string, Record<string, unknown>>;
   geimporteerd?: { eerste: string | null; laatste: string | null } | null;
+  /** Het dagtype per dag (10-10); volgt dezelfde grens als `dates`. */
+  dagtypes?: Record<string, unknown>;
 };
 
 /**
@@ -53,10 +55,13 @@ export function begrensMaandbord<T extends Maandbord>(bord: T, vanaf: string): T
     if (zichtbaar.length > 0) cells[chauffeur] = Object.fromEntries(zichtbaar);
   }
   const eerste = bord.geimporteerd?.eerste ?? null;
+  // Het dagtype per dag (10-10) volgt dezelfde grens als de dagen zelf.
+  const dagtypes = bord.dagtypes ? Object.fromEntries(Object.entries(bord.dagtypes).filter(([dag]) => dag >= vanaf)) : undefined;
   return {
     ...bord,
     dates: bord.dates.filter((dag) => dag >= vanaf),
     cells: cells as T['cells'],
+    ...(dagtypes ? { dagtypes } : {}),
     ...(bord.geimporteerd ? { geimporteerd: { ...bord.geimporteerd, eerste: eerste && eerste < vanaf ? vanaf : eerste } } : {}),
     zichtbaarVanaf: vanaf,
   };

@@ -939,7 +939,7 @@ describe('maandplanning, wie geen staf is kijkt niet verder terug dan de maandag
         expect(res.json.dates).toEqual(dagenIn(m));
         expect(res.json).not.toHaveProperty('zichtbaarVanaf');
         expect(res.json.geimporteerd).toEqual({ eerste: '2026-08-31', laatste: '2026-11-03' });
-        expect(Object.keys(res.json).sort()).toEqual(['cells', 'dates', 'drivers', 'geimporteerd', 'month']);
+        expect(Object.keys(res.json).sort()).toEqual(['cells', 'dagtypes', 'dates', 'drivers', 'geimporteerd', 'month']);
       }
       const sep = await maand('2026-09', token);
       // De ruil van 14/09 en de ziekte van 27/09 staan er voor staf gewoon in.

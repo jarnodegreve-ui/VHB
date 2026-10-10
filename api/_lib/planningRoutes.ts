@@ -28,7 +28,7 @@ import { ruilAfwezigheidsFout } from "./ruilRegels.js";
 import { afwezigheidsReden, vrijOpBord } from "../../shared/bordBezetting.js";
 import { begrensMaandbord, eersteZichtbareDag } from "../../shared/maandplanningTerugblik.js";
 import { bordCellenVoor, bordVanDag } from "./codeDienst.js";
-import { dagtypeVanDag } from "../../shared/dagtype.js";
+import { dagtypeLabel, dagtypePeriode, dagtypeVanDag } from "../../shared/dagtype.js";
 import { dubbeleInplanningen, onbekendeCodeFout } from "./dubbeleInplanning.js";
 import { planningTijdFout } from "./planningTijden.js";
 
@@ -559,6 +559,12 @@ export function mountPlanningRoutes(app: express.Express) {
         dates,
         drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name, section: c.section || null })),
         cells,
+        // Het De Lijn-dagtype per dag (10-10), al met label en periode zodat
+        // het celdetail geen eigen lijst hoeft mee te laden.
+        dagtypes: Object.fromEntries(dates.map((d) => {
+          const code = dagtypes[d];
+          return [d, code ? { code, label: dagtypeLabel(code), periode: dagtypePeriode(code) } : null];
+        })),
         geimporteerd: grenzen,
       };
       // Terugblik (Jarno 02-10): wie geen staf is ziet het bord vanaf de
