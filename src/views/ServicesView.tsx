@@ -24,7 +24,7 @@ import { formatDatumDMJ } from '../lib/format';
 import { DienstTabel, DienstZijvak, useDienstLijst } from '../components/dienstoverzicht/DienstTabel';
 import { dienstenUitRijen, neemVariantenOver } from '../components/dienstoverzicht/dienstImport';
 import { DienstVariantenVelden } from '../components/dienstoverzicht/DienstVariantenVelden';
-import { tijdenUitFormulier, valideerVarianten, variantenNaarFormulier, type VariantFormulier } from '../components/dienstoverzicht/dienstVarianten';
+import { TIJD_TITEL, tijdFout, tijdenUitFormulier, valideerVarianten, variantenNaarFormulier, type VariantFormulier } from '../components/dienstoverzicht/dienstVarianten';
 import { useDienstregelingen } from '../components/dienstoverzicht/useDienstregelingen';
 import { VersieBalk } from '../components/dienstoverzicht/VersieBalk';
 import { VersieFormulier } from '../components/dienstoverzicht/VersieFormulier';
@@ -45,6 +45,12 @@ const LEEG_FORMULIER = {
 };
 type DienstFormulierData = typeof LEEG_FORMULIER;
 
+/** "dienst 12", "diensten 12 en 15", "diensten 12, 15 en 17". */
+const dienstenZin = (nummers: string[]): string => {
+  if (nummers.length === 1) return `dienst ${nummers[0]}`;
+  return `diensten ${nummers.slice(0, -1).join(', ')} en ${nummers[nummers.length - 1]}`;
+};
+
 const formulierVan = (s: Service): DienstFormulierData => ({
   serviceNumber: s.serviceNumber,
   startTime: s.startTime,
@@ -59,7 +65,6 @@ const formulierVan = (s: Service): DienstFormulierData => ({
   varianten: variantenNaarFormulier(s.varianten),
 });
 
-const TIJD_TITEL = 'UU:MM, na middernacht als 24:00+ (bv. 26:16)';
 
 /**
  * Het Dienstoverzicht (3D, 23-09): één scherm voor planner en admin, op
@@ -126,7 +131,7 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
   const [pendingImportedServices, setPendingImportedServices] = useState<Service[] | null>(null);
   // Wat de import met de afwijkingen per dagtype doet (10-10): overgenomen
   // voor dezelfde nummers, en welke diensten mét afwijkingen verdwijnen.
-  const [importAfwijkingen, setImportAfwijkingen] = useState<{ overgenomen: number; nietInBestand: string[] } | null>(null);
+  const [importAfwijkingen, setImportAfwijkingen] = useState<{ overgenomen: number; tijdenGewijzigd: string[]; nietInBestand: string[] } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   // Verborgen file-input voor de Excel-import; het "…"-menu in de kop klikt hem aan.
   const importRef = useRef<HTMLInputElement>(null);
@@ -209,8 +214,8 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
         if (geimporteerd.length > 0) {
           // De Excel van De Lijn kent geen afwijkingen per dagtype: die van de
           // diensten van nu reizen mee op dienstnummer (neemVariantenOver).
-          const { diensten, overgenomen, nietInBestand } = neemVariantenOver(geimporteerd, services);
-          setImportAfwijkingen({ overgenomen, nietInBestand });
+          const { diensten, overgenomen, tijdenGewijzigd, nietInBestand } = neemVariantenOver(geimporteerd, services);
+          setImportAfwijkingen({ overgenomen, tijdenGewijzigd, nietInBestand });
           setPendingImportedServices(diensten);
         } else notify('Geen geldige diensten gevonden in het bestand. Controleer de kolommen Dienst, Start en Eind.', 'error');
       } catch (error) {
@@ -244,11 +249,14 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
       for (const f of timeFields) {
         const raw = String(cleaned[f] ?? '').trim();
         if (!raw) { cleaned[f] = ''; continue; }
-        if (!isValidBusvakTime(raw)) {
-          fouten.zet({ [f]: `Ongeldige tijd “${raw}”, gebruik UU:MM, na middernacht als 24:00+ (bv. 26:16).` });
+        // Eerst normaliseren ("0630" → "06:30", het iPhone-cijferklavier heeft
+        // geen dubbelpunt; controle-ronde 10-10, punt 1), dan pas toetsen.
+        const tijd = normalizeTimeString(raw);
+        if (!isValidBusvakTime(tijd)) {
+          fouten.zet({ [f]: tijdFout(raw) });
           return;
         }
-        cleaned[f] = normalizeTimeString(raw);
+        cleaned[f] = tijd;
       }
       // De afwijkingen per dagtype (10-10): zelfde tijdregels, elke fout bij
       // haar veld; opgeslagen als volledige set per afwijking, leeg = geen.
@@ -310,7 +318,7 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
     <Field label={label} htmlFor={id} error={fouten.fouten[veld]}>
       <Input
         id={id}
-        type="text" required={opts.verplicht} inputMode="numeric" placeholder={opts.placeholder} pattern="\d{1,2}:\d{2}" title={TIJD_TITEL} value={formData[veld]}
+        type="text" required={opts.verplicht} inputMode="numeric" placeholder={opts.placeholder} pattern="\d{1,2}[:.]?\d{2}" title={TIJD_TITEL} value={formData[veld]}
         onChange={(e) => { setFormData({ ...formData, [veld]: e.target.value }); fouten.wisVeld(veld); }}
         className="tabular-nums"
       />
@@ -454,14 +462,27 @@ export function ServicesView({ services: huidigeServices, onSave, canAdminOverri
         onClose={() => { setPendingImportedServices(null); setImportAfwijkingen(null); }}
         onConfirm={handleConfirmImport}
         title="Diensten importeren"
-        message={[
-          `Er zijn ${pendingImportedServices?.length ?? 0} diensten gevonden. ${andereVersie ? `De lijst van versie ${versieLabel(andereVersie)}` : 'De huidige lijst'} wordt vervangen door deze import.`,
-          importAfwijkingen && importAfwijkingen.overgenomen > 0 ? `${importAfwijkingen.overgenomen === 1 ? 'Eén dienst houdt haar' : `${importAfwijkingen.overgenomen} diensten houden hun`} afwijkingen per dagtype.` : '',
-          importAfwijkingen && importAfwijkingen.nietInBestand.length > 0 ? `Let op: ${importAfwijkingen.nietInBestand.join(', ')} ${importAfwijkingen.nietInBestand.length === 1 ? 'heeft' : 'hebben'} afwijkingen per dagtype maar ${importAfwijkingen.nietInBestand.length === 1 ? 'staat' : 'staan'} niet in het bestand en ${importAfwijkingen.nietInBestand.length === 1 ? 'verdwijnt' : 'verdwijnen'}.` : '',
-        ].filter(Boolean).join(' ')}
+        message={`Er zijn ${pendingImportedServices?.length ?? 0} diensten gevonden. ${andereVersie ? `De lijst van versie ${versieLabel(andereVersie)}` : 'De huidige lijst'} wordt vervangen door deze import.`}
         confirmText="Importeren"
         variant="warning"
-      />
+      >
+        {/* De afwijkingen per dagtype, elk op een eigen regel (controle-ronde 10-10, punten 2 en 8). */}
+        {importAfwijkingen && (importAfwijkingen.overgenomen > 0 || importAfwijkingen.nietInBestand.length > 0) && (
+          <div className="space-y-2 text-body-sm text-slate-600">
+            {importAfwijkingen.overgenomen > 0 && (
+              <p>{importAfwijkingen.overgenomen === 1 ? 'Eén dienst behoudt zijn' : `${importAfwijkingen.overgenomen} diensten behouden hun`} afwijkingen per dagtype.</p>
+            )}
+            {importAfwijkingen.tijdenGewijzigd.length > 0 && (
+              <p>Kijk de afwijkingen van {dienstenZin(importAfwijkingen.tijdenGewijzigd)} daarna na: de gewone tijden veranderen in dit bestand, de afwijkingen niet.</p>
+            )}
+            {importAfwijkingen.nietInBestand.length > 0 && (
+              <p className="font-medium text-amber-700">
+                Let op: {dienstenZin(importAfwijkingen.nietInBestand)} {importAfwijkingen.nietInBestand.length === 1 ? 'heeft' : 'hebben'} afwijkingen per dagtype maar {importAfwijkingen.nietInBestand.length === 1 ? 'staat' : 'staan'} niet in het bestand en {importAfwijkingen.nietInBestand.length === 1 ? 'verdwijnt' : 'verdwijnen'}.
+              </p>
+            )}
+          </div>
+        )}
+      </ConfirmationModal>
 
       <ConfirmationModal
         open={!!teVerwijderen}

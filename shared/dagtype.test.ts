@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DAGTYPE_GROEPEN, DAGTYPES, dagtypeKort, dagtypeLabel, dagtypePeriode, dagtypeVanDag, dagtypesKort, delenTekst, isDagtypeCode, kalenderUitDekking, tijdenOpDag,
-  variantTekst, variantenAfdruk, variantenSchoon, variantVoor,
+  DAGTYPE_GROEPEN, DAGTYPES, KIESBARE_DAGTYPES, dagtypeKort, dagtypeLabel, dagtypePeriode, dagtypeVanDag, dagtypesKort, delenTekst, isDagtypeCode, isKiesbaarDagtype,
+  kalenderUitDekking, normaliseerTijd, tijdenOpDag, variantTekst, variantenAfdruk, variantenSchoon, variantVoor,
 } from './dagtype';
 
 describe('DAGTYPES', () => {
@@ -148,10 +148,16 @@ describe('variantenSchoon', () => {
     expect(variantenSchoon('[]')).toBeUndefined();
   });
 
-  it('een variant zonder één volledig deel is geen afwijking en valt weg (de code blijft vrij voor een volgende)', () => {
+  it('een variant zonder deel 1 is geen afwijking en valt weg (de code blijft vrij voor een volgende)', () => {
     expect(variantenSchoon([{ dagtypes: ['23'] }, { dagtypes: ['23'], startTime: '07:00' }])).toBeUndefined();
-    expect(variantenSchoon([{ dagtypes: ['23'], startTime: '07:00' }, { dagtypes: ['23'], startTime2: '12:00', endTime2: '13:00' }]))
-      .toEqual([{ dagtypes: ['23'], startTime2: '12:00', endTime2: '13:00' }]);
+    expect(variantenSchoon([{ dagtypes: ['23'], startTime2: '12:00', endTime2: '13:00' }, { dagtypes: ['23'], startTime: '07:00', endTime: '08:00' }]))
+      .toEqual([{ dagtypes: ['23'], startTime: '07:00', endTime: '08:00' }]);
+  });
+
+  it('normaliseert tijden, laat wat geen tijd is vallen en begrenst loopnummers (servergrens)', () => {
+    expect(variantenSchoon([{ dagtypes: ['23'], startTime: '630', endTime: '8u30', startTime2: '7h10', endTime2: 'later', loopnr: ' ' + 'x'.repeat(40) }]))
+      .toEqual([{ dagtypes: ['23'], startTime: '06:30', endTime: '08:30', startTime2: '07:10', loopnr: 'x'.repeat(20) }]);
+    expect(variantenSchoon([{ dagtypes: ['23'], startTime: '99:00', endTime: '08:00' }])).toBeUndefined();
   });
 });
 
@@ -187,5 +193,23 @@ describe('korte vormen voor het scherm', () => {
     expect(dagtypesKort(['31', '32', '23'])).toBe('wo · vakantie ma, di');
     expect(dagtypesKort(['55', '28', '26'])).toBe('examen vr · za, feest');
     expect(dagtypesKort([])).toBe('');
+  });
+});
+
+describe('normaliseerTijd', () => {
+  it('aanvaardt UU:MM, U:MM, UUMM, UMM en een punt of u als scheiding, busvak tot 47:59', () => {
+    expect(['06:30', '6:30', '0630', '630', '6.30', '6u30', '26:16', '2616', '47:59'].map(normaliseerTijd))
+      .toEqual(['06:30', '06:30', '06:30', '06:30', '06:30', '06:30', '26:16', '26:16', '47:59']);
+  });
+
+  it('wijst af wat geen tijd is', () => {
+    expect(['', '6', '6:3', '48:00', '12:60', '12345', 'abc', '12:00:00', null, undefined].map(normaliseerTijd)).toEqual(Array(10).fill(null));
+  });
+});
+
+describe('KIESBARE_DAGTYPES', () => {
+  it('bevat alleen wat de dekkingskalender en de weekdag kunnen opleveren', () => {
+    expect([...KIESBARE_DAGTYPES].sort()).toEqual(['21', '22', '23', '24', '25', '26', '27', '31', '32', '33', '34', '35']);
+    expect(['28', '41', '53'].map(isKiesbaarDagtype)).toEqual([false, false, false]);
   });
 });

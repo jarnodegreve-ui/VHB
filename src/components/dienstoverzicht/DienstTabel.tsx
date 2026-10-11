@@ -168,8 +168,8 @@ export function DienstTabel({ services, lijst, rijActies, onKies, gekozenId, lee
                   <div className="flex flex-col gap-1">
                     <MicroLabel>Anders op</MicroLabel>
                     {(variantenSchoon(s.varianten) ?? []).map((v, i) => (
-                      <div key={i} className="text-sm text-slate-700 tabular-nums">
-                        <span className="font-semibold">{dagtypesKort(v.dagtypes)}</span> · {delenTekst(v)}
+                      <div key={i} className="text-sm text-slate-700">
+                        <span className="font-semibold">{dagtypesKort(v.dagtypes)}</span> · <span className="tabular-nums">{delenTekst(v)}</span>
                       </div>
                     ))}
                   </div>

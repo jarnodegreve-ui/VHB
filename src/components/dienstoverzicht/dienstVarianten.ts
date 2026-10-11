@@ -21,6 +21,10 @@ export type VariantFormulier = {
 const TIJD_VELDEN = ['startTime', 'endTime', 'startTime2', 'endTime2', 'startTime3', 'endTime3'] as const;
 const DELEN = [['startTime', 'endTime'], ['startTime2', 'endTime2'], ['startTime3', 'endTime3']] as const;
 
+/** Zelfde zin als het hoofdformulier; "0630" mag sinds 10-10 (iPhone-cijferklavier). */
+export const TIJD_TITEL = 'UU:MM of UUMM, na middernacht als 24:00+ (bv. 26:16)';
+export const tijdFout = (raw: string): string => `Ongeldige tijd “${raw}”, gebruik UU:MM of UUMM, na middernacht als 24:00+ (bv. 26:16).`;
+
 let teller = 0;
 /** Verse sleutel per variant (uniek binnen de sessie). */
 export const verseSleutel = (): string => `v${Date.now().toString(36)}-${(teller += 1)}`;
@@ -83,17 +87,19 @@ export function valideerVarianten(varianten: readonly VariantFormulier[]): Varia
     for (const t of TIJD_VELDEN) {
       const raw = v[t].trim();
       if (!raw) continue;
-      if (!isValidBusvakTime(raw)) { fouten[veld(t)] = `Ongeldige tijd “${raw}”, gebruik UU:MM, na middernacht als 24:00+ (bv. 26:16).`; continue; }
-      tijden[t] = normalizeTimeString(raw);
+      // Eerst normaliseren ("0630" → "06:30"), dan pas toetsen.
+      const tijd = normalizeTimeString(raw);
+      if (!isValidBusvakTime(tijd)) { fouten[veld(t)] = tijdFout(raw); continue; }
+      tijden[t] = tijd;
     }
-    let volledig = 0;
+    // Deel 1 is verplicht, zoals bij een gewone dienst; deel 2 en 3 zijn
+    // compleet of leeg.
     for (const [start, einde] of DELEN) {
       const s = tijden[start]; const e = tijden[einde];
-      if (s && e) volledig += 1;
-      else if (s && !e && !fouten[veld(einde)] && !v[einde].trim()) fouten[veld(einde)] = 'Vul ook de eindtijd in.';
-      else if (e && !s && !fouten[veld(start)] && !v[start].trim()) fouten[veld(start)] = 'Vul ook de starttijd in.';
+      const verplicht = start === 'startTime';
+      if ((s || verplicht) && !e && !fouten[veld(einde)] && !v[einde].trim()) fouten[veld(einde)] = verplicht ? 'Vul de eindtijd van deel 1 in.' : 'Vul ook de eindtijd in.';
+      if ((e || verplicht) && !s && !fouten[veld(start)] && !v[start].trim()) fouten[veld(start)] = verplicht ? 'Vul de starttijd van deel 1 in.' : 'Vul ook de starttijd in.';
     }
-    if (volledig === 0 && !fouten[veld('startTime')] && !fouten[veld('endTime')]) fouten[veld('startTime')] = 'Minstens één deel met een begin- en eindtijd.';
     for (const l of ['loopnr', 'loopnr2', 'loopnr3'] as const) {
       const w = v[l].trim();
       if (w) tijden[l] = w;

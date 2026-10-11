@@ -23,8 +23,8 @@ describe('dienstVarianten', () => {
     expect(variantenNaarFormulier(undefined)).toEqual([]);
   });
 
-  it('normaliseert tijden en laat lege loopnummers weg; zonder varianten is het resultaat undefined', () => {
-    const uit = valideerVarianten([{ ...wo, startTime: '6:30', loopnr2: ' 4612 ' }]);
+  it('normaliseert tijden (ook zonder dubbelpunt) en laat lege loopnummers weg; zonder varianten is het resultaat undefined', () => {
+    const uit = valideerVarianten([{ ...wo, startTime: '6:30', startTime2: '1200', endTime2: '1400', loopnr2: ' 4612 ' }]);
     expect(uit).toEqual({ ok: true, varianten: [{ dagtypes: ['23'], startTime: '06:30', endTime: '08:30', startTime2: '12:00', endTime2: '14:00', loopnr2: '4612' }] });
     expect(valideerVarianten([])).toEqual({ ok: true, varianten: undefined });
   });
@@ -41,9 +41,10 @@ describe('dienstVarianten', () => {
     expect(uit.fouten[variantVeld('a', 'dagtypes')]).toMatch(/minstens één dagtype/);
     expect(uit.fouten[variantVeld('b', 'startTime')]).toMatch(/Ongeldige tijd/);
     expect(uit.fouten[variantVeld('b', 'endTime2')]).toBe('Vul ook de eindtijd in.');
-    expect(uit.fouten[variantVeld('c', 'startTime')]).toMatch(/Minstens één deel/);
+    expect(uit.fouten[variantVeld('c', 'startTime')]).toBe('Vul de starttijd van deel 1 in.');
+    expect(uit.fouten[variantVeld('c', 'endTime')]).toBe('Vul de eindtijd van deel 1 in.');
     expect(uit.fouten[variantVeld('d', 'dagtypes')]).toMatch(/afwijking 2/);
-    expect(Object.keys(uit.fouten)).toHaveLength(5);
+    expect(Object.keys(uit.fouten)).toHaveLength(6);
   });
 
   it('dagtypeInGebruik: per code de eerste afwijking die hem draagt', () => {

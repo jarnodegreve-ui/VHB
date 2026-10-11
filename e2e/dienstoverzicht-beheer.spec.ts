@@ -176,8 +176,9 @@ test.describe('afwijkingen per dagtype (10-10)', () => {
     await blok.getByRole('button', { name: 'Woensdag schooldag', exact: true }).click();
     await expect(blok.getByRole('button', { name: 'Woensdag schooldag', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(blok.getByRole('alert')).toHaveCount(0);
-    await blok.getByLabel('Starttijd (deel 2)', { exact: true }).fill('12:00');
-    await blok.getByLabel('Eindtijd (deel 2)', { exact: true }).fill('14:00');
+    // Zonder dubbelpunt, zoals op het iPhone-cijferklavier: wordt 12:00 en 14:00.
+    await blok.getByLabel('Starttijd (deel 2)', { exact: true }).fill('1200');
+    await blok.getByLabel('Eindtijd (deel 2)', { exact: true }).fill('1400');
     const opslaan = await houdOpslaanVast(page);
     const verzoek = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/services' && r.method() === 'POST');
     await p.getByRole('button', { name: 'Dienst bijwerken' }).click();
@@ -197,8 +198,14 @@ test.describe('afwijkingen per dagtype (10-10)', () => {
     await p.getByRole('group', { name: 'Afwijking 1' }).getByRole('button', { name: 'Woensdag schooldag', exact: true }).click();
     await p.getByRole('button', { name: 'Afwijking toevoegen' }).click();
     const tweede = p.getByRole('group', { name: 'Afwijking 2' });
-    await expect(tweede.getByRole('button', { name: 'Woensdag schooldag', exact: true })).toBeDisabled();
+    // Het nieuwe blok krijgt de focus (en staat dus in beeld), en de bezette chip zegt waarom.
+    await expect(tweede.getByRole('button', { name: 'Maandag schooldag', exact: true })).toBeFocused();
+    await expect(tweede.getByRole('button', { name: 'Woensdag schooldag, al in afwijking 1', exact: true })).toBeDisabled();
+    await expect(tweede.getByText('Grijze dagtypes staan al in een andere afwijking.')).toBeVisible();
     await expect(tweede.getByRole('button', { name: 'Donderdag schooldag', exact: true })).toBeEnabled();
+    // Feestdag, juli-augustus en examen zijn (nog) niet kiesbaar.
+    await expect(tweede.getByRole('button', { name: 'Feestdag', exact: true })).toHaveCount(0);
+    await expect(tweede.getByRole('button', { name: 'Maandag examen', exact: true })).toHaveCount(0);
     await p.getByRole('button', { name: 'Afwijking 1 verwijderen' }).click();
     await expect(p.getByRole('group', { name: 'Afwijking 2' })).toHaveCount(0);
     await expect(p.getByRole('group', { name: 'Afwijking 1' }).getByRole('button', { name: 'Woensdag schooldag', exact: true })).toBeEnabled();
