@@ -5,6 +5,7 @@ import { hoortBijVersie, oudsteVersie, versieVoorDatum } from "../../../shared/d
 import { kalenderUitDekking, variantenSchoon, type DagtypeKalender } from "../../../shared/dagtype.js";
 import { perDagVan } from "../../../shared/dagtypeKalender.js";
 import { getDagtypeKalender } from "./dagtypeKalender.js";
+import { getDagtypeCodes } from "../dienstStorage.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 import { isMissingColumnError } from "./fouten.js";
@@ -336,4 +337,17 @@ export const laadDagtypeKalender = async (): Promise<DagtypeKalender> => {
     }),
   ]);
   return { ...kalenderUitDekking(dekking), perDag: perDagVan(dagen) };
+};
+
+/** De koppeling De Lijn-code → portaal-dagtype uit public.dagtype_codes
+ *  (Dienstopbouw › Dagtypes), waarmee de dekking een code naar een van haar
+ *  lijsten vertaalt (shared/dekkingDagtype.ts, 11-10). Leeg als de tabel er
+ *  niet is of niet leest: dan telt de code zelf. */
+export const laadDekkingCodeKoppeling = async (): Promise<Record<string, string | null>> => {
+  try {
+    return Object.fromEntries((await getDagtypeCodes()).map((c) => [c.code, c.portaalDagtype]));
+  } catch (err) {
+    console.warn("Dagtypecodes niet gelezen, de dekking leest de code zelf:", (err as { message?: unknown })?.message ?? err);
+    return {};
+  }
 };
