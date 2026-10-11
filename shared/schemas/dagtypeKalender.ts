@@ -14,3 +14,8 @@ export const dagtypeKalenderBodySchema = z.object({
 });
 
 export type DagtypeKalenderBody = z.output<typeof dagtypeKalenderBodySchema>;
+
+/** PATCH /api/dagtypekalender/:datum (admin, deel 2, 11-10): één dag met de
+ *  hand bijwerken; de datum staat in het pad, de rest is dezelfde regel. */
+export const dagtypeKalenderDagWijzigingSchema = dagtypeKalenderDagSchema.omit({ datum: true });
+export type DagtypeKalenderDagWijziging = z.output<typeof dagtypeKalenderDagWijzigingSchema>;

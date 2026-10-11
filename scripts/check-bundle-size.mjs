@@ -473,6 +473,16 @@ if (!kaartMatch) {
   // plus ±0,7 kB, zodat de volgende kleine stap niet meteen struikelt.
   WARMUP_BUDGET_KB.chauffeur = 78;
   WARMUP_BUDGET_KB.staf = 146;
+  // 11-10 (dagtypekalender deel 2, "bouw maar"): chauffeur 78 → 78,5 en staf
+  // 146 → 147. Mijn dag toont het dagtype onder de dagkop (useDagtypes in
+  // src/lib/dagtypes.ts, één kleine lezing, ±0,5 kB in de chauffeur-set, lokaal
+  // 77,5) en het bord in de dagkop: een prop `dagtypes` op het raster en de
+  // dagweergave, de markering in de legende en `dagtypeMarkering` in
+  // src/lib/maandplanning.ts, ±0,4 kB in het CapacityView-chunk (staf lokaal
+  // 146,0, precies op het budget). De CI-runner meet ±0,3 kB zwaarder. Geen
+  // nieuwe import. Budget = de meting plus ±0,5 tot 1 kB, zelfde stap als hierboven.
+  WARMUP_BUDGET_KB.chauffeur = 78.5;
+  WARMUP_BUDGET_KB.staf = 147;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

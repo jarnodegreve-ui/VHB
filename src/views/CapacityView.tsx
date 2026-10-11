@@ -17,10 +17,11 @@ import { formatDatumDMJ, hoofdletter, MONTH_NAMES } from '../lib/format';
 import { useRecordParam, useRouteParam } from '../app/router';
 import { eersteZichtbareDag } from '../../shared/maandplanningTerugblik';
 import {
-  berekenCodeLegend, bouwDagRijen, groepeerPerSectie, maandNaarParam, maandUitParam, monthOf, noteKey,
+  berekenCodeLegend, bouwDagRijen, dagtypeMarkering, groepeerPerSectie, maandNaarParam, maandUitParam, monthOf, noteKey,
   voegCellenSamen, voegChauffeursSamen, werkdagenUitCellen, WISSEL_REDENEN, wisselOverzichtSortering,
   type MaandOverzicht, type OverzichtRij, type OverzichtSortering,
 } from '../lib/maandplanning';
+import { typedagLabel } from '../lib/typedag';
 import { DesktopRaster } from '../components/maandplanning/DesktopRaster';
 import { Legende } from '../components/maandplanning/Legende';
 import { CelDetailModal } from '../components/maandplanning/CelDetailModal';
@@ -269,6 +270,19 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // Legende: de codes die in de héle maand voorkomen, elk met hun betekenis,
   // data-gedreven uit de cellen (berekenCodeLegend in src/lib/maandplanning.ts).
   const codeLegend = useMemo(() => berekenCodeLegend(cells), [cells]);
+  // Het De Lijn-dagtype per dag (deel 2, 11-10): de hoofdmaand wint van de
+  // extra maand; de legende noemt alleen de markeringen die in de geladen
+  // dagen voorkomen, plus de F van een wettelijke feestdag in het venster.
+  const dagtypes = useMemo(() => ({ ...(extraData?.dagtypes ?? {}), ...(data?.dagtypes ?? {}) }), [data, extraData]);
+  const dagtypeMarkeringen = useMemo(() => {
+    const per = new Map<string, { letter: string; naam: string }>();
+    for (const info of Object.values(dagtypes)) {
+      const m = dagtypeMarkering(info?.code);
+      if (m) per.set(m.letter, m);
+    }
+    if (!per.has('F') && dates.some((iso) => typedagLabel(iso)?.kort === 'F')) per.set('F', { letter: 'F', naam: 'Feestdag' });
+    return ['V', 'E', 'F'].flatMap((l) => (per.has(l) ? [per.get(l)!] : []));
+  }, [dagtypes, dates]);
 
   // Tik op een cel (desktopraster of daglijst): het detailvenster open, met
   // de bestaande notitie van die chauffeur en dag als concept (useCelDetail).
@@ -371,6 +385,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             cells={cells}
             ownId={ownId}
             notes={cel.notes}
+            dagtypes={dagtypes}
             onCel={onCel}
           />
 
@@ -378,12 +393,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               één kolom), sinds 09-10 in src/components/maandplanning/DagWeergave.tsx.
               De cel-modal met details/notitie/dienstwissel blijft dezelfde. */}
           <DagWeergave
-            dag={{ dates, mobielDag, todayIso, dagRijen, showSections, ownId, notes: cel.notes, zoekTerm, toonRust, year, monthIndex, kanMaandTerug, kanMaandVooruit, beginUitleg, laatsteDag, heeftAandacht: aandachtDagen.length > 0 }}
+            dag={{ dates, mobielDag, todayIso, dagRijen, showSections, ownId, notes: cel.notes, zoekTerm, toonRust, year, monthIndex, kanMaandTerug, kanMaandVooruit, beginUitleg, laatsteDag, heeftAandacht: aandachtDagen.length > 0, dagtypes }}
             acties={{ kiesDag, springNaarAandacht, setViewMonth, setToonRust, onCel }}
           />
 
           {/* Legende: codes en markeringen van deze maand (src/components/maandplanning/Legende.tsx). */}
-          <Legende legend={codeLegend} />
+          <Legende legend={codeLegend} markeringen={dagtypeMarkeringen} />
         </>
       )}
 
