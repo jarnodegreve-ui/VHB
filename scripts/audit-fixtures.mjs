@@ -448,6 +448,20 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/ritblaadje')) return json(null);
     if (p.endsWith('/api/filmnummers')) return json(FILMNUMMERS);
     if (p.endsWith('/api/dagtypekalender')) return json(DAGTYPEKALENDER);
+    // Dagtype per dag voor Mijn dag (deel 2, 11-10): weekdag = schooldag, weekend = zaterdag/zondag.
+    if (p.endsWith('/api/dagtypes')) {
+      const van = url.searchParams.get('van') || '2026-10-12';
+      const tot = url.searchParams.get('tot') || van;
+      const NAAM = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
+      const dagtypes = {};
+      for (let d = new Date(`${van}T00:00:00Z`); d.toISOString().slice(0, 10) <= tot; d.setUTCDate(d.getUTCDate() + 1)) {
+        const iso = d.toISOString().slice(0, 10);
+        const dow = d.getUTCDay();
+        const code = dow === 0 ? '27' : dow === 6 ? '26' : `2${dow}`;
+        dagtypes[iso] = { code, label: dow === 0 || dow === 6 ? NAAM[dow] : `${NAAM[dow]} schooldag`, periode: dow === 0 ? 'zondag' : dow === 6 ? 'zaterdag' : 'schooldag', bron: 'kalender' };
+      }
+      return json({ van, tot, dagtypes });
+    }
     // Techniek (13-09): voertuigen, gele boek, werkprestaties, vervaldata.
     if (p.endsWith('/werken') && p.includes('/api/vehicles/')) {
       const id = p.split('/api/vehicles/')[1].split('/')[0];

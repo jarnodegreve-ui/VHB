@@ -7,7 +7,7 @@ import { typedagLabel } from '../../lib/typedag';
 import { formatDayLong, MONTH_NAMES } from '../../lib/format';
 import { celTextClass } from '../../lib/planningKind';
 import type { MonthCell } from '../../lib/monthPlanning';
-import { celTitel, dayHeader, noteKey, sectieLabel, type Cellen, type Chauffeur, type Sectie } from '../../lib/maandplanning';
+import { celTitel, dagtypeMarkering, dayHeader, noteKey, sectieLabel, type Cellen, type Chauffeur, type Sectie } from '../../lib/maandplanning';
 import { SECTIE_BAND, SECTIE_KOP, SECTIE_STREEP } from './sectiekop';
 
 /**
@@ -27,10 +27,12 @@ type Props = {
   /** Id van de ingelogde gebruiker: zijn rij krijgt stip en vet. */
   ownId: string;
   notes: Map<string, string>;
+  /** Het De Lijn-dagtype per dag uit GET /api/month-planning (deel 2, 11-10); ontbreekt in ouder cachemateriaal. */
+  dagtypes?: Record<string, { code: string; label: string; periode: string } | null>;
   onCel: (drv: Chauffeur, iso: string, cell: MonthCell) => void;
 };
 
-export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSections, cells, ownId, notes, onCel }: Props) {
+export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSections, cells, ownId, notes, dagtypes, onCel }: Props) {
   return (
     /* .mp-*-klassen (weekend-arcering, opake sticky-cellen) staan in
        index.css bij de andere component-klassen. */
@@ -52,15 +54,21 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
             {visibleDates.map((iso) => {
               const h = dayHeader(iso);
               const today = iso === todayIso;
-              // De Lijn-typedag, alleen nog de feestdag (F, carbon vet):
-              // die bepaalt welke dienstregeling rijdt. Een typedag is
-              // informatie, geen status en geen "nu": neutraal, geen
-              // goud (tranche 3B, 23-09). Goud blijft hier alleen voor
-              // vandaag (= "nu") en de sectiestreep (Jarno 08-09). De V van
-              // schoolvakantie is eruit op vraag van Jarno (17-09),
-              // die zegt niets over wie er rijdt.
+              // Het De Lijn-dagtype (deel 2, 11-10, keuze Jarno): V, E of F
+              // onder de dag, uit de matrixcode of de dagtypekalender, want
+              // dat bepaalt welke tijden een dienst rijdt. De wettelijke
+              // feestdag uit de eigen kalender blijft een F, ook als de
+              // dekking die dag "zondag" noemt. Een dagtype is informatie,
+              // geen status en geen "nu": neutraal, geen goud (tranche 3B,
+              // 23-09). Goud blijft hier alleen voor vandaag (= "nu") en de
+              // sectiestreep (Jarno 08-09). De V van 17-09 was de berekende
+              // Vlaamse schoolkalender en zei niets over wie rijdt; deze
+              // komt uit de planning zelf.
               const td = typedagLabel(iso);
               const feestdag = td?.kort === 'F';
+              const dagtype = dagtypes?.[iso] ?? null;
+              const markering = dagtypeMarkering(dagtype?.code) ?? (feestdag ? { letter: 'F', naam: 'Feestdag' } : null);
+              const titel = [dagtype?.label, feestdag ? td?.titel : null].filter(Boolean).join(' · ') || undefined;
               // Maandafkorting onder élke dag (Jarno 17-09): stond
               // eerst alleen bij dagen uit de ándere maand van het
               // 2-wekenvenster, waardoor de ene week een maand toonde
@@ -69,7 +77,7 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
               return (
                 <Th
                   key={iso}
-                  title={feestdag ? td?.titel : undefined}
+                  title={titel}
                   className={cn(
                     'px-1 py-2 text-center',
                     h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-hairline',
@@ -77,14 +85,14 @@ export function DesktopRaster({ visibleDates, todayIso, gridSecties, showSection
                   )}
                 >
                   {/* Zichtbaar: letter, dag, maand; voorgelezen: de volledige dag. */}
-                  <span className="sr-only">{formatDayLong(iso)}{feestdag ? ', feestdag' : ''}{today ? ', vandaag' : ''}</span>
+                  <span className="sr-only">{formatDayLong(iso)}{dagtype ? `, ${dagtype.label.toLowerCase()}` : feestdag ? ', feestdag' : ''}{today ? ', vandaag' : ''}</span>
                   <span aria-hidden="true">
                     <span className={cn(microLabelClass, 'block')}>{h.letter}</span>
                     <span className={cn('mt-0.5 block text-xs font-semibold', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</span>
                     {/* 2xs: matrixcel van 3 px-hoog label onder de dag, dichte planningsmatrix */}
                     <span className="mt-0.5 block h-3 text-2xs font-bold leading-3">
                       <span className={microLabelClass}>{maandKort}</span>
-                      {feestdag && <span className="ml-1 text-slate-900">F</span>}
+                      {markering && <span className="ml-1 text-slate-900">{markering.letter}</span>}
                     </span>
                   </span>
                 </Th>

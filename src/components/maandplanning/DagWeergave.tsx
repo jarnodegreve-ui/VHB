@@ -49,6 +49,8 @@ export type DagGegevens = {
   laatsteDag: string | null;
   /** Of er een dag is met een nog niet herverdeelde dienst (het sprong-pijltje). */
   heeftAandacht: boolean;
+  /** Het De Lijn-dagtype per dag (deel 2, 11-10): de periode staat naast de dagkop. */
+  dagtypes?: Record<string, { code: string; label: string; periode: string } | null>;
 };
 
 export type DagActies = {
@@ -60,7 +62,7 @@ export type DagActies = {
 };
 
 export function DagWeergave({ dag, acties }: { dag: DagGegevens; acties: DagActies }) {
-  const { dates, mobielDag, todayIso, dagRijen, showSections, ownId, notes, zoekTerm, toonRust, year, monthIndex, kanMaandTerug, kanMaandVooruit, beginUitleg, laatsteDag, heeftAandacht } = dag;
+  const { dates, mobielDag, todayIso, dagRijen, showSections, ownId, notes, zoekTerm, toonRust, year, monthIndex, kanMaandTerug, kanMaandVooruit, beginUitleg, laatsteDag, heeftAandacht, dagtypes } = dag;
   const { kiesDag, springNaarAandacht, setViewMonth, setToonRust, onCel } = acties;
 
   // De gekozen dag in de strip in beeld houden (bv. na "Vandaag" of een
@@ -207,7 +209,15 @@ export function DagWeergave({ dag, acties }: { dag: DagGegevens; acties: DagActi
         >
           <Card padding="none" className="overflow-hidden">
           <div className="flex items-baseline justify-between gap-3 border-b border-hairline px-4 py-3">
-            <span className="text-sm font-semibold text-slate-800">{hoofdletter(formatDayLong(mobielDag))}</span>
+            <span className="text-sm font-semibold text-slate-800">
+              {hoofdletter(formatDayLong(mobielDag))}
+              {/* Het dagtype van De Lijn (deel 2, 11-10): "· schoolvakantie", zodat je ziet
+                  waarom de tijden anders zijn. Niet op zaterdag en zondag, dat herhaalt de
+                  weekdag (zelfde regel als dagtypeWoord op Mijn dag); een feestdag wel. */}
+              {dagtypes?.[mobielDag]?.periode && !['26', '27'].includes(dagtypes[mobielDag]!.code) && (
+                <span className="font-medium text-slate-500" title={dagtypes[mobielDag]?.label}> · {dagtypes[mobielDag]?.periode}</span>
+              )}
+            </span>
             <MicroLabel className="tabular-nums">
               {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0)} {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0) === 1 ? 'dienst' : 'diensten'}
             </MicroLabel>

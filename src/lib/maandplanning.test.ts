@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { MonthCell } from './monthPlanning';
 import {
-  addDaysIso, berekenCodeLegend, bouwDagRijen, celTitel, dayHeader, formatDayMonth, groepeerPerSectie,
+  addDaysIso, berekenCodeLegend, bouwDagRijen, celTitel, dagtypeMarkering, dayHeader, formatDayMonth, groepeerPerSectie,
   maandNaarParam, maandUitParam, mondayOf, monthOf, noteKey, sectieLabel, sectionOf, sorteerOverzichtRijen,
   urenLabel, voegCellenSamen, voegChauffeursSamen, werkdagenUitCellen, wisselOverzichtSortering,
   type Cellen, type OverzichtRij,
@@ -208,5 +208,21 @@ describe('maandoverzicht', () => {
     expect(sorteerOverzichtRijen(rijen, { kolom: 'naam', richting: 1 }).map((r) => r.naam)).toEqual(['Anna', 'Bert', 'Cas']);
     expect(sorteerOverzichtRijen(rijen, { kolom: 'minuten', richting: 1 }).map((r) => r.naam)).toEqual(['Anna', 'Cas', 'Bert']);
     expect(rijen.map((r) => r.naam)).toEqual(['Bert', 'Anna', 'Cas']);
+  });
+});
+
+describe('dagtypeMarkering (dagkop van het bord, deel 2 dagtypekalender)', () => {
+  it('één letter voor wat niet de gewone week is; schooldag en weekend niets', () => {
+    expect(dagtypeMarkering('23')).toBeNull();
+    expect(dagtypeMarkering('26')).toBeNull();
+    expect(dagtypeMarkering('27')).toBeNull();
+    expect(dagtypeMarkering('28')).toEqual({ letter: 'F', naam: 'Feestdag' });
+    expect(dagtypeMarkering('33')).toEqual({ letter: 'V', naam: 'Schoolvakantie' });
+    // Juli-augustus is voor het bord dezelfde vakantie (de matrix van De Lijn codeert de herfstvakantie ook als 41).
+    expect(dagtypeMarkering('41')).toEqual({ letter: 'V', naam: 'Schoolvakantie' });
+    expect(dagtypeMarkering('55')).toEqual({ letter: 'E', naam: 'Examen' });
+    expect(dagtypeMarkering(null)).toBeNull();
+    expect(dagtypeMarkering(undefined)).toBeNull();
+    expect(dagtypeMarkering('')).toBeNull();
   });
 });

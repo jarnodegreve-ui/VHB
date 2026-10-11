@@ -26,6 +26,7 @@ import { RitbladViewer } from '../components/RitbladViewer';
 import { MededelingStrook } from '../components/MededelingStrook';
 import { MijnWeek } from '../components/MijnWeek';
 import { MIJN_WEEK_DAGEN, bouwMijnWeek } from '../lib/mijnWeek';
+import { dagtypeWoord, useDagtypes } from '../lib/dagtypes';
 
 // Defect melden (techniek, 13-09): pas laden bij de klik, de chunk van Mijn dag blijft licht.
 const LazyDefectMeldenModal = lazy(() => import('../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
@@ -160,6 +161,12 @@ export function MijnDagView({
   const nuLabel = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
   // Statuszin: "Dienst 2101 · 2 delen · tot 17:29" / "Vrij vandaag".
   const dagWoord = isVandaag ? 'vandaag' : 'morgen';
+  // Het De Lijn-dagtype van de peildag (deel 2, 11-10, keuze Jarno): "Vandaag ·
+  // schoolvakantie", zodat je ziet waarom je tijden anders zijn. Gisteren tot
+  // morgen in één lezing, want bij een nachtdienst is de peildag gisteren.
+  const dagtypes = useDagtypes(gisteren, isOffset(now, 1));
+  const dagtypePeildag = dagtypes[peildag] ?? null;
+  const dagtypeTekst = dagtypeWoord(dagtypePeildag);
   const statuszin = (() => {
     if (delen.length === 0) return `Vrij ${dagWoord}`;
     const kop = dienstnummers.length > 1 ? `Diensten ${dienstnummers.join(' / ')}` : `Dienst ${dienstnummers[0] ?? '--'}`;
@@ -229,7 +236,10 @@ export function MijnDagView({
             zakt onder de kop als hij niet naast de datum past. */}
         <div className="flex items-start justify-between gap-x-4 gap-y-3 md:items-end">
           <div className="min-w-0 flex-1">
-            <p className="text-micro">{nachtdienstLoopt && isVandaag ? 'Nog bezig · dienst van gisteren' : hoofdletter(dagWoord)}</p>
+            <p className="text-micro">
+              {nachtdienstLoopt && isVandaag ? 'Nog bezig · dienst van gisteren' : hoofdletter(dagWoord)}
+              {dagtypeTekst && <span title={dagtypePeildag?.label}> · {dagtypeTekst}</span>}
+            </p>
             <h1 className="text-page-title mt-1">{hoofdletter(formatDayLong(peildag))}</h1>
             {/* Stil: een chip met amber-puntje, geen rood en geen banner —
                 offline is een toestand, geen alarm. */}
