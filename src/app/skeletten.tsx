@@ -45,6 +45,7 @@ export const SKELET_PER_VIEW: Partial<Record<View, SkeletVorm>> = {
   dienstoverzicht: { soort: 'tabel' },
   'verlof-kalender': { soort: 'tabel' },
   'planning-codes': { soort: 'tabel' },
+  dagtypekalender: { soort: 'tabel' },
   'planning-matrix': { kpis: 3 },
 };
 

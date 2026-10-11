@@ -71,13 +71,13 @@ describe('dagtypeVanDag', () => {
 
   it('met kalender: de periode uit het dagtype van die dag, de weekdag doet de rest', () => {
     // Schooljaarperiode: "woensdag" is een schooldag → 23.
-    expect(dagtypeVanDag('2026-10-14', '', kalender)).toEqual({ code: '23', bron: 'kalender' });
+    expect(dagtypeVanDag('2026-10-14', '', kalender)).toEqual({ code: '23', bron: 'dekking' });
     // Herfstvakantie als uitzondering: woensdag → 33.
-    expect(dagtypeVanDag('2026-10-28', '', kalender)).toEqual({ code: '33', bron: 'kalender' });
+    expect(dagtypeVanDag('2026-10-28', '', kalender)).toEqual({ code: '33', bron: 'dekking' });
     // Vóór 1 september geldt de basis: "vakantieperiode ma/di/wo" → 33.
-    expect(dagtypeVanDag('2026-08-26', '', kalender)).toEqual({ code: '33', bron: 'kalender' });
+    expect(dagtypeVanDag('2026-08-26', '', kalender)).toEqual({ code: '33', bron: 'dekking' });
     // Wapenstilstand op een woensdag, als "zondag" ingesteld → 27.
-    expect(dagtypeVanDag('2026-11-11', '', kalender)).toEqual({ code: '27', bron: 'kalender' });
+    expect(dagtypeVanDag('2026-11-11', '', kalender)).toEqual({ code: '27', bron: 'dekking' });
     expect(dagtypeVanDag('2026-10-17', '', kalender).code).toBe('26');
   });
 
@@ -209,7 +209,29 @@ describe('normaliseerTijd', () => {
 
 describe('KIESBARE_DAGTYPES', () => {
   it('bevat alleen wat de dekkingskalender en de weekdag kunnen opleveren', () => {
-    expect([...KIESBARE_DAGTYPES].sort()).toEqual(['21', '22', '23', '24', '25', '26', '27', '31', '32', '33', '34', '35']);
-    expect(['28', '41', '53'].map(isKiesbaarDagtype)).toEqual([false, false, false]);
+    expect([...KIESBARE_DAGTYPES].sort()).toEqual(['21', '22', '23', '24', '25', '26', '27', '31', '32', '33', '34', '35', '51', '52', '53', '54', '55']);
+    expect(['28', '41', '53'].map(isKiesbaarDagtype)).toEqual([false, false, true]);
+  });
+});
+
+describe('dagtypekalender per dag (11-10)', () => {
+  const metKalender = { ...kalender, perDag: { '2026-10-14': { typedag: '33', maxVerlof: 7 }, '2026-11-11': { typedag: '28', maxVerlof: 0 } } };
+
+  it('komt ná de matrixcode en vóór de dekkingsafleiding', () => {
+    expect(dagtypeVanDag('2026-10-14', '23', metKalender)).toEqual({ code: '23', bron: 'excel' });
+    expect(dagtypeVanDag('2026-10-14', '', metKalender)).toEqual({ code: '33', bron: 'kalender' });
+    expect(dagtypeVanDag('2026-10-15', '', metKalender)).toEqual({ code: '24', bron: 'dekking' });
+    expect(dagtypeVanDag('2026-11-11', '', metKalender)).toEqual({ code: '28', bron: 'kalender' });
+  });
+
+  it('een naam in kolom B telt vóór de kalender, zoals bij de dekking', () => {
+    expect(dagtypeVanDag('2026-10-14', 'vakantie', metKalender)).toEqual({ code: '33', bron: 'excel' });
+  });
+
+  it('een feestdag rijdt de zondagregeling: tijdenOpDag kiest de variant van 27', () => {
+    const d = { startTime: '06:00', endTime: '14:00', varianten: [{ dagtypes: ['27'], startTime: '08:00', endTime: '12:00' }] };
+    expect(tijdenOpDag(d, '28')).toEqual({ startTime: '08:00', endTime: '12:00' });
+    expect(tijdenOpDag(d, '27')).toEqual({ startTime: '08:00', endTime: '12:00' });
+    expect(tijdenOpDag(d, '26')).toEqual({ startTime: '06:00', endTime: '14:00' });
   });
 });

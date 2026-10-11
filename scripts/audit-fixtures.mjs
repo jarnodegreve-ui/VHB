@@ -58,6 +58,22 @@ export const MAILS = {
   ],
 };
 /** Filmnummers (01-10): een stuk van de echte lijst, met bestemmingen per lijn en algemene boodschappen. */
+/** Dagtypekalender (11-10): een korte week in oktober 2026 plus een feestdag, zoals het CSV van De Lijn. */
+export const DAGTYPEKALENDER = {
+  dagen: [
+    { datum: '2026-10-12', typedag: '21', maxVerlof: 2, bron: 'csv' },
+    { datum: '2026-10-13', typedag: '22', maxVerlof: 2, bron: 'csv' },
+    { datum: '2026-10-14', typedag: '23', maxVerlof: 2, bron: 'csv' },
+    { datum: '2026-10-15', typedag: '24', maxVerlof: 2, bron: 'csv' },
+    { datum: '2026-10-16', typedag: '25', maxVerlof: 2, bron: 'csv' },
+    { datum: '2026-10-17', typedag: '26', maxVerlof: 7, bron: 'csv' },
+    { datum: '2026-10-18', typedag: '27', maxVerlof: 0, bron: 'csv' },
+    { datum: '2026-11-11', typedag: '28', maxVerlof: 0, bron: 'csv' },
+  ],
+  afwijkingen: [{ datum: '2026-10-14', matrix: '33', kalender: '23' }],
+  samenvatting: { aantal: 8, eerste: '2026-10-12', laatste: '2026-11-11', perRegime: [{ regime: 'school', aantal: 5 }, { regime: 'zaterdag', aantal: 1 }, { regime: 'zondag', aantal: 1 }, { regime: 'feestdag', aantal: 1 }] },
+};
+
 export const FILMNUMMERS = {
   bijgewerktOp: '2026-10-01T13:30:00.000Z',
   items: [
@@ -431,6 +447,7 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/activity')) return json(ACTIVITY);
     if (p.endsWith('/api/ritblaadje')) return json(null);
     if (p.endsWith('/api/filmnummers')) return json(FILMNUMMERS);
+    if (p.endsWith('/api/dagtypekalender')) return json(DAGTYPEKALENDER);
     // Techniek (13-09): voertuigen, gele boek, werkprestaties, vervaldata.
     if (p.endsWith('/werken') && p.includes('/api/vehicles/')) {
       const id = p.split('/api/vehicles/')[1].split('/')[0];

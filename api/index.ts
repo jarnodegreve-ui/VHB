@@ -35,6 +35,7 @@ import { mountRuilRoutes, beslisRuilIntern } from "./_lib/ruilRoutes.js";
 import { mountVerlofRoutes, beslisVerlofIntern, registreerZiekmeldingIntern } from "./_lib/verlofRoutes.js";
 import { mountDocumentRoutes } from "./_lib/documentRoutes.js";
 import { mountFilmnummerRoutes } from "./_lib/filmnummerRoutes.js";
+import { mountDagtypeKalenderRoutes } from "./_lib/dagtypeKalenderRoutes.js";
 
 // dotenv alleen buiten Vercel (ronde 3): daar komen de env-vars van het
 // platform en was dit bij elke koude start een overbodige module + een
@@ -188,6 +189,7 @@ mountVerlofRoutes(app);
 mountDocumentRoutes(app);
 // Filmnummers (01-10): de bestemmingscodes voor de chauffeurs. Zie api/_lib/filmnummerRoutes.ts.
 mountFilmnummerRoutes(app);
+mountDagtypeKalenderRoutes(app);
 
 app.all("/api/*", (req, res) => {
   if (process.env.NODE_ENV !== "production") console.log(`API Route not found: ${req.method} ${req.url}`);

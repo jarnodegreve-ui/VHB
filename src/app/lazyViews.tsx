@@ -40,6 +40,7 @@ export const LazyZiekteView = scherm<typeof import('../views/admin/ZiekteView'),
 export const LazyManageSchedulesView = scherm<typeof import('../views/admin/ManageSchedulesView'), 'ManageSchedulesView'>('beheer-roosters', 'ManageSchedulesView');
 export const LazyPlanningMatrixView = scherm<typeof import('../views/admin/PlanningMatrixView'), 'PlanningMatrixView'>('planning-matrix', 'PlanningMatrixView');
 export const LazyPlanningCodesView = scherm<typeof import('../views/admin/PlanningCodesView'), 'PlanningCodesView'>('planning-codes', 'PlanningCodesView');
+export const LazyDagtypeKalenderView = scherm<typeof import('../views/admin/DagtypeKalenderView'), 'DagtypeKalenderView'>('dagtypekalender', 'DagtypeKalenderView');
 export const LazyManageDiversionsView = scherm<typeof import('../views/admin/ManageDiversionsView'), 'ManageDiversionsView'>('beheer-omleidingen', 'ManageDiversionsView');
 export const LazyVerlofKalenderView = scherm<typeof import('../views/admin/VerlofKalenderView'), 'VerlofKalenderView'>('verlof-kalender', 'VerlofKalenderView');
 export const LazyCoverageView = scherm<typeof import('../views/CoverageView'), 'CoverageView'>('dekking', 'CoverageView');

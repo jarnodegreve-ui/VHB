@@ -37,6 +37,7 @@ const mem = vi.hoisted(() => ({
   services: [] as any[],
   // Dienstregelingversies (08-10): leeg = geen versies, dan is services de hele lijst.
   dienstregelingen: [] as any[],
+  dagtypeKalender: [] as any[],
   updates: [] as any[],
   diversions: [] as any[],
   planning: [] as any[],
@@ -365,8 +366,9 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
   // oudste, zonder versies is mem.services de hele lijst.
   const dr = await import('../../shared/dienstregeling');
   const dt = await import('../../shared/dagtype');
-  // De dagtypekalender uit de dekkingsconfig van de mem-store (10-10).
-  const kalenderMock = () => dt.kalenderUitDekking(mem.coverageExpectations ?? {});
+  const dk = await import('../../shared/dagtypeKalender');
+  // De dagtypekalender uit de dekkingsconfig én de kalenderrijen van de mem-store (10-10, 11-10).
+  const kalenderMock = () => ({ ...dt.kalenderUitDekking(mem.coverageExpectations ?? {}), perDag: dk.perDagVan(mem.dagtypeKalender ?? []) });
   const vandaagMock = () => new Date().toISOString().slice(0, 10);
   const versiesGesorteerd = () => [...mem.dienstregelingen].sort((a: any, b: any) => String(a.geldigVanaf).localeCompare(String(b.geldigVanaf)));
   const oudsteId = () => dr.oudsteVersie(mem.dienstregelingen as any[])?.id ?? null;
@@ -887,6 +889,14 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       return segs;
     },
     laadDagtypeKalender: async () => kalenderMock(),
+    getDagtypeKalender: async (opts?: { van?: string; tot?: string }) =>
+      [...(mem.dagtypeKalender ?? [])].filter((d: any) => (!opts?.van || d.datum >= opts.van) && (!opts?.tot || d.datum <= opts.tot)).sort((a: any, b: any) => a.datum.localeCompare(b.datum)),
+    schrijfDagtypeKalender: async (dagen: any[], bron: string) => {
+      const per = new Map((mem.dagtypeKalender ?? []).map((d: any) => [d.datum, d]));
+      for (const d of dagen) per.set(d.datum, { ...d, bron, updatedAt: new Date().toISOString() });
+      mem.dagtypeKalender = [...per.values()].sort((a: any, b: any) => a.datum.localeCompare(b.datum));
+      return dagen.length;
+    },
     getCoverageExpectations: async () => mem.coverageExpectations ?? {},
     saveCoverageExpectations: async (map: any) => { mem.coverageExpectations = map; },
     listUserDocuments: async (userId?: string) =>
@@ -1127,6 +1137,7 @@ beforeEach(() => {
   mem.diversions = [];
   mem.planningCodes = [];
   mem.coverageExpectations = {};
+  mem.dagtypeKalender = [];
   mem.activity = [];
   mem.lastAuthEventAt = null;
   mem.sessionMetaWrites = [];

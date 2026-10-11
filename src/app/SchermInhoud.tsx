@@ -17,7 +17,7 @@ import { SchermInloop, Verwissel } from '../components/Verwissel';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { useAppDataContext } from './AppDataContext';
 import type { useRoute } from './router';
-import { LazyActivityLogView, LazyCapacityView, LazyContactsView, LazyCoverageView, LazyDagafsluitingView, LazyDashboardView, LazyDebugView, LazyDesignsysteemView, LazyDevicesView, LazyDienstopbouwView, LazyDiversionsView, LazyDocumentsView, LazyFilmnummersView, LazyGeleBoekView, LazyInstellingenView, LazyLeaveManagementView, LazyLooncontroleView, LazyManageDiversionsView, LazyManageSchedulesView, LazyManageUpdatesView, LazyManageUsersView, LazyMailsView, LazyMeldingenView, LazyMijnDagView, LazyOcpiDashboardView, LazyPlannerDashboardWidgets, LazyPlanningCodesView, LazyPlanningMatrixView, LazyRapportenView, LazyRitblaadjesView, LazyScheduleView, LazyServicesView, LazySwapRequestsView, LazyUpdatesView, LazyVandaagView, LazyVerlofKalenderView, LazyVervaldataView, LazyVoertuigWerkenView, LazyVoertuigenView, LazyWerkprestatiesView, LazyWerkvoorraadView, LazyZiekteView } from './lazyViews';
+import { LazyActivityLogView, LazyCapacityView, LazyContactsView, LazyCoverageView, LazyDagafsluitingView, LazyDashboardView, LazyDebugView, LazyDesignsysteemView, LazyDevicesView, LazyDienstopbouwView, LazyDiversionsView, LazyDocumentsView, LazyFilmnummersView, LazyGeleBoekView, LazyInstellingenView, LazyLeaveManagementView, LazyLooncontroleView, LazyManageDiversionsView, LazyManageSchedulesView, LazyManageUpdatesView, LazyManageUsersView, LazyMailsView, LazyDagtypeKalenderView, LazyMeldingenView, LazyMijnDagView, LazyOcpiDashboardView, LazyPlannerDashboardWidgets, LazyPlanningCodesView, LazyPlanningMatrixView, LazyRapportenView, LazyRitblaadjesView, LazyScheduleView, LazyServicesView, LazySwapRequestsView, LazyUpdatesView, LazyVandaagView, LazyVerlofKalenderView, LazyVervaldataView, LazyVoertuigWerkenView, LazyVoertuigenView, LazyWerkprestatiesView, LazyWerkvoorraadView, LazyZiekteView } from './lazyViews';
 
 export type SchermInhoudProps = {
   /** De view na de rol-check (magView): nooit een scherm dat de rol niet mag. */
@@ -182,6 +182,7 @@ export function SchermInhoud(props: SchermInhoudProps) {
     </Verwissel>}
     {resolvedCurrentView === 'designsysteem' && <LazyDesignsysteemView />}
     {resolvedCurrentView === 'beheer-mails' && <Suspense fallback={skelet}><LazyMailsView users={users} /></Suspense>}
+    {resolvedCurrentView === 'dagtypekalender' && <Suspense fallback={skelet}><LazyDagtypeKalenderView magBeheren={isAdmin && !previewingChauffeur} /></Suspense>}
     {resolvedCurrentView === 'instellingen' && (
       <LazyInstellingenView
         user={currentUser}

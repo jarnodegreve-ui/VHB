@@ -156,7 +156,13 @@ import zlib from 'node:zlib';
 // celdetail (CapacityView +0,1 kB), buiten de startbundel en buiten beide
 // warmups (index 77,67, chauffeur 77, staf 145: ongewijzigd). Lokaal 721,48;
 // 725 = die meting plus de ±0,5 kB van de runner en ±0,3 % marge.
-const BUDGET_KB = 725;
+// 11-10 (dagtypekalender, verbeterronde punt 1, keuze Jarno): 725 → 734. Geen
+// nieuwe dependency: het nieuwe scherm Beheer › Dagtypekalender (eigen luie
+// chunk ±5 kB gzip), de gedeelde lezer shared/dagtypeKalender.ts, en
+// shared/dagtype.ts en de CSV-lezer van de filmnummers worden nu gedeelde
+// chunks (ServicesView en het nieuwe scherm lenen ze allebei). Lokaal 729,6;
+// 734 = die meting plus de ±0,5 kB van de runner en ±0,5 % marge.
+const BUDGET_KB = 734;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -225,7 +231,11 @@ const DEELBUDGET_KB = {
   // kost ±0,3 kB: lokaal 77,42 → 77,69. De vertaling van de Supabase-reden
   // (`wachtwoordFout.ts`) laadt alleen in de luie schermen. 78,3 = de
   // verwachte CI-meting (±78,0) plus ±0,3.
-  index: 78.3,
+  // 11-10 (dagtypekalender): 78,3 → 78,8. Eén menu-item erbij in routes.tsx
+  // (view, pad, omschrijving, het icoon CalendarRange) en één regel in de
+  // chunk-kaart: lokaal 77,66 → 78,03, de CI-runner meet de index ±0,3 kB
+  // zwaarder. 78,8 = die meting plus ±0,45 kB.
+  index: 78.8,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
@@ -452,6 +462,17 @@ if (!kaartMatch) {
   // De warmup start pas na LCP + 2 s en raakt het eerste beeld niet. Budget
   // = de meting plus ±0,5 kB voor de CI-runner, zelfde stap als hierboven.
   WARMUP_BUDGET_KB.staf = 145.5;
+  // 11-10 (dagtypekalender, verbeterronde punt 1): chauffeur 77,5 → 78 en
+  // staf 145,5 → 146. Geen nieuwe code in de warmup-views: shared/tijdNotatie.ts
+  // (de tijdnotatie "0630" → "06:30", 0,24 kB gzip) werd een eigen gedeelde
+  // chunk omdat naast de startbundel nu ook de luie dagtype-chunk ze leent
+  // (ServicesView en het nieuwe scherm Dagtypekalender). Die bytes verlieten
+  // de index en tellen nu in beide warmup-sets mee; VerlofBeoordeling groeide
+  // 0,06 kB door de limiet per dag. Lokaal chauffeur 76,99 → 77,26 en staf
+  // 144,80 → 145,27; de CI-runner meet ±0,4 kB zwaarder. Budget = de meting
+  // plus ±0,7 kB, zodat de volgende kleine stap niet meteen struikelt.
+  WARMUP_BUDGET_KB.chauffeur = 78;
+  WARMUP_BUDGET_KB.staf = 146;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {
