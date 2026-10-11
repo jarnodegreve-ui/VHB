@@ -126,6 +126,7 @@ export {
   DIENSTREGELING_MIGRATIE,
   VARIANTEN_MIGRATIE,
   laadDagtypeKalender,
+  laadDekkingCodeKoppeling,
   type DienstregelingRecord,
   type VersieKeuze,
   getCoverageExpectations,

@@ -67,6 +67,76 @@ describe('onbemande dienst toewijzen (Dekking)', () => {
   });
 });
 
+describe('dekking op De Lijn-codes (dagtypekalender deel 2, 11-10)', () => {
+  // De echte dekking van VHB: lijsten per eigen naam, basis = zomerregime,
+  // vanaf 1 september het schooljaar. Sinds 28-09 draagt kolom B codes.
+  beforeEach(() => {
+    mem.coverageExpectations = {
+      __weekdagen__: ['zondag', 'vakantie', 'vakantie', 'vakantie', 'vakantie', 'vakantie', 'zaterdag'],
+      '__weekdagen_2026-09-01__': ['zondag', 'schooldag', 'schooldag dinsdag', 'schooldag', 'schooldag', 'schooldag', 'zaterdag'],
+      __uitzonderingen__: [],
+      schooldag: ['12', '14'],
+      'schooldag dinsdag': ['12', '22'],
+      vakantie: ['41'],
+      zaterdag: ['26'],
+      zondag: ['27'],
+    } as any;
+    mem.dagtypeCodeKoppeling = { '21': 'schooldag', '22': 'schooldag', '41': 'vakantie', '28': 'zondag' };
+    mem.dagtypeKalender = [];
+    mem.leave = [];
+    mem.swaps = [];
+    mem.planningMatrix = [
+      // Maandag met code 21: de schooldaglijst (12, 14); alleen 12 is ingevuld.
+      { id: 'c1', source_date: '2030-09-02', day_type: '21', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+      // Dinsdag met code 22: de dinsdaglijst van de dekking zelf (12, 22).
+      { id: 'c2', source_date: '2030-09-03', day_type: '22', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+      // Maandag in het schooljaar met code 41 (herfstvakantie): de vakantielijst (41), niets ingevuld.
+      { id: 'c3', source_date: '2030-11-04', day_type: '41', assignments: {}, raw_row: '' },
+      // Woensdag met code 28 (feestdag): de zondaglijst (27).
+      { id: 'c4', source_date: '2030-11-06', day_type: '28', assignments: { 'Chauffeur A': '27' }, raw_row: '' },
+      // Zonder code: de dekkingskalender zoals vroeger (donderdag in het schooljaar = schooldag).
+      { id: 'c5', source_date: '2030-11-07', day_type: '', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
+    ];
+  });
+
+  it('vindt de gaten op dagen met een code, met de herkomst erbij', async () => {
+    const res = await api('GET', '/api/coverage-gaps?from=2030-09-02&to=2030-11-07', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    const per = Object.fromEntries(res.json.days.map((d: any) => [d.date, d]));
+    expect(per['2030-09-02']).toMatchObject({ dayType: 'schooldag', expected: 2, covered: 1, missing: ['14'], bron: { soort: 'periode', vanaf: '2026-09-01', code: '21' } });
+    expect(per['2030-09-03']).toMatchObject({ dayType: 'schooldag dinsdag', expected: 2, missing: ['22'] });
+    expect(per['2030-11-04']).toMatchObject({ dayType: 'vakantie', expected: 1, covered: 0, missing: ['41'], bron: { soort: 'dagtype', code: '41', label: 'Maandag juli-augustus', naam: 'vakantie' } });
+    expect(per['2030-11-06']).toMatchObject({ dayType: 'zondag', expected: 1, covered: 1, missing: [], bron: { soort: 'dagtype', code: '28', naam: 'zondag' } });
+    expect(per['2030-11-07']).toMatchObject({ dayType: 'schooldag', expected: 2, covered: 2, missing: [], bron: { soort: 'periode', vanaf: '2026-09-01' } });
+    expect(per['2030-11-07'].bron.code).toBeUndefined();
+  });
+
+  it('de dagtypekalender geeft een dag zonder code zijn lijst, en kolom B gaat voor op de kalender', async () => {
+    mem.dagtypeKalender = [
+      { datum: '2030-11-07', typedag: '34', maxVerlof: 7, bron: 'csv' },
+      { datum: '2030-09-02', typedag: '31', maxVerlof: 7, bron: 'csv' },
+    ];
+    const res = await api('GET', '/api/coverage-gaps?from=2030-09-02&to=2030-11-07', { token: 'tok-planner' });
+    const per = Object.fromEntries(res.json.days.map((d: any) => [d.date, d]));
+    expect(per['2030-11-07']).toMatchObject({ dayType: 'vakantie', missing: ['41'], bron: { soort: 'dagtype', code: '34' } });
+    expect(per['2030-09-02']).toMatchObject({ dayType: 'schooldag', missing: ['14'] });
+  });
+
+  it('de verwachtingscheck en het lijstenvoorstel groeperen op de lijstnaam, niet op de code', async () => {
+    mem.planningMatrix = [
+      { id: 'd1', source_date: '2030-09-02', day_type: '21', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '990' }, raw_row: '' },
+      { id: 'd2', source_date: '2030-09-09', day_type: '21', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '990' }, raw_row: '' },
+    ];
+    const check = await api('GET', '/api/coverage-expectation-check?from=2030-09-01&to=2030-09-30', { token: 'tok-planner' });
+    expect(check.status).toBe(200);
+    expect(check.json.afwijkingen).toEqual([{ dayType: 'schooldag', dagen: 2, nooitGereden: ['14'], nietVerwacht: [{ code: '990', dagen: 2 }] }]);
+    const voorstel = await api('GET', '/api/coverage-expectations/voorstel?from=2030-09-01&to=2030-09-30', { token: 'tok-planner' });
+    expect(voorstel.status).toBe(200);
+    // Alleen dienstachtige codes (drie of vier cijfers) tellen in het voorstel, zoals altijd.
+    expect(voorstel.json.voorstellen).toEqual([{ dayType: 'schooldag', dagen: 2, codes: [{ code: '990', dagen: 2 }] }]);
+  });
+});
+
 describe('vervaldata (Code 95 / medische schifting)', () => {
   it('planner zet een vervaldatum; chauffeur ziet alleen zijn eigen datums', async () => {
     const zet = await api('PUT', '/api/user-expiries', { token: 'tok-planner', body: { userId: '3', soort: 'code95', validUntil: '2027-03-01' } });

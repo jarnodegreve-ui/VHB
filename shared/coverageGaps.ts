@@ -97,11 +97,19 @@ export function resolveDayType(
 /** Waar komt het dag-type van een dag vandaan? Voedt de uitleg op de dekking
  *  ("waarom is dit een schooldag?") — scheelt debuggen bij elke
  *  dienstregelingswissel. */
+export type DagtypeZonderLijst = { code: string; label: string };
+
 export type DayTypeBron =
   | { soort: 'excel' }
-  | { soort: 'uitzondering'; from: string; to: string }
-  | { soort: 'periode'; vanaf: string }
-  | { soort: 'basis' }
+  /** `code` (11-10): de De Lijn-code van die dag (kolom B of de dagtypekalender) die
+   *  deze keuze bevestigt; de dekkingskalender gaf dezelfde periode.
+   *  `zonderLijst`: de code heeft in de dekking geen enkele lijst van zijn
+   *  periode (examen zonder examenlijst), dus geldt de dekkingskalender. */
+  | { soort: 'uitzondering'; from: string; to: string; code?: string; zonderLijst?: DagtypeZonderLijst }
+  | { soort: 'periode'; vanaf: string; code?: string; zonderLijst?: DagtypeZonderLijst }
+  | { soort: 'basis'; code?: string; zonderLijst?: DagtypeZonderLijst }
+  /** De De Lijn-code koos een andere lijst dan de dekkingskalender (shared/dekkingDagtype.ts). */
+  | { soort: 'dagtype'; code: string; label: string; naam: string }
   | { soort: 'geen' };
 
 /** Zelfde beslisregels als resolveDayType, maar mét de herkomst erbij. De

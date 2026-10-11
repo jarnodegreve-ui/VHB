@@ -148,7 +148,7 @@ export type DagtypeBron = 'excel' | 'kalender' | 'dekking' | 'weekdag' | 'geen';
  *  "schooldag dinsdag", "woensdag", "herfstverlof"): daarom op trefwoord, niet
  *  op gelijkheid. Een feestdag heet in de dekking vaak "zondag" (het
  *  zondagregime) en wordt dan 27; alleen "feest" in de naam geeft 28. */
-const periodeUitNaam = (naam: string): string => {
+export const periodeUitNaam = (naam: string): string => {
   const n = naam.toLowerCase();
   if (/feest/.test(n)) return '28';
   if (/zondag/.test(n)) return '27';

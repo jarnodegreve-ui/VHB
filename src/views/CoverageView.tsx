@@ -25,7 +25,7 @@ import { Card, CardHeader } from '../components/Card';
 import { DateInput, Input, Select } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { fetchCoverageAdvies, kandidaatMeta, segmentenLabel, type CoverageAdvies } from '../lib/advisor';
-import { aantal, formatDateHuman, formatShortDay, hoofdletter, MONTH_NAMES } from '../lib/format';
+import { aantal, formatDateHuman, formatDatumDMJ, formatShortDay, hoofdletter, MONTH_NAMES } from '../lib/format';
 import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import {
   fetchCoverageConfig,
@@ -648,11 +648,20 @@ export function CoverageView() {
   /** Uitleg bij het dag-type van een dag: waar komt het vandaan? */
   const bronUitleg = (bron?: DayTypeBron): string | undefined => {
     if (!bron) return undefined;
+    // Dekking op De Lijn-codes (11-10): een code in kolom B of de dagtypekalender
+    // bevestigt de keuze van de dekkingskalender (`code`), of koos zelf een
+    // lijst van dezelfde periode (soort 'dagtype').
+    const bevestiging = 'code' in bron && bron.code
+      ? ` De Lijn-dagtype ${bron.code} uit de planning geeft dezelfde periode.`
+      : 'zonderLijst' in bron && bron.zonderLijst
+        ? ` De Lijn-dagtype ${bron.zonderLijst.code} (${bron.zonderLijst.label.toLowerCase()}) uit de planning heeft in de dekking geen lijst, dus geldt de dekkingskalender.`
+        : '';
     switch (bron.soort) {
       case 'excel': return 'Dag-type komt uit de Excel-import (kolom B) en gaat vóór alle instellingen.';
-      case 'uitzondering': return `Via de uitzondering ${bron.from} t/m ${bron.to} (Instellen → Uitzonderingen).`;
-      case 'periode': return `Via de weekdagperiode vanaf ${bron.vanaf} (Instellen → Standaard per weekdag).`;
-      case 'basis': return 'Via de basis-weekdagtoewijzing (Instellen → Standaard per weekdag).';
+      case 'uitzondering': return `Via de uitzondering ${formatDatumDMJ(bron.from)} t/m ${formatDatumDMJ(bron.to)} (Instellen → Uitzonderingen).${bevestiging}`;
+      case 'periode': return `Via de weekdagperiode vanaf ${formatDatumDMJ(bron.vanaf)} (Instellen → Standaard per weekdag).${bevestiging}`;
+      case 'basis': return `Via de basis-weekdagtoewijzing (Instellen → Standaard per weekdag).${bevestiging}`;
+      case 'dagtype': return `Via De Lijn-dagtype ${bron.code} (${bron.label.toLowerCase()}) uit de planning: de lijst “${bron.naam}” van dezelfde periode, want de dekkingskalender gaf een andere.`;
       default: return undefined;
     }
   };

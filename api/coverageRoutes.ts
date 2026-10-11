@@ -1,7 +1,9 @@
-import { dagtypeVanDag, type DagtypeKalender } from "../shared/dagtype.js";
+import { dagtypeVanDag, kalenderUitDekking, type DagtypeKalender } from "../shared/dagtype.js";
+import { perDagVan } from "../shared/dagtypeKalender.js";
+import { dekkingDagtypeVanDag } from "../shared/dekkingDagtype.js";
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
-import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../shared/coverageGaps.js";
+import { computeDayGap, normalizeCode, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../shared/coverageGaps.js";
 import { beoordeelKandidaat, sorteerKandidaten, dagVenster, zoekKettingen, adviesSamenvatting, adviesVenster, adviesMaanden, controleerAdviesBereik, AdviesBereikFout, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 import { addDagenIso, brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
 import {
@@ -13,6 +15,8 @@ import {
   getServiceSegments,
   getServicesData,
   laadDagtypeKalender,
+  laadDekkingCodeKoppeling,
+  getDagtypeKalender,
   getSwapsData,
   getLeaveData,
   getUsersData,
@@ -51,6 +55,33 @@ const parseWeekdagPerioden = (stored: Record<string, string[]>): WeekdagPeriode[
     })
     .sort((a, b) => a.vanaf.localeCompare(b.vanaf));
 
+/** De lijstnamen van de dekking: alle niet-gereserveerde sleutels. */
+const lijstNamenVan = (stored: Record<string, unknown>): string[] => Object.keys(stored).filter((k) => !isReservedCoverageKey(k));
+
+/** Dekking op De Lijn-codes (11-10, shared/dekkingDagtype.ts): kolom B van de
+ *  matrix of de dagtypekalender draagt een code, en die wijst naar een van de
+ *  eigen lijsten van de dekking. Eén lezing van kalender en koppeling, dan
+ *  per rij de naam. `metNaam` geeft de rijen terug met die naam in day_type,
+ *  zodat de pure berekeningen (check, voorstel) er gewoon op rekenen. */
+async function dekkingNamen(stored: Record<string, unknown>) {
+  // De dekkingsconfig is al gelezen (`stored`): de kalender komt daaruit, de
+  // dagtypekalender en de koppeling in één keer ernaast. Een leesfout van een
+  // van beide laat de dekking niet vallen (zoals laadDagtypeKalender).
+  const [dagen, koppeling] = await Promise.all([
+    getDagtypeKalender().catch((err) => {
+      console.warn("Dagtypekalender niet gelezen:", (err as { message?: unknown })?.message ?? err);
+      return [];
+    }),
+    laadDekkingCodeKoppeling(),
+  ]);
+  const kalender: DagtypeKalender = { ...kalenderUitDekking(stored), perDag: perDagVan(dagen) };
+  const lijstNamen = lijstNamenVan(stored);
+  const voorRij = (r: { source_date?: unknown; day_type?: unknown }) =>
+    dekkingDagtypeVanDag({ datum: String(r.source_date ?? ""), rawDayType: r.day_type, kalender, lijstNamen, koppeling });
+  const metNaam = <T extends { source_date?: unknown; day_type?: unknown }>(rows: T[]): T[] => rows.map((r) => ({ ...r, day_type: voorRij(r).dayType }));
+  return { voorRij, metNaam };
+}
+
 
 /** Verwachtingen-vs-praktijk over een set matrix-rijen, met de opgeslagen
  *  dekking-config. Gedeeld door GET /api/coverage-expectation-check (rijen uit
@@ -59,8 +90,9 @@ export async function berekenVerwachtingsCheck(rows: Array<{ source_date?: unkno
   const stored = await getCoverageExpectations();
   const weekdaysRaw = Array.isArray(stored[COVERAGE_WEEKDAYS_KEY]) ? stored[COVERAGE_WEEKDAYS_KEY] : null;
   const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
+  const { metNaam } = await dekkingNamen(stored);
   return vergelijkVerwachtingenMetPraktijk(
-    rows,
+    metNaam(rows),
     Object.fromEntries(Object.entries(stored).filter(([k]) => !isReservedCoverageKey(k))),
     weekdays,
     parseWeekdagPerioden(stored),
@@ -82,12 +114,10 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
       getLeaveData({ endOnOrAfter: from }),
       getSwapsData(),
     ]);
-    // Zelfde weekdag-toewijzing + uitzonderingen als bij het instellen, zodat
-    // het dag-type per dag consistent bepaald wordt.
-    const weekdaysRaw = Array.isArray(stored[COVERAGE_WEEKDAYS_KEY]) ? stored[COVERAGE_WEEKDAYS_KEY] : null;
-    const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
-    const overrides = parseOverrides(stored[COVERAGE_OVERRIDES_KEY]);
-    const weekdagPerioden = parseWeekdagPerioden(stored);
+    // Dekking op De Lijn-codes (11-10): de naam per dag komt uit
+    // dekkingDagtypeVanDag, met dezelfde weekdagen, periodes en
+    // uitzonderingen als hier (laadDagtypeKalender leest dezelfde config).
+    const { voorRij } = await dekkingNamen(stored);
     // Goedgekeurde afwezigheden: de matrix-cel van die chauffeur telt die dag
     // niet mee als invulling — zijn dienst valt dus (terecht) als gat uit de
     // dekking. Matrix-cellen zijn op náám, leave op user-id; naam-resolutie
@@ -145,7 +175,7 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
       const date = String(r.source_date ?? "");
       // Mét herkomst: de dekking toont per dag wáárom dit het dag-type is
       // (Excel-kolom B, uitzondering, weekdagperiode of basis-toewijzing).
-      const { dayType, bron } = resolveDayTypeMetBron(r.day_type, date, weekdays, weekdagPerioden, overrides);
+      const { dayType, bron } = voorRij(r);
       const expected = stored[dayType] || [];
       // Cellen van afwezigen tellen niet mee als invulling; onthoud per
       // weggefilterde code wie uitviel en waarom — de reden reist mee naar de
@@ -642,8 +672,9 @@ export function mountCoverageRoutes(app: express.Express) {
         const d = String(r.source_date ?? "");
         return d >= from && d <= to;
       });
+      const { metNaam } = await dekkingNamen(stored);
       const voorstellen = stelVerwachtingenVoor(
-        rows as any[],
+        metNaam(rows as any[]),
         weekdays,
         parseWeekdagPerioden(stored),
         parseOverrides(stored[COVERAGE_OVERRIDES_KEY]),

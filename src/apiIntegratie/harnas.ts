@@ -38,6 +38,8 @@ const mem = vi.hoisted(() => ({
   // Dienstregelingversies (08-10): leeg = geen versies, dan is services de hele lijst.
   dienstregelingen: [] as any[],
   dagtypeKalender: [] as any[],
+  /** De Lijn-code → portaal-dagtype (dagtype_codes), voor de dekking op codes (11-10). */
+  dagtypeCodeKoppeling: {} as Record<string, string | null>,
   updates: [] as any[],
   diversions: [] as any[],
   planning: [] as any[],
@@ -889,6 +891,7 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       return segs;
     },
     laadDagtypeKalender: async () => kalenderMock(),
+    laadDekkingCodeKoppeling: async () => ({ ...(mem.dagtypeCodeKoppeling ?? {}) }),
     getDagtypeKalender: async (opts?: { van?: string; tot?: string }) =>
       [...(mem.dagtypeKalender ?? [])].filter((d: any) => (!opts?.van || d.datum >= opts.van) && (!opts?.tot || d.datum <= opts.tot)).sort((a: any, b: any) => a.datum.localeCompare(b.datum)),
     schrijfDagtypeKalender: async (dagen: any[], bron: string) => {
@@ -1138,6 +1141,7 @@ beforeEach(() => {
   mem.planningCodes = [];
   mem.coverageExpectations = {};
   mem.dagtypeKalender = [];
+  mem.dagtypeCodeKoppeling = {};
   mem.activity = [];
   mem.lastAuthEventAt = null;
   mem.sessionMetaWrites = [];
