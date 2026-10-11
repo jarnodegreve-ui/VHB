@@ -2,20 +2,27 @@ import type express from "express";
 import { authenticate, requireRole } from "../middleware.js";
 import { isMissingTableError } from "../deviceGate.js";
 import type { AuthenticatedRequest } from "../types.js";
-import { DAG_DMJ } from "../helpers.js";
-import { DAGTYPE_KALENDER_MIGRATIE, getDagtypeKalender, getPlanningMatrixRows, logActivity, schrijfDagtypeKalender } from "../storage.js";
-import { isDagtypeCode } from "../../shared/dagtype.js";
+import { addDagenIso, brusselsDay, DAG_DMJ } from "../helpers.js";
+import { DAGTYPE_KALENDER_MIGRATIE, getDagtypeKalender, getPlanningMatrixRows, laadDagtypeKalender, logActivity, schrijfDagtypeKalender } from "../storage.js";
+import { dagtypeLabel, dagtypePeriode, dagtypeVanDag, isDagtypeCode } from "../../shared/dagtype.js";
 import { samenvatting } from "../../shared/dagtypeKalender.js";
-import { dagtypeKalenderBodySchema } from "../../shared/schemas/dagtypeKalender.js";
+import { isIsoDag } from "../../shared/rapporten/periode.js";
+import { dagtypeKalenderBodySchema, dagtypeKalenderDagWijzigingSchema } from "../../shared/schemas/dagtypeKalender.js";
 import { ISO_DAY_RE } from "./collectie.js";
 import { valideerRecord } from "./valideer.js";
 
 /**
  * Dagtypekalender (11-10): het De Lijn-dagtype en het verlofmaximum per dag,
  * uit het CSV van Jarno. Lezen mag de staf (het scherm), schrijven is
- * admin-werk. De kalender wint nooit van de code in de planningsmatrix
- * (keuze Jarno): een verschil komt als opmerking terug in `afwijkingen`.
+ * admin-werk: het hele bestand (PUT) of één dag met de hand (PATCH, deel 2).
+ * De kalender wint nooit van de code in de planningsmatrix (keuze Jarno):
+ * een verschil komt als opmerking terug in `afwijkingen`.
+ * GET /api/dagtypes (elke rol) geeft het afgeleide dagtype per dag, zoals het
+ * bord het rekent; Mijn dag toont ermee waarom de tijden anders zijn.
  */
+
+/** Hoogstens een kwartaal per lezing: Mijn dag vraagt drie dagen, het bord een maand. */
+const DAGTYPES_MAX_DAGEN = 92;
 
 /** Dagen waar de planningsmatrix een ándere bekende code draagt dan de kalender. */
 const afwijkingenMetMatrix = (
@@ -87,6 +94,59 @@ export function mountDagtypeKalenderRoutes(app: express.Express) {
       }
       console.error("Dagtypekalender opslaan is mislukt.", err);
       res.status(500).json({ error: "De dagtypekalender opslaan is mislukt." });
+    }
+  });
+
+  app.patch("/api/dagtypekalender/:datum", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    const datum = String(req.params.datum ?? "");
+    if (!isIsoDag(datum)) return res.status(400).json({ error: "Ongeldige datum." });
+    const body = valideerRecord(res, dagtypeKalenderDagWijzigingSchema, req.body ?? {});
+    if (!body) return;
+    try {
+      const vorige = (await getDagtypeKalender({ van: datum, tot: datum }))[0] ?? null;
+      await schrijfDagtypeKalender([{ datum, typedag: body.typedag, maxVerlof: body.maxVerlof }], "hand");
+      const dag = (await getDagtypeKalender({ van: datum, tot: datum }))[0] ?? null;
+      const max = (v: number | null) => (v === null ? "zoals de instellingen" : String(v));
+      const delen: string[] = [];
+      if (!vorige || vorige.typedag !== body.typedag) delen.push(`dagtype ${vorige ? `${vorige.typedag} → ` : ""}${body.typedag}`);
+      if (!vorige || vorige.maxVerlof !== body.maxVerlof) delen.push(`max. verlof ${vorige ? `${max(vorige.maxVerlof)} → ` : ""}${max(body.maxVerlof)}`);
+      await logActivity(
+        req,
+        "planning",
+        "Dagtype aangepast",
+        `${DAG_DMJ(datum)}${vorige ? "" : " toegevoegd"}: ${delen.length > 0 ? delen.join(", ") : "ongewijzigd opnieuw bewaard"}.`,
+      );
+      res.json(dag);
+    } catch (err) {
+      if (isMissingTableError(err)) {
+        return res.status(503).json({ error: `De tabel dagtype_kalender bestaat nog niet: draai ${DAGTYPE_KALENDER_MIGRATIE} in de SQL Editor.` });
+      }
+      console.error("Dagtype aanpassen is mislukt.", err);
+      res.status(500).json({ error: "De dag opslaan is mislukt." });
+    }
+  });
+
+  app.get("/api/dagtypes", authenticate, async (req: AuthenticatedRequest, res) => {
+    try {
+      const vandaag = brusselsDay(new Date().toISOString());
+      const van = isIsoDag(req.query.van) ? req.query.van : vandaag;
+      const tot = isIsoDag(req.query.tot) ? req.query.tot : addDagenIso(van, 7);
+      if (tot < van || addDagenIso(van, DAGTYPES_MAX_DAGEN) < tot) {
+        return res.status(400).json({ error: `Geef een periode van hoogstens ${DAGTYPES_MAX_DAGEN} dagen (van, tot).` });
+      }
+      // Dezelfde afleiding als het bord en de opbouw (dagtypeVanDag): de code
+      // in de planningsmatrix wint, dan de kalender, dan de dekking, dan de weekdag.
+      const [rows, kalender] = await Promise.all([getPlanningMatrixRows({ van, tot }), laadDagtypeKalender()]);
+      const matrixPerDag = new Map((rows as Array<{ source_date?: unknown; day_type?: unknown }>).map((r) => [String(r.source_date ?? "").slice(0, 10), r.day_type]));
+      const dagtypes: Record<string, { code: string; label: string; periode: string; bron: string } | null> = {};
+      for (let d = van; d <= tot; d = addDagenIso(d, 1)) {
+        const { code, bron } = dagtypeVanDag(d, matrixPerDag.get(d), kalender);
+        dagtypes[d] = code ? { code, label: dagtypeLabel(code), periode: dagtypePeriode(code), bron } : null;
+      }
+      res.json({ van, tot, dagtypes });
+    } catch (err) {
+      console.error("Dagtypes laden is mislukt.", err);
+      res.status(500).json({ error: "De dagtypes konden niet laden." });
     }
   });
 }

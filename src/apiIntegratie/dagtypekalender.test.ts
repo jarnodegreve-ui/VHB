@@ -69,6 +69,56 @@ describe('dagtypekalender', () => {
     expect(bord.json.dagtypes['2026-10-14']).toMatchObject({ code: '23' });
   });
 
+  it('de admin past één dag met de hand aan: bron hand, een logregel met wat veranderde, en de staf ziet hem zo terug', async () => {
+    await api('PUT', '/api/dagtypekalender', { token: 'tok-admin', body: { dagen } });
+    expect((await api('PATCH', '/api/dagtypekalender/2026-10-13', { token: 'tok-planner', body: { typedag: '33', maxVerlof: 7 } })).status).toBe(403);
+    expect((await api('PATCH', '/api/dagtypekalender/2026-02-30', { token: 'tok-admin', body: { typedag: '33', maxVerlof: 7 } })).status).toBe(400);
+    expect((await api('PATCH', '/api/dagtypekalender/2026-10-13', { token: 'tok-admin', body: { typedag: '99', maxVerlof: 7 } })).status).toBe(400);
+
+    const res = await api('PATCH', '/api/dagtypekalender/2026-10-13', { token: 'tok-admin', body: { typedag: '33', maxVerlof: null } });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ datum: '2026-10-13', typedag: '33', maxVerlof: null, bron: 'hand' });
+    expect(mem.activity.at(-1)).toMatchObject({ domain: 'planning', action: 'Dagtype aangepast' });
+    expect(mem.activity.at(-1).message).toBe('13/10/2026: dagtype 22 → 33, max. verlof 2 → zoals de instellingen.');
+
+    // Een dag die nog niet in de kalender stond komt erbij.
+    const nieuw = await api('PATCH', '/api/dagtypekalender/2026-10-20', { token: 'tok-admin', body: { typedag: '22', maxVerlof: 3 } });
+    expect(nieuw.status).toBe(200);
+    expect(mem.activity.at(-1).message).toBe('20/10/2026 toegevoegd: dagtype 22, max. verlof 3.');
+
+    const lijst = await api('GET', '/api/dagtypekalender?van=2026-10-01&tot=2026-10-31', { token: 'tok-planner' });
+    expect(lijst.json.dagen.map((d: any) => `${d.datum} ${d.typedag} ${d.maxVerlof} ${d.bron}`)).toEqual([
+      '2026-10-13 33 null hand', '2026-10-14 33 7 csv', '2026-10-18 28 0 csv', '2026-10-20 22 3 hand',
+    ]);
+    // De verloflimiet van die dag valt terug op de instellingen (geen eigen maximum meer).
+    const limieten = await api('GET', '/api/verlof/limieten', { token: 'tok-a' });
+    expect(limieten.json.perDag).toEqual({ '2026-10-14': 7, '2026-10-18': 0, '2026-10-20': 3 });
+  });
+
+  it('GET /api/dagtypes geeft elke rol het dagtype per dag: matrixcode, dan kalender, dan dekking of weekdag', async () => {
+    await api('PUT', '/api/dagtypekalender', { token: 'tok-admin', body: { dagen } });
+    const res = await api('GET', '/api/dagtypes?van=2026-10-12&tot=2026-10-18', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.van).toBe('2026-10-12');
+    expect(res.json.tot).toBe('2026-10-18');
+    // 12-10: geen matrixcode en niet in de kalender: de dekking (zonder instellingen haar standaardweek, maandag schooldag).
+    expect(res.json.dagtypes['2026-10-12']).toEqual({ code: '21', label: 'Maandag schooldag', periode: 'schooldag', bron: 'dekking' });
+    // 13-10: de kalender (de matrixrij heeft geen code).
+    expect(res.json.dagtypes['2026-10-13']).toEqual({ code: '22', label: 'Dinsdag schooldag', periode: 'schooldag', bron: 'kalender' });
+    // 14-10: de matrixcode wint van de kalender.
+    expect(res.json.dagtypes['2026-10-14']).toMatchObject({ code: '23', bron: 'excel' });
+    // 18-10: feestdag uit de kalender; de periode is "feestdag".
+    expect(res.json.dagtypes['2026-10-18']).toEqual({ code: '28', label: 'Feestdag', periode: 'feestdag', bron: 'kalender' });
+    expect(Object.keys(res.json.dagtypes)).toHaveLength(7);
+
+    // Zonder parameters: vandaag tot en met zeven dagen verder. Te groot of omgekeerd: 400.
+    const standaard = await api('GET', '/api/dagtypes', { token: 'tok-a' });
+    expect(standaard.status).toBe(200);
+    expect(Object.keys(standaard.json.dagtypes)).toHaveLength(8);
+    expect((await api('GET', '/api/dagtypes?van=2026-01-01&tot=2026-06-30', { token: 'tok-a' })).status).toBe(400);
+    expect((await api('GET', '/api/dagtypes?van=2026-10-18&tot=2026-10-12', { token: 'tok-a' })).status).toBe(400);
+  });
+
   it('de verloflimieten dragen per dag het maximum uit de kalender, de rest volgt de instellingen', async () => {
     await api('PUT', '/api/dagtypekalender', { token: 'tok-admin', body: { dagen } });
     const res = await api('GET', '/api/verlof/limieten', { token: 'tok-a' });

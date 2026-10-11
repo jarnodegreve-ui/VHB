@@ -12,7 +12,9 @@ import type { CodeLegend } from '../../lib/maandplanning';
  * cellen. De inhoud komt uit `berekenCodeLegend` (src/lib/maandplanning.ts).
  * Verplaatst uit CapacityView.tsx op 09-10 (stap 1 van de splitsing).
  */
-export function Legende({ legend }: { legend: CodeLegend }) {
+export type DagtypeMarkeringen = Array<{ letter: string; naam: string }>;
+
+export function Legende({ legend, markeringen = [] }: { legend: CodeLegend; markeringen?: DagtypeMarkeringen }) {
   return (
     <Card padding="md" className="text-xs">
       <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:gap-x-10">
@@ -64,6 +66,15 @@ export function Legende({ legend }: { legend: CodeLegend }) {
               <span className="inline-flex h-6 w-11 items-center justify-center rounded-lg bg-oker-100 text-2xs font-semibold text-oker-800">{new Date().getDate()}</span>
               <span className="font-medium text-slate-700">Vandaag</span>
             </span>
+            {/* Dagtypes van De Lijn die deze maand voorkomen (deel 2, 11-10): dezelfde
+                letter als in de dagkop, neutraal, want het is informatie. */}
+            {markeringen.map((m) => (
+              <span key={m.letter} className="inline-flex items-center gap-2">
+                {/* 2xs: letter in een badge van vaste maat, dezelfde maat als in de dagkop */}
+                <span className="inline-flex h-6 w-11 items-center justify-center rounded-lg bg-surface-muted text-2xs font-bold text-slate-900">{m.letter}</span>
+                <span className="font-medium text-slate-700">{m.naam}</span>
+              </span>
+            ))}
           </div>
         </div>
       </div>

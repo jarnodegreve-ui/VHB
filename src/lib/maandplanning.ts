@@ -70,6 +70,21 @@ export const dayHeader = (iso: string) => {
   };
 };
 
+/** Markering van het De Lijn-dagtype in de dagkop van het bord (dagtypekalender
+ *  deel 2, 11-10, keuze Jarno): één letter voor wat niet de gewone week is.
+ *  V = schoolvakantie én juli-augustus (voor het bord dezelfde vakantie),
+ *  E = examen, F = feestdag. Schooldag, zaterdag en zondag krijgen niets:
+ *  dat zegt de weekdag al. De V was er op 17-09 uit (toen berekend uit de
+ *  Vlaamse schoolkalender, zei niets over wie rijdt); nu komt ze uit de
+ *  matrixcode of de kalender en bepaalt ze welke tijden een dienst rijdt. */
+export const dagtypeMarkering = (code: string | null | undefined): { letter: string; naam: string } | null => {
+  if (!code) return null;
+  if (code === '28') return { letter: 'F', naam: 'Feestdag' };
+  if (code[0] === '3' || code[0] === '4') return { letter: 'V', naam: 'Schoolvakantie' };
+  if (code[0] === '5') return { letter: 'E', naam: 'Examen' };
+  return null;
+};
+
 export const sectionOf = (d: { section?: string | null }) => (d.section || 'Overige');
 // Kop boven een sectie: de opgeslagen waarde is de korte ploegnaam uit
 // gebruikersbeheer ("Reguliere"); in het bord leest "Reguliere diensten"

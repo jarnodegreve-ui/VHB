@@ -1,22 +1,27 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, Upload } from 'lucide-react';
 import { Callout } from '../../components/Callout';
 import { Badge, Button, Chip, IconButton } from '../../components/primitives';
-import { ConfirmationModal, EmptyState, Foutkaart, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
-import { StickyThead } from '../../components/Table';
+import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
+import { Modal, SluitKnop } from '../../components/Modal';
+import { Formulier } from '../../components/Formulier';
+import { Field, Input, Select } from '../../components/Field';
+import { CelKnop, rijKlik, StickyThead } from '../../components/Table';
 import { Tabel, TableShell, Td, Th } from '../../components/TabelBasis';
 import { MaandInput } from '../../components/MaandInput';
 import { Zijvak, ZijvakLayout, ZijvakRij, ZijvakTekst } from '../../components/Zijvak';
 import { ActieMenu } from '../../components/ActieMenu';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { apiFetch, apiJson, foutUitAntwoord } from '../../lib/api';
-import { downloadBlob, notify } from '../../lib/ui';
+import { cn, downloadBlob, notify } from '../../lib/ui';
+import { useVeldfouten, useVuil } from '../../lib/formulier';
 import { meldSchrijffout } from '../../lib/fouten';
 import { csvTekst } from '../../lib/csv';
 import { maandLabel } from '../../lib/kalender';
 import { formatDatumDMJ } from '../../lib/format';
 import { rijenUitBestand } from '../../lib/filmnummerImport';
-import { dagtypeLabel, dagtypePeriode } from '../../../shared/dagtype';
+import { DAGTYPE_GROEPEN, dagtypeLabel, dagtypePeriode } from '../../../shared/dagtype';
+import { dagtypeKalenderDagWijzigingSchema } from '../../../shared/schemas/dagtypeKalender';
 import {
   kalenderRijen, kalenderUitRijen, regimeVan, weekdagKortVan,
   type DagtypeKalenderDag, type KalenderSamenvatting, type Overgeslagen,
@@ -27,11 +32,16 @@ import {
  * De Lijn-dagtype en het verlofmaximum per dag, uit het CSV dat De Lijn per
  * jaar levert. Lezen mag de staf, importeren alleen de admin. De kalender
  * wint nooit van de code in de planningsmatrix: een verschil staat hier als
- * opmerking (keuze Jarno 11-10), nooit als blokkade.
+ * opmerking (keuze Jarno 11-10), nooit als blokkade. Deel 2 (11-10): een
+ * admin past één dag met de hand aan (rij openen, `DagBewerkenModal`); zo'n
+ * dag draagt bron "hand" en een volgende CSV-import overschrijft hem weer,
+ * wat de bevestiging dan zegt.
  */
 
+type KalenderRij = DagtypeKalenderDag & { bron: string };
+
 type Antwoord = {
-  dagen: Array<DagtypeKalenderDag & { bron: string }>;
+  dagen: KalenderRij[];
   afwijkingen: Array<{ datum: string; matrix: string; kalender: string }>;
   samenvatting: KalenderSamenvatting;
 };
@@ -57,6 +67,7 @@ export function DagtypeKalenderView({ magBeheren }: { magBeheren: boolean }) {
   const [data, setData] = useState<Antwoord | null>(null);
   const [maand, setMaand] = useState(huidigeMaand);
   const [importKlaar, setImportKlaar] = useState<Import | null>(null);
+  const [bewerk, setBewerk] = useState<KalenderRij | null>(null);
   const [bezig, setBezig] = useState(false);
   const bestandRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +78,8 @@ export function DagtypeKalenderView({ magBeheren }: { magBeheren: boolean }) {
 
   const dagenVanMaand = useMemo(() => (data?.dagen ?? []).filter((d) => d.datum.startsWith(`${maand}-`)), [data, maand]);
   const afwijkingPerDag = useMemo(() => new Map((data?.afwijkingen ?? []).map((a) => [a.datum, a])), [data]);
+  const handDagen = useMemo(() => new Set((data?.dagen ?? []).filter((d) => d.bron === 'hand').map((d) => d.datum)), [data]);
+  const handOverschreven = importKlaar ? importKlaar.dagen.filter((d) => handDagen.has(d.datum)).length : 0;
   const leeg = (data?.samenvatting.aantal ?? 0) === 0;
 
   const kiesBestand = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,10 +201,15 @@ export function DagtypeKalenderView({ magBeheren }: { magBeheren: boolean }) {
                       const afwijking = afwijkingPerDag.get(d.datum);
                       const regime = regimeVan(d.typedag);
                       const weekend = regime === 'zaterdag' || regime === 'zondag' || regime === 'feestdag';
+                      const datumTekst = <><span className="text-slate-500 font-medium">{weekdagKortVan(d.datum)}</span> {formatDatumDMJ(d.datum)}</>;
                       return (
-                        <tr key={d.datum} className="border-b border-hairline-subtle last:border-b-0">
+                        <tr
+                          key={d.datum}
+                          className={cn('border-b border-hairline-subtle last:border-b-0', magBeheren && 'cursor-pointer hover:bg-surface-soft-hover')}
+                          onClick={magBeheren ? rijKlik(() => setBewerk(d)) : undefined}
+                        >
                           <Td nowrap className="px-3 font-semibold text-slate-800">
-                            <span className="text-slate-500 font-medium">{weekdagKortVan(d.datum)}</span> {formatDatumDMJ(d.datum)}
+                            {magBeheren ? <CelKnop label={`Dag ${formatDatumDMJ(d.datum)} bewerken`} onClick={() => setBewerk(d)}>{datumTekst}</CelKnop> : datumTekst}
                           </Td>
                           <Td nowrap className="px-3"><Chip title={dagtypeLabel(d.typedag)}>{d.typedag}</Chip></Td>
                           <Td nowrap className={`px-3 ${weekend ? 'text-slate-500' : 'text-slate-700'}`}>{regimeTekst(d.typedag)}</Td>
@@ -216,7 +234,7 @@ export function DagtypeKalenderView({ magBeheren }: { magBeheren: boolean }) {
         onClose={() => setImportKlaar(null)}
         onConfirm={bevestigImport}
         title="Dagtypekalender importeren"
-        message={importKlaar ? `${importKlaar.dagen.length} dagen gevonden in ${importKlaar.bestand}, van ${formatDatumDMJ(importKlaar.dagen[0].datum)} t/m ${formatDatumDMJ(importKlaar.dagen[importKlaar.dagen.length - 1].datum)}. Dagen die al in de kalender staan worden overschreven, andere dagen blijven staan.` : ''}
+        message={importKlaar ? `${importKlaar.dagen.length} dagen gevonden in ${importKlaar.bestand}, van ${formatDatumDMJ(importKlaar.dagen[0].datum)} t/m ${formatDatumDMJ(importKlaar.dagen[importKlaar.dagen.length - 1].datum)}. Dagen die al in de kalender staan worden overschreven, andere dagen blijven staan.${handOverschreven > 0 ? ` ${handOverschreven === 1 ? 'Eén met de hand aangepaste dag wordt' : `${handOverschreven} met de hand aangepaste dagen worden`} daarbij vervangen door het bestand.` : ''}` : ''}
         confirmText="Importeren"
         variant="warning"
       >
@@ -230,6 +248,108 @@ export function DagtypeKalenderView({ magBeheren }: { magBeheren: boolean }) {
           </div>
         )}
       </ConfirmationModal>
+
+      <DagBewerkenModal
+        dag={bewerk}
+        afwijking={bewerk ? afwijkingPerDag.get(bewerk.datum) ?? null : null}
+        onClose={() => setBewerk(null)}
+        onSaved={() => { setBewerk(null); void zl.opnieuw(); }}
+      />
     </PageShell>
   );
 }
+
+/**
+ * Eén dag met de hand aanpassen (deel 2, 11-10): het dagtype uit de volledige
+ * lijst van De Lijn (ook feestdag en juli-augustus, want dit is de kalender
+ * zelf, niet een afwijking van een dienst) en het verlofmaximum (leeg = de
+ * gewone verlofinstellingen). De PATCH is idempotent, dus opnieuw proberen mag.
+ */
+function DagBewerkenModal({ dag, afwijking, onClose, onSaved }: {
+  dag: KalenderRij | null;
+  afwijking: { matrix: string; kalender: string } | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const open = dag !== null;
+  const [typedag, setTypedag] = useState('');
+  const [maxVerlof, setMaxVerlof] = useState('');
+  const [bezig, setBezig] = useState(false);
+  const fouten = useVeldfouten();
+  const [geladen, setGeladen] = useState(0);
+  const { vuil } = useVuil({ typedag, maxVerlof }, open, geladen);
+
+  useEffect(() => {
+    if (!dag) return;
+    setTypedag(dag.typedag);
+    setMaxVerlof(dag.maxVerlof === null ? '' : String(dag.maxVerlof));
+    fouten.wis();
+    setGeladen((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dag]);
+
+  const opslaan = async () => {
+    if (!dag || bezig) return;
+    const max = maxVerlof.trim() === '' ? null : Number(maxVerlof);
+    const body = fouten.controleer(dagtypeKalenderDagWijzigingSchema, { typedag, maxVerlof: Number.isNaN(max) ? -1 : max });
+    if (!body) return;
+    setBezig(true);
+    try {
+      const res = await apiFetch(`/api/dagtypekalender/${dag.datum}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const antwoord: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (res.status === 400 && fouten.vanServer(antwoord)) return;
+        meldSchrijffout('Dag opslaan', { status: res.status, message: (antwoord as { error?: string } | null)?.error }, () => void opslaan());
+        return;
+      }
+      notify(`${formatDatumDMJ(dag.datum)} aangepast: ${dagtypeLabel(body.typedag).toLowerCase()}, max. verlof ${body.maxVerlof ?? 'zoals de instellingen'}.`, 'success');
+      onSaved();
+    } catch (err) {
+      meldSchrijffout('Dag opslaan', err, () => void opslaan());
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} vuil={vuil} maxWidth="sm" className="!p-0">
+      <ModalHeader
+        title={dag ? `${hoofdletterVan(weekdagKortVan(dag.datum))} ${formatDatumDMJ(dag.datum)}` : 'Dag bewerken'}
+        description="Het dagtype bepaalt welke tijden een dienst met een afwijking rijdt; het maximum hoeveel chauffeurs die dag tegelijk met verlof kunnen."
+        onClose={onClose}
+      />
+      <Formulier onVerstuur={opslaan} noValidate className="space-y-5 p-6">
+        <Field
+          label="Dagtype"
+          error={fouten.fouten.typedag}
+          hint={afwijking ? `De planningsmatrix zegt ${afwijking.matrix} (${dagtypeLabel(afwijking.matrix).toLowerCase()}) en gaat altijd voor; dit is een opmerking, geen blokkade.` : undefined}
+        >
+          <Select value={typedag} onChange={(e) => { setTypedag(e.target.value); fouten.wisVeld('typedag'); }}>
+            {DAGTYPE_GROEPEN.map((g) => (
+              <optgroup key={g.groep} label={g.groep}>
+                {g.dagtypes.map((d) => <option key={d.code} value={d.code}>{d.code} · {d.label}</option>)}
+              </optgroup>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Max. verlof tegelijk" hint="Leeg = de gewone verlofinstellingen; 0 = volzet, nooit een blokkade." error={fouten.fouten.maxVerlof}>
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={200}
+            value={maxVerlof}
+            onChange={(e) => { setMaxVerlof(e.target.value); fouten.wisVeld('maxVerlof'); }}
+            className="max-w-[8rem] tabular-nums"
+          />
+        </Field>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <SluitKnop onClose={onClose} variant="secondary" disabled={bezig}>Annuleren</SluitKnop>
+          <Button type="submit" variant="primary" bezig={bezig}>Opslaan</Button>
+        </div>
+      </Formulier>
+    </Modal>
+  );
+}
+
+const hoofdletterVan = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
