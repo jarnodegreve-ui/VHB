@@ -1,6 +1,6 @@
 import type { Service } from '../../types';
 import { normalizeTimeString } from '../../lib/shiftTime';
-import { variantenSchoon } from '../../../shared/dagtype';
+import { DIENST_TIJD_VELDEN, variantenSchoon } from '../../../shared/dagtype';
 
 /**
  * Rijen uit het Excel-dienstoverzicht (xlsx `sheet_to_json`, één object per
@@ -87,26 +87,35 @@ export function neemVariantenOver(geimporteerd: Service[], huidig: Service[]): {
   diensten: Service[];
   /** Hoeveel diensten hun afwijkingen meekregen. */
   overgenomen: number;
+  /** Dienstnummers die hun afwijkingen meekregen terwijl hun gewone tijden in
+   *  het bestand veranderden: de afwijking is een volledige set en kan dus
+   *  verouderd zijn (controle-ronde 10-10, punt 2). */
+  tijdenGewijzigd: string[];
   /** Dienstnummers met afwijkingen die niet in het bestand staan. */
   nietInBestand: string[];
 } {
-  const metVarianten = new Map<string, NonNullable<Service['varianten']>>();
+  const metVarianten = new Map<string, { varianten: NonNullable<Service['varianten']>; dienst: Service }>();
   for (const s of huidig) {
     const v = variantenSchoon(s.varianten);
-    if (v) metVarianten.set(nummerSleutel(s.serviceNumber), v);
+    if (v && !metVarianten.has(nummerSleutel(s.serviceNumber))) metVarianten.set(nummerSleutel(s.serviceNumber), { varianten: v, dienst: s });
   }
+  const tijd = (s: Service, veld: (typeof DIENST_TIJD_VELDEN)[number]) => String(s[veld] ?? '').trim();
   let overgenomen = 0;
   const inBestand = new Set<string>();
+  const tijdenGewijzigd: string[] = [];
   const diensten = geimporteerd.map((s) => {
     const k = nummerSleutel(s.serviceNumber);
     inBestand.add(k);
-    const v = metVarianten.get(k);
-    if (!v) return s;
+    const oud = metVarianten.get(k);
+    if (!oud) return s;
     overgenomen += 1;
-    return { ...s, varianten: v.map((x) => ({ ...x, dagtypes: [...x.dagtypes] })) };
+    if (DIENST_TIJD_VELDEN.some((veld) => tijd(oud.dienst, veld) !== tijd(s, veld)) && !tijdenGewijzigd.includes(s.serviceNumber.trim())) {
+      tijdenGewijzigd.push(s.serviceNumber.trim());
+    }
+    return { ...s, varianten: oud.varianten.map((x) => ({ ...x, dagtypes: [...x.dagtypes] })) };
   });
-  const nietInBestand = huidig
+  const nietInBestand = [...new Set(huidig
     .filter((s) => metVarianten.has(nummerSleutel(s.serviceNumber)) && !inBestand.has(nummerSleutel(s.serviceNumber)))
-    .map((s) => s.serviceNumber.trim());
-  return { diensten, overgenomen, nietInBestand };
+    .map((s) => s.serviceNumber.trim()))];
+  return { diensten, overgenomen, tijdenGewijzigd, nietInBestand };
 }

@@ -104,3 +104,20 @@ describe('isValidBusvakTime / normalizeTimeString', () => {
     expect(normalizeTimeString('26:16')).toBe('26:16');
   });
 });
+
+describe('tijden zonder dubbelpunt (iPhone-cijferklavier, controle-ronde 10-10)', () => {
+  it('normalizeTimeString maakt van "0630", "630" en "2616" een busvaktijd; wat geen tijd is komt getrimd terug', () => {
+    expect(normalizeTimeString('0630')).toBe('06:30');
+    expect(normalizeTimeString('630')).toBe('06:30');
+    expect(normalizeTimeString('2616')).toBe('26:16');
+    expect(normalizeTimeString(' 6:30 ')).toBe('06:30');
+    expect(normalizeTimeString('6:3')).toBe('6:3');
+    expect(normalizeTimeString('')).toBe('');
+  });
+
+  it('isValidBusvakTime volgt dezelfde regel', () => {
+    expect(isValidBusvakTime('0630')).toBe(true);
+    expect(isValidBusvakTime('4800')).toBe(false);
+    expect(isValidBusvakTime('6:3')).toBe(false);
+  });
+});

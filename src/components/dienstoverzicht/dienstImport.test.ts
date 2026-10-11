@@ -38,6 +38,7 @@ describe('neemVariantenOver', () => {
       { id: '2', serviceNumber: '2101', startTime: '04:40', endTime: '07:55' },
     ], huidig as any);
     expect(uit.overgenomen).toBe(1);
+    expect(uit.tijdenGewijzigd).toEqual(['eek6']);
     expect(uit.nietInBestand).toEqual(['EEK1']);
     expect(uit.diensten[0].varianten).toEqual([wo]);
     expect(uit.diensten[0].startTime2).toBe('15:10');
@@ -48,6 +49,13 @@ describe('neemVariantenOver', () => {
 
   it('zonder afwijkingen in de huidige lijst verandert er niets', () => {
     const bestand = [{ id: '1', serviceNumber: '2101', startTime: '04:36', endTime: '07:52' }];
-    expect(neemVariantenOver(bestand, [huidig[2]] as any)).toEqual({ diensten: bestand, overgenomen: 0, nietInBestand: [] });
+    expect(neemVariantenOver(bestand, [huidig[2]] as any)).toEqual({ diensten: bestand, overgenomen: 0, tijdenGewijzigd: [], nietInBestand: [] });
+  });
+
+  it('ongewijzigde gewone tijden: de afwijking reist mee zonder waarschuwing', () => {
+    const bestand = [{ id: '1', serviceNumber: 'EEK6', startTime: '06:30', endTime: '08:30', startTime2: '15:00', endTime2: '17:00' }];
+    const uit = neemVariantenOver(bestand, huidig as any);
+    expect(uit.tijdenGewijzigd).toEqual([]);
+    expect(uit.diensten[0].varianten).toEqual([wo]);
   });
 });

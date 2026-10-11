@@ -1,5 +1,6 @@
 import { addDays, isoDate } from './datum';
 import { eindtijdMinuten } from '../../shared/dienstGereden';
+import { normaliseerTijd } from '../../shared/tijdNotatie';
 
 /** 'HH:MM' → minuten sinds middernacht van de dienstdag, of null bij een
  *  ongeldige tijd. Uren ≥ 24 zijn geldig: het Dienstoverzicht gebruikt de
@@ -9,16 +10,14 @@ import { eindtijdMinuten } from '../../shared/dienstGereden';
  *  Eén bron van waarheid — de server-import en het beheerformulier
  *  accepteerden elk hun eigen (lossere) variant, waardoor "08:75" een
  *  geldige planningsrij kon worden die elke component anders las. */
-export const isValidBusvakTime = (t: string): boolean => parseHHMM(t) !== null;
+export const isValidBusvakTime = (t: string): boolean => normaliseerTijd(t) !== null;
 
 /** "6:00" → "06:00": niet-gepadde uren sorteren lexicografisch fout
  *  ("14:00" < "6:00") — normaliseren op de invoergrens houdt alle
- *  string-sorteringen elders correct. */
-export const normalizeTimeString = (t: string): string => {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? '').trim());
-  if (!m) return String(t ?? '').trim();
-  return `${m[1].padStart(2, '0')}:${m[2]}`;
-};
+ *  string-sorteringen elders correct. Sinds 10-10 ook zonder dubbelpunt
+ *  ("0630", het iPhone-cijferklavier heeft er geen); één regel met de server
+ *  (shared/tijdNotatie.ts normaliseerTijd). Wat geen tijd is, komt getrimd terug. */
+export const normalizeTimeString = (t: string): string => normaliseerTijd(t) ?? String(t ?? '').trim();
 
 /** 'HH:MM' → minuten; busvak-uren tot 47 toegestaan (26:16 = dag erna). null bij vuil.
  *  Eén implementatie met de server (shared/dienstGereden.ts, J 24-09). */

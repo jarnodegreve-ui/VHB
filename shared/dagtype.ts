@@ -19,6 +19,7 @@ import {
   DEFAULT_WEEKDAYS, WEEKDAY_PERIOD_KEY_RE, parseOverrides, resolveDayTypeMetBron,
   type DayTypeOverride, type WeekdagPeriode,
 } from './coverageGaps.js';
+import { normaliseerTijd } from './tijdNotatie.js';
 
 // --- De lijst ----------------------------------------------------------------
 
@@ -46,6 +47,18 @@ export const DAGTYPES: readonly Dagtype[] = [
 ];
 
 const LABEL_PER_CODE: Readonly<Record<string, string>> = Object.fromEntries(DAGTYPES.map((d) => [d.code, d.label]));
+
+/**
+ * De dagtypes die het portaal vandaag zelf kan afleiden (controle-ronde
+ * 10-10, punt 3): schooldag en schoolvakantie uit de dekkingskalender, zaterdag
+ * en zondag uit de weekdag. Feestdag (28), juli-augustus (41-45) en examen
+ * (51-55) komen alleen uit een De Lijn-code in de matrix; de dekking noemt een
+ * feestdag "zondag" en de zomer "vakantieperiode". Een afwijking op zo'n code
+ * zou op een dag zonder matrixcode nooit rijden, dus de keuzelijst biedt ze
+ * niet aan tot de dekking ze kan leveren.
+ */
+export const KIESBARE_DAGTYPES: ReadonlySet<string> = new Set(['21', '22', '23', '24', '25', '31', '32', '33', '34', '35', '26', '27']);
+export const isKiesbaarDagtype = (code: string): boolean => KIESBARE_DAGTYPES.has(code);
 
 /** De dagtypes per groep, in de volgorde van de keuzelijst (het scherm). */
 export const DAGTYPE_GROEPEN: ReadonlyArray<{ groep: DagtypeGroep; dagtypes: readonly Dagtype[] }> = (
@@ -170,6 +183,14 @@ export function dagtypeVanDag(datum: string, excelDagtype?: unknown, kalender?: 
   return { code: `${periode}${dow}`, bron };
 }
 
+// --- Tijden ------------------------------------------------------------------
+
+/** De tijdnotatie staat in shared/tijdNotatie.ts (eigen bestand, zie daar waarom). */
+export { normaliseerTijd } from './tijdNotatie.js';
+
+/** Een loopnummer is kort; langer is geen loopnummer (servergrens, punt 16). */
+const LOOP_MAX = 20;
+
 // --- Tijden per dagtype ---------------------------------------------------------
 
 /** De velden van een dienst waar de planning-opbouw naar kijkt, per deel. */
@@ -189,26 +210,33 @@ export type MetVarianten = DienstTijden & { varianten?: DienstVariant[] | null }
 
 const tekst = (v: unknown): string => (v === null || v === undefined ? '' : String(v).trim());
 
-/** Alleen de tijdvelden van een dienst of variant, leeg = weggelaten. */
+/** Alleen de tijdvelden van een dienst of variant, genormaliseerd: een tijd
+ *  die geen tijd is valt weg, een loopnummer wordt getrimd en begrensd;
+ *  leeg = weggelaten. */
 export const tijdenVan = (bron: DienstTijden): DienstTijden => {
   const uit: DienstTijden = {};
   for (const veld of DIENST_TIJD_VELDEN) {
     const w = tekst(bron[veld]);
-    if (w) uit[veld] = w;
+    if (!w) continue;
+    if (veld.startsWith('loopnr')) uit[veld] = w.slice(0, LOOP_MAX);
+    else {
+      const tijd = normaliseerTijd(w);
+      if (tijd) uit[veld] = tijd;
+    }
   }
   return uit;
 };
 
-/** Minstens één deel met begin én einde; anders is het geen set tijden. */
-const heeftTijden = (t: DienstTijden): boolean =>
-  Boolean((t.startTime && t.endTime) || (t.startTime2 && t.endTime2) || (t.startTime3 && t.endTime3));
+/** Deel 1 met begin én einde, zoals bij een gewone dienst (het formulier
+ *  eist het ook, controle-ronde 10-10, punt 12); anders is het geen set tijden. */
+const heeftTijden = (t: DienstTijden): boolean => Boolean(t.startTime && t.endTime);
 
 /**
  * Varianten zoals ze opgeslagen en vergeleken worden: alleen bekende
  * dagtypecodes, elk hoogstens in één variant (de eerste wint), zonder lege
- * varianten en zonder varianten zonder één volledig deel (een afwijking
- * "rijdt niet" bestaat niet: dan hoort de code niet in de matrix); undefined
- * als er niets overblijft.
+ * varianten en zonder varianten zonder deel 1 (een afwijking "rijdt niet"
+ * bestaat niet: dan hoort de code niet in de matrix); undefined als er niets
+ * overblijft.
  */
 export function variantenSchoon(raw: unknown): DienstVariant[] | undefined {
   if (!Array.isArray(raw)) return undefined;
