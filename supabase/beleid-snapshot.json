@@ -446,6 +446,48 @@
       "grantable": false,
       "grantee": "service_role",
       "privilege": "DELETE",
+      "tabel": "dagtype_kalender"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "INSERT",
+      "tabel": "dagtype_kalender"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "REFERENCES",
+      "tabel": "dagtype_kalender"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "SELECT",
+      "tabel": "dagtype_kalender"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRIGGER",
+      "tabel": "dagtype_kalender"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "TRUNCATE",
+      "tabel": "dagtype_kalender"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "UPDATE",
+      "tabel": "dagtype_kalender"
+    },
+    {
+      "grantable": false,
+      "grantee": "service_role",
+      "privilege": "DELETE",
       "tabel": "dienst_loops"
     },
     {
@@ -2428,6 +2470,11 @@
       "force_rls": false,
       "rls": true,
       "tabel": "dagtype_codes"
+    },
+    {
+      "force_rls": false,
+      "rls": true,
+      "tabel": "dagtype_kalender"
     },
     {
       "force_rls": false,
