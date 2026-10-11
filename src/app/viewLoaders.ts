@@ -42,6 +42,7 @@ const VIEWS: Record<View, { pad: string; laad: Loader }> = {
   'beheer-roosters': view('views/admin/ManageSchedulesView', () => import('../views/admin/ManageSchedulesView')),
   'planning-matrix': view('views/admin/PlanningMatrixView', () => import('../views/admin/PlanningMatrixView')),
   'planning-codes': view('views/admin/PlanningCodesView', () => import('../views/admin/PlanningCodesView')),
+  dagtypekalender: view('views/admin/DagtypeKalenderView', () => import('../views/admin/DagtypeKalenderView')),
   dienstoverzicht: view('views/ServicesView', () => import('../views/ServicesView')),
   dekking: view('views/CoverageView', () => import('../views/CoverageView')),
   'verlof-kalender': view('views/admin/VerlofKalenderView', () => import('../views/admin/VerlofKalenderView')),

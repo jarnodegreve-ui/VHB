@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, ArrowLeftRight, Bell, Bus, BusFront, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
   Hash, HeartPulse, History, IdCard, Inbox, LayoutDashboard, ListChecks, Map as MapIcon, MapPin, Palette, Phone, Plus, Settings, Smartphone,
-  Sun, Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route, FileBarChart, Mail } from 'lucide-react';
+  Sun, Sunrise, Thermometer, Users, Wrench, Zap, CalendarCheck2, Coins, Route, FileBarChart, Mail, CalendarRange } from 'lucide-react';
 import type { Role, View } from '../types';
 import { heeftRol, type Toegang } from '../../shared/toegang';
 
@@ -72,6 +72,8 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'beheer-roosters', pad: 'beheer/planning', label: 'Beheer planning', omschrijving: 'Importeer en herbouw de planning.', icoon: CalendarCog, sectie: 'planning', rollen: STAF },
   { view: 'planning-matrix', pad: 'beheer/planningsoverzicht', label: 'Planningsoverzicht', omschrijving: 'Controleer de geïmporteerde matrix per dag en chauffeur.', icoon: FileText, sectie: 'planning', breed: true, rollen: STAF },
   { view: 'planning-codes', pad: 'beheer/planningscodes', label: 'Planningscodes', omschrijving: 'Betekenis van matrixcodes.', icoon: Hash, sectie: 'planning', rollen: STAF },
+  // 11-10 (keuze Jarno): het De Lijn-dagtype en het verlofmaximum per dag, uit het CSV van De Lijn.
+  { view: 'dagtypekalender', pad: 'beheer/dagtypekalender', label: 'Dagtypekalender', omschrijving: 'Welk dagtype elke dag heeft (schooldag, vakantie, examen, feestdag) en hoeveel verlof er dan kan.', icoon: CalendarRange, sectie: 'planning', rollen: STAF },
   // 3D (23-09): Dienstoverzicht en Beheer dienstoverzicht zijn één scherm,
   // alleen voor planner en admin; het oude pad /dienstoverzicht is een alias.
   { view: 'dienstoverzicht', pad: 'beheer/dienstoverzicht', label: 'Dienstoverzicht', omschrijving: 'Alle diensten, uren en loopnummers; hier onderhoud je ze.', icoon: Bus, sectie: 'planning', rollen: STAF },

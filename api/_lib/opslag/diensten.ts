@@ -3,6 +3,8 @@ import { brusselsDay, toDatabaseService, toPublicService } from "../../helpers.j
 import type { ServiceRecord } from "../../types.js";
 import { hoortBijVersie, oudsteVersie, versieVoorDatum } from "../../../shared/dienstregeling.js";
 import { kalenderUitDekking, variantenSchoon, type DagtypeKalender } from "../../../shared/dagtype.js";
+import { perDagVan } from "../../../shared/dagtypeKalender.js";
+import { getDagtypeKalender } from "./dagtypeKalender.js";
 import { verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
 import { isMissingColumnError } from "./fouten.js";
@@ -320,12 +322,18 @@ export const saveCoverageExpectations = async (map: Record<string, string[]>) =>
  *  van een dag afleidt als de planningsmatrix het niet meegeeft: de
  *  weekdag-toewijzing, de periodes en de uitzonderingen van de dekking. */
 export const laadDagtypeKalender = async (): Promise<DagtypeKalender> => {
-  try {
-    return kalenderUitDekking(await getCoverageExpectations());
-  } catch (err) {
-    // De kalender verfijnt alleen het dagtype van dagen zonder matrixcode; een
-    // leesfout op de dekking mag het bord, de opbouw of een ruil niet laten vallen.
-    console.warn("Dagtypekalender niet gelezen, standaard weekdagen gebruikt:", (err as { message?: unknown })?.message ?? err);
-    return kalenderUitDekking({});
-  }
+  // De dekkingsconfig en de dagtypekalender van Jarno (11-10) samen. Beide
+  // verfijnen alleen het dagtype van dagen zonder matrixcode; een leesfout
+  // mag het bord, de opbouw of een ruil niet laten vallen.
+  const [dekking, dagen] = await Promise.all([
+    getCoverageExpectations().catch((err) => {
+      console.warn("Dekkingskalender niet gelezen, standaard weekdagen gebruikt:", (err as { message?: unknown })?.message ?? err);
+      return {} as Record<string, string[]>;
+    }),
+    getDagtypeKalender().catch((err) => {
+      console.warn("Dagtypekalender niet gelezen:", (err as { message?: unknown })?.message ?? err);
+      return [];
+    }),
+  ]);
+  return { ...kalenderUitDekking(dekking), perDag: perDagVan(dagen) };
 };

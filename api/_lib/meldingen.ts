@@ -31,6 +31,7 @@ export const PAD_PER_VIEW: Record<string, string> = {
   "beheer-roosters": "beheer/planning",
   "planning-matrix": "beheer/planningsoverzicht",
   "planning-codes": "beheer/planningscodes",
+  dagtypekalender: "beheer/dagtypekalender",
   dienstoverzicht: "beheer/dienstoverzicht",
   dienstopbouw: "beheer/dienstopbouw",
   dagafsluiting: "beheer/dagadministratie",

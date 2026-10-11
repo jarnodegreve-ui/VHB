@@ -49,15 +49,19 @@ export const DAGTYPES: readonly Dagtype[] = [
 const LABEL_PER_CODE: Readonly<Record<string, string>> = Object.fromEntries(DAGTYPES.map((d) => [d.code, d.label]));
 
 /**
- * De dagtypes die het portaal vandaag zelf kan afleiden (controle-ronde
- * 10-10, punt 3): schooldag en schoolvakantie uit de dekkingskalender, zaterdag
- * en zondag uit de weekdag. Feestdag (28), juli-augustus (41-45) en examen
- * (51-55) komen alleen uit een De Lijn-code in de matrix; de dekking noemt een
- * feestdag "zondag" en de zomer "vakantieperiode". Een afwijking op zo'n code
- * zou op een dag zonder matrixcode nooit rijden, dus de keuzelijst biedt ze
- * niet aan tot de dekking ze kan leveren.
+ * De dagtypes die een afwijking kan dragen (controle-ronde 10-10, punt 3;
+ * dagtypekalender 11-10): schooldag, schoolvakantie en examen uit de
+ * dagtypekalender of de matrixcode, zaterdag en zondag ook uit de weekdag.
+ * Feestdag (28) rijdt de zondagregeling (dienstregelingCode) en juli-augustus
+ * (41-45) komt in de kalender van Jarno niet voor (de zomer is vakantie), dus
+ * die twee biedt de keuzelijst niet aan.
  */
-export const KIESBARE_DAGTYPES: ReadonlySet<string> = new Set(['21', '22', '23', '24', '25', '31', '32', '33', '34', '35', '26', '27']);
+export const KIESBARE_DAGTYPES: ReadonlySet<string> = new Set(['21', '22', '23', '24', '25', '31', '32', '33', '34', '35', '51', '52', '53', '54', '55', '26', '27']);
+
+/** Welke dienstregeling op een dagtype rijdt: een feestdag (28) rijdt de
+ *  zondagregeling (27), de rest zichzelf. Zo hoeft een dienst nooit een
+ *  aparte afwijking voor feestdagen (kalender van Jarno, 11-10). */
+export const dienstregelingCode = (typedag: string): string => (typedag === '28' ? '27' : typedag);
 export const isKiesbaarDagtype = (code: string): boolean => KIESBARE_DAGTYPES.has(code);
 
 /** De dagtypes per groep, in de volgorde van de keuzelijst (het scherm). */
@@ -107,9 +111,16 @@ export const dagtypeLabel = (code: string): string => LABEL_PER_CODE[code] ?? `D
 
 // --- Welk dagtype is een dag? -------------------------------------------------
 
-/** De dekkingskalender zoals de dekking ze bijhoudt: de weekdag-toewijzing,
- *  de periodes met ingangsdatum en de uitzonderingen. */
-export type DagtypeKalender = { weekdays: string[]; perioden: WeekdagPeriode[]; overrides: DayTypeOverride[] };
+/** De dekkingskalender zoals de dekking ze bijhoudt (de weekdag-toewijzing,
+ *  de periodes met ingangsdatum en de uitzonderingen), plus sinds 11-10 de
+ *  dagtypekalender van Jarno per dag (shared/dagtypeKalender.ts). */
+export type DagtypeKalender = {
+  weekdays: string[];
+  perioden: WeekdagPeriode[];
+  overrides: DayTypeOverride[];
+  /** Per 'JJJJ-MM-DD' de De Lijn-code en het verlofmaximum; ontbreekt = geen dagtypekalender geladen. */
+  perDag?: Readonly<Record<string, { typedag: string; maxVerlof: number | null }>>;
+};
 
 const WEEKDAGEN_SLEUTEL = '__weekdagen__';
 const UITZONDERINGEN_SLEUTEL = '__uitzonderingen__';
@@ -128,7 +139,9 @@ export function kalenderUitDekking(stored: Record<string, unknown>): DagtypeKale
   return { weekdays, perioden, overrides: parseOverrides(stored[UITZONDERINGEN_SLEUTEL]) };
 }
 
-export type DagtypeBron = 'excel' | 'kalender' | 'weekdag' | 'geen';
+/** excel = de code in de planningsmatrix, kalender = de dagtypekalender,
+ *  dekking = afgeleid uit de dekkingsconfig, weekdag = zonder enige bron. */
+export type DagtypeBron = 'excel' | 'kalender' | 'dekking' | 'weekdag' | 'geen';
 
 /** De periode (of het weekendtype) die in de naam van een dekkingsdagtype
  *  zit. De planner kiest die namen zelf ("vakantieperiode ma/di/wo",
@@ -160,23 +173,28 @@ const weekdagVan = (datum: string): number | null => {
  *   1. De code uit de planningsmatrix (kolom day_type) wint, als het er een is.
  *      Staat daar een naam ("vakantie", "zondag"), dan telt die zoals de
  *      dekking ze telt: als het dagtype van die dag, op trefwoord.
- *   2. Anders de dekkingskalender: haar dagtype van die dag zegt de periode
+ *   2. Anders de dagtypekalender van Jarno (shared/dagtypeKalender.ts), als
+ *      die de dag kent. De kalender wint nooit van de matrix (keuze Jarno
+ *      11-10): een verschil is een opmerking in het beheerscherm.
+ *   3. Anders de dekkingskalender: haar dagtype van die dag zegt de periode
  *      (schooldag, vakantie, juli-augustus, examen, of een weekend- of
  *      feestdagtype), de weekdag doet de rest.
- *   3. Zonder kalender: weekend op de weekdag, elke andere dag een schooldag.
+ *   4. Zonder kalender: weekend op de weekdag, elke andere dag een schooldag.
  */
 export function dagtypeVanDag(datum: string, excelDagtype?: unknown, kalender?: DagtypeKalender | null): { code: string | null; bron: DagtypeBron } {
   const expliciet = String(excelDagtype ?? '').trim();
   if (isDagtypeCode(expliciet)) return { code: expliciet, bron: 'excel' };
   const dow = weekdagVan(datum);
   if (dow === null) return { code: null, bron: 'geen' };
+  const uitKalender = kalender?.perDag?.[datum];
+  if (!expliciet && uitKalender && isDagtypeCode(uitKalender.typedag)) return { code: uitKalender.typedag, bron: 'kalender' };
   // Zelfde beslisregels als de dekking (resolveDayTypeMetBron): een naam uit
   // kolom B wint, dan de uitzonderingen, dan de periode of de basis.
   const naam = kalender
     ? resolveDayTypeMetBron(expliciet, datum, kalender.weekdays, kalender.perioden, kalender.overrides).dayType
     : expliciet;
   const periode = naam ? periodeUitNaam(naam) : '2';
-  const bron: DagtypeBron = expliciet ? 'excel' : naam ? 'kalender' : 'weekdag';
+  const bron: DagtypeBron = expliciet ? 'excel' : naam ? 'dekking' : 'weekdag';
   if (periode.length === 2) return { code: periode, bron };
   if (dow === 6) return { code: '26', bron };
   if (dow === 0) return { code: '27', bron };
@@ -261,10 +279,11 @@ export function variantenSchoon(raw: unknown): DienstVariant[] | undefined {
 export const variantVoor = (dienst: MetVarianten, dagtype: string | null | undefined): DienstVariant | null =>
   (dagtype && variantenSchoon(dienst.varianten)?.find((v) => v.dagtypes.includes(dagtype))) || null;
 
-/** De tijden, delen en loopnummers die op een dag gelden: de variant van dat
- *  dagtype, anders de gewone tijden. Zonder dagtype altijd de gewone. */
+/** De tijden, delen en loopnummers die op een dag gelden: de variant van de
+ *  dienstregeling die op dat dagtype rijdt (een feestdag rijdt als zondag),
+ *  anders de gewone tijden. Zonder dagtype altijd de gewone. */
 export function tijdenOpDag(dienst: MetVarianten, dagtype: string | null | undefined): DienstTijden {
-  const variant = variantVoor(dienst, dagtype);
+  const variant = variantVoor(dienst, dagtype ? dienstregelingCode(dagtype) : dagtype);
   return tijdenVan(variant ?? dienst);
 }
 

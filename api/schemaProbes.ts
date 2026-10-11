@@ -29,6 +29,8 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // varianten: afwijkende tijden per De Lijn-dagtype (2026-10-10_services_varianten.sql), jsonb, null = geen.
   { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3,loopnr,loopnr2,loopnr3,dienstregelingId,varianten" },
   { table: "dienstregelingen", columns: "id,naam,geldig_vanaf,opmerking,created_at,created_by" },
+  // Dagtypekalender (2026-10-11_dagtype_kalender.sql): het De Lijn-dagtype en het verlofmaximum per datum.
+  { table: "dagtype_kalender", columns: "datum,typedag,max_verlof,bron,updated_at" },
   // severity bestaat live nog (nullable) maar wordt niet meer geschreven;
   // mapCoordinates bestaat live NIET en is uit de schrijfmapper gehaald.
   // location: plaats van de omleiding (2026-09-10_diversions_location.sql);

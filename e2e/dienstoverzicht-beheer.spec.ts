@@ -203,9 +203,10 @@ test.describe('afwijkingen per dagtype (10-10)', () => {
     await expect(tweede.getByRole('button', { name: 'Woensdag schooldag, al in afwijking 1', exact: true })).toBeDisabled();
     await expect(tweede.getByText('Grijze dagtypes staan al in een andere afwijking.')).toBeVisible();
     await expect(tweede.getByRole('button', { name: 'Donderdag schooldag', exact: true })).toBeEnabled();
-    // Feestdag, juli-augustus en examen zijn (nog) niet kiesbaar.
+    // Feestdag en juli-augustus zijn niet kiesbaar (een feestdag rijdt de zondagregeling); examen wel (dagtypekalender 11-10).
     await expect(tweede.getByRole('button', { name: 'Feestdag', exact: true })).toHaveCount(0);
-    await expect(tweede.getByRole('button', { name: 'Maandag examen', exact: true })).toHaveCount(0);
+    await expect(tweede.getByRole('button', { name: 'Maandag juli-augustus', exact: true })).toHaveCount(0);
+    await expect(tweede.getByRole('button', { name: 'Maandag examen', exact: true })).toBeEnabled();
     await p.getByRole('button', { name: 'Afwijking 1 verwijderen' }).click();
     await expect(p.getByRole('group', { name: 'Afwijking 2' })).toHaveCount(0);
     await expect(p.getByRole('group', { name: 'Afwijking 1' }).getByRole('button', { name: 'Woensdag schooldag', exact: true })).toBeEnabled();

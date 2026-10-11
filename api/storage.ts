@@ -132,6 +132,12 @@ export {
   saveCoverageExpectations,
 } from "./_lib/opslag/diensten.js";
 export {
+  DAGTYPE_KALENDER_MIGRATIE,
+  getDagtypeKalender,
+  schrijfDagtypeKalender,
+  type DagtypeKalenderRij,
+} from "./_lib/opslag/dagtypeKalender.js";
+export {
   storeBackup,
   type RestorableCollections,
   checkBackupIntegrity,
