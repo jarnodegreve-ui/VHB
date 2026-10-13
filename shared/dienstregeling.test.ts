@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
+import { dienstenOpDag,
   DIENST_VELD_LABEL, dagVoor, dienstVeldTekst, hoortBijVersie, oudsteVersie, vergelijkDiensten, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum,
 } from './dienstregeling';
 
@@ -108,5 +108,35 @@ describe('vergelijkDiensten met afwijkingen per dagtype (10-10)', () => {
     expect(dienstVeldTekst(basis, 'varianten')).toBe('');
     expect(dienstVeldTekst(basis, 'startTime2')).toBe('15:20');
     expect(DIENST_VELD_LABEL.varianten).toBe('per dagtype');
+  });
+});
+
+describe('dienstenOpDag (13-10)', () => {
+  const sep = [{ serviceNumber: '2101', startTime: '04:36' }, { serviceNumber: '2102', startTime: '06:00' }];
+  const nov = [{ serviceNumber: '2101', startTime: '04:40' }, { serviceNumber: '2199', startTime: '07:00' }];
+  const versies = [{ id: 'v-sep', geldigVanaf: '2026-09-01', services: sep }, { id: 'v-nov', geldigVanaf: '2026-11-09', services: nov }];
+  const sleutel = (d: { serviceNumber: string }) => d.serviceNumber.toLowerCase();
+
+  it('geeft per dag de diensten van de versie die op die dag geldt, en vóór de eerste versie de eerste', () => {
+    const d = dienstenOpDag(versies, sep, sleutel);
+    expect(d.index('2026-11-08').get('2101')?.startTime).toBe('04:36');
+    expect(d.index('2026-11-09').get('2101')?.startTime).toBe('04:40');
+    expect(d.index('2026-11-09').has('2102')).toBe(false);
+    expect(d.index('2026-11-08').has('2199')).toBe(false);
+    expect(d.lijst('2026-03-01')).toBe(sep);
+    expect(d.lijst('2026-12-25')).toBe(nov);
+  });
+
+  it('zonder versies of zonder datum geldt de terugvallijst', () => {
+    expect(dienstenOpDag([], nov, sleutel).lijst('2026-01-01')).toBe(nov);
+    expect(dienstenOpDag(undefined, nov, sleutel).index('2026-01-01').get('2199')?.startTime).toBe('07:00');
+    expect(dienstenOpDag(versies, sep, sleutel).lijst()).toBe(sep);
+    expect(dienstenOpDag(versies, sep, sleutel).index(null).get('2102')?.startTime).toBe('06:00');
+  });
+
+  it('bouwt per versie één index, hoe vaak er ook gevraagd wordt; dubbele nummers: de laatste wint', () => {
+    const d = dienstenOpDag([{ id: 'v', geldigVanaf: '2026-01-01', services: [{ serviceNumber: '2101', startTime: '01:00' }, { serviceNumber: '2101', startTime: '02:00' }] }], [], sleutel);
+    expect(d.index('2026-02-01')).toBe(d.index('2026-03-01'));
+    expect(d.index('2026-02-01').get('2101')?.startTime).toBe('02:00');
   });
 });

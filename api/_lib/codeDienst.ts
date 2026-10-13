@@ -10,9 +10,10 @@
  * intussen gewijzigd", terwijl er niets gewijzigd was.
  */
 import { toLookupToken } from "../helpers.js";
-import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, laadDagtypeKalender } from "../storage.js";
+import { getLeaveData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getServicesPerVersie, getSwapsData, getUsersData, laadDagtypeKalender } from "../storage.js";
 import type { DagtypeKalender } from "../../shared/dagtype.js";
-import { berekenCelWaarheid, type CelWaarheidUser } from "./celWaarheid.js";
+import { dienstenOpDag } from "../../shared/dienstregeling.js";
+import { berekenCelWaarheid, type CelWaarheidUser, type CelWaarheidVersie } from "./celWaarheid.js";
 import type { OverlayCel } from "./ruilOverlay.js";
 
 type DienstBron = { serviceNumber?: unknown };
@@ -42,14 +43,21 @@ export const dienstOpCel = (cel: OverlayCel | undefined, line: unknown): string 
 };
 
 /** Alles waaruit het bord van een dag (of maand) berekend wordt. */
-export type BordBron = { rows: any[]; users: CelWaarheidUser[]; services: any[]; codes: any[]; leave: any[]; swaps: any[]; kalender?: DagtypeKalender | null };
+export type BordBron = {
+  rows: any[]; users: CelWaarheidUser[];
+  /** Het dienstoverzicht van de dag zelf, of dat van vandaag met `versies` erbij. */
+  services: any[];
+  /** Dienstregelingversies (13-10): dan telt per dag de versie die op die dag geldt. */
+  versies?: CelWaarheidVersie[] | null;
+  codes: any[]; leave: any[]; swaps: any[]; kalender?: DagtypeKalender | null;
+};
 
 /** Welke lijst leeg terugkwam. Dan kent het portaal geen enkele code van die
  *  soort en is elke cel "onbekend": een lege lijst is geen bewijs dat een
  *  code onbekend is (controle 29-09, 1c). */
 export type BronLeeg = "dienstoverzicht" | "planningscodes" | "beide";
 
-const bronLeegVan = (services: unknown[], codes: unknown[]): BronLeeg | null => {
+const bronLeegVan = (services: readonly unknown[], codes: readonly unknown[]): BronLeeg | null => {
   if (services.length === 0 && codes.length === 0) return "beide";
   if (services.length === 0) return "dienstoverzicht";
   if (codes.length === 0) return "planningscodes";
@@ -61,11 +69,13 @@ const bronLeegVan = (services: unknown[], codes: unknown[]): BronLeeg | null => 
  *  heeft er geen tweede lezing voor. */
 export const bordVanDag = (date: string, bron: BordBron) => {
   const { cells, chauffeurs } = berekenCelWaarheid(date.slice(0, 7), {
-    rows: bron.rows, users: bron.users, services: bron.services, codes: bron.codes, leave: bron.leave, swaps: bron.swaps, kalender: bron.kalender,
+    rows: bron.rows, users: bron.users, services: bron.services, versies: bron.versies, codes: bron.codes, leave: bron.leave, swaps: bron.swaps, kalender: bron.kalender,
   });
+  // De diensten van déze dag: uit de versie die erop geldt (13-10), anders de meegegeven lijst.
+  const diensten = dienstenOpDag(bron.versies, bron.services, (s) => toLookupToken(String(s?.serviceNumber ?? ""))).lijst(date);
   const opBord = new Set(chauffeurs.map((c) => c.id));
   const bekend = new Set([
-    ...bron.services.map((s) => toLookupToken(String(s?.serviceNumber ?? ""))),
+    ...diensten.map((s) => toLookupToken(String(s?.serviceNumber ?? ""))),
     ...bron.codes.map((c) => toLookupToken(String(c?.code ?? ""))),
   ]);
   return {
@@ -73,13 +83,13 @@ export const bordVanDag = (date: string, bron: BordBron) => {
     /** Alleen chauffeurs staan op het bord; een wissel naar iemand anders zou
      *  het bord nooit kunnen tonen. */
     staatOpBord: (driverId: string): boolean => opBord.has(driverId),
-    isCodeDienst: maakCodeDienstToets(bron.services as DienstBron[], bron.codes as CodeBron[]),
+    isCodeDienst: maakCodeDienstToets(diensten as DienstBron[], bron.codes as CodeBron[]),
     /** Kent het portaal deze code: staat ze in het dienstoverzicht of in de
      *  planningscodes (welke categorie ook)? */
     isBekend: (code: unknown): boolean => bekend.has(toLookupToken(String(code ?? ""))),
     /** Kwam het dienstoverzicht of kwamen de planningscodes leeg terug? Dan
      *  kan het portaal een code niet beoordelen (api/_lib/dubbeleInplanning.ts). */
-    bronLeeg: bronLeegVan(bron.services, bron.codes),
+    bronLeeg: bronLeegVan(diensten, bron.codes),
     swaps: bron.swaps,
     leave: bron.leave,
   };
@@ -91,11 +101,13 @@ export type BordVanDag = ReturnType<typeof bordVanDag>;
  *  planningscodes. Een route die het bord van meer dan één dag nodig heeft
  *  (een lijst ruilen goedkeuren, meerdere overnames indienen) leest dit één
  *  keer vóór haar lus en geeft het mee; per dag blijft alleen de matrixrij. */
-export type BordVast = { users: CelWaarheidUser[]; services: any[]; codes: any[]; kalender: DagtypeKalender };
+export type BordVast = { users: CelWaarheidUser[]; services: any[]; versies: CelWaarheidVersie[]; codes: any[]; kalender: DagtypeKalender };
 
 export const laadBordVast = async (): Promise<BordVast> => {
-  const [users, services, codes, kalender] = await Promise.all([getUsersData(), getServicesData(), getPlanningCodesData(), laadDagtypeKalender()]);
-  return { users: users as any[], services: services as any[], codes: codes as any[], kalender };
+  // Alle versies in één lezing (13-10): de dagen in de lus kunnen vóór en na
+  // een dienstregelingwijziging liggen, en elke dag krijgt dan zijn versie.
+  const [users, perVersie, codes, kalender] = await Promise.all([getUsersData(), getServicesPerVersie(), getPlanningCodesData(), laadDagtypeKalender()]);
+  return { users: users as any[], services: perVersie.services as any[], versies: perVersie.versies as CelWaarheidVersie[], codes: codes as any[], kalender };
 };
 
 /**
@@ -110,7 +122,7 @@ export const laadBordVast = async (): Promise<BordVast> => {
 export const bordOpDag = async (
   date: string,
   users: CelWaarheidUser[],
-  opts?: { zonderAfwezigheid?: boolean; swaps?: any[]; services?: any[]; codes?: any[]; kalender?: DagtypeKalender | null },
+  opts?: { zonderAfwezigheid?: boolean; swaps?: any[]; services?: any[]; versies?: CelWaarheidVersie[] | null; codes?: any[]; kalender?: DagtypeKalender | null },
 ) => {
   const [rows, services, codes, leave, swaps, kalender] = await Promise.all([
     getPlanningMatrixRows({ van: date, tot: date }),
@@ -121,7 +133,7 @@ export const bordOpDag = async (
     opts?.swaps ?? getSwapsData(),
     opts?.kalender ?? laadDagtypeKalender(),
   ]);
-  return bordVanDag(date, { rows: rows as any[], users, services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[], kalender });
+  return bordVanDag(date, { rows: rows as any[], users, services: services as any[], versies: opts?.versies, codes: codes as any[], leave: leave as any[], swaps: swaps as any[], kalender });
 };
 
 /**

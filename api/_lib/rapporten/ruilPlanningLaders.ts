@@ -1,7 +1,7 @@
 import { berekenDekkingsGaten } from "../../coverageRoutes.js";
 import { SWAP_UITVOERING_ACTIES } from "../../helpers.js";
 import {
-  getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixGrenzen, getPlanningMatrixRows, getServicesData,
+  getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixGrenzen, getPlanningMatrixRows, getServicesPerVersie,
   getSwapVerloopRegels, getSwapsData, laadDagtypeKalender,
 } from "../../storage.js";
 import type { RapportLader } from "../../../shared/rapporten/types.js";
@@ -38,18 +38,19 @@ export const RUIL_LADERS: Record<string, RapportLader> = {
 export const PLANNING_LADERS: Record<string, RapportLader> = {
   "overzicht-per-chauffeur": async (filters) => {
     // Zelfde bronnen als GET /api/month-planning, met de matrix en de afwezigheden begrensd op de periode.
-    const [rows, users, services, codes, leave, swaps, grenzen, kalender] = await Promise.all([
+    const [rows, users, perVersie, codes, leave, swaps, grenzen, kalender] = await Promise.all([
       getPlanningMatrixRows({ van: filters.van, tot: filters.tot }),
       // Expliciete kolomlijst (nooit auth-velden); het bord heeft alleen naam, rol, sectie, startdatum en actief nodig.
       getRapportMedewerkers(),
-      getServicesData(),
+      // Alle dienstregelingversies (13-10): de periode kan over een wijziging heen lopen.
+      getServicesPerVersie(),
       getPlanningCodesData(),
       getLeaveData({ endOnOrAfter: filters.van }),
       getSwapsData(),
       getPlanningMatrixGrenzen(),
       laadDagtypeKalender(),
     ]);
-    return bouwOverzichtPerChauffeur({ rows, users, services, codes, leave, swaps, grenzen, kalender } as OverzichtBron, filters);
+    return bouwOverzichtPerChauffeur({ rows, users, services: perVersie.services, versies: perVersie.versies, codes, leave, swaps, grenzen, kalender } as OverzichtBron, filters);
   },
   // De planning wordt volledig gelezen (pagina's parallel) en in de pure functie op periode gefilterd, voor het `bereik`.
   "diensten-per-dag": async (filters) => {

@@ -1,5 +1,6 @@
 import { nameIdIndex, sortedNameToken, toLookupToken } from "../helpers.js";
 import { dagtypeVanDag, tijdenOpDag, type DagtypeKalender, type DienstVariant } from "../../shared/dagtype.js";
+import { dienstenOpDag, type VersieMetDiensten } from "../../shared/dienstregeling.js";
 import { legRuilenOverMaandbeeld, type OverlayCel, type OverlayRuil } from "./ruilOverlay.js";
 
 /**
@@ -16,11 +17,18 @@ export type CelWaarheidUser = { id: string | number; name: string; role?: string
 export type CelWaarheidService = { serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null; loopnr?: string | null; loopnr2?: string | null; loopnr3?: string | null; varianten?: DienstVariant[] | null };
 export type CelWaarheidCode = { code: string; category?: string; description?: string | null };
 export type CelWaarheidLeave = { userId?: unknown; startDate?: unknown; endDate?: unknown; status?: unknown; type?: unknown };
+export type CelWaarheidVersie = VersieMetDiensten<CelWaarheidService>;
 
 export type CelWaarheidInvoer = {
   rows: CelWaarheidMatrixRij[];
   users: CelWaarheidUser[];
+  /** Het dienstoverzicht van vandaag: de terugval zonder `versies`, en de lijst voor wat geen dag heeft (vrij, verlofcodes). */
   services: CelWaarheidService[];
+  /** Dienstregelingversies (13-10): per dag van de maand telt de versie die
+   *  op die dag geldt (shared/dienstregeling.ts), zodat het bord na een
+   *  dienstregelingwijziging de nieuwe uren toont vanaf haar datum en de
+   *  oude ervoor. Zonder versies: overal `services`. */
+  versies?: CelWaarheidVersie[] | null;
   codes: CelWaarheidCode[];
   leave: CelWaarheidLeave[];
   swaps: OverlayRuil[];
@@ -83,8 +91,9 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
   const idByNameKey = nameIdIndex(chauffeurs);
 
   // Code-resolutie — zelfde token-normalisatie als de matrix-import. Label +
-  // uren-segmenten gaan mee zodat de UI per cel een detail kan tonen.
-  const serviceByNorm = new Map(services.map((s) => [toLookupToken(String(s.serviceNumber ?? "")), s]));
+  // uren-segmenten gaan mee zodat de UI per cel een detail kan tonen. De
+  // dienst komt uit de versie die op die dag geldt (13-10).
+  const diensten = dienstenOpDag(invoer.versies, services, (s) => toLookupToken(String(s.serviceNumber ?? "")));
   const codeByNorm = new Map(codes.map((c) => [toLookupToken(c.code), c]));
   const withLoop = (times: string, loopnr: unknown) => {
     const loop = String(loopnr ?? "").trim();
@@ -100,10 +109,10 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
       s.startTime3 && s.endTime3 ? withLoop(`${s.startTime3}–${s.endTime3}`, s.loopnr3) : "",
     ].filter(Boolean);
   };
-  const resolve = (code: string, dagtype: string | null = null): { kind: string; label: string; segments: string[] } | null => {
+  const resolve = (code: string, dagtype: string | null = null, datum?: string): { kind: string; label: string; segments: string[] } | null => {
     const n = toLookupToken(code);
     if (!n) return null;
-    const svc = serviceByNorm.get(n);
+    const svc = diensten.index(datum).get(n);
     if (svc) return { kind: "service", label: `Dienst ${svc.serviceNumber}`, segments: segmentsOf(svc, dagtype) };
     const pc = codeByNorm.get(n);
     if (pc) return { kind: String(pc.category), label: pc.description || String(pc.code).toUpperCase(), segments: [] };
@@ -126,7 +135,7 @@ export function berekenCelWaarheid(month: string, invoer: CelWaarheidInvoer): Ce
       if (!id) continue;
       const code = String(rawCode ?? "").trim();
       if (!code) continue;
-      const r = resolve(code, dagtype);
+      const r = resolve(code, dagtype, date);
       if (!r) continue;
       if (!cells[id]) cells[id] = {};
       cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };

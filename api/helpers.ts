@@ -1,4 +1,5 @@
 import { tijdenOpDag, variantenSchoon, type DienstVariant } from "../shared/dagtype.js";
+import { dienstenOpDag, type VersieMetDiensten } from "../shared/dienstregeling.js";
 import { randomBytes } from "node:crypto";
 import { parseDashboardVoorkeuren } from "../shared/schemas/dashboardVoorkeuren.js";
 import { HANDMATIGE_WISSEL_PREFIX } from "../shared/schemas/constanten.js";
@@ -252,17 +253,23 @@ export type MaandoverzichtRij = {
 /** De maandtelling zelf, als data — gedeeld door het xlsx-tabblad én het
  *  Overzicht-venster in de maandplanning (verbeterronde 22-08, nr. 3), zodat
  *  scherm en export nooit verschillend kunnen tellen. */
+/** Een dienst zoals het maandoverzicht ze leest: nummer, tijden per deel en de afwijkingen per dagtype. */
+export type MaandoverzichtDienst = { serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null; varianten?: DienstVariant[] | null };
+
 export const berekenMaandoverzicht = (
   dates: string[],
   chauffeurs: Array<{ id: string; name: string }>,
   cells: Record<string, Record<string, { code: string; kind: string }>>,
-  services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null; varianten?: DienstVariant[] | null }>,
+  services: MaandoverzichtDienst[],
   planningCodes: Array<{ code: string; countsAsShift?: boolean; isPaidAbsence?: boolean; isDayOff?: boolean }>,
   /** Per dag de De Lijn-dagtypecode (berekenCelWaarheid.dagtypes): de uren
    *  volgen de afwijking van dat dagtype. Zonder: overal de gewone tijden. */
   dagtypes?: Record<string, string | null>,
+  /** Dienstregelingversies (13-10): de uren van een dag komen uit de versie
+   *  die op die dag geldt. Zonder: overal `services`. */
+  versies?: ReadonlyArray<VersieMetDiensten<MaandoverzichtDienst>> | null,
 ): { rijen: MaandoverzichtRij[]; totaal: Omit<MaandoverzichtRij, "driverId" | "naam" | "overig"> & { overig: number } } => {
-  const serviceByNorm = new Map(services.map((s) => [toLookupToken(String(s.serviceNumber ?? "")), s]));
+  const diensten = dienstenOpDag(versies, services, (s) => toLookupToken(String(s.serviceNumber ?? "")));
   const codeByNorm = new Map(planningCodes.map((c) => [toLookupToken(c.code), c]));
   const rijen: MaandoverzichtRij[] = [];
   const totaal = { diensten: 0, minuten: 0, anderWerk: 0, ziek: 0, betaald: 0, vrij: 0, overig: 0, dagen: 0 };
@@ -274,7 +281,7 @@ export const berekenMaandoverzicht = (
       if (!cel || !String(cel.code ?? "").trim()) continue;
       rij.dagen += 1;
       const n = toLookupToken(cel.code);
-      const svc = serviceByNorm.get(n);
+      const svc = diensten.index(iso).get(n);
       if (svc) {
         rij.diensten += 1;
         rij.minuten += dienstMinuten(tijdenOpDag(svc, dagtypes?.[iso] ?? null)) ?? 0;
@@ -354,11 +361,12 @@ export const bouwMaandoverzichtAoa = (
   dates: string[],
   chauffeurs: Array<{ id: string; name: string }>,
   cells: Record<string, Record<string, { code: string; kind: string }>>,
-  services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null; varianten?: DienstVariant[] | null }>,
+  services: MaandoverzichtDienst[],
   planningCodes: Array<{ code: string; countsAsShift?: boolean; isPaidAbsence?: boolean; isDayOff?: boolean }>,
   dagtypes?: Record<string, string | null>,
+  versies?: ReadonlyArray<VersieMetDiensten<MaandoverzichtDienst>> | null,
 ): unknown[][] => {
-  const { rijen, totaal } = berekenMaandoverzicht(dates, chauffeurs, cells, services, planningCodes, dagtypes);
+  const { rijen, totaal } = berekenMaandoverzicht(dates, chauffeurs, cells, services, planningCodes, dagtypes, versies);
   const aoa: unknown[][] = [
     [`Maandoverzicht ${month}`],
     [`Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (${dates.length} dagen). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.`],

@@ -161,3 +161,32 @@ describe('dienstregelingversies: back-up en herstel', () => {
     expect((await lijst()).versies.map((v: any) => [v.id, v.aantalDiensten])).toEqual([['dr-sep', 1], ['dr-x', 1]]);
   });
 });
+
+describe('het bord volgt per dag de versie van die dag (13-10)', () => {
+  // Jarno 13-10: een nieuwe dienstregeling vanaf 09/11 met één gewijzigde
+  // dienst; in het celdetail van de maandplanning stonden na die datum nog de
+  // oude uren, want GET /api/month-planning las de versie van vandaag voor de
+  // hele maand. Seed: Chauffeur A (id 3) rijdt dienst 12 op 01/07 en 08/07.
+  const nieuweVersieMetDienst12Anders = async () => {
+    const nieuw = (await maak({ geldigVanaf: '2026-07-05' })).json;
+    const kopie = (await api('GET', `/api/services?versie=${nieuw.id}`, { token: 'tok-planner' })).json;
+    const gewijzigd = kopie.map((s: any) => (s.serviceNumber === '12' ? { ...s, startTime: '09:00', endTime: '17:30', loopnr: '4700' } : s));
+    const vers = await fetch(`${(await import('./harnas')).baseUrl}/api/services?versie=${nieuw.id}`, { headers: { Authorization: 'Bearer tok-planner', 'X-Device-Token': 'dev-ok' } });
+    const res = await api('POST', `/api/services?versie=${nieuw.id}`, { token: 'tok-planner', body: gewijzigd, headers: { 'x-collection-revision': vers.headers.get('x-collection-revision')! } });
+    expect(res.status).toBe(200);
+    return nieuw;
+  };
+
+  it('GET /api/month-planning geeft per cel de uren van de versie die op die dag geldt', async () => {
+    await nieuweVersieMetDienst12Anders();
+    const bord = (await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' })).json;
+    expect(bord.cells['3']['2026-07-01']).toMatchObject({ code: '12', kind: 'service', segments: ['08:00–16:00'] });
+    expect(bord.cells['3']['2026-07-08']).toMatchObject({ code: '12', kind: 'service', segments: ['09:00–17:30 (loop 4700)'] });
+  });
+
+  it('het maandoverzicht telt de uren per dag uit dezelfde versie', async () => {
+    await nieuweVersieMetDienst12Anders();
+    const overzicht = (await api('GET', '/api/month-planning?month=2026-07&format=summary', { token: 'tok-planner' })).json;
+    expect(overzicht.rijen.find((r: any) => r.driverId === '3')).toMatchObject({ diensten: 2, minuten: 480 + 510 });
+  });
+});

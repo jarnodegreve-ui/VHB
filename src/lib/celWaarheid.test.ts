@@ -86,3 +86,32 @@ describe('berekenCelWaarheid met afwijkingen per dagtype (10-10)', () => {
     expect(uit.dagtypes['2026-10-13']).toBe('22');
   });
 });
+
+describe('berekenCelWaarheid met dienstregelingversies (13-10)', () => {
+  // Jarno 13-10: na een nieuwe dienstregeling vanaf 09/11 toonde het celdetail
+  // van het bord nog de oude uren, want het bord las de versie van vandaag
+  // voor de hele maand. Nu telt per dag de versie die op die dag geldt.
+  const oud = [{ serviceNumber: '2102', startTime: '05:28', endTime: '12:13', loopnr: '4600' }];
+  const nieuw = [{ serviceNumber: '2102', startTime: '05:40', endTime: '12:20', loopnr: '4601' }, { serviceNumber: '2199', startTime: '06:00', endTime: '14:00' }];
+  const versies = [{ id: 'v-sep', geldigVanaf: '2026-09-01', services: oud }, { id: 'v-nov', geldigVanaf: '2026-11-09', services: nieuw }];
+  const rijen = [
+    { source_date: '2026-11-08', day_type: '27', assignments: { 'Jan Janssen': '2102', 'Piet Nieuw': '2199' } },
+    { source_date: '2026-11-09', day_type: '21', assignments: { 'Jan Janssen': '2102', 'Piet Nieuw': '2199', 'An Peeters': 'vrij' } },
+  ];
+
+  it('neemt per dag de uren van de versie die op die dag geldt', () => {
+    const uit = berekenCelWaarheid('2026-11', { rows: rijen, users, services: oud, versies, codes, leave: [], swaps: [] });
+    expect(uit.cells['1']['2026-11-08'].segments).toEqual(['05:28–12:13 (loop 4600)']);
+    expect(uit.cells['1']['2026-11-09'].segments).toEqual(['05:40–12:20 (loop 4601)']);
+    // Een dienst die alleen in de nieuwe versie bestaat is ervoor een onbekende code.
+    expect(uit.cells['3']['2026-11-08'].kind).toBe('unknown');
+    expect(uit.cells['3']['2026-11-09']).toMatchObject({ kind: 'service', segments: ['06:00–14:00'] });
+    // Een code zonder dag (vrij) komt uit de planningscodes, los van de versie.
+    expect(uit.cells['2']['2026-11-09']).toMatchObject({ code: 'vrij', kind: 'absence' });
+  });
+
+  it('zonder versies geldt de meegegeven lijst voor elke dag', () => {
+    const uit = berekenCelWaarheid('2026-11', { rows: rijen, users, services: nieuw, codes, leave: [], swaps: [] });
+    expect(uit.cells['1']['2026-11-08'].segments).toEqual(['05:40–12:20 (loop 4601)']);
+  });
+});

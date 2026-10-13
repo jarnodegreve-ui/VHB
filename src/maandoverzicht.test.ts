@@ -75,3 +75,17 @@ describe('berekenMaandoverzicht', () => {
     expect(totaal.dagen).toBe(2);
   });
 });
+
+describe('berekenMaandoverzicht met dienstregelingversies (13-10)', () => {
+  it('telt de uren van een dag uit de versie die op die dag geldt', async () => {
+    const { berekenMaandoverzicht } = await import('../api/helpers');
+    const oud = [{ serviceNumber: '2101', startTime: '06:00', endTime: '14:00' }];
+    const nieuw = [{ serviceNumber: '2101', startTime: '06:00', endTime: '15:00' }];
+    const versies = [{ id: 'v-sep', geldigVanaf: '2026-09-01', services: oud }, { id: 'v-nov', geldigVanaf: '2026-11-09', services: nieuw }];
+    const cells = { c1: { '2026-11-08': { code: '2101', kind: 'service' }, '2026-11-09': { code: '2101', kind: 'service' } } } as Record<string, Record<string, { code: string; kind: string }>>;
+    const { rijen } = berekenMaandoverzicht(['2026-11-08', '2026-11-09'], [{ id: 'c1', name: 'Jan' }], cells, oud, [], undefined, versies);
+    expect(rijen[0]).toMatchObject({ diensten: 2, minuten: 480 + 540 });
+    // Zonder versies: overal de meegegeven lijst.
+    expect(berekenMaandoverzicht(['2026-11-08', '2026-11-09'], [{ id: 'c1', name: 'Jan' }], cells, oud, []).rijen[0].minuten).toBe(960);
+  });
+});

@@ -1,6 +1,6 @@
 import type { AppUser, PlanningCodeRecord, PlanningMatrixRow, ServiceRecord, ShiftRecord } from "../../types.js";
 import { sortedNameToken, toLookupToken } from "../../helpers.js";
-import { versieVoorDatum } from "../../../shared/dienstregeling.js";
+import { dienstenOpDag } from "../../../shared/dienstregeling.js";
 import { dagtypeVanDag, tijdenOpDag, type DagtypeKalender } from "../../../shared/dagtype.js";
 import { getServicesPerVersie, laadDagtypeKalender } from "./diensten.js";
 import { getUsersData } from "./gebruikers.js";
@@ -95,16 +95,9 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes, ve
     addNameKey(toLookupToken(u.name), u);
     addNameKey(sortedNameToken(u.name), u);
   }
-  const indexVan = (lijst: ServiceRecord[]) => new Map(
-    lijst.map((service): [string, ServiceRecord] => [toLookupToken(service.serviceNumber), service]),
-  );
-  const standaardIndex = indexVan(services as ServiceRecord[]);
-  const indexPerVersie = new Map((versies ?? []).map((v) => [v.id, indexVan(v.services)] as const));
-  const servicesOpDag = (datum: string): Map<string, ServiceRecord> => {
-    if (!versies || versies.length === 0) return standaardIndex;
-    const versie = versieVoorDatum(versies, datum);
-    return (versie && indexPerVersie.get(versie.id)) ?? standaardIndex;
-  };
+  // Per matrixdag de diensten van de versie die op die dag geldt (shared/dienstregeling.ts).
+  const diensten = dienstenOpDag(versies, services as ServiceRecord[], (service) => toLookupToken(service.serviceNumber));
+  const servicesOpDag = (datum: string): Map<string, ServiceRecord> => diensten.index(datum);
   const planningCodesByCode = new Map(planningCodes.map((code): [string, PlanningCodeRecord] => [toLookupToken(code.code), code]));
 
   const generatedShifts: ShiftRecord[] = [];
