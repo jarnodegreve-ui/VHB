@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-const { apiFetchMock, openPdfMock, laadDocumentMock, zoekPaginasMock, verwijderMock, meldFoutMock } = vi.hoisted(() => ({
-  apiFetchMock: vi.fn(), openPdfMock: vi.fn(), laadDocumentMock: vi.fn(), zoekPaginasMock: vi.fn(), verwijderMock: vi.fn(), meldFoutMock: vi.fn(),
+const { apiFetchMock, openPdfMock, laadDocumentMock, zoekPaginasMock, verwijderMock, meldFoutMock, herstartMock } = vi.hoisted(() => ({
+  apiFetchMock: vi.fn(), openPdfMock: vi.fn(), laadDocumentMock: vi.fn(), zoekPaginasMock: vi.fn(), verwijderMock: vi.fn(), meldFoutMock: vi.fn(), herstartMock: vi.fn(),
 }));
 vi.mock('../lib/api', () => ({ apiFetch: apiFetchMock }));
 vi.mock('../lib/ui', async (importOriginal) => ({
@@ -12,7 +12,12 @@ vi.mock('../lib/ui', async (importOriginal) => ({
 vi.mock('../lib/ritbladPaginas', async (importOriginal) => ({
   ...await importOriginal<typeof import('../lib/ritbladPaginas')>(),
   laadRitbladDocument: laadDocumentMock,
-  zoekPaginasVoorDienstGecached: zoekPaginasMock,
+  // De viewer leest de zoektocht met status; de mock geeft alleen pagina's en wordt hier verpakt.
+  zoekPaginasGecachedMetStatus: async (...args: unknown[]) => {
+    const r = await zoekPaginasMock(...args);
+    return Array.isArray(r) ? { paginas: r, fouten: 0, uitCache: false } : r;
+  },
+  herstartPdfjsWorker: herstartMock,
 }));
 vi.mock('../lib/ritbladCache', () => ({ isRitbladOpgeslagen: async () => false, verwijderRitbladUitCache: verwijderMock }));
 vi.mock('../lib/monitoring', () => ({ reportHandledError: meldFoutMock }));
@@ -30,6 +35,8 @@ beforeEach(() => {
   zoekPaginasMock.mockReset();
   verwijderMock.mockReset();
   meldFoutMock.mockReset();
+  herstartMock.mockReset();
+  herstartMock.mockResolvedValue(undefined);
   // Standaard stond er niets in de ritbladen-cache: dan is er geen tweede poging.
   verwijderMock.mockResolvedValue(false);
   laadDocumentMock.mockResolvedValue({ numPages: 3, loadingTask: { destroy: vi.fn().mockResolvedValue(undefined) } });
@@ -143,5 +150,40 @@ describe('Ritbladviewer: versie zonder eigen bundel (13-10)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Vorige ritbladen openen' }));
     await waitFor(() => expect(laadDocumentMock).toHaveBeenCalledWith(OUD, expect.any(Function)));
     await screen.findByText(/vorige dienstregeling/);
+  });
+});
+
+describe('Ritbladviewer: onleesbare tekstlaag (13-10)', () => {
+  it('herstart de worker, opent de bundel opnieuw en zoekt één keer opnieuw als elke pagina onleesbaar was', async () => {
+    apiFetchMock.mockImplementation(async () => antwoord(OUD));
+    zoekPaginasMock
+      .mockResolvedValueOnce({ paginas: [], fouten: 3, uitCache: false })
+      .mockResolvedValueOnce({ paginas: [2], fouten: 0, uitCache: false });
+    render(<RitbladViewer dienstnummer="2101" open onClose={() => {}} />);
+    await screen.findByRole('button', { name: 'Volledige bundel' });
+    expect(herstartMock).toHaveBeenCalledTimes(1);
+    expect(laadDocumentMock).toHaveBeenCalledTimes(2);
+    expect(zoekPaginasMock).toHaveBeenCalledTimes(2);
+    expect(meldFoutMock).toHaveBeenCalledWith(expect.stringMatching(/tekstlaag onleesbaar voor dienst 2101 \(3 van 3 pagina's\), worker herstart/));
+    expect(meldFoutMock).not.toHaveBeenCalledWith(expect.stringMatching(/geen apart blad gevonden/));
+  });
+
+  it('blijft bij één poging en noemt het aantal onleesbare pagina\'s als het daarna nog niets vindt', async () => {
+    apiFetchMock.mockImplementation(async () => antwoord(OUD));
+    zoekPaginasMock.mockResolvedValue({ paginas: [], fouten: 3, uitCache: false });
+    render(<RitbladViewer dienstnummer="2101" open onClose={() => {}} />);
+    await screen.findByRole('button', { name: 'Volledige bundel openen' });
+    expect(herstartMock).toHaveBeenCalledTimes(1);
+    expect(laadDocumentMock).toHaveBeenCalledTimes(2);
+    expect(meldFoutMock).toHaveBeenCalledWith(expect.stringMatching(/geen apart blad gevonden voor dienst 2101 \(bundel van 1 sep, 3 pagina's, 3 onleesbaar\)/));
+  });
+
+  it('een enkele onleesbare pagina is geen reden om te herstarten', async () => {
+    apiFetchMock.mockImplementation(async () => antwoord(OUD));
+    zoekPaginasMock.mockResolvedValue({ paginas: [], fouten: 1, uitCache: false });
+    render(<RitbladViewer dienstnummer="2101" open onClose={() => {}} />);
+    await screen.findByRole('button', { name: 'Volledige bundel openen' });
+    expect(herstartMock).not.toHaveBeenCalled();
+    expect(meldFoutMock).toHaveBeenCalledWith(expect.stringMatching(/3 pagina's, 1 onleesbaar\)/));
   });
 });

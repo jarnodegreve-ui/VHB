@@ -6,6 +6,9 @@ import {
   haalBundelBytes,
   haalRitbladMeta,
   telViercijferigeNummers,
+  laatDocumentLos,
+  wachtOpOpruiming,
+  zoekPaginasGecachedMetStatus,
   zoekPaginasVoorDienst,
   zoekPaginasVoorDienstGecached,
   type RitbladDocument,
@@ -313,5 +316,45 @@ describe('haalBundelBytes', () => {
   it('gooit de netwerkfout door als er ook geen gecachte PDF is (koud offline)', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(haalBundelBytes(OUD)).rejects.toThrow('Failed to fetch');
+  });
+});
+
+describe('zoekPaginasGecachedMetStatus (13-10)', () => {
+  beforeEach(() => {
+    const opslag = maakOpslag();
+    vi.stubGlobal('localStorage', opslag);
+    if (window !== (globalThis as unknown as Window)) Object.defineProperty(window, 'localStorage', { value: opslag, configurable: true });
+  });
+
+  it('geeft het aantal onleesbare pagina\'s mee en zegt of het uit de cache kwam', async () => {
+    const doc = maakDoc([['Dienst', '2116'], ['x']]);
+    doc.getPage.mockImplementationOnce(async () => ({ getTextContent: async () => { throw new Error('worker weg'); } }));
+    await expect(zoekPaginasGecachedMetStatus(doc, '2116', 'v1')).resolves.toEqual({ paginas: [], fouten: 1, uitCache: false });
+    // Een leeg resultaat met fouten is niet bewaard: de volgende keer wordt gelezen.
+    await expect(zoekPaginasGecachedMetStatus(doc, '2116', 'v1')).resolves.toEqual({ paginas: [1], fouten: 0, uitCache: false });
+    await expect(zoekPaginasGecachedMetStatus(doc, '2116', 'v1')).resolves.toEqual({ paginas: [1], fouten: 0, uitCache: true });
+  });
+});
+
+describe('laatDocumentLos / wachtOpOpruiming (13-10)', () => {
+  it('de volgende lading wacht tot het losgelaten document opgeruimd is', async () => {
+    let klaar!: () => void;
+    const destroy = vi.fn(() => new Promise<void>((r) => { klaar = r; }));
+    laatDocumentLos({ loadingTask: { destroy } });
+    expect(destroy).toHaveBeenCalledTimes(1);
+    let voorbij = false;
+    void wachtOpOpruiming().then(() => { voorbij = true; });
+    await Promise.resolve();
+    expect(voorbij).toBe(false);
+    klaar();
+    await wachtOpOpruiming();
+    expect(voorbij).toBe(true);
+  });
+
+  it('een mislukte opruiming blokkeert de volgende lading niet, en null is geen fout', async () => {
+    laatDocumentLos({ loadingTask: { destroy: async () => { throw new Error('al weg'); } } });
+    await expect(wachtOpOpruiming()).resolves.toBeUndefined();
+    laatDocumentLos(null);
+    await expect(wachtOpOpruiming()).resolves.toBeUndefined();
   });
 });

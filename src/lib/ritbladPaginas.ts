@@ -187,12 +187,60 @@ export async function zoekPaginasVoorDienstGecached(
   uploadedAt: string,
   signal?: AbortSignal,
 ): Promise<number[]> {
+  return (await zoekPaginasGecachedMetStatus(doc, dienstnummer, uploadedAt, signal)).paginas;
+}
+
+/** Zelfde zoektocht, met het aantal onleesbare pagina's erbij (13-10): de
+ *  viewer onderscheidt zo "het nummer staat er niet" van "de tekstlaag kwam
+ *  niet uit de worker", en meldt het verschil in de foutgroep. */
+export async function zoekPaginasGecachedMetStatus(
+  doc: RitbladDocument,
+  dienstnummer: string,
+  uploadedAt: string,
+  signal?: AbortSignal,
+): Promise<{ paginas: number[]; fouten: number; uitCache: boolean }> {
   const gecached = leesPaginasUitCache(uploadedAt, dienstnummer);
-  if (gecached) return gecached;
+  if (gecached) return { paginas: gecached, fouten: 0, uitCache: true };
   const { paginas, fouten } = await zoekPaginasMetStatus(doc, dienstnummer, signal);
   controleerAfgebroken(signal); // nooit een afgebroken zoektocht bewaren
   if (fouten === 0 && paginas.length > 0) schrijfPaginasNaarCache(uploadedAt, dienstnummer, paginas);
-  return paginas;
+  return { paginas, fouten, uitCache: false };
+}
+
+// === Document loslaten, de gedeelde worker ===
+
+let laatsteOpruiming: Promise<unknown> = Promise.resolve();
+
+/**
+ * Een pdfjs-document loslaten. pdfjs deelt per sessie één worker
+ * (workerPort) en weigert een nieuwe lading zolang de opruiming van de
+ * vorige nog loopt: "PDFWorker.create - the worker is being destroyed"
+ * (gezien 08-10 tot 13-10 op twee iPhones, telkens bij "Volledige bundel
+ * openen" vlak na een mislukte zoektocht, want de cleanup van het effect
+ * kan de destroy niet afwachten). Daarom wacht elke volgende lading op
+ * deze module-brede belofte (wachtOpOpruiming, laadRitbladDocument).
+ */
+export function laatDocumentLos(doc: { loadingTask: { destroy(): Promise<unknown> } } | null | undefined): void {
+  if (!doc) return;
+  laatsteOpruiming = doc.loadingTask.destroy().catch(() => undefined);
+}
+
+/** Klaar zodra het laatst losgelaten document opgeruimd is. */
+export const wachtOpOpruiming = (): Promise<unknown> => laatsteOpruiming;
+
+/**
+ * De gedeelde worker vervangen. Als de tekstlaag van (bijna) élke pagina
+ * niet te lezen is, kwam ze niet uit de worker: iOS ruimt webworkers op
+ * onder geheugendruk en pdfjs merkt dat niet. Een verse worker en de bundel
+ * opnieuw openen is dan de enige weg; de viewer doet dat één keer.
+ */
+export async function herstartPdfjsWorker(): Promise<void> {
+  const pdfjs = await laadPdfjs();
+  await laatsteOpruiming;
+  const { default: WorkerCtor } = await import('pdfjs-dist/build/pdf.worker.min.mjs?worker');
+  const oud = pdfjs.GlobalWorkerOptions.workerPort;
+  pdfjs.GlobalWorkerOptions.workerPort = new WorkerCtor();
+  try { oud?.terminate(); } catch { /* al weg */ }
 }
 
 // === Metadata + bytes ophalen ===
@@ -280,6 +328,8 @@ export async function laadRitbladDocument(
   versUrl?: () => Promise<string | null>,
 ): Promise<import('pdfjs-dist').PDFDocumentProxy> {
   const [pdfjs, data] = await Promise.all([laadPdfjs(), haalBundelBytes(url, versUrl)]);
+  // Eerst het vorige document laten opruimen (zie laatDocumentLos).
+  await laatsteOpruiming;
   // pdfjs v6 compileert niets meer via new Function() (de oude
   // isEvalSupported-vlag bestaat niet meer) — werkt dus onder de CSP zonder
   // 'unsafe-eval'; de build-controle in het harnas bevestigt dat.

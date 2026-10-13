@@ -9,6 +9,7 @@ import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
 import { Fout, GeenBereik, NietGevonden } from './illustraties';
 import { vergeetBijlage, type BijlageSoort } from '../lib/bijlageCache';
+import { laatDocumentLos, wachtOpOpruiming } from '../lib/ritbladPaginas';
 import { BijlageWeg, bronVanBijlage, bronVanDocument, haalVerseBijlage, laadBijlage, linkVerlopen, type LaadBron, type PersoonlijkDocument } from '../lib/bijlageLaden';
 import { aantal } from '../lib/format';
 import { openPdfInNewTab } from '../lib/ui';
@@ -193,6 +194,8 @@ export default function BijlageViewer(props: ViewerProps) {
       }
       let geopend: PDFDocumentProxy;
       try {
+        // Eerst de vorige opruiming (zelfde gedeelde worker als het ritblad).
+        await wachtOpOpruiming();
         geopend = await pdfjs.getDocument({ data: geladen.bytes }).promise;
       } catch (err) {
         // Geen leesbare PDF: niet laten staan, anders faalt elke volgende opening.
@@ -200,7 +203,7 @@ export default function BijlageViewer(props: ViewerProps) {
         throw err;
       }
       if (signal.aborted) {
-        geopend.loadingTask.destroy().catch(() => undefined);
+        laatDocumentLos(geopend);
         return;
       }
       doc = geopend;
@@ -218,7 +221,7 @@ export default function BijlageViewer(props: ViewerProps) {
     });
     return () => {
       afbreker.abort();
-      doc?.loadingTask.destroy().catch(() => undefined);
+      laatDocumentLos(doc);
       doc = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

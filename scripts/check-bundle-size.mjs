@@ -483,6 +483,18 @@ if (!kaartMatch) {
   // nieuwe import. Budget = de meting plus ±0,5 tot 1 kB, zelfde stap als hierboven.
   WARMUP_BUDGET_KB.chauffeur = 78.5;
   WARMUP_BUDGET_KB.staf = 147;
+  // 13-10 (ritbladviewer: gedeelde worker en zelfherstel): chauffeur 78,5 → 79,
+  // staf 147 → 148. De viewer wacht vóór elke lading op de opruiming van het
+  // vorige document (laatDocumentLos/wachtOpOpruiming), herstart de worker
+  // als de tekstlaag van elke pagina onleesbaar is en noemt het aantal
+  // onleesbare pagina's in de foutgroep; dezelfde dag kwamen de bundel per
+  // dag en de melding "nog geen ritbladen" erbij (#740). De viewerchunk zit
+  // in beide warmups: lokaal 78 en 147, dus exact op de staf-grens, en de
+  // CI-runner meet ±0,5 kB zwaarder (zo viel #740 op de bundelcheck). Geen
+  // nieuwe dependency; de warmup start pas na LCP + 2 s. Budget = de meting
+  // plus ±1 kB, zodat de volgende viewer-regel niet meteen weer botst.
+  WARMUP_BUDGET_KB.chauffeur = 79;
+  WARMUP_BUDGET_KB.staf = 148;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {
