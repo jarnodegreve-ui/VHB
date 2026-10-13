@@ -107,7 +107,13 @@ export function mountDocumentRoutes(app: express.Express) {
         : keuze.vorige ? { versie: keuze.vorige.versie, bundel: keuze.vorige.bundel, terugval: true } : null;
       if (!gekozen) return res.json(null);
       const publiek = maakOndertekenaar();
-      res.json({ ...(await publiek(gekozen.bundel)), versie: gekozen.versie ? versiePublic(versies, gekozen.versie, dag) : null, terugval: gekozen.terugval });
+      res.json({
+        ...(await publiek(gekozen.bundel)),
+        versie: gekozen.versie ? versiePublic(versies, gekozen.versie, dag) : null,
+        // De versie van de dag zelf: bij een terugval zegt de viewer "nog geen ritbladen voor de dienstregeling vanaf dd/mm".
+        voorVersie: keuze.versie ? versiePublic(versies, keuze.versie, dag) : null,
+        terugval: gekozen.terugval,
+      });
     } catch (err: any) {
       console.error("Ritblaadje fetch error:", err);
       res.status(500).json({ error: "Kon ritblad niet ophalen." });

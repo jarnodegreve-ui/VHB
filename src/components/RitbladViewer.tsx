@@ -6,7 +6,8 @@ import { Modal } from './Modal';
 import { Button, IconButton } from './primitives';
 import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
-import { openHuidigRitbladExtern } from '../lib/ritblad';
+import { openRitbladExtern } from '../lib/ritblad';
+import { formatDatumDMJ } from '../lib/format';
 import { isRitbladOpgeslagen, verwijderRitbladUitCache } from '../lib/ritbladCache';
 import { reportHandledError } from '../lib/monitoring';
 import { useOnline } from '../lib/useOnline';
@@ -51,8 +52,9 @@ type Staat =
   | { soort: 'laden' }
   | { soort: 'geen-bundel' }
   | { soort: 'fout' }
-  | { soort: 'niets'; url: string; totaal: number; bundelDatum: string }
-  | { soort: 'klaar'; doc: PDFDocumentProxy; paginas: number[]; url: string; totaal: number; bundelDatum: string };
+  | { soort: 'nog-geen'; vanaf: string | null; totEnMet: string | null }
+  | { soort: 'niets'; url: string; totaal: number; bundelDatum: string; vorige: boolean }
+  | { soort: 'klaar'; doc: PDFDocumentProxy; paginas: number[]; url: string; totaal: number; bundelDatum: string; vorige: boolean };
 
 const ZOOM_STAPPEN = [1, 1.5, 2, 3];
 const RAND = 12; // px rondom de pagina's in de scroller (p-3)
@@ -270,7 +272,11 @@ export function RitbladViewer({
   open,
   onClose,
   alles = false,
+  datum,
 }: {
+  /** De dag waarvoor het blad is (ISO): de bundel van de dienstregelingversie
+   *  die dan geldt (13-10). Zonder: vandaag. */
+  datum?: string;
   /** Eén dienstnummer, of meerdere bij een gesplitste dag (alle bladen onder elkaar). */
   dienstnummer: string | string[];
   open: boolean;
@@ -292,6 +298,10 @@ export function RitbladViewer({
   // (cache-first), maar dan is dat geen boodschap.
   const online = useOnline();
   const [opgeslagen, setOpgeslagen] = useState(false);
+  // De versie van `datum` heeft nog geen eigen bundel (keuze Jarno 13-10):
+  // eerst de melding met de knop naar de vorige, pas daarna die bundel laden.
+  const [vorigeToegestaan, setVorigeToegestaan] = useState(false);
+  useEffect(() => { if (open) setVorigeToegestaan(false); }, [open, datum]);
 
   // Metadata vers ophalen → bundel (via de service-worker-cache, dus ook
   // offline) → pdfjs → pagina's zoeken (gecached per bundel). Sluiten of een
@@ -308,14 +318,18 @@ export function RitbladViewer({
     // begint daardoor bij elk nieuw document weer op 100 %.
     setStaat({ soort: 'laden' });
     (async () => {
-      const meta = await haalRitbladMeta();
+      const meta = await haalRitbladMeta(datum);
       if (signal.aborted) return;
       if (!meta?.url) {
         setStaat({ soort: 'geen-bundel' });
         return;
       }
+      if (meta.terugval && !vorigeToegestaan) {
+        setStaat({ soort: 'nog-geen', vanaf: meta.voorVersie?.geldigVanaf ?? null, totEnMet: meta.versie?.geldigTot ?? null });
+        return;
+      }
       // Verlopen signed URL (storage-fout) → één keer verse metadata en opnieuw.
-      const versUrl = async () => (await haalRitbladMeta())?.url ?? null;
+      const versUrl = async () => (await haalRitbladMeta(datum))?.url ?? null;
       let geladen: PDFDocumentProxy;
       try {
         geladen = await laadRitbladDocument(meta.url, versUrl);
@@ -348,7 +362,7 @@ export function RitbladViewer({
         if (signal.aborted) return;
         paginas = [...gevonden].sort((a, b) => a - b);
       }
-      const basis = { url: meta.url, totaal: doc.numPages, bundelDatum: formatBundelDatum(meta.uploadedAt) };
+      const basis = { url: meta.url, totaal: doc.numPages, bundelDatum: formatBundelDatum(meta.uploadedAt), vorige: Boolean(meta.terugval) };
       // Geen blad gevonden hoort een uitzondering te zijn: melden als
       // foutgroep (Systeemstatus › Fouten), met bundel en omvang erbij, zodat
       // een scan zonder tekst of een ander nummerformaat opvalt vóór de
@@ -371,7 +385,7 @@ export function RitbladViewer({
     // nummerSleutel vat `nummers` samen; een nieuwe array met dezelfde
     // nummers mag niet opnieuw laden.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, nummerSleutel, alleBladen]);
+  }, [open, nummerSleutel, alleBladen, datum, vorigeToegestaan]);
 
   const titel = alleBladen
     ? 'Ritblad · volledige bundel'
@@ -381,8 +395,8 @@ export function RitbladViewer({
   const subregel = (() => {
     switch (staat.soort) {
       case 'laden': return alleBladen ? 'Bundel laden…' : 'Ritblad zoeken…';
-      case 'klaar': return `${somPaginas(staat.paginas)} van ${staat.totaal}${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}${opgeslagenLabel}`;
-      case 'niets': return `${staat.totaal} pagina's${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}${opgeslagenLabel}`;
+      case 'klaar': return `${somPaginas(staat.paginas)} van ${staat.totaal}${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}${staat.vorige ? ' · vorige dienstregeling' : ''}${opgeslagenLabel}`;
+      case 'niets': return `${staat.totaal} pagina's${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}${staat.vorige ? ' · vorige dienstregeling' : ''}${opgeslagenLabel}`;
       default: return null;
     }
   })();
@@ -405,6 +419,19 @@ export function RitbladViewer({
         </div>
       )}
 
+      {staat.soort === 'nog-geen' && (
+        <div className="flex flex-1 items-center p-4">
+          <div className="w-full">
+            <EmptyState
+              illustratie={<NietGevonden />}
+              title="Nog geen ritbladen voor deze dienstregeling"
+              message={`Voor de dienstregeling${staat.vanaf ? ` vanaf ${formatDatumDMJ(staat.vanaf)}` : ''} staan nog geen ritbladen klaar. De vorige ritbladen${staat.totEnMet ? ` (tot en met ${formatDatumDMJ(staat.totEnMet)})` : ''} kan je wel bekijken.`}
+              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => setVorigeToegestaan(true)}>Vorige ritbladen openen</Button>}
+            />
+          </div>
+        </div>
+      )}
+
       {staat.soort === 'fout' && (
         <div className="flex flex-1 items-center p-4">
           <div className="w-full">
@@ -413,7 +440,7 @@ export function RitbladViewer({
               illustratie={typeof navigator !== 'undefined' && navigator.onLine === false ? <GeenBereik /> : <Fout />}
               title="Ritblad kon niet geladen worden"
               message="Controleer je verbinding, of open de volledige bundel zoals voorheen."
-              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => void openHuidigRitbladExtern()}>Volledige bundel openen</Button>}
+              action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => void openRitbladExtern(datum)}>Volledige bundel openen</Button>}
             />
           </div>
         </div>

@@ -8,7 +8,7 @@ import { useRoute, routeUitUrl } from './app/router';
 import { isBreed, magView, routeVan, sectieLabel } from './app/routes';
 import { useAppData } from './app/useAppData';
 import { useLaag } from './lib/lagen';
-import { RITBLAD_BUNDEL_EVENT } from './lib/ritblad';
+import { RITBLAD_BUNDEL_EVENT, type RitbladBundelDetail } from './lib/ritblad';
 import { View, isStaf } from './types';
 import { type ToastEventDetail } from './lib/ui';
 import { useToasts } from './app/useToasts';
@@ -153,11 +153,12 @@ export default function App() {
   // openHuidigRitblad() vraagt met een gebeurtenis of de app de bundel zelf
   // kan tonen; zo blijft de PWA-schil staan en werkt het offline uit de
   // service-worker-cache (controle 16-09, nr. 10).
-  const [bundelOpen, setBundelOpen] = useState(false);
+  const [bundel, setBundel] = useState<RitbladBundelDetail | null>(null);
   useEffect(() => {
     const onBundel = (e: Event) => {
-      e.preventDefault(); // bevestigt aan openHuidigRitblad dat wij het doen
-      setBundelOpen(true);
+      e.preventDefault(); // bevestigt aan openRitblad dat wij het doen
+      // De dag (13-10): de bundel van de dienstregelingversie die dan geldt.
+      setBundel({ datum: (e as CustomEvent<RitbladBundelDetail>).detail?.datum });
     };
     window.addEventListener(RITBLAD_BUNDEL_EVENT, onBundel);
     return () => window.removeEventListener(RITBLAD_BUNDEL_EVENT, onBundel);
@@ -337,8 +338,8 @@ export default function App() {
       showAgenda={showAgenda}
       setShowAgenda={setShowAgenda}
       shifts={shifts}
-      bundelOpen={bundelOpen}
-      setBundelOpen={setBundelOpen}
+      bundel={bundel}
+      setBundel={setBundel}
       isSidebarOpen={isSidebarOpen}
       setIsSidebarOpen={setIsSidebarOpen}
       isDesktopNav={isDesktopNav}

@@ -1,4 +1,4 @@
-import { haalRitbladMeta } from './ritbladPaginas';
+import { haalRitbladen } from './ritbladen';
 
 /**
  * Ritblad offline (next-level 2, 06-09): na het laden van Mijn dag of het
@@ -8,9 +8,11 @@ import { haalRitbladMeta } from './ritbladPaginas';
  * wanneer de chauffeur het pas onderweg — zonder bereik — opent. De SW
  * snoeit die cache tot MAX_RITBLADEN entries (public/sw-ritbladen.js).
  *
- * Er is één gedeelde bundel (id "current"), dus `urls` is in de praktijk één
- * signed URL; de SW sleutelt op het query-loze pad. Eens per WARM_INTERVAL
- * per sessie: de metadata-call is klein, maar hoeft niet bij elke render.
+ * Sinds 13-10 is er een bundel per dienstregelingversie: de huidige én de
+ * toekomstige gaan mee (de vorige niet), zodat op 31/12 ook het blad van
+ * 1/1 al op het toestel staat; de SW sleutelt op het query-loze pad. Eens
+ * per WARM_INTERVAL per sessie: de lijst is klein, maar hoeft niet bij elke
+ * render.
  */
 export const RITBLADEN_CACHE = 'vhb-ritbladen';
 const WARM_INTERVAL_MS = 30 * 60 * 1000;
@@ -44,8 +46,12 @@ export async function warmRitbladCache(opts: { force?: boolean } = {}): Promise<
   if (!opts.force && nu - laatstGewarmd < WARM_INTERVAL_MS) return;
   laatstGewarmd = nu;
   try {
-    const meta = await haalRitbladMeta();
-    if (meta?.url) meldRitbladenAanSw([meta.url]);
+    const lijst = await haalRitbladen();
+    const urls = lijst.bundels
+      .filter((r) => r.versie?.status !== 'verlopen')
+      .map((r) => r.bundel?.url)
+      .filter((url): url is string => Boolean(url));
+    if (urls.length > 0) meldRitbladenAanSw(urls);
   } catch {
     // offline of geen bundel — de volgende online opening probeert opnieuw
     laatstGewarmd = 0;

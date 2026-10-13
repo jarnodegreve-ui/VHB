@@ -293,8 +293,8 @@ export function MijnDagView({
           met het ritblad als enige gouden knop van dit scherm.
           Het ritblad toont meteen de pagina's van jóuw dienstnummer (04-09);
           ook voor morgen zodra het nummer bekend is, zodat je 's avonds al
-          kan klaarleggen wat je morgen rijdt. Het blad is altijd de actuele
-          bundel. Defect melden schrijft rechtstreeks in het gele boek van de
+          kan klaarleggen wat je morgen rijdt. Het blad komt uit de bundel van
+          de dienstregeling die op die dag geldt (13-10). Defect melden schrijft rechtstreeks in het gele boek van de
           garage (13-09) en staat er ook op een dag zonder dienst.
           Filmnummers (01-10, vraag Jarno): het nummer voor de bestemming zoek
           je onderweg op, bij elke eindhalte; de knop staat er dus ook op een
@@ -318,7 +318,7 @@ export function MijnDagView({
         </Button>
       </div>
       {delen.length > 0 && (
-        <RitbladViewer dienstnummer={dienstnummers} open={ritbladOpen} onClose={() => setRitbladOpen(false)} />
+        <RitbladViewer dienstnummer={dienstnummers} datum={peildag} open={ritbladOpen} onClose={() => setRitbladOpen(false)} />
       )}
       {defectMelden && (
         <Suspense fallback={null}>

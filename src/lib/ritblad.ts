@@ -1,6 +1,10 @@
 import { notify, openPdfInNewTab } from './ui';
 import { apiFetch } from './api';
 
+/** Het pad van de bundel-metadata: zonder datum die van vandaag. Hier en
+ *  niet in ritbladPaginas.ts: dit bestand zit in de startbundel, dat niet. */
+export const ritbladMetaPad = (datum?: string | null): string => (datum ? `/api/ritblaadje?datum=${encodeURIComponent(datum)}` : '/api/ritblaadje');
+
 /**
  * De volledige bundel in de app tonen (controle 16-09, nr. 10). Vroeger
  * navigeerde deze knop naar de signed Supabase-URL; in iOS-standalone geeft
@@ -12,30 +16,31 @@ import { apiFetch } from './api';
  * App.tsx luistert en opent de RitbladViewer in bundel-stand; dezelfde
  * gebeurtenis-aanpak als `notify`. Geen luisteraar (of geen venster) =
  * terugvallen op de oude route, zodat de knop nooit stil niets doet.
+ *
+ * Sinds 13-10 hoort een bundel bij een dag: de dienstregelingversie die op
+ * die dag geldt (`datum`, ISO; zonder = vandaag). De gebeurtenis draagt de
+ * dag mee, zodat het rooster ook het blad van volgende week kan openen.
  */
 export const RITBLAD_BUNDEL_EVENT = 'vhb-ritblad-bundel';
+export type RitbladBundelDetail = { datum?: string };
 
-const toonBundelInApp = (): boolean => {
+const toonBundelInApp = (datum?: string): boolean => {
   if (typeof window === 'undefined') return false;
-  const gebeurtenis = new CustomEvent(RITBLAD_BUNDEL_EVENT, { cancelable: true });
+  const gebeurtenis = new CustomEvent<RitbladBundelDetail>(RITBLAD_BUNDEL_EVENT, { cancelable: true, detail: { datum } });
   // De luisteraar bevestigt met preventDefault dat hij de viewer opent.
   return !window.dispatchEvent(gebeurtenis);
 };
 
 /**
- * Het actuele ritblad openen zonder eerst naar de Ritbladen-pagina te gaan.
- *
- * Er is één ritblad voor iedereen (niet één per dienst), dus deze knop hoort
- * alleen bij de dienst van vandáág — bij een dienst van volgende week zou hij
- * suggereren dat het dát blad is.
+ * Het ritblad van een dag openen zonder eerst naar de Ritbladen-pagina te gaan.
  *
  * De metadata wordt pas bij het klikken opgehaald: het rooster hoeft er niet
  * op te wachten, en offline serveert de service worker de PDF vanuit zijn
  * cache onder dezelfde query-loze URL.
  */
-export async function openHuidigRitblad(): Promise<void> {
-  if (toonBundelInApp()) return;
-  return openHuidigRitbladExtern();
+export async function openRitblad(datum?: string): Promise<void> {
+  if (toonBundelInApp(datum)) return;
+  return openRitbladExtern(datum);
 }
 
 /**
@@ -43,11 +48,11 @@ export async function openHuidigRitblad(): Promise<void> {
  * voor de gevallen waar de in-app viewer geen optie is (hij kon het document
  * juist niet laden) of waar de gebruiker de PDF echt wil hebben.
  */
-export async function openHuidigRitbladExtern(): Promise<void> {
+export async function openRitbladExtern(datum?: string): Promise<void> {
   try {
     // no-store: anders kan de SW-cache een signed URL van >1 u teruggeven
     // (controle 05-09, nr. 9 — zelfde regel als de viewer).
-    const res = await apiFetch('/api/ritblaadje', { cache: 'no-store' });
+    const res = await apiFetch(ritbladMetaPad(datum), { cache: 'no-store' });
     if (!res.ok) throw new Error(`Server antwoordde ${res.status}`);
     const data = await res.json();
     if (!data?.url) {

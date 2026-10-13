@@ -46,6 +46,8 @@ const laadChangePasswordModal = () => import('../components/ChangePasswordModal'
 const laadCalendarSubscribeModal = () => import('../components/CalendarSubscribeModal');
 const laadProbleemMelder = () => import('./ProbleemMelder');
 export const laadWerkvoorraadMenu = () => import('../components/WerkvoorraadMenu');
+import type { RitbladBundelDetail } from '../lib/ritblad';
+
 const laadRitbladViewer = () => import('../components/RitbladViewer');
 const LazyChangePasswordModal = lazyWithRetry(() => laadChangePasswordModal().then((m) => ({ default: m.ChangePasswordModal })));
 const LazyCalendarSubscribeModal = lazyWithRetry(() => laadCalendarSubscribeModal().then((m) => ({ default: m.CalendarSubscribeModal })));
@@ -90,8 +92,9 @@ export type AppSchilProps = {
   showAgenda: boolean;
   setShowAgenda: Dispatch<SetStateAction<boolean>>;
   shifts: Shift[];
-  bundelOpen: boolean;
-  setBundelOpen: Dispatch<SetStateAction<boolean>>;
+  /** De bundel-stand van de ritbladviewer (null = dicht), met de dag waarvoor (13-10). */
+  bundel: RitbladBundelDetail | null;
+  setBundel: Dispatch<SetStateAction<RitbladBundelDetail | null>>;
   isSidebarOpen: boolean;
   setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
   isDesktopNav: boolean;
@@ -152,8 +155,8 @@ export function AppSchil({
   showAgenda,
   setShowAgenda,
   shifts,
-  bundelOpen,
-  setBundelOpen,
+  bundel,
+  setBundel,
   isSidebarOpen,
   setIsSidebarOpen,
   isDesktopNav,
@@ -230,9 +233,9 @@ export function AppSchil({
           <LazyCalendarSubscribeModal open onClose={() => setShowAgenda(false)} onDownload={() => { void laadRoosterIcs().then((m) => m.downloadRoosterIcs(currentUser.name, shifts.filter((s) => String(s.driverId) === String(currentUser.id)))).catch(() => {}); }} />
         </Suspense>
       )}
-      {bundelOpen && (
+      {bundel && (
         <Suspense fallback={null}>
-          <LazyRitbladViewer dienstnummer="" alles open onClose={() => setBundelOpen(false)} />
+          <LazyRitbladViewer dienstnummer="" alles datum={bundel.datum} open onClose={() => setBundel(null)} />
         </Suspense>
       )}
       {/* De schermvullende dimmer "Gegevens verwerken…" is in fase 2 (22-09)

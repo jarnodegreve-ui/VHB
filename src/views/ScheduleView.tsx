@@ -25,7 +25,7 @@ import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUre
 import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
 import { formatDatumDMJ, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { downloadRoosterIcs } from '../lib/roosterIcs';
-import { openHuidigRitblad } from '../lib/ritblad';
+import { openRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
 import { navigeer, useRouteParam } from '../app/router';
 import { LegeLijst } from '../components/illustraties';
@@ -268,7 +268,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
             items={[
 
               ...(upcoming.some((g) => g.date === today)
-                ? [{ label: 'Ritblad van vandaag', icon: <FileText size={16} />, onClick: () => void openHuidigRitblad() }]
+                ? [{ label: 'Ritblad van vandaag', icon: <FileText size={16} />, onClick: () => void openRitblad(today) }]
                 : []),
               { label: 'Aan agenda toevoegen', icon: <CalendarPlus size={16} />, onClick: () => setCalendarOpen(true) },
             ]}
@@ -637,9 +637,11 @@ function MonthCalendar({
           </p>
         )}
 
-        {selected === today && selectedGroups.length > 0 && (
-          <Button variant="secondary" size="sm" className="mt-3" onClick={() => void openHuidigRitblad()} icon={<FileText size={14} />}>
-            Ritblad van vandaag
+        {/* Sinds 13-10 hoort de bundel bij een dag (de dienstregelingversie
+            die dan geldt), dus ook een dienst van volgende week heeft zijn blad. */}
+        {selectedGroups.length > 0 && (
+          <Button variant="secondary" size="sm" className="mt-3" onClick={() => void openRitblad(selected)} icon={<FileText size={14} />}>
+            {selected === today ? 'Ritblad van vandaag' : 'Ritblad'}
           </Button>
         )}
         {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict || g.openSwap || dienstGereden({ date: g.date, delen: g.segments }, today, brusselseMinuten())) && (
@@ -823,14 +825,11 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false, pla
                     Deze dienst ruilen
                   </Button>
                 )}
-                {/* Alleen bij vandaag: er is één actueel ritblad, geen blad
-                    per dienst — bij een dienst van volgende week zou deze knop
-                    suggereren dat het dát blad is. */}
-                {isToday && (
-                  <Button variant="secondary" size="sm" onClick={() => void openHuidigRitblad()} icon={<FileText size={14} />}>
-                    Ritblad van vandaag
-                  </Button>
-                )}
+                {/* Sinds 13-10 hoort de bundel bij een dag (de dienstregelingversie
+                    die dan geldt), dus ook een dienst van volgende week heeft zijn blad. */}
+                <Button variant="secondary" size="sm" onClick={() => void openRitblad(g.date)} icon={<FileText size={14} />}>
+                  {isToday ? 'Ritblad van vandaag' : 'Ritblad'}
+                </Button>
               </div>
             </Card>
           );
