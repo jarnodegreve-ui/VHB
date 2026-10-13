@@ -11,7 +11,7 @@ import { formatDatumDMJ } from '../lib/format';
 import { isRitbladOpgeslagen, verwijderRitbladUitCache } from '../lib/ritbladCache';
 import { reportHandledError } from '../lib/monitoring';
 import { useOnline } from '../lib/useOnline';
-import { haalRitbladMeta, laadPdfjs, laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbladPaginas';
+import { haalRitbladMeta, herstartPdfjsWorker, laadPdfjs, laadRitbladDocument, laatDocumentLos, zoekPaginasGecachedMetStatus } from '../lib/ritbladPaginas';
 import { knijpNaarZoomStap, vingerAfstand } from '../lib/ritbladZoom';
 import { Fout, GeenBereik, NietGevonden } from './illustraties';
 
@@ -313,7 +313,9 @@ export function RitbladViewer({
     const afbreker = new AbortController();
     const { signal } = afbreker;
     let doc: PDFDocumentProxy | null = null;
-    const ruimOp = () => { doc?.loadingTask.destroy().catch(() => undefined); doc = null; };
+    // Loslaten via laatDocumentLos: de volgende lading wacht dan op de
+    // opruiming van de gedeelde worker (13-10, "the worker is being destroyed").
+    const ruimOp = () => { laatDocumentLos(doc); doc = null; };
     // 'laden' haalt de bladen uit beeld; de zoom hoort bij PdfBladen en
     // begint daardoor bij elk nieuw document weer op 100 %.
     setStaat({ soort: 'laden' });
@@ -343,32 +345,63 @@ export function RitbladViewer({
         geladen = await laadRitbladDocument((await versUrl()) ?? meta.url, versUrl);
       }
       if (signal.aborted) {
-        geladen.loadingTask.destroy().catch(() => undefined);
+        laatDocumentLos(geladen);
         return;
       }
       doc = geladen;
+      let huidig: PDFDocumentProxy = geladen;
       // Cache-sleutel: het uploadtijdstip; zonder dat (oude metadata) het
       // query-loze pad, dat óók pas bij een nieuwe upload wijzigt.
       const versie = meta.uploadedAt || new URL(meta.url).pathname;
       void isRitbladOpgeslagen(meta.url).then((ja) => { if (!signal.aborted) setOpgeslagen(ja); });
       let paginas: number[];
+      let onleesbaar = 0;
       if (alleBladen) {
-        paginas = Array.from({ length: doc.numPages }, (_, i) => i + 1);
+        paginas = Array.from({ length: huidig.numPages }, (_, i) => i + 1);
       } else {
-        const gevonden = new Set<number>();
-        for (const n of nummers) {
-          for (const p of await zoekPaginasVoorDienstGecached(doc, n, versie, signal)) gevonden.add(p);
+        const zoek = async (d: PDFDocumentProxy) => {
+          const gevonden = new Set<number>();
+          let fouten = 0;
+          for (const n of nummers) {
+            const r = await zoekPaginasGecachedMetStatus(d, n, versie, signal);
+            for (const p of r.paginas) gevonden.add(p);
+            fouten += r.fouten;
+          }
+          return { paginas: [...gevonden].sort((a, b) => a - b), fouten };
+        };
+        let uitkomst = await zoek(huidig);
+        // Geen enkel blad én (bijna) elke pagina onleesbaar: de tekstlaag kwam
+        // niet uit de worker, niet uit de bundel. Dat was het beeld op twee
+        // iPhones van 08-10 tot 13-10 ("geen apart blad gevonden" voor
+        // diensten die wél in de bundel staan). Worker herstarten, de bundel
+        // opnieuw openen en één keer opnieuw zoeken; de melding zegt wat er
+        // gebeurde, zodat de foutgroep het onderscheid toont.
+        if (uitkomst.paginas.length === 0 && uitkomst.fouten >= Math.max(1, huidig.numPages - 1)) {
+          reportHandledError(`Ritblad: tekstlaag onleesbaar voor ${nummerTekst} (${uitkomst.fouten} van ${huidig.numPages} pagina's), worker herstart`);
+          laatDocumentLos(huidig);
+          doc = null;
+          await herstartPdfjsWorker();
+          if (signal.aborted) return;
+          const opnieuw = await laadRitbladDocument(meta.url, versUrl);
+          if (signal.aborted) {
+            laatDocumentLos(opnieuw);
+            return;
+          }
+          doc = opnieuw;
+          huidig = opnieuw;
+          uitkomst = await zoek(huidig);
         }
         if (signal.aborted) return;
-        paginas = [...gevonden].sort((a, b) => a - b);
+        paginas = uitkomst.paginas;
+        onleesbaar = uitkomst.fouten;
       }
-      const basis = { url: meta.url, totaal: doc.numPages, bundelDatum: formatBundelDatum(meta.uploadedAt), vorige: Boolean(meta.terugval) };
+      const basis = { url: meta.url, totaal: huidig.numPages, bundelDatum: formatBundelDatum(meta.uploadedAt), vorige: Boolean(meta.terugval) };
       // Geen blad gevonden hoort een uitzondering te zijn: melden als
       // foutgroep (Systeemstatus › Fouten), met bundel en omvang erbij, zodat
       // een scan zonder tekst of een ander nummerformaat opvalt vóór de
       // chauffeurs het melden.
-      if (!paginas.length) reportHandledError(`Ritblad: geen apart blad gevonden voor ${nummerTekst} (bundel van ${basis.bundelDatum || 'onbekende datum'}, ${doc.numPages} pagina's)`);
-      setStaat(paginas.length ? { soort: 'klaar', doc, paginas, ...basis } : { soort: 'niets', ...basis });
+      if (!paginas.length) reportHandledError(`Ritblad: geen apart blad gevonden voor ${nummerTekst} (bundel van ${basis.bundelDatum || 'onbekende datum'}, ${huidig.numPages} pagina's${onleesbaar ? `, ${onleesbaar} onleesbaar` : ''})`);
+      setStaat(paginas.length ? { soort: 'klaar', doc: huidig, paginas, ...basis } : { soort: 'niets', ...basis });
     })().catch((err: unknown) => {
       if (signal.aborted) return; // sluiten is geen fout
       console.warn('Ritblad laden mislukte:', err);
