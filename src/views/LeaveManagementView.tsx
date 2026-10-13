@@ -955,10 +955,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           onChange={(e) => { setVoorWie(e.target.value); fouten.wisVeld('voorWie'); }}
                         >
                           {registratie
-                            ? <option value="">Kies een chauffeur…</option>
+                            ? <option value="">Kies een medewerker…</option>
                             : <option value="">Mezelf ({user.name})</option>}
+                          {/* Chauffeurs én techniekers (13-10, Jarno: het verlof van een
+                              technieker was niet te registreren); een technieker telt
+                              niet mee in de verlofbezetting (teltInVerlofbezetting). */}
                           {users
-                            .filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
+                            .filter((u) => (u.role === 'chauffeur' || u.role === 'technieker') && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
                             .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
                             .map((u) => (
                               <option key={u.id} value={String(u.id)}>{u.name}</option>
