@@ -1,4 +1,4 @@
-import { haalRitbladen } from './ritbladen';
+import { haalRitbladen } from './ritbladenApi';
 
 /**
  * Ritblad offline (next-level 2, 06-09): na het laden van Mijn dag of het

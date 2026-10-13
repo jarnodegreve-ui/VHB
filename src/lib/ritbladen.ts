@@ -1,31 +1,13 @@
-import { apiFetch } from './api';
 import { formatDatumDMJ } from './format';
-import type { RitbladVersie } from './ritbladPaginas';
+import type { RitbladBundel, RitbladRegel, RitbladVersie, Ritbladen } from './ritbladenApi';
 
 /**
- * Ritbladen per dienstregelingversie (13-10, keuzes Jarno): wat
- * GET /api/ritbladen geeft en de zuivere regels van het scherm Ritbladen.
- * Geen zod: dit zit in de warmup van elke rol.
+ * Ritbladen per dienstregelingversie (13-10, keuzes Jarno): de zuivere regels
+ * van het scherm Ritbladen. De lezer en de types staan in ritbladenApi.ts
+ * (warmup); dit bestand hoort alleen bij de Ritbladen-chunk. Geen zod.
  */
-export type { RitbladVersie };
-export type RitbladBundel = { filename: string; storagePath: string; uploadedAt: string; uploadedBy: string | null; sizeBytes: number | null; dienstregelingId: string | null; url?: string };
-export type RitbladRegel = { versie: RitbladVersie | null; bundel: RitbladBundel | null };
-export type Ritbladen = {
-  datum: string;
-  versie: RitbladVersie | null;
-  bundel: RitbladBundel | null;
-  vorige: { versie: RitbladVersie; bundel: RitbladBundel } | null;
-  bundels: RitbladRegel[];
-};
-
-export const ritbladenPad = (datum?: string | null): string => (datum ? `/api/ritbladen?datum=${encodeURIComponent(datum)}` : '/api/ritbladen');
-
-/** Alle bundels met hun versie, altijd vers (de links verlopen). */
-export async function haalRitbladen(datum?: string | null): Promise<Ritbladen> {
-  const res = await apiFetch(ritbladenPad(datum), { cache: 'no-store' });
-  if (!res.ok) throw Object.assign(new Error(`Server antwoordde ${res.status}`), { status: res.status });
-  return (await res.json()) as Ritbladen;
-}
+export { haalRitbladen, ritbladenPad } from './ritbladenApi';
+export type { RitbladBundel, RitbladRegel, RitbladVersie, Ritbladen };
 
 const RANG: Record<RitbladVersie['status'], number> = { huidig: 0, toekomstig: 1, verlopen: 2 };
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mem = vi.hoisted(() => ({ bundels: [] as Array<{ versie: { status: string } | null; bundel: { url?: string } | null }>, faalt: false }));
-vi.mock('./ritbladen', () => ({
+vi.mock('./ritbladenApi', () => ({
   haalRitbladen: vi.fn(async () => {
     if (mem.faalt) throw new Error('offline');
     return { bundels: mem.bundels };
