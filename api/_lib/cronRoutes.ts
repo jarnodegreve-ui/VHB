@@ -30,7 +30,7 @@ import { invalidateUsersCache } from "../userCache.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { addDagenIso, brusselsDay, DAG_DMJ, isDigestRuis, SWAP_UITVOERING_ACTIES, EXPIRY_SOORT_LABEL, isActieveStaf } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { MigratieOntbreektError, getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesAlle, getDienstregelingen, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "../storage.js";
+import { MigratieOntbreektError, getActivityLog, getAanwezigheid, getCoverageExpectations, getSwapExecutions, getDiversionsData, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningMatrixRows, getServicesAlle, getDienstregelingen, getSwapsData, getUpdatesData, getUsersData, logActivity, getClientErrorsSince, getClientErrorStatuses, storeBackup, checkBackupIntegrity, pruneOldRecords, listUserDocuments, getRitblaadjeMeta, getRitbladRijen, restoreFromBackup, logCronHeartbeat, getUserExpiries, getLatestBackup } from "../storage.js";
 import { viewUrl } from "./collectie.js";
 import { opruimBudget, ruimWeesBijlagenOp } from "./bijlagenOpruim.js";
 
@@ -81,9 +81,12 @@ export const buildBackupPayload = async () => {
   // meer wélk document bij wie hoorde. Referentie-export (net als authUsers).
   let userDocuments: unknown[] = [];
   let ritblaadje: unknown = null;
+  // Alle bundels (sinds 13-10 één per dienstregelingversie), als referentie naast de oude 'current'.
+  let ritbladen: unknown[] = [];
   try {
     userDocuments = await listUserDocuments();
     ritblaadje = await getRitblaadjeMeta();
+    ritbladen = await getRitbladRijen();
   } catch (err) {
     console.error("[backup] documenten/ritblad-export mislukt (backup gaat door):", err);
   }
@@ -112,6 +115,7 @@ export const buildBackupPayload = async () => {
     ocpiRegistration,
     userDocuments,
     ritblaadje,
+    ritbladen,
   };
 };
 

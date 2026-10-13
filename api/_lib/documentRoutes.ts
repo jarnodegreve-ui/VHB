@@ -16,26 +16,70 @@ import { authenticate, requireRole } from "../middleware.js";
 import { metPdfTitel } from "./pdfTitel.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getUsersData, logActivity, listUserDocuments, markUserDocumentOpened, getUserDocument, insertUserDocument, deleteUserDocument, DOCUMENTS_BUCKET } from "../storage.js";
+import { getUsersData, logActivity, listUserDocuments, markUserDocumentOpened, getUserDocument, insertUserDocument, deleteUserDocument, DOCUMENTS_BUCKET, MigratieOntbreektError, getDienstregelingen, getRitbladRijen, saveRitbladRij, deleteRitbladRij, uploadRitbladBestand, verwijderRitbladBestand, ondertekenRitblad, type RitbladRij } from "../storage.js";
 import { viewUrl } from "./collectie.js";
+import { DAG_DMJ, brusselsDay } from "../helpers.js";
+import { hoortBijVersie, oudsteVersie, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum } from "../../shared/dienstregeling.js";
+import { bundelsPerVersie, kiesRitblad } from "./ritbladKeuze.js";
 
-// --- Ritblaadjes ---
-
-const RITBLAADJE_BUCKET = "ritblaadjes";
+// --- Ritbladen: één bundel per dienstregelingversie (13-10, keuzes Jarno) ---
+//
+// Tot 13-10 was er één bundel (rij 'current'). Nu hangt elke bundel aan een
+// versie uit public.dienstregelingen (kolom dienstregeling_id; null = de rij
+// van vóór de migratie, die als de oudste versie telt). Per dag geldt de
+// bundel van de versie die op die dag geldt (api/_lib/ritbladKeuze.ts); een
+// toekomstige bundel is vooraf te bekijken en de vorige blijft zolang haar
+// versie bestaat. De opslag (tabel én bucket) zit in api/_lib/opslag/documenten.ts.
 
 // Was 30 dagen: die URL werd ook nog in localStorage bewaard, dus een
 // geblokkeerd toestel hield wekenlang toegang tot het bedrijfsritblad. De
 // client haalt de URL bij elk bezoek vers op, dus een uur is genoeg.
 const RITBLAADJE_URL_TTL_SEC = 60 * 60;
 
-const ritblaadjeRowToPublic = (row: any, publicUrl: string) => ({
-  filename: row.filename as string,
-  storagePath: row.storage_path as string,
-  uploadedAt: row.uploaded_at as string,
-  uploadedBy: row.uploaded_by as string | null,
-  sizeBytes: row.size_bytes as number | null,
-  url: publicUrl,
+const vandaag = () => brusselsDay(new Date().toISOString());
+const datumUitQuery = (req: express.Request): string | null => {
+  const d = req.query.datum;
+  return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
+};
+const versieUitQuery = (req: express.Request): string | null => (typeof req.query.versie === "string" && req.query.versie.trim() ? req.query.versie.trim() : null);
+
+type Versies = Awaited<ReturnType<typeof getDienstregelingen>>;
+const versiePublic = (versies: Versies, v: Versies[number], dag: string) => ({
+  id: v.id, naam: v.naam, geldigVanaf: v.geldigVanaf, geldigTot: versieGeldigTot(versies, v), status: versieStatus(versies, v, dag),
 });
+/** Eén ondertekening per bestand per request: de lijst noemt dezelfde bundel soms twee keer. */
+const maakOndertekenaar = () => {
+  const cache = new Map<string, Promise<string>>();
+  return async (rij: RitbladRij) => {
+    let url = cache.get(rij.storagePath);
+    if (!url) { url = ondertekenRitblad(rij.storagePath, RITBLAADJE_URL_TTL_SEC); cache.set(rij.storagePath, url); }
+    return {
+      filename: rij.filename, storagePath: rij.storagePath, uploadedAt: rij.uploadedAt, uploadedBy: rij.uploadedBy, sizeBytes: rij.sizeBytes,
+      dienstregelingId: rij.dienstregelingId, url: await url,
+    };
+  };
+};
+const laadRitbladen = async () => {
+  const [versies, rijen] = await Promise.all([getDienstregelingen(), getRitbladRijen()]);
+  return { versies, rijen };
+};
+class VersieOnbekend extends Error {}
+/** De versie waar een upload of verwijdering op slaat: ?versie=, anders die
+ *  van vandaag; null zonder versies (migratie van 08-10 niet gedraaid). */
+const doelVersie = (versies: Versies, req: express.Request, dag: string): Versies[number] | null => {
+  if (versies.length === 0) return null;
+  const id = versieUitQuery(req);
+  if (!id) return versieVoorDatum(versies, dag);
+  const v = versies.find((x) => x.id === id);
+  if (!v) throw new VersieOnbekend(id);
+  return v;
+};
+/** De bundel die bij `versie` hoort (of de rij 'current' zonder versies). */
+const bundelVan = (versies: Versies, rijen: RitbladRij[], versie: Versies[number] | null): RitbladRij | null => {
+  if (!versie) return rijen.find((r) => r.id === "current") ?? rijen[0] ?? null;
+  const oudsteId = oudsteVersie(versies)?.id ?? null;
+  return rijen.find((r) => hoortBijVersie(r, versie.id, oudsteId)) ?? null;
+};
 
 // --- Documenten per gebruiker (attesten, reglement, loonbrieven) ---
 // Zelfde beveiligingspatroon als de ritbladen: privé bucket, ondertekende
@@ -47,36 +91,65 @@ const ritblaadjeRowToPublic = (row: any, publicUrl: string) => ({
 const DOCUMENT_URL_TTL_SEC = 15 * 60;
 
 export function mountDocumentRoutes(app: express.Express) {
-  app.get("/api/ritblaadje", authenticate, async (_req, res) => {
+  // Het contract van vóór 13-10, nu per dag: de bundel van de versie die op
+  // `datum` (standaard vandaag) geldt. Heeft die versie nog geen bundel, dan
+  // de vorige (met `terugval: true`), zodat Mijn dag en de viewer nooit zonder
+  // blad vallen; het scherm Ritbladen leest /api/ritbladen en toont de keuze.
+  // null = geen enkele bundel.
+  app.get("/api/ritblaadje", authenticate, async (req, res) => {
     try {
-      if (!db) return res.status(500).json({ error: "Supabase is niet geconfigureerd." });
-
-      const { data, error } = await db.from("ritblaadje").select("*").eq("id", "current").maybeSingle();
-      if (error) throw error;
-      if (!data) return res.json(null);
-
-      // Ondertekende URL i.p.v. publieke: de bucket wordt privé gezet zodat het
-      // ritblad (interne dienstinfo) niet zonder sessie op te vragen is.
-      const { data: signedData, error: signedError } = await db.storage
-        .from(RITBLAADJE_BUCKET)
-        .createSignedUrl(data.storage_path, RITBLAADJE_URL_TTL_SEC);
-      if (signedError || !signedData?.signedUrl) throw signedError ?? new Error("Kon geen ondertekende URL maken.");
-      return res.json(ritblaadjeRowToPublic(data, signedData.signedUrl));
+      const dag = vandaag();
+      const datum = datumUitQuery(req) ?? dag;
+      const { versies, rijen } = await laadRitbladen();
+      const keuze = kiesRitblad(versies, rijen, datum);
+      const gekozen = keuze.bundel
+        ? { versie: keuze.versie, bundel: keuze.bundel, terugval: false }
+        : keuze.vorige ? { versie: keuze.vorige.versie, bundel: keuze.vorige.bundel, terugval: true } : null;
+      if (!gekozen) return res.json(null);
+      const publiek = maakOndertekenaar();
+      res.json({ ...(await publiek(gekozen.bundel)), versie: gekozen.versie ? versiePublic(versies, gekozen.versie, dag) : null, terugval: gekozen.terugval });
     } catch (err: any) {
       console.error("Ritblaadje fetch error:", err);
-      console.error("Kon ritblaadje niet ophalen.", err);
       res.status(500).json({ error: "Kon ritblad niet ophalen." });
     }
   });
 
+  // Alle bundels met hun versie (13-10), voor het scherm Ritbladen: de keuze
+  // voor één dag (`bundel`, of `vorige` als die versie er nog geen heeft) en
+  // de hele lijst (huidig, toekomstig vooraf te bekijken, verlopen zolang de
+  // versie bestaat). Elke rol: chauffeurs lezen hun ritbladen.
+  app.get("/api/ritbladen", authenticate, async (req, res) => {
+    try {
+      const dag = vandaag();
+      const datum = datumUitQuery(req) ?? dag;
+      const { versies, rijen } = await laadRitbladen();
+      const keuze = kiesRitblad(versies, rijen, datum);
+      const publiek = maakOndertekenaar();
+      const bundels = await Promise.all(bundelsPerVersie(versies, rijen).map(async ({ versie, bundel }) => ({
+        versie: versie ? versiePublic(versies, versie, dag) : null,
+        bundel: bundel ? await publiek(bundel) : null,
+      })));
+      res.json({
+        datum,
+        versie: keuze.versie ? versiePublic(versies, keuze.versie, dag) : null,
+        bundel: keuze.bundel ? await publiek(keuze.bundel) : null,
+        vorige: keuze.vorige ? { versie: versiePublic(versies, keuze.vorige.versie, dag), bundel: await publiek(keuze.vorige.bundel) } : null,
+        bundels,
+      });
+    } catch (err: any) {
+      console.error("Ritbladen fetch error:", err);
+      res.status(500).json({ error: "Kon de ritbladen niet ophalen." });
+    }
+  });
+
+  // Upload (admin): `?versie=<id>` = de bundel van die versie, anders die van
+  // vandaag. Body: filename, dataUrl, `melden` (standaard aan). Een bestaande
+  // bundel van die versie wordt vervangen.
   app.post("/api/ritblaadje", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
     try {
-      if (!supabaseAdmin) {
-        return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
-      }
-
       const filename = String(req.body?.filename || "").trim();
       const dataUrl = String(req.body?.dataUrl || "");
+      const melden = req.body?.melden !== false;
       if (!filename || !filename.toLowerCase().endsWith(".pdf")) {
         return res.status(400).json({ error: "Geef een PDF-bestand met een .pdf extensie." });
       }
@@ -93,101 +166,86 @@ export function mountDocumentRoutes(app: express.Express) {
       // best-effort (api/_lib/pdfTitel.ts). Verzoek Jarno 08-09.
       const buffer = await metPdfTitel(geupload, "Ritblad");
 
-      // Vorige record ophalen zodat we het oude bestand kunnen verwijderen.
-      const { data: existing } = await supabaseAdmin
-        .from("ritblaadje")
-        .select("storage_path")
-        .eq("id", "current")
-        .maybeSingle();
+      const dag = vandaag();
+      const { versies, rijen } = await laadRitbladen();
+      const versie = doelVersie(versies, req, dag);
+      const bestaand = bundelVan(versies, rijen, versie);
 
       // Onvoorspelbaar pad per upload — verhindert dat ex-medewerkers met
       // een oud URL het laatste ritblaadje kunnen blijven opvragen.
       const randomSlug = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const storagePath = `current-${randomSlug}.pdf`;
+      const storagePath = `${versie ? versie.id : "current"}-${randomSlug}.pdf`;
+      await uploadRitbladBestand(storagePath, buffer);
 
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from(RITBLAADJE_BUCKET)
-        .upload(storagePath, buffer, {
-          contentType: "application/pdf",
-          upsert: false,
-        });
-      if (uploadError) throw uploadError;
-
-      // Oud bestand opruimen (best-effort).
-      if (existing?.storage_path && existing.storage_path !== storagePath) {
-        const { error: removeError } = await supabaseAdmin.storage
-          .from(RITBLAADJE_BUCKET)
-          .remove([existing.storage_path]);
-        if (removeError) console.warn("Oude ritblaadje-bestand kon niet worden verwijderd:", removeError);
-      }
-
-      const row = {
-        id: "current",
+      const rij: RitbladRij = {
+        id: bestaand?.id ?? (versie ? versie.id : "current"),
         filename,
-        storage_path: storagePath,
-        uploaded_at: new Date().toISOString(),
-        uploaded_by: req.appUser?.name ?? null,
-        size_bytes: buffer.length,
+        storagePath,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: req.appUser?.name ?? null,
+        sizeBytes: buffer.length,
+        dienstregelingId: versie?.id ?? bestaand?.dienstregelingId ?? null,
       };
-      const { error: upsertError } = await supabaseAdmin.from("ritblaadje").upsert(row);
-      if (upsertError) throw upsertError;
-
-      await logActivity(req, "planning", "Ritblaadje vervangen", `${filename} (${Math.round(buffer.length / 1024)} KB) geüpload.`);
-
-      // Nieuwe bundel = seintje naar de actieve chauffeurs (09-10, keuze
-      // Jarno): zonder melding ontdekte niemand nieuwe ritbladen vóór 14/11.
-      // Best-effort: de upload is al geslaagd, een mislukte push mag dat niet
-      // in een fout veranderen.
       try {
-        const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
-        await sendPushToUsers(chauffeurIds, {
-          title: "Nieuwe ritbladen",
-          soort: "planning",
-          body: "De ritbladbundel is vervangen. Open Ritbladen voor het blad van je dienst.",
-          url: viewUrl("ritbladen"),
-        });
-      } catch (pushErr) {
-        console.error("Push over de nieuwe ritbladbundel versturen mislukt.", pushErr);
+        await saveRitbladRij(rij);
+      } catch (err) {
+        // De rij mislukte (bv. de migratie van 13-10 nog niet gedraaid): het nieuwe bestand niet laten slingeren.
+        await verwijderRitbladBestand(storagePath);
+        throw err;
+      }
+      // Oud bestand opruimen (best-effort), pas nu de rij ernaar wijst.
+      if (bestaand && bestaand.storagePath !== storagePath) await verwijderRitbladBestand(bestaand.storagePath);
+
+      const versieTekst = versie ? ` voor ${versieLabel(versie)} (vanaf ${DAG_DMJ(versie.geldigVanaf)})` : "";
+      await logActivity(req, "planning", bestaand ? "Ritblaadje vervangen" : "Ritblaadje toegevoegd", `${filename} (${Math.round(buffer.length / 1024)} KB) geüpload${versieTekst}.`);
+
+      // Seintje naar de actieve chauffeurs (09-10, keuze Jarno): zonder
+      // melding ontdekte niemand nieuwe ritbladen. Een bundel voor een
+      // toekomstige versie noemt haar datum (13-10); de schakelaar in het
+      // scherm zet `melden: false`. Een verlopen versie meldt nooit.
+      // Best-effort: de upload is al geslaagd.
+      const status = versie ? versieStatus(versies, versie, dag) : "huidig";
+      if (melden && status !== "verlopen") {
+        try {
+          const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
+          const tekst = status === "toekomstig" && versie
+            ? { title: `Nieuwe ritbladen vanaf ${DAG_DMJ(versie.geldigVanaf)}`, body: `Vanaf ${DAG_DMJ(versie.geldigVanaf)} gelden nieuwe ritbladen. Je kan ze nu al bekijken via Ritbladen.` }
+            : { title: "Nieuwe ritbladen", body: "De ritbladbundel is vervangen. Open Ritbladen voor het blad van je dienst." };
+          await sendPushToUsers(chauffeurIds, { ...tekst, soort: "planning", url: viewUrl("ritbladen") });
+        } catch (pushErr) {
+          console.error("Push over de nieuwe ritbladbundel versturen mislukt.", pushErr);
+        }
       }
 
-      const { data: signedData, error: signedError } = await supabaseAdmin.storage
-        .from(RITBLAADJE_BUCKET)
-        .createSignedUrl(storagePath, RITBLAADJE_URL_TTL_SEC);
-      if (signedError || !signedData?.signedUrl) throw signedError ?? new Error("Kon geen ondertekende URL maken.");
-      res.json(ritblaadjeRowToPublic(row, signedData.signedUrl));
+      const publiek = maakOndertekenaar();
+      res.json({ ...(await publiek(rij)), versie: versie ? versiePublic(versies, versie, dag) : null });
     } catch (err: any) {
+      if (err instanceof VersieOnbekend) return res.status(404).json({ error: "Deze versie van de dienstregeling bestaat niet (meer)." });
+      if (err instanceof MigratieOntbreektError) return res.status(503).json({ error: err.message });
       console.error("Ritblaadje upload error:", err);
-      console.error("Kon ritblaadje niet uploaden.", err);
       res.status(500).json({ error: "Kon ritblad niet uploaden." });
     }
   });
 
+  // Verwijderen (admin): `?versie=<id>`, anders de bundel van vandaag.
   app.delete("/api/ritblaadje", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
     try {
-      if (!supabaseAdmin) {
-        return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
-      }
+      const dag = vandaag();
+      const { versies, rijen } = await laadRitbladen();
+      const versie = doelVersie(versies, req, dag);
+      const bestaand = bundelVan(versies, rijen, versie);
+      if (!bestaand) return res.json({ success: true });
 
-      const { data: existing, error: selectError } = await supabaseAdmin.from("ritblaadje").select("*").eq("id", "current").maybeSingle();
-      if (selectError) throw selectError;
-      if (!existing) return res.json({ success: true });
-
-      const { error: removeError } = await supabaseAdmin.storage
-        .from(RITBLAADJE_BUCKET)
-        .remove([existing.storage_path]);
-      if (removeError) console.warn("Storage remove error:", removeError);
-
-      const { error: deleteError } = await supabaseAdmin.from("ritblaadje").delete().eq("id", "current");
-      if (deleteError) throw deleteError;
-
-      await logActivity(req, "planning", "Ritblaadje verwijderd", `${existing.filename} verwijderd.`);
+      await verwijderRitbladBestand(bestaand.storagePath);
+      await deleteRitbladRij(bestaand.id);
+      await logActivity(req, "planning", "Ritblaadje verwijderd", `${bestaand.filename} verwijderd${versie ? ` (${versieLabel(versie)})` : ""}.`);
 
       res.json({ success: true });
     } catch (err: any) {
+      if (err instanceof VersieOnbekend) return res.status(404).json({ error: "Deze versie van de dienstregeling bestaat niet (meer)." });
       console.error("Ritblaadje delete error:", err);
-      console.error("Kon ritblaadje niet verwijderen.", err);
       res.status(500).json({ error: "Kon ritblad niet verwijderen." });
     }
   });

@@ -125,6 +125,9 @@ const mem = vi.hoisted(() => ({
   pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
   documents: [] as any[],
   ritblaadje: null as any,
+  // Ritbladen per dienstregelingversie (13-10): de rijen van de tabel en de paden in de bucket.
+  ritbladen: [] as any[],
+  ritbladBestanden: [] as string[],
   devices: [] as any[],
   planningNotes: [] as any[],
   userExpiries: [] as any[],
@@ -914,6 +917,19 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       if (doc && !doc.openedAt) doc.openedAt = '2026-07-30T12:00:00Z';
     },
     getRitblaadjeMeta: async () => mem.ritblaadje ?? null,
+    getRitbladRijen: async () => [...mem.ritbladen],
+    saveRitbladRij: async (rij: any) => { mem.ritbladen = [...mem.ritbladen.filter((r: any) => r.id !== rij.id), { ...rij }]; },
+    deleteRitbladRij: async (id: string) => { mem.ritbladen = mem.ritbladen.filter((r: any) => r.id !== id); },
+    uploadRitbladBestand: async (pad: string) => { mem.ritbladBestanden.push(pad); },
+    verwijderRitbladBestand: async (pad: string) => { mem.ritbladBestanden = mem.ritbladBestanden.filter((p) => p !== pad); },
+    ondertekenRitblad: async (pad: string) => `https://storage.test/${pad}`,
+    verwijderRitbladVanVersie: async (versieId: string) => {
+      const rij = mem.ritbladen.find((r: any) => r.dienstregelingId === versieId);
+      if (!rij) return false;
+      mem.ritbladBestanden = mem.ritbladBestanden.filter((p) => p !== rij.storagePath);
+      mem.ritbladen = mem.ritbladen.filter((r: any) => r.id !== rij.id);
+      return true;
+    },
     // Toestel-whitelist: zelfde contract als de echte helpers, tegen mem.devices.
     getDevice: async (userId: string, deviceToken: string) => {
       // Speciale tokens simuleren DB-fouten voor de fail-open/closed-tests.
@@ -1173,6 +1189,8 @@ beforeEach(() => {
   mem.historiekFaalt = false;
   mem.documents = [];
   mem.ritblaadje = null;
+  mem.ritbladen = [];
+  mem.ritbladBestanden = [];
   // Beide chauffeurs hebben één goedgekeurd toestel ('dev-ok' — de default
   // van de api()-helper), zodat de whitelist-gate bestaande tests niet raakt.
   mem.planningNotes = [];

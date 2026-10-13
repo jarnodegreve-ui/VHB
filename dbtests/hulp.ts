@@ -13,6 +13,8 @@ const TE_LEGEN: Array<[tabel: string, kolom: string]> = [
   ['planning', 'id'],
   ['planning_matrix_rows', 'id'],
   ['services', 'id'],
+  // De ritbladbundels (FK naar dienstregelingen met cascade; rijen zonder versie blijven anders staan).
+  ['ritblaadje', 'id'],
   // Na services (FK met cascade): de dienstregelingversies van dbtests/diensten.test.ts.
   ['dienstregelingen', 'id'],
   ['dagtype_kalender', 'datum'],
