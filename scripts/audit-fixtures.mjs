@@ -446,6 +446,8 @@ export function apiFixtures(user, extra) {
     if (p.endsWith('/api/activity/presence')) return json({ days: 14, sessies: PRESENCE });
     if (p.endsWith('/api/activity')) return json(ACTIVITY);
     if (p.endsWith('/api/ritblaadje')) return json(null);
+    // Ritbladen per dienstregelingversie (13-10): zonder bundels.
+    if (p.endsWith('/api/ritbladen')) return json({ datum: '2026-10-12', versie: null, bundel: null, vorige: null, bundels: [] });
     if (p.endsWith('/api/filmnummers')) return json(FILMNUMMERS);
     if (p.endsWith('/api/dagtypekalender')) return json(DAGTYPEKALENDER);
     // Dagtype per dag voor Mijn dag (deel 2, 11-10): weekdag = schooldag, weekend = zaterdag/zondag.

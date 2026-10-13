@@ -17,10 +17,13 @@ async function openRitblad(page: Page, baseURL: string) {
   await page.route(`**${PDF_PAD}`, (route) => route.fulfill({ contentType: 'application/pdf', body: bytes }));
   await seed(page, {
     user: CHAUFFEUR, view: 'ritblaadjes', thema: 'dark',
-    extra: (pad) => pad.endsWith('/api/ritblaadje') ? {
-      url: new URL(PDF_PAD, baseURL).href,
-      filename: 'ritblad-zoom.pdf', uploadedAt: '2026-09-16T08:00:00Z',
-    } : undefined,
+    extra: (pad) => {
+      const bundel = { url: new URL(PDF_PAD, baseURL).href, filename: 'ritblad-zoom.pdf', uploadedAt: '2026-09-16T08:00:00Z' };
+      if (pad.endsWith('/api/ritblaadje')) return bundel;
+      // De lijst van het scherm (13-10): één bundel zonder versie.
+      if (pad.endsWith('/api/ritbladen')) return { datum: '2026-09-16', versie: null, bundel, vorige: null, bundels: [{ versie: null, bundel }] };
+      return undefined;
+    },
   });
   await page.goto('/ritbladen');
   await page.getByRole('textbox', { name: 'Dienstnummer', exact: true }).fill('2101');

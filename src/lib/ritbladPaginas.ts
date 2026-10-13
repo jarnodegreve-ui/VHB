@@ -15,6 +15,7 @@
 
 import { apiFetch } from './api';
 import { metRetry } from './lazyRetry';
+import { ritbladMetaPad } from './ritblad';
 
 // Minimale vorm van wat we van pdfjs gebruiken — zo blijven de tests vrij
 // van een echte PDF én van de pdfjs-import (die in jsdom geen worker heeft).
@@ -23,8 +24,16 @@ import { metRetry } from './lazyRetry';
 export type RitbladPagina = { getTextContent(): Promise<{ items: readonly unknown[] }> };
 export type RitbladDocument = { numPages: number; getPage(nummer: number): Promise<RitbladPagina> };
 
-/** Wat /api/ritblaadje teruggeeft (null = geen bundel geüpload). */
-export type RitbladMeta = { url?: string; filename?: string; uploadedAt?: string };
+/** Een dienstregelingversie zoals de ritbladroutes ze meegeven (13-10). */
+export type RitbladVersie = { id: string; naam: string | null; geldigVanaf: string; geldigTot: string | null; status: 'verlopen' | 'huidig' | 'toekomstig' };
+
+/** Wat /api/ritblaadje teruggeeft (null = geen enkele bundel). Sinds 13-10
+ *  per dag: `versie` is de versie waar de bundel bij hoort, `voorVersie` de
+ *  versie van de dag zelf, en `terugval` zegt dat die dag nog geen eigen
+ *  bundel heeft en dit de vorige is. */
+export type RitbladMeta = { url?: string; filename?: string; uploadedAt?: string; versie?: RitbladVersie | null; voorVersie?: RitbladVersie | null; terugval?: boolean };
+
+export { ritbladMetaPad } from './ritblad';
 
 export const PAGINAS_CACHE_KEY = 'vhb-ritblad-paginas';
 
@@ -196,8 +205,8 @@ export async function zoekPaginasVoorDienstGecached(
  * terug op zijn cache; de PDF zelf staat onder het query-loze pad, dus
  * de verlopen token verhindert daar het openen niet.
  */
-export async function haalRitbladMeta(): Promise<RitbladMeta | null> {
-  const res = await apiFetch('/api/ritblaadje', { cache: 'no-store' });
+export async function haalRitbladMeta(datum?: string | null): Promise<RitbladMeta | null> {
+  const res = await apiFetch(ritbladMetaPad(datum), { cache: 'no-store' });
   if (!res.ok) throw new Error(`Server antwoordde ${res.status}`);
   return (await res.json()) as RitbladMeta | null;
 }

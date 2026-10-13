@@ -68,7 +68,7 @@ describe('ritbladen per dienstregelingversie (13-10)', () => {
     expect(lijst.versie.id).toBe(juli.id);
     expect(lijst.bundel).toBeNull();
     expect(lijst.vorige).toMatchObject({ versie: { id: 'dr-sep' }, bundel: { filename: 'juni.pdf' } });
-    expect((await api('GET', '/api/ritblaadje?datum=2026-07-10', { token: 'tok-a' })).json).toMatchObject({ filename: 'juni.pdf', terugval: true, versie: { id: 'dr-sep' } });
+    expect((await api('GET', '/api/ritblaadje?datum=2026-07-10', { token: 'tok-a' })).json).toMatchObject({ filename: 'juni.pdf', terugval: true, versie: { id: 'dr-sep' }, voorVersie: { id: juli.id, status: 'toekomstig' } });
     // Geen enkele bundel meer: null, zoals vroeger.
     expect((await api('DELETE', '/api/ritblaadje', { token: 'tok-admin' })).status).toBe(200);
     expect((await api('GET', '/api/ritblaadje', { token: 'tok-a' })).json).toBeNull();

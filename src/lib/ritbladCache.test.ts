@@ -1,22 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mem = vi.hoisted(() => ({ meta: null as null | { url?: string }, faalt: false }));
-vi.mock('./ritbladPaginas', () => ({
-  haalRitbladMeta: vi.fn(async () => {
+const mem = vi.hoisted(() => ({ bundels: [] as Array<{ versie: { status: string } | null; bundel: { url?: string } | null }>, faalt: false }));
+vi.mock('./ritbladenApi', () => ({
+  haalRitbladen: vi.fn(async () => {
     if (mem.faalt) throw new Error('offline');
-    return mem.meta;
+    return { bundels: mem.bundels };
   }),
 }));
 
 import { _resetRitbladWarm, isRitbladOpgeslagen, meldRitbladenAanSw, ritbladCacheKey, verwijderRitbladUitCache, warmRitbladCache } from './ritbladCache';
 
 const PDF = 'https://x.supabase.co/storage/v1/object/sign/ritblaadjes/bundel.pdf?token=abc';
+const PDF_VOLGENDE = 'https://x.supabase.co/storage/v1/object/sign/ritblaadjes/januari.pdf?token=def';
+const PDF_VORIGE = 'https://x.supabase.co/storage/v1/object/sign/ritblaadjes/september.pdf?token=ghi';
 
 describe('ritbladCache (client → service worker)', () => {
   const berichten: unknown[] = [];
   beforeEach(() => {
     berichten.length = 0;
-    mem.meta = { url: PDF };
+    // Huidige én toekomstige bundel gaan mee, de vorige niet (13-10).
+    mem.bundels = [
+      { versie: { status: 'verlopen' }, bundel: { url: PDF_VORIGE } },
+      { versie: { status: 'huidig' }, bundel: { url: PDF } },
+      { versie: { status: 'toekomstig' }, bundel: { url: PDF_VOLGENDE } },
+      { versie: { status: 'toekomstig' }, bundel: null },
+    ];
     mem.faalt = false;
     _resetRitbladWarm();
     Object.defineProperty(navigator, 'serviceWorker', {
@@ -33,23 +41,23 @@ describe('ritbladCache (client → service worker)', () => {
     expect(ritbladCacheKey(PDF)).toBe('https://x.supabase.co/storage/v1/object/sign/ritblaadjes/bundel.pdf');
   });
 
-  it('meldt de bundel aan de SW en throttlet daarna een half uur', async () => {
+  it('meldt de huidige en de volgende bundel aan de SW en throttlet daarna een half uur', async () => {
     await warmRitbladCache();
     await warmRitbladCache();
-    expect(berichten).toEqual([{ type: 'cache-ritbladen', urls: [PDF] }]);
+    expect(berichten).toEqual([{ type: 'cache-ritbladen', urls: [PDF, PDF_VOLGENDE] }]);
     await warmRitbladCache({ force: true });
     expect(berichten).toHaveLength(2);
   });
 
   it('doet niets zonder actieve SW of zonder bundel, en probeert na een fout opnieuw', async () => {
-    mem.meta = null;
+    mem.bundels = [];
     await warmRitbladCache();
     expect(berichten).toEqual([]);
     _resetRitbladWarm();
     mem.faalt = true;
     await warmRitbladCache();
     mem.faalt = false;
-    mem.meta = { url: PDF };
+    mem.bundels = [{ versie: null, bundel: { url: PDF } }];
     await warmRitbladCache(); // throttle is na de fout teruggezet
     expect(berichten).toHaveLength(1);
     // @ts-expect-error geen controller

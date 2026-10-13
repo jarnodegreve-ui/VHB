@@ -126,3 +126,22 @@ describe('Ritbladviewer: zelfherstel en meldingen (melding chauffeurs 07-10)', (
     expect(meldFoutMock).toHaveBeenCalledWith("Ritblad: geen apart blad gevonden voor diensten 2101 / 2301 (bundel van 1 sep, 3 pagina's)");
   });
 });
+
+describe('Ritbladviewer: versie zonder eigen bundel (13-10)', () => {
+  it('toont eerst de melding met de knop naar de vorige ritbladen en laadt die bundel pas daarna', async () => {
+    apiFetchMock.mockImplementation(async () => new Response(JSON.stringify({
+      url: OUD, uploadedAt: '2026-09-01T08:00:00Z', terugval: true,
+      versie: { id: 'v-sep', naam: null, geldigVanaf: '2026-09-01', geldigTot: '2026-12-31', status: 'huidig' },
+      voorVersie: { id: 'v-jan', naam: null, geldigVanaf: '2027-01-01', geldigTot: null, status: 'toekomstig' },
+    })));
+    zoekPaginasMock.mockResolvedValue([1]);
+    render(<RitbladViewer dienstnummer="2101" datum="2027-01-05" open onClose={() => {}} />);
+    await screen.findByText('Nog geen ritbladen voor deze dienstregeling');
+    expect(screen.getByText(/vanaf 01\/01\/2027 staan nog geen ritbladen klaar\. De vorige ritbladen \(tot en met 31\/12\/2026\)/)).toBeTruthy();
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ritblaadje?datum=2027-01-05', { cache: 'no-store' });
+    expect(laadDocumentMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Vorige ritbladen openen' }));
+    await waitFor(() => expect(laadDocumentMock).toHaveBeenCalledWith(OUD, expect.any(Function)));
+    await screen.findByText(/vorige dienstregeling/);
+  });
+});
