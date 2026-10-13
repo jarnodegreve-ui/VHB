@@ -53,6 +53,8 @@ vi.mock('../api/storage.js', async (origineel) => ({
   // De dagtypekalender (10-10): zonder dekkingsconfig de standaard weekdagen.
   laadDagtypeKalender: async () => ({ weekdays: [], perioden: [], overrides: [] }),
   getServicesData: async () => [{ serviceNumber: '2109', startTime: '06:53', endTime: '08:23', startTime2: '13:10', endTime2: '19:15' }],
+  // Het overzicht per chauffeur leest sinds 13-10 alle versies (per dag de juiste); zonder versies geldt deze ene lijst.
+  getServicesPerVersie: async () => ({ versies: [], services: [{ serviceNumber: '2109', startTime: '06:53', endTime: '08:23', startTime2: '13:10', endTime2: '19:15' }] }),
   getPlanningCodesData: async () => [{ code: 'vrij', category: 'absence', description: 'Vrij', isDayOff: true }],
   getLeaveData: async () => [],
 }));

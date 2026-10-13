@@ -1,6 +1,7 @@
 import { dagtypeVanDag, kalenderUitDekking, type DagtypeKalender } from "../shared/dagtype.js";
 import { perDagVan } from "../shared/dagtypeKalender.js";
 import { dekkingDagtypeVanDag } from "../shared/dekkingDagtype.js";
+import { dienstenOpDag } from "../shared/dienstregeling.js";
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
 import { computeDayGap, normalizeCode, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "../shared/coverageGaps.js";
@@ -14,6 +15,7 @@ import {
   getPlanningCodesData,
   getServiceSegments,
   getServicesData,
+  getServicesPerVersie,
   laadDagtypeKalender,
   laadDekkingCodeKoppeling,
   getDagtypeKalender,
@@ -252,7 +254,7 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
 // Het datavenster per advies-datum (adviesVenster) en de grenzen van één
 // aanvraag wonen in api/advisor.ts, zonder storage en dus los te testen.
 
-type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; services: any[]; swaps: any[]; shifts: any[]; matrixRows: any[]; codes: any[]; kalender: DagtypeKalender };
+type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; services: any[]; versies: any[]; swaps: any[]; shifts: any[]; matrixRows: any[]; codes: any[]; kalender: DagtypeKalender };
 
 /** Eén dataload voor [vanaf, tot] — gedeeld door het losse advies en de
  *  batch (herverdeel-wizard): 17 gaten hoeven niet 17× alles op te halen.
@@ -265,10 +267,12 @@ async function laadAdviesBron(vanaf: string, tot: string): Promise<AdviesBron> {
   const months = adviesMaanden(vanaf, tot);
   // De planningscodes gaan mee voor het bord (controle 29-09): zonder weet
   // de cel-waarheid niet dat een schoolrit een dienst is.
-  const [users, leave, services, swaps, matrixRows, codes, kalender, ...planningChunks] = await Promise.all([
+  // Alle dienstregelingversies (13-10): de gevraagde dag kan na een
+  // dienstregelingwijziging liggen; de dienst en het bord volgen dan die versie.
+  const [users, leave, perVersie, swaps, matrixRows, codes, kalender, ...planningChunks] = await Promise.all([
     getUsersData(),
     getLeaveData({ endOnOrAfter: vanaf }),
-    getServicesData(),
+    getServicesPerVersie(),
     getSwapsData(),
     getPlanningMatrixRows(),
     getPlanningCodesData(),
@@ -277,7 +281,7 @@ async function laadAdviesBron(vanaf: string, tot: string): Promise<AdviesBron> {
     ...months.map((m) => getPlanningData({ monthIso: m })),
   ]);
   const shifts = (planningChunks.flat() as any[]).filter((s) => String(s.date ?? "") >= vanaf && String(s.date ?? "") <= tot);
-  return { vanaf, tot, users, leave, services, swaps, shifts, matrixRows, codes: codes as any[], kalender };
+  return { vanaf, tot, users, leave, services: perVersie.services as any[], versies: perVersie.versies as any[], swaps, shifts, matrixRows, codes: codes as any[], kalender };
 }
 
 export async function berekenCoverageAdvies(date: string, code: string) {
@@ -293,7 +297,7 @@ function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, code: stri
     const shifts = bron.shifts.filter((s) => String(s.date ?? "") >= vanaf && String(s.date ?? "") <= tot);
 
     const dienstToken = toLookupToken(code);
-    const service = (services as any[]).find((s) => toLookupToken(s.serviceNumber) === dienstToken);
+    const service = (dienstenOpDag(bron.versies, services, (s: any) => toLookupToken(s.serviceNumber)).lijst(date) as any[]).find((s) => toLookupToken(s.serviceNumber) === dienstToken);
     const dagtype = dagtypeVanDag(date, (bron.matrixRows as any[]).find((r) => String(r?.source_date) === date)?.day_type, bron.kalender).code;
     const segmenten = service ? getServiceSegments(service, dagtype) : [];
     const venster = dagVenster(segmenten);
@@ -339,7 +343,7 @@ function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, code: stri
     // wissel een schoolrit kreeg wordt niet voorgesteld, wie zijn dienst afgaf
     // wel, ook al toont de matrix zijn oude code nog.
     const nietBeschikbaar = new Set<string>();
-    const bordCellen = bordCellenVoor([date], { rows: bron.matrixRows ?? [], users: users as any[], services: services as any[], codes: bron.codes ?? [], swaps: swaps as any[], kalender: bron.kalender })(date);
+    const bordCellen = bordCellenVoor([date], { rows: bron.matrixRows ?? [], users: users as any[], services: services as any[], versies: bron.versies, codes: bron.codes ?? [], swaps: swaps as any[], kalender: bron.kalender })(date);
     for (const [driverId, cel] of bordCellen) {
       if (!vrijOpBord(cel)) nietBeschikbaar.add(driverId);
     }

@@ -22,7 +22,7 @@ import { addDagenIso, brusselsDay, DAG_DMJ, PERIODE_DMJ, toLookupToken, sortedNa
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
 import { bouwMatrixXlsx, parsePlanningMatrixXlsxMetWaarschuwingen } from "./matrixXlsx.js";
 import { leesMatrixUpload } from "./matrixUpload.js";
-import { buildPlanningFromMatrix, laadDagtypeKalender, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
+import { buildPlanningFromMatrix, laadDagtypeKalender, getPlanningMatrixGrenzen, getLeaveData, getPlanningCodesData, getPlanningData, getPlanningHorizon, getPlanningMatrixHistory, getPlanningMatrixRows, getServicesData, getServicesPerVersie, getSwapsData, getUsersData, logActivity, replacePlanningAndMatrix, savePlanningCodesData, savePlanningData, clearPlanningData, getShiftsOnDate, getServiceSegments, saveMatrixRowAssignments, insertPlanningRows, savePlanningMatrixHistoryEntry, summarizePlanningCodeChanges, diffPlanningCodeChanges, summarizeTokens, getPlanningNotes, upsertPlanningNote, deletePlanningNote, storeImportSnapshot, getImportSnapshot, restorePlanningAndMatrixSnapshot } from "../storage.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { ruilAfwezigheidsFout } from "./ruilRegels.js";
 import { afwezigheidsReden, vrijOpBord } from "../../shared/bordBezetting.js";
@@ -383,11 +383,13 @@ export function mountPlanningRoutes(app: express.Express) {
       // Diensten, planningscodes en ruilen erbij (controle 29-09): de
       // beschikbaarheid leest de cel van het bord, de matrixcel met de
       // doorgevoerde ruilen erover, niet langer de rauwe matrixcel.
-      const [users, leave, matrixRows, services, codes, swaps, kalender] = await Promise.all([
+      // Alle dienstregelingversies (13-10): het venster kan over een
+      // dienstregelingwijziging heen lopen, en per dag telt dan de versie van die dag.
+      const [users, leave, matrixRows, perVersie, codes, swaps, kalender] = await Promise.all([
         getUsersData(),
         getLeaveData(),
         getPlanningMatrixRows(),
-        getServicesData(),
+        getServicesPerVersie(),
         getPlanningCodesData(),
         getSwapsData(),
         laadDagtypeKalender(),
@@ -405,7 +407,7 @@ export function mountPlanningRoutes(app: express.Express) {
       // wissel een schoolrit kreeg is niet vrij, wie zijn dienst afgaf is dat
       // wel, ook al toont de matrix zijn oude code nog. Het verlof uit het
       // portaal telt hierboven al apart (approvedLeave).
-      const bordOp = bordCellenVoor(dates, { rows: matrixRows as any[], users: users as any[], services: services as any[], codes: codes as any[], swaps: swaps as any[], kalender });
+      const bordOp = bordCellenVoor(dates, { rows: matrixRows as any[], users: users as any[], services: perVersie.services as any[], versies: perVersie.versies as any[], codes: codes as any[], swaps: swaps as any[], kalender });
 
       const days = dates.map((date) => {
         const working = new Set<string>();
@@ -487,12 +489,16 @@ export function mountPlanningRoutes(app: express.Express) {
       const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
       if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
 
-      const [rows, users, services, codes, leave, swaps, grenzen, kalender] = await Promise.all([
+      const [rows, users, perVersie, codes, leave, swaps, grenzen, kalender] = await Promise.all([
         // Alleen de matrixrijen van deze maand: berekenCelWaarheid gooit de rest
         // toch weg (monthRows), maar ze reisden wel eerst mee uit Supabase.
         getPlanningMatrixRows({ month }),
         getUsersData(),
-        getServicesData(),
+        // Alle dienstregelingversies (13-10): per dag van de maand telt de
+        // versie die op die dag geldt, dus na een wijziging op 09/11 toont het
+        // bord vanaf die dag de nieuwe uren en ervoor de oude. Tot dan las
+        // het bord de versie van vandaag voor de hele maand.
+        getServicesPerVersie(),
         getPlanningCodesData(),
         // Alleen afwezigheid die deze maand nog raakt — de volledige historiek
         // groeit onbegrensd en is hier nooit nodig.
@@ -519,8 +525,9 @@ export function mountPlanningRoutes(app: express.Express) {
       // het later opnieuw. Voer het tot die tijd NIET opnieuw op als bevinding.
       // De maskering terugzetten is klein werk: commit f2a9b33 (helpers:
       // HEALTH_CODES / isHealthCode, plus één ternary op de cel).
+      const { services, versies } = perVersie;
       const { monthRows, dates, chauffeurs, cells, dagtypes } = berekenCelWaarheid(month, {
-        rows: rows as any[], users: users as any[], services: services as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[], kalender,
+        rows: rows as any[], users: users as any[], services: services as any[], versies: versies as any[], codes: codes as any[], leave: leave as any[], swaps: swaps as any[], kalender,
       });
 
       // Excel-terugexport (planner/admin): de ACTUELE cel-waarheid — wissels,
@@ -535,7 +542,7 @@ export function mountPlanningRoutes(app: express.Express) {
         if (!isStafRol(req.appUser!.role)) {
           return res.status(403).json({ error: "Onvoldoende rechten." });
         }
-        const overzicht = berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes);
+        const overzicht = berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[]);
         return res.json({ month, dagen: dates.length, ...overzicht });
       }
 
@@ -547,7 +554,7 @@ export function mountPlanningRoutes(app: express.Express) {
         // Tweede tabblad "maandoverzicht": per-chauffeur maandtelling (diensten,
         // uren, ziekte, verlof, vrij) op dezelfde cel-waarheid — opstap naar de
         // loonadministratie zonder aparte export.
-        const overzicht = bouwMaandoverzichtAoa(month, dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes);
+        const overzicht = bouwMaandoverzichtAoa(month, dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[], dagtypes, versies as any[]);
         const buffer = await bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="planning-${month}.xlsx"`);

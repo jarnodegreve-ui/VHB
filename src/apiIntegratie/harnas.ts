@@ -385,6 +385,8 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
   };
   const servicesVanVersie = (versieId: string) => mem.services.filter((s: any) => dr.hoortBijVersie(s, versieId, oudsteId()));
   const servicesPerVersieMock = async () => {
+    // Telt als één lezing van het dienstoverzicht, zoals getServicesData (de tellers in de tests).
+    mem.servicesLezingen += 1;
     if (mem.servicesFaalt) throw new Error('services: connection failure');
     const versies = versiesGesorteerd().map((v: any) => ({ ...v, services: servicesVanVersie(v.id) }));
     if (versies.length === 0) return { versies: [], services: mem.services };

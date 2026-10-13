@@ -67,6 +67,41 @@ const dmj = (iso: string): string => {
 export const versieLabel = (v: { naam?: string | null; geldigVanaf: string }): string =>
   (v.naam ?? '').trim() || `Vanaf ${dmj(v.geldigVanaf)}`;
 
+// --- Diensten op een dag ------------------------------------------------------
+
+export type VersieMetDiensten<D> = VersieKern & { services: readonly D[] };
+
+/**
+ * Opzoeker "welke diensten gelden op die dag" (13-10): per versie één index
+ * op de sleutel (het dienstnummer zoals de aanroeper het normaliseert; dubbele
+ * nummers: de laatste wint, zoals in de planning-opbouw), gekozen met
+ * versieVoorDatum. Zonder versies (tabel leeg of migratie niet gedraaid) en
+ * zonder datum geldt de terugvallijst. Elke lezer die meer dan één dag
+ * overspant (het bord, het maandoverzicht, de beschikbaarheid, het advies)
+ * gaat hierdoor, zodat een nieuwe dienstregeling alleen de dagen vanaf haar
+ * datum raakt en het verleden zijn toenmalige tijden houdt.
+ */
+export function dienstenOpDag<D>(
+  versies: readonly VersieMetDiensten<D>[] | null | undefined,
+  terugval: readonly D[],
+  sleutelVan: (dienst: D) => string,
+): { lijst: (datum?: string | null) => readonly D[]; index: (datum?: string | null) => Map<string, D> } {
+  const indexVan = (lijst: readonly D[]) => new Map(lijst.map((d): [string, D] => [sleutelVan(d), d]));
+  const standaard = indexVan(terugval);
+  const perVersie = new Map<string, Map<string, D>>();
+  const versieOp = (datum?: string | null) => (versies && versies.length > 0 && datum ? versieVoorDatum(versies, datum) : null);
+  return {
+    lijst: (datum) => versieOp(datum)?.services ?? terugval,
+    index: (datum) => {
+      const versie = versieOp(datum);
+      if (!versie) return standaard;
+      let m = perVersie.get(versie.id);
+      if (!m) { m = indexVan(versie.services); perVersie.set(versie.id, m); }
+      return m;
+    },
+  };
+}
+
 // --- Vergelijking van twee versies --------------------------------------------
 
 /** De velden van een dienst waar de planning-opbouw naar kijkt: de tijden
