@@ -1,5 +1,5 @@
 import { bouwUitnodigingMail, bouwVerlofBeslissingMail, bouwVervaldatumMail, bouwWelkomMail, portalUrl, type MailTekst } from "../email.js";
-import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwDringendeUpdateMail, bouwOverzichtMail, bouwRestoreProefMail, bouwTestMail, bouwWachtwoordMail, bouwZiekmeldingMail } from "./mailTeksten.js";
+import { bouwBackupIntegriteitMail, bouwBackupWeekkopieMail, bouwDringendeUpdateMail, bouwOverzichtMail, bouwRestoreProefMail, bouwRuilaanvraagMail, bouwTestMail, bouwWachtwoordMail, bouwZiekmeldingMail } from "./mailTeksten.js";
 
 /**
  * Voorbeeld van elke mailsoort voor Beheer › Mails: de échte bouwer van die
@@ -29,6 +29,16 @@ export const voorbeeldMail = (soort: string): MailTekst | null => {
       });
     case "ziekmelding":
       return bouwZiekmeldingMail({ naam: "Dirk Maes", periode: "02/09/2026 t/m 03/09/2026", gemeldDoor: "Els Goossens", openDiensten: ["wo 2 sep, 4407", "do 3 sep, 4408"] });
+    case "ruilaanvraag":
+      return bouwRuilaanvraagMail({
+        aanvrager: "Dirk Maes",
+        collega: "Jan Peeters",
+        dienst: "dienst 2101 op 16/10/2026",
+        tegenprestatie: "dienst 2306 op 18/10/2026",
+        reden: "Trouwfeest van mijn zus.",
+        overname: false,
+        doelPad: "/dienstruil/voorbeeld",
+      });
     case "dringende-update":
       return bouwDringendeUpdateMail({
         titel: "Onderhoud aan boordcomputers",

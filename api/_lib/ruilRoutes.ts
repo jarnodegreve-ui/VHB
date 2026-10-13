@@ -11,6 +11,8 @@
 import express from "express";
 import crypto from "node:crypto";
 import { sendPushToUsers } from "../push.js";
+import { sendEmail } from "../email.js";
+import { bouwRuilaanvraagMail } from "./mailTeksten.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { isStafRol, authenticate, requireRole } from "../middleware.js";
 import { uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from "./ruilUitvoeringen.js";
@@ -1302,6 +1304,39 @@ export function mountRuilRoutes(app: express.Express) {
               : `${userName(next.requesterId)} wil een dienst met je ruilen.`,
             url: recordUrl("ruil-verzoeken", next.id),
           });
+        }
+        // De admins krijgen per aanvraag een mail (13-10, vraag Jarno), elk
+        // apart; uit te zetten in Beheer › Mails (soort ruilaanvraag). Best-
+        // effort: de aanvraag staat al, een mailfout mag geen 500 worden.
+        try {
+          const admins = usersForLog.filter((u) => u.role === "admin" && u.isActive !== false && u.email).map((u) => u.email as string);
+          if (admins.length > 0) {
+            // Datum en dienstnummer staan op het record sinds de shift_info-
+            // migratie; voor een ouder record de planningrij zelf.
+            const shift = next.shiftDate && next.shiftLine ? null : await getShiftById(String(next.shiftId ?? ""));
+            const dienstDatum = String(next.shiftDate ?? shift?.date ?? "");
+            const dienstNummer = String(next.shiftLine ?? shift?.line ?? "").trim() || "?";
+            const terugCode = String(next.returnCode ?? "").trim();
+            const tegenprestatie = isTakeover
+              ? "Geen (overname)"
+              : !terugCode || terugCode.toLowerCase() === "vrij"
+                ? "Vrije dag"
+                : `dienst ${terugCode}${next.returnDate ? ` op ${DAG_DMJ(String(next.returnDate))}` : ""}`;
+            const { onderwerp, html, text } = bouwRuilaanvraagMail({
+              aanvrager: userName(next.requesterId),
+              collega: next.targetDriverId ? userName(String(next.targetDriverId)) : null,
+              dienst: `dienst ${dienstNummer}${dienstDatum ? ` op ${DAG_DMJ(dienstDatum)}` : ""}`,
+              tegenprestatie,
+              reden: String(next.reason ?? "").trim(),
+              overname: isTakeover,
+              doelPad: recordUrl("ruil-verzoeken", next.id),
+            });
+            for (const adres of admins) {
+              await sendEmail({ to: [adres], context: `swap:${next.id}`, soort: "ruilaanvraag", door: userName(next.requesterId), subject: onderwerp, text, html });
+            }
+          }
+        } catch (mailErr) {
+          console.error("Mail over de nieuwe dienstruil versturen mislukt.", mailErr);
         }
       }
 

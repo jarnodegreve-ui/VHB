@@ -2123,3 +2123,46 @@ describe('rusttijd bij een dienstruil (GET /api/swaps › rust)', () => {
     expect(opnieuw.rust[0].rustVoor).toBe(340);
   });
 });
+
+describe('dienstruil aangevraagd: mail naar de admins (13-10)', () => {
+  // Het harnas verstuurt niet echt en logt niet: dat een uitgezette soort in
+  // Beheer › Mails stil blijft (en gelogd wordt) is gedrag van sendEmail zelf,
+  // getest in communicatie.test.ts. Hier: wie krijgt wat, met welke inhoud.
+  const nieuweAanvraag = (extra: Record<string, unknown> = {}) => [{
+    id: 's-mail', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+    reason: 'Trouwfeest van mijn zus.', createdAt: KLOK_ISO, returnDate: '2026-07-05', returnCode: 'VRIJ', ...extra,
+  }];
+  const ruilMails = () => mem.emailsSent.filter((m) => (m.context ?? '').startsWith('swap:'));
+
+  beforeEach(() => {
+    // Geen lopende ruil van chauffeur 3: zo kan hij er zelf één indienen.
+    mem.swaps = [];
+    mem.emailsSent = [];
+    mem.pushesSent = [];
+  });
+
+  it('elke admin krijgt apart een mail met dienst, collega, tegenprestatie en reden; de collega houdt de push', async () => {
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: nieuweAanvraag() });
+    expect(res.status).toBe(200);
+    const mails = ruilMails();
+    expect(mails).toHaveLength(1);
+    expect(mails[0].to).toEqual(['admin@vhb.be']);
+    expect(mails[0].subject).toBe('Dienstruil aangevraagd, Chauffeur A (dienst 12 op 08/07/2026)');
+    expect(mails[0].text).toContain('Chauffeur B');
+    expect(mails[0].text).toContain('Vrije dag');
+    expect(mails[0].text).toContain('Trouwfeest van mijn zus.');
+    expect(mails[0].text).toContain('/dienstruil/s-mail');
+    expect(mem.pushesSent.find((p) => p.payload.title === 'Nieuwe dienstruil-aanvraag')?.userIds).toEqual(['4']);
+    // De planner krijgt geen mail (die houdt de push bij acceptatie).
+    expect(mem.emailsSent.some((m) => m.to.includes('planner@vhb.be'))).toBe(false);
+  });
+
+  it('een overname noemt dat er geen tegenprestatie is', async () => {
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: nieuweAanvraag({ swapType: 'overname', returnCode: '', returnDate: '' }) });
+    expect(res.status).toBe(200);
+    const mails = ruilMails();
+    expect(mails).toHaveLength(1);
+    expect(mails[0].text).toContain('vraagt een overname aan');
+    expect(mails[0].text).toContain('Geen (overname)');
+  });
+});

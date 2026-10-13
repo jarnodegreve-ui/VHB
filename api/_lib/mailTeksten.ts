@@ -37,6 +37,40 @@ export const bouwZiekmeldingMail = (o: { naam: string; periode: string; gemeldDo
   return { onderwerp: `Ziekmelding, ${o.naam} (${o.periode})`, html, text };
 };
 
+/** Een nieuwe dienstruil of overname (13-10, vraag Jarno): de admins krijgen
+ *  per aanvraag een mail, uit te zetten in Beheer › Mails. De collega krijgt
+ *  de push zoals voorheen; wat de planner moet doen staat in de knop. */
+export const bouwRuilaanvraagMail = (o: {
+  aanvrager: string;
+  collega: string | null;
+  dienst: string;
+  tegenprestatie: string;
+  reden: string;
+  overname: boolean;
+  doelPad: string;
+}): MailTekst => {
+  const soort = o.overname ? "overname" : "dienstruil";
+  const { html, text } = mailOpbouw({
+    kicker: "Dienstruil",
+    titel: `${o.aanvrager} vraagt een ${soort} aan`,
+    status: { label: "Wacht op de collega", toon: "aandacht" },
+    alineas: [
+      o.collega
+        ? `${o.collega} moet de aanvraag eerst accepteren; daarna wacht ze op jouw goedkeuring.`
+        : "De aanvraag staat open voor elke collega; zodra iemand accepteert wacht ze op jouw goedkeuring.",
+    ],
+    feiten: [
+      { label: "Aanvrager", waarde: o.aanvrager },
+      { label: "Collega", waarde: o.collega ?? "Nog geen collega (open overname)" },
+      { label: "Dienst", waarde: o.dienst },
+      { label: "Tegenprestatie", waarde: o.tegenprestatie },
+      ...(o.reden ? [{ label: "Reden", waarde: o.reden }] : []),
+    ],
+    knop: { tekst: "Open de dienstruil", url: `${portalUrl()}${o.doelPad}` },
+  });
+  return { onderwerp: `Dienstruil aangevraagd, ${o.aanvrager} (${o.dienst})`, html, text };
+};
+
 /** Dringende update aan alle actieve gebruikers; `doelPad` = het bericht zelf
  *  zodra er een id is (begint met een schuine streep). */
 export const bouwDringendeUpdateMail = (o: { titel: string; inhoud: string; doelPad: string }): MailTekst => {
