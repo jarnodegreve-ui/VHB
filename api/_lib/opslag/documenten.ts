@@ -1,5 +1,7 @@
 import { db, supabaseAdmin } from "../../db.js";
 import { paginatedFetch, requireDb } from "./basis.js";
+import { isMissingColumnError } from "./fouten.js";
+import { MigratieOntbreektError } from "./gebruikers.js";
 
 // --- Documenten per gebruiker (attesten, reglement, loonbrieven) ---
 
@@ -95,6 +97,100 @@ export const deleteUserDocument = async (id: string): Promise<void> => {
   const client = requireDb();
   const { error } = await client.from("user_documents").delete().eq("id", id);
   if (error) throw error;
+};
+
+// --- Ritbladen: één bundel per dienstregelingversie (13-10) ---
+
+export const RITBLAADJE_BUCKET = "ritblaadjes";
+export const RITBLADEN_MIGRATIE = "supabase/2026-10-13_ritblaadje_per_versie.sql";
+
+export type RitbladRij = {
+  id: string;
+  filename: string;
+  storagePath: string;
+  uploadedAt: string;
+  uploadedBy: string | null;
+  sizeBytes: number | null;
+  /** Bij welke dienstregelingversie de bundel hoort; null = de rij 'current'
+   *  van vóór de migratie, die als de oudste versie telt (zoals bij services). */
+  dienstregelingId: string | null;
+};
+
+const toPublicRitblad = (r: any): RitbladRij => ({
+  id: String(r.id),
+  filename: String(r.filename ?? ""),
+  storagePath: String(r.storage_path ?? ""),
+  uploadedAt: String(r.uploaded_at ?? ""),
+  uploadedBy: r.uploaded_by ?? null,
+  sizeBytes: r.size_bytes ?? null,
+  dienstregelingId: r.dienstregeling_id ?? null,
+});
+
+/** Alle bundels, oudste upload eerst (ook zonder de kolom: dan telt elke rij als de oudste versie). */
+export const getRitbladRijen = async (): Promise<RitbladRij[]> => {
+  const client = requireDb();
+  const { data, error } = await client.from("ritblaadje").select("*").order("uploaded_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(toPublicRitblad);
+};
+
+/** Upsert op id. Een rij mét versie zonder de kolom: MigratieOntbreektError (503 in de route). */
+export const saveRitbladRij = async (rij: RitbladRij): Promise<void> => {
+  const client = requireDb();
+  // Zonder versie blijft de kolom buiten de payload, zodat de stand van vóór de migratie blijft werken.
+  const payload: Record<string, unknown> = { id: rij.id, filename: rij.filename, storage_path: rij.storagePath, uploaded_at: rij.uploadedAt, uploaded_by: rij.uploadedBy, size_bytes: rij.sizeBytes };
+  if (rij.dienstregelingId) payload.dienstregeling_id = rij.dienstregelingId;
+  const { error } = await client.from("ritblaadje").upsert(payload);
+  if (error) {
+    if (rij.dienstregelingId && isMissingColumnError(error)) throw new MigratieOntbreektError("ritblaadje.dienstregeling_id", RITBLADEN_MIGRATIE);
+    throw error;
+  }
+};
+
+export const deleteRitbladRij = async (id: string): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client.from("ritblaadje").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const uploadRitbladBestand = async (pad: string, bestand: Buffer): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client.storage.from(RITBLAADJE_BUCKET).upload(pad, bestand, { contentType: "application/pdf", upsert: false });
+  if (error) throw error;
+};
+
+/** Best-effort: een achtergebleven bestand is geen fout voor de gebruiker. */
+export const verwijderRitbladBestand = async (pad: string): Promise<void> => {
+  if (!pad) return;
+  try {
+    const { error } = await requireDb().storage.from(RITBLAADJE_BUCKET).remove([pad]);
+    if (error) console.warn("Ritbladbestand kon niet worden verwijderd:", error);
+  } catch (err) {
+    console.warn("Ritbladbestand kon niet worden verwijderd:", err);
+  }
+};
+
+/** Ondertekende URL van een bundel, `ttlSec` geldig. */
+export const ondertekenRitblad = async (pad: string, ttlSec: number): Promise<string> => {
+  const { data, error } = await requireDb().storage.from(RITBLAADJE_BUCKET).createSignedUrl(pad, ttlSec);
+  if (error || !data?.signedUrl) throw error ?? new Error("Kon geen ondertekende URL maken.");
+  return data.signedUrl;
+};
+
+/** De bundel van een versie weg (bestand én rij), bv. wanneer de versie zelf
+ *  verdwijnt: de FK ruimt de rij op, maar niet het bestand. Best-effort;
+ *  true = er was een bundel. */
+export const verwijderRitbladVanVersie = async (versieId: string): Promise<boolean> => {
+  try {
+    const rij = (await getRitbladRijen()).find((r) => r.dienstregelingId === versieId);
+    if (!rij) return false;
+    await verwijderRitbladBestand(rij.storagePath);
+    await deleteRitbladRij(rij.id);
+    return true;
+  } catch (err) {
+    console.warn("Ritbladen van de versie konden niet worden verwijderd:", err);
+    return false;
+  }
 };
 
 /** Metadata van het huidige ritblad (id='current') — voor de back-up. */

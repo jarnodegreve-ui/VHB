@@ -155,6 +155,16 @@ export {
   getRitblaadjeMeta,
   kopieerOnthaalDocumentenNaar,
   deleteAllDocumentsForUser,
+  RITBLAADJE_BUCKET,
+  RITBLADEN_MIGRATIE,
+  type RitbladRij,
+  getRitbladRijen,
+  saveRitbladRij,
+  deleteRitbladRij,
+  uploadRitbladBestand,
+  verwijderRitbladBestand,
+  ondertekenRitblad,
+  verwijderRitbladVanVersie,
 } from "./_lib/opslag/documenten.js";
 export {
   type ClientErrorEntry,

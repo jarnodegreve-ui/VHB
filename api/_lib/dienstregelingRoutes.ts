@@ -7,7 +7,7 @@ import { dienstregelingBodySchema, dienstregelingPatchSchema } from "../../share
 import { dagVoor, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum } from "../../shared/dienstregeling.js";
 import { valideerRecord } from "./valideer.js";
 import {
-  DIENSTREGELING_MIGRATIE, MigratieOntbreektError, createDienstregeling, deleteDienstregeling, getDienstregelingen, getServicesPerVersie, getUsersData, logActivity, updateDienstregeling,
+  DIENSTREGELING_MIGRATIE, MigratieOntbreektError, createDienstregeling, deleteDienstregeling, getDienstregelingen, getServicesPerVersie, getUsersData, logActivity, updateDienstregeling, verwijderRitbladVanVersie,
 } from "../storage.js";
 import { sendPushToUsers } from "../push.js";
 import { viewUrl } from "./collectie.js";
@@ -156,8 +156,10 @@ export function mountDienstregelingRoutes(app: express.Express) {
       if (versieStatus(versies, huidig, vandaag()) !== "toekomstig") {
         return res.status(409).json({ error: "Alleen een toekomstige versie kan verwijderd worden: de huidige en verlopen versies dragen de planning van hun dagen." });
       }
+      // Haar ritbladbundel eerst (13-10): de FK ruimt de rij op, het bestand niet.
+      const ritbladenWeg = await verwijderRitbladVanVersie(id);
       await deleteDienstregeling(id);
-      await logActivity(req, "services", "Dienstregelingversie verwijderd", `${versieLabel(huidig)}, gold vanaf ${DAG_DMJ(huidig.geldigVanaf)}; haar diensten zijn mee verwijderd.`);
+      await logActivity(req, "services", "Dienstregelingversie verwijderd", `${versieLabel(huidig)}, gold vanaf ${DAG_DMJ(huidig.geldigVanaf)}; haar diensten${ritbladenWeg ? " en ritbladen" : ""} zijn mee verwijderd.`);
       // De dagen van deze versie vallen terug op de vorige: planning mee.
       const planning = planningUitkomstVoorAntwoord(await heropbouwNaDienstoverzicht(req));
       res.json({ success: true, planning });

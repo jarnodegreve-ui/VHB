@@ -91,6 +91,7 @@ export const VERWACHTE_MIGRATIES: readonly string[] = [
   "2026-10-09_users_verlofbudgetten.sql",
   "2026-10-10_services_varianten.sql",
   "2026-10-11_dagtype_kalender.sql",
+  "2026-10-13_ritblaadje_per_versie.sql",
 ];
 
 /** Wat de code verwacht en niet in het register van de omgeving staat. */
