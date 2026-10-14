@@ -28,7 +28,7 @@ import { formatDateHuman, formatPeriodeDMJ, formatShortDay, hoofdletter, service
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { sorteerRuilen } from '../lib/ruilVolgorde';
 import { canRespondToSwap } from '../lib/authorization';
-import { notify, openPdfInNewTab } from '../lib/ui';
+import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { AllesGedaan, LegeLijst } from '../components/illustraties';
 import { TableShell, Td, Th } from '../components/TabelBasis';
 import { RecordOnbekend } from '../components/RecordOnbekend';
@@ -560,6 +560,46 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     </div>
   ) : null;
 
+  /** Wat de kijker zelf nog met een aan hem gerichte ruil doet: antwoorden,
+   *  wachten op de planner, of de doorgevoerde wissel bevestigen. Niets als
+   *  er voor hem niets te doen is. */
+  const antwoordBlok = (swap: SwapRequest, canRespond: boolean, className?: string) => {
+    if (canRespond) {
+      return (
+        /* Zelfde volgorde als de verlofbeoordeling (C, 24-09): afwijzen links, toestemmen rechts. */
+        <div className={cn('flex gap-2 pt-1', className)}>
+          <Button variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleDecline(swap.id)}>
+            Weigeren
+          </Button>
+          <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAccept(swap.id)}>
+            Accepteren
+          </Button>
+        </div>
+      );
+    }
+    if (swap.status === 'accepted' && swap.targetDriverId === user.id) {
+      return <p className={cn('text-xs font-medium text-blue-700', className)}>Je accepteerde deze ruil, de planner valideert nog (rij-/rusttijden).</p>;
+    }
+    if (swap.status === 'approved' && swap.targetDriverId === user.id && !swap.targetSeenAt) {
+      /* Doorgevoerd maar nog niet bevestigd: dé plek waar de chauffeur laat
+         weten dat hij de wijziging gezien heeft (push bereikt bijna niemand,
+         dit vinkje wel). */
+      return (
+        <Button
+          variant="success"
+          full
+          className={className}
+          icon={<Check size={16} />}
+          disabled={isConfirmingSeen === swap.id}
+          onClick={() => void bevestigGezien(swap.id)}
+        >
+          {isConfirmingSeen === swap.id ? 'Bevestigen…' : 'Begrepen, ik rijd deze dienst'}
+        </Button>
+      );
+    }
+    return null;
+  };
+
   /** Inhoud van één ruil (status, dienst, verloop, rust, toelichting): het
    *  beoordelingspaneel van de staf en de alleen-lezen kaart van een chauffeur. */
   const ruilDetail = (swap: SwapRequest) => {
@@ -715,17 +755,63 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
         <div className="space-y-4">
           <MicroLabel className="ml-1">Openstaande dienstruilen</MicroLabel>
-          {availableSwaps.length > 0 ? (
+          {availableSwaps.length > 0 ? isPlanner ? (
+            /* Staf ziet hier ELKE open ruil, ook die tussen twee collega's. Met
+               een kaart per ruil was deze kolom onoverzichtelijk (Jarno 14-10:
+               "veel kleinere tegeltjes, gewoon de naam van beide chauffeurs").
+               Dus het rijrecept: dicht de twee namen, de dag en de stand; het
+               dienstnummer, het tijdvak, het verloop en de rust pas in de
+               uitklap, zoals de beheerlijst op de telefoon. */
+            <LijstKaart aria-label="Openstaande dienstruilen">
+              {availableSwaps.map(swap => {
+                const info = shiftInfoFor(swap);
+                const canRespond = canRespondToSwap(user, swap);
+                // Eigen sleutel: dezelfde ruil kan ook in de beheerlijst open staan.
+                const sleutel = `open:${swap.id}`;
+                const open = expandedSwapIds.includes(sleutel);
+                const ontvanger = swap.targetDriverId ? naamVan(swap.targetDriverId) || 'onbekend' : undefined;
+                const teWeinigRust = !!swap.rust?.some((r) => r.teKort);
+                const nogTeMelden = canRespond && !swap.verloop?.some((st) => st.soort === 'bekeken');
+                return (
+                  <RecordRij
+                    key={swap.id}
+                    titel={<>{naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger && <span className="font-medium text-slate-500"> → {ontvanger}</span>}</>}
+                    meta={info.date ? hoofdletter(fmtShort(info.date)) : undefined}
+                    status={canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
+                    voorproef={teWeinigRust ? <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge> : undefined}
+                    richting="omlaag"
+                    open={open}
+                    onClick={() => toggleSwapExpanded(sleutel)}
+                  >
+                    <Uitklap open={open}>
+                      {/* Het baken staat in de uitklap: een rij is een li en
+                          daar past geen div omheen. Een staflid aan wie een ruil
+                          gericht is (zeldzaam) meldt "bekeken" dus pas zodra hij
+                          de ruil opent, en dan ziet hij ze ook echt. */}
+                      <RuilBekekenBaken swapId={swap.id} actief={nogTeMelden}>
+                        <div className="px-4 pb-4 pt-0.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge tone="slate" className="tabular-nums">Dienst {info.line}</Badge>
+                            {info.startTime && info.endTime && (
+                              <span className="text-xs font-mono font-medium text-slate-500 tabular-nums">{tijdvak(info.startTime, info.endTime)}</span>
+                            )}
+                            {isTakeoverSwap(swap) && <TakeoverBadge compact />}
+                          </div>
+                          <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} className="mt-3" />
+                          <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
+                          {toelichting(swap, 'mt-3')}
+                          {antwoordBlok(swap, canRespond, 'mt-4')}
+                        </div>
+                      </RuilBekekenBaken>
+                    </Uitklap>
+                  </RecordRij>
+                );
+              })}
+            </LijstKaart>
+          ) : (
             availableSwaps.map(swap => {
               const info = shiftInfoFor(swap);
               const canRespond = canRespondToSwap(user, swap);
-              // Staf ziet hier ELKE open ruil, ook die tussen twee collega's. Met
-              // het volledige blok per kaart werd die kolom erg lang, terwijl
-              // dezelfde ruilen eronder in de beheertabel staan: daar dus de
-              // compacte regels, met de namen in de kaartkop. Wie zelf moet
-              // antwoorden (of de chauffeur) houdt het volledige blok.
-              const compactKaart = isPlanner && swap.targetDriverId !== user.id;
-              const ontvanger = swap.targetDriverId ? naamVan(swap.targetDriverId) : undefined;
               // De aangezochte collega heeft deze onbeantwoorde aanvraag in
               // beeld: dat hoort de server één keer, en de aanvrager leest het
               // in het verloop. Weet de server het al, dan vuurt er niets.
@@ -742,16 +828,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {info.startTime && info.endTime && (
                         <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{tijdvak(info.startTime, info.endTime)}</p>
                       )}
-                      {compactKaart && (
-                        <p className="text-xs font-medium text-slate-500">
-                          {naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger ? ` → ${ontvanger}` : ''}
-                        </p>
-                      )}
-                      {isTakeoverSwap(swap) ? (
-                        <div className="mt-1.5"><TakeoverBadge /></div>
-                      ) : compactKaart && returnLabel(swap) && (
-                        <p className="text-xs font-medium text-blue-700 mt-1">↔ in ruil: {returnLabel(swap)}</p>
-                      )}
+                      {isTakeoverSwap(swap) && <div className="mt-1.5"><TakeoverBadge /></div>}
                     </div>
                     <span className="shrink-0">
                       {/* "Jouw antwoord" vraagt actie en blijft amber; de status is stil. */}
@@ -760,38 +837,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
                   {/* Wie vraagt, wie geeft wat en wie nog moet antwoorden. */}
-                  {compactKaart
-                    ? <RuilVerloop compact swap={voorVerloop(swap)} naamVan={naamVan} className="space-y-0.5" />
-                    : <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />}
-                  {/* Ook in de compacte kaart: wie hier accepteert krijgt de dienst,
-                      en moet vóór zijn antwoord weten of zijn rust in het gedrang komt. */}
+                  <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
+                  {/* Wie hier accepteert krijgt de dienst, en moet vóór zijn
+                      antwoord weten of zijn rust in het gedrang komt. */}
                   <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} />
-                  {/* Zelfde volgorde als de verlofbeoordeling (C, 24-09): afwijzen links, toestemmen rechts. */}
-                  {canRespond ? (
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleDecline(swap.id)}>
-                        Weigeren
-                      </Button>
-                      <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAccept(swap.id)}>
-                        Accepteren
-                      </Button>
-                    </div>
-                  ) : swap.status === 'accepted' && swap.targetDriverId === user.id ? (
-                    <p className="text-xs font-medium text-blue-700">Je accepteerde deze ruil, de planner valideert nog (rij-/rusttijden).</p>
-                  ) : swap.status === 'approved' && swap.targetDriverId === user.id && !swap.targetSeenAt ? (
-                    /* Doorgevoerd maar nog niet bevestigd: dé plek waar de
-                       chauffeur laat weten dat hij de wijziging gezien heeft
-                       (push bereikt bijna niemand — dit vinkje wel). */
-                    <Button
-                      variant="success"
-                      full
-                      icon={<Check size={16} />}
-                      disabled={isConfirmingSeen === swap.id}
-                      onClick={() => void bevestigGezien(swap.id)}
-                    >
-                      {isConfirmingSeen === swap.id ? 'Bevestigen…' : 'Begrepen, ik rijd deze dienst'}
-                    </Button>
-                  ) : null}
+                  {antwoordBlok(swap, canRespond)}
                 </Card>
                 </div>
                 </RuilBekekenBaken>
