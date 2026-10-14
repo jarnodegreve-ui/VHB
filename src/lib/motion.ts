@@ -27,5 +27,14 @@ export const EASE = [0.22, 1, 0.36, 1] as const;
  */
 export const EASE_SPRING = [0.34, 1.2, 0.64, 1] as const;
 
+/** Leest de systeemvoorkeur "minder beweging" op het moment zelf, voor
+ *  componenten die zonder motion animeren (CSS-klassen uit index.css) en
+ *  een stap moeten overslaan wanneer de animatie daar op `none` staat
+ *  (zonder animatie komt er ook geen animationend). */
+export const verminderdeBeweging = (): boolean =>
+  typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** Kant-en-klare transition-props voor `motion`-elementen. */
 export const transitie = (duration: number = DUR.base, delay = 0) => ({ duration, ease: EASE, delay });
