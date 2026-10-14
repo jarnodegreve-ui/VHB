@@ -1659,14 +1659,20 @@ html.login-donker {
    eenmalige inloop, base voor een wissel, fast voor wat weggaat.
    `inloop`/`fade-in-traag` krijgen hun vertraging als inline
    animation-delay. Uitgaande animaties blijven bewust weg: wat verdwijnt
-   (een melding, de kop bij een moduswissel) unmount gewoon. */
+   (een melding, de kop bij een moduswissel) unmount gewoon.
+   De fades beginnen op opacity 0,02 en niet op 0 (gemeten 14-10): een
+   element dat met opacity 0 geschilderd wordt en daarna alleen op de
+   compositor opklaart, telt voor Chrome nooit als Largest Contentful Paint
+   (Lighthouse: NO_LCP, score 0 op de login). Met 0,02 telt de eerste
+   schildering, precies zoals bij de motion-fade van vroeger, die elke frame
+   een stijlwijziging was. Voor het oog is 0,02 onzichtbaar. */
 @keyframes vhb-inloop {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0.02; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
 .inloop { animation: vhb-inloop var(--duration-entrance) var(--ease-standard) both; }
 @keyframes vhb-fade-in {
-  from { opacity: 0; }
+  from { opacity: 0.02; }
   to { opacity: 1; }
 }
 .fade-in { animation: vhb-fade-in var(--duration-base) var(--ease-standard) both; }
@@ -1676,12 +1682,12 @@ html.login-donker {
 }
 .fade-uit { animation: vhb-fade-uit var(--duration-fast) var(--ease-standard) both; }
 @keyframes vhb-schuif-in {
-  from { opacity: 0; transform: translateX(6px); }
+  from { opacity: 0.02; transform: translateX(6px); }
   to { opacity: 1; transform: none; }
 }
 .schuif-in { animation: vhb-schuif-in var(--duration-base) var(--ease-standard) both; }
 @keyframes vhb-zak-in {
-  from { opacity: 0; transform: translateY(-6px); }
+  from { opacity: 0.02; transform: translateY(-6px); }
   to { opacity: 1; transform: none; }
 }
 .zak-in { animation: vhb-zak-in var(--duration-base) var(--ease-standard) both; }
