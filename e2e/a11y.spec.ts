@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { ADMIN, CHAUFFEUR, seed, type Fixture } from './helpers';
+import { ADMIN, CHAUFFEUR, seed, type Fixture, wachtOpAnimaties } from './helpers';
 
 /**
  * Toegankelijkheidsscan (axe-core, WCAG 2.1 AA) op dertien schermen — draait in
@@ -67,6 +67,7 @@ for (const scherm of SCHERMEN) {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(500);
 
+    await wachtOpAnimaties(page);
     let axe = new AxeBuilder({ page }).withTags(TAGS).disableRules(TIJDELIJK_UIT);
     for (const sel of UITGESLOTEN) axe = axe.exclude(sel);
     const resultaat = await axe.analyze();
