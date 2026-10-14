@@ -4,7 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>VHB Portaal</title>
-    <meta name="description" content="Intern operationeel portaal voor Van Hoorebeke en Zoon — planning, omleidingen, verlof en updates." />
+    <meta name="description" content="Intern operationeel portaal voor Van Hoorebeke en Zoon, planning, omleidingen, verlof en updates." />
+    <!-- Voorbeeldkaart bij een gedeelde link (WhatsApp, Teams, Slack): titel,
+         omschrijving en het beeld uit scripts/brand-icons.mjs. Absolute URL's,
+         want een chatapp haalt het beeld zelf op; src/openGraph.test.ts houdt
+         tags en beeld bij elkaar. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="VHB Portaal" />
+    <meta property="og:title" content="VHB Portaal" />
+    <meta property="og:description" content="Intern operationeel portaal voor Van Hoorebeke en Zoon, planning, omleidingen, verlof en updates." />
+    <meta property="og:url" content="https://vhbportaal.com/" />
+    <meta property="og:image" content="https://vhbportaal.com/og-afbeelding.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="VHB, Van Hoorebeke en Zoon" />
+    <meta property="og:locale" content="nl_BE" />
+    <meta name="twitter:card" content="summary_large_image" />
 
     <!-- Dark vóór de eerste paint: de bundel zet het thema pas ná het laden,
          waardoor dark mode bij elke herlaad even wit flitste (Jarno 01-09).

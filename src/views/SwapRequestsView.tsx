@@ -34,6 +34,7 @@ import { TableShell, Td, Th } from '../components/TabelBasis';
 import { RecordOnbekend } from '../components/RecordOnbekend';
 import { useRecordLink } from '../app/useRecordLink';
 import { brengRecordInBeeld } from '../lib/recordLink';
+import { citaat } from '../../shared/tekst';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
@@ -835,7 +836,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
                     </span>
                   </div>
-                  {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
+                  {swap.reason && <p className="text-xs text-slate-500 italic">{citaat(swap.reason)}</p>}
                   {/* Wie vraagt, wie geeft wat en wie nog moet antwoorden. */}
                   <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} />
                   {/* Wie hier accepteert krijgt de dienst, en moet vóór zijn

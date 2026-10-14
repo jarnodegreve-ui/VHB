@@ -18,7 +18,6 @@
     "test:e2e": "playwright test --project=\"iPhone 13 (chromium)\" --project=\"Desktop (chromium)\" --project=\"iPhone 13 (webkit)\"",
     "test:e2e:pwa": "playwright test --project=pwa",
     "audit:mobile": "node scripts/mobile-audit.mjs",
-    "changelog": "node scripts/changelog.mjs",
     "test:e2e:ui": "playwright test --ui",
     "db:supabase": "npx --yes supabase@2.119.0",
     "db:start": "npm run -s db:supabase -- start -x studio,imgproxy,logflare,vector,edge-runtime,supavisor,mailpit,postgres-meta",

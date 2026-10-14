@@ -3,6 +3,7 @@ import { onbekendLabel } from "../../../shared/rapporten/filters.js";
 import { ZONDER_SECTIE } from "../../../shared/rapporten/definities/personeel.js";
 import { VERVAL_STATUS_LABEL, brusselseDag, dagenTussen, isoDagVan, jarenTussen, pastInTermijn, vervalStatus } from "../../../shared/rapporten/peildatum.js";
 import type { RapportBereik, RapportFilters, RapportResultaat, RapportRij } from "../../../shared/rapporten/types.js";
+import { formatTelefoon } from "../../../shared/tekst.js";
 
 /**
  * De rapporten van het domein Personeel, als pure functies (bron + filters +
@@ -58,7 +59,7 @@ export function bouwContactlijst(users: readonly RapportMedewerker[], filters: R
     naam: u.name,
     rol: rolLabel(u.role),
     sectie: tekst(u.section),
-    telefoon: tekst(u.phone),
+    telefoon: tekst(formatTelefoon(u.phone)),
     email: tekst(u.email),
     // Het vlagje regelt wat chauffeurs van elkaar zien; staf ziet iedereen, met erbij wie daar ontbreekt.
     gedeeld: u.showInContacts !== false,
@@ -76,7 +77,7 @@ export function bouwActieveMedewerkers(users: readonly RapportMedewerker[], filt
     sectie: tekst(u.section),
     inDienst: isoDagVan(u.startDate),
     ancienniteit: jarenTussen(u.startDate, vandaag),
-    telefoon: tekst(u.phone),
+    telefoon: tekst(formatTelefoon(u.phone)),
   }));
   return { rijen, bereik: personeelBereik(actieven, vandaag), peildatum: vandaag };
 }
