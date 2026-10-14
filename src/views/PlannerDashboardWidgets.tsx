@@ -53,6 +53,7 @@ import { cn, telHref } from '../lib/ui';
 import { navigeer } from '../app/router';
 import { adminMailto, maandplanningParams, ziekmeldMailTekst } from '../lib/uitweg';
 import { meldSchrijffout } from '../lib/fouten';
+import { formatTelefoon } from '../../shared/tekst';
 
 /**
  * Operations Center — het planner/admin-dashboard als operationele cockpit.
@@ -1045,7 +1046,7 @@ export function PlannerDashboardWidgets({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-md font-semibold text-slate-800">{u.name}</span>
                     <span className="block text-xs font-mono font-medium text-slate-500 tabular-nums">
-                      {u.phone || 'geen nummer bekend'}
+                      {u.phone ? formatTelefoon(u.phone) : 'geen nummer bekend'}
                     </span>
                   </span>
                   {href && <Phone size={16} className="shrink-0 text-emerald-700" />}
@@ -1374,7 +1375,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
             <a
               href={telHref(d.phone)}
               aria-label={`Bel ${d.name}`}
-              title={d.phone}
+              title={formatTelefoon(d.phone)}
               className="-my-1.5 -ml-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center self-start rounded-lg text-slate-400 transition-colors hover:bg-surface-soft-hover hover:text-slate-900"
             >
               <Phone size={14} />

@@ -43,6 +43,9 @@ const REGELS = [
   // Em dash als zinsscheiding in zichtbare tekst: Jarno (06-09) wil overal een
   // komma. Een losse '—' als leegte-waarde (geen spaties eromheen) mag blijven.
   { naam: 'em dash in UI-tekst (gebruik een komma)', re: / — /g, zonderCommentaar: true },
+  // Een aangehaalde waarde ("{swap.reason}") krijgt typografische
+  // aanhalingstekens via citaat() uit shared/tekst.ts (verbeterronde 14-10, nr. 7).
+  { naam: 'rechte aanhalingstekens rond een waarde (gebruik citaat() uit shared/tekst)', re: /(?<=>)"\{[^{}]+\}"(?=<)/g, zonderCommentaar: true },
   // Motion-ladder: duration-fast/base/slow (150/220/320 ms, index.css). De
   // minuutwijzer in DienstBalk (duration-1000) is de bewuste uitzondering.
   { naam: 'duration-NNN buiten de motion-ladder (gebruik duration-fast/base/slow)', re: /\bduration-\d+\b/g, zonderCommentaar: true, skip: /components\/DienstBalk\.tsx$/ },
