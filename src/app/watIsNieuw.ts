@@ -17,8 +17,8 @@ export type WatIsNieuwItem = {
 
 /**
  * Kaart uitgezet op vraag van Jarno (13-09): het overzicht met nieuwigheden
- * verschijnt nergens meer. De items blijven bestaan voor de changelog
- * (`npm run changelog`); zet op true om de kaart weer te tonen.
+ * verschijnt nergens meer. De items blijven staan als historiek; zet op true
+ * om de kaart weer te tonen.
  */
 export const WAT_IS_NIEUW_TONEN = false;
 

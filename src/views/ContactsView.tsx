@@ -11,6 +11,7 @@ import { Modal } from '../components/Modal';
 import { notify, telHref } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { LegeLijst, NietGevonden } from '../components/illustraties';
+import { formatTelefoon, telefoonCijfers } from '../../shared/tekst';
 
 const roleLabel = (role: string) => ROL_LABELS[role as keyof typeof ROL_LABELS] ?? role;
 
@@ -40,6 +41,9 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
     }
   };
 
+  // Zoeken op nummer vergelijkt cijfers met cijfers: wie "0472 12" typt vindt
+  // ook "0472123456" (het veld toont sinds 14-10 de opgemaakte vorm).
+  const cijfersGezocht = telefoonCijfers(searchQuery);
   const filteredUsers = users.filter(u => {
     // Hide 'beheerder' from others, but let 'beheerder' see themselves
     const isBeheerder = u.name.toLowerCase() === 'beheerder';
@@ -52,7 +56,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
     if (u.showInContacts === false) return false;
 
     return u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           (u.phone && u.phone.includes(searchQuery));
+           (u.phone && (u.phone.includes(searchQuery) || (cijfersGezocht !== '' && telefoonCijfers(u.phone).includes(cijfersGezocht))));
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   const zoekveld = (
@@ -159,7 +163,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
               <>
                 <div className="mt-5 rounded-2xl bg-slate-50/80 px-4 py-3.5">
                   <MicroLabel>Telefoonnummer</MicroLabel>
-                  <p className="mt-1 text-xl font-mono font-bold text-slate-900 tabular-nums select-all">{selected.phone}</p>
+                  <p className="mt-1 text-xl font-mono font-bold text-slate-900 tabular-nums select-all">{formatTelefoon(selected.phone)}</p>
                 </div>
                 <div className="mt-4 flex flex-col sm:flex-row gap-2">
                   <a

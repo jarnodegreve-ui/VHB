@@ -495,6 +495,14 @@ if (!kaartMatch) {
   // plus ±1 kB, zodat de volgende viewer-regel niet meteen weer botst.
   WARMUP_BUDGET_KB.chauffeur = 79;
   WARMUP_BUDGET_KB.staf = 148;
+  // 14-10 (verbeterronde, punten 6 en 7): 79 → 79,5. Het telefoonnummer in
+  // één opmaak en het citaat met typografische aanhalingstekens staan in
+  // shared/tekst.ts, dat Contacten, Dienstruil en de plannerwidgets delen:
+  // één chunk van 0,41 kB in beide warmups (chauffeur lokaal 78,34 → 78,78,
+  // staf 146,88 → 147,31; de CI-runner meet ±0,3-0,5 kB zwaarder en zou de
+  // chauffeur-grens van 79 nipt passeren). Geen nieuwe dependency; de warmup
+  // start pas na LCP + 2 s. Staf blijft op 148.
+  WARMUP_BUDGET_KB.chauffeur = 79.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

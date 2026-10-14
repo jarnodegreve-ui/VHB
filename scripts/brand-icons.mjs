@@ -10,6 +10,7 @@
 //   vhb-icoon-maskable.png (1024)          vol vlak, merk in de safe-zone
 //   apple-touch-icon-180.png               vol vlak (iOS rondt zelf af)
 //   vhb-favicon.svg / -64.png / favicon.ico tab-icoon (zelfde beeld)
+//   og-afbeelding.png (1200 × 630)       voorbeeldkaart bij een gedeelde link
 // Rasteren gebeurt met de Playwright-Chromium die al als devDependency
 // aanwezig is (geen sharp/rsvg nodig).
 import { chromium } from '@playwright/test';
@@ -54,12 +55,32 @@ const FAVICON = ICOON;
 fs.writeFileSync(path.join(OUT, 'vhb-icoon.svg'), ICOON);
 fs.writeFileSync(path.join(OUT, 'vhb-favicon.svg'), FAVICON);
 
+// Voorbeeldkaart voor een gedeelde link (Open Graph, 1200 × 630; verbeterronde
+// 14-10, punt 5): het volledige logo in negatief op VHB Black, zoals het
+// inlogscherm. WhatsApp, Teams en Slack tonen dit beeld bij een link naar het
+// portaal (index.html, og:image). Wit is het gedempte negatief van BrandLogo
+// (#DCDFE2, Jarno 30-08: zuiver wit is te fel op het diepe zwart).
+const PRIMARY = fs.readFileSync(path.join(ROOT, 'brand/vhb-final-logo-package/schoon/VHB-primary-wit-goud.svg'), 'utf-8');
+const OG = { w: 1200, h: 630, logoBreedte: 520, zwart: '#0D0D0F', negatief: '#DCDFE2' };
+function ogSvg() {
+  const binnen = PRIMARY.slice(PRIMARY.indexOf('>') + 1, PRIMARY.lastIndexOf('</svg>'))
+    .replace(/#CAA044/gi, GOUD)
+    .replace(/#FFFFFF/gi, OG.negatief);
+  const s = OG.logoBreedte / 902;
+  const hoogte = 334 * s;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${OG.w}" height="${OG.h}" viewBox="0 0 ${OG.w} ${OG.h}" role="img" aria-label="VHB, Van Hoorebeke en Zoon">
+  <rect width="${OG.w}" height="${OG.h}" fill="${OG.zwart}"/>
+  <g transform="translate(${((OG.w - OG.logoBreedte) / 2).toFixed(2)} ${((OG.h - hoogte) / 2).toFixed(2)}) scale(${s.toFixed(5)})">${binnen}</g>
+</svg>
+`;
+}
+
 const browser = await chromium.launch();
-async function render(svg, size) {
-  const page = await browser.newPage({ viewport: { width: size, height: size }, deviceScaleFactor: 1 });
+async function render(svg, size, hoogte = size) {
+  const page = await browser.newPage({ viewport: { width: size, height: hoogte }, deviceScaleFactor: 1 });
   const data = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
   await page.setContent(
-    `<style>html,body{margin:0;background:transparent}img{display:block;width:${size}px;height:${size}px}</style><img src="${data}">`,
+    `<style>html,body{margin:0;background:transparent}img{display:block;width:${size}px;height:${hoogte}px}</style><img src="${data}">`,
   );
   await page.waitForFunction(() => document.images[0]?.complete);
   const png = await page.screenshot({ omitBackground: true, type: 'png' });
@@ -89,9 +110,10 @@ const jobs = [
   ['vhb-icoon-maskable.png', MASKABLE, 1024],
   ['apple-touch-icon-180.png', VOL, 180],
   ['vhb-favicon-64.png', FAVICON, 64],
+  ['og-afbeelding.png', ogSvg(), OG.w, OG.h],
 ];
-for (const [name, svg, size] of jobs) {
-  fs.writeFileSync(path.join(OUT, name), await render(svg, size));
+for (const [name, svg, size, hoogte] of jobs) {
+  fs.writeFileSync(path.join(OUT, name), await render(svg, size, hoogte));
   console.log('✓', name);
 }
 const icoSizes = [16, 32, 48];

@@ -10,6 +10,7 @@ import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
 import { formatDatumDMJ, formatLeaveType, formatPeriodeDMJ, formatShortDay, serviceNumberOf, tijdvak } from '../../lib/format';
+import { citaat } from '../../../shared/tekst';
 
 
 export function UserHistoryModal({
@@ -125,7 +126,7 @@ export function UserHistoryModal({
                       {` · aangevraagd ${formatDatumDMJ(s.createdAt)}`}
                     </p>
                     {s.reason && (
-                      <p className="text-xs font-normal italic text-slate-500 line-clamp-2">"{s.reason}"</p>
+                      <p className="text-xs font-normal italic text-slate-500 line-clamp-2">{citaat(s.reason)}</p>
                     )}
                   </Card>
                 );
