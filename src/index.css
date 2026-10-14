@@ -322,6 +322,8 @@
   --duration-fast: 150ms;
   --duration-base: 220ms;
   --duration-slow: 320ms;
+  /* Eenmalige inloop van een scherm (login); tegenhanger van DUR.entrance. */
+  --duration-entrance: 550ms;
 
   /* === Focus-tokens (één focus-systeem, zie het blok "Focus" hieronder) ===
      --focus-ring = huisstijl-goud; --focus-ring-contrast = de ring óp een
@@ -1646,6 +1648,60 @@ html.login-donker {
 .view-in { animation: view-in var(--duration-base) var(--ease-standard) both; }
 @media (prefers-reduced-motion: reduce) {
   .view-in { animation: none; }
+}
+
+/* Inloop zonder motion (verbeterronde 14-10, punt 10): het inlogscherm
+   (LoginView) en de skelet→inhoud-wissel (Verwissel) animeren met CSS, net
+   als SchermInloop hierboven. Een CSS-animatie loopt bij het invoegen van het
+   element en wacht nergens op, dus het eerste beeld (de LCP van login en
+   Mijn dag) hangt niet meer aan de animatiebundel van motion; dat maakt de
+   weg vrij om die features lui te laden. Dezelfde ladder: entrance voor de
+   eenmalige inloop, base voor een wissel, fast voor wat weggaat.
+   `inloop`/`fade-in-traag` krijgen hun vertraging als inline
+   animation-delay. Uitgaande animaties blijven bewust weg: wat verdwijnt
+   (een melding, de kop bij een moduswissel) unmount gewoon.
+   Opacity 0,02 of 0 als startwaarde is bewust (gemeten 14-10 met een
+   PerformanceObserver): een element dat met opacity 0 geschilderd wordt en
+   daarna alleen op de compositor opklaart, telt voor Chrome nooit als
+   Largest Contentful Paint; met 0,02 telt de eerste schildering, zoals bij
+   de motion-fade van vroeger die elke frame een stijlwijziging was. Wat de
+   inhoud is (login: logo, kop, kaart; Verwissel: de inhoud na het skelet)
+   start dus op 0,02, zodat de LCP de inhoud meet. De voet en de hulplijn
+   van de login (fade-in-traag) starten op 0: die zijn geen inhoud, en als
+   grootste tekstblok van de pagina zouden ze anders de LCP zijn (met motion
+   was de voet dat ook: 948 ms na een vertraging van 500 ms). Voor het oog
+   is 0,02 onzichtbaar. */
+@keyframes vhb-inloop {
+  from { opacity: 0.02; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.inloop { animation: vhb-inloop var(--duration-entrance) var(--ease-standard) both; }
+@keyframes vhb-fade-in {
+  from { opacity: 0.02; }
+  to { opacity: 1; }
+}
+.fade-in { animation: vhb-fade-in var(--duration-base) var(--ease-standard) both; }
+@keyframes vhb-fade-in-stil {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in-traag { animation: vhb-fade-in-stil var(--duration-slow) var(--ease-standard) both; }
+@keyframes vhb-fade-uit {
+  to { opacity: 0; }
+}
+.fade-uit { animation: vhb-fade-uit var(--duration-fast) var(--ease-standard) both; }
+@keyframes vhb-schuif-in {
+  from { opacity: 0.02; transform: translateX(6px); }
+  to { opacity: 1; transform: none; }
+}
+.schuif-in { animation: vhb-schuif-in var(--duration-base) var(--ease-standard) both; }
+@keyframes vhb-zak-in {
+  from { opacity: 0.02; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.zak-in { animation: vhb-zak-in var(--duration-base) var(--ease-standard) both; }
+@media (prefers-reduced-motion: reduce) {
+  .inloop, .fade-in, .fade-in-traag, .fade-uit, .schuif-in, .zak-in { animation: none; }
 }
 
 html.vt-route::view-transition-old(hoofdinhoud) {

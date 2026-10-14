@@ -1,6 +1,5 @@
 import React, { useEffect, useId, useState } from 'react';
 import { WACHTWOORD_HINT, WACHTWOORD_MIN, wachtwoordVoortgang } from '../lib/wachtwoord';
-import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { Button, IconButton, microLabelClass } from '../components/primitives';
 import { cn } from '../lib/ui';
@@ -10,7 +9,6 @@ import { BrandLogo } from '../components/BrandLogo';
 import { OmgevingLabel } from '../components/OmgevingLabel';
 import { OnderhoudBanner } from '../components/OnderhoudBanner';
 import { useOnderhoudPubliek } from '../app/useOnderhoud';
-import { DUR, EASE } from '../lib/motion';
 
 
 type Mode = 'login' | 'forgot';
@@ -311,13 +309,10 @@ export function LoginSchil({ children }: { children: React.ReactNode }) {
       {/* Centrale wordmark + form-card, vertikaal gecentreerd. */}
       <main className="min-h-dvh flex flex-col items-center justify-center px-6 py-12">
         {/* Officieel VHB-logo boven het card. Login is donker (carbon), dus
-            de negatief-variant (wit + goud). */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: DUR.entrance, ease: EASE }}
-          className="flex flex-col items-center text-center mb-10"
-        >
+            de negatief-variant (wit + goud). De inloop is CSS (`inloop`,
+            index.css; sinds 14-10): het logo en de kop zijn het eerste beeld
+            van de login en mogen niet op de animatiebundel van motion wachten. */}
+        <div className="inloop flex flex-col items-center text-center mb-10">
           {/* Volledig logo (VHB primary: merk boven naamregel), 1-op-1 het
               master. 176 px mobiel / 224 px desktop: het nieuwe logo is laag
               en breed, dus iets breder dan de oude 144/176 voor dezelfde
@@ -325,68 +320,47 @@ export function LoginSchil({ children }: { children: React.ReactNode }) {
           <BrandLogo tone="donker" className="w-44 sm:w-56 h-auto select-none" />
           {/* Staging-label (alleen met VITE_OMGEVING=staging): testers zien meteen dat dit productie niet is. */}
           <OmgevingLabel className="mt-4" />
-        </motion.div>
+        </div>
 
         {/* Stille form-card: één zachte entrance-fade, verder niets. */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: DUR.entrance, ease: EASE, delay: 0.15 }}
-          className="w-full max-w-[440px]"
-        >
+        <div className="inloop w-full max-w-[440px]" style={{ animationDelay: '150ms' }}>
           <div className="panel-login-dark relative w-full rounded-3xl p-7 sm:p-9">
             {children}
           </div>{/* /panel */}
 
           {/* Wie te bellen als het niet lukt — chauffeurs zijn geen
               IT-publiek, dus dit staat er gewoon bij. */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.35, duration: DUR.slow }}
-            className="mt-6 text-center text-xs text-slate-500"
-          >
+          <p className="fade-in-traag mt-6 text-center text-xs text-slate-500" style={{ animationDelay: '350ms' }}>
             Problemen met inloggen? Contacteer de planning.
-          </motion.p>
-        </motion.div>
+          </p>
+        </div>
       </main>
 
       {/* Footer — gepind aan de onderkant van de viewport, één regel
           ("& Zoon" conform de naamregel in het logo).
           Respecteert env(safe-area-inset-bottom) op iPhones. */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="absolute inset-x-0 bottom-0 text-micro text-slate-500 text-center px-6"
-        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      <div
+        className="fade-in-traag absolute inset-x-0 bottom-0 text-micro text-slate-500 text-center px-6"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))', animationDelay: '500ms' }}
       >
         <div>Intern gebruik · © {new Date().getFullYear()} Van Hoorebeke & Zoon</div>
-      </motion.div>
+      </div>
     </div>
   );
 }
 
 // === Subcomponents ===
 
-/** Kop van het paneel; wisselt met een korte schuif als `sleutel` verandert. */
+/** Kop van het paneel; schuift kort in als `sleutel` verandert (de key
+ *  mount de kop opnieuw, de CSS-animatie loopt bij het invoegen). */
 export function LoginKop({ sleutel, title, description }: { sleutel: string; title: string; description: React.ReactNode }) {
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={sleutel}
-        initial={{ opacity: 0, x: 6 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -6 }}
-        transition={{ duration: DUR.base, ease: EASE }}
-        className="mb-7 text-center"
-      >
-        <h1 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
-          {title}
-        </h1>
-        <p className="mt-2 text-body text-slate-300 font-normal">{description}</p>
-      </motion.div>
-    </AnimatePresence>
+    <div key={sleutel} className="schuif-in mb-7 text-center">
+      <h1 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
+        {title}
+      </h1>
+      <p className="mt-2 text-body text-slate-300 font-normal">{description}</p>
+    </div>
   );
 }
 
@@ -458,21 +432,15 @@ export function FieldInput({
       <div className="flex items-center justify-between px-1 min-h-[14px]">
         <label htmlFor={id} className="block text-xs font-medium text-slate-300">{label}</label>
         <div className="flex items-center gap-3">
-          <AnimatePresence>
-            {showCapsWarning && (
-              <motion.span
-                initial={{ opacity: 0, x: 6 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 6 }}
-                transition={{ duration: DUR.base, ease: EASE }}
-                className={cn(microLabelClass, 'inline-flex items-center gap-1 !text-amber-700')}
-                title="Caps Lock staat aan"
-              >
-                <ArrowUp size={12} strokeWidth={3} />
-                Caps Lock
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {showCapsWarning && (
+            <span
+              className={cn(microLabelClass, 'schuif-in inline-flex items-center gap-1 !text-amber-700')}
+              title="Caps Lock staat aan"
+            >
+              <ArrowUp size={12} strokeWidth={3} />
+              Caps Lock
+            </span>
+          )}
           {rightSlot}
         </div>
       </div>
@@ -535,31 +503,23 @@ export function FieldInput({
 
 export function FeedbackBlock({ error, info }: { error: string; info: string }) {
   return (
-    <AnimatePresence>
+    <>
       {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
+        <div
           role="alert"
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-500/25"
+          className="zak-in flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-500/25"
         >
           <AlertTriangle size={14} className="text-red-300 shrink-0" />
           <p className="text-red-200 text-sm font-semibold">{error}</p>
-        </motion.div>
+        </div>
       )}
       {info && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/25"
-        >
+        <div className="zak-in flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/25">
           <CheckCircle size={14} className="text-emerald-300 shrink-0" />
           <p className="text-emerald-200 text-sm font-semibold">{info}</p>
-        </motion.div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }
 
