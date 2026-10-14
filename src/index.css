@@ -1660,12 +1660,17 @@ html.login-donker {
    `inloop`/`fade-in-traag` krijgen hun vertraging als inline
    animation-delay. Uitgaande animaties blijven bewust weg: wat verdwijnt
    (een melding, de kop bij een moduswissel) unmount gewoon.
-   De fades beginnen op opacity 0,02 en niet op 0 (gemeten 14-10): een
-   element dat met opacity 0 geschilderd wordt en daarna alleen op de
-   compositor opklaart, telt voor Chrome nooit als Largest Contentful Paint
-   (Lighthouse: NO_LCP, score 0 op de login). Met 0,02 telt de eerste
-   schildering, precies zoals bij de motion-fade van vroeger, die elke frame
-   een stijlwijziging was. Voor het oog is 0,02 onzichtbaar. */
+   Opacity 0,02 of 0 als startwaarde is bewust (gemeten 14-10 met een
+   PerformanceObserver): een element dat met opacity 0 geschilderd wordt en
+   daarna alleen op de compositor opklaart, telt voor Chrome nooit als
+   Largest Contentful Paint; met 0,02 telt de eerste schildering, zoals bij
+   de motion-fade van vroeger die elke frame een stijlwijziging was. Wat de
+   inhoud is (login: logo, kop, kaart; Verwissel: de inhoud na het skelet)
+   start dus op 0,02, zodat de LCP de inhoud meet. De voet en de hulplijn
+   van de login (fade-in-traag) starten op 0: die zijn geen inhoud, en als
+   grootste tekstblok van de pagina zouden ze anders de LCP zijn (met motion
+   was de voet dat ook: 948 ms na een vertraging van 500 ms). Voor het oog
+   is 0,02 onzichtbaar. */
 @keyframes vhb-inloop {
   from { opacity: 0.02; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
@@ -1676,7 +1681,11 @@ html.login-donker {
   to { opacity: 1; }
 }
 .fade-in { animation: vhb-fade-in var(--duration-base) var(--ease-standard) both; }
-.fade-in-traag { animation: vhb-fade-in var(--duration-slow) var(--ease-standard) both; }
+@keyframes vhb-fade-in-stil {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in-traag { animation: vhb-fade-in-stil var(--duration-slow) var(--ease-standard) both; }
 @keyframes vhb-fade-uit {
   to { opacity: 0; }
 }

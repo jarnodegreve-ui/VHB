@@ -340,7 +340,7 @@ export function LoginSchil({ children }: { children: React.ReactNode }) {
           ("& Zoon" conform de naamregel in het logo).
           Respecteert env(safe-area-inset-bottom) op iPhones. */}
       <div
-        className="fade-in absolute inset-x-0 bottom-0 text-micro text-slate-500 text-center px-6"
+        className="fade-in-traag absolute inset-x-0 bottom-0 text-micro text-slate-500 text-center px-6"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))', animationDelay: '500ms' }}
       >
         <div>Intern gebruik · © {new Date().getFullYear()} Van Hoorebeke & Zoon</div>
