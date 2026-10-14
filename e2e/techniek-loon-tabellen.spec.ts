@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { ADMIN, seed } from './helpers';
+import { ADMIN, seed, wachtOpAnimaties } from './helpers';
 import { dayOffset } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -87,6 +87,7 @@ for (const scherm of SCHERMEN) {
     await geenOverloop(page, info.project.name);
     await tabellenPassen(page, info.project.name);
 
+    await wachtOpAnimaties(page);
     const resultaat = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     const blokkerend = resultaat.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
     expect(blokkerend.map((v) => `${v.id}: ${v.help} (${JSON.stringify(v.nodes[0]?.target)})`)).toEqual([]);

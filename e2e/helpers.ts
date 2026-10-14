@@ -57,3 +57,21 @@ export const historiekOpgeruimd = (page: Page) => expect.poll(
 export async function gaIntern(page: Page, pad: string) {
   await page.evaluate((p) => { history.pushState(null, '', p); dispatchEvent(new PopStateEvent('popstate')); }, pad);
 }
+
+/** Wacht tot elke lopende, eindige CSS-animatie op de pagina klaar is
+ *  (Verwissel: skelet uit en inhoud in; de inloop van een scherm), in rondes,
+ *  want de ene animatie start pas als de vorige klaar is. axe meet contrast
+ *  mét de opacity van het moment: een gouden knop die nog infadet haalt de
+ *  drempel niet en faalde zo op de CI-runner (main, 14-10). Oneindige
+ *  animaties (bezig-stip, laadlogo) tellen niet mee. */
+export async function wachtOpAnimaties(page: Page) {
+  for (let ronde = 0; ronde < 8; ronde++) {
+    const lopend = await page.evaluate(async () => {
+      const eindig = document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity);
+      await Promise.all(eindig.map((a) => a.finished.catch(() => undefined)));
+      return eindig.length;
+    });
+    if (lopend === 0) return;
+    await page.waitForTimeout(50);
+  }
+}
