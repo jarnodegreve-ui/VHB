@@ -101,6 +101,10 @@ test.describe('ruil-deeplink met sessie', () => {
     await page.goto('/dienstruil/sw1');
     await expect(paneel(page)).toBeVisible();
     weg = true;
+    // Sinds 15-10 zoekt het scherm een ruil buiten de lijst nog één keer op
+    // (GET /api/swaps/:id, voor oude ruilen buiten het venster); een
+    // verwijderde ruil kent de server daar ook niet meer.
+    await page.route('**/api/swaps/sw1', (route) => route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Deze dienstruil is niet beschikbaar.' }) }));
     await page.reload();
     await expect(onbekend(page)).toBeVisible();
     await expect(paneel(page)).toHaveCount(0);

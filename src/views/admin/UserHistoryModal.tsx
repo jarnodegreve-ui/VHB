@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
@@ -11,6 +12,8 @@ import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
 import { formatDatumDMJ, formatLeaveType, formatPeriodeDMJ, formatShortDay, serviceNumberOf, tijdvak } from '../../lib/format';
 import { citaat } from '../../../shared/tekst';
+import { ToonMeer } from '../../components/ToonMeer';
+import { useArchief, useToonMeerMetArchief } from '../../lib/archief';
 
 
 export function UserHistoryModal({
@@ -28,6 +31,16 @@ export function UserHistoryModal({
   users: User[];
   onClose: () => void;
 }) {
+  // Dienstruilen dit jaar (15-10): de opstart geeft alleen het venster (open
+  // of de laatste maanden), dus de rest van het jaar komt uit het archief,
+  // tien tegelijk zoals elke lijst met historiek. Vóór de vroege return:
+  // hooks staan altijd in dezelfde volgorde.
+  const jaarBegin = `${new Date().getFullYear()}-01-01`;
+  const lokaleRuilen = useMemo(() => (user ? swaps
+    .filter((s) => (s.requesterId === user.id || s.targetDriverId === user.id) && (s.createdAt || '').slice(0, 10) >= jaarBegin)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : []), [swaps, user, jaarBegin]);
+  const ruilArchief = useArchief<SwapRequest>(user ? `/api/swaps/archief?persoon=${encodeURIComponent(user.id)}&sinds=${jaarBegin}` : null, { veld: 'ruilen' });
+  const ruilLijst = useToonMeerMetArchief(lokaleRuilen, ruilArchief, { sleutel: user?.id ?? '' });
   if (!user) return null;
 
   const today = isoDate(new Date()); // lokale datum (niet UTC → geen dag-verschuiving 's nachts)
@@ -46,10 +59,8 @@ export function UserHistoryModal({
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
   const approvedLeaveCount = userLeave.filter((l) => l.status === 'approved').length;
 
-  // Dienstruilen dit jaar (als aanvrager OF doelchauffeur)
-  const userSwaps = swaps
-    .filter((s) => (s.requesterId === user.id || s.targetDriverId === user.id) && (s.createdAt || '').slice(0, 10) >= yearStart)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Dienstruilen dit jaar (als aanvrager OF doelchauffeur): venster + archief, zie boven.
+  const userSwaps = ruilLijst.zichtbaar;
 
   const userName = (id?: string) => users.find((u) => u.id === id)?.name || 'Onbekend';
 
@@ -70,7 +81,8 @@ export function UserHistoryModal({
         <div className="grid grid-cols-3 gap-3">
           <Stat label="Diensten" value={allShifts.length} sub={`${upcomingShifts.length} komende`} />
           <Stat label="Verlof" value={approvedLeaveCount} sub="goedgekeurd" />
-          <Stat label="Dienstruilen" value={userSwaps.length} sub="totaal" />
+          {/* Zonder archief geen totaal: laden is "…", een laadfout "—", nooit het venster alleen als totaal. */}
+          <Stat label="Dienstruilen" value={ruilLijst.totaal ?? (ruilArchief.fout ? '—' : '…')} sub={ruilLijst.totaal === null && ruilArchief.fout ? 'niet geladen' : 'totaal'} />
         </div>
 
         {/* Verlof */}
@@ -99,7 +111,12 @@ export function UserHistoryModal({
         <section className="space-y-3">
           <h5 className={microLabelClass}>Dienstruilen dit jaar</h5>
           {userSwaps.length === 0 ? (
-            <p className="text-sm text-slate-500">Geen dienstruilen in {currentYear}.</p>
+            // Een laadfout is nooit "geen dienstruilen": de knop vraagt opnieuw.
+            ruilLijst.leeg === 'fout' ? (
+              <ToonMeer los woord="oudere" className="rounded-2xl" getoond={0} totaal={null} volgende={ruilLijst.volgende} onMeer={ruilLijst.meer} bezig={ruilLijst.bezig} fout />
+            ) : (
+              <p className="text-sm text-slate-500">{ruilLijst.leeg === 'laden' ? 'Laden…' : `Geen dienstruilen in ${currentYear}.`}</p>
+            )
           ) : (
             <div className="space-y-2">
               {userSwaps.map((s) => {
@@ -131,6 +148,7 @@ export function UserHistoryModal({
                   </Card>
                 );
               })}
+              <ToonMeer los woord="oudere" className="rounded-2xl" getoond={ruilLijst.getoond} totaal={ruilLijst.totaal} volgende={ruilLijst.volgende} onMeer={ruilLijst.meer} bezig={ruilLijst.bezig} fout={ruilLijst.fout} />
             </div>
           )}
         </section>

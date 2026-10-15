@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Archive, Plus, ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, Printer, X, Check, Trash2 } from 'lucide-react';
 import { isStaf } from '../types';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
-import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { Formulier } from '../components/Formulier';
 import { useVeldfouten, useVuil } from '../lib/formulier';
@@ -10,10 +10,12 @@ import { Badge, Button, IconButton, MicroLabel } from '../components/primitives'
 import { RuilStatusBadge } from '../components/RuilStatusBadge';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { LijstKaart, RecordRij } from '../components/RecordRij';
-import { ToonMeer, useToonMeer } from '../components/ToonMeer';
+import { ToonMeer } from '../components/ToonMeer';
+import { useArchief, useToonMeerMetArchief } from '../lib/archief';
+import { apiJson } from '../lib/api';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
-import { DateInput, Field, Textarea } from '../components/Field';
+import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { RuilVerloop } from '../components/RuilVerloop';
@@ -90,7 +92,36 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // krijgt het beoordelingspaneel; een chauffeur de ruil in zijn eigen lijst
   // (open en in beeld), of een alleen-lezen kaart als ze daar niet (meer)
   // staat. Wat niet in zijn gegevens staat geeft één nette melding.
-  const link = useRecordLink('ruil-verzoeken', swaps);
+  // Sinds 15-10 geeft de opstart alleen het venster van de ruilen (open of de
+  // laatste maanden): een link naar een oudere ruil haalt die ene ruil op
+  // (GET /api/swaps/:id) en telt dan als gevonden. Pas als de server ze ook
+  // niet kent, volgt de nette melding.
+  // Alleen een 404 betekent "bestaat niet of niet van jou"; een andere fout
+  // (geen bereik, een 500) is een laadfout met "Opnieuw proberen", nooit de
+  // melding dat de ruil weg is (tegenlezing 15-10).
+  const [losseRuilen, setLosseRuilen] = useState<SwapRequest[]>([]);
+  const [opgezocht, setOpgezocht] = useState<Record<string, 'bezig' | 'weg' | 'fout'>>({});
+  const linkRuilen = useMemo(() => (losseRuilen.length ? [...swaps, ...losseRuilen.filter((l) => !swaps.some((s) => s.id === l.id))] : swaps), [swaps, losseRuilen]);
+  const link = useRecordLink('ruil-verzoeken', linkRuilen);
+  const linkOnbekendId = link.staat === 'onbekend' ? link.id : null;
+  useEffect(() => {
+    if (!linkOnbekendId || opgezocht[linkOnbekendId]) return;
+    const id = linkOnbekendId;
+    setOpgezocht((o) => ({ ...o, [id]: 'bezig' }));
+    apiJson<SwapRequest>(`/api/swaps/${encodeURIComponent(id)}`)
+      .then((ruil) => {
+        if (ruil?.id !== id) { setOpgezocht((o) => ({ ...o, [id]: 'weg' })); return; }
+        setLosseRuilen((l) => [...l.filter((x) => x.id !== ruil.id), ruil]);
+      })
+      .catch((err: { status?: number }) => setOpgezocht((o) => ({ ...o, [id]: err?.status === 404 ? 'weg' : 'fout' })));
+  }, [linkOnbekendId, opgezocht]);
+  const linkOnbekend = !!linkOnbekendId && opgezocht[linkOnbekendId] === 'weg';
+  const linkFout = !!linkOnbekendId && opgezocht[linkOnbekendId] === 'fout';
+  const zoekLinkOpnieuw = () => {
+    if (!linkOnbekendId) return;
+    const id = linkOnbekendId;
+    setOpgezocht((o) => { const { [id]: _weg, ...rest } = o; return rest; });
+  };
   const reviewSwap = isStaf(user.role) && link.staat === 'gevonden' ? link.record : null;
   const setReviewSwap = (swap: SwapRequest | null) => (swap ? link.open(swap.id) : link.sluit());
   const eigenDoel = !isStaf(user.role) && link.staat === 'gevonden' ? link.record : null;
@@ -364,31 +395,59 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }), { dienstDatum: dienstDatumVan, kijkerId: user.id });
 
   // Tien tegelijk (Jarno 15-10): Mijn verzoeken groeit met de historiek mee.
-  // Een link naar een eigen verzoek verderop toont de lijst tot en met dat
-  // verzoek.
-  const mijnLijst = useToonMeer(mySwaps, { doel: eigenDoel ? (s) => s.id === eigenDoel.id : undefined });
+  // Na het venster komen de oudere eigen aanvragen uit het archief, pas
+  // opgevraagd als Dienstruil opengaat. Staf heeft hier geen archief: zijn
+  // oude aanvragen staan bij Afgehandeld. Een link naar een eigen verzoek
+  // verderop toont de lijst tot en met dat verzoek.
+  const mijnArchief = useArchief<SwapRequest>(isStaf(user.role) ? null : '/api/swaps/archief', { veld: 'ruilen' });
+  const mijnLijst = useToonMeerMetArchief(mySwaps, mijnArchief, { doel: eigenDoel ? (s) => s.id === eigenDoel.id : undefined });
   // Afgehandeld (staf): afgewezen, ingetrokken en weggezette wissels van
-  // iedereen, nieuwste eerst, ook tien tegelijk.
+  // iedereen, nieuwste eerst, tien tegelijk, met daarna het archief. Te
+  // filteren per persoon (aanvrager of collega), ook in het archief.
+  const [afgehandeldPersoon, setAfgehandeldPersoon] = useState('');
   const alleAfgehandeld = useMemo(() => (isStaf(user.role)
     ? swaps
       .filter((s) => s.status === 'rejected' || s.status === 'cancelled' || s.status === 'completed')
+      .filter((s) => !afgehandeldPersoon || s.requesterId === afgehandeldPersoon || s.targetDriverId === afgehandeldPersoon)
       .sort((a, b) => String(b.decidedAt ?? b.createdAt ?? '').localeCompare(String(a.decidedAt ?? a.createdAt ?? '')))
-    : []), [swaps, user.role]);
-  const afgehandeld = useToonMeer(alleAfgehandeld);
+    : []), [swaps, user.role, afgehandeldPersoon]);
+  const afgehandeldArchief = useArchief<SwapRequest>(
+    isStaf(user.role) ? `/api/swaps/archief${afgehandeldPersoon ? `?persoon=${encodeURIComponent(afgehandeldPersoon)}` : ''}` : null,
+    { veld: 'ruilen' },
+  );
+  const afgehandeld = useToonMeerMetArchief(alleAfgehandeld, afgehandeldArchief, { sleutel: afgehandeldPersoon });
+  // Na een laadfout blijft de sectie staan terwijl "Opnieuw proberen" loopt;
+  // anders verdween ze (met de knop die net de focus had) tot het antwoord.
+  const [afgehandeldFoutGehad, setAfgehandeldFoutGehad] = useState(false);
+  useEffect(() => {
+    if (afgehandeld.leeg === 'fout') setAfgehandeldFoutGehad(true);
+    else if (afgehandeld.leeg !== 'laden') setAfgehandeldFoutGehad(false);
+  }, [afgehandeld.leeg]);
+  // Alleen wat in het venster staat kan uit de geschiedenis gewist worden
+  // (de lijst-save kent het archief niet).
+  const vensterIds = useMemo(() => new Set(swaps.map((s) => s.id)), [swaps]);
+  const ruilPersonen = useMemo(() => users
+    .filter((u) => !isStaf(u.role) && u.name.toLowerCase() !== 'beheerder')
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl')), [users]);
 
   // Deeplink van een chauffeur: staat de ruil in een van zijn lijsten, dan daar
-  // open (eigen verzoek) en in beeld met de focus erop, één keer per id.
-  const doelInLijst = !!eigenDoel && (mySwaps.some((s) => s.id === eigenDoel.id) || availableSwaps.some((s) => s.id === eigenDoel.id));
+  // open (eigen verzoek) en in beeld met de focus erop, één keer per id. Een
+  // eigen verzoek uit het archief telt mee zodra het geladen is: dan verdwijnt
+  // de losse kaart en staat het in de lijst, één keer.
+  const inEigenLijst = !!eigenDoel && (mySwaps.some((s) => s.id === eigenDoel.id) || mijnArchief.items.some((s) => s.id === eigenDoel.id));
+  const doelInLijst = !!eigenDoel && (inEigenLijst || availableSwaps.some((s) => s.id === eigenDoel.id));
   const gebrachtRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!eigenDoel || gebrachtRef.current === eigenDoel.id) return;
-    gebrachtRef.current = eigenDoel.id;
-    if (mySwaps.some((s) => s.id === eigenDoel.id)) {
+    if (!eigenDoel) return;
+    const sleutel = `${eigenDoel.id}:${doelInLijst}`;
+    if (gebrachtRef.current === sleutel) return;
+    gebrachtRef.current = sleutel;
+    if (inEigenLijst) {
       setExpandedSwapIds((cur) => (cur.includes(eigenDoel.id) ? cur : [...cur, eigenDoel.id]));
     }
     requestAnimationFrame(() => { brengRecordInBeeld(eigenDoel.id); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eigenDoel?.id]);
+  }, [eigenDoel?.id, doelInLijst]);
 
   // Gezien-bevestiging door de ontvanger van de dienst.
   const [isConfirmingSeen, setIsConfirmingSeen] = useState<string | null>(null);
@@ -669,7 +728,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         )}
       />
 
-      {link.staat === 'onbekend' && <RecordOnbekend soort="dienstruil" onSluit={link.sluit} />}
+      {linkOnbekend && <RecordOnbekend soort="dienstruil" onSluit={link.sluit} />}
+      {linkFout && (
+        <Foutkaart
+          compact
+          className="mb-6"
+          titel="Deze dienstruil kon niet geladen worden"
+          boodschap="Controleer je verbinding en probeer het opnieuw."
+          onOpnieuw={zoekLinkOpnieuw}
+        />
+      )}
       {eigenDoel && !doelInLijst && (
         // Een ruil die je mag zien maar die in geen van je lijsten (meer)
         // staat, bv. een afgehandelde ruil uit een oude melding: alleen lezen.
@@ -687,7 +755,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
           <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
-          {mySwaps.length > 0 ? (
+          {mijnLijst.getoond > 0 ? (
             /* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
                in plaats van een stapel losse kaarten, de dag als titel
                (daaraan herken je de ruil), de dienst eronder. De lijst groeit
@@ -695,7 +763,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                plaats van een eigen scrollvak (Jarno 15-10). */
               <LijstKaart
                 aria-label="Mijn verzoeken"
-                voet={<ToonMeer getoond={mijnLijst.getoond} totaal={mijnLijst.totaal} volgende={mijnLijst.volgende} onMeer={mijnLijst.meer} />}
+                voet={<ToonMeer getoond={mijnLijst.getoond} totaal={mijnLijst.totaal} volgende={mijnLijst.volgende} onMeer={mijnLijst.meer} bezig={mijnLijst.bezig} fout={mijnLijst.fout} />}
               >
               {mijnLijst.zichtbaar.map(swap => {
                 const info = shiftInfoFor(swap);
@@ -753,6 +821,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 );
               })}
               </LijstKaart>
+          ) : mijnLijst.leeg === 'fout' ? (
+            // Het archief kwam niet: nooit "nog geen ruilverzoeken", wel de knop die opnieuw vraagt.
+            <ToonMeer los getoond={0} totaal={null} volgende={mijnLijst.volgende} onMeer={mijnLijst.meer} bezig={mijnLijst.bezig} fout />
+          ) : mijnLijst.leeg === 'laden' ? (
+            <p className="px-1 text-body-sm text-slate-500">Laden…</p>
           ) : availableSwaps.length > 0 ? (
             // Wacht er een ruil van een collega op antwoord, dan is dát de
             // inhoud van dit scherm: de lege staat duwde ze op een telefoon
@@ -1137,9 +1210,23 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           heropbouw-replay. Compact, nieuwste eerst en tien tegelijk (Jarno
           15-10; tot dan gecapt op 30 zonder weg naar de oudere); de tabel
           hierboven blijft de plek voor wat nog actie vraagt. */}
-      {isStaf(user.role) && afgehandeld.totaal > 0 && (
+      {isStaf(user.role) && (afgehandeld.getoond > 0 || !!afgehandeldPersoon || afgehandeld.leeg === 'fout' || (afgehandeldFoutGehad && afgehandeld.leeg === 'laden')) && (
         <div className="space-y-3">
-          <MicroLabel className="ml-1">Afgehandeld</MicroLabel>
+          <div className="flex items-center justify-between gap-3">
+            <MicroLabel className="ml-1">Afgehandeld</MicroLabel>
+            <Select aria-label="Afgehandeld van" value={afgehandeldPersoon} onChange={(e) => setAfgehandeldPersoon(e.target.value)} className="w-auto min-w-0 px-2.5 py-1.5 text-xs">
+              <option value="">Iedereen</option>
+              {ruilPersonen.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </Select>
+          </div>
+          {afgehandeld.getoond === 0 ? (
+            // Een laadfout is nooit "geen wissels": de knop vraagt opnieuw.
+            afgehandeld.leeg === 'fout' ? (
+              <ToonMeer los woord="oudere" getoond={0} totaal={null} volgende={afgehandeld.volgende} onMeer={afgehandeld.meer} bezig={afgehandeld.bezig} fout />
+            ) : (
+              <p className="px-1 text-body-sm text-slate-500">{afgehandeld.leeg === 'laden' ? 'Laden…' : 'Geen afgehandelde wissels voor deze persoon.'}</p>
+            )
+          ) : (
           <Card padding="none" className="divide-y divide-hairline-subtle">
             {afgehandeld.zichtbaar.map((swap) => {
               const info = shiftInfoFor(swap);
@@ -1172,7 +1259,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </span>
                   </button>
                   <div className="flex items-center shrink-0">
-                    {kanWissen(swap) ? (
+                    {!vensterIds.has(swap.id) ? null : kanWissen(swap) ? (
                       <IconButton label="Uit geschiedenis wissen" size="sm" variant="ghost" className="text-red-700 hover:text-red-700 hover:bg-red-50" onClick={() => vraagWissen(swap)}>
                         <Trash2 size={16} />
                       </IconButton>
@@ -1194,8 +1281,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 </div>
               );
             })}
-            <ToonMeer woord="oudere" getoond={afgehandeld.getoond} totaal={afgehandeld.totaal} volgende={afgehandeld.volgende} onMeer={afgehandeld.meer} />
+            <ToonMeer woord="oudere" getoond={afgehandeld.getoond} totaal={afgehandeld.totaal} volgende={afgehandeld.volgende} onMeer={afgehandeld.meer} bezig={afgehandeld.bezig} fout={afgehandeld.fout} />
           </Card>
+          )}
         </div>
       )}
 

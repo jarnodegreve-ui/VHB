@@ -15,7 +15,7 @@ import { BrandSpinner } from './BrandSpinner';
  * pagina geeft zonder telling); dan alleen de knop. `bezig` = de volgende
  * pagina komt nog van de server.
  */
-export function ToonMeer({ getoond, totaal, volgende, onMeer, woord = 'meer', bezig = false, los = false, className }: {
+export function ToonMeer({ getoond, totaal, volgende, onMeer, woord = 'meer', bezig = false, fout = false, los = false, className }: {
   getoond: number;
   totaal: number | null;
   /** Hoeveel er bij een tik bijkomen; 0 = niets meer te tonen. */
@@ -24,6 +24,8 @@ export function ToonMeer({ getoond, totaal, volgende, onMeer, woord = 'meer', be
   /** "Toon 10 meer" of, bij een lijst van nieuw naar oud, "Toon 10 oudere". */
   woord?: 'meer' | 'oudere';
   bezig?: boolean;
+  /** De vorige pagina van de server kwam niet: de knop probeert opnieuw. */
+  fout?: boolean;
   /** Onder een stapel losse kaarten (geen lijstkaart om in te staan): een
    *  eigen kaart, zonder de hairline erboven. */
   los?: boolean;
@@ -40,9 +42,11 @@ export function ToonMeer({ getoond, totaal, volgende, onMeer, woord = 'meer', be
       >
         <span className="flex items-center gap-2">
           {bezig ? <BrandSpinner size={14} /> : <ChevronDown size={16} aria-hidden="true" className="text-slate-400" />}
-          Toon {volgende} {woord}
+          {fout && !bezig ? 'Opnieuw proberen' : `Toon ${volgende} ${woord}`}
         </span>
-        {totaal !== null && (
+        {fout && !bezig ? (
+          <span className="text-xs font-medium text-red-700" role="status">Laden mislukt</span>
+        ) : totaal !== null && (
           <span className="text-xs font-medium text-slate-500 tabular-nums" aria-live="polite">{getoond} van {totaal}</span>
         )}
       </Pressable>

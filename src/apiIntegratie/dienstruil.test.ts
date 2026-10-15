@@ -2166,3 +2166,172 @@ describe('dienstruil aangevraagd: mail naar de admins (13-10)', () => {
     expect(mails[0].text).toContain('Geen (overname)');
   });
 });
+
+// --- Het venster en het archief (15-10, shared/ruilVenster.ts) ---
+// Vandaag in het harnas = 15/06/2026, dus de grens = 01/03/2026.
+describe('dienstruil: het venster en het archief (15-10)', () => {
+  /** Een afgehandelde ruil van januari: archief. */
+  const OUD = { id: 's-oud', shiftId: 'sh-o', requesterId: '3', targetDriverId: '4', status: 'rejected', reason: '', createdAt: '2026-01-10T08:00:00Z', decidedAt: '2026-01-11T08:00:00Z', shiftDate: '2026-01-20', shiftLine: '12' };
+  /** Nog ouder en van een ander koppel (4 → 2). */
+  const OUDER = { id: 's-ouder', shiftId: 'sh-p', requesterId: '4', targetDriverId: '2', status: 'cancelled', reason: '', createdAt: '2025-12-01T08:00:00Z', decidedAt: '2025-12-02T08:00:00Z', shiftDate: '2025-12-10', shiftLine: '14' };
+  /** Oud aangemaakt, maar de dienst moet nog komen: venster (het bord heeft hem nodig). */
+  const OUD_MAAR_KOMEND = { id: 's-komend', shiftId: 'sh-k', requesterId: '3', targetDriverId: '4', status: 'completed', reason: '', createdAt: '2026-01-05T08:00:00Z', decidedAt: '2026-01-06T08:00:00Z', shiftDate: '2026-07-05', shiftLine: '12' };
+  /** Oud maar nog goedgekeurd en niet afgehandeld: open, dus venster. */
+  const OUD_OPEN = { id: 's-open', shiftId: 'sh-q', requesterId: '4', targetDriverId: '3', status: 'approved', reason: '', createdAt: '2026-01-02T08:00:00Z', decidedAt: '2026-01-03T08:00:00Z', shiftDate: '2026-01-15', shiftLine: '14' };
+
+  beforeEach(() => {
+    mem.swaps = [...mem.swaps, OUD, OUDER, OUD_MAAR_KOMEND, OUD_OPEN];
+  });
+
+  it('staf krijgt het venster (open of recent)', async () => {
+    const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.map((s: any) => s.id).sort()).toEqual(['s-1', 's-2', 's-komend', 's-open']);
+  });
+
+  it('een chauffeur krijgt alleen zijn eigen ruilen in het venster', async () => {
+    const res = await api('GET', '/api/swaps', { token: 'tok-a' });
+    // s-oud is van hem maar in het archief; s-ouder is niet van hem.
+    expect(res.json.map((s: any) => s.id).sort()).toEqual(['s-1', 's-komend', 's-open']);
+  });
+
+  it('GET /api/swaps/archief geeft de rest per pagina, het jongste beslismoment eerst, met het verloop', async () => {
+    mem.activity.push({ domain: 'swaps', action: 'Dienstruil afgewezen', message: 'x', entityType: 'swap', entityId: 's-oud', actorName: 'Pieter Planner', actorRole: 'planner', gelogdOp: '2026-01-11T08:00:00Z' });
+    const p1 = await api('GET', '/api/swaps/archief?vanaf=0&aantal=1', { token: 'tok-planner' });
+    expect(p1.status).toBe(200);
+    expect(p1.json).toMatchObject({ totaal: 2, grens: '2026-03-01' });
+    expect(p1.json.ruilen.map((s: any) => s.id)).toEqual(['s-oud']);
+    expect(p1.json.ruilen[0].verloop.at(-1)).toMatchObject({ door: 'planner', naam: 'Pieter Planner' });
+    const p2 = await api('GET', '/api/swaps/archief?vanaf=1&aantal=1', { token: 'tok-planner' });
+    expect(p2.json.ruilen.map((s: any) => s.id)).toEqual(['s-ouder']);
+  });
+
+  it('staf filtert het archief per persoon en op een begindag; een ongeldige dag is een 400', async () => {
+    const persoon = await api('GET', '/api/swaps/archief?persoon=2', { token: 'tok-planner' });
+    expect(persoon.json.ruilen.map((s: any) => s.id)).toEqual(['s-ouder']);
+    const sinds = await api('GET', '/api/swaps/archief?sinds=2026-01-01', { token: 'tok-planner' });
+    expect(sinds.json.ruilen.map((s: any) => s.id)).toEqual(['s-oud']);
+    expect(sinds.json.totaal).toBe(1);
+    const fout = await api('GET', '/api/swaps/archief?sinds=gisteren', { token: 'tok-planner' });
+    expect(fout.status).toBe(400);
+  });
+
+  it('een chauffeur krijgt in het archief alleen zijn eigen aanvragen, zonder de naam van de planner', async () => {
+    mem.activity.push({ domain: 'swaps', action: 'Dienstruil afgewezen', message: 'x', entityType: 'swap', entityId: 's-oud', actorName: 'Pieter Planner', actorRole: 'planner', gelogdOp: '2026-01-11T08:00:00Z' });
+    const a = await api('GET', '/api/swaps/archief?persoon=4', { token: 'tok-a' });
+    expect(a.json.ruilen.map((s: any) => s.id)).toEqual(['s-oud']);
+    expect(JSON.stringify(a.json)).not.toContain('Pieter Planner');
+    // Chauffeur B (4) vroeg s-ouder aan; s-oud is van A, ook al is B daar de collega.
+    const b = await api('GET', '/api/swaps/archief', { token: 'tok-b' });
+    expect(b.json.ruilen.map((s: any) => s.id)).toEqual(['s-ouder']);
+  });
+
+  it('de lijstroute van staf wist niets uit het archief: wat ontbreekt telt alleen binnen het venster', async () => {
+    const venster = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    // De payload is wat de client heeft: het venster, zonder s-oud en s-ouder.
+    const res = await api('POST', '/api/swaps', {
+      token: 'tok-planner',
+      body: venster.json.map(({ verloop: _v, rust: _r, ...s }: any) => s),
+      headers: { 'x-collection-revision': venster.headers.get('x-collection-revision')! },
+    });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.map((s: any) => s.id)).toEqual(expect.arrayContaining(['s-oud', 's-ouder']));
+  });
+
+  it('de lijstroute van staf wist wel wat binnen het venster ontbreekt (een afgewezen ruil uit de geschiedenis)', async () => {
+    mem.swaps.push({ id: 's-recent', shiftId: 'sh-r', requesterId: '4', targetDriverId: '3', status: 'rejected', reason: '', createdAt: '2026-05-01T08:00:00Z', decidedAt: '2026-05-02T08:00:00Z' });
+    const venster = await api('GET', '/api/swaps', { token: 'tok-admin' });
+    const zonder = venster.json.filter((s: any) => s.id !== 's-recent').map(({ verloop: _v, rust: _r, ...s }: any) => s);
+    const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: zonder, headers: { 'x-collection-revision': venster.headers.get('x-collection-revision')! } });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.some((s: any) => s.id === 's-recent')).toBe(false);
+    expect(mem.swaps.some((s: any) => s.id === 's-oud')).toBe(true);
+  });
+
+  it('een oude client die nog alles had, botst eerst op de revisie (409) in plaats van iets te wissen', async () => {
+    const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: mem.swaps.filter((s: any) => s.id !== 's-oud'), headers: { 'x-collection-revision': 'revisie-van-de-hele-tabel' } });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.some((s: any) => s.id === 's-oud')).toBe(true);
+  });
+
+  it('een chauffeur die zijn venster terugstuurt, trekt zijn oude aanvraag niet in (geen 403)', async () => {
+    const venster = await api('GET', '/api/swaps', { token: 'tok-a' });
+    const nieuw = { id: 's-nieuw-a', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-15T09:00:00Z', swapType: 'overname' };
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...venster.json.map(({ verloop: _v, rust: _r, ...s }: any) => s), nieuw] });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.some((s: any) => s.id === 's-oud')).toBe(true);
+    expect(mem.swaps.some((s: any) => s.id === 's-nieuw-a')).toBe(true);
+  });
+
+  it('GET /api/swaps/:id geeft één ruil voor een oude link; een chauffeur alleen als hij erbij betrokken is', async () => {
+    const staf = await api('GET', '/api/swaps/s-ouder', { token: 'tok-planner' });
+    expect(staf.status).toBe(200);
+    expect(staf.json.id).toBe('s-ouder');
+    expect(Array.isArray(staf.json.verloop)).toBe(true);
+    const eigen = await api('GET', '/api/swaps/s-oud', { token: 'tok-a' });
+    expect(eigen.status).toBe(200);
+    // s-ouder is tussen 4 en 2: niet van A, en dat ziet er hetzelfde uit als onbestaand.
+    const vreemd = await api('GET', '/api/swaps/s-ouder', { token: 'tok-a' });
+    const weg = await api('GET', '/api/swaps/bestaat-niet', { token: 'tok-a' });
+    expect(vreemd.status).toBe(404);
+    expect(weg.status).toBe(404);
+    expect(vreemd.json).toEqual(weg.json);
+  });
+
+  it('de revisie na een beslissing van staf gaat over het venster, zodat een volgende lijst-save niet botst', async () => {
+    const patch = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'pending' } });
+    expect(patch.status).toBe(200);
+    const venster = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(patch.headers.get('x-collection-revision')).toBe(venster.headers.get('x-collection-revision'));
+    const save = await api('POST', '/api/swaps', {
+      token: 'tok-planner',
+      body: venster.json.map(({ verloop: _v, rust: _r, ...s }: any) => s),
+      headers: { 'x-collection-revision': patch.headers.get('x-collection-revision')! },
+    });
+    expect(save.status).toBe(200);
+  });
+
+  it('wisselt een ruil van status tussen de vensterlezing en de volledige lezing van de lijst-save, dan 409 en niets geschreven', async () => {
+    const venster = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    // De vensterquery ziet nog de oude stand (s-1 wacht), de volledige lezing
+    // al de nieuwe: de collega accepteerde intussen.
+    mem.vensterMomentopname = mem.swaps.map((s: any) => ({ ...s }));
+    const s1 = mem.swaps.find((s: any) => s.id === 's-1');
+    expect(s1.status).toBe('pending');
+    s1.status = 'accepted';
+    const save = await api('POST', '/api/swaps', {
+      token: 'tok-planner',
+      body: venster.json.map(({ verloop: _v, rust: _r, ...s }: any) => s),
+      headers: { 'x-collection-revision': venster.headers.get('x-collection-revision')! },
+    });
+    expect(save.status).toBe(409);
+    expect(mem.swaps.find((s: any) => s.id === 's-1').status).toBe('accepted');
+    expect(mem.swapStatusWissels).toEqual([]);
+  });
+
+  it('een chauffeur krijgt na een beslissing geen revisie: alleen de lijst-save van staf kent die controle', async () => {
+    const patch = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+    expect(patch.status).toBe(200);
+    expect(patch.headers.get('x-collection-revision')).toBeNull();
+  });
+
+  it('een oude aanvraag die staf vandaag afwijst, blijft in het venster (het beslismoment telt mee)', async () => {
+    mem.swaps.push({ id: 's-oud-open', shiftId: 'sh-z', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-01-02T08:00:00Z', shiftDate: '2026-01-20', shiftLine: '16' });
+    const patch = await api('PATCH', '/api/swaps/s-oud-open', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'pending' } });
+    expect(patch.status).toBe(200);
+    const venster = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(venster.json.map((s: any) => s.id)).toContain('s-oud-open');
+    const archief = await api('GET', '/api/swaps/archief', { token: 'tok-planner' });
+    expect(archief.json.ruilen.map((s: any) => s.id)).not.toContain('s-oud-open');
+  });
+
+  it('GET /api/swaps/:id weigert een id met tekens die het filter breken, en geeft alleen precies dat id', async () => {
+    for (const id of ['x","s-oud', 's-oud)', 'a,b']) {
+      const res = await api('GET', `/api/swaps/${encodeURIComponent(id)}`, { token: 'tok-planner' });
+      expect(res.status).toBe(404);
+    }
+    const goed = await api('GET', '/api/swaps/s-oud', { token: 'tok-planner' });
+    expect(goed.status).toBe(200);
+    expect(goed.json.id).toBe('s-oud');
+  });
+});

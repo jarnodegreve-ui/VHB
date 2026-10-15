@@ -184,10 +184,12 @@ export const getSwapHistories = async (
   return perSwap;
 };
 
-/** Boven dit aantal ruilen gaat het id-filter niet meer in de URL (PostgREST
- *  zet `in.(...)` in de querystring; 100 uuid's is ±4 kB) en lezen we alle
- *  ruil-logregels in één keer. Dat zijn er enkele per ruil. */
-const VERLOOP_ID_FILTER_MAX = 100;
+/** Zoveel ruil-id's gaan in één `in.(...)`-filter (PostgREST zet het in de
+ *  querystring; 100 uuid's is ±4 kB). Meer id's = meer stukken, parallel
+ *  (15-10): vroeger las de route boven dit aantal álle ruil-logregels ooit, en
+ *  die verlopen nooit, dus dat groeide mee met elke ruil. Zonder id's (de
+ *  rapporten) blijft het één lezing van alles. */
+const VERLOOP_ID_FILTER_MAX = IN_FILTER_MAX;
 
 export type SwapVerloopLogRegel = Pick<ActivityLogRecord, "createdAt" | "action" | "actorRole" | "actorName" | "details">;
 
@@ -200,19 +202,23 @@ export type SwapVerloopLogRegel = Pick<ActivityLogRecord, "createdAt" | "action"
 export const getSwapVerloopRegels = async (swapIds?: string[]): Promise<Record<string, SwapVerloopLogRegel[]>> => {
   const ids = swapIds ? [...new Set(swapIds.map((id) => String(id)).filter(Boolean))] : null;
   if (ids && ids.length === 0) return perRuilId<SwapVerloopLogRegel>();
-  const metFilter = !!ids && ids.length <= VERLOOP_ID_FILTER_MAX;
   const client = requireDb();
   type Rij = Pick<ActivityLogRow, "id" | "created_at" | "action" | "actor_role" | "actor_name" | "details" | "entity_id">;
-  const rows = await paginatedFetch<Rij>((from, to) => {
+  const lees = (deel: string[] | null) => paginatedFetch<Rij>((from, to) => {
     let q = client
       .from("activity_log")
       .select("id, created_at, action, actor_role, actor_name, details, entity_id")
       .eq("entity_type", "swap");
-    if (metFilter) q = q.in("entity_id", ids!);
+    if (deel) q = q.in("entity_id", deel);
     // Unieke sortering (created_at + id), anders kan een paginagrens een regel
     // overslaan of dubbel geven.
     return q.order("created_at", { ascending: true }).order("id", { ascending: true }).range(from, to);
   });
+  // Per stuk oudste eerst; de groepering per ruil hieronder houdt die volgorde,
+  // want elke ruil zit in precies één stuk.
+  const rows = ids
+    ? (await Promise.all(inStukken(ids, VERLOOP_ID_FILTER_MAX).map(lees))).flat()
+    : await lees(null);
   const gevraagd = ids ? new Set(ids) : null;
   const perSwap = perRuilId<SwapVerloopLogRegel>();
   for (const row of rows) {

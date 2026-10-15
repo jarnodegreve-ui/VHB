@@ -113,7 +113,7 @@ describe('PII-scoping voor chauffeurs', () => {
     expect(res.json).toHaveLength(3);
   });
 
-  it('GET /api/leave en /api/swaps filteren voor niet-staf in de query, staf leest ongefilterd', async () => {
+  it('GET /api/leave en /api/swaps filteren voor niet-staf in de query; staf leest alle verlof en het venster van de ruilen', async () => {
     await api('GET', '/api/leave', { token: 'tok-a' });
     await api('GET', '/api/swaps', { token: 'tok-a' });
     expect(mem.leaveFilters).toEqual([{ userId: '3' }]);
@@ -122,7 +122,9 @@ describe('PII-scoping voor chauffeurs', () => {
     await api('GET', '/api/leave', { token: 'tok-planner' });
     await api('GET', '/api/swaps', { token: 'tok-planner' });
     expect(mem.leaveFilters).toEqual([null]);
-    expect(mem.swapFilters).toEqual([null]);
+    // 15-10: niet meer de hele tabel, maar het venster (vandaag in het
+    // harnas = 15/06/2026, grens = 01/03/2026).
+    expect(mem.swapFilters).toEqual([{ venster: '2026-03-01' }]);
   });
 
   it('GET /api/swaps: ook als aangezochte collega (niet alleen als aanvrager)', async () => {
@@ -364,9 +366,11 @@ describe('PII-scoping voor chauffeurs', () => {
       expect([...mem.verloopFilters[0]!].sort()).toEqual(['s-1', 's-2']);
     });
 
-    it('staf: elk verloop in één logquery, mét wie besliste', async () => {
+    it('staf: het verloop van het venster in één logquery, mét wie besliste', async () => {
       const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
-      expect(mem.verloopFilters).toEqual([null]);
+      // 15-10: op de id's van het venster, niet meer elke ruil-logregel ooit.
+      expect(mem.verloopFilters).toHaveLength(1);
+      expect([...mem.verloopFilters[0]!].sort()).toEqual(['s-1', 's-2']);
       const s1 = res.json.find((s: any) => s.id === 's-1');
       expect(s1.verloop.at(-1)).toEqual({ soort: 'geweigerd', op: '2026-06-02T10:00:00Z', door: 'planner', van: 'accepted', naam: 'Pieter Planner' });
       expect(res.json.find((s: any) => s.id === 's-2').verloop).toHaveLength(1);

@@ -442,6 +442,17 @@ export function apiFixtures(user, extra) {
     }
     if (p.endsWith('/api/leave')) return json(user.role === 'chauffeur' ? LEAVE.filter((l) => l.userId === user.id) : LEAVE);
     if (p.endsWith('/api/swaps')) return json(SWAPS);
+    // Het archief van de dienstruilen (15-10): standaard leeg; een spec geeft
+    // het met `extra` een eigen inhoud.
+    if (p.endsWith('/api/swaps/archief')) return json({ ruilen: [], totaal: 0, grens: '2026-07-01' });
+    // Eén ruil voor een link naar een oude ruil (GET /api/swaps/:id), met de
+    // privacy van de echte route: een chauffeur alleen als hij erbij betrokken is.
+    if (/\/api\/swaps\/[^/]+$/.test(p) && route.request().method() === 'GET' && !p.endsWith('/uitgevoerd')) {
+      const id = decodeURIComponent(p.split('/').pop());
+      const ruil = SWAPS.find((s) => s.id === id);
+      const mag = ruil && (user.role !== 'chauffeur' && user.role !== 'technieker' || ruil.requesterId === user.id || ruil.targetDriverId === user.id);
+      return mag ? json(ruil) : route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Deze dienstruil is niet beschikbaar.' }) });
+    }
     if (p.endsWith('/api/activity/logins')) return json({ logins: LOGINS });
     if (p.endsWith('/api/activity/presence')) return json({ days: 14, sessies: PRESENCE });
     if (p.endsWith('/api/activity')) return json(ACTIVITY);
