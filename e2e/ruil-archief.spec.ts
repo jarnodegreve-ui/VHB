@@ -89,8 +89,9 @@ test('een link naar een oude ruil die niet in het venster zit, toont die ruil', 
     extra: (p) => (p.endsWith('/api/swaps') ? [] : p.endsWith('/api/swaps/oud-1') ? oud : undefined),
   });
   await page.goto('/dienstruil/oud-1');
-  // De alleen-lezen kaart van een ruil die in geen lijst (meer) staat.
-  await expect(page.getByRole('heading', { name: 'Dienstruil', exact: true })).toBeVisible();
+  // De alleen-lezen kaart van een ruil die in geen lijst (meer) staat. Op de
+  // kaart zelf zoeken: de paginakop heet ook "Dienstruil".
+  await expect(page.locator('[data-record="oud-1"]').getByRole('heading', { name: 'Dienstruil', exact: true })).toBeVisible();
   await expect(page.getByText('Deze dienstruil is niet beschikbaar')).toHaveCount(0);
 });
 
@@ -127,5 +128,6 @@ test('een link naar een ruil waarop de server faalt, is een laadfout met Opnieuw
   await expect(page.getByText('Deze dienstruil is niet beschikbaar')).toHaveCount(0);
   mislukt = false;
   await page.getByRole('button', { name: 'Opnieuw proberen', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Dienstruil', exact: true })).toBeVisible();
+  await expect(page.locator('[data-record="oud-1"]').getByRole('heading', { name: 'Dienstruil', exact: true })).toBeVisible();
+  await expect(page.getByText('Deze dienstruil kon niet geladen worden')).toHaveCount(0);
 });
