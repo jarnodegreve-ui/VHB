@@ -148,6 +148,7 @@ export {
 } from "./_lib/opslag/backups.js";
 export {
   DOCUMENTS_BUCKET,
+  ondertekenDocumenten,
   type UserDocumentRecord,
   listUserDocuments,
   getUserDocument,

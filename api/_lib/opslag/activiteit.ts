@@ -268,6 +268,9 @@ export const getSwapExecutions = async (
  * entity (bv. één service, één swap). Wordt gebruikt door de "Geschiedenis"-
  * modal vanuit admin-views.
  */
+/** De logactie van een aanmelding (api/_lib/accountRoutes.ts). */
+const AANGEMELD_ACTIE = "Aangemeld";
+
 export const getEntityHistory = async (
   entityType: NonNullable<ActivityLogRecord["entityType"]>,
   entityId: string,
@@ -278,6 +281,11 @@ export const getEntityHistory = async (
     .select("*")
     .eq("entity_type", entityType)
     .eq("entity_id", entityId)
+    // Waarnemingen horen niet in een wijzigingsgeschiedenis (15-10): elke
+    // aanmelding staat als logregel op de gebruiker en duwde de echte
+    // wijzigingen uit deze 200 rijen (de aanmeldingen staan in Activiteit), en
+    // "Dienstruil bekeken" filtert het scherm Activiteit ook al weg.
+    .not("action", "in", `("${AANGEMELD_ACTIE}","${RUIL_BEKEKEN_ACTIE}")`)
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) throw error;

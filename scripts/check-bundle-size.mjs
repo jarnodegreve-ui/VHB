@@ -269,7 +269,12 @@ const DEELBUDGET_KB = {
   // Geladen-vlaggen, drie laadpaden en de skelet-gate in SchermInhoud zitten
   // in de startbundel. Lokaal 78,25 → 78,66; de CI meet de index ±0,4 kB
   // zwaarder (78,8 viel daar om). 79,2 = die meting plus ±0,5 kB.
-  index: 79.2,
+  // 15-10 (toon meer, venster en archief): 79,2 → 79,6. Geen code in de
+  // startbundel; de chunk-kaart van de warmup (__VHB_VIEW_CHUNKS__, in de
+  // index) noemt de nieuwe gedeelde chunks (ToonMeer, archief). Lokaal
+  // 78,63 → 78,77; de CI-runner meet de index ±0,4 kB zwaarder, dat kwam
+  // op de grens. Budget = de meting plus ±0,8 kB.
+  index: 79.6,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
@@ -571,6 +576,13 @@ if (!kaartMatch) {
   // pas na LCP + 2 s. Budget = de meting plus ±1 kB.
   WARMUP_BUDGET_KB.chauffeur = 83.5;
   WARMUP_BUDGET_KB.staf = 151.5;
+  // 15-10 (toon meer, tweede ronde: gele boek, werkprestaties, documenten,
+  // rooster, historiek): chauffeur 83,5 → 84 en staf 151,5 → 152. Het rooster
+  // (in de warmup) leent nu ook ToonMeer voor zijn verleden. Lokaal chauffeur
+  // 82,56 → 82,73 en staf 150,42 → 150,58; met de ±0,5 kB van de runner zou
+  // de marge onder 0,3 kB zakken. Budget = de meting plus ±1,3 kB.
+  WARMUP_BUDGET_KB.chauffeur = 84;
+  WARMUP_BUDGET_KB.staf = 152;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

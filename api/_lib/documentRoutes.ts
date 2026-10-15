@@ -16,7 +16,7 @@ import { authenticate, requireRole } from "../middleware.js";
 import { metPdfTitel } from "./pdfTitel.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getUsersData, logActivity, listUserDocuments, markUserDocumentOpened, getUserDocument, insertUserDocument, deleteUserDocument, DOCUMENTS_BUCKET, MigratieOntbreektError, getDienstregelingen, getRitbladRijen, saveRitbladRij, deleteRitbladRij, uploadRitbladBestand, verwijderRitbladBestand, ondertekenRitblad, type RitbladRij } from "../storage.js";
+import { getUsersData, logActivity, listUserDocuments, ondertekenDocumenten, markUserDocumentOpened, getUserDocument, insertUserDocument, deleteUserDocument, DOCUMENTS_BUCKET, MigratieOntbreektError, getDienstregelingen, getRitbladRijen, saveRitbladRij, deleteRitbladRij, uploadRitbladBestand, verwijderRitbladBestand, ondertekenRitblad, type RitbladRij } from "../storage.js";
 import { viewUrl } from "./collectie.js";
 import { DAG_DMJ, brusselsDay } from "../helpers.js";
 import { hoortBijVersie, oudsteVersie, versieGeldigTot, versieLabel, versieStatus, versieVoorDatum } from "../../shared/dienstregeling.js";
@@ -273,19 +273,15 @@ export function mountDocumentRoutes(app: express.Express) {
       // listUserDocuments zonder id geeft ALLE documenten terug (admin-pad).
       if (!isStaff && !scopeUserId) return res.json([]);
       const docs = await listUserDocuments(scopeUserId);
-      const withUrls = await Promise.all(
-        docs.map(async (d) => {
-          try {
-            // `db!`: zonder Supabase gooit dit en vangt de catch hieronder het op
-            // (url: null), precies zoals voorheen.
-            const { data: signed } = await db!.storage.from(DOCUMENTS_BUCKET).createSignedUrl(d.storagePath, DOCUMENT_URL_TTL_SEC);
-            return { ...d, url: signed?.signedUrl ?? null };
-          } catch {
-            return { ...d, url: null };
-          }
-        }),
-      );
-      res.json(withUrls);
+      // Alle links in één aanvraag (15-10). Mislukt het ondertekenen, dan gaat
+      // de lijst toch mee, zonder links (url: null), zoals vroeger per document.
+      let urls = new Map<string, string>();
+      try {
+        urls = await ondertekenDocumenten(docs.map((d) => d.storagePath), DOCUMENT_URL_TTL_SEC);
+      } catch (err) {
+        console.error("Documentlinks ondertekenen is mislukt.", err);
+      }
+      res.json(docs.map((d) => ({ ...d, url: urls.get(d.storagePath) ?? null })));
     } catch (err) {
       console.error("Documenten laden mislukt:", err);
       res.status(500).json({ error: "Documenten laden is mislukt." });

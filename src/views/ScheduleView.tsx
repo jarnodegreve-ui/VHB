@@ -10,6 +10,7 @@ import { geruildeDiensten, ruilBadgeLabel, ruilSleutel, type RuilBadge } from '.
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, Chip, MicroLabel, microLabelClass, Segmented } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
+import { ToonMeer, useToonMeer } from '../components/ToonMeer';
 import { Card } from '../components/Card';
 import { MaandNavigatie, MaandWissel } from '../components/MaandNavigatie';
 import { useMaandVeeg } from '../lib/useMaandVeeg';
@@ -223,6 +224,8 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
   const gereden = (g: GroupedShift) => dienstGereden({ date: g.date, delen: g.segments }, today, nuMin);
   const upcoming = grouped.filter((g) => !gereden(g));
   const past = grouped.filter(gereden).reverse();
+  // Het verleden groeit elke dag aan: de jongste tien, dan tien per tik (15-10).
+  const verleden = useToonMeer(past);
 
   // Geplande uren deze week/maand (punt 15): afgeleid uit de dienstvensters,
   // geen loonberekening (src/lib/roosterUren.ts); de strook zegt dat ook.
@@ -352,8 +355,9 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
                   </Button>
                   <Uitklap open={showPast}>
                     <div className="mt-4 opacity-60">
-                      <ShiftList shifts={past} today={today} compact={xl} planningTel={planningTel} />
+                      <ShiftList shifts={verleden.zichtbaar} today={today} compact={xl} planningTel={planningTel} />
                     </div>
+                    <ToonMeer los woord="oudere" className="mt-3" getoond={verleden.getoond} totaal={verleden.totaal} volgende={verleden.volgende} onMeer={verleden.meer} />
                   </Uitklap>
                 </div>
               )}

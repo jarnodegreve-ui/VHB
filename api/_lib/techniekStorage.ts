@@ -1,4 +1,5 @@
 import { db } from "../db.js";
+import { paginatedFetch } from "../storage.js";
 import type {
   Defect, DefectPatch, DefectMeldingBody, Vehicle, VehicleBody, VehicleExpiry, Werkprestatie, WerkprestatieBody,
 } from "../../shared/schemas/techniek.js";
@@ -146,16 +147,20 @@ export type DefectFilter = {
 };
 
 export const getDefecten = async (f: DefectFilter = {}): Promise<Defect[]> => {
-  let q = requireDb().from("vehicle_defects").select(DEFECT_SELECT).order("gemeld_op", { ascending: false });
-  if (!f.status || f.status === "open") q = q.eq("status", "open");
-  else if (f.status !== "alles") q = q.eq("status", f.status);
-  if (f.vehicleId) q = q.eq("vehicle_id", f.vehicleId);
-  if (f.sinds) q = q.gte("gemeld_op", `${f.sinds}T00:00:00`);
-  if (f.gemeldDoor) q = q.eq("gemeld_door", f.gemeldDoor);
-  q = q.limit(Math.min(Math.max(f.limit ?? 500, 1), 2000));
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map(toDefect);
+  // Per pagina tot de grens (15-10): PostgREST geeft hoogstens 1000 rijen per
+  // antwoord, dus een `limit` boven 1000 kapte "Alles" stil af op 1000. Het id
+  // maakt de sortering uniek, anders kan een paginagrens een rij overslaan.
+  const max = Math.min(Math.max(f.limit ?? 500, 1), 2000);
+  const rijen = await paginatedFetch((from, to) => {
+    let q = requireDb().from("vehicle_defects").select(DEFECT_SELECT).order("gemeld_op", { ascending: false }).order("id", { ascending: false });
+    if (!f.status || f.status === "open") q = q.eq("status", "open");
+    else if (f.status !== "alles") q = q.eq("status", f.status);
+    if (f.vehicleId) q = q.eq("vehicle_id", f.vehicleId);
+    if (f.sinds) q = q.gte("gemeld_op", `${f.sinds}T00:00:00`);
+    if (f.gemeldDoor) q = q.eq("gemeld_door", f.gemeldDoor);
+    return q.range(from, to);
+  }, max);
+  return rijen.map(toDefect);
 };
 
 export const getDefect = async (id: string): Promise<Defect | null> => {
@@ -237,15 +242,18 @@ export const toDatabaseWerkprestatie = (w: WerkprestatieBody & { mecanicienId: s
 export type WerkFilter = { van?: string; tot?: string; mecanicienId?: string; vehicleId?: string; limit?: number };
 
 export const getWerkprestaties = async (f: WerkFilter = {}): Promise<Werkprestatie[]> => {
-  let q = requireDb().from("vehicle_work").select(WORK_SELECT).order("datum", { ascending: false }).order("created_at", { ascending: false });
-  if (f.van) q = q.gte("datum", f.van);
-  if (f.tot) q = q.lte("datum", f.tot);
-  if (f.mecanicienId) q = q.eq("mecanicien_id", f.mecanicienId);
-  if (f.vehicleId) q = q.eq("vehicle_id", f.vehicleId);
-  q = q.limit(Math.min(Math.max(f.limit ?? 1000, 1), 5000));
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map(toWerkprestatie);
+  // Per pagina tot de grens (15-10), zie getDefecten: een kwartaal van de
+  // hele garage haalde 1000 rijen en de uren telden dan alleen die.
+  const max = Math.min(Math.max(f.limit ?? 1000, 1), 5000);
+  const rijen = await paginatedFetch((from, to) => {
+    let q = requireDb().from("vehicle_work").select(WORK_SELECT).order("datum", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false });
+    if (f.van) q = q.gte("datum", f.van);
+    if (f.tot) q = q.lte("datum", f.tot);
+    if (f.mecanicienId) q = q.eq("mecanicien_id", f.mecanicienId);
+    if (f.vehicleId) q = q.eq("vehicle_id", f.vehicleId);
+    return q.range(from, to);
+  }, max);
+  return rijen.map(toWerkprestatie);
 };
 
 export const getWerkprestatie = async (id: string): Promise<Werkprestatie | null> => {

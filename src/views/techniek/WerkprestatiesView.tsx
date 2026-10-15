@@ -6,6 +6,8 @@ import { isTechnieker } from '../../../shared/toegang';
 import { WERKCODES, WERKCODE_LABEL, WERK_OMSCHRIJVING_MAX, voertuigNaam, type Werkcode } from '../../../shared/techniek';
 import { cn, notify } from '../../lib/ui';
 import { useZelfLadend } from '../../lib/zelfLadend';
+import { Callout } from '../../components/Callout';
+import { ToonMeer, useToonMeer } from '../../components/ToonMeer';
 import { formatDayLong, formatShortDay } from '../../lib/format';
 import { metOngedaan } from '../../lib/ongedaan';
 import {
@@ -29,6 +31,8 @@ import { Td, Th, Tabel, TableShell } from '../../components/TabelBasis';
 
 type Tab = 'lijst' | 'rapport';
 type Periode = 'week' | 'maand' | 'kwartaal';
+/** Zoveel prestaties vraagt het staf-overzicht hoogstens op (de grens van de server). */
+const MAX_PRESTATIES = 5000;
 
 /** ISO-dag n dagen verder (negatief = terug). */
 const schuifDag = (iso: string, n: number) => {
@@ -221,7 +225,9 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
   const van = schuifDag(vandaag, periode === 'week' ? -7 : periode === 'maand' ? -31 : -92);
 
   const zl = useZelfLadend(async () => {
-    const [w, v] = await Promise.all([laadWerkprestaties({ van, mecanicienId: mecanicienFilter || undefined, limit: 2000 }), laadVoertuigen()]);
+    // De grens van de server (5000). Haalt een periode die grens, dan rekenen
+    // de cijfers hierboven alleen op de nieuwste en zegt het scherm dat.
+    const [w, v] = await Promise.all([laadWerkprestaties({ van, mecanicienId: mecanicienFilter || undefined, limit: MAX_PRESTATIES }), laadVoertuigen()]);
     setRijen(w); setVoertuigen(v);
   }, { deps: [van, mecanicienFilter], boodschap: (err) => (err instanceof Error && err.message ? err.message : 'Kon de werkprestaties niet laden.') });
   useEffect(() => {
@@ -237,6 +243,10 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
     return [...m.entries()].map(([datum, l]) => [datum, [...l].sort(opTijd)] as const).sort((a, b) => b[0].localeCompare(a[0]));
   }, [rijen]);
   const dagenMetWerk = perDag.length;
+  // Tien dagen tegelijk (Jarno 15-10): een kwartaal is anders negentig
+  // dagkaarten onder elkaar. Andere periode of technieker = weer de eerste tien.
+  const dagen = useToonMeer(perDag, { sleutel: `${periode}|${mecanicienFilter}` });
+  const afgekapt = rijen.length >= MAX_PRESTATIES;
 
   const naOpslaan = (w: Werkprestatie) => setRijen((lijst) => (lijst.some((x) => x.id === w.id) ? lijst.map((x) => (x.id === w.id ? w : x)) : [w, ...lijst]).sort((a, b) => b.datum.localeCompare(a.datum)));
 
@@ -308,7 +318,12 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
             <EmptyState illustratie={<LegeLijst />} title="Nog geen werkprestaties in deze periode" message="Registreer wat de garage vandaag aan welke bus deed." action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setBewerk({ prestatie: null })}>Prestatie registreren</Button>} />
           ) : (
             <div className="space-y-4">
-              {perDag.map(([datum, lijst]) => (
+              {afgekapt && (
+                <Callout tone="warning" title={`Meer dan ${MAX_PRESTATIES} prestaties in deze periode`}>
+                  De cijfers tellen alleen de nieuwste. Kies een kortere periode of één technieker.
+                </Callout>
+              )}
+              {dagen.zichtbaar.map(([datum, lijst]) => (
                 <Card key={datum} padding="none" className="overflow-clip">
                   <div className="flex items-baseline justify-between border-b border-hairline px-5 py-3">
                     <h2 className="text-card-title">{datum === vandaag ? 'Vandaag' : formatShortDay(datum)}</h2>
@@ -331,6 +346,7 @@ function StafOverzicht({ currentUser, techniekers }: { currentUser: User; techni
                   </ul>
                 </Card>
               ))}
+              <ToonMeer los woord="oudere" getoond={dagen.getoond} totaal={dagen.totaal} volgende={dagen.volgende} onMeer={dagen.meer} />
             </div>
           )}
         </>

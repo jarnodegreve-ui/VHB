@@ -10,6 +10,7 @@ import { SkeletonRow } from '../components/Skeleton';
 import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format';
 import { meldSchrijffout } from '../lib/fouten';
 import { TableShell, Td, Th } from '../components/TabelBasis';
+import { ToonMeer, useToonMeer } from '../components/ToonMeer';
 import { useZelfLadend } from '../lib/zelfLadend';
 import { useOnline } from '../lib/useOnline';
 import { DOCUMENT_VERVERS_NA_MS, linkNogGeldig, opentInDeApp } from '../lib/documentLink';
@@ -38,6 +39,9 @@ export type UserDocument = {
  */
 export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSeen?: () => void }) {
   const [docs, setDocs] = useState<UserDocument[]>([]);
+  // Tien documenten tegelijk, het nieuwste eerst (15-10): elke maand komt er
+  // een loonbrief bij, de lijst groeit dus elk jaar met een dozijn.
+  const lijst = useToonMeer(docs);
   // Het document in de viewer: undefined = nog nooit geopend (de viewer is dan
   // niet geladen), null = gesloten (de laag fadet nog uit).
   const [inViewer, setInViewer] = useState<UserDocument | null>();
@@ -195,7 +199,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                 </tr>
               </thead>
               <tbody>
-                {docs.map((doc) => (
+                {lijst.zichtbaar.map((doc) => (
                   <tr key={doc.id} className="border-t border-hairline-subtle transition-colors hover:bg-surface-soft-hover">
                     <Td className="max-w-md">
                       <div className="flex items-center gap-3 min-w-0">
@@ -217,11 +221,12 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                 ))}
               </tbody>
             </table>
+            <ToonMeer woord="oudere" getoond={lijst.getoond} totaal={lijst.totaal} volgende={lijst.volgende} onMeer={lijst.meer} />
           </TableShell>
 
           {/* Onder lg: de kaartlijst. */}
           <Card padding="none" className="divide-y divide-hairline-subtle overflow-hidden lg:hidden">
-            {docs.map((doc) => (
+            {lijst.zichtbaar.map((doc) => (
               <div key={doc.id} className="flex items-center gap-4 px-5 py-4">
                 <div className="w-10 h-10 rounded-2xl bg-surface-muted text-slate-700 flex items-center justify-center shrink-0">
                   <FileText size={20} />
@@ -247,6 +252,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                 </Button>
               </div>
             ))}
+            <ToonMeer woord="oudere" getoond={lijst.getoond} totaal={lijst.totaal} volgende={lijst.volgende} onMeer={lijst.meer} />
           </Card>
         </>
       )}

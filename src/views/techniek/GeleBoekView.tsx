@@ -27,6 +27,7 @@ import { Badge, Button, FilterChip, Switch, TOON_NAAR_BADGE } from '../../compon
 import { DEFECT_STATUS, statusVan } from '../../../shared/status';
 import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
 import { Td, Th } from '../../components/TabelBasis';
+import { ToonMeer, useToonMeer } from '../../components/ToonMeer';
 import type { ActieMenuItem } from '../../components/ActieMenu';
 
 const LazyDefectMeldenModal = lazy(() => import('../../components/DefectMeldenModal').then((m) => ({ default: m.DefectMeldenModal })));
@@ -102,6 +103,12 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
     if (k === 'status') return r.status;
     return r.gemeldOp;
   });
+
+  // 25 meldingen tegelijk (15-10): "Alles" kan tot 2000 rijen tellen. Een
+  // andere filter, zoekterm of sortering begint weer bij de eerste 25.
+  const lijst = useToonMeer(gesorteerd, { stap: 25, sleutel: [filter, alleenOud, busFilter, soortFilter ?? '', zoekTerm, sort.key, sort.dir].join('|') });
+  // De server geeft hoogstens 2000 meldingen; haalt "Alles" die grens, dan zegt het scherm dat.
+  const afgekapt = filter === 'alles' && rijen.length >= 2000;
 
   const vervang = (d: Defect) => setRijen((lijst) => lijst.map((r) => (r.id === d.id ? d : r)));
 
@@ -239,7 +246,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                     </tr>
                   </StickyThead>
                   <tbody>
-                    {gesorteerd.map((d) => (
+                    {lijst.zichtbaar.map((d) => (
                       <tr key={d.id} className="border-b border-hairline-subtle last:border-b-0 align-top transition-colors hover:bg-surface-soft-hover">
                         <Td>
                           {/* Volledig busnummer in de lijst, niet "Bus 38" (Jarno 17-09). */}
@@ -266,7 +273,7 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                 </table>
               </div>
               <ul className="md:hidden divide-y divide-hairline-subtle">
-                {gesorteerd.map((d) => (
+                {lijst.zichtbaar.map((d) => (
                   <li key={d.id} className="flex items-start gap-3 px-5 py-3.5">
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -282,6 +289,10 @@ export function GeleBoekView({ currentUser }: { currentUser: User }) {
                   </li>
                 ))}
               </ul>
+              <ToonMeer woord="oudere" getoond={lijst.getoond} totaal={lijst.totaal} volgende={lijst.volgende} onMeer={lijst.meer} />
+              {afgekapt && (
+                <p className="border-t border-hairline-subtle px-5 py-3 text-xs text-slate-500">Je ziet de 2000 nieuwste meldingen.</p>
+              )}
             </>
           )}
         </div>
