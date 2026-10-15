@@ -4,6 +4,7 @@ import { AlertTriangle, ChevronRight, MapPin, Phone, UserX } from 'lucide-react'
 import { RuilIcoon } from '../components/RuilIcoon';
 import type { LeaveRequest, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
+import { SkeletonRow } from '../components/Skeleton';
 import { addDays, isoDate } from '../lib/availability';
 import { WEEKSTROOK_DAGEN, bouwDagBriefing, bouwWeekPunten, briefingKop, dagWoordVoor, type BriefingAfwezige, type BriefingRuil, type WeekDagPunt } from '../lib/dagBriefing';
 import { WEEKDAY_SHORT_MON, formatDatumDMJ, formatDayLong } from '../lib/format';
@@ -104,7 +105,7 @@ function Weekstrook({ week, vandaag, gekozen, onKies }: {
 }
 
 export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: string[]) => void }) {
-  const { users, shifts, leaveRequests, swaps, diversions, coverageDays } = useAppDataContext();
+  const { users, shifts, leaveRequests, swaps, diversions, diversionsGeladen, coverageDays } = useAppDataContext();
   // De dag verspringt om middernacht; een tik per minuut volstaat.
   const [vandaag, setVandaag] = useState(() => isoDate(new Date()));
   useEffect(() => {
@@ -131,8 +132,10 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
 
   const teHerverdelen = briefing.afwezigen.filter((a) => a.diensten.length > 0);
   const rustigAfwezig = briefing.afwezigen.filter((a) => a.diensten.length === 0);
+  // De omleidingen laden ná de poort (poort.ts, 15-10): tot ze binnen zijn
+  // is "rustig" niet zeker en toont het paneel een skeletrij.
   const helemaalLeeg = briefing.aandacht === 0 && briefing.afwezigen.length === 0 && briefing.ruilen.length === 0
-    && briefing.omleidingen.length === 0 && briefing.openDiensten !== null;
+    && diversionsGeladen && briefing.omleidingen.length === 0 && briefing.openDiensten !== null;
 
   const afwezigTekst = (a: BriefingAfwezige) =>
     `${AFWEZIG_WOORD[a.type]}${a.tot > dag ? ` t/m ${formatDatumDMJ(a.tot)}` : ''}`;
@@ -289,7 +292,9 @@ export function VandaagView({ onNavigate }: { onNavigate: (view: View, params?: 
             title="Omleidingen"
             aside={briefing.omleidingen.length > 0 ? `${briefing.omleidingen.length} actief` : undefined}
           >
-            {briefing.omleidingen.length === 0 ? (
+            {!diversionsGeladen ? (
+              <SkeletonRow />
+            ) : briefing.omleidingen.length === 0 ? (
               <Stil>Geen omleidingen op deze dag.</Stil>
             ) : (
               <div className="space-y-1.5">

@@ -49,8 +49,12 @@ export function SchermInhoud(props: SchermInhoudProps) {
     resolvedCurrentView, currentUser, setCurrentView, navigeer, isAdmin, isPlanner, previewingChauffeur, ruilDataKlaar, swapPreselectShiftId, setSwapPreselectShiftId, theme, toggleTheme, pushEnabled, pushPublicKey, togglePush, handleLogout, setShowProbleemMelder, setShowChangePassword, setShowAgenda,
   } = props;
   const {
-    aanwezigheid, aanwezigheidLocatieMigratie, aanwezigheidMigratie, activityLog, activityLogGeladen, confirmSwapSeen, createDiversion, createUpdate, decideLeave, decideSwap, deleteDiversion, deleteUpdate, diversions, feestdagenExtra, fetchActivityLog, fetchDiversions, fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, fetchSwaps, fetchUpdates, isInitialLoad, lastSeenLeaveDecisionAt, lastSyncedAt, leaveRequests, loginActivity, markDocumentsSeen, markLeaveDecisionsSeen, myNotes, planningCodes, planningCodesGeladen, planningMatrixGeladen, planningMatrixHistory, planningMatrixRows, planningTot, refreshCoverageGaps, reportSick, saveDiversion, saveDiversions, saveLeave, savePlanning, savePlanningCodes, saveServices, saveSwaps, saveUpdate, saveUpdates, sendUrgentEmail, services, servicesGeladen, shifts, swaps, updates, users, usersGeladen, zetFeestdagenExtra,
+    aanwezigheid, aanwezigheidLocatieMigratie, aanwezigheidMigratie, activityLog, activityLogGeladen, confirmSwapSeen, collectieStaat, createDiversion, createUpdate, decideLeave, decideSwap, deleteDiversion, deleteUpdate, diversions, diversionsGeladen, feestdagenExtra, fetchActivityLog, fetchDiversions, fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, fetchSwaps, fetchUpdates, isInitialLoad, lastSeenLeaveDecisionAt, lastSyncedAt, leaveRequests, loginActivity, markDocumentsSeen, markLeaveDecisionsSeen, meldingenGeladen, myNotes, planningCodes, planningCodesGeladen, planningMatrixGeladen, planningMatrixHistory, planningMatrixRows, planningTot, refreshCoverageGaps, reportSick, saveDiversion, saveDiversions, saveLeave, savePlanning, savePlanningCodes, saveServices, saveSwaps, saveUpdate, saveUpdates, sendUrgentEmail, services, servicesGeladen, shifts, swaps, updates, updatesGeladen, users, usersGeladen, zetFeestdagenExtra,
   } = useAppDataContext();
+  // Een uitgestelde collectie (poort.ts): skelet tot ze binnen is, behalve
+  // wanneer haar eerste laad mislukte, dan toont de view zelf een Foutkaart
+  // (useCollectieStaat) in plaats van eeuwig skelet.
+  const wachtOp = (geladen: boolean, sleutel: 'diversions' | 'updates' | 'meldingen') => isInitialLoad || (!geladen && !collectieStaat[sleutel]?.mislukt);
   // Eén skelet per scherm, met de echte kop (src/app/skeletten.tsx).
   const skelet = skeletVoor(resolvedCurrentView);
   return (
@@ -70,18 +74,18 @@ export function SchermInhoud(props: SchermInhoudProps) {
         />
         </Suspense>
       ) : (
-        <LazyDashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} leaveRequests={leaveRequests} swaps={swaps} users={users} ruilDataKlaar={ruilDataKlaar} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />
+        <LazyDashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} diversionsGeladen={diversionsGeladen} leaveRequests={leaveRequests} swaps={swaps} users={users} ruilDataKlaar={ruilDataKlaar} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />
       )
     )}
     {resolvedCurrentView === 'mijn-dag' && <LazyMijnDagView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />}
-    {resolvedCurrentView === 'omleidingen' && <Verwissel laden={isInitialLoad} skelet={skelet}><LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} /></Verwissel>}
+    {resolvedCurrentView === 'omleidingen' && <Verwissel laden={wachtOp(diversionsGeladen, 'diversions')} skelet={skelet}><LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} /></Verwissel>}
     {resolvedCurrentView === 'rooster' && <LazyScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad || !ruilDataKlaar} lastSyncedAt={lastSyncedAt} planningTot={planningTot} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
     {resolvedCurrentView === 'dienstoverzicht' && <Verwissel laden={isInitialLoad || !servicesGeladen} skelet={skelet}><Suspense fallback={skelet}><LazyServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense></Verwissel>}
     {resolvedCurrentView === 'ritblaadjes' && <LazyRitblaadjesView currentUser={currentUser!} />}
     {resolvedCurrentView === 'filmnummers' && <LazyFilmnummersView magBeheren={isAdmin && !previewingChauffeur} />}
     {resolvedCurrentView === 'documenten' && <LazyDocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
-    {resolvedCurrentView === 'updates' && <Verwissel laden={isInitialLoad} skelet={skelet}><LazyUpdatesView updates={updates} /></Verwissel>}
-    {resolvedCurrentView === 'meldingen' && <LazyMeldingenView onNavigate={setCurrentView} />}
+    {resolvedCurrentView === 'updates' && <Verwissel laden={wachtOp(updatesGeladen, 'updates')} skelet={skelet}><LazyUpdatesView updates={updates} /></Verwissel>}
+    {resolvedCurrentView === 'meldingen' && <Verwissel laden={wachtOp(meldingenGeladen, 'meldingen')} skelet={skelet}><LazyMeldingenView onNavigate={setCurrentView} /></Verwissel>}
     {resolvedCurrentView === 'contacten' && <Verwissel laden={isInitialLoad || !usersGeladen} skelet={skelet}><LazyContactsView users={users} currentUser={currentUser!} /></Verwissel>}
     {resolvedCurrentView === 'beheer-roosters' && <Verwissel laden={isInitialLoad} skelet={skelet}>
       <Suspense fallback={skelet}>
@@ -140,7 +144,7 @@ export function SchermInhoud(props: SchermInhoudProps) {
     {resolvedCurrentView === 'dagafsluiting' && <Suspense fallback={skelet}><LazyDagafsluitingView currentUser={currentUser!} users={users} /></Suspense>}
     {resolvedCurrentView === 'rapporten' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyRapportenView currentUser={currentUser!} /></Suspense></Verwissel>}
     {resolvedCurrentView === 'looncontrole' && <Suspense fallback={skelet}><LazyLooncontroleView currentUser={currentUser!} onNavigate={(view, params) => navigeer(view, { params })} /></Suspense>}
-    {resolvedCurrentView === 'beheer-omleidingen' && <Verwissel laden={isInitialLoad} skelet={skelet}><Suspense fallback={skelet}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} onHerlaad={() => void fetchDiversions(undefined, { silent: true })} /></Suspense></Verwissel>}
+    {resolvedCurrentView === 'beheer-omleidingen' && <Verwissel laden={wachtOp(diversionsGeladen, 'diversions')} skelet={skelet}><Suspense fallback={skelet}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} onHerlaad={() => void fetchDiversions(undefined, { silent: true })} /></Suspense></Verwissel>}
     {resolvedCurrentView === 'ruil-verzoeken' && <Verwissel laden={isInitialLoad || !ruilDataKlaar} skelet={skelet}><LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} /></Verwissel>}
     {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
     {resolvedCurrentView === 'dekking' && <Suspense fallback={skelet}><LazyCoverageView /></Suspense>}

@@ -162,7 +162,13 @@ import zlib from 'node:zlib';
 // shared/dagtype.ts en de CSV-lezer van de filmnummers worden nu gedeelde
 // chunks (ServicesView en het nieuwe scherm lenen ze allebei). Lokaal 729,6;
 // 734 = die meting plus de ±0,5 kB van de runner en ±0,5 % marge.
-const BUDGET_KB = 734;
+// 15-10 (snelheid, punt 3: de poort zonder omleidingen): 734 → 735. Drie
+// Geladen-vlaggen en hun laadpaden in de datalaag, de laadstand op het
+// dashboard, de cockpit en Vandaag, en de Foutkaart in drie lijstschermen;
+// geen nieuwe dependency. Lokaal 733 → 734 (de index +0,41 kB, zie onder),
+// de CI meet ±0,5 kB zwaarder, dus 734 viel daar om. De CI mat daarna
+// precies 735: 736 = die meting plus ±0,5 kB (afronding op de grens).
+const BUDGET_KB = 736;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -235,7 +241,12 @@ const DEELBUDGET_KB = {
   // (view, pad, omschrijving, het icoon CalendarRange) en één regel in de
   // chunk-kaart: lokaal 77,66 → 78,03, de CI-runner meet de index ±0,3 kB
   // zwaarder. 78,8 = die meting plus ±0,45 kB.
-  index: 78.8,
+  // 15-10 (snelheid, punt 3): 78,8 → 79,2. De poort laadt omleidingen (en
+  // voor chauffeurs updates en meldingen) ná het eerste scherm: drie
+  // Geladen-vlaggen, drie laadpaden en de skelet-gate in SchermInhoud zitten
+  // in de startbundel. Lokaal 78,25 → 78,66; de CI meet de index ±0,4 kB
+  // zwaarder (78,8 viel daar om). 79,2 = die meting plus ±0,5 kB.
+  index: 79.2,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
@@ -503,6 +514,15 @@ if (!kaartMatch) {
   // chauffeur-grens van 79 nipt passeren). Geen nieuwe dependency; de warmup
   // start pas na LCP + 2 s. Staf blijft op 148.
   WARMUP_BUDGET_KB.chauffeur = 79.5;
+  // 15-10 (snelheid, punt 3: de poort zonder omleidingen): chauffeur
+  // 79,5 → 80,5 en staf 148 → 148,5. De index droeg +0,41 kB (drie
+  // Geladen-vlaggen, hun laadpaden, de skelet-gate), het dashboard een
+  // skeletrij en de laadstand van de omleidingentegel, Omleidingen de
+  // Foutkaart met useCollectieStaat. Lokaal chauffeur 79 → 79,4 en staf
+  // 147 → 147,6 (afgerond 79 en 148); de CI mat 80 en 148, op of over de
+  // grens. Beide budgetten = de CI-meting plus ±0,5 kB.
+  WARMUP_BUDGET_KB.chauffeur = 80.5;
+  WARMUP_BUDGET_KB.staf = 148.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

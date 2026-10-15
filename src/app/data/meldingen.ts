@@ -17,10 +17,14 @@ import { useCollectieState, type DataCtx } from './kern';
  * client niet terugschrijven (alleen de server maakt meldingen), dus is
  * wachten de enige eerlijke manier om "Ongedaan maken" waar te maken.
  */
-export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'>) {
+export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'> & Partial<Pick<DataCtx, 'noteerCollectie'>>) {
   const { session } = ctx;
   const [meldingen, setMeldingen, zetMeldingenUitAntwoord] = useCollectieState<Melding[]>([]);
   const [ongelezenMeldingen, setOngelezenMeldingen] = useState(0);
+  // Voor chauffeur en technieker laden de meldingen sinds 15-10 ná de poort
+  // (src/app/data/poort.ts): het meldingenscherm houdt zijn skelet tot deze
+  // vlag waar is, de bel toont tot dan geen teller.
+  const [meldingenGeladen, setMeldingenGeladen] = useState(false);
   // Actuele lijst voor markeerMeldingenGelezenVoorScherm zonder dat de
   // schermwissel-hook op elke meldingenwijziging opnieuw hoeft te vuren.
   const meldingenRef = useRef<Melding[]>([]);
@@ -67,7 +71,10 @@ export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'
   const fetchMeldingen = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/meldingen', { accessToken });
-      if (!response.ok) return;
+      if (!response.ok) {
+        ctx.noteerCollectie?.('meldingen', false);
+        return;
+      }
       ctx.noteerAntwoord(response);
       const data = await response.json();
       // Vorm: { meldingen, ongelezen }. Een kale lijst (oude server, mock)
@@ -90,7 +97,10 @@ export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'
             : data.ongelezen,
         );
       }
+      setMeldingenGeladen(true);
+      ctx.noteerCollectie?.('meldingen', true);
     } catch (error) {
+      ctx.noteerCollectie?.('meldingen', false);
       // Meldingen zijn nice-to-have: geen laadfout-toast, de bel blijft leeg.
       console.error('Error fetching meldingen:', error);
     }
@@ -164,11 +174,12 @@ export function useMeldingenData(ctx: Pick<DataCtx, 'session' | 'noteerAntwoord'
   };
 
   const resetMeldingen = () => {
+    setMeldingenGeladen(false);
     for (const { timer } of wachtendRef.current.values()) clearTimeout(timer);
     wachtendRef.current.clear();
     setMeldingen([]);
     setOngelezenMeldingen(0);
   };
 
-  return { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm, verwijderMelding, herstelMelding, resetMeldingen };
+  return { meldingen, ongelezenMeldingen, meldingenGeladen, fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm, verwijderMelding, herstelMelding, resetMeldingen };
 }
