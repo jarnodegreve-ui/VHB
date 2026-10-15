@@ -29,6 +29,7 @@ export const uploadDiversionBijlage = async (diversionId: string, slot: number, 
     .from(DIVERSIONS_BUCKET)
     .upload(diversionBijlagePad(diversionId, slot), buffer, { contentType: "application/pdf", upsert: true });
   if (error) throw error;
+  vergeetDiversionBijlageUrls([diversionBijlagePad(diversionId, slot)]);
 };
 
 /** Eén bijlage weghalen; met `legacy` ook de oude `<id>.pdf`. "Not found" is
@@ -38,6 +39,7 @@ export const verwijderDiversionBijlage = async (diversionId: string, slot: numbe
   const paden = [diversionBijlagePad(diversionId, slot), ...(opts.legacy ? [diversionLegacyPad(diversionId)] : [])];
   const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove(paden);
   if (error && !/not.?found/i.test(String(error.message || ""))) throw error;
+  vergeetDiversionBijlageUrls(paden);
 };
 
 /** Alleen de oude sleutel `<id>.pdf` weghalen (slot 1 is net vervangen door
@@ -46,6 +48,7 @@ export const verwijderDiversionLegacyBijlage = async (diversionId: string): Prom
   if (!supabaseAdmin) throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt.");
   const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove([diversionLegacyPad(diversionId)]);
   if (error && !/not.?found/i.test(String(error.message || ""))) throw error;
+  vergeetDiversionBijlageUrls([diversionLegacyPad(diversionId)]);
 };
 
 /** De PDF van vóór 25-09 (`<id>.pdf`) naar de sleutel van slot 1 verhuizen,
@@ -58,24 +61,73 @@ export const verplaatsDiversionLegacyBijlage = async (diversionId: string): Prom
     .from(DIVERSIONS_BUCKET)
     .move(diversionLegacyPad(diversionId), diversionBijlagePad(diversionId, 1));
   if (error) throw error;
+  vergeetDiversionBijlageUrls([diversionLegacyPad(diversionId), diversionBijlagePad(diversionId, 1)]);
 };
 
 // Bijlage-URL's zijn kortlevend ondertekend (bucket is privé, zie
 // supabase/2026-07-26_diversions_private.sql): een gedeelde link vervalt,
 // i.p.v. eeuwig te blijven werken voor ex-medewerkers.
 export const DIVERSION_URL_TTL_SEC = 60 * 60 * 12;
-/** Tijdelijke, ondertekende URL van één bijlage; undefined als het bestand er
- *  niet (meer) is. `legacy` leest de oude sleutel `<id>.pdf`. */
-export const ondertekenDiversionBijlage = async (diversionId: string, slot: number, legacy = false): Promise<string | undefined> => {
-  if (!db) return undefined;
-  try {
-    const { data } = await db.storage
-      .from(DIVERSIONS_BUCKET)
-      .createSignedUrl(legacy ? diversionLegacyPad(diversionId) : diversionBijlagePad(diversionId, slot), DIVERSION_URL_TTL_SEC);
-    return data?.signedUrl || undefined;
-  } catch {
-    return undefined;
+
+// --- Ondertekenen: één Storage-aanroep per lijst, 30 min onthouden (15-10) ---
+// GET /api/diversions ondertekende elke bijlage apart (createSignedUrl is één
+// HTTP-aanroep naar Supabase Storage per bestand), bij ELKE aanroep, voor alle
+// omleidingen, ook de verlopen. Op het Nano-project deelt die storm de
+// rekenkracht met PostgREST en Auth, en de poort van de boot wachtte op deze
+// route: in elke trage opstart van het snelheidsonderzoek (15-10) was dit de
+// langste call, 2 tot 6 s. Nu gaan alle paden in één `createSignedUrls`, en
+// elke URL blijft 30 min in het geheugen van de instantie (de URL zelf is
+// 12 u geldig, een hergebruikte heeft dus altijd nog ruim 11 u). Elke
+// schrijfactie op een bestand vergeet zijn pad; een mislukte ondertekening
+// wordt nooit onthouden, dus een verdwenen bestand valt bij de volgende
+// aanroep gewoon uit de lijst.
+const URL_CACHE_MS = 30 * 60_000;
+const URL_CACHE_MAX = 2000;
+const urlCache = new Map<string, { url: string; tot: number }>();
+
+/** Onthouden URL's vergeten: van deze paden, of alles zonder argument. */
+export const vergeetDiversionBijlageUrls = (paden?: string[]): void => {
+  if (!paden) {
+    urlCache.clear();
+    return;
   }
+  for (const pad of paden) urlCache.delete(pad);
+};
+
+/** Tijdelijke, ondertekende URL's voor een lijst paden (`<id>-<slot>.pdf` of
+ *  de oude `<id>.pdf`), pad → URL; een pad zonder bestand ontbreekt in het
+ *  antwoord. Eén Storage-aanroep voor wat niet in de cache zit. */
+export const ondertekenDiversionBijlagen = async (paden: string[], now: () => number = Date.now): Promise<Map<string, string>> => {
+  const uit = new Map<string, string>();
+  if (!db || paden.length === 0) return uit;
+  const t = now();
+  const ontbreekt: string[] = [];
+  for (const pad of new Set(paden)) {
+    const hit = urlCache.get(pad);
+    if (hit && hit.tot > t) uit.set(pad, hit.url);
+    else ontbreekt.push(pad);
+  }
+  if (ontbreekt.length === 0) return uit;
+  try {
+    const { data } = await db.storage.from(DIVERSIONS_BUCKET).createSignedUrls(ontbreekt, DIVERSION_URL_TTL_SEC);
+    for (const r of data ?? []) {
+      if (!r?.path || !r.signedUrl || r.error) continue;
+      uit.set(r.path, r.signedUrl);
+      if (urlCache.size >= URL_CACHE_MAX) urlCache.clear();
+      urlCache.set(r.path, { url: r.signedUrl, tot: t + URL_CACHE_MS });
+    }
+  } catch {
+    // Zoals vroeger per bestand: zonder URL valt de bijlage uit de lijst.
+  }
+  return uit;
+};
+
+/** Tijdelijke, ondertekende URL van één bijlage; undefined als het bestand er
+ *  niet (meer) is. `legacy` leest de oude sleutel `<id>.pdf`. Loopt door
+ *  dezelfde cache als de lijstvariant. */
+export const ondertekenDiversionBijlage = async (diversionId: string, slot: number, legacy = false): Promise<string | undefined> => {
+  const pad = legacy ? diversionLegacyPad(diversionId) : diversionBijlagePad(diversionId, slot);
+  return (await ondertekenDiversionBijlagen([pad])).get(pad);
 };
 
 /** De PDF zelf ophalen (voor de mailknop op een omleiding, PR 4); null als
