@@ -73,6 +73,8 @@ const CATEGORY_LABELS: Record<Categorie, string> = {
 };
 
 const PER_PAGINA = 50;
+/** Zoveel regels geeft GET /api/activity hoogstens per venster. */
+const LOG_MAX = 5000;
 /** Herhaalde acties van dezelfde persoon binnen dit venster vouwen samen. */
 const BUNDEL_VENSTER_MS = 10 * 60 * 1000;
 
@@ -806,6 +808,12 @@ export function ActivityLogView({ entries, logins = [], aanwezigheid = [], aanwe
                 </section>
               ))}
               <Paginering className="border-t border-hairline-subtle" totaal={bundels.length} perPagina={PER_PAGINA} pagina={huidigePagina} onPagina={setPagina} />
+              {/* De server geeft hoogstens 5000 regels (systeemRoutes, window=all
+                  of 30d); haalt een venster die grens, dan zegt het scherm dat
+                  in plaats van stil af te kappen (15-10). */}
+              {windowEntries !== null && windowEntries.length >= LOG_MAX && (
+                <p className="border-t border-hairline-subtle px-4 py-2.5 text-xs text-slate-500">Je ziet de {LOG_MAX} nieuwste regels van deze periode.</p>
+              )}
             </Card>
           ) : filterActief ? (
             <EmptyState

@@ -32,6 +32,21 @@ const mapUserDocumentRow = (row: any): UserDocumentRecord => ({
   openedAt: row.opened_at ?? null,
 });
 
+/**
+ * De links van een hele documentenlijst in één aanvraag bij Storage (15-10).
+ * Vroeger tekende de lijstroute elk document apart (één createSignedUrl per
+ * rij, bij elke lijst), wat met de maandelijkse loonbrieven blijft aangroeien;
+ * zelfde patroon als de omleidingen (#749). Geeft pad → URL; een pad dat
+ * Storage niet tekende (bestand weg) staat er niet in.
+ */
+export const ondertekenDocumenten = async (paden: string[], ttlSec: number): Promise<Map<string, string>> => {
+  const uniek = [...new Set(paden.filter(Boolean))];
+  if (uniek.length === 0) return new Map();
+  const { data, error } = await requireDb().storage.from(DOCUMENTS_BUCKET).createSignedUrls(uniek, ttlSec);
+  if (error) throw error;
+  return new Map((data ?? []).filter((d) => !d.error && d.path && d.signedUrl).map((d) => [String(d.path), String(d.signedUrl)]));
+};
+
 /** Alle documenten (userId undefined, admin-pad), of alleen die van één
  *  gebruiker. Een LEGE string is geen "alles" maar "niets" — fail-closed
  *  tegen een ontbrekende gebruikers-id op het aanroepende pad. */

@@ -2,6 +2,7 @@ import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileText, Trash2, Upload } from 'lucide-react';
 import type { User } from '../../types';
 import { Modal } from '../../components/Modal';
+import { ToonMeer, useToonMeer } from '../../components/ToonMeer';
 import { ModalHeader } from '../../components/ui';
 import { notify, openPdfInNewTab } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
@@ -29,6 +30,8 @@ const ACCEPT = '.pdf,.png,.jpg,.jpeg';
  */
 export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () => void }) {
   const [docs, setDocs] = useState<UserDocument[]>([]);
+  // Tien tegelijk, het nieuwste eerst (15-10): een loonbrief per maand.
+  const lijst = useToonMeer(docs, { sleutel: user?.id ?? '' });
   // Het document in de viewer: undefined = nog nooit geopend, null = gesloten.
   const [inViewer, setInViewer] = useState<UserDocument | null>();
   const [loading, setLoading] = useState(true);
@@ -139,7 +142,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
               <p className="p-4 text-sm text-slate-500">Nog geen documenten voor deze gebruiker.</p>
             ) : (
               <div className="divide-y divide-hairline-subtle">
-                {docs.map((doc) => (
+                {lijst.zichtbaar.map((doc) => (
                   <div key={doc.id} className="flex items-center gap-3 px-2 py-3">
                     <FileText size={18} className="text-slate-400 shrink-0" />
                     <div className="min-w-0 flex-1">
@@ -169,6 +172,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                     <IconButton label="Verwijderen" variant="danger" onClick={() => void handleDelete(doc)}><Trash2 size={16} /></IconButton>
                   </div>
                 ))}
+                <ToonMeer woord="oudere" getoond={lijst.getoond} totaal={lijst.totaal} volgende={lijst.volgende} onMeer={lijst.meer} />
               </div>
             )}
           </div>

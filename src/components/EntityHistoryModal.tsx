@@ -8,6 +8,7 @@ import { Card } from './Card';
 import { Skeleton } from './Skeleton';
 import { EmptyState, ModalHeader } from './ui';
 import { MicroLabel, microLabelClass } from './primitives';
+import { ToonMeer, useToonMeer } from './ToonMeer';
 
 /**
  * Toon de volledige wijzigingsgeschiedenis van één specifieke entity
@@ -35,6 +36,8 @@ export function EntityHistoryModal({
 }) {
   const [entries, setEntries] = useState<ActivityLogEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Twintig regels tegelijk (15-10): de server geeft er tot 200.
+  const lijst = useToonMeer(entries ?? [], { stap: 20, sleutel: `${entityType}:${entityId}` });
 
   useEffect(() => {
     if (!open) return;
@@ -84,7 +87,7 @@ export function EntityHistoryModal({
 
               {entries && entries.length > 0 && (
                 <ol className="relative space-y-3 border-l-2 border-hairline pl-5">
-                  {entries.map((entry, i) => (
+                  {lijst.zichtbaar.map((entry, i) => (
                     <li key={entry.id} className="relative">
                       <span className={cn(
                         'absolute -left-[1.65rem] top-2 w-3 h-3 rounded-full ring-4 ring-paper',
@@ -112,6 +115,7 @@ export function EntityHistoryModal({
                   ))}
                 </ol>
               )}
+              {entries && <ToonMeer los woord="oudere" className="mt-4 rounded-2xl" getoond={lijst.getoond} totaal={lijst.totaal} volgende={lijst.volgende} onMeer={lijst.meer} />}
             </div>
       </div>
     </Modal>
