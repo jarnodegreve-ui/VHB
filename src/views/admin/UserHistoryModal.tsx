@@ -81,7 +81,8 @@ export function UserHistoryModal({
         <div className="grid grid-cols-3 gap-3">
           <Stat label="Diensten" value={allShifts.length} sub={`${upcomingShifts.length} komende`} />
           <Stat label="Verlof" value={approvedLeaveCount} sub="goedgekeurd" />
-          <Stat label="Dienstruilen" value={ruilLijst.totaal ?? lokaleRuilen.length} sub="totaal" />
+          {/* Zonder archief geen totaal: laden is "…", een laadfout "—", nooit het venster alleen als totaal. */}
+          <Stat label="Dienstruilen" value={ruilLijst.totaal ?? (ruilArchief.fout ? '—' : '…')} sub={ruilLijst.totaal === null && ruilArchief.fout ? 'niet geladen' : 'totaal'} />
         </div>
 
         {/* Verlof */}
@@ -110,7 +111,12 @@ export function UserHistoryModal({
         <section className="space-y-3">
           <h5 className={microLabelClass}>Dienstruilen dit jaar</h5>
           {userSwaps.length === 0 ? (
-            <p className="text-sm text-slate-500">{ruilArchief.totaal === null && ruilArchief.bezig ? 'Laden…' : `Geen dienstruilen in ${currentYear}.`}</p>
+            // Een laadfout is nooit "geen dienstruilen": de knop vraagt opnieuw.
+            ruilLijst.leeg === 'fout' ? (
+              <ToonMeer los woord="oudere" className="rounded-2xl" getoond={0} totaal={null} volgende={ruilLijst.volgende} onMeer={ruilLijst.meer} bezig={ruilLijst.bezig} fout />
+            ) : (
+              <p className="text-sm text-slate-500">{ruilLijst.leeg === 'laden' ? 'Laden…' : `Geen dienstruilen in ${currentYear}.`}</p>
+            )
           ) : (
             <div className="space-y-2">
               {userSwaps.map((s) => {

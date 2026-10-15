@@ -7,10 +7,13 @@
  * hebben (een doorgevoerde wissel van een dag die nog komt) zitten er altijd
  * in.
  *
- * Eén regel voor de query (api/_lib/opslag/ruilen.ts zet ze om in een filter),
- * het vangnet in de route en de testen. Alleen wat naar de app gaat volgt het
- * venster: de controles bij het goedkeuren (dubbele inplanning, rust, de
- * heropbouw) lezen nog altijd elke ruil.
+ * Eén regel. Voor staf staat ze als filter in de query
+ * (api/_lib/opslag/ruilen.ts) en is die query de enige maat: de lijst, de
+ * revisie en het opslaan lezen hetzelfde venster uit de database, en het
+ * archief is daar het exacte complement van (ook bij lege kolommen). In JS
+ * geldt ze voor de ruilen van een chauffeur en in de testen. Alleen wat naar
+ * de app gaat volgt het venster: de controles bij het goedkeuren (dubbele
+ * inplanning, rust, de heropbouw) lezen nog altijd elke ruil.
  */
 
 /** Hoeveel volle maanden vóór de huidige maand in het venster zitten. */
@@ -34,22 +37,26 @@ export function ruilVensterGrens(vandaag: string, maanden = RUIL_VENSTER_MAANDEN
 export type RuilVoorVenster = {
   status: string;
   createdAt?: string | null;
+  decidedAt?: string | null;
   shiftDate?: string | null;
   returnDate?: string | null;
 };
 
 /**
- * Hoort deze ruil in het venster? Open, of aangemaakt, of met een dienst of
- * tegenprestatie op of na de grens. ISO-teksten vergelijken als tekst
+ * Hoort deze ruil in het venster? Open, of aangemaakt, beslist, of met een
+ * dienst of tegenprestatie op of na de grens. Het beslismoment telt mee
+ * (tegenlezing 15-10): een oude aanvraag die de planner vandaag afwijst,
+ * blijft zo bovenaan bij Afgehandeld staan in plaats van meteen naar het
+ * archief te verhuizen. ISO-teksten vergelijken als tekst
  * ('2026-07-01T08:00…' ≥ '2026-07-01'), net als de query.
  */
 export function ruilInVenster(swap: RuilVoorVenster, grens: string): boolean {
   if ((OPEN_RUIL_STATUSSEN as readonly string[]).includes(String(swap.status))) return true;
   const vanafGrens = (waarde?: string | null) => !!waarde && String(waarde) >= grens;
-  return vanafGrens(swap.createdAt) || vanafGrens(swap.shiftDate) || vanafGrens(swap.returnDate);
+  return vanafGrens(swap.createdAt) || vanafGrens(swap.decidedAt) || vanafGrens(swap.shiftDate) || vanafGrens(swap.returnDate);
 }
 
-export type RuilVoorArchief = RuilVoorVenster & { id: string; decidedAt?: string | null };
+export type RuilVoorArchief = RuilVoorVenster & { id: string };
 
 /**
  * Volgorde van het archief, gelijk aan de query: het beslismoment, het

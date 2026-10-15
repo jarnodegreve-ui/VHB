@@ -34,11 +34,13 @@ const OPEN_IN = `(${OPEN_RUIL_STATUSSEN.join(",")})`;
 
 /**
  * Het venster van shared/ruilVenster.ts (15-10) als query: wat open staat, of
- * aangemaakt is, of een dienst of tegenprestatie heeft op of na `grens`. Dit
- * is wat GET /api/swaps aan staf geeft, zodat de opstart niet met de
- * historiek mee groeit; de route legt `ruilInVenster` er nog eens over als
- * vangnet. Kolommen zijn lowercase/snake_case (zie toDatabaseSwap); de datums
- * staan er als ISO-tekst, dus `gte` vergelijkt zoals de regel in JS.
+ * aangemaakt, beslist of met een dienst of tegenprestatie op of na `grens`.
+ * Voor staf is dit de enige maat van het venster: GET /api/swaps, de revisie
+ * en POST /api/swaps lezen allemaal deze query, zonder er in JS nog iets over
+ * te leggen. Een tweede filter in JS vergelijkt tekst anders dan de database
+ * (sortering, een lege kolom) en gaf dan een revisie die nooit meer klopte
+ * (tegenlezing 15-10). Kolommen zijn lowercase/snake_case (zie
+ * toDatabaseSwap); de datums staan er als ISO-tekst.
  */
 export const getSwapsVenster = async (grens: string) => {
   const client = requireDb();
@@ -46,7 +48,7 @@ export const getSwapsVenster = async (grens: string) => {
   const rows = await paginatedFetch((from, to, telling) => client
     .from('swaps')
     .select('*', telling)
-    .or(`status.in.${OPEN_IN},createdat.gte.${g},shift_date.gte.${g},return_date.gte.${g}`)
+    .or(`status.in.${OPEN_IN},createdat.gte.${g},decidedat.gte.${g},shift_date.gte.${g},return_date.gte.${g}`)
     .order('id', { ascending: true })
     .range(from, to));
   return rows.map(toPublicSwap);
@@ -62,11 +64,19 @@ export type SwapArchiefFilter = {
   sinds?: string;
 };
 
-/** Het archief: precies wat níet in het venster zit. Eén `or` met een
+/** Het archief: precies wat níet in het venster zit, de ontkenning van elk
+ *  deel van het venster, met een lege kolom aan de kant van het archief (een
+ *  lege status of datum valt in SQL nooit in het venster). Eén `or` met een
  *  geneste `and`, want PostgREST kent per niveau één `or`. */
-const archiefQuery = (f: SwapArchiefFilter, kolommen: string, opties?: { count: 'exact' }) => {
+const archiefQuery = (f: SwapArchiefFilter, kolommen: string, opties?: { count: 'exact'; head?: boolean }) => {
   const g = orWaarde(f.grens);
-  const delen = [`or(shift_date.is.null,shift_date.lt.${g})`, `or(return_date.is.null,return_date.lt.${g})`];
+  const delen = [
+    `or(status.is.null,status.not.in.${OPEN_IN})`,
+    `or(createdat.is.null,createdat.lt.${g})`,
+    `or(decidedat.is.null,decidedat.lt.${g})`,
+    `or(shift_date.is.null,shift_date.lt.${g})`,
+    `or(return_date.is.null,return_date.lt.${g})`,
+  ];
   if (f.persoonId) {
     const p = orWaarde(f.persoonId);
     delen.push(`or(requesterid.eq.${p},targetdriverid.eq.${p})`);
@@ -74,8 +84,6 @@ const archiefQuery = (f: SwapArchiefFilter, kolommen: string, opties?: { count: 
   let q = requireDb()
     .from('swaps')
     .select(kolommen, opties)
-    .not('status', 'in', OPEN_IN)
-    .lt('createdat', f.grens)
     .or(`and(${delen.join(',')})`);
   if (f.aanvragerId) q = q.eq('requesterid', f.aanvragerId);
   if (f.sinds) q = q.gte('createdat', f.sinds);
@@ -83,13 +91,21 @@ const archiefQuery = (f: SwapArchiefFilter, kolommen: string, opties?: { count: 
 };
 
 /** Eén pagina van het archief, het jongste beslismoment eerst (zoals
- *  `archiefVolgorde`), met het totaal van het hele archief in dezelfde vraag. */
+ *  `archiefVolgorde`), met het totaal van het hele archief in dezelfde vraag.
+ *  Een pagina voorbij het einde (het archief kromp, bv. na een herstel)
+ *  weigert PostgREST met 416 (PGRST103); dat is een lege pagina met het
+ *  actuele totaal, geen fout, zodat het scherm opnieuw van voren begint. */
 export const getSwapsArchief = async (f: SwapArchiefFilter & { vanaf: number; aantal: number }) => {
   const { data, error, count } = await archiefQuery(f, '*', { count: 'exact' })
     .order('decidedat', { ascending: false, nullsFirst: false })
     .order('createdat', { ascending: false })
     .order('id', { ascending: false })
     .range(f.vanaf, f.vanaf + f.aantal - 1);
+  if (error && (error as { code?: string }).code === 'PGRST103') {
+    const telling = await archiefQuery(f, 'id', { count: 'exact', head: true });
+    if (telling.error) throw telling.error;
+    return { ruilen: [], totaal: telling.count ?? 0 };
+  }
   if (error) throw error;
   return { ruilen: ((data ?? []) as any[]).map(toPublicSwap), totaal: count ?? 0 };
 };

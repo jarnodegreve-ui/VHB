@@ -183,7 +183,14 @@ import zlib from 'node:zlib';
 // persoon bij Afgehandeld en het opzoeken van een oude ruil via een link
 // (±0,4 kB). Geen nieuwe dependency. Lokaal 736,41 → 737,82; budget = die
 // meting plus de ±0,5 kB van de runner en ±1,5 kB marge.
-const BUDGET_KB = 740;
+// 15-10 (tegenlezing van het archief): 740 → 741. useArchief kreeg een
+// generatieteller, een herstart als het archief onder de lijst verschuift en
+// een `leeg`-toestand (laden, fout, leeg); Dienstruil en de historiek in
+// Gebruikers tonen bij een laadfout "Opnieuw proberen" in plaats van "leeg",
+// en een link naar een ruil die niet laadt een Foutkaart. Geen nieuwe
+// dependency. Lokaal 737,82 → 738,45; budget = die meting plus de ±0,5 kB
+// van de runner en ±2 kB marge voor de rest van deze reeks.
+const BUDGET_KB = 741;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -556,6 +563,13 @@ if (!kaartMatch) {
   // LCP + 2 s. Budget = de meting plus ±1 kB.
   WARMUP_BUDGET_KB.chauffeur = 82.5;
   WARMUP_BUDGET_KB.staf = 150.5;
+  // 15-10 (tegenlezing van het archief, zie BUDGET_KB): chauffeur 82,5 →
+  // 83,5 en staf 150,5 → 151,5. src/lib/archief.ts en Dienstruil zitten in
+  // beide sets. Lokaal chauffeur 81,68 → 82,27 en staf 149,53 → 150,11; de
+  // CI-runner meet ±0,5 kB zwaarder. Geen nieuwe dependency; de warmup start
+  // pas na LCP + 2 s. Budget = de meting plus ±1 kB.
+  WARMUP_BUDGET_KB.chauffeur = 83.5;
+  WARMUP_BUDGET_KB.staf = 151.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

@@ -99,3 +99,33 @@ test('een link naar een ruil die de server niet kent, geeft de nette melding', a
   await page.goto('/dienstruil/bestaat-niet');
   await expect(page.getByText('Deze dienstruil is niet beschikbaar')).toBeVisible();
 });
+
+test('chauffeur: lukt het archief niet, dan nooit "Nog geen ruilverzoeken" maar Opnieuw proberen', async ({ page }) => {
+  await seed(page, { user: CHAUFFEUR, view: 'ruil-verzoeken', extra: (p) => (p.endsWith('/api/swaps') ? [] : undefined) });
+  let mislukt = true;
+  const oud = ruil('a0', 120, 4101, { requesterId: '42', targetDriverId: '43' });
+  await page.route('**/api/swaps/archief**', (route) => (mislukt
+    ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'stuk' }) })
+    : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ruilen: [oud], totaal: 1, grens: '2026-07-01' }) })));
+  await page.goto('/dienstruil');
+  await expect(knop(page, /^Opnieuw proberen/)).toBeVisible();
+  await expect(page.getByText('Nog geen ruilverzoeken')).toHaveCount(0);
+  mislukt = false;
+  await knop(page, /^Opnieuw proberen/).click();
+  await expect(rijenVan(page, 'Mijn verzoeken')).toHaveCount(1);
+});
+
+test('een link naar een ruil waarop de server faalt, is een laadfout met Opnieuw proberen, niet "niet beschikbaar"', async ({ page }) => {
+  const oud = ruil('oud-1', 200, 4201, { requesterId: '42', targetDriverId: '43' });
+  await seed(page, { user: CHAUFFEUR, view: 'ruil-verzoeken', extra: (p) => (p.endsWith('/api/swaps') ? [] : undefined) });
+  let mislukt = true;
+  await page.route('**/api/swaps/oud-1', (route) => (mislukt
+    ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'stuk' }) })
+    : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(oud) })));
+  await page.goto('/dienstruil/oud-1');
+  await expect(page.getByText('Deze dienstruil kon niet geladen worden')).toBeVisible();
+  await expect(page.getByText('Deze dienstruil is niet beschikbaar')).toHaveCount(0);
+  mislukt = false;
+  await page.getByRole('button', { name: 'Opnieuw proberen', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Dienstruil', exact: true })).toBeVisible();
+});

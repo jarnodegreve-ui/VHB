@@ -2183,11 +2183,10 @@ describe('dienstruil: het venster en het archief (15-10)', () => {
     mem.swaps = [...mem.swaps, OUD, OUDER, OUD_MAAR_KOMEND, OUD_OPEN];
   });
 
-  it('staf krijgt het venster (open of recent), met de grens in een kop', async () => {
+  it('staf krijgt het venster (open of recent)', async () => {
     const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
     expect(res.status).toBe(200);
     expect(res.json.map((s: any) => s.id).sort()).toEqual(['s-1', 's-2', 's-komend', 's-open']);
-    expect(res.headers.get('x-vhb-venster-vanaf')).toBe('2026-03-01');
   });
 
   it('een chauffeur krijgt alleen zijn eigen ruilen in het venster', async () => {
@@ -2279,10 +2278,42 @@ describe('dienstruil: het venster en het archief (15-10)', () => {
     expect(vreemd.json).toEqual(weg.json);
   });
 
-  it('de revisie na een beslissing gaat over het venster, zodat een volgende lijst-save niet botst', async () => {
-    const patch = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+  it('de revisie na een beslissing van staf gaat over het venster, zodat een volgende lijst-save niet botst', async () => {
+    const patch = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'pending' } });
     expect(patch.status).toBe(200);
     const venster = await api('GET', '/api/swaps', { token: 'tok-planner' });
     expect(patch.headers.get('x-collection-revision')).toBe(venster.headers.get('x-collection-revision'));
+    const save = await api('POST', '/api/swaps', {
+      token: 'tok-planner',
+      body: venster.json.map(({ verloop: _v, rust: _r, ...s }: any) => s),
+      headers: { 'x-collection-revision': patch.headers.get('x-collection-revision')! },
+    });
+    expect(save.status).toBe(200);
+  });
+
+  it('een chauffeur krijgt na een beslissing geen revisie: alleen de lijst-save van staf kent die controle', async () => {
+    const patch = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+    expect(patch.status).toBe(200);
+    expect(patch.headers.get('x-collection-revision')).toBeNull();
+  });
+
+  it('een oude aanvraag die staf vandaag afwijst, blijft in het venster (het beslismoment telt mee)', async () => {
+    mem.swaps.push({ id: 's-oud-open', shiftId: 'sh-z', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-01-02T08:00:00Z', shiftDate: '2026-01-20', shiftLine: '16' });
+    const patch = await api('PATCH', '/api/swaps/s-oud-open', { token: 'tok-planner', body: { status: 'rejected', ifStatus: 'pending' } });
+    expect(patch.status).toBe(200);
+    const venster = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(venster.json.map((s: any) => s.id)).toContain('s-oud-open');
+    const archief = await api('GET', '/api/swaps/archief', { token: 'tok-planner' });
+    expect(archief.json.ruilen.map((s: any) => s.id)).not.toContain('s-oud-open');
+  });
+
+  it('GET /api/swaps/:id weigert een id met tekens die het filter breken, en geeft alleen precies dat id', async () => {
+    for (const id of ['x","s-oud', 's-oud)', 'a,b']) {
+      const res = await api('GET', `/api/swaps/${encodeURIComponent(id)}`, { token: 'tok-planner' });
+      expect(res.status).toBe(404);
+    }
+    const goed = await api('GET', '/api/swaps/s-oud', { token: 'tok-planner' });
+    expect(goed.status).toBe(200);
+    expect(goed.json.id).toBe('s-oud');
   });
 });

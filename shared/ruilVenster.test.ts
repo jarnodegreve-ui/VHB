@@ -35,6 +35,11 @@ describe('ruilInVenster', () => {
     expect(ruilInVenster({ status: 'completed', createdAt: '2026-01-01T08:00:00Z', shiftDate: '2026-02-01', returnDate: '2026-08-01' }, grens)).toBe(true);
   });
 
+  it('afgehandeld: beslist op of na de grens (een oude aanvraag die vandaag afgewezen werd)', () => {
+    expect(ruilInVenster({ status: 'rejected', createdAt: '2026-03-01T08:00:00Z', shiftDate: '2026-03-20', decidedAt: '2026-10-15T09:00:00Z' }, grens)).toBe(true);
+    expect(ruilInVenster({ status: 'rejected', createdAt: '2026-03-01T08:00:00Z', shiftDate: '2026-03-20', decidedAt: '2026-06-30T22:00:00Z' }, grens)).toBe(false);
+  });
+
   it('afgehandeld en alles vóór de grens: archief', () => {
     expect(ruilInVenster({ status: 'rejected', createdAt: '2026-06-30T23:59:59Z', shiftDate: '2026-06-30' }, grens)).toBe(false);
     expect(ruilInVenster({ status: 'cancelled', createdAt: '2026-01-01T08:00:00Z', shiftDate: null, returnDate: null }, grens)).toBe(false);

@@ -107,6 +107,7 @@ describe('ruilen: venster en archief', () => {
     { ...basis, id: 'recent', status: 'rejected' as const, createdAt: '2026-03-01T00:30:00.000Z', decidedAt: '2026-03-02T08:00:00.000Z', shiftDate: '2026-02-20' },
     { ...basis, id: 'komend', status: 'completed' as const, createdAt: '2026-01-05T08:00:00.000Z', decidedAt: '2026-01-06T08:00:00.000Z', shiftDate: '2026-07-05' },
     { ...basis, id: 'terug-komend', status: 'completed' as const, createdAt: '2026-01-05T09:00:00.000Z', decidedAt: '2026-01-06T09:00:00.000Z', shiftDate: '2026-01-20', returnDate: '2026-03-04', returnCode: '2502' },
+    { ...basis, id: 'laat-beslist', status: 'rejected' as const, createdAt: '2026-01-20T08:00:00.000Z', decidedAt: '2026-03-05T08:00:00.000Z', shiftDate: '2026-01-25' },
     { ...basis, id: 'oud', status: 'rejected' as const, createdAt: '2026-01-10T08:00:00.000Z', decidedAt: '2026-01-11T08:00:00.000Z', shiftDate: '2026-01-20' },
     { ...basis, id: 'oud-zonder-datum', status: 'cancelled' as const, createdAt: '2026-02-27T08:00:00.000Z' },
     { ...basis, id: 'ouder', requesterId: 'c3', targetDriverId: 'c1', status: 'cancelled' as const, createdAt: '2025-12-01T08:00:00.000Z', decidedAt: '2025-12-02T08:00:00.000Z', shiftDate: '2025-12-10' },
@@ -115,7 +116,7 @@ describe('ruilen: venster en archief', () => {
   it('het venster is precies wat de regel in JS zegt, en het archief de rest', async () => {
     await voegSwapsToe(ruilen);
     const venster = (await getSwapsVenster(GRENS)).map((s) => s.id).sort();
-    expect(venster).toEqual(['komend', 'open-oud', 'recent', 'terug-komend']);
+    expect(venster).toEqual(['komend', 'laat-beslist', 'open-oud', 'recent', 'terug-komend']);
     expect(venster).toEqual(ruilen.filter((r) => ruilInVenster(r, GRENS)).map((r) => r.id).sort());
     const { ruilen: archief, totaal } = await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 10 });
     expect(totaal).toBe(3);
@@ -132,5 +133,18 @@ describe('ruilen: venster en archief', () => {
     const sinds = await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 10, sinds: '2026-01-01' });
     expect(sinds.ruilen.map((s) => s.id)).toEqual(['oud', 'oud-zonder-datum']);
     expect((await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 1, persoonId: 'c2' })).totaal).toBe(2);
+  });
+
+  it('een pagina voorbij het einde is leeg, met het actuele totaal (geen fout)', async () => {
+    await voegSwapsToe(ruilen);
+    expect(await getSwapsArchief({ grens: GRENS, vanaf: 50, aantal: 10 })).toEqual({ ruilen: [], totaal: 3 });
+    expect(await getSwapsArchief({ grens: GRENS, vanaf: 3, aantal: 10 })).toEqual({ ruilen: [], totaal: 3 });
+  });
+
+  it('venster en archief samen zijn elke ruil precies één keer', async () => {
+    await voegSwapsToe(ruilen);
+    const venster = (await getSwapsVenster(GRENS)).map((s) => s.id);
+    const archief = (await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 50 })).ruilen.map((s) => s.id);
+    expect([...venster, ...archief].sort()).toEqual((await getSwapsData()).map((s) => s.id).sort());
   });
 });
