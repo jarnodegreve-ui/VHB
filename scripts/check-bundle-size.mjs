@@ -166,8 +166,9 @@ import zlib from 'node:zlib';
 // Geladen-vlaggen en hun laadpaden in de datalaag, de laadstand op het
 // dashboard, de cockpit en Vandaag, en de Foutkaart in drie lijstschermen;
 // geen nieuwe dependency. Lokaal 733 → 734 (de index +0,41 kB, zie onder),
-// de CI meet ±0,5 kB zwaarder, dus 734 viel daar om.
-const BUDGET_KB = 735;
+// de CI meet ±0,5 kB zwaarder, dus 734 viel daar om. De CI mat daarna
+// precies 735: 736 = die meting plus ±0,5 kB (afronding op de grens).
+const BUDGET_KB = 736;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -513,6 +514,15 @@ if (!kaartMatch) {
   // chauffeur-grens van 79 nipt passeren). Geen nieuwe dependency; de warmup
   // start pas na LCP + 2 s. Staf blijft op 148.
   WARMUP_BUDGET_KB.chauffeur = 79.5;
+  // 15-10 (snelheid, punt 3: de poort zonder omleidingen): chauffeur
+  // 79,5 → 80,5 en staf 148 → 148,5. De index droeg +0,41 kB (drie
+  // Geladen-vlaggen, hun laadpaden, de skelet-gate), het dashboard een
+  // skeletrij en de laadstand van de omleidingentegel, Omleidingen de
+  // Foutkaart met useCollectieStaat. Lokaal chauffeur 79 → 79,4 en staf
+  // 147 → 147,6 (afgerond 79 en 148); de CI mat 80 en 148, op of over de
+  // grens. Beide budgetten = de CI-meting plus ±0,5 kB.
+  WARMUP_BUDGET_KB.chauffeur = 80.5;
+  WARMUP_BUDGET_KB.staf = 148.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {
