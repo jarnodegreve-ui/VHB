@@ -27,7 +27,7 @@ import { valideerLijst, valideerRecord } from "./valideer.js";
 import { recordRevisionOf, withRecordRevision, requestedRecordRevision, verwerkDiversionsOpslag, verwerkUpdatesOpslag } from "./recordWrites.js";
 import { bijlagenUitKolom, omleidingBijlagen } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { DienstregelingOnbekend, MigratieOntbreektError, getDienstregelingen, getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlage, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
+import { DienstregelingOnbekend, MigratieOntbreektError, getDienstregelingen, getDiversionsData, getServicesData, getUpdatesData, getUpdateReadCounts, getUpdateReadIdsForUser, getUsersData, logActivity, markUpdatesRead, saveServicesData, uploadUpdateBijlage, verwijderUpdateBijlage, ondertekenUpdateBijlage, zetUpdateBijlagen, uploadDiversionBijlage, verwijderDiversionBijlage, verwijderDiversionLegacyBijlage, verplaatsDiversionLegacyBijlage, ondertekenDiversionBijlagen, diversionBijlagePad, diversionLegacyPad, zetDiversionBijlagen, summarizeServiceChanges, diffServiceChanges } from "../storage.js";
 import { COLLECTION_REVISION_HEADER, detectMassDelete, isPlainRecord, massDeleteResponse, newRecordId, recordConflictResponse, recordRevisionMissingResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { herstelBewezen, herstelOmleidingBijlagen, herstelUpdateBijlagen } from "./bijlagenHerstel.js";
 
@@ -45,22 +45,28 @@ import { herstelBewezen, herstelOmleidingBijlagen, herstelUpdateBijlagen } from 
 /** Elke bijlage een verse, ondertekende URL geven; wat niet te ondertekenen
  *  is (bestand weg) valt uit de lijst in plaats van als dode link mee te
  *  gaan. De marker "pdfUrl" verlaat de server nooit. */
-const metOndertekendeOmleidingBijlagen = async (diversions: any[]): Promise<any[]> =>
-  Promise.all(
-    diversions.map(async (d: any) => {
-      const { pdfUrl: _marker, bijlagen: _kolom, ...rest } = d ?? {};
-      if (!d?.id) return rest;
-      const bijlagen = (
-        await Promise.all(
-          omleidingBijlagen(d).map(async ({ legacy, ...b }) => {
-            const url = await ondertekenDiversionBijlage(String(d.id), b.slot, Boolean(legacy));
-            return url ? { ...b, url } : null;
-          }),
-        )
-      ).filter(Boolean);
-      return bijlagen.length > 0 ? { ...rest, bijlagen } : rest;
-    }),
-  );
+const metOndertekendeOmleidingBijlagen = async (diversions: any[]): Promise<any[]> => {
+  // Eén Storage-aanroep voor alle bijlagen van alle omleidingen (en meestal
+  // geen: de URL's staan 30 min in de cache van de instantie), zie
+  // ondertekenDiversionBijlagen in opslag/omleidingen.ts. Tot 15-10 was dit
+  // één aanroep per bestand, bij elke boot van elke gebruiker.
+  const perRecord = diversions.map((d: any) => ({
+    d,
+    bijlagen: d?.id
+      ? omleidingBijlagen(d).map(({ legacy, ...b }) => ({ ...b, pad: legacy ? diversionLegacyPad(String(d.id)) : diversionBijlagePad(String(d.id), b.slot) }))
+      : [],
+  }));
+  const urls = await ondertekenDiversionBijlagen(perRecord.flatMap((r) => r.bijlagen.map((b) => b.pad)));
+  return perRecord.map(({ d, bijlagen }) => {
+    const { pdfUrl: _marker, bijlagen: _kolom, ...rest } = d ?? {};
+    if (!d?.id) return rest;
+    const metUrl = bijlagen.flatMap(({ pad, ...b }) => {
+      const url = urls.get(pad);
+      return url ? [{ ...b, url }] : [];
+    });
+    return metUrl.length > 0 ? { ...rest, bijlagen: metUrl } : rest;
+  });
+};
 
 /**
  * Bij het schrijven van een omleiding komen de bijlagen nooit van de client:

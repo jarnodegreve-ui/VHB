@@ -758,6 +758,9 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       const pad = legacy ? `${id}.pdf` : `${id}-${slot}.pdf`;
       return mem.opslag.has(`diversions/${pad}`) ? `https://opslag.test/diversions/${pad}?sig=test` : undefined;
     },
+    ondertekenDiversionBijlagen: async (paden: string[]) =>
+      new Map(paden.filter((pad) => mem.opslag.has(`diversions/${pad}`)).map((pad) => [pad, `https://opslag.test/diversions/${pad}?sig=test`])),
+    vergeetDiversionBijlageUrls: () => {},
     zetDiversionBijlagen: async (id: string, bijlagen: any[]) => {
       const d = mem.diversions.find((x: any) => String(x.id) === String(id));
       if (!d) return;

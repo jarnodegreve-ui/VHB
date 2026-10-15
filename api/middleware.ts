@@ -10,6 +10,7 @@ import { getOnderhoud } from "./_lib/onderhoud.js";
 import { beslisSchrijfblok, isSchrijfmethode, ONDERHOUD_FOUT } from "./_lib/onderhoudRegels.js";
 import { bijUsersCacheWissel, epochStand, getUsersCached, invalidateUsersCache } from "./userCache.js";
 import { maakSwrCache, SWR_STALE_MS } from "./_lib/swrCache.js";
+import { markeer } from "./_lib/serverTiming.js";
 import { isStafRol } from "./types.js";
 import type { AppUser, AppUserIntern, AuthenticatedRequest, Role } from "./types.js";
 import { heeftRol } from "../shared/toegang.js";
@@ -248,10 +249,15 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     return res.status(401).json({ error: "Niet aangemeld." });
   }
 
+  // Tussentijden voor de [traag]-regel (_lib/serverTiming.ts): tot hier =
+  // rate-limiter en body-parsing, dan token, profiel en toestel; de rest is
+  // de route zelf.
+  markeer(res, "limiet");
   // Token-validatie: lokaal (getClaims/JWKS) met getUser als fallback — zie
   // verifieerToken. 401 = token zelf ongeldig/verlopen (client logt uit),
   // 503 = auth-dienst onbereikbaar (client houdt zijn sessie).
   const check = await verifieerToken(accessToken);
+  markeer(res, "auth");
   if (check.ok === false) {
     if (check.status === 401) return res.status(401).json({ error: "Ongeldige sessie." });
     return res.status(503).json({ error: "Aanmeldcontrole is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "auth_unavailable" });
@@ -259,6 +265,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   const authUser = { id: check.id, email: check.email ?? undefined };
 
   const gevonden = await findAppUser({ id: check.id, email: check.email });
+  markeer(res, "profiel");
   if (gevonden === "koppeling") {
     return res.status(403).json({ error: "Dit profiel is aan een andere aanmelding gekoppeld. Neem contact op met de planning." });
   }
@@ -376,6 +383,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   req.appUser = appUser;
   req.aal = check.aal;
   registreerAanwezigheid(appUser, req.headers);
+  markeer(res, "toestel");
   next();
 };
 
