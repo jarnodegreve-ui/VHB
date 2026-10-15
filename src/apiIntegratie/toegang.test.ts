@@ -1202,7 +1202,8 @@ describe('toestel-whitelist', () => {
       await api('GET', '/api/me', {}),
       await api('GET', '/api/health', {}),
     ]) {
-      expect(res.headers.get('server-timing')).toMatch(/^app;dur=\d+$/);
+      // Sinds 15-10 volgen na het totaal de stappen van authenticate (limiet, auth, …).
+      expect(res.headers.get('server-timing')).toMatch(/^app;dur=\d+(, [a-z]+;dur=\d+)*$/);
     }
   });
 

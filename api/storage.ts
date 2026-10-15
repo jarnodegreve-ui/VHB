@@ -98,6 +98,8 @@ export {
   verplaatsDiversionLegacyBijlage,
   DIVERSION_URL_TTL_SEC,
   ondertekenDiversionBijlage,
+  ondertekenDiversionBijlagen,
+  vergeetDiversionBijlageUrls,
   downloadDiversionBijlage,
   zetDiversionBijlagen,
   bestaandeDiversionBijlagen,
