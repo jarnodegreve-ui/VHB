@@ -2,6 +2,7 @@ import type { ShiftRecord, SwapRecord } from "../../types.js";
 import { toDatabaseSwap, toPublicSwap } from "../../helpers.js";
 import { IN_FILTER_MAX, inStukken, verwijderInStukken } from "./activiteit.js";
 import { paginatedFetch, requireDb } from "./basis.js";
+import { OPEN_RUIL_STATUSSEN } from "../../../shared/ruilVenster.js";
 
 // --- Swaps ---
 
@@ -26,6 +27,71 @@ export const getSwapsData = async (filters?: { betrokkenUserId?: string }) => {
     return q.order('id', { ascending: true }).range(from, to);
   });
   return rows.map(toPublicSwap);
+};
+
+/** `(pending,accepted,approved)` voor een `in`-filter. */
+const OPEN_IN = `(${OPEN_RUIL_STATUSSEN.join(",")})`;
+
+/**
+ * Het venster van shared/ruilVenster.ts (15-10) als query: wat open staat, of
+ * aangemaakt is, of een dienst of tegenprestatie heeft op of na `grens`. Dit
+ * is wat GET /api/swaps aan staf geeft, zodat de opstart niet met de
+ * historiek mee groeit; de route legt `ruilInVenster` er nog eens over als
+ * vangnet. Kolommen zijn lowercase/snake_case (zie toDatabaseSwap); de datums
+ * staan er als ISO-tekst, dus `gte` vergelijkt zoals de regel in JS.
+ */
+export const getSwapsVenster = async (grens: string) => {
+  const client = requireDb();
+  const g = orWaarde(grens);
+  const rows = await paginatedFetch((from, to, telling) => client
+    .from('swaps')
+    .select('*', telling)
+    .or(`status.in.${OPEN_IN},createdat.gte.${g},shift_date.gte.${g},return_date.gte.${g}`)
+    .order('id', { ascending: true })
+    .range(from, to));
+  return rows.map(toPublicSwap);
+};
+
+export type SwapArchiefFilter = {
+  grens: string;
+  /** Alleen de aanvragen van deze persoon (Mijn verzoeken). */
+  aanvragerId?: string;
+  /** Alleen ruilen waar deze persoon aanvrager óf collega is (staf, filter per persoon). */
+  persoonId?: string;
+  /** Alleen ruilen aangemaakt op of na deze dag (historiek van één jaar). */
+  sinds?: string;
+};
+
+/** Het archief: precies wat níet in het venster zit. Eén `or` met een
+ *  geneste `and`, want PostgREST kent per niveau één `or`. */
+const archiefQuery = (f: SwapArchiefFilter, kolommen: string, opties?: { count: 'exact' }) => {
+  const g = orWaarde(f.grens);
+  const delen = [`or(shift_date.is.null,shift_date.lt.${g})`, `or(return_date.is.null,return_date.lt.${g})`];
+  if (f.persoonId) {
+    const p = orWaarde(f.persoonId);
+    delen.push(`or(requesterid.eq.${p},targetdriverid.eq.${p})`);
+  }
+  let q = requireDb()
+    .from('swaps')
+    .select(kolommen, opties)
+    .not('status', 'in', OPEN_IN)
+    .lt('createdat', f.grens)
+    .or(`and(${delen.join(',')})`);
+  if (f.aanvragerId) q = q.eq('requesterid', f.aanvragerId);
+  if (f.sinds) q = q.gte('createdat', f.sinds);
+  return q;
+};
+
+/** Eén pagina van het archief, het jongste beslismoment eerst (zoals
+ *  `archiefVolgorde`), met het totaal van het hele archief in dezelfde vraag. */
+export const getSwapsArchief = async (f: SwapArchiefFilter & { vanaf: number; aantal: number }) => {
+  const { data, error, count } = await archiefQuery(f, '*', { count: 'exact' })
+    .order('decidedat', { ascending: false, nullsFirst: false })
+    .order('createdat', { ascending: false })
+    .order('id', { ascending: false })
+    .range(f.vanaf, f.vanaf + f.aantal - 1);
+  if (error) throw error;
+  return { ruilen: ((data ?? []) as any[]).map(toPublicSwap), totaal: count ?? 0 };
 };
 
 /** Alleen de gevraagde wissels — het weekoverzicht heeft er een handvol nodig

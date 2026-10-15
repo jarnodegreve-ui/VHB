@@ -23,10 +23,11 @@ import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoo
 import { addDagenIso, DAG_DMJ, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
 import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen, type SwapCarryResult } from "../storage.js";
+import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getSwapsVenster, getSwapsArchief, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen, type SwapCarryResult } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, bordToontRuilAl, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
+import { archiefVolgorde, ruilInVenster, ruilVensterGrens } from "../../shared/ruilVenster.js";
 import { RUIL_WEIGERING, STAF_BESLIS_STATUSSEN, beoordeelStafOvergang, isRuilDoorgevoerd, magRuilOvergang, ruilLogStappen, ruilVoertDoor } from "../../shared/ruilOvergangen.js";
 import { bordBenenVan, bordOpDag, dienstOpCel, laadBordVast, type BordVast } from "./codeDienst.js";
 import { dubbeleInplanningen, laadDagStanden, onbekendeCodeFout, type DubbeleInplanning, type Ontvangst } from "./dubbeleInplanning.js";
@@ -492,6 +493,21 @@ export async function beslisRuilIntern(opts: { id: string; status: string; ifSta
     return { swap: updated, melding: `${action}, ${userName(String(current.requesterId))}${current.shiftLine ? ` · dienst ${current.shiftLine} op ${current.shiftDate ? DAG_KORT(String(current.shiftDate)) : "?"}` : ""}.` };
 }
 
+/** Het venster van de dienstruilen (shared/ruilVenster.ts): de grens van
+ *  vandaag, op de Brusselse kalenderdag. */
+const vensterGrens = () => ruilVensterGrens(brusselsDay(new Date().toISOString()));
+/** Waar het venster begint (15-10). Het archief telt het scherm zelf, met
+ *  de eerste pagina van GET /api/swaps/archief, pas als Dienstruil opengaat:
+ *  zo kost het niet bij elke opstart een extra vraag aan de database. */
+export const RUIL_VENSTER_HEADER = "X-VHB-Venster-Vanaf";
+
+/** De collectie-revisie gaat over het venster: dezelfde set die GET
+ *  /api/swaps aan staf geeft, anders botst elke lijst-save op een vals 409. */
+const vensterRevisie = async () => {
+  const grens = vensterGrens();
+  return revisionOf((await getSwapsVenster(grens)).filter((s) => ruilInVenster(s, grens)));
+};
+
 export function mountRuilRoutes(app: express.Express) {
   app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     try {
@@ -502,25 +518,28 @@ export function mountRuilRoutes(app: express.Express) {
       // het JS-filter hieronder blijft als vangnet staan, zodat de privacygrens
       // nooit van de filtersyntaxis van de query afhangt.
       const staf = isStafRol(req.appUser!.role);
-      // Staf leest elke ruil, dus ook elk verloop: die query start tegelijk met
-      // de ruilen. Een chauffeur vraagt alleen het verloop van zijn eigen ruilen
-      // op, en dat kan pas als hun id's bekend zijn.
-      const alleRegels = staf ? getSwapVerloopRegels() : undefined;
-      alleRegels?.catch(() => undefined); // de fout wordt in metRuilVerloop afgehandeld
-      const data = await getSwapsData(staf ? undefined : { betrokkenUserId: String(req.appUser!.id) });
+      const selfId = String(req.appUser!.id);
+      // Het venster (15-10, shared/ruilVenster.ts): wat open staat of de
+      // laatste maanden raakt. De rest is het archief, per pagina via
+      // GET /api/swaps/archief; de kop zegt waar het venster begint.
+      const grens = vensterGrens();
+      res.setHeader(RUIL_VENSTER_HEADER, grens);
       if (!staf) {
-        const selfId = String(req.appUser!.id);
+        // Zijn eigen ruilen zijn er weinig: één lezing, het venster in JS.
+        const data = await getSwapsData({ betrokkenUserId: selfId });
         const scoped = data.filter(
-          (s) => String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId,
+          (s) => (String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId) && ruilInVenster(s, grens),
         );
         return res.json(await metRuilRust(await metRuilVerloop(scoped, false), false, selfId));
       }
-      // Revisie enkel voor planner/admin (volledige weergave) — de POST-check
-      // geldt ook alleen voor hen (chauffeur-payloads worden delta-gereconstrueerd).
-      // Over de ruilen ZONDER verloop: de POST-check vergelijkt met
-      // revisionOf(getSwapsData()), en het verloop is afgeleid, geen invoer.
-      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
-      res.json(await metRuilRust(await metRuilVerloop(data, true, alleRegels), true, String(req.appUser!.id)));
+      // Staf: het venster staat in de query, met de regel in JS als vangnet.
+      const venster = (await getSwapsVenster(grens)).filter((s) => ruilInVenster(s, grens));
+      // Revisie enkel voor planner/admin — de POST-check geldt ook alleen voor
+      // hen (chauffeur-payloads worden delta-gereconstrueerd). Over het venster
+      // en ZONDER verloop: de POST-check rekent met hetzelfde venster, en het
+      // verloop is afgeleid, geen invoer.
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(venster));
+      res.json(await metRuilRust(await metRuilVerloop(venster, true), true, selfId));
     } catch (err) {
       res.status(500).json({ error: "Dienstruilen laden is mislukt." });
     }
@@ -598,6 +617,70 @@ export function mountRuilRoutes(app: express.Express) {
     }
   });
 
+  /**
+   * Het archief van de dienstruilen, per pagina (15-10, Jarno: de historiek
+   * houden, maar niet alles bij elke opstart). Precies wat buiten het venster
+   * van GET /api/swaps valt, het jongste beslismoment eerst
+   * (shared/ruilVenster.ts), met het totaal erbij.
+   *
+   * - `vanaf` (0…), `aantal` (1-50, standaard 10)
+   * - staf: alle ruilen; `persoon` = alleen waar die aanvrager of collega is,
+   *   `sinds` = aangemaakt op of na die dag (historiek van een jaar)
+   * - chauffeur: alleen zijn eigen aanvragen (Mijn verzoeken), uit zijn eigen
+   *   ruilen gelezen; `persoon` en `sinds` tellen voor hem niet
+   * Het verloop gaat mee zoals in GET /api/swaps (een chauffeur zonder de
+   * naam van de planner); rust niet, die geldt alleen voor open ruilen.
+   */
+  app.get("/api/swaps/archief", authenticate, async (req: AuthenticatedRequest, res) => {
+    try {
+      const geheel = (waarde: unknown, standaard: number, min: number, max: number) => {
+        const n = Number(waarde);
+        return Number.isInteger(n) ? Math.min(Math.max(n, min), max) : standaard;
+      };
+      const vanaf = geheel(req.query.vanaf, 0, 0, 1_000_000);
+      const aantal = geheel(req.query.aantal, 10, 1, 50);
+      const grens = vensterGrens();
+      const selfId = String(req.appUser!.id);
+      if (!isStafRol(req.appUser!.role)) {
+        const eigen = (await getSwapsData({ betrokkenUserId: selfId }))
+          .filter((s) => String(s.requesterId) === selfId && !ruilInVenster(s, grens))
+          .sort(archiefVolgorde);
+        const pagina = eigen.slice(vanaf, vanaf + aantal);
+        return res.json({ ruilen: await metRuilVerloop(pagina, false), totaal: eigen.length, grens });
+      }
+      const persoon = String(req.query.persoon ?? "").trim();
+      const sinds = String(req.query.sinds ?? "").trim();
+      if (sinds && !ISO_DAY_RE.test(sinds)) return res.status(400).json({ error: "Ongeldige datum in sinds: verwacht een dag als 2026-01-01." });
+      const { ruilen, totaal } = await getSwapsArchief({ grens, vanaf, aantal, persoonId: persoon || undefined, sinds: sinds || undefined });
+      res.json({ ruilen: await metRuilVerloop(ruilen, true), totaal, grens });
+    } catch (err) {
+      console.error("Archief van de dienstruilen laden is mislukt.", err);
+      res.status(500).json({ error: "Oudere dienstruilen laden is mislukt." });
+    }
+  });
+
+  /**
+   * Eén ruil, voor een link naar een ruil die niet (meer) in het venster zit:
+   * een oude melding of een oud bericht (15-10). Zelfde privacy als de lijst:
+   * een chauffeur krijgt alleen een ruil waar hij bij betrokken is, en wat hij
+   * niet mag zien is een 404, net als wat niet bestaat (lekt niets).
+   */
+  app.get("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const staf = isStafRol(req.appUser!.role);
+      const selfId = String(req.appUser!.id);
+      const [swap] = await getSwapsByIds([id]);
+      const betrokken = !!swap && (String(swap.requesterId) === selfId || String(swap.targetDriverId ?? "") === selfId);
+      if (!swap || (!staf && !betrokken)) return res.status(404).json({ error: "Deze dienstruil is niet beschikbaar." });
+      const [metVerloop] = await metRuilRust(await metRuilVerloop([swap], staf), staf, selfId);
+      res.json(metVerloop);
+    } catch (err) {
+      console.error("Dienstruil laden is mislukt.", err);
+      res.status(500).json({ error: "Dienstruil laden is mislukt." });
+    }
+  });
+
   app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     try {
       const newData = req.body;
@@ -605,17 +688,26 @@ export function mountRuilRoutes(app: express.Express) {
         return res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
       }
 
+      // Elke ruil, voor de regels die over het bord en de exclusiviteit gaan
+      // (een oude, doorgevoerde ruil telt daar nog mee).
       const previousSwaps = await getSwapsData();
+      // Wat de client kreeg (15-10): het venster. "Ontbreekt = verwijderen"
+      // geldt alleen daarbinnen: het archief stuurt de client nooit mee, dus
+      // een ruil die er ontbreekt is geen verwijdering. Een oude client die nog
+      // alles had, botst eerst op de revisie en ververst.
+      const grens = vensterGrens();
+      const vensterSwaps = previousSwaps.filter((s) => ruilInVenster(s, grens));
       // Planner/admin schrijven de hele payload ("ontbreekt = verwijderen"):
       // zonder revisie-check verwijderde een stale save stilletjes een verse
       // aanvraag die intussen binnenkwam. Chauffeur-payloads worden hieronder
       // delta-gereconstrueerd en hebben de check niet nodig.
       if (isStafRol(req.appUser!.role)) {
-        { const rp = revisionCheck(req, previousSwaps); if (rp) return revisionProbleemResponse(res, "De dienstruilen", rp); }
-        const swapsRemoved = detectMassDelete(previousSwaps, newData);
-        if (swapsRemoved !== null) return massDeleteResponse(res, swapsRemoved, previousSwaps.length, "dienstruilen");
+        { const rp = revisionCheck(req, vensterSwaps); if (rp) return revisionProbleemResponse(res, "De dienstruilen", rp); }
+        const swapsRemoved = detectMassDelete(vensterSwaps, newData);
+        if (swapsRemoved !== null) return massDeleteResponse(res, swapsRemoved, vensterSwaps.length, "dienstruilen");
       }
       const previousById = new Map(previousSwaps.map((s) => [String(s.id), s]));
+      const vensterById = new Map(vensterSwaps.map((s) => [String(s.id), s]));
       const newById = new Map(newData.map((s: any) => [String(s.id), s]));
       const swapIdsToDelete: string[] = [];
       // Eén lopende ruil per dienst — voorkomt dat twee gelijktijdige verzoeken
@@ -684,8 +776,9 @@ export function mountRuilRoutes(app: express.Express) {
         const selfId = String(req.appUser!.id);
         const writes: any[] = [];
 
-        // Verwijderingen: alleen eigen pending-aanvragen mogen weg.
-        for (const [id, prev] of previousById) {
+        // Verwijderingen: alleen eigen pending-aanvragen mogen weg, en alleen
+        // binnen het venster (het archief krijgt de client nooit).
+        for (const [id, prev] of vensterById) {
           if (!newById.has(id)) {
             // GET /api/swaps is voor chauffeurs gescoped op ruilen waar ze
             // zélf bij betrokken zijn — andermans ruilen ontbreken dus altijd
@@ -862,7 +955,7 @@ export function mountRuilRoutes(app: express.Express) {
       }
 
       if (isStafRol(req.appUser!.role)) {
-        for (const [id, prev] of previousById) {
+        for (const [id, prev] of vensterById) {
           if (newById.has(String(id))) continue;
           // Doorgevoerde ruilen (approved/completed) zitten in de heropbouw-
           // replay: verwijderen draait níéts terug in de planning, maar laat de
@@ -1342,7 +1435,7 @@ export function mountRuilRoutes(app: express.Express) {
 
       // Verse revisie zodat een direct volgende save van dezelfde sessie geen
       // vals 409 krijgt ("gewijzigd door iemand anders" = je eigen save).
-      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getSwapsData()));
+      res.setHeader(COLLECTION_REVISION_HEADER, await vensterRevisie());
       res.json({ success: true });
     } catch (err: any) {
       console.error("Dienstruil opslaan is mislukt.", err);
@@ -1372,7 +1465,7 @@ export function mountRuilRoutes(app: express.Express) {
 
       // Verse collectie-revisie meegeven zodat een volgende array-save van
       // dezelfde client geen vals 409 krijgt na deze delta-wijziging.
-      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getSwapsData()));
+      res.setHeader(COLLECTION_REVISION_HEADER, await vensterRevisie());
       // De client voegt dit record lokaal in zonder de lijst opnieuw te halen:
       // het verloop moet dus mee, anders toont het blok per persoon de nieuwe
       // status zonder moment en zonder wie besliste.
@@ -1606,7 +1699,7 @@ export function mountRuilRoutes(app: express.Express) {
 
       // Verse collectie-revisie zodat een volgende array-save van dezelfde
       // client geen vals 409 krijgt (zelfde patroon als PATCH /api/swaps/:id).
-      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getSwapsData()));
+      res.setHeader(COLLECTION_REVISION_HEADER, await vensterRevisie());
       res.json({ success: true, swap, carry });
     } catch (err) {
       console.error("Handmatige dienstwissel is mislukt.", err);

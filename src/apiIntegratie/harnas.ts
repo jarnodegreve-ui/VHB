@@ -364,6 +364,17 @@ vi.mock('../../api/email.js', async (importOriginal) => ({
   }),
 }));
 
+/** Het archief uit mem.swaps, zoals de query in api/_lib/opslag/ruilen.ts. */
+const archiefUitMem = async (f: { grens: string; aanvragerId?: string; persoonId?: string; sinds?: string }) => {
+  const { archiefVolgorde, ruilInVenster } = await import('../../shared/ruilVenster');
+  return mem.swaps
+    .filter((s: any) => !ruilInVenster(s, f.grens))
+    .filter((s: any) => !f.aanvragerId || String(s.requesterId) === String(f.aanvragerId))
+    .filter((s: any) => !f.persoonId || String(s.requesterId) === String(f.persoonId) || String(s.targetDriverId ?? '') === String(f.persoonId))
+    .filter((s: any) => !f.sinds || String(s.createdAt ?? '') >= f.sinds)
+    .sort(archiefVolgorde);
+};
+
 vi.mock('../../api/storage.js', async (importOriginal) => {
   const orig = await importOriginal<any>();
   // Dienstregelingversies op de mem-store, met dezelfde regels als de echte
@@ -537,6 +548,20 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       if (mem.swapHerlezingFaalt) throw new Error('swaps: connection failure');
       return mem.swaps.filter((s: any) => ids.map(String).includes(String(s.id)));
     },
+    // Het venster en het archief (15-10) met dezelfde regel als de query
+    // (shared/ruilVenster.ts); de filters gaan mee in swapFilters, zodat een
+    // test kan aantonen dat staf het venster leest en niet de hele tabel.
+    getSwapsVenster: async (grens: string) => {
+      mem.swapFilters.push({ venster: grens });
+      const { ruilInVenster } = await import('../../shared/ruilVenster');
+      return mem.swaps.filter((s: any) => ruilInVenster(s, grens));
+    },
+    getSwapsArchief: async (f: any) => {
+      mem.swapFilters.push({ archief: f });
+      const alle = await archiefUitMem(f);
+      return { ruilen: alle.slice(f.vanaf, f.vanaf + f.aantal), totaal: alle.length };
+    },
+
     markSwapTargetSeen: async (id: string, seenAtIso: string) => {
       const sw = mem.swaps.find((s: any) => String(s.id) === String(id));
       if (sw) sw.targetSeenAt = seenAtIso;

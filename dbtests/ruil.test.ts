@@ -5,9 +5,10 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  applySwapToPlanning, getSwapsData, replacePlanningData, revertSwapFromPlanning,
+  applySwapToPlanning, getSwapsArchief, getSwapsData, getSwapsVenster, replacePlanningData, revertSwapFromPlanning,
   schrijfSwapAlsStatus, swapToestandInPlanning, voegSwapsToe,
 } from '../api/storage';
+import { archiefVolgorde, ruilInVenster } from '../shared/ruilVenster';
 import { dienst, leegDatabase, planningKort } from './hulp';
 
 beforeEach(leegDatabase);
@@ -89,5 +90,47 @@ describe('ruil doorvoeren in de planning', () => {
     expect(await planningKort()).toContain('2026-11-12 2502 c2');
     // Half doorgevoerd is geen van beide eindstanden.
     expect(await swapToestandInPlanning(ruil)).toBe('onbekend');
+  });
+});
+
+/**
+ * Het venster en het archief (15-10): de filters staan als PostgREST-tekst in
+ * api/_lib/opslag/ruilen.ts (één `or`, een geneste `and` voor het archief).
+ * Hier tegen een echte database, en telkens gelijk aan de regel in JS
+ * (shared/ruilVenster.ts), want de route legt die er als vangnet over.
+ */
+describe('ruilen: venster en archief', () => {
+  const GRENS = '2026-03-01';
+  const basis = { shiftId: 's', requesterId: 'c1', targetDriverId: 'c2', reason: '', swapType: 'ruil' as const, returnCode: 'vrij' };
+  const ruilen = [
+    { ...basis, id: 'open-oud', status: 'approved' as const, createdAt: '2026-01-02T08:00:00.000Z', decidedAt: '2026-01-03T08:00:00.000Z', shiftDate: '2026-01-15' },
+    { ...basis, id: 'recent', status: 'rejected' as const, createdAt: '2026-03-01T00:30:00.000Z', decidedAt: '2026-03-02T08:00:00.000Z', shiftDate: '2026-02-20' },
+    { ...basis, id: 'komend', status: 'completed' as const, createdAt: '2026-01-05T08:00:00.000Z', decidedAt: '2026-01-06T08:00:00.000Z', shiftDate: '2026-07-05' },
+    { ...basis, id: 'terug-komend', status: 'completed' as const, createdAt: '2026-01-05T09:00:00.000Z', decidedAt: '2026-01-06T09:00:00.000Z', shiftDate: '2026-01-20', returnDate: '2026-03-04', returnCode: '2502' },
+    { ...basis, id: 'oud', status: 'rejected' as const, createdAt: '2026-01-10T08:00:00.000Z', decidedAt: '2026-01-11T08:00:00.000Z', shiftDate: '2026-01-20' },
+    { ...basis, id: 'oud-zonder-datum', status: 'cancelled' as const, createdAt: '2026-02-27T08:00:00.000Z' },
+    { ...basis, id: 'ouder', requesterId: 'c3', targetDriverId: 'c1', status: 'cancelled' as const, createdAt: '2025-12-01T08:00:00.000Z', decidedAt: '2025-12-02T08:00:00.000Z', shiftDate: '2025-12-10' },
+  ];
+
+  it('het venster is precies wat de regel in JS zegt, en het archief de rest', async () => {
+    await voegSwapsToe(ruilen);
+    const venster = (await getSwapsVenster(GRENS)).map((s) => s.id).sort();
+    expect(venster).toEqual(['komend', 'open-oud', 'recent', 'terug-komend']);
+    expect(venster).toEqual(ruilen.filter((r) => ruilInVenster(r, GRENS)).map((r) => r.id).sort());
+    const { ruilen: archief, totaal } = await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 10 });
+    expect(totaal).toBe(3);
+    // Het jongste beslismoment eerst; zonder beslismoment achteraan.
+    expect(archief.map((s) => s.id)).toEqual(['oud', 'ouder', 'oud-zonder-datum']);
+    expect(archief.map((s) => s.id)).toEqual([...ruilen].filter((r) => !ruilInVenster(r, GRENS)).sort(archiefVolgorde).map((r) => r.id));
+  });
+
+  it('per pagina, per persoon en vanaf een dag', async () => {
+    await voegSwapsToe(ruilen);
+    expect((await getSwapsArchief({ grens: GRENS, vanaf: 1, aantal: 1 })).ruilen.map((s) => s.id)).toEqual(['ouder']);
+    expect((await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 10, persoonId: 'c3' })).ruilen.map((s) => s.id)).toEqual(['ouder']);
+    expect((await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 10, aanvragerId: 'c1' })).totaal).toBe(2);
+    const sinds = await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 10, sinds: '2026-01-01' });
+    expect(sinds.ruilen.map((s) => s.id)).toEqual(['oud', 'oud-zonder-datum']);
+    expect((await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 1, persoonId: 'c2' })).totaal).toBe(2);
   });
 });

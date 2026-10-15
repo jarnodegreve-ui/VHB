@@ -215,6 +215,8 @@ export {
   getSwapsData,
   getPlanningMatrixGrenzen,
   getSwapsByIds,
+  getSwapsVenster,
+  getSwapsArchief,
   saveSwapsData,
   schrijfSwapAlsStatus,
   voegSwapsToe,

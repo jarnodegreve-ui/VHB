@@ -32,7 +32,7 @@ process.env.TZ = 'Europe/Brussels';
 const PORT = Number(process.env.E2E_PORT) > 0 ? Number(process.env.E2E_PORT) : 4173;
 
 /** Specs die alleen op het desktop-project horen (én a11y, dat op beide draait). */
-const DESKTOP_SPECS = /(desktop|a11y|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|beheer-tabellen|techniek-loon-tabellen|planning-tabellen|planning-upload|deeplinks[\w-]*|datumveld[\w-]*|dagadministratie-grens|\/dienstoverzicht[\w-]*|scroll-lock|lagen|panelen|laadfouten|rooster-gereden|beheer-mails|omleiding-mailen|bijlage-viewer|document-viewer|filmnummers|toon-meer)\.spec\.ts$/;
+const DESKTOP_SPECS = /(desktop|a11y|omleidingen-layout|ziekte-overzicht|ritblad-zoom|rapporten|beheer-tabellen|techniek-loon-tabellen|planning-tabellen|planning-upload|deeplinks[\w-]*|datumveld[\w-]*|dagadministratie-grens|\/dienstoverzicht[\w-]*|scroll-lock|lagen|panelen|laadfouten|rooster-gereden|beheer-mails|omleiding-mailen|bijlage-viewer|document-viewer|filmnummers|toon-meer|ruil-archief)\.spec\.ts$/;
 /** Specs die NIET op het mobiele standaardproject horen: desktop-only en de pwa-spec. */
 const NIET_MOBIEL = /(desktop|pwa)\.spec\.ts$/;
 const PWA_SPEC = /pwa\.spec\.ts$/;
