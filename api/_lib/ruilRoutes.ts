@@ -694,13 +694,22 @@ export function mountRuilRoutes(app: express.Express) {
       // (een oude, doorgevoerde ruil telt daar nog mee). Daarnaast wat de
       // client kreeg (15-10): het venster. "Ontbreekt = verwijderen" geldt
       // alleen daarbinnen: het archief stuurt de client nooit mee, dus een
-      // ruil die er ontbreekt is geen verwijdering. Voor staf is dat exact de
-      // query van GET /api/swaps (ook de revisie rekent erover); voor een
-      // chauffeur de regel in JS over zijn eigen ruilen, zoals zijn GET.
+      // ruil die er ontbreekt is geen verwijdering. Voor staf bepaalt de query
+      // van GET /api/swaps WELKE ruilen in het venster zitten, maar de inhoud
+      // komt uit dezelfde lezing als de rest van deze handler (previousSwaps):
+      // de revisie-check moet gaan over wat hieronder vergeleken en geschreven
+      // wordt. Twee losse lezingen lieten een ruil die tussen beide van status
+      // wisselde (een collega accepteert, een andere planner keurt goed) door
+      // de check glippen en zette hem terug op de oude status (tegenlezing
+      // 15-10, ronde 2); nu geeft dat een 409. Voor een chauffeur de regel in
+      // JS over zijn eigen ruilen, zoals zijn GET.
       const grens = vensterGrens();
       const stafSave = isStafRol(req.appUser!.role);
       const [previousSwaps, vensterRijen] = await Promise.all([getSwapsData(), stafSave ? getSwapsVenster(grens) : Promise.resolve(null)]);
-      const vensterSwaps = vensterRijen ?? previousSwaps.filter((s) => ruilInVenster(s, grens));
+      const vensterIds = vensterRijen ? new Set(vensterRijen.map((s) => String(s.id))) : null;
+      const vensterSwaps = vensterIds
+        ? previousSwaps.filter((s) => vensterIds.has(String(s.id)))
+        : previousSwaps.filter((s) => ruilInVenster(s, grens));
       // Planner/admin schrijven de hele payload ("ontbreekt = verwijderen"):
       // zonder revisie-check verwijderde een stale save stilletjes een verse
       // aanvraag die intussen binnenkwam. Chauffeur-payloads worden hieronder

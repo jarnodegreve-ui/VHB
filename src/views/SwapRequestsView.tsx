@@ -416,6 +416,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     { veld: 'ruilen' },
   );
   const afgehandeld = useToonMeerMetArchief(alleAfgehandeld, afgehandeldArchief, { sleutel: afgehandeldPersoon });
+  // Na een laadfout blijft de sectie staan terwijl "Opnieuw proberen" loopt;
+  // anders verdween ze (met de knop die net de focus had) tot het antwoord.
+  const [afgehandeldFoutGehad, setAfgehandeldFoutGehad] = useState(false);
+  useEffect(() => {
+    if (afgehandeld.leeg === 'fout') setAfgehandeldFoutGehad(true);
+    else if (afgehandeld.leeg !== 'laden') setAfgehandeldFoutGehad(false);
+  }, [afgehandeld.leeg]);
   // Alleen wat in het venster staat kan uit de geschiedenis gewist worden
   // (de lijst-save kent het archief niet).
   const vensterIds = useMemo(() => new Set(swaps.map((s) => s.id)), [swaps]);
@@ -1203,7 +1210,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           heropbouw-replay. Compact, nieuwste eerst en tien tegelijk (Jarno
           15-10; tot dan gecapt op 30 zonder weg naar de oudere); de tabel
           hierboven blijft de plek voor wat nog actie vraagt. */}
-      {isStaf(user.role) && (afgehandeld.getoond > 0 || !!afgehandeldPersoon || afgehandeld.leeg === 'fout') && (
+      {isStaf(user.role) && (afgehandeld.getoond > 0 || !!afgehandeldPersoon || afgehandeld.leeg === 'fout' || (afgehandeldFoutGehad && afgehandeld.leeg === 'laden')) && (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <MicroLabel className="ml-1">Afgehandeld</MicroLabel>

@@ -138,6 +138,51 @@ describe('useArchief', () => {
   });
 });
 
+describe('useArchief: herstarten (tegenlezing ronde 2)', () => {
+  it('een mislukte herstart probeert "opnieuw" exact die herstart, ook als alles al geladen was', async () => {
+    server(3);
+    const { result } = renderHook(() => useArchief<{ id: string }>('/api/swaps/archief', { veld: 'ruilen' }));
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    apiJson.mockRejectedValueOnce(new Error('netwerk'));
+    act(() => { result.current.herlaad(); });
+    await waitFor(() => expect(result.current.fout).toBe(true));
+    const vragen = apiJson.mock.calls.length;
+    act(() => { result.current.laadVolgende(); });
+    await waitFor(() => expect(apiJson.mock.calls.length).toBe(vragen + 1));
+    expect(apiJson).toHaveBeenLastCalledWith('/api/swaps/archief?vanaf=0&aantal=10');
+    await waitFor(() => expect(result.current.fout).toBe(false));
+  });
+
+  it('een herstart vult aan tot zoveel als er stond, ook boven de 50 per vraag', async () => {
+    server(80);
+    const { result } = renderHook(() => useArchief<{ id: string }>('/api/swaps/archief', { veld: 'ruilen' }));
+    await waitFor(() => expect(result.current.totaal).toBe(80));
+    for (let i = 0; i < 6; i += 1) {
+      const voor = result.current.items.length;
+      act(() => { result.current.laadVolgende(); });
+      await waitFor(() => expect(result.current.items.length).toBe(voor + 10));
+    }
+    expect(result.current.items).toHaveLength(70);
+    act(() => { result.current.herlaad(); });
+    await waitFor(() => expect(apiJson).toHaveBeenLastCalledWith('/api/swaps/archief?vanaf=50&aantal=20'));
+    await waitFor(() => expect(result.current.bezig).toBe(false));
+    expect(result.current.items).toHaveLength(70);
+  });
+
+  it('na het sluiten van het scherm start een laat antwoord geen nieuwe vraag meer', async () => {
+    const stand = server(25);
+    const { result, unmount } = renderHook(() => useArchief<{ id: string }>('/api/swaps/archief', { veld: 'ruilen' }));
+    await waitFor(() => expect(result.current.totaal).toBe(25));
+    const losLaten = vasthouden();
+    act(() => { result.current.laadVolgende(); });
+    unmount();
+    const vragen = apiJson.mock.calls.length;
+    // Een antwoord met een ander totaal zou anders een herstart vragen.
+    await act(async () => { losLaten({ ruilen: stand.alle.slice(10, 20), totaal: 26, grens: stand.grens }); });
+    expect(apiJson.mock.calls.length).toBe(vragen);
+  });
+});
+
 describe('useToonMeerMetArchief', () => {
   const opzet = (lokaal: { id: string }[], totaal: number) => {
     server(totaal);
@@ -215,6 +260,17 @@ describe('useToonMeerMetArchief', () => {
     expect(apiJson).toHaveBeenLastCalledWith('/api/swaps/archief?vanaf=10&aantal=10');
     expect(result.current.fout).toBe(false);
     expect(stand.alle).toHaveLength(25);
+  });
+
+  it('mislukt de herstart na een record dat het venster verliet, dan is het "fout" met de knop, nooit "leeg"', async () => {
+    server(0);
+    const archiefOpzet = (lokaal: { id: string }[]) => useToonMeerMetArchief(lokaal, useArchief<{ id: string }>('/api/swaps/archief', { veld: 'ruilen' }));
+    const { result, rerender } = renderHook(({ lokaal }) => archiefOpzet(lokaal), { initialProps: { lokaal: [{ id: 'v0' }] } });
+    await waitFor(() => expect(result.current.totaal).toBe(1));
+    apiJson.mockRejectedValueOnce(new Error('netwerk'));
+    rerender({ lokaal: [] });
+    await waitFor(() => expect(result.current.leeg).toBe('fout'));
+    expect(result.current).toMatchObject({ fout: true, volgende: 10 });
   });
 
   it('verdwijnt een record uit het venster, dan begint het archief opnieuw van voren', async () => {

@@ -2291,6 +2291,24 @@ describe('dienstruil: het venster en het archief (15-10)', () => {
     expect(save.status).toBe(200);
   });
 
+  it('wisselt een ruil van status tussen de vensterlezing en de volledige lezing van de lijst-save, dan 409 en niets geschreven', async () => {
+    const venster = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    // De vensterquery ziet nog de oude stand (s-1 wacht), de volledige lezing
+    // al de nieuwe: de collega accepteerde intussen.
+    mem.vensterMomentopname = mem.swaps.map((s: any) => ({ ...s }));
+    const s1 = mem.swaps.find((s: any) => s.id === 's-1');
+    expect(s1.status).toBe('pending');
+    s1.status = 'accepted';
+    const save = await api('POST', '/api/swaps', {
+      token: 'tok-planner',
+      body: venster.json.map(({ verloop: _v, rust: _r, ...s }: any) => s),
+      headers: { 'x-collection-revision': venster.headers.get('x-collection-revision')! },
+    });
+    expect(save.status).toBe(409);
+    expect(mem.swaps.find((s: any) => s.id === 's-1').status).toBe('accepted');
+    expect(mem.swapStatusWissels).toEqual([]);
+  });
+
   it('een chauffeur krijgt na een beslissing geen revisie: alleen de lijst-save van staf kent die controle', async () => {
     const patch = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
     expect(patch.status).toBe(200);

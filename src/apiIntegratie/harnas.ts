@@ -160,6 +160,11 @@ const mem = vi.hoisted(() => ({
   // de lezing van de handler (en zijn planning-doorvoer) en zijn schrijfactie.
   // Een test laat daar een tweede, echt verzoek landen.
   voorSwapStatusWissel: null as null | ((swapId: string) => Promise<void> | void),
+  // Het venster (15-10) als een momentopname van vóór een wijziging: de
+  // vensterquery geeft dan deze ruilen terug in plaats van mem.swaps. Zo
+  // simuleert een test dat een ruil tussen de vensterlezing en de volledige
+  // lezing van POST /api/swaps van status wisselt.
+  vensterMomentopname: null as null | any[],
   // Hoeveel voorwaardelijke statuswissels er liepen, en met welke verwachte
   // status: bewijst dat een ongewijzigd record niet geschreven wordt.
   swapStatusWissels: [] as Array<{ id: string; verwacht: string; naar: string; geraakt: boolean }>,
@@ -554,7 +559,7 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     getSwapsVenster: async (grens: string) => {
       mem.swapFilters.push({ venster: grens });
       const { ruilInVenster } = await import('../../shared/ruilVenster');
-      return mem.swaps.filter((s: any) => ruilInVenster(s, grens));
+      return (mem.vensterMomentopname ?? mem.swaps).filter((s: any) => ruilInVenster(s, grens));
     },
     getSwapsArchief: async (f: any) => {
       mem.swapFilters.push({ archief: f });
@@ -1231,6 +1236,7 @@ beforeEach(() => {
   mem.planningVersieTeller = 0;
   mem.planningVervangenFaalt = false;
   mem.voorSwapStatusWissel = null;
+  mem.vensterMomentopname = null;
   mem.swapStatusWissels = [];
   mem.planningVerplaatsenFaalt = null;
   mem.voorSwapToevoegen = null;

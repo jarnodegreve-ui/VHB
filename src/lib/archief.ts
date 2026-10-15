@@ -64,59 +64,105 @@ export function useArchief<T extends { id: string }>(
   // hetzelfde is (A → B → A met een pagina van de eerste A onderweg).
   const generatie = useRef(0);
 
-  // Gewone functies achter een ref: `laad` start bij een verschoven archief
-  // zelf een herstart, en de knoppen en effecten houden een vaste identiteit.
-  const acties = useRef({ laad: async (_vanaf: number, _hoeveel: number, _vanVoren: boolean) => {}, herstart: (_hoeveel: number) => {} });
-  acties.current.laad = async (vanaf, hoeveel, vanVoren) => {
+  // Wat er opnieuw moet als de laatste vraag mislukte: een herstart van
+  // voren (met hoeveel er moesten staan) of null = de volgende pagina. Zo
+  // probeert "Opnieuw proberen" exact de vraag die faalde, ook een herstart
+  // na een verschoven archief (tegenlezing 15-10, ronde 2).
+  const opnieuwVanVoren = useRef<number | null>(null);
+
+  // Gewone functies achter een ref: de volgende pagina start bij een
+  // verschoven archief zelf een herstart, en de knoppen en effecten houden
+  // een vaste identiteit.
+  const acties = useRef({ vanVoren: async (_tot: number) => {}, volgende: async () => {} });
+  const vraag = async (voorPad: string, vanaf: number, hoeveel: number) => {
+    const scheiding = voorPad.includes('?') ? '&' : '?';
+    const antwoord = await apiJson<Record<string, unknown>>(`${voorPad}${scheiding}vanaf=${vanaf}&aantal=${hoeveel}`);
+    return {
+      nieuw: Array.isArray(antwoord?.[veld]) ? (antwoord[veld] as T[]) : [],
+      totaal: typeof antwoord?.totaal === 'number' ? antwoord.totaal : null,
+      grens: typeof antwoord?.grens === 'string' ? antwoord.grens : null,
+    };
+  };
+  /** Van voren tot `tot` records, per pagina van hoogstens MAX_PAGINA: wie al
+   *  70 oudere in beeld had, houdt er na een herstart 70, niet 50. De lijst
+   *  op het scherm blijft staan tot alles binnen is. */
+  acties.current.vanVoren = async (tot) => {
     const voorPad = padRef.current;
     if (!voorPad) return;
+    generatie.current += 1;
     const gen = generatie.current;
+    const geldig = () => generatie.current === gen && padRef.current === voorPad;
+    const doel = Math.max(aantal, tot);
     setStand((s) => (s.pad === voorPad ? { ...s, bezig: true, fout: false } : s));
     try {
-      const scheiding = voorPad.includes('?') ? '&' : '?';
-      const antwoord = await apiJson<Record<string, unknown>>(`${voorPad}${scheiding}vanaf=${vanaf}&aantal=${hoeveel}`);
-      if (generatie.current !== gen || padRef.current !== voorPad) return;
-      const nieuw = Array.isArray(antwoord?.[veld]) ? (antwoord[veld] as T[]) : [];
-      const totaal = typeof antwoord?.totaal === 'number' ? antwoord.totaal : null;
-      const grens = typeof antwoord?.grens === 'string' ? antwoord.grens : null;
-      if (vanVoren) {
-        setStand({ pad: voorPad, items: uniek(nieuw), totaal, grens, bezig: false, fout: false });
-        return;
+      let items: T[] = [];
+      let totaal: number | null = null;
+      let grens: string | null = null;
+      for (let pagina = 0; pagina < 40; pagina += 1) {
+        const p = await vraag(voorPad, items.length, Math.min(MAX_PAGINA, doel - items.length));
+        if (!geldig()) return;
+        const voor = items.length;
+        items = uniek([...items, ...p.nieuw]);
+        totaal = p.totaal;
+        grens = p.grens;
+        if (items.length === voor || items.length >= doel || totaal === null || items.length >= totaal) break;
       }
-      const s = huidig.current;
-      const bekend = new Set(s.items.map((x) => x.id));
-      const erbij = nieuw.filter((x) => !bekend.has(x.id));
-      const verschoven = totaal !== s.totaal || grens !== s.grens || (erbij.length === 0 && totaal !== null && s.items.length < totaal);
-      if (verschoven) {
-        acties.current.herstart(s.items.length + hoeveel);
-        return;
-      }
-      setStand({ ...s, items: [...s.items, ...erbij], totaal, grens, bezig: false, fout: false });
+      opnieuwVanVoren.current = null;
+      setStand({ pad: voorPad, items, totaal, grens, bezig: false, fout: false });
     } catch {
-      if (generatie.current !== gen || padRef.current !== voorPad) return;
+      if (!geldig()) return;
+      opnieuwVanVoren.current = doel;
       setStand((s) => (s.pad === voorPad ? { ...s, bezig: false, fout: true } : s));
     }
   };
-  acties.current.herstart = (hoeveel) => {
-    if (!padRef.current) return;
-    generatie.current += 1;
-    void acties.current.laad(0, Math.min(MAX_PAGINA, Math.max(aantal, hoeveel)), true);
+  acties.current.volgende = async () => {
+    const voorPad = padRef.current;
+    if (!voorPad) return;
+    const gen = generatie.current;
+    const geldig = () => generatie.current === gen && padRef.current === voorPad;
+    setStand((s) => (s.pad === voorPad ? { ...s, bezig: true, fout: false } : s));
+    try {
+      const s = huidig.current;
+      const p = await vraag(voorPad, s.items.length, aantal);
+      if (!geldig()) return;
+      const nu = huidig.current;
+      const bekend = new Set(nu.items.map((x) => x.id));
+      const erbij = p.nieuw.filter((x) => !bekend.has(x.id));
+      const verschoven = p.totaal !== nu.totaal || p.grens !== nu.grens || (erbij.length === 0 && p.totaal !== null && nu.items.length < p.totaal);
+      if (verschoven) {
+        void acties.current.vanVoren(nu.items.length + aantal);
+        return;
+      }
+      opnieuwVanVoren.current = null;
+      setStand({ ...nu, items: [...nu.items, ...erbij], totaal: p.totaal, grens: p.grens, bezig: false, fout: false });
+    } catch {
+      if (!geldig()) return;
+      opnieuwVanVoren.current = null;
+      setStand((s) => (s.pad === voorPad ? { ...s, bezig: false, fout: true } : s));
+    }
   };
 
   useEffect(() => {
-    generatie.current += 1;
     setStand(beginStand<T>(pad));
-    if (pad) void acties.current.laad(0, aantal, true);
+    opnieuwVanVoren.current = null;
+    if (pad) void acties.current.vanVoren(aantal);
+    else generatie.current += 1;
+    // Weg van het scherm (of een ander pad): niets wat nog onderweg is, telt
+    // nog of start een nieuwe vraag.
+    return () => { generatie.current += 1; };
   }, [pad, aantal]);
 
   const laadVolgende = useCallback(() => {
     const s = huidig.current;
     if (!padRef.current || s.pad !== padRef.current || s.bezig) return;
-    // Nog geen totaal (de eerste pagina mislukte): opnieuw van voren.
-    if (s.totaal === null) { void acties.current.laad(0, aantal, true); return; }
-    if (s.items.length < s.totaal) void acties.current.laad(s.items.length, aantal, false);
+    // Mislukte de eerste pagina of een herstart: die opnieuw, van voren.
+    if (s.totaal === null || opnieuwVanVoren.current !== null) {
+      void acties.current.vanVoren(opnieuwVanVoren.current ?? aantal);
+      return;
+    }
+    if (s.items.length < s.totaal) void acties.current.volgende();
   }, [aantal]);
-  const herlaad = useCallback(() => { acties.current.herstart(huidig.current.items.length); }, []);
+  const herlaad = useCallback(() => { void acties.current.vanVoren(huidig.current.items.length); }, []);
 
   // Tot het effect het nieuwe pad oppakt: al de begintoestand (bezig), niet
   // één render lang de lijst of het "leeg" van het vorige pad.
@@ -188,6 +234,8 @@ export function useToonMeerMetArchief<T extends { id: string }>(
     lijst.meer();
   };
 
-  const leeg = lijst.getoond > 0 ? null : archief.actief && archief.totaal === null ? (archief.fout ? 'fout' : 'laden') : 'leeg';
+  // Laadfout gaat vóór leeg, ook als het totaal al gekend was (een herstart
+  // die mislukte); onderweg is laden, nooit leeg.
+  const leeg = lijst.getoond > 0 ? null : !archief.actief ? 'leeg' : archief.fout ? 'fout' : archief.bezig || archief.totaal === null ? 'laden' : 'leeg';
   return { zichtbaar: lijst.zichtbaar, getoond: lijst.getoond, totaal, volgende, meer, bezig: archief.bezig, fout: opnieuw, leeg };
 }
