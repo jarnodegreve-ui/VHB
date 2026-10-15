@@ -12,6 +12,7 @@ import { Badge, Button, IconButton, TOON_NAAR_BADGE } from '../../components/pri
 import { SluitKnop } from '../../components/Modal';
 import { OMLEIDING_FASE } from '../../../shared/status';
 import { Card } from '../../components/Card';
+import { ToonMeer, useToonMeer } from '../../components/ToonMeer';
 import { DateInput, Field, Input, Textarea } from '../../components/Field';
 import { useVeldfouten, useVuil } from '../../lib/formulier';
 import { Formulier } from '../../components/Formulier';
@@ -84,6 +85,13 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   // deelbaar met een collega, en een refresh houdt het formulier open. De
   // desktop-voorselectie (useStandaardKeuze) schrijft níét, alleen een klik.
   const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-omleidingen' });
+  // Lopende en komende omleidingen staan er altijd allemaal; de verlopen
+  // groeien met de historiek mee en komen tien tegelijk (Jarno 15-10). Een
+  // link naar een verlopen omleiding toont de lijst tot en met die.
+  const actueleDiversions = useMemo(() => sortedDiversions.filter((d) => !isExpired(d)), [sortedDiversions]);
+  const verlopenDiversions = useMemo(() => sortedDiversions.filter((d) => isExpired(d)), [sortedDiversions]);
+  const verlopenLijst = useToonMeer(verlopenDiversions, { doel: recordParam ? (d) => d.id === recordParam : undefined });
+  const getoondeDiversions = useMemo(() => [...actueleDiversions, ...verlopenLijst.zichtbaar], [actueleDiversions, verlopenLijst.zichtbaar]);
 
   const handleOpenAdd = () => poort.via(openNieuw);
   // Annuleren sluit het paneel, ook op desktop (polish P2b, regel Jarno
@@ -152,7 +160,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   };
 
   const inline = useStandaardKeuze({
-    items: sortedDiversions,
+    items: getoondeDiversions,
     sleutelVan: (d) => d.id,
     gekozen: paneelOpen ? editingId : null,
     actief: !(paneelOpen && editingId === null) && !handDicht,
@@ -276,11 +284,12 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   };
 
   const lijst = sortedDiversions.length > 0 ? (
+    <div className="space-y-2">
     <ul className="space-y-2" aria-label="Omleidingen">
       {/* Verwijderen is optimistisch met undo-toast: de rij klapt dicht en komt
           na "Ongedaan maken" op zijn eigen plek terug (LijstRij, key = id). */}
-      <LijstAnimatie aantal={sortedDiversions.length}>
-      {sortedDiversions.map(div => {
+      <LijstAnimatie aantal={getoondeDiversions.length}>
+      {getoondeDiversions.map(div => {
         const expired = isExpired(div);
         const isCurrent = paneelOpen && editingId === div.id;
         return (
@@ -320,6 +329,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       })}
       </LijstAnimatie>
     </ul>
+    {/* De teller telt de hele lijst, zoals ze er staat: actueel plus de verlopen in beeld. */}
+    <ToonMeer los woord="oudere" getoond={actueleDiversions.length + verlopenLijst.getoond} totaal={sortedDiversions.length} volgende={verlopenLijst.volgende} onMeer={verlopenLijst.meer} />
+    </div>
   ) : (
     <EmptyState
       icon={<MapPin size={24} />}

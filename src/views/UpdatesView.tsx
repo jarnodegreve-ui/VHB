@@ -4,6 +4,7 @@ import type { Update } from '../types';
 import { cn } from '../lib/ui';
 import { fetchMijnUpdateReads, markUpdatesRead } from '../lib/updateReads';
 import { formatUpdateDate } from '../lib/format';
+import { nieuwsteUpdateEerst } from '../lib/updateVolgorde';
 import { kiesRecord } from '../lib/overgang';
 import { useRecordParam } from '../app/router';
 import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
@@ -12,6 +13,7 @@ import { Badge, Button } from '../components/primitives';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
 import { LegeLijst } from '../components/illustraties';
 import { LijstKaart, RecordRij } from '../components/RecordRij';
+import { ToonMeer, useToonMeer } from '../components/ToonMeer';
 import { UpdateBijlagenLezen } from '../components/UpdateBijlagenLezen';
 
 /**
@@ -58,11 +60,17 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
   const gekozen = updates.find((u) => u.id === selectedId) ?? null;
   // K (24-09): een dringend bericht dat nog niet bevestigd is staat bovenaan,
   // daarna alles van nieuw naar oud (de lijst kwam van oud naar nieuw binnen).
+  // Op de datum als dag, niet als tekst: '2/10/2026' stond vóór '14/10/2026'.
   const gesorteerd = useMemo(() => {
     const dringendOpen = (u: Update) => u.isUrgent && !gelezen.has(u.id);
-    return [...updates].sort((a, b) => Number(dringendOpen(b)) - Number(dringendOpen(a)) || b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+    return [...updates].sort((a, b) => Number(dringendOpen(b)) - Number(dringendOpen(a)) || nieuwsteUpdateEerst(a, b));
   }, [updates, gelezen]);
-  const detail = inline ? gekozen ?? updates[0] ?? null : gekozen;
+  // Desktop zonder keuze: het bovenste bericht van de lijst, niet het oudste.
+  const detail = inline ? gekozen ?? gesorteerd[0] ?? null : gekozen;
+  // Tien berichten tegelijk, de rest achter "Toon oudere" (Jarno 15-10): de
+  // lijst groeit met elk bericht mee. Een link naar een ouder bericht toont
+  // de lijst tot en met dat bericht.
+  const berichten = useToonMeer(gesorteerd, { doel: selectedId ? (u) => u.id === selectedId : undefined });
 
   const markeer = (id: string) => {
     setGelezen((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
@@ -113,8 +121,11 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
             // plaats van een losse kaart per bericht met een dikke streep. De
             // streep blijft alleen voor wat dringend is; een grijze streep bij
             // elk gewoon bericht zei niets.
-            <LijstKaart aria-label="Berichten">
-              {gesorteerd.map((update) => (
+            <LijstKaart
+              aria-label="Berichten"
+              voet={<ToonMeer woord="oudere" getoond={berichten.getoond} totaal={berichten.totaal} volgende={berichten.volgende} onMeer={berichten.meer} />}
+            >
+              {berichten.zichtbaar.map((update) => (
                 <RecordRij
                   key={update.id}
                   titel={update.title}

@@ -168,7 +168,16 @@ import zlib from 'node:zlib';
 // geen nieuwe dependency. Lokaal 733 → 734 (de index +0,41 kB, zie onder),
 // de CI meet ±0,5 kB zwaarder, dus 734 viel daar om. De CI mat daarna
 // precies 735: 736 = die meting plus ±0,5 kB (afronding op de grens).
-const BUDGET_KB = 736;
+// 15-10 (toon meer, Jarno: "eindeloos in een lijst scrollen is niet
+// gebruiksvriendelijk"): 736 → 738. Eén gedeelde module (src/components/
+// ToonMeer.tsx: de hook useToonMeer en de voet onder de lijst, samen ±0,9 kB
+// gzip; als twee modules waren het twee chunks en 0,2 kB meer), de lijsten in
+// Dienstruil, Verlof, Omleidingen, Updates en Ritbladen, en
+// src/lib/updateVolgorde.ts (de datum van een update als dag sorteren, bewust
+// niet in format.ts want dat zit in de startbundel). Geen nieuwe dependency.
+// Lokaal 733,98 → 736,41; budget = die meting plus de ±0,5 kB van de runner
+// en ±1 kB marge.
+const BUDGET_KB = 738;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -523,6 +532,15 @@ if (!kaartMatch) {
   // grens. Beide budgetten = de CI-meting plus ±0,5 kB.
   WARMUP_BUDGET_KB.chauffeur = 80.5;
   WARMUP_BUDGET_KB.staf = 148.5;
+  // 15-10 (toon meer, zie BUDGET_KB): chauffeur 80,5 → 81,5 en staf
+  // 148,5 → 149,5. Dienstruil (beide sets) en Omleidingen (chauffeur) tonen
+  // hun historiek tien tegelijk en lenen daarvoor src/components/ToonMeer.tsx,
+  // één nieuwe gedeelde chunk. Lokaal chauffeur 79,43 → 80,52 en staf
+  // 147,40 → 148,36; de CI-runner meet ±0,5 kB zwaarder. Geen nieuwe
+  // dependency; de warmup start pas na LCP + 2 s. Budget = de meting plus
+  // ±1 kB, zelfde stap als hierboven.
+  WARMUP_BUDGET_KB.chauffeur = 81.5;
+  WARMUP_BUDGET_KB.staf = 149.5;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

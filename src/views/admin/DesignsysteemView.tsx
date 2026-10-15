@@ -27,6 +27,7 @@ import { VervalPil } from '../../components/VervalPil';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
 import { Avatar } from '../../components/Avatar';
 import { LijstKaart, RecordRij } from '../../components/RecordRij';
+import { ToonMeer } from '../../components/ToonMeer';
 import { BrandLogo } from '../../components/BrandLogo';
 import { BrandSpinner } from '../../components/BrandSpinner';
 import { LijnTegel } from '../../components/LijnTegel';
@@ -472,6 +473,17 @@ export function DesignsysteemView() {
             <RecordRij titel="Do 24 september" meta="Dienst 2101" status={<StatusBadge status="pending" stil />} richting="omlaag" onClick={() => {}} />
           </LijstKaart>
         </div>
+        <Rij label="Toon meer">
+          {/* Een lijst die met de historiek groeit toont tien records; de voet zet er telkens tien bij (useToonMeer). */}
+          <div className="w-full max-w-md">
+            <LijstKaart
+              aria-label="Voorbeeld van Toon meer"
+              voet={<ToonMeer woord="oudere" getoond={10} totaal={143} volgende={10} onMeer={() => notify('Tien oudere getoond.', 'success')} />}
+            >
+              <RecordRij titel="Do 24 september" meta="Dienst 2101" status={<StatusBadge status="approved" stil />} richting="omlaag" onClick={() => {}} />
+            </LijstKaart>
+          </div>
+        </Rij>
       </Sectie>
 
       <Sectie id="tabel" titel="Tabel" uitleg="TableShell is het kader: label (toegankelijke naam), kop (toolbar, filters, bulkbalk) en de overloop (standaard schuiven, sticky vanaf xl, past = de kop plakt altijd). Tabel is de table erin, Th is standaard een kolomkop (scope col). Een rij die iets opent draagt een CelKnop in de hoofdcel (Tab en Enter werken) en rijKlik op de rij als muisgemak, geen apart potlood. Td num = cijfer rechts, Td nowrap = datum, tijd of code op één regel. Op de telefoon (onder md) een kaartlijst, geen verkleinde tabel.">

@@ -96,8 +96,11 @@ test('chauffeur: Mijn dag staat er vóór de omleidingen binnen zijn', async ({ 
   await seed(page, { user: CHAUFFEUR, view: 'mijn-dag' });
   const diversions = await houdTegen(page, '/api/diversions');
   await page.goto('/mijn-dag');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Mijn dag');
   await diversions.aangevraagd;
+  // De kop van de inhoud is de dag ("Donderdag 15 oktober"). "Mijn dag" is de
+  // kop van de laadweergave zolang de chunk onderweg is: daarop wachten
+  // slaagde alleen als de test die tussenstand nog ving.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^(Maandag|Dinsdag|Woensdag|Donderdag|Vrijdag|Zaterdag|Zondag) \d/);
   await expect(page.locator('[aria-label="Scherm wordt geladen"]')).toHaveCount(0);
   diversions.laatLos();
 });

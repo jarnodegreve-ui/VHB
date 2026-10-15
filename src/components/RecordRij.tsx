@@ -19,10 +19,17 @@ import { uitklapChevron } from './Uitklap';
  * Rijen met een eigen, rijkere opbouw (omleidingen met lijntegels, meldingen
  * met een kruisje ernaast) blijven eigen rijen; ze delen wel deze maten.
  */
-export function LijstKaart({ children, className, ...rest }: { children: ReactNode; className?: string; 'aria-label'?: string }) {
+export function LijstKaart({ children, voet, className, ...rest }: {
+  children: ReactNode;
+  /** Onder de rijen, in dezelfde kaart: de `<ToonMeer>` van een lijst die met de historiek groeit. */
+  voet?: ReactNode;
+  className?: string;
+  'aria-label'?: string;
+}) {
   return (
     <Card padding="none" className={cn('overflow-hidden', className)}>
       <ul className="divide-y divide-hairline-subtle" {...rest}>{children}</ul>
+      {voet}
     </Card>
   );
 }

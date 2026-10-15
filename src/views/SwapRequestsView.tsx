@@ -10,6 +10,7 @@ import { Badge, Button, IconButton, MicroLabel } from '../components/primitives'
 import { RuilStatusBadge } from '../components/RuilStatusBadge';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { LijstKaart, RecordRij } from '../components/RecordRij';
+import { ToonMeer, useToonMeer } from '../components/ToonMeer';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { DateInput, Field, Textarea } from '../components/Field';
@@ -362,6 +363,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     return true;
   }), { dienstDatum: dienstDatumVan, kijkerId: user.id });
 
+  // Tien tegelijk (Jarno 15-10): Mijn verzoeken groeit met de historiek mee.
+  // Een link naar een eigen verzoek verderop toont de lijst tot en met dat
+  // verzoek.
+  const mijnLijst = useToonMeer(mySwaps, { doel: eigenDoel ? (s) => s.id === eigenDoel.id : undefined });
+  // Afgehandeld (staf): afgewezen, ingetrokken en weggezette wissels van
+  // iedereen, nieuwste eerst, ook tien tegelijk.
+  const alleAfgehandeld = useMemo(() => (isStaf(user.role)
+    ? swaps
+      .filter((s) => s.status === 'rejected' || s.status === 'cancelled' || s.status === 'completed')
+      .sort((a, b) => String(b.decidedAt ?? b.createdAt ?? '').localeCompare(String(a.decidedAt ?? a.createdAt ?? '')))
+    : []), [swaps, user.role]);
+  const afgehandeld = useToonMeer(alleAfgehandeld);
+
   // Deeplink van een chauffeur: staat de ruil in een van zijn lijsten, dan daar
   // open (eigen verzoek) en in beeld met de focus erop, één keer per id.
   const doelInLijst = !!eigenDoel && (mySwaps.some((s) => s.id === eigenDoel.id) || availableSwaps.some((s) => s.id === eigenDoel.id));
@@ -674,14 +688,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         <div className="space-y-4">
           <MicroLabel className="ml-1">Mijn verzoeken</MicroLabel>
           {mySwaps.length > 0 ? (
-            /* Compacte, uitklapbare rijen in een eigen scrollcontainer: deze
-               lijst groeit onbegrensd mee met de historiek (wens Jarno). */
-            <div className="max-h-[420px] overflow-y-auto overscroll-contain -mx-1 px-1">
-              {/* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
-                  in plaats van een stapel losse kaarten, de dag als titel
-                  (daaraan herken je de ruil), de dienst eronder. */}
-              <LijstKaart aria-label="Mijn verzoeken">
-              {mySwaps.map(swap => {
+            /* Het rijrecept (RecordRij, 22-09): één lijstkaart met hairlines
+               in plaats van een stapel losse kaarten, de dag als titel
+               (daaraan herken je de ruil), de dienst eronder. De lijst groeit
+               met de historiek mee: tien tegelijk met "Toon meer" eronder, in
+               plaats van een eigen scrollvak (Jarno 15-10). */
+              <LijstKaart
+                aria-label="Mijn verzoeken"
+                voet={<ToonMeer getoond={mijnLijst.getoond} totaal={mijnLijst.totaal} volgende={mijnLijst.volgende} onMeer={mijnLijst.meer} />}
+              >
+              {mijnLijst.zichtbaar.map(swap => {
                 const info = shiftInfoFor(swap);
                 const open = expandedSwapIds.includes(swap.id);
                 return (
@@ -737,7 +753,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 );
               })}
               </LijstKaart>
-            </div>
           ) : availableSwaps.length > 0 ? (
             // Wacht er een ruil van een collega op antwoord, dan is dát de
             // inhoud van dit scherm: de lege staat duwde ze op een telefoon
@@ -1119,80 +1134,70 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           iedereen, met een wisknop om testwissels op te ruimen (Jarno 09-09),
           plus de wissels die via "Afhandelen" zijn weggezet (Jarno 17-09).
           Doorgevoerde wissels staan er zonder wisknop: die zitten in de
-          heropbouw-replay. Compact en gecapt op 30, nieuwste eerst; de tabel
+          heropbouw-replay. Compact, nieuwste eerst en tien tegelijk (Jarno
+          15-10; tot dan gecapt op 30 zonder weg naar de oudere); de tabel
           hierboven blijft de plek voor wat nog actie vraagt. */}
-      {isStaf(user.role) && (() => {
-        const alleAfgehandeld = swaps
-          .filter((s) => s.status === 'rejected' || s.status === 'cancelled' || s.status === 'completed')
-          .sort((a, b) => String(b.decidedAt ?? b.createdAt ?? '').localeCompare(String(a.decidedAt ?? a.createdAt ?? '')));
-        const afgehandeld = alleAfgehandeld.slice(0, 30);
-        if (afgehandeld.length === 0) return null;
-        return (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <MicroLabel className="ml-1">Afgehandeld</MicroLabel>
-              {alleAfgehandeld.length > afgehandeld.length && (
-                <span className="text-xs font-medium text-slate-500">nieuwste {afgehandeld.length} van {alleAfgehandeld.length}</span>
-              )}
-            </div>
-            <Card padding="none" className="divide-y divide-hairline-subtle">
-              {afgehandeld.map((swap) => {
-                const info = shiftInfoFor(swap);
-                const requester = users.find((u) => u.id === swap.requesterId);
-                // Eigen sleutel: dezelfde wissel kan ook bij "Mijn verzoeken" staan.
-                const sleutel = `afgehandeld:${swap.id}`;
-                const open = expandedSwapIds.includes(sleutel);
-                return (
-                  <div key={swap.id}>
-                  <div className="flex items-center justify-between gap-2 px-4 py-2.5">
-                    {/* rauw: de rij is de uitklapknop (namen + dienst + status + chevron); de badge zegt geweigerd (collega) of afgewezen (planner), het verloop door wie */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSwapExpanded(sleutel)}
-                      aria-expanded={open}
-                      className="min-w-0 flex flex-1 items-center justify-between gap-3 text-left"
-                    >
-                      <span className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                        <span className="text-sm font-semibold text-slate-800 truncate">
-                          {requester?.name ?? 'Onbekend'}
-                          {swap.targetDriverId && <span className="font-medium text-slate-500"> → {users.find((u) => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
-                        </span>
-                        <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
-                          Dienst {info.line}{info.date ? ` · ${formatDateHuman(info.date)}` : ''}
-                        </span>
+      {isStaf(user.role) && afgehandeld.totaal > 0 && (
+        <div className="space-y-3">
+          <MicroLabel className="ml-1">Afgehandeld</MicroLabel>
+          <Card padding="none" className="divide-y divide-hairline-subtle">
+            {afgehandeld.zichtbaar.map((swap) => {
+              const info = shiftInfoFor(swap);
+              const requester = users.find((u) => u.id === swap.requesterId);
+              // Eigen sleutel: dezelfde wissel kan ook bij "Mijn verzoeken" staan.
+              const sleutel = `afgehandeld:${swap.id}`;
+              const open = expandedSwapIds.includes(sleutel);
+              return (
+                <div key={swap.id}>
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5">
+                  {/* rauw: de rij is de uitklapknop (namen + dienst + status + chevron); de badge zegt geweigerd (collega) of afgewezen (planner), het verloop door wie */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSwapExpanded(sleutel)}
+                    aria-expanded={open}
+                    className="min-w-0 flex flex-1 items-center justify-between gap-3 text-left"
+                  >
+                    <span className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="text-sm font-semibold text-slate-800 truncate">
+                        {requester?.name ?? 'Onbekend'}
+                        {swap.targetDriverId && <span className="font-medium text-slate-500"> → {users.find((u) => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
                       </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <RuilStatusBadge swap={swap} stil />
-                        <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
+                      <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
+                        Dienst {info.line}{info.date ? ` · ${formatDateHuman(info.date)}` : ''}
                       </span>
-                    </button>
-                    <div className="flex items-center shrink-0">
-                      {kanWissen(swap) ? (
-                        <IconButton label="Uit geschiedenis wissen" size="sm" variant="ghost" className="text-red-700 hover:text-red-700 hover:bg-red-50" onClick={() => vraagWissen(swap)}>
-                          <Trash2 size={16} />
-                        </IconButton>
-                      ) : (
-                        <IconButton label="Doorgevoerde wissel: annuleren i.p.v. wissen" size="sm" variant="ghost" disabled>
-                          <Trash2 size={16} />
-                        </IconButton>
-                      )}
-                    </div>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <RuilStatusBadge swap={swap} stil />
+                      <ChevronDown size={16} className={uitklapChevron(open, 180, 'text-slate-400')} />
+                    </span>
+                  </button>
+                  <div className="flex items-center shrink-0">
+                    {kanWissen(swap) ? (
+                      <IconButton label="Uit geschiedenis wissen" size="sm" variant="ghost" className="text-red-700 hover:text-red-700 hover:bg-red-50" onClick={() => vraagWissen(swap)}>
+                        <Trash2 size={16} />
+                      </IconButton>
+                    ) : (
+                      <IconButton label="Doorgevoerde wissel: annuleren i.p.v. wissen" size="sm" variant="ghost" disabled>
+                        <Trash2 size={16} />
+                      </IconButton>
+                    )}
                   </div>
-                  <Uitklap open={open}>
-                    <div className="px-4 pb-3">
-                      {isTakeoverSwap(swap) && <div className="mb-2"><TakeoverBadge compact /></div>}
-                      {/* Begrensd: op een breed scherm staat de status anders een halve meter van de naam. */}
-                      <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} className="max-w-xl" />
-                      <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
-                    </div>
-                  </Uitklap>
+                </div>
+                <Uitklap open={open}>
+                  <div className="px-4 pb-3">
+                    {isTakeoverSwap(swap) && <div className="mb-2"><TakeoverBadge compact /></div>}
+                    {/* Begrensd: op een breed scherm staat de status anders een halve meter van de naam. */}
+                    <RuilVerloop swap={voorVerloop(swap)} naamVan={naamVan} kijkerId={user.id} className="max-w-xl" />
+                    <RuilRust regels={swap.rust} naamVan={naamVan} kijkerId={user.id} requesterId={swap.requesterId} targetDriverId={swap.targetDriverId} className="mt-3" />
                   </div>
-                );
-              })}
-            </Card>
-          </div>
-        );
-      })()}
+                </Uitklap>
+                </div>
+              );
+            })}
+            <ToonMeer woord="oudere" getoond={afgehandeld.getoond} totaal={afgehandeld.totaal} volgende={afgehandeld.volgende} onMeer={afgehandeld.meer} />
+          </Card>
+        </div>
+      )}
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing komen daar vandaan (verbeterronde 29/07 #3). */}
