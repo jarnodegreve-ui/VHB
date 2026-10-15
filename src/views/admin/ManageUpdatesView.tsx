@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { Bell, ChevronRight, History, Mail, Plus, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { formatUpdateDate } from '../../lib/format';
+import { nieuwsteUpdateEerst } from '../../lib/updateVolgorde';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, Switch } from '../../components/primitives';
@@ -20,6 +21,7 @@ import { DetailPaneel, MasterDetail, useDetailPoort, useStandaardKeuze } from '.
 import { UpdateBijlagen } from '../../components/UpdateBijlagen';
 import { ActieMenu } from '../../components/ActieMenu';
 import { LijstAnimatie, LijstRij } from '../../components/LijstRij';
+import { ToonMeer, useToonMeer } from '../../components/ToonMeer';
 import { useRecordParam } from '../../app/router';
 
 const FORM_ID = 'update-form';
@@ -153,6 +155,13 @@ export function ManageUpdatesView({
   // deelbaar met een collega, en een refresh houdt het formulier open. De
   // desktop-voorselectie (useStandaardKeuze) schrijft níét, alleen een klik.
   const [recordParam, zetRecordParam] = useRecordParam(0, { view: 'beheer-updates' });
+  // Tien updates tegelijk in plaats van een eigen scrollvak (Jarno 15-10):
+  // de lijst groeit met elk bericht mee. Een link naar een oudere update
+  // toont de lijst tot en met die.
+  // Nieuwste eerst: de server geeft ze op id, dus van oud naar nieuw, en dan
+  // zou "Toon oudere" de oudste tonen. Op de datum als dag (nieuwsteUpdateEerst).
+  const gesorteerd = useMemo(() => [...updates].sort(nieuwsteUpdateEerst), [updates]);
+  const lijstStand = useToonMeer(gesorteerd, { doel: recordParam ? (u) => u.id === recordParam : undefined });
 
   // Dringende mail nog eens sturen (bv. na een correctie of omdat ze de
   // eerste keer niet aankwam); de server bepaalt de ontvangers.
@@ -215,7 +224,7 @@ export function ManageUpdatesView({
   // de lijst leeg is. Het lege "nieuw"-formulier (paneel open zonder
   // editingId) wordt niet gekaapt.
   const inline = useStandaardKeuze({
-    items: updates,
+    items: lijstStand.zichtbaar,
     sleutelVan: (u) => u.id,
     gekozen: paneelOpen ? editingId : null,
     actief: !(paneelOpen && editingId === null) && !handDicht,
@@ -300,8 +309,8 @@ export function ManageUpdatesView({
         )}
       />
 
-      <div className="mt-5 max-h-[480px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
-        {updates.length > 0 ? <LijstAnimatie aantal={updates.length}>{updates.map((update) => {
+      <div className="mt-5 space-y-2">
+        {updates.length > 0 ? <LijstAnimatie aantal={lijstStand.getoond}>{lijstStand.zichtbaar.map((update) => {
           const isCurrent = paneelOpen && editingId === update.id;
           return (
             <LijstRij as="div" key={update.id}>
@@ -337,6 +346,7 @@ export function ManageUpdatesView({
             action={<Button variant="secondary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
           />
         )}
+        <ToonMeer los className="rounded-2xl" woord="oudere" getoond={lijstStand.getoond} totaal={lijstStand.totaal} volgende={lijstStand.volgende} onMeer={lijstStand.meer} />
       </div>
     </Card>
   );

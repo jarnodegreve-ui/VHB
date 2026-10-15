@@ -79,9 +79,10 @@ describe('Beheer updates: lege velden', () => {
 });
 
 describe('Beheer updates op desktop: onbewaarde invoer', () => {
+  // Nieuwste eerst (15-10): "Eerste" is het jongste bericht en staat bovenaan.
   const UPDATES = [
-    { id: 'u1', date: '1/9/2026', title: 'Eerste', content: 'Tekst een', category: 'algemeen' as const },
-    { id: 'u2', date: '2/9/2026', title: 'Tweede', content: 'Tekst twee', category: 'algemeen' as const },
+    { id: 'u1', date: '2/9/2026', title: 'Eerste', content: 'Tekst een', category: 'algemeen' as const },
+    { id: 'u2', date: '1/9/2026', title: 'Tweede', content: 'Tekst twee', category: 'algemeen' as const },
   ];
 
   it('een andere update kiezen of Annuleren vraagt eerst; Verder bewerken houdt de invoer, Niet bewaren sluit', async () => {

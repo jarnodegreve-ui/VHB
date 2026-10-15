@@ -10,7 +10,8 @@ import { useVeldfouten, useVuil } from '../lib/formulier';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge } from '../components/primitives';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
-import { RecordRij } from '../components/RecordRij';
+import { LijstKaart, RecordRij } from '../components/RecordRij';
+import { ToonMeer, useToonMeer } from '../components/ToonMeer';
 import { RecordOnbekend } from '../components/RecordOnbekend';
 import { useRecordLink } from '../app/useRecordLink';
 import { brengRecordInBeeld } from '../lib/recordLink';
@@ -897,6 +898,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
             );
           })()}
 
+          {isPlanner && <TeamHistoriek aanvragen={verlofRequests} users={users} today={today} onOpen={setReviewLeave} />}
+
           <MyLeaveSection
             title="Mijn openstaande aanvragen"
             count={myPending.length}
@@ -1315,6 +1318,69 @@ function MyLeaveRow({ req, fresh, open, toonStatus, onToggle, onCancel, onWithdr
   );
 }
 
+/** Historiek van iedereen, voor planner en admin (Jarno 15-10: in de
+ *  historiek kijken was moeilijk, er was alleen de kalender per dag):
+ *  afgewezen, geannuleerd en voorbij goedgekeurd verlof, de jongste periode
+ *  eerst, tien tegelijk en te filteren per persoon. Ziekte staat er niet in
+ *  (Beheer › Ziekte). Een rij opent dezelfde beoordeling als de kalender. */
+function TeamHistoriek({ aanvragen, users, today, onOpen }: { aanvragen: LeaveRequest[]; users: User[]; today: string; onOpen: (req: LeaveRequest) => void }) {
+  const [persoon, setPersoon] = useState('');
+  const historiek = useMemo(() => aanvragen
+    .filter((r) => r.status === 'rejected' || r.status === 'cancelled' || (r.status === 'approved' && r.endDate < today))
+    .sort((a, b) => b.startDate.localeCompare(a.startDate) || b.id.localeCompare(a.id)), [aanvragen, today]);
+  const naamVan = (id: string) => users.find((u) => u.id === id)?.name ?? 'Onbekend';
+  const personen = useMemo(() => [...new Set(historiek.map((r) => r.userId))]
+    .map((id) => ({ id, naam: users.find((u) => u.id === id)?.name ?? 'Onbekend' }))
+    .sort((a, b) => a.naam.localeCompare(b.naam, 'nl')), [historiek, users]);
+  const gefilterd = useMemo(() => (persoon ? historiek.filter((r) => r.userId === persoon) : historiek), [historiek, persoon]);
+  const lijst = useToonMeer(gefilterd, { sleutel: persoon });
+  if (historiek.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <MicroLabel className="text-slate-600">Historiek</MicroLabel>
+        <Select aria-label="Historiek van" value={persoon} onChange={(e) => setPersoon(e.target.value)} className="w-auto min-w-0 px-2.5 py-1.5 text-xs">
+          <option value="">Iedereen</option>
+          {personen.map((p) => <option key={p.id} value={p.id}>{p.naam}</option>)}
+        </Select>
+      </div>
+      <LijstKaart
+        aria-label="Historiek"
+        voet={<ToonMeer woord="oudere" getoond={lijst.getoond} totaal={lijst.totaal} volgende={lijst.volgende} onMeer={lijst.meer} />}
+      >
+        {lijst.zichtbaar.map((req) => (
+          <RecordRij
+            key={req.id}
+            leading={<Avatar naam={naamVan(req.userId)} size="md" />}
+            titel={naamVan(req.userId)}
+            // Korte periode ('11/08 – 13/08/2026'), zoals Mijn historiek: in de
+            // smalle kolom kapte de lange vorm het verloftype af.
+            meta={`${formatPeriodeKort(req.startDate, req.endDate)} · ${formatLeaveType(req.type)}`}
+            // Voorbij goedgekeurd is de rusttoestand van deze lijst (opgenomen
+            // verlof): alleen afgewezen en geannuleerd krijgen een pil, zodat
+            // het verloftype in de smalle kolom niet wegvalt.
+            status={req.status === 'approved' ? undefined : <StatusBadge status={req.status} stil />}
+            richting="rechts"
+            onClick={() => onOpen(req)}
+          />
+        ))}
+      </LijstKaart>
+    </div>
+  );
+}
+
+/** De aanvragen van één jaar in de historiek, tien tegelijk (Jarno 15-10).
+ *  Een eigen component omdat elk jaar zijn eigen "Toon meer" heeft. */
+function JaarLijst({ items, rij, doelId }: { items: LeaveRequest[]; rij: (req: LeaveRequest) => React.ReactNode; doelId: string | null }) {
+  const lijst = useToonMeer(items, { doel: doelId ? (r) => r.id === doelId : undefined });
+  return (
+    <Card padding="none" className="overflow-hidden">
+      <ul className="divide-y divide-hairline-subtle">{lijst.zichtbaar.map(rij)}</ul>
+      <ToonMeer woord="oudere" getoond={lijst.getoond} totaal={lijst.totaal} volgende={lijst.volgende} onMeer={lijst.meer} />
+    </Card>
+  );
+}
+
 function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, onWithdraw, perJaar = false, doelId = null }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void; onWithdraw?: (id: string) => void; /** Historiek: groepeer per jaar (alleen het jongste open) en toon de status, die daar wisselt. */ perJaar?: boolean; /** Aanvraag uit de URL (`/verlof/<id>`): openklappen en in beeld brengen als ze in deze sectie staat. */ doelId?: string | null }) {
   // Eén lijstkaart met hairlines in plaats van een stapel losse kaarten in een
   // scrollvak: die kaarten kostten veel hoogte en de periode had geen jaar,
@@ -1387,9 +1453,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                   <ChevronDown size={14} className={uitklapChevron(open, 180, 'ml-auto text-slate-400')} />
                 </button>
                 <Uitklap open={open}>
-                  <Card padding="none" className="overflow-hidden">
-                    <ul className="divide-y divide-hairline-subtle">{groep.items.map(rij)}</ul>
-                  </Card>
+                  <JaarLijst items={groep.items} rij={rij} doelId={doelId} />
                 </Uitklap>
               </div>
             );

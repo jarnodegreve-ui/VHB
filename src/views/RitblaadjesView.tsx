@@ -11,6 +11,7 @@ import { apiFetch } from '../lib/api';
 import { leesAlsDataUrl } from '../lib/dataUrl';
 import { Badge, Button, Switch } from '../components/primitives';
 import { Card, CardHeader } from '../components/Card';
+import { ToonMeer, useToonMeer } from '../components/ToonMeer';
 import { Field, Input } from '../components/Field';
 import { RitbladViewer } from '../components/RitbladViewer';
 import { Skeleton } from '../components/Skeleton';
@@ -237,6 +238,12 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   };
 
   const regels = useMemo(() => (lijst ? volgordeVoorScherm(lijst.bundels) : []), [lijst]);
+  // Elke dienstregeling laat een kaart "Tot en met" achter zolang haar versie
+  // bestaat. De jongste vorige staat er, de oudere komen vijf tegelijk achter
+  // "Toon oudere" (Jarno 15-10: geen lijst die eindeloos aangroeit).
+  const actueleRegels = useMemo(() => regels.filter((r) => r.versie?.status !== 'verlopen'), [regels]);
+  const verlopenRegels = useMemo(() => regels.filter((r) => r.versie?.status === 'verlopen'), [regels]);
+  const vorigeKaarten = useToonMeer(verlopenRegels, { begin: 1, stap: 5 });
   const heeftBundel = regels.some((r) => r.bundel);
   // Zoeken per dienst kan zodra er voor vandaag een bundel is, of de vorige.
   const kanZoeken = Boolean(lijst && (lijst.bundel || lijst.vorige));
@@ -332,7 +339,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
             </Card>
           )}
 
-          {regels.map((regel, index) => {
+          {[...actueleRegels, ...vorigeKaarten.zichtbaar].map((regel, index) => {
             const kop = kaartKop(regel.versie);
             const sleutel = regelSleutel(regel);
             const datum = datumVoorVersie(regel.versie, vandaag);
@@ -437,6 +444,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
               </Card>
             );
           })}
+          <ToonMeer los woord="oudere" getoond={vorigeKaarten.getoond} totaal={vorigeKaarten.totaal} volgende={vorigeKaarten.volgende} onMeer={vorigeKaarten.meer} />
 
           {!touchToestel && heeftBundel && (
             <p className="text-xs font-medium text-slate-500 text-center">

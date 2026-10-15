@@ -14,6 +14,7 @@ import { Badge, Button, MicroLabel, TOON_NAAR_BADGE } from '../components/primit
 import { OMLEIDING_FASE } from '../../shared/status';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
 import { Card } from '../components/Card';
+import { ToonMeer, useToonMeer } from '../components/ToonMeer';
 import { OmleidingDetail } from '../components/OmleidingDetail';
 import { SearchField, Select } from '../components/Field';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
@@ -73,6 +74,10 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
   const verlopenGekozen = groepen.verlopen.some((d) => d.id === selectedId);
   useEffect(() => { if (verlopenGekozen) setToonVerlopen(true); }, [verlopenGekozen]);
   const verlopenOpen = toonVerlopen || zoek.length > 0 || verlopenGekozen;
+  // Voorbij groeit mee met de historiek: tien tegelijk, de jongst afgelopen
+  // eerst (Jarno 15-10). Andere zoekterm of lijn = terug naar de eerste tien;
+  // een link naar een verlopen omleiding toont de lijst tot en met die.
+  const voorbij = useToonMeer(groepen.verlopen, { sleutel: `${zoek}|${selectedLine}`, doel: selectedId ? (d) => d.id === selectedId : undefined });
   const zichtbaar = [...groepen.lopend, ...groepen.komend, ...(verlopenOpen ? groepen.verlopen : [])];
   const nietsActueel = groepen.lopend.length === 0 && groepen.komend.length === 0;
 
@@ -139,10 +144,11 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
           <Uitklap open={verlopenOpen} id="omleidingen-verlopen-lijst">
             <Card padding="none" className="mt-2 overflow-hidden">
               <ul className="divide-y divide-hairline" aria-label="Voorbij">
-                {groepen.verlopen.map((div) => (
+                {voorbij.zichtbaar.map((div) => (
                   <OmleidingRij key={div.id} div={div} vandaag={vandaag} isCurrent={detail?.id === div.id} onClick={() => kies(div.id)} />
                 ))}
               </ul>
+              <ToonMeer woord="oudere" getoond={voorbij.getoond} totaal={voorbij.totaal} volgende={voorbij.volgende} onMeer={voorbij.meer} />
             </Card>
           </Uitklap>
         </section>
