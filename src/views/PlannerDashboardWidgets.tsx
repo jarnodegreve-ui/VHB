@@ -78,7 +78,7 @@ export function PlannerDashboardWidgets({
   // hier i.p.v. in de verlofview, zie de toelichting bij LeaveManagementView)
   // en de fetchers om na een dienstwissel te verversen.
   const {
-    users, shifts, diversions, updates, leaveRequests, swaps,
+    users, shifts, diversions, diversionsGeladen, updates, leaveRequests, swaps,
     planningMatrixRows, planningMatrixGeladen, planningMatrixHistory: matrixHistory, activityLog, activityLogGeladen, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, reportSick: onSickReport,
     fetchPlanning, fetchSwaps, refreshCoverageGaps,
@@ -645,8 +645,9 @@ export function PlannerDashboardWidgets({
         icon={<MapPin size={16} />}
         tone="slate"
         label="Omleidingen"
-        value={activeDiversions}
-        sub={activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
+        value={diversionsGeladen ? activeDiversions : undefined}
+        text={diversionsGeladen ? undefined : '–'}
+        sub={!diversionsGeladen ? 'omleidingen laden' : activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
         onClick={() => onNavigate('omleidingen')}
       />
     ),

@@ -8,7 +8,8 @@ import type { Diversion } from '../types';
 import { cn } from '../lib/ui';
 import { kiesRecord } from '../lib/overgang';
 import { useRecordParam } from '../app/router';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
+import { useCollectieStaat } from '../app/collectieStaat';
 import { Badge, Button, MicroLabel, TOON_NAAR_BADGE } from '../components/primitives';
 import { OMLEIDING_FASE } from '../../shared/status';
 import { Uitklap, uitklapChevron } from '../components/Uitklap';
@@ -34,6 +35,9 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
   // over één omleiding landt meteen op dat item. Alleen een klik schrijft;
   // de desktop-voorselectie hieronder blijft afgeleid.
   const [selectedId, setSelectedId] = useRecordParam(0, { view: 'omleidingen' });
+  // De omleidingen laden ná de poort (poort.ts, 15-10): mislukte de eerste
+  // laad, dan een Foutkaart met "Opnieuw proberen", geen lege staat.
+  const laad = useCollectieStaat('diversions');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLine, setSelectedLine] = useState<string>('all');
   const [toonVerlopen, setToonVerlopen] = useState(false);
@@ -84,7 +88,9 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
     { fase: 'komend', titel: 'Binnenkort', items: groepen.komend },
   ];
 
-  const lijst = gefilterd.length === 0 ? (
+  const lijst = laad.foutZonderData ? (
+    <Foutkaart boodschap={laad.fout ?? 'De omleidingen konden niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />
+  ) : gefilterd.length === 0 ? (
     <EmptyState
       illustratie={heeftFilter ? <NietGevonden /> : <LegeLijst />}
       title={heeftFilter ? 'Geen resultaten' : 'Geen omleidingen'}

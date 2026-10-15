@@ -6,7 +6,8 @@ import { fetchMijnUpdateReads, markUpdatesRead } from '../lib/updateReads';
 import { formatUpdateDate } from '../lib/format';
 import { kiesRecord } from '../lib/overgang';
 import { useRecordParam } from '../app/router';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
+import { useCollectieStaat } from '../app/collectieStaat';
 import { Badge, Button } from '../components/primitives';
 import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
 import { LegeLijst } from '../components/illustraties';
@@ -29,6 +30,8 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
   // één update landt meteen op dat bericht. Alleen een klik schrijft; de
   // desktop-voorselectie hieronder blijft afgeleid.
   const [selectedId, setSelectedId] = useRecordParam(0, { view: 'updates' });
+  // Voor een chauffeur laden de updates ná de poort (poort.ts, 15-10).
+  const laad = useCollectieStaat('updates');
   const inline = useInlinePaneel();
 
   // Wat deze gebruiker al las (server), aangevuld met wat hij in deze sessie
@@ -95,7 +98,9 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
         description="Berichten en mededelingen."
       />
 
-      {updates.length === 0 ? (
+      {laad.foutZonderData ? (
+        <Foutkaart boodschap={laad.fout ?? 'De updates konden niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />
+      ) : updates.length === 0 ? (
         <EmptyState
           illustratie={<LegeLijst />}
           title="Geen updates"

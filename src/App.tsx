@@ -46,14 +46,6 @@ export default function App() {
   // Aanwezigheid (staf ziet elkaar in de topbar) + broodkruimel per schermwissel (foutrapporten).
   useAanwezigheid(!!session && !!currentUser, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
   useEffect(() => { addBreadcrumb('navigatie', currentView); }, [currentView]);
-  // Aankomen op het scherm waar een melding naar wijst = die melding gelezen
-  // (ook via een push-tik of deeplink); de bel- en app-badge zakken meteen
-  // mee in plaats van te blijven staan tot iemand het meldingenscherm opent.
-  useEffect(() => {
-    if (!currentUser) return;
-    markeerMeldingenGelezenVoorScherm(currentView, (doel) => routeUitUrl('/' + doel.replace(/^\/+/, ''))?.view ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentView, currentUser?.id]);
   // Netwerkstatus uit de online-store (src/lib/useOnline.ts): dezelfde
   // waarheid als Mijn dag en de ritbladviewer, mét ping-fallback voor
   // "wifi zonder internet". Bij terug-online meteen stil bijverversen; via
@@ -121,8 +113,18 @@ export default function App() {
     fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps,
     fetchMyNotes,
     fetchUsers, fetchPlanning, fetchDiversions,
-    fetchMeldingen, ongelezenMeldingen, markeerMeldingenGelezenVoorScherm,
+    fetchMeldingen, ongelezenMeldingen, meldingenGeladen, markeerMeldingenGelezenVoorScherm,
   } = appData;
+  // Aankomen op het scherm waar een melding naar wijst = die melding gelezen
+  // (ook via een push-tik of deeplink); de bel- en app-badge zakken meteen
+  // mee in plaats van te blijven staan tot iemand het meldingenscherm opent.
+  // Ook opnieuw zodra de meldingen binnen zijn: voor een chauffeur laden ze
+  // sinds 15-10 ná de poort, dus bij de start zijn ze er nog niet.
+  useEffect(() => {
+    if (!currentUser || !meldingenGeladen) return;
+    markeerMeldingenGelezenVoorScherm(currentView, (doel) => routeUitUrl('/' + doel.replace(/^\/+/, ''))?.view ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, currentUser?.id, meldingenGeladen]);
   // Toasts en de gebundelde laadfout (src/app/useToasts.ts). De twee vlaggen
   // hierboven blijven van de sessie; de hook leest ze alleen.
   const { toasts, showToast, dismissToast, meldLaadfout, meldOnderhoud, wisFouten, wisToasts } = useToasts({

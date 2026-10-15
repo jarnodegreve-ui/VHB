@@ -19,7 +19,7 @@ import { relatieveDag } from '../lib/datum';
 import { warmRitbladCache } from '../lib/ritbladCache';
 import { formatDuration, hasShiftEnded, isShiftActiveAt, parseHHMM, shiftWindowMinutes } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
-import { SkeletonTile } from '../components/Skeleton';
+import { SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { DashboardSkelet } from '../components/ui';
 import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
@@ -47,6 +47,7 @@ export function DashboardView({ notes = [],
   user,
   shifts,
   diversions,
+  diversionsGeladen = true,
   leaveRequests = [],
   swaps = [],
   users = [],
@@ -57,6 +58,9 @@ export function DashboardView({ notes = [],
   user: User;
   shifts: Shift[];
   diversions: Diversion[];
+  /** De omleidingen laden ná de poort (poort.ts, 15-10): tot dan geen
+   *  teller en een skeletrij in het paneel, nooit "Vrije baan". */
+  diversionsGeladen?: boolean;
   notes?: Array<{ date: string; note: string }>;
   leaveRequests?: LeaveRequest[];
   /** Ruilen en namen voor het paneel "Wacht op jouw antwoord"; beide laden
@@ -306,8 +310,9 @@ export function DashboardView({ notes = [],
         tone={lopend.length > 0 ? 'amber' : 'slate'}
         className={kleinKlassen('omleidingen')}
         label="Omleidingen"
-        value={lopend.length}
-        sub={lopend.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
+        value={diversionsGeladen ? lopend.length : undefined}
+        text={diversionsGeladen ? undefined : '–'}
+        sub={!diversionsGeladen ? 'omleidingen laden' : lopend.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
         onClick={onNavigate ? () => onNavigate('omleidingen') : undefined}
       />
     ),
@@ -367,7 +372,9 @@ export function DashboardView({ notes = [],
         aside={lopend.length > 0 ? `${lopend.length} actief` : undefined}
         onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
       >
-        {newestDiversions.length === 0 ? (
+        {!diversionsGeladen ? (
+          <SkeletonRow />
+        ) : newestDiversions.length === 0 ? (
           <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
               <MapPin size={16} />

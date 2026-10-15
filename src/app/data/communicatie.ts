@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Diversion, Update, User } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { replaceById, useCollectieState, withoutId, type DataCtx, type OpVeldfouten } from './kern';
@@ -21,6 +22,12 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
   const { session, currentUser, showToast, meldLaadfout, fetchActivityLog, users } = ctx;
   const [updates, setUpdates, zetUpdatesUitAntwoord] = useCollectieState<Update[]>([]);
   const [diversions, setDiversions, zetDiversionsUitAntwoord] = useCollectieState<Diversion[]>([]);
+  // Beide laden sinds 15-10 (de omleidingen voor elke rol, de updates voor
+  // chauffeur en technieker) ná de poort (src/app/data/poort.ts): een lezer
+  // houdt zijn skelet aan tot de vlag waar is, en een mislukte eerste laad
+  // staat als `mislukt` in de collectiestaat (Foutkaart, geen lege staat).
+  const [updatesGeladen, setUpdatesGeladen] = useState(false);
+  const [diversionsGeladen, setDiversionsGeladen] = useState(false);
 
   // Verwijderen gaat meteen (geen bevestigingsmodal); de toast biedt 6 s
   // "Ongedaan maken" = hetzelfde record (zelfde id) opnieuw POST …/one. De
@@ -54,15 +61,25 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
     try {
       const response = await apiFetch('/api/updates', { accessToken });
       ctx.noteerAntwoord(response);
+      // Laadfout ≠ leeg: een niet-ok antwoord is een mislukte laad, geen
+      // lege lijst (de view toont dan een Foutkaart via useCollectieStaat).
+      if (!response.ok) {
+        ctx.noteerCollectie('updates', false);
+        meldLaadfout('de updates');
+        return;
+      }
       const data = await response.json();
       if (data && Array.isArray(data)) {
         zetUpdatesUitAntwoord(response, data, ctx.stripRecordRevisions<Update>('updates', data));
         ctx.markCollectionLoaded('updates');
         ctx.captureRevision('updates', response);
+        setUpdatesGeladen(true);
+        ctx.noteerCollectie('updates', true);
       }
     } catch (error) {
       console.error('Error fetching updates:', error);
       meldLaadfout('de updates', error);
+      ctx.noteerCollectie('updates', false);
     }
   };
 
@@ -123,14 +140,23 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
     try {
       const response = await apiFetch('/api/diversions', { accessToken });
       ctx.noteerAntwoord(response);
+      if (!response.ok) {
+        ctx.noteerCollectie('diversions', false);
+        return;
+      }
       const data = await response.json();
       if (data && Array.isArray(data)) {
         zetDiversionsUitAntwoord(response, data, ctx.stripRecordRevisions<Diversion>('diversions', data));
         ctx.markCollectionLoaded('diversions');
         ctx.captureRevision('diversions', response);
+        setDiversionsGeladen(true);
+        ctx.noteerCollectie('diversions', true);
       }
     } catch (error) {
+      // Bewust geen laadfout-toast (zoals altijd): de omleidingenlijst toont
+      // zelf een Foutkaart met "Opnieuw proberen" (useCollectieStaat).
       console.error('Error fetching diversions:', error);
+      ctx.noteerCollectie('diversions', false);
     }
   };
 
@@ -229,10 +255,12 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
   const resetCommunicatie = () => {
     setDiversions([]);
     setUpdates([]);
+    setDiversionsGeladen(false);
+    setUpdatesGeladen(false);
   };
 
   return {
-    updates, diversions,
+    updates, diversions, updatesGeladen, diversionsGeladen,
     fetchUpdates, saveUpdates, sendUrgentEmail, saveUpdate, createUpdate, deleteUpdate,
     fetchDiversions, saveDiversions, saveDiversion, createDiversion, deleteDiversion,
     resetCommunicatie,

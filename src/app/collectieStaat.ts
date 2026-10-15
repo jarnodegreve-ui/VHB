@@ -14,6 +14,9 @@ const BOODSCHAP: Record<Uitgesteld, string> = {
   users: 'De gebruikerslijst kon niet laden.',
   swaps: 'De dienstruilen konden niet laden.',
   documenten: 'De documenten konden niet laden.',
+  diversions: 'De omleidingen konden niet laden.',
+  updates: 'De updates konden niet laden.',
+  meldingen: 'De meldingen konden niet laden.',
 };
 
 /**

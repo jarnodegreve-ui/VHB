@@ -99,6 +99,9 @@ export function useAppData({
       case 'users': return mensen.fetchUsers(accessToken);
       case 'swaps': return ruil.fetchSwaps(accessToken);
       case 'documenten': return mensen.fetchUnseenDocuments(userId, accessToken);
+      case 'diversions': return communicatie.fetchDiversions(accessToken);
+      case 'updates': return communicatie.fetchUpdates(accessToken);
+      case 'meldingen': return meldingenData.fetchMeldingen(accessToken);
     }
   };
   const laadUitgesteld = (sleutel: Uitgesteld): Promise<void> => {
@@ -148,15 +151,17 @@ export function useAppData({
       ctx.beginBronMeting();
       await Promise.all([
         planning.fetchPlanning(accessToken, planningFilter),
-        communicatie.fetchDiversions(accessToken),
-        communicatie.fetchUpdates(accessToken),
         verlof.fetchLeave(accessToken),
-        // Meldingencentrum (bel + badge) — voor elke rol.
-        meldingenData.fetchMeldingen(accessToken),
         // Staf: de cockpit en de werkvoorraad rekenen op gebruikers, ruilen,
-        // importgeschiedenis en dekking. Chauffeur/technieker hebben users
-        // en swaps alleen voor badges/contacten nodig: uitgesteld.
+        // importgeschiedenis, dekking, updates ("x van y bevestigd") en de
+        // bel. Chauffeur/technieker: alleen planning en verlof; omleidingen,
+        // updates, meldingen, users, swaps en de documentenbadge laden
+        // direct ná de poort (poort.ts). De omleidingen zitten sinds 15-10
+        // voor niemand meer in de poort: in elke trage opstart was dat de
+        // langste call en het eerste scherm wachtte erop.
         ...(isStafRol ? [
+          communicatie.fetchUpdates(accessToken),
+          meldingenData.fetchMeldingen(accessToken),
           mensen.fetchUsers(accessToken),
           ruil.fetchSwaps(accessToken),
           planning.fetchPlanningMatrixHistory(accessToken),
@@ -196,6 +201,9 @@ export function useAppData({
     users: mensen.usersGeladen,
     swaps: ruil.swapsGeladen,
     documenten: mensen.documentenGeladen,
+    diversions: communicatie.diversionsGeladen,
+    updates: communicatie.updatesGeladen,
+    meldingen: meldingenData.meldingenGeladen,
   };
   useEffect(() => {
     const beurt = laadbeurtRef.current;
@@ -235,10 +243,10 @@ export function useAppData({
   const { servicesGeladen, planningMatrixGeladen, planningCodesGeladen } = planning;
   const { users, usersGeladen, documentenGeladen, unseenDocuments, vervaldata, pendingDevices, fetchUsers, saveUsers, saveUser, createUser, deleteUser,
     fetchUnseenDocuments, markDocumentsSeen } = mensen;
-  const { updates, diversions, fetchUpdates, saveUpdates, sendUrgentEmail, saveUpdate, createUpdate, deleteUpdate,
+  const { updates, diversions, updatesGeladen, diversionsGeladen, fetchUpdates, saveUpdates, sendUrgentEmail, saveUpdate, createUpdate, deleteUpdate,
     fetchDiversions, saveDiversions, saveDiversion, createDiversion, deleteDiversion } = communicatie;
   const { activityLog, activityLogGeladen, loginActivity, aanwezigheid, aanwezigheidMigratie, aanwezigheidLocatieMigratie, fetchActivityLog, fetchLoginActivity } = activiteit;
-  const { meldingen, ongelezenMeldingen, fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm, verwijderMelding, herstelMelding } = meldingenData;
+  const { meldingen, ongelezenMeldingen, meldingenGeladen, fetchMeldingen, markeerMeldingenGelezen, markeerMeldingenGelezenVoorScherm, verwijderMelding, herstelMelding } = meldingenData;
 
   // Data: alleen een nieuwe referentie wanneer een van de velden wijzigt.
   const data = useMemo(() => ({
@@ -246,12 +254,14 @@ export function useAppData({
     planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, aanwezigheidLocatieMigratie, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen, planningTot,
     servicesGeladen, planningMatrixGeladen, planningCodesGeladen, activityLogGeladen, usersGeladen, swapsGeladen, documentenGeladen,
+    diversionsGeladen, updatesGeladen, meldingenGeladen,
     collectieStaat: ctx.collectieStaat,
   }), [
     shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
     planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, aanwezigheid, aanwezigheidMigratie, aanwezigheidLocatieMigratie, coverageDays, vervaldata, pendingDevices,
     isInitialLoad, lastSyncedAt, feestdagenExtra, meldingen, ongelezenMeldingen, planningTot,
     servicesGeladen, planningMatrixGeladen, planningCodesGeladen, activityLogGeladen, usersGeladen, swapsGeladen, documentenGeladen,
+    diversionsGeladen, updatesGeladen, meldingenGeladen,
     ctx.collectieStaat,
   ]);
 

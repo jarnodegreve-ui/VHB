@@ -11,7 +11,8 @@ import type { Melding, MeldingSoort, View } from '../types';
 import { Card } from '../components/Card';
 import { LijstAnimatie, LijstRij } from '../components/LijstRij';
 import { Button, FilterChip, IconButton } from '../components/primitives';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { EmptyState, Foutkaart, PageHeader, PageShell } from '../components/ui';
+import { useCollectieStaat } from '../app/collectieStaat';
 
 /**
  * Meldingencentrum: alles wat het portaal voor jou verstuurde — ook als je
@@ -36,6 +37,8 @@ const ICOON_PER_SOORT: Record<MeldingSoort, ReactNode> = {
 
 export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => void }) {
   const { meldingen, ongelezenMeldingen, markeerMeldingenGelezen, verwijderMelding, herstelMelding } = useAppDataContext();
+  // Voor een chauffeur laden de meldingen ná de poort (poort.ts, 15-10).
+  const laad = useCollectieStaat('meldingen');
   const [filter, setFilter] = useState<MeldingFilter>('alles');
   const vandaag = isoDate(new Date());
 
@@ -78,7 +81,9 @@ export function MeldingenView({ onNavigate }: { onNavigate?: (view: View) => voi
         </div>
       )}
 
-      {meldingen.length === 0 ? (
+      {laad.foutZonderData ? (
+        <Foutkaart boodschap={laad.fout ?? 'De meldingen konden niet laden.'} onOpnieuw={laad.opnieuw} bezig={laad.bezig} />
+      ) : meldingen.length === 0 ? (
         <EmptyState
           title="Nog geen meldingen"
           message="Zodra de planning iets voor jou heeft, een beslissing, een ruil, een update, verschijnt het hier."
