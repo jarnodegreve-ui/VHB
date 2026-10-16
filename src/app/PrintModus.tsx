@@ -67,7 +67,7 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
   if ((printGeleBoek === 'open' || printGeleBoek === 'alles') && currentUser && magView(currentUser, 'defecten')) {
     return (
       <Suspense fallback={<PrintLaden />}>
-        <LazyPrintGeleBoekView filter={printGeleBoek} door={currentUser.name} />
+        <LazyPrintGeleBoekView filter={printGeleBoek} />
       </Suspense>
     );
   }

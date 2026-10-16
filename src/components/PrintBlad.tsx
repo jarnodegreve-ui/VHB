@@ -14,9 +14,13 @@ import { Button } from './primitives';
  *
  * Wat het blad zelf regelt:
  *  - kop met het VHB-logo, de titel en de gekozen filters in woorden, en
- *    "Afgedrukt op dd/mm/jjjj uu:mm door <naam>";
- *  - `@page` A4 staand of liggend met marges, paginateller rechtsonder
- *    (`@bottom-right`: werkt in Chrome en Edge, Safari negeert het, aanvaard);
+ *    "Afgedrukt op dd/mm/jjjj uu:mm door <naam>" (zonder `door` geen regel);
+ *  - `@page` A4 staand of liggend met marges, voettekst met de datum links en
+ *    de paginateller rechts (`@bottom-*`: werkt in Chrome en Edge, Safari
+ *    negeert het, aanvaard);
+ *  - geen browserkop (datum en uur links, tabbladtitel rechts): Chrome tekent
+ *    die in elk marge-vak dat het blad leeg laat, dus de drie bovenste vakken
+ *    krijgen een lege inhoud (Jarno 16-10, getest in Chrome 155);
  *  - altijd het lichte thema, ook als de app op donker staat: `.dark` gaat van
  *    `<html>` zolang het blad open is (zelfde recept als het loginscherm);
  *  - `print-color-adjust: exact` zodat de lijnen en het logo blijven staan,
@@ -44,8 +48,11 @@ import { Button } from './primitives';
  * van papier, niet de schermladder); kleuren komen uit de tokens.
  */
 
+const datum = (d: Date): string =>
+  `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
 const tijdstip = (d: Date): string =>
-  `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  `${datum(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 /** Tekst veilig in een CSS-string (de paginavoet staat in `content: "…"`). */
 const cssTekst = (s: string): string => s.replace(/[\\"]/g, '\\$&').replace(/[\r\n]+/g, ' ');
@@ -80,6 +87,9 @@ const bladCss = (richting: 'staand' | 'liggend', voet: string) => `
     @page {
       size: A4 ${richting === 'liggend' ? 'landscape' : 'portrait'};
       margin: 14mm 14mm 16mm;
+      @top-left { content: ""; }
+      @top-center { content: ""; }
+      @top-right { content: ""; }
       @bottom-left { content: "${cssTekst(voet)}"; font: 8pt sans-serif; color: gray; }
       @bottom-right { content: "Pagina " counter(page) " van " counter(pages); font: 8pt sans-serif; color: gray; }
     }
@@ -96,8 +106,8 @@ export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTi
   titel: string;
   /** De gekozen filters in woorden, één per stuk ("Jaar 2026", "Medewerker: alle"). */
   filters: readonly string[];
-  /** Naam van wie afdrukt. */
-  door: string;
+  /** Naam van wie afdrukt; zonder naam geen regel "Afgedrukt op … door …". */
+  door?: string;
   richting?: 'staand' | 'liggend';
   /** Titel van het tabblad = voorgestelde bestandsnaam van de PDF. */
   tabbladTitel?: string;
@@ -111,7 +121,7 @@ export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTi
   children: ReactNode;
 }) {
   const [nu] = useState(() => new Date());
-  const afgedrukt = `Afgedrukt op ${tijdstip(nu)} door ${door}`;
+  const afgedrukt = door ? `Afgedrukt op ${tijdstip(nu)} door ${door}` : null;
 
   // Altijd licht: staf werkt standaard in het donkere thema, papier niet.
   useLayoutEffect(() => {
@@ -134,7 +144,7 @@ export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTi
     return () => window.clearTimeout(t);
   }, [klaar]);
 
-  const css = useMemo(() => bladCss(richting, `VHB · ${titel}`), [richting, titel]);
+  const css = useMemo(() => bladCss(richting, `VHB · ${titel} · ${datum(nu)}`), [richting, titel, nu]);
 
   return (
     <div className="printblad">
@@ -154,7 +164,7 @@ export function PrintBlad({ titel, filters, door, richting = 'staand', tabbladTi
             {filters.length > 0 && <p className="printblad-filters">{filters.join(' · ')}</p>}
           </div>
         </header>
-        <p className="printblad-meta">{afgedrukt}</p>
+        {afgedrukt ? <p className="printblad-meta">{afgedrukt}</p> : null}
         {opmerking ? <p className="printblad-opmerking">{opmerking}</p> : null}
         {children}
       </div>

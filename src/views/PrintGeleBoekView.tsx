@@ -13,7 +13,9 @@ import { PrintBlad } from '../components/PrintBlad';
  *
  * De tabel volgt het Access-rapport "openstaande aangevraagde werken" (Jarno
  * 17-09): A4 staand, gegroepeerd per werktype, per bus oplopend, met de duur
- * in dagen sinds de melding.
+ * in dagen sinds de melding. Sinds 16-10 (Jarno) alleen de titel in de kop:
+ * geen filterregel en geen "Afgedrukt op … door …"; de datum staat in de
+ * voettekst en is meteen de peildatum van de duur.
  */
 
 const MAANDEN = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
@@ -35,7 +37,7 @@ const duurDagen = (d: Defect, vandaag: string): number | null => {
 
 const busSleutel = (d: Defect) => d.kortNr ?? (Number.parseInt(d.busnr, 10) || Number.MAX_SAFE_INTEGER);
 
-export function PrintGeleBoekView({ filter, door }: { filter: 'open' | 'alles'; door: string }) {
+export function PrintGeleBoekView({ filter }: { filter: 'open' | 'alles' }) {
   const [rijen, setRijen] = useState<Defect[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
 
@@ -68,11 +70,9 @@ export function PrintGeleBoekView({ filter, door }: { filter: 'open' | 'alles'; 
   const th = 'pb-1 pr-2 text-left align-bottom text-[11px] font-bold text-slate-900';
 
   return (
-    // De duur in dagen rekent tegenover vandaag, dus de peildatum staat in de filterregel.
     <PrintBlad
       titel={titel}
-      filters={[filter === 'open' ? 'Alleen openstaande werken' : 'Alle werken, ook uitgevoerde', `Peildatum ${formatDatumDMJ(vandaagIso)}`]}
-      door={door}
+      filters={[]}
       tabbladTitel={`VHB Gele boek ${filter === 'open' ? 'openstaand' : 'alles'} ${formatDatumDMJ(vandaagIso)}`}
     >
       {groepen.length === 0 ? (
