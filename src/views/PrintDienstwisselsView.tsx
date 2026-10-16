@@ -3,22 +3,22 @@ import type { ActivityLogEntry, Shift, SwapRequest } from '../types';
 import { apiJson } from '../lib/api';
 import { PrintBlad } from '../components/PrintBlad';
 import { formatDatumDMJ, formatDayLong, formatShortDay } from '../lib/format';
-import { maandagVan } from '../lib/roosterUren';
-import { isoWeekOf } from '../lib/week';
-import { addDagen, isoDate } from '../lib/datum';
+import { isoDate } from '../lib/datum';
+import { ruilPeriodeUitUrl } from '../lib/ruilOverzicht';
 
 /**
- * Weekoverzicht van de dienstwissels als bewijsstuk voor het klassement
- * (Jarno 18-09). Nieuw tabblad via ?ruiloverzicht-week=<yyyy-mm-dd> (elke dag
- * uit de week mag, de view neemt de maandag). Kop, printdialoog en paginavoet
- * zijn van `PrintBlad` (sinds 03-10); geen paraafstrook meer, het blad is ter
- * info (Jarno 03-10).
+ * Ruiloverzicht van de dienstwissels als bewijsstuk voor het klassement
+ * (Jarno 18-09). Nieuw tabblad via ?ruiloverzicht-van=<yyyy-mm-dd>&
+ * ruiloverzicht-tot=<yyyy-mm-dd> (src/lib/ruilOverzicht.ts; de oude
+ * ?ruiloverzicht-week= geeft de week van die dag). Kop, printdialoog en
+ * paginavoet zijn van `PrintBlad` (sinds 03-10); geen paraafstrook meer, het
+ * blad is ter info (Jarno 03-10).
  *
- * Wat er in staat: de wissels die die week in het portaal zijn UITGEVOERD,
- * niet de wissels die die week in de planning vielen. Het uitvoeringsmoment
- * komt uit het activiteitenlog (server: GET /api/swaps/uitgevoerd), want de
- * `decidedAt` op de wissel wordt door een latere terugdraai overschreven (en
- * tot 20-09 ook door afhandelen).
+ * Wat er in staat: sinds 16-10 (Jarno) de doorgevoerde wissels van de diensten
+ * in de gekozen periode, elk één keer (GET /api/swaps/uitgevoerd?op=dienst);
+ * tot dan de wissels die in één week waren doorgevoerd. Of een wissel
+ * doorgevoerd werd, komt uit het activiteitenlog, want de `decidedAt` op de
+ * wissel wordt door een latere terugdraai overschreven.
  *
  * Sinds 16-10 (Jarno) compact, zodat er veel wissels op één blad passen: één
  * tabelregel per wissel met alleen dienst, dienstdatum, soort (ruil of
@@ -27,8 +27,7 @@ import { addDagen, isoDate } from '../lib/datum';
  * bevestigd" in het verloop). Geen verloop, reden, uitvoerder of
  * "Afgedrukt op" meer. Gegroepeerd per dag van de dienst, oplopend, met een
  * kopregel per dag zoals de werktypes in de gele boek-print (Jarno 16-10, was
- * per uitvoeringsdag); de kolom datum zit daardoor in de kopregel. Welke
- * wissels erop staan verandert niet: die van de gekozen uitvoeringsweek.
+ * per uitvoeringsdag); de kolom datum zit daardoor in de kopregel.
  */
 
 /** Dit blad toont alleen wissels die doorgevoerd zijn geweest, dus afgewezen
@@ -63,9 +62,10 @@ const dagVanTijdstip = (iso: string) => {
   return Number.isNaN(d.getTime()) ? '' : isoDate(d);
 };
 
-export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: Shift[] }) {
-  const van = maandagVan(dag);
-  const tot = addDagen(van, 6);
+export function PrintDienstwisselsView({ query, shifts }: { query: string; shifts: Shift[] }) {
+  const periode = ruilPeriodeUitUrl(new URLSearchParams(query));
+  const van = periode?.van ?? '';
+  const tot = periode?.tot ?? '';
   const [wissels, setWissels] = useState<UitgevoerdeWissel[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
 
@@ -73,9 +73,13 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
     let actief = true;
     setWissels(null);
     setFout(null);
-    apiJson<{ wissels: UitgevoerdeWissel[] }>(`/api/swaps/uitgevoerd?van=${van}&tot=${tot}`)
+    if (!van || !tot) {
+      setFout('Deze link heeft geen geldige periode. Kies de periode opnieuw in Dienstruil.');
+      return;
+    }
+    apiJson<{ wissels: UitgevoerdeWissel[] }>(`/api/swaps/uitgevoerd?van=${van}&tot=${tot}&op=dienst`)
       .then((data) => { if (actief) setWissels(data.wissels ?? []); })
-      .catch((err: unknown) => { if (actief) setFout(err instanceof Error ? err.message : 'Het weekoverzicht kon niet geladen worden.'); });
+      .catch((err: unknown) => { if (actief) setFout(err instanceof Error ? err.message : 'Het ruiloverzicht kon niet geladen worden.'); });
     return () => { actief = false; };
   }, [van, tot]);
 
@@ -83,7 +87,7 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
     return <div className="min-h-screen flex items-center justify-center bg-surface-white text-slate-700 p-8 text-center">{fout}</div>;
   }
   if (!wissels) {
-    return <div className="min-h-screen flex items-center justify-center bg-surface-white text-slate-500 p-8">Weekoverzicht wordt geladen…</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-surface-white text-slate-500 p-8">Ruiloverzicht wordt geladen…</div>;
   }
 
   const dienstVan = (s: SwapRequest) => shifts.find((sh) => sh.id === s.shiftId);
@@ -112,11 +116,11 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
   return (
     <PrintBlad
       titel="Ruiloverzicht"
-      filters={[`Doorgevoerd in week ${isoWeekOf(van)}`, `${formatDatumDMJ(van)} t/m ${formatDatumDMJ(tot)}`]}
-      tabbladTitel={`VHB Ruiloverzicht week ${isoWeekOf(van)} ${formatDatumDMJ(van)}`}
+      filters={[`Diensten van ${formatDatumDMJ(van)} t/m ${formatDatumDMJ(tot)}`]}
+      tabbladTitel={`VHB Ruiloverzicht ${formatDatumDMJ(van)} t/m ${formatDatumDMJ(tot)}`}
     >
       {wissels.length === 0 ? (
-        <p className="printblad-leeg">Deze week zijn er geen dienstwissels uitgevoerd.</p>
+        <p className="printblad-leeg">Geen doorgevoerde dienstwissels voor diensten in deze periode.</p>
       ) : (
         <table className="mt-5 w-full border-collapse text-[10px] leading-snug">
           <colgroup>

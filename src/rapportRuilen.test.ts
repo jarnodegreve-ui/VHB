@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { SWAP_UITVOERING_ACTIES } from '../api/helpers';
 import { bouwRuilaanvragen, bouwRuilenPerChauffeur, bouwUitgevoerdeWissels, type RuilBron, type RuilRij } from '../api/_lib/rapporten/ruilen';
-import { MAX_UITVOERING_DAGEN, brusselseDagVan, uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from '../api/_lib/ruilUitvoeringen';
+import { MAX_UITVOERING_DAGEN, brusselseDagVan, laatsteUitvoeringPerRuil, uitvoeringPeriodeFout, uitvoeringenOpDagen, utcVensterVoor } from '../api/_lib/ruilUitvoeringen';
 import { rapportVan } from '../shared/rapporten/register';
 import { totalenVoor } from '../shared/rapporten/opmaak';
 import { RUIL_LOG_ACTIES, type RuilLogRegel } from '../shared/ruilVerloop';
@@ -121,6 +121,39 @@ describe('de kern onder weekblad en rapport (api/_lib/ruilUitvoeringen.ts)', () 
   it('filtert op de Brusselse dag, oudste eerst', () => {
     const regels = [{ createdAt: '2026-09-01T08:00:00.000Z' }, { createdAt: '2026-08-31T22:30:00.000Z' }, { createdAt: '2026-08-31T21:30:00.000Z' }];
     expect(uitvoeringenOpDagen(regels, '2026-09-01', '2026-09-30').map((r) => r.createdAt)).toEqual(['2026-08-31T22:30:00.000Z', '2026-09-01T08:00:00.000Z']);
+  });
+
+  // Ruiloverzicht op dienstdatum (16-10): per ruil de laatste doorvoer, één keer.
+  it('per ruil de laatste doorvoer; nooit doorgevoerd valt weg; een objectnaam als id vindt niets', () => {
+    const ruilen = [
+      { id: 'a', status: 'completed' }, { id: 'nooit', status: 'rejected' }, { id: 'twee-keer', status: 'approved' },
+      { id: 'constructor' }, { id: 'zonder-log', status: 'pending' },
+      // Doorgevoerde status zonder logregel (een mislukte logActivity): toch op het blad, zonder regel.
+      { id: 'status-zonder-regel', status: 'completed' },
+      // Teruggedraaid zonder regel: niet te bewijzen, valt weg.
+      { id: 'terug-zonder-regel', status: 'cancelled' },
+    ];
+    const log: Record<string, Array<{ action: string; createdAt: string; actorName?: string }>> = Object.create(null);
+    log.a = [
+      { action: 'Dienstruil aangevraagd', createdAt: '2026-10-01T08:00:00.000Z' },
+      { action: 'Dienstruil goedgekeurd', createdAt: '2026-10-02T08:00:00.000Z', actorName: 'Planner' },
+      { action: 'Dienstwissel bevestigd', createdAt: '2026-10-03T08:00:00.000Z' },
+    ];
+    log.nooit = [{ action: 'Dienstruil aangevraagd', createdAt: '2026-10-01T08:00:00.000Z' }, { action: 'Dienstruil afgewezen', createdAt: '2026-10-02T08:00:00.000Z' }];
+    // Doorgevoerd, teruggedraaid, opnieuw doorgevoerd: één keer, met de laatste (ook als de regels niet op volgorde staan).
+    log['twee-keer'] = [
+      { action: 'Dienst handmatig overgezet', createdAt: '2026-10-09T08:00:00.000Z', actorName: 'Tweede' },
+      { action: 'Dienstruil goedgekeurd', createdAt: '2026-10-04T08:00:00.000Z', actorName: 'Eerste' },
+      { action: 'Dienstruil geannuleerd', createdAt: '2026-10-05T08:00:00.000Z' },
+    ];
+    const uit = laatsteUitvoeringPerRuil(ruilen, log, SWAP_UITVOERING_ACTIES);
+    expect(uit.map((u) => [u.swap.id, u.regel?.createdAt ?? null, u.regel?.actorName ?? null])).toEqual([
+      ['a', '2026-10-02T08:00:00.000Z', 'Planner'],
+      ['twee-keer', '2026-10-09T08:00:00.000Z', 'Tweede'],
+      ['status-zonder-regel', null, null],
+    ]);
+    // Een gewoon object (geen null-prototype) als log: "constructor" vindt nog altijd niets.
+    expect(laatsteUitvoeringPerRuil([{ id: 'constructor' }, { id: 'toString' }], {}, SWAP_UITVOERING_ACTIES)).toEqual([]);
   });
 
   it('elke uitvoeringsactie is een bekende ruil-logactie, en "bekeken" hoort er nooit bij', () => {

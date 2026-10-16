@@ -9,7 +9,7 @@ import type { Sessie } from './useSessie';
 
 // Print-modus (?print-…=) lui: zelden gebruikt, dus niet in de startbundel (P5).
 const LazyPrintModus = lazyWithRetry(() => import('./PrintModus'));
-const PRINT_PARAM = /[?&](print-(driver|gele-boek|rapport|verlof-driver)|ruiloverzicht-week)=/;
+const PRINT_PARAM = /[?&](print-(driver|gele-boek|rapport|verlof-driver)|ruiloverzicht-(week|van|tot))=/;
 const LazyToestelGeblokkeerd = lazyWithRetry(() => import('./ToestelGeblokkeerd').then((m) => ({ default: m.ToestelGeblokkeerd })));
 const LazyTweeStapsScherm = lazyWithRetry(() => import('./TweeStapsScherm').then((m) => ({ default: m.TweeStapsScherm })));
 const LazyUitnodiging = lazyWithRetry(() => import('./UitnodigingScherm').then((m) => ({ default: m.UitnodigingScherm })));

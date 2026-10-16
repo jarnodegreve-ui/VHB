@@ -178,6 +178,10 @@ const mem = vi.hoisted(() => ({
   planningToestandLezingen: 0,
   // true = de gerichte lezing van een ruil (getSwapsByIds) faalt.
   swapHerlezingFaalt: false,
+  // true = getSwapExecutions leest de doorvoerregels uit mem.activity (zoals de
+  // query: venster [vanIso, totIso), acties, oudste eerst); anders [] zoals de
+  // digest-tests verwachten.
+  doorvoerUitActiviteit: false,
   // Service-role-client voor de routes die Supabase Auth beheren; null =
   // niet geconfigureerd (standaard). Een test zet hier een attrap.
   supabaseAdmin: null as any,
@@ -549,6 +553,12 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       }
       mem.swaps = [...mem.swaps, ...swaps];
     },
+    // Ruiloverzicht op dienstdatum (16-10): zelfde contract als de query
+    // (shift_date als tekst binnen [van, tot], oplopend, dan op id).
+    getSwapsOpDienstdag: async (van: string, tot: string) =>
+      mem.swaps
+        .filter((s: any) => s.shiftDate && s.shiftDate >= van && s.shiftDate <= tot)
+        .sort((a: any, b: any) => String(a.shiftDate).localeCompare(String(b.shiftDate)) || String(a.id).localeCompare(String(b.id))),
     getSwapsByIds: async (ids: string[]) => {
       if (mem.swapHerlezingFaalt) throw new Error('swaps: connection failure');
       return mem.swaps.filter((s: any) => ids.map(String).includes(String(s.id)));
@@ -824,6 +834,27 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       }
       return uit;
     },
+    // Zelfde contract als de echte: alle logregels per gevraagde ruil, oudste
+    // eerst, zonder "Dienstruil bekeken" (ruiloverzicht, GET /api/swaps/uitgevoerd).
+    getSwapHistories: async (ids: string[]) => {
+      const uit: Record<string, any[]> = Object.create(null);
+      for (const id of ids) uit[String(id)] = [];
+      for (const a of [...mem.activity].sort((x: any, y: any) => String(x.createdAt ?? x.gelogdOp).localeCompare(String(y.createdAt ?? y.gelogdOp)))) {
+        if (a.entityType !== 'swap' || !a.entityId || a.action === 'Dienstruil bekeken') continue;
+        uit[String(a.entityId)]?.push({ ...a, createdAt: a.createdAt ?? a.gelogdOp });
+      }
+      return uit;
+    },
+    // Ruiloverzicht op dienstdatum (16-10): alleen de doorvoerregels per ruil, oudste eerst.
+    getSwapDoorvoerRegels: async (ids: string[], acties: readonly string[]) => {
+      const uit: Record<string, any[]> = Object.create(null);
+      for (const id of ids) uit[String(id)] = [];
+      for (const a of [...mem.activity].sort((x: any, y: any) => String(x.createdAt ?? x.gelogdOp).localeCompare(String(y.createdAt ?? y.gelogdOp)))) {
+        if (a.entityType !== 'swap' || !a.entityId || !acties.includes(a.action)) continue;
+        uit[String(a.entityId)]?.push({ ...a, createdAt: a.createdAt ?? a.gelogdOp });
+      }
+      return uit;
+    },
     getActivityLog: async (opts?: { sinceIso?: string | null; max?: number; metRuilBekeken?: boolean }) => {
     // Mock respecteert de opts — anders kan de #249-regressie ("UI beloofde
     // 30 dagen, server gaf 100") ongemerkt terugkomen terwijl alles groen blijft.
@@ -839,7 +870,12 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
     getLatestAuthEventAt: async () => mem.lastAuthEventAt,
     // Weekcijfers in de digest (25-09): uitgevoerde wissels uit het
     // activiteitenlog; de mock heeft geen activity_log-tabel.
-    getSwapExecutions: async () => [],
+    getSwapExecutions: async (vanIso: string, totIso: string, acties: string[]) => {
+      if (!mem.doorvoerUitActiviteit) return [];
+      return mem.activity
+        .filter((a: any) => a.entityType === 'swap' && acties.includes(a.action) && a.createdAt >= vanIso && a.createdAt < totIso)
+        .sort((a: any, b: any) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    },
     getAanwezigheid: async (sinceIso: string) => {
       if (!mem.presenceTabel) {
         const err: any = new Error('relation "public.user_presence" does not exist');
@@ -1242,6 +1278,7 @@ beforeEach(() => {
   mem.voorSwapToevoegen = null;
   mem.planningToestandLezingen = 0;
   mem.swapHerlezingFaalt = false;
+  mem.doorvoerUitActiviteit = false;
   mem.devices = [
     { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
     { userId: '4', deviceToken: 'dev-ok', name: 'Android · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },

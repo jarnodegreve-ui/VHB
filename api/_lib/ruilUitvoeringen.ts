@@ -9,6 +9,11 @@ import { MAX_PERIODE_DAGEN, dagPlus, dagenInPeriode } from "../../shared/rapport
  * Ruil-logregels ruimt de nachtcron nooit op (`pruneOldRecords` slaat
  * `entity_type = 'swap'` over), dus dit werkt ook voor meer dan een jaar terug.
  * Puur, geen database.
+ *
+ * Sinds 16-10 kiest het ruiloverzicht ook op de datum van de DIENST
+ * (`laatsteUitvoeringPerRuil`): dan is de vraag niet "wat is in deze periode
+ * doorgevoerd" maar "welke ruilen van diensten in deze periode zijn ooit
+ * doorgevoerd", en telt elke ruil één keer.
  */
 
 /** Langste periode die in één keer opgevraagd mag worden: de rapportgrens (was 31 dagen, genoeg voor het weekblad). */
@@ -50,6 +55,43 @@ export const brusselseDagVan = (moment: string | null | undefined): string | nul
   if (!MET_ZONE.test(tekst)) return ZONELOOS.exec(tekst)?.[1] ?? null;
   const d = new Date(tekst);
   return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" }) : null;
+};
+
+/** Een status die zegt dat de ruil in de planning staat: goedgekeurd of daarna afgehandeld. */
+const DOORGEVOERDE_STATUS = new Set(["approved", "completed"]);
+
+/**
+ * Per ruil de laatste logregel die hem doorvoerde (een actie uit `acties`), in
+ * de volgorde van de ruilen. Een ruil die na een terugdraai opnieuw doorgevoerd
+ * werd, staat er één keer in, met zijn laatste doorvoer; de volgorde van de
+ * logregels doet er niet toe.
+ *
+ * Zonder doorvoerregel valt een ruil weg, tenzij zijn status zegt dat hij
+ * doorgevoerd is (goedgekeurd of afgehandeld): dan staat hij erin met
+ * `regel: null` (tegenlezing 16-10: `logActivity` slikt een mislukte
+ * schrijfactie, en het blad is een bewijsstuk). Een teruggedraaide ruil
+ * zonder regel kan niet bewezen worden en valt weg.
+ */
+export const laatsteUitvoeringPerRuil = <S extends { id?: unknown; status?: unknown }, R extends { action?: string | null; createdAt: string }>(
+  ruilen: readonly S[],
+  logPerRuil: Readonly<Record<string, readonly R[]>>,
+  acties: readonly string[],
+): Array<{ swap: S; regel: R | null }> => {
+  const doorvoer = new Set(acties);
+  const uit: Array<{ swap: S; regel: R | null }> = [];
+  for (const swap of ruilen) {
+    const id = String(swap.id ?? "");
+    // hasOwn: een ruil-id als "constructor" mag geen regels van Object.prototype vinden.
+    const regels = id && Object.prototype.hasOwnProperty.call(logPerRuil, id) ? logPerRuil[id] : [];
+    let laatste: R | null = null;
+    for (const regel of regels) {
+      if (!doorvoer.has(String(regel.action ?? ""))) continue;
+      if (!laatste || String(regel.createdAt) >= String(laatste.createdAt)) laatste = regel;
+    }
+    if (laatste) uit.push({ swap, regel: laatste });
+    else if (DOORGEVOERDE_STATUS.has(String(swap.status ?? ""))) uit.push({ swap, regel: null });
+  }
+  return uit;
 };
 
 /** De logregels waarvan de Brusselse kalenderdag in [van, tot] valt, oudste eerst. */

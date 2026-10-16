@@ -184,6 +184,38 @@ export const getSwapHistories = async (
   return perSwap;
 };
 
+/** Alleen de logregels die een ruil doorvoerden (`acties`), per gevraagde ruil,
+ *  oudste eerst: het ruiloverzicht op dienstdatum (16-10) beslist daarmee
+ *  welke ruilen erop staan. Unieke sortering (created_at + id) en geen limiet,
+ *  want een overgeslagen regel haalt hier een ruil van het blad. */
+export const getSwapDoorvoerRegels = async (
+  swapIds: string[],
+  acties: readonly string[],
+): Promise<Record<string, ActivityLogRecord[]>> => {
+  const ids = [...new Set(swapIds.map((id) => String(id)).filter(Boolean))];
+  const perSwap = perRuilId<ActivityLogRecord>();
+  if (ids.length === 0 || acties.length === 0) return perSwap;
+  const client = requireDb();
+  const stukken = await Promise.all(inStukken(ids, IN_FILTER_MAX).map((deel) =>
+    paginatedFetch<ActivityLogRow>((from, to) =>
+      client
+        .from("activity_log")
+        .select("*")
+        .eq("entity_type", "swap")
+        .in("entity_id", deel)
+        .in("action", [...acties])
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to))));
+  for (const id of ids) perSwap[id] = [];
+  for (const row of stukken.flat()) {
+    const entry = toPublicActivityLog(row);
+    const id = String(entry.entityId ?? "");
+    if (perSwap[id]) perSwap[id].push(entry);
+  }
+  return perSwap;
+};
+
 /** Zoveel ruil-id's gaan in één `in.(...)`-filter (PostgREST zet het in de
  *  querystring; 100 uuid's is ±4 kB). Meer id's = meer stukken, parallel
  *  (15-10): vroeger las de route boven dit aantal álle ruil-logregels ooit, en

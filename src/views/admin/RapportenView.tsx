@@ -18,9 +18,8 @@ import { printbladKlaar, printbladUrl, printbladenVanDomein, type PrintbladDef, 
 import { bereikUitleg } from '../../lib/rapportBereik';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { addDagen, isoDate, maandPlus } from '../../lib/datum';
-import { MONTH_NAMES, formatDatumDMJ } from '../../lib/format';
-import { maandagVan } from '../../lib/roosterUren';
-import { isoWeekOf } from '../../lib/week';
+import { MONTH_NAMES } from '../../lib/format';
+import { ruilPeriodeFout, standaardRuilPeriode } from '../../lib/ruilOverzicht';
 import { cn, downloadBlob, notify, openPdfInNewTab } from '../../lib/ui';
 import { EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { NietGevonden } from '../../components/illustraties';
@@ -220,11 +219,10 @@ function CatalogusRij({ titel, omschrijving, href, onKies, meta, staart }: {
 function PrintbladModal({ def, onClose }: { def: PrintbladDef; onClose: () => void }) {
   const { users } = useAppDataContext();
   const vandaag = isoDate(new Date());
-  const [w, setW] = useState<PrintbladWaarden>({ maand: vandaag.slice(0, 7), chauffeur: '', jaar: Number(vandaag.slice(0, 4)), dag: vandaag, omvang: 'open' });
+  const [w, setW] = useState<PrintbladWaarden>(() => ({ maand: vandaag.slice(0, 7), chauffeur: '', jaar: Number(vandaag.slice(0, 4)), ...standaardRuilPeriode(vandaag), omvang: 'open' }));
   const zet = (deel: Partial<PrintbladWaarden>) => setW((v) => ({ ...v, ...deel }));
   const mensen = useMemo(() => users.filter((u) => u.name.trim().toLowerCase() !== 'beheerder'), [users]);
   const [j, m] = w.maand.split('-').map(Number);
-  const maandag = w.dag ? maandagVan(w.dag) : '';
   const open = () => {
     openPdfInNewTab(printbladUrl(def, w, `${window.location.origin}${window.location.pathname}`));
     onClose();
@@ -248,11 +246,17 @@ function PrintbladModal({ def, onClose }: { def: PrintbladDef; onClose: () => vo
               return <Chauffeurkiezer key={p} users={mensen.filter((u) => !isStaf(u.role))} waarde={w.chauffeur} onChange={(chauffeur) => zet({ chauffeur })} label="Medewerker" alleLabel="Kies een medewerker" />;
             case 'jaar':
               return <JaarKiezer key={p} waarde={w.jaar} onChange={(jaar) => zet({ jaar })} huidigJaar={Number(vandaag.slice(0, 4))} />;
-            case 'week':
+            case 'periode':
+              // Datum van de dienst; schuift Vanaf voorbij Tot, dan schuift Tot mee (zoals in Dienstruil).
               return (
-                <Field key={p} label="Dag in de week" hint={maandag ? `Week ${isoWeekOf(maandag)}, ${formatDatumDMJ(maandag)} t/m ${formatDatumDMJ(addDagen(maandag, 6))}` : undefined}>
-                  {({ id, describedBy }) => <DateInput id={id} aria-describedby={describedBy} value={w.dag} onChange={(dag) => zet({ dag })} />}
-                </Field>
+                <div key={p} className="grid grid-cols-2 gap-3">
+                  <Field label="Diensten vanaf">
+                    {({ id, describedBy }) => <DateInput id={id} aria-describedby={describedBy} value={w.van} wisbaar={false} onChange={(van) => zet({ van, tot: w.tot < van ? addDagen(van, 6) : w.tot })} />}
+                  </Field>
+                  <Field label="Tot en met" error={ruilPeriodeFout({ van: w.van, tot: w.tot }) ?? undefined}>
+                    {({ id, describedBy }) => <DateInput id={id} aria-describedby={describedBy} value={w.tot} min={w.van} wisbaar={false} onChange={(tot) => zet({ tot })} />}
+                  </Field>
+                </div>
               );
             case 'omvang':
               return (

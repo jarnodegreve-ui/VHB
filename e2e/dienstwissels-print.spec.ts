@@ -31,12 +31,16 @@ test('planning print het weekoverzicht van de uitgevoerde dienstwissels', async 
       : undefined,
   });
   await page.addInitScript(() => { window.print = () => {}; });
-  await page.goto(`/?ruiloverzicht-week=${uitgevoerdOp.slice(0, 10)}`);
+  // Vrije periode op de dienstdatum (16-10): de view vraagt de wissels op met op=dienst.
+  const verzoek = page.waitForRequest((r) => r.url().includes('/api/swaps/uitgevoerd'));
+  await page.goto(`/?ruiloverzicht-van=${PLANNING[0].date}&ruiloverzicht-tot=${PLANNING[0].date}`);
+  const vraag = new URL((await verzoek).url()).searchParams;
+  expect([vraag.get('van'), vraag.get('tot'), vraag.get('op')]).toEqual([PLANNING[0].date, PLANNING[0].date, 'dienst']);
 
   await expect(page.getByRole('heading', { name: 'Ruiloverzicht', level: 1 })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Afdrukken' })).toBeVisible();
-  // Kop van PrintBlad: de week in woorden; geen 'Afgedrukt op' en geen paraafstrook meer.
-  await expect(page.getByText(/^Doorgevoerd in week \d{1,2} · \d{2}\/\d{2}\/\d{4} t\/m \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
+  // Kop van PrintBlad: de periode in woorden; geen 'Afgedrukt op' en geen paraafstrook meer.
+  await expect(page.getByText(/^Diensten van \d{2}\/\d{2}\/\d{4} t\/m \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
   await expect(page.getByText(/Afgedrukt op/)).toHaveCount(0);
   await expect(page.getByText('Paraaf planning')).toHaveCount(0);
   // Gegroepeerd per dag van de dienst (kopregel met de datum), daaronder één

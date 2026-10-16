@@ -72,17 +72,19 @@ export function printScherm({ currentUser, users, shifts, leaveRequests, isIniti
     );
   }
 
-  // Weekoverzicht dienstwissels (bewijsstuk voor het klassement): planner/admin.
-  // De view haalt de uitgevoerde wissels zelf op, alleen de planning komt uit
-  // de collecties (voor de uren van de dienst).
-  const printRuilWeek = printParams?.get('ruiloverzicht-week');
-  if (printRuilWeek && /^\d{4}-\d{2}-\d{2}$/.test(printRuilWeek) && currentUser && (currentUser.role === 'planner' || currentUser.role === 'admin')) {
+  // Ruiloverzicht (bewijsstuk voor het klassement): planner/admin. Sinds 16-10
+  // een vrije periode op de dienstdatum (?ruiloverzicht-van=&ruiloverzicht-tot=;
+  // de oude ?ruiloverzicht-week= geeft de week van die dag). De view leest de
+  // periode zelf (src/lib/ruilOverzicht.ts, buiten de startbundel) en haalt de
+  // wissels op; alleen de planning komt uit de collecties.
+  const ruilOverzicht = printParams && ['ruiloverzicht-van', 'ruiloverzicht-tot', 'ruiloverzicht-week'].some((k) => printParams.has(k));
+  if (ruilOverzicht && currentUser && (currentUser.role === 'planner' || currentUser.role === 'admin')) {
     if (isInitialLoad) {
       return <PrintLaden />;
     }
     return (
       <Suspense fallback={<PrintLaden />}>
-        <LazyPrintDienstwisselsView dag={printRuilWeek} shifts={shifts} />
+        <LazyPrintDienstwisselsView query={window.location.search} shifts={shifts} />
       </Suspense>
     );
   }
