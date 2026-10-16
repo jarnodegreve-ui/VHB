@@ -5,10 +5,12 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  applySwapToPlanning, getSwapsArchief, getSwapsData, getSwapsOpDienstdag, getSwapsVenster, replacePlanningData, revertSwapFromPlanning,
+  applySwapToPlanning, getSwapDoorvoerRegels, getSwapsArchief, getSwapsData, getSwapsOpDienstdag, getSwapsVenster, replacePlanningData, revertSwapFromPlanning,
   schrijfSwapAlsStatus, swapToestandInPlanning, voegSwapsToe,
 } from '../api/storage';
 import { archiefVolgorde, ruilInVenster } from '../shared/ruilVenster';
+import { db } from '../api/db';
+import { SWAP_UITVOERING_ACTIES } from '../api/helpers';
 import { dienst, leegDatabase, planningKort } from './hulp';
 
 beforeEach(leegDatabase);
@@ -163,5 +165,28 @@ describe('ruilen op dienstdatum', () => {
       { ...basis, id: 'zonder-datum' },
     ]);
     expect((await getSwapsOpDienstdag('2026-11-01', '2026-11-30')).map((s) => s.id)).toEqual(['a', 'midden', 'b']);
+  });
+});
+
+// Welke ruilen op het ruiloverzicht staan, beslist deze lezing (tegenlezing
+// 16-10): alleen de doorvoeracties, per ruil, oudste eerst, ook bij twee regels
+// op exact hetzelfde moment (unieke sortering met het id).
+describe('doorvoerregels per ruil', () => {
+  it('alleen de doorvoeracties van de gevraagde ruilen, oudste eerst, ook bij een gelijk tijdstip', async () => {
+    const regel = (id: string, entity_id: string, action: string, created_at: string) =>
+      ({ id, entity_type: 'swap', entity_id, action, created_at, actor_name: 'Planner', actor_role: 'planner', category: 'swaps', details: '' });
+    const { error } = await db!.from('activity_log').insert([
+      regel('l3', 'r1', 'Dienstruil goedgekeurd', '2026-10-02T08:00:00.000Z'),
+      regel('l1', 'r1', 'Dienstruil aangevraagd', '2026-10-01T08:00:00.000Z'),
+      regel('l2', 'r1', 'Dienst handmatig overgezet', '2026-10-02T08:00:00.000Z'),
+      regel('l4', 'r2', 'Dienstruil goedgekeurd', '2026-10-03T08:00:00.000Z'),
+      regel('l5', 'andere', 'Dienstruil goedgekeurd', '2026-10-03T08:00:00.000Z'),
+    ]);
+    if (error) throw error;
+    const uit = await getSwapDoorvoerRegels(['r1', 'r2', 'zonder'], SWAP_UITVOERING_ACTIES);
+    expect(Object.keys(uit).sort()).toEqual(['r1', 'r2', 'zonder']);
+    expect(uit.r1.map((r) => r.id)).toEqual(['l2', 'l3']);
+    expect(uit.r2.map((r) => r.id)).toEqual(['l4']);
+    expect(uit.zonder).toEqual([]);
   });
 });

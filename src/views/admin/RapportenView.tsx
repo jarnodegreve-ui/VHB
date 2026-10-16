@@ -19,7 +19,7 @@ import { bereikUitleg } from '../../lib/rapportBereik';
 import { useZelfLadend } from '../../lib/zelfLadend';
 import { addDagen, isoDate, maandPlus } from '../../lib/datum';
 import { MONTH_NAMES } from '../../lib/format';
-import { standaardRuilPeriode } from '../../lib/ruilOverzicht';
+import { ruilPeriodeFout, standaardRuilPeriode } from '../../lib/ruilOverzicht';
 import { cn, downloadBlob, notify, openPdfInNewTab } from '../../lib/ui';
 import { EmptyState, Foutkaart, ModalHeader, PageHeader, PageShell, VersheidRegel } from '../../components/ui';
 import { NietGevonden } from '../../components/illustraties';
@@ -253,7 +253,7 @@ function PrintbladModal({ def, onClose }: { def: PrintbladDef; onClose: () => vo
                   <Field label="Diensten vanaf">
                     {({ id, describedBy }) => <DateInput id={id} aria-describedby={describedBy} value={w.van} wisbaar={false} onChange={(van) => zet({ van, tot: w.tot < van ? addDagen(van, 6) : w.tot })} />}
                   </Field>
-                  <Field label="Tot en met">
+                  <Field label="Tot en met" error={ruilPeriodeFout({ van: w.van, tot: w.tot }) ?? undefined}>
                     {({ id, describedBy }) => <DateInput id={id} aria-describedby={describedBy} value={w.tot} min={w.van} wisbaar={false} onChange={(tot) => zet({ tot })} />}
                   </Field>
                 </div>

@@ -47,6 +47,7 @@ export {
   getRecentLogins,
   getLatestAuthEventAt,
   getSwapHistories,
+  getSwapDoorvoerRegels,
   type SwapVerloopLogRegel,
   getSwapVerloopRegels,
   getSwapExecutions,

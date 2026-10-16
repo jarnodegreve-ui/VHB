@@ -17,6 +17,10 @@ describe('ruiloverzicht: vrije periode op dienstdatum (16-10)', () => {
     expect(ruilPeriodeFout({ van: '2026-01-01', tot: '2027-01-02' })).toMatch(/366 dagen/);
     expect(ruilPeriodeFout({ van: '2026-11-30', tot: '2026-11-01' })).toMatch(/vóór de begindatum/);
     expect(ruilPeriodeFout({ van: '', tot: '2026-11-01' })).toMatch(/begin- en een einddatum/);
+    // Onbestaande dagen weigert ook de server (400); hier dus ook.
+    expect(ruilPeriodeFout({ van: '2026-02-30', tot: '2026-03-05' })).toMatch(/begin- en een einddatum/);
+    expect(ruilPeriodeFout({ van: '2026-13-01', tot: '2026-13-02' })).toMatch(/begin- en een einddatum/);
+    expect(ruilPeriodeFout({ van: '2028-02-29', tot: '2028-03-01' })).toBeNull();
   });
 
   it('URL heen en terug', () => {

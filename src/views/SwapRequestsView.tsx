@@ -978,6 +978,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               >
                 Ruiloverzicht
               </Button>
+              {/* De knop staat dan uit; de reden staat erbij, een title ziet niemand op de iPhone. */}
+              {printPeriodeFout && <span className="basis-full text-right text-body-sm text-red-700" role="status">{printPeriodeFout}</span>}
             </div>
           </div>
         );

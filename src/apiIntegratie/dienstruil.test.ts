@@ -2344,6 +2344,8 @@ describe('ruiloverzicht op dienstdatum (GET /api/swaps/uitgevoerd?op=dienst)', (
       { ...basis, id: 'nov-ok', status: 'approved', shiftDate: '2026-11-05', shiftLine: '2101' },
       { ...basis, id: 'nov-terug', status: 'cancelled', shiftDate: '2026-11-20', shiftLine: '2102' },
       { ...basis, id: 'nov-open', status: 'pending', shiftDate: '2026-11-10', shiftLine: '2103' },
+      // Afgehandeld, maar de logregel van de doorvoer ontbreekt (mislukte logActivity).
+      { ...basis, id: 'nov-zonder-regel', status: 'completed', shiftDate: '2026-11-25', shiftLine: '2105', decidedAt: '2026-10-07T09:00:00Z', reason: 'Handmatige wissel door Test Planning' },
       { ...basis, id: 'dec-ok', status: 'approved', shiftDate: '2026-12-01', shiftLine: '2104' },
     ];
     const regel = (entityId: string, action: string, createdAt: string, actorName = 'Test Planning', actorRole = 'planner') =>
@@ -2354,28 +2356,46 @@ describe('ruiloverzicht op dienstdatum (GET /api/swaps/uitgevoerd?op=dienst)', (
       // Doorgevoerd en later teruggedraaid: staat erin (bewijsstuk), met zijn doorvoer.
       regel('nov-terug', 'Dienst handmatig overgezet', '2026-10-03T08:00:00Z', 'Jarno De Greve', 'admin'),
       regel('nov-terug', 'Dienstruil geannuleerd', '2026-10-04T08:00:00Z', 'Jarno De Greve', 'admin'),
+      // Een verwijderde ruil: het logspoor blijft, het record niet.
+      regel('weg', 'Dienstruil goedgekeurd', '2026-10-04T09:00:00Z'),
       regel('nov-open', 'Dienstruil aangevraagd', '2026-10-05T08:00:00Z', 'Chauffeur A', 'chauffeur'),
       regel('dec-ok', 'Dienstruil goedgekeurd', '2026-10-06T08:00:00Z'),
+      // nov-ok teruggedraaid en opnieuw doorgevoerd.
+      regel('nov-ok', 'Dienstruil geannuleerd', '2026-10-07T08:00:00Z'),
+      regel('nov-ok', 'Dienstruil goedgekeurd', '2026-10-08T08:00:00Z', 'Jarno De Greve', 'admin'),
     ];
   };
 
-  it('elke doorgevoerde ruil van een dienst in de periode, één keer; open en buiten de periode niet', async () => {
+  it('elke doorgevoerde ruil van een dienst in de periode, één keer met zijn laatste doorvoer; open en buiten de periode niet', async () => {
     zaai();
     const res = await api('GET', '/api/swaps/uitgevoerd?van=2026-11-01&tot=2026-11-30&op=dienst', { token: 'tok-planner' });
     expect(res.status).toBe(200);
     expect(res.json.wissels.map((w: any) => [w.swap.id, w.uitgevoerdOp, w.handmatig, w.uitgevoerdDoor])).toEqual([
-      ['nov-ok', '2026-10-02T08:00:00Z', false, 'Test Planning'],
+      ['nov-ok', '2026-10-08T08:00:00Z', false, 'Jarno De Greve'],
       ['nov-terug', '2026-10-03T08:00:00Z', true, 'Jarno De Greve'],
+      // Vangnet: de status bewijst de doorvoer; moment = beslismoment, uitvoerder onbekend.
+      ['nov-zonder-regel', '2026-10-07T09:00:00Z', true, ''],
     ]);
-    expect(res.json.wissels[0]).toMatchObject({ aanvragerNaam: 'Chauffeur A', overnemerNaam: 'Chauffeur B' });
+    expect(res.json.wissels[0]).toMatchObject({ aanvragerNaam: 'Chauffeur A', overnemerNaam: 'Chauffeur B', verloop: [] });
   });
 
-  it('zonder op=dienst blijft het de keuze op het moment van doorvoeren', async () => {
+  it('zonder op=dienst blijft het de keuze op het moment van doorvoeren, ongewijzigd', async () => {
     zaai();
-    const res = await api('GET', '/api/swaps/uitgevoerd?van=2026-11-01&tot=2026-11-30', { token: 'tok-planner' });
+    mem.doorvoerUitActiviteit = true;
+    const res = await api('GET', '/api/swaps/uitgevoerd?van=2026-10-01&tot=2026-10-10', { token: 'tok-planner' });
     expect(res.status).toBe(200);
-    // De mock van getSwapExecutions geeft geen regels: in november is er niets doorgevoerd.
-    expect(res.json.wissels).toEqual([]);
+    // Eén regel per doorvoer, chronologisch: nov-ok twee keer, de verwijderde ruil valt weg,
+    // de ruil zonder logregel staat hier (zoals altijd) niet in.
+    expect(res.json.wissels.map((w: any) => [w.swap.id, w.uitgevoerdOp, w.handmatig])).toEqual([
+      ['nov-ok', '2026-10-02T08:00:00Z', false],
+      ['nov-terug', '2026-10-03T08:00:00Z', true],
+      ['dec-ok', '2026-10-06T08:00:00Z', false],
+      ['nov-ok', '2026-10-08T08:00:00Z', false],
+    ]);
+    // Het verloop gaat op dit pad nog mee (tabbladen van vóór 16-10), oudste eerst.
+    expect(res.json.wissels[0].verloop.map((r: any) => r.action)).toEqual([
+      'Dienstruil aangevraagd', 'Dienstruil goedgekeurd', 'Dienstruil geannuleerd', 'Dienstruil goedgekeurd',
+    ]);
   });
 
   it('een chauffeur krijgt 403, een periode van meer dan 366 dagen 400', async () => {

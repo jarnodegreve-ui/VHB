@@ -57,20 +57,28 @@ export const brusselseDagVan = (moment: string | null | undefined): string | nul
   return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" }) : null;
 };
 
+/** Een status die zegt dat de ruil in de planning staat: goedgekeurd of daarna afgehandeld. */
+const DOORGEVOERDE_STATUS = new Set(["approved", "completed"]);
+
 /**
  * Per ruil de laatste logregel die hem doorvoerde (een actie uit `acties`), in
- * de volgorde van de ruilen; een ruil die nooit doorgevoerd werd valt weg. Een
- * ruil die na een terugdraai opnieuw doorgevoerd werd, staat er één keer in,
- * met zijn laatste doorvoer. De logregels per ruil komen oudste eerst
- * (`getSwapHistories`), maar de keuze hangt daar niet van af.
+ * de volgorde van de ruilen. Een ruil die na een terugdraai opnieuw doorgevoerd
+ * werd, staat er één keer in, met zijn laatste doorvoer; de volgorde van de
+ * logregels doet er niet toe.
+ *
+ * Zonder doorvoerregel valt een ruil weg, tenzij zijn status zegt dat hij
+ * doorgevoerd is (goedgekeurd of afgehandeld): dan staat hij erin met
+ * `regel: null` (tegenlezing 16-10: `logActivity` slikt een mislukte
+ * schrijfactie, en het blad is een bewijsstuk). Een teruggedraaide ruil
+ * zonder regel kan niet bewezen worden en valt weg.
  */
-export const laatsteUitvoeringPerRuil = <S extends { id?: unknown }, R extends { action?: string | null; createdAt: string }>(
+export const laatsteUitvoeringPerRuil = <S extends { id?: unknown; status?: unknown }, R extends { action?: string | null; createdAt: string }>(
   ruilen: readonly S[],
   logPerRuil: Readonly<Record<string, readonly R[]>>,
   acties: readonly string[],
-): Array<{ swap: S; regel: R }> => {
+): Array<{ swap: S; regel: R | null }> => {
   const doorvoer = new Set(acties);
-  const uit: Array<{ swap: S; regel: R }> = [];
+  const uit: Array<{ swap: S; regel: R | null }> = [];
   for (const swap of ruilen) {
     const id = String(swap.id ?? "");
     // hasOwn: een ruil-id als "constructor" mag geen regels van Object.prototype vinden.
@@ -78,9 +86,10 @@ export const laatsteUitvoeringPerRuil = <S extends { id?: unknown }, R extends {
     let laatste: R | null = null;
     for (const regel of regels) {
       if (!doorvoer.has(String(regel.action ?? ""))) continue;
-      if (!laatste || String(regel.createdAt).localeCompare(String(laatste.createdAt)) >= 0) laatste = regel;
+      if (!laatste || String(regel.createdAt) >= String(laatste.createdAt)) laatste = regel;
     }
     if (laatste) uit.push({ swap, regel: laatste });
+    else if (DOORGEVOERDE_STATUS.has(String(swap.status ?? ""))) uit.push({ swap, regel: null });
   }
   return uit;
 };

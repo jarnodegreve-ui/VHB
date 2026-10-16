@@ -20,10 +20,10 @@ import { DAG_KORT, meldRuilTerValidatieTelegram } from "../telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
 import { RUIL_BEKEKEN_ACTIE, regelsVanRuil, verloopUitLog, type RuilVerloopStap } from "../../shared/ruilVerloop.js";
 import { RUST_TE_BEOORDELEN, beoordeelRuilRust, type RuilRustRegel, type RuilVoorRust, type RustPlanningRij } from "../../shared/ruilRust.js";
-import { addDagenIso, DAG_DMJ, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
+import { addDagenIso, DAG_DMJ, toLookupToken, isTakeoverCode, HANDMATIGE_WISSEL_PREFIX, SWAP_UITVOERING_ACTIES, isHandmatigeWissel, normalizeSwapType, TAKEOVER_CODES, isActieveStaf, redenVoorChauffeur, brusselsDay } from "../helpers.js";
 import { brusselseMinuten, dienstGereden } from "../../shared/dienstGereden.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getSwapsOpDienstdag, getSwapsVenster, getSwapsArchief, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen, type SwapCarryResult } from "../storage.js";
+import { applySwapToPlanning, revertSwapFromPlanning, swapToestandInPlanning, getSwapExecutions, getSwapHistories, getSwapDoorvoerRegels, getSwapVerloopRegels, type SwapVerloopLogRegel, getSwapsByIds, getSwapsOpDienstdag, getSwapsVenster, getSwapsArchief, getPlanningData, getSwapsData, getUsersData, logActivity, getShiftById, getShiftsOnDate, markSwapTargetSeen, saveSwapsData, schrijfSwapAlsStatus, voegSwapsToe, type SwapBenen, type SwapCarryResult } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, ISO_DAY_RE, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 import { TERMINAL_SWAP_STATES, bordToontRuilAl, describeSwapCarry, dubbeleInplanningFout, ruilAfwezigheidsFout, staleApprovalError } from "./ruilRegels.js";
@@ -574,16 +574,21 @@ export function mountRuilRoutes(app: express.Express) {
 
       let paren: Array<{ swap: any; regel: any }>;
       let users: any[];
-      let verloopPerSwap: Record<string, any[]>;
+      // Het verloop gaat alleen nog mee op het oude pad (tabbladen van vóór
+      // 16-10 tonen het); het blad op dienstdatum toont het niet.
+      let verloopPerSwap: Record<string, any[]> = Object.create(null);
       if (opDienstdag) {
         // Elke ruil van een dienst in [van, tot] die ooit doorgevoerd werd, één
         // keer, met zijn laatste doorvoer; wanneer dat was doet er niet toe.
+        // Alleen de doorvoerregels gelezen, met een unieke sortering en zonder
+        // limiet (tegenlezing 16-10): hier beslissen ze wie erop staat.
         const ruilen = await getSwapsOpDienstdag(van, tot);
-        [users, verloopPerSwap] = await Promise.all([
+        let doorvoer: Record<string, any[]>;
+        [users, doorvoer] = await Promise.all([
           getUsersData(),
-          getSwapHistories(ruilen.map((s: any) => String(s.id))),
+          getSwapDoorvoerRegels(ruilen.map((s: any) => String(s.id)), SWAP_UITVOERING_ACTIES),
         ]);
-        paren = laatsteUitvoeringPerRuil(ruilen, verloopPerSwap, SWAP_UITVOERING_ACTIES);
+        paren = laatsteUitvoeringPerRuil(ruilen, doorvoer, SWAP_UITVOERING_ACTIES);
       } else {
         // Ruim in UTC ophalen en daarna filteren op de Brusselse kalenderdag: dat
         // klopt ook in de weken van de zomer-/wintertijdwissel, zonder offsetwerk.
@@ -616,14 +621,16 @@ export function mountRuilRoutes(app: express.Express) {
         if (!sleutel) return "";
         return naamById.get(sleutel) ?? "Onbekend";
       };
+      // `regel: null` = doorgevoerde status zonder logregel (laatsteUitvoeringPerRuil):
+      // het moment is dan het beslismoment, wie het deed is onbekend.
       const wissels = paren.map(({ swap, regel }) => ({
         swap,
         aanvragerNaam: naamVan(swap.requesterId),
         overnemerNaam: naamVan(swap.targetDriverId),
-        uitgevoerdOp: regel.createdAt,
-        uitgevoerdDoor: regel.actorName,
-        uitgevoerdDoorRol: regel.actorRole,
-        handmatig: regel.action !== "Dienstruil goedgekeurd",
+        uitgevoerdOp: regel ? regel.createdAt : String(swap.decidedAt ?? swap.createdAt ?? ""),
+        uitgevoerdDoor: regel ? regel.actorName : "",
+        uitgevoerdDoorRol: regel ? regel.actorRole : "",
+        handmatig: regel ? regel.action !== "Dienstruil goedgekeurd" : isHandmatigeWissel(swap),
         verloop: regelsVanRuil(verloopPerSwap, String(swap.id)),
       }));
 
