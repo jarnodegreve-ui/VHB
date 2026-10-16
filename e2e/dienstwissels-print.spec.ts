@@ -36,10 +36,13 @@ test('planning print het weekoverzicht van de uitgevoerde dienstwissels', async 
   await expect(page.getByRole('heading', { name: 'Ruiloverzicht', level: 1 })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Afdrukken' })).toBeVisible();
   // Kop van PrintBlad: de week in woorden; geen 'Afgedrukt op' en geen paraafstrook meer.
-  await expect(page.getByText(/^Week \d{1,2} · \d{2}\/\d{2}\/\d{4} t\/m \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
+  await expect(page.getByText(/^Doorgevoerd in week \d{1,2} · \d{2}\/\d{2}\/\d{4} t\/m \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
   await expect(page.getByText(/Afgedrukt op/)).toHaveCount(0);
   await expect(page.getByText('Paraaf planning')).toHaveCount(0);
-  // Eén regel per wissel: dienst, datum, soort, geeft af, neemt over, aangevraagd, bevestigd.
+  // Gegroepeerd per dag van de dienst (kopregel met de datum), daaronder één
+  // regel per wissel: dienst, soort, naam (geeft af), naam (neemt over), aangevraagd, bevestigd.
+  const [j, m, d] = PLANNING[0].date.split('-');
+  await expect(page.getByRole('cell', { name: new RegExp(`^[a-z]+dag ${d}/${m}/${j}$`) })).toBeVisible();
   const rij = page.getByRole('row').filter({ hasText: 'Alex Du Priez' });
   await expect(rij).toHaveCount(1);
   await expect(rij.getByRole('cell', { name: String(PLANNING[0].line) })).toBeVisible();
