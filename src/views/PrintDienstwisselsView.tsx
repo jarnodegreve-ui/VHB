@@ -22,7 +22,7 @@ import { addDagen, isoDate } from '../lib/datum';
  *
  * Sinds 16-10 (Jarno) compact, zodat er veel wissels op één blad passen: één
  * tabelregel per wissel met alleen dienst, dienstdatum, soort (ruil of
- * overname), wie afgeeft, wie overneemt, aangevraagd op en bevestigd op (de
+ * overname, bij een ruil klein eronder wat er in ruil terugkomt), wie afgeeft, wie overneemt, aangevraagd op en bevestigd op (de
  * bevestiging van de nieuwe rijder, `targetSeenAt`, zoals "Dienstwissel
  * bevestigd" in het verloop). Geen verloop, reden, uitvoerder of
  * "Afgedrukt op" meer. Per uitvoeringsdag een kopregel, zoals de werktypes in
@@ -33,6 +33,13 @@ import { addDagen, isoDate } from '../lib/datum';
  *  of geannuleerd betekent hier altijd dat de wissel later is teruggedraaid
  *  (api/_lib/ruilRoutes.ts). Dat blijft zichtbaar, de andere statussen niet. */
 const isTeruggedraaid = (s: SwapRequest) => s.status === 'rejected' || s.status === 'cancelled';
+
+/** Wat de overnemer bij een ruil teruggeeft: 'tegen 2606, za 5 dec' of 'tegen vrije dag, …'. */
+const inRuil = (s: SwapRequest): string => {
+  if (s.swapType === 'overname' || !s.returnCode || !s.returnDate) return '';
+  const wat = s.returnCode.toLowerCase() === 'vrij' ? 'vrije dag' : s.returnCode;
+  return `tegen ${wat}, ${formatShortDay(s.returnDate)}`;
+};
 
 type UitgevoerdeWissel = {
   swap: SwapRequest;
@@ -103,13 +110,13 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
       ) : (
         <table className="mt-5 w-full border-collapse text-[10px] leading-snug">
           <colgroup>
-            <col className="w-[8%]" />
-            <col className="w-[12%]" />
+            <col className="w-[7%]" />
             <col className="w-[10%]" />
+            <col className="w-[19%]" />
             <col />
             <col />
-            <col className="w-[12%]" />
-            <col className="w-[12%]" />
+            <col className="w-[11%]" />
+            <col className="w-[11%]" />
           </colgroup>
           <thead>
             <tr className="border-b-2 border-slate-900">
@@ -133,12 +140,14 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
               </tr>
               {groep.wissels.map((wissel) => {
                 const s = wissel.swap;
+                const terug = inRuil(s);
                 return (
                   <tr key={`${s.id}-${wissel.uitgevoerdOp}`} className="printblad-bijeen border-b border-slate-300 align-top">
                     <td className="py-0.5 pr-2 font-bold">{lijnVan(s)}</td>
                     <td className="whitespace-nowrap py-0.5 pr-2">{formatShortDay(s.shiftDate || dienstVan(s)?.date)}</td>
                     <td className="py-0.5 pr-2">
                       {s.swapType === 'overname' ? 'Overname' : 'Ruil'}
+                      {terug && <span className="block whitespace-nowrap text-[9px] text-slate-600">{terug}</span>}
                       {isTeruggedraaid(s) && <span className="block italic text-slate-600">teruggedraaid</span>}
                     </td>
                     <td className="py-0.5 pr-2">{wissel.aanvragerNaam}</td>

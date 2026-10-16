@@ -43,7 +43,8 @@ test('planning print het weekoverzicht van de uitgevoerde dienstwissels', async 
   const rij = page.getByRole('row').filter({ hasText: 'Alex Du Priez' });
   await expect(rij).toHaveCount(1);
   await expect(rij.getByRole('cell', { name: String(PLANNING[0].line) })).toBeVisible();
-  await expect(rij.getByRole('cell', { name: 'Ruil', exact: true })).toBeVisible();
+  // Bij een ruil klein onder de soort wat er terugkomt (fixture: VRIJ = vrije dag).
+  await expect(rij.getByRole('cell', { name: /^Ruil tegen vrije dag, / })).toBeVisible();
   await expect(rij.getByRole('cell', { name: 'Diether Van Haute' })).toBeVisible();
   await expect(rij.getByRole('cell', { name: 'nog niet' })).toBeVisible();
   // Wat er sinds 16-10 niet meer op staat: uitvoerder, verloop en reden.
