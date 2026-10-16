@@ -132,6 +132,20 @@ export const getPlanningMatrixGrenzen = async (): Promise<{ eerste: string | nul
   return { eerste, laatste };
 };
 
+/** De ruilen waarvan de dienst op een dag in [van, tot] valt (ruiloverzicht
+ *  per dienstdatum, Jarno 16-10). `shift_date` is tekst jjjj-mm-dd, dus de
+ *  tekstvergelijking is de datumvergelijking; een ruil zonder dienstdatum
+ *  (alleen van vóór de migratie van 01-08) valt erbuiten. */
+export const getSwapsOpDienstdag = async (van: string, tot: string) => {
+  const client = requireDb();
+  const rows = await paginatedFetch((from, to) =>
+    client.from('swaps').select('*').gte('shift_date', van).lte('shift_date', tot)
+      .order('shift_date', { ascending: true }).order('id', { ascending: true }).range(from, to),
+  // Vangnet, geen verwachting: hoogstens 366 dagen en enkele ruilen per dag.
+  5000);
+  return rows.map(toPublicSwap);
+};
+
 export const getSwapsByIds = async (ids: string[]) => {
   const unieke = [...new Set(ids.map((id) => String(id)).filter(Boolean))];
   if (unieke.length === 0) return [];

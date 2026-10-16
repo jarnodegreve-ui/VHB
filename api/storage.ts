@@ -216,6 +216,7 @@ export {
   getSwapsData,
   getPlanningMatrixGrenzen,
   getSwapsByIds,
+  getSwapsOpDienstdag,
   getSwapsVenster,
   getSwapsArchief,
   saveSwapsData,

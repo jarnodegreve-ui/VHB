@@ -2335,3 +2335,54 @@ describe('dienstruil: het venster en het archief (15-10)', () => {
     expect(goed.json.id).toBe('s-oud');
   });
 });
+
+// --- Ruiloverzicht op dienstdatum (GET /api/swaps/uitgevoerd?op=dienst, 16-10) ---
+describe('ruiloverzicht op dienstdatum (GET /api/swaps/uitgevoerd?op=dienst)', () => {
+  const zaai = () => {
+    const basis = { requesterId: '3', targetDriverId: '4', reason: '', createdAt: '2026-10-01T08:00:00Z' };
+    mem.swaps = [
+      { ...basis, id: 'nov-ok', status: 'approved', shiftDate: '2026-11-05', shiftLine: '2101' },
+      { ...basis, id: 'nov-terug', status: 'cancelled', shiftDate: '2026-11-20', shiftLine: '2102' },
+      { ...basis, id: 'nov-open', status: 'pending', shiftDate: '2026-11-10', shiftLine: '2103' },
+      { ...basis, id: 'dec-ok', status: 'approved', shiftDate: '2026-12-01', shiftLine: '2104' },
+    ];
+    const regel = (entityId: string, action: string, createdAt: string, actorName = 'Test Planning', actorRole = 'planner') =>
+      ({ entityType: 'swap', entityId, action, createdAt, actorName, actorRole, category: 'swaps', details: '' });
+    mem.activity = [
+      regel('nov-ok', 'Dienstruil aangevraagd', '2026-10-01T08:00:00Z', 'Chauffeur A', 'chauffeur'),
+      regel('nov-ok', 'Dienstruil goedgekeurd', '2026-10-02T08:00:00Z'),
+      // Doorgevoerd en later teruggedraaid: staat erin (bewijsstuk), met zijn doorvoer.
+      regel('nov-terug', 'Dienst handmatig overgezet', '2026-10-03T08:00:00Z', 'Jarno De Greve', 'admin'),
+      regel('nov-terug', 'Dienstruil geannuleerd', '2026-10-04T08:00:00Z', 'Jarno De Greve', 'admin'),
+      regel('nov-open', 'Dienstruil aangevraagd', '2026-10-05T08:00:00Z', 'Chauffeur A', 'chauffeur'),
+      regel('dec-ok', 'Dienstruil goedgekeurd', '2026-10-06T08:00:00Z'),
+    ];
+  };
+
+  it('elke doorgevoerde ruil van een dienst in de periode, één keer; open en buiten de periode niet', async () => {
+    zaai();
+    const res = await api('GET', '/api/swaps/uitgevoerd?van=2026-11-01&tot=2026-11-30&op=dienst', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.wissels.map((w: any) => [w.swap.id, w.uitgevoerdOp, w.handmatig, w.uitgevoerdDoor])).toEqual([
+      ['nov-ok', '2026-10-02T08:00:00Z', false, 'Test Planning'],
+      ['nov-terug', '2026-10-03T08:00:00Z', true, 'Jarno De Greve'],
+    ]);
+    expect(res.json.wissels[0]).toMatchObject({ aanvragerNaam: 'Chauffeur A', overnemerNaam: 'Chauffeur B' });
+  });
+
+  it('zonder op=dienst blijft het de keuze op het moment van doorvoeren', async () => {
+    zaai();
+    const res = await api('GET', '/api/swaps/uitgevoerd?van=2026-11-01&tot=2026-11-30', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    // De mock van getSwapExecutions geeft geen regels: in november is er niets doorgevoerd.
+    expect(res.json.wissels).toEqual([]);
+  });
+
+  it('een chauffeur krijgt 403, een periode van meer dan 366 dagen 400', async () => {
+    zaai();
+    expect((await api('GET', '/api/swaps/uitgevoerd?van=2026-11-01&tot=2026-11-30&op=dienst', { token: 'tok-a' })).status).toBe(403);
+    const teLang = await api('GET', '/api/swaps/uitgevoerd?van=2026-01-01&tot=2027-01-02&op=dienst', { token: 'tok-planner' });
+    expect(teLang.status).toBe(400);
+    expect(teLang.json.error).toMatch(/366 dagen/);
+  });
+});

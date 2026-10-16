@@ -549,6 +549,12 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
       }
       mem.swaps = [...mem.swaps, ...swaps];
     },
+    // Ruiloverzicht op dienstdatum (16-10): zelfde contract als de query
+    // (shift_date als tekst binnen [van, tot], oplopend, dan op id).
+    getSwapsOpDienstdag: async (van: string, tot: string) =>
+      mem.swaps
+        .filter((s: any) => s.shiftDate && s.shiftDate >= van && s.shiftDate <= tot)
+        .sort((a: any, b: any) => String(a.shiftDate).localeCompare(String(b.shiftDate)) || String(a.id).localeCompare(String(b.id))),
     getSwapsByIds: async (ids: string[]) => {
       if (mem.swapHerlezingFaalt) throw new Error('swaps: connection failure');
       return mem.swaps.filter((s: any) => ids.map(String).includes(String(s.id)));
@@ -821,6 +827,17 @@ vi.mock('../../api/storage.js', async (importOriginal) => {
         if (a.entityType !== 'swap' || !a.entityId) continue;
         if (ids && !ids.includes(String(a.entityId))) continue;
         (uit[String(a.entityId)] ??= []).push({ createdAt: a.gelogdOp ?? a.createdAt, action: a.action, actorRole: a.actorRole ?? null, actorName: a.actorName ?? null, details: a.message ?? a.details ?? '' });
+      }
+      return uit;
+    },
+    // Zelfde contract als de echte: alle logregels per gevraagde ruil, oudste
+    // eerst, zonder "Dienstruil bekeken" (ruiloverzicht, GET /api/swaps/uitgevoerd).
+    getSwapHistories: async (ids: string[]) => {
+      const uit: Record<string, any[]> = Object.create(null);
+      for (const id of ids) uit[String(id)] = [];
+      for (const a of mem.activity) {
+        if (a.entityType !== 'swap' || !a.entityId || a.action === 'Dienstruil bekeken') continue;
+        uit[String(a.entityId)]?.push({ ...a, createdAt: a.createdAt ?? a.gelogdOp });
       }
       return uit;
     },

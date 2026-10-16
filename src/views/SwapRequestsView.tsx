@@ -25,8 +25,7 @@ import { RuilRust } from '../components/RuilRust';
 import { RuilBekekenBaken } from '../components/RuilBekekenBaken';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { addDagen } from '../lib/datum';
-import { maandagVan } from '../lib/roosterUren';
-import { isoWeekOf } from '../lib/week';
+import { ruilOverzichtQuery, ruilPeriodeFout, standaardRuilPeriode, type RuilPeriode } from '../lib/ruilOverzicht';
 import { formatDateHuman, formatPeriodeDMJ, formatShortDay, hoofdletter, serviceNumberOf, tijdvak } from '../lib/format';
 import { dienstSleutel, eigenDienstOp, groepeerPerDienst } from '../lib/ruilWizard';
 import { sorteerRuilen } from '../lib/ruilVolgorde';
@@ -78,12 +77,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // stonden er anders 30-40 kaarten in één modal.
   const [showAllShifts, setShowAllShifts] = useState(false);
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
-  // Weekoverzicht van de uitgevoerde dienstwissels afdrukken (bewijsstuk voor
-  // het klassement, Jarno 18-09). De datum mag elke dag uit de week zijn, het
-  // printscherm neemt de maandag; standaard de lopende week.
-  const [printDag, setPrintDag] = useState(() => isoDate(new Date()));
-  const drukWeekoverzichtAf = (dag: string) => {
-    if (dag) openPdfInNewTab(`${window.location.origin}${window.location.pathname}?ruiloverzicht-week=${dag}`);
+  // Ruiloverzicht afdrukken (bewijsstuk voor het klassement, Jarno 18-09):
+  // sinds 16-10 een vrije periode op de datum van de dienst, standaard de
+  // lopende week. Schuift Vanaf voorbij Tot, dan schuift Tot mee.
+  const [printPeriode, setPrintPeriode] = useState<RuilPeriode>(() => standaardRuilPeriode(isoDate(new Date())));
+  const printPeriodeFout = ruilPeriodeFout(printPeriode);
+  const zetPrintVan = (van: string) => setPrintPeriode((p) => ({ van, tot: p.tot < van ? addDagen(van, 6) : p.tot }));
+  const drukRuiloverzichtAf = () => {
+    if (!printPeriodeFout) openPdfInNewTab(`${window.location.origin}${window.location.pathname}?${ruilOverzichtQuery(printPeriode).toString()}`);
   };
   // Beoordeling in een side panel: alle ruil-context + beslis-acties
   // zonder paginawissel (zelfde patroon als LeaveManagementView).
@@ -962,16 +963,20 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         const beheerKop = (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <MicroLabel className="ml-1">Beheer dienstruilen</MicroLabel>
-            <div className="flex items-center gap-2">
-              <DateInput size="sm" value={printDag} onChange={setPrintDag} aria-label="Dag uit de week van het ruiloverzicht" />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-body-sm text-slate-500">Vanaf</span>
+              <DateInput size="sm" value={printPeriode.van} onChange={zetPrintVan} wisbaar={false} aria-label="Ruiloverzicht, diensten vanaf" />
+              <span className="text-body-sm text-slate-500">tot</span>
+              <DateInput size="sm" value={printPeriode.tot} min={printPeriode.van} onChange={(tot) => setPrintPeriode((p) => ({ ...p, tot }))} wisbaar={false} aria-label="Ruiloverzicht, diensten tot en met" />
               <Button
                 variant="secondary"
                 size="sm"
                 icon={<Printer size={14} />}
-                onClick={() => drukWeekoverzichtAf(printDag)}
-                title={`Uitgevoerde wissels van ${formatPeriodeDMJ(maandagVan(printDag), addDagen(maandagVan(printDag), 6))}`}
+                onClick={drukRuiloverzichtAf}
+                disabled={!!printPeriodeFout}
+                title={printPeriodeFout ?? `Doorgevoerde wissels van de diensten van ${formatPeriodeDMJ(printPeriode.van, printPeriode.tot)}`}
               >
-                Ruiloverzicht week {isoWeekOf(maandagVan(printDag))}
+                Ruiloverzicht
               </Button>
             </div>
           </div>

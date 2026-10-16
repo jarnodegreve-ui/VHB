@@ -9,6 +9,11 @@ import { MAX_PERIODE_DAGEN, dagPlus, dagenInPeriode } from "../../shared/rapport
  * Ruil-logregels ruimt de nachtcron nooit op (`pruneOldRecords` slaat
  * `entity_type = 'swap'` over), dus dit werkt ook voor meer dan een jaar terug.
  * Puur, geen database.
+ *
+ * Sinds 16-10 kiest het ruiloverzicht ook op de datum van de DIENST
+ * (`laatsteUitvoeringPerRuil`): dan is de vraag niet "wat is in deze periode
+ * doorgevoerd" maar "welke ruilen van diensten in deze periode zijn ooit
+ * doorgevoerd", en telt elke ruil één keer.
  */
 
 /** Langste periode die in één keer opgevraagd mag worden: de rapportgrens (was 31 dagen, genoeg voor het weekblad). */
@@ -50,6 +55,34 @@ export const brusselseDagVan = (moment: string | null | undefined): string | nul
   if (!MET_ZONE.test(tekst)) return ZONELOOS.exec(tekst)?.[1] ?? null;
   const d = new Date(tekst);
   return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" }) : null;
+};
+
+/**
+ * Per ruil de laatste logregel die hem doorvoerde (een actie uit `acties`), in
+ * de volgorde van de ruilen; een ruil die nooit doorgevoerd werd valt weg. Een
+ * ruil die na een terugdraai opnieuw doorgevoerd werd, staat er één keer in,
+ * met zijn laatste doorvoer. De logregels per ruil komen oudste eerst
+ * (`getSwapHistories`), maar de keuze hangt daar niet van af.
+ */
+export const laatsteUitvoeringPerRuil = <S extends { id?: unknown }, R extends { action?: string | null; createdAt: string }>(
+  ruilen: readonly S[],
+  logPerRuil: Readonly<Record<string, readonly R[]>>,
+  acties: readonly string[],
+): Array<{ swap: S; regel: R }> => {
+  const doorvoer = new Set(acties);
+  const uit: Array<{ swap: S; regel: R }> = [];
+  for (const swap of ruilen) {
+    const id = String(swap.id ?? "");
+    // hasOwn: een ruil-id als "constructor" mag geen regels van Object.prototype vinden.
+    const regels = id && Object.prototype.hasOwnProperty.call(logPerRuil, id) ? logPerRuil[id] : [];
+    let laatste: R | null = null;
+    for (const regel of regels) {
+      if (!doorvoer.has(String(regel.action ?? ""))) continue;
+      if (!laatste || String(regel.createdAt).localeCompare(String(laatste.createdAt)) >= 0) laatste = regel;
+    }
+    if (laatste) uit.push({ swap, regel: laatste });
+  }
+  return uit;
 };
 
 /** De logregels waarvan de Brusselse kalenderdag in [van, tot] valt, oudste eerst. */

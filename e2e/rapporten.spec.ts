@@ -486,10 +486,14 @@ test('ruilrapport: ruilaanvragen met status, antwoord van de collega, peildatum 
   await vangNieuwTabblad(page);
   await page.goto('/rapporten');
   await expect(page.getByRole('heading', { name: 'Ruilen', level: 2 })).toBeVisible({ timeout: 15_000 });
-  // De drie rapporten staan naast het bestaande weekblad.
+  // De drie rapporten staan naast het bestaande blad Ruiloverzicht, dat sinds
+  // 16-10 een vrije periode op de dienstdatum vraagt.
   await expect(page.getByRole('link', { name: /Uitgevoerde wissels/ })).toBeVisible();
   await expect(page.getByRole('link', { name: /Ruilen per chauffeur/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Ruiloverzicht per week/ })).toBeVisible();
+  await page.getByRole('button', { name: /^Ruiloverzicht/ }).click();
+  await expect(page.getByLabel('Diensten vanaf')).toBeVisible();
+  await expect(page.getByLabel('Tot en met')).toBeVisible();
+  await page.getByRole('button', { name: 'Annuleren' }).click();
   await page.getByRole('link', { name: /Ruilaanvragen/ }).click();
   await expect(page).toHaveURL(/\/rapporten\/ruilen\/ruilaanvragen$/);
 

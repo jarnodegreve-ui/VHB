@@ -1,4 +1,5 @@
 import type { RapportDomein } from '../../shared/rapporten/types';
+import { ruilOverzichtQuery, ruilPeriodeFout } from './ruilOverzicht';
 
 /**
  * De vier printbladen die al bestonden vóór de pagina Rapporten. Ze staan in
@@ -7,9 +8,10 @@ import type { RapportDomein } from '../../shared/rapporten/types';
  * vraagt alleen hun parameters en opent die URL; ze zijn bewust NIET omgebouwd
  * naar het register (wel staan ze sinds 03-10 op dezelfde `PrintBlad`-kop).
  */
-export type PrintbladParameter = 'maand' | 'chauffeur' | 'chauffeur-of-alle' | 'jaar' | 'week' | 'omvang';
+export type PrintbladParameter = 'maand' | 'chauffeur' | 'chauffeur-of-alle' | 'jaar' | 'periode' | 'omvang';
 
-export type PrintbladWaarden = { maand: string; chauffeur: string; jaar: number; dag: string; omvang: 'open' | 'alles' };
+/** `van`/`tot` = de periode van het ruiloverzicht (dienstdatum, sinds 16-10; was één week). */
+export type PrintbladWaarden = { maand: string; chauffeur: string; jaar: number; van: string; tot: string; omvang: 'open' | 'alles' };
 
 export type PrintbladDef = {
   id: string;
@@ -41,10 +43,10 @@ export const PRINTBLADEN: readonly PrintbladDef[] = [
   {
     id: 'ruiloverzicht',
     domein: 'ruilen',
-    titel: 'Ruiloverzicht per week',
-    omschrijving: 'De dienstwissels die in één week zijn uitgevoerd, met hun verloop.',
-    parameters: ['week'],
-    query: (w) => new URLSearchParams({ 'ruiloverzicht-week': w.dag }),
+    titel: 'Ruiloverzicht',
+    omschrijving: 'De doorgevoerde dienstwissels van de diensten in een periode, per dag.',
+    parameters: ['periode'],
+    query: (w) => ruilOverzichtQuery({ van: w.van, tot: w.tot }),
   },
   {
     id: 'gele-boek',
@@ -58,8 +60,8 @@ export const PRINTBLADEN: readonly PrintbladDef[] = [
 
 export const printbladenVanDomein = (domein: RapportDomein): PrintbladDef[] => PRINTBLADEN.filter((p) => p.domein === domein);
 
-/** Kan dit blad open met deze waarden? (de chauffeur is bij het verlofjaar verplicht) */
+/** Kan dit blad open met deze waarden? (de chauffeur is bij het verlofjaar verplicht, de periode moet kloppen) */
 export const printbladKlaar = (def: PrintbladDef, w: PrintbladWaarden): boolean =>
-  def.parameters.every((p) => (p === 'chauffeur' ? w.chauffeur !== '' : p === 'week' ? w.dag !== '' : true));
+  def.parameters.every((p) => (p === 'chauffeur' ? w.chauffeur !== '' : p === 'periode' ? ruilPeriodeFout({ van: w.van, tot: w.tot }) === null : true));
 
 export const printbladUrl = (def: PrintbladDef, w: PrintbladWaarden, basis: string): string => `${basis}?${def.query(w).toString()}`;

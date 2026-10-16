@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  applySwapToPlanning, getSwapsArchief, getSwapsData, getSwapsVenster, replacePlanningData, revertSwapFromPlanning,
+  applySwapToPlanning, getSwapsArchief, getSwapsData, getSwapsOpDienstdag, getSwapsVenster, replacePlanningData, revertSwapFromPlanning,
   schrijfSwapAlsStatus, swapToestandInPlanning, voegSwapsToe,
 } from '../api/storage';
 import { archiefVolgorde, ruilInVenster } from '../shared/ruilVenster';
@@ -146,5 +146,22 @@ describe('ruilen: venster en archief', () => {
     const venster = (await getSwapsVenster(GRENS)).map((s) => s.id);
     const archief = (await getSwapsArchief({ grens: GRENS, vanaf: 0, aantal: 50 })).ruilen.map((s) => s.id);
     expect([...venster, ...archief].sort()).toEqual((await getSwapsData()).map((s) => s.id).sort());
+  });
+});
+
+// Ruiloverzicht op dienstdatum (16-10): shift_date is tekst, dus de
+// tekstvergelijking in de query moet de datumvergelijking zijn, randen inbegrepen.
+describe('ruilen op dienstdatum', () => {
+  it('precies de ruilen met een dienst in [van, tot], randen inbegrepen, oplopend; zonder dienstdatum nooit', async () => {
+    const basis = { shiftId: 's', requesterId: 'c1', targetDriverId: 'c2', reason: '', swapType: 'ruil' as const, status: 'approved' as const, createdAt: '2026-10-01T08:00:00.000Z' };
+    await voegSwapsToe([
+      { ...basis, id: 'b', shiftDate: '2026-11-30' },
+      { ...basis, id: 'a', shiftDate: '2026-11-01' },
+      { ...basis, id: 'midden', shiftDate: '2026-11-15' },
+      { ...basis, id: 'ervoor', shiftDate: '2026-10-31' },
+      { ...basis, id: 'erna', shiftDate: '2026-12-01' },
+      { ...basis, id: 'zonder-datum' },
+    ]);
+    expect((await getSwapsOpDienstdag('2026-11-01', '2026-11-30')).map((s) => s.id)).toEqual(['a', 'midden', 'b']);
   });
 });
