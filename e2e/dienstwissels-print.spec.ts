@@ -5,7 +5,7 @@ import { PLANNING, SWAPS } from '../scripts/audit-fixtures.mjs';
 /**
  * Weekoverzicht dienstwissels (bewijsstuk voor het klassement): het
  * printscherm toont de wissels die die week in het portaal zijn uitgevoerd,
- * met hun verloop uit het activiteitenlog.
+ * sinds 16-10 compact: één tabelregel per wissel, zonder verloop of reden.
  */
 test('planning print het weekoverzicht van de uitgevoerde dienstwissels', async ({ page }) => {
   const pageErrors: string[] = [];
@@ -35,13 +35,20 @@ test('planning print het weekoverzicht van de uitgevoerde dienstwissels', async 
 
   await expect(page.getByRole('heading', { name: 'Ruiloverzicht', level: 1 })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Afdrukken' })).toBeVisible();
-  // Kop van PrintBlad: de week in woorden en wie afdrukt; geen paraafstrook meer.
+  // Kop van PrintBlad: de week in woorden; geen 'Afgedrukt op' en geen paraafstrook meer.
   await expect(page.getByText(/^Week \d{1,2} · \d{2}\/\d{2}\/\d{4} t\/m \d{2}\/\d{2}\/\d{4}$/)).toBeVisible();
-  await expect(page.getByText(/Afgedrukt op \d{2}\/\d{2}\/\d{4} \d{2}:\d{2} door Jarno De Greve/)).toBeVisible();
+  await expect(page.getByText(/Afgedrukt op/)).toHaveCount(0);
   await expect(page.getByText('Paraaf planning')).toHaveCount(0);
-  await expect(page.getByText('Alex Du Priez').first()).toBeVisible();
-  await expect(page.getByText('Test Planning')).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Dienstruil aangevraagd' })).toBeVisible();
-  await expect(page.getByText('“Familiefeest”')).toBeVisible();
+  // Eén regel per wissel: dienst, datum, soort, geeft af, neemt over, aangevraagd, bevestigd.
+  const rij = page.getByRole('row').filter({ hasText: 'Alex Du Priez' });
+  await expect(rij).toHaveCount(1);
+  await expect(rij.getByRole('cell', { name: String(PLANNING[0].line) })).toBeVisible();
+  await expect(rij.getByRole('cell', { name: 'Ruil', exact: true })).toBeVisible();
+  await expect(rij.getByRole('cell', { name: 'Diether Van Haute' })).toBeVisible();
+  await expect(rij.getByRole('cell', { name: 'nog niet' })).toBeVisible();
+  // Wat er sinds 16-10 niet meer op staat: uitvoerder, verloop en reden.
+  await expect(page.getByText('Test Planning')).toHaveCount(0);
+  await expect(page.getByText('Dienstruil aangevraagd')).toHaveCount(0);
+  await expect(page.getByText('Familiefeest')).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });
