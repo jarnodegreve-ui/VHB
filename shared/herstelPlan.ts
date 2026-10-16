@@ -10,9 +10,15 @@
  * (`buildBackupPayload().collections`). Gebruikt door `POST /api/restore?droog=1`
  * (het beheerscherm toont het plan vóór de bevestiging) en door de maandelijkse
  * restore-proef.
+ *
+ * Deze lijst is ook wat het beheerscherm van een back-upbestand opstuurt
+ * (`herstelVerzending`, src/lib/herstelBestand.ts). Elke collectie die
+ * `restoreFromBackup` terugzet, hoort er dus in; src/lib/herstelBestand.test.ts
+ * bewaakt dat. De dienstregelingversies (08-10) ontbraken tot 16-10: een
+ * herstel via het scherm zette ze stil niet terug en de droge run toonde ze niet.
  */
 export const HERSTEL_LIJSTEN = [
-  'users', 'planning', 'services', 'diversions', 'updates', 'planningCodes', 'leave', 'swaps', 'planningMatrixRows',
+  'users', 'planning', 'dienstregelingen', 'services', 'diversions', 'updates', 'planningCodes', 'leave', 'swaps', 'planningMatrixRows',
 ] as const;
 export type HerstelLijst = (typeof HERSTEL_LIJSTEN)[number];
 export type HerstelCollectie = HerstelLijst | 'coverageExpectations';
@@ -57,7 +63,7 @@ export const HERSTEL_OUD_DAGEN = 7;
  * op de planningscodes, en dus ook elk echt herstel (01-10).
  */
 const SLEUTELVELD: Record<HerstelLijst, 'id' | 'code'> = {
-  users: 'id', planning: 'id', services: 'id', diversions: 'id', updates: 'id',
+  users: 'id', planning: 'id', dienstregelingen: 'id', services: 'id', diversions: 'id', updates: 'id',
   planningCodes: 'code', leave: 'id', swaps: 'id', planningMatrixRows: 'id',
 };
 const SLEUTELWOORD = { id: ['id', 'id’s'], code: ['code', 'codes'] } as const;
