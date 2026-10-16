@@ -25,8 +25,10 @@ import { addDagen, isoDate } from '../lib/datum';
  * overname, bij een ruil klein eronder wat er in ruil terugkomt), wie afgeeft, wie overneemt, aangevraagd op en bevestigd op (de
  * bevestiging van de nieuwe rijder, `targetSeenAt`, zoals "Dienstwissel
  * bevestigd" in het verloop). Geen verloop, reden, uitvoerder of
- * "Afgedrukt op" meer. Per uitvoeringsdag een kopregel, zoals de werktypes in
- * de gele boek-print.
+ * "Afgedrukt op" meer. Gegroepeerd per dag van de dienst, oplopend, met een
+ * kopregel per dag zoals de werktypes in de gele boek-print (Jarno 16-10, was
+ * per uitvoeringsdag); de kolom datum zit daardoor in de kopregel. Welke
+ * wissels erop staan verandert niet: die van de gekozen uitvoeringsweek.
  */
 
 /** Dit blad toont alleen wissels die doorgevoerd zijn geweest, dus afgewezen
@@ -87,11 +89,19 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
   const dienstVan = (s: SwapRequest) => shifts.find((sh) => sh.id === s.shiftId);
   const lijnVan = (s: SwapRequest) => String(s.shiftLine || dienstVan(s)?.line || '').trim() || '?';
 
-  // Per uitvoeringsdag, chronologisch: zo leest het klassement als een
-  // dagboek van de week in plaats van als één lange lijst.
+  const dienstDag = (s: SwapRequest) => String(s.shiftDate || dienstVan(s)?.date || '').slice(0, 10);
+
+  // Per dag van de dienst, oplopend (zonder datum achteraan); binnen een dag
+  // op dienstnummer, dan in de volgorde van uitvoeren.
+  const gesorteerd = [...wissels].sort((a, b) => {
+    const da = dienstDag(a.swap);
+    const db = dienstDag(b.swap);
+    if (da !== db) return !da ? 1 : !db ? -1 : da.localeCompare(db);
+    return lijnVan(a.swap).localeCompare(lijnVan(b.swap), 'nl', { numeric: true }) || a.uitgevoerdOp.localeCompare(b.uitgevoerdOp);
+  });
   const dagen: Array<{ dag: string; wissels: UitgevoerdeWissel[] }> = [];
-  for (const wissel of wissels) {
-    const d = dagVanTijdstip(wissel.uitgevoerdOp);
+  for (const wissel of gesorteerd) {
+    const d = dienstDag(wissel.swap);
     const laatste = dagen[dagen.length - 1];
     if (laatste && laatste.dag === d) laatste.wissels.push(wissel);
     else dagen.push({ dag: d, wissels: [wissel] });
@@ -102,7 +112,7 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
   return (
     <PrintBlad
       titel="Ruiloverzicht"
-      filters={[`Week ${isoWeekOf(van)}`, `${formatDatumDMJ(van)} t/m ${formatDatumDMJ(tot)}`]}
+      filters={[`Doorgevoerd in week ${isoWeekOf(van)}`, `${formatDatumDMJ(van)} t/m ${formatDatumDMJ(tot)}`]}
       tabbladTitel={`VHB Ruiloverzicht week ${isoWeekOf(van)} ${formatDatumDMJ(van)}`}
     >
       {wissels.length === 0 ? (
@@ -111,7 +121,6 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
         <table className="mt-5 w-full border-collapse text-[10px] leading-snug">
           <colgroup>
             <col className="w-[7%]" />
-            <col className="w-[10%]" />
             <col className="w-[19%]" />
             <col />
             <col />
@@ -121,20 +130,20 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
           <thead>
             <tr className="border-b-2 border-slate-900">
               <th className={th}>dienst</th>
-              <th className={th}>datum</th>
               <th className={th}>soort</th>
-              <th className={th}>geeft af</th>
-              <th className={th}>neemt over</th>
+              {/* Twee keer "naam" (Jarno 16-10): eerst wie de dienst afgeeft, dan wie hem overneemt. */}
+              <th className={th}>naam</th>
+              <th className={th}>naam</th>
               <th className={th}>aangevraagd</th>
               <th className={`${th} pr-0`}>bevestigd</th>
             </tr>
           </thead>
           {dagen.map((groep) => (
-            <tbody key={groep.dag}>
+            <tbody key={groep.dag || 'onbekend'}>
               <tr className="printblad-bij-volgende">
-                <td colSpan={7} className="pt-3">
+                <td colSpan={6} className="pt-3">
                   <p className="border-b border-slate-900 pb-0.5 text-[11px] font-bold">
-                    {weekdag(groep.dag)} {formatDatumDMJ(groep.dag)}
+                    {groep.dag ? `${weekdag(groep.dag)} ${formatDatumDMJ(groep.dag)}` : 'Datum van de dienst onbekend'}
                   </p>
                 </td>
               </tr>
@@ -144,7 +153,6 @@ export function PrintDienstwisselsView({ dag, shifts }: { dag: string; shifts: S
                 return (
                   <tr key={`${s.id}-${wissel.uitgevoerdOp}`} className="printblad-bijeen border-b border-slate-300 align-top">
                     <td className="py-0.5 pr-2 font-bold">{lijnVan(s)}</td>
-                    <td className="whitespace-nowrap py-0.5 pr-2">{formatShortDay(s.shiftDate || dienstVan(s)?.date)}</td>
                     <td className="py-0.5 pr-2">
                       {s.swapType === 'overname' ? 'Overname' : 'Ruil'}
                       {terug && <span className="block whitespace-nowrap text-[9px] text-slate-600">{terug}</span>}
