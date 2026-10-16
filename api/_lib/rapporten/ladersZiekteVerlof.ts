@@ -1,7 +1,8 @@
 import { isMissingTableError } from "../../deviceGate.js";
 import { getAppSetting, getLeaveData, getUsersData } from "../../storage.js";
 import type { RapportLader } from "../../../shared/rapporten/types.js";
-import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten } from "../../../shared/schemas/verlofLimieten.js";
+import { limietVoorDag } from "../../../shared/schemas/verlofLimieten.js";
+import { laadVerlofLimieten } from "../verlofInstellingen.js";
 import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen } from "../../../shared/schemas/verlofFeestdagen.js";
 import { bouwVerlofsaldo } from "./verlofsaldo.js";
 import { bouwVerlofPerType, bouwVerlofaanvragen, bouwVerlofbezetting } from "./verlof.js";
@@ -24,15 +25,6 @@ const extraFeestdagen = async (): Promise<ReadonlySet<string>> => {
   }
 };
 
-/** Verloflimieten zoals GET /api/leave/bezetting: zonder instellingen (of bij een fout) de standaard. */
-const verlofLimieten = async () => {
-  try {
-    return parseVerlofLimieten(await getAppSetting(VERLOF_LIMIETEN_KEY));
-  } catch (err) {
-    if (!isMissingTableError(err)) console.error("Verloflimieten laden is mislukt.", err);
-    return parseVerlofLimieten(null);
-  }
-};
 
 /** De kalenderdag van vandaag in België: de server draait op UTC, en "t/m vandaag" is de dag van de planner. */
 const vandaagInBelgie = (): string => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
@@ -58,7 +50,7 @@ export const VERLOF_LADERS: Record<string, RapportLader> = {
     return bouwVerlofaanvragen({ users, leave, extraFeestdagen: extra }, filters);
   },
   verlofbezetting: async (filters) => {
-    const [users, leave, limieten] = await Promise.all([getUsersData(), getLeaveData(), verlofLimieten()]);
+    const [users, leave, limieten] = await Promise.all([getUsersData(), getLeaveData(), laadVerlofLimieten()]);
     return bouwVerlofbezetting({ users, leave, limietVoor: (dag) => limietVoorDag(limieten, dag) }, filters);
   },
   "verlof-per-type": async (filters) => {
