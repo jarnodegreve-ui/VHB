@@ -87,15 +87,17 @@ export function mountDienstregelingRoutes(app: express.Express) {
       });
       await logActivity(req, "services", "Dienstregelingversie aangemaakt", `${versieLabel(versie)}, geldig vanaf ${DAG_DMJ(versie.geldigVanaf)}${kopieVan ? `, kopie van ${versieLabel(kopieVan)}` : ", zonder diensten"}.`);
       // Seintje naar de actieve chauffeurs (09-10, keuze Jarno), tenzij het
-      // formulier het uitzet. Best-effort: de versie bestaat al.
+      // formulier het uitzet. Best-effort: de versie bestaat al. De tik opent
+      // Ritbladen (16-10, keuze Jarno): het Dienstoverzicht is alleen voor de
+      // staf, een chauffeur viel daar terug op het dashboard.
       if (body.melden !== false) {
         try {
           const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
           await sendPushToUsers(chauffeurIds, {
             title: "Nieuwe dienstregeling",
             soort: "planning",
-            body: `Vanaf ${DAG_DMJ(versie.geldigVanaf)} geldt een nieuwe dienstregeling${versie.naam ? ` (${versie.naam})` : ""}. Bekijk het dienstoverzicht.`,
-            url: viewUrl("dienstoverzicht"),
+            body: `Vanaf ${DAG_DMJ(versie.geldigVanaf)} geldt een nieuwe dienstregeling${versie.naam ? ` (${versie.naam})` : ""}. Je vindt de ritbladen ervan via Ritbladen zodra ze klaarstaan.`,
+            url: viewUrl("ritblaadjes"),
           });
         } catch (pushErr) {
           console.error("Push over de nieuwe dienstregelingversie versturen mislukt.", pushErr);

@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { api, mem } from './harnas';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { magView } from '../app/routes';
+import { routeUitUrl } from '../app/router';
 
 /**
  * Dienstregelingversies (fase 1, 08-10): versies met een geldig-vanaf-datum,
@@ -57,7 +59,9 @@ describe('dienstregelingversies: lezen en aanmaken', () => {
     expect((await maak({ geldigVanaf: '2026-11-14', naam: 'November' })).status).toBe(201);
     const push = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe dienstregeling');
     expect(push?.userIds).toEqual(['3']);
-    expect(push?.payload).toMatchObject({ soort: 'planning', url: '/?view=dienstoverzicht', body: 'Vanaf 14/11/2026 geldt een nieuwe dienstregeling (November). Bekijk het dienstoverzicht.' });
+    expect(push?.payload).toMatchObject({ soort: 'planning', url: '/?view=ritblaadjes', body: 'Vanaf 14/11/2026 geldt een nieuwe dienstregeling (November). Je vindt de ritbladen ervan via Ritbladen zodra ze klaarstaan.' });
+    // De tik moet landen op een scherm dat een chauffeur mag openen (16-10: het Dienstoverzicht is alleen voor de staf).
+    expect(magView('chauffeur', routeUitUrl(push!.payload.url)!.view)).toBe(true);
 
     mem.pushesSent = [];
     expect((await maak({ geldigVanaf: '2027-01-01', melden: false })).status).toBe(201);
