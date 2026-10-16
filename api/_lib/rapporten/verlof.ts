@@ -74,7 +74,7 @@ export function bouwVerlofaanvragen(bron: VerlofaanvragenBron, filters: RapportF
 export type VerlofbezettingBron = {
   users: readonly RapportGebruiker[];
   leave: readonly VerlofRij[];
-  /** De verloflimiet van een dag (`limietVoorDag` met de limieten uit de instellingen). */
+  /** De verloflimiet van een dag (`limietVoorDag` met `laadVerlofLimieten`: de instellingen plus het maximum per dag uit de dagtypekalender, zoals het verlofscherm). */
   limietVoor: (dagIso: string) => number;
 };
 

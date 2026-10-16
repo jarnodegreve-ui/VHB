@@ -219,7 +219,7 @@ export function mountDocumentRoutes(app: express.Express) {
           const tekst = status === "toekomstig" && versie
             ? { title: `Nieuwe ritbladen vanaf ${DAG_DMJ(versie.geldigVanaf)}`, body: `Vanaf ${DAG_DMJ(versie.geldigVanaf)} gelden nieuwe ritbladen. Je kan ze nu al bekijken via Ritbladen.` }
             : { title: "Nieuwe ritbladen", body: "De ritbladbundel is vervangen. Open Ritbladen voor het blad van je dienst." };
-          await sendPushToUsers(chauffeurIds, { ...tekst, soort: "planning", url: viewUrl("ritbladen") });
+          await sendPushToUsers(chauffeurIds, { ...tekst, soort: "planning", url: viewUrl("ritblaadjes") });
         } catch (pushErr) {
           console.error("Push over de nieuwe ritbladbundel versturen mislukt.", pushErr);
         }

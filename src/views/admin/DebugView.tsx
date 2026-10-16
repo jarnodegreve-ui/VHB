@@ -24,6 +24,7 @@ import { vandaagBrussel } from '../../lib/brussel';
 const COLLECTION_LABELS: Record<string, string> = {
   users: 'Gebruikers',
   planning: 'Planning (diensten)',
+  dienstregelingen: 'Dienstregelingversies',
   services: 'Dienstoverzicht',
   diversions: 'Omleidingen',
   updates: 'Updates',

@@ -126,4 +126,32 @@ describe('dagtypekalender', () => {
     expect(res.json.perDag).toEqual({ '2026-10-13': 2, '2026-10-14': 7, '2026-10-18': 0 });
     expect(res.json.standaard).toBe(2);
   });
+
+  it('het rapport Verlofbezetting telt met hetzelfde maximum per dag als de verlofkalender (16-10)', async () => {
+    await api('PUT', '/api/dagtypekalender', { token: 'tok-admin', body: { dagen } });
+    mem.leave = [
+      { id: 'l-k1', userId: '3', startDate: '2026-10-13', endDate: '2026-10-14', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-09-01T08:00:00Z', decidedAt: '2026-09-02T08:00:00Z' },
+    ];
+    const periode = 'van=2026-10-12&tot=2026-10-18';
+    const rapport = await api('GET', `/api/rapporten/verlofbezetting?${periode}`, { token: 'tok-planner' });
+    expect(rapport.status).toBe(200);
+    // 14-10 heeft een eigen maximum (7) en 18-10 is volzet (0); de andere dagen volgen de standaard (2).
+    // Tot 16-10 las het rapport alleen de instellingen en toonde het daar 2.
+    expect(rapport.json.rijen.map((r: any) => [r.datum, r.afwezig, r.limiet])).toEqual([
+      ['2026-10-12', 0, 2], ['2026-10-13', 1, 2], ['2026-10-14', 1, 7], ['2026-10-15', 0, 2],
+      ['2026-10-16', 0, 2], ['2026-10-17', 0, 2], ['2026-10-18', 0, 0],
+    ]);
+    const kalender = await api('GET', `/api/leave/bezetting?${periode}`, { token: 'tok-a' });
+    expect(kalender.json.dagen).toEqual(rapport.json.rijen.map((r: any) => ({ datum: r.datum, aantal: r.afwezig, limiet: r.limiet })));
+  });
+
+  it('na het opslaan van de verloflimieten draagt het antwoord de kalendermaxima nog, zoals GET', async () => {
+    await api('PUT', '/api/dagtypekalender', { token: 'tok-admin', body: { dagen } });
+    const put = await api('PUT', '/api/verlof/limieten', { token: 'tok-admin', body: { standaard: 3, periodes: [] } });
+    expect(put.status).toBe(200);
+    expect(put.json).toMatchObject({ standaard: 3, perDag: { '2026-10-13': 2, '2026-10-14': 7, '2026-10-18': 0 } });
+    expect(put.json).toEqual((await api('GET', '/api/verlof/limieten', { token: 'tok-a' })).json);
+    // In de instellingen zelf komt het maximum per dag niet: dat blijft de kalender.
+    expect(mem.appSettings.verlof_limieten).toEqual({ standaard: 3, periodes: [] });
+  });
 });

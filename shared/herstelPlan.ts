@@ -10,9 +10,15 @@
  * (`buildBackupPayload().collections`). Gebruikt door `POST /api/restore?droog=1`
  * (het beheerscherm toont het plan vóór de bevestiging) en door de maandelijkse
  * restore-proef.
+ *
+ * Deze lijst is ook wat het beheerscherm van een back-upbestand opstuurt
+ * (`herstelVerzending`, src/lib/herstelBestand.ts). Elke collectie die
+ * `restoreFromBackup` terugzet, hoort er dus in; src/lib/herstelBestand.test.ts
+ * bewaakt dat. De dienstregelingversies (08-10) ontbraken tot 16-10: een
+ * herstel via het scherm zette ze stil niet terug en de droge run toonde ze niet.
  */
 export const HERSTEL_LIJSTEN = [
-  'users', 'planning', 'services', 'diversions', 'updates', 'planningCodes', 'leave', 'swaps', 'planningMatrixRows',
+  'users', 'planning', 'dienstregelingen', 'services', 'diversions', 'updates', 'planningCodes', 'leave', 'swaps', 'planningMatrixRows',
 ] as const;
 export type HerstelLijst = (typeof HERSTEL_LIJSTEN)[number];
 export type HerstelCollectie = HerstelLijst | 'coverageExpectations';
@@ -57,7 +63,7 @@ export const HERSTEL_OUD_DAGEN = 7;
  * op de planningscodes, en dus ook elk echt herstel (01-10).
  */
 const SLEUTELVELD: Record<HerstelLijst, 'id' | 'code'> = {
-  users: 'id', planning: 'id', services: 'id', diversions: 'id', updates: 'id',
+  users: 'id', planning: 'id', dienstregelingen: 'id', services: 'id', diversions: 'id', updates: 'id',
   planningCodes: 'code', leave: 'id', swaps: 'id', planningMatrixRows: 'id',
 };
 const SLEUTELWOORD = { id: ['id', 'id’s'], code: ['code', 'codes'] } as const;
@@ -136,6 +142,53 @@ export function bouwHerstelPlan({ backup, live, exportedAt = null, actorId = nul
       collectie: 'coverageExpectations', inBackup: true, overgeslagen: false, backup: sleutels.length, live: liveDekking.length,
       erbij, weg: liveDekking.filter((k) => !sleutels.includes(k)).length, blijft: sleutels.length - erbij,
     });
+  }
+
+  // Dienstregelingversies: geldig_vanaf is uniek in de database, en het
+  // herstel schrijft eerst de versies uit de back-up (upsert op id, rij per
+  // rij) en haalt pas daarna de andere weg. Draagt een versie die nu in het
+  // portaal staat de begindatum van een ándere versie uit de back-up (datum
+  // verschoven, versies gewisseld, versie opnieuw gemaakt), of staat een
+  // datum dubbel in de back-up, dan kan de database die upsert weigeren en
+  // strandt het herstel halverwege, na de gebruikers en de planning. Bij een
+  // schuif in een ketting hangt dat van de volgorde af; we blokkeren dan
+  // liever één keer te veel. De datum lezen we zoals herstelDienstregelingen
+  // (eerste tien tekens, dan pas het patroon). Tegenlezing 16-10.
+  if (Array.isArray(backup.dienstregelingen) && Array.isArray(live.dienstregelingen)) {
+    const datumVan = (rij: unknown) => {
+      if (!rij || typeof rij !== 'object') return '';
+      const r = rij as Record<string, unknown>;
+      const datum = String(r.geldigVanaf ?? r.geldig_vanaf ?? '').slice(0, 10);
+      return /^\d{4}-\d{2}-\d{2}$/.test(datum) ? datum : '';
+    };
+    const dmj = (datums: Set<string>) => [...datums].sort().map((d) => d.split('-').reverse().join('/')).join(', ');
+    const liveIdOpDatum = new Map<string, string>();
+    for (const rij of live.dienstregelingen as unknown[]) {
+      const id = sleutelVan(rij);
+      const datum = datumVan(rij);
+      if (id && datum) liveIdOpDatum.set(datum, id);
+    }
+    const metLive = new Set<string>();
+    const dubbel = new Set<string>();
+    const backupIdOpDatum = new Map<string, string>();
+    for (const rij of backup.dienstregelingen as unknown[]) {
+      const id = sleutelVan(rij);
+      const datum = datumVan(rij);
+      if (!id || !datum) continue;
+      const liveId = liveIdOpDatum.get(datum);
+      if (liveId && liveId !== id) metLive.add(datum);
+      const eerder = backupIdOpDatum.get(datum);
+      if (eerder && eerder !== id) dubbel.add(datum);
+      backupIdOpDatum.set(datum, id);
+    }
+    if (metLive.size > 0) {
+      blokkades.push(metLive.size === 1
+        ? `'dienstregelingen': een versie die nu in het portaal staat, draagt de begindatum van een andere versie uit de back-up (${dmj(metLive)}); verplaats of verwijder eerst die versie`
+        : `'dienstregelingen': versies die nu in het portaal staan, dragen de begindatum van andere versies uit de back-up (${dmj(metLive)}); verplaats of verwijder eerst die versies`);
+    }
+    if (dubbel.size > 0) {
+      blokkades.push(`'dienstregelingen': ${dubbel.size === 1 ? 'een begindatum staat' : 'begindatums staan'} dubbel in de back-up (${dmj(dubbel)})`);
+    }
   }
 
   // Dezelfde vangrail als de route: zonder admin sluit je jezelf buiten.

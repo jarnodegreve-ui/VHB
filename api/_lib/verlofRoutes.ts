@@ -18,7 +18,8 @@ import { isStafRol, authenticate, requireRole } from "../middleware.js";
 import { isMissingColumnError, isMissingTableError } from "../deviceGate.js";
 import { stuurTelegram, telegramGeconfigureerd, meldVerlofAanvraagTelegram } from "../telegram.js";
 // Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
-import { VERLOF_LIMIETEN_KEY, limietVoorDag, parseVerlofLimieten, sorteerPeriodes, verlofLimietenSchema } from "../../shared/schemas/verlofLimieten.js";
+import { VERLOF_LIMIETEN_KEY, limietVoorDag, sorteerPeriodes, verlofLimietenSchema } from "../../shared/schemas/verlofLimieten.js";
+import { laadVerlofLimieten, metKalenderMaxima } from "./verlofInstellingen.js";
 import { bezettingPerDag } from "../../shared/verlofbezettingPerDag.js";
 import { uitersteVerlofdag, verlofGrensFout } from "../../shared/verlofGrens.js";
 import { isIsoDag } from "../../shared/rapporten/periode.js";
@@ -26,7 +27,7 @@ import { VERLOF_FEESTDAGEN_KEY, parseVerlofFeestdagen, sorteerExtraFeestdagen, v
 import { valideerRecord } from "./valideer.js";
 import { brusselsDay, DAG_DMJ, PERIODE_DMJ, LEAVE_TYPE_LABEL, isActieveStaf } from "../helpers.js";
 // Excel-werk (xlsx lui geladen, daarom async): zie api/_lib/matrixXlsx.ts.
-import { getLeaveData, getPlanningData, getUsersData, logActivity, saveLeaveData, getAppSetting, setAppSetting, getDagtypeKalender } from "../storage.js";
+import { getLeaveData, getPlanningData, getUsersData, logActivity, saveLeaveData, getAppSetting, setAppSetting } from "../storage.js";
 import { recordUrl } from "./meldingen.js";
 import { type BeslisActor, COLLECTION_REVISION_HEADER, RECORD_ID_RE, actorReq, detectMassDelete, massDeleteResponse, revisionCheck, revisionOf, revisionProbleemResponse, viewUrl } from "./collectie.js";
 
@@ -349,37 +350,13 @@ export async function beslisVerlofIntern(opts: { id: string; status: string; ifS
     return { leave: updated, melding: `${action}: ${requesterName}, ${typeLabel} (${period}).${reden ? ` Reden: ${reden}` : ""}` };
 }
 
-/**
- * De verloflimieten zoals het scherm en de bezetting ze lezen: de
- * instellingen (standaard + periodes) plus, sinds 11-10, per dag het maximum
- * uit de dagtypekalender (wint van de periodes). Zonder instellingen-tabel
- * of bij een DB-hik de standaard: de kalender moet blijven werken, de admin
- * ziet de fout pas bij het opslaan.
- */
-async function limietenMetKalender() {
-  let limieten = parseVerlofLimieten(null);
-  try {
-    limieten = parseVerlofLimieten(await getAppSetting(VERLOF_LIMIETEN_KEY));
-  } catch (err: any) {
-    if (!isMissingTableError(err)) console.error("Verloflimieten laden is mislukt.", err);
-  }
-  try {
-    const perDag: Record<string, number> = {};
-    for (const d of await getDagtypeKalender()) if (d.maxVerlof !== null) perDag[d.datum] = d.maxVerlof;
-    if (Object.keys(perDag).length > 0) limieten = { ...limieten, perDag };
-  } catch (err) {
-    console.error("Dagtypekalender voor de verloflimieten niet gelezen.", err);
-  }
-  return limieten;
-}
-
 export function mountVerlofRoutes(app: express.Express) {
   // Verloflimieten (verzoek Jarno 09-09): hoeveel chauffeurs tegelijk vrij
   // mogen zijn, standaard plus uitzonderingsperiodes (zomervakantie hoger dan
   // een schoolperiode). Lezen mag elke rol: de kalenderkleuring in Verlof
   // gebruikt het ook voor chauffeurs. Schrijven is admin-werk.
   app.get("/api/verlof/limieten", authenticate, async (_req: AuthenticatedRequest, res) => {
-    res.json(await limietenMetKalender());
+    res.json(await laadVerlofLimieten());
   });
 
   app.put("/api/verlof/limieten", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
@@ -395,7 +372,9 @@ export function mountVerlofRoutes(app: express.Express) {
         "Verloflimieten aangepast",
         `Standaard ${limieten.standaard} tegelijk vrij${uitz > 0 ? `, ${uitz} uitzonderingsperiode${uitz === 1 ? "" : "s"}: ${limieten.periodes.map((p) => `${p.naam} (${p.max})`).join(", ")}` : ", geen uitzonderingsperiodes"}.`,
       );
-      res.json(limieten);
+      // Zelfde vorm als GET: mét de kalendermaxima, anders verliest het
+      // verlofscherm ze na het opslaan tot een herlaad.
+      res.json(await metKalenderMaxima(limieten));
     } catch (err: any) {
       if (isMissingTableError(err)) {
         return res.status(503).json({ error: "De instellingen-tabel bestaat nog niet: draai supabase/2026-07-30_app_settings.sql in de SQL Editor." });
@@ -492,8 +471,8 @@ export function mountVerlofRoutes(app: express.Express) {
 
       const [leave, users] = await Promise.all([getLeaveData(), getUsersData()]);
       // Verloflimieten zoals GET /api/verlof/limieten (instellingen plus de
-      // dagtypekalender per dag).
-      const limieten = await limietenMetKalender();
+      // dagtypekalender per dag), dezelfde lader als het rapport.
+      const limieten = await laadVerlofLimieten();
       // Zelfde regels als bezettingOp/anderenAfwezigOp aan de client-kant:
       // goedgekeurd, geen ziekte, en de aanvrager telt in de verlofbezetting
       // (een onbekende aanvrager telt mee, net als daar). De telling zelf staat

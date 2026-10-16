@@ -29,7 +29,7 @@ describe('ritbladen per dienstregelingversie (13-10)', () => {
     expect(mem.ritbladen).toHaveLength(1);
     const push = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe ritbladen');
     expect(push?.userIds).toEqual(['3']);
-    expect(push?.payload).toMatchObject({ soort: 'planning', url: '/?view=ritbladen', body: 'De ritbladbundel is vervangen. Open Ritbladen voor het blad van je dienst.' });
+    expect(push?.payload).toMatchObject({ soort: 'planning', url: '/?view=ritblaadjes', body: 'De ritbladbundel is vervangen. Open Ritbladen voor het blad van je dienst.' });
     expect(mem.activity.some((a: any) => a.action === 'Ritblaadje toegevoegd')).toBe(true);
     // Nog eens voor dezelfde versie: vervangt, het oude bestand gaat weg, één rij.
     expect((await upload({ filename: 'ritblad2.pdf' })).status).toBe(200);

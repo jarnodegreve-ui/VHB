@@ -90,6 +90,40 @@ describe('bouwHerstelPlan', () => {
     expect(zonderDatum.exportedAt).toBeNull();
   });
 
+  it('blokkeert als een huidige dienstregelingversie de begindatum van een andere versie uit de back-up draagt (16-10)', () => {
+    const versie = (id: string, geldigVanaf: string) => ({ id, naam: null, geldigVanaf });
+    const plan = (backupVersies: unknown[], liveVersies: unknown[]) => bouwHerstelPlan({
+      backup: { users: [admin], dienstregelingen: backupVersies },
+      live: { users: [admin], dienstregelingen: liveVersies },
+      exportedAt: '2026-09-21T02:00:00Z',
+      nu: NU,
+    });
+    const melding = (data: string) => `'dienstregelingen': een versie die nu in het portaal staat, draagt de begindatum van een andere versie uit de back-up (${data}); verplaats of verwijder eerst die versie`;
+    const meldingMeer = (data: string) => `'dienstregelingen': versies die nu in het portaal staan, dragen de begindatum van andere versies uit de back-up (${data}); verplaats of verwijder eerst die versies`;
+    // Zelfde stand, of alleen een versie erbij of weg: geen botsing.
+    expect(plan([versie('a', '2026-09-01'), versie('b', '2026-11-14')], [versie('a', '2026-09-01'), versie('b', '2026-11-14')]).blokkades).toEqual([]);
+    expect(plan([versie('a', '2026-09-01')], [versie('a', '2026-09-01'), versie('b', '2026-11-14')]).blokkades).toEqual([]);
+    expect(plan([versie('a', '2026-09-01'), versie('b', '2026-11-14')], [versie('a', '2026-09-01')]).blokkades).toEqual([]);
+    // Een versie die alleen van datum veranderde, botst met niemand: de upsert op id zet ze terug.
+    expect(plan([versie('b', '2026-11-14')], [versie('b', '2026-11-21')]).blokkades).toEqual([]);
+    // Verschoven: B ging van 14/11 naar 21/11 en C kwam op 14/11.
+    expect(plan([versie('a', '2026-09-01'), versie('b', '2026-11-14')], [versie('a', '2026-09-01'), versie('b', '2026-11-21'), versie('c', '2026-11-14')]).blokkades)
+      .toEqual([melding('14/11/2026')]);
+    // Gewisseld: B en C ruilden van datum.
+    expect(plan([versie('b', '2026-11-14'), versie('c', '2026-11-21')], [versie('b', '2026-11-21'), versie('c', '2026-11-14')]).blokkades)
+      .toEqual([meldingMeer('14/11/2026, 21/11/2026')]);
+    // Opnieuw gemaakt: dezelfde datum, een nieuw id.
+    expect(plan([versie('b', '2026-11-14')], [versie('b2', '2026-11-14')]).blokkades).toEqual([melding('14/11/2026')]);
+    // De datum zoals het herstel ze leest: een tijd erachter telt als die dag, een spatie ervoor valt weg (het herstel slaat die versie over).
+    expect(plan([versie('x', '2026-11-14T00:00:00Z')], [versie('y', '2026-11-14')]).blokkades).toEqual([melding('14/11/2026')]);
+    expect(plan([versie('x', ' 2026-11-14')], [versie('y', '2026-11-14')]).blokkades).toEqual([]);
+    // Twee versies op één datum in de back-up botsen op zichzelf.
+    expect(plan([versie('x', '2026-11-14'), versie('z', '2026-11-14')], []).blokkades)
+      .toEqual(["'dienstregelingen': een begindatum staat dubbel in de back-up (14/11/2026)"]);
+    // Een back-up zonder versies (van vóór 08-10) laat ze ongemoeid en botst dus nooit.
+    expect(bouwHerstelPlan({ backup: { users: [admin] }, live: { users: [admin], dienstregelingen: [versie('c', '2026-11-14')] }, exportedAt: '2026-09-21T02:00:00Z', nu: NU }).blokkades).toEqual([]);
+  });
+
   it('dekkingsverwachting telt per dag-type', () => {
     const plan = bouwHerstelPlan({
       backup: { users: [admin], coverageExpectations: { week: ['2101'], zaterdag: [] } },

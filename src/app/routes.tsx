@@ -136,6 +136,11 @@ const OUDE_PADEN = new Map<string, string>([
  *  onthouden laatste scherm) en de view die hun plaats nam. */
 const OUDE_VIEWS = new Map<string, View>([
   ['beheer-dienstoverzicht', 'dienstoverzicht'],
+  // 16-10: de push "Nieuwe ritbladen" droeg van 09-10 tot 16-10 het pad
+  // ('ritbladen') in plaats van de sleutel. Een tik op zo'n push die nog op
+  // het toestel staat, landt hiermee alsnog; de rij in Meldingen van die
+  // dagen kreeg geen doel en blijft zonder link.
+  ['ritbladen', 'ritblaadjes'],
 ]);
 
 export const routeVan = (view: View): RouteDef => PER_VIEW.get(view) ?? ROUTES[0];

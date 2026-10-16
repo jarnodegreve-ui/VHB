@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ROUTES } from '../app/routes';
 import { PAD_PER_VIEW, doelUitPushUrl, meldingUitPayload, recordUrl, soortUitPushUrl, viewUitPushUrl } from '../../api/_lib/meldingen';
@@ -12,6 +14,40 @@ describe('meldingen, doel uit push-URL', () => {
   it('PAD_PER_VIEW is exact de routetabel (beide richtingen)', () => {
     const uitRoutes = Object.fromEntries(ROUTES.map((r) => [r.view, r.pad]));
     expect(PAD_PER_VIEW).toEqual(uitRoutes);
+  });
+
+  it('elke push- of maillink van de server noemt een bestaande view-sleutel, niet een pad', () => {
+    // 16-10: de push "Nieuwe ritbladen" droeg sinds 09-10 `viewUrl("ritbladen")`,
+    // het pad; de sleutel is 'ritblaadjes'. Wie op de melding tikte, kwam niet
+    // op Ritbladen uit, en niets faalde.
+    const ROOT = path.resolve(__dirname, '../..');
+    const bestanden: string[] = [];
+    const loop = (dir: string) => {
+      for (const naam of fs.readdirSync(path.join(ROOT, dir))) {
+        const p = path.join(dir, naam);
+        if (fs.statSync(path.join(ROOT, p)).isDirectory()) loop(p);
+        else if (/\.ts$/.test(p) && !/\.test\.ts$/.test(p)) bestanden.push(p);
+      }
+    };
+    loop('api');
+    const gevonden: string[] = [];
+    const onbekend: string[] = [];
+    for (const bestand of bestanden) {
+      const tekst = fs.readFileSync(path.join(ROOT, bestand), 'utf8');
+      for (const m of tekst.matchAll(/\b(?:viewUrl|recordUrl)\(\s*["'`]([^"'`]+)["'`]|\?view=([A-Za-z0-9-]+)/g)) {
+        const sleutel = m[1] ?? m[2];
+        gevonden.push(sleutel);
+        if (!(sleutel in PAD_PER_VIEW)) onbekend.push(`${bestand}: ${sleutel}`);
+      }
+    }
+    expect(onbekend).toEqual([]);
+    // De zoektocht vindt echt iets (een gewijzigde schrijfwijze zou hem stil leeg maken).
+    expect(gevonden.length).toBeGreaterThan(20);
+  });
+
+  it('een verdwenen view-sleutel uit een oude push landt op zijn opvolger', () => {
+    expect(routeUitUrl('/?view=ritbladen')).toEqual({ view: 'ritblaadjes', params: [] });
+    expect(routeUitUrl('/?view=ritblaadjes')).toEqual({ view: 'ritblaadjes', params: [] });
   });
 
   it('leidt view, doel en soort af uit de deeplink-URL', () => {

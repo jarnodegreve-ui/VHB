@@ -4,6 +4,7 @@ import {
   mem,
 } from './harnas';
 import { describe, it, expect } from 'vitest';
+import { herstelVerzending } from '../lib/herstelBestand';
 
 describe('restore vanuit back-up', () => {
   const backup = (collections: any) => ({ exportedAt: '2026-06-13T02:00:00Z', version: 1, collections });
@@ -96,6 +97,23 @@ describe('droge herstelrun (POST /api/restore?droog=1)', () => {
     const echt = await api('POST', '/api/restore', { token: 'tok-admin', body: eigen.json });
     expect(echt.status).toBe(200);
     expect(echt.json.summary.planningCodes).toBe(2);
+  });
+
+  it('een herstel via het beheerscherm zet ook de dienstregelingversies terug (16-10)', async () => {
+    const eigen = await api('GET', '/api/backup', { token: 'tok-admin' });
+    expect(eigen.json.collections.dienstregelingen.map((v: any) => v.id)).toEqual(['dr-sep']);
+    // Wat het scherm opstuurt (herstelVerzending), niet het hele bestand.
+    const verzending = herstelVerzending(eigen.json);
+    expect(verzending.collections.dienstregelingen).toEqual(eigen.json.collections.dienstregelingen);
+    // Intussen is de versie weg; het herstel brengt ze terug.
+    mem.dienstregelingen = [];
+    const droog = await api('POST', '/api/restore?droog=1', { token: 'tok-admin', body: verzending });
+    expect(droog.json.plan.blokkades).toEqual([]);
+    expect(droog.json.plan.regels.find((r: any) => r.collectie === 'dienstregelingen')).toMatchObject({ inBackup: true, backup: 1, live: 0, erbij: 1, weg: 0 });
+    const echt = await api('POST', '/api/restore', { token: 'tok-admin', body: verzending });
+    expect(echt.status).toBe(200);
+    expect(echt.json.summary.dienstregelingen).toBe(1);
+    expect(mem.dienstregelingen.map((v: any) => v.id)).toEqual(['dr-sep']);
   });
 });
 
