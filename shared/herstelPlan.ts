@@ -144,6 +144,37 @@ export function bouwHerstelPlan({ backup, live, exportedAt = null, actorId = nul
     });
   }
 
+  // Dienstregelingversies: geldig_vanaf is uniek in de database, en het
+  // herstel schrijft eerst de versies uit de back-up (upsert op id) en haalt
+  // pas daarna de andere weg. Draagt een huidige versie nu de datum van een
+  // ándere versie uit de back-up (datum verschoven, versie opnieuw gemaakt),
+  // dan weigert de database die upsert en strandt het herstel halverwege,
+  // na de gebruikers en de planning. Tegenlezing 16-10.
+  if (Array.isArray(backup.dienstregelingen) && Array.isArray(live.dienstregelingen)) {
+    const datumVan = (rij: unknown) => {
+      if (!rij || typeof rij !== 'object') return '';
+      const r = rij as Record<string, unknown>;
+      return String(r.geldigVanaf ?? r.geldig_vanaf ?? '').trim();
+    };
+    const liveIdOpDatum = new Map<string, string>();
+    for (const rij of live.dienstregelingen as unknown[]) {
+      const id = sleutelVan(rij);
+      const datum = datumVan(rij);
+      if (id && datum) liveIdOpDatum.set(datum, id);
+    }
+    const botsend = new Set<string>();
+    for (const rij of backup.dienstregelingen as unknown[]) {
+      const id = sleutelVan(rij);
+      const datum = datumVan(rij);
+      const liveId = datum ? liveIdOpDatum.get(datum) : undefined;
+      if (id && liveId && liveId !== id) botsend.add(datum);
+    }
+    if (botsend.size > 0) {
+      const data = [...botsend].sort().map((d) => d.split('-').reverse().join('/')).join(', ');
+      blokkades.push(`'dienstregelingen': een huidige versie draagt de begindatum van een andere versie uit de back-up (${data}); verplaats of verwijder eerst die huidige versie`);
+    }
+  }
+
   // Dezelfde vangrail als de route: zonder admin sluit je jezelf buiten.
   const users = Array.isArray(backup.users) ? (backup.users as Array<Record<string, unknown>>) : null;
   if (users) {
