@@ -1,4 +1,4 @@
-import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Settings, Sun } from 'lucide-react';
+import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Settings } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { ROL_LABELS } from '../../shared/schemas/constanten';
 import type { User } from '../types';
@@ -18,8 +18,6 @@ import { MenuItem, Popover } from './Popover';
 export function UserMenu({
   user,
   initials,
-  theme,
-  onToggleTheme,
   pushBeschikbaar,
   pushEnabled,
   onTogglePush,
@@ -30,8 +28,6 @@ export function UserMenu({
 }: {
   user: User;
   initials: string;
-  theme: 'light' | 'dark';
-  onToggleTheme: () => void;
   pushBeschikbaar: boolean;
   pushEnabled: boolean;
   onTogglePush: () => void;
@@ -76,9 +72,6 @@ export function UserMenu({
               </span>
             </span>
           </div>
-          <MenuItem icon={theme === 'light' ? <Moon size={16} /> : <Sun size={16} />} onClick={sluitEn(onToggleTheme)}>
-            {theme === 'light' ? 'Donkere modus' : 'Lichte modus'}
-          </MenuItem>
           {pushBeschikbaar && (
             <MenuItem icon={pushEnabled ? <BellOff size={16} /> : <BellRing size={16} />} onClick={sluitEn(onTogglePush)}>
               {pushEnabled ? 'Meldingen uitschakelen' : 'Meldingen inschakelen'}

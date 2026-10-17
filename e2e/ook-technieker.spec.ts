@@ -21,7 +21,7 @@ test('chauffeur met Ook technieker: chauffeursbalk, Techniek onder Meer, Werkpre
   await expect(dock.getByRole('button', { name: 'Gele boek', exact: true })).toHaveCount(0);
 
   await dock.getByRole('button', { name: 'Meer', exact: true }).click();
-  const zijbalk = page.getByRole('navigation', { name: 'Zijbalk' });
+  const zijbalk = page.getByRole('navigation', { name: 'Meer' });
   await expect(zijbalk).toBeVisible();
   for (const label of ['Gele boek', 'Werkprestaties', 'Voertuigen']) {
     await expect(zijbalk.getByRole('button', { name: label, exact: true }), label).toBeVisible();
@@ -40,8 +40,9 @@ test('gewone chauffeur: geen Techniek onder Meer, en een techniekpad gaat terug 
   const dock = page.getByRole('navigation', { name: 'Hoofdnavigatie' });
   await expect(dock).toBeVisible({ timeout: 15_000 });
   await dock.getByRole('button', { name: 'Meer', exact: true }).click();
-  const zijbalk = page.getByRole('navigation', { name: 'Zijbalk' });
-  await expect(zijbalk.getByRole('button', { name: 'Rooster', exact: true })).toBeVisible();
+  const zijbalk = page.getByRole('navigation', { name: 'Meer' });
+  // Rooster staat in de onderbalk en dus niet onder Meer; Contacten wel.
+  await expect(zijbalk.getByRole('button', { name: 'Contacten', exact: true })).toBeVisible();
   await expect(zijbalk.getByRole('button', { name: 'Werkprestaties', exact: true })).toHaveCount(0);
 
   await page.goto('/techniek/prestaties');

@@ -1,4 +1,5 @@
 import type { Role, View } from '../types';
+import { cn } from '../lib/ui';
 import { MicroLabel } from '../components/primitives';
 import { NavItem, NavSection, NavSubLabel } from '../components/Navigation';
 import { sidebarRoutes, type RouteDef } from './routes';
@@ -15,7 +16,15 @@ export function SidebarNav({
   currentView,
   badges,
   onNavigate,
+  verberg,
+  label = 'Zijbalk',
+  className,
 }: {
+  /** Schermen die hier niet nog eens moeten staan (Meer: de onderbalk). */
+  verberg?: readonly View[];
+  /** Toegankelijke naam van de navigatie. */
+  label?: string;
+  className?: string;
   /** Effectieve rol (preview-modus verrekend) — bepaalt welke secties er zijn. */
   rol: Role;
   /** Chauffeur die ook technieker is: de sectie Techniek komt erbij. */
@@ -40,15 +49,16 @@ export function SidebarNav({
       />
     );
   };
-  const algemeen = sidebarRoutes(wie, 'algemeen');
-  const planning = sidebarRoutes(wie, 'planning');
-  const afwezigheid = sidebarRoutes(wie, 'afwezigheid');
-  const communicatie = sidebarRoutes(wie, 'communicatie');
-  const techniek = sidebarRoutes(wie, 'techniek');
-  const systeem = sidebarRoutes(wie, 'systeem');
+  const zonder = (lijst: RouteDef[]) => (verberg ? lijst.filter((r) => !verberg.includes(r.view)) : lijst);
+  const algemeen = zonder(sidebarRoutes(wie, 'algemeen'));
+  const planning = zonder(sidebarRoutes(wie, 'planning'));
+  const afwezigheid = zonder(sidebarRoutes(wie, 'afwezigheid'));
+  const communicatie = zonder(sidebarRoutes(wie, 'communicatie'));
+  const techniek = zonder(sidebarRoutes(wie, 'techniek'));
+  const systeem = zonder(sidebarRoutes(wie, 'systeem'));
   const beheer = [...planning, ...afwezigheid, ...communicatie];
   return (
-    <nav className="flex-1 min-h-0 px-3 py-2 space-y-0.5 overflow-y-auto overscroll-contain" aria-label="Zijbalk">
+    <nav className={cn('flex-1 min-h-0 px-3 py-2 space-y-0.5 overflow-y-auto overscroll-contain', className)} aria-label={label}>
       {isPlanner && <MicroLabel className="mb-1 px-3 pt-0.5">Algemeen</MicroLabel>}
       {algemeen.map(item)}
       {isPlanner && beheer.length > 0 && (

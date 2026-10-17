@@ -6,6 +6,24 @@ import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
 import { CountUp } from './CountUp';
 
+/** De vaste plekken in de onderbalk per rol (naast Meer). Ook de lijst die
+ *  het Meer-sheet weglaat (AppSchil). */
+export function dockViews(role: Role): View[] {
+  // Vandaag i.p.v. Open diensten (Jarno 22-09): de dagbriefing bevat de open
+  // diensten van de dag én afwezigen, ruilen en omleidingen; het volledige
+  // scherm Openstaande diensten blijft via "Meer".
+  if (role === 'planner' || role === 'admin') return ['dashboard', 'vandaag', 'verlof', 'ruil-verzoeken', 'vervaldata'];
+  // Technieker heeft geen diensten: geen Mijn dag, Rooster of Omleidingen,
+  // die schermen staan ook niet in zijn menu (Jarno 09-09). Gele boek en
+  // Prestaties zijn zijn dagelijkse werk (13-09); Documenten en Updates via "Meer".
+  if (role === 'technieker') return ['dashboard', 'defecten', 'werkprestaties', 'verlof', 'meldingen'];
+  // Chauffeur: vier plekken plus Meer, zoals iOS op de iPhone hoogstens vijf
+  // toont (Apple-review 17-10, nr. 11). Omleidingen staat onder Meer en blijft
+  // zichtbaar op Mijn dag (sectie) en het dashboard (kaart en tegel); Mijn dag
+  // (03-09) nam eerder al de plek van Ritbladen in.
+  return ['dashboard', 'mijn-dag', 'rooster', 'verlof'];
+}
+
 type NavSlot = {
   view: View;
   label: string;
@@ -35,9 +53,12 @@ export function BottomNav({
   pendingLeaveCount = 0,
   pendingSwapsCount = 0,
   onMore,
+  onMeerVoorladen,
   moreBadge = 0,
   hidden = false,
 }: {
+  /** Aanraken of aanwijzen van Meer: het sheet alvast laden. */
+  onMeerVoorladen?: () => void;
   currentView: View;
   onSelect: (view: View) => void;
   /** Effectieve rol (dus mét preview-modus verrekend). */
@@ -67,21 +88,13 @@ export function BottomNav({
     const Icoon = r.icoon;
     return { view, label: r.kort ?? r.label, icon: <Icoon size={18} />, badge };
   };
-  const slots: NavSlot[] = isPlanner
-    // Vandaag i.p.v. Open diensten (Jarno 22-09): de dagbriefing bevat de open
-    // diensten van de dag én afwezigen, ruilen en omleidingen; het volledige
-    // scherm Openstaande diensten blijft via "Meer".
-    ? [tab('dashboard'), tab('vandaag'), tab('verlof', pendingLeaveCount), tab('ruil-verzoeken', pendingSwapsCount), tab('vervaldata')]
-    : role === 'technieker'
-      // Technieker heeft geen diensten: geen Mijn dag, Rooster of Omleidingen,
-      // die schermen staan ook niet in zijn menu (Jarno 09-09).
-      // Gele boek en Prestaties zijn zijn dagelijkse werk (13-09); Documenten
-      // en Updates blijven via "Meer".
-      ? [tab('dashboard'), tab('defecten'), tab('werkprestaties'), tab('verlof', unseenLeaveCount), tab('meldingen')]
-      // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount).
-      // Mijn dag (03-09) neemt de plek van Ritbladen in: het ritblad van vandaag
-      // zit als knop ín Mijn dag, de Ritbladen-pagina blijft via "Meer".
-      : [tab('dashboard'), tab('mijn-dag'), tab('rooster'), tab('omleidingen'), tab('verlof', unseenLeaveCount)];
+  // Badges: verlof telt bij staf de open aanvragen, bij de rest de
+  // verlofbeslissingen (unseenLeaveCount); dienstruil (staf) de open ruilen.
+  const badgeVoor = (view: View): number | undefined =>
+    view === 'verlof' ? (isPlanner ? pendingLeaveCount : unseenLeaveCount)
+      : view === 'ruil-verzoeken' ? pendingSwapsCount
+        : undefined;
+  const slots: NavSlot[] = dockViews(role).map((view) => tab(view, badgeVoor(view)));
 
   // Meer staat voor elk scherm dat niet in de vaste plekken zit (Ritbladen,
   // Dienstruil, Updates, …): daar licht Meer op, zoals de More-tab op iOS.
@@ -169,6 +182,8 @@ export function BottomNav({
           <li className="flex-auto min-w-0">
             <button
               onClick={onMore}
+              onPointerEnter={onMeerVoorladen}
+              onTouchStart={onMeerVoorladen}
               aria-label="Meer"
               aria-current={meerActief ? 'page' : undefined}
               // Het getal als beschrijving, niet in de naam: de naam blijft

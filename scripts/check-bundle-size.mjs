@@ -191,7 +191,15 @@ import zlib from 'node:zlib';
 // dependency. Lokaal 737,82 → 738,87 (met ronde 2: herstart per 50 en
 // opnieuw proberen van een mislukte herstart); budget = die meting plus de
 // ±0,5 kB van de runner en ±1,5 kB marge voor de rest van deze reeks.
-const BUDGET_KB = 741;
+// 17-10 (Apple-review, PR D: Meer als sheet, onderbalk van vijf, thema
+// Automatisch): 741 → 743. Het sheet zelf is een eigen luie chunk
+// (MeerSheet); in de startbundel komen de luie grens en de open/dicht-
+// toestand in AppSchil, de plekken per rol (`dockViews`), de filter op de
+// onderbalk in SidebarNav, de drie themastanden met de luisteraar op het
+// systeemthema (useThema) en slepen vanaf de grip in Sheet. Geen nieuwe
+// dependency. Lokaal 740,53 → 741,86; budget = die meting plus de ±0,5 kB
+// van de runner en ±0,6 kB voor de laatste PR van de reeks (iconen, tekst).
+const BUDGET_KB = 743;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -280,7 +288,12 @@ const DEELBUDGET_KB = {
   // veeg naar rechts; allebei in de startbundel, net als useMinWidth dat ze
   // nu lezen. Geen nieuwe dependency. Op de CI-runner 79,14 (PR B) → 79,67;
   // lokaal 79,31. 80,0 = die meting plus ±0,3 kB.
-  index: 80.0,
+  // 17-10 (Apple-review, PR D): 80,0 → 80,3. Zie het totaalbudget: de
+  // luie grens van het Meer-sheet, `dockViews`, de filter in SidebarNav en
+  // useThema met Automatisch zitten in de schil. Lokaal 79,34 → 79,63; de
+  // CI-runner meet de index ±0,35 kB zwaarder (PR C: lokaal 79,31, CI
+  // 79,67). 80,3 = de verwachte meting (±80,0) plus ±0,3 kB.
+  index: 80.3,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB

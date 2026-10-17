@@ -23,7 +23,8 @@
 
     <!-- Dark vóór de eerste paint: de bundel zet het thema pas ná het laden,
          waardoor dark mode bij elke herlaad even wit flitste (Jarno 01-09).
-         vhb-theme = expliciete keuze; vhb-theme-effectief = wat er effectief
+         vhb-theme = expliciete keuze (light, dark of auto = volgt het toestel,
+         Apple-review 17-10 nr. 8); vhb-theme-effectief = wat er effectief
          stond (ook de rol-standaard van planner/admin, die niet als keuze
          wordt bewaard). -->
     <!-- Warme start vóór de eerste paint (22-09): staat er een opgeslagen
@@ -41,6 +42,7 @@
       (function () {
         try {
           var t = localStorage.getItem('vhb-theme') || localStorage.getItem('vhb-theme-effectief');
+          if (t === 'auto') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
           if (t === 'dark') document.documentElement.classList.add('dark');
           for (var i = 0; i < localStorage.length; i++) {
             var k = localStorage.key(i) || '';
