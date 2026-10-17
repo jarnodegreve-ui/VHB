@@ -945,13 +945,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing (verbeterronde 29/07 #3). */}
-      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} vuil={aanvraagVuil} onNietBewaren={verwerpConcept} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} vuil={aanvraagVuil} onNietBewaren={verwerpConcept} maxWidth="md" sheet className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               <ModalHeader
                 title={registratie ? 'Verlof registreren' : 'Verlof aanvragen'}
                 description={registratie ? 'Voor verlof dat al goedgekeurd is, bijvoorbeeld op papier. Wordt meteen als goedgekeurd vastgelegd, zonder mail naar de chauffeur.' : undefined}
                 onClose={() => setShowRequestModal(false)}
               />
-              <Formulier onVerstuur={handleRequestLeave} noValidate className="p-8 space-y-5 overflow-y-auto flex-1">
+              <Formulier onVerstuur={handleRequestLeave} noValidate className="p-5 sm:p-8 space-y-5 overflow-y-auto flex-1">
                 {/* Alleen planner/admin: verlof registreren dat een chauffeur
                     mondeling of telefonisch doorgaf. Kiest de planner een
                     collega, dan is het meteen goedgekeurd (hij ís de
@@ -1002,7 +1002,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </p>
                 </Card>
 
-                <Card padding="sm" className="space-y-3" {...swipeHandlers}>
+                {/* Smalle binnenrand op de telefoon: dagcellen van 44 pt
+                    (Apple-review 17-10, nr. 9). */}
+                <Card padding="none" className="space-y-3 p-2 sm:p-4" {...swipeHandlers}>
                   <MaandNavigatie className="justify-between" label={monthName} onVorige={goToPrevMonth} onVolgende={goToNextMonth} />
                   {/* Echt raster met één tab-stop, pijltjes en volledige labels
                       (datumtranche PR 5); een keuze volgt dezelfde regels als

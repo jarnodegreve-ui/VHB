@@ -11,6 +11,10 @@ const PDF_NAAM = 'Omleidingsplan lijn 50.pdf';
 const PDF_NAAM_2 = 'Haltekaart station.pdf';
 // Zestig tekens: zo lang zijn de bestandsnamen die planners echt uploaden.
 const PDF_NAAM_LANG = 'Omleidingsplan lijnen 50 en 58, tijdelijke halte station.pdf';
+// Op de telefoon (onder 640 px) is het detail een stap in de hiërarchie:
+// links een terugknop in plaats van het kruisje (Apple-review 17-10, nr. 7).
+const sluitKnop = (page: Page, detail: Locator) =>
+  detail.getByRole('button', { name: (page.viewportSize()?.width ?? 0) < 640 ? 'Terug naar Omleidingen' : 'Sluiten', exact: true });
 const OMLEIDINGEN: Diversion[] = [
   { id: 'lange-omleiding', line: '50, 58, 82', title: TITEL, location: 'Maldegem, stationsomgeving', description: OMSCHRIJVING, startDate: '2026-09-12', endDate: '2026-09-19' },
   { id: 'andere-lijn', line: '883, 884', title: 'Brugwerken aan de Zuidlaan', location: 'Eeklo', description: 'De brug blijft afgesloten voor doorgaand verkeer.', startDate: '2026-09-14', endDate: '2026-09-21' },
@@ -148,7 +152,7 @@ test('omleidingen: volledig detail, PDF-bijlagen, URL-selectie en mobiel sluiten
   await expect(detail).toBeVisible();
 
   if (isMobile) {
-    await detail.getByRole('button', { name: 'Sluiten', exact: true }).click();
+    await sluitKnop(page, detail).click();
     await expect(detail).toHaveCount(0);
     await expect(page).toHaveURL(/\/omleidingen$/);
     await expect.poll(() => page.evaluate(() => history.state?.vhbOverlay ?? null)).toBeNull();
@@ -180,7 +184,7 @@ test('omleidingen: directe link naar een verlopen record blijft na refresh gesel
   await expect(detail).toContainText('De normale haltes zijn opnieuw beschikbaar.');
   await expect(page).toHaveURL(/\/omleidingen\/voorbij$/);
   if (isMobile) {
-    await detail.getByRole('button', { name: 'Sluiten', exact: true }).click();
+    await sluitKnop(page, detail).click();
     await expect(detail).toHaveCount(0);
     await expect(page).toHaveURL(/\/omleidingen$/);
   }
@@ -203,7 +207,7 @@ for (const viewport of [{ width: 320, height: 800 }, { width: 844, height: 390 }
     const detail = page.getByRole('dialog', { name: TITEL, exact: true });
     await volledigeTekstZichtbaar(detail.getByRole('heading', { level: 2 }));
     await volledigeTekstZichtbaar(detail.getByText(OMSCHRIJVING, { exact: true }));
-    const sluit = detail.getByRole('button', { name: 'Sluiten', exact: true });
+    const sluit = sluitKnop(page, detail);
     await expect(sluit).toBeInViewport();
     await detail.getByRole('button', { name: PDF_NAAM, exact: true }).scrollIntoViewIfNeeded();
     await expect(sluit).toBeInViewport();
@@ -245,7 +249,7 @@ test('omleidingen: een bestandsnaam van 60 tekens kapt af binnen het paneel, met
     // volledige naam blijft de toegankelijke naam van de knop.
     const naam = knop.locator('span.truncate');
     expect(await naam.evaluate((el) => el.scrollWidth > el.clientWidth), 'de naam is afgekapt').toBe(true);
-    await expect(detail.getByRole('button', { name: 'Sluiten', exact: true })).toBeInViewport();
+    await expect(sluitKnop(page, detail)).toBeInViewport();
   }
 
   // Het icoon volgt de tekstkleur van de knop, zoals bij de updates: rood

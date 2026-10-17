@@ -70,7 +70,8 @@ for (const sluitMet of ['sluitknop', 'terugknop'] as const) {
     await expect(dialoog).toBeVisible();
     await expect(page).toHaveURL(/\/omleidingen\/d1$/);
     if (sluitMet === 'sluitknop') {
-      const sluiten = dialoog.getByRole('button', { name: 'Sluiten', exact: true });
+      // Op de telefoon: terugknop links (Apple-review 17-10, nr. 7).
+      const sluiten = dialoog.getByRole('button', { name: 'Terug naar Omleidingen', exact: true });
       await expect(sluiten).toBeInViewport({ ratio: 1 });
       await sluiten.tap();
     } else {

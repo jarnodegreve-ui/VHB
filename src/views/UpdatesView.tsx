@@ -153,6 +153,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
               open={!!detail}
               onClose={() => setSelectedId(null)}
               title={detail?.title ?? 'Bericht'}
+              terug="Updates"
               subtitle={detail ? formatUpdateDate(detail.date) : undefined}
               sleutel={detail?.id}
               leegTekst="Kies een bericht."

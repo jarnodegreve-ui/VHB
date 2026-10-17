@@ -1296,7 +1296,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing komen daar vandaan (verbeterronde 29/07 #3). */}
-      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} vuil={wizardVuil} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} vuil={wizardVuil} maxWidth="md" sheet className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               {/* 44x44 op de terugknop (het kruisje van ModalHeader is dat op
                   touch ook): dit zijn de enige twee uitwegen uit een
                   driestapswizard op een telefoon. Ze stonden op 36 resp. 38px

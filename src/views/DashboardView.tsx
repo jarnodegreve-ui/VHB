@@ -550,6 +550,7 @@ export function DashboardView({ notes = [],
         onClose={() => setOpenDiversion(null)}
         title={openDiversion?.title ?? 'Omleiding'}
         subtitle={openDiversion ? [lijnLabel(openDiversion.line), openDiversion.location].filter(Boolean).join(' · ') : undefined}
+        terug="Dashboard"
       >
         {openDiversion && <OmleidingDetail diversion={openDiversion} />}
       </SlideOver>
