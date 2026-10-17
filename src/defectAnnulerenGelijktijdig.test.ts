@@ -15,20 +15,24 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import express from 'express';
+import { magView } from './app/routes';
+import { routeUitUrl } from './app/router';
 
 const staat = vi.hoisted(() => ({
   users: [
     { id: '10', name: 'Chris Chauffeur', role: 'chauffeur', isActive: true },
     { id: '11', name: 'Carla Collega', role: 'chauffeur', isActive: true },
     { id: '12', name: 'Tom Technieker', role: 'technieker', isActive: true },
-  ],
+    { id: '13', name: 'Petra Planner', role: 'planner', isActive: true },
+    { id: '14', name: 'Olaf Ook', role: 'chauffeur', ookTechnieker: true, isActive: true },
+  ] as Array<{ id: string; name: string; role: string; isActive: boolean; ookTechnieker?: boolean }>,
   defecten: [] as Array<Record<string, any>>,
   /** Loopt één keer, vlak vóór de eerstvolgende update wordt uitgevoerd. */
   voorUpdate: null as null | (() => Promise<void> | void),
   /** De filters van elke uitgevoerde update, in volgorde. */
   updates: [] as Array<Array<[string, unknown]>>,
   log: [] as Array<{ actie: string; door: string }>,
-  pushes: [] as Array<{ ontvangers: string[]; titel: string }>,
+  pushes: [] as Array<{ ontvangers: string[]; titel: string; url?: string }>,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -76,8 +80,8 @@ vi.mock('../api/storage.js', async (origineel) => ({
   },
 }));
 vi.mock('../api/push.js', () => ({
-  sendPushToUsers: async (ontvangers: string[], payload: { title: string }) => {
-    staat.pushes.push({ ontvangers: [...ontvangers].sort(), titel: payload.title });
+  sendPushToUsers: async (ontvangers: string[], payload: { title: string; url?: string }) => {
+    staat.pushes.push({ ontvangers: [...ontvangers].sort(), titel: payload.title, url: payload.url });
   },
 }));
 
@@ -155,7 +159,7 @@ describe('de chauffeur annuleert terwijl de technieker afhandelt', () => {
     expect(melding()).toMatchObject({ status: 'uitgevoerd', uitgevoerd_door: TECHNIEKER, uitgevoerd_op: '2026-09-29', uitgevoerd_werk: 'Deurrail gesmeerd' });
     // Alleen de afhandeling is gelogd en gemeld; van de annulering geen spoor.
     expect(staat.log).toEqual([{ actie: 'Melding uitgevoerd', door: TECHNIEKER }]);
-    expect(staat.pushes).toEqual([{ ontvangers: [CHAUFFEUR], titel: 'Bus 23: je melding is afgehandeld' }]);
+    expect(staat.pushes).toEqual([{ ontvangers: [CHAUFFEUR], titel: 'Bus 23: je melding is afgehandeld', url: '/?view=mijn-dag' }]);
   });
 
   it('de melding verdween intussen: 404', async () => {
@@ -173,4 +177,26 @@ describe('de chauffeur annuleert terwijl de technieker afhandelt', () => {
     expect((await wijzig(TECHNIEKER, { status: 'open' })).status).toBe(200);
     expect(melding()).toMatchObject({ status: 'open', uitgevoerd_door: null, uitgevoerd_op: null });
   });
+});
+
+describe('de push "je melding is afgehandeld" opent een scherm dat de melder mag zien (17-10)', () => {
+  // Vroeger altijd Mijn dag: een technieker (of staf) die een defect meldde,
+  // viel bij een tik terug op het dashboard met "niet beschikbaar voor jouw rol".
+  const gevallen = [
+    { wie: 'chauffeur', id: CHAUFFEUR, url: '/?view=mijn-dag' },
+    { wie: 'technieker', id: TECHNIEKER, url: '/?view=defecten' },
+    { wie: 'planner', id: '13', url: '/?view=defecten' },
+    { wie: 'chauffeur met Ook technieker', id: '14', url: '/?view=defecten' },
+  ];
+  for (const geval of gevallen) {
+    it(`${geval.wie}: ${geval.url}`, async () => {
+      melding().gemeld_door = geval.id;
+      // Afgehandeld door iemand anders dan de melder, anders vertrekt er geen push.
+      const afhandelaar = geval.id === TECHNIEKER ? '13' : TECHNIEKER;
+      expect((await wijzig(afhandelaar, AFHANDELING)).status).toBe(200);
+      expect(staat.pushes).toEqual([{ ontvangers: [geval.id], titel: 'Bus 23: je melding is afgehandeld', url: geval.url }]);
+      const melder = staat.users.find((u) => u.id === geval.id)!;
+      expect(magView(melder as any, routeUitUrl(geval.url)!.view)).toBe(true);
+    });
+  }
 });
