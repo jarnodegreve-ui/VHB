@@ -88,6 +88,11 @@
      text-[NNpx]-strooiwaarden meer. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
+  /* Labels van de onderbalk: vast op 11 px, ook als de wortel meegroeit met
+     de tekstgrootte van de iPhone (Apple-review 17-10, nr. 1; HIG: wie de
+     tekst groter zet, verwacht niet dat de tabtitels meegroeien). */
+  --text-dock: 11px;
+  --text-dock--line-height: 13px;
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.25rem;
   --text-md: 0.9375rem;
@@ -441,9 +446,12 @@
    mobiele maatvoering te klein — alles rem-gebaseerd schaalt mee met de
    wortel, dus één regel geeft het hele portaal 6 % meer lucht en letter
    (16 → 17 px basis). px-waarden (--content-max, logo) blijven staan. */
+html {
+  font-size: var(--wortel-ios, 100%);
+}
 @media (min-width: 1280px) {
   html {
-    font-size: 106.25%;
+    font-size: var(--wortel-ios, 106.25%);
   }
 }
 

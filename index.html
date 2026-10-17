@@ -31,6 +31,12 @@
          app in plaats van het carbon laadscherm (zie de stijlregels hieronder
          en scripts/voorrender-schil.tsx). Zelfde sleutel als
          heeftOpgeslagenSessie() in src/app/AppSkeleton.tsx. -->
+    <!-- Tekstgrootte van de iPhone (Apple-review 17-10, nr. 1): op een
+         aanraakscherm met WebKit volgt de wortelmaat de systeemmaat
+         (-apple-system-body: 17 px bij de standaardinstelling), begrensd
+         tussen 16 en 22 px, en opnieuw gemeten bij terugkeer naar de app.
+         Alles in rem schaalt mee; de labels van de onderbalk staan vast
+         (text-dock). Ook vóór de eerste paint, anders verspringt de schil. -->
     <script>
       (function () {
         try {
@@ -41,6 +47,22 @@
             if (k.indexOf('sb-') === 0 && k.slice(-11) === '-auth-token') { document.documentElement.classList.add('vhb-warm'); break; }
           }
         } catch (e) { /* privacy-modus: val terug op licht en op het laadscherm */ }
+      })();
+      (function () {
+        try {
+          if (!window.CSS || !CSS.supports('font', '-apple-system-body') || !matchMedia('(pointer: coarse)').matches) return;
+          var html = document.documentElement;
+          var meet = function () {
+            var p = document.createElement('span');
+            p.style.cssText = 'position:absolute;visibility:hidden;font:-apple-system-body';
+            html.appendChild(p);
+            var px = parseFloat(getComputedStyle(p).fontSize);
+            html.removeChild(p);
+            if (px > 0) html.style.setProperty('--wortel-ios', Math.min(Math.max(px, 16), 22) + 'px');
+          };
+          meet();
+          document.addEventListener('visibilitychange', function () { if (!document.hidden) meet(); });
+        } catch (e) { /* geen meting: de wortel blijft 16 px */ }
       })();
     </script>
     <!-- Welke van de twee voorgerenderde schillen zichtbaar is. Inline, zodat
