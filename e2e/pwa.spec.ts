@@ -556,7 +556,7 @@ test.describe('pwa: bijlagen van omleidingen', () => {
     await openBijlage(page);
     await sluitViewer(page);
     await expect.poll(async () => (await bewaardeBijlagen(page))?.length).toBe(1);
-    await detail.getByRole('button', { name: 'Sluiten', exact: true }).click();
+    await detail.getByRole('button', { name: 'Terug naar Omleidingen', exact: true }).click();
     await expect(detail).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Accountmenu' }).click();

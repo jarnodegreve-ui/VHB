@@ -1,12 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { X } from 'lucide-react';
+import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'motion/react';
+import { ChevronLeft, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useLaag } from '../lib/lagen';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
+import { useMinWidth } from '../lib/useMinWidth';
 import { SluitContext, useSluitPoort } from './Modal';
+import { Button } from './primitives';
 
 /**
  * Premium slide-over side panel (rechts) — het standaard detailvenster van
@@ -30,9 +32,15 @@ export function SlideOver({
   footer,
   vuil = false,
   onNietBewaren,
+  terug,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Op de telefoon (onder 640 px) een stap in de hiërarchie i.p.v. een
+   *  losse laag: links een terugknop met deze naam ("‹ Omleidingen") in plaats
+   *  van het kruisje rechts, en een veeg naar rechts sluit. De historie- en
+   *  lagenregels blijven dezelfde (Apple-review 17-10, nr. 7). */
+  terug?: string;
   title: string;
   subtitle?: string;
   /** Lange titel en subtitel volledig leesbaar, ook op een smalle telefoon. */
@@ -107,6 +115,15 @@ export function SlideOver({
   // patroon als Modal.tsx (controle 16-09, nr. 7).
   const keyboardInset = useKeyboardInset(open);
 
+  // Terug op de telefoon: veeg naar rechts sluit. Slepen start bij elke
+  // aanraking buiten een veld, maar dragDirectionLock laat een verticale
+  // beweging aan het scrollen; dragListener={false} houdt de touch-action
+  // en de tekstselectie van het paneel vrij.
+  const breed = useMinWidth(640);
+  const alsPagina = !!terug && !breed;
+  const veeg = useDragControls();
+  const kanVegen = alsPagina && !reduceMotion;
+
   if (typeof document === 'undefined') return null;
 
   const widthClass = width === 'lg' ? 'sm:max-w-[36rem]' : 'sm:max-w-[28rem]';
@@ -137,6 +154,16 @@ export function SlideOver({
             // standaard ease-out — zoals elk paneel in de app.
             animate={{ x: 0, transition: reduceMotion ? { duration: 0 } : { duration: DUR.slow, ease: EASE_SPRING } }}
             exit={{ x: '100%', transition: reduceMotion ? { duration: 0 } : { duration: DUR.slow, ease: EASE } }}
+            drag={kanVegen ? 'x' : false}
+            dragListener={false}
+            dragControls={veeg}
+            dragDirectionLock
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={{ left: 0, right: 1 }}
+            onDragEnd={kanVegen ? (_, info) => { if (info.offset.x > 90 || info.velocity.x > 500) sluit(); } : undefined}
+            onPointerDown={kanVegen ? (e) => {
+              if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('input, textarea, select')) veeg.start(e);
+            } : undefined}
             className={cn(
               // Bewust géén backdrop-filter op het geanimeerde paneel zelf
               // (blur + transform op één element geeft compositing-glitches);
@@ -150,12 +177,18 @@ export function SlideOver({
             style={keyboardInset ? { height: `calc(100% - ${keyboardInset}px)` } : undefined}
           >
             <div className="statusbalk-strook shrink-0" aria-hidden="true" />
+            {alsPagina && (
+              <div className="flex shrink-0 items-center px-2 pt-1" style={{ paddingLeft: 'max(0.5rem, env(safe-area-inset-left))' }}>
+                <Button variant="ghost" icon={<ChevronLeft size={18} />} aria-label={`Terug naar ${terug}`} onClick={() => sluit()}>{terug}</Button>
+              </div>
+            )}
             {/* Landscape: iOS negeert de portrait-lock uit het manifest, dus
                 header, inhoud en footer respecteren de zij-insets — anders valt
                 het sluitkruis deels achter de notch-hoek. */}
             <div
               className={cn(
                 'flex shrink-0 items-start gap-3 border-b border-hairline p-5',
+                alsPagina && 'pt-2',
                 // Een zeer lange titel krijgt een eigen scrollvak; ook in
                 // landscape blijft er ruimte voor de inhoud en de bijlage.
                 titelTerugloop && 'max-h-[40dvh] overflow-y-auto overscroll-contain',
@@ -178,6 +211,7 @@ export function SlideOver({
                 className={cn(
                   '-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-700',
                   titelTerugloop && 'sticky top-0 self-start',
+                  alsPagina && 'hidden',
                 )}
               >
                 <X className="h-4 w-4" />

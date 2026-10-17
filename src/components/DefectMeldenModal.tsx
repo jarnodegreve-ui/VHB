@@ -101,7 +101,7 @@ export function DefectMeldenModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} vuil={vuil} maxWidth="md" ariaLabel="Defect melden" className="!p-0 flex flex-col">
+    <Modal open={open} onClose={onClose} vuil={vuil} maxWidth="md" ariaLabel="Defect melden" sheet className="!p-0 flex flex-col">
       <ModalHeader
         title="Defect melden"
         description="Wat is er mis met de bus? De garage ziet je melding meteen."
@@ -155,7 +155,7 @@ export function DefectMeldenModal({
           </div>
         )}
         <div className="flex gap-3 pt-1">
-          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig}>Annuleren</SluitKnop>
+          <SluitKnop onClose={onClose} variant="ghost" className="flex-1" disabled={bezig} alleenInVenster>Annuleren</SluitKnop>
           <Button type="submit" variant="primary" className="flex-1" bezig={bezig} disabled={laden}>Melden</Button>
         </div>
       </Formulier>

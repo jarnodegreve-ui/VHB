@@ -212,6 +212,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
             onClose={() => setSelectedId(null)}
             title={detail?.title ?? 'Omleiding'}
             titelTerugloop
+            terug="Omleidingen"
             subtitle={detail ? [lijnLabel(detail.line), detail.location].filter(Boolean).join(' · ') : undefined}
             sleutel={detail?.id}
             leegTekst="Kies een omleiding."
