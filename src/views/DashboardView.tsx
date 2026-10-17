@@ -63,7 +63,7 @@ export function DashboardView({ notes = [],
   diversionsGeladen?: boolean;
   notes?: Array<{ date: string; note: string }>;
   leaveRequests?: LeaveRequest[];
-  /** Ruilen en namen voor het paneel "Wacht op jouw antwoord"; beide laden
+  /** Ruilen en namen voor het paneel "Wacht op je antwoord"; beide laden
    *  voor een chauffeur ná de poort, dus pas tonen als `ruilDataKlaar`. */
   swaps?: SwapRequest[];
   users?: User[];
@@ -263,10 +263,13 @@ export function DashboardView({ notes = [],
         label="Volgende dienst"
         // Dienstnummer groot, net als in de Vandaag-tegel (Jarno 04-09:
         // het nummer is het belangrijkste); dag + afstand op de subregel.
-        text={nextShift ? serviceNumberOf(nextShift) : 'Geen'}
+        // Zonder dienst na vandaag maar mét een dienst vandaag zegt "Geen"
+        // iets wat niet klopt (Apple-review 17-10, nr. 18); "niets ingepland"
+        // alleen als er echt niets komt.
+        text={nextShift ? serviceNumberOf(nextShift) : todayParts.length > 0 ? 'Na vandaag' : 'Geen'}
         mono={!!nextShift}
         subClassName={nextShift ? 'text-sm font-semibold text-slate-600' : undefined}
-        sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : 'niets ingepland'}
+        sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relatieveDag(nextShift.date, today)}` : todayParts.length > 0 ? 'nog niets gepland' : 'niets ingepland'}
         lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
         onClick={onNavigate ? () => onNavigate('rooster') : undefined}
       />
@@ -330,7 +333,7 @@ export function DashboardView({ notes = [],
         title="Komende diensten"
         aside={thisMonthShiftCount > 0 ? `${thisMonthShiftCount} deze maand` : undefined}
         onSeeAll={onNavigate ? () => onNavigate('rooster') : undefined}
-        seeAllLabel="Mijn rooster"
+        seeAllLabel="Rooster"
       >
         {upcomingShifts.length === 0 ? (
           /* Neutrale lege staat: geen groen vlak voor een rusttoestand. */
@@ -469,7 +472,7 @@ export function DashboardView({ notes = [],
         </div>
       </div>
 
-      {/* === Wacht op jouw antwoord (chauffeur) ===
+      {/* === Wacht op je antwoord (chauffeur) ===
           Alleen zichtbaar als er een ruil op hem wacht; niet in te stellen via
           Dashboard aanpassen, want het is een vraag van een collega, geen
           tegel. Amber = vraagt een beslissing; de bevestiging van een
@@ -479,7 +482,7 @@ export function DashboardView({ notes = [],
       {wachtOpMij.length > 0 && (
         <OpsPanel
           icon={<RuilIcoon />}
-          title="Wacht op jouw antwoord"
+          title="Wacht op je antwoord"
           aside={`${wachtOpMij.length} ${wachtOpMij.length === 1 ? 'ruil' : 'ruilen'}`}
           onSeeAll={() => navigeer('ruil-verzoeken')}
           seeAllLabel="Dienstruil"
@@ -534,7 +537,7 @@ export function DashboardView({ notes = [],
         // Een oneven laatste tegel spant de volle breedte, zoals de kleine
         // tegels hierboven: met Filmnummers erbij (01-10) zijn het er zeven.
         <div role="group" aria-label="Snelle acties" className="grid grid-cols-2 gap-3 lg:hidden [&>*:last-child:nth-child(odd)]:col-span-2">
-          {isRijdend(user.role) && <QuickAction icon={<Calendar size={16} />} label="Mijn rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />}
+          {isRijdend(user.role) && <QuickAction icon={<Calendar size={16} />} label="Rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />}
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
           <QuickAction icon={<BusFront size={16} />} label="Filmnummers" sub="Nummer per bestemming" onClick={() => onNavigate('filmnummers')} />
           {isRijdend(user.role) && <QuickAction icon={<Wrench size={16} />} label="Defect melden" sub="Iets mis met de bus?" onClick={() => setDefectMelden(true)} />}

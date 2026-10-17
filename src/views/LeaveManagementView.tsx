@@ -833,7 +833,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
             return (
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
-                  <MicroLabel className="text-slate-600">Wachtend op goedkeuring</MicroLabel>
+                  <h2 className="text-subsection-title">Wachtend op goedkeuring</h2>
                   {plannerPending.length > 1 && (
                     <Button
                       variant="ghost"
@@ -912,7 +912,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           {isPlanner && <TeamHistoriek aanvragen={verlofRequests} users={users} today={today} onOpen={setReviewLeave} />}
 
           <MyLeaveSection
-            title="Mijn openstaande aanvragen"
+            title={isPlanner ? 'Mijn openstaande aanvragen' : 'Openstaande aanvragen'}
             count={myPending.length}
             emptyText="Geen openstaande aanvragen."
             requests={myPending}
@@ -922,7 +922,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           />
 
           <MyLeaveSection
-            title="Mijn geplande verloven"
+            title={isPlanner ? 'Mijn geplande verloven' : 'Geplande verloven'}
             count={myUpcoming.length}
             emptyText="Geen goedgekeurd verlof gepland."
             requests={myUpcoming}
@@ -932,7 +932,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           />
 
           <MyLeaveSection
-            title="Mijn historiek"
+            title={isPlanner ? 'Mijn historiek' : 'Historiek'}
             count={myHistory.length}
             emptyText="Nog geen afgehandelde aanvragen."
             requests={myHistory}
@@ -1351,7 +1351,7 @@ function TeamHistoriek({ aanvragen, users, today, onOpen }: { aanvragen: LeaveRe
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 px-1">
-        <MicroLabel className="text-slate-600">Historiek</MicroLabel>
+        <h2 className="text-subsection-title">Historiek</h2>
         <Select aria-label="Historiek van" value={persoon} onChange={(e) => setPersoon(e.target.value)} className="w-auto min-w-0 px-2.5 py-1.5 text-xs">
           <option value="">Iedereen</option>
           {personen.map((p) => <option key={p.id} value={p.id}>{p.naam}</option>)}
@@ -1439,9 +1439,12 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
 
   return (
     <div className={requests.length > 0 ? 'space-y-2' : 'space-y-1.5'}>
+      {/* Lijstkop = een echte kop in zinsvorm (Apple-review 17-10, nr. 16;
+          eerst alleen op Verlof). Het microlabel blijft voor een label bij
+          een waarde, zoals "Periode kiezen". */}
       <div className="flex items-center justify-between px-1">
-        <MicroLabel className="text-slate-600">{title}</MicroLabel>
-        <MicroLabel>{count}</MicroLabel>
+        <h2 className="text-subsection-title">{title}</h2>
+        <span className="text-xs font-medium text-slate-500">{count}</span>
       </div>
       {requests.length === 0 ? (
         // Eén stille regel i.p.v. een lege kaart: drie lege secties onder

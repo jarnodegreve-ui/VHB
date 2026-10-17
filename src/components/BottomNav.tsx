@@ -203,7 +203,7 @@ export function BottomNav({
                     <span aria-hidden="true" className="absolute -top-1.5 -right-3 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
                       <CountUp value={moreBadge} badge format={(n) => (n > 9 ? '9+' : n)} />
                     </span>
-                    <span id="dock-meer-wacht" className="sr-only">{`${moreBadge} ${moreBadge === 1 ? 'ruil wacht' : 'ruilen wachten'} op jouw antwoord`}</span>
+                    <span id="dock-meer-wacht" className="sr-only">{`${moreBadge} ${moreBadge === 1 ? 'ruil wacht' : 'ruilen wachten'} op je antwoord`}</span>
                   </>
                 )}
               </span>

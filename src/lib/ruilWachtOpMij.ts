@@ -1,7 +1,7 @@
 import type { SwapRequest } from '../types';
 
 /**
- * Ruilen die op de ingelogde chauffeur wachten (paneel "Wacht op jouw antwoord"
+ * Ruilen die op de ingelogde chauffeur wachten (paneel "Wacht op je antwoord"
  * op het dashboard, getal op de Meer-tab en het nav-item Dienstruil; richting
  * beslist op 22-09, gebouwd op 03-10). Tot dan kreeg de collega alleen een
  * push en stond het verzoek in Dienstruil achter Meer: wie de push miste,

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { metEenheid } from '../lib/format';
-import { ArrowUpRight, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { CountUp } from './CountUp';
 import { cn } from '../lib/ui';
 import { Button, Meter, MeterVulling } from './primitives';
@@ -192,7 +192,7 @@ export function OpsPanel({
       {onSeeAll && (
         <Button variant="secondary" size="sm" full className="mt-3 gap-1" onClick={onSeeAll}>
           {seeAllLabel}
-          <ArrowUpRight size={12} />
+          <ChevronRight size={14} />
         </Button>
       )}
     </div>
@@ -271,9 +271,10 @@ export function QuickAction({
       onClick={onClick}
       className="ios-pressable group surface-card surface-card-hover flex flex-wrap items-center gap-2.5 rounded-3xl p-3.5 text-left"
     >
-      {/* Carbon vierkant met licht icoon; de omgekeerde schalen keren dat in
-          donker vanzelf om (geen aparte dark-look meer, controle-ronde 05-09, 40). */}
-      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-slate-50">
+      {/* Hetzelfde neutrale vlak als de tegels (Apple-review 17-10, nr. 17):
+          het carbon vierkant spiegelde in donker naar zeven witte blokken,
+          feller dan de gouden knop. Kleur alleen waar het een status is. */}
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
         {icon}
       </span>
       {/* Op de telefoon (onder sm) alleen de naam, op hoogstens twee regels:
@@ -283,7 +284,7 @@ export function QuickAction({
         <span className="line-clamp-2 text-sm font-semibold leading-tight text-slate-900 sm:line-clamp-1">{label}</span>
         <span className="hidden truncate text-xs font-medium text-slate-500 sm:block">{sub}</span>
       </span>
-      <ArrowUpRight size={16} className="hidden shrink-0 text-slate-300 transition-colors group-hover:text-slate-700 sm:block" />
+      <ChevronRight size={16} className="hidden shrink-0 text-slate-300 transition-colors group-hover:text-slate-700 sm:block" />
     </button>
   );
 }

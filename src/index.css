@@ -538,7 +538,9 @@ html.dark {
   --color-ink-soft: #1C2025;
   --color-keuze: #C4C9CE;
   --color-keuze-tekst: #17181A;
-  --color-keuze-vlak: #353B42;
+  /* Een trede lichter (Apple-review 17-10, nr. 12): #353B42 haalde 1,5:1 op
+     de ondergrond; #5A626B 2,75:1, de tekst erop 5,57:1. */
+  --color-keuze-vlak: #5A626B;
   --color-keuze-vlak-tekst: #F2F3F4;
   --color-rim: rgba(154, 161, 169, 0.20);
   --color-rim-strong: rgba(154, 161, 169, 0.26);
@@ -1801,4 +1803,35 @@ html.dark {
   border-color: var(--lijn-zand);
   background: var(--lijn-papier);
   color: var(--lijn-zand-inkt);
+}
+
+/* Verhoogd contrast van het toestel (iPhone: Toegankelijkheid › Weergave en
+   tekstgrootte › Verhoog contrast; Apple-review 17-10, nr. 13). Alleen
+   tokens: de hairlines een trede sterker, de rand rond kaarten zichtbaar en
+   gedempte tekst van slate-500 naar slate-600. Onderaan het bestand, zodat
+   het wint van de lichte (@theme) en de donkere waarden (html.dark). */
+@media (prefers-contrast: more) {
+  :root,
+  html.dark {
+    --color-slate-500: var(--color-slate-600);
+    --tekst-micro: var(--color-slate-600);
+  }
+  :root {
+    --color-hairline-subtle: rgba(228, 230, 232, 0.70);
+    --color-hairline: rgba(205, 209, 213, 0.80);
+    --color-hairline-strong: rgba(154, 161, 169, 0.80);
+    --elev-1-rim: rgba(154, 161, 169, 0.55);
+    --elev-2-rim: rgba(154, 161, 169, 0.55);
+    --elev-3-rim: rgba(154, 161, 169, 0.55);
+    --elev-4-rim: rgba(154, 161, 169, 0.55);
+  }
+  html.dark {
+    --color-hairline-subtle: rgba(79, 87, 95, 0.32);
+    --color-hairline: rgba(110, 118, 127, 0.45);
+    --color-hairline-strong: rgba(154, 161, 169, 0.55);
+    --elev-1-rim: rgba(255, 255, 255, 0.22);
+    --elev-2-rim: rgba(255, 255, 255, 0.22);
+    --elev-3-rim: rgba(255, 255, 255, 0.22);
+    --elev-4-rim: rgba(255, 255, 255, 0.22);
+  }
 }

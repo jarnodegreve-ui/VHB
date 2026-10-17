@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, CheckCheck, FolderOpen, Info, MapPin, Plane, Wrench, X } from 'lucide-react';
+import { Bell, Calendar, CheckCheck, ChevronRight, FolderOpen, Info, MapPin, Plane, Wrench, X } from 'lucide-react';
 import { RuilIcoon } from './RuilIcoon';
 import { useAppDataContext } from '../app/AppDataContext';
 import { openDoel } from '../app/openDoel';
@@ -124,7 +124,7 @@ export function MeldingenPaneel({ onNavigate, onSluit }: { onNavigate: (view: Vi
         )}
 
         <PopoverVoet>
-          <MenuItem icon={<Bell size={16} />} iconClassName="text-slate-500" trailing={<ArrowUpRight size={14} />} onClick={() => ga('meldingen')}>
+          <MenuItem icon={<Bell size={16} />} iconClassName="text-slate-500" trailing={<ChevronRight size={14} />} onClick={() => ga('meldingen')}>
             Alle meldingen
           </MenuItem>
         </PopoverVoet>

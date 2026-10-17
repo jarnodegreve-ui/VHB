@@ -867,7 +867,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     key={swap.id}
                     titel={<>{naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger && <span className="font-medium text-slate-500"> → {ontvanger}</span>}</>}
                     meta={info.date ? hoofdletter(fmtShort(info.date)) : undefined}
-                    status={canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
+                    status={canRespond ? <Badge tone="amber" dot>Wacht op je antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
                     voorproef={teWeinigRust ? <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge> : undefined}
                     richting="omlaag"
                     open={open}
@@ -921,8 +921,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {isTakeoverSwap(swap) && <div className="mt-1.5"><TakeoverBadge /></div>}
                     </div>
                     <span className="shrink-0">
-                      {/* "Jouw antwoord" vraagt actie en blijft amber; de status is stil. */}
-                      {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
+                      {/* "Wacht op je antwoord" vraagt actie en blijft amber; de status is stil. */}
+                      {canRespond ? <Badge tone="amber" dot>Wacht op je antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
                     </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">{citaat(swap.reason)}</p>}
