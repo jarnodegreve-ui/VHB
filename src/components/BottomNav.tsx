@@ -158,7 +158,7 @@ export function BottomNav({
                     </span>
                   )}
                 </span>
-                <span className="relative z-10 max-[339px]:sr-only text-2xs font-semibold leading-tight truncate max-w-full px-0.5">
+                <span className="relative z-10 max-[339px]:sr-only text-dock font-semibold truncate max-w-full px-0.5">
                   {slot.label}
                 </span>
               </button>
@@ -192,7 +192,7 @@ export function BottomNav({
                   </>
                 )}
               </span>
-              <span className="relative z-10 max-[339px]:sr-only text-2xs font-semibold leading-tight truncate max-w-full px-0.5">Meer</span>
+              <span className="relative z-10 max-[339px]:sr-only text-dock font-semibold truncate max-w-full px-0.5">Meer</span>
             </button>
           </li>
         )}

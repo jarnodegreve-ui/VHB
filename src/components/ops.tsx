@@ -177,15 +177,15 @@ export function OpsPanel({
 }) {
   return (
     <div className={cn('surface-card rounded-3xl p-5 relative', className)}>
-      <div className="mb-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+      <div className="mb-3.5 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
             {icon}
           </span>
           <h3 className="text-card-title">{title}</h3>
         </div>
         {aside && (
-          <span className="text-xs font-medium text-slate-500">{aside}</span>
+          <span className="shrink-0 whitespace-nowrap text-xs font-medium text-slate-500">{aside}</span>
         )}
       </div>
       {children}
@@ -269,7 +269,7 @@ export function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="ios-pressable group surface-card surface-card-hover flex items-center gap-2.5 rounded-3xl p-3.5 text-left"
+      className="ios-pressable group surface-card surface-card-hover flex flex-wrap items-center gap-2.5 rounded-3xl p-3.5 text-left"
     >
       {/* Carbon vierkant met licht icoon; de omgekeerde schalen keren dat in
           donker vanzelf om (geen aparte dark-look meer, controle-ronde 05-09, 40). */}
@@ -279,7 +279,7 @@ export function QuickAction({
       {/* Op de telefoon (onder sm) alleen de naam, op hoogstens twee regels:
           naam, subregel en pijl naast elkaar kapten 10 van de 14 regels af op
           390 pt (Apple-review 17-10, nr. 5). Vanaf sm is er ruimte voor alle drie. */}
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 grow basis-22">
         <span className="line-clamp-2 text-sm font-semibold leading-tight text-slate-900 sm:line-clamp-1">{label}</span>
         <span className="hidden truncate text-xs font-medium text-slate-500 sm:block">{sub}</span>
       </span>
