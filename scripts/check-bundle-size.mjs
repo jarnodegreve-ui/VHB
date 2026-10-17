@@ -274,7 +274,13 @@ const DEELBUDGET_KB = {
   // index) noemt de nieuwe gedeelde chunks (ToonMeer, archief). Lokaal
   // 78,63 → 78,77; de CI-runner meet de index ±0,4 kB zwaarder, dat kwam
   // op de grens. Budget = de meting plus ±0,8 kB.
-  index: 79.6,
+  // 17-10 (Apple-review, PR C: formulieren als sheet, detail met
+  // terugknop): 79,6 → 80,0. Modal kreeg de sheet-weergave (grip, slepen
+  // vanaf de kop, in- en uitgang van onder) en SlideOver de terugknop met
+  // veeg naar rechts; allebei in de startbundel, net als useMinWidth dat ze
+  // nu lezen. Geen nieuwe dependency. Op de CI-runner 79,14 (PR B) → 79,67;
+  // lokaal 79,31. 80,0 = die meting plus ±0,3 kB.
+  index: 80.0,
   'react-vendor': 68, // 61 kB
   'ui-vendor': 68, // 62 kB (lucide + motion; zit bewust in het kritieke pad, zie vite.config.ts)
   'supabase-vendor': 64, // 57 kB
