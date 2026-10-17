@@ -58,6 +58,15 @@ import { BESLISREDEN_MAX, bevatVrijeDag, dagenBovenVerlofLimiet, dagenVan, Verlo
 type Bezetting = 'vrij' | 'deels' | 'volzet';
 const bezettingVanDag = (afwezig: number, limiet: number): Bezetting => (afwezig <= 0 ? 'vrij' : afwezig < limiet ? 'deels' : 'volzet');
 const BEZETTING_LABEL: Record<Bezetting, string> = { vrij: 'vrij', deels: 'deels vrij', volzet: 'volzet' };
+/** Teken onder een dag in de bezettingskalender (Apple-review 17-10, nr. 2):
+ *  vorm én kleur, nooit kleur alleen. Vrij = geen teken (de rusttoestand),
+ *  deels vrij = een holle ring, volzet = het woord "vol". Voorgelezen wordt
+ *  de toestand via het aria-label van de dagcel. */
+function BezettingTeken({ bezetting }: { bezetting: Bezetting }) {
+  if (bezetting === 'volzet') return <span className="text-micro leading-none text-red-700">Vol</span>;
+  if (bezetting === 'deels') return <span className="h-2 w-2 rounded-full border-2 border-amber-600" />;
+  return null;
+}
 
 const VERLEDEN_MELDING = 'Je kan geen verlof aanvragen in het verleden.';
 
@@ -692,8 +701,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               kalender zou ruis zijn. */}
           {link.staat === 'onbekend' && <RecordOnbekend soort="verlofaanvraag" onSluit={link.sluit} />}
           {renderBeoordelingPaneel()}
-          <Card padding="lg" {...swipeHandlers}>
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          {/* Smalle binnenrand en tussenruimte op de telefoon: zo halen de
+              dagcellen 44 pt (Apple-review 17-10, nr. 9); met p-6 en gap-3
+              waren ze 34 pt. */}
+          <Card padding="none" className="p-3 sm:p-6 md:p-8" {...swipeHandlers}>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-5 sm:mb-8">
               <MaandNavigatie label={monthName} labelClassName="min-w-36" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
                 {!isCurrentMonth && (
                   <Button variant="secondary" size="sm" className="ml-1" onClick={goToCurrentMonth}>
@@ -701,12 +713,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </Button>
                 )}
               </MaandNavigatie>
-              {/* Legende als stille chips — zelfde puntjes als in de dagcellen
-                  (kleuren en titels: Jarno 08-09). */}
+              {/* Legende met dezelfde tekens als in de dagcellen: vrij heeft
+                  geen teken, deels vrij een ring, volzet het woord "vol". */}
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="emerald" stil>Vrij</Badge>
-                <Badge tone="amber" stil>Deels vrij</Badge>
-                <Badge tone="red" stil>Volzet</Badge>
+                <Badge>Vrij</Badge>
+                <Badge icon={<BezettingTeken bezetting="deels" />}>Deels vrij</Badge>
+                <Badge icon={<BezettingTeken bezetting="volzet" />}>Volzet</Badge>
                 {isPlanner && (
                   <span className="text-xs font-medium text-slate-500">
                     Limiet {limieten.standaard} tegelijk{limieten.periodes.length > 0 ? `, ${limieten.periodes.length} uitzonderingsperiode${limieten.periodes.length === 1 ? '' : 's'}` : ''}
@@ -714,7 +726,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-7 gap-3">
+            <div className="grid grid-cols-7 gap-1 sm:gap-3">
               {WEEKDAY_SHORT_MON.map((d) => <div key={d} className={cn(microLabelClass, 'text-center mb-2')}>{d}</div>)}
               {calendarDays.map((day, i) => {
                 if (day === null) return <div key={`empty-${i}`} />;
@@ -722,7 +734,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 const occupancyCount = bezettingOp(dateStr);
                 const limiet = limietVoorDag(limieten, dateStr);
                 const bezetting = bezettingVanDag(occupancyCount, limiet);
-                const statusColor = bezetting === 'volzet' ? 'bg-red-500' : bezetting === 'deels' ? 'bg-amber-500' : 'bg-emerald-500';
                 const isSelected = selectedDate === dateStr;
                 const isInDraftRange = isDateWithinDraftRange(dateStr);
                 const isDraftEdge = isDraftBoundary(dateStr);
@@ -742,7 +753,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     )}
                   >
                     <span className={cn('text-sm font-semibold tabular-nums transition-colors', (isSelected || isInDraftRange) ? 'text-slate-900' : 'text-slate-500 group-hover:text-slate-600')}>{day}</span>
-                    <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} aria-hidden="true" />
+                    <span aria-hidden="true" className="mt-1 flex h-3 items-center justify-center"><BezettingTeken bezetting={bezetting} /></span>
                   </button>
                 );
               })}

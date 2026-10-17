@@ -276,11 +276,14 @@ export function QuickAction({
       <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-slate-50">
         {icon}
       </span>
+      {/* Op de telefoon (onder sm) alleen de naam, op hoogstens twee regels:
+          naam, subregel en pijl naast elkaar kapten 10 van de 14 regels af op
+          390 pt (Apple-review 17-10, nr. 5). Vanaf sm is er ruimte voor alle drie. */}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-slate-900">{label}</span>
-        <span className="block truncate text-xs font-medium text-slate-500">{sub}</span>
+        <span className="line-clamp-2 text-sm font-semibold leading-tight text-slate-900 sm:line-clamp-1">{label}</span>
+        <span className="hidden truncate text-xs font-medium text-slate-500 sm:block">{sub}</span>
       </span>
-      <ArrowUpRight size={16} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />
+      <ArrowUpRight size={16} className="hidden shrink-0 text-slate-300 transition-colors group-hover:text-slate-700 sm:block" />
     </button>
   );
 }

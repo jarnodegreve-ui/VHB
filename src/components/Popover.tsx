@@ -171,7 +171,7 @@ export function MenuItem({
       type={type}
       role="menuitem"
       className={cn(
-        'tikbaar flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium',
+        'tikbaar flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium sm:pointer-fine:py-2.5',
         'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent',
         gevaarlijk ? 'text-red-700 hover:bg-red-500/10' : 'text-slate-600 hover:bg-surface-soft-hover hover:text-slate-900',
         className,

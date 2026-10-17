@@ -83,6 +83,11 @@ export function BottomNav({
       // zit als knop ín Mijn dag, de Ritbladen-pagina blijft via "Meer".
       : [tab('dashboard'), tab('mijn-dag'), tab('rooster'), tab('omleidingen'), tab('verlof', unseenLeaveCount)];
 
+  // Meer staat voor elk scherm dat niet in de vaste plekken zit (Ritbladen,
+  // Dienstruil, Updates, …): daar licht Meer op, zoals de More-tab op iOS.
+  // Tot 17-10 was op die schermen geen enkele tab actief (Apple-review nr. 4).
+  const meerActief = !!onMore && !slots.some((s) => s.view === currentView);
+
   return (
     <nav
       className={cn(
@@ -165,12 +170,17 @@ export function BottomNav({
             <button
               onClick={onMore}
               aria-label="Meer"
+              aria-current={meerActief ? 'page' : undefined}
               // Het getal als beschrijving, niet in de naam: de naam blijft
               // "Meer" (specs en schermlezers zoeken erop), de beschrijving
               // zegt wat er wacht.
               aria-describedby={moreBadge > 0 ? 'dock-meer-wacht' : undefined}
-              className="tikbaar relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg text-slate-500 pointer-fine:hover:text-slate-700"
+              className={cn(
+                'tikbaar relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg',
+                meerActief ? 'text-slate-900' : 'text-slate-500 pointer-fine:hover:text-slate-700',
+              )}
             >
+              {meerActief && <span className="absolute inset-0 rounded-lg bg-surface-muted ring-1 ring-hairline" />}
               <span className="relative z-10">
                 <Menu size={18} />
                 {moreBadge > 0 && (

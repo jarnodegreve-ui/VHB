@@ -91,7 +91,7 @@ function Weekstrook({ week, vandaag, gekozen, onKies }: {
                 aria-hidden="true"
                 className={cn(
                   'mt-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-2xs font-bold tabular-nums leading-none',
-                  punt.onbekend ? 'text-slate-400' : punt.aandacht > 0 ? 'bg-amber-500/15 text-amber-700' : 'text-slate-400',
+                  punt.onbekend ? 'text-slate-400' : punt.aandacht > 0 ? 'bg-amber-500/15 text-amber-700' : 'text-slate-500',
                 )}
               >
                 {punt.onbekend ? '–' : punt.aandacht}
