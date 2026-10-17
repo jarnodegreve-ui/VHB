@@ -11,6 +11,7 @@ import {
   VOERTUIG_VERVAL_LABEL, WERKTYPE_LABEL, voertuigNaam, type Defect, type Werkprestatie,
 } from "../../shared/schemas/techniek.js";
 import { valideerRecord } from "./valideer.js";
+import { viewUrl } from "./collectie.js";
 import {
   TECHNIEK_MIGRATIE, countOpenDefecten, createDefect, createVehicle, createWerkprestatie, deleteVehicle, deleteVehicleExpiry,
   deleteWerkprestatie, getDefect, getDefecten, getVehicle, getVehicleExpiries, getVehicles, getWerkprestatie, getWerkprestaties,
@@ -225,7 +226,7 @@ export function mountTechniekRoutes(app: express.Express) {
         await sendPushToUsers(ontvangers, {
           title: `${naam}: nieuwe melding in het gele boek`,
           body: `${WERKTYPE_LABEL[body.werktype]}, gemeld door ${req.appUser!.name}: ${body.omschrijving.slice(0, 140)}`,
-          url: "/?view=defecten",
+          url: viewUrl("defecten"),
           soort: "techniek",
         });
       } catch (pushErr: any) {
@@ -281,11 +282,16 @@ export function mountTechniekRoutes(app: express.Express) {
       if (body.status && body.status !== bestaand.status) {
         await logActivity(req, "system", `Melding ${body.status}`, `${naam}: ${bestaand.omschrijving.slice(0, 100)}${body.uitgevoerdWerk ? ` → ${body.uitgevoerdWerk.slice(0, 100)}` : ""}`);
         if (body.status === "uitgevoerd" && d.gemeldDoor !== eigenId) {
+          // De tik opent een scherm dat de melder mag zien (17-10): wie het
+          // gele boek mag openen (technieker, "Ook technieker", staf) komt daar,
+          // een chauffeur op Mijn dag, waar "Defect melden" zijn meldingen toont.
+          // Vroeger altijd Mijn dag: een technieker viel terug op het dashboard.
+          const melder = users.find((u) => String(u.id) === String(d.gemeldDoor));
           try {
             await sendPushToUsers([d.gemeldDoor], {
               title: `${naam}: je melding is afgehandeld`,
               body: body.uitgevoerdWerk ? body.uitgevoerdWerk.slice(0, 140) : `${WERKTYPE_LABEL[d.werktype]}: ${bestaand.omschrijving.slice(0, 120)}`,
-              url: "/?view=mijn-dag",
+              url: melder && magTechniek(melder) ? viewUrl("defecten") : viewUrl("mijn-dag"),
               soort: "techniek",
             });
           } catch (pushErr: any) {
