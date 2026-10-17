@@ -217,21 +217,16 @@ export async function downloadBlob(filename: string, blob: Blob): Promise<Downlo
   return 'gedownload';
 }
 
-/** Statusbalk-kleur van de PWA-schil laten meekleuren met het thema — een
- *  carbon balk boven een lichte app oogde als een bug op geïnstalleerde
- *  iPhones (design-ronde 30/07). Login zet hem altijd op carbon. */
+/** theme-color laten meekleuren met het thema (de browserbalk buiten de
+ *  geïnstalleerde app). Login zet hem altijd op carbon. De statusbalk van de
+ *  geïnstalleerde iOS-app raakt deze functie niet meer: die staat vast op
+ *  black-translucent in index.html, met de eigen strook (.statusbalk-strook).
+ *  Tot 17-10 zette ze hier bij elke themawissel 'black' of 'default', terwijl
+ *  'black' het herlaadprobleem van 04-09 gaf (Apple-review nr. 21). */
 export function applyThemeColorMeta(dark: boolean) {
   if (typeof document === 'undefined') return;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', dark ? '#0D0D0F' : '#F2F3F4');
-  // In een geïnstalleerde iOS-PWA stuurt DEZE meta de statusbalk aan, niet
-  // theme-color. Hij stond hard op 'black', dus in lichte modus hield je
-  // alsnog een zwarte strook boven een lichtgrijze app — precies wat de regel
-  // hierboven wilde wegnemen. 'default' = lichte balk met donkere tekst.
-  // iOS leest hem bij het opstarten van de PWA, dus het effect is er vooral
-  // vanaf de volgende keer openen; beter dan permanent verkeerd staan.
-  const statusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-  if (statusBar) statusBar.setAttribute('content', dark ? 'black' : 'default');
 }
 
 /**

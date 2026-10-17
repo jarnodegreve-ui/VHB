@@ -533,7 +533,7 @@ export function DashboardView({ notes = [],
       {onNavigate && toon('snelle-acties') && (
         // Een oneven laatste tegel spant de volle breedte, zoals de kleine
         // tegels hierboven: met Filmnummers erbij (01-10) zijn het er zeven.
-        <div className="grid grid-cols-2 gap-3 lg:hidden [&>*:last-child:nth-child(odd)]:col-span-2">
+        <div role="group" aria-label="Snelle acties" className="grid grid-cols-2 gap-3 lg:hidden [&>*:last-child:nth-child(odd)]:col-span-2">
           {isRijdend(user.role) && <QuickAction icon={<Calendar size={16} />} label="Mijn rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />}
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
           <QuickAction icon={<BusFront size={16} />} label="Filmnummers" sub="Nummer per bestemming" onClick={() => onNavigate('filmnummers')} />

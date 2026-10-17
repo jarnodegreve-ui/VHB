@@ -249,6 +249,11 @@
   --color-overlay: var(--laag-overlay);
   --color-ink: #14181B;
   --color-ink-soft: #2C3137;
+  /* Gedempte tekst op een vlak dat in elk thema donker is (het inlogscherm):
+     7,44:1 op VHB Black. Spiegelt bewust niet mee in html.dark, net zoals
+     het vlak zelf (Apple-review 17-10, nr. 3: text-slate-500 haalde daar
+     3,70:1). */
+  --color-ink-tekst-gedempt: #9AA1A9;
   /* Keuze (punt 4, goud rantsoeneren): de vulling voor "geselecteerd" zonder
      goud. Klein bedieningselement (Switch aan, Checkbox) = `keuze`; groter
      vlak met tekst (FilterChip aan) = `keuze-vlak`. In licht allebei carbon;

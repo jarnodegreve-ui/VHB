@@ -133,7 +133,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[]; lastSy
             onClick={() => setToonVerlopen((v) => !v)}
             aria-expanded={verlopenOpen}
             aria-controls="omleidingen-verlopen-lijst"
-            className="ios-pressable -mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-soft-hover"
+            className="ios-pressable -mx-1 flex min-h-11 w-[calc(100%+0.5rem)] items-center justify-between rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-soft-hover sm:pointer-fine:min-h-0"
           >
             <SectieKop id="omleidingen-verlopen" titel="Voorbij" aantal={groepen.verlopen.length} inline />
             <span className="flex items-center gap-1 text-xs font-medium text-slate-500">
