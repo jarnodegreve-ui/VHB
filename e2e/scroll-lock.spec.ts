@@ -168,13 +168,13 @@ test('mobiele zijbalk: openen, sluiten en navigeren', async ({ page }, info) => 
   await seed(page, { user: ADMIN });
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
-  // Op de telefoon opent "Meer" in de dock een sheet van onder (17-10).
+  // Op de telefoon opent "Meer" in de dock de zijbalk (lade).
   await page.getByRole('button', { name: 'Meer', exact: true }).click();
-  await expect(page.getByRole('navigation', { name: 'Meer' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Zijbalk' })).toBeVisible();
   await page.keyboard.press('Escape');
   await kanScrollen(page);
   await page.getByRole('button', { name: 'Meer', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Meer' }).getByRole('button', { name: 'Dienstoverzicht', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Zijbalk' }).getByRole('button', { name: 'Dienstoverzicht', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Dienstoverzicht', level: 1 })).toBeVisible();
   await kanScrollen(page);
 });

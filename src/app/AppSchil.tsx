@@ -4,7 +4,7 @@
  * sessie en de staat bij en geeft hier door wat de schil toont. Bewust nog
  * één lange lijst props: dit was een verplaatsing, geen herontwerp.
  */
-import { Suspense, useState } from 'react';
+import { Suspense } from 'react';
 import { SidebarNav } from './SidebarNav';
 import { AppDataProvider } from './AppDataContext';
 import { ViewFout } from './ViewFout';
@@ -24,7 +24,7 @@ import { IconButton } from '../components/primitives';
 import { Callout } from '../components/Callout';
 import { ToastStack, type Toast } from '../components/ToastStack';
 import { InstallPrompt } from '../components/PwaChrome';
-import { BottomNav, dockViews } from '../components/BottomNav';
+import { BottomNav } from '../components/BottomNav';
 import { BrandLogo } from '../components/BrandLogo';
 import { OmgevingLabel } from '../components/OmgevingLabel';
 import { OnderhoudBanner } from '../components/OnderhoudBanner';
@@ -55,7 +55,6 @@ const LazyCalendarSubscribeModal = lazyWithRetry(() => laadCalendarSubscribeModa
 // ProbleemMelder was de laatste schil-importeur van Field, en Field sleept de
 // DatePicker (±17 kB bron) mee; lazy = Field + DatePicker uit de startbundel.
 const LazyProbleemMelder = lazyWithRetry(() => laadProbleemMelder().then((m) => ({ default: m.ProbleemMelder })));
-const LazyMeerSheet = lazyWithRetry(() => import('./MeerSheet').then((m) => ({ default: m.MeerSheet })));
 const LazyWerkvoorraadMenu = lazyWithRetry(() => laadWerkvoorraadMenu().then((m) => ({ default: m.WerkvoorraadMenu })));
 // Volledige ritblad-bundel in de app (controle 16-09, nr. 10): pdfjs blijft
 // lazy, net als bij de viewer op Mijn dag.
@@ -205,10 +204,6 @@ export function AppSchil({
   swapPreselectShiftId,
   setSwapPreselectShiftId,
 }: AppSchilProps) {
-  // Meer op de telefoon (Apple-review 17-10, nr. 10): open/dicht, en of het
-  // luie sheet al geladen is (blijft daarna staan voor de uitgang).
-  const [meerOpen, setMeerOpen] = useState(false);
-  const [meerGeladen, setMeerGeladen] = useState(false);
   return (
     <AppDataProvider value={appData}>
       {/* Parallax-laag: fixed gekleurde blobs die trager scrollen dan content */}
@@ -569,37 +564,17 @@ export function AppSchil({
       {/* Mobile bottom-nav (alleen op klein scherm, alleen voor ingelogde gebruikers) */}
       <BottomNav
         currentView={resolvedCurrentView}
-        onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); setMeerOpen(false); }}
+        onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
         role={effectiveRole}
         unseenLeaveCount={unseenLeaveDecisionCount}
         pendingLeaveCount={pendingLeaveCount}
         pendingSwapsCount={pendingSwapsCount}
-        onMore={() => { setMeerGeladen(true); setMeerOpen(true); }}
-        onMeerVoorladen={() => setMeerGeladen(true)}
+        // Meer opent de zijbalk als lade, met alle schermen (Jarno 18-10: de
+        // lijst van onder uit de Apple-review van 17-10 ging terug).
+        onMore={() => setIsSidebarOpen(true)}
         moreBadge={isPlanner ? 0 : targetedSwapsCount}
         hidden={isSidebarOpen}
       />
-      {/* Meer (Apple-review 17-10, nr. 10): een sheet van onder met de
-          schermen die niet in de onderbalk staan. Lui geladen bij het eerste
-          aanraken van Meer, daarna blijft hij staan voor de uitgang. */}
-      {meerGeladen && (
-        <Suspense fallback={null}>
-          <LazyMeerSheet
-            open={meerOpen}
-            onClose={() => setMeerOpen(false)}
-            rol={effectiveRole}
-            ookTechnieker={currentUser.ookTechnieker}
-            currentView={resolvedCurrentView}
-            badges={{
-              documenten: unseenDocuments,
-              'ruil-verzoeken': isPlanner ? pendingSwapsCount : targetedSwapsCount,
-              verlof: isPlanner ? pendingLeaveCount : unseenLeaveDecisionCount,
-            }}
-            verberg={dockViews(effectiveRole)}
-            onNavigate={(v) => { setCurrentView(v); setMeerOpen(false); if (v === 'documenten') markDocumentsSeen(); }}
-          />
-        </Suspense>
-      )}
 
     </AppDataProvider>
   );

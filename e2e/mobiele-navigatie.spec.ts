@@ -56,7 +56,7 @@ for (const sluitMet of ['sluitknop', 'terugknop'] as const) {
     await expect(dock).toBeVisible({ timeout: 15_000 });
     // Omleidingen staat onder Meer (Apple-review 17-10, nr. 11).
     await dock.getByRole('button', { name: 'Meer', exact: true }).tap();
-    await page.getByRole('navigation', { name: 'Meer' }).getByRole('button', { name: 'Omleidingen', exact: true }).tap();
+    await page.getByRole('navigation', { name: 'Zijbalk' }).getByRole('button', { name: 'Omleidingen', exact: true }).tap();
     await expect(page).toHaveURL(/\/omleidingen$/);
     // De URL wisselt vóór het scherm: zolang de chunk van Omleidingen laadt,
     // staat Mijn dag er nog, mét zijn eigen omleidingskaart "Werken Markt
