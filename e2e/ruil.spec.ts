@@ -337,7 +337,7 @@ test('collega accepteert een aan hem gerichte ruil (PATCH met ifStatus-guard)', 
   });
 
   await page.goto('/');
-  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Wacht op je antwoord')).toBeVisible({ timeout: 15_000 });
 
   // Verloop per persoon: de collega (ik) is aan zet, de planner nog niet.
   const verloop = page.getByRole('region', { name: 'Verloop per persoon' });
@@ -436,7 +436,7 @@ test('de collega opent het ruilscherm, de aanvrager ziet daarna "Bekeken" in het
   // 2. De collega opent het ruilscherm: de kaart staat in beeld → één melding.
   wie = CHAUFFEUR;
   await page.reload();
-  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Wacht op je antwoord')).toBeVisible({ timeout: 15_000 });
   await expect.poll(() => bekekenAanroepen.length, { timeout: 10_000 }).toBe(1);
   expect(bekekenAanroepen[0]).toEqual({ methode: 'POST', pad: '/api/swaps/w9/bekeken', door: CHAUFFEUR.id });
   // Zijn eigen regel zegt gewoon dat hij nog moet antwoorden.
@@ -446,7 +446,7 @@ test('de collega opent het ruilscherm, de aanvrager ziet daarna "Bekeken" in het
 
   // Opnieuw openen: de server kent de regel al, dus er vuurt niets meer.
   await page.reload();
-  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Wacht op je antwoord')).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(1500);
   expect(bekekenAanroepen).toHaveLength(1);
 
@@ -604,7 +604,7 @@ test('de collega ziet vóór het accepteren dat hij te weinig rust overhoudt', a
   });
 
   await page.goto('/');
-  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Wacht op je antwoord')).toBeVisible({ timeout: 15_000 });
 
   const rust = page.getByRole('region', { name: 'Rusttijd' });
   await expect(rust.getByRole('listitem')).toHaveCount(1);
@@ -753,7 +753,7 @@ test('chauffeur: wat op zijn antwoord wacht bovenaan, lopende verzoeken boven af
   });
 
   await page.goto('/');
-  await expect(page.getByText('Jouw antwoord')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Wacht op je antwoord')).toBeVisible({ timeout: 15_000 });
   // Mijn verzoeken staat eerst op de pagina, dan de ruilen die aan hem gericht zijn.
   await expect.poll(() => page.locator('[data-record]').evaluateAll((els) => els.map((e) => e.getAttribute('data-record'))))
     .toEqual(['mv-lopend', 'mv-klaar', 'os-antwoord', 'os-planner']);

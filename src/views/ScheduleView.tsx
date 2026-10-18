@@ -289,7 +289,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, users = [], 
         <Segmented
           label="Weergave"
           className="xl:hidden"
-          itemClassName="capitalize"
+          itemClassName="capitalize min-h-11 sm:pointer-fine:min-h-8"
           waarde={weergave}
           opties={[{ waarde: 'lijst' as const, label: 'lijst' }, { waarde: 'maand' as const, label: 'maand' }]}
           onChange={setWeergave}

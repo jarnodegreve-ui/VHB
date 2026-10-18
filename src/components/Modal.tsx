@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
+import { useMinWidth } from '../lib/useMinWidth';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { useLaag } from '../lib/lagen';
 import { Button } from './primitives';
@@ -28,10 +29,21 @@ export function useModalSluiten(): SluitVia {
   return useContext(SluitContext) ?? DIRECT;
 }
 
+/** Hoe de omringende Modal getoond wordt: `venster` (midden in beeld) of
+ *  `sheet` (op de telefoon van onder, Apple-review 17-10 nr. 6). ModalHeader
+ *  zet in een sheet "Annuleren" links in de kop in plaats van het kruisje. */
+export type Presentatie = 'venster' | 'sheet';
+const PresentatieContext = createContext<Presentatie>('venster');
+export const usePresentatie = (): Presentatie => useContext(PresentatieContext);
+
 /** Annuleren/Sluiten-knop in een formulier-overlay: gaat door de sluitpoort
- *  (de aanroeper rendert de Modal zelf en staat dus búiten de context). */
-export function SluitKnop({ onClose, onClick, ...rest }: React.ComponentProps<typeof Button> & { onClose: () => void }) {
+ *  (de aanroeper rendert de Modal zelf en staat dus búiten de context).
+ *  `alleenInVenster`: niet tonen in een sheet, want daar staat Annuleren al
+ *  links in de kop. */
+export function SluitKnop({ onClose, onClick, alleenInVenster = false, ...rest }: React.ComponentProps<typeof Button> & { onClose: () => void; alleenInVenster?: boolean }) {
   const sluitVia = useModalSluiten();
+  const presentatie = usePresentatie();
+  if (alleenInVenster && presentatie === 'sheet') return null;
   return (
     <Button
       {...rest}
@@ -136,10 +148,17 @@ export function Modal({
   vuil = false,
   onNietBewaren,
   vast = false,
+  sheet = false,
 }: {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  /** Op de telefoon (onder 640 px) een sheet van onder: grip bovenaan, een
+   *  veeg omlaag vanaf de kop sluit (via dezelfde sluitpoort, dus met de vraag
+   *  bij onbewaarde invoer), "Annuleren" links in de kop. Voor een formulier
+   *  bij een taak (verlof, defect, dienstruil). Vanaf 640 px het gewone
+   *  venster (Apple-review 17-10, nr. 6). */
+  sheet?: boolean;
   /** Onbewaarde invoer: Escape, backdrop, terugknop, kruisje en Annuleren
    *  (via useModalSluiten) vragen eerst "Wijzigingen niet bewaren?". */
   vuil?: boolean;
@@ -225,6 +244,22 @@ export function Modal({
   // opslaan-knop), want de layout-viewport krimpt niet mee.
   const keyboardInset = useKeyboardInset(open);
 
+  // Sheet op de telefoon. Slepen start alleen vanaf de grip of de kop (de
+  // bovenste 72 px, niet op een knop of veld, en alleen als de inhoud
+  // bovenaan staat): zo blijft scrollen in het formulier gewoon scrollen.
+  // dragListener={false} houdt ook de touch-action van het paneel vrij.
+  const breed = useMinWidth(640);
+  const alsSheet = sheet && !breed;
+  const sleep = useDragControls();
+  const kanSlepen = alsSheet && !reduceMotion;
+  const startSlepenInKop = (e: React.PointerEvent) => {
+    const paneel = panelRef.current;
+    if (!kanSlepen || !paneel || paneel.scrollTop > 0) return;
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select, label, [role="button"]')) return;
+    if (e.clientY - paneel.getBoundingClientRect().top > 72) return;
+    sleep.start(e);
+  };
+
   if (typeof document === 'undefined') return null;
 
   const widthClass = {
@@ -249,14 +284,16 @@ export function Modal({
       // en respecteer safe-area (notch + home-indicator).
       // Op md+: 1rem padding rondom de modal.
       className={cn(
-        'fixed inset-0 flex items-center justify-center p-2 md:p-4 bg-ink/40 backdrop-blur-sm',
+        'fixed inset-0 flex justify-center bg-ink/40 backdrop-blur-sm',
+        alsSheet ? 'items-end' : 'items-center p-2 md:p-4',
         boven ? 'z-modal-boven' : 'z-modal',
       )}
       style={{
         paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
+        // Een sheet staat op de onderrand; de safe-area zit dan ín het paneel.
         paddingBottom: keyboardInset
           ? `${keyboardInset}px`
-          : 'max(0.5rem, env(safe-area-inset-bottom))',
+          : alsSheet ? undefined : 'max(0.5rem, env(safe-area-inset-bottom))',
       }}
     >
       <motion.div
@@ -267,11 +304,25 @@ export function Modal({
         tabIndex={-1}
         // Zelfde reduced-motion-respect als SlideOver (Modal miste het:
         // de CSS-regel raakt alleen CSS-animaties, niet deze JS-animaties).
-        initial={reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.95, y: 20 }}
+        initial={reduceMotion ? { opacity: 1 } : alsSheet ? { y: '100%' } : { opacity: 0, scale: 0.95, y: 20 }}
         // Binnenkomend met de veer (EASE_SPRING), uitgaand korter op de
-        // standaard-ease, zoals elk paneel in de app.
-        animate={{ opacity: 1, scale: 1, y: 0, transition: reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE_SPRING } }}
-        exit={reduceMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.98, y: 8, transition: { duration: DUR.fast, ease: EASE } }}
+        // standaard-ease, zoals elk paneel in de app. Een sheet schuift van
+        // onder in en weer naar onder uit, zoals Sheet.
+        animate={alsSheet
+          ? { y: 0, transition: reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE_SPRING } }
+          : { opacity: 1, scale: 1, y: 0, transition: reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE_SPRING } }}
+        exit={reduceMotion
+          ? { opacity: 0, transition: { duration: 0 } }
+          : alsSheet
+            ? { y: '100%', transition: { duration: DUR.base, ease: EASE } }
+            : { opacity: 0, scale: 0.98, y: 8, transition: { duration: DUR.fast, ease: EASE } }}
+        drag={kanSlepen ? 'y' : false}
+        dragListener={false}
+        dragControls={sleep}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.6 }}
+        onDragEnd={kanSlepen ? (_, info) => { if (info.offset.y > 80 || info.velocity.y > 600) sluit(); } : undefined}
+        onPointerDown={kanSlepen ? startSlepenInKop : undefined}
         onClick={(e) => e.stopPropagation()}
         // Op mobile: max-h = viewport minus de safe-area-padding van de
         // backdrop hierboven (dezelfde max(0.5rem, env(…))-termen), zodat een
@@ -281,7 +332,10 @@ export function Modal({
         className={cn(
           // focus-stil: het paneel krijgt bij openen programmatisch focus
           // (focus-trap); een ring om het hele venster zegt niets.
-          'glass-modal focus-stil rounded-3xl md:rounded-3xl w-full overflow-y-auto overscroll-contain max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-max(0.5rem,env(safe-area-inset-bottom)))] md:max-h-overlay',
+          'glass-modal focus-stil w-full overflow-y-auto overscroll-contain',
+          alsSheet
+            ? 'rounded-t-3xl rounded-b-none max-h-overlay'
+            : 'rounded-3xl md:rounded-3xl max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-max(0.5rem,env(safe-area-inset-bottom)))] md:max-h-overlay',
           widthClass,
           className,
         )}
@@ -294,7 +348,17 @@ export function Modal({
         // max-h die de aanroeper via className meegeeft.
         style={keyboardInset ? { maxHeight: `calc(100dvh - ${keyboardInset}px - 1rem)` } : undefined}
       >
-        <SluitContext.Provider value={sluitVia}>{children}</SluitContext.Provider>
+        {alsSheet && (
+          // Grip: zegt "dit kan je omlaag vegen", en slepen kan er altijd.
+          <div aria-hidden="true" className="flex shrink-0 touch-none justify-center pb-1 pt-2" onPointerDown={kanSlepen ? (e) => sleep.start(e) : undefined}>
+            <span className="h-1 w-10 rounded-full bg-slate-300" />
+          </div>
+        )}
+        <PresentatieContext.Provider value={alsSheet ? 'sheet' : 'venster'}>
+          <SluitContext.Provider value={sluitVia}>{children}</SluitContext.Provider>
+        </PresentatieContext.Provider>
+        {/* Sheet tot op de onderrand: de home-indicator krijgt zijn eigen strook. */}
+        {alsSheet && !keyboardInset && <div aria-hidden="true" className="shrink-0" style={{ height: 'env(safe-area-inset-bottom)' }} />}
         {dialoog}
       </motion.div>
     </motion.div>

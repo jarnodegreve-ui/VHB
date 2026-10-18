@@ -50,7 +50,7 @@ export function useBadges(currentUser: User | null, data: Pick<AppData, 'leaveRe
   const pendingSwapsCount = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted').length;
   // Voor chauffeurs: ruilen die op míjn antwoord wachten (badge op het
   // nav-item + dot op de "Meer"-tab, anders mist de collega het verzoek).
-  // Zelfde regel als het paneel "Wacht op jouw antwoord" op het dashboard
+  // Zelfde regel als het paneel "Wacht op je antwoord" op het dashboard
   // (lib/ruilWachtOpMij): ook een goedgekeurde ruil die hij nog moet bevestigen.
   const targetedSwapsCount = currentUser && currentUser.role === 'chauffeur'
     ? telRuilenDieOpMijWachten(swaps, currentUser.id)

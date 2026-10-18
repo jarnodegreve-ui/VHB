@@ -56,9 +56,13 @@ const groep = (rol: TypografieRol): RolGroep => `rol-${rol}`;
 
 const twMerge = extendTailwindMerge<RolGroep>({
   extend: {
-    classGroups: Object.fromEntries(
-      rollen.map(rol => [groep(rol), [{ text: [rol] }]]),
-    ) as Record<RolGroep, [{ text: [TypografieRol] }]>,
+    classGroups: {
+      ...(Object.fromEntries(
+        rollen.map(rol => [groep(rol), [{ text: [rol] }]]),
+      ) as Record<RolGroep, [{ text: [TypografieRol] }]>),
+      // text-dock is een lettermaat (vaste 11 px van de onderbalk), geen kleur.
+      'font-size': [{ text: ['dock'] }],
+    },
     conflictingClassGroups: Object.fromEntries(
       rollen.map(rol => [
         groep(rol),

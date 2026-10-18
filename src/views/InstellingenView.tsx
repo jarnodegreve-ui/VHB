@@ -6,7 +6,7 @@ import { TOESTEL_STATUS } from '../../shared/status';
 import { Card, CardHeader } from '../components/Card';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
-import { Badge, Button, Chip, StatusBadge, Switch } from '../components/primitives';
+import { Badge, Button, Chip, Segmented, StatusBadge, Switch } from '../components/primitives';
 import { Select } from '../components/Field';
 import { ActieMenu } from '../components/ActieMenu';
 import { TweeStapsCode, TweeStapsInschrijving } from '../components/TweeStapsInschrijving';
@@ -23,6 +23,7 @@ import { schakelUit } from '../lib/tweeStapsBeheer';
 import { notify } from '../lib/ui';
 import { ROL_LABEL, type User, type View } from '../types';
 import { OnderhoudBeheer } from './instellingen/OnderhoudBeheer';
+import type { ThemaVoorkeur } from '../app/useThema';
 import { meldSchrijffout } from '../lib/fouten';
 
 // --- Toestellen en sessies (GET /api/me/toestellen) ---
@@ -440,7 +441,8 @@ function Rij({ icoon, titel, uitleg, rechts }: { icoon: React.ReactNode; titel: 
 export function InstellingenView({
   user,
   theme,
-  onToggleTheme,
+  themaVoorkeur,
+  onKiesThema,
   pushBeschikbaar,
   pushEnabled,
   onTogglePush,
@@ -452,7 +454,8 @@ export function InstellingenView({
 }: {
   user: User;
   theme: 'light' | 'dark';
-  onToggleTheme: () => void;
+  themaVoorkeur: ThemaVoorkeur | null;
+  onKiesThema: (voorkeur: ThemaVoorkeur) => void;
   pushBeschikbaar: boolean;
   pushEnabled: boolean;
   onTogglePush: () => void;
@@ -471,11 +474,24 @@ export function InstellingenView({
       <Card>
         <CardHeader title="Weergave" />
         <div className="mt-4">
+          {/* Drie standen (Apple-review 17-10, nr. 8): Automatisch volgt het
+              toestel, ook als dat 's avonds naar donker wisselt. Zonder eigen
+              keuze staat de stand die nu effectief geldt (de rol-standaard). */}
           <Rij
             icoon={<Moon size={16} />}
-            titel="Donkere modus"
-            uitleg={theme === 'dark' ? 'Aan, het portaal gebruikt het donkere thema op dit toestel.' : 'Uit, het portaal gebruikt het lichte thema op dit toestel.'}
-            rechts={<Switch checked={theme === 'dark'} onChange={onToggleTheme} label="Donkere modus" />}
+            titel="Thema"
+            uitleg={themaVoorkeur === 'auto'
+              ? `Volgt je toestel, nu ${theme === 'dark' ? 'donker' : 'licht'}.`
+              : theme === 'dark' ? 'Altijd donker op dit toestel.' : 'Altijd licht op dit toestel.'}
+            rechts={(
+              <Segmented
+                label="Thema"
+                itemClassName="min-h-11 sm:pointer-fine:min-h-8"
+                waarde={themaVoorkeur ?? theme}
+                opties={[{ waarde: 'auto' as const, label: 'Automatisch' }, { waarde: 'light' as const, label: 'Licht' }, { waarde: 'dark' as const, label: 'Donker' }]}
+                onChange={onKiesThema}
+              />
+            )}
           />
           <StartschermRij user={user} />
         </div>

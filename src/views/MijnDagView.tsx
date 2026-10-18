@@ -234,8 +234,11 @@ export function MijnDagView({
       <header className="px-1 pt-1">
         {/* Zelfde kop-raster als PageHeader: schakelaar rechts via ml-auto,
             zakt onder de kop als hij niet naast de datum past. */}
-        <div className="flex items-start justify-between gap-x-4 gap-y-3 md:items-end">
-          <div className="min-w-0 flex-1">
+        {/* flex-wrap + basis: bij grote tekst (de wortel volgt de iPhone)
+            zakt de schakelaar onder de titel; zonder wrap schoof hij over
+            de datum (Apple-review 17-10, nr. 1). */}
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:items-end">
+          <div className="min-w-0 grow basis-30">
             <p className="text-micro">
               {nachtdienstLoopt && isVandaag ? 'Nog bezig · dienst van gisteren' : hoofdletter(dagWoord)}
               {dagtypeTekst && <span title={dagtypePeildag?.label}> · {dagtypeTekst}</span>}

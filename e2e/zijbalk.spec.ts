@@ -28,10 +28,10 @@ const PROFIELEN = [
   { naam: 'Pixel 7 (412)', viewport: { width: 412, height: 915 } },
 ] as const;
 
-/** Zijbalk openen via "Meer" in de dock en één menu-item aantikken. */
+/** "Meer" in de dock openen (sinds 17-10 een sheet van onder) en één menu-item aantikken. */
 async function kiesInZijbalk(page: Page, label: string) {
   await page.getByRole('button', { name: 'Meer', exact: true }).click();
-  const zijbalk = page.getByRole('navigation', { name: 'Zijbalk' });
+  const zijbalk = page.getByRole('navigation', { name: 'Meer' });
   await expect(zijbalk).toBeVisible();
   await zijbalk.getByRole('button', { name: label, exact: true }).click();
 }

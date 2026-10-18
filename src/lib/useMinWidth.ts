@@ -9,9 +9,15 @@ import { useCallback, useSyncExternalStore } from 'react';
 export function useMinWidth(px: number) {
   const query = `(min-width: ${px}px)`;
   const subscribe = useCallback((cb: () => void) => {
+    if (!kanMeten()) return () => {};
     const m = window.matchMedia(query);
     m.addEventListener('change', cb);
     return () => m.removeEventListener('change', cb);
   }, [query]);
-  return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches, () => false);
+  return useSyncExternalStore(subscribe, () => kanMeten() && window.matchMedia(query).matches, () => false);
 }
+
+// Zonder matchMedia (jsdom in de unit-tests) geldt hetzelfde als op de
+// server: mobile-first. Sinds Modal en SlideOver de hook gebruiken (Apple-
+// review 17-10) rendert bijna elke test hem.
+const kanMeten = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function';

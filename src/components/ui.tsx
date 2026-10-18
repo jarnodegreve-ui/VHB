@@ -5,7 +5,7 @@ import type { View } from '../types';
 import { routeVan, sectieLabel } from '../app/routes';
 import { versheidTekst, type Versheid } from '../lib/zelfLadend';
 import { Button } from './primitives';
-import { Modal, useModalSluiten } from './Modal';
+import { Modal, useModalSluiten, usePresentatie } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
 import { AllesGedaan, Fout, GeenBereik, LegeLijst } from './illustraties';
 
@@ -103,6 +103,27 @@ export function ModalHeader({
   // Het kruisje gaat door de sluitpoort van de Modal: met onbewaarde invoer
   // komt eerst "Wijzigingen niet bewaren?" (tranche 3A).
   const sluitVia = useModalSluiten();
+  const presentatie = usePresentatie();
+  if (presentatie === 'sheet') {
+    // Sheet op de telefoon (Apple-review 17-10, nr. 6): Annuleren links in de
+    // kop, zoals iOS; de hoofdknop staat onderaan in het formulier. De kop is
+    // ook de plek om het sheet omlaag te vegen (touch-none).
+    return (
+      <div className="shrink-0 touch-none border-b border-hairline px-5 pb-4">
+        {onClose ? (
+          <Button variant="ghost" className="-ml-3 mb-1" onClick={() => sluitVia(onClose)}>Annuleren</Button>
+        ) : null}
+        <div className="flex min-w-0 items-center gap-3">
+          {leading ? <div className="shrink-0">{leading}</div> : null}
+          <div className="min-w-0">
+            {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
+            <h2 className={cn('text-section-title', eyebrow && 'mt-1.5')}>{title}</h2>
+            {description ? <p className="mt-1.5 text-body font-normal text-slate-500">{description}</p> : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex items-start justify-between gap-3 p-6 md:p-7 border-b border-hairline shrink-0">
       <div className="flex min-w-0 items-center gap-3">

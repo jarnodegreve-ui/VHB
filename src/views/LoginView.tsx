@@ -260,7 +260,7 @@ export function LoginView({
                   setMode('forgot');
                   resetFeedback();
                 }}
-                className="-my-2 inline-flex min-h-11 items-center text-xs font-medium text-slate-500 transition-colors hover:text-oker-400"
+                className="-my-2 inline-flex min-h-11 items-center text-xs font-medium text-ink-tekst-gedempt transition-colors hover:text-oker-400"
               >
                 Wachtwoord vergeten?
               </button>
@@ -330,7 +330,7 @@ export function LoginSchil({ children }: { children: React.ReactNode }) {
 
           {/* Wie te bellen als het niet lukt — chauffeurs zijn geen
               IT-publiek, dus dit staat er gewoon bij. */}
-          <p className="fade-in-traag mt-6 text-center text-xs text-slate-500" style={{ animationDelay: '350ms' }}>
+          <p className="fade-in-traag mt-6 text-center text-xs text-ink-tekst-gedempt" style={{ animationDelay: '350ms' }}>
             Problemen met inloggen? Contacteer de planning.
           </p>
         </div>
@@ -340,7 +340,7 @@ export function LoginSchil({ children }: { children: React.ReactNode }) {
           ("& Zoon" conform de naamregel in het logo).
           Respecteert env(safe-area-inset-bottom) op iPhones. */}
       <div
-        className="fade-in-traag absolute inset-x-0 bottom-0 text-micro text-slate-500 text-center px-6"
+        className="fade-in-traag absolute inset-x-0 bottom-0 text-micro text-ink-tekst-gedempt text-center px-6"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))', animationDelay: '500ms' }}
       >
         <div>Intern gebruik · © {new Date().getFullYear()} Van Hoorebeke & Zoon</div>

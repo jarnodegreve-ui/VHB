@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from 'react';
-import { ArrowUpRight, Bell, Bus, Check, ChevronDown, Download, Info, LogOut, Pencil, Plus, Search, Settings, Trash2, X } from 'lucide-react';
+import { Bell, Bus, Check, ChevronDown, ChevronRight, Download, Info, LogOut, Pencil, Plus, Search, Settings, Trash2, X } from 'lucide-react';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell, EmptyState, Foutkaart, VersheidRegel } from '../../components/ui';
 import { Card, CardHeader } from '../../components/Card';
 import { Badge, Button, Chip, FilterChip, IconButton, Kbd, Meter, MeterVulling, MicroLabel, Pressable, Segmented, StatusBadge, Switch } from '../../components/primitives';
@@ -568,7 +568,7 @@ export function DesignsysteemView() {
               <MenuItem icon={<Settings size={16} />} onClick={() => menu.setOpen(false)}>Instellingen</MenuItem>
               <MenuItem icon={<Bell size={16} />} sub="3 ongelezen" onClick={() => menu.setOpen(false)}>Meldingen</MenuItem>
               <MenuItem icon={<LogOut size={16} />} gevaarlijk onClick={() => menu.setOpen(false)}>Uitloggen</MenuItem>
-              <PopoverVoet><MenuItem icon={<ArrowUpRight size={16} />} onClick={() => menu.setOpen(false)}>Volledig overzicht</MenuItem></PopoverVoet>
+              <PopoverVoet><MenuItem icon={<Bell size={16} />} iconClassName="text-slate-500" trailing={<ChevronRight size={14} />} onClick={() => menu.setOpen(false)}>Volledig overzicht</MenuItem></PopoverVoet>
             </Popover>
           </div>
           <div ref={dialoog.wortel} className="relative inline-flex">
