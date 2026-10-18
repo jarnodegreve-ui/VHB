@@ -44,8 +44,8 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, ariaLa
   const sluit = () => sluitVia(onClose);
   const laag = useLaag({ open, sluit, soort: 'dialoog', scrollSlot: 'sheet' });
   // Slepen start alleen op de grip of de kop (17-10): met slepen op het hele
-  // paneel zette motion touch-action: pan-x en kon een lange lijst (Meer) op
-  // de telefoon niet meer scrollen.
+  // paneel zette motion touch-action: pan-x en kon een lange lijst op de
+  // telefoon niet meer scrollen.
   const sleep = useDragControls();
 
   useEffect(() => {

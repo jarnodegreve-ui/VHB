@@ -6,8 +6,7 @@ import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
 import { CountUp } from './CountUp';
 
-/** De vaste plekken in de onderbalk per rol (naast Meer). Ook de lijst die
- *  het Meer-sheet weglaat (AppSchil). */
+/** De vaste plekken in de onderbalk per rol (naast Meer). */
 export function dockViews(role: Role): View[] {
   // Vandaag i.p.v. Open diensten (Jarno 22-09): de dagbriefing bevat de open
   // diensten van de dag én afwezigen, ruilen en omleidingen; het volledige
@@ -53,12 +52,9 @@ export function BottomNav({
   pendingLeaveCount = 0,
   pendingSwapsCount = 0,
   onMore,
-  onMeerVoorladen,
   moreBadge = 0,
   hidden = false,
 }: {
-  /** Aanraken of aanwijzen van Meer: het sheet alvast laden. */
-  onMeerVoorladen?: () => void;
   currentView: View;
   onSelect: (view: View) => void;
   /** Effectieve rol (dus mét preview-modus verrekend). */
@@ -182,8 +178,6 @@ export function BottomNav({
           <li className="flex-auto min-w-0">
             <button
               onClick={onMore}
-              onPointerEnter={onMeerVoorladen}
-              onTouchStart={onMeerVoorladen}
               aria-label="Meer"
               aria-current={meerActief ? 'page' : undefined}
               // Het getal als beschrijving, niet in de naam: de naam blijft
