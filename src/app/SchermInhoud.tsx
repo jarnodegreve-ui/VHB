@@ -17,7 +17,6 @@ import { SchermInloop, Verwissel } from '../components/Verwissel';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { useAppDataContext } from './AppDataContext';
 import type { useRoute } from './router';
-import type { ThemaVoorkeur } from './useThema';
 import { LazyActivityLogView, LazyCapacityView, LazyContactsView, LazyCoverageView, LazyDagafsluitingView, LazyDashboardView, LazyDebugView, LazyDesignsysteemView, LazyDevicesView, LazyDienstopbouwView, LazyDiversionsView, LazyDocumentsView, LazyFilmnummersView, LazyGeleBoekView, LazyInstellingenView, LazyLeaveManagementView, LazyLooncontroleView, LazyManageDiversionsView, LazyManageSchedulesView, LazyManageUpdatesView, LazyManageUsersView, LazyMailsView, LazyDagtypeKalenderView, LazyMeldingenView, LazyMijnDagView, LazyOcpiDashboardView, LazyPlannerDashboardWidgets, LazyPlanningCodesView, LazyPlanningMatrixView, LazyRapportenView, LazyRitblaadjesView, LazyScheduleView, LazyServicesView, LazySwapRequestsView, LazyUpdatesView, LazyVandaagView, LazyVerlofKalenderView, LazyVervaldataView, LazyVoertuigWerkenView, LazyVoertuigenView, LazyWerkprestatiesView, LazyWerkvoorraadView, LazyZiekteView } from './lazyViews';
 
 export type SchermInhoudProps = {
@@ -35,8 +34,7 @@ export type SchermInhoudProps = {
   swapPreselectShiftId: string | null;
   setSwapPreselectShiftId: (id: string | null) => void;
   theme: 'light' | 'dark';
-  themaVoorkeur: ThemaVoorkeur | null;
-  kiesThema: (voorkeur: ThemaVoorkeur) => void;
+  toggleTheme: () => void;
   pushEnabled: boolean;
   pushPublicKey: string | null;
   togglePush: () => void | Promise<void>;
@@ -48,7 +46,7 @@ export type SchermInhoudProps = {
 
 export function SchermInhoud(props: SchermInhoudProps) {
   const {
-    resolvedCurrentView, currentUser, setCurrentView, navigeer, isAdmin, isPlanner, previewingChauffeur, ruilDataKlaar, swapPreselectShiftId, setSwapPreselectShiftId, theme, themaVoorkeur, kiesThema, pushEnabled, pushPublicKey, togglePush, handleLogout, setShowProbleemMelder, setShowChangePassword, setShowAgenda,
+    resolvedCurrentView, currentUser, setCurrentView, navigeer, isAdmin, isPlanner, previewingChauffeur, ruilDataKlaar, swapPreselectShiftId, setSwapPreselectShiftId, theme, toggleTheme, pushEnabled, pushPublicKey, togglePush, handleLogout, setShowProbleemMelder, setShowChangePassword, setShowAgenda,
   } = props;
   const {
     aanwezigheid, aanwezigheidLocatieMigratie, aanwezigheidMigratie, activityLog, activityLogGeladen, confirmSwapSeen, collectieStaat, createDiversion, createUpdate, decideLeave, decideSwap, deleteDiversion, deleteUpdate, diversions, diversionsGeladen, feestdagenExtra, fetchActivityLog, fetchDiversions, fetchPlanning, fetchPlanningMatrix, fetchPlanningMatrixHistory, fetchSwaps, fetchUpdates, isInitialLoad, lastSeenLeaveDecisionAt, lastSyncedAt, leaveRequests, loginActivity, markDocumentsSeen, markLeaveDecisionsSeen, meldingenGeladen, myNotes, planningCodes, planningCodesGeladen, planningMatrixGeladen, planningMatrixHistory, planningMatrixRows, planningTot, refreshCoverageGaps, reportSick, saveDiversion, saveDiversions, saveLeave, savePlanning, savePlanningCodes, saveServices, saveSwaps, saveUpdate, saveUpdates, sendUrgentEmail, services, servicesGeladen, shifts, swaps, updates, updatesGeladen, users, usersGeladen, zetFeestdagenExtra,
@@ -193,8 +191,7 @@ export function SchermInhoud(props: SchermInhoudProps) {
       <LazyInstellingenView
         user={currentUser}
         theme={theme}
-        themaVoorkeur={themaVoorkeur}
-        onKiesThema={kiesThema}
+        onToggleTheme={toggleTheme}
         pushBeschikbaar={!!pushPublicKey && isPushSupported()}
         pushEnabled={pushEnabled}
         onTogglePush={togglePush}

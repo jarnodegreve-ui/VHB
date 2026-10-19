@@ -1,6 +1,5 @@
 import { forwardRef, useId, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Check } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 import { overgangActief } from '../lib/overgang';
@@ -435,10 +434,7 @@ export function FilterChip({ active, tone = 'oker', icon, className, children, t
       )}
       {...rest}
     >
-      {/* Aan = een vinkje vooraan (Apple-review 17-10, nr. 12): een vorm,
-          dus leesbaar in beide thema's en zonder kleur. Een eigen icoon
-          wijkt zolang de chip aan staat. */}
-      {active ? <Check size={14} strokeWidth={2.5} aria-hidden="true" /> : icon}
+      {icon}
       {children}
     </button>
   );

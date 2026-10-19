@@ -88,11 +88,6 @@
      text-[NNpx]-strooiwaarden meer. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
-  /* Labels van de onderbalk: vast op 11 px, ook als de wortel meegroeit met
-     de tekstgrootte van de iPhone (Apple-review 17-10, nr. 1; HIG: wie de
-     tekst groter zet, verwacht niet dat de tabtitels meegroeien). */
-  --text-dock: 11px;
-  --text-dock--line-height: 13px;
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.25rem;
   --text-md: 0.9375rem;
@@ -254,11 +249,6 @@
   --color-overlay: var(--laag-overlay);
   --color-ink: #14181B;
   --color-ink-soft: #2C3137;
-  /* Gedempte tekst op een vlak dat in elk thema donker is (het inlogscherm):
-     7,44:1 op VHB Black. Spiegelt bewust niet mee in html.dark, net zoals
-     het vlak zelf (Apple-review 17-10, nr. 3: text-slate-500 haalde daar
-     3,70:1). */
-  --color-ink-tekst-gedempt: #9AA1A9;
   /* Keuze (punt 4, goud rantsoeneren): de vulling voor "geselecteerd" zonder
      goud. Klein bedieningselement (Switch aan, Checkbox) = `keuze`; groter
      vlak met tekst (FilterChip aan) = `keuze-vlak`. In licht allebei carbon;
@@ -446,12 +436,9 @@
    mobiele maatvoering te klein — alles rem-gebaseerd schaalt mee met de
    wortel, dus één regel geeft het hele portaal 6 % meer lucht en letter
    (16 → 17 px basis). px-waarden (--content-max, logo) blijven staan. */
-html {
-  font-size: var(--wortel-ios, 100%);
-}
 @media (min-width: 1280px) {
   html {
-    font-size: var(--wortel-ios, 106.25%);
+    font-size: 106.25%;
   }
 }
 
@@ -538,9 +525,7 @@ html.dark {
   --color-ink-soft: #1C2025;
   --color-keuze: #C4C9CE;
   --color-keuze-tekst: #17181A;
-  /* Een trede lichter (Apple-review 17-10, nr. 12): #353B42 haalde 1,5:1 op
-     de ondergrond; #5A626B 2,75:1, de tekst erop 5,57:1. */
-  --color-keuze-vlak: #5A626B;
+  --color-keuze-vlak: #353B42;
   --color-keuze-vlak-tekst: #F2F3F4;
   --color-rim: rgba(154, 161, 169, 0.20);
   --color-rim-strong: rgba(154, 161, 169, 0.26);
@@ -1803,35 +1788,4 @@ html.dark {
   border-color: var(--lijn-zand);
   background: var(--lijn-papier);
   color: var(--lijn-zand-inkt);
-}
-
-/* Verhoogd contrast van het toestel (iPhone: Toegankelijkheid › Weergave en
-   tekstgrootte › Verhoog contrast; Apple-review 17-10, nr. 13). Alleen
-   tokens: de hairlines een trede sterker, de rand rond kaarten zichtbaar en
-   gedempte tekst van slate-500 naar slate-600. Onderaan het bestand, zodat
-   het wint van de lichte (@theme) en de donkere waarden (html.dark). */
-@media (prefers-contrast: more) {
-  :root,
-  html.dark {
-    --color-slate-500: var(--color-slate-600);
-    --tekst-micro: var(--color-slate-600);
-  }
-  :root {
-    --color-hairline-subtle: rgba(228, 230, 232, 0.70);
-    --color-hairline: rgba(205, 209, 213, 0.80);
-    --color-hairline-strong: rgba(154, 161, 169, 0.80);
-    --elev-1-rim: rgba(154, 161, 169, 0.55);
-    --elev-2-rim: rgba(154, 161, 169, 0.55);
-    --elev-3-rim: rgba(154, 161, 169, 0.55);
-    --elev-4-rim: rgba(154, 161, 169, 0.55);
-  }
-  html.dark {
-    --color-hairline-subtle: rgba(79, 87, 95, 0.32);
-    --color-hairline: rgba(110, 118, 127, 0.45);
-    --color-hairline-strong: rgba(154, 161, 169, 0.55);
-    --elev-1-rim: rgba(255, 255, 255, 0.22);
-    --elev-2-rim: rgba(255, 255, 255, 0.22);
-    --elev-3-rim: rgba(255, 255, 255, 0.22);
-    --elev-4-rim: rgba(255, 255, 255, 0.22);
-  }
 }

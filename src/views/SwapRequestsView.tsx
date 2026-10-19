@@ -867,7 +867,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     key={swap.id}
                     titel={<>{naamVan(swap.requesterId) ?? 'Onbekend'}{ontvanger && <span className="font-medium text-slate-500"> → {ontvanger}</span>}</>}
                     meta={info.date ? hoofdletter(fmtShort(info.date)) : undefined}
-                    status={canRespond ? <Badge tone="amber" dot>Wacht op je antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
+                    status={canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
                     voorproef={teWeinigRust ? <Badge tone="amber" icon={<AlertTriangle size={12} />}>Te weinig rust</Badge> : undefined}
                     richting="omlaag"
                     open={open}
@@ -921,8 +921,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {isTakeoverSwap(swap) && <div className="mt-1.5"><TakeoverBadge /></div>}
                     </div>
                     <span className="shrink-0">
-                      {/* "Wacht op je antwoord" vraagt actie en blijft amber; de status is stil. */}
-                      {canRespond ? <Badge tone="amber" dot>Wacht op je antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
+                      {/* "Jouw antwoord" vraagt actie en blijft amber; de status is stil. */}
+                      {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <RuilStatusBadge swap={swap} stil />}
                     </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">{citaat(swap.reason)}</p>}
@@ -1296,7 +1296,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing komen daar vandaan (verbeterronde 29/07 #3). */}
-      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} vuil={wizardVuil} maxWidth="md" sheet className="flex max-h-overlay flex-col !overflow-hidden !p-0">
+      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} vuil={wizardVuil} maxWidth="md" className="flex max-h-overlay flex-col !overflow-hidden !p-0">
               {/* 44x44 op de terugknop (het kruisje van ModalHeader is dat op
                   touch ook): dit zijn de enige twee uitwegen uit een
                   driestapswizard op een telefoon. Ze stonden op 36 resp. 38px

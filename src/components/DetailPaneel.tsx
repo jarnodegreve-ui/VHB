@@ -266,10 +266,7 @@ export function DetailPaneel({
   poort,
   sluitKnop = verbergLeeg,
   className,
-  terug,
 }: {
-  /** Telefoon: terugknop met deze naam i.p.v. het kruisje (zie SlideOver). */
-  terug?: string;
   open: boolean;
   onClose: () => void;
   title: string;
@@ -371,7 +368,7 @@ export function DetailPaneel({
 
   if (!inline) {
     return (
-      <SlideOver open={open} onClose={onClose} vuil={vuil} title={title} subtitle={subtitle} titelTerugloop={titelTerugloop} icon={icon} width={breedte} footer={footer} terug={terug}>
+      <SlideOver open={open} onClose={onClose} vuil={vuil} title={title} subtitle={subtitle} titelTerugloop={titelTerugloop} icon={icon} width={breedte} footer={footer}>
         {/* Een andere rij kiezen terwijl het paneel open staat: zachte wissel
             i.p.v. een harde; het openen zelf is de veer van de SlideOver. */}
         <RichtingWissel sleutel={sleutel ?? ''} richting={wissel.richting} as="y" stil={wissel.stil}>

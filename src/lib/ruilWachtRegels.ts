@@ -24,6 +24,6 @@ export function ruilWachtRegels(item: RuilWachtOpMij, users: ReadonlyArray<Pick<
       : `in ruil voor jouw dienst ${ruil.returnCode} (${formatShortDayPadded(ruil.returnDate!)})`;
   return {
     primary: isOvername ? `${naam} vraagt een overname` : `${naam} wil ruilen`,
-    secondary: [dienst, tegen].filter(Boolean).join(' · ') || 'Wacht op je antwoord',
+    secondary: [dienst, tegen].filter(Boolean).join(' · ') || 'Wacht op jouw antwoord',
   };
 }

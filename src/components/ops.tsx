@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { metEenheid } from '../lib/format';
-import { ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ChevronRight } from 'lucide-react';
 import { CountUp } from './CountUp';
 import { cn } from '../lib/ui';
 import { Button, Meter, MeterVulling } from './primitives';
@@ -177,22 +177,22 @@ export function OpsPanel({
 }) {
   return (
     <div className={cn('surface-card rounded-3xl p-5 relative', className)}>
-      <div className="mb-3.5 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <div className="mb-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
             {icon}
           </span>
           <h3 className="text-card-title">{title}</h3>
         </div>
         {aside && (
-          <span className="shrink-0 whitespace-nowrap text-xs font-medium text-slate-500">{aside}</span>
+          <span className="text-xs font-medium text-slate-500">{aside}</span>
         )}
       </div>
       {children}
       {onSeeAll && (
         <Button variant="secondary" size="sm" full className="mt-3 gap-1" onClick={onSeeAll}>
           {seeAllLabel}
-          <ChevronRight size={14} />
+          <ArrowUpRight size={12} />
         </Button>
       )}
     </div>
@@ -269,22 +269,18 @@ export function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="ios-pressable group surface-card surface-card-hover flex flex-wrap items-center gap-2.5 rounded-3xl p-3.5 text-left"
+      className="ios-pressable group surface-card surface-card-hover flex items-center gap-2.5 rounded-3xl p-3.5 text-left"
     >
-      {/* Hetzelfde neutrale vlak als de tegels (Apple-review 17-10, nr. 17):
-          het carbon vierkant spiegelde in donker naar zeven witte blokken,
-          feller dan de gouden knop. Kleur alleen waar het een status is. */}
-      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
+      {/* Carbon vierkant met licht icoon; de omgekeerde schalen keren dat in
+          donker vanzelf om (geen aparte dark-look meer, controle-ronde 05-09, 40). */}
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-slate-50">
         {icon}
       </span>
-      {/* Op de telefoon (onder sm) alleen de naam, op hoogstens twee regels:
-          naam, subregel en pijl naast elkaar kapten 10 van de 14 regels af op
-          390 pt (Apple-review 17-10, nr. 5). Vanaf sm is er ruimte voor alle drie. */}
-      <span className="min-w-0 grow basis-22">
-        <span className="line-clamp-2 text-sm font-semibold leading-tight text-slate-900 sm:line-clamp-1">{label}</span>
-        <span className="hidden truncate text-xs font-medium text-slate-500 sm:block">{sub}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-slate-900">{label}</span>
+        <span className="block truncate text-xs font-medium text-slate-500">{sub}</span>
       </span>
-      <ChevronRight size={16} className="hidden shrink-0 text-slate-300 transition-colors group-hover:text-slate-700 sm:block" />
+      <ArrowUpRight size={16} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />
     </button>
   );
 }

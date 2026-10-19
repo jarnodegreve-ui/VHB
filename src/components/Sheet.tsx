@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE, EASE_SPRING } from '../lib/motion';
@@ -43,10 +43,6 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, ariaLa
   const { sluitVia, dialoog } = useSluitPoort(open, vuil, onNietBewaren);
   const sluit = () => sluitVia(onClose);
   const laag = useLaag({ open, sluit, soort: 'dialoog', scrollSlot: 'sheet' });
-  // Slepen start alleen op de grip of de kop (17-10): met slepen op het hele
-  // paneel zette motion touch-action: pan-x en kon een lange lijst op de
-  // telefoon niet meer scrollen.
-  const sleep = useDragControls();
 
   useEffect(() => {
     if (!open) return;
@@ -105,8 +101,6 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, ariaLa
             animate={{ y: 0, transition: reduced ? { duration: 0 } : { duration: DUR.base, ease: EASE_SPRING } }}
             exit={{ y: '100%', transition: reduced ? { duration: 0 } : { duration: DUR.base, ease: EASE } }}
             drag={reduced ? false : 'y'}
-            dragListener={false}
-            dragControls={sleep}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, info) => { if (info.offset.y > 80 || info.velocity.y > 600) sluit(); }}
@@ -117,14 +111,11 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, ariaLa
             )}
           >
             {/* Handvat: zegt "dit kan je omlaag vegen". */}
-            <div className="flex shrink-0 touch-none justify-center pt-2" aria-hidden="true" onPointerDown={reduced ? undefined : (e) => sleep.start(e)}>
+            <div className="flex shrink-0 justify-center pt-2" aria-hidden="true">
               <span className="h-1 w-10 rounded-full bg-slate-300" />
             </div>
             {(title || subtitle) && (
-              <div
-                className="flex shrink-0 touch-none items-start gap-3 px-5 pb-3 pt-2"
-                onPointerDown={reduced ? undefined : (e) => { if (!(e.target as HTMLElement).closest('button')) sleep.start(e); }}
-              >
+              <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-2">
                 <div className="min-w-0 flex-1">
                   {title && <h2 className="text-card-title truncate">{title}</h2>}
                   {subtitle && <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>}

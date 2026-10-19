@@ -146,8 +146,7 @@ test.describe('smoke: ingelogde chauffeur', () => {
     await page.goto('/');
     await expect(page.getByText('Komende diensten')).toBeVisible({ timeout: 15_000 });
 
-    // Op de telefoon toont de tegel alleen zijn naam (Apple-review 17-10, nr. 5).
-    await page.getByRole('group', { name: 'Snelle acties' }).getByRole('button', { name: /rooster/i }).click();
+    await page.getByText('Diensten en agenda').click();
 
     // Roosterweergave: op een iPhone-viewport rendert de kaartweergave (de
     // tabel is daar verborgen), dus check op de zichtbare variant.

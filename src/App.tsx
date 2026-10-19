@@ -72,7 +72,7 @@ export default function App() {
   const [showAgenda, setShowAgenda] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [viewFoutReset, setViewFoutReset] = useState(0);
-  const { theme, themaVoorkeur, kiesThema } = useThema(currentUser);
+  const { theme, toggleTheme } = useThema(currentUser);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // Navigeren = bovenaan beginnen; terug = de oude positie terug. Dat zit
   // sinds 15-09 (punt 19) in de router zelf (scrollgeheugen per route,
@@ -369,8 +369,7 @@ export default function App() {
       users={users}
       userInitials={userInitials}
       theme={theme}
-      themaVoorkeur={themaVoorkeur}
-      kiesThema={kiesThema}
+      toggleTheme={toggleTheme}
       pushPublicKey={pushPublicKey}
       pushEnabled={pushEnabled}
       togglePush={togglePush}
