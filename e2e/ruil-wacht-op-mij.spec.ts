@@ -4,7 +4,7 @@ import { SWAPS } from '../scripts/audit-fixtures.mjs';
 import { vandaagIso } from './deeplinkHulp';
 
 /**
- * Paneel "Wacht op je antwoord" op het chauffeursdashboard (03-10): een ruil
+ * Paneel "Wacht op jouw antwoord" op het chauffeursdashboard (03-10): een ruil
  * die een collega hem voorstelde (pending) of een goedgekeurde ruil die hij
  * nog niet bevestigde, met een rij die de ruil zelf opent (/dienstruil/<id>),
  * en hetzelfde getal op de Meer-tab. Staf en een chauffeur zonder wachtende
@@ -22,10 +22,10 @@ const SW6 = { id: 'sw6', shiftId: 't1', requesterId: '42', targetDriverId: '44',
 const met = (ruilen: unknown[]): Extra => (p) => (p.endsWith('/api/swaps') ? ruilen : undefined);
 const sw1 = { ...SWAPS[0], shiftDate: vandaagIso(1), shiftLine: '2104' };
 
-const paneel = (page: Page) => page.getByRole('heading', { name: 'Wacht op je antwoord' });
+const paneel = (page: Page) => page.getByRole('heading', { name: 'Wacht op jouw antwoord' });
 const meer = (page: Page) => page.getByRole('navigation', { name: 'Hoofdnavigatie' }).getByRole('button', { name: 'Meer', exact: true });
 
-test.describe('wacht op je antwoord', () => {
+test.describe('wacht op jouw antwoord', () => {
   test('chauffeur: paneel met de vraag van de collega en de te bevestigen ruil, rij opent de ruil', async ({ page }) => {
     await seed(page, { user: CHAUFFEUR, extra: met([sw1, SW5, SW6]) });
     await page.goto('/');
@@ -47,7 +47,7 @@ test.describe('wacht op je antwoord', () => {
     await seed(page, { user: CHAUFFEUR, extra: met([sw1, SW5, SW6]) });
     await page.goto('/');
     await expect(meer(page)).toHaveAccessibleName('Meer');
-    await expect(meer(page)).toHaveAccessibleDescription('2 ruilen wachten op je antwoord');
+    await expect(meer(page)).toHaveAccessibleDescription('2 ruilen wachten op jouw antwoord');
     await expect(meer(page)).toContainText('2');
   });
 

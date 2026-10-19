@@ -82,6 +82,6 @@ describe('ruilWachtRegels', () => {
   it('onbekende aanvrager heet "Een collega", zonder dienstgegevens blijft er een regel', () => {
     const r = ruilWachtRegels({ ruil: ruil({ requesterId: 'u-weg', shiftDate: undefined, shiftLine: undefined, swapType: 'overname' }), soort: 'antwoord' }, users);
     expect(r.primary).toBe('Een collega vraagt een overname');
-    expect(r.secondary).toBe('Wacht op je antwoord');
+    expect(r.secondary).toBe('Wacht op jouw antwoord');
   });
 });

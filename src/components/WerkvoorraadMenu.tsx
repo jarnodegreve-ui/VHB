@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ChevronRight, IdCard, ListChecks, Smartphone, UserX } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, CalendarClock, CalendarDays, CheckCircle2, IdCard, ListChecks, Smartphone, UserX } from 'lucide-react';
 import { RuilIcoon } from './RuilIcoon';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
@@ -210,7 +210,7 @@ export function WerkvoorraadMenu({
               per soort; wie álles wil zien (of sorteren, filteren, zoeken) gaat
               naar /werkvoorraad. */}
           <PopoverVoet>
-            <MenuItem icon={<ListChecks size={16} />} iconClassName="text-slate-500" trailing={<ChevronRight size={14} />} onClick={ga('werkvoorraad')}>
+            <MenuItem icon={<ListChecks size={16} />} iconClassName="text-slate-500" trailing={<ArrowUpRight size={14} />} onClick={ga('werkvoorraad')}>
               Volledig overzicht
             </MenuItem>
           </PopoverVoet>

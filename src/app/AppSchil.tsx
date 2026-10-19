@@ -34,7 +34,6 @@ import type { Werkvoorraad } from '../lib/werkvoorraad';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import type { Dispatch, SetStateAction, RefObject } from 'react';
 import type { useAppData } from './useAppData';
-import type { ThemaVoorkeur } from './useThema';
 
 // Overlays lazy (punt 18, 14-09): wachtwoord wijzigen, agenda-abonnement, de
 // werkvoorraad-knop en het twee-stapsscherm zaten statisch in de schil, samen
@@ -123,8 +122,7 @@ export type AppSchilProps = {
   users: User[];
   userInitials: string;
   theme: "light" | "dark";
-  themaVoorkeur: ThemaVoorkeur | null;
-  kiesThema: (voorkeur: ThemaVoorkeur) => void;
+  toggleTheme: () => void;
   pushPublicKey: string | null;
   pushEnabled: boolean;
   togglePush: () => Promise<void>;
@@ -186,8 +184,7 @@ export function AppSchil({
   users,
   userInitials,
   theme,
-  themaVoorkeur,
-  kiesThema,
+  toggleTheme,
   pushPublicKey,
   pushEnabled,
   togglePush,
@@ -485,6 +482,8 @@ export function AppSchil({
                   <UserMenu
                     user={currentUser}
                     initials={userInitials}
+                    theme={theme}
+                    onToggleTheme={toggleTheme}
                     pushBeschikbaar={!!pushPublicKey && isPushSupported()}
                     pushEnabled={pushEnabled}
                     onTogglePush={togglePush}
@@ -543,8 +542,7 @@ export function AppSchil({
                 swapPreselectShiftId={swapPreselectShiftId}
                 setSwapPreselectShiftId={setSwapPreselectShiftId}
                 theme={theme}
-                themaVoorkeur={themaVoorkeur}
-                kiesThema={kiesThema}
+                toggleTheme={toggleTheme}
                 pushEnabled={pushEnabled}
                 pushPublicKey={pushPublicKey}
                 togglePush={togglePush}
@@ -569,8 +567,6 @@ export function AppSchil({
         unseenLeaveCount={unseenLeaveDecisionCount}
         pendingLeaveCount={pendingLeaveCount}
         pendingSwapsCount={pendingSwapsCount}
-        // Meer opent de zijbalk als lade, met alle schermen (Jarno 18-10: de
-        // lijst van onder uit de Apple-review van 17-10 ging terug).
         onMore={() => setIsSidebarOpen(true)}
         moreBadge={isPlanner ? 0 : targetedSwapsCount}
         hidden={isSidebarOpen}

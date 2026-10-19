@@ -108,8 +108,7 @@ for (const rol of ['planner', 'chauffeur'] as const) {
         };
       });
 
-      // Chauffeur: vier plekken plus Meer (Apple-review 17-10, nr. 11); staf vijf plus Meer.
-      expect(meting.tabs, 'tabs inclusief Meer').toBe(rol === 'chauffeur' ? 5 : 6);
+      expect(meting.tabs, 'zes tabs (5 views + Meer)').toBe(6);
       expect(meting.geclipt, 'tabs buiten de kaart').toEqual([]);
       expect(meting.afgekapt, 'afgekapte labels').toEqual([]);
       expect(meting.minKnopH, 'touch-hoogte').toBeGreaterThanOrEqual(44);

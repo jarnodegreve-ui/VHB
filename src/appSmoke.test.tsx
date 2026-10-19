@@ -153,7 +153,7 @@ describe('app smoke test', () => {
     expect(await screen.findByText('Volgende dienst')).toBeTruthy();
     expect(screen.getByText('Verlofsaldo')).toBeTruthy();
     expect(screen.getByText('Komende diensten')).toBeTruthy();
-    expect(screen.getAllByText('Rooster').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Mijn rooster').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Ruilen met een collega')).toBeTruthy();
     // Het rijdende busje is bewust verwijderd van dit scherm.
     expect(document.querySelector('.bus-drive')).toBeNull();

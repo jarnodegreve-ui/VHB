@@ -1,5 +1,5 @@
 import { Children, useCallback, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, ChevronRight, Download, Info, Link2, Printer, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, Download, Info, Link2, Printer, RotateCcw } from 'lucide-react';
 import type { User, View } from '../../types';
 import { isStaf } from '../../types';
 import { heeftRol } from '../../../shared/toegang';
@@ -137,7 +137,7 @@ function Catalogus({ isAdmin }: { isAdmin: boolean }) {
                   href={padVan('ocpi-monitoring')}
                   onKies={() => navigeer('ocpi-monitoring')}
                   meta="Scherm"
-                  staart={<ChevronRight size={16} />}
+                  staart={<ArrowUpRight size={16} />}
                 />
               )}
             </DomeinBlok>
@@ -463,7 +463,7 @@ function RapportScherm({ def, onTerug }: { def: RapportDefinitie; onTerug: () =>
         <EmptyState
           title="Nog niets geregistreerd"
           message={uitleg.tekst ?? undefined}
-          action={geenBronActie ? <Button variant="secondary" onClick={() => navigeer(geenBronActie.view as View)}>{geenBronActie.label}</Button> : undefined}
+          action={geenBronActie ? <Button variant="secondary" icon={<ArrowUpRight size={16} />} onClick={() => navigeer(geenBronActie.view as View)}>{geenBronActie.label}</Button> : undefined}
         />
       )}
       {toestand === 'buiten' && uitleg?.toestand !== 'geen-bron' && (
