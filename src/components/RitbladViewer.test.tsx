@@ -168,6 +168,16 @@ describe('Ritbladviewer: onleesbare tekstlaag (13-10)', () => {
     expect(meldFoutMock).not.toHaveBeenCalledWith(expect.stringMatching(/geen apart blad gevonden/));
   });
 
+  it('noemt de eerste fouttekst in het rapport, zodat de oorzaak niet opnieuw gegist hoeft te worden (21-10)', async () => {
+    apiFetchMock.mockImplementation(async () => antwoord(OUD));
+    zoekPaginasMock
+      .mockResolvedValueOnce({ paginas: [], fouten: 3, uitCache: false, eersteFout: 'TypeError: readableStream is not async iterable' })
+      .mockResolvedValueOnce({ paginas: [2], fouten: 0, uitCache: false });
+    render(<RitbladViewer dienstnummer="2101" open onClose={() => {}} />);
+    await screen.findByRole('button', { name: 'Volledige bundel' });
+    expect(meldFoutMock).toHaveBeenCalledWith(expect.stringMatching(/\(3 van 3 pagina's, eerste fout: TypeError: readableStream is not async iterable\), worker herstart/));
+  });
+
   it('blijft bij één poging en noemt het aantal onleesbare pagina\'s als het daarna nog niets vindt', async () => {
     apiFetchMock.mockImplementation(async () => antwoord(OUD));
     zoekPaginasMock.mockResolvedValue({ paginas: [], fouten: 3, uitCache: false });

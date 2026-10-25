@@ -417,6 +417,14 @@ export function useSessie(koppelingen: { readonly current: SessieKoppelingen | n
       // Vangnet: blijft de herlaad uit, dan komt het inlogscherm alsnog op
       // zijn plaats; bij een herlaad sterft deze wachttijd met de pagina.
       await new Promise((klaar) => window.setTimeout(klaar, 5000));
+      // Kwam de nette herlaad niet (de opruiming van de lagen bleef hangen),
+      // dan toch herladen zolang er bereik is. Anders blijft hij in de wachtrij
+      // staan en vuurt hij later alsnog, midden in het werk van wie zich hierna
+      // op dezelfde pagina aanmeldt: werkplaats-pc 19-10, 40 s na de afmelding,
+      // tijdens het opslaan van een werkprestatie (opgeslagen, maar de toast
+      // zei 'mislukt'). Zonder bereik blijft het inlogscherm het vangnet.
+      // Geen lus: na de herlaad is er geen sessie en dus geen profiel.
+      if (isOnlineNu()) window.location.reload();
     }
     afmeldingRef.current = null;
     setAuthReady(true);
