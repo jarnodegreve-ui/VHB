@@ -145,7 +145,7 @@ export async function zoekPaginasMetStatus(
 /** Korte, veilige omschrijving van een leesfout voor het foutrapport. */
 const beschrijfLeesfout = (err: unknown): string => {
   const tekst = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  return tekst.length > 120 ? `${tekst.slice(0, 117)}...` : tekst;
+  return tekst.length > 120 ? `${tekst.slice(0, 119)}…` : tekst;
 };
 
 type PaginaCache = { uploadedAt: string; paginas: Record<string, number[]> };
