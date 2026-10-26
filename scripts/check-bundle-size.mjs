@@ -191,7 +191,14 @@ import zlib from 'node:zlib';
 // dependency. Lokaal 737,82 → 738,87 (met ronde 2: herstart per 50 en
 // opnieuw proberen van een mislukte herstart); budget = die meting plus de
 // ±0,5 kB van de runner en ±1,5 kB marge voor de rest van deze reeks.
-const BUDGET_KB = 741;
+// 25-10 (npm audit + ritblad op Safari 26): 741 → 744. Geen nieuwe
+// dependency. `npm audit fix` voor drie adviezen op productie-afhankelijkheden
+// (body-parser 1.20.9, nodemailer 10.2.1, zod 4.6.7); de zod-patch tegen
+// geheugenuitputting maakt zod-vendor 23,19 → 24,79 kB. Daarnaast de
+// aanvulling van de ReadableStream-iterator voor Safari ≤ 26
+// (src/lib/streamIteratie.ts, ±0,3 kB in de ritblad-chunk). Lokaal 740 → 742;
+// budget = die meting plus de ±0,5 kB van de runner en ±1,5 kB marge.
+const BUDGET_KB = 744;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
@@ -583,6 +590,11 @@ if (!kaartMatch) {
   // de marge onder 0,3 kB zakken. Budget = de meting plus ±1,3 kB.
   WARMUP_BUDGET_KB.chauffeur = 84;
   WARMUP_BUDGET_KB.staf = 152;
+  // 25-10 (npm audit): staf 152 → 154. De zod-patch 4.6.7 (geheugenuitputting,
+  // GHSA-mrhx-c7xc-m3w5) maakt zod-vendor 1,6 kB zwaarder, en zod zit via de
+  // verlof-kalender in de staf-set: lokaal staf 151 → 153. De chauffeur-set
+  // blijft 83 → 84 (budget 84, ongewijzigd). Budget = de meting plus ±1 kB.
+  WARMUP_BUDGET_KB.staf = 154;
 
   // --- 5. zod-vrije startschermen --------------------------------------------
   for (const view of ZOD_VRIJE_VIEWS) {

@@ -362,12 +362,14 @@ export function RitbladViewer({
         const zoek = async (d: PDFDocumentProxy) => {
           const gevonden = new Set<number>();
           let fouten = 0;
+          let eersteFout: string | undefined;
           for (const n of nummers) {
             const r = await zoekPaginasGecachedMetStatus(d, n, versie, signal);
             for (const p of r.paginas) gevonden.add(p);
             fouten += r.fouten;
+            eersteFout ??= r.eersteFout;
           }
-          return { paginas: [...gevonden].sort((a, b) => a - b), fouten };
+          return { paginas: [...gevonden].sort((a, b) => a - b), fouten, eersteFout };
         };
         let uitkomst = await zoek(huidig);
         // Geen enkel blad én (bijna) elke pagina onleesbaar: de tekstlaag kwam
@@ -377,7 +379,7 @@ export function RitbladViewer({
         // opnieuw openen en één keer opnieuw zoeken; de melding zegt wat er
         // gebeurde, zodat de foutgroep het onderscheid toont.
         if (uitkomst.paginas.length === 0 && uitkomst.fouten >= Math.max(1, huidig.numPages - 1)) {
-          reportHandledError(`Ritblad: tekstlaag onleesbaar voor ${nummerTekst} (${uitkomst.fouten} van ${huidig.numPages} pagina's), worker herstart`);
+          reportHandledError(`Ritblad: tekstlaag onleesbaar voor ${nummerTekst} (${uitkomst.fouten} van ${huidig.numPages} pagina's${uitkomst.eersteFout ? `, eerste fout: ${uitkomst.eersteFout}` : ''}), worker herstart`);
           laatDocumentLos(huidig);
           doc = null;
           await herstartPdfjsWorker();

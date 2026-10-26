@@ -14,6 +14,7 @@
  */
 
 import { apiFetch } from './api';
+import { zorgVoorStreamIteratie } from './streamIteratie';
 import { metRetry } from './lazyRetry';
 import { ritbladMetaPad } from './ritblad';
 
@@ -110,32 +111,42 @@ export async function zoekPaginasMetStatus(
   doc: RitbladDocument,
   dienstnummer: string,
   signal?: AbortSignal,
-): Promise<{ paginas: number[]; fouten: number }> {
+): Promise<{ paginas: number[]; fouten: number; eersteFout?: string }> {
   const nummer = dienstnummer.trim();
   if (!nummer) return { paginas: [], fouten: 0 };
   const re = dienstnummerRegex(nummer);
   const inKop: number[] = [];
   const elders: number[] = [];
   let fouten = 0;
+  // De eerste fouttekst gaat mee in het rapport: zonder die tekst bleef de
+  // oorzaak van "68 van 68 onleesbaar" op iPhones een week lang gissen (21-10).
+  let eersteFout: string | undefined;
   for (let n = 1; n <= doc.numPages; n++) {
     controleerAfgebroken(signal);
     let tekst = '';
     try {
       const pagina = await doc.getPage(n);
       tekst = paginaTekst((await pagina.getTextContent()).items);
-    } catch {
+    } catch (err) {
       // Eén kapotte pagina mag de rest niet tegenhouden — tenzij de fout
       // komt doordat het document intussen vernietigd is (viewer dicht).
       controleerAfgebroken(signal);
       fouten++;
+      eersteFout ??= beschrijfLeesfout(err);
       continue;
     }
     if (!re.test(tekst)) continue;
     if (telViercijferigeNummers(tekst) > MAX_NUMMERS_PER_BLAD) continue;
     (staatInKop(tekst, re) ? inKop : elders).push(n);
   }
-  return { paginas: inKop.length ? inKop : elders, fouten };
+  return { paginas: inKop.length ? inKop : elders, fouten, ...(eersteFout ? { eersteFout } : {}) };
 }
+
+/** Korte, veilige omschrijving van een leesfout voor het foutrapport. */
+const beschrijfLeesfout = (err: unknown): string => {
+  const tekst = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return tekst.length > 120 ? `${tekst.slice(0, 119)}…` : tekst;
+};
 
 type PaginaCache = { uploadedAt: string; paginas: Record<string, number[]> };
 
@@ -198,13 +209,13 @@ export async function zoekPaginasGecachedMetStatus(
   dienstnummer: string,
   uploadedAt: string,
   signal?: AbortSignal,
-): Promise<{ paginas: number[]; fouten: number; uitCache: boolean }> {
+): Promise<{ paginas: number[]; fouten: number; uitCache: boolean; eersteFout?: string }> {
   const gecached = leesPaginasUitCache(uploadedAt, dienstnummer);
   if (gecached) return { paginas: gecached, fouten: 0, uitCache: true };
-  const { paginas, fouten } = await zoekPaginasMetStatus(doc, dienstnummer, signal);
+  const { paginas, fouten, eersteFout } = await zoekPaginasMetStatus(doc, dienstnummer, signal);
   controleerAfgebroken(signal); // nooit een afgebroken zoektocht bewaren
   if (fouten === 0 && paginas.length > 0) schrijfPaginasNaarCache(uploadedAt, dienstnummer, paginas);
-  return { paginas, fouten, uitCache: false };
+  return { paginas, fouten, uitCache: false, ...(eersteFout ? { eersteFout } : {}) };
 }
 
 // === Document loslaten, de gedeelde worker ===
@@ -307,6 +318,9 @@ export function laadPdfjs(): Promise<Pdfjs> {
       { magHerladen: () => typeof navigator === 'undefined' || navigator.onLine !== false },
     );
     pdfjsPromise = importeer().then(([pdfjs, worker]) => {
+      // Safari 26 en ouder: getTextContent() itereert een ReadableStream met
+      // `for await`, en die engines missen de async-iterator (streamIteratie.ts).
+      zorgVoorStreamIteratie();
       pdfjs.GlobalWorkerOptions.workerPort = new worker.default();
       return pdfjs;
     }).catch((err) => {

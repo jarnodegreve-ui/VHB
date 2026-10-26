@@ -329,7 +329,7 @@ describe('zoekPaginasGecachedMetStatus (13-10)', () => {
   it('geeft het aantal onleesbare pagina\'s mee en zegt of het uit de cache kwam', async () => {
     const doc = maakDoc([['Dienst', '2116'], ['x']]);
     doc.getPage.mockImplementationOnce(async () => ({ getTextContent: async () => { throw new Error('worker weg'); } }));
-    await expect(zoekPaginasGecachedMetStatus(doc, '2116', 'v1')).resolves.toEqual({ paginas: [], fouten: 1, uitCache: false });
+    await expect(zoekPaginasGecachedMetStatus(doc, '2116', 'v1')).resolves.toEqual({ paginas: [], fouten: 1, uitCache: false, eersteFout: 'Error: worker weg' });
     // Een leeg resultaat met fouten is niet bewaard: de volgende keer wordt gelezen.
     await expect(zoekPaginasGecachedMetStatus(doc, '2116', 'v1')).resolves.toEqual({ paginas: [1], fouten: 0, uitCache: false });
     await expect(zoekPaginasGecachedMetStatus(doc, '2116', 'v1')).resolves.toEqual({ paginas: [1], fouten: 0, uitCache: true });
