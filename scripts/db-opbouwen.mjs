@@ -91,15 +91,19 @@ for (let ronde = 1; ronde <= rondes; ronde += 1) {
 // Zonder deze stand zouden
 // de databasetests ook slagen op een migratie die haar grants vergeet, en
 // zou precies die migratie in een vers project de API breken.
+// Elk statement in een eigen -c: met meerdere statements in één -c geeft psql
+// alleen de uitvoer van het laatste terug (hier de drop, dus niets), en -q
+// onderdrukt de commandotags ("CREATE TABLE"), zodat alleen t of f overblijft.
 const proef = spawnSync(
   'docker',
-  ['exec', CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-At', '-c',
-    "drop table if exists public.__rechten_proef; create table public.__rechten_proef (id int);" +
+  ['exec', CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q', '-At',
+    '-c', 'drop table if exists public.__rechten_proef;',
+    '-c', 'create table public.__rechten_proef (id int);',
     // Een lijst rechten in has_table_privilege betekent "minstens één ervan".
-    " select has_table_privilege('anon', 'public.__rechten_proef', 'select, insert, update, delete, truncate, references, trigger, maintain')" +
-    " or has_table_privilege('authenticated', 'public.__rechten_proef', 'select, insert, update, delete, truncate, references, trigger, maintain')" +
-    " or has_table_privilege('service_role', 'public.__rechten_proef', 'select');" +
-    ' drop table public.__rechten_proef;'],
+    '-c', "select has_table_privilege('anon', 'public.__rechten_proef', 'select, insert, update, delete, truncate, references, trigger, maintain')" +
+      " or has_table_privilege('authenticated', 'public.__rechten_proef', 'select, insert, update, delete, truncate, references, trigger, maintain')" +
+      " or has_table_privilege('service_role', 'public.__rechten_proef', 'select');",
+    '-c', 'drop table public.__rechten_proef;'],
   { encoding: 'utf8' },
 );
 if (proef.status !== 0 || !['t', 'f'].includes(proef.stdout.trim())) {
