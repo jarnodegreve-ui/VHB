@@ -24,9 +24,19 @@ concurrency:
 permissions:
   contents: read
 
+# Vaste runner-versie (30-10): GitHub verhuist `ubuntu-latest` sinds 19-10
+# geleidelijk naar 26.04. Daar vindt de gecachte WebKit-build van Playwright
+# (gebouwd tegen 24.04) libicudata.so.74 niet ("browserType.launch: Target
+# page, context or browser has been closed"): e2e (1/3) en visueel rood op
+# elke PR. En Lighthouse meet er dezelfde bundel ruim trager (bootup van
+# react-vendor 1789 ms tegenover 898 tot 1050 op 24.04), dus ook die check
+# viel om op ongewijzigde code. Alle jobs op één versie, en die versie staat
+# ook in de Playwright-cache-keys: een nieuwe distro = een nieuwe cache. Bij
+# een upgrade naar 26.04 dus beide aanpassen, en eerst de Lighthouse-drempels
+# opnieuw tegen die runner ijken.
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +96,7 @@ jobs:
   # zonder dat er één test faalde. 25 = de traagste shard plus een trage
   # installatie; een job die echt hangt stopt nog altijd vanzelf.
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -108,7 +118,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
 
       # --with-deps ook bij een cache-hit: de systeembibliotheken (vooral
       # voor WebKit) zitten niet in de cache.
@@ -170,7 +180,7 @@ jobs:
   # Geen `needs: checks` meer (21-09): Lighthouse bouwt zelf en hangt van
   # niets uit die job af; het wachten kostte alleen 10 minuten doorlooptijd.
   lighthouse:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       # Zelfde dummy-env als e2e/visueel, op de Lighthouse-poort (4191):
@@ -224,7 +234,7 @@ jobs:
   # niet-gedraaide migratie, en herstel uit een back-up was van 21-09 tot
   # 01-10 stuk zonder dat één test het zag. Geen secrets: alles is lokaal.
   database:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -251,7 +261,7 @@ jobs:
   # vangnet ontbrak). gitleaks scant de gepushte commits op secrets en laat
   # de check falen vóór iets publiek staat.
   gitleaks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     # De action leest de PR-commits via de API (pull-requests: read). PR-
     # commentaar bij een vondst zou pull-requests: write vragen — bewust uit:
@@ -279,7 +289,7 @@ jobs:
   # artifact zijn een signaal voor de reviewer, geen blokkade.
   visueel:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       # Zelfde dummy-env als de e2e-build: anders rendert de app de
@@ -309,7 +319,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
 
       # --with-deps ook bij een cache-hit: de systeembibliotheken (vooral
       # voor WebKit) zitten niet in de cache.
