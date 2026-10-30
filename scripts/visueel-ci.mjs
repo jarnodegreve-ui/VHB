@@ -240,6 +240,9 @@ function vergelijk({ basis, kop, out, drempel = DREMPEL_STANDAARD }) {
   ].join('\n');
   fs.writeFileSync(path.join(out, 'rapport.md'), md);
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+  // Voor de workflow (ci.yml): het artifact met de diff-afbeeldingen wordt alleen geüpload
+  // als een scherm boven de drempel zit; de tabel hierboven is het signaal voor de rest.
+  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `afwijkend=${afwijkend.length > 0}\n`);
 }
 
 const { los, opties } = argumenten(process.argv.slice(2));

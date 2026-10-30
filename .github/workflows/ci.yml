@@ -196,13 +196,20 @@ jobs:
       - name: Lighthouse CI
         run: npx --yes @lhci/cli@0.14.0 autorun
 
+      # Alleen rapporten/ (de kopie die lhci zelf wegschrijft, HTML + JSON per
+      # run): de ruwe collect-uitvoer ernaast in .lighthouseci is dezelfde
+      # inhoud nog een keer en was ruim de helft van het artefact. Groen 3
+      # dagen, genoeg om de bootup-tijd van react-vendor naast een rode run te
+      # leggen (CLAUDE.md › Lighthouse CI); rood 14 dagen. Aanleiding 30-10:
+      # GitHub meldde dat de gratis Actions-opslag van het account bijna vol
+      # zat, en de repo is privé, dus elk artefact telt mee.
       - name: Lighthouse-rapporten als artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse
-          path: .lighthouseci
-          retention-days: 14
+          path: .lighthouseci/rapporten
+          retention-days: ${{ job.status == 'success' && 3 || 14 }}
           if-no-files-found: ignore
           # upload-artifact v4.4+ slaat verborgen mappen (.lighthouseci) over
           # tenzij dit aanstaat; zonder was er bij een gefaalde assert nooit
@@ -330,13 +337,21 @@ jobs:
           node scripts/visueel-ci.mjs schiet --app .visueel-basis --out .visueel/basis
 
       - name: Vergelijken (drempel 1,5 % per scherm)
+        id: vergelijk
         run: node scripts/visueel-ci.mjs vergelijk .visueel/basis .visueel/kop --out .visueel/verschil --drempel 1.5
 
+      # Alleen als een scherm boven de drempel zit (de stap hierboven zet
+      # `afwijkend`) en alleen de map met de diff-afbeeldingen (basis | kop |
+      # verschil in rood), 7 dagen; de tabel in de job-samenvatting is het
+      # signaal. Tot 30-10 kwam hier nooit iets aan: .visueel is een verborgen
+      # map en upload-artifact v4.4+ slaat die zonder include-hidden-files
+      # over, dus het artefact waarnaar de samenvatting verwees bestond niet.
       - name: Diff-afbeeldingen als artifact
-        if: always()
+        if: steps.vergelijk.outputs.afwijkend == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: visuele-regressie
-          path: .visueel
-          retention-days: 14
+          path: .visueel/verschil
+          retention-days: 7
           if-no-files-found: ignore
+          include-hidden-files: true
