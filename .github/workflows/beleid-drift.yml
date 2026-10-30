@@ -79,7 +79,8 @@ jobs:
       # stap een Auth-gezondheidscheck en een REST-verzoek met de publieke
       # sleutel: geen van beide bereikt de database (health raakt geen tabel;
       # anon heeft sinds 2026-09-29 geen rechten en wordt vóór elke query
-      # geweigerd), en de pauzewaarschuwing kwam toch (mails 28-09 en 30-10).
+      # geweigerd), en de pauzewaarschuwing kwam toch (mail 28-09, opnieuw
+      # gemeld op 30-10).
       # Daarom nu drie kleine select-queries met de service-sleutel van
       # staging, de enige rol die nog mag lezen. Nooit rood: een mislukte
       # wekker is een warning, geen alarm.
