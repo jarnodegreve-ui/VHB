@@ -28,6 +28,8 @@ create table if not exists public.ocpi_registration (
 
 alter table public.ocpi_registration enable row level security;
 -- Bewust geen policies: enkel de service-role (server) mag hierbij.
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.ocpi_registration to service_role;
 
 -- Zelfvoorzienend: zorg dat de updated_at-helper bestaat. (create or replace is
 -- idempotent en botst niet met de identieke definitie in setup_security.sql.)

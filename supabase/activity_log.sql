@@ -9,3 +9,5 @@ create table if not exists public.activity_log (
 );
 
 create index if not exists activity_log_created_at_idx on public.activity_log (created_at desc);
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.activity_log to service_role;

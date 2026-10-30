@@ -60,6 +60,8 @@ create policy meldingen_select_own
 -- Geen rechten voor anon (zelfde lijn als 2026-08-02_anon_rechten_intrekken).
 revoke all on table public.meldingen from anon;
 grant select on table public.meldingen to authenticated;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.meldingen to service_role;
 
 -- Realtime: de app abonneert zich op postgres_changes voor de eigen rijen.
 -- DELETE-events dragen alleen de primary key (uuid) — geen persoonsgegevens

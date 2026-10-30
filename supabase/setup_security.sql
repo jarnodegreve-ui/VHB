@@ -258,6 +258,14 @@ alter table public.updates enable row level security;
 alter table public.swaps enable row level security;
 alter table public.leave enable row level security;
 
+-- Rechten expliciet (sinds 30-10-2026 geeft Supabase ze niet meer vanzelf, zie
+-- de kop): de API (service_role) op alles; de browser leest via Realtime alleen
+-- diversions, updates, swaps en leave. De leespolicies daarvoor staan in de
+-- latere migraties, de laatste stand in 2026-09-29_rls_tweede_factor.sql.
+grant all on table public.users, public.planning, public.diversions, public.services,
+  public.updates, public.swaps, public.leave to service_role;
+grant select on table public.diversions, public.updates, public.swaps, public.leave to authenticated;
+
 drop policy if exists "planning_read_authenticated" on public.planning;
 create policy "planning_read_authenticated"
 on public.planning

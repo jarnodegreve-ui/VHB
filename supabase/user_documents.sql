@@ -31,6 +31,8 @@ create index if not exists user_documents_user_id_idx
   on public.user_documents (user_id);
 
 alter table public.user_documents enable row level security;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.user_documents to service_role;
 
 -- 2. Privé storage-bucket (lezen via signed URLs, schrijven via service role)
 -- do update i.p.v. do nothing: herstelt de public-vlag ook als de bucket al
