@@ -160,12 +160,13 @@ jobs:
   # chauffeur via de e2e-fixtures, zie scripts/lighthouse-server.mjs).
   #
   # Drempels (.lighthouserc.json, per URL via assertMatrix):
-  #   - scores  → error: performance ≥ 0,87 (login) en ≥ 0,65 (/mijn-dag),
-  #               accessibility ≥ 0,95, best-practices ≥ 0,90. De twee
-  #               performance-drempels zijn geijkt op de meetbrowser van
-  #               Playwright (30-10, zie onder; de geschiedenis van de
-  #               drempels staat in CLAUDE.md › Lighthouse CI): regressie-
-  #               bewaking onder de ruisband van de runner, geen doel.
+  #   - scores  → error: performance ≥ 0,87 (login), accessibility ≥ 0,95,
+  #               best-practices ≥ 0,90 (beide pagina's). De performance-
+  #               score van /mijn-dag is sinds 30-10 (keuze Jarno) een
+  #               waarschuwing (≥ 0,60): ze hangt aan de CPU van de runner
+  #               (0,70 snel, 0,64 gewoon, ±0,54 traag, zelfde code), een
+  #               harde grens zou flappen of niets meer bewaken. Geschiedenis
+  #               van de drempels: CLAUDE.md › Lighthouse CI.
   #   - metrics → warn: LCP ≤ 2500 ms, CLS ≤ 0,1, TBT ≤ 300 ms. Absolute
   #               milliseconden jitteren op ubuntu-latest (gedeelde CPU) —
   #               een waarschuwing in de log is het signaal, niet een rode PR.
