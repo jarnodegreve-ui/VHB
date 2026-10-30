@@ -226,5 +226,8 @@ header `x-vercel-protection-bypass`, daarna intrekken met `{"revoke":{"secret":"
 - Rooster verlopen → `seed.sql` opnieuw draaien.
 - Wachtwoord vergeten → `staging-accounts.mjs` opnieuw draaien met een nieuw
   `STAGING_WACHTWOORD`.
-- Free-plan-projecten pauzeren na een week zonder verkeer; even openen in het
-  Supabase-dashboard (Restore) volstaat.
+- Free-plan-projecten pauzeren na een week zonder echte databasequeries (een
+  Auth-health-check of een geweigerd REST-verzoek telt niet). De nachtelijke
+  workflow Beleidsdrift doet daarom drie kleine select-queries met het
+  GitHub-secret `STAGING_SERVICE_ROLE_KEY`. Toch gepauzeerd? Even openen in het
+  Supabase-dashboard (Restore) volstaat; daarna neemt de wekker het weer over.
