@@ -3,6 +3,24 @@
 
 begin;
 
+-- Data-API-rechten zijn sinds 30-10-2026 nooit meer vanzelf (Supabase,
+-- changelog 45329, ook voor bestaande projecten): een nieuwe tabel of
+-- sequence in public krijgt niets voor anon, authenticated én service_role;
+-- wat al bestond houdt zijn rechten. Dit blok zet precies die stand (de
+-- officiële statements van Supabase) op elke omgeving waar dit bestand als
+-- eerste draait, dus ook op de lokale Supabase van de CI-job `database`, die
+-- met een oudere CLI nog de oude defaults heeft. Zo bewijst de heropbouw
+-- (scripts/db-opbouwen.mjs + dbtests/rechten.test.ts) dat élke migratie haar
+-- rechten zelf geeft: `grant all on table public.<tabel> to service_role` voor
+-- de API, en alleen voor een tabel die de browser via Realtime volgt
+-- `grant select on table public.<tabel> to authenticated`. Productie en
+-- staging hebben deze stand al van Supabase zelf. Idempotent: een default
+-- intrekken die er niet (meer) is, is een no-op.
+alter default privileges for role postgres in schema public
+  revoke select, insert, update, delete on tables from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public
+  revoke usage, select on sequences from anon, authenticated, service_role;
+
 create extension if not exists pgcrypto;
 
 create table if not exists public.users (
