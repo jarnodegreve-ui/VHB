@@ -85,15 +85,19 @@ for (let ronde = 1; ronde <= rondes; ronde += 1) {
 // Sinds 30-10-2026 geeft Supabase een nieuwe tabel in public geen
 // Data-API-rechten meer, en setup_security.sql zet die stand als eerste ook
 // hier. Dit bewijst dat ze er echt is: een verse tabel zonder grant mag voor
-// geen van de drie PostgREST-rollen leesbaar zijn. Zonder deze stand zouden
+// service_role niet leesbaar zijn en voor anon en authenticated geen enkel
+// recht dragen (dat laatste komt van 2026-08-02_anon_rechten_intrekken.sql,
+// dat ook truncate, references, trigger en maintain uit de defaults haalt).
+// Zonder deze stand zouden
 // de databasetests ook slagen op een migratie die haar grants vergeet, en
 // zou precies die migratie in een vers project de API breken.
 const proef = spawnSync(
   'docker',
   ['exec', CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-At', '-c',
     "drop table if exists public.__rechten_proef; create table public.__rechten_proef (id int);" +
-    " select has_table_privilege('anon', 'public.__rechten_proef', 'select')" +
-    " or has_table_privilege('authenticated', 'public.__rechten_proef', 'select')" +
+    // Een lijst rechten in has_table_privilege betekent "minstens één ervan".
+    " select has_table_privilege('anon', 'public.__rechten_proef', 'select, insert, update, delete, truncate, references, trigger, maintain')" +
+    " or has_table_privilege('authenticated', 'public.__rechten_proef', 'select, insert, update, delete, truncate, references, trigger, maintain')" +
     " or has_table_privilege('service_role', 'public.__rechten_proef', 'select');" +
     ' drop table public.__rechten_proef;'],
   { encoding: 'utf8' },
@@ -105,7 +109,8 @@ if (proef.status !== 0 || !['t', 'f'].includes(proef.stdout.trim())) {
 if (proef.stdout.trim() === 't') {
   console.error(
     'Een verse tabel krijgt hier nog default Data-API-rechten, terwijl Supabase die sinds 30-10-2026 niet meer geeft.\n' +
-    'Staat het blok "alter default privileges for role postgres" nog bovenaan supabase/setup_security.sql?',
+    'Staat het blok "alter default privileges for role postgres" nog bovenaan supabase/setup_security.sql,\n' +
+    'en staan de default-revokes voor anon en authenticated nog in supabase/2026-08-02_anon_rechten_intrekken.sql?',
   );
   process.exit(1);
 }

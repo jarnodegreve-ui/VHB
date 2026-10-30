@@ -7,6 +7,9 @@
  * vers project de API met "permission denied"; hier faalt ze in de PR.
  * Bron: public.security_snapshot() (2026-09-08, alleen service_role), dezelfde
  * functie als de nachtelijke beleidsdrift-check tegen supabase/beleid-snapshot.json.
+ * Grens: information_schema kent het PG17-recht MAINTAIN niet, dus een
+ * achtergebleven maintain ziet deze test niet; de rechtenproef in
+ * scripts/db-opbouwen.mjs en de Deel-A-controle van 2026-09-29 wel.
  */
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
