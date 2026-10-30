@@ -95,9 +95,13 @@ jobs:
   # de job af vóór of midden in de tests: vier afgebroken shards op één dag,
   # zonder dat er één test faalde. 25 = de traagste shard plus een trage
   # installatie; een job die echt hangt stopt nog altijd vanzelf.
+  # 30-10: 25 → 40 min. Shard 1 deed op main tot 19-10 9 tot 13,5 min, op
+  # 26-10 20,6 min en op 30-10 ruim 22 min zonder einde (geannuleerd op de
+  # limiet), telkens met dezelfde tests: de runner werd trager, niet de code.
+  # Met de verse browsercache na de nieuwe cache-key kwam er nog 2 min bij.
   e2e:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
