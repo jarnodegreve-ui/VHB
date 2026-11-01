@@ -16,3 +16,5 @@ create table if not exists public.planning_notes (
   primary key (driver_id, date)
 );
 alter table public.planning_notes enable row level security;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.planning_notes to service_role;

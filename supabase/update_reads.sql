@@ -38,5 +38,7 @@ end
 $$;
 
 alter table public.update_reads enable row level security;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.update_reads to service_role;
 
 commit;

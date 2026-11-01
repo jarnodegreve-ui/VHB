@@ -11,6 +11,8 @@ create table if not exists public.planning_matrix_import_history (
 );
 
 alter table public.planning_matrix_import_history enable row level security;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.planning_matrix_import_history to service_role;
 
 drop policy if exists "planning_matrix_import_history_select_authenticated" on public.planning_matrix_import_history;
 create policy "planning_matrix_import_history_select_authenticated"

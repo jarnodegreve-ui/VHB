@@ -62,6 +62,8 @@ create policy planning_version_read_authenticated
 -- in 2026-08-02_anon_rechten_intrekken.sql aangepast, en zo maakt het niet uit
 -- in welke volgorde de twee migraties draaien.
 grant select on public.planning_version to authenticated;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.planning_version to service_role;
 
 -- Upsert i.p.v. een kale update: verdwijnt de rij ooit, dan zou een update 0
 -- rijen raken en de teller stil nooit meer ophogen — kapot zonder foutmelding.

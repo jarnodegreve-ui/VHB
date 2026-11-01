@@ -126,5 +126,7 @@ alter table public.ocpi_evses      enable row level security;
 alter table public.ocpi_connectors enable row level security;
 alter table public.ocpi_sessions   enable row level security;
 alter table public.ocpi_cdrs       enable row level security;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.ocpi_locations, public.ocpi_evses, public.ocpi_connectors, public.ocpi_sessions, public.ocpi_cdrs to service_role;
 
 commit;

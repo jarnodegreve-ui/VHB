@@ -34,6 +34,14 @@ draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
 > hieronder is de toelichting per bestand en kan achterlopen. Zo ontbrak
 > `supabase/2026-09-09_rol_technieker.sql` hier (hoort na nummer 59).
 
+> **Rechten expliciet** (30-10-2026): Supabase geeft een nieuwe tabel in
+> `public` geen Data-API-rechten meer, ook niet aan `service_role`; wat al
+> bestond houdt zijn rechten. Elke migratie die een tabel maakt bevat daarom
+> `grant all on table public.<tabel> to service_role;` (en `grant select …
+> to authenticated` alleen voor een tabel die de browser via Realtime volgt).
+> `setup_security.sql` zet die stand als eerste op elke omgeving, en de
+> CI-job `database` faalt op een tabel zonder grant (dbtests/rechten.test.ts).
+
 **Basis (setup en de ongedateerde migraties, in afhankelijkheidsvolgorde)**
 
 1. `supabase/setup_security.sql` — users, planning, diversions, services, updates, swaps, leave, RLS, `set_updated_at()`, `current_app_user_role()`

@@ -19,6 +19,8 @@ create table if not exists public.ritblaadje (
 );
 
 alter table public.ritblaadje enable row level security;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.ritblaadje to service_role;
 
 drop policy if exists "Authenticated can read ritblaadje" on public.ritblaadje;
 create policy "Authenticated can read ritblaadje" on public.ritblaadje
