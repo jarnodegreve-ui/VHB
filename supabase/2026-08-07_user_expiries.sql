@@ -26,5 +26,7 @@ revoke insert, update, delete, truncate, references, trigger
   on table public.user_expiries
   from anon, authenticated;
 revoke all on table public.user_expiries from anon;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.user_expiries to service_role;
 
 commit;

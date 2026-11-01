@@ -82,6 +82,44 @@ for (let ronde = 1; ronde <= rondes; ronde += 1) {
   console.log(`Ronde ${ronde}: ${volgorde.length} bestanden zonder fout.`);
 }
 
+// Sinds 30-10-2026 geeft Supabase een nieuwe tabel in public geen
+// Data-API-rechten meer, en setup_security.sql zet die stand als eerste ook
+// hier. Dit bewijst dat ze er echt is: een verse tabel zonder grant mag voor
+// service_role niet leesbaar zijn en voor anon en authenticated geen enkel
+// recht dragen (dat laatste komt van 2026-08-02_anon_rechten_intrekken.sql,
+// dat ook truncate, references, trigger en maintain uit de defaults haalt).
+// Zonder deze stand zouden
+// de databasetests ook slagen op een migratie die haar grants vergeet, en
+// zou precies die migratie in een vers project de API breken.
+// Elk statement in een eigen -c: met meerdere statements in één -c geeft psql
+// alleen de uitvoer van het laatste terug (hier de drop, dus niets), en -q
+// onderdrukt de commandotags ("CREATE TABLE"), zodat alleen t of f overblijft.
+const proef = spawnSync(
+  'docker',
+  ['exec', CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q', '-At',
+    '-c', 'drop table if exists public.__rechten_proef;',
+    '-c', 'create table public.__rechten_proef (id int);',
+    // Een lijst rechten in has_table_privilege betekent "minstens één ervan".
+    '-c', "select has_table_privilege('anon', 'public.__rechten_proef', 'select, insert, update, delete, truncate, references, trigger, maintain')" +
+      " or has_table_privilege('authenticated', 'public.__rechten_proef', 'select, insert, update, delete, truncate, references, trigger, maintain')" +
+      " or has_table_privilege('service_role', 'public.__rechten_proef', 'select');",
+    '-c', 'drop table public.__rechten_proef;'],
+  { encoding: 'utf8' },
+);
+if (proef.status !== 0 || !['t', 'f'].includes(proef.stdout.trim())) {
+  console.error(`De rechtenproef is niet te draaien:\n${(proef.stderr || proef.stdout).trim()}`);
+  process.exit(1);
+}
+if (proef.stdout.trim() === 't') {
+  console.error(
+    'Een verse tabel krijgt hier nog default Data-API-rechten, terwijl Supabase die sinds 30-10-2026 niet meer geeft.\n' +
+    'Staat het blok "alter default privileges for role postgres" nog bovenaan supabase/setup_security.sql,\n' +
+    'en staan de default-revokes voor anon en authenticated nog in supabase/2026-08-02_anon_rechten_intrekken.sql?',
+  );
+  process.exit(1);
+}
+console.log('Rechtenproef: een verse tabel is zonder grant onleesbaar voor anon, authenticated en service_role.');
+
 // Het register (supabase/2026-10-05_schema_migraties.sql): elk bestand uit de
 // lijst moet er na het draaien in staan. Een nieuwe migratie die zichzelf niet
 // inschrijft, zou op productie nooit als "nog te draaien" opvallen.

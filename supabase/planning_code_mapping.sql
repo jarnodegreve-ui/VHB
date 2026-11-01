@@ -28,6 +28,8 @@ for each row
 execute function public.set_updated_at();
 
 alter table public.planning_codes enable row level security;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.planning_codes to service_role;
 
 drop policy if exists "planning_codes_read_authenticated" on public.planning_codes;
 create policy "planning_codes_read_authenticated"

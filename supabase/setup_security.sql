@@ -3,6 +3,31 @@
 
 begin;
 
+-- Data-API-rechten zijn sinds 30-10-2026 niet meer vanzelf (Supabase,
+-- changelog 45329, ook voor bestaande projecten): een nieuwe tabel of
+-- sequence in public krijgt geen select, insert, update of delete meer voor
+-- anon, authenticated én service_role; wat al bestond houdt zijn rechten.
+-- Dit blok zet precies die stand (letterlijk de statements van Supabase) op
+-- elke omgeving waar dit bestand als eerste draait, dus ook op de lokale
+-- Supabase van de CI-job `database`, zolang die CLI nog de oude defaults
+-- heeft. Truncate, references, trigger en maintain blijven in de default
+-- staan (zo doet Supabase het ook); 2026-08-02_anon_rechten_intrekken.sql
+-- haalt die voor anon en authenticated weg, en de Deel-A-controle van
+-- 2026-09-29_rls_tweede_factor.sql bewaakt de eindstand. Zo bewijst de
+-- heropbouw (scripts/db-opbouwen.mjs + dbtests/rechten.test.ts) dat élke
+-- migratie haar rechten zelf geeft: `grant all on table public.<tabel> to
+-- service_role` voor de API, en alleen voor een tabel die de browser via
+-- Realtime volgt `grant select on table public.<tabel> to authenticated`.
+-- De oudere migraties (tot 2026-09-06) kregen op 30-10 alleen die
+-- service_role-grant: hun anon/authenticated-rechten ruimen 2026-08-02 en
+-- 2026-09-29 op, de latere hebben hun eigen revoke. Productie en staging
+-- hebben deze stand al van Supabase zelf. Idempotent: een default intrekken
+-- die er niet (meer) is, is een no-op.
+alter default privileges for role postgres in schema public
+  revoke select, insert, update, delete on tables from anon, authenticated, service_role;
+alter default privileges for role postgres in schema public
+  revoke usage, select on sequences from anon, authenticated, service_role;
+
 create extension if not exists pgcrypto;
 
 create table if not exists public.users (
@@ -239,6 +264,14 @@ alter table public.services enable row level security;
 alter table public.updates enable row level security;
 alter table public.swaps enable row level security;
 alter table public.leave enable row level security;
+
+-- Rechten expliciet (sinds 30-10-2026 geeft Supabase ze niet meer vanzelf, zie
+-- de kop): de API (service_role) op alles; de browser leest via Realtime alleen
+-- diversions, updates, swaps en leave. De leespolicies daarvoor staan in de
+-- latere migraties, de laatste stand in 2026-09-29_rls_tweede_factor.sql.
+grant all on table public.users, public.planning, public.diversions, public.services,
+  public.updates, public.swaps, public.leave to service_role;
+grant select on table public.diversions, public.updates, public.swaps, public.leave to authenticated;
 
 drop policy if exists "planning_read_authenticated" on public.planning;
 create policy "planning_read_authenticated"

@@ -63,5 +63,7 @@ alter table public.client_error_status enable row level security;
 
 -- Geen anon/authenticated-rechten: alleen de service role (API) leest en schrijft.
 revoke all on table public.client_error_status from anon, authenticated;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.client_error_status to service_role;
 
 commit;

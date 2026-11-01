@@ -24,9 +24,18 @@ concurrency:
 permissions:
   contents: read
 
+# Vaste runner-versie (30-10): GitHub verhuist `ubuntu-latest` sinds 19-10
+# geleidelijk naar 26.04. Daar vindt de gecachte WebKit-build van Playwright
+# (gebouwd tegen 24.04) libicudata.so.74 niet ("browserType.launch: Target
+# page, context or browser has been closed"): e2e (1/3) en visueel rood op
+# elke PR. Alle jobs op één versie, en die versie staat ook in de
+# Playwright-cache-keys: een nieuwe distro = een nieuwe cache. Bij een upgrade
+# naar 26.04 dus beide aanpassen. (De rode Lighthouse van dezelfde dagen had
+# een andere oorzaak: Chrome 156 in het runner-image van 25-10, op beide
+# distro's; zie de meetbrowser in de job lighthouse.)
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -85,9 +94,13 @@ jobs:
   # de job af vóór of midden in de tests: vier afgebroken shards op één dag,
   # zonder dat er één test faalde. 25 = de traagste shard plus een trage
   # installatie; een job die echt hangt stopt nog altijd vanzelf.
+  # 30-10: 25 → 40 min. Shard 1 deed op main tot 19-10 9 tot 13,5 min, op
+  # 26-10 20,6 min en op 30-10 ruim 22 min zonder einde (geannuleerd op de
+  # limiet), telkens met dezelfde tests: de runner werd trager, niet de code.
+  # Met de verse browsercache na de nieuwe cache-key kwam er nog 2 min bij.
   e2e:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -108,7 +121,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
 
       # --with-deps ook bij een cache-hit: de systeembibliotheken (vooral
       # voor WebKit) zitten niet in de cache.
@@ -147,14 +160,13 @@ jobs:
   # chauffeur via de e2e-fixtures, zie scripts/lighthouse-server.mjs).
   #
   # Drempels (.lighthouserc.json, per URL via assertMatrix):
-  #   - scores  → error: performance ≥ 0,90 (login), accessibility ≥ 0,95,
-  #               best-practices ≥ 0,90. Scores zijn stabiel genoeg op een
-  #               gedeelde runner om hard te blokkeren. /mijn-dag staat op
-  #               performance ≥ 0,80: de stand op 06-09 was 0,85–0,88 (mediaan
-  #               0,87) door de seriële auth-keten devices/register → me →
-  #               data (drie 4G-roundtrips vóór de eerste inhoud); 0,80 is
-  #               dus regressiebewaking, geen doel — trek hem naar 0,90 zodra
-  #               die keten korter is.
+  #   - scores  → error: performance ≥ 0,87 (login), accessibility ≥ 0,95,
+  #               best-practices ≥ 0,90 (beide pagina's). De performance-
+  #               score van /mijn-dag is sinds 30-10 (keuze Jarno) een
+  #               waarschuwing (≥ 0,60): ze hangt aan de CPU van de runner
+  #               (0,70 snel, 0,64 gewoon, ±0,54 traag, zelfde code), een
+  #               harde grens zou flappen of niets meer bewaken. Geschiedenis
+  #               van de drempels: CLAUDE.md › Lighthouse CI.
   #   - metrics → warn: LCP ≤ 2500 ms, CLS ≤ 0,1, TBT ≤ 300 ms. Absolute
   #               milliseconden jitteren op ubuntu-latest (gedeelde CPU) —
   #               een waarschuwing in de log is het signaal, niet een rode PR.
@@ -170,7 +182,7 @@ jobs:
   # Geen `needs: checks` meer (21-09): Lighthouse bouwt zelf en hangt van
   # niets uit die job af; het wachten kostte alleen 10 minuten doorlooptijd.
   lighthouse:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       # Zelfde dummy-env als e2e/visueel, op de Lighthouse-poort (4191):
@@ -191,18 +203,44 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Meetbrowser (30-10, keuze Jarno): de Chromium van Playwright (Chrome
+      # for Testing, versie uit package-lock), niet de Chrome van het
+      # runner-image. Het image van 25-10 bracht Chrome 156 en daarmee een
+      # verdubbelde JS-opstarttijd in de meting (Mijn dag 0,70-0,74 →
+      # 0,58-0,62, TBT 327-476 → 818-1092 ms) op ongewijzigde code, op 24.04
+      # én 26.04. Nu verschuift het meetinstrument alleen met een bewuste
+      # Playwright-upgrade: ijk dan de drempels in .lighthouserc.json opnieuw
+      # (CLAUDE.md › Lighthouse CI). Eigen cache-key: de e2e-cache bevat ook
+      # WebKit en hoort niet door een chromium-only save overschreven te worden.
+      - name: Playwright-Chromium-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
+
+      # Zonder --with-deps: het runner-image heeft de Chrome-bibliotheken al.
+      - name: Playwright-Chromium (meetbrowser)
+        run: npx playwright install chromium
+
       # autorun = healthcheck + collect (start scripts/lighthouse-server.mjs
       # zelf) + assert + upload naar .lighthouseci/rapporten (filesystem).
       - name: Lighthouse CI
-        run: npx --yes @lhci/cli@0.14.0 autorun
+        run: npx --yes @lhci/cli@0.14.0 autorun --collect.chromePath="$(node -e "console.log(require('@playwright/test').chromium.executablePath())")"
 
+      # Alleen rapporten/ (de kopie die lhci zelf wegschrijft, HTML + JSON per
+      # run): de ruwe collect-uitvoer ernaast in .lighthouseci is dezelfde
+      # inhoud nog een keer en was ruim de helft van het artefact. Groen 3
+      # dagen, genoeg om de bootup-tijd van react-vendor naast een rode run te
+      # leggen (CLAUDE.md › Lighthouse CI); rood 14 dagen. Aanleiding 30-10:
+      # GitHub meldde dat de gratis Actions-opslag van het account bijna vol
+      # zat, en de repo is privé, dus elk artefact telt mee.
       - name: Lighthouse-rapporten als artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse
-          path: .lighthouseci
-          retention-days: 14
+          path: .lighthouseci/rapporten
+          retention-days: ${{ job.status == 'success' && 3 || 14 }}
           if-no-files-found: ignore
           # upload-artifact v4.4+ slaat verborgen mappen (.lighthouseci) over
           # tenzij dit aanstaat; zonder was er bij een gefaalde assert nooit
@@ -217,7 +255,7 @@ jobs:
   # niet-gedraaide migratie, en herstel uit een back-up was van 21-09 tot
   # 01-10 stuk zonder dat één test het zag. Geen secrets: alles is lokaal.
   database:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -244,7 +282,7 @@ jobs:
   # vangnet ontbrak). gitleaks scant de gepushte commits op secrets en laat
   # de check falen vóór iets publiek staat.
   gitleaks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     # De action leest de PR-commits via de API (pull-requests: read). PR-
     # commentaar bij een vondst zou pull-requests: write vragen — bewust uit:
@@ -272,7 +310,7 @@ jobs:
   # artifact zijn een signaal voor de reviewer, geen blokkade.
   visueel:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       # Zelfde dummy-env als de e2e-build: anders rendert de app de
@@ -302,7 +340,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
 
       # --with-deps ook bij een cache-hit: de systeembibliotheken (vooral
       # voor WebKit) zitten niet in de cache.
@@ -330,13 +368,21 @@ jobs:
           node scripts/visueel-ci.mjs schiet --app .visueel-basis --out .visueel/basis
 
       - name: Vergelijken (drempel 1,5 % per scherm)
+        id: vergelijk
         run: node scripts/visueel-ci.mjs vergelijk .visueel/basis .visueel/kop --out .visueel/verschil --drempel 1.5
 
+      # Alleen als een scherm boven de drempel zit (de stap hierboven zet
+      # `afwijkend`) en alleen de map met de diff-afbeeldingen (basis | kop |
+      # verschil in rood), 7 dagen; de tabel in de job-samenvatting is het
+      # signaal. Tot 30-10 kwam hier nooit iets aan: .visueel is een verborgen
+      # map en upload-artifact v4.4+ slaat die zonder include-hidden-files
+      # over, dus het artefact waarnaar de samenvatting verwees bestond niet.
       - name: Diff-afbeeldingen als artifact
-        if: always()
+        if: steps.vergelijk.outputs.afwijkend == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: visuele-regressie
-          path: .visueel
-          retention-days: 14
+          path: .visueel/verschil
+          retention-days: 7
           if-no-files-found: ignore
+          include-hidden-files: true

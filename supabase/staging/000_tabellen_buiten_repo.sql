@@ -63,6 +63,8 @@ revoke all on table public.push_subscriptions, public.client_errors, public.cove
 revoke insert, update, delete, truncate, references, trigger
   on table public.push_subscriptions, public.client_errors, public.coverage_expectations
   from authenticated;
+-- Sinds 30-10-2026 niet meer vanzelf (zie de kop van setup_security.sql): de API leest en schrijft via service_role.
+grant all on table public.push_subscriptions, public.client_errors, public.coverage_expectations to service_role;
 
 -- swaps.return_date / return_code (tegenprestatie bij een 1-op-1-ruil) zijn
 -- in productie ook buiten de repo om toegevoegd: geen enkel .sql-bestand
