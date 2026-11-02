@@ -10,12 +10,11 @@
 #
 # Secrets (repo-instellingen, zie README › Beleidssnapshot):
 #   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY            → productie (verplicht)
-#   STAGING_SUPABASE_URL, STAGING_SERVICE_ROLE_KEY     → staging (optioneel,
-#                                                        alleen als ook
+#   STAGING_SUPABASE_URL, STAGING_SERVICE_ROLE_KEY     → staging: wakker houden
+#                                                        (laatste stap) en, als
 #                                                        supabase/beleid-snapshot-staging.json
-#                                                        gecommit is)
-#   STAGING_SUPABASE_URL, STAGING_SUPABASE_ANON_KEY    → staging wakker houden
-#                                                        (zie de laatste stap)
+#                                                        gecommit is, ook de
+#                                                        driftvergelijking
 # Ontbreken de productie-secrets, dan slaat de job netjes over (geen fout):
 # de check is dan gewoon nog niet ingericht.
 name: Beleidsdrift
@@ -42,7 +41,6 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
       STAGING_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SERVICE_ROLE_KEY }}
-      STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,26 +72,44 @@ jobs:
         if: ${{ !cancelled() && steps.secrets.outputs.staging == 'true' }}
         run: node scripts/beleid-drift.mjs --omgeving staging
 
-      # Staging wakker houden (03-10): de gratis laag van Supabase pauzeert een
-      # project na zeven dagen zonder API-verzoeken, en staging krijgt die
-      # alleen als een PR-preview of iemand ermee praat (mail van 28-09:
-      # "vhb-portaal-staging is going to be paused"). Elke nacht één verzoek
-      # naar de Auth-API (200 met de publieke sleutel) en één naar de REST-API
-      # (401: anon heeft daar sinds 2026-09-29 bewust geen rechten, maar het
-      # verzoek telt). Alleen de publieke publishable-sleutel is nodig; de
-      # drift-stap hierboven doet hetzelfde met de service-sleutel zodra die
-      # er is, en dan is deze stap dubbel maar onschadelijk. Nooit rood: een
-      # mislukte wekker is een notice, geen alarm.
+      # Staging wakker houden (03-10, herzien 30-10): de gratis laag van
+      # Supabase pauzeert een project na een week zonder "user database
+      # activity" (een paar echte queries per dag), en staging krijgt die
+      # alleen als een PR-preview of iemand ermee praat. Tot 30-10 deed deze
+      # stap een Auth-gezondheidscheck en een REST-verzoek met de publieke
+      # sleutel: geen van beide bereikt de database (health raakt geen tabel;
+      # anon heeft sinds 2026-09-29 geen rechten en wordt vóór elke query
+      # geweigerd), en de pauzewaarschuwing kwam toch (mail 28-09, opnieuw
+      # gemeld op 30-10).
+      # Daarom nu drie kleine select-queries met de service-sleutel van
+      # staging, de enige rol die nog mag lezen. Nooit rood: een mislukte
+      # wekker is een warning, geen alarm.
       - name: Staging wakker houden
         if: ${{ !cancelled() }}
         run: |
-          if [ -z "$STAGING_SUPABASE_URL" ] || [ -z "$STAGING_SUPABASE_ANON_KEY" ]; then
-            echo "::notice::STAGING_SUPABASE_URL en/of STAGING_SUPABASE_ANON_KEY ontbreken: staging niet wakker gehouden."
+          if [ -z "$STAGING_SUPABASE_URL" ] || [ -z "$STAGING_SERVICE_ROLE_KEY" ]; then
+            echo "::notice::STAGING_SUPABASE_URL en/of STAGING_SERVICE_ROLE_KEY ontbreken: staging niet wakker gehouden."
             exit 0
           fi
-          auth=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "apikey: $STAGING_SUPABASE_ANON_KEY" "$STAGING_SUPABASE_URL/auth/v1/health" || echo 000)
-          rest=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "apikey: $STAGING_SUPABASE_ANON_KEY" -H "Authorization: Bearer $STAGING_SUPABASE_ANON_KEY" "$STAGING_SUPABASE_URL/rest/v1/" || echo 000)
-          echo "staging: auth/v1/health $auth, rest/v1 $rest"
-          if [ "$auth" != "200" ]; then
-            echo "::warning::Staging antwoordde $auth op auth/v1/health: gepauzeerd of onbereikbaar? Kijk in het Supabase-dashboard."
+          # Een nieuwe sleutel (sb_secret_…) gaat alleen in de apikey-header;
+          # de oude JWT-sleutel ook als Bearer (zoals scripts/beleid-drift.mjs).
+          auth=()
+          case "$STAGING_SERVICE_ROLE_KEY" in
+            sb_*) ;;
+            *) auth=(-H "Authorization: Bearer $STAGING_SERVICE_ROLE_KEY") ;;
+          esac
+          geslaagd=0
+          uitkomst=""
+          for pad in 'users?select=id&limit=1' 'schema_migraties?select=bestand&limit=1' 'dagtype_codes?select=code&limit=1'; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+              -H "apikey: $STAGING_SERVICE_ROLE_KEY" "${auth[@]}" \
+              "$STAGING_SUPABASE_URL/rest/v1/$pad" || echo 000)
+            if [ "$code" = "200" ]; then
+              geslaagd=$((geslaagd + 1))
+            fi
+            uitkomst="$uitkomst ${pad%%\?*}=$code"
+          done
+          echo "staging wakker houden:$uitkomst ($geslaagd/3 geslaagd)"
+          if [ "$geslaagd" -eq 0 ]; then
+            echo "::warning::Geen enkele staging-query slaagde ($uitkomst): gepauzeerd, verkeerde sleutel of onbereikbaar? Kijk in het Supabase-dashboard."
           fi
