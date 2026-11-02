@@ -53,7 +53,9 @@ export function UserMenu({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Accountmenu"
+        // De initialen zijn het zichtbare label van deze knop en horen dus in
+        // de naam (WCAG 2.5.3, axe 4.14); specs zoeken op "Accountmenu".
+        aria-label={`Accountmenu, ${initials}`}
         className="tikbaar flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 hover:bg-surface-soft-hover"
       >
         {/* Huisstijl-pairing: op goud altijd carbon-tekst, geen wit. */}

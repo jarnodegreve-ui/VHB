@@ -9,6 +9,31 @@ import { ADMIN, CHAUFFEUR, USERS, seedPagina } from '../scripts/audit-fixtures.m
  */
 export { ADMIN, CHAUFFEUR, USERS };
 
+/** De WCAG-tags waarmee elke axe-run in de specs draait. */
+export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+
+/**
+ * Tijdelijk uitgeschakelde axe-regels voor de vier tabelspecs (beheer-,
+ * planning-, techniek-loon-tabellen en rapporten). a11y.spec en
+ * dienstoverzicht-beheer draaien álle regels: hun schermen zijn in orde en
+ * blijven zo de kanarie. Alleen als een hele regel op de bestaande schermen
+ * niet houdbaar is; een enkel element liever uitsluiten met `exclude`.
+ *
+ * - `label-content-name-mismatch` (sinds @axe-core 4.14, 02-11-2026): de regel
+ *   was jaren "experimental" en draait nu mee met wcag21a. Ze eist dat alle
+ *   zichtbare tekst van een knop, ook aria-hidden tekst, als aaneengesloten
+ *   woordreeks in de naam zit, zonder wat tussen haakjes staat. Opgelost in
+ *   dezelfde ronde: badge-tellers (CountUp badge, CSS-inhoud), het accountmenu
+ *   (initialen in de naam), de weekstrook van Vandaag (ma 2 vooraan) en de
+ *   roostercel op desktop (naam uit de inhoud, geen ISO-datum meer). Blijft
+ *   over voor een aparte toegankelijkheidsronde: de sorteerknoppen van
+ *   tabellen (naam "Leeftijd (jaar)" verliest de haakjes), CelKnop ("Bus 26
+ *   openen"), bewerkbare cellen ("2101 bewerken", "BV bewerken"), en drie
+ *   knoppen in Activiteit, Toestellen en Looncontrole. Tot dan uit in die
+ *   vier specs, anders staat elke PR rood op schermen die niet geraakt zijn.
+ */
+export const AXE_TIJDELIJK_UIT = ['label-content-name-mismatch'];
+
 export type Fixture = Record<string, unknown>;
 export type Extra = (pad: string, request: Request) => unknown;
 

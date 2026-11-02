@@ -24,7 +24,7 @@ import { formatDuration } from '../lib/shiftTime';
 import { brusselseMinuten, dienstGereden } from '../../shared/dienstGereden';
 import { berekenRoosterUren, formatUren, minutenPerDag } from '../lib/roosterUren';
 import { spiegelStartscherm } from '../lib/dashboardVoorkeuren';
-import { formatDatumDMJ, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
+import { formatDatumDMJ, formatDayLong, formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
@@ -517,7 +517,10 @@ function MonthCalendar({
                 key={day}
                 type="button"
                 onClick={() => setSelected(iso)}
-                aria-label={`${iso}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}`}
+                // Geen aria-label: de naam komt uit de inhoud (dagnummer, code)
+                // plus de sr-only toelichting onderaan, zodat de zichtbare tekst
+                // vooraan in de naam staat (WCAG 2.5.3, axe 4.14) en niemand nog
+                // een ISO-datum hoort.
                 title={dayGroups.length > 0 ? `${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : undefined}
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',
@@ -535,10 +538,16 @@ function MonthCalendar({
                 <span className={cn('text-xs font-semibold tabular-nums leading-none', isToday ? 'text-oker-800' : 'text-slate-700')}>
                   {day}
                 </span>
+                {/* Witruimte tussen de tekstknopen: zo heet de cel "1 2515" en
+                    niet "12515"; in een flex-kolom tekent ze niets. */}
+                {' '}
                 {td && td.kort === 'F' && (
-                  <span className="text-xs font-bold leading-none text-oker-800" title={td.titel}>
-                    {td.kort}
-                  </span>
+                  <>
+                    <span className="text-xs font-bold leading-none text-oker-800" title={td.titel}>
+                      {td.kort}
+                    </span>
+                    {' '}
+                  </>
                 )}
                 {dayGroups.length > 0 ? (
                   <span className={cn('max-w-full truncate text-xs font-mono font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-slate-800')}>
@@ -557,6 +566,11 @@ function MonthCalendar({
                     v
                   </span>
                 ) : null}
+                {/* De rest van de naam, onzichtbaar: datum voluit en toelichting
+                    ná de zichtbare tekst. */}
+                <span className="sr-only">
+                  {`, ${formatDayLong(iso)}${dayGroups.length > 0 ? `, dienst, ${formatDuration(minutenOpDag.get(iso) ?? 0)} gepland` : ''}${leave ? ', verlof' : ''}${td && td.kort === 'F' ? `, ${td.titel}` : ''}`}
+                </span>
               </button>
             );
           })}

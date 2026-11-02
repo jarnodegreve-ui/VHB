@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { ADMIN, CHAUFFEUR, seed, type Fixture, wachtOpAnimaties } from './helpers';
+import { ADMIN, AXE_TAGS, CHAUFFEUR, seed, wachtOpAnimaties, type Fixture } from './helpers';
 
 /**
  * Toegankelijkheidsscan (axe-core, WCAG 2.1 AA) op dertien schermen — draait in
@@ -9,12 +9,15 @@ import { ADMIN, CHAUFFEUR, seed, type Fixture, wachtOpAnimaties } from './helper
  * maar blokkeren niet.
  */
 
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+const TAGS = AXE_TAGS;
 
 /**
  * Tijdelijk uitgeschakelde regels: alleen als een hele axe-regel op de
- * bestaande schermen niet houdbaar is. Liever `UITGESLOTEN` hieronder — dan
- * blijft de regel elders gewoon actief. Leeg sinds de eerste run (03-09).
+ * bestaande schermen niet houdbaar is. Liever `UITGESLOTEN` hieronder, dan
+ * blijft de regel elders gewoon actief. Leeg sinds de eerste run (03-09); de
+ * regel label-content-name-mismatch (axe 4.14) draait hier WEL, de schermen
+ * in deze lijst zijn er sinds 02-11 op in orde; alleen de vier tabelspecs
+ * zetten haar uit (AXE_TIJDELIJK_UIT in helpers.ts).
  */
 const TIJDELIJK_UIT: string[] = [];
 

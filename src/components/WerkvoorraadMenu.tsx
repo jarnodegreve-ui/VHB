@@ -6,6 +6,7 @@ import type { Werkvoorraad } from '../lib/werkvoorraad';
 import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
 import { useDropdown } from './useDropdown';
 import { IconButton } from './primitives';
+import { CountUp } from './CountUp';
 import { MenuItem, Popover, PopoverKop, PopoverVoet } from './Popover';
 
 /**
@@ -177,7 +178,7 @@ export function WerkvoorraadMenu({
                 : 'bg-amber-500 text-slate-950',
             )}
           >
-            {wv.attentionCount > 9 ? '9+' : wv.attentionCount}
+            <CountUp value={wv.attentionCount} badge format={(n) => (n > 9 ? '9+' : n)} />
           </span>
         )}
       </IconButton>

@@ -15,6 +15,8 @@ import { cn } from '../lib/ui';
  *   het verschijnen binnen met scale 0,6 → 1: badges bestaan alleen als er
  *   iets te tellen valt, dus mount = "van 0 naar 1".
  * - `format` voor de zichtbare tekst ("9+"); de telling zelf blijft numeriek.
+ * - Een badge zet zijn cijfer als CSS-inhoud (`data-teller`), niet als tekst:
+ *   zie de uitleg bij de render en `.teller-badge` in index.css.
  *
  * Reduced motion via `useReducedMotion` (reactief): geen telling, geen
  * schaal. Puur visueel: aria-labels van de ouder blijven de bron. Het
@@ -83,9 +85,21 @@ export function CountUp({
   }, [value]);
 
   const n = Number.isFinite(shown) ? Math.round(shown) : shown;
+  const tekst = format && Number.isFinite(n) ? format(n) : n;
+  // Teller-badge: het cijfer staat als CSS-inhoud (`.teller-badge::after`,
+  // content: attr(data-teller)) en niet als tekstknoop. Een badge is een
+  // decoratieve teller naast een label, geen label: de naam van de knop
+  // blijft het label (BottomNav, MeldingenBel, Open taken) en het aantal
+  // gaat waar het hoort (aria-label of aria-describedby). axe-core 4.14
+  // (WCAG 2.5.3, label-content-name-mismatch) telt elke zichtbare
+  // tekstknoop, ook aria-hidden, als label en eiste anders "1 Verlof" als
+  // naam van de dock-tab. Zelfde letter, zelfde box: pixelgelijk.
+  if (badge && (typeof tekst === 'string' || typeof tekst === 'number')) {
+    return <span ref={scope} data-teller={String(tekst)} className={cn('inline-block tabular-nums teller-badge', className)} />;
+  }
   return (
     <span ref={scope} className={cn('inline-block tabular-nums', className)}>
-      {format && Number.isFinite(n) ? format(n) : n}
+      {tekst}
     </span>
   );
 }
