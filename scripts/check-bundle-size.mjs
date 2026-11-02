@@ -198,7 +198,14 @@ import zlib from 'node:zlib';
 // aanvulling van de ReadableStream-iterator voor Safari ≤ 26
 // (src/lib/streamIteratie.ts, ±0,3 kB in de ritblad-chunk). Lokaal 740 → 742;
 // budget = die meting plus de ±0,5 kB van de runner en ±1,5 kB marge.
-const BUDGET_KB = 744;
+// 02-11 (Dependabot minor-en-patch november, zonder React 19.3): 744 → 746.
+// Geen nieuwe dependency; tailwind-merge 3.6 → 3.7 en supabase-js 2.112 →
+// 2.118 verschuiven ±1 kB tussen de vendor-chunks. Lokaal 742 → 744-745
+// (main meet 743 op de runner); budget = die meting plus de ±0,5 kB van de
+// runner en ±1,5 kB marge. React 19.3.1 is bewust NIET meegenomen: die maakt
+// react-vendor 60,1 → 68,6 kB gzip (+14 %, in de startbundel) en het totaal
+// 752; zie .github/dependabot.yml.
+const BUDGET_KB = 747;
 
 // Deelbudgetten in kB gzip: stand van 14-09 + ±10 % marge.
 const DEELBUDGET_KB = {
