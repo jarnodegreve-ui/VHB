@@ -39,12 +39,11 @@ Eenmalig inrichten:
    ```bash
    gh secret set SUPABASE_URL
    gh secret set SUPABASE_SERVICE_ROLE_KEY
-   # optioneel, staging:
+   # staging: houdt het gratis project wakker (drie echte select-queries per
+   # nacht) en bewaakt de drift zodra supabase/beleid-snapshot-staging.json
+   # gecommit is:
    gh secret set STAGING_SUPABASE_URL
    gh secret set STAGING_SERVICE_ROLE_KEY
-   # staging wakker houden (gratis laag pauzeert na 7 dagen zonder verzoeken;
-   # publieke publishable-sleutel, Supabase › Project Settings › API Keys):
-   gh secret set STAGING_SUPABASE_ANON_KEY
    ```
    Zonder de productie-secrets slaat de job over met een melding (geen fout).
 3. Eerste snapshot maken en committen:
