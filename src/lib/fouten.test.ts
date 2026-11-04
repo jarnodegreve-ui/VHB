@@ -23,8 +23,21 @@ describe('schrijffout', () => {
 
   it('4xx met een reden van de server: reden + vervolgstap, één punt per zin', () => {
     online(true);
-    const err = Object.assign(new Error('Busnummer 12 bestaat al'), { status: 409 });
-    expect(schrijffout('Bewaren', err)).toBe('Bewaren is mislukt. Busnummer 12 bestaat al. Iemand anders heeft dit intussen gewijzigd. Vernieuw de lijst en probeer het opnieuw.');
+    const err = Object.assign(new Error('Alleen een PDF van hoogstens 3,5 MB'), { status: 413 });
+    expect(schrijffout('Uploaden', err)).toBe('Uploaden is mislukt. Alleen een PDF van hoogstens 3,5 MB. Maak het bestand kleiner en probeer het opnieuw.');
+  });
+
+  it('een 409 mét reden is een regel, geen botsing: de reden alleen, zonder "iemand anders"', () => {
+    online(true);
+    // Voor een chauffeur bestaat de revisiecheck niet eens: elke 409 van
+    // POST /api/swaps is een regel over zijn aanvraag. Met de algemene stap
+    // erachter las hij "iemand anders wijzigde dit, probeer opnieuw" en bleef
+    // hij dezelfde aanvraag indienen (03-11-2026).
+    const regel = 'Voor Danny staat er op 08/11/2026 niets in de planning. Ruilen zonder tegenprestatie kan alleen als de collega die dag vrij/bv/tk/ta staat.';
+    expect(schrijffout('Opslaan van dienstruilen', { status: 409, message: regel })).toBe(`Opslaan van dienstruilen is mislukt. ${regel}`);
+    expect(schrijffout('Bewaren', Object.assign(new Error('Busnummer 12 bestaat al'), { status: 409 }))).toBe('Bewaren is mislukt. Busnummer 12 bestaat al.');
+    // Zonder reden blijft een 409 de botsing die hij vroeger altijd was.
+    expect(schrijffout('Bewaren', { status: 409 })).toBe('Bewaren is mislukt. Iemand anders heeft dit intussen gewijzigd. Vernieuw de lijst en probeer het opnieuw.');
   });
 
   it('zegt de server zelf al wat je moet doen, dan komt de algemene stap er niet achter', () => {

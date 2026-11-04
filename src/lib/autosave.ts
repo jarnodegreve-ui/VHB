@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { leesFout, meldSchrijffout, vervolgstap } from './fouten';
+import { leesFout, meldSchrijffout, vervolgstap, vervolgstapNodig } from './fouten';
 
 /**
  * Autosave per cel (tranche 3A, 22-09-2026): Dagadministratie en de
@@ -84,7 +84,7 @@ export function resetAutosaveVoorTest() {
 export function celFoutTekst(err: unknown): string {
   const info = leesFout(err);
   const zin = (t: string) => (/[.!?]$/.test(t) ? t : `${t}.`);
-  return ['Niet bewaard.', ...(info.tekst ? [zin(info.tekst)] : []), vervolgstap(info)].join(' ');
+  return ['Niet bewaard.', ...(info.tekst ? [zin(info.tekst)] : []), ...(vervolgstapNodig(info) ? [vervolgstap(info)] : [])].join(' ');
 }
 
 export function useAutosaveCel<T, R = unknown>(opties: {
