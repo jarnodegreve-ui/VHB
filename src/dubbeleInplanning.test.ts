@@ -167,9 +167,9 @@ describe('onbekendeCodeFout', () => {
 
   it('de app toont de melding zelf, zonder verkeerde vervolgzin, ook bij een heel lange naam en code', () => {
     // meldSchrijffout toont een servertekst alleen als die veilig en hoogstens
-    // 240 tekens is, en zet er "Iemand anders heeft dit intussen gewijzigd"
-    // achter als de tekst zelf geen "probeer" of "vernieuw" bevat
-    // (src/lib/fouten.ts). Beide mogen hier nooit gebeuren.
+    // 240 tekens is, en zet achter een reden zonder eigen "probeer" of
+    // "vernieuw" de algemene vervolgstap (sinds 04-11 niet meer achter een
+    // 409 mét reden, src/lib/fouten.ts). Beide mogen hier nooit gebeuren.
     const naam = 'Alexandra-Fleur Vandenbroucke-Vanderstraeten de Wilde-Van Acker';
     const code = 'naar de garage brengen en daarna de bus tanken';
     for (const bronLeeg of [undefined, 'dienstoverzicht', 'planningscodes', 'beide'] as const) {

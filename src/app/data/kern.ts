@@ -98,6 +98,23 @@ export const antwoordAfdruk = (response: Pick<Response, 'headers' | 'url'> | nul
 };
 
 /**
+ * Zei de server dat de LIJST intussen door iemand anders gewijzigd is? Alleen
+ * het antwoord van `revisionCheck` (api/_lib/collectie.ts) zegt dat: 409 met
+ * `conflict: 'revision'`, of 428 als de revisie ontbrak. Elke andere 409 is
+ * een regel over de inhoud (de dienst loopt al, de collega staat die dag niet
+ * vrij, de aanvraag is al afgehandeld) en voor een chauffeur bestaat de
+ * revisiecheck niet eens. Wie "status 409" las als "iemand anders was je voor"
+ * verving de echte reden door een toast die vroeg opnieuw te proberen, en dat
+ * liep in een kringetje (dienstruil, 03-11-2026).
+ */
+export const isRevisieConflict = (status: number, body: unknown): boolean => {
+  if (status === 428) return true;
+  if (status !== 409) return false;
+  const conflict = (body as { conflict?: unknown } | null | undefined)?.conflict;
+  return conflict === 'revision' || conflict === 'revision-missing';
+};
+
+/**
  * Collectie-state met gelijkheidscheck (ronde 3, 19-09). Een catch-up na het
  * heropenen van het tabblad haalt ±10 collecties opnieuw op; elke fetcher deed
  * blind `setX(data)`, en omdat `response.json()` altijd een nieuwe array geeft

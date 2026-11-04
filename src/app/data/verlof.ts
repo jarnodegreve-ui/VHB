@@ -4,7 +4,7 @@ import { apiFetch, apiJson } from '../../lib/api';
 import { stelExtraFeestdagenIn } from '../../lib/leaveBalance';
 // Zod-vrij (shared/feestdagen.ts): deze hook zit in de startbundel.
 import { parseExtraFeestdagenLos, type ExtraFeestdag } from '../../../shared/feestdagen';
-import { useCollectieState, type DataCtx } from './kern';
+import { isRevisieConflict, useCollectieState, type DataCtx } from './kern';
 import { laatSchrijffout } from '../../lib/foutenLui';
 
 /**
@@ -42,11 +42,6 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         headers: ctx.revisionHeader('leave'),
         body: JSON.stringify(newLeave),
       });
-      if (response.status === 409 || response.status === 428) {
-        showToast('De verlofaanvragen zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
-        await fetchLeave();
-        return false;
-      }
       if (response.ok) {
         setLeaveRequests(newLeave);
         ctx.captureRevision('leave', response);
@@ -68,6 +63,14 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
+      // Zelfde onderscheid als bij de dienstruilen (ruil.ts): alleen een echt
+      // revisieconflict ververst en vraagt opnieuw; een 409 met een reden
+      // ("al afgehandeld") toont die reden.
+      if (isRevisieConflict(response.status, err)) {
+        showToast('De verlofaanvragen zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchLeave();
+        return false;
+      }
       laatSchrijffout('Opslaan van verlofaanvragen', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {

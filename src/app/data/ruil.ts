@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { SwapRequest } from '../../types';
 import { apiFetch, apiLijst } from '../../lib/api';
 import { notify } from '../../lib/ui';
-import { useCollectieState, type DataCtx } from './kern';
+import { isRevisieConflict, useCollectieState, type DataCtx } from './kern';
 import { laatSchrijffout } from '../../lib/foutenLui';
 
 /**
@@ -46,11 +46,6 @@ export function useRuilData(ctx: DataCtx) {
         headers: ctx.revisionHeader('swaps'),
         body: JSON.stringify(newSwaps),
       });
-      if (response.status === 409 || response.status === 428) {
-        showToast('De dienstruilen zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
-        await fetchSwaps();
-        return false;
-      }
       if (response.ok) {
         // Bewust opnieuw ophalen i.p.v. setSwaps(newSwaps): de server vult bij
         // het opslaan shiftDate/shiftLine aan — de dienst-info die de
@@ -64,7 +59,18 @@ export function useRuilData(ctx: DataCtx) {
         return true;
       }
       const err = await response.json().catch(() => ({} as any));
-      laatSchrijffout('Opslaan van dienstruilen', { status: response.status, message: err.error }, (tekst) => showToast(tekst, 'error'));
+      // Alleen een echt revisieconflict (de lijst van staf is verouderd) is
+      // "iemand anders was je voor": dan verversen en opnieuw laten proberen.
+      // Elke andere 409 is een regel van de server over déze aanvraag (de
+      // dienst loopt al, de collega staat die dag niet vrij of is afwezig) en
+      // die reden moet de chauffeur lezen, anders probeert hij eindeloos
+      // hetzelfde (03-11-2026).
+      if (isRevisieConflict(response.status, err)) {
+        showToast('De dienstruilen zijn intussen door iemand anders gewijzigd, ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchSwaps();
+        return false;
+      }
+      laatSchrijffout('Opslaan van dienstruilen', { status: response.status, message: err.details || err.error }, (tekst) => showToast(tekst, 'error'));
       return false;
     } catch (error) {
       console.error('Error saving swaps:', error);

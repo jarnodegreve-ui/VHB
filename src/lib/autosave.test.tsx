@@ -89,7 +89,9 @@ describe('useAutosaveCel', () => {
     await act(async () => { d.faal(Object.assign(new Error('Deze dag is afgesloten.'), { status: 409 })); await d.p.catch(() => {}); });
     expect(notifyMock).toHaveBeenCalledTimes(1);
     const [tekst, toon, opties] = notifyMock.mock.calls[0];
-    expect(tekst).toBe('Overminuten van Jan bewaren is mislukt. Deze dag is afgesloten. Iemand anders heeft dit intussen gewijzigd. Vernieuw de lijst en probeer het opnieuw.');
+    // Een 409 mét reden is een regel (src/lib/fouten.ts): de reden alleen,
+    // niet "iemand anders heeft dit gewijzigd" erachter.
+    expect(tekst).toBe('Overminuten van Jan bewaren is mislukt. Deze dag is afgesloten.');
     expect(toon).toBe('error');
     expect(opties.action.label).toBe('Opnieuw proberen');
     expect(autosaveOnrustig()).toBe(false);
