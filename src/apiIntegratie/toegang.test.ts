@@ -1129,15 +1129,29 @@ describe('toestel-whitelist', () => {
     expect(res.json?.code).toBe('device_unknown');
   });
 
-  it('fail-CLOSED bij een echte DB-fout in de gate (503)', async () => {
+  it('fail-CLOSED bij een DB-fout in de gate voor een chauffeur (503), ook als de tabel zou ontbreken', async () => {
     const res = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-dberror' });
     expect(res.status).toBe(503);
     expect(res.json?.code).toBe('device_check_failed');
+    // De aparte fail-open-tak voor een ontbrekende tabel is weg (05-11):
+    // user_devices zit in de basismigratie.
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-missingtable' })).status).toBe(503);
   });
 
-  it('fail-OPEN alleen wanneer de user_devices-tabel ontbreekt (migratie niet gedraaid)', async () => {
-    const res = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-missingtable' });
-    expect(res.status).toBe(200);
+  it('staf met een toesteltoken valt bij een DB-fout OPEN: verder zonder gate, zoals staf zonder token (05-11)', async () => {
+    const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await api('GET', '/api/updates', { token: 'tok-planner', device: 'dev-dberror' });
+      expect(res.status).toBe(200);
+      // De sessiecontrole blijft gelden: een ingetrokken sessie is ook dan dicht.
+      mem.devices.push({ userId: '2', deviceToken: 'dev-x', name: 'x', status: 'revoked', sessionId: 'sess-dicht', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: '' });
+      const token = `x.${Buffer.from(JSON.stringify({ sub: 'auth-tok-planner', email: 'planner@vhb.be', session_id: 'sess-dicht' })).toString('base64')}.y`;
+      const dicht = await api('GET', '/api/updates', { token, device: 'dev-dberror' });
+      expect(dicht.status).toBe(403);
+      expect(dicht.json?.code).toBe('device_revoked');
+    } finally {
+      stil.mockRestore();
+    }
   });
 
   it('het laatste toestel van een gebruiker kan niet geschrapt worden (heropent auto-approve)', async () => {

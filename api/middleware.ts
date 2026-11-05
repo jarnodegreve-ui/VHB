@@ -316,11 +316,12 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   // met de toestel-lookup hieronder (warm: beide uit het geheugen; koud: één
   // DB-wachttijd i.p.v. twee na elkaar).
   //
-  // Fail-OPEN op déze laag, anders dan de header-gate: de query hangt niet van
-  // client-invoer af en is dus niet te forceren, en fail-closed zou bij een
-  // DB-hik ook elke admin buitensluiten. De header-gate hieronder blijft
-  // fail-closed. Ontbreekt de kolom session_id (migratie 2026-09-09 nog niet
-  // gedraaid), dan levert storage een lege lijst: exact het oude gedrag.
+  // Fail-OPEN op déze laag: de query hangt niet van client-invoer af en is
+  // dus niet te forceren, en fail-closed zou bij een DB-hik ook elke admin
+  // buitensluiten. De header-gate hieronder blijft fail-closed voor wie ze
+  // echt tegenhoudt (chauffeur en technieker). Ontbreekt de kolom session_id
+  // (migratie 2026-09-09 nog niet gedraaid), dan levert storage een lege
+  // lijst: exact het oude gedrag.
   const sessie = gateExempt ? null : sessieUitJwt(accessToken);
   const sessieIngetrokken: Promise<boolean> = sessie
     ? isSessieIngetrokken(sessie).catch((err) => {
@@ -341,21 +342,19 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
       // worden niet gecacht en komen hier ongewijzigd terecht.
       device = deviceToken ? await getDeviceCached(String(appUser.id), deviceToken) : null;
     } catch (err) {
-      // Fail-OPEN uitsluitend wanneer de user_devices-tabel nog niet bestaat
-      // (migratie niet gedraaid) — dan mag de whitelist de app niet platleggen.
-      // Elke andere DB-fout = fail-CLOSED (503), anders is de gate met een
-      // geforceerde fout te omzeilen. Chauffeur-only, dus planners/admins
-      // blijven sowieso werken.
-      if (isMissingTableError(err)) {
-        console.error("Toestel-tabel ontbreekt, gate tijdelijk overgeslagen:", err);
-        req.accessToken = accessToken;
-        req.authUser = authUser;
-        req.appUser = appUser;
-        req.aal = check.aal;
-        return next();
+      // Niet-staf: fail-CLOSED (503), anders is de gate met een geforceerde
+      // fout te omzeilen. Staf valt OPEN (05-11): zonder toesteltoken passeert
+      // staf de gate toch al, dus een 503 hier sloot alleen de planner met een
+      // token buiten bij een DB-hik en opende niets. Hij gaat verder als
+      // "geen toestel gevonden" (geen rij = toegelaten voor staf), de
+      // sessiecontrole hieronder blijft gelden. De aparte tak voor een
+      // ontbrekende tabel is weg: user_devices zit in de basismigratie.
+      if (!isStafRol(appUser.role)) {
+        console.error("Toestel-controle DB-fout (fail-closed):", err);
+        return res.status(503).json({ error: "Toestel-controle is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "device_check_failed" });
       }
-      console.error("Toestel-controle DB-fout (fail-closed):", err);
-      return res.status(503).json({ error: "Toestel-controle is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "device_check_failed" });
+      console.error("Toestel-controle DB-fout, staf gaat zonder gate verder (fail-open):", err);
+      device = null;
     }
 
     // De sessie gaat vóór het oordeel over de header: een verzonnen of
