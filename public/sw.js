@@ -123,14 +123,19 @@ async function precacheShell() {
   if (!res.ok) return;
   const html = await res.clone().text();
   await cache.put('/', res);
-  const assets = [...new Set(html.match(/\/assets\/[A-Za-z0-9._-]+/g) || [])];
+  // De chunks en css onder /assets/, plus de twee fonts onder /fonts/ die
+  // index.html vooraf laadt. Die zijn ongehasht en stonden tot 05-11 niet in
+  // de precache: na een stille activatie zonder bereik (de oude cache is dan
+  // al weg) stond de app even in de terugvalletter.
+  const assets = [...new Set(html.match(/\/(assets|fonts)\/[A-Za-z0-9._-]+/g) || [])];
   // Gehashte assets zijn onveranderlijk: staat dezelfde bestandsnaam al in een
   // oudere cache, dan kopiëren we die i.p.v. hem opnieuw te downloaden. Elke
   // deploy stempelt alleen index-*.js opnieuw; de vendor-chunks (react, ui,
-  // supabase: ±180 kB gzip) en fonts/css houden meestal hun hash en werden
-  // toch bij élke deploy op 4G opnieuw binnengehaald (ronde 3, 19-09). Zelfde
-  // patroon als de pdf-chunks (±1,7 MB) uit PRECACHE_EXTRA. De navigatie-
-  // strategie (network-first) verandert hier niet door.
+  // supabase: ±180 kB gzip) en css houden meestal hun hash en werden toch bij
+  // élke deploy op 4G opnieuw binnengehaald (ronde 3, 19-09). Zelfde patroon
+  // als de pdf-chunks (±1,7 MB) uit PRECACHE_EXTRA; de ongehashte fonts gaan
+  // gewoon opnieuw over de lijn. De navigatie-strategie (network-first)
+  // verandert hier niet door.
   const extra = PRECACHE_EXTRA.filter((pad) => !assets.includes(pad));
   await Promise.all([...assets, ...extra].map((pad) => precacheAsset(cache, pad)));
 }
