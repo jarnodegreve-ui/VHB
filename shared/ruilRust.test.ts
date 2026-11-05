@@ -108,12 +108,17 @@ describe('rust over een uurwissel (controle-ronde 04-11, punt 35)', () => {
   it('rustTovVorigeDag/VolgendeDag: zonder correctie een vlakke nacht van 24 uur, met correctie een uur korter of langer', () => {
     const laat = [{ startTime: '14:00', endTime: '22:00' }];
     expect(rustTovVorigeDag(laat, 6 * 60)).toBe(480);
-    expect(rustTovVorigeDag(laat, 6 * 60, 60)).toBe(420); // naar de zomertijd: 7u
-    expect(rustTovVorigeDag(laat, 6 * 60, -60)).toBe(540); // naar de wintertijd: 9u
+    expect(rustTovVorigeDag(laat, 6 * 60, { eerder: '2027-03-27', later: '2027-03-28' })).toBe(420); // naar de zomertijd: 7u
+    expect(rustTovVorigeDag(laat, 6 * 60, { eerder: '2027-10-30', later: '2027-10-31' })).toBe(540); // naar de wintertijd: 9u
+    expect(rustTovVorigeDag(laat, 6 * 60, { eerder: 'x', later: '2027-03-28' })).toBe(480); // geen dag = vlakke nacht
+    // Einde ná de wissel (27:00 = 03:00 zomertijd) en start vóór de wissel: de echte klok telt.
+    expect(rustTovVorigeDag([{ startTime: '20:00', endTime: '27:00' }], 6 * 60, { eerder: '2027-03-27', later: '2027-03-28' })).toBe(180);
+    expect(rustTovVorigeDag([{ startTime: '09:00', endTime: '17:00' }], 90, { eerder: '2027-03-27', later: '2027-03-28' })).toBe(510);
+    expect(rustTovVorigeDag([{ startTime: '09:00', endTime: '17:30' }], 60, { eerder: '2027-10-30', later: '2027-10-31' })).toBe(450);
     const vroeg = [{ startTime: '06:00', endTime: '14:00' }];
     expect(rustTovVolgendeDag(vroeg, 22 * 60)).toBe(480);
-    expect(rustTovVolgendeDag(vroeg, 22 * 60, 60)).toBe(420);
-    expect(rustTovVolgendeDag(vroeg, 22 * 60, -60)).toBe(540);
+    expect(rustTovVolgendeDag(vroeg, 22 * 60, { eerder: '2027-03-27', later: '2027-03-28' })).toBe(420);
+    expect(rustTovVolgendeDag(vroeg, 22 * 60, { eerder: '2027-10-30', later: '2027-10-31' })).toBe(540);
   });
 
   it('nacht van zaterdag 27 op zondag 28 maart 2027 (23 uur): 22:00 naar 06:00 is 7u, dus te kort', () => {

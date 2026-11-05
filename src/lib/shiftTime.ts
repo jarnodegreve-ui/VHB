@@ -1,6 +1,7 @@
 import { addDays, isoDate } from './datum';
 import { eindtijdMinuten } from '../../shared/dienstGereden';
 import { normaliseerTijd } from '../../shared/tijdNotatie';
+import { tijdstipBrussel } from '../../shared/uurwissel';
 
 /** 'HH:MM' → minuten sinds middernacht van de dienstdag, of null bij een
  *  ongeldige tijd. Uren ≥ 24 zijn geldig: het Dienstoverzicht gebruikt de
@@ -80,22 +81,20 @@ export const hasShiftEnded = (
 };
 
 /**
- * Een klokminuut van de dienstdag als echt tijdstip. De Date-constructor rekent
- * in lokale kloktijd, dus busvak-minuten (1460 = 00:20 de nacht erna) en een
- * uurwissel komen vanzelf goed: 08:00 op zondag 28 maart 2027 ligt zeven uur
- * na middernacht, niet acht. null voor wat geen ISO-dag is.
+ * Een klokminuut van de dienstdag als echt tijdstip (epoch-ms) op de Brusselse
+ * klok, dezelfde lezing als de rustregel (shared/uurwissel.ts): busvak-minuten
+ * (1460 = 00:20 de nacht erna) en een uurwissel komen goed uit, 08:00 op
+ * zondag 28 maart 2027 ligt zeven uur na middernacht, niet acht. null voor
+ * wat geen ISO-dag is.
  */
-const tijdstipOpDienstdag = (date: string, minuut: number): Date | null => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date ?? ''));
-  if (!m) return null;
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, minuut);
-};
+const tijdstipOpDienstdag = (date: string, minuut: number): number | null => tijdstipBrussel(date, minuut);
 
-/** `now` op de minuut afgekapt: de aftelling telt hele minuten, zoals de
- *  klokminuten-versie met getHours()/getMinutes() deed. */
-const opDeMinuut = (now: Date): Date => new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+/** `now` op de minuut afgekapt (epoch, niet via de lokale klokvelden: in het
+ *  dubbele uur van de wintertijdwissel wijzen die twee keer dezelfde minuut
+ *  aan). De aftelling telt hele minuten. */
+const opDeMinuut = (now: Date): number => Math.floor(now.getTime() / 60000) * 60000;
 
-const minutenTussen = (van: Date, tot: Date): number => Math.round((tot.getTime() - van.getTime()) / 60000);
+const minutenTussen = (van: number, tot: number): number => Math.round((tot - van) / 60000);
 
 /**
  * Hoeveel minuten loopt dit segment nog? null als de tijden ongeldig zijn of
@@ -119,7 +118,7 @@ export const minutesUntilShiftEnd = (
   if (start === null || end === null) return null;
   const endNorm = end <= start ? end + 24 * 60 : end;
   const einde = tijdstipOpDienstdag(shift.date, endNorm);
-  if (!einde) return null;
+  if (einde === null) return null;
   const resterend = minutenTussen(opDeMinuut(now), einde);
   return resterend > 0 ? resterend : null;
 };
@@ -140,7 +139,7 @@ export const minutesUntilShiftStart = (
   const start = parseHHMM(shift.startTime);
   if (start === null) return null;
   const begin = tijdstipOpDienstdag(shift.date, start);
-  if (!begin) return null;
+  if (begin === null) return null;
   const tot = minutenTussen(opDeMinuut(now), begin);
   return tot > 0 ? tot : null;
 };

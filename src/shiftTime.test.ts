@@ -56,6 +56,13 @@ describe('aftelling over een uurwissel (controle-ronde 04-11, punt 35)', () => {
     expect(minutesUntilShiftStart({ date: '2027-03-28', startTime: '06:00' }, om('2027-03-27', 23, 0))).toBe(360);
   });
 
+  it('in het dubbele uur van de wintertijdwissel telt de echte klok (02:30 CET, de tweede keer)', () => {
+    // 2027-10-31T01:30Z = 02:30 wintertijd, de tweede doorgang; tot 06:00 CET (05:00Z) is 3u30.
+    const nu = new Date('2027-10-31T01:30:00Z');
+    expect(minutesUntilShiftEnd({ date: '2027-10-30', startTime: '22:00', endTime: '06:00' }, nu)).toBe(210);
+    expect(minutesUntilShiftStart({ date: '2027-10-31', startTime: '06:00' }, nu)).toBe(210);
+  });
+
   it('naar de wintertijd: dezelfde nachtdienst heeft om 00:30 nog 6u30', () => {
     const nacht = { date: '2027-10-30', startTime: '22:00', endTime: '06:00' };
     expect(minutesUntilShiftEnd(nacht, om('2027-10-31', 0, 30))).toBe(390);
