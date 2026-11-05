@@ -27,10 +27,11 @@ export function useMensenData(ctx: DataCtx) {
   const [pendingDevices, setPendingDevices, zetDevicesUitAntwoord] = useCollectieState<PendingDevice[]>([]);
   // Ververst elke 10 min (alleen in een zichtbaar tabblad) én bij tab-focus,
   // hooguit 1× per 5 min (startRustigePoll): het portaal staat bij de planner
-  // de hele dag open en de werkvoorraad-badge moet blijven kloppen.
+  // de hele dag open en de werkvoorraad-badge moet blijven kloppen. Pas
+  // zodra `dataKlaar` waar is (zie DataBasis), niet zodra er een gebruiker is.
   useEffect(() => {
     const rol = currentUser?.role;
-    if (rol !== 'planner' && rol !== 'admin') { setVervaldata([]); return; }
+    if (!ctx.dataKlaar || (rol !== 'planner' && rol !== 'admin')) { setVervaldata([]); return; }
     let cancelled = false;
     const haal = () => {
       apiJson<VervaldataRij[]>('/api/user-expiries')
@@ -42,9 +43,9 @@ export function useMensenData(ctx: DataCtx) {
       cancelled = true;
       stop();
     };
-  }, [currentUser?.role]);
+  }, [ctx.dataKlaar, currentUser?.role]);
   useEffect(() => {
-    if (currentUser?.role !== 'admin') { setPendingDevices([]); return; }
+    if (!ctx.dataKlaar || currentUser?.role !== 'admin') { setPendingDevices([]); return; }
     let cancelled = false;
     const haal = async () => {
       try {
@@ -61,7 +62,7 @@ export function useMensenData(ctx: DataCtx) {
       cancelled = true;
       stop();
     };
-  }, [currentUser?.role]);
+  }, [ctx.dataKlaar, currentUser?.role]);
 
   const fetchUsers = async (accessToken = session?.access_token) => {
     try {

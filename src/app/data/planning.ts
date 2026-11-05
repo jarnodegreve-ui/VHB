@@ -292,9 +292,10 @@ export function usePlanningData(ctx: DataCtx) {
   };
 
   useEffect(() => {
-    if (currentUser?.role === 'chauffeur') void fetchMyNotes();
+    // Pas zodra er met de API gepraat mag worden (DataBasis.dataKlaar).
+    if (ctx.dataKlaar && currentUser?.role === 'chauffeur') void fetchMyNotes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, currentUser?.role]);
+  }, [ctx.dataKlaar, currentUser?.id, currentUser?.role]);
 
   /** Bij uitloggen: de collecties leeg. Ook de persoonlijke dienstnotities:
    *  MijnDagView zoekt ze enkel op datum, dus zonder wissen zag de volgende

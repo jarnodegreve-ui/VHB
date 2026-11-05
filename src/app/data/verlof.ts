@@ -171,7 +171,8 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     stelExtraFeestdagenIn(extra.map((d) => d.datum));
   };
   useEffect(() => {
-    if (!currentUser) return;
+    // Pas zodra er met de API gepraat mag worden (DataBasis.dataKlaar).
+    if (!ctx.dataKlaar || !currentUser) return;
     let weg = false;
     void (async () => {
       try {
@@ -183,7 +184,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
     })();
     return () => { weg = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id]);
+  }, [ctx.dataKlaar, currentUser?.id]);
 
   /** Bij uitloggen: de aanvragen leeg (lastSeen wordt door het effect hierboven beheerd). */
   const resetVerlof = () => {

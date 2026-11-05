@@ -118,3 +118,50 @@ describe('saveUsers en een 409 van de server', () => {
     expect(gets()).toHaveLength(1);
   });
 });
+
+/**
+ * De werkvoorraad-polls (vervaldata, wachtende toestellen) hangen aan
+ * `dataKlaar`, niet aan de rol alleen (05-11): na een toestelblokkade stond
+ * de admin nog in de state en liep elke poll om de 10 min in een 403.
+ */
+describe('de werkvoorraad-polls starten pas als dataKlaar waar is', () => {
+  let root: Root;
+  let el: HTMLDivElement;
+
+  const Proef = ({ klaar }: { klaar: boolean }) => {
+    const ctx = useDataKern({
+      session: null,
+      currentUser: { id: 'u-admin', role: 'admin' },
+      dataKlaar: klaar,
+      showToast: () => {},
+      meldLaadfout: () => {},
+      fetchActivityLog: async () => {},
+    } as unknown as Parameters<typeof useDataKern>[0]);
+    useMensenData(ctx);
+    return null;
+  };
+  const polls = () => net.verzoeken.filter((v) => v.url === '/api/user-expiries' || v.url === '/api/devices').map((v) => v.url).sort();
+
+  beforeEach(() => {
+    el = document.createElement('div');
+    document.body.appendChild(el);
+    root = createRoot(el);
+    net.verzoeken = [];
+    net.antwoord = () => ({ body: [] });
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    el.remove();
+  });
+
+  it('een admin achter het toestel-wachtscherm of de tweede stap vraagt niets op; daarna wel', async () => {
+    await act(async () => { root.render(<Proef klaar={false} />); });
+    expect(polls()).toEqual([]);
+    await act(async () => { root.render(<Proef klaar />); });
+    expect(polls()).toEqual(['/api/devices', '/api/user-expiries']);
+    // Blokkade (dataKlaar valt terug): de poll stopt en start niet opnieuw.
+    net.verzoeken = [];
+    await act(async () => { root.render(<Proef klaar={false} />); });
+    expect(polls()).toEqual([]);
+  });
+});

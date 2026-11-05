@@ -37,12 +37,15 @@ import { UITGESTELD_PER_VIEW, uitgesteldVoor, type Uitgesteld } from './data/poo
 export function useAppData({
   session,
   currentUser,
+  dataKlaar,
   currentView,
   showToast,
   meldLaadfout,
 }: {
   session: Session | null;
   currentUser: User | null;
+  /** Zie DataBasis.dataKlaar (App.tsx berekent hem). */
+  dataKlaar: boolean;
   currentView: View;
   showToast: ShowToast;
   meldLaadfout: (bron: string, fout?: unknown) => void;
@@ -59,8 +62,8 @@ export function useAppData({
   // De kern ontstaat pas ná activiteit (kruisverband), dus het log meldt zijn
   // laadstaat via een ref die hieronder op de kern wordt gezet.
   const noteerRef = useRef<(key: string, geslaagd: boolean) => void>(() => {});
-  const activiteit = useActiviteitData({ session, currentUser, currentView, noteerCollectie: (k, f) => noteerRef.current(k, f) });
-  const ctx = useDataKern({ session, currentUser, showToast, meldLaadfout, fetchActivityLog: activiteit.fetchActivityLog });
+  const activiteit = useActiviteitData({ session, currentUser, currentView, dataKlaar, noteerCollectie: (k, f) => noteerRef.current(k, f) });
+  const ctx = useDataKern({ session, currentUser, dataKlaar, showToast, meldLaadfout, fetchActivityLog: activiteit.fetchActivityLog });
   noteerRef.current = ctx.noteerCollectie;
   const planning = usePlanningData(ctx);
   const verlof = useVerlofData({ ...ctx, refreshCoverageGaps: planning.refreshCoverageGaps });

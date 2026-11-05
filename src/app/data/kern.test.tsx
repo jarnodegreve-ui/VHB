@@ -151,7 +151,8 @@ describe('laadstaat per collectie (noteerCollectie)', () => {
   it('fout zonder eerdere laad = niet geslaagd; geslaagd blijft staan bij een latere fout; uitloggen wist alles', () => {
     let ctx: DataCtx | null = null;
     function Proef() {
-      ctx = useDataKern({ session: null, currentUser: null, showToast: () => {}, meldLaadfout: () => {}, fetchActivityLog: async () => {} });
+      // `dataKlaar` hoort sinds 05-11 bij de basis (polls hangen eraan); de kern zelf leest hem niet.
+      ctx = useDataKern({ session: null, currentUser: null, dataKlaar: false, showToast: () => {}, meldLaadfout: () => {}, fetchActivityLog: async () => {} });
       return null;
     }
     act(() => root.render(<Proef />));

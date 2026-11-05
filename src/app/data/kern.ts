@@ -24,6 +24,11 @@ export type ShowToast = (message: string, tone?: Toast['tone'], action?: Toast['
 export type DataBasis = {
   session: Session | null;
   currentUser: User | null;
+  /** Mag er met de API gepraat worden: sessie én gebruiker, geen
+   *  toestel-wachtscherm, geen tweede stap (App.tsx). Achtergrondpolls hangen
+   *  hieraan, niet aan `currentUser` alleen: na een toestelblokkade bleef de
+   *  gebruiker staan en liep elke poll in een 403-lus (05-11). */
+  dataKlaar: boolean;
   showToast: ShowToast;
   meldLaadfout: (bron: string, fout?: unknown) => void;
   fetchActivityLog: (accessToken?: string) => Promise<void>;

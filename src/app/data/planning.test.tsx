@@ -39,7 +39,7 @@ type Toast = { tekst: string; toon?: string };
 
 const dienst: Shift = { id: 's-1', date: '2026-11-09', driverId: 'u-jan', serviceNumber: '2704' } as unknown as Shift;
 const service: Service = { id: 'd-1', serviceNumber: '2704' } as unknown as Service;
-const code: PlanningCode = { code: 'BUR', category: 'dienst', description: 'Bureau', countsAsShift: false, isPaidAbsence: false, isDayOff: false } as PlanningCode;
+const code: PlanningCode = { code: 'BUR', category: 'service', description: 'Bureau', countsAsShift: false, isPaidAbsence: false, isDayOff: false } as PlanningCode;
 
 const REM = 'Deze opslag zou 300 van de 320 diensten verwijderen. Vermoedelijk was je scherm niet volledig geladen, vernieuw de pagina en probeer opnieuw, of verwijder in kleinere stappen.';
 const DUBBEL = 'Jan Peeters rijdt op 09/11/2026 al dienst 2301. Er is niets gewijzigd. Kijk de planning na en probeer opnieuw.';

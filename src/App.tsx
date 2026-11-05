@@ -44,7 +44,7 @@ export default function App() {
   // refresh-op-dezelfde-plek werken daardoor vanzelf.
   const { view: currentView, navigeer } = useRoute();
   // Aanwezigheid (staf ziet elkaar in de topbar) + broodkruimel per schermwissel (foutrapporten).
-  useAanwezigheid(!!session && !!currentUser, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
+  useAanwezigheid(dataKlaar, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
   useEffect(() => { addBreadcrumb('navigatie', currentView); }, [currentView]);
   // Netwerkstatus uit de online-store (src/lib/useOnline.ts): dezelfde
   // waarheid als Mijn dag en de ritbladviewer, mét ping-fallback voor
@@ -99,6 +99,7 @@ export default function App() {
   const appData = useAppData({
     session,
     currentUser,
+    dataKlaar,
     currentView,
     showToast: (m, t, a, o) => showToast(m, t, a, o),
     meldLaadfout: (b, f) => meldLaadfout(b, f),
