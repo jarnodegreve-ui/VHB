@@ -5,7 +5,7 @@ import { getUsersData, logActivity } from "../storage.js";
 import { sendPushToUsers } from "../push.js";
 import { isStafRol, type AuthenticatedRequest, type Role } from "../types.js";
 import { heeftRol, isTechnieker, type Toegang } from "../../shared/toegang.js";
-import { DAG_DMJ } from "../helpers.js";
+import { DAG_DMJ, brusselsDay } from "../helpers.js";
 import {
   defectMeldingBodySchema, defectPatchSchema, vehicleBodySchema, vehicleExpiryBodySchema, werkprestatieBodySchema,
   VOERTUIG_VERVAL_LABEL, WERKTYPE_LABEL, voertuigNaam, type Defect, type Werkprestatie,
@@ -256,7 +256,9 @@ export function mountTechniekRoutes(app: express.Express) {
       const patch: Parameters<typeof patchDefect>[1] = { ...body };
       if (body.status === "uitgevoerd") {
         patch.uitgevoerdDoor = eigenId;
-        if (patch.uitgevoerdOp === undefined || patch.uitgevoerdOp === null) patch.uitgevoerdOp = new Date().toISOString().slice(0, 10);
+        // Zonder datum: vandaag op de Brusselse klok, niet de UTC-dag (die is
+        // tussen middernacht en één uur nog gisteren).
+        if (patch.uitgevoerdOp === undefined || patch.uitgevoerdOp === null) patch.uitgevoerdOp = brusselsDay(new Date().toISOString());
       }
       if (body.status === "open") {
         patch.uitgevoerdDoor = null;

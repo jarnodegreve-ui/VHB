@@ -139,6 +139,16 @@ describe('Loon: dagafsluiting en Easypay-export', () => {
     expect(res.json.length).toBe(1150);
   });
 
+  it('neemt vandaag op de Brusselse klok: om 00u30 Belgische tijd telt de nieuwe dag al mee als niet geopend', async () => {
+    zetLoonBasis();
+    // 22:30 UTC op 07-07 is 00:30 op 08-07 in Brussel (zomertijd); de UTC-dag
+    // zou 08-07 (matrix-inhoud, nooit geopend) nog als toekomst laten liggen.
+    vi.setSystemTime(new Date('2026-07-07T22:30:00Z'));
+    const controle = await api('GET', '/api/loon/export/controle?maand=2026-07', { token: 'tok-planner' });
+    expect(controle.status).toBe(200);
+    expect(controle.json.nietGeopendeDagen).toEqual(['2026-07-01', '2026-07-08']);
+  });
+
   it('blokkeert de export op een planningdag die nooit geopend is, tot die is afgesloten', async () => {
     // Deze test redeneert over de echte kalender (vandaag/gisteren), niet over de vaste juni-klok.
     vi.useRealTimers();

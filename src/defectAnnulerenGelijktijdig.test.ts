@@ -169,6 +169,19 @@ describe('de chauffeur annuleert terwijl de technieker afhandelt', () => {
     expect(staat.log).toEqual([]);
   });
 
+  it('zonder uitvoerdatum neemt de afhandeling de Brusselse dag, niet de UTC-dag', async () => {
+    // 22:30 UTC = 00:30 Belgische zomertijd op de volgende dag.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-28T22:30:00Z'));
+    try {
+      const res = await wijzig(TECHNIEKER, { status: 'uitgevoerd', uitgevoerdWerk: 'Deurrail gesmeerd' });
+      expect(res.status).toBe(200);
+      expect(melding().uitgevoerd_op).toBe('2026-09-29');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('wat de technieker doet is ongewijzigd: zijn schrijfactie draagt geen voorwaarde', async () => {
     const res = await wijzig(TECHNIEKER, AFHANDELING);
     expect(res.status).toBe(200);
